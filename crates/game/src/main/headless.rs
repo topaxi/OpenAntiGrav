@@ -579,6 +579,7 @@ pub(crate) fn run_race(
                     cli.wreck.force_missile_hit.as_deref(),
                     "Missile hit",
                 )?,
+                no_weapon_lights: cli.wreck.no_weapon_lights,
                 force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
                 medals: oag_game::race_capture::tick::Medals {
                     forced: crate::args::force_medal(&cli.wreck.force_medal)?,

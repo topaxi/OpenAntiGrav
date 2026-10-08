@@ -206,6 +206,7 @@ pub mod tournament;
 pub mod track_panel;
 mod view;
 mod visibility;
+mod weapon_light;
 mod weapons;
 mod wreck_fx;
 pub(crate) use weapons::{CannonAssets, CannonDraw};

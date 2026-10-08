@@ -308,6 +308,21 @@ Open:
   Unchecked against a picture; not changed here.
 - Push offset from the rocket origin (`0x00124880..0x00124888`) and `Libc_Rand`'s range (jitter
   symmetry) are unread.
-- The launch light: `Rocket_Update` (`0x00123fb0`) calls `0x006778c8` at `0x001246cc` with
-  f1 100.0, f2 1.0, colour seeded `(14, 10, ?, ?)` (rocket-trail.md, Open). Not wired: no weapon
-  point light exists in this engine yet; that mechanism is the next step, shared with the Bomb's.
+- ~~The launch light~~: closed 2026-10-08, see the `hd-weapon-lights` entry below.
+
+## 2026-10-08 (`hd-weapon-lights`): weapon point lights played
+
+The mechanism was already there: `0x006778c8` is `SpuLight_AddCandidate`'s thunk
+(`f1 = D`, `f2 = w`, `v2` position, `v3` colour, no slot), so the weapons add records to
+the engines' `SpuLights` list (`oag_raceplay::weapon_light`, `Race::hd_spu_lights`).
+Played: Missile explosion `(500, 200, 50)`, `D = 150 (1-p)^2`, `w = 7 (1-p)^2 + 1.5`;
+Rocket `(7, 5, 1)`, `D = 50`, `w = 1`, per rocket (`0x00123de8`, read live: three records
+in the visible buffer while a volley flew); Bomb two lights, envelope read off the original's
+update in the emulator. Details and matched pairs in `weapons.md`, "Weapon point lights".
+Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` never appeared in
+flight, so it is probably an impact-side light, arming unread, unwired; the point light
+alone does not reach the HUD, so the Missile's frame-wide white-out is still `hd-whiteout`'s;
+the original keeps 8 visible records, this engine passes all of them (chosen); the Rocket
+launch wash is stronger than the film's first frame; the Cannon round's per-round light
+(`FUN_001310e8`, colour `(0.3, 0.3, 0.2)`, `D = 10`) and the other producers in renderer.md's
+table are still unwired.

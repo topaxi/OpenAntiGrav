@@ -745,8 +745,7 @@ returning false (the table's `+0`). It sets each model's clock with
 - **Draw** (`0x001512f8`): the fireball with the matrix at `+0x150`, the core,
   the bloom disc with `+0x1d0`, then two point lights at the blast's centre
   three units up (`0x006778c8`, ranges 40 and 100, colour `500, 200 -> 50...`,
-  `5, 0.5`). The lights are **not played**: this engine has no weapon point
-  light.
+  `5, 0.5`). **Played since 2026-10-08**, see "Weapon point lights" below.
 
 **How it was checked.** Ghidra stops at the AltiVec in these functions and marks
 `0x00327500` no-return, so a decompile of the start and the update is
@@ -980,8 +979,8 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   `+0x170 = p` (`0 -> 0.967`, linear, about `1.0 / s`: `0.0334, 0.0673, 0.1172, ... 0.9667` at 40 ms
   steps), `+0x17c = (1 - p)^2` and `+0x180 = 2 (1 - p)` (`0.9344 = 0.9666^2`, `1.9333 = 2 x 0.9667`,
   checked at all 25 samples to the fourth decimal). `+0x174 = 5.0` while alive and `-1.0` when free.
-  `Draw` reads `+0x17c` as the point light's intensity and `+0x17c * c` as its radius
-  (`0x006778c8(slot, 0x17c * k1 + k2, 0x17c * k3)`), so the light dies quadratically. **The entry
+  `Draw` reads `+0x17c` as the light's range (`* 150`) and falloff exponent (`* 7 + 1.5`)
+  (`0x006778c8(position, colour, D, w)`, no slot - see "Weapon point lights"), so the light dies quadratically. **The entry
   retires when `p` reaches 1: the count fell back to 0 at 5.45 s, 0.98 s after it rose** (`m3`: 0.96 s,
   the same boot's first observation), and every field is rewritten to its free value in one step.
   `HD_missile_explosion.vex`'s keyed `Anim Transform` nodes (`sphere`, `bloom`, `rays`, `shockwave`)
@@ -1049,7 +1048,7 @@ executable: not checkable here (no PS4 emulator).
   - shockwave (`@0x19b0`): the Bomb ring's program with `c = 0.45 S - (v + 0.05 n)` and `a = colour2.a * sum(tex(c,c).rgb) * (1 - S)`.
 - **Node clock.** `write_node_anims(age)` scales `sphere`/`bloom` 1x to 18x (model radius 6.44, so 9.3x = 60 units at 0.1 s).
 - **Chosen, not measured:** the orientation (the struck craft's own; `Start`'s source matrix unresolved), the
-  per-viewport visibility gate (not reproduced), alphas held to 1, no point light `(1-p)^2`, the 16 rotated entries at `+0x190` not drawn.
+  per-viewport visibility gate (not reproduced), alphas held to 1, the 16 rotated entries at `+0x190` not drawn.
 - **Matched pair** (Talon's Junction, `--force-missile-hit`, `data/scratch/hd-missile-blast/frames/pair_d.png`, film `m5`
   `h_011..h_028`): ours draws the cream-yellow core, orange ray arcs and ring discs, shape and colour like the film, but mean luma
   is 136/175/200/192/178 at ages 0.03/0.1/0.2/0.37/0.5 s against the film's 217/224/242/208/182. **Not reproduced:** the film's
@@ -1057,3 +1056,81 @@ executable: not checkable here (no PS4 emulator).
   explain a HUD wash, so it is a screen-space part (bloom/exposure, the point light, or a flash object) still unread.
 - **Omega:** `HD_missile_explosion` ships in Omega; same asset lineage as HD, so checked, applies, not wired
   (`oag-omega` has no `WEAPON_MODELS` entry, and its PS4 programs are unread).
+
+## Weapon point lights (2026-10-08, `hd-weapon-lights`)
+
+**The call has no light slot.** `0x006778c8` is a tail-call thunk to
+`SpuLight_AddCandidate` (`0x0040d990`), and the candidate store writes
+`record = (v2.x, v2.y, v2.z, f2 | v3.x, v3.y, v3.z, f1)`: **`v2` position, `f2`
+the falloff exponent `w`, `v3` colour, `f1` the range `D`** (`0x0040da38`-
+`0x0040dab0`, read again here, confidence 90). The earlier "`(slot, 1/f,
+radius)`" wording above and in the 2026-10-07 entries is retracted. The lights
+therefore ride the mechanism renderer.md already read end to end: `EdgeGeom`
+sums `max(0, 1 - |d|/D)^w * max(0, N.L) * colour` per vertex and the `SVC1`
+programs add it to the pre-albedo diffuse. This engine's `SpuLights` list and
+`spu_light_sum` are that, and the weapons only add records
+(`oag_raceplay::weapon_light`, chained after the engines' in
+`Race::hd_spu_lights`).
+
+| Producer | Function | Position | Colour | `D` | `w` | Confidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| Missile explosion | `MissileExplosion_Draw` (`0x00155420`, call `0x00155540`) | matrix row 3 at `this + 0xf0 + viewport * 0x40` | `(500, 200, 50)` | `150 f` | `7 f + 1.5` | 85 |
+| Rocket, per rocket per frame | `Rocket_SubmitLight` (`0x00123de8`, call `0x00123e90`) | row at `this + 0x90` | `(7, 5, 1)` | `50` (`0x008aa124`) | `1` | 85 |
+| Bomb blast, light 1 | `NormalBombBlast_Draw` (`0x001512f8`, call `0x001514bc`) | centre + 3 up | `(500, 100 + 100 x, 50)` | `40 s` | `7 (1 - x) + 1.5` | 75 |
+| Bomb blast, light 2 | same (`0x001514f8`) | centre + 3 up | `(20, 5, 0.5)` | `100 s` | same | 75 |
+
+`f = +0x17c = (1 - p)^2` for the Missile. The constants are `0x008ab258`
+(`150.0`), `0x008ab25c` (`7.0`), `0x008ab260` (`1.5`), `0x008ab0e8` (`40.0`),
+`0x008ab0e4` (`100.0`), `0x008ab0e0` (`7.0`), `0x008ab0ec` (`1.5`).
+
+**The Rocket's light is `0x00123de8`, not the one at `0x001246cc`.** Read live
+on RPCS3 (Talon's Junction, one rocket volley, `scripts` driver
+`data/scratch/hd-weapon-lights/lightdump.py`, six snapshots over the first
+1.0 s of flight): the visible buffer held the player's engine light
+`(4, 10, 40)` and **three** records `(7, 5, 1)`, `D = 50`, `w = 1` that moved
+with the three rockets (`x` from -116 to +256 across the snapshots), and the
+candidate list held the same four. **No `D = 100` record, so `Rocket_Update`'s
+`0x006778c8` call at `0x001246cc` (`D = 100`, `w = 1`, colour `(14, 10, r15)`
+with `r15 = 2.0` from `lis r15, 0x4000` at `0x00124540`, the only path into
+that store) is not a flight light.** It sits in the block that allocates a
+`0x180`-byte object after the `0x0007be58` trace, so an impact-side flash is the
+guess (below 50, unmeasured). The "colour `(14, 10, ?, ?)` unread" in
+`rocket-trail.md` is closed: `(14, 10, 2)`. Not wired.
+
+**The Bomb's `x` and `s`** are read off the original's own update, run in the
+emulator (`0x001503d8` stepped at 60 Hz then `0x001512f8`, which logs the
+calls): `x = 1` to 0.1 s, `1 - (t - 0.1) / 0.7` to 0.8 s, `((t - 0.8) / 0.7)^0.25`
+(`0x00677868` is `powf`, exponent `0x008ab168 = 0.25`) to 1.5 s, then
+`(1 - (t - 1.5) / 0.5)^2` to 2.0 s and 0; `s = 1` until 1.5 s, then `x`.
+Closed forms fitted to the emulated samples (four digits), breakpoints read
+from them: confidence 75.
+
+**Matched pairs** (Talon's Junction, `data/scratch/hd-weapon-lights/frames/`,
+`sheet_missile.png`, `sheet_rocket.png`, `sheet_bomb.png`, light off left, on
+right):
+
+- **Missile** (`m5` film): mean luma at ages 0.03/0.1/0.2/0.37/0.5 s, light off
+  130/146/162/164/159, light on **202/208/213/207/185**, film
+  **217/224/242/208/182**. The walls and track around the blast go to the film's
+  cream and white; the film's wash over the HUD and the player's hull remains
+  (screen-space, `hd-whiteout`'s), and the point light alone does **not** reach
+  the HUD.
+- **Rocket** (`r4`/`r5` film): the launch frames take a warm cream wash on the
+  track and walls near the craft, which the film's first frame also shows, and
+  it fades within about 0.3 s as the rockets leave; ours is stronger than the
+  film at the launch frame (mean luma 132 off, 178 on at tick 424).
+- **Bomb** (`hd-bomb-match` film): walls and track near the blast brighten to
+  white at 1.1 s as the film does; the film is whiter still (its craft is
+  nearer the bomb).
+
+**Chosen, not measured:** the Missile orientation is irrelevant to the light
+(centre only) but its position is the struck craft's; the Rocket's position is
+the projectile's own; the original keeps eight visible records and this engine
+passes every record to the vertex stage (no cap, no per-chunk cull); one
+viewport.
+
+**Omega:** `HD_missile_explosion` and the weapon objects ship in Omega, but its
+race path has no SPU `EdgeGeom` light stage that was measured (PS4, no
+executable capture path), so this is **not checkable**; **2048** has no
+`SpuLight_AddCandidate` equivalent read (`Authored::engine_light` is false there):
+checked, differs.

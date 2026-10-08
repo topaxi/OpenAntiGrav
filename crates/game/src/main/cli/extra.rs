@@ -203,6 +203,12 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_bomb_trip: Option<String>,
 
+    /// With `--race`, leave the weapons' point lights (Missile explosion, Rocket,
+    /// Bomb blast) out of Wipeout HD's SPU vertex-light list, so a picture can be
+    /// read for the model alone. See [`oag_raceplay::Race::set_weapon_lights`].
+    #[arg(long, requires = "race")]
+    pub(crate) no_weapon_lights: bool,
+
     /// With `--race --screenshot`, put craft `SLOT` on a Missile the player has
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `330:1`. The same aid
     /// `--force-bomb-trip` is, for the Missile's explosion: a headless run's

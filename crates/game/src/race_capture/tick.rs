@@ -71,6 +71,7 @@ pub(super) fn advance_one_tick(
         crate::medal_watch::tick(cell, *difficulty, &mut earned, race);
         options.medals.earned.set(earned);
     }
+    race.set_weapon_lights(!options.no_weapon_lights);
     if let Some((at, slot)) = options.force_wreck
         && at == tick
     {
