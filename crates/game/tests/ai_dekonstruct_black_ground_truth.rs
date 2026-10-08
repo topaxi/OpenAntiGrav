@@ -126,6 +126,19 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// impulse, and over seeds 4-23 (160 races) deaths were 110 before, 110 after.
 /// The cells moved because the races diverged, not because the AI drives worse.
 /// Read the cells as seed spread, as the 2026-10-05 note above does.
+///
+/// **Three cells raised 2026-10-08 for the Mine's six-tick drop** (lane
+/// `pulse-mine-drop`; the field now lays a cluster every 6 ticks, not 7, as the
+/// original does): RAPIER 1 reversed 0 -> 1, RAPIER 3 forward 1 -> 3, PHANTOM 3
+/// forward 1 -> 3; only the exceeded half of a row moved, every other bound
+/// stays (the other cells measured at or under theirs). Cause, per cell, with
+/// the old spacing against the new: the deaths are weapon-dominant (PHANTOM 3
+/// slots 5 and 6, RAPIER 1 reversed slot 6, RAPIER 3 slots 2, 3 and 4: weapon
+/// shield loss over wall plus roll) apart from PHANTOM 3 slot 4 (wall 57, roll
+/// 23, weapon 15). Mines are not shown to be the killer (a blast leaves no
+/// projectile to attribute), and the spread is per-seed divergence: over
+/// PHANTOM and RAPIER seeds 4-13 (80 races) deaths were 40 with the fix and 41
+/// with the old spacing (forward 18 against 19, reversed 22 against 22).
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),
@@ -133,12 +146,12 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("FLASH", 1, 2, 1),
     ("FLASH", 2, 0, 0),
     ("FLASH", 3, 0, 2),
-    ("RAPIER", 1, 1, 0),
+    ("RAPIER", 1, 1, 1),
     ("RAPIER", 2, 1, 2),
-    ("RAPIER", 3, 1, 3),
+    ("RAPIER", 3, 3, 3),
     ("PHANTOM", 1, 0, 1),
     ("PHANTOM", 2, 2, 3),
-    ("PHANTOM", 3, 1, 2),
+    ("PHANTOM", 3, 3, 2),
 ];
 
 fn check(class: &str, seed: u64) {
