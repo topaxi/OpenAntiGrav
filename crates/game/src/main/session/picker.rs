@@ -405,6 +405,11 @@ impl Session {
                 .as_ref()
                 .and_then(|shell| shell.title.front_end)
                 .is_some_and(|front_end| front_end.preview_meshes),
+            ship_hull: self
+                .shell
+                .as_ref()
+                .and_then(|shell| shell.title.front_end)
+                .and_then(|front_end| front_end.ship_preview_hull),
             globals: self
                 .shell
                 .as_ref()

@@ -649,11 +649,8 @@ pub fn run(
                 // ask for, and asking would log a miss for a file that is
                 // not supposed to be there - see
                 // `oag_title::FrontEnd::preview_meshes`.
-                preview_request = title
-                    .front_end
-                    .is_some_and(|front_end| front_end.preview_meshes)
-                    .then_some(request)
-                    .flatten();
+                preview_request = request
+                    .filter(|r| r.hull_only || title.front_end.is_some_and(|f| f.preview_meshes));
                 (backdrop, format, list, space)
             } else if let Some(kind) = campaign_kind(page) {
                 // The Race Campaign's own two screens - the disc's, opened

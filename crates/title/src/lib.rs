@@ -576,6 +576,13 @@ pub struct FrontEnd {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub preview_meshes: bool,
+    /// The file under a craft's own directory that its selection screen draws
+    /// as the 3-D craft when [`Self::preview_meshes`] is `false`: HD's
+    /// `Team Selection` draws the race hull (`ship.vex`, the pair
+    /// `ship.rcsmodel`) in its `ShipModel` frame, and ships no `ship_FE.vex`
+    /// (checked 2026-10-08: no `*FE*` mesh under any HD `Data\Ships\<team>`).
+    /// `None` everywhere a title has no such screen or draws stills.
+    pub ship_preview_hull: Option<&'static str>,
     /// The definition file that authors the three screens a race ends on -
     /// `EndRace Results`/`EndRace Rewards`/`EndRace Menu` - or `None` for a
     /// title whose copy has not been read.

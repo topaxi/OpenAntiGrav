@@ -41,11 +41,11 @@
 //!
 //! Not drawn, and said so:
 //!
-//! - **The 3-D ship.** The `ShipModel` widget's pose is read
-//!   ([`ShipModel`]), but HD ships no `ship_FE.vex` - the per-team
-//!   `screen.xml` names one and the archive has none - and the race hull
-//!   (`ship.vex` plus `ship.rcsmodel`) is not reachable from the preview
-//!   path yet.
+//! - **The 3-D ship** is the team's race hull (`ship.vex` plus
+//!   `ship.rcsmodel`; HD ships no `ship_FE.vex`), drawn by `oag_game` at a
+//!   fixed pose in this screen's `SHIP MODEL` frame. The pose is chosen, not
+//!   measured: the widget's own `ShipModel` values ([`ShipModel`]) are read
+//!   and not yet composed.
 //! - **The `HexSelection` grid.** Its colours are authored but its hex art
 //!   is the widget class's own, unread. See [`livery_line`] for what
 //!   stands in for the row it would highlight.

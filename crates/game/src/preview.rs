@@ -32,6 +32,78 @@ use oag_ui_screens::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
+/// The craft's framing on a title whose `Team Selection` draws the race hull
+/// ([`oag_title::FrontEnd::ship_preview_hull`]): **fixed, not a turntable** -
+/// the original's hull held the same pose across five seconds of frames
+/// (2026-10-08). The angles are **chosen, not measured**, fitted by eye to
+/// the original's frame; the widget's authored `RotX`/`RotY` are not yet
+/// composed.
+#[must_use]
+pub fn hull_orbit() -> Orbit {
+    Orbit {
+        yaw: 5.9,
+        pitch: 0.5,
+        zoom: 0.6,
+        ..Orbit::default()
+    }
+}
+
+/// Whether `title`'s `kind` selection screen draws the race hull as its craft
+/// ([`oag_title::FrontEnd::ship_preview_hull`]) rather than a `ship_FE.vex`.
+#[must_use]
+pub fn draws_hull(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) -> bool {
+    kind == oag_ui_screens::picker::Kind::Ship
+        && title
+            .front_end
+            .is_some_and(|f| !f.preview_meshes && f.ship_preview_hull.is_some())
+}
+
+/// The craft entry a `--menu-page ship-select` capture previews for a team at
+/// `location`.
+#[must_use]
+pub fn ship_entry(title: &oag_title::Title, location: &str) -> String {
+    let file = title.front_end.and_then(|f| f.ship_preview_hull);
+    format!(r"{location}\{}", file.unwrap_or("ship_FE.vex"))
+}
+
+/// The orbit a capture frames a preview with: the fixed hull pose, or the
+/// turntable at its first tick.
+#[must_use]
+pub fn capture_orbit(hull_only: bool, kind: oag_ui_screens::picker::Kind) -> Orbit {
+    if hull_only {
+        hull_orbit()
+    } else {
+        orbit_for(kind, 0.0)
+    }
+}
+
+/// Frames a race hull from the bulk of its vertices instead of all of them.
+///
+/// HD's `ship.vex` carries one chunk with a stray vertex hundreds of units
+/// from the craft (a bound of 257 against a hull some 13 units long, checked
+/// 2026-10-08 on `Assegai`), and the bounding sphere the viewer frames from
+/// then draws the craft as a speck. The 1st-to-99th percentile box of the
+/// vertex positions is the hull's own extent; the stray triangle is left in
+/// the mesh and simply sits outside the frame.
+pub fn frame_hull(model: &mut Model) {
+    let mut lo = [0.0f32; 3];
+    let mut hi = [0.0f32; 3];
+    for axis in 0..3 {
+        let mut values: Vec<f32> = model.vertices.iter().map(|v| v.position[axis]).collect();
+        if values.is_empty() {
+            return;
+        }
+        values.sort_by(f32::total_cmp);
+        lo[axis] = values[values.len() / 100];
+        hi[axis] = values[values.len() * 99 / 100];
+    }
+    model.centre = std::array::from_fn(|i| (lo[i] + hi[i]) * 0.5);
+    model.radius = (0..3)
+        .map(|i| (hi[i] - lo[i]) * 0.5)
+        .fold(0.0f32, f32::max)
+        .max(0.001);
+}
+
 /// How the ship preview on `Team Selection` is framed at `seconds` into the
 /// screen.
 ///
