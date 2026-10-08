@@ -125,3 +125,86 @@ beside `enginetrail_bluered_triangle`, so the ribbon family carries forward.
 Its materials are PS4 shaders, which `ps3-microcode.py` cannot read, so the
 fragment law above is HD's alone; the executable is not decoded here and no
 PS4 capture path exists. Not wired on Omega.
+
+## 2026-10-08 (`hd-leach-path`): measured live on RPCS3, path law and material read
+
+Two boots of a held LeachBeam (`data/scratch/hd-leach-path/run5`, `run6`; Racebox-free
+Fury campaign walk, player placed 40 units behind the nearest rival at that rival's
+speed, slot state written, TRIANGLE held), agreeing on every structure below.
+`+0xf0` of the pickup slot is the *owner* craft, not a target (a write there was
+overwritten by the game).
+
+**Which state is the LeachBeam: 10.** `Weapon_FireFromSlot` (`0x0012d970`)'s state-10
+handler (`0x0012dba8`) sets slot `+0x200` bit `0x8000`; the per-slot update
+(`0x0012ba80`) calls `LeachBeamManager_Fire` (`0x0013ccd0`, confidence 80), which
+writes `slot+0x204 = -1` (the spent state), arms beam 0 (`+0x40 = 1`) when manager
+`+0x88` (active count) is 0, calls the beam init `0x00154558` (or `0x00154360` with no
+target, index `slot+0x1ac == -1`) and increments `+0x88`. Written on a fresh boot
+(slot clean), state 10 fires at once: `(slot+0x204, +0x208)` goes `(-1, 10)`, manager
+`+0x88` 0 to 1. State 3 only sets `0x2000` and calls `0x00129048(5)`: nothing
+consumes it, the state stays 3 (four boots, up to 14 s held). Earlier "3 or 10"
+resolved to **10**, confidence 90. Writing 6, 1, 2 first leaves `0x800`/`0x2000`
+bits in `slot+0x200` and a later state 10 did not fire in that boot.
+
+**State machine** (`LeachBeam_Update` `0x001535f8`, jump table `0x001536e0`, state at
+`+0x4c`, clock at `+0xc934`; conf 80, read plus live): 2 = ball flight, 0.4 s
+(`2.5 * clock`, TOC `-0x22c8`), then clock = 0, state 3 (live: state 3 at clock 0.15);
+3 = reveal, to state 4 with clock 0 (`0x00153b2c`; 0.3 s by the TOC `-0x22c0` constant,
+the hand-read reveal rate `3.3333` agrees); 4 = held until the owner's end flags,
+then 6 (not drawn). `LeachBeam_DrawStrip` draws 3 and 4 only. Live: 3 to 4 to 6 seen
+with `n` growing 16, 22, 30, 40, 51, 66 samples as the rival pulls away.
+
+**The path (measured, conf 75).** The strip's samples are the **target's anchor
+trail**, not a line:
+
+- `LeachTrail_RecordAnchor` (`0x001169f8`, from `0x000ebfe8`, every tick, every craft):
+  anchor = `arc_anchor_point` node `+0x30` plus node `+0x10` (row 1) * `-1.7`, or the
+  body's `+0x200`/`+0x1e0` the same way when the hull has no node. If it is more than
+  **3.4** from the newest record (TOC `-0x37e4`) the head `craft+0x5ed0` steps (wrap
+  at 299 to 0), and the record at `craft+0x110 + head*0x50` is written: `+0x00` anchor,
+  `+0x10`/`+0x20` body rows `+0x1d0`/`+0x1e0`, `+0x30` four words from `craft+0x7820`,
+  `+0x40` the craft's track progress (`craft+0x7020`, a 0..1 lap fraction); the count
+  `craft+0x5ed4` saturates at 299.
+- `BeamPath_WalkTargetHistory` (`0x00116c48`): sample 0 is the target's anchor
+  (strip `+0x138` is the target, `+0x13c` the shooter; live, sample 0 sits on the rival
+  ahead). Then the target's ring newest first, keeping records whose progress is not
+  below the shooter's (a lap/wrap fix of +1.0 for a lap difference), and more than
+  1e-4 from both anchors; at the first record below it, one more point is the
+  inverse-lerp between the last kept and that one at the shooter's progress. The
+  progress of the last sample equals the shooter's `+0x7020` exactly (live).
+- `BeamPath_BendToTarget` (`0x00116090`, conf 80): `cum[i]` = running segment length,
+  `sample[i] = lerp(sample[i], shooter_anchor, cum[i] / cum[n-1])`, so sample 0 stays on
+  the target and the last lands on the shooter's anchor. Live: fitted bend fractions
+  match `cum/total` to 0.003 over 28 samples; predicted against dumped samples the
+  worst point is 2.1 units on a 125-unit beam, ends exact, and the sample count equals
+  the prediction in 3 of 6 snapshots (the others one record off at the head, a pause
+  between the ring write and the strip build).
+
+**The nodes** (`LeachBeamStrip_BuildRibbon` run in the scratch interpreter,
+`data/scratch/hd-leach-path/emu_strip.py`, conf 85): per sample from the shooter end,
+`forward = unit(sample[i] - sample[i-1])` (sample 0 reuses sample 1's), `up =
+unit(ref - (ref . forward) forward)` with `ref = (0, -1, 0)` (`RibbonNode_FromDirection`
+`0x002a3f70`), `right = up x forward`; half-width **1.0** (node `+0x68`), `u +=
+0.05 * segment length` starting 0 at the shooter end (`+0x6c`), colour word at node
+`+0x60` (not `+0x48`): `0xffffffff`, `t * 0x01010101` or 0 by the reveal law above
+(emulated for reveal 1.0/0.5/0.0, window 0 and 0.001). `RibbonBuilder_WriteVertexPair`
+(`0x002a4660`) reads half-width `+0x68`, `u` `+0x6c`, colour `+0x60`; three fins
+as the Rocket's (`RibbonBuilder_Alloc(300, 3)`), `v` 1 and 0.
+
+**The material** (`hd_leachbeam.rcsmaterial`, `ps3-microcode.py`, conf 85): vertex
+program `TC3 = (u + 2 time, v, colour.a, v)`, `TC4.x = u + time`; fragment: `n =
+2 * tex0(TC3.xy).r` (noise unit 0), `rgb = tex1(TC4.x + n, TC3.w).rgb * colour.rgb`,
+`alpha = tex1.a * |facing| * colour.a * saturate(0.75 * z)`; `time` is engine
+parameter `0x906b67ba`. Which GTF is unit 0 and unit 1, the samplers' wrap state, and
+the blend of this draw (it is not `RibbonEffects_Render`'s) are **unread**.
+
+**Film** (`run7/rec.mp4`, 8 fps sheet `run7/fr/beam_sheet.png`): thin white and violet
+crackling arcs from the player to the rival, a few units wide, not a smoke ribbon.
+
+**Not drawn, and why.** The draw needs (1) an anchor trail per craft recorded every
+tick, (2) the HD state timeline on top of our Pulse-lineage beam, (3) a pipeline with
+a second texture, the `time` parameter and a blend nobody read. (3) is the blocker:
+any texture assignment or blend would be chosen. Nothing wired.
+
+**Omega:** checked, differs (PS4 shaders, `ps3-microcode.py` cannot read them); the
+ring and walker are EBOOT code, not decoded for Omega.
