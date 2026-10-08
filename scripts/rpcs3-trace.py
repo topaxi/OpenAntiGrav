@@ -10,13 +10,13 @@ memory read `scripts/rpcs3-mem-poll.py` measured (`/proc/<pid>/mem` at
     OAG_RPCS3_PAD_NAME="OAG Pad <lane>" XDG_CONFIG_HOME=... XDG_CACHE_HOME=... \\
         uv run --with evdev python3 scripts/rpcs3-trace.py \\
         --image <abs>/hdfury-ps3-eu-dec.iso --out <dir> \\
-        --run name=verification/scenarios/straight-line.inputs[@x,y,z,yaw[,speed]] ...
+        --run name=verification/scenarios/hd-thrust.inputs[@x,y,z,yaw[,speed]] ...
 
 One boot runs every `--run`. Each one optionally teleports the player
-(`rpcs3_place`), then plays the script **keyed on the game's own physics tick**
-(`craft+0x308`, the game clock), not on host time or frames: RPCS3 runs
-this game below real time, so a host-timed script would be stretched by
-whatever speed the emulator managed. Every sample is the body's state plus the
+(`rpcs3_place`), then plays the script **keyed on the game's own clock**
+(`craft+0x308`), not on host time or frames: HD integrates each frame with that
+frame's own delta and RPCS3 sometimes drops to 30 fps, so a frame-keyed script
+holds a state for a game time that depends on the emulator. Every sample is the body's state plus the
 control values the craft itself read (`craft+0x30c` throttle, the
 `PlayerInput` record's steer and pitch), so the trace records what the game
 received, latency included, rather than what was pressed.
@@ -124,11 +124,12 @@ def snapshot(guest, objs):
 OPTIONS_PTR = 0x008B098C
 OPT_PILOT_ASSIST = 0x473
 
-#: Script button -> pad button. `l`/`r` are this engine's airbrakes; which HD pad
-#: buttons they are is `--map`'s business (measured, see the capture page).
+#: Script button -> pad button. `l`/`r` are this engine's airbrakes, and on HD
+#: they are L2/R2 (measured 2026-10-08: L2 turns left, R2 right, L1/R1 move
+#: nothing; `PlayerInput+0x54/+0x58` read 100 on the press).
 DEFAULT_MAP = {"cross": "cross", "circle": "circle", "square": "square",
                "triangle": "triangle", "up": "up", "down": "down",
-               "left": "left", "right": "right", "l": "l1", "r": "r1",
+               "left": "left", "right": "right", "l": "l2", "r": "r2",
                "start": "start", "select": "select"}
 
 HEADER = ["time", "dt", "throttle", "steer", "pitch", "airbrake_l", "airbrake_r",
@@ -166,12 +167,14 @@ def row_of(game_t, dt, wt, s, extra, inputs_key, pressed):
     inp = s.get(inputs_key)
     steer = struct.unpack_from(">f", inp, 0x4C)[0] / 100.0 if inp else 0.0
     pitch = struct.unpack_from(">f", inp, 0x5C)[0] / 100.0 if inp else 0.0
+    brake_l = struct.unpack_from(">f", inp, 0x54)[0] / 100.0 if inp else 0.0
+    brake_r = struct.unpack_from(">f", inp, 0x58)[0] / 100.0 if inp else 0.0
     throttle = struct.unpack_from(">f", s["entry"], 0x30C)[0] / 100.0
     # Our trace's `right` column is cross(forward, up); HD's row 0 is
     # cross(up, forward), so the column is its negation.
     right = tuple(-c for c in r0)
     speed = sum(v * v for v in vel) ** 0.5
-    return [game_t, dt, throttle, steer, pitch, extra.get("abl", 0.0), extra.get("abr", 0.0),
+    return [game_t, dt, throttle, steer, pitch, brake_l, brake_r,
             *right, *up, *fw, *pos, *vel, speed, wt, extra.get("rival", -1.0), pressed]
 
 
@@ -322,6 +325,16 @@ def main():
             sys.exit("guest base is not 0x300000000 on this build")
         world = find_world(guest, body)
         inputs = guest.scan(struct.pack(">I", PLAYER_INPUT_VTABLE))
+        # The craft's loaded handling blocks, as the game holds them after its
+        # own load-time scaling: `craft+0x7c` (read by the airbrake update for
+        # gain/falloff/amount/turn/drag at +0x44..+0x54), `+0x78` (the second
+        # ramp's block, +0x7c/+0x80) and `+0x84` (the airbrake targets).
+        blocks = {}
+        for off in (0x74, 0x78, 0x7C, 0x80, 0x84, 0x88):
+            ptr = guest.u32(entry + off)
+            if 0x30000000 <= ptr < 0x40000000:
+                blocks[off] = (ptr, guest.read(ptr, 0x200))
+        pickle.dump(blocks, open(out / "handling-blocks.pkl", "wb"))
         meta = {"ship": ship, "body": body, "entry": entry, "world": world,
                 "inputs": inputs, "rivals": rivals, "track": track, "map": mapping}
         print(meta, flush=True)
