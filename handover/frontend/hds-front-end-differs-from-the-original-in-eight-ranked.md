@@ -15,8 +15,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   original's default team is the maintainer's save (Feisar), not a gap
 - Cell Selection (closed 2026-10-08, hd-cell-select: back card face-on, 32-hex
   field, four `_bw` icons, `corner2` brackets, next-grid logo, barcode, rule,
-  capitals): the wordmark's glow and bloom, the card's `CARD_GAIN` mechanism
-  (which materials carry the 2x, unread), the Y-joint and mark margins (one
+  capitals): the wordmark's glow and bloom, the card's `FURY_GAIN` mechanism
+  (which materials carry the 2x, unread; the base campaign's cards and their
+  backs have no measurement), the Y-joint and mark margins (one
   frame), a Tournament cell and the `NitroBattle` icon (no `_bw` file named for
   it), and the live pad/pointer walk (headless stills only)
 - Frame chrome (closed 2026-10-08): the title's size and offset against the

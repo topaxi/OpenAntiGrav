@@ -110,6 +110,7 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
         &GridSummary::from_grid(grid),
         &CellArt {
             next_flyer: None,
+            fury: true,
             track_emblem: &|id| campaign.circuit_emblems.get(&id.to_lowercase()).cloned(),
         },
         None,
@@ -152,5 +153,67 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
     assert!(
         marks >= 4 * 4,
         "four marks on each of the screen's brackets: {marks}"
+    );
+}
+
+/// Every cell of all sixteen grids: each emblem the screen can name for it is on
+/// the sheet, and the only cells that name none are the ones documented as having
+/// no such file.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_cell_of_every_grid_names_emblems_that_are_on_the_sheet() {
+    let Some(opened) = open() else { return };
+    let campaign = &opened.campaign;
+    let emblem = |id: &str| campaign.circuit_emblems.get(&id.to_lowercase()).cloned();
+    let mut cells = 0;
+    let mut no_event_icon = Vec::new();
+    for grid in &campaign.grids {
+        for cell in &grid.cells {
+            cells += 1;
+            for slot in [
+                "Event Emblem",
+                "Track Emblem",
+                "Speed Class Emblem",
+                "Weapons Emblem",
+            ] {
+                match cell_emblems::source(slot, cell, &emblem) {
+                    Some(src) => assert!(
+                        campaign.sprites.get(&src).is_some(),
+                        "{}: {slot} names {src}, which is not on the sheet",
+                        cell.name
+                    ),
+                    None => match slot {
+                        "Event Emblem" => {
+                            no_event_icon.push(format!("{} {:?}", cell.name, cell.mode));
+                        }
+                        "Speed Class Emblem" => {
+                            // A class that is not one of the four speed classes: Zone's,
+                            // Detonator's (`Zone`) and NitroBattle's own.
+                            assert!(
+                                ["Zone", "NitroBattle"].contains(&cell.class.as_str()),
+                                "{} class {:?}",
+                                cell.name,
+                                cell.class
+                            );
+                        }
+                        "Track Emblem" => assert!(
+                            cell.track.as_deref().is_none_or(str::is_empty)
+                                || cell.mode == oag_tables::race_campaign::Mode::Tournament,
+                            "{} on {:?} has no circuit emblem",
+                            cell.name,
+                            cell.track
+                        ),
+                        other => panic!("{}: {other} names nothing", cell.name),
+                    },
+                }
+            }
+        }
+    }
+    assert!(cells >= 160, "{cells} cells walked");
+    assert!(
+        no_event_icon
+            .iter()
+            .all(|cell| cell.contains("NitroBattle")),
+        "only NitroBattle has no mode icon: {no_event_icon:?}"
     );
 }

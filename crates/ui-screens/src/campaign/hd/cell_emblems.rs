@@ -95,7 +95,8 @@ fn mode_stem(mode: &Mode) -> Option<&'static str> {
 }
 
 /// The `src` of the picture `slot` shows for `cell`; `None` for no picture.
-fn source(
+#[must_use]
+pub fn source(
     slot: &str,
     cell: &Cell,
     track_emblem: &dyn Fn(&str) -> Option<String>,

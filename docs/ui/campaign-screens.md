@@ -4133,16 +4133,18 @@ card drew. The picture is `Data\FE\Flyers\<grid>\flyer_Back.vex` (`bgplane`,
 - **The outline is the front's, mirrored.** `00_flyer.vex`'s `cardShape` (chamfer
   top-left, notches) cut the back at its chamfer top-right with the notches on the
   other edge, as the frame shows; no reflection under it.
-- **Cards are drawn at twice their texel colour: `CARD_GAIN` 2.0, measured,
-  mechanism unread.** The back panel's texel is 63 and the frame shows 130; the
-  stripe texel 197 shows 255; `Grid Selection`'s front card's dominant red is 255
-  where the undoubled texel drew 198 (so this also brightens Grid's card, which the
-  flyer thread had called "duller reds"). Done through the vertex colour with
-  `vertex_colour_is_light` off, no shader change. **Not on `Campaign Selection`'s
-  two cards** (`CAMPAIGN_GAIN` 1.0): undoubled they matched the frame; doubled the HD
-  card clamps to a white rectangle. Which materials carry the factor is unread
-  (`basicnonalpha`'s fragment block multiplies by a patched `float1`, slot `0x2c`;
-  the value was not read).
+- **Fury's cards are drawn at twice their texel colour: `FURY_GAIN` 2.0,
+  measured, mechanism unread.** The back panel's texel is 63 and the frame shows
+  130; the stripe texel 197 shows 255; `Grid Selection`'s front card's dominant red
+  is 255 where the undoubled texel drew 198 (so this also brightens Fury's Grid
+  cards, which the flyer thread had called "duller reds"). Done through the vertex
+  colour with `vertex_colour_is_light` off, no shader change. **Not on the base
+  campaign's eight cards (`BASE_GAIN` 1.0) nor on `Campaign Selection`'s two
+  (`CAMPAIGN_GAIN` 1.0)**: doubled, `01_uplift`'s cyan and white and the HD
+  campaign card clamp to flat colour where the earlier fit matched the undoubled
+  texels, and no RPCS3 frame of a base `Cell Selection` exists to measure its back
+  against. Which materials carry the factor is unread (`basicnonalpha`'s fragment
+  block multiplies by a patched `float1`, slot `0x2c`; the value was not read).
 - Not drawn: the wordmark's glow and bloom (the thread's open item), the
   `blitzed` sliver above the wordmark's ascenders (a layer clipped by the window).
 
@@ -4180,8 +4182,11 @@ draws them, and neither draws once the figure is met or on the last grid.
 
 **Text.** The screen authors every label and value `TitleColor` (`0xFF646464`); the
 frame draws headings at `150,150,150` and values at 255 (`cell_text`, **measured on
-one frame, confidence 60**, by widget name), and `SINGLE RACE`/`VENOM`/the counter in
-capitals where the string table holds `Single Race`/`Venom`. `CAMPAIGN RECORD` reads
+one frame, confidence 60**, by widget name) - **on Fury's red cards only**
+(`CellArt::fury`): the base campaign's cards are white, white values would not read,
+and no base frame exists, so they keep the authored colour. `SINGLE RACE`/`VENOM`/the
+counter are in capitals where the string table holds `Single Race`/`Venom` (every
+campaign, a case rule), and `GridNum`'s `font="Title"` draws in the title face. `CAMPAIGN RECORD` reads
 `NONE` with no saved record (the frame does).
 
 **Frame chrome (item 3).**
@@ -4205,12 +4210,25 @@ capitals where the string table holds `Single Race`/`Venom`. `CAMPAIGN RECORD` r
   (`FE_NAVIGATION`, x 260) are siblings of the footer's controller, outside the
   prompts the legend read; they are now a `PromptKind::Navigation` in the legend.
 
+**What was looked at after the change, and not only on Fury** (stills,
+`data/scratch/hd-cell-select/`): the base campaign's `cell-select-hd` and
+`grid-select-hd` (`d_base.png`, `e_both.png`), Omega's `cell-select` and
+`grid-select` (`checks.png`, `om-*.png`), HD's `Main Menu` and Ship Select
+(`checks.png`). **Walked live** (windowed, Xvfb, lvp, keyboard, `data/scratch/hd-cell-select/live/`):
+Main Menu, Campaign Select, Grid and Cell Selection on Fury, and one Down press
+moving the cursor to the first `Elimination` cell, whose card, `ELIMINATOR` icon,
+`THE AMPHISEUM` emblem, `INFINITE` laps and `TARGET 200` line draw
+(`live/p12.png`). **Not walked live**: a pointer hover or click on the new page
+(the hex targets are unchanged and covered by `campaign_pointer_ground_truth`).
+
 **Omega** (census 2026-10-08, `data/extracted/ps4`): ships its own flyers
 (`000_flyer`, `0000_flyer`, `.gnf`/PS4 `.rcsmodel`), a `cellmode_definition.xml` in
 `data07`/`data09` and per-circuit `TrackSelectEmblem_BW.gnf`; no `corner2` and no
 `*_bw` mode icons under those names. Checked, applies in part, not wired (`load_omega`
-draws no flyer and no emblem); the quad-buffer fix and the legend's caption apply to
-its campaign pages as far as they draw.
+draws no flyer and no emblem, and it has no `corner2`); the quad-buffer fix and the
+legend's `SCREEN TITLE` caption and `NAVIGATION` entry now draw on its pages too,
+because its root skin authors the same widgets - **unmeasured for Omega** (no PS4
+emulator), so flagged for the lead rather than scoped away.
 
 **Still open** (item 4, page transitions): the screen authors per-widget
 `transition`/`delay` keys (`bBg_0_0` 0.4 s, the emblems 0.05 to 0.275 s, the

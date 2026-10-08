@@ -179,18 +179,23 @@ impl Side {
     }
 }
 
-/// How much brighter a grid's card is than its textures: every texel doubled
-/// (and clamped). **Measured, mechanism unread.** A flat panel's texel is 63
-/// and RPCS3 shows 130 (`Cell Selection`, the back's `flyer_back_colour.gtf`);
-/// the stripe texture's 197 shows 255 on both the back and `Grid Selection`'s
-/// front, whose dominant red is 255 against the 198 an undoubled texel drew.
-/// **Not on the two `Campaign Selection` cards**: undoubled they matched the
-/// frame (the HD card's teal and white), doubled the HD card clamps to a plain
-/// white rectangle, so they take [`CAMPAIGN_GAIN`]. What writes the factor, and
-/// which materials it belongs to, is unread.
-pub const CARD_GAIN: f32 = 2.0;
+/// How much brighter one of Fury's grid cards is than its textures: every texel
+/// doubled (and clamped). **Measured on Fury, mechanism unread.** A flat panel's
+/// texel is 63 and RPCS3 shows 130 (`Cell Selection` of `09_blitzed`, the
+/// back's `flyer_back_colour.gtf`); the stripe texture's 197 shows 255 on both
+/// the back and `Grid Selection`'s front, whose dominant red is 255 against the
+/// 198 an undoubled texel drew.
+pub const FURY_GAIN: f32 = 2.0;
 
-/// The `Campaign Selection` cards' gain: none.
+/// The base campaign's eight grid cards, front and back: **no gain**. Not
+/// measured against a frame of its own `Cell Selection`; doubled, the eight
+/// cards' cyan and white clamp to flat colour where the earlier fit to RPCS3's
+/// base `Grid Selection` frames matched the undoubled texels.
+pub const BASE_GAIN: f32 = 1.0;
+
+/// The two `Campaign Selection` cards: none. Undoubled they matched the frame;
+/// doubled the HD card clamps to a plain white rectangle. Which materials carry
+/// the factor is unread.
 pub const CAMPAIGN_GAIN: f32 = 1.0;
 
 /// One card to load: a flyer's model, the window of its camera's image it
@@ -205,7 +210,7 @@ pub struct CardSpec {
     pub window: f32,
     /// `1.0` or [`CAMPAIGN_STRETCH`].
     pub stretch: f32,
-    /// [`CARD_GAIN`] or [`CAMPAIGN_GAIN`].
+    /// [`FURY_GAIN`], [`BASE_GAIN`] or [`CAMPAIGN_GAIN`].
     pub gain: f32,
 }
 

@@ -18,10 +18,10 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   so Fury's ship silhouette is flat white where RPCS3 shades its facets and its
   reds are duller. Try: watch the three parameters' patch slots in RPCS3.
 - **The bloom and glow** RPCS3 shows around every card.
-- **`CARD_GAIN` 2.0** (2026-10-08, hd-cell-select) doubles a grid card's and a
-  back card's texels: measured (63 to 130, 197 to 255, Grid's dominant red 198 to
-  255), mechanism unread. The two `Campaign Selection` cards keep gain 1.0 (the HD
-  card clamps white at 2.0). Find which materials carry it (`basicnonalpha`'s
+- **`FURY_GAIN` 2.0** (2026-10-08, hd-cell-select) doubles a Fury grid card's and
+  its back's texels: measured (63 to 130, 197 to 255, Grid's dominant red 198 to
+  255), mechanism unread. The base campaign's eight cards and the two `Campaign
+  Selection` cards keep gain 1.0 (clamped flat at 2.0). Find which materials carry it (`basicnonalpha`'s
   fragment block multiplies by a patched `float1`, slot `0x2c`) and whether the
   campaign cards' materials differ.
 - **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle

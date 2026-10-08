@@ -100,6 +100,7 @@ fn drawn(summary: &GridSummary, next: Option<&str>) -> Vec<String> {
         summary,
         &CellArt {
             next_flyer: next,
+            fury: true,
             track_emblem: &|_| None,
         },
         None,

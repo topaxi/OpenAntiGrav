@@ -450,26 +450,31 @@ fn load_hd(
     // `Campaign Selection` cards, each with the window of its camera's image
     // it shows.
     let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let window = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
-            crate::flyer::HD_WINDOW
+        let (window, gain) = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
+            (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
         } else {
-            crate::flyer::FURY_WINDOW
+            (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
         };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
             side: crate::flyer::Side::Front,
             window,
             stretch: 1.0,
-            gain: crate::flyer::CARD_GAIN,
+            gain,
         })
     });
-    let back_cards = grids.iter().filter_map(|grid| {
+    let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
+        let gain = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
+            crate::flyer::BASE_GAIN
+        } else {
+            crate::flyer::FURY_GAIN
+        };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
             side: crate::flyer::Side::Back,
             window: crate::flyer::BACK_WINDOW,
             stretch: crate::flyer::BACK_STRETCH,
-            gain: crate::flyer::CARD_GAIN,
+            gain,
         })
     });
     let campaign_cards = [

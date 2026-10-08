@@ -40,10 +40,10 @@ fn is_capitalised(name: &str) -> bool {
 }
 
 /// `text`'s draw on `Cell Selection`.
-pub(super) fn draw(text: &Text, content: &str, layout: &Layout) -> Draw {
+pub(super) fn draw(text: &Text, content: &str, layout: &Layout, recolour: bool) -> Draw {
     let name = text.name.as_deref().unwrap_or("");
     let mut text = text.clone();
-    if text.color == TITLE_COLOR {
+    if recolour && text.color == TITLE_COLOR {
         text.color = if is_heading(name) { HEADING } else { VALUE };
     }
     let content = if is_capitalised(name) {

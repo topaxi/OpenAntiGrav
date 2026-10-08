@@ -269,6 +269,12 @@ impl CampaignStage {
         }
     }
 
+    /// Whether the open grid is one of Fury's: its card is red and its page
+    /// draws the text colours measured on that card.
+    pub(crate) fn fury_open(&self) -> bool {
+        self.active_campaign == Some(Campaign::Fury)
+    }
+
     /// The sheet `src` of circuit `id`'s white emblem, when it has one.
     pub(crate) fn circuit_emblem(&self, id: &str) -> Option<String> {
         self.circuit_emblems.get(&id.to_lowercase()).cloned()

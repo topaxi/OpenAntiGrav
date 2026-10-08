@@ -336,6 +336,10 @@ fn event_counter(index: usize, total: usize) -> String {
 pub struct CellArt<'a> {
     /// The next grid's `FlyerName`, whose logo the unlock box shows.
     pub next_flyer: Option<&'a str>,
+    /// The grid is one of Fury's, whose card is red: the text colours
+    /// [`cell_text`] applies were measured on it, and the base campaign's white
+    /// cards keep the authored ones (white values would not read on them).
+    pub fury: bool,
     /// A circuit id's white emblem, as the `src` the sheet holds it under.
     pub track_emblem: &'a dyn Fn(&str) -> Option<String>,
 }
@@ -614,7 +618,7 @@ pub fn hd_cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(cell_text::draw(text, &content, layout));
+        out.push(cell_text::draw(text, &content, layout, art.fury));
     }
     for image in &screen.images {
         let Some(name) = image.name.as_deref() else {

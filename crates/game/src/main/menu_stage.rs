@@ -612,6 +612,7 @@ impl MenuStage {
                             &grid_summary,
                             &oag_ui_screens::campaign::hd::CellArt {
                                 next_flyer,
+                                fury: campaign.fury_open(),
                                 track_emblem: &|id| campaign.circuit_emblem(id),
                             },
                             if frozen_race { None } else { shown },
