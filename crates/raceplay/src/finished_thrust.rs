@@ -91,7 +91,13 @@ pub(super) struct RaceTerms<'a> {
 ///
 /// `None`, said so in `report`, when the class is not one of the four or
 /// the file is absent or does not parse - Pulse ships one per class (PSP and
-/// PS2 alike), Pure one file of another shape, HD/Fury none. With no
+/// PS2 alike), Pure one file of another shape. HD/Fury, 2048 and Omega ship
+/// Pulse's own four, value for value
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ai-stats.md`), so they read theirs
+/// here too; the cap is **Pulse's law, unmeasured on HD**: HD's
+/// `AI_ComputeOpponentThrust` (`0x000fdf00`) gives a finished craft a spread
+/// of `75` rather than `50` and a wander offset of `8 - place`, which the
+/// lower-stop formula does not read and which no HD capture has tested. With no
 /// `stats.xml` read (anything but Pulse on a PSP disc: PS2 Pulse keeps its
 /// track table where this project does not read it) the skill scale is
 /// `2.0`, the value the original substitutes only when its own table is
