@@ -103,3 +103,15 @@ fn a_live_bomb_blast_reaches_the_frame_list() {
     race.view.hd_bomb_blasts[0] = Some(crate::bomb_blast::hd::HdBlast::new(Vec3::ZERO, Vec3::Y));
     assert_eq!(race.hd_spu_lights().len(), before + 2);
 }
+
+/// `--no-weapon-lights` leaves the engines' lights and drops the weapons'.
+#[test]
+fn the_verification_switch_drops_the_weapons_alone() {
+    let mut race = hd_race();
+    let engines = race.hd_engine_lights().len();
+    race.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
+    race.set_weapon_lights(false);
+    assert_eq!(race.hd_spu_lights().len(), engines);
+    race.set_weapon_lights(true);
+    assert_eq!(race.hd_spu_lights().len(), engines + 1);
+}

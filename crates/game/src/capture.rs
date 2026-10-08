@@ -452,6 +452,7 @@ pub fn run(
                 force_leach_lock: None,
                 force_bomb_trip: None,
                 force_missile_hit: None,
+                no_weapon_lights: false,
                 force_shield: Vec::new(),
                 medals: Default::default(),
                 scheme: options.scheme,

@@ -532,6 +532,7 @@ impl Race {
                 nozzles,
                 engine_lights,
                 spu_vertex_lights,
+                hd_weapon_lights: true,
                 engine_light_jitter: [super::engine_light::Jitter::default(); MAX_SHIPS],
                 engine_light_rng: std::array::from_fn(|slot| {
                     Rng::new(super::engine_light::engine_light_seed(slot))

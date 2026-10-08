@@ -163,12 +163,19 @@ pub(crate) fn rocket_record(position: Vec3) -> SpuLight {
 }
 
 impl Race {
+    /// Switches the weapons' point lights on or off; a verification aid
+    /// (`--no-weapon-lights`). On by default.
+    pub fn set_weapon_lights(&mut self, on: bool) {
+        self.view.hd_weapon_lights = on;
+    }
+
     /// Every SPU vertex light this frame: the engines', then the weapons'.
     /// Empty off HD and on a circuit that switches the lights off.
     #[must_use]
     pub fn hd_spu_lights(&self) -> Vec<SpuLight> {
         let mut lights = self.hd_engine_lights();
-        if !self.view.hd_trail_active || !self.view.spu_vertex_lights {
+        if !self.view.hd_trail_active || !self.view.spu_vertex_lights || !self.view.hd_weapon_lights
+        {
             return lights;
         }
         lights.extend(self.hd_weapon_lights());
