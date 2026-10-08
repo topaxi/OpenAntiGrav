@@ -1458,14 +1458,13 @@ verification/scenarios/mine-stationary-fire.inputs`, tick `304 + k`. The number 
 brightness of the top 200 rows (`R+G+B)/3`). Frames and logs: `data/scratch/pulse-weapon-look/`
 (`mine-orig-r1`, `mine-orig-r5`, `mine-orig-r5b`, `mine-ours*`).
 
-**Is the three-bump wash the cluster? Yes (confidence 90, two boots of the five-round run, one of the
-one-round run).** The discriminator written before the capture: one round (`0x1ac=1`) must show one
+**Is the three-bump wash the cluster? Yes (confidence 80: one PPSSPP boot, the five-round run restarted twice in it and the one-round run once - restarts, not reboots).** The discriminator written before the capture: one round (`0x1ac=1`) must show one
 bump, five rounds several.
 
 | round counter | brightness, fire+k | reading |
 | --- | --- | --- |
 | 1 | 98 at k=0, 88 at k=30, **186** at 32, 144 at 38, 100 at 46, back to 90 by 52 | one blast, one decaying bump, 20 frames |
-| 5 | 88 at k=30, 192 at 32, **210** at 38, **205** at 44, **210** at 50, 159 at 54, 110 at 60 | bumps at 32, 38, 44, 51: one per laid mine |
+| 5 | 88 at k=30, 192 at 32, **210** at 38, **205** at 44, **210** at 50, 159 at 54, 110 at 60 | bumps at 32, 38, 44, 51 (both restarts agree): one per laid mine |
 
 Each mine trips 0.5 s after it is laid (`Mine_InArmingDelay`, the owner-exemption section below), the
 first mine leaves on the press frame and the rest six frames apart, so the blasts go off at
@@ -1491,8 +1490,9 @@ frame (the 2026-09-15 measurement: six frames, seven now and then). Passing the 
 against the original's 32, 38, 44, 51 with the brightness tail agreeing (123 against 124 at k=59), and a unit test
 (`a_cluster_leaves_every_six_ticks_at_sixty_hertz`, drops on ticks 0, 6, 12, 18, 24). **It was backed out of the
 branch**: it moves `ai_dekonstruct_black_ground_truth` (`phantom_seed_3` forward 3 destroyed against a ceiling of 1,
-`rapier_seed_1` and `rapier_seed_3` over theirs too), because the seven AI Aces lay mines with weapons on and a
-faithful six-tick cluster kills more of the field. Those ceilings "may only fall" and are the AI lane's, so raising
+`rapier_seed_1` and `rapier_seed_3` over theirs too; all 13 cells pass with slack 0). The seven AI Aces play with weapons on, so
+mine kills are the obvious suspect, but **whether the extra deaths are mine kills or the per-seed divergence the test's own
+notes call chaotic was not checked**. Those ceilings "may only fall" and are the AI lane's, so raising
 them is the maintainer's or the lead's call. The ready patch is `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`
 (commit `9dc9b01b8` on the lane's history, reverted in the next commit); whether the AI should lay or avoid
 mines the way the original does is the open question it carries.
