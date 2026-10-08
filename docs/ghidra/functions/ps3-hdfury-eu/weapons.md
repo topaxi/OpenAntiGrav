@@ -1154,22 +1154,21 @@ while the eye is inside it.** Four draws sit on the scene target with a large wo
 
 | Draw | Scale | State | Reading |
 | --- | --- | --- | --- |
-| 638 | 10.60 | opaque, alpha test on `LESS` (ref unread: its register is overwritten by blits), depth mask on, `LEQUAL`, cull off | the fireball, `ColourAnim` constant 0.3649 |
+| 638 | 10.60 | opaque, alpha test on `LESS` (ref `0x7f` = 0.5, read off the subchannel-0 stream by `hd-blast-fill`), depth mask on, `LEQUAL`, cull off | the fireball, `ColourAnim` constant 0.3649 |
 | 639 | 10.49 (= 0.99 x 10.60) | the same | the core, `ColourAnim` constant 0.9 |
 | 640 | 10.64 | additive `SrcAlpha`/`One`, no depth write, alpha test off | the bloom disc (`hd_bombfire_bloomring`) |
 | 641 | 53.33 | additive, no depth write | the first ring (`0.1 -> 53.33`) |
 
-The fireball's `ColourAnim` 0.3649 puts the blast at age about 0.55 s by the law above (`x = 2 (age - 0.1) / 1.4 - 1`,
-`|x|` branch), the centre 9.5 units from the eye (`c[259]` against `c[465]`) and the fireball radius 10.6: **the eye is
-inside both the fireball and the core**, the case the open question asked about. Both draws use the same program
-(`fp 0074cf01`/`0074d3c1`, the 50-instruction `@0x1d90` block: its `RCP`s give the `(1 - ColourAnim)^-1` multiplier, 1.57 and
-10) and the same state, face culling off. So the original cannot be skipping the core by a draw condition or by
-culling. **A lead, not tested:** both programs carry the clock parameter `AlphaAnim` as `0.996105`, where the law table
-above gives `1.0` for age 0 to 0.75 s and ours takes the `divisor == 0` branch of the shader (any texel with alpha above
-zero is cut, `shade.wesl`). With `0.996` the divisor is 0.0039 instead of 0 and only texels with alpha above 0.992 are
-cut. If the original's clock is not exactly 1 over that stretch, our fireball and core are cut far more than the
-original's and the white wedge is a symptom of that. Confidence 60 that the constant is the clock (read in both
-draws, same value); the effect on our picture is not measured here.
+The fireball's `ColourAnim` 0.3649 puts the blast at age **0.81 s** (`x = 2 (age - 0.1) / 1.4 - 1`, the `x^0.25` branch
+since `x > 0`; the first reading took the `|x|` branch and said 0.55 - corrected 2026-10-08, `hd-blast-fill`), the centre 9.5 units
+from the eye (`c[259]` against `c[465]`) and the fireball radius 10.6: **the eye is inside both the fireball and the core**, the case
+the open question asked about. Both draws use the same program (`fp 0074cf01`/`0074d3c1`, the 50-instruction `@0x1d90` block: its
+`RCP`s give the `(1 - ColourAnim)^-1` multiplier, 1.57 and 10) and the same state, face culling off. So the original cannot be
+skipping the core by a draw condition or by culling. **The `AlphaAnim` lead is closed** (`hd-blast-fill`): both programs carry
+`0.996105`, and our own clock law at age 0.81 is `1 - (0.81 - 0.75)^2 = 0.99610`, so the constant is the clock, not a
+discrepancy. Nor was "any texel with alpha above zero is cut" right of our shader: at a divisor of 0 the numerator
+`0.5 a + 0.5 - 1` is never positive, so nothing is cut; at 0.996 only texels with alpha at or above 0.996 go, 1.4 % of the
+texture.
 
 **Not settled:** how the original's frame *looks* at that age, and a second boot of the core's state. The first boot's
 screenshots were taken before the retried dump (the dump follows a resume), so bomb0's picture shows an earlier
@@ -1279,3 +1278,63 @@ executable capture path), so this is **not checkable**; **2048** has no
 `SpuLight_AddCandidate` equivalent read (`Authored::engine_light` is false there):
 checked, differs.
 
+## 2026-10-08 (`hd-blast-fill`): the three blast-look gaps re-measured
+
+Method and every number: `data/scratch/hd-blast-fill/report.md` (gitignored). Ours was read with a temporary env-gated probe
+(`OAG_BLAST_PROBE`: eye from the inverse of the view-projection, node scales from `NodeAnims::sample`; reverted, not committed), the
+original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py` (new: a `/proc/PID/mem` poller of the SPU light list). No `.rs` changed.
+
+### 1. The Missile white-out: the gap was the point light, now wired; geometry already matches
+
+- **Ours, geometry** (Talon's Junction, `--force-missile-hit 289:1`; ours is deterministic, a rerun is identical): at age 0.017 / 0.05 / 0.1 /
+  0.2 s the `sphere` node scale is 1.0 / 4.883 / 9.277 / 14.023 (model radius 6.44) and the eye is 18.8 / 19.4 / 20.4 / 22.3 units from
+  the centre: **inside the shell at every age** (radius 31.4 at 0.05 s).
+- **Original** (`hd-blast-fill/wo1`, one boot, draws read by `c[464].x` = age, scale = the world rows' length): age 0.059 scale 5.75, eye 25.6
+  from the centre; age 0.073 scale 7.12 (a second pool entry, eye 59.6 away). Ours at those ages: 5.67 and 6.9, **within 1.4 % and 3 %**.
+  The `hd-whiteout` draw (0.05, scale 4.88, eye 26.2) agrees. So the keys, the node clock and the camera distance are not the gap; the
+  eye is 6 units further out in the original only because its staging put the player 12 units behind the rival. The boot's second shot
+  (0.25 s) returned no explosion (pool 0) and the run hit its 900 s ceiling (one capture took 328 s), so the original is read at two
+  ages only.
+- **What the earlier "a quarter of the frame" was.** The same staging with `--no-weapon-lights`: luma 132 / 181 / 207 and 6.5 / 26.3 / 34.9 %
+  of pixels at or above 250 at ages 0.017 / 0.1 / 0.2 - the quarter `hd-whiteout` saw. With the lights (current main): 212 / 230 / 234 and
+  55 / 64 / 67 %, against the original's final 224-232 (RPCS3, ages 0.06-0.27) and 217-241 (film). Luma now matches; the saturated share
+  is higher in ours (67 % against the original's 45.8 % at 0.27 s). The `hd-weapon-lights` point light is what closed it; the model was
+  already right. Not settled: at the first frame ours is white already (212 at 0.017) where RPCS3's scene read 88 to 92 at pool age 0.033;
+  the pool age runs about two ticks ahead of the drawn frame, so this is timing granularity until a draw-age-keyed pair says otherwise.
+
+### 2. The Bomb's white core: the lead is closed, the cause is still open
+
+- `AlphaAnim` 0.996105 is our own law at age 0.81 (see the correction above), so the "ours holds 1.0" lead is not a discrepancy.
+- **Core against fireball, byte for byte** (`bomb1` fragment programs `0074cf00`/`0074d3c0`, 1,536 bytes each, halfword-swapped): they differ
+  only in the inline `ColourAnim` float4 (0.3649 against 0.9) and in bytes past the code; the `0.996105` constant is at the same offset
+  in both. Same texture binding (`0ce1b480`), same state, same alpha func `LESS`, ref `0x7f`. The two models' textures are
+  pixel-identical here, so the two cut-outs are identical and the core (radius 0.99 x, nearer the eye) is drawn over every pixel of the
+  fireball that survives the test, at ten times the colour.
+- **Our core does whiten the frame.** Eye 9.5 inside the blast at ages 0.5 / 0.8 / 1.1 s (`--camera-pose` at the centre minus 9.5 along the
+  track), mean blue of the middle of the frame: ours with the core 250 / 250 / 246 (3-5 % of pixels under 200), ours with the core draw
+  dropped 169 / 154 / 234 (75-81 % under 200 at the first two), the film `hd-bomb-match/orig/o_0.5, 0.8, 1.1`: 120 / 198 / 216 (80 / 43 / 30 %).
+  The film is yellower than ours with the core and, at 0.5 s, yellower than ours without it. **If the original's core sat over the fireball at
+  x10, its frame would be as white as ours; it is not.** Staging differs (the film's eye position against the blast is unknown), so this is
+  a gap in what the core does, not yet a proven wrong law. Both models have vertex radius 1.0 (0.992 to 1.011), so the core is not a smaller ball.
+- Not tried: the draw-state read says nothing that separates the two draws, so the next measurement is a frame of the original at a known
+  age with the eye inside, next to ours at the same age and offset (the `bomb2` boots never detonated; `bomb1` is one boot).
+
+### 3. The Rocket's `(14, 10, 2)` light is a contact flash, not a launch light; the launch wash on the hull already matches
+
+- **Read live** (`hd-blast-fill/rk1`, two volleys on RPCS3, the candidate list at `0x00f4b300 + 0x20a0` polled from `/proc/PID/mem` without
+  pausing, 630,000 polls a shot): the `(14, 10, 2)`, `D = 100`, `w = 1` record appears **three times per shot, one to three frames each**,
+  first at 1.00 s / 0.88 s after the press, then roughly every 0.4 to 0.6 s while the rocket flies (x advancing at the rocket's
+  speed, 235 and 206 u/s). It sits 12 to 25 units to the side of the rockets (z -206 against the rockets' -182 to -195), on the wall, **not at the
+  launch** (the `(7, 5, 1)` lights are present from 0.03 s and no `D = 100` record exists before 0.88 s). In `Rocket_Update` the block is
+  entered only when `0x0007be58` returns 0 to 5 (a trace result, `cmplwi r3, 5; bgt`) and a second test passes, then it allocates the
+  `0x180`-byte object through `0x00054628` and submits the light at the stored point. Confidence 75 that it is a wall-contact flash
+  paired with that object (two boots, the same shape; what `0x0007be58` traces and why every ~0.5 s is unread).
+- **Not wired**: the arming (the trace and the cadence) is not read, and a light placed on a guess would be invented. `weapon_light`'s doc
+  comment says it is "not a flight light"; it is a flight light that fires on wall contact.
+- **The hull at launch.** With the lights on, ours' hull region (centre-bottom 36 % x 33 % of the frame) reads 201 against 149 with
+  `--no-weapon-lights` two ticks after the press (184 at +4, 158 at +7, 149 at +15), so the hull does take the rocket lights. On the film pair
+  (`hd-rocket-light/pair_launch.png`, a different ship) the same region reads 188 at the launch frame and 168 after, ours 185 and 168:
+  equal within the noise of a region that includes floor. The earlier "the film whitens the hull, ours does not" does not reproduce on this
+  measure; a same-ship pair would settle it.
+- **Omega / 2048:** the rocket and missile models and the weapon-light call sites are HD-lineage; Omega ships the same models (`checked, applies, not wired`
+  for the geometry; PS4 programs unread, the light list `not checkable`); 2048 has no SPU light record (`checked, differs`).

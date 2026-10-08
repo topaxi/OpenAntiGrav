@@ -193,11 +193,12 @@ and the 16 entries at `+0x190`. `--force-missile-hit TICK:SLOT` frames it (`hd_m
 is the last thing drawn and its programs do not change; the wash is the explosion's additive geometry with the eye
 inside it (26 units from the centre, core radius 31), lit, and then bloomed by the ordinary chain (pixels at or above
 250 double from 22.7 % to 45.8 % through the composite at age 0.27 s). The translucent HUD panels read as washed over
-that white. Open: ours puts no eye inside the sphere (at age 0.1 a burst a quarter of the frame across; our eye distance and
-radius unmeasured, take them next), the point light `(1-p)^2` (lane `hd-weapon-lights`), the HD bloom strength, a pair with a
+that white. Closed by `hd-blast-fill` (`weapons.md`): ours puts the eye inside the shell at every age (19-22 units against a radius of 31 and up)
+and the node scales match the original within 3 %; the quarter-frame was the missing point light, now wired. Still open: the point light `(1-p)^2` (lane `hd-weapon-lights`), the HD bloom strength, a pair with a
 moving player, and ours' livery/brightness at rest (196 grey-mean against the original's 93, so whole-frame luma compares
-nothing). Bomb: the original draws the core with the eye inside it (same state as the fireball, cull off); a lead is `AlphaAnim` reading
-0.996105 where we hold 1.0 (our fireball cuts every texel with alpha above zero in that case). Tools:
+nothing). Bomb: the original draws the core with the eye inside it (same state as the fireball, cull off); the `AlphaAnim`
+lead is closed (0.996105 is our own law at age 0.81), but ours' core still whitens an inside-the-blast frame where the film is yellower
+(`hd-blast-fill`: mean blue 250 against 120-216), cause open; the next measurement is the original at a known age and eye offset. Tools:
 `scripts/rpcs3-hd-whiteout.py`, `scripts/rsx-draw-list.py`.
 
 ## Next Steps
@@ -332,8 +333,8 @@ Played: Missile explosion `(500, 200, 50)`, `D = 150 (1-p)^2`, `w = 7 (1-p)^2 + 
 Rocket `(7, 5, 1)`, `D = 50`, `w = 1`, per rocket (`0x00123de8`, read live: three records
 in the visible buffer while a volley flew); Bomb two lights, envelope read off the original's
 update in the emulator. Details and matched pairs in `weapons.md`, "Weapon point lights".
-Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` never appeared in
-flight, so it is probably an impact-side light, arming unread, unwired; the point light
+Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` is a wall-contact flash read live
+(`hd-blast-fill`: one to three frames, three times a shot, from 0.9 s, on the wall beside the rocket), arming (`0x0007be58`'s trace) unread, unwired; the point light
 alone does not reach the HUD, so the Missile's frame-wide white-out is still `hd-whiteout`'s;
 the original keeps 8 visible records, this engine passes all of them (chosen); the Rocket
 launch wash matches the film (re-measured 2026-10-08: +63 against +66 luma, same 0.33 s decay; the
