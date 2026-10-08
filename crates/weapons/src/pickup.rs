@@ -218,21 +218,6 @@ pub struct Held {
     pub cannon_reload: f32,
 }
 
-/// How far above zero [`Held::drop_reload`] may sit and still release the next mine.
-///
-/// **Chosen, not measured.** `Weapon_DropMines` drops when the `0.1` s timer is
-/// at or below zero, and the original's own `dt` is the display's `1/59.94` s with
-/// jitter, so six frames always carry it past zero and a seventh only follows a
-/// short frame (measured 2026-09-15: six-frame intervals, seven now and then).
-/// This engine steps exactly `1/60` s, where six ticks land on zero to within
-/// rounding: `0.1f32` less six `dt`s leaves `+1e-9`, so a strict `> 0` test made
-/// every interval seven ticks and a five-mine cluster ran 28 ticks instead of
-/// 24 (a stationary owner then left the trigger radius before the fourth went off:
-/// three blasts against the original's four, `mine.md` 2026-10-08). A slack far
-/// below one tick's `dt` (about `1.7e-2`) and below the jitter that makes a seventh
-/// frame keeps six as the common case.
-const DROP_TIMER_SLACK: f32 = 1.0e-5;
-
 impl Held {
     /// Nothing held, nothing remembered and nothing being laid.
     #[must_use]
@@ -285,7 +270,7 @@ impl Held {
             return false;
         }
         self.drop_reload -= dt;
-        if self.drop_reload > DROP_TIMER_SLACK {
+        if self.drop_reload > 0.0 {
             return false;
         }
         self.drop_reload = interval;
