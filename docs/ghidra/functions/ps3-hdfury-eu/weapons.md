@@ -1032,3 +1032,28 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
 **Omega:** `HD_missile_explosion.vex`/`.rcsmodel` ships in Omega's archives (see
 `ps4-omega-eu/weapons.md`); the pool, trigger and lifetime above were not looked up in Omega's
 executable: not checkable here (no PS4 emulator).
+
+## 2026-10-08 (`hd-missile-blast`): the Missile's explosion drawn
+
+`oag_raceplay::missile_blast` plays `HD_missile_explosion` when a Missile reaches a craft
+(`Race::ignite_blast`, `Missile` with `struck`), on HD only (`WeaponModels::missile_blast_hd`).
+
+- **Programs** (fogged blocks, vertex programs read with `scripts/ps3-microcode.py vp-file`; each earns a
+  pair of existing `slots` bits, the way the Bomb's did, `MISSILE_CORE`/`_RAYS`/`_SHOCK`). `U` = `UV_offset`
+  (vertex `c[208]`) and `S` = `Shockwave_scalar`, both the age in seconds (the entry lives 1.0 s). Confidence 70
+  for the reads, 80 for the age clock:
+  - core (`@0x17f0`): `rgb = tex(u, v + 0.5 U).rgb * colour.rgb`, `a = tex.a * colour.a`. The colour is the
+    chunk's inline last four bytes (`ff ff ff ff`, stride 18); no vertex colour decoded meant black and a
+    core that never drew.
+  - rays (`@0x17f0`): `rim = sat(1 - N.V)`, `f = sat(0.9 - 0.9 rim^5)^5`, `out = (f tex(u, U).rgb, tex.a)`; the mesh's `v` is unused.
+  - shockwave (`@0x19b0`): the Bomb ring's program with `c = 0.45 S - (v + 0.05 n)` and `a = colour2.a * sum(tex(c,c).rgb) * (1 - S)`.
+- **Node clock.** `write_node_anims(age)` scales `sphere`/`bloom` 1x to 18x (model radius 6.44, so 9.3x = 60 units at 0.1 s).
+- **Chosen, not measured:** the orientation (the struck craft's own; `Start`'s source matrix unresolved), the
+  per-viewport visibility gate (not reproduced), alphas held to 1, no point light `(1-p)^2`, the 16 rotated entries at `+0x190` not drawn.
+- **Matched pair** (Talon's Junction, `--force-missile-hit`, `data/scratch/hd-missile-blast/frames/pair_d.png`, film `m5`
+  `h_011..h_028`): ours draws the cream-yellow core, orange ray arcs and ring discs, shape and colour like the film, but mean luma
+  is 136/175/200/192/178 at ages 0.03/0.1/0.2/0.37/0.5 s against the film's 217/224/242/208/182. **Not reproduced:** the film's
+  white to the frame edge that also washes the HUD and the player's craft, jumping 139 to 217 in one 30 fps frame. The model does not
+  explain a HUD wash, so it is a screen-space part (bloom/exposure, the point light, or a flash object) still unread.
+- **Omega:** `HD_missile_explosion` ships in Omega; same asset lineage as HD, so checked, applies, not wired
+  (`oag-omega` has no `WEAPON_MODELS` entry, and its PS4 programs are unread).
