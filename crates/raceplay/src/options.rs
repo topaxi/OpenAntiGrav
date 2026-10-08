@@ -429,16 +429,9 @@ pub struct Setup {
     /// ones. See [`oag_render::shield::Palette`]'s own doc comment for what
     /// each title's palette carries and which parts are measured.
     pub shield_palette: oag_render::shield::Palette,
-    /// Whether a Plasma detonation plays Wipeout HD's own three-model scale
-    /// ease rather than Pulse's baked anim-time scrub.
-    ///
-    /// A title fact, the same footing [`Self::shield_palette`] is on:
-    /// `craft_title.weapon_models.plasma_blast_hd.is_some()`. The two
-    /// mechanisms are read off different executables and do not unify - see
-    /// `blast_models`'s own module doc comment - so this is what
-    /// `Race::plasma_blast_draws` and `Race::advance_plasma_blast_models`
-    /// branch on rather than re-deriving which title is live from anywhere
-    /// else.
+    /// Whether a Plasma detonation plays HD's three-model scale ease rather than
+    /// Pulse's baked anim-time scrub: `plasma_blast_hd.is_some()`. The two are
+    /// read off different executables and do not unify (`blast_models`).
     pub hd_plasma_blast: bool,
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
