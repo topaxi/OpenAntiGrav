@@ -336,6 +336,7 @@ Open: `Rocket_Update`'s own `(14, 10, 2)`, `D = 100` call at `0x001246cc` never 
 flight, so it is probably an impact-side light, arming unread, unwired; the point light
 alone does not reach the HUD, so the Missile's frame-wide white-out is still `hd-whiteout`'s;
 the original keeps 8 visible records, this engine passes all of them (chosen); the Rocket
-launch wash is stronger than the film's first frame; the Cannon round's per-round light
+launch wash matches the film (re-measured 2026-10-08: +63 against +66 luma, same 0.33 s decay; the
+bleached Vineta K still was `--press square` re-firing every other tick); the Cannon round's per-round light
 (`FUN_001310e8`, colour `(0.3, 0.3, 0.2)`, `D = 10`) and the other producers in renderer.md's
 table are still unwired.

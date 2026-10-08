@@ -1243,8 +1243,26 @@ right):
   the HUD.
 - **Rocket** (`r4`/`r5` film): the launch frames take a warm cream wash on the
   track and walls near the craft, which the film's first frame also shows, and
-  it fades within about 0.3 s as the rockets leave; ours is stronger than the
-  film at the launch frame (mean luma 132 off, 178 on at tick 424).
+  it fades within about 0.3 s as the rockets leave. **Re-measured
+  2026-10-08 (`hd-rocket-light`), over the lower half of the frame:** the film
+  goes 160 -> 226 at its first launch frame (+66, 43.7 % of pixels at 250+),
+  197 four frames (0.13 s) on, 174 at six, baseline 159 by frame 184 (0.33 s)
+  and stays there through the whole flight (r4, 30 fps). Ours on Talon's
+  Junction goes 143 -> 206 (+63, 35.6 % at 250+) at tick +3, 176 at +9 and is
+  at baseline by +24 (0.4 s; `--no-weapon-lights` is the baseline). **Ours is
+  not stronger than the film**: the earlier "132 -> 178, stronger" compared a
+  different region and camera. Same rise, same decay, ours a touch lower. The
+  film is a different team and camera, so this is a magnitude and timeline
+  match, not a pixel pair. A lone volley on Vineta K's banked deck decays the
+  same way (lights on 189 at +3 ticks, 171 at +6, 138 at +10, baseline 90 at
+  +20; off 89 throughout). **The bleached Vineta K frame
+  (`projectile-tilt/shots/hd-rocket-bank.png`) is a harness artefact:**
+  `--give rocket --press square` re-arms and fires a fresh volley every other
+  tick, so three lit rockets are always within 50 units and the wash never
+  fades (luma 217 on against 99 off from tick 50 to 130). A single shot
+  (`--input-script`) does not do it. Colour units, falloff law and exponent
+  were therefore not changed: nothing here discriminates against
+  `(7, 5, 1)`, `D = 50`, `w = 1`.
 - **Bomb** (`hd-bomb-match` film): walls and track near the blast brighten to
   white at 1.1 s as the film does; the film is whiter still (its craft is
   nearer the bomb).
