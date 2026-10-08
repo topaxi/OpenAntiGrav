@@ -31,9 +31,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Layout scale: the original is drawn at about 0.904 of the authored space,
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
-- Track Select: hex grid (reuse `hex::HexGrid`'s cell layout; `TrackHexSelection`
-  is 9x2 with circuit emblems and its own pitch, unmeasured), shaded circuit model (no `FE` mesh on the disc), the
-  moving fly-by picture
+- Track Select: hex grid LANDED 2026-10-08 (`hd-track-select`, shared
+  `hex::draw_cells`; direction glyphs and ring thickness open). Shaded circuit
+  model: the asset is located (`fe/track0N.rcsmodel` on DATA02, `zone_N` on DATA00,
+  8 of 12 base circuits; fresnel-blend material unread; name table at
+  `renderer.md` `+0x10`); the moving fly-by picture (Bink)
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)
 
 ## Next Steps
