@@ -104,7 +104,10 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\ship_zone.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
-    frontend: Some(r"Data\Sound\frontend.bnk"),
+    frontend: Some(oag_title::FrontEndSounds {
+        bank: r"Data\Sound\frontend.bnk",
+        cues: oag_title::MenuCues::PULSE,
+    }),
     // A literal string in the executable too, at the same confidence as the
     // five above, and the bank 568 of the 1,164 authored `sound` nodes name.
     track: oag_title::TrackBanks {

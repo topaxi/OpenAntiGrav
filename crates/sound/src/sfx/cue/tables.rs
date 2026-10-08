@@ -18,12 +18,33 @@ impl Cue {
     ///
     /// Not in [`Self::ALL`]: a race does not read that bank. [`Self::MenuTeletype`]
     /// is left out because its trigger's extra argument is unread.
-    pub const FRONT_END: [Self; 4] = [
-        Self::MenuUpDown,
-        Self::MenuLeftRight,
+    pub const FRONT_END: [Self; 8] = [
+        Self::MenuUp,
+        Self::MenuDown,
+        Self::MenuLeft,
+        Self::MenuRight,
+        Self::MenuStepLeft,
+        Self::MenuStepRight,
         Self::MenuAccept,
         Self::MenuDecline,
     ];
+
+    /// The cue name this front-end role plays in the title's bank, in the
+    /// style the front end is in, or [`None`] for a cue that is not one.
+    #[must_use]
+    pub fn front_end_name(self, cues: &oag_title::MenuCues, fury: bool) -> Option<&'static str> {
+        Some(match self {
+            Self::MenuUp => cues.up,
+            Self::MenuDown => cues.down,
+            Self::MenuLeft => cues.left,
+            Self::MenuRight => cues.right,
+            Self::MenuStepLeft => cues.step_left,
+            Self::MenuStepRight => cues.step_right,
+            Self::MenuAccept => cues.accept.name(fury),
+            Self::MenuDecline => cues.decline.name(fury),
+            _ => return None,
+        })
+    }
 
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,
@@ -117,8 +138,12 @@ impl Cue {
             | Self::Ready
             | Self::Go
             | Self::ContElim => BankName::Speech,
-            Self::MenuUpDown
-            | Self::MenuLeftRight
+            Self::MenuUp
+            | Self::MenuDown
+            | Self::MenuLeft
+            | Self::MenuRight
+            | Self::MenuStepLeft
+            | Self::MenuStepRight
             | Self::MenuAccept
             | Self::MenuDecline
             | Self::MenuTeletype => BankName::Frontend,
@@ -207,8 +232,8 @@ impl Cue {
             Self::Repulsor => "REPULSOR",
             Self::RepulsorHit => "REPULSORHIT",
             Self::Magstrip | Self::MagstripStop => "~magstrip01",
-            Self::MenuUpDown => "UPDOWN",
-            Self::MenuLeftRight => "LEFTRIGHT",
+            Self::MenuUp | Self::MenuDown | Self::MenuLeft | Self::MenuRight => "UPDOWN",
+            Self::MenuStepLeft | Self::MenuStepRight => "LEFTRIGHT",
             Self::MenuAccept => "ACCEPT",
             Self::MenuDecline => "DECLINE",
             Self::MenuTeletype => "TELETYPE",
@@ -395,8 +420,12 @@ impl Cue {
             // Anchored to `ship+0x70c8 + 0x10`, the craft's transform.
             Self::Magstrip | Self::MagstripStop => Placement::Craft,
             // `Sound_PlayNamedInSlot` at `0x400` with no emitter: dry.
-            Self::MenuUpDown
-            | Self::MenuLeftRight
+            Self::MenuUp
+            | Self::MenuDown
+            | Self::MenuLeft
+            | Self::MenuRight
+            | Self::MenuStepLeft
+            | Self::MenuStepRight
             | Self::MenuAccept
             | Self::MenuDecline
             | Self::MenuTeletype => Placement::Unplaced,

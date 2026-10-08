@@ -537,30 +537,43 @@ pub enum Cue {
     /// (`0x01312770`) sets the stop bit on the instance and every group voice. An
     /// action, not a sound: loads nothing, not in [`Self::ALL`].
     MagstripStop,
-    /// The front end's cursor moving up or down a list: `"UPDOWN"` in
-    /// `frontend.bnk`.
+    /// The front end's cursor moving up a list: `"UPDOWN"` in Pulse's
+    /// `frontend.bnk`, `"navUp"` in HD's.
     ///
-    /// `Sound_PlayNamedInSlot(ui, bank slot 0, "UPDOWN", 0x400, 0, 0, 0)`, the
-    /// dry no-emitter path, from `FUN_088a3b1c` (grid move that landed),
+    /// Pulse: `Sound_PlayNamedInSlot(ui, bank slot 0, "UPDOWN", 0x400, 0, 0, 0)`,
+    /// the dry no-emitter path, from `FUN_088a3b1c` (grid move that landed),
     /// `FUN_088a4e60`, `FUN_088a9db4`/`FUN_088a9e7c`, `FUN_088b528c`,
     /// `FUN_088cae88`, `GridSelection_Update` and `TrackSelection_Update`
     /// (`docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, confidence 88).
-    /// Three waveforms on Pulse, one on Pure. Not in [`Self::ALL`]: it loads
-    /// through [`super::MenuSfx`] from [`oag_title::SoundBanks::frontend`].
-    MenuUpDown,
-    /// A value stepped left or right: `"LEFTRIGHT"`. `FUN_088aaae4`,
-    /// `FUN_088cae88` and `FUN_088e4fd0` play it on a row's value changing,
-    /// the settings-row edit. See [`Self::MenuUpDown`].
-    MenuLeftRight,
+    /// Three waveforms on Pulse, one on Pure. HD plays a cue per direction
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-sounds.md`). The four move
+    /// cues and the two step cues are one role each so a title can name a
+    /// cue per direction; the name is [`oag_title::MenuCues`]'s, not
+    /// [`Self::name`]'s. Not in [`Self::ALL`]: they load through
+    /// [`super::MenuSfx`] from [`oag_title::SoundBanks::frontend`].
+    MenuUp,
+    /// The cursor moving down. See [`Self::MenuUp`].
+    MenuDown,
+    /// The cursor moving left. See [`Self::MenuUp`].
+    MenuLeft,
+    /// The cursor moving right. See [`Self::MenuUp`].
+    MenuRight,
+    /// A value stepped left: Pulse's `"LEFTRIGHT"` (`FUN_088aaae4`,
+    /// `FUN_088cae88` and `FUN_088e4fd0` play it on a row's value changing),
+    /// HD's `"navLeft"`. See [`Self::MenuUp`].
+    MenuStepLeft,
+    /// A value stepped right. See [`Self::MenuStepLeft`].
+    MenuStepRight,
     /// A confirmed choice: `"ACCEPT"`. `ConfirmButton_Update` plays it when
     /// the button's redirect resolves, `FUN_088ed05c` the same on the track
-    /// screen; a widget's `+0x269` flag suppresses it. See [`Self::MenuUpDown`].
+    /// screen; a widget's `+0x269` flag suppresses it. HD plays `accept` or,
+    /// in the Fury style, `accept_fury`. See [`Self::MenuUp`].
     MenuAccept,
     /// Back, or a refused move: `"DECLINE"`. Played for the back button
     /// (`ConfirmButton_Update`'s secondary-button branch), for a confirm the
     /// button's own check refuses, and for a grid move onto an empty cell
-    /// (`FUN_088a3b1c`) - there it takes the place of [`Self::MenuUpDown`],
-    /// it does not follow it. See [`Self::MenuUpDown`].
+    /// (`FUN_088a3b1c`) - there it takes the place of [`Self::MenuUp`],
+    /// it does not follow it. HD's is `reject` or `reject_fury`. See [`Self::MenuUp`].
     MenuDecline,
     /// A line of text typing in: `"TELETYPE"`, one waveform at 48,051 Hz.
     /// `FUN_088b6514` plays it per character, pitched by the glyph's measured

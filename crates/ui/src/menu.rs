@@ -824,24 +824,24 @@ impl Menu {
         let rows = self.page().entries.len();
 
         let page = self.current();
-        let mut moved = false;
+        let mut moved = None;
         if input.take(Button::Down) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + 1) % rows;
-            moved = true;
+            moved = Some(nav::Dir::Down);
         }
         if input.take(Button::Up) && rows > 0 {
             self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
-            moved = true;
+            moved = Some(nav::Dir::Up);
         }
         // The window follows the cursor and then **stays there**. Storing it is
         // the whole difference between a list that scrolls and one that snaps:
         // without this the window is only ever the tightest one holding the
         // cursor, so stepping back up off the last row would jump the page to
         // the top instead of revealing the row above.
-        if moved {
+        if let Some(dir) = moved {
             self.scroll[page] = self.scroll();
+            self.nav.when(rows > 1, nav::Nav::Moved(Some(dir)));
         }
-        self.nav.when(moved && rows > 1, nav::Nav::UpDown);
 
         let right = input.take(Button::Right);
         let left = input.take(Button::Left);
@@ -864,7 +864,13 @@ impl Menu {
             if left {
                 self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
             }
-            self.nav.when((left || right) && rows > 1, nav::Nav::UpDown);
+            let dir = if right {
+                nav::Dir::Right
+            } else {
+                nav::Dir::Left
+            };
+            self.nav
+                .when((left || right) && rows > 1, nav::Nav::Moved(Some(dir)));
         } else if (right || left)
             && let Some(event) = self.adjust(if right { 1 } else { -1 })
         {

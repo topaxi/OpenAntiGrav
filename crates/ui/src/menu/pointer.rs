@@ -227,8 +227,13 @@ impl Menu {
         if row >= rows {
             return;
         }
+        let dir = if row > self.cursor[page] {
+            super::nav::Dir::Down
+        } else {
+            super::nav::Dir::Up
+        };
         self.nav
-            .when(self.cursor[page] != row, super::nav::Nav::UpDown);
+            .when(self.cursor[page] != row, super::nav::Nav::Moved(Some(dir)));
         self.cursor[page] = row;
         self.scroll[page] = self.scroll();
     }

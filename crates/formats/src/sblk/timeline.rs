@@ -101,6 +101,13 @@ pub struct WalkModel {
     /// Follow `0x24` to its `0x23` marker within the cue, instead of reporting
     /// both as unread.
     pub goto_markers: bool,
+    /// Read a `0x19` alternate group's operand the way HD's handler does: the
+    /// count is operand byte 0 (`word >> 16`) rather than the low byte, so
+    /// `19 07 02 00` is seven alternates of two commands. Pulse and Pure keep
+    /// the count in the low byte (`docs/formats/psp-audio.md`, "Which of a
+    /// cue's waveforms sounds"). Off by default so a title opts in per cue
+    /// family it has measured.
+    pub hd_alternates: bool,
 }
 
 /// One waveform started at one moment.
@@ -337,8 +344,11 @@ impl Bank<'_> {
             } else if opcode == END {
                 return;
             } else if opcode == ALTERNATE {
-                let alternates = (word & 0xff) as i32;
-                let stride = ((word >> 8) & 0xff) as i32;
+                let (alternates, stride) = if walk.model.hd_alternates {
+                    (((word >> 16) & 0xff) as i32, ((word >> 8) & 0xff) as i32)
+                } else {
+                    ((word & 0xff) as i32, ((word >> 8) & 0xff) as i32)
+                };
                 if repeat.is_some() || alternates == 0 || stride == 0 {
                     walk.out.unread.push(opcode);
                     return;

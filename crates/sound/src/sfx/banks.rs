@@ -84,7 +84,7 @@ impl Banks {
         zone: bool,
         tick: oag_title::SequenceTick,
     ) -> Self {
-        Self::load_cues(archives, banks, zone, tick, &Cue::ALL)
+        Self::load_cues(archives, banks, zone, tick, &Cue::ALL, &|cue| cue.name())
     }
 
     /// Reads the front end's navigation cues, [`Cue::FRONT_END`], out of the
@@ -98,14 +98,17 @@ impl Banks {
         archives: &mut Archives,
         banks: &oag_title::SoundBanks,
         tick: oag_title::SequenceTick,
+        fury: bool,
     ) -> Self {
-        if banks.frontend.is_none() {
+        let Some(front) = banks.frontend else {
             return Self {
                 report: vec!["sfx: this title names no front-end sound bank".to_string()],
                 ..Default::default()
             };
-        }
-        Self::load_cues(archives, banks, false, tick, &Cue::FRONT_END)
+        };
+        Self::load_cues(archives, banks, false, tick, &Cue::FRONT_END, &|cue| {
+            cue.front_end_name(&front.cues, fury).unwrap_or(cue.name())
+        })
     }
 
     /// [`Self::load`]'s body over an explicit list of cues.
@@ -115,6 +118,7 @@ impl Banks {
         zone: bool,
         tick: oag_title::SequenceTick,
         cues: &[Cue],
+        name_of: &dyn Fn(Cue) -> &'static str,
     ) -> Self {
         let mut sounds = BTreeMap::new();
         let mut timelines = BTreeMap::new();
@@ -137,7 +141,7 @@ impl Banks {
             load_one(
                 blob,
                 entry,
-                cue,
+                (cue, name_of(cue)),
                 tick,
                 &mut sounds,
                 Tables {
@@ -183,7 +187,7 @@ impl Banks {
             load_one(
                 &blob,
                 entry,
-                cue,
+                (cue, cue.name()),
                 tick,
                 &mut self.sounds,
                 Tables {
@@ -324,7 +328,7 @@ struct Tables<'a> {
 fn load_one(
     blob: &[u8],
     entry: &str,
-    cue: Cue,
+    (cue, name): (Cue, &str),
     tick: oag_title::SequenceTick,
     sounds: &mut BTreeMap<Cue, Loaded>,
     tables: Tables,
@@ -334,7 +338,7 @@ fn load_one(
         timelines,
         programs,
     } = tables;
-    match load_cue(blob, cue, tick) {
+    match load_cue(blob, (cue, name), tick) {
         Ok((loaded, skipped, timeline, program)) => {
             let undecoded = if skipped == 0 {
                 String::new()
@@ -343,8 +347,7 @@ fn load_one(
             };
             // One line per cue: the timeline note rides on it.
             let mut line = format!(
-                "sfx: {} -> {} waveform(s) from {entry}{undecoded}",
-                cue.name(),
+                "sfx: {name} -> {} waveform(s) from {entry}{undecoded}",
                 loaded.waveforms.len()
             );
             let mut extra = None;
@@ -377,7 +380,7 @@ fn load_one(
         }
         // A report line, not a fallback: nothing is substituted for a cue that
         // will not resolve.
-        Err(e) => report.push(format!("sfx: {} not loaded: {e}", cue.name())),
+        Err(e) => report.push(format!("sfx: {name} not loaded: {e}")),
     }
 }
 
@@ -388,7 +391,7 @@ type TimelineResult = anyhow::Result<Option<Vec<Timeline>>>;
 /// Resolves one cue in one bank blob and decodes what it binds.
 fn load_cue(
     blob: &[u8],
-    cue: Cue,
+    (cue, name): (Cue, &str),
     tick: oag_title::SequenceTick,
 ) -> anyhow::Result<(
     Loaded,
@@ -397,16 +400,16 @@ fn load_cue(
     anyhow::Result<Option<Program>>,
 )> {
     let bank = sblk::Bank::parse(blob)?;
-    let (loaded, skipped) = load_named_cue(&bank, cue.name())?;
+    let (loaded, skipped) = load_named_cue(&bank, name)?;
     // The engine is driven by one voice's per-tick pitch and volume, and how
     // that law spreads over layers is unread: it keeps its flat set.
     let timeline = if cue == Cue::Engine {
         Ok(None)
     } else {
-        layers::timelines(&bank, cue.name(), tick)
+        layers::timelines(&bank, name, tick, cue.bank() == BankName::Frontend)
     };
     let program = if cue.repeats() {
-        layers::program(&bank, cue.name(), tick)
+        layers::program(&bank, name, tick)
     } else {
         Ok(None)
     };
