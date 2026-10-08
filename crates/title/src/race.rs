@@ -93,15 +93,13 @@ pub struct ShipPaths {
 
 mod announcer;
 mod fresh;
-mod sound;
+pub mod sound;
 mod transition;
 mod variants;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{CountdownVoice, SequenceTick, ZoneAnnouncer, ZoneClassAnnouncer};
 pub use fresh::FreshVariant;
-pub use sound::{
-    CircuitBanks, Crossfade, FrontEndSounds, MenuCues, SoundBanks, StyledCue, TrackBanks,
-};
+pub use sound::{CircuitBanks, Crossfade, SoundBanks, TrackBanks};
 pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
