@@ -26,7 +26,7 @@ pub(super) fn pad_direction(buttons: &oag_gameplay::input::Input) -> Option<Dir>
     .into_iter()
     .filter(|(button, _)| buttons.is_pressed(*button))
     .map(|(_, dir)| dir)
-    .last()
+    .next_back()
 }
 
 impl Session {
