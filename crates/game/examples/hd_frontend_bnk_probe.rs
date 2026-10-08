@@ -47,7 +47,6 @@ fn main() {
         let model = oag_formats::sblk::timeline::WalkModel {
             goto_markers: true,
             hd_alternates: true,
-            ..Default::default()
         };
         match bank.cue_timelines_modelled(&cue, model) {
             None => println!("{want}: no timelines"),
