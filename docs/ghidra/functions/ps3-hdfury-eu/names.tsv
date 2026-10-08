@@ -598,7 +598,6 @@
 0x00123de8	function	Rocket_SubmitLight	85	weapons.md
 0x00155420	function	MissileExplosion_Draw	70	weapons.md
 
-||||||| d059f89ec
 
 # 2026-10-08 hd-leach-beam: the LeachBeam strip draw and path
 0x00153288	function	LeachBeam_DrawStrip	80	leach-beam-strips.md
