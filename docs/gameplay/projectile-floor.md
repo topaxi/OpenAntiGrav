@@ -19,7 +19,7 @@ what the fix was. Implemented in
 | On that landing the Missile moves and nothing else - no normal adopted, no velocity written - where the Rocket and Shuriken adopt the normal and recompute velocity | **recovered 2026-09-13**, the same two decompiles | 85 |
 | A wall found by the *probe* detonates a Rocket or a Plasma and does nothing to a Missile or a Shuriken | **recovered 2026-09-13** | 80 |
 | Keeping the speed when the Rocket, Plasma or Shuriken's velocity is turned onto a floor met across the segment | **ours** - the original writes `(next - prev) / dt` and rescales on the next probe | - |
-| The fall is along world `-Y` for every weapon but the Cannon, which does not fall at all | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma's decompile falls along its *carried normal* instead, and this engine gives it the Rocket's axis - pre-existing, not touched here | - |
+| The fall is along world `-Y` for the Rocket, Missile and Shuriken, along the carried normal for the Plasma, and absent for the Cannon | Rocket and Shuriken **recovered** (`velocity.y -= dt * 50`); the Plasma **recovered** as `velocity -= surface * (dt * 50)` (`plasma.md`) and **wired 2026-10-08** - it fell along world `-Y` before, a different direction on any bank. The Missile's fall axis is not separately read | 85 |
 | The normal a projectile is born riding: the firing craft's up for the Rocket, Missile, Shuriken and Plasma (`Rocket_Init`, `Missile_Init` `+0xd0`, `Shuriken_Init` `+0x150`, `Plasma_Launch` `+0x110` all store `-(craft+0xb10)`) | **recovered 2026-10-07**, `Missile_Init`/`Shuriken_Init` decompiled; wired through `spawn_riding`, `spawn_guided` and `throw`. A seed of world up (`Vec3::Y`) remains only for tests | - |
 
 ## The Cannon is not in this table at all
@@ -189,3 +189,77 @@ which both models resolve identically.
 - **HD's own projectile update** has not been read. Everything above is
   Pulse's model applied to HD's geometry, which the measurement supports and a
   read of `ps3-hdfury-eu` would settle.
+
+## Do the other projectiles share the Cannon's bank fault? (2026-10-08)
+
+Maintainer report, played on HD after the Cannon fix: "a similar issue might be
+going on with rockets" - asked of the Missile, Plasma and Shuriken too, "across
+all titles". **Answer: no. The Rocket, Missile and Shuriken ride a bank
+correctly; one real fault was found, the Plasma's fall axis, and fixed.**
+
+The Cannon's fault was a ridden normal seeded with world up, so its first probe
+landed on a different deck. The four other floor followers now carry the craft's
+up from birth (2026-10-07) and probe along it, so they cannot repeat that.
+`crates/game/tests/projectile_tilt_ground_truth.rs` flies each one off the
+autopilot's craft, fired through the pad every 30 ticks, on Pulse's Moa Therma
+(`03_Track`, the loop) and HD's Vineta K (`01_vineta_k/track.vex`), and on every
+tick a projectile is in the air casts the weapon's own probe along `-surface`
+(`6.0` Rocket, `12.0` the rest). Floor classes only. Measured on this tree
+(roughly 4,000 judged ticks per weapon per title, 20 or more shots from a craft
+tilted past 18 degrees each):
+
+| Weapon | Pulse worst angle / height error | HD worst angle / height error |
+| --- | --- | --- |
+| Rocket | 15.0 deg / 0.47 | 5.0 deg / 0.36 |
+| Missile | 0.0 deg / 0.00 | 1.2 deg / 1.02 |
+| Plasma | 14.5 deg / 0.00 | 13.2 deg / 0.00 |
+| Shuriken | 14.9 deg / 0.87 | 3.1 deg / 1.01 |
+
+**The fault found: the Plasma fell along world `-Y`.** `Plasma_Update`'s `0x7f`
+arm is `velocity -= surface * (dt * 50.0)` (`plasma.md`, confidence 85); this
+engine gave it the Rocket's `velocity.y -= dt * 50.0`. Wired in
+`flight.rs`; pinned by
+`projectile::tests::seed::a_plasma_bolt_over_nothing_falls_along_its_carried_normal`
+(fails on the old code). Control run: with every seed forced back to world up
+*and* the old fall, the Plasma's ride test fails (worst angle 70.9 deg on Pulse,
+39.0 on HD).
+
+**What the ground truth does not prove.** With the seeds alone forced back to
+world up the Rocket, Missile and Shuriken ride tests still pass: the first floor
+hit adopts the real normal, and on these two circuits' banks the wrong first
+probe is rarely enough to leave the floor. The seeds are pinned by the unit
+tests in `projectile/tests/seed.rs` (each fails if its seed is dropped) and the
+Missile's by `a_missile_fired_on_a_bank_is_born_riding_the_craft_up`; the ride
+test is the guard that nothing re-introduces the Cannon's displacement, not a
+seed discriminator.
+
+**Mine and Bomb.** Laid where the craft is, to the bit, on every tilted drop
+(Pulse 482 mines / 225 bombs, HD 204 / 98 on a craft past 18 degrees), and the
+Bomb's pose (Pulse) and both charges' pose (HD, the frozen craft pose) have the
+craft's up where the craft's is (pose.up above 0.99). Pulse's Mine spins by
+design (`Mine_PoseNode`).
+
+**Early deaths on a bank were the craft, not the weapon.** The first HD run
+showed 39 of 57 rockets ending within a few ticks from craft at up.y 0.8; every
+one sat at one spot (-743, -23, -140) where the autopilot craft was wedged
+against a wall, a Wall class one to two units ahead. Not a tilt effect.
+
+**The HD rocket basis (`up = -surface`).** `rocket-trail.md` reads row 1 = `-up`
+and row 0 = `forward x row 1` off the *ribbon's* node, a matrix with determinant
+`-1`. The six fins sit at 60 degree steps, a set unchanged by flipping up, so the
+trail is the same picture either way and does not depend on roll; it is not the
+rocket body's matrix and was not touched. Pulse's basis for the body
+(`row0 = n x f`) equals HD's row 0, so only the sign of the middle row differs.
+
+**Pictures.** `data/scratch/projectile-tilt/shots/pulse-rocket-bank.png` (Moa
+Therma, at the loop's foot, three rockets climbing the wall) and
+`hd-rocket-bank.png`, `hd-missile-bank.png` (Vineta K, at (-282, 86, 106) where the
+autopilot's craft read up.y -0.68): the volley follows the track surface and the
+trails lie along it. There is no before/after pair, since nothing in the
+Rocket/Missile/Shuriken flight changed.
+
+**Lineage.** Pulse and HD: **ported** (the shared code, a ride test each).
+Pure shares the code and authors the Rocket, Missile, Plasma and Shuriken:
+**checked, applies, not wired** (no circuit with a bank chosen, no Pure test).
+2048 and Omega: **checked, applies, not wired** - the shared code reaches them,
+no weapon is raced on either (`docs/overview/status.md`).

@@ -246,6 +246,9 @@ authored speeds are **km/h**
 ([rocket-visuals.md](rocket-visuals.md)). `oag_weapons::projectile::advance`
 already implements all of it, which is why porting the Plasma needed no flight
 code at all.
+**Correction 2026-10-08:** not quite all - the `0x7f` fall axis was world `-Y`
+here until `flight.rs` gave the Plasma its own arm, `velocity -= surface * (dt * 50)`
+(see [projectile-floor.md](../../../gameplay/projectile-floor.md), last section).
 
 `0x0885c5a4` is the per-entity speed lookup whose result is divided by `3.6`,
 structurally `Rocket_SpeedForClass`'s twin. **It is deliberately unnamed**: it

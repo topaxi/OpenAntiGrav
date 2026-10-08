@@ -18,6 +18,14 @@ a Cannon hit applies no impulse, and no AI change is owed. The ceilings stay.
 `crates/game/tests/ai_loss_attribution_board.rs` is the diagnostic
 (`OAG_SWEEP=1`, release, `--ignored --nocapture`).
 
+**2026-10-08 follow-up (lane `projectile-tilt`).** The maintainer asked whether
+Rocket, Missile, Plasma and Shuriken share the fault ("across all titles"). They
+do not: `projectile_tilt_ground_truth.rs` rides each on a bank on Pulse and HD
+and all stay within 15 degrees of the floor under them. One real fault, the
+Plasma falling along world `-Y` instead of its carried normal, is fixed
+([projectile-floor.md](../../docs/gameplay/projectile-floor.md), last section).
+Banked frames now exist (`data/scratch/projectile-tilt/shots/`).
+
 ## Open
 
 - **Forward Black rescues a craft about ten times a race** (882 teleports in 80
@@ -27,11 +35,10 @@ a Cannon hit applies no impulse, and no AI change is owed. The ceilings stay.
   1926-1941 and 359).
   Neither moved with the Cannon; both are the AI's, not this thread's.
 
-- **No banked frame was captured.** `--autopilot` fires nothing and a hand-held
-  `--race` cannot reach the loop, so the screenshots are flat-track only
-  (`data/scratch/weapon-tilt/shots/`); the bank is covered by
-  `cannon_tilt_ground_truth` alone. A `--give`-style autopilot-with-fire flag would
-  let a picture show it.
+- **No banked Cannon frame.** `--pose x,y,z` puts a craft on the loop and
+  `--give <weapon> --hold cross --press square` fires from there (that is how
+  the 2026-10-08 rocket and missile frames were taken); the Cannon needs its
+  hold, not captured yet.
 - **The Cannon's flight against a live PPSSPP is unchecked.** The decompile is
   confidence 82 (VFPU-dense); the reflect arm is read at the shape of its
   arithmetic only. Nobody has watched a round glance off a floor in the original.
