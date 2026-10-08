@@ -103,6 +103,11 @@ pub struct WeaponModels {
     /// from Pulse's, not a renamed copy. See `oag_raceplay::bomb_blast::hd`
     /// and `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, 2026-10-07.
     pub bomb_blast_hd: Option<HdBombBlast>,
+    /// Wipeout HD's Missile detonation model, `Data\Weapons\HD_missile_explosion.vex`
+    /// (`MissileManager`'s pool of sixteen, `0x00154cf0` loads it): played when
+    /// a Missile reaches a craft, on its own keys over one second. See
+    /// `oag_raceplay::missile_blast` and `weapons.md`, 2026-10-07.
+    pub missile_blast_hd: Option<&'static str>,
     /// The Repulser's field model: a flat ring around the firer that shrinks,
     /// then widens and fades - `Repulser_Construct` (`0x08875008`) loads it and
     /// `Repulser_UpdateFieldModel` (`0x088758cc`) eases it. See
@@ -199,6 +204,7 @@ impl WeaponModels {
         plasma_blast_hd: None,
         bomb_blast_pulse: None,
         bomb_blast_hd: None,
+        missile_blast_hd: None,
         repulser_field: None,
         mag_floor: None,
         magstrip_wake: None,

@@ -881,6 +881,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             ),
             hd_plasma_blast: craft_title.weapon_models.plasma_blast_hd.is_some(),
             hd_bomb_blast: craft_title.weapon_models.bomb_blast_hd.is_some(),
+            hd_missile_blast: craft_title.weapon_models.missile_blast_hd.is_some(),
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
             grid_frame_from_sample: extents,
             screen_flash: extents,

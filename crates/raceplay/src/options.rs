@@ -445,6 +445,10 @@ pub struct Setup {
     /// eased models: `craft_title.weapon_models.bomb_blast_hd.is_some()`. See
     /// `bomb_blast::hd`.
     pub hd_bomb_blast: bool,
+    /// Whether a Missile that reaches a craft plays Wipeout HD's explosion
+    /// model: `craft_title.weapon_models.missile_blast_hd.is_some()`. See
+    /// `missile_blast`.
+    pub hd_missile_blast: bool,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:

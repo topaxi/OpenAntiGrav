@@ -178,6 +178,7 @@ fn setup(handling: Handling) -> Setup {
         // Pulse's own mechanism, same reasoning as `shield_palette` above.
         hd_plasma_blast: false,
         hd_bomb_blast: false,
+        hd_missile_blast: false,
         pulse_laid_pose: false,
         grid_frame_from_sample: false,
         screen_flash: false,

@@ -824,14 +824,15 @@ fn build_with_options(
                     }
                 }
                 let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
-                // **The Bomb's shockwave carries its two colours inline** -
+                // **The Bomb's shockwave (and the Missile's) carries its two colours inline** -
                 // `[a.rgb, b.a]`, which its program multiplies in and takes
                 // its alpha from. Only for the surface that earned the bit.
                 let vertex_light =
                     mesh.vertex_light(model_blob, submesh, stride)
                         .ok()
                         .or_else(|| {
-                            (surface.roles & slots::BOMB_SHOCK == slots::BOMB_SHOCK)
+                            (surface.roles & slots::BOMB_SHOCK == slots::BOMB_SHOCK
+                                || surface.roles & slots::MISSILE_SHOCK == slots::MISSILE_SHOCK)
                                 .then(|| mesh.inline_two_colours(model_blob, submesh, stride).ok())
                                 .flatten()
                         });
