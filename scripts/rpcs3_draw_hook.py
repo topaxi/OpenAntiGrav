@@ -5,6 +5,9 @@ reached), then the fragment programs and index ranges, the vertex ranges, the
 textures of normal-map programs, and the first bytes of every bound texture
 (`HOOK_LIGHT=1` skips the index and vertex stages). Returning `None` asks the
 driver to resume, wait and try again when the captured frame is incomplete.
+`HOOK_TGT=cc0000,10000` limits the index and vertex stages to draws on those render
+targets (a few draws instead of all 700); `HOOK_NEED_SCREEN=1` also retries a frame whose
+bloom chain and the HUD after it are missing, which the 200-draw floor does not catch.
 See docs/reverse-engineering/rpcs3-capture.md, "Capturing one frame's draws".
 """
 import sys, glob, struct, subprocess, re, os

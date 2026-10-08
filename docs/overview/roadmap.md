@@ -1203,7 +1203,7 @@ reproduced deliberately and documented as a choice.
 - [ ] Motion blur / speed streaking. **Not an original feature on the titles
       measured.** HD/Fury: measured 2026-10-08 on RPCS3, no post pass samples a
       previous frame or a velocity at rest, at 440 km/h or through a Turbo; the one
-      boost-driven pass is a short bloom re-composite pulse, not a blur
+      boost-driven pass is a short radial zoom-streak ring at the screen edge, not a blur
       ([funklayer-zoom.md](../ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md)).
       Pulse: the original has no blur pass per
       [bloom.md](../ghidra/functions/psp-pulse-usa/bloom.md) (one recorded frame,

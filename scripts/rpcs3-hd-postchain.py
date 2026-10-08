@@ -42,12 +42,20 @@ def load(name, file):
 wh = load("rpcs3_hd_whiteout", "rpcs3-hd-whiteout.py")
 poll, drive, place = wh.poll, wh.drive, wh.place
 Debugger = wh.Debugger
+#: The whiteout lane's three targets, plus the bloom chain's buffers: `0x02150000` is the half-resolution scene
+#: (640x360, pitch 0xa00, written once a frame), and the quarter-resolution (320x180, pitch 0x500) `0x02300000` and
+#: `0x022c0000` are the ping-pong pair the chain accumulates into, one the other's history.
+wh.TARGETS.extend([(0x02280000, 0x500 * 180), (0x022C0000, 0x500 * 180), (0x02240000, 0x500 * 180),
+                   (0x02150000, 0xA00 * 360)])
 
 
 #: The `FunkLayer` global the post-chain runner reads (`0x8b73bc` holds this pointer). `+0x58`/`+0x5c`
 #: and `+0x64`/`+0x68` are its two per-viewport inputs to the `FunkLayerZoom` pass; `+0x130 + 4 * viewport`
 #: points at the vertex buffer object whose `+0x10` holds the pass's 24-quad CPU mesh (24 records of 0xa0 bytes).
 FUNK_LAYER = 0x00C50EE0
+#: The tuning struct the Zoom pass reads its per-viewport alpha scale (`+0x00`, `+0x04`) and warp factors
+#: (`+0x64` 0.15, `+0x68` 0.95 in the executable's initial data) from.
+FUNK_TUNING = 0x008C2B70
 
 
 def main():
@@ -98,6 +106,7 @@ def main():
             funk = gdb.read(FUNK_LAYER, 0x100)
             (out / ("%s-funklayer.bin" % stem)).write_bytes(funk)
             f = struct.unpack(">64f", funk)
+            tuning = struct.unpack(">32f", gdb.read(FUNK_TUNING, 0x80))
             template = {}
             for v in range(2):
                 ptr = struct.unpack(">I", gdb.read(FUNK_LAYER + 0x130 + 4 * v, 4))[0]
@@ -113,7 +122,8 @@ def main():
             info = {"note": note, "attempt": used, "shot": str(shot), "seconds": round(time.time() - t, 1),
                     "screen": drive.current_screen(),
                     "funk_0x50_0x6c": [round(x, 6) for x in f[0x50 // 4:0x70 // 4]],
-                    "zoom_mesh": template}
+                    "zoom_mesh": template,
+                    "tuning_0x00_0x7c": [round(x, 6) for x in tuning]}
             (out / ("%s.json" % stem)).write_text(json.dumps(info, indent=1))
             print(stem, note, "attempt", used, flush=True)
 
