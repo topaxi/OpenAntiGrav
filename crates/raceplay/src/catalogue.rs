@@ -127,6 +127,16 @@ pub fn track_emblem(title: &oag_title::Title, track: &Track) -> Option<String> {
         .then(|| oag_ui_screens::picker::hd::track::emblem_src(&track.location))
 }
 
+/// The sheet name of `track`'s white icon, the picture its hexagon carries in
+/// HD's `Track Creation` grid, on the titles whose track screen has one.
+#[must_use]
+pub fn track_icon(title: &oag_title::Title, track: &Track) -> Option<String> {
+    title
+        .front_end
+        .is_some_and(|front_end| front_end.track_select.is_some())
+        .then(|| oag_ui_screens::picker::hd::track::grid_icon_src(&track.location))
+}
+
 /// One thing a player can pick on the Race page.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Track {

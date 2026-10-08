@@ -25,18 +25,21 @@
 //! the widget authors no `src`), the circuit name, the length and distance
 //! rows, and the RECORDS table's header and empty cells.
 //!
+//! Also drawn: the `TrackHexSelection` grid, a circuit per hexagon (see
+//! [`draw_grid`]).
+//!
 //! Not drawn, and said so: the `FlyByMovie` (`preview.bik`, Bink), the
-//! `TrackModel` wireframe, the `TrackHexSelection` grid (its hex art is the
-//! widget class's own), the page squares, the `Padlock` and the direction
-//! icons.
+//! `TrackModel` circuit model, the page squares, the `Padlock` (HD's circuit
+//! gate is open) and the small direction glyphs on the forward hexagon.
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
 use oag_ui::screen::{Screens, argb_to_rgba};
 
+use super::hex::{self, ArtSize, Face};
 use super::{TeamScreen, draw_labels, find_screen, find_text, sprite, text_draw, walk};
-use crate::picker::{Details, FaceScales, Layout, Picker};
+use crate::picker::{Details, Entry, FaceScales, Layout, Picker};
 
 /// The screen every widget is authored on.
 pub const TOP_LEVEL: &str = "TrackSelectionTopLevel";
@@ -50,6 +53,14 @@ pub const SCREEN: &str = "Track Creation";
 /// frame of the screen shows, in that order.
 pub const RECORD_ROW_IDS: [&str; 3] = ["FE_PERSONAL", "FE_FRIENDS", "FE_GLOBAL"];
 
+/// A circuit's icon, in units across, in its hexagon: the selected Vineta K
+/// cell's sails span 55 px of a 2000 px frame, 58 units at 0.9424 px per
+/// unit, and the icon texture is drawn at the size that puts its own sails
+/// there (**chosen** from one frame, the texture's fill not measured).
+const ICON_SIZE: f32 = 62.0;
+/// The cursor ring's tint, off the frame's pale ring (221/155/162).
+const RING: [f32; 4] = [0.87, 0.61, 0.64, 1.0];
+
 /// What a widget the generic parser does not reach says.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct TrackScreen {
@@ -60,8 +71,8 @@ pub struct TrackScreen {
     pub emblem: Option<[f32; 4]>,
     /// `TrackModel`'s own pose: read and carried, nothing draws it.
     pub model: Option<TrackModel>,
-    /// The `TrackHexSelection` widget's origin and shape: read, not drawn.
-    pub hex_grid: Option<HexGrid>,
+    /// The `TrackHexSelection` widget: circuits on hexagons, see [`super::hex`].
+    pub hex_grid: Option<hex::HexGrid>,
     /// The RECORDS table's three row labels, resolved from
     /// [`RECORD_ROW_IDS`].
     pub row_labels: [String; 3],
@@ -72,14 +83,6 @@ pub struct TrackScreen {
 pub struct TrackModel {
     pub origin: [f32; 2],
     pub z: f32,
-}
-
-/// The `<TrackHexSelection>` widget.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct HexGrid {
-    pub origin: [f32; 2],
-    pub columns: u32,
-    pub rows: u32,
 }
 
 /// `<environment>\FE\TrackSelectEmblem_Fury.gtf` - what the `Emblem` widget
@@ -96,6 +99,71 @@ pub fn emblem_src(location: &str) -> String {
         r"{}\FE\TrackSelectEmblem_Fury.gtf",
         location.trim_end_matches('\\')
     )
+}
+
+/// `<environment>\FE\TrackSelectEmblem_BW.gtf` - the white icon a circuit's
+/// hexagon carries in the `TrackHexSelection` grid. It is the file `Cell
+/// Selection`'s `Track Emblem` draws ([`crate::campaign::hd::cell_emblems`]),
+/// and the frame's hexagons show the same pictures as the circuit's own
+/// emblem in white, so the path is that module's. **Chosen, not measured**:
+/// the widget names no art; the match is by picture on one frame.
+#[must_use]
+pub fn grid_icon_src(location: &str) -> String {
+    crate::campaign::hd::cell_emblems::track_emblem_src(location)
+}
+
+/// How a circuit's hexagon is arranged in `picker`: `(circuits per row,
+/// row count)`. The entries are every forward circuit then every reverse one,
+/// so a picker without that shape (no reverse twin for some circuit) is one
+/// row of everything.
+fn shape(picker: &Picker) -> (usize, usize) {
+    let width = picker.row_width();
+    if width == 0 {
+        (picker.entries().len(), 1)
+    } else {
+        (width, picker.entries().len().div_ceil(width))
+    }
+}
+
+/// The grid: one column per circuit, the centre column the selected one,
+/// both rows red there and the cursor ring on the chosen direction's row.
+/// Circuits wrap round the list. **Chosen, not measured**: the widget
+/// authors no colour, so the hexagon fills are `Team Selection`'s authored
+/// `HexCol` / `SelectedColumnCol` values (the frame's red and dim grey read
+/// the same on both screens) and the ring is the frame's pale pink; the
+/// small direction glyphs under the forward hexagon's emblem are not drawn
+/// (their art is unlocated). Nothing locks: HD's circuit gate is open
+/// (Pulse's law, unmeasured on HD), so no cell shows a padlock.
+fn draw_grid(
+    grid: &hex::HexGrid,
+    picker: &Picker,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    out: &mut Vec<Draw>,
+) {
+    let (width, rows) = shape(picker);
+    let face = |cell: &hex::Cell| match picker.entries().get(cell.row * width + cell.entry) {
+        Some(Entry {
+            details: Details::Track {
+                icon: Some(src), ..
+            },
+            ..
+        }) => Face::Art {
+            src: src.clone(),
+            size: ArtSize::Fit(ICON_SIZE),
+        },
+        _ => Face::Empty,
+    };
+    let mut grid = *grid;
+    grid.rows = grid.rows.min(rows);
+    hex::draw_cells(
+        &grid,
+        (picker.index() % width.max(1), width),
+        Some(picker.index() / width.max(1)),
+        RING,
+        &face,
+        sprites,
+        out,
+    );
 }
 
 /// The `CIRCUIT LENGTH` and `RACE DISTANCE` values for a lap of `metres`
@@ -224,11 +292,11 @@ fn walk_track(
                 });
             }
             "trackhexselection" => {
-                out.hex_grid = Some(HexGrid {
-                    origin: [inner.0, inner.1],
-                    columns: number(child, "columns").map_or(0, |v| v as u32),
-                    rows: number(child, "rows").map_or(0, |v| v as u32),
-                });
+                out.hex_grid = Some(hex::HexGrid::unauthored(
+                    [inner.0, inner.1],
+                    number(child, "columns").map_or(0, |v| v as usize),
+                    number(child, "rows").map_or(0, |v| v as usize),
+                ));
             }
             _ => {}
         }
@@ -297,8 +365,8 @@ pub(in crate::picker) fn body(
             continue;
         }
         // The reverse glyph and its `REVERSE` text are authored for a
-        // reversed circuit; showing them only then is **chosen** - no frame
-        // has the cursor on the grid's second row.
+        // reversed circuit; they show only then (measured 2026-09-29: `Down`
+        // drew them, `Up` removed them).
         if name.starts_with("ReverseIcon") {
             if reversed && let Some(placed) = sprites(&image.src) {
                 out.push(sprite(image, placed, None));
@@ -313,6 +381,9 @@ pub(in crate::picker) fn body(
         }
     }
     draw_labels(&extra.common.labels, &mut out);
+    if let Some(grid) = &extra.hex_grid {
+        draw_grid(grid, picker, sprites, &mut out);
+    }
     let Some(entry) = picker.selected() else {
         return out;
     };
@@ -445,7 +516,20 @@ pub(in crate::picker) fn targets(
             rect: [x + w / 2.0, y, w / 2.0, h],
         });
     }
-    if picker.has_rows()
+    if let Some(grid) = &extra.hex_grid {
+        let (width, rows) = shape(picker);
+        let mut grid = *grid;
+        grid.rows = grid.rows.min(rows);
+        for cell in grid.cells(picker.index() % width.max(1), width) {
+            out.push(Target {
+                what: What::Cell {
+                    entry: cell.row * width + cell.entry,
+                    variant: 0,
+                },
+                rect: cell.rect,
+            });
+        }
+    } else if picker.has_rows()
         && let Some(hexes) = brackets.next()
     {
         let [x, y, w, h] = hexes.rect;

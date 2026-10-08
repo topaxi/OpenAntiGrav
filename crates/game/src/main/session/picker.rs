@@ -66,6 +66,7 @@ impl Session {
                         details: Details::Track {
                             info: self.track_info(title.name, track, mode),
                             emblem: catalogue::track_emblem(title, track),
+                            icon: catalogue::track_icon(title, track),
                             reversed: track.reversed,
                         },
                     },
