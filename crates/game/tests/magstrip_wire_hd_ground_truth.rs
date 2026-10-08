@@ -43,7 +43,7 @@ fn load() -> Option<race::Race> {
         println!("{line}");
     }
     assert!(
-        loaded.magstrip_wake_textures.is_some(),
+        loaded.ribbon_textures.magstrip.is_some(),
         "HD_electric_arc_8x8 and HD_ElectricArc_Contact must both decode"
     );
     let mut race = race::Race::start(loaded.setup);

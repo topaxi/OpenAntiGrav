@@ -18,7 +18,7 @@ impl Scene {
         self.exhaust.borrow().draw(pass);
         self.sparks.borrow().draw(pass);
         self.draw_beam(pass);
-        self.draw_magstrip_wake(pass);
+        self.draw_ribbons(pass);
         self.clouds.borrow().draw(pass);
         self.weapon_quads.pipeline.borrow().draw(pass);
         self.draw_ghost(race, eye, pass, stats);

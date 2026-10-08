@@ -921,10 +921,10 @@ pub struct Loaded {
     /// "never invent what the assets author" terms every optional asset here
     /// follows - see `oag_fx::beam`.
     pub leach_beam_texture: Option<FlareTexture>,
-    /// The magstrip arc wake's two textures, `[atlas, contact]`, when the title
-    /// builds the class and both decode - see `load::magstrip_wake`. `None`
-    /// draws no wake rather than a stand-in.
-    pub magstrip_wake_textures: Option<[FlareTexture; 2]>,
+    /// The magstrip arc wake's two textures and the Rocket smoke's texture and
+    /// ramp, each where the title builds it and it decodes - see
+    /// [`crate::rocket_smoke::RibbonTextures`].
+    pub ribbon_textures: crate::rocket_smoke::RibbonTextures,
     /// One `blob` shadow silhouette per grid slot, slot 0 the player's.
     ///
     /// The disc's own where the source ships one - Wipeout HD's nine

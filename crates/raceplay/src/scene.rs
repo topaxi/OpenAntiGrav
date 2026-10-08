@@ -24,6 +24,7 @@ mod mist;
 mod motion;
 mod per_slot;
 mod queries;
+mod ribbons;
 mod scratch;
 mod shine;
 mod weapon_models;
@@ -227,8 +228,8 @@ pub struct Scene {
     mist: std::cell::RefCell<Option<oag_fx::mist::Pipeline>>,
     /// The LeachBeam's own ribbon, `None` on an undecoded texture - see `beam`.
     beam: Option<std::cell::RefCell<oag_fx::beam::Pipeline>>,
-    /// The HD-lineage magstrip arc wake, `None` off a title that builds it.
-    magstrip: Option<magstrip_wake::Magstrip>,
+    /// The magstrip arc wake and the Rocket smoke, each `None` where it is not built.
+    ribbons: ribbons::Ribbons,
     /// Collision sparks. `RefCell` for the same reason [`Self::exhaust`] is.
     sparks: std::cell::RefCell<sparks::Pipeline>,
     /// The `blob` shadow tier: one ground-aligned quad per craft, drawn after
@@ -435,7 +436,7 @@ impl Scene {
         shield_cockpit: Option<Model>,
         flare: Option<FlareTexture>,
         leach_beam_texture: Option<FlareTexture>,
-        magstrip_wake_textures: Option<[FlareTexture; 2]>,
+        ribbon_textures: crate::rocket_smoke::RibbonTextures,
         noise: Option<FlareTexture>,
         trail_blend: Option<wgpu::BlendState>,
         trail_shape: Option<FlareTexture>,
@@ -852,13 +853,7 @@ impl Scene {
             leach_beam_texture.as_ref(),
             sample_count,
         );
-        let magstrip = magstrip_wake::build(
-            device,
-            queue,
-            format,
-            magstrip_wake_textures.as_ref(),
-            sample_count,
-        );
+        let ribbons = ribbons::build(device, queue, format, &ribbon_textures, sample_count);
         // One silhouette per grid slot, in the same slot order the liveries
         // are in - `race::shadow::silhouettes` built them, and the load report
         // already said which slots got the disc's own image and which got the
@@ -975,7 +970,7 @@ impl Scene {
             clouds: clouds::Clouds::build(device, queue, format, sample_count, cloud_layer),
             mist: std::cell::RefCell::new(None),
             beam,
-            magstrip,
+            ribbons,
             sparks,
             shadow,
             shadow_map: std::cell::RefCell::new(shadow_map),

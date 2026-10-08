@@ -57,6 +57,9 @@ pub struct Style {
     pub topology: wgpu::PrimitiveTopology,
     /// Vertices the buffer holds; an upload past it is cut off.
     pub capacity: usize,
+    /// Whether the fragment is HD's Rocket smoke program - see
+    /// [`Style::rocket_smoke`].
+    pub smoke: bool,
 }
 
 impl Style {
@@ -70,6 +73,7 @@ impl Style {
         alpha_is_fragment: false,
         topology: wgpu::PrimitiveTopology::TriangleStrip,
         capacity: MAX_VERTICES,
+        smoke: false,
     };
 
     /// The magstrip arc wake, `capacity` vertices of triangle list.
@@ -108,6 +112,46 @@ impl Style {
             alpha_is_fragment: true,
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,
+            smoke: false,
+        }
+    }
+
+    /// Wipeout HD's Rocket smoke ribbon, `capacity` vertices of triangle list.
+    ///
+    /// **Measured** (`docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`):
+    /// `RibbonEffects_Render` (`0x002a6478`) switches to `blend(0x302, 0x303,
+    /// 0, 0x303)` before the Rocket's pool - colour `SRC_ALPHA,
+    /// ONE_MINUS_SRC_ALPHA`, alpha `ZERO, ONE_MINUS_SRC_ALPHA` (the alpha
+    /// pair's argument order read off the call, confidence 60) - so the smoke
+    /// dims the glow mask behind it rather than stamping one. The fragment is
+    /// `hd_rockettrail`'s own program, the `smoke` override in `beam.wesl`.
+    /// **Chosen, not measured**: depth test on and depth write off, cull off,
+    /// and the gamma-authored texture decoded on a linear target - the
+    /// renderer-wide state the original's `0x00677ff8` calls in that function
+    /// were not decoded to.
+    #[must_use]
+    pub const fn rocket_smoke(capacity: usize) -> Self {
+        Self {
+            label: "rocket smoke",
+            blend: wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::SrcAlpha,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Zero,
+                    dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                    operation: wgpu::BlendOperation::Add,
+                },
+            },
+            glow_mask: 0.0,
+            vertex_alpha_weights_colour: false,
+            decodes_source: true,
+            alpha_is_fragment: false,
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            capacity,
+            smoke: true,
         }
     }
 }
@@ -223,6 +267,7 @@ impl Pipeline {
                     "alpha_is_fragment",
                     f64::from(u8::from(style.alpha_is_fragment)),
                 ),
+                ("smoke", f64::from(u8::from(style.smoke))),
             ])
             .collect();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -339,12 +384,25 @@ impl Pipeline {
         view_projection: &[[f32; 4]; 4],
         vertices: &[GpuVertex],
     ) {
+        self.upload_with_eye(queue, view_projection, [0.0; 3], vertices);
+    }
+
+    /// [`Self::upload`] with the camera's world position in the `model`
+    /// block's fourth column, for [`Style::rocket_smoke`]'s facing fade - the
+    /// same seat `exhaust`'s HD ribbon gives it.
+    pub fn upload_with_eye(
+        &mut self,
+        queue: &wgpu::Queue,
+        view_projection: &[[f32; 4]; 4],
+        eye: [f32; 3],
+        vertices: &[GpuVertex],
+    ) {
         let mut block = [[0.0f32; 4]; 8];
         block[..4].copy_from_slice(view_projection);
         block[4] = [1.0, 0.0, 0.0, 0.0];
         block[5] = [0.0, 1.0, 0.0, 0.0];
         block[6] = [0.0, 0.0, 1.0, 0.0];
-        block[7] = [0.0, 0.0, 0.0, 1.0];
+        block[7] = [eye[0], eye[1], eye[2], 1.0];
         queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&block));
 
         let n = vertices.len().min(self.capacity);
