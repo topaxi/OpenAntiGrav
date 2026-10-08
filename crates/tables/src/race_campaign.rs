@@ -432,6 +432,25 @@ impl Cell {
         })
     }
 
+    /// Whether this cell's medal law is one this build has not measured:
+    /// an `Elimination` or `NitroBattle` cell on Wipeout HD/Fury, whose
+    /// `gold`/`silver`/`bronze` and every [`Cell::difficulty_targets`] rung are
+    /// the dummy `1`/`2`/`3` and whose real target is the single
+    /// [`Cell::nitro_elimination_targets`] number per rung (`200`..`300` on an
+    /// `Elimination` cell, `12`..`26` on a `NitroBattle` one). Neither the unit
+    /// (kills or score points) nor the way one number becomes a tier is
+    /// measured (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`, "what
+    /// is not determined"), so [`Cell::evaluate_medal_for_difficulty`] awards
+    /// nothing for it rather than gold for one kill against the dummy `1`.
+    /// Pulse's `Eliminator` cells keep their kill target in `gold` and carry no
+    /// nitro triple, so they are not affected.
+    #[must_use]
+    pub fn medal_law_is_unmeasured(&self) -> bool {
+        let nitro_mode = matches!(&self.mode, Mode::Elimination)
+            || matches!(&self.mode, Mode::Other(name) if name == "NitroBattle");
+        nitro_mode && self.nitro_elimination_targets.is_some_and(|t| t != (1, 1, 1))
+    }
+
     /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of
     /// `value` against this cell's gold/silver/bronze targets. `value` is a
     /// finishing position (`Race`/`Tournament`/`Head2Head`), a time in
@@ -479,7 +498,7 @@ impl Cell {
         value: i64,
         difficulty: Difficulty,
     ) -> Option<Medal> {
-        if value <= 0 || value == 0xFFFF_FFFF {
+        if value <= 0 || value == 0xFFFF_FFFF || self.medal_law_is_unmeasured() {
             return None;
         }
         let targets = self.targets_for_difficulty(difficulty);

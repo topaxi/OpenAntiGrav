@@ -159,6 +159,7 @@ pub const TITLE: &Title = &Title {
         unlocks_origin: oag_title::Origin::Chosen,
         selection_strings: true,
         screen_archive: Some(campaign::SELECTION_SCREEN_ARCHIVE),
+        grid_archive: Some(campaign::GRID_ARCHIVE),
         origin: oag_title::Origin::Measured,
     },
     pressings: None,

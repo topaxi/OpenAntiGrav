@@ -158,6 +158,18 @@ pub const FURY_GRID_RANGE: std::ops::Range<usize> = 8..16;
 /// precedence-resolved one. See [`SCREEN_ENTRY`]'s own doc for why.
 pub const SELECTION_SCREEN_ARCHIVE: &str = crate::archives::DATA06;
 
+/// The archive whose copy of each `grid_00.xml`..`grid_07.xml` is read:
+/// `DATA06`'s, the last archive in the mount order and the one the front end's
+/// own `Campaign="HD"` grids are tagged in. `DATA02`'s older copy authors one
+/// flat `Gold`/`Silver`/`Bronze` set per cell, **equal to `DATA06`'s hard rung
+/// on every cell with a rung** (measured, all 87 cells,
+/// `crates/game/tests/hd_campaign_ground_truth.rs`), so reading it hands a
+/// novice or skilled player the elite targets. `grid_08`..`grid_15` (Fury) are
+/// on `DATA00` alone and read by precedence. Confidence 85: `DATA06` is what
+/// `Campaign Selection` and `Cell Selection` already read, and its `NOVICE`
+/// rung is what RPCS3 shows; no capture compared a base-campaign target number.
+pub const GRID_ARCHIVE: &str = crate::archives::DATA06;
+
 /// `Campaign Selection`'s own screen name, as `DATA06`'s `CellMode_Definition.xml`
 /// authors it. See [`SCREEN_ENTRY`]'s own doc.
 pub const SELECTION_SCREEN: &str = "Campaign Selection";
