@@ -353,6 +353,26 @@ fn a_re_press_mid_cluster_does_not_restart_the_drop() {
     );
 }
 
+/// A five-mine cluster at the engine's `1/60` s tick leaves every six ticks, as the
+/// original's does at its display's `1/59.94` s: the first on the press, then
+/// 6, 12, 18 and 24 ticks later. A strict `> 0` test on the reload timer made every
+/// gap seven (`0.1f32` less six `dt`s is `+1e-9`), 28 ticks for the cluster and a
+/// fourth blast lost to the owner leaving the trigger radius first.
+#[test]
+fn a_cluster_leaves_every_six_ticks_at_sixty_hertz() {
+    let dt = 1.0 / 60.0_f32;
+    let mut held = Held::empty();
+    held.grant(Weapon::Mine);
+    held.begin_drop(5);
+    let mut left = Vec::new();
+    for tick in 0..40_u32 {
+        if held.advance_drop(dt, crate::projectile::mine::DROP_INTERVAL) {
+            left.push(tick);
+        }
+    }
+    assert_eq!(left, [0, 6, 12, 18, 24]);
+}
+
 /// A fresh grant, with nothing dropping, is unaffected by the guard above.
 #[test]
 fn begin_drop_still_arms_a_cluster_from_empty() {
