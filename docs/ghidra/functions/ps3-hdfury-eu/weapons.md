@@ -1165,7 +1165,6 @@ the third holds a single large draw (scale 9.5, additive). So the core's state a
 (`hd-weapon-ref/e11`, `e12`) stays the reference for the look. `rpcs3-hd-whiteout.py` now takes the screenshot after the
 dump.
 
-||||||| bebbbc492
 
 
 
