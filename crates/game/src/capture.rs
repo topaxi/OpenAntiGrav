@@ -34,8 +34,7 @@ use offscreen::{offscreen, read_back, touch_preview, write_png};
 pub struct Options {
     /// Where to write the PNG.
     pub path: std::path::PathBuf,
-    /// Capture the frame the way a window presents it: render scale, upscaler,
-    /// grade and aspect bars.
+    /// Capture the frame the way a window presents it: scale, upscaler, grade, bars.
     ///
     /// On the race hand-off, the whole path. On the front end there is no 3D
     /// scene, so no render scale and no upscaler - since
