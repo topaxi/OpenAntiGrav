@@ -124,6 +124,8 @@ def main():
     ap.add_argument("command", choices=["save", "load", "check", "pose"])
     ap.add_argument("slot", type=int, nargs="?", default=1)
     ap.add_argument("--keep", help="copy the saved state to this path (under data/saves/)")
+    ap.add_argument("--serial", default="UCUS98712_1.00",
+                    help="disc serial and version in the state file name (Pulse USA by default)")
     ap.add_argument("--file", help="for load: first copy this .ppst into the slot's file name")
     args = ap.parse_args()
     if "DISPLAY" not in os.environ:
@@ -146,7 +148,7 @@ def main():
                 saved = pose(args.port)
                 dbg = Debugger(args.port)
             if args.file:
-                target = state_dir(args.home) / ("UCUS98712_1.00_%d.ppst" % (args.slot - 1))
+                target = state_dir(args.home) / ("%s_%d.ppst" % (args.serial, args.slot - 1))
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy(args.file, target)
                 print("placed %s -> %s" % (args.file, target))

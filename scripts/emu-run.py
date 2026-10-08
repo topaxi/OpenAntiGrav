@@ -198,6 +198,10 @@ def main(argv=None):
             sys.exit("--bg needs --status")
         args.total = args.total if "--total" in argv[:cut] else 0.0
         flags = [a for a in argv[:cut] if a != "--bg"]
+        if "--total" not in flags:
+            # The detached child re-parses its flags; without this it would fall
+            # back to the 570 s foreground default and kill the long run it exists for.
+            flags += ["--total", "0"]
         out = open(args.log or os.devnull, "ab")
         proc = subprocess.Popen(
             [sys.executable, os.path.abspath(__file__)] + flags + ["--"] + command

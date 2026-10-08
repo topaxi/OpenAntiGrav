@@ -443,6 +443,15 @@ def clear_stale_lock():
                 or os.path.expanduser("~/.cache")) / "rpcs3" / "RPCS3.buf"
     if not lock.exists():
         return False
+    # Never remove a lock some process still has open: an RPCS3 the maintainer
+    # started by hand or from the GUI has no pidfile here, and its lock is live.
+    for fd_dir in glob.glob("/proc/[0-9]*/fd"):
+        try:
+            for fd in os.listdir(fd_dir):
+                if os.path.realpath(os.path.join(fd_dir, fd)) == str(lock.resolve()):
+                    return False
+        except OSError:
+            continue
     lock.unlink()
     print("removed a stale %s left by a terminated run" % lock, flush=True)
     return True
@@ -677,6 +686,7 @@ class Session:
         self.pad = None
         self.proc = None
         self.guard = None
+        self._welcomes_before = 0
         # `attach=None` follows `OAG_RPCS3_ATTACH=1`: with it set, every script
         # built on Session drives the live `serve` instance when there is one.
         if attach is None:
@@ -812,7 +822,13 @@ class Session:
             # An attached emulator is wherever the last script left it. Anywhere
             # in the front end, `walk_to_race` carries on from there (it presses
             # cross on whatever screen it finds), so only a race needs leaving.
-            if self.in_race():
+            if self.in_demo():
+                for _ in range(8):
+                    self.pad.press("cross", 0.15)
+                    time.sleep(2.0)
+                    if not self.in_demo() and not self.in_race():
+                        break
+            elif self.in_race():
                 self.leave_race()
             if current_screen() not in ("?", "Top"):
                 return True
@@ -874,8 +890,18 @@ class Session:
         time.sleep(3.0)
 
     def press_once(self, button, settle=5.0):
-        """Press, then wait for the screen to change. Returns (was, now)."""
+        """Press, then wait for the screen to change. Returns (was, now).
+
+        Refuses to press on a screen that is, or is about to become, the race:
+        the check sits *here*, immediately before the press, because a check at
+        the top of a walk loop races the screen's own change - `Launch Game` to
+        `HUD` happens inside the gap, the `cross` then lands on the fly-over's
+        START RACE prompt and the fly-over a capture exists to measure is skipped
+        (hd-ride-height b2-b4, and again here 2026-10-09: "FLYBY SKIPPED").
+        """
         was = current_screen()
+        if (was in RACE_ARRIVED and not self.in_demo()) or was in self.AUTO_ADVANCE:
+            return was, was
         self.pad.press(button, 0.15)
         deadline = time.time() + settle
         while time.time() < deadline and current_screen() == was:
@@ -930,9 +956,31 @@ class Session:
     PAUSE_RESTART_DOWNS = 5
     PAUSE_QUIT_DOWNS = 6
     IN_RACE_SCREENS = ("InGame", "HUD", "InGame Pause SP")
+    AUTO_ADVANCE = ("Team Launch Transition", "Launch Game")
 
     def in_race(self):
         return current_screen() in self.IN_RACE_SCREENS
+
+    def in_demo(self):
+        """Whether the race on screen is the attract demo, not a real one.
+
+        **Idle on `Main Menu` for about a minute and HD starts driving itself**:
+        `Demo Launch`, `Demo Launch Real`, `Demo InGame`, then `HUD`. `HUD` is in
+        `RACE_ARRIVED`, so a walk that was slow (a long settle, a dropped press)
+        used to report "in a race" on the demo and the capture measured the
+        demo's craft. Measured 2026-10-09 with presses ignored: Main Menu to
+        `HUD` through the demo in 93 s. Any button leaves it.
+        """
+        for _, now in reversed(SCREEN_LINE.findall(tty_text())):
+            if now.startswith("Demo"):
+                return True
+            if now in ("Main Menu", "Launch Game", "Team Launch Transition",
+                       "Cell Selection", "Team Selection"):
+                return False
+        return False
+
+    def arrived(self):
+        return current_screen() in RACE_ARRIVED and not self.in_demo()
 
     def _pause_choose(self, downs):
         if current_screen() != "InGame Pause SP":
@@ -1000,7 +1048,8 @@ class Session:
         """
         text = tty_text()
         start = text.rfind("Loading track model")
-        return start >= 0 and "Play welcome" in text[start:]
+        return (start >= 0 and "Play welcome" in text[start:]
+                and text.count("Play welcome") > self._welcomes_before)
 
     def wait_for_load(self, fallback=70.0, settle=2.0):
         """Wait for the race to finish loading, instead of sleeping `fallback`.
@@ -1039,6 +1088,9 @@ class Session:
         time.sleep(wait)
 
     def walk_to_race(self, max_presses=12, plan=None):
+        # An attached emulator's TTY.log still holds the last race's `Play welcome`;
+        # `race_loaded` must see a new one.
+        self._welcomes_before = tty_text().count("Play welcome")
         """Press cross until HD is in a race, or give up and say where it got to.
 
         Deliberately not a fixed count: HD runs at about 9 fps here and a press
@@ -1047,13 +1099,23 @@ class Session:
         """
         for index in range(1, max_presses + 1):
             self.note_screen()
-            if current_screen() in RACE_ARRIVED:
+            if self.arrived():
                 break
             if plan:
                 self.navigate(plan)
-                if current_screen() in RACE_ARRIVED:
+                if self.arrived():
                     break
             self.photograph(was_screen=current_screen())
+            if current_screen() in self.AUTO_ADVANCE:
+                # These advance on their own within ~1-2 s; a `cross` landing on
+                # them reaches the race's own START RACE prompt and skips the
+                # fly-over (hd-ride-height, 2026-10-08, b2-b4).
+                was = current_screen()
+                deadline = time.time() + 15
+                while time.time() < deadline and current_screen() == was:
+                    time.sleep(0.3)
+                print("  wait       %-22s -> %-22s" % (was, current_screen()), flush=True)
+                continue
             was, now = self.press_once("cross")
             print("  press %2d  %-22s -> %-22s%s"
                   % (index, was, now, "" if now != was else "   (dropped)"),

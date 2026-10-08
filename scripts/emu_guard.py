@@ -36,7 +36,7 @@ import time
 #: `Top` in 37-40 s and `Main Menu` in 56-75 s; a menu walk spends 5 s on a
 #: dropped press and never more than 25 s on one screen; a track load is 60-70 s.
 LIMITS = {
-    "boot": 150.0,
+    "boot": 100.0,
     "menu": 90.0,
     "loading": 150.0,
     "countdown": 90.0,
@@ -108,18 +108,25 @@ class Guard:
             if name != self.name:
                 self.name = name
                 self.limit = self._limit_for(name, limit)
+                self.since = time.time()
             elif limit is not None:
                 self.limit = float(limit)
-            self.since = time.time()
+                self.since = time.time()
             self.extra.update(extra)
             self.beats += 1
         self.write()
 
+    #: Stage families where only a screen change counts as progress. A press, or
+    #: a re-poll of the same screen, must not reset the clock there: a boot that
+    #: never leaves `?` and a walk parked on one page both keep pressing.
+    SCREEN_PROGRESS = ("boot", "menu")
+
     def beat(self, **extra):
         with self._lock:
-            self.since = time.time()
             self.beats += 1
             self.extra.update(extra)
+            if self.name.split(":", 1)[0] not in self.SCREEN_PROGRESS:
+                self.since = time.time()
         now = time.time()
         if extra or now - getattr(self, "_written", 0.0) > 2.0:
             self._written = now
