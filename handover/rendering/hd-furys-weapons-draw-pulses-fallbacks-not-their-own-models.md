@@ -187,6 +187,19 @@ Wired (see `weapons.md`, 2026-10-08). Open: the film's frame-wide white-out that
 136 at the same age); candidates are bloom/exposure on HD, the point light `(1-p)^2`, or a flash object. Also the entry's orientation
 and the 16 entries at `+0x190`. `--force-missile-hit TICK:SLOT` frames it (`hd_missile_blast_ground_truth.rs`).
 
+## 2026-10-08 (`hd-whiteout`): the Missile's white-out measured, the Bomb core read
+
+`weapons.md`, "`hd-whiteout`". Closed: the white-out is **not** a flash object and **not** a pass over the HUD. The HUD
+is the last thing drawn and its programs do not change; the wash is the explosion's additive geometry with the eye
+inside it (26 units from the centre, core radius 31), lit, and then bloomed by the ordinary chain (pixels at or above
+250 double from 22.7 % to 45.8 % through the composite at age 0.27 s). The translucent HUD panels read as washed over
+that white. Open: ours puts no eye inside the sphere (at age 0.1 a burst a quarter of the frame across; our eye distance and
+radius unmeasured, take them next), the point light `(1-p)^2` (lane `hd-weapon-lights`), the HD bloom strength, a pair with a
+moving player, and ours' livery/brightness at rest (196 grey-mean against the original's 93, so whole-frame luma compares
+nothing). Bomb: the original draws the core with the eye inside it (same state as the fireball, cull off); a lead is `AlphaAnim` reading
+0.996105 where we hold 1.0 (our fireball cuts every texel with alpha above zero in that case). Tools:
+`scripts/rpcs3-hd-whiteout.py`, `scripts/rsx-draw-list.py`.
+
 ## Next Steps
 
 1. ~~Plasma first: per-title entries, `HD_plasma_ball` on the bolt, the
