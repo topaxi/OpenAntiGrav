@@ -192,5 +192,9 @@ impl Scene {
     #[must_use]
     pub fn draws_gantry(&self) -> bool {
         self.gantry.is_some()
+            || self
+                .adverts
+                .as_ref()
+                .is_some_and(crate::adverts::Cards::has_gantry)
     }
 }

@@ -28,7 +28,7 @@ use oag_mesh::mesh::{DrawCall, Model};
 use oag_raceplay as race;
 use oag_raceplay::gantry;
 
-fn placed() -> Option<gantry::Placed> {
+fn placed() -> Option<oag_raceplay::adverts::Card> {
     let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -43,7 +43,11 @@ fn placed() -> Option<gantry::Placed> {
         .unwrap_or_else(|| panic!("no gantry line: {:#?}", loaded.report));
     assert!(line.contains("plays the FX-350 board"), "{line}");
     assert!(line.contains("fx350_nomip.gtf"), "{line}");
-    loaded.billboards.gantry
+    loaded
+        .billboards
+        .adverts
+        .into_iter()
+        .find(|card| card.slot == 8)
 }
 
 fn draws(model: &Model) -> impl Iterator<Item = &DrawCall> {
@@ -107,8 +111,12 @@ fn lit_white(model: &Model, keys: &[u32], seconds: f32) -> u32 {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn each_lap_window_draws_the_board_the_original_shows() {
     let Some(placed) = placed() else { return };
-    let model = placed.model();
-    let cull = placed.cull().expect("HD keeps its later states");
+    let model = &placed.model;
+    let cull = placed
+        .timeline
+        .as_ref()
+        .expect("the gantry card is clocked")
+        .cull();
     let fx350: Vec<u32> = bound_to(model, "fx350_nomip.gtf").collect();
     let flag: Vec<u32> = bound_to(model, "checkered.gtf").collect();
     // `FINAL LAP` shares `GO`'s texture file; its letters are the draws of

@@ -45,6 +45,17 @@ pub struct Adverts {
     /// but 8 instead of building a target per slot. What that texture is has not
     /// been read, so on such a title a Zone race draws no advert and says so.
     pub zone_shares_one_texture: bool,
+    /// Whether slot 8 - the start gantry - is drawn as a card like the other
+    /// slots instead of as a model stood on the track's mount.
+    ///
+    /// Wipeout HD: **measured on RPCS3 (2026-10-08, Talon's Junction, one hooked
+    /// boot)**: the frame's second 512 x 256 colour target is drawn with
+    /// `321_go_64.gtf` (64 x 128 DXT5, 8 mips, trilinear) through a
+    /// `texture * constant` program, and the track's `billboard8` quad then
+    /// samples it through the ordinary lit track program. A lit `GO` read 132 of
+    /// 255 on screen against a full white from the model route, whose white sits
+    /// above the bloom gate's knee and smears into a halo.
+    pub gantry_card: bool,
     /// Where the numbers came from.
     pub origin: crate::Origin,
 }

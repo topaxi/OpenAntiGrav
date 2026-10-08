@@ -211,6 +211,12 @@ four addresses, only observed to sit near them in the same data region.
 Slot 8 is not special-cased anywhere in this function; its `321Go_StartFinish`
 content is used exactly as authored.
 
+**Resolved on the live frame, 2026-10-08 (`hd-gantry`):** the mode does pick the file. `GetMode()` read
+from `TTY.log` is 6 in a Zone race, 13 in Zone Battle and 14 in Detonator, and each shows its own slot-8 board
+before the release (Single Race and Eliminator, 3 and 8, show `3 2 1 GO`). Those are the ids the PS4
+binary's allowlist branches on (`ps4-omega-eu/billboards.md`). The *code site* on this binary is still unread.
+See `docs/rendering/start-gantry.md`. Confidence 85.
+
 ## The four `321Go_*.vex` shapes are confirmed as genuinely different content, by rendering them
 
 2026-09-02, from the race-start countdown handover thread, asset side only - does
