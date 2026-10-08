@@ -201,3 +201,9 @@ back. The lead merges and removes your worktree as soon as the report arrives.
 A member once kept committing after its report and was mid-way
 through merging main when its worktree was removed. Finish everything first,
 then report.
+
+**If a message wakes you after your report**, your worktree is gone or belongs
+to someone else now. Answer in text only. Never `cd` into another lane's
+worktree, rename a branch or commit. A woken member once did all three inside
+a running lane's worktree. If the message asks for more work, say so and stop:
+the lead spawns a fresh member for it.
