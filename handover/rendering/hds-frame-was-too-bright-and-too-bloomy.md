@@ -960,3 +960,34 @@ SPU offset `0x2920` (the region containing the field-presence dispatch) opens by
 **`LightCulling` (`0x007f6880`, `0x490` bytes) is the SPU consumer, read end to end.** Dispatched by the track-visibility pass (`FUN_0040aba0`) with the visible lights, the track's per-chunk bounding spheres (`track + 0x24`, 16 bytes each) and the address of the `0x1000`-byte bit table at `0x00f4a280`; it sets bit `chunk` when any light's sphere intersects the chunk's sphere and DMAs the table back; the caller waits on the job's ticket before returning. That table is exactly what `FUN_004074e0`/`FUN_00408fa8` test per chunk before emitting opcode `0x2d` (their two base symbols are `0x200000` apart and resolve to the same address). `0x800` is bit 11 of the permutation word, `SVC1` per `rcsmaterial.md`'s independent derivation - the `SpuVertexColours` variant. **The PPU side of `Enable_spu_vertex_light` is now closed end to end**: candidates -> frustum cull with count -> chunk cull on SPU -> per-chunk opcode `0x2d` + `SVC1` variant -> `Live_RcsBlackbox`, which by the variant's own declared input must write the `SpuVertexColours` stream. That last computation is the one thing still unread, and it is a static `0xd690`-byte file range, not a live-tooling problem.
 
 Confidence 85-88 for everything decompiled (the chain, the count, the dispatch), 75 for the `LightCulling` job's arithmetic (hand disassembly, corroborated by both loop strides matching the PPU-side sizes), 78 for `0x800 = SVC1`. Fourteen names landed in `names.tsv` and the Ghidra database. No code changed - `mesh.wgsl`, `crates/render/`, `crates/game/` untouched; nothing here is wired, since what the SPU *computes* per vertex is still unread and "never invent" holds until it is. Extracted binaries and disassemblies now live under `data/extracted/ps3/spu-jobs/` and the live slot dumps under `data/traces/hd-spu-light-companion/` (both gitignored, never committed; moved out of `/tmp` at the maintainer's request so they survive a reboot).
+
+2026-10-08 (`hd-exposure`): **the `pow(1/2.2)` is not an extra encode, the original's exposure is unity, and the
+brightness gap is per surface.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The exposure is unity, and the brightness gap is
+per surface". What lives only here:
+
+**Reconciliation.** Every earlier reading on this page is right for its own frame. Ours reads 0.77-0.84x at Talon's and
+Sol 2's grid and tunnel frames (the 09-13 "darker" family and `bloom-racing`'s "HD bloom reads weaker") and **1.54x** in
+Talon's corridor (the `hd-gantry` 1.6x, an exact camera, original at clock 0.26.3). The gap does not track the race
+clock: final/scene is 1.02-1.06 on nine scene-target dumps including clock 0.00.0 (`scripts/hd-exposure-ratio.py`), so the
+original's `scale` is 1.0 and the sky-law entry's "race-start exposure transient" is not supported on the two circuits
+measured at 0.00.0 (Sol 2 at 0.00.3 was not dumped, so what made those frames bright is open).
+
+**The register read.** `NV4097_SET_SHADER_PACKER` (`0x1fec`, RPCS3's `framebuffer_srgb_enabled`) is 1 on scene and
+bloom-ladder draws and 0 on swap-buffer draws; albedo, normal and ladder units carry gamma nibble 7, the lightmap unit 0.
+
+**Where it lives.** In ours the corridor road is the lightmap `prelit` term alone (road box 0.707, 0.244 without it,
+ambient and vertex light move nothing); the original's program has the same equation, constants and raw lightmap unit and
+lands ~4x lower in linear light. A uniform `x0.25` matches the road's quantiles and misses the distant geometry, so it is
+**not** the fix and was not shipped.
+
+**Negatives, so nobody re-runs them.** (1) Removing the final `pow` or pinning `scale` is not the answer: `scale` is
+already 1.0 at that pose (byte-identical when pinned). (2) Restoring the lightmap's sRGB decode would be wrong: its
+sampler word is nibble 0. (3) The ambient, vertex-light and sun summands are zero or near it on that road.
+
+**Open / next.** Sky-law method on the corridor road draw: hook-dump unit 1 and unit 0 of a `fp 0x759ac1` draw in full
+(`rpcs3-drive.py place --hook`, a copy of `hd-sky-law`'s `hook_sky.py`), predict the road's bytes from the live
+constants and diff against `hd-exposure/placeA/00-40cc0000.bin`; then check our lightmap sample (atlas, UV set, mip,
+colour/alpha split of the DXT5) against it. Also fix two stale comments (`hd_bloom.rs` header, `fs_encode`) that still call
+the final `pow` a stand-in.
+
