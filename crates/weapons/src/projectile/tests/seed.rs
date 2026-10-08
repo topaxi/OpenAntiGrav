@@ -97,7 +97,7 @@ fn a_plasma_bolt_over_nothing_falls_along_its_carried_normal() {
     let up = ships[0].physics.body.up();
     let mut projectiles = Projectiles::new();
     assert!(projectiles.charge_up(Vec3::ZERO, Vec3::Z * 100.0, 0, 0.05));
-    let mut step = |projectiles: &mut Projectiles| {
+    let step = |projectiles: &mut Projectiles| {
         projectiles.advance(
             1.0 / 60.0,
             &empty_world(),
