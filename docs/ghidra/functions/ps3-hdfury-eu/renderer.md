@@ -2191,6 +2191,25 @@ rather than past it once the reference was measured over its own picture.
 **Not measured**: Fury's circuits, any mounted DLC pack, and Amphiseum in
 motion against a grab there is none of.
 
+### Where HD's bloom stands at a matched pose (2026-10-08)
+
+From the Pulse lane's direct readout ([bloom.md](../psp-pulse-usa/bloom.md#racing-strength-against-the-originals-own-scratch-buffers-2026-10-08))
+the question was whether HD shares a too-strong term. **It does not generalise
+(`checked, differs`)**: Pulse's finding is 8-bit GE arithmetic (per-tap bytes,
+a truncating composite), and this chain is float HDR with its constants read off
+the disc. `scripts/hd-frame-compare.py` over the stored `talons-matched` pairs
+(poses `00`, `01`, `03`, this tree, native, no craft drawn) reads ours
+**weaker**: whole frame excluding the HUD, clipped white `2.85 / 6.03 / 0.37 %`
+against the reference's `5.32 / 12.43 / 4.77 %`, luma `0.523 / 0.497 / 0.477`
+against `0.618 / 0.601 / 0.618`, halo ring at `+2 px` `0.820 / 0.833 / 0.839`
+against `0.907 / 0.847 / 0.876` (`+16 px` `0.625 / 0.506 / 0.619` against
+`0.642 / 0.597 / 0.700`). So the "band still being tightened" is not an excess:
+at these poses ours sits below it, the largest part being the sky (`0.53` luma
+and `11 %` clipped against `0.91` and `56 %` on pose `00`), as the
+2026-10-05 accuracy pass already recorded. No new RPCS3 boot: these are the
+stored 2026-09-13 captures at race-start poses, so no racing intensity, no
+craft and no boost were compared. Colour grading stays unread.
+
 ### The chain was unswitchable, and how bright it actually is (2026-09-09)
 
 A regression hunt, opened on a from-play report that HD/Fury's bloom "seemed

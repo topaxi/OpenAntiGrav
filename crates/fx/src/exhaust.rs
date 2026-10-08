@@ -620,19 +620,17 @@ impl Exhaust {
                 let fade_b = ramp * trail_fade(k + 1);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
-                // The glow mask ramps to zero along the ribbon - see
-                // [`trail_glow`]. Flat here reads as a solid white cone.
-                let glow_a = trail_glow(self.intensity, k);
-                let glow_b = trail_glow(self.intensity, k + 1);
+                // One stencil byte per segment, not interpolated: [`trail_stencil`].
+                let glow = trail_stencil(self.intensity, k);
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
                     let va = fin as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
                     let vb = (fin + 1) as f32 * 0.25 * TEXCOORD_U16_GAIN + ov;
-                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow_a);
-                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow_a);
-                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow_b);
-                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow_b);
+                    let a0 = rib_vertex(pa + rim[fin] * wa, ca, ua, va, glow);
+                    let a1 = rib_vertex(pa + rim[fin + 1] * wa, ca, ua, vb, glow);
+                    let b0 = rib_vertex(pb + rim[fin] * wb, cb, ub, va, glow);
+                    let b1 = rib_vertex(pb + rim[fin + 1] * wb, cb, ub, vb, glow);
                     out.extend_from_slice(&[a0, a1, b0, a1, b1, b0]);
                 }
             }
@@ -959,8 +957,6 @@ pub const TRAIL_BLEND: wgpu::BlendState = wgpu::BlendState {
 /// **An earlier reading called this value "visually inert".** It is not; nothing
 /// in the ribbon's own draw reads it, but the post-process does. See
 /// `docs/ghidra/functions/psp-pulse-usa/exhaust.md`.
-///
-/// The value is **not** flat along the ribbon: see [`trail_glow`].
 pub const TRAIL_GLOW_GAIN: f32 = 0.5 * 0.9;
 
 /// The glow mask at segment `k`, as a fraction of the head value.
@@ -988,15 +984,19 @@ pub const TRAIL_GLOW_GAIN: f32 = 0.5 * 0.9;
 /// bloom source and blows the exhaust out to a solid white cone. Measured
 /// 2026-08-10 against the same frame both ways.
 ///
-/// Two known simplifications, both recorded rather than hidden: the original
-/// stamps one *constant* per segment where an interpolated vertex attribute
-/// ramps across it, and `& 0xff` cannot wrap here because the head value is at
-/// most `255`.
+/// The original stamps one constant per segment: see [`trail_stencil`].
 #[must_use]
 pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
     let n = (TRAIL_SAMPLES - 1) as f32;
     let fall = 1.0 - (segment as f32 / n);
     intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
+}
+
+/// The stencil byte segment `k`'s draw stamps: [`trail_glow`] truncated, as
+/// `trunc(f20)` is; measured off the original's EDRAM (`bloom.md`, 2026-10-08).
+#[must_use]
+pub fn trail_stencil(intensity: f32, segment: usize) -> f32 {
+    (trail_glow(intensity, segment) * 255.0).floor() / 255.0
 }
 
 /// How many craft this crate's per-frame budgets are sized for.

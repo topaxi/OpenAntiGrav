@@ -221,6 +221,16 @@ def main():
         "keep it under data/shots/, which is gitignored)",
     )
     parser.add_argument(
+        "--edram-every",
+        type=int,
+        metavar="N",
+        help="at every Nth recorded tick, write the two framebuffers and the "
+        "bloom's scratch buffers A and B (EDRAM 0x110000 and 0x132000, stride "
+        "256) as raw bytes tick%%05d.edram under --edram-dir. The alpha "
+        "channel of a framebuffer is the glow mask.",
+    )
+    parser.add_argument("--edram-dir", type=Path)
+    parser.add_argument(
         "--shot-window",
         type=int,
         help="niri window id of the emulator. Defaults to the first PPSSPPSDL "
@@ -481,6 +491,19 @@ def main():
                     struct.unpack("<f", blob[at : at + 4])[0] for _, at in FLARE_FIELDS
                 ]
             print("%d,%s" % (tick, ",".join("%.7g" % v for v in values)), file=out)
+
+            if args.edram_every is not None and tick % args.edram_every == 0:
+                args.edram_dir.mkdir(parents=True, exist_ok=True)
+                blob = b"".join(
+                    dbg.read(0x04000000 + off, n)
+                    for off, n in (
+                        (0x0, 512 * 272 * 4),
+                        (0x88000, 512 * 272 * 4),
+                        (0x110000, 256 * 136 * 4),
+                        (0x132000, 256 * 136 * 4),
+                    )
+                )
+                (args.edram_dir / ("tick%05d.edram" % tick)).write_bytes(blob)
 
             if args.shot_every is not None and tick % args.shot_every == 0:
                 screenshot(args.shot_window, args.shot_dir, "tick%05d" % tick)
