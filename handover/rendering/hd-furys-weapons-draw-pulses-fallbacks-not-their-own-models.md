@@ -284,5 +284,30 @@ Two RPCS3 boots agree (fire on video frame 173): thick white smoke ribbons ahead
 by a `WakeTrail`-style manager whose law is unread. The flash is probably a point light (`0x006778c8`,
 unread). Our sim fires 3 rockets per press; the film shows at least two ribbons, count not settled.
 Pitfall: our rocket's fire button is `square` in `--input-script`; `triangle` does nothing.
-Next: read the `0x00ad81f0` job's extrusion (width, taper, life) and what pushes samples for a rocket,
-then draw `rockettrail_triangle` through the engine-trail ribbon path. Omega's rocket model: not checked.
+~~Next: read the `0x00ad81f0` job's extrusion and draw `rockettrail_triangle`.~~ **Done 2026-10-08
+(`hd-rocket-trail`)**, see below.
+
+## 2026-10-08 (`hd-rocket-trail`): the smoke ribbon is read, measured live and drawn
+
+Not the `WakeTrail` SPU job: a PPU pool manager, `RibbonEffects_Construct` (`0x002a7560`), pool 4.
+Law (life 1.85 s, half-width 0.4 to 2.0, alpha from `smoke_trails_opacity_ramp.tga` read at byte
+20, three single-sided fins, alpha-over, ambient forced to 0.8) matched against a live RPCS3 dump,
+695/695 node alphas exact: `docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`. Drawn by
+`oag_fx::rocket_smoke` + `oag_raceplay::rocket_smoke`; ground truth
+`crates/game/tests/hd_rocket_smoke_ground_truth.rs`. The shadow ribbon draws nothing in the original
+(its alpha is always 0), so none here. Omega: checked, differs (ships the textures, no ramp).
+
+Open:
+- **Vertex RGB is white, chosen**: the original samples a lighting volume (`0x002a4280` ->
+  `0x003c2598`/`0x003c2488`, data at `*0x00d43cc4`), unread. Live it ran `0xbaffff` to `0x2b5d7b`
+  on the dumped circuit, so ours is the bright end. Matched pair (team and grid view differ from
+  the film): `data/scratch/hd-rocket-trail/ours/pair_trail.png`; ours reads greyer than the film.
+- **Engine trail facing may be two-sided too**: `hd_enginetrail_bluered.rcsmaterial`'s facing `MIN`
+  carries the same NV40 `SRC0_ABS` bit (word 1 bit 29) that made the smoke two-sided, and
+  `exhaust.wesl` draws it one-sided (`clamp(dot, 0, 0.15)`). `ps3-microcode.py` prints `|x|` now.
+  Unchecked against a picture; not changed here.
+- Push offset from the rocket origin (`0x00124880..0x00124888`) and `Libc_Rand`'s range (jitter
+  symmetry) are unread.
+- The launch light: `Rocket_Update` (`0x00123fb0`) calls `0x006778c8` at `0x001246cc` with
+  f1 100.0, f2 1.0, colour seeded `(14, 10, ?, ?)` (rocket-trail.md, Open). Not wired: no weapon
+  point light exists in this engine yet; that mechanism is the next step, shared with the Bomb's.

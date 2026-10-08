@@ -16,7 +16,7 @@ mod geometry;
 mod global;
 mod glow_mask;
 mod intro;
-mod magstrip_wake;
+pub(crate) mod magstrip_wake;
 mod pads;
 mod pose;
 mod pulse_ps2;
@@ -973,7 +973,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         visibility,
         flare,
         leach_beam_texture,
-        magstrip_wake_textures: magstrip_wake.textures,
+        ribbon_textures: magstrip_wake.textures,
         noise,
         trail_blend,
         trail_shape,

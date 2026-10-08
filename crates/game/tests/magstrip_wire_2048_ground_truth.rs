@@ -52,7 +52,7 @@ fn load_mode(mode: oag_race::Mode) -> Option<race::Race> {
         println!("{line}");
     }
     assert!(
-        loaded.magstrip_wake_textures.is_none(),
+        loaded.ribbon_textures.magstrip.is_none(),
         "no arc textures are bound on a .pob title"
     );
     for name in ["WO_MAGSTRIP_SPARKS", "WO_MAGSTRIP_ZONE"] {

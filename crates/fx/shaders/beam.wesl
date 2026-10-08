@@ -4,7 +4,7 @@
 // texture sample tinted by the vertex colour the geometry half already
 // computed (white, faded by the disconnect linger, zeroed at both ends).
 
-import oag_shaders::scene_vertex::{Uniforms, VertexInput, VertexOutput};
+import oag_shaders::scene_vertex::{Uniforms, VertexInput};
 import oag_shaders::target::{linear_out, gamma_to_target};
 
 // What the ribbon stamps into the glow mask - `beam::GLOW_MASK`, the stencil
@@ -29,7 +29,29 @@ override decode_source: f32 = 1.0;
 // 0.0 writes the constant `glow_mask`.
 override alpha_is_fragment: f32 = 0.0;
 
+// 1.0 for Wipeout HD's Rocket smoke ribbon, whose fragment program
+// (`hd_rockettrail.rcsmaterial`, read on
+// `docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`) shades
+//
+//     facing = saturate(max(min(abs(dot(n, v)), 0.32), 0) * 3.12433)
+//     rgb    = tex.rgb * vertex.rgb
+//     alpha  = saturate(14 * tex.a * facing * vertex.a) * saturate(window_z * 0.75)
+//
+// and is drawn `SRC_ALPHA, ONE_MINUS_SRC_ALPHA`, so the alpha leaves here
+// unweighted for the blend to apply. The draw's own `(0.8, 0.8, 0.8)` ambient is
+// already in the vertex colour (`oag_fx::rocket_smoke::AMBIENT`).
+override smoke: f32 = 0.0;
+
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+struct VertexOutput {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) colour: vec4<f32>,
+    @location(1) texcoord: vec2<f32>,
+    // The smoke's `TC2` and `TC1`: the world normal and eye minus position.
+    @location(2) normal: vec3<f32>,
+    @location(3) view: vec3<f32>,
+};
 @group(1) @binding(0) var beam_texture: texture_2d<f32>;
 @group(1) @binding(1) var beam_sampler: sampler;
 
@@ -43,6 +65,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip = uniforms.view_projection * vec4<f32>(in.position, 1.0);
     out.colour = in.colour;
     out.texcoord = in.texcoord;
+    out.normal = in.normal;
+    // `model`'s fourth column carries the eye for the smoke's facing fade -
+    // `Pipeline::upload_with_eye`; the identity's zero elsewhere, unused.
+    out.view = uniforms.model[3].xyz - in.position;
     return out;
 }
 
@@ -57,5 +83,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // replaces the alpha.
     let weight = texel.a * mix(1.0, in.colour.a, vertex_alpha_weight);
     let alpha = mix(glow_mask, in.colour.a * texel.a, alpha_is_fragment);
+    if smoke > 0.5 {
+        let facing_dot = dot(normalize(in.normal), normalize(in.view));
+        // `abs`: the `MIN`'s source carries NV40's `SRC0_ABS` bit (word 1 bit
+        // 29), so a fin shows from either side - the original's own eye and
+        // vertex buffer leave every fin back-facing from the chase camera
+        // otherwise, against a film full of smoke.
+        let facing = saturate(max(min(abs(facing_dot), 0.32), 0.0) * 3.12433);
+        let depth_fade = saturate(in.clip.z * 0.75);
+        let coverage = saturate(14.0 * texel.a * facing * in.colour.a) * depth_fade;
+        return vec4<f32>(decoded, coverage);
+    }
     return vec4<f32>(decoded * weight, alpha);
 }

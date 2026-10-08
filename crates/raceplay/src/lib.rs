@@ -186,6 +186,7 @@ mod replay;
 mod repulser_field;
 mod respawn;
 mod results;
+pub mod rocket_smoke;
 mod routes;
 mod scene;
 pub mod scenery_fx;

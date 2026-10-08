@@ -357,7 +357,20 @@ def fp_word(raw: bytes, off: int) -> int:
     )[0]
 
 
-def fp_src(bits: int, const: list[float] | None, input_src: int) -> str:
+def fp_src(bits: int, const: list[float] | None, input_src: int, absolute: bool = False) -> str:
+    text = fp_src_plain(bits, const, input_src)
+    return f"|{text}|" if absolute else text
+
+
+# Each source's `abs` modifier sits outside its own register word: source 0's
+# in word 1 bit 29, sources 1 and 2's in bit 18 of words 2 and 3 (Mesa's
+# `NVFX_FP_OP_SRC{0,1,2}_ABS`). Printed since 2026-10-08: before that this tool
+# dropped it, and `hd_rockettrail`'s facing `MIN |dot|, 0.32` read as a
+# one-sided cull that the original's own eye and vertex buffer contradict.
+FP_SRC_ABS = ((1, 29), (2, 18), (3, 18))
+
+
+def fp_src_plain(bits: int, const: list[float] | None, input_src: int) -> str:
     ty = bits & 3
     reg = (bits >> 2) & 0x3F
     half = "H" if bits & (1 << 8) else "R"
@@ -516,7 +529,11 @@ def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
         sat = "_SAT" if d0 & (1 << 31) else ""
         input_src = (d0 >> 13) & 0xF
         arity = FP_SRC_ARITY.get(name, 2)
-        ops = ", ".join(fp_src(b, const, input_src) for b in srcs[:arity])
+        words = (d0, d1, d2, d3)
+        ops = ", ".join(
+            fp_src(b, const, input_src, bool((words[w] >> bit) & 1))
+            for b, (w, bit) in zip(srcs[:arity], FP_SRC_ABS)
+        )
         unit = f" unit{(d0 >> 17) & 0xF}" if name in ("TEX", "TXP", "TXB", "TXL", "TXD") else ""
         slot = (pos - start) // 16
         tail = ""

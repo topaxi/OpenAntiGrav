@@ -134,6 +134,10 @@ pub struct WeaponModels {
     /// `.pob` side - measured live, `docs/ghidra/functions/vita-2048-eu-v104/
     /// ships-effects.md`. See `oag_raceplay::magstrip_wake`.
     pub magstrip_pob: bool,
+    /// The Rocket's smoke ribbon: `RibbonEffects` pool 4, its texture and the
+    /// opacity ramp its nodes age through. See `oag_fx::rocket_smoke`. `None`
+    /// on a title whose ribbon law is unread, which is every title but HD's.
+    pub rocket_trail: Option<RocketTrail>,
     /// The LeachBeam's own ball, at the drawing end of the beam.
     ///
     /// **Named, not wired.** What places this model each tick has not been
@@ -187,6 +191,17 @@ pub struct MagstripWake {
     pub contact: &'static str,
 }
 
+/// What the Rocket's smoke ribbon draws with - see [`WeaponModels::rocket_trail`].
+///
+/// Archive entry names, folded the same way [`MagstripWake`]'s are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RocketTrail {
+    /// The texture the ribbon's material samples in a race.
+    pub texture: &'static str,
+    /// The 256-entry alpha table, as the executable names it.
+    pub opacity_ramp: &'static str,
+}
+
 impl WeaponModels {
     /// Every field absent - a title with none of these recovered.
     ///
@@ -209,6 +224,7 @@ impl WeaponModels {
         mag_floor: None,
         magstrip_wake: None,
         magstrip_pob: false,
+        rocket_trail: None,
         leachbeam_ball: None,
         shuriken: None,
         cannon_look: None,

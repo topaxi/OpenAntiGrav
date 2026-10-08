@@ -74,6 +74,10 @@ Two structural facts to expect, both different from every other binary here:
   weapon docs, plus two owning classes (`WeaponManager`, `Plasma`) found but
   not fully read, and the one trap in `batch_string_anchor_report`'s
   per-binary behaviour.
+- [rocket-trail.md](rocket-trail.md) - the Rocket's smoke ribbon: the PPU-side
+  `RibbonEffects` pool manager, the ribbon node law (life 1.85 s, half-width
+  0.4 to 2.0, the opacity ramp TGA read two bytes late), the three-fin
+  geometry and the material, all matched against a live RPCS3 dump.
 - [plasma.md](plasma.md) - `PlasmaManager_Update`, `Plasma_Update`,
   `Plasma_CheckShipHit` and the `WeaponExplosions` update/draw pair: the
   1.0 s hardcoded wind-up, the 10.0 s reap, the 6.0 probe, the +-6.0 hit

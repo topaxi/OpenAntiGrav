@@ -52,7 +52,7 @@ impl super::Scene {
         queue: &wgpu::Queue,
         vp: &[[f32; 4]; 4],
     ) {
-        if let Some(magstrip) = &self.magstrip {
+        if let Some(magstrip) = &self.ribbons.magstrip {
             let (atlas, contact) = race.magstrip_wake_vertices();
             magstrip.atlas.borrow_mut().upload(queue, vp, &atlas);
             magstrip.contact.borrow_mut().upload(queue, vp, &contact);
@@ -62,7 +62,7 @@ impl super::Scene {
     /// Draws the contact quads under the arc bodies, into the pass `draw_effects`
     /// owns: depth-tested, unwritten, after the solid scene.
     pub(super) fn draw_magstrip_wake(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if let Some(magstrip) = &self.magstrip {
+        if let Some(magstrip) = &self.ribbons.magstrip {
             magstrip.contact.borrow().draw(pass);
             magstrip.atlas.borrow().draw(pass);
         }

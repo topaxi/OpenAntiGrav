@@ -345,6 +345,8 @@ pub struct RaceView {
     /// is locked, the same way [`Self::leach_beam_ribbon`] is torn down -
     /// see [`weapons::visuals::advance_leach_beam_ribbon`].
     pub(super) leach_ball_elapsed: f32,
+    /// The Rocket's smoke ribbons - see [`crate::rocket_smoke`].
+    pub(super) rocket_smoke: crate::rocket_smoke::Smoke,
     /// The Plasma's own render-side detonation instances, one per
     /// [`blast_models::PLASMA_BLAST_SLOTS`] - see that module's own doc
     /// comment for why this lives here rather than in `World`, and
