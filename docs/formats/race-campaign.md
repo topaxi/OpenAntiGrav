@@ -172,6 +172,18 @@ plugin definition), and is the only one of the three copies (`DATA00`,
 `DATA02`, `DATA04`) naming all sixteen grids; `DATA02`'s and `DATA04`'s own
 copies list only the eight they carry.
 
+**The engine reads `grid_00`..`07` off `DATA06` since 2026-10-08** (`Title::campaign.grid_archive`,
+`oag_hd::campaign::GRID_ARCHIVE`; PSN installs keep precedence). Measured over all 87
+cells (`crates/game/tests/hd_campaign_ground_truth.rs`): `DATA02`'s flat
+`Gold`/`Silver`/`Bronze` equals `DATA06`'s **hard** rung on every Time Trial, Speed Lap
+and Zone cell (`grid0_2_2`: flat 111.00/114.00/120.00 s, easy 120.00/123.00/129.00 s), so
+before this a novice, the default rung, was judged and shown the elite times. `Race` and
+`Tournament` cells author no rungs (1st/2nd/3rd). Confidence 85 that `DATA06` is the
+copy the original plays: it is the copy `Campaign Selection` and `Cell Selection` already
+read, tagged `Campaign="HD"`. No capture compared a base-campaign target number.
+Omega: `grid_archive` is `None`, its grids read by precedence (`checked, differs`:
+one archive set).
+
 ### The per-difficulty schema
 
 `grid_08`..`grid_15`, and the `DATA04`/`DATA06` copies of `grid_00`..`07`,
@@ -223,6 +235,13 @@ unchanged, and its result is **not meaningful** for an `Elimination`/
 `NitroBattle` cell on Wipeout HD, since that cell's own flat
 `gold`/`silver`/`bronze` (and every rung of `difficulty_targets`) are the
 dummy `1`/`2`/`3` this section already describes.
+**Since 2026-10-08 `Cell::evaluate_medal_for_difficulty` returns `None` for such a cell**
+(`Cell::medal_law_is_unmeasured`: `Elimination` or `NitroBattle` with a `NitroElim*` triple
+other than `1/1/1`), and `plan_cell` leaves the race's own kill target alone: before, one
+kill scored gold on every rung and a launched cell ended on the first kill (its kill
+target was the dummy `1`). The unit of `200`..`300` (kills or score points) is the open
+question. Pulse's `Eliminator` is unaffected. Omega: ported, the guard is on the shared
+`Cell` (`omega_campaign_launch_ground_truth.rs`).
 `Cell::nitro_elimination_target_for_difficulty` reads the one measured number
 per rung instead - deliberately not a synthesized `MedalTargets` triple, since
 this executable spells medal tiers `Gold`/`Silver`/`Bronze` and difficulty

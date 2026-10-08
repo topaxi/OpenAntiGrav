@@ -448,7 +448,10 @@ impl Cell {
     pub fn medal_law_is_unmeasured(&self) -> bool {
         let nitro_mode = matches!(&self.mode, Mode::Elimination)
             || matches!(&self.mode, Mode::Other(name) if name == "NitroBattle");
-        nitro_mode && self.nitro_elimination_targets.is_some_and(|t| t != (1, 1, 1))
+        nitro_mode
+            && self
+                .nitro_elimination_targets
+                .is_some_and(|t| t != (1, 1, 1))
     }
 
     /// `Cell_EvaluateMedal` (`0x088bf620`): a three-way threshold compare of

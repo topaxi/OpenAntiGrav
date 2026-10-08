@@ -40,6 +40,26 @@ this thread is the open work, not a restatement of what landed.
   reads zero cells for a grid that authors five. Not fixed - see the doc
   section for why.
 
+## 2026-10-08, `hd-campaign` lane: the HD campaign plays through to a persisted medal
+
+Walked live (Xvfb, `--autopilot`, own XDG): `Main Menu` -> `Campaign Selection` ->
+`Grid Selection` -> `Cell Selection` -> `Team Selection` -> race (Anulpha Pass Speed
+Lap, `grid0_3_2`) -> "SILVER MEDAL AWARDED" at 37.03 -> `records.toml` `[[campaign]]`
+(`best_medal`, `best_difficulty = "easy"`) -> `Cell Selection` shows `SILVER`, `2/18
+POINTS`, neighbouring cells unlock. A locked cell refuses Confirm. **Fixed**: the base
+campaign read `DATA02`'s flat targets (= `DATA06`'s hard rung) for every rung; it now
+reads `DATA06` (`Title::campaign.grid_archive`). **Fixed**: an HD `Elimination` cell scored
+gold for one kill and launched with kill target `1`; it now awards nothing and keeps the
+race's own target. Ground truth: `crates/game/tests/hd_campaign_ground_truth.rs`.
+Evidence: `docs/formats/race-campaign.md`, `docs/overview/status.md`.
+
+**Still open**: (1) the unit and tier law of `NitroElim*` (200..300 on `Elimination`,
+12..26 on `NitroBattle`; kills or score points?) - an RPCS3 `Elimination` cell played to
+a medal would settle it; (2) leaving a Speed Lap/Zone cell with Escape lands on the main
+menu (a parked race behind it), not `Cell Selection`, shared with Pulse; (3) `Tournament`
+cells launch by `plan_cell` but were not walked; (4) base-campaign target numbers were not
+compared against an RPCS3 frame; (5) `NitroBattle`/`Detonator` (25 cells) refused, no rules.
+
 ## Open
 
 - **Which target set a mode's own medal law reads is partly measured now,
