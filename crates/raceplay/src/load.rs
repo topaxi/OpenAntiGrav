@@ -649,6 +649,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         geometry_name.as_deref(),
         vex_geometry,
         gantry_visibility::adverts_for(title, options.mode),
+        gantry_visibility::gantry_card(title),
         start_position.as_ref(),
         &mut report,
     );
@@ -697,12 +698,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
     for name in craft_title.effects.names_on(archives.layout.platform) {
-        match particle_effect(&mut archives, title.race.effect_dir_for(&track), name) {
-            Ok((mut effect, note)) => {
-                if !extents {
-                    effect.without_extents();
-                    effect.without_pulse_psp_draw();
-                }
+        let gtf = craft_title.effects.sprites.contains(&name);
+        let dir = title.race.effect_dir_for(&track);
+        match particle_effect(&mut archives, dir, name, extents, gtf) {
+            Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);
                 report.extend(super::assets::sheet_note(name, &effects));
@@ -921,6 +920,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
             launch_hover: title.race.launch_hover,
+            weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
             weapon_pads,
             weapons,

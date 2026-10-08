@@ -245,6 +245,9 @@ impl Session {
                 let stats = details
                     .map(|team| team.variant_stats(variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
+                let models = details
+                    .map(|team| team.hex_cells(variants.iter().map(|(id, _)| id.as_str())))
+                    .unwrap_or_default();
                 (
                     Entry {
                         id: choice.value.clone(),
@@ -260,6 +263,7 @@ impl Session {
                             }),
                             variants,
                             stats,
+                            models,
                             loyalty: gates
                                 .then(|| records.loyalty_total(title.name, &choice.value)),
                         },
@@ -405,6 +409,11 @@ impl Session {
                 .as_ref()
                 .and_then(|shell| shell.title.front_end)
                 .is_some_and(|front_end| front_end.preview_meshes),
+            ship_hull: self
+                .shell
+                .as_ref()
+                .and_then(|shell| shell.title.front_end)
+                .and_then(|front_end| front_end.ship_preview_hull),
             globals: self
                 .shell
                 .as_ref()

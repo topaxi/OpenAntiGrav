@@ -7,7 +7,10 @@
 draw: its number, begin mode, vertex count, fragment program, blend
 (enable, src, dst, equation), alpha test (enable, func), cull (enable, face),
 depth (test, mask, func), colour mask, viewport and the first four bound
-textures. Only subchannel-0 writes are kept: the blits on subchannels 3 to 7
+textures. `idx` is the sum over every batch of one `0x1824` method (it carries up to
+256 indices per argument and several arguments per call), and `d["batches"]`
+holds the `(first, count)` pairs; the register itself keeps only the last one.
+Only subchannel-0 writes are kept: the blits on subchannels 3 to 7
 reuse the method numbers `0x300`-`0x30c` and would overwrite the alpha-test
 and blend registers. Register numbers are read off the stream, not from a gcm
 header (`0x183c` as cull enable is inferred from its 0/1 spread). A line `SURF` marks a render-target switch
@@ -44,6 +47,8 @@ def draws(directory, stem):
             events.append((len(out), "CLEAR %08x" % args[0]))
         if meth in (0x0208, 0x0194, 0x0a00) and len(args) >= 1 and meth != 0x0a00:
             events.append((len(out), "SURF %s" % " ".join("%08x" % regs.get(m, 0) for m in SURFACE)))
+        if meth == 0x1824:
+            regs["batches"] = [(a & 0xffffff, ((a >> 24) & 0xff) + 1) for a in args]
         if meth in (0x1814, 0x1824):
             snap = dict(regs)
             snap["c"] = dict(regs.get("c", {}))
@@ -75,7 +80,7 @@ def main():
         if not (a.lo <= n <= a.hi):
             continue
         tex = ["%08x" % d.get(0x1a00 + 0x20 * u, 0) for u in range(4) if d.get(0x1a00 + 0x20 * u + 0xc, 0) & 0x80000000]
-        cnt = ((d.get(0x1824, 0) >> 24) & 0xff) + 1 if 0x1824 in d else 0
+        cnt = sum(c for _, c in d.get("batches", [])) if 0x1824 in d else 0
         print("%4d tgt %08x idx%-4d fp %08x bl %d %x/%x eq %x at %d/%x cull %d/%x dep %d/%d/%x cm %08x vp %08x/%08x tex %s" % (
             n, d.get(0x210, 0), cnt, d.get(0x8e4, 0), d.get(0x310, 0) & 1, d.get(0x314, 0), d.get(0x318, 0), d.get(0x320, 0),
             d.get(0x304, 0) & 1, d.get(0x308, 0), d.get(0x183c, 0) & 1, d.get(0x1830, 0),

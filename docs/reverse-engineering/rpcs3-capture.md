@@ -873,6 +873,13 @@ What it had to learn, each of which produced a wrong-looking result first:
 
 ## Capturing one frame's draws (2026-10-07, `vineta-k-fidelity`)
 
+**Index batches (2026-10-08, `hd-leach-bright`).** `0x1824` carries up to 256 indices per argument and
+several arguments per method; the register keeps only the last. `rsx-draw-list.py` and the hook now read
+every batch (`d["batches"]`, `idx` is their sum), where they showed only the last one before: a 21-segment
+strip read as 122 indices and its vertex span as 8 nodes. Dumps taken earlier miss the vertices of the
+earlier batches. And a fragment program's address is **not** stable between boots: identify a draw by its
+disassembled microcode (`scripts/ps3-microcode.py`'s `fp_code` reads a dumped span), not by `fp 0x00744c41`.
+
 What the pushbuffer holds besides the camera: **every draw of the frame with the state it was issued under** - the fragment
 program, the textures on every unit, blend, depth, cull, fog registers, the vertex-constant block, the index and vertex
 ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hook PY` runs a module
@@ -1145,3 +1152,14 @@ sleeping through it: phase `count`, each row with `since_tap`, a frame every `--
 samples. Each sample reads the screen name, which costs about 1.3 s with a frame and 0.1 s without;
 align on the craft's own clock (`entry+0x348`, game seconds since the grid state ended) rather than the
 wall time, and read the entry state `+0x2f8` for the flip. It needs `uv run --with evdev`.
+
+## Racing a chosen race type, and finding which texture a draw binds (2026-10-08, `hd-gantry`)
+
+`rpcs3-drive.py countdown` and `place` take `--nav SCREEN=BUTTONS`. The Racebox `RACE TYPE` row sits on the
+`Single Player` screen and `right` steps it: Single Race, Time Trial, Speed Lap, Eliminator, Zone, Zone Battle,
+Detonator. **The first `right` was swallowed on this machine**, so Zone took five (`--nav "Main Menu=right" --nav
+"Single Player=right,right,right,right,right,cross"`), Zone Battle six, Detonator seven; read the result
+off `TTY.log`'s `BackendRoot has g_GameState.GetMode()==N` (Zone 6, Zone Battle 13, Detonator 14, Eliminator 8) rather than
+counting. Naming a bound texture needs more than the first 64 bytes: a flat first DXT block matches several
+files, so compare the head and the samples at `+0x400`, `+0x1000`, `+0x4000`, `+0x10000`
+(`data/scratch/hd-gantry/namegtf.py`). The main surface word `0x3148` is A8R8G8B8 with 2x MSAA, not fp16.

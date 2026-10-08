@@ -649,6 +649,11 @@
 # 2026-10-08 hd-handling lane (physics.md, "The handling update")
 0x000ee730	function	Craft_UpdateAirbrakes	85	physics.md
 0x000f0980	function	Craft_UpdatePitch	80	physics.md
+# 2026-10-08 hd-menu-sfx lane (menu-sounds.md)
+0x002ffa58	function	Sound_PlayBankCue	75	menu-sounds.md
+0x001f5478	function	RedirectController_Update	72	menu-sounds.md
+
+
 # 2026-10-08 hd-flyby-hover lane (hover-target.md)
 0x000f0630	function	Craft_SetState	85	hover-target.md
 0x000f1958	function	Craft_Update	75	hover-target.md
@@ -665,3 +670,7 @@
 0x00c50ee0	data	g_FunkLayer	85	funklayer-zoom.md
 0x00ad7880	data	g_EngineFlareGlowState	70	funklayer-zoom.md
 0x008c2b70	data	g_FunkLayerTuning	70	funklayer-zoom.md
+0x008c26a0	data	WeaponPad_CycleKeyframes	88	pads.md
+0x00aec2c0	data	WeaponPad_CoolingGlowVector	90	pads.md
+0x00aec2d0	data	WeaponPad_GlowScaleVector	90	pads.md
+0x002e0450	function	WeaponPad_InitStatics	75	pads.md

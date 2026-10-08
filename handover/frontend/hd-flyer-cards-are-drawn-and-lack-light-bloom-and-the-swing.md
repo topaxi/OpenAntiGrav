@@ -18,6 +18,15 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   so Fury's ship silhouette is flat white where RPCS3 shades its facets and its
   reds are duller. Try: watch the three parameters' patch slots in RPCS3.
 - **The bloom and glow** RPCS3 shows around every card.
+- **`FURY_GAIN` 2.0** (2026-10-08, hd-cell-select) doubles a Fury grid card's and
+  its back's texels: measured (63 to 130, 197 to 255, Grid's dominant red 198 to
+  255), mechanism unread. The base campaign's eight cards and the two `Campaign
+  Selection` cards keep gain 1.0 (clamped flat at 2.0). Find which materials carry it (`basicnonalpha`'s
+  fragment block multiplies by a patched `float1`, slot `0x2c`) and whether the
+  campaign cards' materials differ.
+- **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle
+  measured, `BACK_STRETCH` chosen); its wordmark glow is open with the rest of the
+  bloom.
 - **The five effect textures hidden by name** (`UNREAD_EFFECTS`: `loops`,
   `flashes`, `noise_bar`, `failscreen`, `crash_screen`): materials that take UV
   offset/scale or alpha from native-animated parameters. Drawn at rest they are
@@ -34,7 +43,7 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   camera's `+0x20` word tracks the first two and fails on the campaign cards).
   `CAMPAIGN_STRETCH` 1.048 is chosen. `+0x1c` reads as the aspect.
 - **The card's body colour** under the picture (the dummy textures are a green
-  debug swatch swapped at runtime), the flip to `flyer_back.vex` (its camera
+  debug swatch swapped at runtime), the flip between the two models (the back is drawn on `Cell Selection` face-on; the front-to-back swing is not; its camera
   is 97.15 away on `01_uplift`, not 92.5), tier-change animation.
 - **The 26-vertex back face** of `cardShape` has no recoverable stride (stride 18
   fits); the inline layout is read on one file only - check the other 2,488

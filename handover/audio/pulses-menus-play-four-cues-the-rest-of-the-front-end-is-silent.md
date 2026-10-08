@@ -33,8 +33,13 @@ race-box selection screens, the campaign screens and the EndRace menu now play `
    closing the root menu plays `DECLINE`; `Results` and `Rewards` advancing plays `ACCEPT`. The widget flag `+0x269`
    (silences `ACCEPT`) was not swept, so a few original buttons that stay silent here make a sound.
 7. **A menu SFX volume row** was not added; the sounds ride the SFX bus (`Bus::Sfx`) and its setting.
-8. **HD**: `frontend.bnk` has 27 cues named `navUp`, `navDown`, `accept`, `reject` and so on; wiring is HD's own
-   front-end reading. **2048**: a nameless v5 bank. **Omega**: Wwise.
+8. **HD**: wired 2026-10-08 (lane `hd-menu-sfx`): `navUp`/`navDown`/`navLeft`/`navRight`, `accept`/`reject` and the
+   `_fury` spellings, from Title data (`SoundBanks::frontend.cues`), pad and pointer. Evidence
+   [menu-sounds.md](../../docs/ghidra/functions/ps3-hdfury-eu/menu-sounds.md). Open on HD: a blocked step plays `reject`
+   in the original and the port's rows wrap; `unlockcell`/`unlockscreen` (cell unlock, `ShowUnlocks`), `~podiumticker`/
+   `podiumtickend`, `wipe_med` (flyer selection), `TextBox01..04`, the team and circuit name voices (Fury also plays
+   `accept_fury` after each); the `0x19` no-repeat rule; the rear-half whoosh is centred (chosen, not measured); not
+   heard by a human. **2048**: a nameless v5 bank. **Omega**: the same eight cues as Wwise events, no SFX path.
 
 ## Next Steps
 

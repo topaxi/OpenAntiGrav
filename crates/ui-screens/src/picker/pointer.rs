@@ -34,7 +34,7 @@
 
 use oag_ui::frontend::Placed;
 use oag_ui::menu::Skin;
-use oag_ui::pointer::{Pointer, contains};
+use oag_ui::pointer::{Pointer, contains, hex_contains};
 use oag_ui::screen::Image;
 
 use super::{Event, Layout, Picker};
@@ -52,6 +52,9 @@ pub enum What {
     NextVariant,
     /// One row of a listed entry column, by entry index.
     Entry(usize),
+    /// A cell of HD's hex column: team `entry`, and the livery it is when
+    /// the model is open. Selects, and confirms when it is already chosen.
+    Cell { entry: usize, variant: usize },
     /// The panel or the preview: confirm the selection.
     Confirm,
 }
@@ -138,6 +141,22 @@ pub fn targets(
 /// `SHIP MODEL` frame confirms.
 fn hd_targets(picker: &Picker, layout: &Layout, extra: &super::hd::TeamScreen) -> Vec<Target> {
     let mut out = Vec::new();
+    if let Some(grid) = &extra.hex {
+        // Open cells only: a padlocked cell is nothing, and its neighbour
+        // hexagons are tested as hexagons, not boxes (`hex_contains`).
+        for cell in grid.cells(picker.index(), picker.entries().len()) {
+            let Some(variant) = super::hd::hex::variant_at(picker, &cell) else {
+                continue;
+            };
+            out.push(Target {
+                what: What::Cell {
+                    entry: cell.entry,
+                    variant,
+                },
+                rect: cell.rect,
+            });
+        }
+    }
     let [x, y, w, h] = layout.panel;
     out.push(Target {
         what: What::Previous,
@@ -148,6 +167,7 @@ fn hd_targets(picker: &Picker, layout: &Layout, extra: &super::hd::TeamScreen) -
         rect: [x + w / 2.0, y, w / 2.0, h],
     });
     if picker.variants().len() > 1
+        && extra.hex.is_none()
         && let Some(grid) = extra.brackets.get(1).filter(|bracket| !bracket.middle)
     {
         let [x, y, w, h] = grid.rect;
@@ -182,10 +202,10 @@ fn image_rect(image: &Image, sprites: &dyn Fn(&str) -> Option<Placed>) -> Option
 /// The first target under `at`, in [`targets`]' own order.
 #[must_use]
 pub fn hit(targets: &[Target], at: (f32, f32)) -> Option<Target> {
-    targets
-        .iter()
-        .copied()
-        .find(|target| contains(target.rect, at))
+    targets.iter().copied().find(|target| match target.what {
+        What::Cell { .. } => hex_contains(target.rect, at),
+        _ => contains(target.rect, at),
+    })
 }
 
 impl Picker {
@@ -222,6 +242,14 @@ impl Picker {
                 What::NextVariant => out.extend(self.step_vertical(1)),
                 What::Entry(index) if index == was => out.push(Event::Confirmed),
                 What::Entry(index) => out.extend(self.select(index)),
+                What::Cell { entry, variant } => {
+                    let chosen = entry == was && variant == self.variant;
+                    if chosen {
+                        out.push(Event::Confirmed);
+                    } else {
+                        out.extend(self.select_cell(entry, variant));
+                    }
+                }
                 What::Confirm => out.push(Event::Confirmed),
             }
         }
@@ -229,6 +257,16 @@ impl Picker {
             out.push(Event::Back);
         }
         out
+    }
+
+    /// Puts the selection on team `entry` and its livery `variant`: the
+    /// move a click on a hex of HD's team column makes.
+    fn select_cell(&mut self, entry: usize, variant: usize) -> Option<Event> {
+        let moved = self.select(entry);
+        let wanted = variant.min(self.variants().len().saturating_sub(1));
+        let changed = wanted != self.variant;
+        self.variant = wanted;
+        moved.or(changed.then_some(Event::VariantChanged))
     }
 
     /// Moves the selection by `step` entries, wrapping, and restarts the

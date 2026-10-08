@@ -172,6 +172,16 @@ fn find_first<'a>(node: &'a Node, tag: &str) -> Option<&'a Node> {
         .find_map(|child| find_first(child, tag))
 }
 
+/// The first `<MiniText>` under `node` whose `idstring` is `id`.
+fn find_minitext<'a>(node: &'a Node, id: &str) -> Option<&'a Node> {
+    if node.name.eq_ignore_ascii_case("MiniText") && node.value("idstring") == Some(id) {
+        return Some(node);
+    }
+    node.children
+        .iter()
+        .find_map(|child| find_minitext(child, id))
+}
+
 /// [`find_first`], also requiring the node's own `name` attribute - for
 /// `Viewport name="TextInfoIsAlwaysLast"`, the one of several `Viewport`s on
 /// `FE Screen` that clips the ticker's bar text.
@@ -192,6 +202,9 @@ fn find_named<'a>(node: &'a Node, tag: &str, name: &str) -> Option<&'a Node> {
 enum PromptKind {
     Confirm,
     Back,
+    /// HD's `NAVIGATION` entry: the d-pad glyph and its word, authored beside
+    /// the controller rather than in it.
+    Navigation,
 }
 
 /// How far above the legend's own row [`NavigationLegend::notice`] sits, in
@@ -264,6 +277,9 @@ struct Prompt {
 #[derive(Debug, Clone, Default)]
 pub struct NavigationLegend {
     prompts: Vec<Prompt>,
+    /// The root's own `FE_SCREEN_TITLE` caption over the page title, where the
+    /// file authors one - HD's. Drawn the way `Team Selection`'s headings are.
+    caption: Option<crate::picker::hd::MiniText>,
 }
 
 impl NavigationLegend {
@@ -340,6 +356,40 @@ impl NavigationLegend {
                 },
             ));
         }
+        // The d-pad glyph and `FE_NAVIGATION`, two `Text`s the root authors as
+        // siblings of the controller (`ControlTextNavigationButton`,
+        // `ControlTextNavigation`), not children: RPCS3 draws them first in
+        // the footer on every screen (`NAVIGATION` at authored `x=260`). Only a
+        // file that authors them gets them, which is HD's.
+        let navigation = [
+            ("ControlTextNavigationButton", "FE_NAVIGATION_BUTTON"),
+            ("ControlTextNavigation", "FE_NAVIGATION"),
+        ];
+        if !prompts.is_empty() {
+            for (name, key) in navigation {
+                let Some(text) = find_named(root, "Text", name) else {
+                    continue;
+                };
+                let word = match text.value("idstring") {
+                    Some(id) => strings.get_or_id(id).to_string(),
+                    None => text.value("string").unwrap_or_default().to_string(),
+                };
+                prompts.push((
+                    key.to_string(),
+                    Prompt {
+                        text: word,
+                        font: text.value("font").unwrap_or("default").to_string(),
+                        x: number(globals, text, "x").unwrap_or(0.0),
+                        y: number(globals, text, "y").unwrap_or(0.0),
+                        color: color_of(globals, text),
+                        kind: PromptKind::Navigation,
+                        scale: number(globals, text, "scale").unwrap_or(1.0),
+                        align_right_to: None,
+                        left_bound: None,
+                    },
+                ));
+            }
+        }
         if prompts.is_empty() {
             return None;
         }
@@ -396,8 +446,24 @@ impl NavigationLegend {
             const GLYPH_WIDTH_ESTIMATE: f32 = 20.0;
             confirm.left_bound = Some(confirm_button_x + GLYPH_WIDTH_ESTIMATE + GAP);
         }
+        // The `<MiniText idstring="FE_SCREEN_TITLE">` the root authors at
+        // `(160, 48)`: RPCS3 draws the string itself, `SCREEN TITLE`, a
+        // placeholder the shipped game never replaced, over every page's
+        // title, so it is drawn as authored.
+        let caption =
+            find_minitext(root, "FE_SCREEN_TITLE").map(|text| crate::picker::hd::MiniText {
+                x: number(globals, text, "x").unwrap_or(0.0),
+                y: number(globals, text, "y").unwrap_or(0.0),
+                text: strings.get_or_id("FE_SCREEN_TITLE").to_string(),
+                color: text
+                    .value("color")
+                    .and_then(|value| resolve(globals, value))
+                    .and_then(parse_argb)
+                    .unwrap_or(0xFFFF_FFFF),
+            });
         Some(Self {
             prompts: prompts.into_iter().map(|(_, prompt)| prompt).collect(),
+            caption,
         })
     }
 
@@ -408,10 +474,19 @@ impl NavigationLegend {
     /// is, so this module never has to know what a font atlas is either.
     #[must_use]
     pub fn draw(&self, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Vec<Draw> {
-        self.prompts
+        let mut out: Vec<Draw> = self
+            .prompts
             .iter()
             .map(|prompt| Self::draw_prompt(prompt, faces, measure))
-            .collect()
+            .collect();
+        self.draw_caption(&mut out);
+        out
+    }
+
+    fn draw_caption(&self, out: &mut Vec<Draw>) {
+        if let Some(caption) = &self.caption {
+            crate::picker::hd::draw_labels(std::slice::from_ref(caption), out);
+        }
     }
 
     /// [`Self::draw`], with [`PromptKind::Back`] left out when `show_back`
@@ -431,11 +506,14 @@ impl NavigationLegend {
         measure: &dyn Fn(&str) -> f32,
         show_back: bool,
     ) -> Vec<Draw> {
-        self.prompts
+        let mut out: Vec<Draw> = self
+            .prompts
             .iter()
             .filter(|prompt| show_back || prompt.kind != PromptKind::Back)
             .map(|prompt| Self::draw_prompt(prompt, faces, measure))
-            .collect()
+            .collect();
+        self.draw_caption(&mut out);
+        out
     }
 
     fn draw_prompt(prompt: &Prompt, faces: &FaceScales, measure: &dyn Fn(&str) -> f32) -> Draw {
@@ -487,6 +565,7 @@ impl NavigationLegend {
         let left = self
             .prompts
             .iter()
+            .filter(|prompt| prompt.kind != PromptKind::Navigation)
             .map(|prompt| prompt.x)
             .fold(base.x, f32::min);
         let prompt = Prompt {

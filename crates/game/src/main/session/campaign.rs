@@ -84,6 +84,8 @@ impl Session {
         // `strings` above is already a clone rather than a borrow.
         let title_ref = shell.title;
         let circuit_names = shell.circuit_names.clone();
+        let tracks: Vec<oag_raceplay::catalogue::Track> =
+            shell.tracks.iter().map(|(track, _)| track.clone()).collect();
         let records = self.records.clone();
         let globals: Vec<(&str, &str)> = shell
             .globals
@@ -98,6 +100,7 @@ impl Session {
             &shell.sprites,
             &globals,
             title_ref,
+            &tracks,
         ) {
             Ok(mut campaign) => {
                 if let Some(flyers) = campaign.flyers.as_mut() {
@@ -125,6 +128,7 @@ impl Session {
                         circuit_names,
                         records,
                         campaign.flyers,
+                        campaign.circuit_emblems,
                         self.campaign_cursor,
                     ));
                 }

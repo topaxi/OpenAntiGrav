@@ -54,6 +54,7 @@ pub mod prompts;
 pub mod race;
 pub mod speed;
 pub mod touch;
+pub mod weapon_pad;
 pub mod weapons;
 
 pub use boot::{BootProfile, BootStep, Provenance};
@@ -71,6 +72,7 @@ pub use menu::{
 };
 pub use oag_disc::Platform;
 pub use pressing::{Pressing, Pressings};
+pub use race::sound::{FrontEndSounds, MenuCues, StyledCue};
 pub use race::{
     CircuitBanks, CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks,
     SpeedClasses, TeamVariant, TeamVariants, TrackBanks, VariantJoin, ZoneAnnouncer, ZoneCircuit,
@@ -135,6 +137,10 @@ pub struct Title {
     /// [`flare::Flare`], and see that module for why the two are separate axes
     /// rather than variants of one.
     pub flare: &'static flare::Flare,
+    /// What colours a weapon pad's light bars at run time. See
+    /// [`weapon_pad::WeaponPadGlow`]: Wipeout HD overwrites the material's
+    /// authored value with a per-pad cycle, every other title keeps it.
+    pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// Which codepoints in this title's strings are controller-button glyphs,
     /// and which control each depicts. See [`prompts::Prompts`].
     pub prompts: &'static prompts::Prompts,
@@ -575,6 +581,13 @@ pub struct FrontEnd {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub preview_meshes: bool,
+    /// The file under a craft's own directory that its selection screen draws
+    /// as the 3-D craft when [`Self::preview_meshes`] is `false`: HD's
+    /// `Team Selection` draws the race hull (`ship.vex`, the pair
+    /// `ship.rcsmodel`) in its `ShipModel` frame, and ships no `ship_FE.vex`
+    /// (checked 2026-10-08: no `*FE*` mesh under any HD `Data\Ships\<team>`).
+    /// `None` everywhere a title has no such screen or draws stills.
+    pub ship_preview_hull: Option<&'static str>,
     /// The definition file that authors the three screens a race ends on -
     /// `EndRace Results`/`EndRace Rewards`/`EndRace Menu` - or `None` for a
     /// title whose copy has not been read.

@@ -133,10 +133,14 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // globals that does not move between the archives**, which is worth saying
     // here because half the palette does. See `selected` below.
     text: Some(0xFFFF_FFFF),
-    // `FEGlobals->TitleColor`. HD's menu screens usually reach for an `HD_*`
-    // palette instead, whose `HD_Grey` is declared to the same value - so the
-    // two agree today and could diverge. See `hd-frontend.md`.
-    title: Some(0xFF64_6464),
+    // `FEGlobals->HD_Grey`, which the screens' own title widgets reach for
+    // (`FE_MM` on `Main Menu`), not `TitleColor` (`0xFF646464`): the two
+    // diverge in the skin the front end loads, where `HD_Grey` resolves to
+    // `0xFF969696`. **Measured 2026-10-08**: RPCS3's `Main Menu`, `Grid
+    // Selection` and `Cell Selection` titles all draw `150,150,150`; this
+    // field read `TitleColor` and drew `100,100,100` until then. See
+    // `hd-frontend.md`.
+    title: Some(0xFF96_9696),
     // `FE Screen` authors its own `<ScreenClear Colour="FEGlobals->HD_BG">`,
     // so `Frame::clear` already carries this and the field stays unneeded.
     background: None,
@@ -378,12 +382,13 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
-    // `false`, and not because HD has no 3-D craft on this screen - it
-    // does (`ShipModel`). The one preview path this build has reads
-    // `<team>\ship_FE.vex`, which HD's own per-team `screen.xml` names and
-    // no HD archive carries; the race hull is a `.vex`/`.rcsmodel` pair the
-    // preview does not load yet. See `oag_ui_screens::picker::hd`.
+    // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
+    // which HD's `screen.xml`s name and no HD archive carries. The craft the
+    // original draws on `Team Selection` is the race hull, named here; the
+    // circuit model has no such file and stays undrawn. See
+    // `oag_ui_screens::picker::hd`.
     preview_meshes: false,
+    ship_preview_hull: Some("ship.vex"),
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
     // [`names::FRONTEND_ROOT`] documents reaching `DATA00`'s `skin.xml`.

@@ -6,12 +6,28 @@
 //! front-end bank plays nothing without a branch of its own.
 
 use log::debug;
-use oag_ui::menu::nav::Nav;
+use oag_ui::menu::nav::{Dir, Nav};
 use oag_ui_screens::campaign::Event;
 
 use super::Session;
 use crate::campaign_stage::Screen;
 use crate::stage::Stage;
+
+/// The direction a d-pad edge points this tick, the last one pressed if
+/// several were.
+pub(super) fn pad_direction(buttons: &oag_gameplay::input::Input) -> Option<Dir> {
+    use oag_gameplay::input::Button;
+    [
+        (Button::Up, Dir::Up),
+        (Button::Down, Dir::Down),
+        (Button::Left, Dir::Left),
+        (Button::Right, Dir::Right),
+    ]
+    .into_iter()
+    .filter(|(button, _)| buttons.is_pressed(*button))
+    .map(|(_, dir)| dir)
+    .next_back()
+}
 
 impl Session {
     /// Starts the cue for each of `navs`, oldest first.
@@ -24,9 +40,10 @@ impl Session {
             return;
         };
         for nav in navs {
-            let cue = oag_game::sound::menu_cue(nav);
+            let cue = oag_game::sound::menu_cue(nav, self.pad_dir);
             let started = sfx.play(&self.audio, cue);
-            debug!("menu sound: {} (started: {started})", cue.name());
+            let live = self.audio.output().with_mixer(|mixer| mixer.active_voices());
+            debug!("menu sound: {cue:?} (started: {started}, {live} voice(s) live)");
         }
     }
 

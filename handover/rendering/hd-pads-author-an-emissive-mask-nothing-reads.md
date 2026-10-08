@@ -10,7 +10,12 @@ is complete and this file is only what it did **not** close.
   (`0x089265f0`) writes no colour, Pulse's gold and HD's blue are both in the
   texture, and `oag_render::speedup_pad` is deleted rather than gated.
 - Pulse's `Weapon Pad` cycle (`pad+0x6c`, table `0x08ac00c8`) stays exactly as
-  recovered on PSP/PS2 and no longer runs on HD.
+  recovered on PSP/PS2 and does not run on HD. **HD runs its own cycle, and it
+  is wired as of 2026-10-08 (`hd-weapon-pads`)**: the light bars' colour is
+  `WeaponPad_UpdateRefreshTimer`'s per-pad cycle, red, written into the pad
+  program's constant every frame - measured on RPCS3, `docs/rendering/pads.md`
+  "The red is a cycle". `Title::weapon_pad_glow` carries it. The material's
+  authored `W_Cycle` is not what the original draws.
 - On a PS3 chunk `GpuVertex::colour` is HD's baked per-vertex **light**, not a
   tint. `Drawable::tint_weapon_pads` gates on `Model::vertex_colour_is_light`
   for that reason, and
@@ -449,3 +454,24 @@ frame.
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 **What binds the `_ne` file is now answered, asset-side, 2026-09-07**: the pad material is an inline `.rcsmodel` record, not a separate file, and it genuinely names `ds_speedup_ne.gtf`/`ds_weaponup_ne.gtf` as its own `second_texture` - but the record carries a *third* sampler entry (the lightmap), and `skin::picks`'s "the lightmap wins the second binding, wherever it sits" rule grabs that instead, so the `_ne` entry is never bound. Measured off the actual shader too: the `_ne` sampler binds fragment unit 1 and `Program::accumulates(1)` is `true` on 18 of 18 pad chunks on `12_sol_2`, unconditionally - no parameter patch gates it. `speedup_material.rcsmaterial` turned out to be an authored orphan on this circuit; the `Speedup Pad` chunks name a generic material instead. **Wiring it is not cheap**: the renderer has room for only one second texture per material, so the naive fix trades the lightmap away for the glow - a near-black regression the existing pixel-count guard would not catch, since an added glow layer adds lit pixels even while losing more of them to the dropped lightmap. A real fix needs a third texture slot reaching every model's bind group. **Maintainer report from play, 2026-09-07, more specific than before**: HD weapon pads light up red, go dark on grant, relight on refresh - only the light bars, not the whole pad. **Checked asset-side the same day, and it is a negative result**: the `_ne` file's RGB is a tangent-space normal map (whole-texture mean `[127,129,243]`/`[127,128,244]`, confirmed by the shader's own `x*2-1` normal-decode right after the sample), not paint, and neither pad's fragment program carries a tint anywhere - baked or parameter-driven. So nothing measured explains "red" for the light bars; that hypothesis is closed, not open. **Which alpha channel gates the accumulate is now answered too, same day**: `_ne`'s own alpha, not the diffuse's - traced with the fragment program's own swizzles and write masks, which the probe now prints. `_ne`'s raw alpha (untouched from its `TEX` sample to instruction 41/43) gates an additive term identically on both pad classes; the diffuse's alpha only multiplies that already-accumulated sum one step later. Neither channel runs the renderer's generic `mesh.wgsl` shape at all - the pad's own program runs two power-curve chains (one against the lightmap sample directly, one a genuine `N·H` specular exponent) as well as `_cs` and `_ne`; the "second texture" those curves read is unit 2, which is the material's own already-known lightmap (`LIGHTMAP_SAMPLER`), already bound today via `skin::picks` - not a fourth, unbound texture, so the slot count stays three. `Program::output_texels()` independently agrees with the hand trace on both programs' output-alpha lane, and a `Weapon Pad`-only register-aliasing caveat (a `TEX H0` sits between `R0`'s write and its use, unlike `Speedup Pad`'s `TEX H5`) is recorded rather than glossed over. The colour patched into the `_ne`-gated term is now read too: `[0.0, 0.768628, 0.992157, 0.0]`, a light cyan/blue, identical between the `Speedup Pad` and `Weapon Pad` material files - not red, and shared rather than pad-specific, which reads as a circuit rim tint. **Corrected 2026-09-08, from play**: that colour is right for the *speed* pad (cyan, confirmed) but wrong for the *weapon* pad, which the maintainer reports as red - the thread's own confidence-82 cap over a `Weapon Pad`-specific register-aliasing concern was the named suspect and now looks like the actual bug. What is still open is where the red actually comes from, which needs the Ghidra-side vtable diff this thread's Next Steps already named, not another asset probe - and wiring anything is now known to need reproducing that arithmetic, not just a third texture slot, since the disc's own formula is not the generic emissive shape either
+
+## Update 2026-10-08 (`hd-weapon-pads`): the red is landed, what stays open
+
+Closed: where the red comes from, and wired (`docs/rendering/pads.md`, "The red is a
+cycle"; `docs/ghidra/functions/ps3-hdfury-eu/pads.md`). The "unmeasured runtime
+state" candidate was the right one: the cycle position and the cooling vector are
+pad-object state the engine copies into the fragment program's constant.
+
+Open, in order:
+
+1. **A ready pad on a second circuit, and a cooling pad on Vineta K.** Seen: two
+   ready pads (Vineta K, two phases of one cycle) and one cooling pad (Sol 2).
+   Cheapest: `place` with a pose clear of every pad on arrival, so the pad is not
+   collected by the placement (the Sol 2 and the second Vineta captures were).
+2. **The code that carries `pad+0x1b0` into the constant** (material parameter
+   `W_Cycle`, `0xce5c4410`): no `lis 0xce5c` immediate exists, so it is indirect.
+   The wiring rests on the numbers fitting, not on a traced store.
+3. **The cycle's real rate against video**: 3 keys a second is read from
+   `DAT_008b4324`, not timed on frames.
+4. **The `_ne` normal-map lighting terms** of the pad program (the specular chain)
+   are still the renderer's own `pad_normal`, not the program's; unchanged here.

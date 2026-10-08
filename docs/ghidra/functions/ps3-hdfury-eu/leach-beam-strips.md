@@ -266,7 +266,80 @@ replaces Pulse's ribbon on HD (Pulse and Pure frames byte-identical, checked). O
 measured**: the phases start at 0 when our beam starts; our progress is unwrapped track distance; the
 single-level texture (the original has mips); the node at the walked end (`u` 0 in the emulation of
 `0x001164e0`, accumulated here); the anchor falls back to the body's pose when a hull has no locator.
-In a straight chase view the strip is faint (the `|dot(n, v)|` term is the program's, and the film's beam
-is brighter): not explained, see the handover thread.
+In a straight chase view the strip looked faint; **`hd-leach-bright` (below) found that was the
+staging, not the strip**.
 
 **Omega:** checked, differs (PS4 shaders); **2048:** has no LeachBeam strip of this family.
+
+## 2026-10-08 (`hd-leach-bright`): why the strip read faint, and what the live draw says
+
+Two boots of RPCS3 (`data/scratch/hd-leach-bright/c1`, `c2`; a held LeachBeam placed behind the
+nearest rival, pushbuffer plus the strip's own memory read paused). Both agree on every row below.
+
+**The faint streak was the staging, conf 70** (the original's straight-chase facing table is one frame; `t1`, `t2` and `t3` are the same paused frame): The `hd-leach-draw` comparison frame (`--force-leach-lock
+276:1` at tick 330) renders a strip of **4 samples spaced 24-66 units apart** (the countdown, speed 0.7:
+the leader's anchor trail has barely started, so the walk is one long segment plus the bend), where the
+original's held beam has 22-38 samples about 3.5 apart. That strip is one flat quad nearly along the view
+axis, so the program's `|dot(n, v)|` is near 0. `hd_leach_strip_ground_truth` uses the same 4-sample
+staging; it still shows the strip but says nothing about its brightness. With a dense trail
+(`--autopilot --force-leach-lock 800:3`, 18 samples over 83 units) ours draws a white-cyan thread toward the rival
+(`ours/f800_3.png`, turbo streaks swamp it; the clean read is the strip on against off at identical sim state,
+`ours/onoff.png`, below): a thread forward, but the larger share of its light is at the hull's tail.
+
+**The per-node facing agrees.** Sum over the three fins of `|n . v|`, the program's own term, from the
+original's dumped samples and its eye (`c[467]` of the draw), against ours from `--autopilot
+--force-leach-lock 940:3` (19 samples over 67 units), nodes counted from the shooter:
+
+| node from the shooter | 0 | 3 | 6 | 9 | 12 | 15 | far end |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| original (`c2/t1`, straight chase, 22 samples, 76 units) | 1.62 | 0.79 | 0.56 | 0.34 | 0.23 | 0.13 | 0.06 |
+| ours (`ours/dbg_e3`, 19 samples, 67 units) | 1.80 | 1.12 | 0.71 | 0.30 | 0.18 | 0.13 | 0.07 |
+
+The beam is thick and bright for the first 15-20 units and a thin thread beyond, in both. The fin
+normals dumped from the draw match `oag_fx::rocket_smoke::fin_axes` on the matching fin (cosine 1.0; fin 0
+flips sign between nodes, which `abs()` does not see), the half-width is 1.0 on every pair, `u` advances
+0.0498 per unit, and the vertex colour is `ffffffff` (alpha 1) in state 4. Residual, **the open near-end
+lead** (not attributed): the eye is **13.8-15.3** from the shooter's anchor in the original (three frames, `b0`,
+`t1`, `v1`) and **7.7** in ours (eye to body 9.0), and that is where the brightness lives (sums 0.8-1.8 in the
+first 15-20 units). Ours resolves the hull locator (`anchors[slot]` is `Some`) and puts the anchor 2.4 along the
+model z and 2.25 along its y from the body origin. Projected into `t1` with the draw's own matrix (`c[256..259]`),
+the original's anchor sits on the hull's rear engine cluster and the path then rises over the spine
+(`c2/t1_anchor.png`). Strip on against off at identical sim state (`--autopilot --force-leach-lock 800:3`,
+ticks 845-880, `ours/onoff.png`): our beam's light is a large blob at the hull's tail with a weak thread
+forward. Whether the anchor sits at the right place on the hull is unmeasured: the body pose read in the same
+paused frame did not pair with the anchor sample (`place.read_pose` came back 62 units off while the eye was
+13.8 from the anchor), so the offset in the body frame is the next measurement.
+
+**Read off the live draw, not on the static page** (conf 85, two boots):
+
+| Item | Measured | Ours |
+| --- | --- | --- |
+| noise unit sampler | address word `0x60710101`: gamma field (bits 20-22) = 7, so R, G, B are sRGB-decoded before the program; the same word on the glow (unit 1) | the noise's red was used raw; **now decoded** in `beam.wesl` (`2 * srgb(noise.r)`), the glow's colour left as every HD ribbon has it (`decodes_source` false, the rocket-smoke precedent). The piecewise sRGB curve is **chosen, not measured** (the rest of the project uses 2.2) |
+| both units' filter word | `0x02063e80`: mag LINEAR, min `LINEAR_LINEAR` (trilinear), LOD bias -1.5 | one level, linear. With a -1.5 bias the chain starts at its sharper levels, so the single level differs little (a 256 glow reaches 12.8 texels per unit at the near nodes); mips **not built**, open and low value |
+| `u` at the walked end (idx 0) | 0.0 on the last node of both dumps, after a node at 3.6 and 7.6 | accumulated; **now 0** (`nodes()`), one segment sweeps the texture back as the original's does |
+| `time` | `c[466]` = 140.64 (c1, `0x430ca3f9`) and 161.6 earlier: engine seconds | as before |
+| program | the leach fragment program is the 18-instruction one with the facing term (found by its microcode in the dump); its address changes boot to boot | unchanged |
+
+The noise change moves the glow lookup only (the decoded noise averages 0.10 against 0.33 raw): before/after
+at four dense frames differ by 0 to 7,200 pixels with the frame's mean luminance unchanged to 0.01
+(`data/scratch/hd-leach-bright/ba/`). It is a correctness change to the program's inputs, **not** the
+brightness fix; the brightness gap was the staging.
+
+**Three things this lane's tools got wrong, so the previous pages should be read with them:**
+
+- `0x1824` (DRAW_INDEX_ARRAY) carries several 256-index batches in one method; `rsx-draw-list.py`
+  and `rpcs3_draw_hook.py` kept only the last argument, so a draw's `idx` count and its dumped vertex
+  range described the last batch only (a 21-segment strip showed as `idx122`, 8 nodes). Both now read
+  every batch (`d["batches"]`, `idx` is the sum). The earlier dumps do not hold the near-shooter vertices.
+- **fp addresses are not stable between boots.** At `0x00744c41` one boot held the leach program and
+  another held `hd_waketrail`'s; identify a draw by its microcode, not by its address.
+- The film's **side arcs** around the ship (thin white and violet crackle left and right) are not the
+  strip: they are the per-craft `hd_waketrail` ribbons (draws with two 128x128 units, one per craft, program
+  with the `0.1 * time` scroll and no facing term). Open for a lane of their own (HD wakes).
+
+Not settled: the original reveals from sample 0 (the walked end) toward the shooter in a dump taken
+mid-reveal; ours follows the static law (`frac <= lo` white), the same direction. The near-end anchor (above).
+
+**Regression gate:** the Pulse frame of `hd-leach-draw` (`--force-leach-lock 276:1`, tick 330, 960x544) renders
+sha `9d510ab01c91fcc2...` with this tree and with the tree before it, the same sha as that lane's reference.
+**Omega:** checked, differs (PS4 shaders); **2048:** no such strip.

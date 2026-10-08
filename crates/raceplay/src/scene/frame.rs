@@ -287,7 +287,7 @@ impl Scene {
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
-        crate::adverts::render(&self.adverts, queue, encoder, seconds);
+        crate::adverts::render(&self.adverts, queue, encoder, seconds, race, anim_seconds);
         let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
         let glass = (section_view, eye, seconds);
         let behind_glass =

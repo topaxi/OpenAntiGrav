@@ -16,17 +16,93 @@ gets into a model at all is `oag_mesh::mesh::build_pads` on PSP/PS2 and
 | Pulse (PSP/PS2), Pure | `Speedup Pad` | the texture, unmodified | 90 |
 | Pulse (PSP/PS2), Pure | `Weapon Pad` | `pad+0x6c`, a per-tick runtime write | 85 |
 | HD / Fury | `Speedup Pad` | the texture, plus a per-circuit-authored additive glow tint (cyan on every circuit measured) | 88 |
-| HD / Fury | `Weapon Pad` | the texture, plus a per-circuit-authored additive glow tint - red on `talons_junction`, `tech_de_ra`, `modesto_heights`, `15_anulpha_pass`, cyan/blue on the other 8; any armed/cooling state change is **unrecovered** | 88 |
+| HD / Fury | `Weapon Pad` | the texture, plus an additive glow on the light bars whose colour **the engine writes every frame from the pad's own cycle**: a 1 s loop through red `2.0, 0.06, 0` / `1.0, 0, 0` / `0.25, 0, 0` while the pad is ready, `0.025, 0, 0.01` while it cools down - on every circuit measured, whatever the material authors (see "The red is a cycle", 2026-10-08) | 88 |
 
-All four rows agree on the finding worth carrying: **on every title measured,
-a pad's colour is authored by the artists and the engine leaves it alone -
-Pulse's runtime write included, since even that reads a fixed keyframe table
-rather than computing anything.** HD's two rows are authored in two places at
-once, not one: the diffuse texture paints a fixed cross/chevron outline, and
-the `_ne`-alpha-gated additive glow (the light bars) is tinted by a per-material
-parameter authored per circuit - see "Corrected 2026-09-16" below for the
-per-circuit table. Nothing on HD is a per-tick write like Pulse's `Weapon Pad`;
-"per-circuit-authored" means baked into the `.rcsmaterial` file, read once.
+Three of the four rows agree on the finding worth carrying: **a pad's colour is
+authored by the artists and the engine leaves it alone** - Pulse's `Weapon Pad`
+is the exception that writes (`pad+0x6c`, from a fixed keyframe table), and
+**HD's `Weapon Pad` is the second one**: its plate and outline are the texture's
+and the light bars are not (the earlier version of this page read the
+material's authored `W_Cycle` value as the bars' colour; the original does not
+use it - see "The red is a cycle" below). HD's `Speedup Pad` is authored in two
+places, not one: the diffuse texture paints a fixed chevron outline, and the
+`_ne`-alpha-gated additive glow is tinted by a per-material parameter authored
+per circuit, read once.
+
+## The red is a cycle (2026-10-08, `hd-weapon-pads`)
+
+**Report from play, treated as reliable:** on `01_vineta_k` the weapon pads' light
+bars are red in the original and cyan in ours. **Reproduced**: same circuit, same
+place (`-804.3, -144.0, 262.0`), `scripts/rpcs3-drive.py place`, original against
+`oag-game --mode single_race --pose-from` (`data/scratch/hd-weapon-pads/vk1/00.png`
+against `ours/vk_w0.png`): the layout and the red outline of the plate agree, the
+bars are red/orange in the original and `(0, 0.77, 0.99)` in ours. (A default
+`--race` is time trial: weapons off, the pads are not drawn by design.)
+
+**Where the red comes from: the engine, every frame, per pad.** One RSX frame
+dumped on that spot (`scripts/rpcs3_draw_hook.py`, `cap1/`, five weapon-pad and speed-pad
+draws named against the disc's `.gtf` files by their VRAM bytes): in each
+weapon-pad fragment program the constant of the `_ne`-alpha-gated accumulate
+(`@0x39  MAD H2.xyz, R0.wwww, C, H0`, constant slot `0x3a`) reads
+
+| Draw | Pad | Constant `C` |
+| --- | --- | --- |
+| 108, and 233 (the alpha-tested pass of the same chunk) | weapon pad A | `{1.16612, 0.0326835, 0, 1}` |
+| 109 | weapon pad B | `{1.65581, 0.0407428, 0, 1}` |
+| 110, 144, 145 | speed pads | `{0, 0.768628, 0.992157, 0}` |
+
+**A second boot of the same spot** (`cap4/`, 20 hook attempts; the pads' phases
+differ, as a heap-address seed would make them) read `{0.718887, 0, 0, 1}` and
+`{1.68172, 0.0510977, 0, 1}` on the two weapon pads and the authored cyan on the
+speed pads again: green `0` puts the first pad in the `256 -> 64` span at
+`t = 0.379` (red `0.7189 * 255 = 183.3 = 256 - 192 t`), and the second in the
+`64 -> 512` span at `t = 0.814` (red `1.6819 * 255 = 428.9 = 64 + 448 t`), both
+exact to the printed digits. Four pads on two boots, one law. **No pad was
+followed over time** (every capture is one paused frame), so the rate is the
+function's, not a measured one.
+
+The material authors `W_Cycle` as `{0, 0.768628, 0.992157}` for these weapon pads
+too (the census above), so **the original does not draw the authored value**; the
+speed pads, whose function carries no colour logic, keep it. A third capture on
+`12_sol_2` (also authored cyan; `cap3/`, one weapon pad) reads
+`{0.025, 0, 0.01, 1}` - the cooling vector below, again not the authored cyan.
+Red is therefore **not an authored per-circuit value**: the cycle lives in the
+executable and two circuits whose material authors cyan (Vineta K, Sol 2) were
+measured overriding it; the other ten circuits were not captured, and nothing in
+the function branches on the circuit.
+
+**The law**, read off `WeaponPad_UpdateRefreshTimer` and its constants
+(`docs/ghidra/functions/ps3-hdfury-eu/pads.md`, "Answered 2026-10-08"; four pads on two boots fit it to the printed digits and the two vectors were read live on RPCS3,
+confidence **88** for the law, **not scored** for the rate): while the pad is ready a position advances by `3.0` keyframes
+a second through six keyframes `(512,16,0) (256,0,0) (64,0,0)` twice, blended
+linearly, times `1/255`; while it cools down nothing advances and the colour is
+`(0.025, 0, 0.01)`. The values pass through unclamped (red reaches `2.0`).
+
+**What it replaces, in ours**: `Title::weapon_pad_glow` (`oag_title::weapon_pad`)
+carries the cycle as HD Title data (every other title: `Authored`, unchanged);
+`mesh::rcs::build_weapon_pads` gives each pad node its own glow-table entry
+(authored colour, so an unrewritten pad draws what it drew), and
+`Drawable::glow_weapon_pads` rewrites those entries each frame into the
+`emissive` uniform from the race clock and `weapon_pad_refresh_left`. Pulse's
+`tint_weapon_pads` path is untouched.
+
+**Chosen, not measured:** a pad's starting key. The original seeds it from the
+pad object's heap address modulo six (the constructor, `0x002e01dc`); ours is the
+pad's index modulo six. Phase is a render-side accumulation of ready time, not
+simulation state. **Not measured:** a ready pad on `12_sol_2`, a cooling pad on
+`01_vineta_k` (the one cooling constant seen is the Sol 2 one), the original's
+frame-to-frame advance (the 3 keys/s is read from the function, not timed on
+video), and the code that copies the pad's cycle vector into the program's
+constant (found by the numbers, not by a traced store).
+
+**Speed pads: checked, nothing moves.** Their constant on the same frame is the
+authored cyan and `SpeedupPad_Importer`'s slot 3 has no colour logic; ours already
+draws the authored value.
+
+**2048 and Omega: not checkable here.** Omega reads through 2048's `.rcsmodel`
+readers, but neither title's weapon-pad object has been decompiled and no
+Omega emulator exists in this toolchain, so whether either overwrites the
+constant is unknown. Both keep `Authored`, which is what they drew before.
 
 ## A speed pad is never recoloured, on any title
 
@@ -548,6 +624,11 @@ handover thread's Next Steps - the Ghidra-side vtable diff - remain the way
 to find it, unchanged by this section.
 
 ### Corrected 2026-09-16: it is each pad's own colour, and it is red on most circuits
+
+> **Superseded 2026-10-08 for the weapon pad.** The authored values below are real and
+> are what the loader reads, but the original does not draw them: it overwrites
+> the weapon pad's constant per frame from a cycle - see "The red is a cycle" above.
+> The speed pad rows stand.
 
 **The "identical, cyan, shared rim tint" reading above rests on one circuit
 and does not generalise - the value varies per circuit, and the hash the

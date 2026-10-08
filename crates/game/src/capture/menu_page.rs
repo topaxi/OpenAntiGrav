@@ -634,6 +634,10 @@ pub(super) struct PreviewRequest {
     /// [`oag_game::preview::mode3d_view_projection`]. `None` falls back to
     /// [`oag_game::preview::orbit_for`], same as the live screen.
     pub mode3d: Option<oag_ui::screen::Model>,
+    /// The craft is the race hull of a title with no `ship_FE.vex`, drawn at
+    /// the fixed [`crate::preview::hull_orbit`] - see
+    /// [`oag_title::FrontEnd::ship_preview_hull`].
+    pub hull_only: bool,
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
@@ -747,6 +751,7 @@ pub(super) fn picker_page(
                             .collect()
                     };
                     let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
+                    let models = team.hex_cells(variants.iter().map(|(id, _)| id.as_str()));
                     (
                         Entry {
                             id: team.id.clone(),
@@ -761,9 +766,10 @@ pub(super) fn picker_page(
                                 }),
                                 variants,
                                 stats,
+                                models,
                             },
                         },
-                        format!(r"{}\ship_FE.vex", team.location),
+                        crate::preview::ship_entry(title, &team.location),
                     )
                 })
                 .unzip()
@@ -804,6 +810,7 @@ pub(super) fn picker_page(
         // Filled in by the caller, which already has `picker_stills`'s own
         // slideshow read - see `capture.rs`.
         mode3d: None,
+        hull_only: crate::preview::draws_hull(title, kind),
     });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,
@@ -861,6 +868,9 @@ pub(super) fn draw_preview(
                 log::debug!("preview {}: {line}", request.entry);
             }
         }
+        if request.hull_only {
+            crate::preview::frame_hull(&mut model);
+        }
         crate::preview::Preview::new(
             device,
             queue,
@@ -880,7 +890,7 @@ pub(super) fn draw_preview(
             space,
             request.mode3d.as_ref(),
             request.rect,
-            crate::preview::orbit_for(request.kind, 0.0),
+            crate::preview::capture_orbit(request.hull_only, request.kind),
             0.0,
         ),
         Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),

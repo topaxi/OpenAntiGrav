@@ -402,6 +402,10 @@ pub struct TeamModel {
     /// none is available from a fresh profile. What each unlock condition
     /// means is not read here.
     pub has_unlock: bool,
+    /// The `LiveryNumber` the model's front-end thumbnail is named by:
+    /// `<modellocation>\FE\thumb<LiveryNumber>.gtf` exists on the disc for
+    /// every model of every team (Feisar's `concept1` is `4`, `Feisar_c1\FE\thumb4.gtf`).
+    pub livery_number: Option<u32>,
 }
 
 /// The disc's own string id for a team's baseline paint - `Classic` on
@@ -585,6 +589,9 @@ fn read_models(team: &Node) -> Vec<TeamModel> {
                 model_location: model.value("modellocation")?.to_string(),
                 rating_tenths,
                 has_unlock: model.children_named("Unlock").next().is_some(),
+                livery_number: model
+                    .value("LiveryNumber")
+                    .and_then(|number| number.trim().parse().ok()),
             })
         })
         .collect()
@@ -617,6 +624,45 @@ impl Team {
                     handling: rating.handling,
                     shield: rating.shield,
                 })
+            })
+            .collect()
+    }
+
+    /// What `Team Selection`'s hex column shows for each of this team's
+    /// [`Self::models`], in file order: the model's own thumbnail, and
+    /// whether it can be picked right now.
+    ///
+    /// A row is open when it is the model one of `variant_ids` races as
+    /// ([`Self::model_for_directory`], carrying that variant's index) and
+    /// padlocked otherwise - every model with an `<Unlock>` the build does
+    /// not offer. The original draws exactly the two `<Unlock>`-free models
+    /// of Feisar open on a fresh profile; this build keeps no unlock state
+    /// on HD, so a model it lets a player race (`nitro`, through the `_n1`
+    /// variant) is drawn open as well. Pulse's law, unmeasured on HD.
+    #[must_use]
+    pub fn hex_cells<'a>(
+        &self,
+        variant_ids: impl IntoIterator<Item = &'a str>,
+    ) -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
+        let offered: Vec<Option<usize>> = variant_ids
+            .into_iter()
+            .map(|suffix| {
+                let model = self.model_for_directory(&format!("{}{suffix}", self.location))?;
+                self.models.iter().position(|candidate| candidate == model)
+            })
+            .collect();
+        self.models
+            .iter()
+            .enumerate()
+            .map(|(row, model)| {
+                let variant = offered.iter().position(|offer| *offer == Some(row));
+                oag_ui_screens::picker::hd::hex::ModelCell {
+                    thumb: model.livery_number.map(|number| {
+                        oag_ui_screens::picker::hd::hex::thumb_src(&model.model_location, number)
+                    }),
+                    open: variant.is_some(),
+                    variant,
+                }
             })
             .collect()
     }

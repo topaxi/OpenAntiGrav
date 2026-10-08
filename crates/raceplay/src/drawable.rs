@@ -6,6 +6,7 @@
 
 use super::*;
 mod instance;
+mod pad_glow;
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -73,6 +74,10 @@ pub(super) struct Drawable {
     /// `Anim Transform` at all - which is every ship, every sky and every
     /// synthetic overlay.
     node_anims: wgpu::Buffer,
+    /// The glow table's own buffer, binding 2 of the same group 3. Rewritten
+    /// by [`Self::glow_weapon_pads`] only; every other drawable leaves what
+    /// [`mesh_render::Emissives::of`] wrote at build time.
+    emissive: wgpu::Buffer,
     /// The Zone visualiser's own lookup texture - bind group 2's binding 4.
     /// All-black until [`Self::write_zone_vis`] is called, which
     /// `race::Scene::render` does once a frame alongside [`Self::fog`].
@@ -95,6 +100,9 @@ pub(super) struct Drawable {
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
+    /// Each weapon pad's own position in HD's colour cycle - see
+    /// [`Self::glow_weapon_pads`]. Empty on every drawable but HD's pads.
+    pad_glow: std::cell::RefCell<pad_glow::PadGlow>,
     /// Draws left out this frame, by [`oag_render::gantry::panel::key`]:
     /// the start gantry's states off its panel ([`Self::set_hidden`]).
     /// Empty on everything else.
@@ -193,6 +201,7 @@ impl Drawable {
             anim_bind,
             anim_buffer,
             node_anim_buffer,
+            emissive_buffer,
         } = mesh_render::build_with(
             device,
             queue,
@@ -310,9 +319,11 @@ impl Drawable {
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
+            emissive: emissive_buffer,
             zone_vis: zone_vis_texture,
             zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::cell::RefCell::new(None),
+            pad_glow: std::cell::RefCell::default(),
         })
     }
 
@@ -681,11 +692,12 @@ impl Drawable {
     /// title enum. Two independent reasons, either sufficient:
     ///
     /// 1. The keyframe table is *Pulse's*, read out of the PSP executable at
-    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). Nothing says HD's own
-    ///    `Weapon Pad` cycles at all, and the picture the disc paints says it
-    ///    does not: `ds_weaponup_cs.gtf` is a grey plate with a **red** cross
-    ///    on it, where Pulse's `weapon_under.tga` is neutral and takes its
-    ///    colour entirely from `pad+0x6c`.
+    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). HD's own `Weapon Pad`
+    ///    does cycle, but through its own table at `0x008c26a0` and into the
+    ///    light bars' constant rather than the mesh - see
+    ///    [`Self::glow_weapon_pads`]. `ds_weaponup_cs.gtf` is a grey plate with
+    ///    a **red** cross on it, where Pulse's `weapon_under.tga` is neutral and
+    ///    takes its colour entirely from `pad+0x6c`.
     /// 2. On an HD model `colour` is not a tint at all. It is the baked
     ///    per-vertex light the fragment program **adds** inside its authored
     ///    lighting sum - see `oag_mesh::mesh::rcs::emit`. Writing a palette

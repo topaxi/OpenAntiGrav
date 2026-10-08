@@ -36,6 +36,7 @@ def draws_of(out,stem):
     for pos,meth,ni,args in wk.run(0x1000):
         if meth in (0x1efc,0xb80): continue
         for i,v in enumerate(args): regs[meth if ni else meth+4*i]=v
+        if meth==0x1824: regs['batches']=[(a&0xffffff,((a>>24)&0xff)+1) for a in args]
         if meth in (0x1814,0x1824): draws.append(dict(regs))
     return m,wk,draws
 def regions(out, stem, rnd):
@@ -62,12 +63,13 @@ def regions(out, stem, rnd):
             res.append((base(draws[0][0x8e4]&3)+p,0x600))
         seen=set()
         for d in ([] if LIGHT else [x for x in draws if keep(x)]):
-            ixoff=d.get(0x181c); cnt=((d.get(0x1824,0)>>24)&0xff)+1
-            first=d.get(0x1824,0)&0xffffff
-            key=(ixoff,first,cnt)
-            if d.get(0x1824) is None or key in seen: continue
-            seen.add(key)
-            res.append((0x40000000+ixoff+first*2,cnt*2+2))
+            ixoff=d.get(0x181c)
+            if d.get(0x1824) is None: continue
+            for first,cnt in d.get('batches') or [(d[0x1824]&0xffffff,((d[0x1824]>>24)&0xff)+1)]:
+                key=(ixoff,first,cnt)
+                if key in seen: continue
+                seen.add(key)
+                res.append((0x40000000+ixoff+first*2,cnt*2+2))
         print('hook stage1: %d spans'%len(res),flush=True)
         if res: return res
         ST['stage']=1
@@ -78,13 +80,14 @@ def regions(out, stem, rnd):
         rngs={}
         for d in ([] if LIGHT else [x for x in draws if keep(x)]):
             if 0x1824 not in d or d.get(0x1824) is None: continue
-            ixoff=d[0x181c]; cnt=((d[0x1824]>>24)&0xff)+1; first=d[0x1824]&0xffffff
-            raw=m.bytes(ixoff+first*2,cnt*2) if False else None
-            blob=None
-            try:
-                blob=open('%s/%s-%08x.bin'%(out,stem,0x40000000+ixoff+first*2),'rb').read()
-            except Exception: continue
-            ix=struct.unpack('>%dH'%cnt,blob[:cnt*2])
+            ixoff=d[0x181c]
+            ix=[]
+            for first,cnt in d.get('batches') or [(d[0x1824]&0xffffff,((d[0x1824]>>24)&0xff)+1)]:
+                try:
+                    blob=open('%s/%s-%08x.bin'%(out,stem,0x40000000+ixoff+first*2),'rb').read()
+                except Exception: continue
+                ix+=struct.unpack('>%dH'%cnt,blob[:cnt*2])
+            if not ix: continue
             lo,hi=min(ix),max(ix)
             for a in range(16):
                 off=d.get(0x1680+4*a); fmt=d.get(0x1740+4*a)

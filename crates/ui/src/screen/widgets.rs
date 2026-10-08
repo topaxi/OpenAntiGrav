@@ -4,7 +4,9 @@
 //! already split their own `touch_button_from_node`/`touch_list_from_node`/
 //! `touch_slider_from_node` into. A move, not a behaviour change.
 
-use super::{Fill, Image, Menu, Node, Redirect, Screens, Text, argb_to_rgba, parse_argb};
+use super::{
+    Bracket, Fill, Image, Menu, Node, Redirect, Screens, Slot, Text, argb_to_rgba, parse_argb,
+};
 use crate::frontend::Draw;
 use oag_core::buttons::button_from_name;
 
@@ -81,6 +83,41 @@ impl Screens {
             gradient,
             reveal: Vec::new(),
             transition: 0.0,
+        })
+    }
+
+    /// A [`Slot`] off an `Image` node with a rect and neither a `src` nor a
+    /// colour; `None` when it authors no width and no height.
+    pub fn slot_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Slot> {
+        let width = self.number(node.value("width"));
+        let height = self.number(node.value("height"));
+        (width.is_some() || height.is_some()).then(|| Slot {
+            name: node.attr("name").map(str::to_string),
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
+            width,
+            height,
+        })
+    }
+
+    /// A [`Bracket`] off its node; `None` when it authors no size.
+    pub fn bracket_from_node(&self, node: &Node, offset: (f32, f32)) -> Option<Bracket> {
+        let width = self.number(node.value("width"))?;
+        let height = self.number(node.value("height"))?;
+        Some(Bracket {
+            x: self.number(node.value("x")).unwrap_or(0.0) + offset.0,
+            y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
+            width,
+            height,
+            color: self
+                .resolve(
+                    node.value("Colour")
+                        .or_else(|| node.value("color"))
+                        .unwrap_or_default(),
+                )
+                .and_then(parse_argb)
+                .unwrap_or(0xffff_ffff),
+            corner: node.flag("corner").unwrap_or(false),
         })
     }
 

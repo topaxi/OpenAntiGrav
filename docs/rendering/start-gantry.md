@@ -930,6 +930,83 @@ own HD section places the gantry either - it is the **track**'s own
 already recovered for Pulse below rather than by anything new on this
 model's own side. See ["Implemented on HD"](#implemented-on-hd-the-same-mechanism-on-a-mount-that-is-not-flat).
 
+## Wipeout HD: the gantry is a card, and the mode picks the file (2026-10-08, `hd-gantry`)
+
+**The maintainer's two reports from play, both measured on RPCS3** (private instance,
+muted, 1280x720 at render scale 100; Talon's Junction, Vineta K). Captures under
+`data/scratch/hd-gantry/` (`pl1`, `pl2`, `zp` RSX dumps; `cd1`, `zcd2`, `zb`, `det`,
+`elim-cd` recordings). Not a new binary read: the mode numbers below agree with the
+PS4 branch in [`ps4-omega-eu/billboards.md`](../ghidra/functions/ps4-omega-eu/billboards.md).
+
+### "The countdown is very blurry": a bloom halo on a white board, because it was not a card
+
+**What the original does, read off a hooked frame (`scripts/rpcs3_draw_hook.py`,
+`scripts/rsx-draw-list.py`; one boot, texture named against `321_go_64.gtf` by its first
+bytes and three further samples; confidence 85, one boot):**
+
+- the main target is **A8R8G8B8 with 2x MSAA** (surface word `0x3148`: colour format 8,
+  depth `0x40`, pitch `0x2800` = 2560 x 4 B), not fp16 as a first reading said;
+- the frame draws **two 512 x 256 colour cards** before the scene (surface `0x123`,
+  offsets `0x02aa0000` and `0x02ae0000`, pitch `0x400`). The second holds slot 8: 14
+  draws of `321_go_64.gtf` (64 x 128 DXT5, 8 mips, min filter trilinear, mag linear) through
+  `TEX; MUL H0.xyz, H0, {1,1,1,1}`. The first is slot 7 (`fx350`);
+- the scene then samples the card on the track's `billboard8` quad (draw 128, program
+  `0075f501`: `(f[TC0..] + ambient {0.404, 0.392, 0.51} + sun * sat(N.L)) * card`, then fog), so the board
+  is **lit like the road under it**. A lit `GO` reads **(132, 131, 112)** on screen, not white.
+
+**What ours did:** drew `321Go_StartFinish.vex` as a model stood on the mount, straight
+into the scene. Its `GO` came out full white, above the HD bloom gate's knee, and
+`post::hd_bloom` smeared it into a halo wider than the letter strokes. **A/B, same
+camera and tick** (`data/scratch/hd-gantry/ours/cmp-bloom.png`): with the bloom term removed
+the letters are crisp but still white; with the card route they are cream, crisp, and carry no halo,
+matching the original frame. So the "blur" is not the texture (64 x 128 with the disc's
+own 8 mips is what the original samples too), not the sampler and not the render scale.
+
+**Fix:** `oag_title::adverts::Adverts::gantry_card` (HD `true`, measured; Pulse `false`).
+On HD slot 8 goes through the advert card path (`oag_raceplay::gantry::place_card`): the
+model is drawn through its own camera into the 512 x 256 target and the track's `billboard8`
+quad samples it. The gantry's clock, per-window cull and `GO` edge are the ones
+[`gantry-clock.md`](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md) measured; they now drive the
+card. **Not reproduced:** the card's R5G6B5 format (ours is RGBA8, chosen). Pulse's frame is
+byte-identical before and after (`data/scratch/hd-gantry/pulse/`, sha256 `6318e31c...` at tick
+150, `72fc7de6...` at tick 273).
+
+### "Zone levels have a different gantry animation": the mode picks the file
+
+Measured live, one boot per mode, slot 8 on Vineta K, from the Racebox `RACE TYPE` row
+(`rpcs3-drive.py countdown --nav "Single Player=right,..."`):
+
+| Race type | `GetMode()` (TTY) | Gantry before the release | File (inferred from the picture and the names) |
+| --- | ---: | --- | --- |
+| Single Race | 3 | `3 2 1 GO` board | `321Go_StartFinish.vex` |
+| Eliminator | 8 | the same `GO` board | `321Go_StartFinish.vex` |
+| Zone | **6** | dark panel; a loop icon assembles from light pieces | `321Go_Zone.vex` |
+| Zone Battle | **13** | dark panel with arrow glyphs | `321Go_HD_Zone_Battle.vex` |
+| Detonator | **14** | dark panel with scrolling glyph shapes | `321go_hd_detonator.vex` |
+
+**The mode numbers are the ones the PS4 binary branches on** (`ps4-omega-eu/billboards.md`: allowlist
+`{6, 13, 14, 21}`; 13 and 21 select Zone Battle, 14 the detonator, 6 `321Go_Zone.vex`), so the
+rule HD follows is Omega's, by mode id. Confidence 85 for "the mode picks a different file", 80 for the
+name per mode (the picture, the file shapes and Omega's table agree; HD's own code site was
+not read: the four names are only referenced by a name-to-hash registration loop at
+`0x003f1300`, entries in the registry at `+0x4a20...`, which is not a chooser).
+The Zone icon starts about 3.5 s (210 ticks) before the release and is complete about 10 frames before it
+(`zcd2`, release at video frame 1066 of 30 fps).
+
+**Not wired, and why.** `oag_race::Mode` has Zone but no Zone Battle or Detonator.
+Substituting `321Go_Zone.vex` for Zone was tried and **reverted**: loaded as a card, the panel
+draws blank white on both archive copies (`DATA00` 8.4 KB / bars, `DATA02` 2.6 KB /
+`cf_321_zone` + `321_go_64_zone2.gtf`; `DATA00` is mounted last by the game, which would make it
+the live copy, but the original's picture has light pieces on a dark panel that the `DATA00`
+copy's textures - `black_fadeout`, an 8x8 - cannot make). A wrong picture is not shipped in place of the known one. Open: which
+copy the game loads, and why ours draws that model empty. A Zone race therefore still shows `3 2 1 GO`.
+
+**Per title** (the rule is a single name table by mode id): **Omega** - ported in the binary's own code
+(`ps4-omega-eu/billboards.md`), checked, not wired (no PS4 capture path); **2048** - checked, differs: no manifest
+of the twenty-six names any of the three files (see the census above), so the rule has nothing to
+substitute there; **Pulse** - checked, differs: one gantry file, no chooser, and its gantry
+stays a placed model (the card route is measured on HD only).
+
 ## Wipeout 2048: eight files plus `fx350`, two reached by any of 26 manifests, a third countdown mechanism
 
 **Read on `data/extracted/vita/PCSF00007`** (the decrypted EU package: base,
@@ -1508,6 +1585,10 @@ required a PPSSPP breakpoint on `func_0x00140bd4` during a track load rested on
 the premise that the billboard system places the gantry, and it does not.
 
 ## Implemented on HD: the same mechanism, on a mount that is not flat
+
+> **Superseded for drawing, 2026-10-08:** HD no longer draws the placed model; slot 8 is a card
+> (see ["the gantry is a card"](#wipeout-hd-the-gantry-is-a-card-and-the-mode-picks-the-file-2026-10-08-hd-gantry)).
+> The measurement of the mount below still feeds the panel cull and Pulse's route.
 
 2026-09-13. The Pulse mechanism above generalises to HD with one extension and
 one genuine title difference, both measured rather than assumed. No Ghidra and

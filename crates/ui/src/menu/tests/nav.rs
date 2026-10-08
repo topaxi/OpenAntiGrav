@@ -2,7 +2,7 @@
 //! value step and refusal, drained with [`Menu::take_nav`].
 
 use super::*;
-use crate::menu::nav::Nav;
+use crate::menu::nav::{Dir, Nav};
 use crate::menu::pointer;
 
 fn navs(menu: &mut Menu, buttons: &[Button]) -> Vec<Nav> {
@@ -13,15 +13,24 @@ fn navs(menu: &mut Menu, buttons: &[Button]) -> Vec<Nav> {
 #[test]
 fn a_walk_through_the_menus_asks_for_the_cues_the_original_plays() {
     let mut menu = Menu::new(fixture());
-    assert_eq!(navs(&mut menu, &[Button::Down]), [Nav::UpDown]);
-    assert_eq!(navs(&mut menu, &[Button::Up]), [Nav::UpDown]);
+    assert_eq!(
+        navs(&mut menu, &[Button::Down]),
+        [Nav::Moved(Some(Dir::Down))]
+    );
+    assert_eq!(navs(&mut menu, &[Button::Up]), [Nav::Moved(Some(Dir::Up))]);
     assert_eq!(navs(&mut menu, &[Button::Cross]), [Nav::Accept], "OPTIONS");
     assert_eq!(menu.page().id, "options");
-    assert_eq!(navs(&mut menu, &[Button::Right]), [Nav::LeftRight]);
-    assert_eq!(navs(&mut menu, &[Button::Down]), [Nav::UpDown]);
+    assert_eq!(
+        navs(&mut menu, &[Button::Right]),
+        [Nav::Stepped(Some(Dir::Right))]
+    );
+    assert_eq!(
+        navs(&mut menu, &[Button::Down]),
+        [Nav::Moved(Some(Dir::Down))]
+    );
     assert_eq!(
         navs(&mut menu, &[Button::Cross]),
-        [Nav::LeftRight],
+        [Nav::Stepped(Some(Dir::Right))],
         "confirming a toggle flips it"
     );
     navs(&mut menu, &[Button::Down]);
@@ -70,12 +79,18 @@ fn hovering_sounds_once_per_row_and_a_click_on_a_submenu_accepts() {
         moved: true,
         ..Default::default()
     };
-    assert_eq!(pointer_nav(&mut menu, &over(1.0)), [Nav::UpDown]);
+    assert_eq!(
+        pointer_nav(&mut menu, &over(1.0)),
+        [Nav::Moved(Some(Dir::Down))]
+    );
     assert!(
         pointer_nav(&mut menu, &over(1.0)).is_empty(),
         "the same row again is not another move"
     );
-    assert_eq!(pointer_nav(&mut menu, &over(0.0)), [Nav::UpDown]);
+    assert_eq!(
+        pointer_nav(&mut menu, &over(0.0)),
+        [Nav::Moved(Some(Dir::Up))]
+    );
     let click = crate::pointer::Pointer {
         clicked: true,
         ..over(0.0)

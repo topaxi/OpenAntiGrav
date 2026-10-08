@@ -45,15 +45,15 @@ pub struct SoundBanks {
     pub weapons: &'static str,
     /// Where `shieldactive` is: the announcer, not an effect.
     pub speech: &'static str,
-    /// The bank the front end's navigation sounds are in (`ACCEPT`, `DECLINE`,
-    /// `UPDOWN`, `LEFTRIGHT`, `TELETYPE`), or [`None`] on a title whose menus
-    /// are not known to play any.
+    /// The front end's navigation sounds: their bank and the cue each event
+    /// plays, or [`None`] on a title whose menus are not known to play any.
     ///
-    /// Pulse reads it at boot into its first bank slot and every menu cue
-    /// goes through that slot (`FUN_0893aba4`); Pure carries the same six
-    /// names. HD, 2048 and Omega leave it `None` until their own triggers are
-    /// read, so a shared lookup cannot switch menu cues on there.
-    pub frontend: Option<&'static str>,
+    /// Pulse and Pure read the bank at boot into their first slot and every
+    /// menu cue goes through it (`FUN_0893aba4`). HD's is the first of its five
+    /// boot banks (`0x00301338`). 2048 and Omega leave it `None` until their
+    /// own triggers are read, so a shared lookup cannot switch menu cues on
+    /// there.
+    pub frontend: Option<FrontEndSounds>,
     /// Where a circuit's authored emitters find their banks: the shared ones
     /// and the directory the circuit's own bank sits in.
     ///
@@ -128,4 +128,87 @@ pub struct Crossfade {
     /// The infix a Zone race's table names carry (`xfship_ZONE_<team>.xfx`),
     /// or [`None`] where Zone reads the same tables as any race.
     pub zone_infix: Option<&'static str>,
+}
+
+/// The front end's navigation sounds: where they are and which cue each menu
+/// event plays.
+///
+/// The cue *names* are per title (Pulse's `UPDOWN`, HD's `navUp`), so they are
+/// data here, read off each executable's own play call sites, and no crate
+/// above this one branches on the title to choose.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrontEndSounds {
+    /// The archive entry of the bank, `Data\Sound\frontend.bnk`.
+    pub bank: &'static str,
+    /// The cue each event plays.
+    pub cues: MenuCues,
+}
+
+/// The cue name for each menu event, in the title's front-end bank.
+///
+/// Pulse plays one cue for any cursor move and one for any value step, so its
+/// four move fields repeat `UPDOWN`. HD plays a cue per direction for both
+/// kinds of event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MenuCues {
+    /// The cursor moved up.
+    pub up: &'static str,
+    /// The cursor moved down.
+    pub down: &'static str,
+    /// The cursor moved left.
+    pub left: &'static str,
+    /// The cursor moved right.
+    pub right: &'static str,
+    /// A row's value stepped left.
+    pub step_left: &'static str,
+    /// A row's value stepped right.
+    pub step_right: &'static str,
+    /// A confirm that went through.
+    pub accept: StyledCue,
+    /// A back, or a confirm that was refused.
+    pub decline: StyledCue,
+}
+
+/// A cue with a second spelling for the Fury style of the front end.
+///
+/// HD's executable asks `FrontEnd_IsFuryStyle` before each confirm and back
+/// and plays `accept_fury` or `accept`, `reject_fury` or `reject`. A title
+/// with one style repeats the name in both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StyledCue {
+    /// The cue in the title's ordinary style.
+    pub plain: &'static str,
+    /// The cue in the Fury style.
+    pub fury: &'static str,
+}
+
+impl StyledCue {
+    /// A cue that does not change with the style.
+    #[must_use]
+    pub const fn same(name: &'static str) -> Self {
+        Self {
+            plain: name,
+            fury: name,
+        }
+    }
+
+    /// The name for the style the front end is in.
+    #[must_use]
+    pub const fn name(self, fury: bool) -> &'static str {
+        if fury { self.fury } else { self.plain }
+    }
+}
+
+impl MenuCues {
+    /// Pulse's and Pure's: one cue for a cursor move, one for a value step.
+    pub const PULSE: Self = Self {
+        up: "UPDOWN",
+        down: "UPDOWN",
+        left: "UPDOWN",
+        right: "UPDOWN",
+        step_left: "LEFTRIGHT",
+        step_right: "LEFTRIGHT",
+        accept: StyledCue::same("ACCEPT"),
+        decline: StyledCue::same("DECLINE"),
+    };
 }

@@ -24,7 +24,8 @@ pub struct MenuSfx {
 }
 
 impl MenuSfx {
-    /// Reads [`Cue::FRONT_END`] out of the title's front-end bank. Never fails;
+    /// Reads [`Cue::FRONT_END`] out of the title's front-end bank, in the
+    /// Fury style when `fury` (HD's `accept_fury` and `reject_fury`). Never fails;
     /// a title without one, or a cue that will not decode, is a line in
     /// [`Self::report`] and silence.
     #[must_use]
@@ -32,9 +33,10 @@ impl MenuSfx {
         archives: &mut oag_assets::Archives,
         banks: &oag_title::SoundBanks,
         tick: oag_title::SequenceTick,
+        fury: bool,
     ) -> Self {
         Self {
-            banks: Banks::load_front_end(archives, banks, tick),
+            banks: Banks::load_front_end(archives, banks, tick, fury),
             rng: Rng::new(MENU_SEED),
         }
     }

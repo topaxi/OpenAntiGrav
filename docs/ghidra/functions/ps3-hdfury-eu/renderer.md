@@ -7508,3 +7508,22 @@ So the displayed sky is `texel * (byte / 255) ^ (1 / 2.2)`: the colour is a **li
 **Other titles (lineage).** Wipeout 2048 and Omega: **checked, differs in key** - an authored dome mesh with `Sky brightness`, no `Sky colour`; this is HD's `Scene_PrepareFrame` word and says nothing about them (**not checkable** without a Vita or PS4 capture of the dome's draw). The same live-texel method applies when one exists.
 
 **Confidences.** Vertex colour word = authored byte (live, four circuits): 95. Fragment program `tex * COL0`, no scale: 95. Face textures sRGB-decoded (gamma nibble 7): 95. Scene sky = `texel * (byte/255)^(1/2.2)`: 90 at 255 (two circuits, 62k and 64k pixels), 80 at 128 and 140 (one frame each, small patch and a dark sky). The race-start exposure explanation: 85. Names `Sky_DrawCube` (`0x005ecc28`) and `Sky_SetCubeFaces` (`0x005ec3e0`) are unchanged (65); the live draw read here confirms what they emit and raises neither.
+
+## Note 2026-10-08 (`hd-gantry`): ours reads about 1.6x brighter than the original, recorded and not chased
+
+Same circuit (Talon's Junction), same camera (the viewProj captured from the RPCS3 frame, fed to
+`oag-game --camera-pose ... --camera-fov 59.9971`), both as 1882 x 1058 PNGs, mean grey (`L`) over fixed boxes.
+Original: `data/scratch/hd-gantry/pl2/01.png` (RPCS3, render scale 100). Ours: `data/scratch/hd-gantry/ours/c1-300.png`
+(`--race`, tick 300, before the card route; the boxes hold no gantry draw that changed).
+
+| Box (x0,y0,x1,y1) | What is in it | Original | Ours | Ratio |
+| --- | --- | ---: | ---: | ---: |
+| 500,600,1400,1000 | road surface | 104.7 | 169.8 | 1.62 |
+| 500,100,1400,230 | gantry board and sky above the road | 48.5 | 86.2 | 1.78 |
+| 100,300,500,450 | left wall | 49.4 | 72.3 | 1.46 |
+
+Sky and lit surfaces are clipped white in ours where the original is not. One boot of the original, one render of ours:
+a lead, not a measurement. Candidate worth checking first: `fs_encode` in `crates/post/shaders/hd_bloom.wesl` ends on
+`pow(resolved, 1/2.2)`, which ADR-0026 names as a stand-in, while the original's resolve ends on `ADD_SAT` with the
+main surface A8R8G8B8 (the surface word `0x3148` decodes to colour format 8, not fp16). Every bloom halo is also larger
+for it. Its own lane.

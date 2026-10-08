@@ -27,6 +27,7 @@ mod eliminator;
 mod energy_bar_delay;
 mod field;
 mod hash;
+mod hd_effect_sprites;
 mod hd_sprite;
 mod headless;
 mod held_buttons;
@@ -272,6 +273,7 @@ fn setup(handling: Handling) -> Setup {
         zone_stages: None,
         countdown_voice: false,
         launch_hover: None,
+        weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.
         speedup_pads: Vec::new(),

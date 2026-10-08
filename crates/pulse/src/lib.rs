@@ -58,6 +58,7 @@ pub const TITLE: &Title = &Title {
     // The flare's own texture, a second literal in the same executable -
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.
@@ -104,6 +105,7 @@ pub const TITLE: &Title = &Title {
         colour_pool: true,
         flip_v: true,
         zone_shares_one_texture: false,
+        gantry_card: false,
         origin: oag_title::Origin::Measured,
     }),
 };
@@ -159,6 +161,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,
+    ship_preview_hull: None,
     // `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - `oag_game::endrace`'s
     // own long-standing constant, restated here now that a second title
     // needs this axis. See `oag_title::FrontEnd::endrace_entry`.

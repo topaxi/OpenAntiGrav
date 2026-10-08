@@ -116,6 +116,10 @@ pub enum Details {
         /// `Loyalty` block shows. `None` where the title keeps no such
         /// counter, and the block is then not drawn at all.
         loyalty: Option<u32>,
+        /// The team's models as Wipeout HD/Fury's hex column draws them,
+        /// one per `PI_TeamModel` in file order - see [`hd::hex`]. Empty
+        /// where the title draws no such grid.
+        models: Vec<hd::hex::ModelCell>,
     },
 }
 
@@ -150,8 +154,8 @@ impl Event {
     pub fn nav(self) -> oag_ui::menu::nav::Nav {
         use oag_ui::menu::nav::Nav;
         match self {
-            Self::Moved => Nav::UpDown,
-            Self::VariantChanged => Nav::LeftRight,
+            Self::Moved => Nav::Moved(None),
+            Self::VariantChanged => Nav::Stepped(None),
             Self::Confirmed => Nav::Accept,
             Self::Back => Nav::Decline,
         }
@@ -276,6 +280,12 @@ impl Picker {
             Some(Details::Ship { variants, .. }) => variants,
             _ => &[],
         }
+    }
+
+    /// Which of [`Self::variants`] is chosen.
+    #[must_use]
+    pub fn variant_index(&self) -> usize {
+        self.variant
     }
 
     /// The chosen livery, when the selected team offers any.

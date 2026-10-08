@@ -363,7 +363,27 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     ship_zone: r"Data\Sound\shiphd.bnk",
     weapons: r"Data\Sound\weapons.bnk",
     speech: r"Data\Sound\speech.bnk",
-    frontend: None,
+    // `frontend.bnk` is the first bank `0x00301338` loads. The names and the
+    // events that play them are `docs/ghidra/functions/ps3-hdfury-eu/menu-sounds.md`.
+    frontend: Some(oag_title::FrontEndSounds {
+        bank: r"Data\Sound\frontend.bnk",
+        cues: oag_title::MenuCues {
+            up: "navUp",
+            down: "navDown",
+            left: "navLeft",
+            right: "navRight",
+            step_left: "navLeft",
+            step_right: "navRight",
+            accept: oag_title::StyledCue {
+                plain: "accept",
+                fury: "accept_fury",
+            },
+            decline: oag_title::StyledCue {
+                plain: "reject",
+                fury: "reject_fury",
+            },
+        },
+    }),
     // The banks a circuit's nodes spell besides their own, each named by the
     // executable: the sound manager's constructor loads `generaltrack`,
     // `voppler` and `speech_PreRaceChatter` (label `radios`) for the whole

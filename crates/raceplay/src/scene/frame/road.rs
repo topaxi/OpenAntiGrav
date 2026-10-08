@@ -71,7 +71,14 @@ impl Scene {
                     .iter()
                     .map(|&left| left <= 0.0),
             );
-            weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
+            match race.sim.weapon_pad_glow {
+                oag_title::weapon_pad::WeaponPadGlow::Cycle(cycle) => {
+                    weapon_pads.glow_weapon_pads(queue, seconds, cycle, pads_ready);
+                }
+                oag_title::weapon_pad::WeaponPadGlow::Authored => {
+                    weapon_pads.tint_weapon_pads(queue, seconds, pads_ready, recoloured);
+                }
+            }
         }
     }
 }

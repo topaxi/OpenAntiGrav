@@ -55,6 +55,7 @@ pub const TITLE: &Title = &Title {
     exhaust: &oag_title::exhaust::Exhaust::Named(r"Data\Tex\engineFlare\Engine_noise.mip"),
     // The same sprite Pulse names, and found under the same name on Pure's
     // disc - see `oag_pulse`'s note for the literal it was read from.
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // No prompt glyph of this title's has been read; the disc's own draw unchanged.
     prompts: &oag_title::prompts::Prompts::UNREAD,
@@ -253,6 +254,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Pure ships neither `FE\forward.vex` nor `ship_FE.vex`; both screens
     // preview with the stills the entry's own `screen.xml` authors.
     preview_meshes: false,
+    ship_preview_hull: None,
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,
