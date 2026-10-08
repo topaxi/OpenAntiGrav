@@ -26,12 +26,19 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 - **The world does not settle** under the flyby, by choice (ticking it would move every hash):
   the craft sits at its placement pose, about two units low on `16_Track`. A faithful fix is a
   view-side settle of the draw pose, or moving the placement pose, both a decision.
-- **HD's flyby craft sits 1.84 lower on the original (2026-10-08, `hd-ride-height`)**: 2.16 above the
-  floor against our 4.00, from a lowered hover target (`entry+0x344` 2.25 against 4.125) that returns when
-  the race starts; the race's own ride height matches. Numbers and frames in
-  [hd-ride-height.md](../../docs/physics/hd-ride-height.md). Open: what lowers the target (unread), and then
-  the view-side settle for HD (draw the craft at the original's flyby height); not done, it would be a number
-  matched to one circuit.
+- ~~HD's flyby craft sits 1.84 lower on the original~~ **landed 2026-10-08 (`hd-flyby-hover`)**: the
+  original's hover target is `0.75 * min(5.5, entry+0x348)` with `+0x348` a `3.0x` clamp in the grid
+  state and a seconds timer from GO, so the craft sits low through the flyby **and the countdown** and
+  rises over 2.46 s after GO. Ported as HD `LaunchHover` title data: the spring reads the clamp, written
+  per tick from the countdown clock, and the placement height is the lowered spring's rest height, so the
+  held world at tick 0 is already low. **This changes the flyby's world-at-tick-0 design for HD only**: the
+  placement pose is 1.85 lower than Pulse-style placement, and HD's countdown pose and first 2.5 s of
+  racing physics differ from before (the craft rises under the released target). Evidence and the
+  ours-against-original table: [hd-ride-height.md](../../docs/physics/hd-ride-height.md), the read:
+  [hover-target.md](../../docs/ghidra/functions/ps3-hdfury-eu/hover-target.md). Open: which caller of
+  `Craft_SetState(1)` runs at GO (timing measured, caller unnamed); modes that skip the grid branch
+  (`0x000f2390`); a respawn's state 0 may re-lower a craft; rivals unmeasured; HD golden hashes that move
+  (none found in the affected gate). Pulse's craft update was not read for the same branch.
 - **The scenery does not animate under the flyby**: `Scene::render` takes its animation clock from
   `World::tick`, held at 0 for the 25 s. One line in `scene/frame.rs` (`race.sim.world.tick` ->
   `Race::motion_tick`, at the two places it is read), but the file is 1,000 lines of one function
@@ -60,6 +67,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 ## Next Steps
 
 1. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.
-2. Decide the settle: a view-side offset on the drawn craft for the flyby, or leave it.
+2. Decide Pulse's settle (HD's is landed as a lowered spring): read Pulse's `Ship_UpdateCraft` for the
+   grid-state hover branch, then measure whether its flyby craft sits low.
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load
    Zone or Eliminator race.

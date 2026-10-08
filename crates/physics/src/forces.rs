@@ -515,7 +515,12 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     //    below: the original builds `craft+0x2f0` once at the top of `Ship_UpdateCraft`
     //    from the previous frame's blend, and both consumers read that value. Recomputing
     //    it after the ramp would give the reposition a target the spring never saw.
-    let target_height = hover::target_height(handling, state.mag_lock_blend, state.slowdown_timer);
+    let target_height = hover::capped_target_height(
+        handling,
+        state.mag_lock_blend,
+        state.slowdown_timer,
+        state.hover_cap,
+    );
     let hover = hover::evaluate(state, handling, env, raycaster, target_height);
     for probe in &hover.probes {
         if probe.contact {

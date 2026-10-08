@@ -184,6 +184,9 @@ pub struct RaceDefaults {
     pub zone_announcer: Option<&'static ZoneAnnouncer>,
     /// Measured `ready`/`go` start-voice banks, or `None` (plays nothing): [`CountdownVoice`].
     pub countdown_voice: Option<&'static CountdownVoice>,
+    /// The hover target the craft holds on the grid and releases after the green light, or `None`
+    /// where the title was not measured to do it: [`crate::launch_hover::LaunchHover`].
+    pub launch_hover: Option<&'static crate::launch_hover::LaunchHover>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///

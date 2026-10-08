@@ -60,6 +60,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     countdown_voice: None,
+    launch_hover: None,
     // Unread on this title: `data.psarc` is not extracted in this tree, so
     // its own speed-class bank (if it has one) has not been listed.
     zone_class_announcer: None,

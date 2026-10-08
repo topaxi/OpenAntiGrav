@@ -252,8 +252,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // See `roster::resolve_team`.
     let team = roster::resolve_team(options.team.as_deref(), craft_title, &mut report);
 
-    // The player's own alternate hull file, resolved the same place `team`
-    // is and for the same reason. See `variant::resolve`.
+    // The player's own alternate hull file, resolved where `team` is: `variant::resolve`.
     let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
 
     let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
@@ -921,6 +920,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class_announcer,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
+            launch_hover: title.race.launch_hover,
             speedup_pads,
             weapon_pads,
             weapons,

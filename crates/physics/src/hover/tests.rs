@@ -686,6 +686,39 @@ fn the_hover_target_responds_to_the_magstrip_blend_and_the_slowdown_timer() {
     assert_eq!(target_height(&handling, 0.0, 0.0), 10.0 * k2);
 }
 
+/// A title's grid clamp lowers the target before the global scale and never raises it; `None`
+/// is the ordinary target to the bit.
+#[test]
+fn the_grid_clamp_lowers_the_pre_scale_target_and_none_changes_nothing() {
+    let handling = Handling {
+        antigrav: crate::params::Antigrav {
+            ride_height: 5.5,
+            ..crate::params::Antigrav::default()
+        },
+        ..Handling::ZERO
+    };
+
+    let k2 = TARGET_GLOBAL_SCALE;
+    assert_eq!(
+        capped_target_height(&handling, 0.0, 0.0, None),
+        target_height(&handling, 0.0, 0.0)
+    );
+    assert_eq!(
+        capped_target_height(&handling, 0.0, 0.0, Some(3.0)),
+        3.0 * k2
+    );
+    // A clamp above the race value is no clamp.
+    assert_eq!(
+        capped_target_height(&handling, 0.0, 0.0, Some(9.0)),
+        5.5 * k2
+    );
+    // The magstrip gain is applied before the clamp, as the original orders it.
+    assert_eq!(
+        capped_target_height(&handling, 1.0, 0.0, Some(3.0)),
+        3.0 * k2
+    );
+}
+
 /// `Handling::ZERO` has `ride_height = 0.0`, so the probe segment has zero
 /// length and cannot hit anything. That is the mechanism behind the
 /// crate-level "nothing accelerates" invariant, so it is pinned here too.
