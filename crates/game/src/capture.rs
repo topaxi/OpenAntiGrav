@@ -713,6 +713,7 @@ pub fn run(
                     &mut sprites,
                     &globals,
                     title,
+                    &tracks,
                     // `Default`-role, not `menu_font.unwrap_or(&font)`: this
                     // measures `FE_CONFIRM`'s own shrink-to-fit, and
                     // `NavigationLegend::draw` routes that text through the

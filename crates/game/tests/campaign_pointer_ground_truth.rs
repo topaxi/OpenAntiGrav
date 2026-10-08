@@ -57,6 +57,7 @@ fn load_on(
         &base,
         &[],
         title,
+        &[],
     )
     .expect("the campaign loads");
     Loaded { campaign }

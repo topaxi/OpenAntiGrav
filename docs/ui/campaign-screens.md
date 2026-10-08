@@ -4065,12 +4065,19 @@ hold 24 `Tournament` cells in the archive read, none walked).
    in mixed case. Needs the flyer's face-on pose (the open "swing" in the
    `hd-flyer` thread). Cell-to-cell d-pad moves land on the same cells on both
    sides (`sheets/cell-nav.png`). Omega: same screen, same gap.
+   **Fixed 2026-10-08 (hd-cell-select): the card, the hex field, the four icons,
+   the brackets, the next-grid logo and the capitalised values draw** - see
+   "`Cell Selection`'s card, field, icons and brackets" below.
 3. **Frame chrome on the campaign pages.** The original carries the
    `SCREEN TITLE` caption, a bold title with the arrow, a rule above the page
    and a `NAVIGATION` line (d-pad glyphs) in the footer on every page. Ours
    has no top rule on Campaign Select and Grid, no caption, no NAVIGATION
    entry, and a title at another size and offset. Ours shows keyboard glyphs
    (auto style on a keyboard-driven run, not a gap).
+   **Fixed 2026-10-08 (hd-cell-select)**: the rules and the title's bullet were
+   being drawn and then lost (a shared quad buffer, below), the title is now the
+   original's 150 grey, the `SCREEN TITLE` caption and the `NAVIGATION` entry
+   draw. Not fixed: the title's size and offset against the 0.904 layout scale.
 4. **No page transitions.** On entering Campaign Select the original scrambles
    the title, slides the two flyers in and flies the particle scene through
    (`trans-campsel-original.png`); ours cuts. `--menu-anim-phase 0.3` draws a
@@ -4097,3 +4104,134 @@ hold 24 `Tournament` cells in the archive read, none walked).
 Not a gap (checked): what looked like an `ELIMINATOR` against `NitroBattle`
 mismatch on The Amphiseum was two different cells (`grid8_3_2` Elimination,
 `grid8_2_1` NitroBattle) reached by dropped presses, not a label bug.
+
+### `Cell Selection`'s card, field, icons and brackets (2026-10-08, hd-cell-select)
+
+Measured against `data/scratch/hd-fe-look/ref/campaign/088-cell-settled1.png`
+(RPCS3, the first cell of `09_blitzed`, a fresh zero-medal profile) and drawn
+with `--menu-page cell-select` on the same grid; sheets under
+`data/scratch/hd-cell-select/` (`before.png`, `a5.png`, `b3.png`).
+
+**The red card is the grid's flyer seen from behind.** `Cell Selection` authors
+no `<Flyer>` of its own (the top-level `FlyerModel` is shared), and
+`CampaignStage::flyer_shows` returned nothing for the screen - that is why no
+card drew. The picture is `Data\FE\Flyers\<grid>\flyer_Back.vex` (`bgplane`,
+`stripes`, the wordmark layer; textures `flyer_back_colour.gtf`, `scroll_col.gtf`,
+`<grid>_elements.gtf`), through the same path as the front card
+(`oag_game::flyer`, `Side::Back`). Its camera aspect is 1.5389 like the front's
+(`+0x20` = `0x4a2c`, the Fury window).
+
+- **Rectangle, measured; pose derived.** The frame puts the card on authored
+  columns 165 to 1756 and rows 139 to 937 (centred, 1.994 wide for its height; the
+  page's rule `GridTopBar` inside it spans 190 to 1690). Reading it through the
+  frame's own mapping (`px = 157 + 0.94 * x`, from `GridTopBar`'s two ends) rather
+  than guessing the layout scale. A card `CARD_HEIGHT` tall at `FOV_Y` fills 798 of
+  1080 rows at 82.5 units, face-on: `CELL_POSE`, no fitted number. The width needs
+  `BACK_STRETCH` 1.2965 (= 1.994 / 1.5389), **chosen, not measured**: the stretch
+  scales the card and its picture together. `BACK_WINDOW` 0.321 is the Fury
+  window, chosen.
+- **The outline is the front's, mirrored.** `00_flyer.vex`'s `cardShape` (chamfer
+  top-left, notches) cut the back at its chamfer top-right with the notches on the
+  other edge, as the frame shows; no reflection under it.
+- **Fury's cards are drawn at twice their texel colour: `FURY_GAIN` 2.0,
+  measured, mechanism unread.** The back panel's texel is 63 and the frame shows
+  130; the stripe texel 197 shows 255; `Grid Selection`'s front card's dominant red
+  is 255 where the undoubled texel drew 198 (so this also brightens Fury's Grid
+  cards, which the flyer thread had called "duller reds"). Done through the vertex
+  colour with `vertex_colour_is_light` off, no shader change. **Not on the base
+  campaign's eight cards (`BASE_GAIN` 1.0) nor on `Campaign Selection`'s two
+  (`CAMPAIGN_GAIN` 1.0)**: doubled, `01_uplift`'s cyan and white and the HD
+  campaign card clamp to flat colour where the earlier fit matched the undoubled
+  texels, and no RPCS3 frame of a base `Cell Selection` exists to measure its back
+  against. Which materials carry the factor is unread (`basicnonalpha`'s fragment
+  block multiplies by a patched `float1`, slot `0x2c`; the value was not read).
+- Not drawn: the wordmark's glow and bloom (the thread's open item), the
+  `blitzed` sliver above the wordmark's ascenders (a layer clipped by the window).
+
+**The hex field is 32 black hexes.** `bBg_x_y` (black `Hexagon_HD.mip`, colour
+`0xff000000`) and `Bg_x_y` (`Hexagon_HD_OUTLINE.mip`, `CM_HEX_Bg`) draw on every
+slot; `Outline_`, `Lock_` and `Medal_` stay on the grid's own cells. The pointer
+targets stay occupied-only.
+
+**The four emblems.** `Event`/`Track`/`Speed Class`/`Weapons Emblem` are `<Image>`s
+with a 96 by 96 rect and no `src`; `oag_ui::screen::Screen::slots` keeps such an
+image (`Slot`, data only). The disc ships a white `*_bw.gtf` set named as the
+screen's own values: `singlerace`, `timetrial`, `speedlap`, `zone`, `tournament`,
+`head2head`, `eliminator`, `detonator`; `venom`, `flash`, `rapier`, `phantom`;
+`weaponson`, `weaponsoff` (`Data\FE\Images\<stem>_bw.gtf`), and each circuit's
+`FE\TrackSelectEmblem_bw.gtf`. Four of four icons on the frame (single race, the
+circuit ring, one-star `VC`, the `X`) are the file their name says, tinted
+`150,150,150`. **Mapping by file name, not a table the disc authors, confidence
+70**; a mode with no such file (`NitroBattle`, `Custom Grid`, `AI Race`) draws no
+picture. `oag_ui_screens::campaign::hd::cell_emblems`; the circuit id to folder
+comes from the catalogue (`oag_game::campaign::load` takes `tracks`).
+
+**The brackets.** `<Bracket corner="true">` is now kept as `Screen::brackets`
+(data only; `picker::hd` still reads its own). Each rectangle is four marks of
+`Data\FE\Images\corner2.gtf` (a 16 by 16 rounded top-left corner,
+`docs/formats/gtf.md`), mirrored to the other three corners, flush with the edges,
+in the bracket's `Colour`: two rectangles that touch (x 750 to 850 and 850 to 1250)
+make the frame's "Y" joints. **Measured on one frame, confidence 65.**
+`GridTopBar`, the rule across the card, is a colour-less `Slot` that the frame
+draws solid `150,150,150` (confidence 70), and `flyerbarcode.gtf`, authored on the
+screen and until now on no sheet, is added to the campaign's sheet and draws.
+
+**The unlock box.** `flyerlogo` carries the next grid's `Logo.gtf` and `NextPoints`
+the points still needed (`RequiredPoints` less earned), exactly as `Grid Selection`
+draws them, and neither draws once the figure is met or on the last grid.
+
+**Text.** The screen authors every label and value `TitleColor` (`0xFF646464`); the
+frame draws headings at `150,150,150` and values at 255 (`cell_text`, **measured on
+one frame, confidence 60**, by widget name) - **on Fury's red cards only**
+(`CellArt::fury`): the base campaign's cards are white, white values would not read,
+and no base frame exists, so they keep the authored colour. `SINGLE RACE`/`VENOM`/the
+counter are in capitals where the string table holds `Single Race`/`Venom` (every
+campaign, a case rule), and `GridNum`'s `font="Title"` draws in the title face. `CAMPAIGN RECORD` reads
+`NONE` with no saved record (the frame does).
+
+**Frame chrome (item 3).**
+
+- **A real bug, in the split render path.** `flyer::render_list` calls
+  `Renderer::render_with` twice into one encoder; `render_with` fills the quad
+  buffer with `queue.write_buffer`, which lands before either pass, so both passes
+  drew the *second* call's quads and the first's rules, bullet and `FuryBackdrop`
+  neighbours vanished. That is why `Grid Selection` and `Campaign Selection` had no
+  top rule or title bullet (item 3's "no top rule"). `Renderer::renew_quad_buffer`
+  between the calls fixes it for every card page.
+- `oag_hd::frontend::MENU_SKIN.title` was `TitleColor` (`100,100,100`); the frame's
+  titles on `Main Menu`, `Grid Selection` and `Cell Selection` are `150,150,150`,
+  `HD_Grey` as the title widgets author it (the two diverge in the skin the front end
+  loads). Omega's `MENU_SKIN` shares HD's front end and was not changed: checked,
+  applies, not wired (no PS4 capture).
+- The root authors `<MiniText idstring="FE_SCREEN_TITLE">` at (160, 48): the string
+  itself, `SCREEN TITLE`, a placeholder the shipped game draws on every page.
+  `NavigationLegend` carries it and draws it through `picker::hd::draw_labels`.
+- `ControlTextNavigationButton` (the four d-pad glyphs) and `ControlTextNavigation`
+  (`FE_NAVIGATION`, x 260) are siblings of the footer's controller, outside the
+  prompts the legend read; they are now a `PromptKind::Navigation` in the legend.
+
+**What was looked at after the change, and not only on Fury** (stills,
+`data/scratch/hd-cell-select/`): the base campaign's `cell-select-hd` and
+`grid-select-hd` (`d_base.png`, `e_both.png`), Omega's `cell-select` and
+`grid-select` (`checks.png`, `om-*.png`), HD's `Main Menu` and Ship Select
+(`checks.png`). **Walked live** (windowed, Xvfb, lvp, keyboard, `data/scratch/hd-cell-select/live/`):
+Main Menu, Campaign Select, Grid and Cell Selection on Fury, and one Down press
+moving the cursor to the first `Elimination` cell, whose card, `ELIMINATOR` icon,
+`THE AMPHISEUM` emblem, `INFINITE` laps and `TARGET 200` line draw
+(`live/p12.png`). **Not walked live**: a pointer hover or click on the new page
+(the hex targets are unchanged and covered by `campaign_pointer_ground_truth`).
+
+**Omega** (census 2026-10-08, `data/extracted/ps4`): ships its own flyers
+(`000_flyer`, `0000_flyer`, `.gnf`/PS4 `.rcsmodel`), a `cellmode_definition.xml` in
+`data07`/`data09` and per-circuit `TrackSelectEmblem_BW.gnf`; no `corner2` and no
+`*_bw` mode icons under those names. Checked, applies in part, not wired (`load_omega`
+draws no flyer and no emblem, and it has no `corner2`); the quad-buffer fix and the
+legend's `SCREEN TITLE` caption and `NAVIGATION` entry now draw on its pages too,
+because its root skin authors the same widgets - **unmeasured for Omega** (no PS4
+emulator), so flagged for the lead rather than scoped away.
+
+**Still open** (item 4, page transitions): the screen authors per-widget
+`transition`/`delay` keys (`bBg_0_0` 0.4 s, the emblems 0.05 to 0.275 s, the
+right column 0.35 to 0.625 s, `EnableTransition` 0.3/0.5), not curves, and the
+page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems; nothing here
+plays them. A tween measured off `trans-campsel-original.png` remains the next step.

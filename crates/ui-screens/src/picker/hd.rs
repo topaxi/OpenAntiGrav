@@ -388,7 +388,7 @@ pub(super) fn body(
 }
 
 /// The `MiniText` headings: a square bullet and the text beside it.
-fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
+pub(crate) fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
     for label in labels {
         let color = argb_to_rgba(label.color);
         out.push(Draw::Fill {

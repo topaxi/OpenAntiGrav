@@ -28,6 +28,7 @@ mod color;
 mod fade;
 mod movie;
 mod read;
+mod rects;
 #[cfg(test)]
 use movie::has_movie_extension;
 mod block;
@@ -42,6 +43,7 @@ pub use color::{argb_to_rgba, parse_argb};
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
 pub use mode3d::{Mode3dModel, Model};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
+pub use rects::{Bracket, Slot};
 pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
@@ -310,6 +312,15 @@ pub struct Screen {
     pub path: String,
     /// Solid-colour `Image` widgets, each with its own rect.
     pub fills: Vec<Fill>,
+    /// `Image` widgets that author a rect and neither a `src` nor a colour: a
+    /// place the native code puts a picture or a bar in. Collected so a
+    /// screen that knows what goes there can find it; nothing draws one on
+    /// its own. HD's `Cell Selection` authors five (`GridTopBar` and the four
+    /// `*Emblem`s).
+    pub slots: Vec<Slot>,
+    /// `<Bracket>` widgets: the corner marks a panel is framed with. Data only
+    /// - see [`Bracket`].
+    pub brackets: Vec<Bracket>,
     /// `Image` widgets that name a texture, in document order.
     pub images: Vec<Image>,
     /// `Movie` widgets in document order.
@@ -600,6 +611,8 @@ impl Screens {
                         if let Some(mut fill) = self.fill_from_node(child, at) {
                             fill.transition = transition;
                             screen.fills.push(fill);
+                        } else if let Some(slot) = self.slot_from_node(child, inner) {
+                            screen.slots.push(slot);
                         }
                     }
                 }
@@ -620,6 +633,11 @@ impl Screens {
                         transition,
                         fallback_images,
                     );
+                }
+            }
+            "bracket" => {
+                if let Some(bracket) = self.bracket_from_node(child, inner) {
+                    screen.brackets.push(bracket);
                 }
             }
             "screenclear" => {

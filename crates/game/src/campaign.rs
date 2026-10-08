@@ -15,6 +15,7 @@ use oag_ui_screens::picker::FaceScales;
 
 use oag_hud::sprite::Sheet;
 
+mod emblems;
 pub mod hit;
 pub mod launch;
 
@@ -89,6 +90,11 @@ pub struct Campaign {
     /// name="FlyerModel">`; a card that will not decode is left out of it
     /// and logged, which draws nothing for that grid.
     pub flyers: Option<crate::flyer::Flyers>,
+    /// **HD/Fury only.** A circuit's white emblem for `Cell Selection`, keyed
+    /// by the lowercased circuit id (`17_track`) and holding the `src` the
+    /// sheet carries it under - see `oag_ui_screens::campaign::hd::cell_emblems`.
+    /// Empty on every other title.
+    pub circuit_emblems: std::collections::HashMap<String, String>,
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]: both live on the front-end
@@ -213,6 +219,11 @@ pub fn draws_hd_campaign(title: &oag_title::Title) -> bool {
 /// Propagates a missing or unreadable screen entry, a screen definition
 /// missing `Grid Selection`/`Cell Selection`, or a `Definition.xml` that
 /// yields no grid at all.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact the load reads: the archives, the strings, the face scales, \
+              the grid, the base sheet, the globals, the title and the circuits"
+)]
 pub fn load(
     archives: &mut oag_assets::Archives,
     strings: &StringTable,
@@ -230,6 +241,9 @@ pub fn load(
     // instead of its authored translucent teal.
     fallback_globals: &[(&str, &str)],
     title: &'static oag_title::Title,
+    // The circuits' own folders, for `Cell Selection`'s emblem per track. HD
+    // only; the others read none.
+    tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     match title.campaign.dialect {
         oag_title::CampaignDialect::Hd => {
@@ -241,6 +255,7 @@ pub fn load(
                 grid,
                 base,
                 fallback_globals,
+                tracks,
             );
         }
         oag_title::CampaignDialect::Omega => {
@@ -307,6 +322,7 @@ pub fn load(
         selection_layout: None,
         grid_layout_fury: None,
         flyers: None,
+        circuit_emblems: std::collections::HashMap::new(),
     })
 }
 
@@ -358,6 +374,11 @@ fn same_archive(label: &str, wanted: &str) -> bool {
 /// expansion of the screen XML - it is plain UTF-8 on this title, unlike
 /// Pulse's dictionary-shortened copy. See `oag_ui_screens::campaign::hd`'s own
 /// module doc for what the two screens draw once resolved this way.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "each is a separate fact the load reads: the archives, the strings, the face scales, \
+              the grid, the base sheet, the globals, the title and the circuits"
+)]
 fn load_hd(
     title: &oag_title::Title,
     archives: &mut oag_assets::Archives,
@@ -366,6 +387,7 @@ fn load_hd(
     grid: [f32; 2],
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
+    tracks: &[oag_raceplay::catalogue::Track],
 ) -> Result<Campaign> {
     // `DATA06`'s copy, not `oag_assets::Archives::read_name`'s own
     // precedence (which lands on `DATA02`'s) - **switched 2026-09-27**, see
@@ -428,16 +450,33 @@ fn load_hd(
     // Every card: the base campaign's eight, Fury's eight and the two
     // `Campaign Selection` cards, each with the window of its camera's image
     // it shows.
+    let is_base = |index: usize| oag_hd::campaign::HD_GRID_RANGE.contains(&index);
     let grid_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
-        let window = if oag_hd::campaign::HD_GRID_RANGE.contains(&index) {
-            crate::flyer::HD_WINDOW
+        let (window, gain) = if is_base(index) {
+            (crate::flyer::HD_WINDOW, crate::flyer::BASE_GAIN)
         } else {
-            crate::flyer::FURY_WINDOW
+            (crate::flyer::FURY_WINDOW, crate::flyer::FURY_GAIN)
         };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Front,
             window,
             stretch: 1.0,
+            gain,
+        })
+    });
+    let back_cards = grids.iter().enumerate().filter_map(|(index, grid)| {
+        let gain = if is_base(index) {
+            crate::flyer::BASE_GAIN
+        } else {
+            crate::flyer::FURY_GAIN
+        };
+        Some(crate::flyer::CardSpec {
+            flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Back,
+            window: crate::flyer::BACK_WINDOW,
+            stretch: crate::flyer::BACK_STRETCH,
+            gain,
         })
     });
     let campaign_cards = [
@@ -446,12 +485,15 @@ fn load_hd(
     ]
     .map(|name| crate::flyer::CardSpec {
         flyer: name.to_string(),
+        side: crate::flyer::Side::Front,
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
+        gain: crate::flyer::CAMPAIGN_GAIN,
     });
     // The two `Campaign Selection` cards exist only where that screen does.
     let campaign_cards = selection_layout.is_some().then_some(campaign_cards);
     let cards: Vec<crate::flyer::CardSpec> = grid_cards
+        .chain(back_cards)
         .chain(campaign_cards.into_iter().flatten())
         .collect();
     let widgets = oag_ui_screens::campaign::flyer::read(&xml, &screens);
@@ -512,6 +554,8 @@ fn load_hd(
             Err(error) => log::warn!("{entry}: {error:#} - its unlock-box logo draws nothing"),
         }
     }
+    let circuit_emblems = emblems::circuit_emblems(tracks);
+    emblems::push_blobs(archives, &grids, &circuit_emblems, &mut blobs);
     let mut report = Vec::new();
     let sprites = base.extended(&blobs, &mut report);
     oag_raceplay::loader_log::lines(report.iter().map(|line| format!("campaign sprites {line}")));
@@ -530,6 +574,7 @@ fn load_hd(
         selection_layout,
         grid_layout_fury,
         flyers,
+        circuit_emblems,
     })
 }
 
@@ -784,6 +829,7 @@ fn load_omega(
         selection_layout: None,
         grid_layout_fury: None,
         flyers: None,
+        circuit_emblems: std::collections::HashMap::new(),
     })
 }
 

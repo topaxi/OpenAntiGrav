@@ -149,8 +149,13 @@ use super::pointer::{Target, What};
 use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 
 #[cfg(test)]
+mod cell_field_tests;
+#[cfg(test)]
 mod tests;
 
+pub mod cell_brackets;
+pub mod cell_emblems;
+mod cell_text;
 mod medal;
 mod unlock;
 use unlock::{POINTS_GROUP, UnlockKind, unlock_box};
@@ -325,6 +330,21 @@ fn event_counter(index: usize, total: usize) -> String {
     format!("Event {:02}/{:02}", index + 1, total)
 }
 
+/// What `Cell Selection` draws that its screen file and the model do not
+/// carry: the next grid and the circuits' emblems.
+#[derive(Debug, Clone, Copy)]
+pub struct CellArt<'a> {
+    /// The next grid's `FlyerName`, whose logo the unlock box shows.
+    pub next_flyer: Option<&'a str>,
+    /// The grid is one of Fury's, whose card is red: the text colours
+    /// [`cell_text`] applies were measured on it, and the base campaign's white
+    /// cards keep the authored ones (white values would not read on them).
+    pub fury: bool,
+    /// A circuit's white emblem by its lowercased id, as the `src` the sheet
+    /// holds it under.
+    pub track_emblems: &'a std::collections::HashMap<String, String>,
+}
+
 /// `Cell Selection`'s draw list: the same 32-position staggered hex grid
 /// Pulse's own `Cell Selection` is, plus HD's wider detail column and
 /// difficulty toggle - see the module doc.
@@ -352,6 +372,7 @@ pub fn hd_cell_draw_list(
     grid_index: usize,
     grid_count: usize,
     grid_summary: &GridSummary,
+    art: &CellArt,
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
@@ -379,6 +400,16 @@ pub fn hd_cell_draw_list(
 
     let screen = &layout.screen;
     let mut out = Vec::new();
+    // The box under the hex field, as `Grid Selection` draws it for an
+    // unlocked tier: how many points the tier still needs to open the next
+    // grid, over the next grid's logo. Nothing once the tier's own figure
+    // is met or when there is no next grid.
+    out.extend(cell_brackets::draws(&screen.brackets, sprites));
+    out.extend(cell_emblems::rule(&screen.slots));
+    let remaining = grid_summary
+        .required_points
+        .saturating_sub(grid_summary.points_earned);
+    let unlock_logo = art.next_flyer.filter(|_| remaining > 0);
     let occupied: Vec<(u32, u32)> = model.cells().iter().filter_map(Cell::grid_coords).collect();
     let selected_coords = model.selected().and_then(Cell::grid_coords);
     for fill in &screen.fills {
@@ -386,9 +417,10 @@ pub fn hd_cell_draw_list(
     }
     for image in &screen.images {
         if let Some(name) = image.name.as_deref() {
-            if let Some((x, y)) = hex_slot_xy(name, "bBg_")
-                .or_else(|| hex_slot_xy(name, "Bg_"))
-                .or_else(|| hex_slot_xy(name, "Outline_"))
+            // `bBg_x_y` and `Bg_x_y` draw on all 32 slots, the empty ones too: the
+            // original's field is a black hex honeycomb with the grid's own
+            // hexes lit on it (RPCS3, `Cell Selection` of `09_blitzed`).
+            if let Some((x, y)) = hex_slot_xy(name, "Outline_")
                 .or_else(|| hex_slot_xy(name, "Lock_"))
                 .or_else(|| hex_slot_xy(name, "Medal_"))
                 && !occupied.contains(&(x, y))
@@ -416,9 +448,18 @@ pub fn hd_cell_draw_list(
             {
                 continue;
             }
-            // Same per-grid-identical path as `hd_grid_draw_list`'s own
-            // `flyerlogo` skip - see the module doc.
+            // `flyerlogo` authors `01_uplift\Logo.gtf`; the box names the next grid's
+            // - the same rule `hd_grid_draw_list` draws it by.
             if name == "flyerlogo" {
+                let Some(next) = unlock_logo else { continue };
+                let mut logo = image.clone();
+                logo.src = super::flyer::logo_entry(next);
+                if let Some(placed) = sprites(&logo.src) {
+                    out.push(image_draw(&logo, placed));
+                }
+                continue;
+            }
+            if name == "NextPoints Arrow" && unlock_logo.is_none() {
                 continue;
             }
         }
@@ -479,6 +520,12 @@ pub fn hd_cell_draw_list(
     // argues for hiding it" reasoning, not a fourth frame. Kept as a named
     // `bool` (unlike `Weapons`'s own single match arm) since this one gates
     // five separate sites below.
+    out.extend(cell_emblems::draws(
+        &screen.slots,
+        cell,
+        art.track_emblems,
+        sprites,
+    ));
     let targets_visible = true;
     let targets = cell.targets_for_difficulty(model.difficulty());
 
@@ -535,10 +582,11 @@ pub fn hd_cell_draw_list(
             // placeholder on screen. Also unmeasured: whether the widget is
             // gated on the grid actually being short of that many points,
             // which this build shows unconditionally.
-            "NextPoints" => text
-                .string
-                .as_deref()
-                .map(|s| s.replacen("%d", &grid_summary.required_points.to_string(), 1)),
+            "NextPoints" => unlock_logo.and_then(|_| {
+                text.string
+                    .as_deref()
+                    .map(|s| s.replacen("%d", &remaining.to_string(), 1))
+            }),
             // Omega's own `Cell Selection` authors a `RecordsButton` (`FE_RECORDS`,
             // glyph `RecordsButtonIcon`) at exactly `DifficultyButton`'s `x=944
             // y=994`, so the two cannot both be visible. This build models the
@@ -551,7 +599,10 @@ pub fn hd_cell_draw_list(
             // `Cell_SavedRecord` - no saved record kept by this build, the
             // same absence `crate::campaign::draw::cell_draw_list` leaves
             // `Line5`/`Line8` in. See the module doc.
-            "Record" => None,
+            "Record" => Some(model.selected_record().map_or_else(
+                || strings.get_or_id("MSC_NONE").to_string(),
+                hd_format_centiseconds,
+            )),
             "Points" => Some(format!(
                 "{}/{}",
                 model.selected_medal().map_or(0, |m| m.points()),
@@ -568,7 +619,7 @@ pub fn hd_cell_draw_list(
             _ => text.string.clone(),
         };
         let Some(content) = content else { continue };
-        out.push(text_draw(text, &content, layout));
+        out.push(cell_text::draw(text, &content, layout, art.fury));
     }
     for image in &screen.images {
         let Some(name) = image.name.as_deref() else {

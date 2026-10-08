@@ -111,18 +111,23 @@ fn every_card_of_both_campaigns_decodes_and_every_grid_has_a_logo() {
         .iter()
         .map(|name| oag_game::flyer::CardSpec {
             flyer: name.clone(),
+            side: oag_game::flyer::Side::Front,
             window: if HD_CARDS.contains(&name.as_str()) {
                 oag_game::flyer::HD_WINDOW
             } else {
                 oag_game::flyer::FURY_WINDOW
             },
             stretch: 1.0,
+            gain: oag_game::flyer::FURY_GAIN,
         })
         .collect();
     let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);
     assert!(flyers.report.is_empty(), "{:?}", flyers.report);
     for name in &names {
-        assert!(flyers.has(name), "{name} did not decode");
+        assert!(
+            flyers.has(&oag_game::flyer::Flyers::grid_show(name)),
+            "{name} did not decode"
+        );
         let [x, y, width, height] = flyers
             .card_rect(
                 &oag_game::flyer::Flyers::grid_show(name),
@@ -199,8 +204,10 @@ fn campaign_selections_cards_land_where_rpcs3_shows_them() {
         [flyer::FURY_CAMPAIGN_FLYER, flyer::HD_CAMPAIGN_FLYER]
             .map(|name| oag_game::flyer::CardSpec {
                 flyer: name.to_string(),
+                side: oag_game::flyer::Side::Front,
                 window: oag_game::flyer::FURY_WINDOW,
                 stretch: oag_game::flyer::CAMPAIGN_STRETCH,
+                gain: oag_game::flyer::CAMPAIGN_GAIN,
             })
             .to_vec();
     let flyers = oag_game::flyer::Flyers::load(&mut archives, widgets, &cards);
@@ -280,4 +287,44 @@ fn a_base_card_is_flat_and_a_fury_card_is_not() {
     };
     assert!(depth(&mut archives, "01_uplift") < 10.0);
     assert!(depth(&mut archives, "09_Blitzed") > 20.0);
+}
+
+/// `Cell Selection` draws the back of the grid's flyer face-on, on the
+/// rectangle RPCS3's settled frame of `09_blitzed` shows (authored columns 165
+/// to 1756, rows 139 to 937 of the 1920 by 1080 grid). Every grid's back
+/// decodes and stands there.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn every_grids_back_card_stands_on_the_measured_cell_selection_rectangle() {
+    let Some(image) = image() else { return };
+    let mut archives = archives(&image);
+    let xml = screen_xml(&mut archives);
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let widget = flyer::read(&xml, &screens)
+        .into_iter()
+        .find(|w| w.name == "FlyerModel")
+        .expect("the grid widget");
+    let names: Vec<&str> = HD_CARDS.iter().chain(&FURY_CARDS).copied().collect();
+    let cards: Vec<oag_game::flyer::CardSpec> = names
+        .iter()
+        .map(|name| oag_game::flyer::CardSpec {
+            flyer: (*name).to_string(),
+            side: oag_game::flyer::Side::Back,
+            window: oag_game::flyer::BACK_WINDOW,
+            stretch: oag_game::flyer::BACK_STRETCH,
+            gain: oag_game::flyer::FURY_GAIN,
+        })
+        .collect();
+    let flyers = oag_game::flyer::Flyers::load(&mut archives, vec![widget], &cards);
+    assert!(flyers.report.is_empty(), "{:?}", flyers.report);
+    for name in names {
+        let show = oag_game::flyer::Flyers::cell_show(name);
+        assert!(flyers.has(&show), "{name}'s back did not decode");
+        let rect = flyers
+            .card_rect(&show, oag_display::space::Space::HD)
+            .unwrap_or_else(|| panic!("{name} has no rectangle"));
+        for (got, want) in rect.iter().zip([165.0, 139.0, 1591.0, 798.0]) {
+            assert!((got - want).abs() < 12.0, "{name}: {rect:?}");
+        }
+    }
 }

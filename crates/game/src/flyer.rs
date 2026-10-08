@@ -36,7 +36,7 @@
 //! degree turn, which no settled frame shows) and the native code that settles
 //! them is unread.
 //!
-//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex`, the elements
+//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex` (which `Cell Selection` draws face-on, [`CELL_POSE`], with no flip), the elements
 //! animating, and the light: Fury's cards are lit by `simpletexture*`
 //! programs whose light direction and colours (`0x02df31e5`, `0x2dba643d`,
 //! `0x81db67ea`) are written by code nobody has found, so every card is drawn
@@ -105,6 +105,22 @@ pub const GRID_POSE: Pose = Pose {
     offset: [22.0, 0.0, -111.1],
 };
 
+/// `Cell Selection`'s card: the grid's flyer seen from behind, face-on, filling
+/// the screen's frame.
+///
+/// **Measured rectangle, derived pose.** The settled RPCS3 frame puts the card
+/// at authored columns 165 to 1756 and rows 139 to 937 of the 1920 by 1080 grid
+/// (the `GridTopBar` rule inside it spans 190 to 1690 and the frame's own
+/// `Bracket` on `Campaign Selection` 160 to 1755, which brackets the same
+/// area) - centred on the screen, 1.994 wide for its height. A card
+/// [`CARD_HEIGHT`] tall at [`FOV_Y`] fills 798 of the grid's 1080 rows at a
+/// distance of `33.3 / (tan 0.5 * 798 / 1080)` = 82.5 units, so the pose is
+/// straight ahead at that distance: nothing in it is fitted by eye.
+pub const CELL_POSE: Pose = Pose {
+    yaw: 0.0,
+    offset: [0.0, 0.0, -82.5],
+};
+
 /// The tangent of half the vertical field of view of the camera's image the
 /// base campaign's cards show - how much of what the flyer's camera sees fits
 /// on the card. **Chosen, not measured**: fitted on four base frames (0.346,
@@ -123,6 +139,12 @@ pub const HD_WINDOW: f32 = 0.346;
 /// the same proportionality would put at 0.236), so it is not what sets them.
 pub const FURY_WINDOW: f32 = 0.321;
 
+/// The window of a back card's camera image the card shows, and how much wider
+/// than its camera's aspect it is drawn. **Chosen, not measured** (see the
+/// `Cell Selection` section of `docs/ui/campaign-screens.md`).
+pub const BACK_WINDOW: f32 = 0.321;
+pub const BACK_STRETCH: f32 = 1.2965;
+
 /// How much wider than its camera's aspect the two `Campaign Selection`
 /// cards are drawn: **chosen, not measured**. On RPCS3's frames they stand
 /// 800 by 710 authored pixels (aspect 1.13) where the camera's `+0x1c` says
@@ -130,16 +152,66 @@ pub const FURY_WINDOW: f32 = 0.321;
 /// the camera's aspect makes it, so the picture is stretched, not shown wider.
 pub const CAMPAIGN_STRETCH: f32 = 1.048;
 
-/// One card to load: a flyer, the window of its camera's image it shows and
-/// how much wider than its camera's aspect it is drawn.
+/// Which of a flyer's two models a card is: `flyer.vex` or `flyer_Back.vex`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// `Grid Selection` and `Campaign Selection` draw this one.
+    Front,
+    /// `Cell Selection` draws this one, face-on ([`CELL_POSE`]).
+    Back,
+}
+
+impl Side {
+    /// The archive entry of `flyer`'s model on this side.
+    fn entry(self, flyer: &str) -> String {
+        match self {
+            Self::Front => flyer::front_entry(flyer),
+            Self::Back => flyer::back_entry(flyer),
+        }
+    }
+
+    /// What a side's card is stored under: a front card by the bare name.
+    fn key(self, flyer: &str) -> String {
+        match self {
+            Self::Front => flyer.to_string(),
+            Self::Back => format!("{flyer}/back"),
+        }
+    }
+}
+
+/// How much brighter one of Fury's grid cards is than its textures: every texel
+/// doubled (and clamped). **Measured on Fury, mechanism unread.** A flat panel's
+/// texel is 63 and RPCS3 shows 130 (`Cell Selection` of `09_blitzed`, the
+/// back's `flyer_back_colour.gtf`); the stripe texture's 197 shows 255 on both
+/// the back and `Grid Selection`'s front, whose dominant red is 255 against the
+/// 198 an undoubled texel drew.
+pub const FURY_GAIN: f32 = 2.0;
+
+/// The base campaign's eight grid cards, front and back: **no gain**. Not
+/// measured against a frame of its own `Cell Selection`; doubled, the eight
+/// cards' cyan and white clamp to flat colour where the earlier fit to RPCS3's
+/// base `Grid Selection` frames matched the undoubled texels.
+pub const BASE_GAIN: f32 = 1.0;
+
+/// The two `Campaign Selection` cards: none. Undoubled they matched the frame;
+/// doubled the HD card clamps to a plain white rectangle. Which materials carry
+/// the factor is unread.
+pub const CAMPAIGN_GAIN: f32 = 1.0;
+
+/// One card to load: a flyer's model, the window of its camera's image it
+/// shows and how much wider than its camera's aspect it is drawn.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CardSpec {
     /// The `FlyerName`.
     pub flyer: String,
+    /// Which model.
+    pub side: Side,
     /// [`HD_WINDOW`] or [`FURY_WINDOW`].
     pub window: f32,
     /// `1.0` or [`CAMPAIGN_STRETCH`].
     pub stretch: f32,
+    /// [`FURY_GAIN`], [`BASE_GAIN`] or [`CAMPAIGN_GAIN`].
+    pub gain: f32,
 }
 
 /// One card on a screen: which flyer, seen through which widget, in which pose.
@@ -147,11 +219,20 @@ pub struct CardSpec {
 pub struct Show {
     /// The flyer's `FlyerName`: `01_uplift`, `fury_campaign`.
     pub flyer: String,
+    /// Which of its two models.
+    pub side: Side,
     /// The `<Flyer>` widget that places it: `FlyerModel`,
     /// `FuryCampaignFlyerModel`.
     pub widget: String,
     /// Where it stands.
     pub pose: Pose,
+}
+
+impl Show {
+    /// What the card is stored under in [`Flyers`].
+    fn key(&self) -> String {
+        self.side.key(&self.flyer)
+    }
 }
 
 /// The pose of a `Campaign Selection` card, from its widget's own numbers.
@@ -265,6 +346,14 @@ fn stretched(outline: &[[[f32; 2]; 3]], stretch: f32) -> Vec<[[f32; 2]; 3]> {
         .collect()
 }
 
+/// `outline` turned about the card's vertical axis: the back face.
+fn mirrored(outline: &[[[f32; 2]; 3]]) -> Vec<[[f32; 2]; 3]> {
+    outline
+        .iter()
+        .map(|triangle| triangle.map(|[x, y]| [-x, y]))
+        .collect()
+}
+
 /// Every flyer card a campaign screen can show, decoded and waiting.
 ///
 /// The card caches sit behind `RefCell`s so a stage that only holds the
@@ -324,15 +413,18 @@ impl Flyers {
             }
         };
         for CardSpec {
-            flyer: name,
+            flyer,
+            side,
             window,
             stretch,
+            gain,
         } in cards
         {
+            let name = &side.key(flyer);
             if waiting.contains_key(name) {
                 continue;
             }
-            let entry = flyer::front_entry(name);
+            let entry = side.entry(flyer);
             let camera = archives
                 .read_name(&entry)
                 .ok()
@@ -356,7 +448,9 @@ impl Flyers {
                     // comes out at about 0.4 of its own colours.
                     for vertex in &mut model.vertices {
                         vertex.lit = 0.0;
+                        vertex.colour = [*gain, *gain, *gain, 1.0];
                     }
+                    model.vertex_colour_is_light = false;
                     clip::bake(&mut model, SETTLED_SECONDS);
                     clip::flatten(&mut model, &camera.to_world, *window, CARD_HEIGHT, *stretch);
                     // The card is as wide as its camera's aspect makes it (times
@@ -369,8 +463,18 @@ impl Flyers {
                     match &shell {
                         Some(shell) => {
                             let widen = half_width / shell.half_size[0];
-                            clip::clip_to_shape(&mut model, &stretched(&shell.outline, widen));
-                            clip::reflect(&mut model, shell.fade);
+                            let outline = stretched(&shell.outline, widen);
+                            match side {
+                                Side::Front => {
+                                    clip::clip_to_shape(&mut model, &outline);
+                                    clip::reflect(&mut model, shell.fade);
+                                }
+                                // The back's outline is the front's seen from the other
+                                // side, and RPCS3 draws no reflection under it.
+                                Side::Back => {
+                                    clip::clip_to_shape(&mut model, &mirrored(&outline));
+                                }
+                            }
                         }
                         None => clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]),
                     }
@@ -398,8 +502,21 @@ impl Flyers {
     pub fn grid_show(flyer: &str) -> Show {
         Show {
             flyer: flyer.to_string(),
+            side: Side::Front,
             widget: flyer::GRID_WIDGET.to_string(),
             pose: GRID_POSE,
+        }
+    }
+
+    /// The card `Cell Selection` shows for the flyer named `flyer`: the back
+    /// of the grid's own flyer, through the same widget as [`Self::grid_show`].
+    #[must_use]
+    pub fn cell_show(flyer: &str) -> Show {
+        Show {
+            flyer: flyer.to_string(),
+            side: Side::Back,
+            widget: flyer::GRID_WIDGET.to_string(),
+            pose: CELL_POSE,
         }
     }
 
@@ -430,6 +547,7 @@ impl Flyers {
             let pose = campaign_pose(self.widgets.get(widget)?, campaign == selected);
             Some(Show {
                 flyer: name.to_string(),
+                side: Side::Front,
                 widget: widget.to_string(),
                 pose,
             })
@@ -441,7 +559,7 @@ impl Flyers {
     /// widget or its card is not loaded.
     fn matrices(&self, show: &Show, space: Space) -> Option<(Mat4, Mat4)> {
         let widget = self.widgets.get(&show.widget)?;
-        self.has(&show.flyer)
+        self.has(show)
             .then(|| flyer_view_projection(widget, space, show.pose))
     }
 
@@ -451,7 +569,7 @@ impl Flyers {
     /// loaded.
     #[must_use]
     pub fn card_rect(&self, show: &Show, space: Space) -> Option<[f32; 4]> {
-        let [hx, hy] = self.placed.get(&show.flyer)?.half_size;
+        let [hx, hy] = self.placed.get(&show.key())?.half_size;
         let (view_projection, model) = self.matrices(show, space)?;
         let to_screen = view_projection * model;
         let mut lo = [f32::MAX; 2];
@@ -470,10 +588,11 @@ impl Flyers {
         Some([lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]])
     }
 
-    /// Whether `name` has a card to draw.
+    /// Whether `show` has a card to draw.
     #[must_use]
-    pub fn has(&self, name: &str) -> bool {
-        self.waiting.borrow().contains_key(name) || self.cards.borrow().contains_key(name)
+    pub fn has(&self, show: &Show) -> bool {
+        let key = show.key();
+        self.waiting.borrow().contains_key(&key) || self.cards.borrow().contains_key(&key)
     }
 
     /// Draws `show`'s card into the screen, over whatever `view` holds.
@@ -493,10 +612,11 @@ impl Flyers {
         space: Space,
         show: &Show,
     ) {
-        if let Some(model) = self.waiting.borrow_mut().remove(&show.flyer) {
+        let key = show.key();
+        if let Some(model) = self.waiting.borrow_mut().remove(&key) {
             match Preview::new(device, queue, format, self.anisotropy, model) {
                 Ok(card) => {
-                    self.cards.borrow_mut().insert(show.flyer.clone(), card);
+                    self.cards.borrow_mut().insert(key.clone(), card);
                 }
                 Err(error) => log::warn!("flyer {}: {error:#} - it draws nothing", show.flyer),
             }
@@ -505,7 +625,7 @@ impl Flyers {
             return;
         };
         let mut cards = self.cards.borrow_mut();
-        let Some(card) = cards.get_mut(&show.flyer) else {
+        let Some(card) = cards.get_mut(&key) else {
             return;
         };
         card.draw_matrices(
@@ -548,12 +668,7 @@ pub fn render_list(
     let (device, queue, format) = gpu;
     let ((list, split), (viewport, target_size, space)) = (list, frame);
     let shown: Vec<&Show> = cards
-        .map(|(flyers, shows)| {
-            shows
-                .iter()
-                .filter(|show| flyers.has(&show.flyer))
-                .collect()
-        })
+        .map(|(flyers, shows)| shows.iter().filter(|show| flyers.has(show)).collect())
         .unwrap_or_default();
     let Some((flyers, _)) = cards.filter(|_| !shown.is_empty()) else {
         renderer.render_with(load, device, queue, encoder, view, list, viewport, clip);
@@ -570,6 +685,7 @@ pub fn render_list(
         viewport,
         None,
     );
+    renderer.renew_quad_buffer(device);
     for show in shown {
         flyers.draw(
             device,
