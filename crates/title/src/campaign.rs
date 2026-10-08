@@ -14,6 +14,7 @@
 //! | variants gated by loyalty rows ([`Campaign::loyalty_unlocks`]) | yes | no | no | no | no |
 //! | `Campaign Selection` ids overlaid ([`Campaign::selection_strings`]) | no | no | yes | no | no |
 //! | archive the screen file is read from ([`Campaign::screen_archive`]) | precedence | precedence | `DATA06` | precedence | precedence |
+//! | archive the grid files are read from ([`Campaign::grid_archive`]) | precedence | precedence | `DATA06` | precedence | precedence |
 //!
 //! Pure and 2048 read through Pulse's reader today because nothing else
 //! exists to read them with; their [`Campaign::dialect`] is
@@ -81,6 +82,14 @@ pub struct Campaign {
     /// wrong one (Wipeout HD/Fury: `DATA06`'s later build, not `DATA02`'s).
     /// `None` reads the copy the source's ordinary precedence serves.
     pub screen_archive: Option<&'static str>,
-    /// Where the dialect, grids file, selection flag and screen archive came from.
+    /// The archive label whose copy of each `grid_NN.xml` wins over the
+    /// source's ordinary precedence, for a grid that archive carries; a grid it
+    /// does not carry is read by precedence. Wipeout HD/Fury: `DATA06`, whose
+    /// `grid_00`..`grid_07` carry the three medal rungs per cell where
+    /// `DATA02`'s older copy carries one flat set, equal to the hard rung.
+    /// `None` reads every grid by precedence.
+    pub grid_archive: Option<&'static str>,
+    /// Where the dialect, grids file, selection flag, screen archive and grid
+    /// archive came from.
     pub origin: Origin,
 }

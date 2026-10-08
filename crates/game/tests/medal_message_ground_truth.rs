@@ -155,13 +155,16 @@ fn a_real_speed_lap_crossing_raises_the_banner_and_leaves_a_standing_line() {
     let mut opened =
         oag_source::title::open_source(&image.display().to_string(), Vec::new(), Vec::new())
             .expect("opening the source");
-    let cell =
-        oag_game::campaign::read_grids(&mut opened.archives, oag_pulse::campaign::DEFINITION_ENTRY)
-            .expect("the grids")
-            .into_iter()
-            .flat_map(|grid| grid.cells)
-            .find(|cell| cell.name == "grid8_3_2")
-            .expect("grid8_3_2");
+    let cell = oag_game::campaign::read_grids(
+        &mut opened.archives,
+        oag_pulse::campaign::DEFINITION_ENTRY,
+        None,
+    )
+    .expect("the grids")
+    .into_iter()
+    .flat_map(|grid| grid.cells)
+    .find(|cell| cell.name == "grid8_3_2")
+    .expect("grid8_3_2");
     let loaded = oag_raceplay::load(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),

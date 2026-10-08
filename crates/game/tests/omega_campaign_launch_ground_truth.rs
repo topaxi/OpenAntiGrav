@@ -203,3 +203,37 @@ fn lap_overrides_are_the_cells_own_and_only_for_the_modes_that_take_one() {
         );
     }
 }
+
+/// Omega re-ships HD's per-difficulty schema, `NitroElim*` and all, so the
+/// same guard holds: an `Elimination` or `NitroBattle` cell with a real triple
+/// awards no medal on the dummy `1`/`2`/`3`, and a launched `Elimination` keeps
+/// the race's own kill target instead of ending on the first kill.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn an_elimination_cell_with_a_nitro_triple_awards_nothing_it_cannot_measure() {
+    let Some(omega) = open() else { return };
+    let mut unmeasured = 0;
+    for (grid, cell) in &omega.cells {
+        if !cell.medal_law_is_unmeasured() {
+            continue;
+        }
+        unmeasured += 1;
+        for difficulty in [
+            race_campaign::Difficulty::Easy,
+            race_campaign::Difficulty::Medium,
+            race_campaign::Difficulty::Hard,
+        ] {
+            assert_eq!(
+                cell.evaluate_medal_for_difficulty(5, difficulty),
+                None,
+                "grid {grid} {}",
+                cell.name
+            );
+        }
+        if let Ok(plan) = plan(&omega, cell) {
+            assert_eq!(plan.eliminator_kill_target, None, "{}", cell.name);
+        }
+    }
+    println!("{unmeasured} Omega cells carry an unmeasured nitro law");
+    assert!(unmeasured > 0);
+}
