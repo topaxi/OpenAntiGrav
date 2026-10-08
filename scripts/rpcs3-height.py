@@ -73,7 +73,7 @@ def main():
         (out / "rpcs3.pid").write_text("%d\n" % session.proc.pid)
         if not session.wait_for_screen_pressing("Main Menu", 240):
             sys.exit("never reached the Main Menu")
-        time.sleep(20)
+        session.settle_menu(20)
         gdb = Debugger(port=port)
         tr.set_pilot_assist(gdb, False)
         session.screens_seen = set()
@@ -94,17 +94,6 @@ def main():
             plan.pop(screen, None)
 
         session.navigate = navigate
-        real_press_once = session.press_once
-
-        def guarded(button, settle=5.0):
-            # A cross landing on the race's own START RACE prompt skips the flyby this tool
-            # exists to measure; the stock walk races its own screen check (b2-b4, 2026-10-08).
-            now = drive.current_screen()
-            if now in drive.RACE_ARRIVED or now == "Team Launch Transition":
-                return now, now
-            return real_press_once(button, settle)
-
-        session.press_once = guarded
         if session.walk_to_race(plan=plan) not in drive.RACE_ARRIVED:
             sys.exit("no race")
         print("track: %s" % drive.track_name(), flush=True)
@@ -126,7 +115,7 @@ def main():
         if ship is None:
             sys.exit("no player craft")
         print("player found %.1f s after race arrival" % (time.time() - t0), flush=True)
-        guest = tr.Guest(session.proc.pid)
+        guest = tr.Guest(session.proc.pid, session.open_mem())
         world = tr.find_world(guest, body)
         objs = {"world": (world, 0x50), "body": (body, 0x210), "entry": (entry, 0x600),
                 "ship": (ship, 0x200)}

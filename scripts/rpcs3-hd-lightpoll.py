@@ -30,14 +30,14 @@ with drive.Session(IMAGE, str(OUT / 'logs')) as session:
     print('rpcs3 pid %d' % session.proc.pid, flush=True)
     (OUT / 'rpcs3.pid').write_text(str(session.proc.pid))
     if not session.wait_for_screen_pressing('Main Menu', 240): sys.exit('no main menu')
-    time.sleep(20)
+    session.settle_menu(20)
     if session.walk_to_race() not in drive.RACE_ARRIVED: sys.exit('no race')
-    time.sleep(70)
+    session.wait_for_load(70)
     session.tap('cross', settle=22.0)
     g = Debugger(port=port)
     g.pause(); ship, body = place.find_player(g)
     slot = u32(g, ship + 0x5edc); g.resume()
-    mem = open('/proc/%d/mem' % session.proc.pid, 'rb', 0)
+    mem = session.open_mem()
     def rd(a, n):
         mem.seek(GUEST + a); return mem.read(n)
     def snap():

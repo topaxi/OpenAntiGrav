@@ -104,17 +104,17 @@ def main():
     with drive.Session(args.image, str(out / "logs")) as session:
         if not session.wait_for_screen_pressing("Main Menu", 240):
             sys.exit("never reached the Main Menu")
-        time.sleep(20)
+        session.settle_menu(20)
         if session.walk_to_race() not in drive.RACE_ARRIVED:
             sys.exit("no race")
-        time.sleep(70)
+        session.wait_for_load(70)
         session.tap("cross", settle=22)
         gdb = Debugger(port=port)
         gdb.pause()
         ship, _body = place.find_player(gdb)
         slot = struct.unpack(">I", gdb.read(ship + SLOT_OFFSET, 4))[0]
         gdb.resume()
-        mem = open("/proc/%d/mem" % session.proc.pid, "rb", 0)
+        mem = session.open_mem()
 
         def read(addr, n):
             mem.seek(GUEST_BASE + addr)

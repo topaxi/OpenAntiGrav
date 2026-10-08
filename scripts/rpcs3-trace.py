@@ -39,6 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import emu_guard  # noqa: E402
 _spec = importlib.util.spec_from_file_location("rpcs3_drive", HERE / "rpcs3-drive.py")
 drive = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(drive)
@@ -61,10 +62,11 @@ WORLD_COUNT = 0x2C8
 
 
 class Guest:
-    def __init__(self, pid):
-        self.mem = open("/proc/%d/mem" % pid, "rb", 0)
+    def __init__(self, pid, mem=None):
+        self.mem = mem if mem is not None else open("/proc/%d/mem" % pid, "rb", 0)
 
     def read(self, addr, n):
+        emu_guard.beat()
         self.mem.seek(GUEST_BASE + addr)
         return self.mem.read(n)
 
@@ -279,7 +281,7 @@ def main():
         (out / "rpcs3.pid").write_text("%d\n" % session.proc.pid)
         if not session.wait_for_screen_pressing("Main Menu", 240):
             sys.exit("never reached the Main Menu")
-        time.sleep(20)
+        session.settle_menu(20)
         gdb = Debugger(port=port)
         if args.pilot_assist != "leave":
             set_pilot_assist(gdb, args.pilot_assist == "on")
@@ -308,7 +310,7 @@ def main():
             sys.exit("no race")
         track = drive.track_name()
         print("track: %s" % track, flush=True)
-        time.sleep(args.load)
+        session.wait_for_load(args.load)
         session.tap("cross", settle=args.countdown)
         drive.screenshot(out / "grid.png", trim=True)
         gdb.pause()
@@ -320,7 +322,7 @@ def main():
             if other and other != ship:
                 rivals.append(struct.unpack(">I", gdb.read(other + place.OFF_BODY, 4))[0])
         gdb.resume()
-        guest = Guest(session.proc.pid)
+        guest = Guest(session.proc.pid, session.open_mem())
         if guest.read(CODE_CHECK[0], 4) != CODE_CHECK[1]:
             sys.exit("guest base is not 0x300000000 on this build")
         world = find_world(guest, body)
