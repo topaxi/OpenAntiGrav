@@ -20,9 +20,10 @@ fixed the halo that read as a blurry countdown. The per-mode boards are the part
 - **`oag_race::Mode` has Zone only.** Zone Battle and Detonator need modes before their boards can be chosen.
 - HD's own code site (which function fills the name) is unread; the only references to the four names
   are the hash registration loop at `0x003f1300`.
-- Ours is about 1.6x brighter than the original on every surface (the `pow(1/2.2)` display encode in
-  `hd_bloom.wesl` that ADR-0026 stands in for the unread exposure stage). Not this lane's; it also makes
-  every bloom halo larger than the original's.
+- ~~Ours is about 1.6x brighter than the original on every surface~~ - answered 2026-10-08 by `hd-exposure`: the
+  display `pow(1/2.2)` is the ROP's encode and the original's exposure is unity, so it is not an extra gamma step; the
+  gap is per surface (ours 0.84x at Talon's grid, 1.54x in the corridor) and sits in the lightmap term. See
+  `hds-frame-was-too-bright-and-too-bloomy.md`.
 
 ## Next Steps
 

@@ -7504,4 +7504,82 @@ Sky and lit surfaces are clipped white in ours where the original is not. One bo
 a lead, not a measurement. Candidate worth checking first: `fs_encode` in `crates/post/shaders/hd_bloom.wesl` ends on
 `pow(resolved, 1/2.2)`, which ADR-0026 names as a stand-in, while the original's resolve ends on `ADD_SAT` with the
 main surface A8R8G8B8 (the surface word `0x3148` decodes to colour format 8, not fp16). Every bloom halo is also larger
-for it. Its own lane.
+for it. Its own lane. **Followed up the same day by `hd-exposure`: the encode is not
+the cause** - see "The exposure is unity, and the brightness gap is per surface" below.
+
+## The exposure is unity, and the brightness gap is per surface (2026-10-08, `hd-exposure`)
+
+**Question** (the `hd-gantry` note above): ours reads about 1.6x brighter than the original; is the `pow(1/2.2)` that ends
+`fs_encode` (ADR-0026's stand-in) an extra gamma step? **Answer: no, and the gap is not a display-chain step at all. It is
+a magnitude that depends on the surface, and on this circuit's corridor road it sits in the lightmap term.** What would
+have falsified "one extra encode": ours not brighter at a matched pose, or the quantile map not a constant exponent, or the
+sky (unlit, so only the chain touches it) not matching. All three came out against it. No code changed.
+
+**1. The original's transfer chain, read.** RSX dump of `hd-gantry/pl1` (one hooked boot, `rsx-draw-list.py --samplers`)
+and RPCS3's own source for what the registers mean (`rsx_decode.h`: `framebuffer_srgb_enabled()` is
+`NV4097_SET_SHADER_PACKER` (`0x1fec`) `!= 0`; the texture `gamma` field is bits 20-23 of the address word `0x1a08`).
+
+| Item | Live value | Reading |
+| --- | --- | --- |
+| Scene surface | `0x3148`: `A8R8G8B8`, 2x MSAA, pitch `0x2800` (also `hd-gantry`) | 8-bit, not fp16 |
+| `SET_SHADER_PACKER` `0x1fec` | **1** on scene draws and on every bloom-ladder draw; **0** on the draws that write the swap buffer (the tint quad, every HUD draw) | the ROP encodes sRGB on write into the scene and the ladder, and writes the swap buffer raw. This turns the sky law's *inferred* encode-on-write (85) into a register read for the scene target (90; the encode curve itself is not read, sRGB is the hardware's) |
+| Albedo and normal units, ladder and composite units | address word `0x60710101` / `0x60730303`: gamma nibble **7** | sRGB decode on fetch |
+| Lightmap unit of the lightmapped track programs (`fp 0x759ac1`, `0x7638c1`: `TEX H6 f[TC4].zwzz unit1` then `LG2`/`MUL 2`/`EX2`) | `0x60010101`: nibble **0** | raw, so the `10-05` raw lightmap read in `shade.wesl` is right and the old "RSX decodes no texture" static read was only right for this unit |
+| `scale` of the resolve, measured | scene target (`0x40cc0000`, 1280x720) against the screenshot, whole-frame luma, `scripts/hd-exposure-ratio.py` | final/scene 1.02-1.06 on nine captures, 1.14 on the darkest circuit (Amphiseum, where the HUD is a larger share): **`scale` is 1.0 and the 2-6 % is the bloom**. Includes race clock **0.00.0** on Talon's Junction (`hd-exposure/placeB`, 1.038) and 0.31.7 (`placeA`, 1.049). Confidence 90 |
+
+So the original is linear light with 8-bit sRGB storage end to end: decode on fetch, encode on write into the scene, the
+resolve adds the bloom, the picture is written. Ours is the same arithmetic with a float scene: one `pow(2.2)` on the
+albedo, light unclamped, `scale` (1.0 at this pose, checked by pinning it: byte-identical frame), bloom, saturate, **one**
+`pow(1/2.2)`. **The final `pow` is the ROP's encode, not a stand-in for an exposure stage**; the module header of
+`hd_bloom.rs` and the comment above `fs_encode` still call it one and are stale in that sentence (left for the next
+code change, it is a comment). What the port does not do is the original's per-draw saturate and 8-bit quantisation
+of the scene before the resolve (the bloom gate reads the clamped value; `surface()` clamps at the three points the chain
+samples it).
+
+**2. Same camera, different clock, the sign flips with the surface and not with time.** `hd-frame-compare.py`, ours
+(this tree, native, bloom on, no craft drawn) against the original, whole frame excluding the HUD, mean luma:
+
+| Frame (clock) | Ours | Original | Ours / original | Road region ours / original |
+| --- | ---: | ---: | ---: | ---: |
+| Talon's grid, pose 00 (0.00.3) | 0.522 | 0.618 | 0.84 | 0.571 / 0.571 |
+| Talon's 01 (0.06.3, 529 km/h) / 03 (0.18.3, 431 km/h) | 0.497 / 0.477 | 0.601 / 0.618 | 0.83 / 0.77 | - |
+| Sol 2, pose 00 (0.00.3) | 0.577 | 0.684 | 0.84 | 0.633 / 0.722 |
+| Amphiseum, pose 00 (0.54.3) | 0.237 | 0.245 | 0.97 | 0.204 / 0.298 |
+| **Talon's corridor, `pl2/01` camera, original at 0.26.3, `placeA` at 0.31.7** | **0.519** | **0.338** (scene target 0.332) | **1.54** | **0.478 / 0.246** |
+
+The same circuit reads ours 0.84x at the grid and 1.54x in the corridor, at clocks from 0.0 to 31.7 s. **The gap does
+not track the clock** (it is 0.84 at 0.3 s and 0.77 at 18.3 s on Talon's, then 1.54 at 26-32 s on other geometry), and the
+exposure is unity at every clock measured, so the "race-start exposure transient" that the sky-law entry above used to explain
+the old `byte / 128` fit **is not supported on the two circuits measured at clock 0.00.0** (Talon's here, and
+`hd-sky-law/start`, final/scene 1.043); Sol 2 at 0.00.3 itself was not scene-dumped, so what made those frames bright is
+open. The sky law itself is untouched: it was measured against scene dumps, and the sky's own `texel * (byte/255)^(1/2.2)`
+needed no exposure.
+The older readings reconcile as one thing seen at different surfaces: the 2026-09-13 "ours darker everywhere" family was
+grid and tunnel frames (above: 0.77-0.84), the Amphiseum sign flip is its ceiling brighter and floor darker, the
+`bloom-racing` "HD's bloom reads weaker" is the same grid frames (clipped white 2.85 / 6.03 / 0.37 % against 5.32 / 12.43 / 4.77 %,
+luma 0.52 against 0.62), and the `hd-gantry` 1.6x is the corridor.
+
+**3. Where the corridor's excess lives, on our side.** The road there is 100 % the authored lit path (an attribution
+render, authored red against stand-in blue: road box 1.0 lit). Dropping one summand of `lit_sum` at a time, road box
+(`0.30..0.70 x 0.60..0.95` of the frame, luma), baseline **0.707**: without the sun diffuse 0.692, without the ambient 0.707,
+without the vertex light 0.707, **without the lightmap's `prelit` term 0.244**; the original's same box reads 0.402 with its
+craft in it (road region alone 0.246). So the corridor road is the lightmap term and nothing else; the ambient and the
+vertex light are zero there. The original's program evaluates the same equation with the same constants (live
+`{4, 4, 4, 2}` = `Prelit ambient colour scale/power`, sun `{2, 1.82745, 0.886275}`, ambient `{0.403922, 0.392157, 0.509804}`,
+all equal to Talon's `track.envsettings`), on the same raw lightmap unit, yet lands about 4x lower in linear light. A
+uniform `x0.25` on `lit_linear` (diagnostic only, not shipped, **chosen, not measured**; the exposure pinned at 1.0 for it) brings
+the road region's quantiles to within 0.02 of the original at every rank (0.131/0.126, 0.172/0.184, 0.250/0.231, 0.325/0.300,
+0.365/0.354 at 5/25/50/75/90 %) and leaves the distant geometry 0.03-0.18 short at the top ranks, so a single
+divisor is not the answer: it fits the one surface and the others want a different one. **What would settle it** is the
+sky-law method on the road draw: hook-dump the lightmap and albedo textures that draw binds (unit 1 and 0, 1024x1024 `DXT5`),
+predict the road's bytes from the live program and constants, and diff them against the scene target
+(`hd-exposure/placeA/00-40cc0000.bin`, 1280x720). A wrong lightmap sample (atlas, UV set, mip, the alpha/colour split of
+the `DXT5`) would give this; a wrong constant would not, since the constants match.
+
+**Regression gates, none touched** (no code changed): sky law, weapon-light matches, the gantry card's 132/255 GO, the
+bomb/missile pairs and `bloom-racing`'s HD bloom readings all stand as recorded. `bloom-racing`'s "HD weaker than the
+original" is rescoped to grid frames as above.
+
+**Other titles.** Nothing is wired, so there is nothing to port. Omega shares HD's front end and 2048's circuits: the
+`SET_SHADER_PACKER` read is RPCS3-only (**not checkable** on Omega, no PS4 capture path); 2048 has no RSX. **Evidence**:
+`data/scratch/hd-exposure/` (`report.md`, `placeA`, `placeB`, `pairS`, `pl1-00-draws.txt`, `abl-*.png`).
