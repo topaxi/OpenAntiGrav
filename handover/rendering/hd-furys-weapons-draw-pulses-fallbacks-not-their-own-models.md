@@ -298,5 +298,6 @@ Open:
   the film): `data/scratch/hd-rocket-trail/ours/pair_trail.png`; ours reads greyer than the film.
 - Push offset from the rocket origin (`0x00124880..0x00124888`) and `Libc_Rand`'s range (jitter
   symmetry) are unread.
-- The launch light: `Rocket_Update` (`0x00123fb0`) calls the point light `0x006778c8` at
-  `0x001246cc`; its arguments are unread.
+- The launch light: `Rocket_Update` (`0x00123fb0`) calls `0x006778c8` at `0x001246cc` with
+  f1 100.0, f2 1.0, colour seeded `(14, 10, ?, ?)` (rocket-trail.md, Open). Not wired: no weapon
+  point light exists in this engine yet; that mechanism is the next step, shared with the Bomb's.

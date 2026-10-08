@@ -262,6 +262,16 @@ point light `0x006778c8` (at `0x001246cc`) - the launch light, unread here.
 - What offset from the rocket's own origin the pushed matrix carries
   (`0x00124880..0x00124888` adds a scaled vector to the position).
 - Pools 0, 1, 2 and 5 (the `ThickLine` family) and their users.
+- **The launch light, read as far as its call.** `Rocket_Update` calls
+  `0x006778c8` at `0x001246cc` with `f1 = 100.0` (`TOC-0x3360` ->
+  `0x008aa178`), `f2 = 1.0` (`-0x33b0` -> `0x008aa128`), the rocket's position
+  in `v2` and a colour vector in `v3` seeded once (guarded by a byte flag) as
+  `(14.0, 10.0, r15, r15)`, where `r15` is the word `lwz r15, -0x33a4(r2)`
+  loads - its value at that point is not settled. Hypothesis, below 50: a
+  point light of range 100 and intensity 1 per update while the rocket lives,
+  the shape `cannon.md` and the Bomb blast on [weapons.md](weapons.md) record
+  for the same call. **Not wired**: this engine has no weapon point light
+  (weapons.md, Bomb blast draw), so drawing it needs that mechanism first.
 
 ## Omega
 
