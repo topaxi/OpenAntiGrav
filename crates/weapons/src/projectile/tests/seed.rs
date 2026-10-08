@@ -86,3 +86,40 @@ fn a_shuriken_thrown_from_a_banked_craft_rides_the_craft_up() {
     assert_eq!(thrown, Some(true));
     assert_riding_up(&projectiles.slots[0], &ships[0]);
 }
+
+/// With nothing under it a Plasma bolt falls along the normal it carries, as
+/// `Plasma_Update`'s `0x7f` arm does (`velocity -= surface * dt * 50`), not along
+/// world `-Y` as the Rocket and Shuriken do. On a craft rolled 60 degrees the two
+/// are different directions.
+#[test]
+fn a_plasma_bolt_over_nothing_falls_along_its_carried_normal() {
+    let ships = rolled_craft();
+    let up = ships[0].physics.body.up();
+    let mut projectiles = Projectiles::new();
+    assert!(projectiles.charge_up(Vec3::ZERO, Vec3::Z * 100.0, 0, 0.05));
+    let step = |projectiles: &mut Projectiles| {
+        projectiles.advance(
+            1.0 / 60.0,
+            &empty_world(),
+            &ships,
+            None,
+            None,
+            None,
+            TriggerRadii::default(),
+            "VENOM",
+        );
+    };
+    for _ in 0..8 {
+        step(&mut projectiles);
+    }
+    let released = projectiles.slots[0].velocity;
+    for _ in 0..10 {
+        step(&mut projectiles);
+    }
+    let gained = projectiles.slots[0].velocity - released;
+    let expected = -up * (FALL_ACCELERATION * 10.0 / 60.0);
+    assert!(
+        (gained - expected).length() < 1e-2,
+        "fell by {gained:?}, a fall along the carried normal is {expected:?}"
+    );
+}

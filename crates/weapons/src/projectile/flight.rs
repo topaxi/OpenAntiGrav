@@ -257,6 +257,14 @@ impl Projectiles {
                 }
                 // Nothing under it: it falls, keeping its normal so it resumes
                 // riding when the track returns.
+                None if kind == Weapon::Plasma => {
+                    // `Plasma_Update`'s `0x7f` arm falls along the carried normal,
+                    // `velocity -= surface * (dt * 50.0)`, where the Rocket's and
+                    // the Shuriken's is `velocity.y -= dt * 50.0` (`plasma.md`,
+                    // "`Plasma_Update` is `Rocket_Update`'s floor follower"). On a
+                    // bank or a loop the two are different directions.
+                    projectile.velocity -= projectile.surface * (FALL_ACCELERATION * dt);
+                }
                 None if kind != Weapon::Cannon => {
                     projectile.velocity -= Vec3::Y * FALL_ACCELERATION * dt;
                 }

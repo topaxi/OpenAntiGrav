@@ -21,6 +21,7 @@ use oag_raceplay as race;
 use oag_tables::weapons::Weapon;
 
 const MOA_THERMA_WHITE: &str = r"Data\Environments\03_Track\track.vex";
+const VINETA_K: &str = "/data/environments/01_vineta_k/track.vex";
 
 fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot {
     let mut buttons = previous.copied().unwrap_or_else(Input::new);
@@ -32,11 +33,11 @@ fn snapshot(bits: u32, previous: Option<&Input>) -> oag_gameplay::InputSnapshot 
 }
 
 /// `(bank_cos, residual)` for every round slot 0 fired on one lap of the autopilot.
-fn residuals() -> Option<Vec<(f32, f32)>> {
-    let image = oag_testdata::image("data/images/pulse-psp-eu.chd")?;
+fn residuals(disc: &str, track: &str) -> Option<Vec<(f32, f32, f32)>> {
+    let image = oag_testdata::image(disc)?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
-        track: Some(MOA_THERMA_WHITE.to_string()),
+        track: Some(track.to_string()),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
         opponent_teams: Vec::new(),
@@ -82,20 +83,22 @@ fn residuals() -> Option<Vec<(f32, f32)>> {
                     (round.position - (position + velocity * dt)).length()
                 })
                 .fold(f32::MAX, f32::min);
-            out.push((before.body.up().y, residual));
+            out.push((
+                before.body.up().y,
+                residual,
+                round.surface.dot(before.body.up()),
+            ));
         }
     }
     Some(out)
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
-    let Some(shots) = residuals() else { return };
-    let tilted = shots.iter().filter(|(bank, _)| *bank < 0.95).count();
+fn assert_muzzle_residuals(shots: Option<Vec<(f32, f32, f32)>>) {
+    let Some(shots) = shots else { return };
+    let tilted = shots.iter().filter(|(bank, ..)| *bank < 0.95).count();
     assert!(shots.len() >= 100, "only {} rounds fired", shots.len());
     assert!(tilted >= 20, "only {tilted} rounds fired on a tilt");
-    let worst = shots.iter().map(|(_, r)| *r).fold(0.0_f32, f32::max);
+    let worst = shots.iter().map(|(_, r, _)| *r).fold(0.0_f32, f32::max);
     println!(
         "{} rounds, {tilted} fired on a tilt, worst residual {worst}",
         shots.len()
@@ -105,6 +108,30 @@ fn a_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
         "a round left {worst} units from its muzzle ({} shots, {tilted} tilted)",
         shots.len()
     );
+    // The drawn pose reads the round's carried normal as its up
+    // (`projectile_model_matrices`), and `Cannon_Init` copies the craft's muzzle
+    // anchor into the round's basis: on a bank the round is drawn with the
+    // craft's up, not world up.
+    let least_aligned = shots.iter().map(|(_, _, d)| *d).fold(1.0_f32, f32::min);
+    println!("least round-up . craft-up {least_aligned}");
+    assert!(
+        least_aligned > 0.99,
+        "a round was drawn with an up {least_aligned} against its craft's"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
+    assert_muzzle_residuals(residuals("data/images/pulse-psp-eu.chd", MOA_THERMA_WHITE));
+}
+
+/// Wipeout HD authors a Cannon and flies it through the same
+/// `Projectiles::advance`, so the same law holds on its own circuit.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_cannon_round_leaves_the_muzzle_on_a_tilted_track() {
+    assert_muzzle_residuals(residuals("data/images/hdfury-ps3-eu-dec.iso", VINETA_K));
 }
 
 /// The Missile and the Shuriken leave a banked craft riding **its** up, as
