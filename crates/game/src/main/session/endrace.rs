@@ -332,6 +332,7 @@ impl Session {
     /// built.
     pub(crate) fn tick_endrace(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let mut confirmed_option = None;
+        let mut navs = Vec::new();
         {
             let Stage::Race(stage) = &mut self.stage else {
                 return;
@@ -358,6 +359,7 @@ impl Session {
                 let targets = endrace.menu_targets();
                 events.extend(endrace.menu_mut().pointer(pointer, &targets));
                 for event in events {
+                    navs.push(event.nav());
                     match event {
                         Event::Confirmed => confirmed_option = endrace.menu().selected(),
                         Event::Moved | Event::Back => {}
@@ -386,6 +388,7 @@ impl Session {
                 // panels as an edge of its own.
                 if confirmed && endrace.takes_confirm() {
                     endrace.advance();
+                    navs.push(oag_ui::menu::nav::Nav::Accept);
                 }
                 // `RaceManager_Update`'s d-pad on `Race End Photo`, once it is entered: the
                 // spectator camera's mode and the craft it watches.
@@ -399,6 +402,7 @@ impl Session {
                 }
             }
         }
+        self.play_navs(navs);
         if let Some(option) = confirmed_option {
             self.handle_endrace_menu_option(option);
         }
@@ -450,7 +454,7 @@ impl Session {
         let Some(cell) = cell else {
             return;
         };
-        self.reopen_cell_selection(&cell.name, None);
+        self.reopen_cell_selection(&cell.name, None, false);
     }
 
     /// Opens the campaign and lands `Cell Selection` on the cell named
@@ -462,6 +466,7 @@ impl Session {
         &mut self,
         cell: &str,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
+        default_cursor_on_pulse: bool,
     ) {
         self.open_campaign();
         let Stage::Menu(menu_stage) = &mut self.stage else {
@@ -480,10 +485,17 @@ impl Session {
             );
             return;
         };
+        let keep_cursor = !default_cursor_on_pulse || campaign.has_selection();
         if campaign.open_cell_selection(which)
             && let crate::campaign_stage::Screen::Cell { model, .. } = &mut campaign.screen
         {
-            model.select_by_name(cell);
+            // Pulse's pause-menu QUIT RACE lands on `Cell Selection`'s own
+            // default cell whichever cell was raced (measured, see
+            // `Session::quit_campaign_race`); the selection-screen titles
+            // keep the cell.
+            if keep_cursor {
+                model.select_by_name(cell);
+            }
             if let Some(difficulty) = difficulty {
                 model.set_difficulty(difficulty);
             }

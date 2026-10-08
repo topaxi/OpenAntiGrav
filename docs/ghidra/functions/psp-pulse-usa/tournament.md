@@ -462,6 +462,8 @@ not just unverified.
 
 ## Head2Head - not reached this pass
 
+**Closed since: see [head2head.md](head2head.md) (2026-09-29, and its 2026-10-08 section for `Race_RecordResult`'s arm).** What follows is the original note.
+
 Deliverable 4 (Head2Head) was not attempted: the points/standings chain
 above was the higher-value target given the assignment's own priority
 order, and what remained of this pass's budget went to durability (this

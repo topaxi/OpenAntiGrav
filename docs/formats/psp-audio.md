@@ -1608,6 +1608,30 @@ That is a reasonable bet and it is not a reading. Recorded at confidence
 **50** - below this project's naming threshold, which is why it is written here
 as a caveat rather than implied by the code.
 
+## The front end's navigation sounds (2026-10-08)
+
+`frontend.bnk` (`FRNTEND`) holds six cues: `ACCEPT`, `DECLINE`, `LEFTRIGHT`, `PAUSE`, `TELETYPE`, `UPDOWN`. The
+executable plays five of them through `Sound_PlayNamedInSlot` from a slot filled at boot, and a scan of its 79 call
+sites gives every moment: [menu-sounds.md](../ghidra/functions/psp-pulse-usa/menu-sounds.md). `PAUSE` has no
+reference. The bank is not the "294 descriptors" of the pitch table above (that count is the whole bank's descriptor
+block); the cue table is six names, ten commands and seven waveforms on Pulse.
+
+Wired: `oag_sound::sfx::MenuSfx` loads `Cue::FRONT_END` from the title's
+`oag_title::SoundBanks::frontend`, and the menus raise `oag_ui::menu::nav::Nav`. Pulse's `UPDOWN` and `DECLINE` bind
+three waveforms each and play as their authored timeline (one variant of three voices; `ACCEPT` is one 1.41 s
+waveform, `LEFTRIGHT` one 0.05 s); Pure's four bind one each
+at 22,050 Hz (0.02 to 0.12 s) - the same names, a different recording, so the two titles' menus sound unlike. The PS2
+Pulse disc carries the identical bank (checked, applies: same counts). A headless walk writes a WAV and reads it back:
+`crates/game/tests/menu_sfx_ground_truth.rs`.
+
+| Title | Verdict |
+| --- | --- |
+| Pulse PSP, PS2 | ported |
+| Pure | ported, triggers unread on Pure's executable (the same six names less `PAUSE` are in it): a bet like HD's |
+| HD / Fury | checked, differs: `frontend.bnk` carries 27 cues (`navUp`, `navDown`, `navLeft`, `navRight`, `accept`, `reject`, `accept_fury`, `reject_fury`, `pause`, `whoosh*`, `TextBox0*`, `wipe_*`, `unlockcell`...) and none of Pulse's names; wiring is its own reading of HD's front end |
+| 2048 | checked, differs: `frontend.bnk` is a v5 bank with no name table (`docs/formats/2048-frontend.md`) |
+| Omega | not checkable: Wwise banks, no event mapping (`docs/formats/wwise.md`) |
+
 ## Reproducing
 
 ```sh

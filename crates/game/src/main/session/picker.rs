@@ -451,6 +451,7 @@ impl Session {
     }
 
     pub(crate) fn handle_picker(&mut self, event: Event) {
+        self.play_navs([event.nav()]);
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -542,7 +543,7 @@ impl Session {
                 // its earlier `Grid Selection` - nothing measured there.
                 let hd = layout_is_hd;
                 match self.campaign_cell.take() {
-                    Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty),
+                    Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty, false),
                     Some(_) => self.open_campaign(),
                     None => {
                         self.open_track_picker();

@@ -132,6 +132,22 @@ pub enum Event {
     DifficultyChanged,
 }
 
+impl Event {
+    /// The navigation sound for it, or none: `Cell Help` opening has no cue
+    /// recovered. See `crate::picker::Event::nav`.
+    #[must_use]
+    pub fn nav(self) -> Option<oag_ui::menu::nav::Nav> {
+        use oag_ui::menu::nav::Nav;
+        match self {
+            Self::Moved => Some(Nav::UpDown),
+            Self::Confirmed => Some(Nav::Accept),
+            Self::Back => Some(Nav::Decline),
+            Self::DifficultyChanged => Some(Nav::LeftRight),
+            Self::Help => None,
+        }
+    }
+}
+
 /// A grid tier, reduced to what `GridSelection_Update` binds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GridSummary {

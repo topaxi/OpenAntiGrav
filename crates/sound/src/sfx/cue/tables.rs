@@ -13,6 +13,18 @@ impl Cue {
     pub const COUNTDOWN: [Self; 3] = [Self::Ready, Self::Go, Self::ContElim];
 
     /// Every cue this port fires, which is every one it knows how to load.
+    /// The navigation sounds the front end plays, loaded by
+    /// [`crate::sfx::MenuSfx`] from the title's front-end bank and nothing else.
+    ///
+    /// Not in [`Self::ALL`]: a race does not read that bank. [`Self::MenuTeletype`]
+    /// is left out because its trigger's extra argument is unread.
+    pub const FRONT_END: [Self; 4] = [
+        Self::MenuUpDown,
+        Self::MenuLeftRight,
+        Self::MenuAccept,
+        Self::MenuDecline,
+    ];
+
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,
         Self::Message,
@@ -105,6 +117,11 @@ impl Cue {
             | Self::Ready
             | Self::Go
             | Self::ContElim => BankName::Speech,
+            Self::MenuUpDown
+            | Self::MenuLeftRight
+            | Self::MenuAccept
+            | Self::MenuDecline
+            | Self::MenuTeletype => BankName::Frontend,
         }
     }
 
@@ -120,7 +137,7 @@ impl Cue {
     pub fn bus(self) -> Bus {
         match self.bank() {
             BankName::Speech => Bus::Speech,
-            BankName::Hud | BankName::Ship | BankName::Weapons => Bus::Sfx,
+            BankName::Hud | BankName::Ship | BankName::Weapons | BankName::Frontend => Bus::Sfx,
         }
     }
 
@@ -190,6 +207,11 @@ impl Cue {
             Self::Repulsor => "REPULSOR",
             Self::RepulsorHit => "REPULSORHIT",
             Self::Magstrip | Self::MagstripStop => "~magstrip01",
+            Self::MenuUpDown => "UPDOWN",
+            Self::MenuLeftRight => "LEFTRIGHT",
+            Self::MenuAccept => "ACCEPT",
+            Self::MenuDecline => "DECLINE",
+            Self::MenuTeletype => "TELETYPE",
         }
     }
 
@@ -372,6 +394,12 @@ impl Cue {
             Self::Repulsor | Self::RepulsorHit => Placement::Craft,
             // Anchored to `ship+0x70c8 + 0x10`, the craft's transform.
             Self::Magstrip | Self::MagstripStop => Placement::Craft,
+            // `Sound_PlayNamedInSlot` at `0x400` with no emitter: dry.
+            Self::MenuUpDown
+            | Self::MenuLeftRight
+            | Self::MenuAccept
+            | Self::MenuDecline
+            | Self::MenuTeletype => Placement::Unplaced,
         }
     }
 }

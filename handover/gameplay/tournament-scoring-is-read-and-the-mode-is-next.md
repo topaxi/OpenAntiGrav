@@ -131,3 +131,24 @@ Head2Head cell today gets no gap readout.
 ## From the HANDOVER.md index (moved 2026-09-25)
 
 2026-09-23. `oag_race::Mode::Tournament` races a leg exactly like a single race; `oag_race::tournament` implements the points table (8/6/5/4/3/2/1/0 by leg placing) and the standings rank (grid-slot tie-break); the campaign session carries the leg list and running totals across a relaunch (`crate::main::session::tournament`), and the final leg's medal compares the standings rank (`RaceStage::tournament_final_rank`), not a leg's own placing. Chosen, not measured: a non-finisher scores 0 (standing in for the original's own destroyed/race-state-7 guard), no save/resume between legs, and no authored standings table (a leg reuses the ordinary results/rewards screens). Open, unforced by the build: Head2Head entirely, `DAT_08b30fa0`'s writer, `DAT_08b31158+0xdc`'s meaning, the leg-hash-to-track resolution, `DAT_08b34320`'s reset condition
+
+## Update, 2026-10-08 (pulse-h2h): Head2Head is built, quit returns to Cell Selection
+
+Head2Head was already mapped, launched and drawn (the brief's "refused by
+`race_mode_for_cell`" was stale); `Race_RecordResult`'s mode-9 arm is read
+(same arm as `Race`) and a campaign Head2Head cell was walked live. Quitting a
+campaign race now lands on `Cell Selection` in every mode, Pulse and HD
+([`campaign-quit.md`](../../docs/ghidra/functions/psp-pulse-usa/campaign-quit.md)).
+
+## Open (2026-10-08)
+
+- Which team the Head2Head opponent flies: Qirex on `grid4_5_2`, Goteki 45 on a
+  custom race, our `teams_for_slots` cycle is chosen, not measured.
+- A Head2Head cell watched live to its finish and medal (place 1 gold is
+  decompile only).
+- `FUN_088099b4`, the test that picks `Show Unlocks`' redirect, and a quit walk
+  of the Time Trial, Speed Lap, Zone, Elimination and Tournament cells (same
+  `IG_PAUSE_QUIT` data, not walked).
+- HD/Fury's own quit destination and cursor, and a pause menu with CONTINUE:
+  escape discards a campaign race here (chosen, not measured).
+- Omega launches Head2Head cells with one opponent already; its own rules are unread.

@@ -90,7 +90,9 @@ impl Session {
             }
         };
         oag_raceplay::loader_log::lines(&boot_shell.report);
-        let shell = Shell::from_boot(title, definition, &boot_shell);
+        let mut shell = Shell::from_boot(title, definition, &boot_shell);
+        // Decoded once at boot and language-independent, so it rides across.
+        shell.menu_sfx = self.shell.as_ref().and_then(|old| old.menu_sfx.clone());
         let mode = self.race_mode();
         let device = &self.gpu.device;
         let queue = &self.gpu.queue;

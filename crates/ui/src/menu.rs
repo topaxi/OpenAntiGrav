@@ -560,6 +560,9 @@ pub struct Menu {
     arrival: Option<u32>,
     /// A finger drag's travel not yet worth a whole row, in rows. See `pointer.rs`.
     drag_rows: f32,
+    /// The navigation sounds this menu has called for since the caller last
+    /// drained them with [`Self::take_nav`].
+    nav: nav::Log,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -595,6 +598,7 @@ impl Menu {
             focus,
             arrival: Some(0),
             drag_rows: 0.0,
+            nav: nav::Log::default(),
         }
     }
 
@@ -837,6 +841,7 @@ impl Menu {
         if moved {
             self.scroll[page] = self.scroll();
         }
+        self.nav.when(moved && rows > 1, nav::Nav::UpDown);
 
         let right = input.take(Button::Right);
         let left = input.take(Button::Left);
@@ -859,6 +864,7 @@ impl Menu {
             if left {
                 self.cursor[page] = (self.cursor[page] + rows - 1) % rows;
             }
+            self.nav.when((left || right) && rows > 1, nav::Nav::UpDown);
         } else if (right || left)
             && let Some(event) = self.adjust(if right { 1 } else { -1 })
         {
@@ -950,90 +956,6 @@ impl Menu {
             .get(self.selected())
             .is_some_and(|entry| self.is_disabled(entry))
     }
-
-    /// Moves the selected row's value by `step`, wrapping.
-    fn adjust(&mut self, step: i32) -> Option<MenuEvent> {
-        // A disabled row does not move, and does not report a change it did not
-        // make. Checked here rather than in `update` so activating one is inert
-        // too - `activate` steps an adjustable row forward.
-        if self.selected_is_disabled() {
-            return None;
-        }
-        let page = self.current();
-        let row = self.cursor[page];
-        let entry = self.definition.pages[page].entries.get_mut(row)?;
-
-        match entry {
-            Entry::Choice {
-                setting,
-                values,
-                current,
-                ..
-            } => {
-                let count = values.len() as i32;
-                if count == 0 {
-                    return None;
-                }
-                *current = (*current as i32 + step).rem_euclid(count) as usize;
-                Some(MenuEvent::Changed {
-                    setting: setting.clone(),
-                    // The stored value, not the label: a settings file holds
-                    // `16_Track`, never the words a player read.
-                    value: Value::Text(values[*current].value.clone()),
-                })
-            }
-            Entry::Toggle { setting, on, .. } => {
-                *on = !*on;
-                Some(MenuEvent::Changed {
-                    setting: setting.clone(),
-                    value: Value::Flag(*on),
-                })
-            }
-            _ => None,
-        }
-    }
-
-    /// Activates the selected row.
-    fn activate(&mut self) -> Vec<MenuEvent> {
-        let page = self.current();
-        let row = self.cursor[page];
-        let Some(entry) = self.definition.pages[page].entries.get(row) else {
-            return Vec::new();
-        };
-
-        match entry {
-            Entry::Submenu { target, .. } => {
-                self.stack.push(*target);
-                self.snap_focus();
-                Vec::new()
-            }
-            Entry::Run { action, .. } => vec![MenuEvent::Fired(*action)],
-            Entry::Back { .. } => self.back(),
-            // Activating an adjustable row steps it forward, so a player who
-            // only ever presses one button can still change everything. Left
-            // and right are the discoverable way; this is the forgiving one.
-            Entry::Choice { .. } | Entry::Toggle { .. } => self.adjust(1).into_iter().collect(),
-            Entry::Binding { .. } => Vec::new(),
-        }
-    }
-
-    /// Pops a page, or reports that the root was backed out of.
-    ///
-    /// Public because escape is not a game button and must not become one:
-    /// mapping it onto `circle` would give the menus their back key and give a
-    /// race a brake. The window layer therefore calls this directly, out of
-    /// band with the tick loop, which is safe precisely because the menus hold
-    /// no input state of their own - [`Self::update`] takes edges off a
-    /// snapshot and this takes none at all.
-    pub fn back(&mut self) -> Vec<MenuEvent> {
-        if self.stack.len() > 1 {
-            self.stack.pop();
-            self.snap_focus();
-            Vec::new()
-        } else {
-            vec![MenuEvent::Closed]
-        }
-    }
 }
 
 pub mod block;
@@ -1042,6 +964,7 @@ pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
 mod jump;
+pub mod nav;
 mod pin;
 pub use pin::Pin;
 mod layers;

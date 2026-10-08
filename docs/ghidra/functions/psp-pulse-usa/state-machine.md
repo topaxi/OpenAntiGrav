@@ -128,8 +128,11 @@ of string constants passed to the transition anywhere in the binary:
 | `""` (the empty name, at `0x08a83878`, `0x08a7ff10`, `0x08a795e0`) | `FUN_088e0f90`, `FUN_088b3428`, `InGame_Construct` | teardown of a sub-machine: `FindState("")` fails, so the call returns 0 without running any enter, and only the request field `+0x1e8` changes - Ghidra left these untyped because a one-byte string has no body |
 
 `FrontEnd_TransitionTo(name, context)` (`0x088e24fc`) is the wrapper the
-online screens use: a transition on `g_state_machine` followed by a
-front-end sound (`FUN_08965630`).
+online screens use: a transition on `g_state_machine` followed by a call to
+`FUN_08965630`, which zeroes two fields of a singleton (`*p = 0`, `*(p + 4) = 0`)
+and reaches no `Sound_*` or `Scream_*` function
+([menu-sounds.md](menu-sounds.md)). An earlier reading of this paragraph called it a
+front-end sound; it is not.
 
 ### The unlock-everything code
 

@@ -10,8 +10,11 @@
 //! recovered stays unwired. Every [`Cue`] variant names the page that recovered
 //! its trigger; the banks hold many cues this does not fire (`WEAPONPICKUP`,
 //! `WRONGWAY`, `EXPLBIG` and more), listed by `oag-wad sounds <archive>`. The
-//! reverse holds too: every cue whose trigger is recovered is wired, and
-//! `Cue::ALL` is the set.
+//! race's wired cues are `Cue::ALL` plus the countdown's three; the front end's
+//! are `Cue::FRONT_END` ([`MenuSfx`]). A cue with a recovered trigger and no
+//! wiring is named on its variant (`Cue::MenuTeletype`) or in
+//! `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md` (the place and medal
+//! lines, the name voices).
 //!
 //! # One caveat, per title
 //!
@@ -82,6 +85,7 @@ mod engine;
 mod hd;
 mod layers;
 mod magstrip;
+mod menu;
 mod repeating;
 mod track;
 mod travel;
@@ -93,6 +97,7 @@ pub use banks::{Banks, Loaded};
 pub use cue::Cue;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
+pub use menu::MenuSfx;
 pub use repeating::Playing;
 pub use track::TrackEmitters;
 pub use track::circuit_manifest;
