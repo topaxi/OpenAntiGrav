@@ -49,6 +49,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     countdown_voice: None,
+    // Read in the craft update and measured on three RPCS3 boots (2026-10-08): the hover target is
+    // clamped low through the flyby and countdown and released after the green light. See
+    // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
+    launch_hover: Some(&LAUNCH_HOVER),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
@@ -702,3 +706,11 @@ mod tests {
         assert_eq!(ZONE_STAGES.next_zone(999), None);
     }
 }
+
+/// HD's grid hover: [`oag_title::launch_hover::LaunchHover`].
+pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
+    oag_title::launch_hover::LaunchHover {
+        // The mean of the original's `3.0 + rand8 * 0.0003`; the mean is chosen.
+        grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
+        release_rate: oag_title::pre_race::Sourced::measured(1.0),
+    };

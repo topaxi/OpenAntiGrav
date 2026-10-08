@@ -633,6 +633,10 @@ pub struct Setup {
     /// rides [`Self::sounds`]; whether the simulation asks for the cue at all
     /// is title data, and must not change with whether a bank decoded.
     pub countdown_voice: bool,
+    /// The title's grid hover, `oag_title::RaceDefaults::launch_hover`: the craft's hover target is
+    /// clamped low on the grid and released after the green light ([`crate::launch_hover`]).
+    /// `None` leaves the ordinary target.
+    pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

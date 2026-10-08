@@ -45,6 +45,7 @@ pub mod exhaust;
 pub mod flare;
 pub mod hud;
 pub mod language;
+pub mod launch_hover;
 pub mod loading;
 pub mod menu;
 pub mod pre_race;

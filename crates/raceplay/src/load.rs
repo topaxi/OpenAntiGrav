@@ -921,6 +921,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class_announcer,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
+            launch_hover: title.race.launch_hover,
             speedup_pads,
             weapon_pads,
             weapons,

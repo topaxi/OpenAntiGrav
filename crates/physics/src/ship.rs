@@ -458,6 +458,11 @@ pub struct ShipState {
     /// [`crate::hover::BANK_TO_YAW_GAIN_FOUR_CORNER`]); the four-corner probe layout and
     /// downforce law are not ported. Written by the race, not hashed.
     pub four_corner: bool,
+    /// The grid clamp on the pre-scale hover target, `craft+0x348`: `Some` where the title holds
+    /// the craft's hover low on the grid and releases it after the green light
+    /// ([`crate::hover::capped_target_height`]). Written by the race from the countdown clock
+    /// every tick, not hashed, for [`Self::on_grid`]'s reason. `None`: the ordinary target.
+    pub hover_cap: Option<f32>,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -618,6 +623,7 @@ impl Default for ShipState {
             time_since_landing: 10.0,
             on_grid: false,
             four_corner: false,
+            hover_cap: None,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

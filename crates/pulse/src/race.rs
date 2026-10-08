@@ -38,6 +38,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     sounds: SOUND_BANKS,
     zone_announcer: Some(ZONE_ANNOUNCER),
     countdown_voice: Some(COUNTDOWN_VOICE),
+    launch_hover: None,
     // Pulse's own `speech_zone.bnk` was listed alongside Pure's and HD's -
     // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped
     // speed-class cues at all, only the numbered ladder.

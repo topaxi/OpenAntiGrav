@@ -128,6 +128,7 @@ impl Setup {
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
             zone_stages: None,
             countdown_voice: false,
+            launch_hover: None,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),
             weapons: None,
