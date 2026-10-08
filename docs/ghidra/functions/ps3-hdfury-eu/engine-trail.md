@@ -2112,3 +2112,23 @@ OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all hd_engin
 target/release/oag-game --race data/images/hdfury-ps3-eu-dec.iso --autopilot \
     --team feisar_c1 --ticks 1050 --screenshot /tmp/ours-t1050.png
 ```
+
+## Two-sided facing term, 2026-10-08 (`hd-leach-beam`)
+
+`python3 scripts/ps3-microcode.py fp-file` on `hd_enginetrail_bluered.rcsmaterial`
+(DATA06 `/data/ribboneffects/materials/`) prints
+`@0x0b MIN H0.w, |H4.xxxx|, {..} [const@slot 0xc = 0xe296b1ed]`: the facing
+dot `H4.x = dot(norm(TC2), norm(TC1))` goes through NV40's `SRC0_ABS` before the
+`MIN`, so the fade is `saturate(clamp(|dot|, 0, c) / c)`, two-sided, the same
+bit as the Rocket smoke ribbon ([rocket-trail.md](rocket-trail.md)). Confidence
+85 (instruction read; the rocket page's live eye-vector argument is the
+independent half). `crates/fx/shaders/exhaust.wesl` now takes `abs(facing_dot)`
+(it drew the ribbon one-sided before). Matched frames, autopilot `--race`,
+ticks 300/330/360/1100 byte-identical (camera dead astern, dot > 0); tick 700
+differs in 1133 px around the plume's edge, slightly more plume on the edge.
+Confidence 85 rests on the instruction read alone (the Rocket ribbon's live
+eye-vector dump is a different ribbon). Omega: checked, differs - its
+`data00.psarc` ships `Data/ribboneffects/HD_EngineTrail_BlueRed{,_1,_2}.rcsmaterial`
+as PS4 shaders and its `eboot.bin` names `TrailEffectManager.cpp`, so the
+family carries forward, but `ps3-microcode.py` cannot read PS4 code; not
+wired on Omega, no PS4 capture path.
