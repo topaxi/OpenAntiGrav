@@ -104,6 +104,7 @@ pub const TITLE: &Title = &Title {
         colour_pool: true,
         flip_v: true,
         zone_shares_one_texture: false,
+        gantry_card: false,
         origin: oag_title::Origin::Measured,
     }),
 };

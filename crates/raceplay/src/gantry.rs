@@ -312,6 +312,62 @@ fn panel_cull(
 /// HD's gantry, which keeps every state it authors: the countdown's own
 /// leave-outs are named rather than removed, and the later windows cull per
 /// frame ([`PanelCull`]).
+/// HD's gantry as a card: loaded, clocked and culled exactly as [`place_hd`]
+/// does, but framed by the model's own camera and drawn into the target the
+/// track's `billboard8` quad shows ([`oag_title::adverts::Adverts::gantry_card`]).
+///
+/// Nothing is placed: the quad is the track's own, so no mount basis, matrix or
+/// start position is read. The mount is measured only for the panel's extent,
+/// which [`PanelCull`] tests the later board states against.
+pub(super) fn place_card(
+    archives: &mut oag_assets::Archives,
+    name: &str,
+    track_model: &Model,
+    spec: &oag_title::adverts::Adverts,
+    report: &mut Vec<String>,
+) -> Option<crate::adverts::Card> {
+    let Some(mount) = oag_render::gantry::mount(track_model) else {
+        report.push(
+            "no start gantry: this circuit's track authors no billboard8 surface to show a card on"
+                .to_string(),
+        );
+        return None;
+    };
+    let loaded =
+        oag_mesh::mesh_render::without_texture_sink(|| load_with_blob(archives, name, report));
+    let (model, blob) = match loaded {
+        Ok(loaded) => loaded,
+        Err(e) => {
+            report.push(format!("no start gantry: {name} did not load ({e})"));
+            return None;
+        }
+    };
+    let countdown = oag_render::gantry::panel::fx350_draws(&model);
+    let (cull, parked) = panel_cull(&model, countdown, &mount, &HD_LAP_WINDOWS);
+    let clock = hd_clock(&model, name, report);
+    let mut card = match crate::adverts::card_from(8, model, &blob, spec) {
+        Ok(card) => card,
+        Err(why) => {
+            report.push(format!(
+                "no start gantry: {name} not drawn as a card ({why})"
+            ));
+            return None;
+        }
+    };
+    report.push(format!(
+        "start gantry {name}: drawn through its own camera into a {}x{} target shown on the \
+         circuit's billboard8 quad(s), as the original does (RPCS3, 2026-10-08); {parked} draw(s) \
+         outside the {:.1} x {:.1} panel are hidden per board window",
+        spec.target.0, spec.target.1, mount.width, mount.height,
+    ));
+    card.timeline = Some(CardTimeline {
+        clock,
+        cull,
+        tracker: std::cell::Cell::default(),
+    });
+    Some(card)
+}
+
 fn place_hd(
     mut model: Model,
     matrix: Mat4,
@@ -649,6 +705,50 @@ fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
     placed
 }
 
+/// `clock`'s time at this tick of `race`: [`Clock::seconds`] before the player's
+/// first line crossing, then the race-manager window the lap picks
+/// ([`BoardWindow::of`]), entered on the crossing that picked it.
+fn race_clock(clock: &Clock, tracker: &std::cell::Cell<BoardTracker>, race: &Race) -> f32 {
+    let tick = race.sim.world.tick;
+    let standing = race.player_standing();
+    let Some(laps) = clock.laps else {
+        return clock.seconds(tick);
+    };
+    let window = BoardWindow::of(standing, race.sim.world.laps_target(), &laps);
+    let mut state = tracker.get();
+    let entry = state.observe(tick, window, standing.lap_start_tick);
+    tracker.set(state);
+    clock.seconds_in(tick, entry)
+}
+
+/// What drives a gantry drawn as a card ([`place_card`]): the same clock, the
+/// same per-window cull as [`Gantry`], on the card's own drawable.
+#[derive(Debug)]
+pub struct CardTimeline {
+    clock: Clock,
+    cull: PanelCull,
+    tracker: std::cell::Cell<BoardTracker>,
+}
+
+impl CardTimeline {
+    /// This timeline's clock now: [`race_clock`], or `anim_seconds` where a
+    /// capture pins one.
+    pub(super) fn seconds(&self, race: &Race, anim_seconds: Option<f32>) -> f32 {
+        anim_seconds.unwrap_or_else(|| race_clock(&self.clock, &self.tracker, race))
+    }
+
+    /// Sets `drawable`'s hidden draws for `clock` and returns the time its
+    /// animation tables are written at.
+    pub(super) fn apply(&self, drawable: &Drawable, clock: f32) -> f32 {
+        if self.clock.window.is_some() {
+            drawable.set_hidden(self.cull.hidden(clock));
+            clock
+        } else {
+            clock.min(CLOCK_LIMIT)
+        }
+    }
+}
+
 /// The gantry on the GPU: one drawable and the matrix it is drawn at.
 #[derive(Debug)]
 pub(super) struct Gantry {
@@ -704,16 +804,7 @@ impl Gantry {
     /// player's first line crossing, then the race-manager window its lap
     /// picks ([`BoardWindow::of`]), entered on the crossing that picked it.
     pub(super) fn clock_seconds(&self, race: &Race) -> f32 {
-        let tick = race.sim.world.tick;
-        let standing = race.player_standing();
-        let Some(laps) = self.clock.laps else {
-            return self.clock.seconds(tick);
-        };
-        let window = BoardWindow::of(standing, race.sim.world.laps_target(), &laps);
-        let mut tracker = self.tracker.get();
-        let entry = tracker.observe(tick, window, standing.lap_start_tick);
-        self.tracker.set(tracker);
-        self.clock.seconds_in(tick, entry)
+        race_clock(&self.clock, &self.tracker, race)
     }
 
     /// The fog block this frame, shared with the rest of the scenery.

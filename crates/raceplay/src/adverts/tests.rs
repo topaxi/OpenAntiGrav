@@ -119,7 +119,7 @@ impl Cards {
         seconds: f32,
     ) -> Vec<(u32, (u32, u32), Vec<u8>)> {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-        self.render(queue, &mut encoder, seconds);
+        self.render(queue, &mut encoder, seconds, &|_| seconds);
         let buffers: Vec<wgpu::Buffer> = self
             .cards
             .iter()
@@ -399,4 +399,43 @@ fn pulse_psp_cards_stay_128_square() {
             .iter()
             .all(|c| c.size == (128, 128))
     );
+}
+
+#[test]
+fn hd_draws_its_gantry_as_a_card_and_pulse_does_not() {
+    let hd = oag_hd::TITLE.adverts.expect("HD measured its advert pass");
+    let pulse = oag_pulse::TITLE
+        .adverts
+        .expect("Pulse measured its advert pass");
+    assert!(
+        hd.gantry_card,
+        "RPCS3 2026-10-08: slot 8 is a 512x256 card on HD"
+    );
+    assert!(
+        !pulse.gantry_card,
+        "Pulse's gantry stands on the mount, byte-identical"
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_loads_slot_8_as_a_clocked_card_and_not_as_a_placed_model() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    assert!(loaded.billboards.gantry.is_none(), "no placed gantry model");
+    let card = loaded
+        .billboards
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("slot 8 is a card");
+    assert!(card.timeline.is_some(), "the gantry card carries its clock");
+    assert_eq!(card.size, (512, 256));
 }
