@@ -94,10 +94,10 @@ def main():
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
         if not session.wait_for_screen_pressing("Main Menu", 240):
             sys.exit("never reached the Main Menu")
-        time.sleep(20)
+        session.settle_menu(20)
         if session.walk_to_race() not in drive.RACE_ARRIVED:
             sys.exit("no race")
-        time.sleep(70)
+        session.wait_for_load(70)
         session.tap("cross", settle=22)
         gdb = Debugger(port=port)
         gdb.pause()

@@ -86,6 +86,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import emu_guard
 import rpcs3_pad
 import xvfb_display
 
@@ -345,46 +346,69 @@ EMULATOR_BINARY = "rpcs3"
 EMULATOR_PROCESS_NAMES = (EMULATOR_BINARY, "AppRun.wrapped")
 
 
+#: The pid of the RPCS3 *this* tooling launched, under this run's own cache dir.
+#: Stopping, lock clearing and "is it running" all key on it. The previous
+#: `pgrep -x rpcs3` matched every member's emulator on the machine, so one
+#: member's `stop` killed the others' runs, and `clear_stale_lock` refused to
+#: remove a dead run's `RPCS3.buf` for as long as anybody else's RPCS3 was up -
+#: which presents as an "Another instance" modal and a boot that never reaches
+#: a screen.
+EMULATOR_PIDFILE = os.path.join(xdg_cache(), "oag-rpcs3-drive", "emulator.pid")
+
+
+def recorded_pid():
+    try:
+        return int(Path(EMULATOR_PIDFILE).read_text().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _alive(pid):
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:
+        stat = Path("/proc/%d/stat" % pid).read_text()
+        return stat.rsplit(")", 1)[1].split()[0] != "Z"
+    except (OSError, IndexError):
+        return True
+
+
 def emulator_running(binary=EMULATOR_BINARY):
-    names = EMULATOR_PROCESS_NAMES if binary == EMULATOR_BINARY else (binary,)
-    return any(subprocess.run(["pgrep", "-x", name],
-                              capture_output=True).returncode == 0
-               for name in names)
+    """Whether the RPCS3 recorded in this run's pidfile is still alive."""
+    return _alive(recorded_pid())
 
 
-def _kill_emulator(binary, signal_flag=None):
-    names = EMULATOR_PROCESS_NAMES if binary == EMULATOR_BINARY else (binary,)
-    for name in names:
-        args = ["pkill"] + ([signal_flag] if signal_flag else []) + ["-x", name]
-        subprocess.run(args, capture_output=True)
-
-
-def stop_emulator(binary=EMULATOR_BINARY, quiet=False):
-    """Stop a running RPCS3, if one is up.
+def stop_emulator(binary=EMULATOR_BINARY, quiet=False, everyone=False):
+    """Stop the RPCS3 this tooling started (by pid), if it is up.
 
     `Session.__exit__` already terminates the process it started on a normal
-    exit - `boot`/`race`/`shot`/`capture`/`browse`/`record` all clean up after
-    themselves that way. It runs under `start_new_session=True`, though, so a
-    driving script that dies uncleanly (killed, crashed, the terminal closed)
-    detaches RPCS3 rather than taking it down with it - measured directly as
-    an emulator left running for thirty minutes with nothing attached to it.
-    This is `stop`'s half of covering that case; RPCS3 does not support a
-    second instance at all (see `clear_stale_lock` below), so unlike Xvfb
-    there is no "someone else's" RPCS3 to avoid - matching pid, matching
-    RPCS3 was never possible to begin with.
+    exit. It runs under `start_new_session=True`, so a driving script that dies
+    uncleanly detaches RPCS3 rather than taking it down with it; the pidfile is
+    what lets a later `stop` find it again. `everyone=True` is the old
+    behaviour (`pkill -x rpcs3`) for the maintainer's own machine; on a shared
+    one it kills other members' runs, so it is never the default.
     """
-    if not emulator_running(binary):
-        if not quiet:
-            print("no %s running" % binary)
-        return False
-    _kill_emulator(binary)
-    for _ in range(20):
-        time.sleep(0.5)
-        if not emulator_running(binary):
-            if not quiet:
-                print("%s stopped" % binary)
-            return True
-    _kill_emulator(binary, "-9")
+    pid = recorded_pid()
+    if everyone:
+        for name in EMULATOR_PROCESS_NAMES:
+            subprocess.run(["pkill", "-x", name], capture_output=True)
+    if not _alive(pid):
+        if not quiet and not everyone:
+            print("no %s recorded as running in %s" % (binary, EMULATOR_PIDFILE))
+        return everyone
+    emu_guard.terminate_group(pid)
+    try:
+        os.unlink(EMULATOR_PIDFILE)
+    except OSError:
+        pass
+    if not quiet:
+        print("%s (pid %d) stopped" % (binary, pid))
     return True
 
 
@@ -403,8 +427,11 @@ def clear_stale_lock():
     nothing to `TTY.log`, and every wait here times out against what looks
     exactly like a game that booted and stalled. Two runs were lost to it.
 
-    Guarded on there being no live process, so this cannot pull the lock out
-    from under a real one - a second instance is genuinely not supported.
+    Guarded on *this run's* recorded emulator being dead (`EMULATOR_PIDFILE`),
+    so it cannot pull the lock out from under a live one. It used to ask
+    whether any `rpcs3` on the machine was running, and with several members'
+    emulators up it never cleared a dead run's lock - the "Another instance"
+    modal, then a boot that reached no screen.
     """
     if emulator_running():
         return False
@@ -450,15 +477,142 @@ def screenshot(path, trim=False):
     return path
 
 
+#: One long-lived emulator a member keeps up between captures (`serve`). The
+#: file names the emulator pid, the serving pid and the pad's control socket;
+#: a script that finds it live and was asked to `attach` drives that instance
+#: instead of booting a fresh one - a boot, menu walk and track load cost three
+#: to ten minutes per state, and most states are reachable from a running race.
+SESSION_FILE = os.path.join(xdg_cache(), "oag-rpcs3-drive", "session.json")
+CONTROL_SOCKET = os.path.join(xdg_cache(), "oag-rpcs3-drive", "pad.sock")
+
+
+def read_session():
+    try:
+        return json.loads(Path(SESSION_FILE).read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def live_session():
+    info = read_session()
+    if info and _alive(info.get("emulator_pid")) and _alive(info.get("serve_pid")):
+        return info
+    return None
+
+
+class RemotePad:
+    """`rpcs3_pad.Pad`'s interface, spoken to the pad the `serve` process owns.
+
+    The virtual pad is a kernel device that dies with the process that made it,
+    and RPCS3 binds it only at start; so the pad lives in `serve` and an
+    attaching script borrows it over a unix socket.
+    """
+
+    def __init__(self, path):
+        self.path = path
+        self.held = set()
+
+    def _call(self, **msg):
+        import socket as _socket
+        sock = _socket.socket(_socket.AF_UNIX)
+        sock.settimeout(30)
+        sock.connect(self.path)
+        sock.sendall((json.dumps(msg) + "\n").encode())
+        reply = sock.makefile().readline()
+        sock.close()
+        if not reply or not json.loads(reply).get("ok"):
+            raise RuntimeError("pad server refused %r: %s" % (msg, reply))
+
+    def set(self, name, down):
+        self._call(op="set", name=name, down=bool(down))
+        (self.held.add if down else self.held.discard)(name)
+
+    def press(self, name, seconds=0.12):
+        self._call(op="press", name=name, seconds=seconds)
+
+    def stick(self, x=0.0, y=0.0, right=False):
+        self._call(op="stick", x=x, y=y, right=right)
+
+    def release_all(self):
+        self._call(op="release_all")
+        self.held.clear()
+
+    def close(self):
+        """Releases what this script held; the pad itself belongs to `serve`."""
+        try:
+            self.release_all()
+        except (OSError, RuntimeError):
+            pass
+
+
+class AttachedProcess:
+    """Just enough of `subprocess.Popen` for scripts that read `session.proc.pid`
+    or poll for an exit, over an emulator someone else started."""
+
+    def __init__(self, pid):
+        self.pid = pid
+
+    def poll(self):
+        return None if _alive(self.pid) else 1
+
+    def terminate(self):
+        pass
+
+
+def serve_pad(pad, path, stop):
+    """Answer `RemotePad` calls until `stop` is set. One thread per request so a
+    long `press` never blocks a concurrent `release_all`."""
+    import socket as _socket
+    import threading
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+    server = _socket.socket(_socket.AF_UNIX)
+    server.bind(path)
+    server.listen(8)
+    server.settimeout(1.0)
+
+    def handle(conn):
+        try:
+            msg = json.loads(conn.makefile().readline())
+            op = msg["op"]
+            if op == "set":
+                pad.set(msg["name"], msg["down"])
+            elif op == "press":
+                pad.press(msg["name"], msg.get("seconds", 0.12))
+            elif op == "stick":
+                pad.stick(msg["x"], msg["y"], msg.get("right", False))
+            elif op == "release_all":
+                pad.release_all()
+            reply = {"ok": True}
+        except Exception as exc:
+            reply = {"ok": False, "error": str(exc)}
+        try:
+            conn.sendall((json.dumps(reply) + "\n").encode())
+        finally:
+            conn.close()
+
+    while not stop.is_set():
+        try:
+            conn, _ = server.accept()
+        except _socket.timeout:
+            continue
+        threading.Thread(target=handle, args=(conn,), daemon=True).start()
+    server.close()
+
+
 class Session:
     """One emulator run, with the pad it must not outlive."""
 
-    def __init__(self, image, log_dir, config=MUTED, interpreter=False):
+    def __init__(self, image, log_dir, config=MUTED, interpreter=False,
+                 attach=None):
         # Resolved here rather than passed through: `data/` is gitignored and
         # does not travel into a worktree, so a relative default silently
         # becomes a path RPCS3 answers `Invalid file or folder` for.
         self.image = Path(image).resolve()
-        if not self.image.exists():
+        attaching = os.environ.get("OAG_RPCS3_ATTACH") == "1"
+        if not self.image.exists() and not attaching:
             raise SystemExit(
                 "no such image: %s\n"
                 "  `data/` is gitignored and absent from a worktree - run this "
@@ -473,13 +627,53 @@ class Session:
         self.interpreter = interpreter
         self.pad = None
         self.proc = None
+        self.guard = None
+        # `attach=None` follows `OAG_RPCS3_ATTACH=1`: with it set, every script
+        # built on Session drives the live `serve` instance when there is one.
+        if attach is None:
+            attach = os.environ.get("OAG_RPCS3_ATTACH") == "1"
+        self.attach = attach
+        self.serving = False
+
+    def _enter_attached(self):
+        info = live_session()
+        if info is None:
+            raise SystemExit(
+                "OAG_RPCS3_ATTACH is set but no live session: start one with\n"
+                "  uv run --with evdev python3 scripts/rpcs3-drive.py serve "
+                "--image <iso> &   (record its pid)")
+        if bool(info.get("interpreter")) != bool(self.interpreter) or \
+                (self.config not in (MUTED, None) and info.get("config") != str(self.config)):
+            raise SystemExit(
+                "this script wants interpreter=%s config=%s but the live session was "
+                "served with interpreter=%s config=%s; stop it and serve again"
+                % (self.interpreter, self.config, info.get("interpreter"),
+                   info.get("config")))
+        self.guard = emu_guard.Guard(self.log_dir / "status.json", label="rpcs3-attached",
+                                     kill=lambda: None)
+        self.guard.extra["emulator_pid"] = 0
+        self.guard.stage("attach")
+        self.pad = RemotePad(info["socket"])
+        self.proc = AttachedProcess(info["emulator_pid"])
+        self.guard.start()
+        emu_guard.CURRENT = self.guard
+        print("attached to the live emulator, pid %d (screen: %s)"
+              % (self.proc.pid, current_screen()), flush=True)
+        return self
 
     def __enter__(self):
+        if self.attach:
+            return self._enter_attached()
         clear_stale_lock()
         start_display()
+        self.guard = emu_guard.Guard(
+            self.log_dir / "status.json", label="rpcs3",
+            kill=self._emergency_stop)
+        self.guard.stage("boot")
         # The pad has to exist before RPCS3 does: it binds pads when it
         # enumerates devices and does not rescan.
         self.pad = rpcs3_pad.Pad()
+        os.makedirs(os.path.dirname(TTY), exist_ok=True)
         open(TTY, "w").close()
         if self.config == MUTED:
             self.config = scratch_config(interpreter=self.interpreter)
@@ -490,18 +684,57 @@ class Session:
             stdout=open(self.log_dir / "rpcs3.log", "w"),
             stderr=subprocess.STDOUT, start_new_session=True,
             env=emulator_env())
+        os.makedirs(os.path.dirname(EMULATOR_PIDFILE), exist_ok=True)
+        Path(EMULATOR_PIDFILE).write_text("%d\n" % self.proc.pid)
+        self.guard.extra["emulator_pid"] = self.proc.pid
+        self.guard.start()
+        emu_guard.CURRENT = self.guard
         return self
 
-    def __exit__(self, *_):
+    def _emergency_stop(self):
+        """The watchdog's kill: the emulator's whole group, by pid, then the pad."""
         if self.proc is not None:
-            self.proc.terminate()
+            emu_guard.terminate_group(self.proc.pid)
+        if self.pad is not None:
+            try:
+                self.pad.close()
+            except Exception:
+                pass
+
+    def __exit__(self, exc_type, *_):
+        if self.guard is not None:
+            self.guard.finish(ok=exc_type is None)
+            emu_guard.CURRENT = None
+        if self.attach:
+            if self.pad is not None:
+                self.pad.close()
+            return
+        if self.proc is not None:
+            # The whole group, not just the wrapper: `terminate()` signalled
+            # only `rpcs3`/`AppRun`, which is how emulators and their
+            # `RPCS3.buf` outlived the run that started them.
+            emu_guard.terminate_group(self.proc.pid)
+            try:
+                os.unlink(EMULATOR_PIDFILE)
+            except OSError:
+                pass
         if self.pad is not None:
             self.pad.close()
+
+    def note_screen(self):
+        """Tell the watchdog which screen this is: `boot` before the first
+        `Switching Screen` line, `menu:<name>` after, so a walk parked on one
+        screen is a stall *named* by that screen."""
+        screen = current_screen()
+        if self.guard is not None:
+            self.guard.stage("boot" if screen == "?" else "menu:" + screen,
+                             screen=screen)
+        return screen
 
     def wait_for_screen(self, name, timeout=180.0):
         deadline = time.time() + timeout
         while time.time() < deadline:
-            if current_screen() == name:
+            if self.note_screen() == name:
                 return True
             if self.proc.poll() is not None:
                 raise RuntimeError("RPCS3 exited before reaching %r" % name)
@@ -524,7 +757,7 @@ class Session:
         """
         deadline = time.time() + timeout
         while time.time() < deadline:
-            if current_screen() == name:
+            if self.note_screen() == name:
                 return True
             if self.proc.poll() is not None:
                 raise RuntimeError("RPCS3 exited before reaching %r" % name)
@@ -534,8 +767,13 @@ class Session:
 
     def tap(self, button, settle=4.0):
         was = current_screen()
+        if self.guard is not None and settle > 10:
+            # A long settle is the countdown or a load, not a stall.
+            self.guard.stage("countdown", limit=settle + 60)
         self.pad.press(button, 0.15)
         time.sleep(settle)
+        if self.guard is not None and settle > 10:
+            self.guard.stage("capture")
         return was, current_screen()
 
     def home_menu_select(self, item, settle=1.0):
@@ -626,6 +864,54 @@ class Session:
                 self.tap(button, settle=1.2)
             print("    nav %-8s at %s" % (button, current_screen()), flush=True)
 
+    def race_loaded(self):
+        """Whether the track that started loading last has finished.
+
+        HD prints `Loading track model ...` when a load begins and, once the
+        race is up, `Play welcome` (after `Loading Screen Finished` and `Track
+        Vex Allocated`). Measured 2026-10-08 on a warm cache: the load takes
+        well under the 70 s every script used to sleep.
+        """
+        text = tty_text()
+        start = text.rfind("Loading track model")
+        return start >= 0 and "Play welcome" in text[start:]
+
+    def wait_for_load(self, fallback=70.0, settle=2.0):
+        """Wait for the race to finish loading, instead of sleeping `fallback`.
+
+        Replaces `time.sleep(70)` after `walk_to_race`. Returns the seconds it
+        took; if the signal never comes within `fallback * 2` it says so and
+        returns, leaving the caller to carry on as the fixed sleep would have -
+        the load having stalled is then reported by the watchdog's own stage.
+        """
+        began = time.time()
+        if self.guard is not None:
+            self.guard.stage("loading", limit=fallback * 2 + 30)
+        while time.time() - began < fallback * 2:
+            if self.race_loaded():
+                time.sleep(settle)
+                took = time.time() - began
+                print("  race loaded after %.0f s (a fixed sleep was %.0f s)"
+                      % (took, fallback), flush=True)
+                if self.guard is not None:
+                    self.guard.stage("capture")
+                return took
+            if self.proc.poll() is not None:
+                raise RuntimeError("RPCS3 exited while the race loaded")
+            time.sleep(1.0)
+        print("  no 'Play welcome' after %.0f s; continuing as a sleep would"
+              % (fallback * 2), flush=True)
+        if self.guard is not None:
+            self.guard.stage("capture")
+        return None
+
+    def settle_menu(self, fixed=20.0):
+        """The pause after `Main Menu` that scripts used to spend 20 s on."""
+        wait = float(os.environ.get("OAG_MENU_SETTLE", fixed))
+        if self.guard is not None:
+            self.guard.stage("settle", limit=wait + 60)
+        time.sleep(wait)
+
     def walk_to_race(self, max_presses=12, plan=None):
         """Press cross until HD is in a race, or give up and say where it got to.
 
@@ -634,6 +920,7 @@ class Session:
         *measured* to be and this loop is what survives a dropped press.
         """
         for index in range(1, max_presses + 1):
+            self.note_screen()
             if current_screen() in RACE_ARRIVED:
                 break
             if plan:
@@ -645,13 +932,97 @@ class Session:
             print("  press %2d  %-22s -> %-22s%s"
                   % (index, was, now, "" if now != was else "   (dropped)"),
                   flush=True)
-        return current_screen()
+        screen = current_screen()
+        if self.guard is not None:
+            if screen in RACE_ARRIVED:
+                self.guard.stage("loading", screen=screen)
+            else:
+                self.guard.stage("menu:" + screen, screen=screen)
+        return screen
 
 
 def cmd_display(args):
     started = start_display()
     print("Xvfb :%d %s; address it as DISPLAY=%s"
           % (DISPLAY_NUMBER, "started" if started else "already running", DISPLAY))
+    return 0
+
+
+def cmd_serve(args):
+    """Boot once, hold the pad, and stay up until stopped (`stop`, or SIGTERM).
+
+    Run it as a plain background job and record its pid:
+
+        uv run --with evdev python3 scripts/rpcs3-drive.py --log-dir D serve \\
+            --image I > D/serve.log 2>&1 &
+
+    Every script built on `Session` then drives this emulator, instead of
+    booting its own, when `OAG_RPCS3_ATTACH=1` is set (see `Session`). The run
+    stops being a boot-walk-load-capture-quit cycle and becomes: reach a state
+    once, capture, navigate to the next one.
+    """
+    import signal
+    import threading
+    import rpcs3_gdb_proxy
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    # The stub lives on port+1000, owned by this process; scripts reach it
+    # through a proxy on the public port, because the stub serves one client
+    # per launch and dies when that client leaves.
+    proxy = None
+    global GDB_SERVER
+    if GDB_SERVER:
+        host, _, port = GDB_SERVER.rpartition(":")
+        public = int(port)
+        GDB_SERVER = "%s:%d" % (host, public + 1000)
+    session = Session(args.image, args.log_dir, config=args.config,
+                      interpreter=args.interpreter, attach=False)
+    with session:
+        session.guard.stage("boot", limit=args.timeout)
+        print("rpcs3 pid %d" % session.proc.pid, flush=True)
+        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+            print("never reached the Main Menu (last screen: %s)"
+                  % current_screen(), file=sys.stderr)
+            return 1
+        if GDB_SERVER:
+            proxy = rpcs3_gdb_proxy.Proxy(public + 1000, public)
+            proxy.connect_upstream()
+            proxy.stop = stop
+            proxy.start()
+            print("gdb proxy on %d (stub on %d)" % (public, public + 1000), flush=True)
+        info = {"emulator_pid": session.proc.pid, "serve_pid": os.getpid(),
+                "socket": CONTROL_SOCKET, "interpreter": bool(args.interpreter),
+                "config": None if args.config == MUTED else str(args.config),
+                "image": str(session.image), "started": time.time()}
+        Path(SESSION_FILE).write_text(json.dumps(info))
+        thread = threading.Thread(target=serve_pad,
+                                  args=(session.pad, CONTROL_SOCKET, stop), daemon=True)
+        thread.start()
+        session.guard.stage("serving", limit=10 ** 9)
+        print("serving: Main Menu reached; attach with OAG_RPCS3_ATTACH=1 "
+              "(session file %s)" % SESSION_FILE, flush=True)
+        while not stop.is_set() and session.proc.poll() is None:
+            time.sleep(1.0)
+        stop.set()
+        thread.join(timeout=3)
+    for path in (SESSION_FILE, CONTROL_SOCKET):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    print("serve ended", flush=True)
+    return 0
+
+
+def cmd_status(args):
+    """One line on the live session: pids, screen, how long it has been up."""
+    info = live_session()
+    if info is None:
+        print("no live session (serve is not running, or its emulator died)")
+        return 1
+    print("live: emulator %d, serve %d, up %.0fs, screen %s"
+          % (info["emulator_pid"], info["serve_pid"],
+             time.time() - info["started"], current_screen()))
     return 0
 
 
@@ -671,7 +1042,16 @@ def cmd_stop(args):
     `clear_stale_lock` is itself guarded on there being no live process, so
     running it before the kill would just skip.
     """
-    stop_emulator()
+    info = read_session()
+    if info and _alive(info.get("serve_pid")):
+        import signal
+        os.kill(info["serve_pid"], signal.SIGTERM)
+        for _ in range(20):
+            time.sleep(0.5)
+            if not _alive(info["serve_pid"]):
+                break
+        print("serve (pid %d) stopped" % info["serve_pid"])
+    stop_emulator(everyone=getattr(args, "all", False))
     clear_stale_lock()
     if stop_display():
         print("Xvfb :%d stopped" % DISPLAY_NUMBER)
@@ -704,6 +1084,7 @@ def cmd_boot(args):
                   % current_screen(), file=sys.stderr)
             return 1
         print("Main Menu. Holding for %g s." % args.hold, flush=True)
+        session.guard.stage("hold", limit=args.hold + 30)
         time.sleep(args.hold)
     return 0
 
@@ -748,6 +1129,7 @@ def cmd_race(args):
                   % current_screen(), file=sys.stderr)
             return 1
         print("Main Menu; settling", flush=True)
+        session.guard.stage("settle", limit=args.settle + 60)
         time.sleep(args.settle)
         if args.shots:
             screenshot(session.log_dir / "01-menu.png")
@@ -758,6 +1140,7 @@ def cmd_race(args):
             return 1
         print("%s; waiting %g s for the track to load"
               % (current_screen(), args.load), flush=True)
+        session.guard.stage("loading", limit=args.load + 90)
         # **A burst rather than one shot at the end, because the loading screen
         # is transient.** The grid shot below is taken once the load is over, so
         # nothing here used to see the screen that covers it - and the load is
@@ -777,6 +1160,7 @@ def cmd_race(args):
             screenshot(session.log_dir / "02-grid.png")
         if args.drive:
             print("holding thrust for %g s" % args.drive, flush=True)
+            session.guard.stage("capture:drive", limit=args.drive + 90)
             session.pad.set("cross", True)
             time.sleep(args.drive)
             session.pad.set("cross", False)
@@ -932,6 +1316,7 @@ def cmd_capture(args):
             return 1
         print("in a race; waiting %g s for the track to load" % args.load,
               flush=True)
+        session.guard.stage("loading", limit=args.load + 90)
         time.sleep(args.load)
 
         track = track_name()
@@ -1622,8 +2007,18 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("display").set_defaults(run=cmd_display)
-    sub.add_parser("stop").set_defaults(run=cmd_stop)
+    stop_parser = sub.add_parser("stop")
+    stop_parser.add_argument(
+        "--all", action="store_true",
+        help="also pkill every rpcs3 on the machine (never on a shared host)")
+    stop_parser.set_defaults(run=cmd_stop)
     sub.add_parser("preflight").set_defaults(run=cmd_preflight)
+
+    serve = sub.add_parser("serve", help="boot once and stay up for attaching scripts")
+    serve.add_argument("--timeout", type=float, default=240.0)
+    serve.set_defaults(run=cmd_serve)
+    sub.add_parser("status", help="the live serve session, if any").set_defaults(
+        run=cmd_status)
 
     boot = sub.add_parser("boot")
     boot.add_argument("--timeout", type=float, default=180.0)

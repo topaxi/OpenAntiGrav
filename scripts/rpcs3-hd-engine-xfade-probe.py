@@ -108,11 +108,11 @@ with drive.Session(str(ROOT / "data/images/hdfury-ps3-eu-dec.iso"), str(log_dir)
     print("rpcs3 pid", s.proc.pid, flush=True)
     if not s.wait_for_screen_pressing("Main Menu", 240):
         sys.exit("no main menu")
-    time.sleep(20)
+    s.settle_menu(20)
     screen = s.walk_to_race()
     if screen not in drive.RACE_ARRIVED:
         sys.exit("ended on %r" % screen)
-    time.sleep(70)
+    s.wait_for_load(70)
     d = Debugger(port=GDB_PORT)
     try:
         d.pause()

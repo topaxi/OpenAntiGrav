@@ -43,8 +43,13 @@ reads the `\x7fELF` header of the decrypted EBOOT, so every address in
 `docs/ghidra/functions/ps3-hdfury-eu/names.tsv` can be used as-is.
 """
 
+import os
 import socket
+import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import emu_guard  # noqa: E402
 
 DEFAULT_PORT = 2345
 
@@ -80,6 +85,7 @@ class Debugger:
     """
 
     def __init__(self, port=DEFAULT_PORT, host="127.0.0.1", timeout=25.0):
+        emu_guard.stage("capture")
         self.sock = socket.create_connection((host, port), timeout)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.settimeout(timeout)
@@ -128,7 +134,9 @@ class Debugger:
 
     def cmd(self, body):
         self.send(body)
-        return self.read_packet()
+        packet = self.read_packet()
+        emu_guard.beat()
+        return packet
 
     def pause(self, timeout=25.0):
         """Interrupt a running target. A no-op if it is already stopped.
