@@ -1936,8 +1936,14 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   difference rather than as a bloom radius to fit. Note the PSP has **no
   programmable shaders at all** - whatever the original does here is
   fixed-function GE work or a framebuffer pass, so "find the shader" is the
-  wrong search; the roadmap's sibling item, motion blur / speed streaking, is
-  visible in these same frames and is the other half of the look.
+  wrong search. **No motion blur is recorded for the original here**: the roadmap's
+  sibling item was filed as "visible in the reference frames" with no evidence, and
+  [bloom.md](bloom.md)'s census of the one recorded frame's screen-space prims
+  (shadow wipe, bright pass, the two bloom blurs, composite) has no frame-blend prim,
+  though that is one frame at rest and not re-read at speed. The plume's streaked
+  look comes from its own streak lookup texture (below, "the original's streaked
+  look"). HD's boost has no blur pass either, measured
+  ([funklayer-zoom.md](../ps3-hdfury-eu/funklayer-zoom.md)).
 - **The original's field of view is wider during a boost**, reproduced
   independently here. Per the Open list below this is **not** a porting
   target and no constant in `display.rs` moves for it.
