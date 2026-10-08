@@ -1479,7 +1479,7 @@ corollaries closed:
   1.8 at +45, 3.2 at +51, 4.8 at +57, read from the log's body position) and the trigger radius is 3, so
   mine 5 (tripping at +54) finds the owner out of reach: four blasts.
 
-**Where ours diverges: the drop interval, a fix prepared and not landed.** Ours lays the cluster at seven-tick spacing, so
+**Where ours diverged: the drop interval (landed 2026-10-08, lane `pulse-mine-drop`, see the end of this section).** Ours lays the cluster at seven-tick spacing, so
 its blasts are at k=32, 39, 46 and a **third** only; the fourth is lost to the owner leaving the trigger radius first
 (`MINEDBG`, a temporary print: trips at age 0.5000 with the owner 0.002, 0.57 and 1.69 units off, the fourth
 would have been past 3). `Held::advance_drop` tests its `0.1` s reload with a strict `> 0`, and at the engine's
@@ -1488,8 +1488,7 @@ display's `1/59.94` s with jitter, which carries six frames past zero and makes 
 frame (the 2026-09-15 measurement: six frames, seven now and then). Passing the test at a slack of `1e-5` s
 (`DROP_TIMER_SLACK`, **chosen, not measured**: far below one tick, far below the jitter) gave blasts at k=32, 38, 44, 50
 against the original's 32, 38, 44, 51 with the brightness tail agreeing (123 against 124 at k=59), and a unit test
-(`a_cluster_leaves_every_six_ticks_at_sixty_hertz`, drops on ticks 0, 6, 12, 18, 24). **It was backed out of the
-branch**: it moves `ai_dekonstruct_black_ground_truth` (`phantom_seed_3` forward 3 destroyed against a ceiling of 1,
+(`a_cluster_leaves_every_six_ticks_at_sixty_hertz`, drops on ticks 0, 6, 12, 18, 24). **It was held back at first**: it moved `ai_dekonstruct_black_ground_truth` (`phantom_seed_3` forward 3 destroyed against a ceiling of 1,
 `rapier_seed_1` and `rapier_seed_3` over theirs too; all 13 cells pass with slack 0). The seven AI Aces play with weapons on, so
 mine kills are the obvious suspect, but **whether the extra deaths are mine kills or the per-seed divergence the test's own
 notes call chaotic was not checked**. Those ceilings "may only fall" and are the AI lane's, so raising
@@ -1503,3 +1502,24 @@ orange sparks plus a few chunks (frames `mine-late.png`, one boot, a description
 the original's camera shakes and the craft is pushed, ours' shield bar differs (not this lane's).
 Pure's mine uses this same timer: **checked, applies if landed (the timer is shared engine code), not measured on
 Pure's own binary**, so the six is Pulse's.
+
+### Landed 2026-10-08 (pulse-mine-drop)
+
+`DROP_TIMER_SLACK = 1e-5` is in `Held::advance_drop`, with `a_cluster_leaves_every_six_ticks_at_sixty_hertz`
+(fails with slack 0). The three held ceilings were separated before being raised: with the fix, PHANTOM 3
+forward loses 3 craft (old spacing 1), RAPIER 1 reversed 1 (0), RAPIER 3 forward 3 (1). The extra deaths are
+weapon-dominant by shield accounting (weapon loss over wall plus roll) in all but one, but a mine blast leaves no
+projectile to attribute (`unattributed`), so "mine kill" is not shown; weapons-off, all three cells lose nobody
+under either spacing (not a wall-only control, see `ai_loss_attribution_board`). The wide control is decisive:
+PHANTOM and RAPIER seeds 4-13, forward and reversed (80 races): **40 destroyed with the fix, 41 with seven-tick
+spacing** (forward 18 against 19, reversed 22 against 22). Read as per-seed divergence, the same reading as the
+2026-10-07 `weapon-tilt` note. Only the exceeded half of each of the three rows was raised.
+
+Eliminator credit for a Mine is intact and now pinned (`a_tripped_mine_that_finishes_the_craft_credits_the_layer`):
+`Impact::struck` records the layer as the victim's last damager and `credit_kill` pays it; the splash path
+(`credit_blast`) covers a second craft inside the radius.
+
+Cross-title: `advance_drop` and `DROP_INTERVAL` are shared by every title that lays a charge, so **Pure (Mine and Bomb)
+and HD (`HD_Mine`) now drop at six ticks too**. That is Pulse's law, **unmeasured on Pure's and HD's own binaries**
+(HD's drop timer is unread); the nearest evidence is that all three run the same fixed 60 Hz step, where a seven-tick
+gap is an artefact of float rounding, not of any authored value. Status: checked, applies, not measured on Pure/HD.
