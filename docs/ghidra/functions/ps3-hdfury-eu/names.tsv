@@ -612,3 +612,19 @@
 0x001535f8	function	LeachBeam_Update	80	leach-beam-strips.md
 0x002a3f70	function	RibbonNode_FromDirection	80	leach-beam-strips.md
 
+
+# 2026-10-08 hd-ai-nnt: the dormant AI neural network and its per-craft driver (ai-net.md)
+0x0010a368	function	AiNet_SetInputs	85	ai-net.md
+0x0010a748	function	AiNet_Forward	85	ai-net.md
+0x0010ac90	function	AiNet_GetOutputs	85	ai-net.md
+0x0010a938	function	AiNet_Allocate	80	ai-net.md
+0x0010ab10	function	AiNet_LoadWeights	80	ai-net.md
+0x0010a480	function	AiNet_Free	80	ai-net.md
+0x0010a530	function	AiNet_PrintStats	90	ai-net.md
+0x0010ad18	function	AiNet_PrintResponses	75	ai-net.md
+0x0010b150	function	AiNet_TrainStep	75	ai-net.md
+0x0010b978	function	AiNetDriver_Init	80	ai-net.md
+0x0010b8a8	function	AiNetDriver_SetName	80	ai-net.md
+0x0010b760	function	AiNetDriver_LoadAcn	80	ai-net.md
+0x0010be38	function	AiNetDriver_GetControls	80	ai-net.md
+0x0010ba08	function	AiNetDriver_BuildInputs	65	ai-net.md
