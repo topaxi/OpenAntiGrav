@@ -1447,7 +1447,7 @@ steers round its own old mine like anyone's.
 neither title's bomb trigger is located, and the weapon table has no equivalent
 (`checked, differs` is not claimable either).
 
-## 2026-10-08: the cluster is the round counter, and our drop was one tick too slow (pulse-weapon-look)
+## 2026-10-08: the cluster is the round counter, and our drop is one tick too slow (pulse-weapon-look)
 
 Settles the 2026-10-01 pulse-fx-3 section's open questions on the Mine's explosion.
 Method: PPSSPP 1.20.4, software renderer, native 480x272, a stationary craft in a Time Trial
@@ -1480,21 +1480,26 @@ corollaries closed:
   1.8 at +45, 3.2 at +51, 4.8 at +57, read from the log's body position) and the trigger radius is 3, so
   mine 5 (tripping at +54) finds the owner out of reach: four blasts.
 
-**Where ours diverged: the drop interval, fixed.** Ours laid the cluster at seven-tick spacing, so its
-blasts were at k=32, 39, 46 and a **third** only; the fourth was lost to the owner leaving the trigger radius first
+**Where ours diverges: the drop interval, a fix prepared and not landed.** Ours lays the cluster at seven-tick spacing, so
+its blasts are at k=32, 39, 46 and a **third** only; the fourth is lost to the owner leaving the trigger radius first
 (`MINEDBG`, a temporary print: trips at age 0.5000 with the owner 0.002, 0.57 and 1.69 units off, the fourth
-would have been past 3). `Held::advance_drop` tested its `0.1` s reload with a strict `> 0`, and at the engine's
-exact `1/60` s step `0.1f32` less six `dt`s leaves `+1e-9`, so every gap was seven. The original's own `dt` is the
+would have been past 3). `Held::advance_drop` tests its `0.1` s reload with a strict `> 0`, and at the engine's
+exact `1/60` s step `0.1f32` less six `dt`s leaves `+1e-9`, so every gap is seven. The original's own `dt` is the
 display's `1/59.94` s with jitter, which carries six frames past zero and makes a seventh only after a short
-frame (`mine.md`'s 2026-09-15 measurement: six frames, seven now and then). The test now passes at a slack of
-`1e-5` s (`DROP_TIMER_SLACK`, **chosen, not measured**: far below one tick, far below the jitter). After:
-blasts at k=32, 38, 44, 50 against the original's 32, 38, 44, 51, and the brightness tail (123 against 124 at
-k=59) agrees. `a_cluster_leaves_every_six_ticks_at_sixty_hertz` pins it (the drops leave on ticks
-0, 6, 12, 18, 24).
+frame (the 2026-09-15 measurement: six frames, seven now and then). Passing the test at a slack of `1e-5` s
+(`DROP_TIMER_SLACK`, **chosen, not measured**: far below one tick, far below the jitter) gave blasts at k=32, 38, 44, 50
+against the original's 32, 38, 44, 51 with the brightness tail agreeing (123 against 124 at k=59), and a unit test
+(`a_cluster_leaves_every_six_ticks_at_sixty_hertz`, drops on ticks 0, 6, 12, 18, 24). **It was backed out of the
+branch**: it moves `ai_dekonstruct_black_ground_truth` (`phantom_seed_3` forward 3 destroyed against a ceiling of 1,
+`rapier_seed_1` and `rapier_seed_3` over theirs too), because the seven AI Aces lay mines with weapons on and a
+faithful six-tick cluster kills more of the field. Those ceilings "may only fall" and are the AI lane's, so raising
+them is the maintainer's or the lead's call. The ready patch is `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`
+(commit `9dc9b01b8` on the lane's history, reverted in the next commit); whether the AI should lay or avoid
+mines the way the original does is the open question it carries.
 
 **Still open on the Mine:** ours' blasts peak about 10 % brighter (205 to 221 against 197 to 204) and a
 single one 8 to 14 % brighter; the original's debris reads as larger tan chunks and ours as smaller
 orange sparks plus a few chunks (frames `mine-late.png`, one boot, a description not a measurement);
 the original's camera shakes and the craft is pushed, ours' shield bar differs (not this lane's).
-The `Pure` mine uses this same timer and now drops at six ticks too: **checked, applies (the timer is shared
-engine code), not measured on Pure's own binary**, so the six is Pulse's.
+Pure's mine uses this same timer: **checked, applies if landed (the timer is shared engine code), not measured on
+Pure's own binary**, so the six is Pulse's.
