@@ -136,9 +136,11 @@ same cyan for `W_Cycle`, so **the engine overwrites the constant per pad, per
 frame**, and `docs/rendering/pads.md`'s "red on four circuits" table was a
 reading of the authored value only.
 
-The numbers are this page's function and nothing else (confidence **88**: two
-pads fit one law to 0.01 %, and the static initialiser's constants were also
-read live):
+The numbers are this page's function and nothing else (confidence **88**: four
+pads on two boots fit one law to the printed digits - the second boot read
+`{0.718887, 0, 0, 1}` and `{1.68172, 0.0510977, 0, 1}` - and the static
+initialiser's constants were also read live; the rate was not timed over
+frames):
 
 - the pad's `this+0x1c0` is a keyframe index, `this+0x1c4` a position in
   `[0, 1)` advancing by `dt * DAT_008b4324` = **3.0** per second while the pad is

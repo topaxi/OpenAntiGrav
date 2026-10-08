@@ -51,18 +51,29 @@ weapon-pad fragment program the constant of the `_ne`-alpha-gated accumulate
 | 109 | weapon pad B | `{1.65581, 0.0407428, 0, 1}` |
 | 110, 144, 145 | speed pads | `{0, 0.768628, 0.992157, 0}` |
 
+**A second boot of the same spot** (`cap4/`, 20 hook attempts; the pads' phases
+differ, as a heap-address seed would make them) read `{0.718887, 0, 0, 1}` and
+`{1.68172, 0.0510977, 0, 1}` on the two weapon pads and the authored cyan on the
+speed pads again: green `0` puts the first pad in the `256 -> 64` span at
+`t = 0.379` (red `0.7189 * 255 = 183.3 = 256 - 192 t`), and the second in the
+`64 -> 512` span at `t = 0.814` (red `1.6819 * 255 = 428.9 = 64 + 448 t`), both
+exact to the printed digits. Four pads on two boots, one law. **No pad was
+followed over time** (every capture is one paused frame), so the rate is the
+function's, not a measured one.
+
 The material authors `W_Cycle` as `{0, 0.768628, 0.992157}` for these weapon pads
 too (the census above), so **the original does not draw the authored value**; the
 speed pads, whose function carries no colour logic, keep it. A third capture on
 `12_sol_2` (also authored cyan; `cap3/`, one weapon pad) reads
 `{0.025, 0, 0.01, 1}` - the cooling vector below, again not the authored cyan.
-Red is therefore **not per circuit**: the four circuits the 2026-09-16 table marks
-red were red by authoring and by cycle; the other eight are red by cycle alone.
+Red is therefore **not an authored per-circuit value**: the cycle lives in the
+executable and two circuits whose material authors cyan (Vineta K, Sol 2) were
+measured overriding it; the other ten circuits were not captured, and nothing in
+the function branches on the circuit.
 
 **The law**, read off `WeaponPad_UpdateRefreshTimer` and its constants
-(`docs/ghidra/functions/ps3-hdfury-eu/pads.md`, "Answered 2026-10-08"; both pads
-of the frame fit it to 0.01 % and the two vectors were read live on RPCS3,
-confidence **88**): while the pad is ready a position advances by `3.0` keyframes
+(`docs/ghidra/functions/ps3-hdfury-eu/pads.md`, "Answered 2026-10-08"; four pads on two boots fit it to the printed digits and the two vectors were read live on RPCS3,
+confidence **88** for the law, **not scored** for the rate): while the pad is ready a position advances by `3.0` keyframes
 a second through six keyframes `(512,16,0) (256,0,0) (64,0,0)` twice, blended
 linearly, times `1/255`; while it cools down nothing advances and the colour is
 `(0.025, 0, 0.01)`. The values pass through unclamped (red reaches `2.0`).

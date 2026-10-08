@@ -48,6 +48,20 @@ pub struct Cycle {
 }
 
 impl Cycle {
+    /// One pad's next position and colour after `gap` seconds: a ready pad
+    /// advances by `gap * keys_per_second` and shows [`Self::colour`], a
+    /// cooling pad stays where it is and shows [`Self::cooling`] - the
+    /// original's two branches.
+    #[must_use]
+    pub fn step(&self, position: f32, ready: bool, gap: f32) -> (f32, [f32; 3]) {
+        if ready {
+            let next = position + gap * self.keys_per_second;
+            (next, self.colour(next))
+        } else {
+            (position, self.cooling)
+        }
+    }
+
     /// The bar colour of one pad at `position` keyframes into its cycle.
     ///
     /// `position` counts from the first keyframe and wraps over the table, so
@@ -81,6 +95,20 @@ mod tests {
     fn a_whole_position_is_its_keyframe_scaled() {
         let c = CYCLE.colour(1.0);
         assert!((c[0] - 256.0 / 255.0).abs() < 1e-6 && c[1] == 0.0 && c[2] == 0.0);
+    }
+
+    #[test]
+    fn a_ready_pad_advances_by_three_keys_a_second() {
+        let (next, colour) = CYCLE.step(0.5, true, 0.5);
+        assert!((next - 2.0).abs() < 1e-6);
+        assert_eq!(colour, CYCLE.colour(2.0));
+    }
+
+    #[test]
+    fn a_cooling_pad_holds_its_position_and_shows_the_cooling_colour() {
+        let (next, colour) = CYCLE.step(1.25, false, 5.0);
+        assert_eq!(next, 1.25);
+        assert_eq!(colour, [0.025, 0.0, 0.01]);
     }
 
     #[test]

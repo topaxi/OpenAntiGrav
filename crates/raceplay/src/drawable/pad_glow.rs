@@ -45,9 +45,12 @@ impl Drawable {
                 .map(|i| (i % cycle.keyframes.len().max(1)) as f32)
                 .collect();
         }
+        // The first call covers the clock from zero: every pad is ready from the
+        // start of the race, so a capture taken after N ticks sits N ticks into
+        // its cycle rather than on its starting key.
         let gap = state
             .last
-            .map_or(0.0, |last| (seconds - last).clamp(0.0, 0.1));
+            .map_or(seconds.max(0.0), |last| (seconds - last).clamp(0.0, 0.1));
         state.last = Some(seconds);
         let mut table = mesh_render::Emissives::of(&self.model);
         for (i, range) in self.model.node_vertex_ranges.iter().enumerate() {
@@ -58,15 +61,12 @@ impl Drawable {
             if entry == 0 || entry >= table.tint_offset.len() {
                 continue;
             }
-            let is_ready = ready.get(i).copied().unwrap_or(true);
-            if is_ready {
-                state.position[i] += gap * cycle.keys_per_second;
-            }
-            let colour = if is_ready {
-                cycle.colour(state.position[i])
-            } else {
-                cycle.cooling
-            };
+            let (position, colour) = cycle.step(
+                state.position[i],
+                ready.get(i).copied().unwrap_or(true),
+                gap,
+            );
+            state.position[i] = position;
             table.tint_offset[entry][..3].copy_from_slice(&colour);
         }
         queue.write_buffer(&self.emissive, 0, bytemuck::bytes_of(&table));

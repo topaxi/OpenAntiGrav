@@ -283,8 +283,12 @@ fn each_node_its_own_glow(model: &mut Model) {
         }
         model.emissive.push(layer);
         let own = u32::try_from(model.emissive.len()).unwrap_or(0);
+        // Only the vertices on the shared entry: a node's chunk may carry another
+        // surface with a glow of its own, which must keep it.
         for vertex in &mut model.vertices[range.start as usize..range.end as usize] {
-            vertex.slots = (vertex.slots & slots::ROLE_MASK) | (own << slots::MATERIAL_SHIFT);
+            if slots::material_index(vertex.slots) as usize == shared {
+                vertex.slots = (vertex.slots & slots::ROLE_MASK) | (own << slots::MATERIAL_SHIFT);
+            }
         }
     }
 }
