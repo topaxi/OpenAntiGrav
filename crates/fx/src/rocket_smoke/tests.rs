@@ -129,26 +129,28 @@ fn jitter_stays_inside_its_amplitude() {
     assert!(trail.nodes().any(|n| n.position.length() > 0.0));
 }
 
-/// The three fins the interpreter run of `RibbonBuilder_StripSide` printed on
-/// an identity basis (right = X, up = Y).
+/// One rocket's dumped node rows and the three fin normals its live vertex
+/// buffer carried (RPCS3, 2026-10-08, pool 4 element 3, first pause).
 #[test]
-fn fins_are_sixty_degrees_apart_from_up_toward_minus_right() {
-    let expect = [
-        ((0.0, 1.0), (1.0, 0.0)),
-        ((-0.866, 0.5), (0.5, 0.866)),
-        ((-0.866, -0.5), (-0.5, 0.866)),
+fn fin_normals_are_the_dumped_ones() {
+    let right = Vec3::new(-0.086, -0.012, -0.996);
+    let up = Vec3::new(-0.003, -1.0, 0.012);
+    let dumped = [
+        Vec3::new(0.086, 0.015, 0.996),
+        Vec3::new(0.041, -0.858, 0.511),
+        Vec3::new(-0.045, -0.873, -0.485),
     ];
-    for (k, ((sx, sy), (nx, ny))) in expect.into_iter().enumerate() {
-        let (side, normal) = fin_axes(k, Vec3::X, Vec3::Y);
+    for (k, expect) in dumped.into_iter().enumerate() {
+        let (_, normal) = fin_axes(k, right, up);
         assert!(
-            (side - Vec3::new(sx, sy, 0.0)).length() < 1e-3,
-            "fin {k} side {side}"
-        );
-        assert!(
-            (normal - Vec3::new(nx, ny, 0.0)).length() < 1e-3,
-            "fin {k} normal {normal}"
+            (normal - expect).length() < 0.02,
+            "fin {k}: {normal} vs {expect}"
         );
     }
+    // Fin 0's first vertex, `centre - side * w`, sat 0.4 above the centre in
+    // the dump's +y, which is along `-up`.
+    let (side, _) = fin_axes(0, right, up);
+    assert!((side - up).length() < 1e-6);
 }
 
 #[test]

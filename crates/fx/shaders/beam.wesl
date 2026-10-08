@@ -33,7 +33,7 @@ override alpha_is_fragment: f32 = 0.0;
 // (`hd_rockettrail.rcsmaterial`, read on
 // `docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`) shades
 //
-//     facing = saturate(max(min(dot(n, v), 0.32), 0) * 3.12433)
+//     facing = saturate(max(min(abs(dot(n, v)), 0.32), 0) * 3.12433)
 //     rgb    = tex.rgb * vertex.rgb
 //     alpha  = saturate(14 * tex.a * facing * vertex.a) * saturate(window_z * 0.75)
 //
@@ -85,7 +85,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let alpha = mix(glow_mask, in.colour.a * texel.a, alpha_is_fragment);
     if smoke > 0.5 {
         let facing_dot = dot(normalize(in.normal), normalize(in.view));
-        let facing = saturate(max(min(facing_dot, 0.32), 0.0) * 3.12433);
+        // `abs`: the `MIN`'s source carries NV40's `SRC0_ABS` bit (word 1 bit
+        // 29), so a fin shows from either side - the original's own eye and
+        // vertex buffer leave every fin back-facing from the chase camera
+        // otherwise, against a film full of smoke.
+        let facing = saturate(max(min(abs(facing_dot), 0.32), 0.0) * 3.12433);
         let depth_fade = saturate(in.clip.z * 0.75);
         let coverage = saturate(14.0 * texel.a * facing * in.colour.a) * depth_fade;
         return vec4<f32>(decoded, coverage);

@@ -296,6 +296,10 @@ Open:
   `0x003c2598`/`0x003c2488`, data at `*0x00d43cc4`), unread. Live it ran `0xbaffff` to `0x2b5d7b`
   on the dumped circuit, so ours is the bright end. Matched pair (team and grid view differ from
   the film): `data/scratch/hd-rocket-trail/ours/pair_trail.png`; ours reads greyer than the film.
+- **Engine trail facing may be two-sided too**: `hd_enginetrail_bluered.rcsmaterial`'s facing `MIN`
+  carries the same NV40 `SRC0_ABS` bit (word 1 bit 29) that made the smoke two-sided, and
+  `exhaust.wesl` draws it one-sided (`clamp(dot, 0, 0.15)`). `ps3-microcode.py` prints `|x|` now.
+  Unchecked against a picture; not changed here.
 - Push offset from the rocket origin (`0x00124880..0x00124888`) and `Libc_Rand`'s range (jitter
   symmetry) are unread.
 - The launch light: `Rocket_Update` (`0x00123fb0`) calls `0x006778c8` at `0x001246cc` with

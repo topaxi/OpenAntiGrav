@@ -170,13 +170,21 @@ Confidence 90.
 `RibbonBuilder_AddSample` (`0x002a4c20`) runs once per node and strip `k`,
 calling `RibbonBuilder_StripSide` (`0x002a47e8`) with angle parameter
 `k / strips + node+0x40`, which multiplies it by pi and evaluates sine and
-cosine by polynomial. Run in the scratch interpreter on an identity and a
-yawed basis (rows `right`, `up`, `forward`):
+cosine by polynomial. Read off the live vertex buffer against the same node's
+dumped rows (`right` = row 0, `up` = row 1, `forward` = row 2):
 
 ```text
-side(k)   = cos(k * 60deg) * up - sin(k * 60deg) * right
-normal(k) = cos(k * 60deg) * right + sin(k * 60deg) * up
+side(k)   = cos(k * 60deg) * up + sin(k * 60deg) * right
+normal(k) = side(k) x forward = sin(k * 60deg) * up - cos(k * 60deg) * right
 ```
+
+A scratch interpreter run of `0x002a47e8` on synthetic bases printed the same
+fin set with row 0's sign flipped; the dump is the original's own output and
+wins. The rows themselves: a rocket flying `+x` over track whose up is `+y`
+carried **row 1 = `-y`** and row 0 = `forward x row 1` (dumped node, flight
+direction `(0.996, -0.004, -0.087)`, row 1 `(-0.003, -1.0, 0.012)`, row 0
+`(-0.086, -0.012, -0.996)`), which is not the Pulse-derived basis this
+project's Rocket model draws on.
 
 `RibbonBuilder_WriteVertexPair` (`0x002a4660`) then writes two vertices per
 strip: `centre + side * half_width` with `uv = (u, 1)` and
@@ -200,21 +208,33 @@ program: `TC0 = colour.rgb`, `TC3 = (uv, colour.a)`, `TC1 = eye - position`,
 (`ps3-microcode.py fp-file`):
 
 ```text
-facing = saturate(max(min(dot(norm(TC2), norm(TC1)), 0.32), 0) * 3.12433)
+facing = saturate(max(min(|dot(norm(TC2), norm(TC1))|, 0.32), 0) * 3.12433)
 tex    = lerp(Texture1, Texture2, saturate(time * 0.3))
 rgb    = tex.rgb * TC0.rgb * constantAmbientColour
 alpha  = saturate(14 * tex.a * facing * TC3.z) * saturate(window_z * 0.75)
 ```
 
-So each fin is single-sided: it shows only from its normal's side, fully from
-`dot >= 0.32`.
+**Two-sided, confidence 85.** The `MIN` at `@0x0b` is the program's only
+instruction with word 1 bit 29 set, NV40's `SRC0_ABS`, which
+`ps3-microcode.py` did not print until this lane. It is decided by the
+original itself: a second live dump read the eye vector the ribbon's draw binds
+(`*0x008b30cc + 0x110`, 4 units above the rockets), and against it fins 1 and 2
+of every dumped vertex are back-facing and fin 0 is on 1 to 4 of 5 to 26
+pairs - a one-sided cull would leave almost nothing, where the film shows
+thick smoke. A fin fades in only edge-on (`|dot| < 0.32`). The same bit sits
+on the `MIN` of `hd_enginetrail_bluered.rcsmaterial`'s facing term, which
+`exhaust.wesl` draws one-sided: open, outside this page.
 
 `RibbonBuilder_Flush` writes the engine parameter table directly before the
 draw: entry 0 (`time`) from the frame singleton `*0x00936fd4 + 0xc4`, the
 monotonic clock in seconds; entry 10 (`constantAmbientColour`, `+0x158`)
 **`(0.8, 0.8, 0.8, 1)`**, its own constant; entry 7 (`fogColour`, `+0xf8`)
 `(1, 1, 1, 0)`. So the circuit's ambient does not reach the smoke, and in a
-race `time * 0.3` is long past 1, so the picture is `Texture2` alone.
+race `time * 0.3` is long past 1, so the picture is `Texture2` alone. The
+second dump read entry 10's vector as `(0.8, 0.8, 0.8, 1)` live. The program
+has no transfer function, so this renderer adds the texture undecoded, as it
+does for HD's engine tube and magstrip wake; decoded, the smoke read grey
+against the film's white.
 Confidence 80 (the slot table is
 [renderer.md](renderer.md)'s "The engine's own parameter table").
 

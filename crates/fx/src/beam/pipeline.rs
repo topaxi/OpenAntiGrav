@@ -125,10 +125,12 @@ impl Style {
     /// pair's argument order read off the call, confidence 60) - so the smoke
     /// dims the glow mask behind it rather than stamping one. The fragment is
     /// `hd_rockettrail`'s own program, the `smoke` override in `beam.wesl`.
-    /// **Chosen, not measured**: depth test on and depth write off, cull off,
-    /// and the gamma-authored texture decoded on a linear target - the
-    /// renderer-wide state the original's `0x00677ff8` calls in that function
-    /// were not decoded to.
+    /// The texture is **not** decoded on a linear target: the program carries
+    /// no transfer function, the precedent the HD engine tube and the magstrip
+    /// wake already follow, and against the film the decoded smoke read grey
+    /// where the original's is white. **Chosen, not measured**: depth test on
+    /// and depth write off and cull off - the state the original's
+    /// `0x00677ff8` calls in that function were not decoded to.
     #[must_use]
     pub const fn rocket_smoke(capacity: usize) -> Self {
         Self {
@@ -147,7 +149,7 @@ impl Style {
             },
             glow_mask: 0.0,
             vertex_alpha_weights_colour: false,
-            decodes_source: true,
+            decodes_source: false,
             alpha_is_fragment: false,
             topology: wgpu::PrimitiveTopology::TriangleList,
             capacity,

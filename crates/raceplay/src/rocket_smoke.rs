@@ -108,6 +108,24 @@ impl Smoke {
     }
 }
 
+/// The rocket's rows 0 and 1 as the original pushes them, from its flight
+/// direction and the surface normal it rides.
+///
+/// **Measured off the dump**: a rocket flying `+x` over a track whose up is
+/// `+y` carried row 1 = `-y` (HD's object rows point down) and row 0 =
+/// `forward x row 1`, and those rows reproduce the vertex buffer's fin normals
+/// (`oag_fx::rocket_smoke` tests). Not the Rocket model's own basis, which is
+/// Pulse's `surface x forward`.
+#[must_use]
+pub fn rocket_rows(forward: Vec3, surface: Vec3) -> (Vec3, Vec3) {
+    let reference = [surface, Vec3::Y]
+        .into_iter()
+        .find(|axis| forward.dot(*axis).abs() < 0.999)
+        .unwrap_or_else(|| forward.any_orthonormal_vector());
+    let up = -(reference - forward * forward.dot(reference)).normalize_or_zero();
+    (forward.cross(up), up)
+}
+
 impl Race {
     /// One tick of every rocket's ribbon: `Rocket_Update` pushes a node at the
     /// rocket each update, then `RibbonEffects_UpdatePools` ages every chain
@@ -116,9 +134,7 @@ impl Race {
     ///
     /// The node sits at the rocket's own origin, **chosen, not measured**: the
     /// original adds a scaled vector to the position it pushes
-    /// (`0x00124880..0x00124888`), unread. The basis is the one the Rocket's
-    /// model draws on (`projectile_model_matrices`): row 0 `surface x
-    /// forward`, row 1 `forward x row 0`.
+    /// (`0x00124880..0x00124888`), unread. The basis is [`rocket_rows`].
     pub(crate) fn advance_rocket_smoke(&mut self) {
         let dt = self.sim.dt;
         let smoke = &mut self.view.rocket_smoke;
@@ -146,12 +162,7 @@ impl Race {
             else {
                 continue;
             };
-            let reference = [projectile.surface, Vec3::Y]
-                .into_iter()
-                .find(|axis| forward.dot(*axis).abs() < 0.999)
-                .unwrap_or_else(|| forward.any_orthonormal_vector());
-            let right = reference.cross(forward).normalize_or_zero();
-            let up = forward.cross(right);
+            let (right, up) = rocket_rows(forward, projectile.surface);
             if let Some(trail) = smoke.trails[index].as_mut() {
                 trail.push(projectile.position, right, up, UNLIT_RGB, &mut smoke.rng);
             }
@@ -180,5 +191,25 @@ impl Race {
     #[must_use]
     pub fn rocket_smoke_live(&self) -> usize {
         self.view.rocket_smoke.live()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The dumped rocket: flight direction and rows 0 and 1 of one node.
+    #[test]
+    fn rows_are_the_dumped_ones() {
+        let forward = Vec3::new(0.996, -0.004, -0.087).normalize();
+        let (right, up) = rocket_rows(forward, Vec3::Y);
+        assert!(
+            (up - Vec3::new(-0.003, -1.0, 0.012)).length() < 0.02,
+            "{up}"
+        );
+        assert!(
+            (right - Vec3::new(-0.086, -0.012, -0.996)).length() < 0.02,
+            "{right}"
+        );
     }
 }

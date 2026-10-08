@@ -226,13 +226,19 @@ impl Trail {
     }
 }
 
-/// `RibbonBuilder_StripSide` for fin `k`, run in an interpreter on two bases:
-/// the side the fin spans and the normal it faces.
+/// `RibbonBuilder_StripSide` for fin `k`: the side the fin spans and the
+/// normal it faces, in the node's own rows (`right` = row 0, `up` = row 1).
+///
+/// **Read off the live vertex buffer**, three fins of one rocket against that
+/// node's dumped rows: `side = cos * up + sin * right` and `normal = side x
+/// forward` = `sin * up - cos * right`, at 0, 60 and 120 degrees. A scratch
+/// interpreter run of the function printed the same set with row 0's sign
+/// flipped; the dump is the original's own output, so it wins.
 #[must_use]
 pub fn fin_axes(k: usize, right: Vec3, up: Vec3) -> (Vec3, Vec3) {
     let angle = k as f32 * std::f32::consts::PI / FINS as f32;
     let (sin, cos) = angle.sin_cos();
-    (up * cos - right * sin, right * cos + up * sin)
+    (up * cos + right * sin, up * sin - right * cos)
 }
 
 /// `RibbonBuilder_WriteVertexPair` for every fin of one node: `centre -
