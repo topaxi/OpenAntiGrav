@@ -79,8 +79,18 @@ Open: a live dump of a held LeachBeam (state 3 via `rpcs3-hd-weapon.py`) reading
 rule; the stack record's half-width at `+0xe8`; whether the `+0x50` strip is
 ever drawn.
 
+## 2026-10-08 (`hd-leach-path`): the path is measured live; the draw waits on the material
+
+State **10** is the LeachBeam (state 3 never fires). Path = target's anchor trail
+(3.4-unit ring per craft), walked back to the shooter's progress and bent onto the
+shooter's anchor by cumulative length; nodes, half-width 1.0, `u` and the reveal law
+emulated; material fragment/vertex programs read. See leach-beam-strips.md, "hd-leach-path".
+Open: the second-texture/`time`/blend pipeline (unit assignment, sampler wrap, blend of
+this draw), an anchor trail per craft in `oag-raceplay`, the HD state timeline (ball 0.4 s,
+reveal 0.3 s, held) over our Pulse-lineage beam, the wobble `0x001157d0`.
+
 ## Next Steps
 
-1. Live-dump a held LeachBeam's `+0x6420` strip (see the 2026-10-08 section),
-   then build it beside the other ribbons from leach-beam-strips.md's law.
+1. Build the strip from leach-beam-strips.md's measured law (anchor trail, walk, bend,
+   nodes), after reading the draw's blend and texture units from a film or the draw call.
 2. Add the ghost-static axis to `Title` so HD stops asking.
