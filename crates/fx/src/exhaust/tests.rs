@@ -552,3 +552,12 @@ fn a_late_pad_re_reveals_the_plume_the_tick_after_it_hides() {
          was still armed"
     );
 }
+
+#[test]
+fn hd_trail_facing_term_is_two_sided() {
+    // `hd_enginetrail_bluered.rcsmaterial`'s fragment program takes
+    // `MIN |dot(n, v)|` (NV40 SRC0_ABS on word 1 bit 29 at @0x0b), so a fin
+    // seen from behind fades in exactly as one seen from the front.
+    let wgsl = include_str!(concat!(env!("OUT_DIR"), "/exhaust.wgsl"));
+    assert!(wgsl.contains("abs(facing_dot)"), "facing term lost its abs");
+}
