@@ -266,8 +266,8 @@ impl CampaignStage {
     }
 
     /// The flyer cards the current screen shows behind its widgets: the
-    /// selected tier's on `Grid Selection`, both campaigns' on `Campaign
-    /// Selection`, none on any other screen or on a tier that names none.
+    /// selected tier's on `Grid Selection`, its back on `Cell Selection`, both
+    /// campaigns' on `Campaign Selection`, none on a tier that names none.
     pub(crate) fn flyer_shows(&self) -> Vec<oag_game::flyer::Show> {
         let Some(flyers) = &self.flyers else {
             return Vec::new();
@@ -280,7 +280,13 @@ impl CampaignStage {
                 .into_iter()
                 .collect(),
             Screen::Selection(model) => flyers.selection_shows(model.selected()),
-            Screen::Cell { .. } => Vec::new(),
+            Screen::Cell { which, .. } => self
+                .grids
+                .get(*which)
+                .and_then(|grid| grid.flyer_name.as_deref())
+                .map(oag_game::flyer::Flyers::cell_show)
+                .into_iter()
+                .collect(),
         }
     }
 
@@ -659,22 +665,27 @@ impl CampaignStage {
     /// **HD only** - the enclosing grid's own index and count, both relative
     /// to [`Self::grid_range`] (so `Cell Selection`'s own `EventNum`/
     /// `GridNum` reads `"Event 01/08"` on a Fury cell, not `"Event
-    /// 09/16"`), plus its [`oag_ui_screens::campaign::GridSummary`], for
+    /// 09/16"`), plus its [`oag_ui_screens::campaign::GridSummary`] and the next grid's `FlyerName`, for
     /// `oag_ui_screens::campaign::hd::hd_cell_draw_list`'s own counters. `None` off
     /// `Grid Selection`/`Campaign Selection`, since there is no "enclosing
     /// grid" there.
     #[must_use]
     pub(crate) fn cell_grid_summary(
         &self,
-    ) -> Option<(usize, usize, oag_ui_screens::campaign::GridSummary)> {
+    ) -> Option<(usize, usize, oag_ui_screens::campaign::GridSummary, Option<&str>)> {
         let Screen::Cell { which, .. } = &self.screen else {
             return None;
         };
         let grid = self.grids.get(*which)?;
+        let next = (which + 1 < self.grid_range.end)
+            .then(|| self.grids.get(which + 1))
+            .flatten()
+            .and_then(|grid| grid.flyer_name.as_deref());
         Some((
             which.saturating_sub(self.grid_range.start),
             self.grid_range.len(),
             Self::grid_summary(grid, &self.title, &self.records),
+            next,
         ))
     }
 

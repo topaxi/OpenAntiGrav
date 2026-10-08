@@ -593,9 +593,9 @@ impl MenuStage {
                         )
                     }
                     crate::campaign_stage::Screen::Cell { model, .. } => {
-                        let (grid_index, grid_count, grid_summary) =
+                        let (grid_index, grid_count, grid_summary, next_flyer) =
                             campaign.cell_grid_summary().unwrap_or_else(|| {
-                                (0, 1, oag_ui_screens::campaign::GridSummary::empty())
+                                (0, 1, oag_ui_screens::campaign::GridSummary::empty(), None)
                             });
                         // No ticker: HD's shared `Skin.xml` has no `TextInfoIsAlwaysLast` viewport.
                         let footer_overlay = campaign
@@ -610,6 +610,7 @@ impl MenuStage {
                             grid_index,
                             grid_count,
                             &grid_summary,
+                            next_flyer,
                             if frozen_race { None } else { shown },
                             frozen_race,
                             &|src| campaign.sprites.get(src),

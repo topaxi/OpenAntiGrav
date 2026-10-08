@@ -264,6 +264,7 @@ pub(super) fn campaign_page(
         ),
     };
     let mut flyer_name = None;
+    let mut cell_page = false;
     let mut selected_campaign = None;
     let layers = if is_hd {
         match kind {
@@ -349,6 +350,8 @@ pub(super) fn campaign_page(
                 // something honest rather than crashing" terms the rest of
                 // this module follows.
                 let grid = hd_grids.first();
+                flyer_name = grid.and_then(|grid| grid.flyer_name.clone());
+                cell_page = true;
                 let cells = grid.map(|grid| grid.cells.clone()).unwrap_or_default();
                 // HD/Fury's own fresh-profile default rung is `Easy`, not
                 // Pulse's `Medium` - see
@@ -374,6 +377,7 @@ pub(super) fn campaign_page(
                     0,
                     hd_grids.len().max(1),
                     &grid_summary,
+                    hd_grids.get(1).and_then(|grid| grid.flyer_name.as_deref()),
                     backdrop,
                     false,
                     &|src| sprites.get(src),
@@ -439,6 +443,7 @@ pub(super) fn campaign_page(
     let split = layers.backdrop.len();
     let shot = campaign.flyers.and_then(|flyers| {
         let shows = match (flyer_name, selected_campaign) {
+            (Some(name), _) if cell_page => vec![crate::flyer::Flyers::cell_show(&name)],
             (Some(name), _) => vec![crate::flyer::Flyers::grid_show(&name)],
             (None, Some(selected)) => flyers.selection_shows(selected),
             (None, None) => return None,

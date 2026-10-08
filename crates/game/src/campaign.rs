@@ -436,8 +436,17 @@ fn load_hd(
         };
         Some(crate::flyer::CardSpec {
             flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Front,
             window,
             stretch: 1.0,
+        })
+    });
+    let back_cards = grids.iter().filter_map(|grid| {
+        Some(crate::flyer::CardSpec {
+            flyer: grid.flyer_name.clone()?,
+            side: crate::flyer::Side::Back,
+            window: crate::flyer::BACK_WINDOW,
+            stretch: crate::flyer::BACK_STRETCH,
         })
     });
     let campaign_cards = [
@@ -446,12 +455,14 @@ fn load_hd(
     ]
     .map(|name| crate::flyer::CardSpec {
         flyer: name.to_string(),
+        side: crate::flyer::Side::Front,
         window: crate::flyer::FURY_WINDOW,
         stretch: crate::flyer::CAMPAIGN_STRETCH,
     });
     // The two `Campaign Selection` cards exist only where that screen does.
     let campaign_cards = selection_layout.is_some().then_some(campaign_cards);
     let cards: Vec<crate::flyer::CardSpec> = grid_cards
+        .chain(back_cards)
         .chain(campaign_cards.into_iter().flatten())
         .collect();
     let widgets = oag_ui_screens::campaign::flyer::read(&xml, &screens);
