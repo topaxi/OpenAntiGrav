@@ -15,6 +15,11 @@ PPU-side pool manager; `WakeTrail`'s registration (`0x002a8678`) only shares
 the TOC block. The vertices are written on the PPU by
 `RibbonBuilder_WriteVertexPair` (`0x002a4660`). Confidence 90.
 
+`oag_fx::rocket_smoke` implements what this page measures and
+`oag_raceplay::rocket_smoke` owns one ribbon per rocket; what is chosen
+rather than measured there (vertex RGB white, jitter distribution, push at
+the rocket's origin) is labelled in that module.
+
 ## The manager
 
 `RibbonEffects_Construct` (`0x002a7560`, called from 24 circuit-scene
