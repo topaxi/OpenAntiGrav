@@ -95,11 +95,19 @@ Blend (`SRC_ALPHA, ONE`), depth (LEQUAL, no write), units (noise 128x128 on 0, g
 `REPEAT`), `time` (engine seconds) and the wobble (three sines, verified on the live beam) are read; the
 walk follows the craft ahead. Wired through `WeaponModels::leach_strip`, `oag_fx::leach_strip`,
 `oag_raceplay::leach_strip`; Pulse/Pure frames byte-identical. See leach-beam-strips.md, "hd-leach-draw".
-Open: (1) our strip is fainter than the film in a straight chase view - the facing term is the
-program's own, so look at bloom feed, the original's mips and the node `u` at the walked end;
+Open: (1) ~~our strip is fainter than the film in a straight chase view~~ - closed 2026-10-08
+(`hd-leach-bright`): that was a 4-sample staging, the per-node facing agrees with the original's;
 (2) the wobble's phases start at 0 here, the original's reset is unread; (3) a pair against the film at
 matched geometry (the film's rival is 40 units ahead in a corner, ours were on straights); (4) the held
 duration (about 2.6 s of the beam clock, then state 6) is not tied to our `active_time`.
+
+## 2026-10-08 (`hd-leach-bright`): the faintness was the staging
+
+Dense trail, ours and the original's per-node facing agree; the noise's red is now sRGB-decoded and the
+walked end's `u` is 0 (both read live). Open: mips (sampler is trilinear with a -1.5 bias, low value),
+the chase camera sits 14.9 from the first node in the original and 7.5 in ours (camera lane), the film's
+side arcs are `hd_waketrail` draws (a wake lane), and `hd_leach_strip_ground_truth` still uses the
+4-sample staging. See leach-beam-strips.md, "hd-leach-bright".
 
 ## Next Steps
 

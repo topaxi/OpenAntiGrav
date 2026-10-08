@@ -106,6 +106,10 @@ fn nodes_start_at_the_shooter_with_u_growing_by_a_twentieth_per_unit() {
     assert_eq!(out[0].u, 0.0);
     let step = (samples[2].anchor - samples[1].anchor).length() * U_PER_UNIT;
     assert!((out[1].u - step).abs() < 1e-6);
+    assert_eq!(
+        out[2].u, 0.0,
+        "the walked end restarts at 0, as the live draws do"
+    );
     assert!(out[1].up.dot(out[1].right).abs() < 1e-5);
     assert!(out.iter().all(|n| n.shade == 255));
 }
