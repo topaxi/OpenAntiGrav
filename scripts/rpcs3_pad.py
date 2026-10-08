@@ -49,6 +49,9 @@ import os
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import emu_guard  # noqa: E402
+
 UINPUT = "/dev/uinput"
 UINPUT_GROUP = "input"
 INPUT_CONFIG_NAME = "oag"
@@ -354,6 +357,7 @@ class Pad:
 
     def set(self, name, down):
         """Hold or release one button or d-pad direction."""
+        emu_guard.beat()
         if name in BUTTONS:
             self.ui.write(self.ecodes.EV_KEY,
                           getattr(self.ecodes, BUTTONS[name]), 1 if down else 0)

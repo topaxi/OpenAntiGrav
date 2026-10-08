@@ -39,6 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import emu_guard  # noqa: E402
 _spec = importlib.util.spec_from_file_location("rpcs3_drive", HERE / "rpcs3-drive.py")
 drive = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(drive)
@@ -65,6 +66,7 @@ class Guest:
         self.mem = mem if mem is not None else open("/proc/%d/mem" % pid, "rb", 0)
 
     def read(self, addr, n):
+        emu_guard.beat()
         self.mem.seek(GUEST_BASE + addr)
         return self.mem.read(n)
 

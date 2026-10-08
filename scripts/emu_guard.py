@@ -120,7 +120,9 @@ class Guard:
             self.since = time.time()
             self.beats += 1
             self.extra.update(extra)
-        if self.beats % 5 == 0 or extra:
+        now = time.time()
+        if extra or now - getattr(self, "_written", 0.0) > 2.0:
+            self._written = now
             self.write()
 
     def finish(self, ok=True):

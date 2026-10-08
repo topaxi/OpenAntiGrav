@@ -851,6 +851,13 @@ nothing in the log to say which it took.
 
 ## Savestates work, drive off the pad, and are not worth adopting
 
+> **Re-measured 2026-10-09, see [emulator-recipes.md](emulator-recipes.md).** Two findings
+> change the 2026-08-19 account below: a state taken on the grid **does** restore to the grid
+> (fly-over with `START RACE`, 7.7 s after launch), and the write is a silent no-op while the GDB
+> stub is enabled. What still holds: the restored emulator has a dead virtual pad and the
+> state's config disables the stub, so it is useful for a still or a video of the fly-over and
+> for nothing that needs input or GDB. The advice stands: keep an emulator running instead.
+
 They were expected to be the payoff - `rpcs3 --savestate <path>` boots straight
 into one, which would have collapsed the 130-second cold walk to a flag. Tried
 end to end on 2026-08-19 and **not adopted**, for the same shape of reason the

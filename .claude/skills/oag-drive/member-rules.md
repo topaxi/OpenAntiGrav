@@ -67,7 +67,7 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
 - **Processes.** Record the PID of everything you start, and kill only by
   that PID. Never `pkill -f <pattern>`: one pattern kill took down every
   member's `oag-game --race` run.
-- **Emulators.** Start your own instance (PPSSPP with its own `HOME` and
+- **Emulators.** Start your own instance (see "Waiting on an emulator capture" below; PPSSPP with its own `HOME` and
   `XDG_CONFIG_HOME`, debugger port and display; RPCS3 with its own config
   copy). Never attach to an instance another member started.
 - **Ghidra.** When the GUI bridge is up it listens on `127.0.0.1:8089` and is
@@ -75,6 +75,34 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   `/pulse/BOOT-psp-pulse-usa.BIN`, `/hdfury/EBOOT-ps3-hdfury-eu.elf`), and
   never call `switch_program`. Headless `analyzeHeadless` works when no GUI
   is up.
+
+## Waiting on an emulator capture
+
+Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
+
+- **Never poll a capture log for a success marker.** On 2026-10-08 that cost
+  about 9.6 h, 4 h of it in waits that hit the 10 minute tool ceiling, many on
+  runs that had stalled at a boot or a menu. A marker that never comes is a
+  wait with no end.
+- **Run the capture in the foreground under the watchdog**, with a timeout under
+  the tool ceiling (600000 ms):
+  `uv run --with evdev python3 scripts/emu-run.py --child-status <log-dir>/status.json -- python3 scripts/<capture>.py ...`.
+  It exits within 150 s of the last output (`STALLED ... last line ... child
+  stage`) and at 570 s overall; an RPCS3 `Session` also stops itself with
+  `STALLED at <stage>` (boot, `menu:<screen>`, loading, countdown, capture).
+  Read the stage it names; do not retry the same run unchanged.
+- **A run longer than ~9 minutes**: `emu-run.py --bg --status F -- ...`, then
+  `emu-run.py wait F` in a loop (it returns 4 while the run is healthy). Never end
+  a turn waiting for a notification.
+- **Keep the emulator running between captures.** Start it once
+  (`rpcs3-drive.py serve`, `scripts/ppsspp-start.sh`), set `OAG_RPCS3_ATTACH=1`,
+  and drive each next state from the current one: restart race, quit to Cell
+  Selection, save state, menu walk. Boot fresh only when the measurement needs the
+  boot. Build your private tree with `scripts/emu-env.sh`.
+- **Stop emulators by pid**: `rpcs3-drive.py stop` stops only the RPCS3 your own
+  `serve`/`Session` recorded (`--all` is for the maintainer's own machine, never
+  here); `ppsspp-start.sh <lane> stop` for PPSSPP. Never `pkill -x rpcs3`.
+- Save states live only under `data/saves/<title>/` and are never committed.
 
 ## Build and gate
 
