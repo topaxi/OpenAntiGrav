@@ -582,6 +582,18 @@ project renders none of that. The lesson worth keeping is the general one -
 a shared framebuffer channel needs the consumer found before it is called
 inert.
 
+**Measured 2026-10-08: the stamped value is one constant per segment, not a
+ramp across it (confidence 85).** Read out of EDRAM on a racing frame (see
+[bloom.md](bloom.md#racing-strength-against-the-originals-own-scratch-buffers-2026-10-08)),
+the ribbon's mask over the craft box holds two values at intensity `1.0`:
+`114` on 2,049 pixels and `102` on 552, which are `trunc(0.45 * 255 * (1 - k /
+9))` for segments `k = 0` and `1`; at `0.663` they are `75` and `67`, at
+`0.162` `18`. One `Gu_StencilFunc` reference per segment draw, so a vertex
+attribute interpolated between segments (what this port did until then) reads
+low over the ribbon. `oag_fx::exhaust::trail_stencil` is the per-segment byte.
+Only segments 0 and 1 are on screen at the chase camera's framing; ours also
+shows segment 2 (`89`), so the ribbon's screen length differs and is open.
+
 ### The baked vertex colours: the authored colours are alive, and they fade
 
 `Trail_ApplyPreset` (`0x0892a724`) fills the per-layer vertex buffers once at

@@ -22,7 +22,7 @@
 //! # The blur truncates every tap to a byte
 //!
 //! The GE adds in 8-bit integers and the blur is eleven separate additive
-//! draws, so each tap's `floor(v * w / 255)` is a whole byte before it joins
+//! draws, so each tap's `(v * (w + 1)) >> 8` is a whole byte before it joins
 //! the sum. `bloom.wesl` does the same. It is not cosmetic: the opaque mask
 //! stamp of `4` leaves the bright pass at most 4, the horizontal pass at most 3
 //! (three taps of weight 64 keep 1 each), and the vertical pass truncates that

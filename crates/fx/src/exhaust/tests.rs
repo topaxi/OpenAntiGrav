@@ -389,7 +389,7 @@ fn the_ribbon_tapers_in_width_and_fades_in_colour() {
     // for `oag_post::bloom`'s bright pass to weigh, reproducing
     // `Trail_BuildStateList`'s stencil `REPLACE`. See [`TRAIL_GLOW_GAIN`].
     assert!(
-        (v[0].colour[3] - trail_glow(1.0, 0)).abs() < 1e-6,
+        (v[0].colour[3] - trail_stencil(1.0, 0)).abs() < 1e-6,
         "the head carries the full glow value, not an opacity"
     );
     assert!(
@@ -560,4 +560,17 @@ fn hd_trail_facing_term_is_two_sided() {
     // seen from behind fades in exactly as one seen from the front.
     let wgsl = include_str!(concat!(env!("OUT_DIR"), "/exhaust.wgsl"));
     assert!(wgsl.contains("abs(facing_dot)"), "facing term lost its abs");
+}
+
+/// The ribbon stamps one whole byte per segment, the values read out of the
+/// original's EDRAM on a racing frame (`bloom.md`, "Racing strength against
+/// the original's own scratch buffers"): `114` then `102` at intensity `1.0`,
+/// `18` at `0.162`.
+#[test]
+fn the_ribbon_stamps_one_truncated_byte_per_segment() {
+    let byte = |intensity: f32, segment: usize| (trail_stencil(intensity, segment) * 255.0).round();
+    assert_eq!(byte(1.0, 0), 114.0);
+    assert_eq!(byte(1.0, 1), 102.0);
+    assert_eq!(byte(1.0, 2), 89.0);
+    assert_eq!(byte(0.162, 0), 18.0);
 }

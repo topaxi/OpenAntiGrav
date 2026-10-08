@@ -620,10 +620,13 @@ impl Exhaust {
                 let fade_b = ramp * trail_fade(k + 1);
                 let ca = [colour[0] * fade_a, colour[1] * fade_a, colour[2] * fade_a];
                 let cb = [colour[0] * fade_b, colour[1] * fade_b, colour[2] * fade_b];
-                // The glow mask ramps to zero along the ribbon - see
-                // [`trail_glow`]. Flat here reads as a solid white cone.
-                let glow_a = trail_glow(self.intensity, k);
-                let glow_b = trail_glow(self.intensity, k + 1);
+                // The glow mask steps down the ribbon one segment at a time:
+                // one stencil reference per segment draw, so every vertex of
+                // segment `k` carries the same byte - see [`trail_stencil`].
+                // Interpolating `k` to `k + 1` instead read 17 % low over the
+                // ribbon on a racing frame.
+                let glow_a = trail_stencil(self.intensity, k);
+                let glow_b = glow_a;
                 let ua = k as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 let ub = (k + 1) as f32 * TRAIL_FADE_STEP * TEXCOORD_U16_GAIN * su + ou;
                 for fin in 0..TRAIL_FINS {
@@ -988,15 +991,30 @@ pub const TRAIL_GLOW_GAIN: f32 = 0.5 * 0.9;
 /// bloom source and blows the exhaust out to a solid white cone. Measured
 /// 2026-08-10 against the same frame both ways.
 ///
-/// Two known simplifications, both recorded rather than hidden: the original
-/// stamps one *constant* per segment where an interpolated vertex attribute
-/// ramps across it, and `& 0xff` cannot wrap here because the head value is at
-/// most `255`.
+/// The original stamps one *constant* per segment: [`trail_stencil`] is what a
+/// segment's draw carries. `& 0xff` cannot wrap here because the head value is
+/// at most `255`.
 #[must_use]
 pub fn trail_glow(intensity: f32, segment: usize) -> f32 {
     let n = (TRAIL_SAMPLES - 1) as f32;
     let fall = 1.0 - (segment as f32 / n);
     intensity * TRAIL_GLOW_GAIN * fall.max(0.0)
+}
+
+/// The stencil reference segment `k`'s draw stamps: [`trail_glow`] truncated to
+/// a whole byte, as `trunc(f20) & 0xff` does before `Gu_StencilFunc`.
+///
+/// **Measured against the original on 2026-10-08**
+/// (`docs/ghidra/functions/psp-pulse-usa/bloom.md`, "Racing strength against
+/// the original's own scratch buffers"): out of EDRAM, a racing frame's ribbon
+/// mask over the craft box holds exactly two values, `114` on `2049` pixels and
+/// `102` on `552` at intensity `1.0`, which are `trunc(0.45 * 255 * (1 - k / 9))`
+/// for `k = 0` and `1`, and `75`/`67` at `0.663`. A vertex attribute
+/// interpolated from segment `k` to `k + 1` ramps in between, which the
+/// original's per-draw constant does not.
+#[must_use]
+pub fn trail_stencil(intensity: f32, segment: usize) -> f32 {
+    (trail_glow(intensity, segment) * 255.0).floor() / 255.0
 }
 
 /// How many craft this crate's per-frame budgets are sized for.
