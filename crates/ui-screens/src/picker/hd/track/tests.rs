@@ -65,6 +65,7 @@ fn circuit(id: &str, reversed: bool) -> Entry {
         details: Details::Track {
             info: ["4.4KM".into(), "13.2KM".into(), "-".into()],
             emblem: Some(emblem_src(&format!(r"Data\Environments\{id}"))),
+            icon: Some(grid_icon_src(&format!(r"Data\Environments\{id}"))),
             reversed,
         },
     }
@@ -189,21 +190,119 @@ fn pointer_halves_step_and_the_model_frame_confirms() {
     assert_eq!(at(200.0, 300.0), Some(What::Previous));
     assert_eq!(at(800.0, 300.0), Some(What::Next));
     assert_eq!(at(1200.0, 400.0), Some(What::Confirm));
-    // The hex frame: top half is the row above, bottom half the row below.
-    assert_eq!(at(400.0, 500.0), Some(What::PreviousVariant));
-    assert_eq!(at(400.0, 640.0), Some(What::NextVariant));
-    // And a click there moves the cursor to the other direction's row.
+    // The grid draws, so its frame's halves are not targets: a hexagon is.
+    // Circuit `a` is the centre column (origin 210 + 4 * 72.2), its reverse
+    // twin the cell below.
+    let (cx, top, bottom) = (210.0 + 4.0 * 72.2, 500.0, 500.0 + 82.8);
+    assert_eq!(
+        at(cx, top),
+        Some(What::Cell {
+            entry: 0,
+            variant: 0
+        })
+    );
+    assert_eq!(
+        at(cx, bottom),
+        Some(What::Cell {
+            entry: 3,
+            variant: 0
+        })
+    );
+    // The next column is the next circuit, `b`, on its half-row shift.
+    assert_eq!(
+        at(cx + 72.2, top + 41.4),
+        Some(What::Cell {
+            entry: 1,
+            variant: 0
+        })
+    );
+    // A click on the other direction's hexagon moves the cursor there, and
+    // a second click on it confirms.
     let mut picker = grid();
     let pointer = oag_ui::pointer::Pointer {
-        at: Some((400.0, 640.0)),
+        at: Some((cx, bottom)),
         moved: true,
         clicked: true,
         ..oag_ui::pointer::Pointer::default()
     };
     assert_eq!(picker.pointer(&pointer, &found), vec![Event::Moved]);
     assert_eq!(picker.index(), 3);
+    let found = targets(&picker, &layout, &skin, &|_| None);
+    assert_eq!(picker.pointer(&pointer, &found), vec![Event::Confirmed]);
+    // Without the grid the frame's halves switch the direction row.
+    let mut bare = layout.clone();
+    bare.hd_track.as_mut().expect("hd").hex_grid = None;
+    let found = targets(&grid(), &bare, &skin, &|_| None);
+    let at = |x, y| crate::picker::pointer::hit(&found, (x, y)).map(|t| t.what);
+    assert_eq!(at(400.0, 500.0), Some(What::PreviousVariant));
+    assert_eq!(at(400.0, 640.0), Some(What::NextVariant));
     // A single row has no such target.
     let single = Picker::new(Kind::Track, vec![circuit("a", false)], None, None).with_rows(1);
-    let found = targets(&single, &layout, &skin, &|_| None);
+    let found = targets(&single, &bare, &skin, &|_| None);
     assert!(found.iter().all(|t| t.what != What::NextVariant));
+}
+
+fn sheet(name: &str) -> Option<oag_ui::frontend::Placed> {
+    (name.contains("Hexagon") || name.to_ascii_lowercase().contains("trackselectemblem_bw"))
+        .then_some(oag_ui::frontend::Placed {
+            x: 0,
+            y: 0,
+            width: 128,
+            height: 64,
+            quad_extent: None,
+            blend: None,
+        })
+}
+
+fn grid_draws(picker: &Picker) -> Vec<Draw> {
+    let layout = layout();
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let mut out = Vec::new();
+    draw_grid(
+        extra.hex_grid.as_ref().expect("grid"),
+        picker,
+        &sheet,
+        &mut out,
+    );
+    out
+}
+
+#[test]
+fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
+    let picker = grid();
+    let draws = grid_draws(&picker);
+    // 9 columns x 2 rows: a hexagon and an icon each, the chosen column's
+    // two hexagons drawn twice, and the ring on the forward row.
+    let sprites = draws
+        .iter()
+        .filter(|d| matches!(d, Draw::Sprite { .. }))
+        .count();
+    assert_eq!(sprites, 18 + 2 + 18 + 1);
+    let red = draws
+        .iter()
+        .filter(|d| matches!(d, Draw::Sprite { color, .. } if color[0] == 1.0 && color[1] == 0.0))
+        .count();
+    assert_eq!(red, 4, "both chosen-column hexagons, twice each");
+}
+
+#[test]
+fn the_ring_follows_the_direction_row_and_dropping_the_grid_draws_nothing() {
+    let mut picker = grid();
+    let ring_y = |draws: &[Draw]| {
+        draws.iter().rev().find_map(|d| match d {
+            Draw::Sprite { rect, color, .. } if (color[0] - RING[0]).abs() < 1e-6 => Some(rect[1]),
+            _ => None,
+        })
+    };
+    let forward = ring_y(&grid_draws(&picker)).expect("ring on the forward row");
+    press(&mut picker, Button::Down);
+    let reverse = ring_y(&grid_draws(&picker)).expect("ring on the reverse row");
+    assert!((reverse - forward - 82.8).abs() < 0.01);
+    let layout = layout();
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let mut bare = extra.clone();
+    bare.hex_grid = None;
+    let with = body(&picker, &layout, extra, &Frame::default(), &sheet);
+    let without = body(&picker, &layout, &bare, &Frame::default(), &sheet);
+    assert!(with.len() > without.len());
 }

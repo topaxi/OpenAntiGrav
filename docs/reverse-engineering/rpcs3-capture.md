@@ -1091,6 +1091,39 @@ and what they taught:
 
 The result is in `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`, "`hd-whiteout`".
 
+## Reading which post-chain programs ran, state by state (2026-10-08, `hd-motion-blur`)
+
+`scripts/rpcs3-hd-postchain.py` is the whiteout script's walk with three plan entries
+(`rest`, `speed:SECS`, `boost:DELAY`, `bomb:DELAY`) and, at each pause, a read of the
+live `FunkLayer` object (`0x00c50ee0`, `+0x50..+0x6c` into the frame's `.json`) and of the
+bloom chain's quarter-resolution targets. Result and method:
+[funklayer-zoom.md](../ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md). What it taught,
+each worth knowing before the next capture:
+
+- **A frame with 200 draws or more is not a complete frame.** A pause that catches the
+  main thread mid-write keeps its first 200 to 400 draws (the scene) and loses the post
+  chain and the HUD, which are the last passes of a frame, so "program X did not run"
+  reads true on a half. `HOOK_NEED_SCREEN=1` retries until a bloom-chain-end draw
+  (`0x02240000`) is followed by a screen-buffer draw (`0x00010000` or `0x00394000`);
+  `data/scratch/hd-motion-blur/frametab.py` applies the same test offline. Two of ten
+  early frames here were halves.
+- **Name a live fragment program by its microcode, not its address.** The same address
+  (`0x00741f40`, the `FunkLayerBloomDownsample_fp` copy) serves thirteen draws whose constants are
+  patched between draws, so only the last patch survives in the dump; compare the
+  opcode stream with the executable's blocks after dropping constants
+  (`fpmap.py`). A vertex program is named the same way from the `0xb80` uploads and the
+  `0x1ea0` start slot (`vpmap.py`); `scripts/ps3-registry.py` gives the name to block
+  mapping for 62 programs.
+- **Read the live inputs at the pause, do not time them.** The wall clock around a
+  retried dump moves by half a second a retry, so "0.5 s after the press" was an
+  unreliable label; the `FunkLayer` floats are exact.
+- **`HOOK_TGT=cc0000` keeps the vertex stage cheap**: a full non-light dump is every
+  index and vertex range of 700 draws; limited to one target it is the one draw read.
+- A cross-TOC call from the HUD module goes through a stub (`0x006774d8` for
+  `0x003af820`); `scripts/ps3-toc.py toc` shows two TOCs, `0x008bd3c4` for the render
+  code and `0x008ad4d8` for the HUD and engine-flare code, and a float constant
+  loaded with `lfs d(r2)` in one is a different word in the other.
+
 ## See also
 
 - [rpcs3-debugger.md](rpcs3-debugger.md) - the stub, and the traps around it.

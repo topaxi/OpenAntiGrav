@@ -99,6 +99,10 @@ pub enum Details {
     Track {
         info: [String; 3],
         emblem: Option<String>,
+        /// The circuit's white icon, the picture its hexagon in `Track
+        /// Creation`'s grid carries ([`hd::track::grid_icon_src`]); `None`
+        /// where the title draws no such grid.
+        icon: Option<String>,
         reversed: bool,
     },
     /// A team: its ratings, when the definition authors them, and its
@@ -236,14 +240,20 @@ impl Picker {
     ///
     /// **The wrap at the row's end is measured** - `right` pressed twelve
     /// times from Vineta K lands on Vineta K again on an RPCS3 walk, the
-    /// cursor still on the top row - **and up/down for the row is chosen**:
-    /// no capture has pressed it, and it is read off the grid's two rows
-    /// under the `CIRCUIT DIRECTION` heading.
+    /// cursor still on the top row - **and so is up/down for the row**
+    /// (2026-09-29: `Down` drew the reverse glyph with the lower hexagon
+    /// highlighted, `Up` went back).
     #[must_use]
     pub fn with_rows(mut self, columns: usize) -> Self {
         self.across = true;
         self.columns = columns;
         self
+    }
+
+    /// How many entries one row of [`Self::with_rows`] holds; `0` for a list.
+    #[must_use]
+    pub fn row_width(&self) -> usize {
+        self.columns
     }
 
     /// Whether the entries are laid out as more than one row - see

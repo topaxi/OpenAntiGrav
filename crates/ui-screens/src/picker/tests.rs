@@ -55,6 +55,7 @@ fn entries() -> Vec<Entry> {
             details: Details::Track {
                 info: ["5178".into(), "-.--.--".into(), "-.--.--".into()],
                 emblem: None,
+                icon: None,
                 reversed: false,
             },
         })

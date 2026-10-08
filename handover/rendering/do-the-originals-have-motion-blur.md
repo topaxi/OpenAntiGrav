@@ -26,11 +26,13 @@ Leads, from strings and docs only, none verified:
 - **Pulse PS2**: [camera.md](../../docs/ghidra/functions/ps2-pulse-eu/camera.md)
   (around line 412) has an unconsumed camera roll angle at `+0x124`, with
   "motion-blur direction" as one guess.
-- **HD/Fury**: [hd-hud.md](../../docs/formats/hd-hud.md) (around line 763)
-  describes an RPCS3 capture at 529 km/h as "heavy motion blur". The EBOOT has
-  DoF blur programs (`FunkLayerDofBlur*_fp`), bloom blur and photo mode's
-  `photomodeRadialBlur`, but no pass named MotionBlur. What blurs that capture
-  is unknown: a speed radial blur, DoF, or frame blending.
+- ~~**HD/Fury**~~ **Answered 2026-10-08 (`hd-motion-blur`): no motion blur.** No pass of
+  the post chain samples a previous screen buffer or a velocity at rest, at 440 km/h or
+  through a Turbo. What blurs the 529 km/h capture is `FunkLayerZoom`, a boost-start and
+  damage pulse pass, plus the bloom: see
+  [funklayer-zoom.md](../../docs/ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md). The
+  `original` setting value is therefore not offered on HD. The pass itself is read and not
+  ported: its own thread is `hds-boost-zoom-pass-is-read-and-not-ported.md`.
 - **Omega**: [lightmap-prelit.md](../../docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md)
   (around line 182) shows a settings registrar naming a `MotionBlur` group
   beside Vignette, DepthOfField and Water. It most likely has one; its keys and
@@ -46,6 +48,10 @@ Leads, from strings and docs only, none verified:
 Suggested shape: one `oag-re` lane on opus. Use `mblur-originals` as the lane
 name if it is driven.
 
+0. Done for HD (see above); Pulse PSP/PS2, Pure, 2048 and Omega remain. The HD method
+   (`scripts/rpcs3-hd-postchain.py`, `rsx-frame-census.py`, `rsx-fp-names.py`) is the
+   template: complete frames only, name programs by microcode, read live inputs at the
+   pause.
 1. **Static, per title** (about 2 hours a title): find the race-time blur pass
    or prove its absence. Ghidra programs as named in `docs/ghidra/`. Stay in the
    post-processing, blur, frame-blend and render-target-feedback functions.

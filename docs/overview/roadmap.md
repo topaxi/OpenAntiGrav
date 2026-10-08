@@ -1200,8 +1200,17 @@ reproduced deliberately and documented as a choice.
       [`bloom.md`](../ghidra/functions/psp-pulse-usa/bloom.md). The prerequisite
       is a scene target with a meaningful alpha channel, which nothing writes yet.
 - [ ] Colour grading
-- [ ] Motion blur / speed streaking. Visible in the reference frames captured for
-      the HUD, so this is observed rather than assumed
+- [ ] Motion blur / speed streaking. **Not an original feature on the titles
+      measured.** HD/Fury: measured 2026-10-08 on RPCS3, no post pass samples a
+      previous frame or a velocity at rest, at 440 km/h or through a Turbo; the one
+      boost-driven pass is a short radial zoom-streak ring at the screen edge, not a blur
+      ([funklayer-zoom.md](../ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md)).
+      Pulse: the original has no blur pass per
+      [bloom.md](../ghidra/functions/psp-pulse-usa/bloom.md) (one recorded frame,
+      not re-measured at speed); the boost plume's streaked look comes from its own
+      streak texture ([exhaust.md](../ghidra/functions/psp-pulse-usa/exhaust.md)).
+      Ours is an invented modern option
+      ([motion-blur.md](../rendering/motion-blur.md)); Pure, 2048 and Omega are unread
 - [ ] Decide, and document as choices: dithering, and affine texture-mapping
       artefacts. Both are hardware limitations; both are arguably identity
 - [ ] Retro-versus-modern as an explicit setting axis, if any of the above is

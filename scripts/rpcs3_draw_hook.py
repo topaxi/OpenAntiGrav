@@ -5,11 +5,22 @@ reached), then the fragment programs and index ranges, the vertex ranges, the
 textures of normal-map programs, and the first bytes of every bound texture
 (`HOOK_LIGHT=1` skips the index and vertex stages). Returning `None` asks the
 driver to resume, wait and try again when the captured frame is incomplete.
+`HOOK_TGT=cc0000,10000` limits the index and vertex stages to draws on those render
+targets (a few draws instead of all 700); `HOOK_NEED_SCREEN=1` also retries a frame whose
+bloom chain and the HUD after it are missing, which the 200-draw floor does not catch.
 See docs/reverse-engineering/rpcs3-capture.md, "Capturing one frame's draws".
 """
 import sys, glob, struct, subprocess, re, os
 LIGHT=os.environ.get('HOOK_LIGHT')=='1'
 NO_HEADS=os.environ.get('HOOK_NO_HEADS')=='1'
+# HOOK_TGT=cc0000,10000 limits the index and vertex stages to draws whose render target (0x210) is listed.
+TGTS={int(x,16) for x in os.environ.get('HOOK_TGT','').split(',') if x}
+def keep(d): return not TGTS or d.get(0x210) in TGTS
+# HOOK_NEED_SCREEN=1 also retries a frame with no bloom-chain end (a draw on target 0x2240000) followed
+# by a draw on a screen buffer (0x10000 or 0x394000): the frame stops before the passes it is read for.
+def post_chain_complete(draws):
+    ends=[i for i,d in enumerate(draws) if d.get(0x210)==0x2240000]
+    return bool(ends) and any(d.get(0x210) in (0x10000,0x394000) for d in draws[ends[-1]:])
 sys.path.insert(0,os.path.dirname(os.path.abspath(__file__)))
 import rsx_fifo as r
 BPP={0x85:4,0x86:.5,0x87:1,0x88:1,0x81:1,0x84:2,0x82:2,0x83:2,0x8b:2,0x8d:4,0x8f:.5,0x9b:2,0xa5:4,0xa6:.5,0xa7:1,0xa8:1}
@@ -41,12 +52,17 @@ def regions(out, stem, rnd):
         if len(draws)<200:
             print('hook: only %d draws, retry'%len(draws),flush=True)
             return None
+        if os.environ.get('HOOK_NEED_SCREEN')=='1' and not post_chain_complete(draws):
+            # a pause that caught the main thread mid-write ends in the scene, with the post chain
+            # (the part measured) and the HUD missing
+            print('hook: no complete post chain followed by a screen-buffer draw, retry',flush=True)
+            return None
         ST['stage']=1
         res=[]
         for p in sorted(set(d[0x8e4]&0xfffffff0 for d in draws)):
             res.append((base(draws[0][0x8e4]&3)+p,0x600))
         seen=set()
-        for d in ([] if LIGHT else draws):
+        for d in ([] if LIGHT else [x for x in draws if keep(x)]):
             ixoff=d.get(0x181c)
             if d.get(0x1824) is None: continue
             for first,cnt in d.get('batches') or [(d[0x1824]&0xffffff,((d[0x1824]>>24)&0xff)+1)]:
@@ -62,7 +78,7 @@ def regions(out, stem, rnd):
         res=[]
         # vertex ranges per draw
         rngs={}
-        for d in ([] if LIGHT else draws):
+        for d in ([] if LIGHT else [x for x in draws if keep(x)]):
             if 0x1824 not in d or d.get(0x1824) is None: continue
             ixoff=d[0x181c]
             ix=[]

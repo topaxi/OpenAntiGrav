@@ -166,7 +166,7 @@ pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]
     out
 }
 
-/// Every circuit's own emblem, for a source whose track screen draws one -
+/// Every circuit's own emblem and grid icon, for a source whose track screen draws one -
 /// asked for by name, since the `Emblem` widget authors no `src`. See
 /// `oag_ui_screens::picker::hd::track::emblem_src`.
 pub(super) fn track_emblems(
@@ -178,8 +178,17 @@ pub(super) fn track_emblems(
     }
     let mut out: Vec<String> = tracks
         .iter()
-        .map(|track| oag_ui_screens::picker::hd::track::emblem_src(&track.location))
+        .flat_map(|track| {
+            [
+                oag_ui_screens::picker::hd::track::emblem_src(&track.location),
+                oag_ui_screens::picker::hd::track::grid_icon_src(&track.location),
+            ]
+        })
         .collect();
+    // `TrackHexSelection` names no art either: the same hexagon and cursor
+    // ring as `Team Selection`'s grid.
+    out.push(oag_ui_screens::picker::hd::hex::HEX_SRC.to_string());
+    out.push(oag_ui_screens::picker::hd::hex::OUTLINE_SRC.to_string());
     out.sort_unstable();
     out.dedup();
     out

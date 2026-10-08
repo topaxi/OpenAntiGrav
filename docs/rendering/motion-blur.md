@@ -26,6 +26,24 @@ the [modern features](../overview/modern-features.md) track, alongside
 ultrawide, HDR and FSR-class upscaling, and it is subject to the same rule those
 are: a setting exists only when the thing behind it exists.
 
+## What the originals have, per title (2026-10-08)
+
+The sentence above, "Wipeout Pulse has no motion blur", was first written with no
+capture behind it. What is known now, by title, with the evidence:
+
+| Title | Original has a motion blur or speed blur? | Evidence |
+| --- | --- | --- |
+| HD/Fury (PS3) | **No.** No pass of its post chain samples a previous frame or a velocity, at rest, at 440 km/h or through a Turbo. The one boost-driven pass, `FunkLayerZoom`, draws a radial zoom-streak ring over the screen edge for about a second after a boost starts (and on damage); it is a pulse on an event, not a blur driven by speed or velocity. | Measured on RPCS3, full draw lists of complete frames with the live parameters read at the pause, four boots, plus the executable read: [funklayer-zoom.md](../ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md). Confidence 85 (four boots with live reads). |
+| Pulse PSP | None recorded. One recorded frame's screen-space prims hold the bloom and no frame-blend prim. | [bloom.md](../ghidra/functions/psp-pulse-usa/bloom.md), one frame at rest, not re-read at speed. |
+| Pulse PS2, Pure, 2048 | Unread. | Open; tracked in `HANDOVER.md`'s thread index. |
+| Omega (PS4) | Unread. Its settings registrar names a `MotionBlur` group beside Vignette and DepthOfField, so HD's answer does not carry over. | [lightmap-prelit.md](../ghidra/functions/ps4-omega-eu/lightmap-prelit.md) (strings only). |
+
+So no measured original has the effect this page designs. The maintainer's rule
+(2026-10-05) stands: the motion blur setting gains an `original` value only on a
+title whose original has a recovered blur, offered only there, the way the shadow
+setting's `original` tier is ([shadows.md](shadows.md)). None qualifies yet, so no
+title is offered one.
+
 The file and line references below were read against the tree at the time of
 writing. They are there so an implementer can start from this page instead of
 re-deriving the renderer's shape, and they will drift; treat them as
