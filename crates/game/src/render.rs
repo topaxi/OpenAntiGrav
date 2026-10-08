@@ -783,7 +783,18 @@ impl Renderer {
                 } => {
                     let border = border.unwrap_or(TRANSPARENT);
                     let bounds = clip.filter(|(at, ..)| *at == index).map(|(_, l, r)| (l, r));
-                    let slot = if role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS)
+                    // A `Buttons` draw with the third slot holding another
+                    // role's face (Pulse's `Title`) draws nothing: sampling
+                    // that face would print the button codepoints as letters.
+                    let is_buttons = role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS);
+                    if is_buttons
+                        && !self
+                            .buttons_role
+                            .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS)
+                    {
+                        continue;
+                    }
+                    let slot = if is_buttons
                         || (self.buttons_atlas.is_some()
                             && role.eq_ignore_ascii_case(self.buttons_role))
                     {
