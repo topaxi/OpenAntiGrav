@@ -338,7 +338,7 @@ for the full candidate table.
 
 ## Not built
 
-- **The footer's ticker text and button-prompt line** - see above.
+- ~~The footer's ticker text and button-prompt line~~ - built since (`oag_ui_screens::campaign::footer`); what still differs is item 3 and 4 of "What still differs, ranked".
 - ~~The highlight's pulse, for want of a period and a depth on Pulse~~ -
   measured 2026-09-05, see "The highlight's pulse" above, and built in
   `oag_game::menu::Skin::selected`. Its exact curve shape between the two
@@ -464,6 +464,93 @@ pairs have distinct, unrelated `(u0, v0)` in the raw `.fnt` table. The
 actual mechanism is not identified - left as "cause unknown" rather than a
 plausible-sounding guess, for whoever picks up `oag_ui_screens::campaign::draw`'s
 own fix above.
+
+## What still differs, ranked - measured 2026-10-08
+
+**Method.** Pulse PSP USA under PPSSPP 1.20.4 with `SoftwareRenderer = True`
+in its own ini (the key is set and read back; the log does not name the
+backend, so that it took effect is not independently confirmed), 1280x720 Xvfb,
+the game's 960x544 area cropped at `+160+88`. `scripts/psp-frontend-capture.py`
+walked 65 states; the transition burst is
+`scripts/psp-menu-transition-burst.py` (30 `Gfx_PresentFrame` hits after one
+`cross`, end state asserted as `Grid Selection`). Ours is `oag-game
+data/images/pulse-psp-usa.chd --menu-page <id> --size 960x544`. Sheets (original
+above, ours below) are in `data/scratch/pulse-fe-look/sheets/`: `main`,
+`custom`, `track`, `team`, `grid`, `cell`, `boot`, `options-orig` against
+`options-ours`, `burst-orig` against `burst-ours` and `burst-ours-options`.
+
+**What is not compared, and why.** A `--menu-page` still runs no clock and no
+state machine, so the selected row's white pulse, the ticker's scroll, the
+backdrop's ship fly-by and the 3D previews' rotation are not judged from it;
+the original's backdrop movie plays a ship across the screen (burst frames),
+ours plays the same movie. No `--press` walk stops on `Main Menu` (the first
+walk launches a race), so a live frame of ours was not taken. The original's
+loading screen and EndRace were not captured this pass (the loading wave is
+in [loading-screen.md](../ghidra/functions/psp-pulse-usa/loading-screen.md); EndRace needs a finished race).
+
+Ranked by how much a player notices, ours first listed worst:
+
+1. **Our Race page is not the original's Racebox settings page.** The disc has
+   `Racebox` (Custom Race / Load Grid / Edit Grid) then a settings page whose
+   rows are label left, a `<` `>` selector then the value at x of about 240,
+   with a thin rule between rows and the focused row in white. Ours is one
+   `RACE` page with the value right-aligned at the far edge, greyed rows and no
+   rules. Structural (our page tree is our own, `menus.md`); the rule lines and
+   the selector arrows are disc art and not drawn.
+2. **The top-bar title is set in the wrong face on every page.** The original's
+   `MAIN MENU`/`TRACK SELECT`/`RACE CAMPAIGN` are the `Title` role,
+   `Pulse_14.fnt` (17px): 9 glyphs span 152 px of the 960-wide crop, 17 px a
+   glyph. Ours draws `Pulse_20.fnt` (22px): 12 glyphs span 305 px, 25 px a glyph,
+   a 0.68 ratio against 14/20 = 0.70. `oag_pulse::frontend::MENU_SKIN::title_font`
+   is `None` with a note that nothing had re-checked the capture against the
+   smaller face; this is that check, and the answer is the original is the
+   smaller one. Not fixed this pass: Pulse needs the `Title` face and the
+   `Default` face loaded at once and the renderer has one secondary slot
+   (`boot::fonts::face_atlas_slot`), so it is a third slot, not a flag.
+3. **The footer ticker is set in the wrong face, and the profile tag is empty.**
+   The original's ticker is lowercase `pulse_text.fnt` (`Default` role, the
+   same face as `Help`/`Confirm`/`AI difficulty` beside it), dark ink, scrolling
+   in the strip; the tag at its left is the profile tag in white caps (`AAA`
+   here). Ours drew the tip in `menu`-role capitals at 17/22 scale, which on
+   `Main Menu` ran past the strip's ends. The tag draws nothing (no honest
+   string; `campaign-screens.md`). **Fixed 2026-10-08, see below.**
+4. **Track and Ship Select labels are capitals where the original is mixed
+   case.** `Distance(m)`, `Lap record`, `Classic`, `Speed`, `Thrust`, the
+   `Help`/`Music playlist` prompts are `Default` role on the disc. Ours draws
+   them in the capitals-only menu face. The `Confirm`/`Back` prompts and the
+   ticker are missing on our pickers' footer. Same cause as item 3 on another
+   widget family.
+5. **Page transitions.** The original zooms the outgoing page up while fading
+   it and the incoming page up from smaller, 14 to 15 presented frames at
+   30 Hz (`burst-orig`: frames 0-3 barely move, then the zoom accelerates, gone
+   by frame 13). Ours (`--menu-anim-phase`) draws only the arriving half on
+   menu pages, and **draws no transition at all on the campaign and picker
+   pages**: `grid-select` at phase 0.0 through 1.0 is the same picture. The
+   easing curve is still the invented one (confidence 30); the burst frames at
+   `data/scratch/pulse-fe-look/burst-main-grid/` are the data a fit needs, a
+   per-frame scale and alpha read off them, and are not fitted yet.
+6. **Selected-hex and row glow.** The original's focused grid hex is a white
+   hexagon with a bloom; ours is a flat cyan outline at pulse phase 0. The
+   pulse is measured (`menus-original.md`, "The highlight's pulse") so this is
+   likely the still's phase, not a missing effect; a live frame is needed to
+   say.
+7. **Boot title.** `--screen "Show Logo"` draws the logo on black with no teal
+   backdrop, no copyright lines and `Press START button` in the small face;
+   the original has the backdrop, two copyright lines and `PRESS START
+   BUTTON` in the menu face, larger and with a glow. This is the debugging
+   view of one screen and not the boot flow, so it is unconfirmed as a player
+   gap.
+8. **Notes, not ranked.** The track circuit's distance reads 5178 on the
+   original and 5094 on ours for Talon's Junction White (ours is not the
+   authored value, worth a trace). A circuit count of 1 / 3 on a fresh
+   original profile against 1 / 11 on ours is our unlock default. `/` in
+   counters and the HUD lap draws as a long-s glyph on the pickers but as a
+   plain slash on the grid page.
+
+**What is not missing:** the top bar and both footer strips, the row pitch and
+colours, the help subtitle, the hex cluster and its panels, the `Confirm`/`Back`
+prompts on the campaign pages and the backdrop movie all line up with the
+original on the sheets.
 
 ## Reproducing this
 
