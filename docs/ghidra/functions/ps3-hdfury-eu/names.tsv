@@ -660,3 +660,7 @@
 
 # 2026-10-08 hd-leach-draw lane (leach-beam-strips.md)
 0x001179c8	function	BeamPath_Rebuild	80	leach-beam-strips.md
+0x008c26a0	data	WeaponPad_CycleKeyframes	88	pads.md
+0x00aec2c0	data	WeaponPad_CoolingGlowVector	90	pads.md
+0x00aec2d0	data	WeaponPad_GlowScaleVector	90	pads.md
+0x002e0450	function	WeaponPad_InitStatics	75	pads.md

@@ -80,6 +80,7 @@ pub const TITLE: &Title = &Title {
     // Unread, on the same terms `oag_2048::TITLE` states: nothing here has
     // looked for an engine exhaust or flare model beside the hull.
     exhaust: &oag_title::exhaust::Exhaust::Unread,
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Unread,
     // **Split into three files, like 2048's, not combined like HD's or
     // Pulse's/Pure's.** `data09.psarc` carries `data/plugins/teams/

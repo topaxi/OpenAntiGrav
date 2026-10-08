@@ -161,3 +161,30 @@ fn the_front_end_is_wired_and_its_chain_has_been_watched() {
         "data/reference/hd-boot-chain/cold-01, cold-02 and cold-03, then Main Menu"
     );
 }
+
+/// The cycle reproduces the two fragment-program constants read off RPCS3 on
+/// `01_vineta_k` (`data/scratch/hd-weapon-pads/cap1`, draws 108 and 109), one
+/// pad in the third keyframe's span and one in the first's, both from the same
+/// frame and both at the one scale `1/255`.
+///
+/// The position of each is solved from its green channel alone (the only
+/// channel that moves in both spans), so the red channel and the third lane
+/// are the checks.
+#[test]
+fn the_weapon_pad_cycle_reproduces_both_measured_constants() {
+    let oag_title::weapon_pad::WeaponPadGlow::Cycle(cycle) = TITLE.weapon_pad_glow else {
+        panic!("HD's weapon pads cycle");
+    };
+    // Third keyframe to the fourth: green rises 0 -> 16.
+    let a = cycle.colour(2.0 + 0.5208);
+    assert!((a[0] - 1.16612).abs() < 2e-4, "{a:?}");
+    assert!((a[1] - 0.032_683_5).abs() < 2e-4, "{a:?}");
+    assert_eq!(a[2], 0.0);
+    // First keyframe to the second: green falls 16 -> 0.
+    let b = cycle.colour(0.35071);
+    assert!((b[0] - 1.65581).abs() < 2e-4, "{b:?}");
+    assert!((b[1] - 0.040_742_8).abs() < 2e-4, "{b:?}");
+    assert_eq!(b[2], 0.0);
+    // Cooling is the vector the static initialiser writes, read live as well.
+    assert_eq!(cycle.cooling, [0.025, 0.0, 0.01]);
+}

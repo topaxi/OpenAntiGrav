@@ -3609,7 +3609,7 @@ with no `goto`. The parent's widgets, with their `Item` offsets folded:
 | `Bracket` x3 (team, hex grid, ship model with `middle`) | (160,170) 506x156 / (160,366) 506x600 / (705,170) 1052x650 | no - rects only, for layout and pointer |
 | `LogoOutline` images and fills | around (160,170) | yes |
 | `Logo` (no `src`) | (160,185) 512x128 | yes, the team's own `Data\Ships\<team>\FE\Logo.gtf` |
-| `HexSelection` 5 cols x 7 rows | offset (272,395) | no |
+| `HexSelection` 5 cols x 7 rows | offset (272,395) | yes, see "The `NAVIGATE TEAM` honeycomb" |
 | `Model name="ShipModel"` | `OriginX=1220 OriginY=412 z=-24 RotX=0.4 RotY=-0.5` | no (read, not drawn) |
 | `Block` `Slide_0..3` (`RC_SPEED`/`RC_THRUST`/`RC_HANDLING`/`RC_SHIELD`) with `Nobble_N`, `Label_N` | from (705,858) | yes, the stat bars |
 | `Block` `Slide_4` `ER_LOY` with nobbles | (1250,770) | box and label only |
@@ -3734,11 +3734,81 @@ old save of 2026-09-21.
   names `<team>\ship_FE.vex`, which no HD archive carries; the race hull
   (`ship.vex` + `ship.rcsmodel`) is not reachable from the preview path, so
   the `SHIP MODEL` frame is empty. The biggest thing still missing.
-- **The hex grid** (`HexSelection`): colours authored, hex art the widget
-  class's own and unread. The per-team `FE\thumb0..3.gtf` are candidates
-  for the ship icons in it, not checked.
+- **The hex grid** (`HexSelection`): drawn since 2026-10-08, see below.
 - **The bracket corner marks, the padlock, the unlock condition text and
   the loyalty value** - no unlock or loyalty state is kept.
+
+### The `NAVIGATE TEAM` honeycomb, 2026-10-08 (hd-ship-select)
+
+`HexSelection` authors only a shape and colours (`columns="5" rows="7"`,
+`HexCol 0x64808080`, `HexColFade 0x32808080`, `SelectedColumnCol 0x64ff0000`,
+`SelectedLockCol 0xff808080`, `SelectedLockColFade 0xff242424`); the art is
+the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
+
+| Piece | Source | Confidence |
+| --- | --- | --- |
+| cell | `Data\FE\Images\Hexagon_HD.gtf` (72x62 art in 128x64) at 1.22 | 70 |
+| cursor ring | `Hexagon_HD_OUTLINE.gtf`, tint read off the frame (`185/35/55`); the original's ring is about twice as thick: **chosen, not measured** | 40 |
+| padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
+| model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
+| selected column | `SelectedColumnCol` drawn twice on the bare cell (the two-pass fill `Block_Render` uses): `0x64` twice over black is 160, the frame reads (151, 6, 20) | 70 |
+| neighbour columns | the same cells in `HexCol`, open rows ghosting their thumbnail in black at 0.35: **chosen, not measured** (the frame shows faint silhouettes) | - |
+
+Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
+maintainer's save): first column centre = the authored origin `x=272`, column
+pitch 72.2, row pitch 82.8, odd columns half a row lower, hexagon 88x76. **70**:
+one frame, in authored units through the page scale of "The layout scale"
+below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
+
+**The columns are teams, the rows models**: `Right` from `concept1` lands on
+the next team's `concept1` (2026-09-29 walk), so the centre column is the
+selected team and its neighbours the teams either side (wrapping: chosen).
+The cursor ring sits on the row of the chosen livery. Our picker offers three
+liveries (`""`, `_c1`, `_n1`), each on the row its model occupies
+(`Team::hex_cells`, `model_for_directory`).
+
+**The lock rule is inherited, labelled so**: a row is open when it is a model
+this build lets a player race, padlocked otherwise - Pulse's law, unmeasured
+on HD. HD keeps no unlock state (`gates_variants` is false), so the original's
+fresh-profile frame opens exactly `concept1` and `normal` while this build
+also opens `nitro` (its `_n1` variant races). A visible difference, kept so
+the cursor never rests on a locked cell.
+
+**The classic hulls' thumbnails are `DATA06`'s**: `DATA02` also ships
+`thumb0..3`, a 256x64 top-down plan, and this build's mount order reaches it
+first. The frame shows `DATA06`'s 126x64 three-quarter view, so the sheet
+reads the **last** archive's copy of an `FE\thumb` name
+(`hex::is_thumb`, `read_front_end_first`). Which rule the original uses is
+unread; the later archive winning is the reading both frames agree with.
+
+Pointer: each open hexagon is a target (`hex_contains`, so a click near an
+edge picks the right cell); a click selects that team and livery and confirms
+when it is already the chosen cell; a padlocked cell is nothing. This
+replaces the old top/bottom half of the `NAVIGATE TEAM` bracket. Pad:
+unchanged (left/right team, up/down livery). **Chosen**: the pad visits only
+the offered rows; whether the original's cursor can rest on a locked row is
+unmeasured. Tests: `picker::hd::tests::*` (the miniature) and
+`hd_reads_its_own_team_selection` (the disc: the five colours, the origin,
+Feisar's open rows and thumbnails, every model's thumbnail on the sheet).
+
+### The layout scale: the original is not drawn 1:1, 2026-10-08
+
+Open question 12 of `hd-frontend.md` ("is the 1920x1080 space presented 1:1")
+has an answer on this frame: **no**. One anchor that does not depend on this
+build's drawing gives a uniform scale of **0.904** (picture units per
+authored unit; confidence 60, one frame): the stat blocks' authored spacing
+of 545 units reads 513 px, and their 60-unit row pitch reads 57 px, within a
+pixel. The title rule spans the same `306..1811` px on all five pages walked,
+so the transform is page-wide; the offset comes from the hex origin and the
+block's left edge, which disagree by about 4 units. The offset is about `(+150, -8)` units. Our front end draws 1:1, so
+every HD page is laid out about 1.1 times larger than the original's frame,
+which is what the Ship Select sheet shows. **Not applied, and why:** HD's
+Game Options carry `Screen Size` / `Safe Area Setting`, and the RPCS3 profile
+the frame came from is the maintainer's save, so the scale may be that
+setting rather than the default. A fresh-profile boot with the setting at its
+default is the measurement that settles it; until then nothing here is
+inset. Not the offset's origin either: a pure safe-area scale about the
+centre would not move the centre, and this one does.
 
 ### Walked live, 2026-09-29
 
@@ -3980,8 +4050,12 @@ hold 24 `Tournament` cells in the archive read, none walked).
    0.5, zoom 0.6) is **chosen, not measured**, fitted by eye to the original's
    Feisar frame (different team, so shape differs). The authored `ShipModel`
    `RotX`/`RotY` are not composed yet. Sheet: `page-ship-select-after.png`.
-   Still missing on this screen: the team hex column, brackets, the loyalty
-   value, and the original's default team (save-state confound).
+   Still missing on this screen: the brackets, the loyalty value, and the
+   original's default team (save-state confound).
+   **Fixed 2026-10-08 (hd-ship-select): the team hex column draws** - see
+   "The `NAVIGATE TEAM` honeycomb" below. Omega: checked, applies (same
+   `Team_Selection_Definition.xml` in `data09.psarc`, which `crates/omega`
+   skips), not wired; its thumbnails and `Padlock.gtf` were not censused.
 2. **Cell Selection lacks the card.** The original lays the grid's red flyer
    (the event logo "blitzed", the striped rail, a black hex field of about 30
    cells with the event's hexes lit), an event-type icon beside each of

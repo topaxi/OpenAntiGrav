@@ -58,6 +58,7 @@ pub const TITLE: &Title = &Title {
     // The flare's own texture, a second literal in the same executable -
     // `Texture_LoadEngineFlare` at `0x08a84c80`. Note the directory case
     // differs from the noise map's; the WAD hash is case-insensitive.
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
     flare: &oag_title::flare::Flare::Sprite(r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip"),
     // Measured: the six stand-in codepoints and the glyph each draws, read off
     // `pulse_text.fnt`, `Pulse_14.fnt` and `Pulse_20.fnt` - see `prompts`.

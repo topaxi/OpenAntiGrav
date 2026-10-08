@@ -27,11 +27,12 @@ impl Drawable {
     /// [`Self::new`] gave them, in every slot alike. A caller that starts
     /// writing per-slot fog or vertices must stop sharing them first.
     pub(crate) fn instance(&self, device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
-        let (anims, node_anims, anim_bind) =
+        let (anims, node_anims, emissive, anim_bind) =
             if self.model.anim_tracks.is_empty() && self.model.anim_nodes.is_empty() {
                 (
                     self.anims.clone(),
                     self.node_anims.clone(),
+                    self.emissive.clone(),
                     self.anim_bind.clone(),
                 )
             } else {
@@ -76,11 +77,13 @@ impl Drawable {
             anim_bind,
             anims,
             node_anims,
+            emissive,
             zone_vis: self.zone_vis.clone(),
             zone_rebind: self.zone_rebind.clone(),
             opaque_ranges: self.opaque_ranges.clone(),
             lod: oag_mesh::mesh::LodSwitch::new(&self.model.lod_groups),
             ripple: std::cell::RefCell::new(None),
+            pad_glow: std::cell::RefCell::default(),
         }
     }
 
@@ -90,7 +93,7 @@ impl Drawable {
         &self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::BindGroup) {
+    ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer, wgpu::BindGroup) {
         let buffer = |label, size| {
             device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some(label),
@@ -135,7 +138,7 @@ impl Drawable {
                 },
             ],
         });
-        (anims, node_anims, bind)
+        (anims, node_anims, emissive, bind)
     }
 
     /// Whether `other` draws from this drawable's own vertex and index buffers

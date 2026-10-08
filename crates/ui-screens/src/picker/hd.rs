@@ -34,8 +34,8 @@
 //!
 //! # What this draws, and what it does not
 //!
-//! Drawn, off the disc: the title, the four `MiniText` headings, the
-//! `LogoOutline` frame, the selected team's own `Data\Ships\<team>\FE\Logo.gtf`
+//! Drawn, off the disc: the `NAVIGATE TEAM` honeycomb ([`hex`]), the title,
+//! the four `MiniText` headings, the `LogoOutline` frame, the selected team's own `Data\Ships\<team>\FE\Logo.gtf`
 //! in the `Logo` widget's rect, the four `STATISTICS` blocks with their
 //! value labels and down-nobbles, and the `LOYALTY` block's box and label.
 //!
@@ -46,12 +46,11 @@
 //!   fixed pose in this screen's `SHIP MODEL` frame. The pose is chosen, not
 //!   measured: the widget's own `ShipModel` values ([`ShipModel`]) are read
 //!   and not yet composed.
-//! - **The `HexSelection` grid.** Its colours are authored but its hex art
-//!   is the widget class's own, unread. See [`livery_line`] for what
-//!   stands in for the row it would highlight.
 //! - **The `Bracket` corner marks**, the `Padlock` and the `Unlockcondition`
 //!   text (this build keeps no unlock state), and the loyalty value, its
-//!   nobbles and `LiveryString`'s own original content (unread).
+//!   nobbles. `LiveryString` is authored empty and filled by code this
+//!   build has not read; the honeycomb's cursor row shows the chosen model
+//!   instead, so nothing stands in for it.
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
@@ -60,6 +59,7 @@ use oag_ui::screen::{BlockWidget, Node, Screen, Screens, Text, argb_to_rgba, par
 
 use super::{Details, FaceScales, Layout, Picker};
 
+pub mod hex;
 pub mod track;
 
 /// The screen every widget is authored on.
@@ -135,6 +135,8 @@ pub struct TeamScreen {
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
+    /// The `NAVIGATE TEAM` honeycomb - see [`hex`].
+    pub hex: Option<hex::HexGrid>,
 }
 
 /// Reads HD's `Team Selection` off its own definition file: `xml` is the
@@ -271,6 +273,25 @@ fn walk(
                     rot_y: number(child, "RotY").unwrap_or(0.0),
                 });
             }
+            "hexselection" => {
+                let count = |attr: &str| number(child, attr).map_or(0, |n| n as usize);
+                let colour = |attr: &str| {
+                    child
+                        .value(attr)
+                        .and_then(|raw| screens.resolve(raw))
+                        .and_then(parse_argb)
+                };
+                out.hex = Some(hex::HexGrid {
+                    origin: [x, y],
+                    columns: count("columns"),
+                    rows: count("rows"),
+                    hex: colour("HexCol").unwrap_or(0x6480_8080),
+                    hex_fade: colour("HexColFade").unwrap_or(0x3280_8080),
+                    selected_column: colour("SelectedColumnCol").unwrap_or(0x64ff_0000),
+                    selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
+                    selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
+                });
+            }
             "image" if child.attr("name") == Some("Logo") => {
                 out.logo = Some([
                     x,
@@ -348,6 +369,9 @@ pub(super) fn body(
         });
     }
     draw_labels(&extra.labels, &mut out);
+    if let Some(grid) = &extra.hex {
+        hex::draw(grid, picker, sprites, &mut out);
+    }
 
     let stats = selected_stats(picker);
     for (index, name) in STAT_BLOCKS.iter().enumerate() {
@@ -359,12 +383,6 @@ pub(super) fn body(
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
         stat_bar(block, None, layout, extra, frame, sprites, &mut out);
-    }
-    // `LiveryString` - see [`livery_line`].
-    if let Some(text) = find_text(screen, "LiveryString")
-        && let Some(line) = livery_line(picker)
-    {
-        out.push(text_draw(text, &line, layout));
     }
     out
 }
@@ -388,18 +406,6 @@ fn draw_labels(labels: &[MiniText], out: &mut Vec<Draw>) {
             wrap_width: None,
         });
     }
-}
-
-/// What `LiveryString` says: the selected livery's own label, when the team
-/// offers more than one. **Chosen, not measured** - the widget is authored
-/// empty and filled at runtime by code this build has not read, and it
-/// stands in here for the `HexSelection` row the original highlights, which
-/// this build does not draw.
-fn livery_line(picker: &Picker) -> Option<String> {
-    if picker.variants().len() < 2 {
-        return None;
-    }
-    picker.variant().map(|(_, label)| label.clone())
 }
 
 /// The selected livery's own ratings, where the entry carries them.

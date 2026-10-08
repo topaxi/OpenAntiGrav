@@ -206,6 +206,11 @@ pub(crate) fn read_front_end_first(
     if let Some(hash) = super::images::hash_spec(name) {
         return archives.read_hash(hash);
     }
+    if oag_ui_screens::picker::hd::hex::is_thumb(name)
+        && let Some((_, blob)) = archives.read_every_name(name).pop()
+    {
+        return Ok(blob);
+    }
     if let Some(fe) = archives.fe.as_mut()
         && let Ok(blob) = fe.read_entry(name)
     {
