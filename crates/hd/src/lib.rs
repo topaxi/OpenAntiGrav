@@ -109,6 +109,30 @@ pub const TITLE: &Title = &Title {
     // `engineflare.vex`/`.rcsmodel` pair of 961-2141 triangles instead, split
     // into an always-on `EF_Main` group and an `EF_Boost` one. See
     // `docs/rendering/trail-ribbon.md`, "HD's flare is a model, not a sprite".
+    // **HD overwrites the material's authored `W_Cycle` colour every frame.**
+    // `WeaponPad_UpdateRefreshTimer` (`0x002e02b8`) keeps a per-pad cycle in
+    // the pad object and the fragment program's inline constant reads it:
+    // `{1.166, 0.033, 0, 1}` and `{1.656, 0.041, 0, 1}` on two pads of
+    // `01_vineta_k`, whose material authors cyan. Every number below is read
+    // out of the executable (`docs/rendering/pads.md`, "The red is a cycle").
+    weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Cycle(oag_title::weapon_pad::Cycle {
+        // The 6 keyframes at `0x008c26a0`, 12 bytes each.
+        keyframes: &[
+            [512.0, 16.0, 0.0],
+            [256.0, 0.0, 0.0],
+            [64.0, 0.0, 0.0],
+            [512.0, 16.0, 0.0],
+            [256.0, 0.0, 0.0],
+            [64.0, 0.0, 0.0],
+        ],
+        // `DAT_008b4324`.
+        keys_per_second: 3.0,
+        // `DAT_008b4330`, the multiplier vector's three lanes.
+        scale: 1.0 / 255.0,
+        // The vector at `0x00aec2c0` the constructor's static init writes,
+        // read live on RPCS3 as well.
+        cooling: [0.025, 0.0, 0.01],
+    }),
     flare: &oag_title::flare::Flare::PerTeam(oag_title::flare::Authored {
         stem: "engineflare",
         always: "EF_Main",

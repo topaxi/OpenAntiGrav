@@ -294,6 +294,7 @@ impl Session {
             anim_bind,
             anim_buffer,
             node_anim_buffer,
+            emissive_buffer: _,
             stamp_pipeline: _,
             prepass: _,
         } = mesh_render::build(

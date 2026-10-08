@@ -7,6 +7,16 @@
 use super::*;
 mod instance;
 
+/// One weapon pad's place in HD's colour cycle, per pad, plus the race clock
+/// it was last advanced at.
+#[derive(Default)]
+struct PadGlow {
+    /// Keyframes into the cycle, one per pad node, wrapped over the table.
+    position: Vec<f32>,
+    /// The `seconds` of the last advance, so the next one adds only the gap.
+    last: Option<f32>,
+}
+
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
 /// Two of these are drawn into one render pass. Separate pipelines rather than one
@@ -73,6 +83,10 @@ pub(super) struct Drawable {
     /// `Anim Transform` at all - which is every ship, every sky and every
     /// synthetic overlay.
     node_anims: wgpu::Buffer,
+    /// The glow table's own buffer, binding 2 of the same group 3. Rewritten
+    /// by [`Self::glow_weapon_pads`] only; every other drawable leaves what
+    /// [`mesh_render::Emissives::of`] wrote at build time.
+    emissive: wgpu::Buffer,
     /// The Zone visualiser's own lookup texture - bind group 2's binding 4.
     /// All-black until [`Self::write_zone_vis`] is called, which
     /// `race::Scene::render` does once a frame alongside [`Self::fog`].
@@ -95,6 +109,9 @@ pub(super) struct Drawable {
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
+    /// Each weapon pad's own position in HD's colour cycle - see
+    /// [`Self::glow_weapon_pads`]. Empty on every drawable but HD's pads.
+    pad_glow: std::cell::RefCell<PadGlow>,
     /// Draws left out this frame, by [`oag_render::gantry::panel::key`]:
     /// the start gantry's states off its panel ([`Self::set_hidden`]).
     /// Empty on everything else.
@@ -193,6 +210,7 @@ impl Drawable {
             anim_bind,
             anim_buffer,
             node_anim_buffer,
+            emissive_buffer,
         } = mesh_render::build_with(
             device,
             queue,
@@ -310,9 +328,11 @@ impl Drawable {
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
+            emissive: emissive_buffer,
             zone_vis: zone_vis_texture,
             zone_rebind: std::sync::Arc::new(zone_rebind),
             ripple: std::cell::RefCell::new(None),
+            pad_glow: std::cell::RefCell::default(),
         })
     }
 
@@ -681,11 +701,12 @@ impl Drawable {
     /// title enum. Two independent reasons, either sufficient:
     ///
     /// 1. The keyframe table is *Pulse's*, read out of the PSP executable at
-    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). Nothing says HD's own
-    ///    `Weapon Pad` cycles at all, and the picture the disc paints says it
-    ///    does not: `ds_weaponup_cs.gtf` is a grey plate with a **red** cross
-    ///    on it, where Pulse's `weapon_under.tga` is neutral and takes its
-    ///    colour entirely from `pad+0x6c`.
+    ///    `0x08ac00c8` (see [`oag_render::weapon_pad`]). HD's own `Weapon Pad`
+    ///    does cycle, but through its own table at `0x008c26a0` and into the
+    ///    light bars' constant rather than the mesh - see
+    ///    [`Self::glow_weapon_pads`]. `ds_weaponup_cs.gtf` is a grey plate with
+    ///    a **red** cross on it, where Pulse's `weapon_under.tga` is neutral and
+    ///    takes its colour entirely from `pad+0x6c`.
     /// 2. On an HD model `colour` is not a tint at all. It is the baked
     ///    per-vertex light the fragment program **adds** inside its authored
     ///    lighting sum - see `oag_mesh::mesh::rcs::emit`. Writing a palette
@@ -716,6 +737,61 @@ impl Drawable {
             }),
             tinted,
         );
+    }
+
+    /// Retints each HD weapon pad's light bars from that pad's own cycle - the
+    /// colour `WeaponPad_UpdateRefreshTimer` hands the fragment program's
+    /// inline constant, see [`oag_title::weapon_pad`].
+    ///
+    /// `ready[i]` pairs with this drawable's `i`-th
+    /// [`mesh::Model::node_vertex_ranges`] entry, as
+    /// [`Self::tint_weapon_pads`]' own does. A ready pad's position advances by
+    /// the race clock's gap at `cycle.keys_per_second`; a cooling pad's does
+    /// not move and it shows `cycle.cooling`, the original's two branches.
+    ///
+    /// **A pad's starting position is chosen, not measured**: the original
+    /// seeds it from the pad object's heap address modulo six, which this
+    /// project has no counterpart for, so pad `i` starts on keyframe
+    /// `i % 6`. Only the cycle's shape and rate are the original's.
+    ///
+    /// The values pass through unclamped (the red channel reaches `2.0`), as
+    /// the program's own constant does. A no-op unless every pad node carries
+    /// its own glow entry, which `mesh::rcs::build_weapon_pads` gives it.
+    pub(super) fn glow_weapon_pads(
+        &self,
+        queue: &wgpu::Queue,
+        seconds: f32,
+        cycle: &oag_title::weapon_pad::Cycle,
+        ready: &[bool],
+    ) {
+        let mut state = self.pad_glow.borrow_mut();
+        let pads = self.model.node_vertex_ranges.len();
+        if state.position.len() != pads {
+            state.position = (0..pads).map(|i| (i % cycle.keyframes.len().max(1)) as f32).collect();
+        }
+        let gap = state.last.map_or(0.0, |last| (seconds - last).clamp(0.0, 0.1));
+        state.last = Some(seconds);
+        let mut table = mesh_render::Emissives::of(&self.model);
+        for (i, range) in self.model.node_vertex_ranges.iter().enumerate() {
+            let Some(vertex) = self.model.vertices.get(range.start as usize) else {
+                continue;
+            };
+            let entry = mesh::slots::material_index(vertex.slots) as usize;
+            if entry == 0 || entry >= table.tint_offset.len() {
+                continue;
+            }
+            let is_ready = ready.get(i).copied().unwrap_or(true);
+            if is_ready {
+                state.position[i] += gap * cycle.keys_per_second;
+            }
+            let colour = if is_ready {
+                cycle.colour(state.position[i])
+            } else {
+                cycle.cooling
+            };
+            table.tint_offset[entry][..3].copy_from_slice(&colour);
+        }
+        queue.write_buffer(&self.emissive, 0, bytemuck::bytes_of(&table));
     }
 
     /// Rewrites each of this drawable's [`mesh::Model::node_vertex_ranges`]

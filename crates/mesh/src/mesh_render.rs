@@ -154,6 +154,9 @@ pub struct Built {
     /// The [`NodeAnims`] buffer, bound as **binding 1 of the same group 3** as
     /// [`Built::anim_buffer`]. Write it once a frame to move scenery.
     pub node_anim_buffer: wgpu::Buffer,
+    /// The [`Emissives`] buffer, **binding 2 of the same group 3**. Written once
+    /// from the model's glow table; rewrite it to retint an entry per frame.
+    pub emissive_buffer: wgpu::Buffer,
 }
 
 /// Which depth state [`build`] gives a model's pipelines.
@@ -963,6 +966,7 @@ pub fn build_with(
         anim_bind,
         anim_buffer,
         node_anim_buffer,
+        emissive_buffer,
         fog_bind,
         fog_buffer,
         zone_vis_texture,

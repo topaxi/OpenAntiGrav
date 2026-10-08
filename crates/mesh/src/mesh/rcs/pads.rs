@@ -31,6 +31,9 @@ use anyhow::{Context, Result, bail};
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
+use crate::mesh::slots;
+
+use super::emissive::EMISSIVE_LIMIT;
 use super::{
     Geometry, MaterialSetup, Model, Report, Textures, anim_node, authored, bounding_sphere,
     declares_no_texcoord, emit, face_normals, material_setup, node_geometry, pad_ne, surface,
@@ -245,7 +248,45 @@ pub fn build_weapon_pads(
     model_blob: &[u8],
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
-    build_pad_class(label, data, model_blob, textures, |c| c.weapon_pad)
+    let (mut model, report) = build_pad_class(label, data, model_blob, textures, |c| c.weapon_pad)?;
+    each_node_its_own_glow(&mut model);
+    Ok((model, report))
+}
+
+/// Gives every node's `_ne` glow its own [`Model::emissive`] entry, a copy of
+/// the one the node's material resolved to.
+///
+/// A weapon pad's bar colour is **per pad** at run time: HD's own pad object
+/// carries a cycle position and a cooldown, and the program's inline constant
+/// is written from them (`oag_title::weapon_pad`). The glow table is shared by
+/// value (`pad_ne` deduplicates), so every pad of one material would otherwise
+/// read the same entry; copying it per node lets a caller rewrite one pad's
+/// tint without touching another's. The copies hold the authored value, so a
+/// caller that never rewrites them draws what it drew before.
+///
+/// A node whose vertices carry no glow entry, or a table with no room left
+/// ([`EMISSIVE_LIMIT`]), is left on the shared one.
+fn each_node_its_own_glow(model: &mut Model) {
+    for range in model.node_vertex_ranges.clone() {
+        let Some(first) = model.vertices.get(range.start as usize) else {
+            continue;
+        };
+        let shared = slots::material_index(first.slots) as usize;
+        if first.slots & slots::PAD_NE == 0 || shared == 0 {
+            continue;
+        }
+        let Some(layer) = model.emissive.get(shared - 1).copied() else {
+            continue;
+        };
+        if model.emissive.len() + 1 >= EMISSIVE_LIMIT {
+            break;
+        }
+        model.emissive.push(layer);
+        let own = u32::try_from(model.emissive.len()).unwrap_or(0);
+        for vertex in &mut model.vertices[range.start as usize..range.end as usize] {
+            vertex.slots = (vertex.slots & slots::ROLE_MASK) | (own << slots::MATERIAL_SHIFT);
+        }
+    }
 }
 
 pub(super) fn build_pad_class(

@@ -633,6 +633,8 @@ pub struct Setup {
     pub countdown_voice: bool,
     /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
+    /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
+    pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.
     ///
     /// The same nodes [`Loaded::pad_model`] draws, decoded for what they *do*

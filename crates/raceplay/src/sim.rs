@@ -281,6 +281,8 @@ pub struct RaceSim {
     pub(super) countdown_voice: bool,
     /// The grid hover the craft carries - see [`Setup::launch_hover`].
     pub(super) launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
+    /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
+    pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
     /// The launch boost's parameters - see [`Setup::start_boost`].

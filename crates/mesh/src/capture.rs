@@ -180,6 +180,7 @@ pub fn capture_pixels_from(
         anim_bind,
         anim_buffer,
         node_anim_buffer,
+        emissive_buffer: _,
         stamp_pipeline: _,
         prepass: _,
     } = build(
