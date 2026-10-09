@@ -492,7 +492,7 @@ impl Default for Graphics {
 /// `None` on a platform `dirs` cannot place a config directory on, in which
 /// case [`load`] falls back to defaults with nothing to persist them to.
 pub fn path() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("oag").join("settings.toml"))
+    crate::profile::config_dir().map(|dir| dir.join("oag").join("settings.toml"))
 }
 
 const HEADER: &str = "\
@@ -592,7 +592,7 @@ pub fn load() -> Result<Settings> {
 }
 
 fn load_from(path: &std::path::Path) -> Result<Settings> {
-    let on_disk = match std::fs::read_to_string(path) {
+    let on_disk = match crate::profile::read_to_string(path) {
         Ok(text) => Some(text),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => {
@@ -633,8 +633,8 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
     if on_disk.as_deref() != Some(canonical.as_str()) {
         let written = path
             .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(path, &canonical));
+            .map_or(Ok(()), crate::profile::create_dir_all)
+            .and_then(|()| crate::profile::write(path, &canonical));
         if let Err(e) = written {
             warn!(
                 "could not write {}: {e}; running on the settings read, nothing persists",
@@ -861,10 +861,10 @@ pub fn save(settings: &Settings) -> Result<()> {
         toml::to_string_pretty(settings).context("serialising settings")?
     );
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    crate::profile::write(&path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 #[cfg(test)]
