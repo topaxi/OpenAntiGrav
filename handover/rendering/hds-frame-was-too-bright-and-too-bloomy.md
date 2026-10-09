@@ -985,9 +985,25 @@ lands ~4x lower in linear light. A uniform `x0.25` matches the road's quantiles 
 already 1.0 at that pose (byte-identical when pinned). (2) Restoring the lightmap's sRGB decode would be wrong: its
 sampler word is nibble 0. (3) The ambient, vertex-light and sun summands are zero or near it on that road.
 
-**Open / next.** Sky-law method on the corridor road draw: hook-dump unit 1 and unit 0 of a `fp 0x759ac1` draw in full
+**Open / next (done 2026-10-09, see the entry below).** Sky-law method on the corridor road draw: hook-dump unit 1 and unit 0 of a `fp 0x759ac1` draw in full
 (`rpcs3-drive.py place --hook`, a copy of `hd-sky-law`'s `hook_sky.py`), predict the road's bytes from the live
 constants and diff against `hd-exposure/placeA/00-40cc0000.bin`; then check our lightmap sample (atlas, UV set, mip,
 colour/alpha split of the DXT5) against it. Also fix two stale comments (`hd_bloom.rs` header, `fs_encode`) that still call
 the final `pow` a stand-in.
 
+
+2026-10-09 (`hd-corridor-road`): **the corridor's excess was a dropped output scale, not the lightmap term.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Every lit program ends on a /2 output scale". The road
+program evaluated on live textures lands on the live scene target at 1.03; the final instruction of every lit program drawn into
+the scene (draws 87-522) carries scale `/2`, which `ps3-microcode.py` never printed. Ported: `Looks::lit_output_halved` (HD),
+`Light::output_scale`, fog colour halved with it; the exposure's adaptation now averages encoded luminance (inferred), because
+otherwise ours' exposure rose to 1.73 on the halved frame. Steady-state corridor 2.49x -> 1.23x, grid 1.17x; Pulse byte-identical.
+The earlier "`fp 0x759ac1` road draw" was a wall program.
+
+**Open.** (1) **The matched pairs read lower now (0.45-0.73 of the reference) because they are race-start frames**, brighter than
+a same-pose frame at rest by about 1.7x with a clipped sky: a start-of-race exposure or flash state is unmodelled, and the retracted
+"exposure transient" is open again; capture a start sequence (frame by frame from the countdown release, scene target each) and
+read `adapted` and the resolve `scale` constants live. (2) Amphiseum steady state was not captured (Racebox presses are
+unreliable: 9 landed on Talon's, 10 on Modesto); its remaining 2x deficit is in vertex-lit or emissive terms. (3) Non-road families
+read 1.1-1.4 (sun, `x8` specular scale, saturation). (4) Particles and effects end on `/2` too and `oag-fx` does not apply it.
+(5) Omega: a GCN `omod` census of the circuit pixel shaders.

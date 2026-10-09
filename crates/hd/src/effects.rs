@@ -109,12 +109,32 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Any,
         origin: Origin::Measured,
     },
+    // The scale field of the final instruction of every lit program drawn
+    // into the scene target (draws 87-522 of 640 on Talon's Junction) reads
+    // `/2`; the sky's six draws and the late additive draws carry none. The
+    // road program evaluated on the live textures lands on the live scene
+    // target at 1.03 with it and 2.0 without.
+    // `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`, "Every lit program
+    // ends on a /2 output scale".
+    lit_output_halved: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     ..Looks::unread(SHIELD)
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HD's lit programs end on a `/2` output scale and no other title's
+    /// race looks claim it; Pulse's rig is the GE's and stays at one.
+    #[test]
+    fn hd_halves_its_lit_output_and_pulse_does_not() {
+        assert!(LOOKS.lit_output_halved.applies_everywhere());
+        assert_eq!(LOOKS.lit_output_halved.origin, Origin::Measured);
+        assert!(!Looks::unread(SHIELD).lit_output_halved.applies_everywhere());
+    }
 
     /// The five names no archive of HD's disc carries
     /// (`docs/formats/pob.md`, "Which names HD does not author"); the

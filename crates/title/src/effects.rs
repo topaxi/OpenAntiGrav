@@ -654,6 +654,12 @@ pub struct Looks {
     /// same yes-or-no-with-origin shape; kept here so a title carries one
     /// table of such rules.
     pub skips_language_picker: Rule,
+    /// Every lit fragment program the title draws into its scene target ends
+    /// on an instruction whose output scale is `/2`: the scene holds half the
+    /// light the program's arithmetic states, so a surface reads half as
+    /// bright against the unscaled sky. Wipeout HD's (read off its microcode's
+    /// scale field, and confirmed against the live scene target).
+    pub lit_output_halved: Rule,
 }
 
 impl Looks {
@@ -675,6 +681,7 @@ impl Looks {
             ps2_glow_mask: Rule::UNREAD,
             shield_palette,
             skips_language_picker: Rule::UNREAD,
+            lit_output_halved: Rule::UNREAD,
         }
     }
 }

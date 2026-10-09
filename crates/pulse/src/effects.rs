@@ -120,4 +120,6 @@ pub const LOOKS: &Looks = &Looks {
     },
     // Pulse shows its picker; this build waits at it too.
     skips_language_picker: Rule::UNREAD,
+    // Pulse lights on the GE; no fragment-program output scale exists there.
+    lit_output_halved: Rule::UNREAD,
 };

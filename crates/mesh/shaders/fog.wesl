@@ -12,5 +12,8 @@ fn fogged(colour: vec3<f32>, world: vec3<f32>, view_depth: f32) -> vec3<f32> {
     let scaled = scene.fog.density * view_depth;
     let authored = clamp(exp(-scaled * scaled), 0.0, 1.0);
     let factor = mix(linear, authored, scene.fog.curve);
-    return mix(scene.fog.colour, colour, mix(1.0, factor, scene.fog.enabled));
+    // The fog lerp sits inside the program's final instruction, so its output
+    // scale halves the fog colour with the lit colour (`output_scale` is 1.0
+    // where no title scales).
+    return mix(scene.fog.colour * scene.light.output_scale, colour, mix(1.0, factor, scene.fog.enabled));
 }

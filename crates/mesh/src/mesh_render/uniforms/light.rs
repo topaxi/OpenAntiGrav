@@ -45,7 +45,12 @@ pub struct Light {
     pub enabled: f32,
     /// Constant ambient, passed through as authored - see [`Light::authored`].
     pub ambient: [f32; 3],
-    _pad0: f32,
+    /// The output scale the title's lit fragment programs end on: `0.5` where
+    /// every lit program's last instruction is `/2` (HD's), `1.0` otherwise.
+    /// Applied to the whole lit sum, specular and glows included, and, through
+    /// the fog colour the loader halves with it, to the fog share too - see
+    /// [`Light::with_output_scale`].
+    pub output_scale: f32,
     /// The sun's colour, magnitude and all - see [`Light::authored`]. **Not**
     /// divided down to a hue: that reduction was this project's own before
     /// `76d0f58e` read the circuit's combining equation off its own
@@ -99,7 +104,7 @@ impl Light {
             direction: [0.0, 1.0, 0.0],
             enabled: 0.0,
             ambient: [0.0; 3],
-            _pad0: 0.0,
+            output_scale: 1.0,
             sun: [0.0; 3],
             nova: 0.0,
             prelit_scale: [1.0; 3],
@@ -135,7 +140,7 @@ impl Light {
             direction,
             enabled: 1.0,
             ambient,
-            _pad0: 0.0,
+            output_scale: 1.0,
             sun: colour,
             nova: 0.0,
             prelit_scale,
@@ -147,6 +152,15 @@ impl Light {
             prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
             prelit_bias: 0.0,
             hull: crate::mesh_render::HullLights::OFF,
+        }
+    }
+
+    /// This rig with the title's lit-program output scale (`0.5` for HD).
+    #[must_use]
+    pub fn with_output_scale(self, output_scale: f32) -> Self {
+        Self {
+            output_scale,
+            ..self
         }
     }
 
