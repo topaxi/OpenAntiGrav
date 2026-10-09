@@ -152,6 +152,13 @@ impl Session {
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
+            log::info!(
+                "render target {}x{} for a {}x{} surface",
+                wanted.0,
+                wanted.1,
+                self.gpu.size().0,
+                self.gpu.size().1
+            );
             // A depth attachment whose size does not match the colour one is a
             // validation error, so the race's has to follow - and now that is
             // true of a scene sitting in `LoadingStage::built_race` as well:
