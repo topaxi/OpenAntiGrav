@@ -181,9 +181,10 @@ fn a_laid_bombs_body_is_lit_by_the_circuits_rig() {
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
 fn the_cannons_muzzle_flash_takes_the_circuits_scene() {
     // The chase camera at tick 304, the flash in a 66 x 72 box ahead of the
-    // nose. Near-white pixels: 2,916 written, 2,849 dropped. **A small margin**:
-    // a bright flash against a bright wall moves 67 pixels, but the frame is
-    // deterministic, so 2,880 holds it.
+    // nose. Near-white pixels: 1,742 written, 1,576 dropped (2,916 and 2,849
+    // before the hull's `VertexColour1` became a factor on its light, which
+    // darkened the hull pixels this box also holds). The frame is
+    // deterministic, so 1,660 sits between the two.
     let Some(frame) = frame_of("cannon", 304, None) else {
         return;
     };
@@ -192,7 +193,7 @@ fn the_cannons_muzzle_flash_takes_the_circuits_scene() {
     });
     println!("near-white pixels in the flash's box: {white}");
     assert!(
-        white > 2880,
+        white > 1660,
         "the muzzle flash is shaded from the stand-in scene"
     );
 }

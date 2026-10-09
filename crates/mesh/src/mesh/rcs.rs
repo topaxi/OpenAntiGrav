@@ -243,6 +243,7 @@ fn surface(
     skin: &[Option<std::sync::Arc<ModelTexture>>],
     material_slots: &[u32],
     material_specular_exponent: &[f32],
+    material_colour_factor: &[bool],
     material_anim: &[u32],
 ) -> Surface {
     let slot = mesh.material as usize;
@@ -287,6 +288,7 @@ fn surface(
         cutout,
         roles,
         specular_exponent,
+        colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
         anim,
     }
 }
@@ -370,6 +372,10 @@ struct Surface {
     /// This material's specular exponent, handed to every vertex this
     /// surface emits - see `mesh::vertex::GpuVertex::specular_exponent`.
     specular_exponent: f32,
+    /// Whether the material's program takes `VertexColour1` as a factor on its
+    /// light - see `skin::light_inputs`. Marks the chunk's vertices through
+    /// `GpuVertex::sun_mask`.
+    colour_factor: bool,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -516,7 +522,15 @@ fn emit(
             // colour set, which is what a lightmapped chunk uses instead -
             // `mesh.wesl` multiplies this by the lightmap's own alpha, so
             // `1.0` here leaves that gate untouched.
-            sun_mask: light.map(|&[.., m]| finite(m)).unwrap_or(1.0),
+            // **Negative marks a chunk whose `VertexColour1` is a factor on the
+            // light** (`skin::light_inputs`): that program never reads the
+            // fourth byte, so the mask it would carry is not one, and the
+            // sign is what `shade.wesl` reads the mode from.
+            sun_mask: match light {
+                Some(&[.., m]) if surface.colour_factor => crate::mesh::factor_sun_mask(finite(m)),
+                Some(&[.., m]) => finite(m),
+                None => 1.0,
+            },
             specular_exponent: surface.specular_exponent,
             glow: 0.0,
             texcoord2: texcoords2
@@ -677,6 +691,7 @@ fn build_with_options(
         lightmaps: seconds,
         material_slots,
         material_specular_exponent,
+        material_colour_factor,
         material_variants,
         emissive,
         alpha_test_ref,
@@ -706,6 +721,7 @@ fn build_with_options(
     out.material_variants = material_variants;
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
+    out.material_colour_factor = material_colour_factor;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;
 
@@ -773,6 +789,7 @@ fn build_with_options(
                 &out.textures,
                 &out.material_slots,
                 &out.material_specular_exponent,
+                &out.material_colour_factor,
                 &out.material_anim,
             );
             report.see_through += usize::from(surface.blend.is_some());

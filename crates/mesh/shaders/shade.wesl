@@ -63,6 +63,13 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // that switches the term off. `slots::SECOND_IS_LIGHTMAP` is the material's
     // own four-signal reading; without it the value is the placeholder's, to
     // the bit.
+    // `sun_mask` below zero is `-1 - mask` on a chunk whose `VertexColour1` is a factor
+    // (`oag_mesh::mesh::factor_sun_mask`); only a hull (`receives_shadow` not 2, the
+    // track's) reads it as one - the track keeps the additive reading until it is
+    // measured against its own references.
+    let marked = in.sun_mask < 0.0;
+    let colour_factor = marked && receives_shadow != 2.0;
+    let sun_mask = select(in.sun_mask, -1.0 - in.sun_mask, marked);
     var authored = vec3<f32>(0.0);
     var mask = 0.0;
     var emissive = false;
@@ -217,7 +224,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // function's four-tap loop held registers for it, 0.25 ms of HD's
         // 22.5 ms opaque track at 3200x1800 on the Raphael iGPU. Only a hull
         // names a layer, and a hull is `ShadowReceiver::Mapped`.
-        mask = baked.a * in.sun_mask;
+        mask = baked.a * select(sun_mask, 1.0, colour_factor);
         if receives_shadow != 2.0 {
             mask = mask * sun_occlusion(in.world);
         }
@@ -251,7 +258,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // the emissive add (renderer.md, "The `SVC1` combine is read"). Zero on
         // every draw that binds no list, and on an `EMISSIVE` chunk the whole
         // sum is replaced below, which is the original's own no-op there.
-        let lit_sum = ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light;
+        // **`VertexColour1` as a factor** (`oag_mesh::mesh::FACTOR_SUN_MASK`): the
+        // hull programs `MUL` it into `ambient + sun * N.L` (and the `SVC1` twins
+        // add the SPU light inside that same product), and carry no lightmap
+        // term and no added vertex light - `skin/light_inputs.rs` has the
+        // blocks.
+        let lit_sum = select(
+            ambient_term + prelit + vertex_light_term + sun_diffuse + in.spu_light,
+            in.colour.rgb * (ambient_term + sun_diffuse + in.spu_light),
+            colour_factor,
+        );
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
         // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
         // prelit term added (the vertex colour is the picture there).
@@ -582,9 +598,15 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             0.0,
             1.0,
         );
+        // `NO_SPECULAR` (`oag_mesh::mesh::NO_SPECULAR`) is a hull program's with no
+        // `pow(N.H, e)` in it; any other draw keeps the shared stand-in there.
+        let no_specular = in.specular_exponent <= 0.0 && colour_factor;
+        let specular_exponent = select(in.specular_exponent, 32.0, in.specular_exponent <= 0.0);
         let specular = scene.light.sun
-            * (pow(ndh, in.specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
-                * scene.light.enabled * in.lit * select(1.0, 0.0, emissive));
+            * (pow(ndh, specular_exponent) * ndl * mask * texel.a * scene.light.specular_scale
+                * scene.light.enabled * in.lit * select(1.0, 0.0, emissive))
+            * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
+            * select(1.0, 0.0, no_specular);
 
         // The authored path shades in linear light, as the RSX does: the samples
         // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
