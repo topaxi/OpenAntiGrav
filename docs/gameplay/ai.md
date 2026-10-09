@@ -3866,7 +3866,11 @@ against 599; seed 5 is the difference. **The field stays at the regressed number
 contacts are where traffic hands character back. Pulse's lone board (`ai_clean_lap_board`, 48
 rows, five minutes each): contact ticks 639 to 649, rows with any contact 6 to 9, respawns 3 to
 2. `ai_clean_lap_gate`, `speed_plan_ground_truth`, `craft_sticking_ground_truth` (1,806 to 1,819
-pair-ticks) and `ram_ground_truth` pass.
+pair-ticks) and `ram_ground_truth` pass. Pulse's de Konstruct field (`ai_dekonstruct_black_board`,
+seeds 1-23, every class, both layouts, weapons on): destroyed 138 to 142, wall-contact ticks
+86,765 to 84,889; by class VENOM 15 to 10, FLASH 16 to 15, RAPIER 46 to 46, PHANTOM 61 to 71
+(forward 25 to 33). Four cells of `ai_dekonstruct_black_ground_truth` rose by one and their bounds
+were raised in a separate commit; PHANTOM forward is the one class past seed spread.
 
 **Two variants measured and not kept:**
 
