@@ -457,10 +457,16 @@ impl Session {
         // The frame loop's own device: the scene is built from it, so each
         // texture goes up as it is decoded rather than waiting on the CPU for
         // every other one. See `race::TextureSink`.
+        //
+        // Not on the web: the load runs on a Web Worker there, and wgpu's web
+        // types belong to the page's thread (docs/tools/web.md, "Threads").
+        #[cfg(not(target_arch = "wasm32"))]
         let sink = Some(race::TextureSink {
             device: self.gpu.device.clone(),
             queue: self.gpu.queue.clone(),
         });
+        #[cfg(target_arch = "wasm32")]
+        let sink = None;
         // A campaign event the front end asked for, or the menus' own race.
         let worker = match self.pending_event.take() {
             Some(event) => race::LoadWorker::spawn_event(options, event, label, sink),

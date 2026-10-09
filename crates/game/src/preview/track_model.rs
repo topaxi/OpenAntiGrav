@@ -232,6 +232,7 @@ impl Ramp {
                 .first()
                 .and_then(|level| format.decode_level(level, texture.width, texture.height))
                 .unwrap_or_default(),
+            #[cfg(not(target_arch = "wasm32"))]
             Texels::Uploaded { .. } => Vec::new(),
         };
         if width == 0 || height == 0 || decoded.len() < width * height {

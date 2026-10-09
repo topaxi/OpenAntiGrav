@@ -210,6 +210,8 @@ mod view;
 mod visibility;
 mod weapon_light;
 mod weapons;
+#[cfg(target_arch = "wasm32")]
+pub mod web_thread;
 mod wreck_fx;
 pub(crate) use weapons::{CannonAssets, CannonDraw};
 mod worker;
