@@ -414,7 +414,13 @@ reproduces here, several byte for byte:
   Swedish - not a fourth instance of the bug, just adjacent to it in the same
   copy-paste family.)
 - **Russian's native name is mangled to `P??????`** - character-for-character
-  the same garbled string HD ships.
+  the same garbled string HD ships (literal `0x3f` bytes in the file, not an
+  encoding fault). **Ported 2026-10-09**: the loader reads `OPT_RUSSIAN`
+  (`Русский`) from the plugin's own table, and the picker's face
+  (`NEOSANS_BOLD_LARGE.fnt`, no Cyrillic) then leaves Russian out. Also seen
+  here, **open and not changed**: the `Polish` plugin, which 2048 EU offers,
+  declares itself as `Español`, so the picker shows that word twice; its own
+  table has `OPT_POLISH` = `Polish`, no better.
 - **Portuguese's own name fails to round-trip**, though not identically to
   HD's failure mode: HD's `portuguese/definition.xml` keeps the raw Latin-1
   byte (`Portugu\xeas`) inside a file declared `encoding="utf-8"`; 2048's copy

@@ -458,7 +458,6 @@ pub fn load_shell(
         front_end.disc_strings,
         &mut report,
     );
-    let offered = languages.clone();
     steps.lap("languages");
     // Resolved once and threaded through every font/table read below rather
     // than re-asked with `options.language.as_deref()` at each one: the
@@ -472,6 +471,9 @@ pub fn load_shell(
     let font = load_font(&mut archives, &languages, preferred_language, &mut report)
         .with_prompts(title.prompts)
         .with_texel_scale(texel_scale);
+    // The picker and the menus' language row draw in `font`, so a language whose
+    // name `font` cannot spell is not offered; it still loads for a saved choice.
+    let offered = oag_ui::language::load::pickable(&languages, &font, &mut report);
     steps.lap("font");
     // **`TitleFrame` is appended here, not carried in `profile.fallback_images`
     // itself.** Its own real `src` differs by pressing - `Screen_
