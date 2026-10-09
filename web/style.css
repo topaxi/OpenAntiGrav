@@ -16,3 +16,22 @@ h1 { margin-top: 0; font-weight: 600; letter-spacing: .04em; }
 #status { min-height: 1.5em; color: #fc6; }
 a { color: #8cf; }
 #oag-canvas:fullscreen { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; }
+#picker { max-height: 92vh; overflow-y: auto; box-sizing: border-box; width: calc(100% - 1rem); max-width: 44rem; }
+table { border-collapse: collapse; width: 100%; font-size: .85em; margin: 1rem 0; }
+caption { text-align: left; color: #999; padding-bottom: .4rem; }
+th, td { text-align: left; padding: .3rem .5rem; border-bottom: 1px solid #333; vertical-align: top; }
+th { color: #aaa; font-weight: 600; }
+td.races { color: #7d7; }
+td.front { color: #fc6; }
+td.no { color: #e88; }
+@media (max-width: 40rem) {
+  #picker { padding: 1rem; }
+  thead { display: none; }
+  caption { display: block; }
+  table, tbody, tr, td { display: block; }
+  tr { border: 1px solid #333; border-radius: 6px; margin-bottom: .6rem; padding: .3rem .2rem; }
+  td { border: 0; padding: .1rem .5rem; }
+  td::before { content: attr(data-label) ": "; color: #888; }
+  td[data-label="Game"] { font-weight: 600; }
+  td[data-label="Game"]::before { content: ""; }
+}

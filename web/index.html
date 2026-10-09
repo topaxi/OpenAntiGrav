@@ -15,16 +15,31 @@
   <p>A clean-room reimplementation of the Studio Liverpool anti-gravity racing
   engine. It plays <strong>your own</strong> disc image: pick one below. The
   image is read here, in this browser tab, and is never uploaded anywhere.</p>
-  <p class="formats">A Wipeout Pulse or Wipeout Pure PSP image (<code>.chd</code> or
-  <code>.iso</code>) is what this web build is meant for. The image is read a
-  piece at a time, as the game asks for it.</p>
+  <p class="formats">The image is read a piece at a time, as the game asks for
+  it. <code>.chd</code> and plain <code>.iso</code> are what a browser can open;
+  the table below says which discs get how far.</p>
   <label class="button" for="file">Choose a disc image
     <input id="file" type="file" accept=".chd,.iso">
   </label>
   <button id="open-handle" class="button" hidden>Choose, and remember it</button>
   <button id="resume" class="button" hidden></button>
   <p id="status" role="status"></p>
-  <p class="small">Needs WebGPU (Chrome or Edge 113+, Safari 26+, Firefox 141+ on Windows).
+  <table id="images">
+    <caption>Disc images, and how far each gets in the browser</caption>
+    <thead><tr><th>Game</th><th>Console</th><th>Region</th><th>Accepts</th><th>Today</th><th>Note</th></tr></thead>
+    <tbody>
+    <tr><td data-label="Game">Wipeout Pulse</td><td data-label="Console">PSP</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="races">Races</td><td data-label="Note">Boots to a race on Moa Therma White in Chromium and Firefox.</td></tr>
+    <tr><td data-label="Game">Wipeout Pulse</td><td data-label="Console">PS2</td><td data-label="Region">Europe</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="front">Front end only</td><td data-label="Note">Reaches the front end; a race is untried here.</td></tr>
+    <tr><td data-label="Game">Wipeout Pure</td><td data-label="Console">PSP</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">Plays on the desktop build; not tried in a browser.</td></tr>
+    <tr><td data-label="Game">WipEout HD / Fury</td><td data-label="Console">PS3</td><td data-label="Region">Europe</td><td data-label="Accepts">decrypted .iso</td><td data-label="Today" class="races">Races</td><td data-label="Note">An encrypted .iso with its .dkey does not open on the web yet.</td></tr>
+    <tr><td data-label="Game">WipEout 2048</td><td data-label="Console">Vita</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">none</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">A .pkg or .vpk is not read in a browser.</td></tr>
+    <tr><td data-label="Game">WipEout: Omega Collection</td><td data-label="Console">PS4</td><td data-label="Region">Europe</td><td data-label="Accepts">none</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">A .pkg pair is not read in a browser.</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Needs WebGPU: Chrome or Edge 113+, Safari 26+, Firefox 141+ on
+  Windows; Firefox on Linux with <code>dom.webgpu.enabled</code> and
+  <code>gfx.webgpu.ignore-blocklist</code> set in <code>about:config</code>, Chromium on Linux
+  with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>.
   Keyboard and gamepad; no sound or movies yet.
   <a href="https://github.com/topaxi/OpenAntiGrav">Source</a> ·
   <a href="https://github.com/topaxi/OpenAntiGrav/releases/tag/nightly">Nightly downloads</a></p>
