@@ -434,7 +434,7 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    it does not (`thread_stack_size` missing from the glue). `wasm-opt` gets
    `--enable-threads`.
 2. **A worker is a thread.** `std::thread::spawn` stays unsupported on this
-   target even with atomics. `oag_raceplay::web_thread::spawn` parks the
+   target even with atomics. `oag_thread::web::spawn` parks the
    closure in a table and calls the page's `oagSpawnWorker(module, memory,
    id)` (`web/main.js`), which starts `web/worker.js` as a module worker; that
    imports the same glue, instantiates the module on the same memory, and calls

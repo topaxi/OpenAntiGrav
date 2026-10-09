@@ -1,0 +1,19 @@
+[package]
+name = "oag-thread"
+description = "A closure on another thread: std::thread natively, a Web Worker on the module's shared memory in the browser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+log.workspace = true
+
+# Workers for the web build's threads (`web`). See docs/tools/web.md.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.106"
+wasm-bindgen = "0.2.129"
+
+[lints]
+workspace = true

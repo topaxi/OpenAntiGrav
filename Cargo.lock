@@ -2270,10 +2270,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cpal",
+ "js-sys",
  "log",
  "oag-core",
  "oag-formats",
+ "oag-thread",
  "rtrb",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2388,6 +2391,7 @@ dependencies = [
  "oag-tables",
  "oag-testdata",
  "oag-texture",
+ "oag-thread",
  "oag-title",
  "oag-trace",
  "oag-ui",
@@ -2644,7 +2648,6 @@ dependencies = [
  "anyhow",
  "bytemuck",
  "dirs",
- "js-sys",
  "log",
  "oag-2048",
  "oag-ai",
@@ -2677,6 +2680,7 @@ dependencies = [
  "oag-tables",
  "oag-testdata",
  "oag-texture",
+ "oag-thread",
  "oag-title",
  "oag-trace",
  "oag-ui",
@@ -2687,7 +2691,6 @@ dependencies = [
  "serde",
  "toml",
  "toml_edit",
- "wasm-bindgen",
  "web-time",
  "wgpu",
  "winit",
@@ -2767,6 +2770,7 @@ dependencies = [
  "oag-pure",
  "oag-race",
  "oag-tables",
+ "oag-thread",
  "oag-title",
  "oag-ui",
  "oag-vex",
@@ -2819,6 +2823,15 @@ dependencies = [
  "oag-formats",
  "oag-pulse",
  "oag-testdata",
+]
+
+[[package]]
+name = "oag-thread"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "log",
+ "wasm-bindgen",
 ]
 
 [[package]]

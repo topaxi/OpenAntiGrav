@@ -336,3 +336,50 @@ fn a_refused_default_format_falls_back_to_i16_then_f32() {
     assert_eq!(formats_to_try(I16), vec![I16, F32]);
     assert_eq!(formats_to_try(U16), vec![U16, I16, F32]);
 }
+
+/// The browser's sink: the same loop, rendering into the ring the page's
+/// worklet drains, held at the same target. The worklet's half is
+/// `SharedRing::pop`, which `web/audio-worklet.js` transcribes.
+#[test]
+fn the_render_thread_fills_the_browser_ring_to_its_target() {
+    let mixer = Arc::new(Mutex::new(Mixer::new(48_000)));
+    mixer
+        .lock()
+        .unwrap()
+        .play(Play::looping(tone(), Bus::Music))
+        .expect("a voice");
+    let target = render::target_samples(48_000, Duration::from_millis(60));
+    let ring = Arc::new(shared_ring::SharedRing::new(render::ring_capacity(
+        48_000,
+        Duration::from_millis(60),
+    )));
+    let ahead = render::Ahead::spawn(
+        Arc::clone(&mixer),
+        Arc::clone(&ring),
+        target,
+        48_000,
+        Arc::new(Spectrum::new()),
+    );
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while ring.occupied() < target / 2 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let held = ring.occupied();
+    assert!(
+        held >= target / 2,
+        "the ring held {held} sample(s) after five seconds"
+    );
+    assert!(
+        held <= target,
+        "{held} sample(s) is past the {target} it was told to hold"
+    );
+
+    let mut quantum = vec![0.0f32; 256];
+    assert_eq!(ring.pop(&mut quantum), 256, "a whole quantum is there");
+    assert!(
+        quantum.iter().any(|s| *s != 0.0),
+        "and it is audio, not zeroes"
+    );
+    assert_eq!(ring.underruns(), 0);
+    drop(ahead);
+}

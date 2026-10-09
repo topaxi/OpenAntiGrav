@@ -15,6 +15,7 @@ rust-version.workspace = true
 [dependencies]
 oag-core.workspace = true
 oag-formats.workspace = true
+oag-thread.workspace = true
 anyhow.workspace = true
 log.workspace = true
 
@@ -37,6 +38,12 @@ log.workspace = true
 # upstream, so Windows and macOS are unaffected.
 cpal = { version = "0.18.2", features = ["pipewire"] }
 rtrb = "0.4.0"
+
+# The browser's output: an AudioWorklet the page starts, reading a ring in the
+# module's shared memory (`output::web`). See docs/tools/web.md, "Sound".
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.106"
+wasm-bindgen = "0.2.129"
 
 [lints]
 workspace = true

@@ -57,8 +57,9 @@ pub(super) fn locate(
 /// poll), as `oag_raceplay::worker` argues for `LoadWorker`.
 #[derive(Debug)]
 pub struct MusicFetchWorker {
-    /// `None` once joined, which is what makes [`Self::join`] idempotent.
-    handle: Option<std::thread::JoinHandle<(Result<Option<Loaded>>, usize)>>,
+    /// The fetch, on a thread natively and on a Web Worker in the browser,
+    /// where the page's thread polls it and never waits (`oag_thread::Task`).
+    task: oag_thread::Task<(Result<Option<Loaded>>, usize)>,
     /// The booted disc's soundtrack length, read on the fetch's thread and
     /// available after [`Self::join`] ([`Audio::race_soundtrack_len`]).
     soundtrack_len: Option<usize>,
@@ -81,15 +82,12 @@ impl MusicFetchWorker {
         index: usize,
         label: &str,
     ) -> Self {
-        let handle = std::thread::Builder::new()
-            .name(label.to_string())
-            .spawn(move || {
-                let fetched = fetch_track(&discs, choice, &cache_dir, index);
-                (fetched, Audio::booted_soundtrack_len(&discs))
-            })
-            .ok();
+        let task = oag_thread::Task::spawn(label, move || {
+            let fetched = fetch_track(&discs, choice, &cache_dir, index);
+            (fetched, Audio::booted_soundtrack_len(&discs))
+        });
         Self {
-            handle,
+            task,
             soundtrack_len: None,
         }
     }
@@ -99,17 +97,14 @@ impl MusicFetchWorker {
     /// thread that never started and the error surfaces from [`Self::join`].
     #[must_use]
     pub fn is_finished(&self) -> bool {
-        self.handle
-            .as_ref()
-            .is_none_or(std::thread::JoinHandle::is_finished)
+        self.task.is_finished()
     }
 
     /// Takes the result, waiting if it is not in yet (the frame loop only calls
     /// it once [`Self::is_finished`]). `None` on a second call or a thread that
     /// would not spawn.
     pub fn join(&mut self) -> Option<Result<Option<Loaded>>> {
-        let handle = self.handle.take()?;
-        Some(match handle.join() {
+        Some(match self.task.join()? {
             Ok((result, len)) => {
                 self.soundtrack_len = Some(len);
                 result
@@ -301,7 +296,7 @@ impl Audio {
                 }
             }
             Ok(None) => warn!("audio: this source carries no race music this can play"),
-            Err(error) => warn!("audio: no race music ({error:#})"),
+            Err(error) => crate::warn_no_music("no race music", &error),
         }
     }
 
@@ -378,8 +373,12 @@ impl Audio {
         let next = next_race_index(index, self.race_soundtrack_len());
         self.race_index = Some(next);
 
+        // In the browser `join` cannot wait for an unfinished fetch, so one
+        // the boundary beat is dropped and the track fetched the synchronous
+        // way below, as it would be with no prefetch at all.
         if let Some((prefetch_index, mut worker)) = self.race_prefetch.take()
             && prefetch_index == next
+            && (cfg!(not(target_arch = "wasm32")) || worker.is_finished())
         {
             // Rarely waits (see the doc), but can if the boundary beat the fetch;
             // no worse than the synchronous path, which this worker is mostly
@@ -557,7 +556,7 @@ impl Audio {
             Ok(None) => {
                 warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
             }
-            Err(error) => warn!("audio: the music stays where it is ({error:#})"),
+            Err(error) => crate::warn_no_music("the music stays where it is", &error),
         }
     }
 
@@ -607,7 +606,7 @@ impl Audio {
             Ok(None) => {
                 warn!("audio: no soundtrack on the {wanted} release, so nothing changed")
             }
-            Err(error) => warn!("audio: the race music stays where it is ({error:#})"),
+            Err(error) => crate::warn_no_music("the race music stays where it is", &error),
         }
     }
 

@@ -1,5 +1,5 @@
 // One thread of the game: the module's own code on the page's shared memory,
-// running the closure `id` names (`oag_raceplay::web_thread`). Started by
+// running the closure `id` names (`oag_thread::web`). Started by
 // `oagSpawnWorker` in main.js. See docs/tools/web.md, "Threads".
 self.onmessage = async ({ data: { glue, module, memory, id, file } }) => {
   // The disc reader for this thread: FileReaderSync, which a worker may use
