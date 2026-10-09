@@ -251,7 +251,9 @@ screenshot waits for a free page thread, so its timestamp hides a stall);
 `--audio-seconds` of what the audio worklet outputs ("Sound"). Chromium runs
 with `--mute-audio --disable-audio-output`: the second renders to a fake sink,
 which still drives the worklet, so no stream reaches the host's sound server at
-all (checked with `pactl list sink-inputs` during a run). The walk this page's
+all (checked with `pactl list sink-inputs` during a run). Firefox has no such
+sink, so `--browser firefox` loads the page with `?audio=off` and refuses
+`--audio-wav`. The walk this page's
 claims rest on, from Language Selection to a race on Moa Therma White:
 
 ```sh
@@ -528,7 +530,12 @@ runs after an `await`, outside any gesture. The JavaScript processor above is
 mixer at the context's own sample rate (48 kHz on a real output, 44.1 kHz on
 Chromium's fake one; the mixer resamples every source, as natively). A page
 that already had a click (the picker's) starts it at once; otherwise the first
-key press, click or touch resumes it. A hidden tab suspends the context: the
+key press, click or touch resumes it. Headless Chromium counts the page as
+already activated (`navigator.userActivation.hasBeenActive` is true before any
+input, with `--autoplay-policy=user-gesture-required` too), so the browser's
+own refusal was not reproduced; the resume itself was: a context suspended
+through `oagAudioSetPaused(true)` stopped advancing and ran again on the next
+key press. A hidden tab suspends the context: the
 ring stays full and the worker idles. `?audio=off` opens no context and runs
 the null mixer, as `--no-audio` does natively. The audio settings page works
 unchanged: SFX VOLUME at 75 scaled the menu's navigation sounds from a 0.297 to
@@ -540,7 +547,7 @@ a 0.223 peak in the tap, exactly 0.75.
 | --- | --- | --- |
 | Pulse PSP | menus, race | **absent**: ATRAC3+, decoded by `ffmpeg` into a file cache natively |
 | Pure | not booted in a browser | absent, the same codec |
-| Pulse PS2 | not tried past the front end | its PCM soundtrack goes through the same in-process path as natively; not checked here |
+| Pulse PS2 | front end (race not tried) | front end: soundtrack track 0, in process as natively (45 s tap, -18.5 dBFS, 0 under-runs) |
 | HD / Fury | menus, race | front end and race, MP3 through `symphonia` in process |
 | 2048, Omega | no package opens in a browser | `atrac9dec` builds into the web module; unreachable |
 
@@ -566,6 +573,8 @@ and prints the under-run count. Headless Chromium 153, dev build, 2026-10-09,
 | --- | --- | --- | --- | --- |
 | Pulse PSP, the walk above to Moa Therma White | 75 s | -15.6 dBFS | 0.0 dBFS | 0 of 25,840 quanta |
 | HD, the walk above plus Enter at 62 s and thrust from 68 s | 83.2 s | -21.0 dBFS | -3.0 dBFS | 0 of 28,672 quanta |
+| The same HD walk on the `dist` build (`just web`) | 80 s | -21.1 dBFS | -3.5 dBFS | 0 of 27,563 quanta |
+| Pulse PS2, boot to its front end | 45 s | -18.5 dBFS | -8.2 dBFS | 0 of 15,504 quanta |
 
 Against the desktop's own WAV (`oag-game --dump-audio`, the null backend, so a
 tick-exact render): Pulse's race without its music (`ffmpeg` off `PATH`,

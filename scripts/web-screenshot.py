@@ -166,6 +166,10 @@ def main() -> None:
         help="firefox: Playwright's own build, WebGPU switched on by pref",
     )
     args = parser.parse_args()
+    # Firefox has no fake audio sink: its stream would reach the host's sound
+    # server, muted only by volume. So it runs silent, and records nothing.
+    if args.browser == "firefox" and args.audio_wav:
+        parser.error("--audio-wav needs Chromium's fake audio sink; Firefox has none")
 
     shots = sorted(float(t) for t in args.at.split(","))
     def keyed(specs: list[str], kind: str) -> list[tuple[float, str, str]]:
@@ -207,6 +211,7 @@ def main() -> None:
                 args.log and f"log={args.log}",
                 args.read and f"read={args.read}",
                 args.audio_wav and f"audiotap={args.audio_seconds:g}",
+                args.browser == "firefox" and "audio=off",
             ) if q)
             page.goto(url + (f"?{query}" if query else ""))
             print("webgpu:", page.evaluate("!!navigator.gpu"), flush=True)

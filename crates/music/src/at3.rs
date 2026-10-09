@@ -37,6 +37,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+#[cfg(not(target_arch = "wasm32"))]
 use log::info;
 use oag_core::hash::StateHasher;
 
@@ -535,6 +536,7 @@ fn content_key(bytes: &[u8]) -> String {
 /// matches the geometry its own name records. Verified to be a no-op on
 /// `frontend1.at3`: forcing 2 channels at 44,100 Hz and letting `ffmpeg`
 /// choose produce byte-identical output.
+#[cfg(not(target_arch = "wasm32"))]
 fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
     info!(
         "decoding {} into {} (once; cached after this)",

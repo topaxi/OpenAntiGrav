@@ -2297,6 +2297,7 @@ dependencies = [
  "miniz_oxide",
  "num-bigint",
  "oag-testdata",
+ "oag-thread",
  "thiserror 2.0.19",
 ]
 

@@ -554,27 +554,6 @@ impl std::fmt::Debug for Audio {
     }
 }
 
-/// Logs a music fetch that failed, as `audio: <what> (<why>)`.
-///
-/// A codec this platform cannot decode at all (`oag_music::at3::NoDecoderHere`:
-/// Pulse's and Pure's ATRAC3+ in a browser) is said once, at warn, and every
-/// later track it refuses goes to debug: the absence is the same one each time.
-fn warn_no_music(what: &str, error: &anyhow::Error) {
-    static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if error
-        .chain()
-        .any(|cause| cause.is::<oag_music::at3::NoDecoderHere>())
-    {
-        if SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
-            debug!("audio: {what} ({error:#})");
-        } else {
-            warn!("audio: {what} ({error:#}); this music stays absent");
-        }
-        return;
-    }
-    warn!("audio: {what} ({error:#})");
-}
-
 impl Audio {
     /// Opens the output and applies the persisted volumes.
     ///
@@ -713,7 +692,7 @@ impl Audio {
                 debug!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
             Ok(None) => warn!("audio: this source carries no music this can play"),
-            Err(error) => warn_no_music("no music", &error),
+            Err(error) => race_music::warn_no_music("no music", &error),
         }
     }
 
