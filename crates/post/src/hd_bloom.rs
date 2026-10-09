@@ -181,7 +181,7 @@ pub enum Glow {
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
 #[derive(Debug)]
 struct Target {
-    #[expect(dead_code, reason = "held so the view stays valid")]
+    #[cfg_attr(not(test), expect(dead_code, reason = "held so the view stays valid"))]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
@@ -199,7 +199,14 @@ impl Target {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: SCENE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            // A test writes its scene texels directly.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | if cfg!(test) {
+                    wgpu::TextureUsages::COPY_DST
+                } else {
+                    wgpu::TextureUsages::empty()
+                },
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -301,6 +308,11 @@ pub struct Chain {
     params: Params,
     glow: Glow,
     copy: wgpu::RenderPipeline,
+    /// The first luminance-reduction step: an exact 2x2 mean of the encoded
+    /// scene, the bytes the original's readback sees.
+    reduce_encode: wgpu::RenderPipeline,
+    /// The later reduction steps: the same exact mean, no encode.
+    reduce: wgpu::RenderPipeline,
     adapt: wgpu::RenderPipeline,
     /// The adapt pipeline with the lerp rate forced to 1, run once: the
     /// state starts at zero and a single captured frame would otherwise
@@ -410,6 +422,14 @@ impl Chain {
             })
         };
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
+        let reduce_encode = pipeline(
+            "hd bloom reduce encode",
+            "fs_reduce_encode",
+            SCENE_FORMAT,
+            None,
+            &[],
+        );
+        let reduce = pipeline("hd bloom reduce", "fs_reduce", SCENE_FORMAT, None, &[]);
         let adapt = pipeline("hd bloom adapt", "fs_adapt", SCENE_FORMAT, None, &[]);
         let adapt_jump = pipeline(
             "hd bloom adapt jump",
@@ -435,6 +455,8 @@ impl Chain {
             params,
             glow,
             copy,
+            reduce_encode,
+            reduce,
             adapt,
             adapt_jump,
             gate,
@@ -453,6 +475,12 @@ impl Chain {
     #[must_use]
     pub fn scene_view(&self) -> &wgpu::TextureView {
         &self.sized.scene.view
+    }
+
+    /// The scene target's texture, for a test that writes its texels directly.
+    #[cfg(test)]
+    fn scene_texture(&self) -> &wgpu::Texture {
+        &self.sized.scene.texture
     }
 
     /// Rebuilds the targets for a new viewport size. The adaptation state
@@ -485,9 +513,9 @@ impl Chain {
         // its readback.
         let mut reductions = Vec::new();
         let (mut w, mut h) = quarter;
-        while w > 1 || h > 1 {
-            w = (w / 2).max(1);
-            h = (h / 2).max(1);
+        while w > 1 || h > 1 || reductions.is_empty() {
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
             reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
         }
         let adapted = [
@@ -814,10 +842,18 @@ impl Chain {
         // `self.sized.downsamples` always has at least two entries - see its
         // own construction - so the opening write always lands on a real pass
         // and `opening` never survives this loop unconsumed.
-        for stage in &self.sized.downsamples {
+        for (index, stage) in self.sized.downsamples.iter().enumerate() {
+            // The two halvings are the gate's and the blur's quarter-res
+            // scene; what follows is the luminance reduction, whose first
+            // step takes the encoded bytes the original's readback sees.
+            let pipeline = match index {
+                0 | 1 => &self.copy,
+                2 => &self.reduce_encode,
+                _ => &self.reduce,
+            };
             pass(
                 "hd bloom downsample",
-                Some(&self.copy),
+                Some(pipeline),
                 stage,
                 None,
                 clear,

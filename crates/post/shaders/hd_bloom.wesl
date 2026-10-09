@@ -140,6 +140,58 @@ fn surface(texel: vec4<f32>) -> vec4<f32> {
     return clamp(texel, vec4<f32>(0.0), vec4<f32>(1.0));
 }
 
+// The luminance reduction's halving step, in two forms.
+//
+// **The mean is of the bytes the original's surface holds.** `FUN_003b4690`
+// reads its reduced 8-bit `A8R8G8B8` surface back, scales each byte by 1/255,
+// averages the remaining texels equally and takes the luma of that - no decode
+// anywhere (renderer.md, "The adaptation reads encoded bytes"). Those bytes are
+// what the original puts on screen before its exposure and bloom, and this
+// chain's linear scene reaches the screen through `pow(1/2.2)`, so the same
+// bytes here are the encoded scene: `fs_reduce_encode` applies that encode as
+// it takes the first step, and the steps after it only average.
+//
+// **Each step is an exact, coverage-weighted 2x2 mean.** The step before this
+// one halved with a bilinear tap, which over an odd-sized level reads the
+// middle of a texel pair and drops a row or column, and the last step of a 3x2
+// level read one column alone: the ladder came out ~30 % under the true mean
+// of the frame it was given. A level here carries, in its alpha, the share of
+// each texel's footprint that holds picture, so the half-empty last texel of an
+// odd level weighs what it covers - 1 for the first step, which reads the
+// scene's quarter-res copy - and the 1x1 result is the plain mean of every
+// quarter-res texel.
+fn reduce_sum(pixel: vec2<i32>, encode: bool) -> vec4<f32> {
+    let dims = vec2<f32>(textureDimensions(source_tex));
+    let last = vec2<i32>(max(round(dims * constants.uv_scale), vec2<f32>(1.0))) - vec2<i32>(1);
+    var rgb = vec3<f32>(0.0);
+    var weight = 0.0;
+    for (var k = 0; k < 4; k = k + 1) {
+        let at = pixel * 2 + vec2<i32>(k & 1, k >> 1);
+        if (at.x <= last.x && at.y <= last.y) {
+            let texel = textureLoad(source_tex, at, 0);
+            var share = texel.a;
+            var colour = texel.rgb;
+            if (encode) {
+                share = 1.0;
+                colour = pow(clamp(colour, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+            }
+            rgb = rgb + colour * share;
+            weight = weight + share;
+        }
+    }
+    return vec4<f32>(rgb / max(weight, 1e-6), weight * 0.25);
+}
+
+@fragment
+fn fs_reduce_encode(in: VertexOutput) -> @location(0) vec4<f32> {
+    return reduce_sum(vec2<i32>(in.position.xy), true);
+}
+
+@fragment
+fn fs_reduce(in: VertexOutput) -> @location(0) vec4<f32> {
+    return reduce_sum(vec2<i32>(in.position.xy), false);
+}
+
 // The adaptation update FUN_003b4690 runs on the CPU after reading back the
 // fully-downsampled frame:
 //

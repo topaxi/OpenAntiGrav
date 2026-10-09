@@ -7670,3 +7670,78 @@ may be in our reduction rather than in the original's input.
 **Omega: checked, differs.** Omega authors a `Tonemap` block, not `HDR and Bloom`, so there is no gate, frame term or adaptation
 fade to share; its Metropia is not compared (no capture path for PS4).
 **Pulse**: no code changed, so its picture is unchanged by construction (no before/after screenshot taken for that reason).
+
+## The adaptation reads encoded bytes, and ours read a biased linear mean (2026-10-09, `hd-bloom-adapt`)
+
+Closes the open end of "Metropia's white lamp blobs": why our `adapted` read 0.09-0.13 where the gate needs 0.267.
+**Two causes, both in our reduction, neither in the gate or the settings. Fixed in `oag_post::hd_bloom`. A side effect is
+disclosed at the end and is not hidden: frames that the old low `adapted` over-exposed now come out darker.**
+
+**1. Our `adapted` read back, at the Metropia grid pose 00** (`hd-metropia-bloom`'s camera, 1882x1058, first frame so the
+rate-1 jump makes it the frame's own luma; the readback is a temporary `fs_encode` that returns `adapted` as grey, not committed):
+
+| quantity | value |
+| --- | ---: |
+| our ladder's `adapted`, as shipped | **0.098** (byte 25) |
+| true mean luma of the clamped linear scene (centre crop 300-1500 x 200-800 / whole frame incl. HUD) | 0.144 / 0.172 |
+| so the ladder read ~30 % under the frame it was given | |
+| exposure it produced, `4 - min(0.098 x 20, 3)` | 2.04 |
+
+The previous page's "the frame's linear luma is 0.28" was the *final* picture (after the exposure x2.04), not the scene the
+reduction reads. The ladder halved with a bilinear tap to a floor-sized level, and over an odd size that reads the middle of a
+texel pair; the last step, 3x2 to 1x1, read one column alone. Confidence 90 (one pose, deterministic, a readback).
+
+**2. The original averages raw bytes, with no decode.** `FunkLayer_RunBloomChain` (`0x003b4690`, decompile re-read for this
+section): after the iterated halving (sizes `(n/2)` rounded up to even, `&~1`) it loops **until either dimension is 1**, reads
+the remaining texels of the 8-bit `A8R8G8B8` surface, `(byte >> 16 & 0xff, >> 8, & 0xff, >> 24) * c` with **`c` the constant at
+`0x8b74f4`, `0x3b808081` = 1/255 (live read, confirmed)**, sums them, divides by `w * h`, stores the mean at `FunkLayer + 0x240`
+(16 bytes) and its luma - weights `0.3, 0.59, 0.11` (`0x8b74fc..0x8b7504`) - at `FunkLayer + 0x25c` **unconditionally**; the
+lerp `adapted += rate * (luma - adapted)` into `*(FunkLayer + *(sp + 0x894) + 0x254)` runs only if the byte at `sp + 0xa8f` is set.
+Nothing between the bytes and the luma converts light. Those bytes are the frame the original puts on the display before its
+exposure and bloom: the original shows its scene surface directly (`NV4097_SET_SHADER_PACKER` 1 on the scene draws and 0 on the
+swap buffer, `hds-frame-was-too-bright-and-too-bloomy`), and the exposure `scale = 4 - min(adapted x 20, 3)` is **1.0**
+in the original (`final/scene` 1.02-1.06 on nine scene-target dumps, same thread) - which means its `adapted` is >= 0.15, in
+byte terms, on every circuit measured. Our scene is linear and reaches the display through `pow(1/2.2)`, so **the original's
+bytes are our encoded scene**, and the reduction's mean has to be taken over those. Confidence 85 for the law (static, plus the
+`final/scene` ratio as an independent consequence), 90 for the constant `1/255`.
+
+**The fix** (`crates/post/shaders/hd_bloom.wesl`, `fs_reduce_encode` and `fs_reduce`): the first reduction step encodes the
+quarter-res scene (`pow(clamp(x, 0, 1), 1/2.2)`) as it halves, and every step is an exact 2x2 mean carrying in its alpha the
+share of each texel's footprint that holds picture, so odd levels weigh their half-empty last texel by what it covers; the
+ladder keeps `ceil(n/2)` levels to 1x1. A test pins it (`the_adaptation_is_the_mean_of_the_encoded_scene`: an 80x76 scene, half
+black and half 0.4, whose odd levels 19, 5, 3 gave byte 205 against the predicted 212 on the first, edge-duplicating version).
+The remaining difference from the original is where the encode sits: ours averages 4x4 linear boxes at quarter res and then
+encodes, the original encodes at full res and then averages; the measured effect is a ~7 % lower mean (0.325 against 0.35-0.376
+for the per-pixel mean of the encoded scene on Metropia 00), Jensen on bright small lamps, and it only matters near the 0.15 and
+0.267 knees.
+
+| Metropia 00, ceiling band y < 420 | clipped share | blob px | mean RGB | whole-frame luma |
+| --- | ---: | ---: | --- | ---: |
+| original | 3.07 % | 22.3 k | 153.9 140.9 128.9 | 0.488 |
+| ours before | 10.87 % | 82.5 k | 163.1 154.5 142.8 | 0.518 |
+| ours after | **1.38 %** | 10.6 k | 119.2 105.6 99.5 | 0.364 |
+
+Poses 03, 05 and 01 agree within 0.1 point (`data/reference/hd-capture/metropia-bloom/adapt/stats.txt`). `adapted` is now
+0.325 (readback) so the gate's fade is complete and the exposure is 1.0, as in the original.
+
+**The side effect, measured.** `adapted` also sets the exposure, so every circuit whose old, low linear `adapted` lifted the
+frame (`scale` 1.5-2) now sits at the original's `scale` 1.0 and shows the underlying scene darkness directly. Whole-frame mean
+luma, original / before / after (`stats.txt`): Metropia 0.488 / 0.518 / 0.364; Amphiseum 00 0.286 / 0.280 / 0.204, 01
+0.430 / 0.486 / 0.355; Talon's 00/01/03 0.608, 0.609, 0.614 / 0.522, 0.483, 0.489 / 0.515, 0.476, 0.484 (-0.007, within
+1.5 %); Sol 2 00/01/02 unchanged to the pixel (its `adapted` was already past the knee). The old numbers matched the
+original on dark circuits by compensation: a linear mean too low pushed the exposure up and hid a scene that is 15-28 %
+darker than the original's own bytes at scale 1. That darkness is the open item of "HD's frame was too bright and too
+bloomy" (the lightmap/prelit road law, `hd-corridor-road`), not this one. Judged as a player at 640 px: the Metropia ceiling
+lamps lose their white discs and keep their housings, and the whole frame looks dimmer than the original; Amphiseum's screens
+go from white-hot to their authored red with a dimmer track. Frames in
+`data/reference/hd-capture/metropia-bloom/adapt/` (`triptych_orig_before_after_*.png`, `before_*`, `after_*`).
+
+**The original's `adapted` was not read live.** `FunkLayer` at `*0x8b73bc = 0xc50ee0` holds the render-target handles at
+`+0xa0/+0xa4` (`0x500`, `0x2d0`: 1280x720 internal, so its quarter is 320x180, not 480x270) and `+0xd0..+0xf0`, but
+`+0x240..+0x26c` reads zero at the grid and a `Z0` breakpoint on `0x003b4690` never fired in 10 s on a running grid (and, set
+without reading the stop reply, `wait_at` closes the stub, see `rpcs3-debugger.md`), so the value stays an inference
+from the code above and the `final/scene` ratio. A next attempt: break on a later address (the readback loop at `0x003b5318`),
+or sample the scene surface itself out of RSX memory.
+
+**Omega: checked, differs** (authors a `Tonemap` block, no gate or adaptation to share). **2048: not applicable** (no HD chain).
+Pulse unchanged: one race screenshot (`pulse-psp-eu.chd`, 960x544) before and after is byte-identical.

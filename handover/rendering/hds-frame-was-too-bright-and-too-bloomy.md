@@ -997,3 +997,13 @@ the final `pow` a stand-in.
 adaptation fade should cancel; ours reads `adapted` about 0.1 (estimate), the original's behaves as `>= ~0.25`. Table, method,
 frames and the saved grid state are in [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Metropia's white lamp
 blobs". **Next**: (1) read back our own `adapted` at tick 0 on that pose (the sweep brackets it in 0.09-0.13, yet the frame's linear luma is 0.28, which would fully fade it, so our reduction or scene mean is suspect, not the original's input); (2) read the original's `adapted` at the grid (the `FunkLayer + 0x254` read at `0xc50ee0` came back zero; break on the lerp store in `FunkLayer_RunBloomChain`). The first guess, that the original averages encoded bytes, was checked and is not supported. Same check applies to every Fury/DLC circuit (`01_vineta_k`, `03_track`, `05_ubermall`, `12_sol_2`, ...) that authors a large frame term.
+
+2026-10-09 (`hd-bloom-adapt`): **The Metropia blobs are fixed in the reduction, and the fix exposes the frame-wide darkness.** Our `adapted` read 0.098 (linear
+mean of a biased ladder) where the original averages raw bytes (no decode, `1/255`, mean of every texel left when one dimension reaches 1) and shows its scene
+surface directly, so its bytes are our *encoded* scene (renderer.md, "The adaptation reads encoded bytes"). `oag_post::hd_bloom` now encodes at the first
+reduction step and halves with an exact coverage-weighted 2x2 mean: Metropia ceiling clipped share 10.87 % -> 1.38 % (original 3.07 %), `adapted` 0.325, exposure
+1.0 as in the original. **Costs, to be read together with "Open / next" above**: whole-frame luma now Metropia 0.364 (original 0.488, was 0.518), Amphiseum 0.204 / 0.355
+(0.286 / 0.430, was 0.280 / 0.486), Talon's within 0.008 of before, Sol 2 unchanged. The old low `adapted` was lifting dark circuits by a x1.5-2 exposure that hid a scene
+15-28 % darker than the original's own bytes at scale 1: that darkness, not the exposure, is what the lightmap/prelit lane has to close. **Next**: (1) the live read of the
+original's `adapted` (`FunkLayer + 0x25c`; `0x003b4690` never hit under `wait_at`, read the stop reply instead); (2) encode before the 4x4 average (the ~7 % Jensen gap)
+if the knee matters on a circuit.
