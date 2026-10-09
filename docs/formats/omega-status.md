@@ -355,7 +355,12 @@ None`); `Event 01/08` is an English literal on HD too; the Endrace screens still
 dispatch `title == HD` alone. The picker's `Svenska` x4 and `Portugus` are **the
 disc's own**: `definition.xml` really says `ID="Japanese" String="Svenska"` (and
 Korean, TraditionalChinese), and `ID="Portuguese" String="Portugus"`. `P??????`
-(Russian) is Cyrillic missing from the `Default` face's atlas.
+(Russian) is **not** Cyrillic missing from an atlas: the file holds seven bytes
+`50 3f 3f 3f 3f 3f 3f`. The plugin's own table authors `Русский` (`OPT_RUSSIAN`),
+which the loader reads instead, and the picker's `helv.fnt` has no Cyrillic, so
+Russian is not offered there (2026-10-09, checked against HD: same bytes).
+Omega's `Portugus` is the same class of loss (the `ê` is absent from the file)
+and is left as the disc wrote it.
 
 `just play omega` boots the front end, reads `data09.psarc`'s ten `FEGlobals`,
 the boot chain and the string table, and stops on **Language Selection** - the

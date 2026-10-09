@@ -86,13 +86,24 @@ Two findings, and the first is the disc's own bug rather than a reading error:
   is quoting the disc. Pinned in
   `crates/game/tests/hd_boot_ground_truth.rs` so that a future change which
   *fixes* these is noticed rather than assumed correct.
-- **Portuguese is the one plugin that does not parse**, and Russian's native
-  name comes through as `P??????`. Both look like an encoding fault rather than
-  a schema one: every file declares `encoding="utf-8"` and
-  `portuguese/definition.xml` writes `Portugu<0xea>s`, which is Latin-1. Not
-  chased - it costs one language in a picker this build's own menus do not
-  depend on - and recorded here so the next reader starts from the symptom
-  rather than from the plugin list.
+- **Portuguese did not parse, and Russian's native name comes through as
+  `P??????`.** Portuguese was an encoding fault, fixed: every file declares
+  `encoding="utf-8"` and `portuguese/definition.xml` writes `Portugu<0xea>s`,
+  which is Latin-1 (`oag_ui::xml::expand` falls back to it). **Russian is not
+  one**: `russian/definition.xml` holds the bytes `50 3f 3f 3f 3f 3f 3f` (`P`
+  and six literal `?`, confidence 97, read off the file), so the name was lost
+  before it reached the disc and no decoder can recover it. The plugin's own
+  `entries.xml` authors it again as `OPT_RUSSIAN` = `Русский`, and
+  `oag_ui::language::load::load_languages` reads that when a native name holds a
+  `?` (**2026-10-09**). The picker draws in the boot language's `Default` face,
+  `helv.fnt` (243 glyphs, no Cyrillic), so `load::pickable` then leaves Russian
+  out of HD's picker and the boot report says so; Russian's own `arialbd.fnt`
+  has 67 Cyrillic glyphs, but one row cannot be drawn in another language's
+  face yet. HD's executable has no picker at all (the XMB language chooses), so
+  there is no original screen to compare. Pinned by
+  `picker_glyphs_ground_truth`. **Omega: checked, same bytes, same result**
+  (`helv.fnt`, Russian left out); **2048: checked, same bytes, same result**
+  (Russian's `LARGE_RUSSIAN_BOLD.fnt` is not the picker's `NEOSANS_BOLD_LARGE.fnt`).
 
 [`oag_title::FrontEnd::language_plugins`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
 
@@ -429,7 +440,8 @@ copy-paste; `Russian` declares `P??????`. A boot report reading
 `Japanese (Svenska)` looks exactly like this build mixing two plugins up, which
 is why it is pinned rather than merely noted - see
 `every_declared_language_plugin_resolves`. Correcting them here would be
-inventing.
+inventing. (`Russian`'s `P??????` is a lost name rather than a mislabelled one,
+and is read from its own table instead; see above.)
 
 ## The dead PSP screen
 
