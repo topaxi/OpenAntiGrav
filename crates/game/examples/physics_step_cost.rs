@@ -53,7 +53,7 @@ fn main() {
     let mut driver = ship.driver;
     let line = race.racing_line().clone();
     let tuning = oag_ai::Tuning::default();
-    let ceiling = oag_ai::hull_yaw_ceiling(&handling);
+    let ceiling = oag_ai::hull_yaw_ceiling(&handling, &state.body);
     let dt = race.dt();
 
     let ticks = 10_000u32;
