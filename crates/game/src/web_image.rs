@@ -97,6 +97,7 @@ impl Sliced {
             ));
         }
         bytes.copy_to(into);
+        log::debug!("web: image fetch at {offset}, {} bytes", into.len());
         cache.fetches += 1;
         cache.fetched += into.len() as u64;
         if cache.fetches.is_power_of_two() || cache.fetches.is_multiple_of(1024) {
