@@ -738,6 +738,10 @@ impl ApplicationHandler for App {
         // the tick loop has no event loop to call, and quitting from inside a
         // frame would leave that frame half-drawn.
         if self.state.as_ref().is_some_and(|session| session.quit) {
+            // The browser cannot start a second loop in this page, so the page
+            // is told and reloads itself (docs/tools/web.md, "Quitting").
+            #[cfg(target_arch = "wasm32")]
+            super::gpu::web::quit();
             event_loop.exit();
             return;
         }
