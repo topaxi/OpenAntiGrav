@@ -387,18 +387,18 @@ fn the_encode_pass_honours_the_scenes_own_offset() {
     );
 }
 
-/// The luminance reduction averages the *encoded* scene, exactly, whatever
-/// the level sizes.
+/// The luminance reduction is an exact linear mean whose result is read as
+/// encoded bytes, whatever the level sizes.
 ///
-/// Half of an 80x76 scene is linear 0 and half 0.4, so the encoded mean is
-/// `0.4^(1/2.2) / 2` whatever the ladder's odd levels (20x19, 10x10, 5x5,
-/// 3x3, 2x2) do to it. The resolve's exposure `max - adapted * boost` turns
-/// that into the right half's byte: reading the mean of the *linear* scene
-/// (0.2) or a ladder that dropped a row or column moves it by more than the
-/// tolerance. See the module header of `hd_bloom` and `renderer.md`, "The
-/// adaptation reads encoded bytes".
+/// Half of an 80x76 scene is linear 0 and half 0.4, so the ladder's odd levels
+/// (20x19, 10x10, 5x5, 3x3, 2x2) must still return 0.2 and the readback encodes
+/// it: `adapted = 0.2^(1/2.2)`. The resolve's exposure `max - adapted * boost`
+/// turns that into the right half's byte (203). A mean of the *linear* scene
+/// (0.2), a mean taken after encoding each texel (0.33) or a ladder that
+/// dropped a row or column (205 on the edge-duplicating one) all land more than
+/// the tolerance away. See `renderer.md`, "The adaptation reads encoded bytes".
 #[test]
-fn the_adaptation_is_the_mean_of_the_encoded_scene() {
+fn the_adaptation_is_the_encoded_linear_mean() {
     let instance = wgpu::Instance::default();
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
     if adapters.is_empty() {
@@ -512,11 +512,11 @@ fn the_adaptation_is_the_mean_of_the_encoded_scene() {
     readback.unmap();
 
     let stored = 0.399_902_3f64;
-    let adapted = stored.powf(1.0 / 2.2) / 2.0;
+    let adapted = (stored / 2.0).powf(1.0 / 2.2);
     let scale = 2.0 - adapted;
     let want = (stored * scale).min(1.0).powf(1.0 / 2.2) * 255.0;
     assert!(
         (got - want).abs() <= 2.5,
-        "the right half resolved to byte {got}, the encoded-scene mean predicts {want:.1}"
+        "the right half resolved to byte {got}, the encoded linear mean predicts {want:.1}"
     );
 }

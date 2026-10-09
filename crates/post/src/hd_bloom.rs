@@ -308,10 +308,10 @@ pub struct Chain {
     params: Params,
     glow: Glow,
     copy: wgpu::RenderPipeline,
-    /// The first luminance-reduction step: an exact 2x2 mean of the encoded
-    /// scene, the bytes the original's readback sees.
-    reduce_encode: wgpu::RenderPipeline,
-    /// The later reduction steps: the same exact mean, no encode.
+    /// The first luminance-reduction step: an exact 2x2 mean of the quarter-res
+    /// scene, every texel weighing 1.
+    reduce_first: wgpu::RenderPipeline,
+    /// The later reduction steps: the same mean, weighted by coverage.
     reduce: wgpu::RenderPipeline,
     adapt: wgpu::RenderPipeline,
     /// The adapt pipeline with the lerp rate forced to 1, run once: the
@@ -422,9 +422,9 @@ impl Chain {
             })
         };
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
-        let reduce_encode = pipeline(
-            "hd bloom reduce encode",
-            "fs_reduce_encode",
+        let reduce_first = pipeline(
+            "hd bloom reduce first",
+            "fs_reduce_first",
             SCENE_FORMAT,
             None,
             &[],
@@ -455,7 +455,7 @@ impl Chain {
             params,
             glow,
             copy,
-            reduce_encode,
+            reduce_first,
             reduce,
             adapt,
             adapt_jump,
@@ -513,7 +513,7 @@ impl Chain {
         // its readback.
         let mut reductions = Vec::new();
         let (mut w, mut h) = quarter;
-        while w > 1 || h > 1 || reductions.is_empty() {
+        while (w > 1 && h > 1) || reductions.is_empty() {
             w = w.div_ceil(2);
             h = h.div_ceil(2);
             reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
@@ -844,11 +844,10 @@ impl Chain {
         // and `opening` never survives this loop unconsumed.
         for (index, stage) in self.sized.downsamples.iter().enumerate() {
             // The two halvings are the gate's and the blur's quarter-res
-            // scene; what follows is the luminance reduction, whose first
-            // step takes the encoded bytes the original's readback sees.
+            // scene; what follows is the luminance reduction.
             let pipeline = match index {
                 0 | 1 => &self.copy,
-                2 => &self.reduce_encode,
+                2 => &self.reduce_first,
                 _ => &self.reduce,
             };
             pass(
