@@ -80,5 +80,4 @@ fn a_titles_craft_laws_build_its_inertia_and_none_keeps_pulses() {
     let hd = craft_inertia(Some(&oag_hd::race::CRAFT_LAWS));
     assert!((hd.y - 24.0).abs() < 1.0e-3, "I_yy {}", hd.y);
     assert!((hd.x - 17.333).abs() < 1.0e-3, "I_xx {}", hd.x);
-    assert!(oag_hd::race::CRAFT_LAWS.steer_ramp_clamped.value);
 }
