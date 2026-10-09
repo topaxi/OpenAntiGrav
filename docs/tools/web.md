@@ -9,7 +9,9 @@ loaded on a Web Worker while the loading screen draws (see "Threads"), in
 headless Chromium and Firefox; Pulse PS2 (a 3.7 GB CHD) boots to Language
 Selection, the image read a slice at a time. It plays sound: the effects on
 every title, and Wipeout HD's MP3 music, through an `AudioWorklet` fed from a
-Web Worker (see "Sound"); Pulse's and Pure's ATRAC3+ music is absent. It has
+Web Worker (see "Sound"); Pulse's and Pure's ATRAC3+ music is absent. The PSP
+movies play, the boot intro and the menu backdrop, decoded by the browser's
+WebCodecs (see "Movies"); the PS2's and HD's do not. It has
 not been tried in a browser on a real desktop, on a phone, or with a gamepad.
 "What is missing" lists the rest.
 
@@ -122,8 +124,8 @@ makes no request after loading itself.
   wasm, behind `cfg(target_arch = "wasm32")`: the race scene build
   (`race_build::BuildWorker`, which is GPU work and wgpu's web types belong to
   the page's thread), dropping a parked race (GPU resources again), and the
-  boot's media (`boot::MediaWorker`; no movie decodes on the web, so it has
-  nothing slow to move). A CHD read is serial when `available_parallelism`
+  boot's media (`boot::MediaWorker`; a movie's open is a demux, and its decode
+  is the browser's own and asynchronous, so it has nothing slow to move). A CHD read is serial when `available_parallelism`
   fails, which it does here. The circuit-length worker uses `std::thread`, which
   this target refuses even with atomics, so it fails to spawn and logs it, as it
   would on any machine that refuses a thread.
@@ -313,10 +315,13 @@ claims rest on, from Language Selection to a race on Moa Therma White:
 just web
 uv run --with playwright python3 scripts/web-screenshot.py \
     --image data/images/pulse-psp-eu.chd --out data/web-shots \
-    --at 30,62,70,78 --press Enter@8 --press Space@12 --press Enter@16 \
-    --press Enter@20 --press Enter@24 --press Enter@28 \
-    --down x@50 --down ArrowLeft@72 --up ArrowLeft@74 --fps 5
+    --at 32,64,72,80 --press Enter@8 --press Enter@11 --press Space@14 \
+    --press Enter@18 --press Enter@22 --press Enter@26 --press Enter@30 \
+    --down x@52 --down ArrowLeft@74 --up ArrowLeft@76 --fps 5
 ```
+
+The first Enter skips the intro movie, which plays since 2026-10-09
+("Movies"); before that the walk was one press shorter.
 
 And Wipeout HD into the campaign's first event (Blitzed, Talon's Junction,
 Venom, Assegai), the load "Threads" measures:
@@ -336,8 +341,7 @@ adapter (`GPUAdapterInfo`: vendor `amd`, architecture `rdna-3`,
 `isFallbackAdapter` false), not SwiftShader; `fps: 60.2` is the
 `requestAnimationFrame` rate during the race, which is the cap, not a measure of
 headroom. Native and web frames of the Language Selection screen match glyph for
-glyph; the native one has the menu's backdrop movie behind it and the web one
-does not (see below).
+glyph, each with the menu's backdrop movie behind it ("Movies").
 
 The simulation's determinism on wasm is checked by `just test-wasm`: the
 `oag-core` determinism test against its committed reference, and the
@@ -644,6 +648,97 @@ browser's walk is real time and its presses land on different ticks. The
 desktop's dump stayed byte-identical through this change (the four sequences
 of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
 
+## Movies
+
+The PSP's movies play in the browser since 2026-10-09: on Pulse PSP EU the
+boot intro (`Intro.PMF`, capped at 260 frames as natively) and the menu
+backdrop (`Backdrop.PMF`, 270 frames, looping), in headless Chromium 153 and
+Firefox 155. Natively a movie is transcoded by `ffmpeg` into a lossless AV1
+cache and decoded by `re_rav1d` (ADR-0008); a page can run neither, but every
+browser it runs in decodes H.264, which is what a `.PMF` holds.
+
+**How.** `movie::open` demuxes the `.PMF` as natively; on wasm, where the
+native path would transcode, `movie/webcodecs.rs` builds a `FrameStore` whose
+`VideoDecoder` is the browser's WebCodecs `VideoDecoder`, driven through
+`web/movie.js`:
+
+1. The H.264 is cut into access units (`oag_video::pmf::access_units`, where
+   `frame_count` counts) and each goes in as one `EncodedVideoChunk`, Annex B,
+   no `description`: the first unit carries the SPS and PPS in band and is an
+   IDR picture, which `movie_access_units_ground_truth.rs` checks on all three
+   Pulse PSP movies (Intro 1,200 units, 71 IDR; Backdrop 270, 5; the dev/pub
+   reel 260, 9; all `avc1.4d4015`, Main profile, level 2.1).
+2. Frames come out in display order and are **counted, not timed**: the n-th
+   frame out since a reset is frame n. Up to 8 pictures are in flight (chosen,
+   not measured); after the last unit the decoder is flushed so it lets go of
+   any it holds back. A loop's wrap or a reopened menu resets it: a new
+   decoder, from the first unit.
+3. Each `VideoFrame` is copied out as planes (`copyTo`) and closed, and the
+   module takes them as I420, the format `upload_frame` and `video.wesl` read
+   natively. Chromium hands out `I420`; `NV12` is split into two planes.
+   **Firefox 155 hands out `BGRX`** (with `hardwareAcceleration:
+   "prefer-software"` too), which is converted back to BT.601 limited-range
+   I420, the inverse of `video.wesl`'s matrix: close to the native frame, not
+   equal to it.
+4. **Nothing waits.** The decode runs on the browser's threads and its output
+   arrives on the page's event loop between frames. The web's `movie::Feed`
+   has no worker (natively a thread decodes into its ring): `take_upto` polls
+   the store once a frame, and a frame not out yet is `movie::Pending`, retried
+   on the next poll. The ring, the epoch and the pacing are the native ones;
+   the movie clock is the same `Player` position.
+
+**Why planes and not `copyExternalImageToTexture`.** wgpu 30's web backend has
+it, for a `VideoFrame` (`ExternalImageSource::VideoFrame`), but it writes RGBA
+the browser colour-converted into an RGBA texture, which `video.wesl` does not
+read. The copy keeps one format and one shader, and frames comparable byte for
+byte with the native decode; a 480x272 frame is 196 KB, at 30 frames a second.
+
+**Checked, headless, 2026-10-09** (`?log=debug` logs an FNV-1a hash of frame
+30's luma plane, `movie: <key> frame 30 luma fnv1a ...`):
+
+| | Chromium 153 | Firefox 155 | Native (AV1 cache, and `ffmpeg` on the H.264) |
+| --- | --- | --- | --- |
+| Intro, frame 30 | `8b671cb032854bb6` | `c979fd976a39ac17` | `8b671cb032854bb6` |
+| Backdrop, frame 30 | `b64ab88564c708a8` | `98190de5c4f22e87` | `b64ab88564c708a8` |
+
+So Chromium's frames are the native ones, byte for byte, and the index is
+right; Firefox's differ by its RGB round trip. Screenshots over the intro show
+its successive screens (SYSTEM STARTUP, CONTROL SYSTEM BIOS, WEAPONS SYSTEMS
+ANALYSIS, ENGINE CORE ENABLED), and the backdrop's rays and ship pass move
+behind Language Selection and the title, as natively. **Enter skips the intro**
+to Language Selection, as natively, in both browsers. The backdrop logged
+`rewound after 270 frame(s)` at each wrap, every frame of the loop decoded, in
+both. The boot's one stall after the pick (1.1 to 1.4 s, Chromium) is the one
+"What is still on the page's thread" names; no new one, and the race in the
+walk above still runs at the 60 fps cap. Dropped frames at the display (the
+ring's skip-ahead) are not counted.
+
+**Sound.** A `.PMF`'s audio is ATRAC3+, which the web build cannot decode
+("Sound"): the picture plays silent, and the log says so once (`audio:
+LogoFMV plays silently`, warn, and `audio: not decoded (...)` in the loader
+report). Nothing stands in for it.
+
+| Title | Movies in a browser |
+| --- | --- |
+| Pulse PSP | **play**: intro, backdrop (Chromium byte-equal, Firefox by RGB) |
+| Pure PSP EU | **plays**: the dev/pub reel `IntroMovieP1_EU.PMF` after Language Selection, frame 30 `a6112c4ced558bc4` in Chromium, the native hash; its other reels are `.PMF` too and were not reached |
+| Pulse PS2 | **absent**: `INTRO*.PSS` is MPEG-2, `BG*.IPF` MPEG-2 IPU |
+| HD / Fury | **absent**: Bink |
+| 2048, Omega | no package opens in a browser. 2048's `.mp4`s are H.264 (`avc1`, `docs/formats/mp4.md`), which WebCodecs decodes: checked, applies, not wired (they would need their samples fed instead of a `.PMF`'s access units); Omega's front end is HD's, whose boot reel is Bink (and `StudioLiverpool.bik` is not in its archives, `omega-status.md`): absent as HD's |
+
+**Why the PS2 and HD stay absent.** The WebCodecs codec registry
+(https://www.w3.org/TR/webcodecs-codec-registry/) names AV1, AVC (H.264), HEVC,
+VP8 and VP9 and nothing else: no MPEG-1/2 video and no Bink.
+`VideoDecoder.isConfigSupported` agrees in both browsers: `avc1.4d4015`,
+`av01.0.04M.08` and `vp09.00.10.08` true, `mpeg2video`, `mp2v`, `mpeg1video` and
+`bink` false. Such a movie opens for its shape (frame count, size, rate, so the
+sequencing holds) and its sound where it has one, and the loader report says
+`no picture: the web build has no decoder for this movie: WebCodecs decodes no
+MPEG-2 (PS2) or Bink (HD), and a browser cannot run the ffmpeg transcode`, at
+warn. A Rust MPEG-2 decoder would be the way to the PS2's; Bink has no other.
+**An AV1 path would not help**: AV1 is only what the native cache holds, and
+the cache is made by `ffmpeg`, which a page cannot run.
+
 ## What is missing
 
 - **Images over about 2 GB in a browser without synchronous slice reads.**
@@ -658,10 +753,8 @@ of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
   faked ("Sound").
 - **Sound in Firefox and WebKit, and on a real output device.** The worklet ran
   in headless Chromium on its fake sink only.
-- **Movies.** The AV1 decoder (`re_rav1d`) does not build for wasm32, and the
-  movie cache it reads is made by `ffmpeg` into a directory; the boot movies and
-  the menu backdrop are absent, and the loader report says so (`no picture: ...`,
-  logged at warn).
+- **The PS2's and HD's movies**, and every movie's sound ("Movies"). The
+  PSP's play.
 - **Ghosts and pilot files** last one tab; settings and records persist.
 - **Untested inputs.** gilrs's Gamepad API backend is compiled in and not tried
   with a pad; touch is not tried. The keyboard and the mouse work.

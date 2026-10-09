@@ -1,6 +1,6 @@
 # The web build races in Chromium and Firefox
 
-2026-10-09, lanes `web-pages`, `web-next`, `web-load` then `web-audio`. `just web` builds
+2026-10-09, lanes `web-pages`, `web-next`, `web-load`, `web-audio` then `web-video`. `just web` builds
 `oag-game` for `wasm32-unknown-unknown` + WebGPU into `target/web/dist`,
 threaded (pinned nightly, `-Z build-std`, `+atomics`, shared memory);
 `pages.yml` builds it and deploys it to Cloudflare Pages (`oag.topaxi.com`,
@@ -51,10 +51,14 @@ Architecture, measurements, hosting and limits:
   Selection only; Pure reaches its Press Start title and no further.
 - **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
   package's sibling files cannot be found beside one picked file.
-- **No movies.** The AV1 decoder does not build for wasm32 (`re_rav1d` uses
-  `libc` items the target lacks) and the movie cache is files made by
-  `ffmpeg`; HD's Bink movies' audio goes through the same cache. Options:
-  WebCodecs for H.264/AV1, the cache in memory or OPFS.
+- **Movies (2026-10-09, web-video lane)**: the PSP's `.PMF`s play through
+  WebCodecs (Pulse intro and backdrop, Pure's dev/pub reel; Chromium's frames
+  byte-equal to native). Open: the PS2's MPEG-2 (`.PSS`, `.IPF`) and HD's Bink
+  have no WebCodecs codec and stay absent (a Rust MPEG-2 decoder is the only
+  way to the PS2's); every movie is silent (ATRAC3+; HD's Bink audio needs the
+  file cache a page lacks); Firefox's frames go through its `BGRX` and back,
+  not byte-equal; display-side dropped frames are not counted; Pure's other
+  reels and a headed browser are untried.
 - **Pulse/Pure music (ATRAC3+) is absent in the browser**: `ffmpeg` only, and
   the Rust-decoder decision is the maintainer's, deferred. Pulse PS2's front
   end plays its soundtrack in the browser; its race and Pure were not tried.
