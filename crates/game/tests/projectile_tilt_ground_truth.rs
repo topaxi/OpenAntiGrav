@@ -12,7 +12,11 @@
 //! each is judged here by what that normal says about the floor under it.
 //!
 //! The craft is flown by the autopilot and the weapon is fired through the
-//! pad every 30 ticks (the Cannon test's staging). On every tick a projectile is
+//! pad every 30 ticks (the Cannon test's staging). Its shield is restored every
+//! tick (a fixture choice, 2026-10-09): the race is armed, and whether an
+//! opponent's beam destroys the firer depends on every line in the field, which
+//! any handling change moves. HD's four-point hover once left the firer drained
+//! on the first lap and parked, and the count below measured that, not a floor. On every tick a projectile is
 //! in the air the test casts the original's own probe, the weapon's own reach (`6.0` for the Rocket, `12.0` for the
 //! rest) along `-surface` from the projectile, and asks two things of the floor it finds:
 //!
@@ -86,8 +90,10 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut input: Option<Input> = None;
     let mut next_shot = 200;
     let mut out = Ride::default();
+    let shield = race.sim.world.ships[0].physics.shield;
     for tick in 0..ticks {
         race.set_autopilot(true);
+        race.sim.world.ships[0].physics.shield = shield;
         if tick < next_shot {
             let snap = snapshot(Button::Cross.bit(), input.as_ref());
             input = Some(snap.buttons);
