@@ -7720,18 +7720,22 @@ reads the same `adapted`, so the bloom is a little weaker at steady state; that 
 
 1. **The matched pairs (`talons-matched`, `sol2-matched`, `amphiseum-matched`) read lower after the fix** (whole frame, ours
    over reference: Talon's 00/01/03 0.84/0.83/0.77 before, 0.61/0.61/0.73 after; Sol 2 00/01 0.84/- before, 0.68/0.67 after;
-   Amphiseum 00/01 0.97/- before, 0.45/0.67 after). These are race-start frames (HUD clock 0.00.3, 0.06.3, 0.18.3, 74 to 529
-   km/h); a frame at the **same pose at rest** (clock 0.03.5, scene target and screenshot from one boot) reads luminance 0.355
-   against the pair's 0.618, with a cloudy sky where the pair's is clipped white. So the early race is brighter than steady
-   state by about 1.7x in the original, and the cause is **not** the lit-program scale: it is an exposure or a flash state
-   this build does not model (the `/2` is in the programs at steady state too). The earlier "race-start exposure transient"
-   explanation, retracted in the section above on the strength of final-over-scene 1.04 at clock 0.00.0 (a countdown
-   frame, before the start), is **open again**, and so is Sol 2's old `byte/128` fit. Judge steady-state frames against
-   steady-state references and start frames against start frames.
+   Amphiseum 00/01 0.97/- before, 0.45/0.67 after) **and are probably not steady-state references: they were shot in September on what
+   was then RPCS3's stock config (`Write Color Buffers` off; inferred from the date and the config a private tree copies, not
+   recorded with the pairs).** The same corridor pose shot on four boots reads screenshot luminance 0.587 and
+   0.589 on two with it off (the stock config, resolution scale 150) and 0.331 and 0.342 on two with it on (this lane's
+   corridor and grid captures; 1.77x, rows 170-640, one weighting), with a clipped white sky on the first pair and a
+   cloudy one on the second. With it off the PPU's readback of the reduced buffer is not the frame's bytes, `adapted`
+   stays low and the exposure `scale` heads for `Tone maximum brightness` (4.0): the resolve is brighter without any
+   change to the lit programs. So **the "ours darker everywhere" family (the 0.77-0.84 grid and tunnel readings, `bloom-racing`'s
+   "HD bloom reads weaker", Sol 2's `byte/128` fit and its "race-start exposure transient") was measured, at least in part, against this
+   artefact**, and the 1.54x corridor reading (`hd-exposure`'s `placeA`, taken with the option on) was the true one. The
+   pairs are retired as brightness references; judge frames against captures with `Write Color Buffers` on. **Not
+   re-shot:** the pairs' own poses with the option on (Sol 2 and Amphiseum need a circuit pick the Racebox presses do not
+   give reliably).
 2. **Amphiseum steady state was not captured** (the Racebox carousel presses landed on Talon's Junction with nine presses
-   and Modesto Heights with ten: the count is not reliable on this save). Its pair 00 (clock 0.54.3, steady) reads ours/reference
-   0.45 after the fix against 0.97 before, which says its lit sources other than the lightmap term (vertex-lit and emissive
-   surfaces, whose terms ours may be 2x short on) were hiding behind the 2x excess; unattributed.
+   and Modesto Heights with ten: the count is not reliable on this save). Its pair 00 is a stock-config capture (item 1) and says
+   nothing either way; whether its vertex-lit and emissive surfaces match is open.
 3. Non-road families still read 1.1-1.4: the sun and specular terms (`x8` on the specular) and per-draw saturation are not
    matched term by term outside the road.
 4. Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.
@@ -7742,7 +7746,7 @@ included, because the `/2` is on the program's last instruction) and `fog.wesl` 
 fog lerp is inside that instruction). Pulse's race frame is byte-identical before and after (`cmp` of two 960x544
 screenshots).
 
-**Six HD pixel-count ground truths pinned the old brightness** (`hd_behind_glass_frame`, `hd_weapon_scene` x3, `hd_leach_ball`, `hd_plasma_ball`): their colour windows are re-scaled by 0.73, the encoded value of one half, in their own commit, and each count lands back near its old figure (teal pane pixels pass; green 5,804 against 5,751, violet 9,180 against 10,521, flash 3,176 against 2,916). They are eye-position guards, not comparisons with the original.
+**Six HD pixel-count ground truths pinned the old brightness** (`hd_behind_glass_frame`, `hd_weapon_scene` x3, `hd_leach_ball`, `hd_plasma_ball`): their colour windows are re-scaled by 0.73, the encoded value of one half, in their own commit, and each count lands back near its old figure (teal pane pixels pass; green 5,804 against 5,751, violet 9,180 against 10,521, flash 3,176 against 2,916). They are eye-position guards. **One window is not independent of the artefact:** `hd_behind_glass_frame`'s teal pane window comes from a September capture's median `(4, 87, 87)`, shot on the stock config; if that capture carries the 1.77x of item 1, the original's pane is about `(3, 64, 64)` and the rescaled window is the right one. Unverified: it needs a Vineta K frame with the option on.
 
 **Other titles.** Wipeout 2048: no RSX (**not checkable** here). Omega: **checked, not established** - its pixel
 shaders export fp16 linear (`ps4-omega-eu/lightmap-prelit.md`) and that read did not look at a final output modifier
@@ -7752,5 +7756,5 @@ shaders is the check.
 **Confidences.** Scale field read per instruction: 90 (the field is in the dword, the road program with `/2` reproduces the
 scene at 1.03 over 465k pixels). Code 5 = `/2`: 90 (measured). Other codes: unmeasured. The `/2` on every scene draw 87-522:
 85 (one frame census). Encoded-luma adaptation: **inferred** (reading, not located; it is what makes the measured exposure 1.0
-at steady state). Early-race brightness cause: unknown.
+at steady state). The stock-config artefact: measured on one pose, three boots, two configs (the lit-program scale is unaffected by it).
 ||||||| c3b22f033

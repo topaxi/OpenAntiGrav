@@ -905,6 +905,7 @@ ranges. `place --dump CHAIN:LEN` writes guest memory beside a shot; `place --hoo
   for 0.4-0.7 s and pause again; the hook returns `None` under 200 draws. Two of ten boots were wasted before this.
 - **A hook stage that returns nothing ends the loop** (`if not extra: break`): a stage with no spans must fall through to the
   next one in the same call. Two boots were wasted on this.
+- **A screenshot's brightness depends on `Write Color Buffers` too (2026-10-09).** The same Talon's corridor pose reads screenshot luminance 0.587/0.589 on two boots with it off and 0.331/0.342 on two with it on (1.77x): the exposure resolve's adapted-luminance readback is not the frame's bytes when the option is off. Never take a brightness reference from a capture with it off.
 - **A render target reads as stale noise unless `Write Color Buffers` is on** (`config.yml`, `Video`). The sea's
   paraboloid probe at `0xc4065380` was a dither of DXT-looking blocks until it was turned on, then a smooth image
   (roughness 5.7 against 112). It costs nothing visible here.

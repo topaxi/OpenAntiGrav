@@ -1005,10 +1005,7 @@ the scene (draws 87-522) carries scale `/2`, which `ps3-microcode.py` never prin
 otherwise ours' exposure rose to 1.73 on the halved frame. Steady-state corridor 2.49x -> 1.23x, grid 1.17x; Pulse byte-identical.
 The earlier "`fp 0x759ac1` road draw" was a wall program.
 
-**Open.** (1) **The matched pairs read lower now (0.45-0.73 of the reference) because they are race-start frames**, brighter than
-a same-pose frame at rest by about 1.7x with a clipped sky: a start-of-race exposure or flash state is unmodelled, and the retracted
-"exposure transient" is open again; capture a start sequence (frame by frame from the countdown release, scene target each) and
-read `adapted` and the resolve `scale` constants live. (2) Amphiseum steady state was not captured (Racebox presses are
+**Open.** (1) **The matched pairs are probably stock-config (`Write Color Buffers` off) captures and so read about 1.77x too bright** (same corridor pose: 0.587/0.589 off, 0.331/0.342 on); retire them as references and re-shoot the poses that matter with the option on; the older "ours darker" readings that used them are suspect. Verify the `hd_behind_glass_frame` teal window the same way. (2) Amphiseum steady state was not captured (Racebox presses are
 unreliable: 9 landed on Talon's, 10 on Modesto); its remaining 2x deficit is in vertex-lit or emissive terms. (3) Non-road families
 read 1.1-1.4 (sun, `x8` specular scale, saturation). (4) Particles and effects end on `/2` too and `oag-fx` does not apply it.
 (5) Omega: a GCN `omod` census of the circuit pixel shaders.
