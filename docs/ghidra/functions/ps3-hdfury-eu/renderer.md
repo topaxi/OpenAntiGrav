@@ -7837,3 +7837,84 @@ break with `wait_for_stop` on the readback loop (`0x003b5318`) or the `0x25c` st
 
 **Omega: checked, differs** (authors a `Tonemap` block; no gate or adaptation to share). **2048: not applicable** (no HD chain).
 Pulse unchanged: one race screenshot (`pulse-psp-eu.chd`, 960x544) before and after is byte-identical.
+
+## There is no darkening regression: the references were the artefact (2026-10-09, `hd-dark-ref`)
+
+**Question.** After `hd-corridor-road` (`/2` output scale) and `hd-bloom-adapt` (encoded linear mean), whole frames read
+25-29 % under "the original" (Metropia 0.364 against 0.488, Amphiseum 0.191 against 0.286). Is ours darker than the
+original, or were the references bright? **Falsifier, written before the capture:** if the original with `Write Color
+Buffers` on lands within 0.04 luma of ours at the Metropia grid pose, or below it, there is no darkening regression,
+only a bad reference. **It landed at 0.285 against ours 0.273. There is no regression; the old references are retired.**
+
+**1. Every "original" number in the darkness accounting was a WCB-off capture.**
+
+| Number | Capture | WCB | Basis |
+| --- | --- | --- | --- |
+| Metropia grid 0.488, clipped 3.07 %; throttle 08 11.56 % / 0.613 | `metropia-bloom/` (`hd-metropia-bloom`, 2026-10-09 03:35) | **off** | the lane's generated RPCS3 config (regenerated per session from the private copy of the stock `config.yml`, last written 03:48, after the capture) reads `false`; the stock file reads `false` and was last written 2026-09-21, and that lane never touched the option |
+| Talon's 0.608 / 0.609 / 0.614 | `talons-matched/` (2026-09-13) | **not recorded, inferred off** | RPCS3's default is off; the stock file postdates the capture (2026-09-21), so its value then is not on record; the option first appears in this repository on 2026-10-07 |
+| Sol 2 0.649 / 0.690 / 0.904 | `sol2-matched/` (2026-09-13) | not recorded, inferred off | as above |
+| Amphiseum 0.286 / 0.430 | `amphiseum-matched/` (2026-09-13) | not recorded, inferred off | as above |
+| corridor 1.23x and grid 1.17x (ours over original) | `hd-corridor-road`'s scene dumps, `hd-exposure`'s `placeA` | **on** | their configs read `true` (scale 100); these were the only true references, and they already said ours was not darker |
+
+**2. Ours at four commits** (headless, `--size 1882x1058`, `hd-frame-compare.py`'s comparison settings, the kept camera of
+each old capture, same binary flags; `A` = `d4853697e` main before the corridor-road merge, `B` = `1d244275f` that merge,
+`C` = `3e365c784` the bloom-adapt merge, `D` = `9e662b442` main now). Whole-frame luma `(0.3, 0.59, 0.11)` of the bytes:
+
+| Pose | A | B | C | D |
+| --- | ---: | ---: | ---: | ---: |
+| Metropia grid 00 | 0.517 | 0.274 | 0.273 | 0.273 |
+| Metropia 06 / 08 | 0.520 / 0.489 | 0.292 / 0.299 | same | same |
+| Talon's 00 | 0.518 | 0.382 | 0.379 | 0.382 |
+| Sol 2 00 | 0.535 | 0.436 | 0.436 | 0.436 |
+| Amphiseum 00 | 0.209 | 0.148 | 0.148 | 0.155 |
+
+The whole drop is `A -> B`, the corridor-road merge (`/2` plus the encoded adaptation); bloom-adapt moved nothing
+measurable on top of it. One render repeated is byte-identical; `C` and `D` are byte-identical on Metropia and Sol 2 (the
+zoom ring is inert at tick 0) and differ by <= 0.007 elsewhere. **The bloom-adapt "cost" line (Metropia 0.364, Amphiseum
+0.191 / 0.355) was measured on that branch before it merged the corridor-road change** (`git merge-base --is-ancestor
+1d244275f 552eb2818` is false), so it carries no `/2`; main has read 0.273 at that pose since the two merged.
+
+**3. The new references, `Write Color Buffers` on** (RPCS3's own `Used configuration:` dump read back on every boot and
+copied to `rpcs3-used-config.txt` beside the frames; `scripts/hd-grid-capture.py`, crop 1882x1058+118+7, Resolution Scale
+150 like the Metropia capture so WCB is the only change). Kept under `data/reference/hd-capture/`, `*-wcb-on-s150` and one
+`-s100` control:
+
+| Circuit, pose | Original, WCB on | Ours (D) | Ours / original | Old WCB-off reference |
+| --- | ---: | ---: | ---: | ---: |
+| Metropia grid (boot 1 / boot 2 / scale 100) | 0.285-0.287 / 0.286-0.289 / 0.280 | 0.273 (pose 00), 0.278 (pose 04) | 0.95-0.97 | 0.488 |
+| Metropia throttle (boot 1 / boot 2, frame 10) | 0.339 / 0.341 | 0.325 | 0.96 | 0.613 (another pose) |
+| Talon's grid (boot 1 / boot 2) | 0.354-0.357 / 0.355-0.358 | 0.381 | 1.07 | 0.608 |
+| Talon's driving (boot 1 frame 09 / boot 2 frame 09, different poses) | 0.441 / 0.471 | 0.432 / 0.469 | 0.98 / 1.00 | - |
+| Sol 2 grid (one boot) | 0.414-0.433 | 0.446-0.447 | 1.07 | 0.649 |
+| Sol 2 driving 09 / 10 | 0.409 / 0.358 | 0.407 / 0.352 | 1.00 / 0.98 | - |
+| Amphiseum grid (one boot) | 0.290-0.291 | 0.295 | 1.01 | 0.286 |
+| Amphiseum driving 09 / 10 | 0.309 / 0.235 | 0.326 / 0.285 | 1.05 / 1.21 | - |
+
+Grid frames carry no trend across the eight shots of a boot (the restored states were saved with WCB off, so the
+original's `adapted` had to re-converge; a 5-6 s first delay covered it). Ours before the `/2` (binary A) at the new poses:
+Talon's grid 0.517, Talon's driving 0.557 / 0.597, Sol 2 0.550, Amphiseum 0.429, 1.3-1.5x the original. **So the `/2` is
+right, and the darkness was in the references: WCB off reads 1.71x (Metropia), 1.70x (Talon's), 1.56x (Sol 2) brighter at
+the grid, the 1.77x the corridor pair found.** Resolution scale is not part of it: the scale-100 control reads 0.280
+against 0.285-0.289 at 150. Amphiseum's old pair read near ours only because its pose was a different, darker one.
+Confidence 90 that there is no frame-wide darkening (four circuits, two boots on two of them, ours within -5 % to +7 % at
+every grid pose); Sol 2 and Amphiseum were seen on one boot each.
+
+**4. What is still different.**
+
+- **Metropia's lamps are now a little over the original, not under.** Ceiling band clipped share: original 0.03-0.15 %
+  (grid, three boots), 1.02-1.03 % (throttle, two boots); ours 0.51 % and 2.72 %. bloom-adapt's "under the original"
+  (1.38 % against 3.07 %) compared against the WCB-off frame. The residual is small and unattributed.
+- **The hull.** The original races the same `feisar_c1` hull as ours: with throttle held its side pylons fold away and
+  the cyan stripes and yellow wing edges match ours; at the grid it shows a rest pose with two upright pylons, which ours
+  does not draw (unread). Neither Feisar's classic nor `_n1` hull matches. The in-race livery is dark grey in both, although
+  Ship Select previews the concept in blue and white. Hull-box luma (120x80 px on the rear engine housing, ours with the
+  craft placed by `--pose` 14 units ahead of the original's camera): original 0.097 / 0.100 / 0.086 (two boots, scale 100
+  control), ours 0.297. **Ours is about 3x brighter on the hull**, and the gap survives WCB on (the WCB-off frame read 0.203).
+  The original's housing also carries an orange rim ours lacks. Not chased further: the hull lighting is its own question.
+- Amphiseum's dark interior pose (frame 10) reads ours 1.21x.
+
+**Not done (deliberately):** the live read of the original's `adapted` (`FunkLayer + 0x25c`). With no gap left to explain,
+the falsifier closed the lane before it.
+
+**Other titles.** Omega: **not checkable** (no PS4 capture path; it authors a `Tonemap` block, not this chain). Pulse: no
+code changed.
