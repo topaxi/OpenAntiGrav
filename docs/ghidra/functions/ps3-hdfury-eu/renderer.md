@@ -7637,28 +7637,35 @@ within 0.1 point):
 | ours, `Bloom from alpha contribution` = 0 | 10.87 % (byte-identical to shipped) | 82.4 k | 163.1 154.5 142.8 |
 | ours, `Bloom from frame contribution` = 0 | 3.69 % (identical to summand off) | 26.1 k | 150.5 136.7 128.4 |
 
-So the lamps are **not too bright before bloom** (surfaces and the lamp discs match within 0.6 points and 5 levels of mean), the
+**Attribution confidence 90** (deterministic ablation, three poses, two boots, one machine). So the lamps are **not too bright before bloom** (surfaces and the lamp discs match within 0.6 points and 5 levels of mean), the
 glow-mask alpha term contributes nothing here, and **the whole excess is the gate's frame-luminance term**.
 
-**The parameters are the engine's own.** Read live from the settings singleton (`*0x8b6fb4 + 0x52c`) during the race:
+**The parameters are the engine's own (confidence 92: direct live read of the values, one boot).** Read live from the settings singleton (`*0x8b6fb4 + 0x52c`) during the race:
 rate 0.025, frame contribution 1.0, exponent 3.0, alpha contribution 2.5, adaption boost 15.0, tone 20/3/4, sizes 0.7 - exactly what
 `envsettings_bloom` loads. Metropia's file authors frame contribution **1.0** and boost 15 where Talon's authors 0.03 and 5, and omits
 the tone clamp and maximum (carried from the front end, as already documented).
 
-**The fade is what is missing.** The gate multiplies that term by `1 - min(adapted * 15 * 0.25, 1)`, which is zero once
+**The fade is what is missing (confidence 85 that the excess is the frame term and that our fade is incomplete; the value of our
+`adapted` is an estimate).** The gate multiplies that term by `1 - min(adapted * 15 * 0.25, 1)`, which is zero once
 `adapted >= 0.267`. Sweeping `Bloom adaption boost` in ours: 15 -> 10.87 %, 20 -> 10.15 %, 30 -> 8.24 %, 45 and above -> 3.69 %
-(fully faded, equal to the summand off). That puts our `adapted` at about 0.09-0.13 (estimate from the sweep, not a readback), and the
-original's lamps, which show almost no frame-term bloom, imply its fade is near zero, `adapted` >= ~0.25 (inferred). On Talon's the
-same gap exists but is invisible: 0.03 of a term is nothing, which is why `hd-bloom` found "no chain defect" on Talon's/Sol 2/Amphiseum.
+(fully faded, equal to the summand off). Full fade at 45 and partial fade at 30 bracket our effective `adapted` in
+[0.089, 0.133) (derived from the sweep, no readback). The original's lamps show almost no frame-term bloom, so its fade is near
+zero, `adapted` >= ~0.25: **inferred from blob size alone, no score**. That Talon's (frame term 0.03) has the same gap but
+invisibly is also **inferred, not measured**.
 
-**Hypothesis, not measured (no confidence score).** The original's adaptation is a CPU readback of the reduced **8-bit** buffer, so
-its mean is of the stored bytes (about 0.5 for this frame), while ours averages linear float light (about 0.1). The register read
-in "The exposure is unity" shows those surfaces sRGB-packed (`SHADER_PACKER` 1, gamma nibble 7 on the ladder units), which is
-consistent with it. A fix would take the adaptation mean in the encoded domain; it was not made, because the original's `adapted`
-was not read: `FunkLayer_RunBloomChain` (`0x003b4690`) lerps into `*(FunkLayer + viewport_offset + 0x254)` where `FunkLayer =
-*0x8b73bc = 0xc50ee0`; live reads of `0xc50ee0 + 0x230..0x270` and `+0x900..0x980` hold no changing floats, so the viewport offset
-(`*(r16 + 0x894)`) or an unmodelled pointer step is wrong. **Next**: break on the store at the lerp (`0x3b4690`, the `stfs` after
-`EnvSettings_GetOrCreate` +0x52c) and read `adapted` at the grid; compare it with ours (a 1x1 readback in `Chain::run`).
+**The first hypothesis was checked and is not supported.** I guessed the original averages encoded bytes (about 0.5) where ours
+averages linear light (about 0.1). The one-minute check: whole-frame luma `(0.3, 0.59, 0.11)` of the mean of the original's bytes
+is **0.488** and of ours (`^2.2`, linear) **0.279**. Ours at 0.28 would already be fully faded (>= 0.267), and it is not, so the
+low effective `adapted` is **not** explained by the frame's linear mean, and the encoded-domain explanation is not needed to get
+past 0.267. (Both numbers include the HUD, which the scene target does not carry, so the true scene mean is lower; by how much is
+unmeasured.) What is open is therefore why our chain's `adapted` reads in [0.09, 0.13) on this frame: the scene target's own mean
+without HUD and craft, the ladder (`hd bloom reduce`: integer halving to 1x1, bilinear taps), or the `1 - min(...)` fade. The
+original's `adapted` was not read either: `FunkLayer_RunBloomChain` (`0x003b4690`) lerps into `*(FunkLayer + viewport_offset +
+0x254)` where `FunkLayer = *0x8b73bc = 0xc50ee0`; live reads of `0xc50ee0 + 0x230..0x270` and `+0x900..0x980` hold no changing
+floats, so the viewport offset (`*(r16 + 0x894)`) or an unmodelled pointer step is wrong. **Next, in this order**: (1) a 1x1
+readback of our `adapted` texture at tick 0 on this pose, to replace the bracket with a number and compare with 0.267; (2) break
+on the lerp's `stfs` in `0x003b4690` and read the original's `adapted` at the grid. No fix is justified before (1): the fault
+may be in our reduction rather than in the original's input.
 
 **Omega: checked, differs.** Omega authors a `Tonemap` block, not `HDR and Bloom`, so there is no gate, frame term or adaptation
 fade to share; its Metropia is not compared (no capture path for PS4).

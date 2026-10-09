@@ -996,6 +996,4 @@ the final `pow` a stand-in.
 10.9 % against the original's 3.1 %) is the gate's *frame luminance* term (`Bloom from frame contribution` 1.0, 33x Talon's), which the
 adaptation fade should cancel; ours reads `adapted` about 0.1 (estimate), the original's behaves as `>= ~0.25`. Table, method,
 frames and the saved grid state are in [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Metropia's white lamp
-blobs". **Next**: read the original's `adapted` at the grid (store at the lerp in `FunkLayer_RunBloomChain`, the `FunkLayer + 0x254`
-read at `0xc50ee0` came back zero), then test whether the adaptation mean should be taken over the encoded 8-bit bytes. Same
-check applies to every Fury/DLC circuit (`01_vineta_k`, `03_track`, `05_ubermall`, `12_sol_2`, ...) that authors a large frame term.
+blobs". **Next**: (1) read back our own `adapted` at tick 0 on that pose (the sweep brackets it in 0.09-0.13, yet the frame's linear luma is 0.28, which would fully fade it, so our reduction or scene mean is suspect, not the original's input); (2) read the original's `adapted` at the grid (the `FunkLayer + 0x254` read at `0xc50ee0` came back zero; break on the lerp store in `FunkLayer_RunBloomChain`). The first guess, that the original averages encoded bytes, was checked and is not supported. Same check applies to every Fury/DLC circuit (`01_vineta_k`, `03_track`, `05_ubermall`, `12_sol_2`, ...) that authors a large frame term.
