@@ -631,6 +631,8 @@ pub struct Setup {
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
     /// The title's hover probe set, `oag_title::RaceDefaults::hover_rig` ([`crate::launch_hover`]).
     pub hover_rig: Option<&'static oag_title::hover_rig::HoverRig>,
+    /// The title's craft-body laws, `oag_title::RaceDefaults::craft_laws` ([`crate::launch_hover`]).
+    pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.
@@ -774,8 +776,7 @@ pub struct Loaded {
     /// The model a laid Mine is drawn as: [`MINE_MODEL_ENTRY`]. `None` on the
     /// same terms as [`Self::rocket_model`].
     pub mine_model: Option<Model>,
-    /// The model a laid Bomb is drawn as: [`BOMB_MODEL_ENTRY`]. `None` on the
-    /// same terms.
+    /// The model a laid Bomb is drawn as: [`BOMB_MODEL_ENTRY`]. `None` on the same terms.
     pub bomb_model: Option<Model>,
     /// The Plasma's own detonation: a halo and two hemispheres, each `None`
     /// on the same terms as [`Self::rocket_model`] - see `blast_models`.
@@ -807,8 +808,7 @@ pub struct Loaded {
     pub liveries: Vec<Livery>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,
-    /// The track's authored `fogCube` volumes, for [`Scene`] to sample per
-    /// frame at the camera.
+    /// The track's authored `fogCube` volumes, for [`Scene`] to sample per frame at the camera.
     pub fog_volumes: Vec<oag_vex::fog::FogVolume>,
     /// `05_Track`'s cloud puffs and the shared texture they draw with -
     /// `None` for every other circuit and for a ribbon build. See

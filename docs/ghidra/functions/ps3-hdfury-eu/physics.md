@@ -412,7 +412,7 @@ call the entry and the craft (`craft+0x270` is the rigid body).
 | `craft+0x84` | the control record, `PlayerInput+0x4c`: `+0x00` steer, `+0x08`/`+0x0c` left/right airbrake, `+0x10` pitch, each `0..100` | the pointer equals `PlayerInput + 0x4c`; L2 writes `+0x08`, R2 `+0x0c` |
 | `craft+0x308` | game clock, seconds | above |
 | `craft+0x30c` | throttle `0..100` | [above](#craft0x30c-is-the-throttle-input-and-it-is-exact); reads 92 with Pilot Assist on |
-| `craft+0x314` | ramped steering, `+8.3` a frame | `<Turning gain="500">` |
+| `craft+0x314` | ramped steering, `+8.3` a frame, parking at the target ([craft-inertia.md](craft-inertia.md)) | `<Turning gain="500">` |
 | `craft+0x318`/`+0x31c` | ramped left/right airbrake, `+13.3` a frame; copied to `+0x2fc`/`+0x300` | `<Airbrake gain="800">` |
 | `craft+0x32c`/`+0x330` | flap ramps, `+8.3` a frame, from the team block's `+0x7c`/`+0x80` | `<AirbrakeGraphics up_speed="500">`, so the visual flap, not the force |
 | `craft+0x340` | previous frame's forward speed | above |

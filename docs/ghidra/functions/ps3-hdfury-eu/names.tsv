@@ -680,3 +680,4 @@
 0x000eda30	function	Craft_ApplyAngularDamping	75	hover-four-point.md
 0x000eff78	function	Craft_ApplyLateralGrip	78	hover-four-point.md
 0x000f0700	function	Craft_UpdateBrake	72	hover-four-point.md
+0x000f5aa0	function	Body_SetBoxInertia	90	craft-inertia.md
