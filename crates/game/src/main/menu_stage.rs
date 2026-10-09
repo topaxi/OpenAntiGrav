@@ -291,6 +291,12 @@ impl MenuStage {
         // blocks ticks a fraction nothing reads.
         self.menu
             .tick_focus(self.skin.blocks().map_or(1.0, |blocks| blocks.ease));
+        // A flicked long page coasts on its own clock - `oag_ui::kinetic`.
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        self.menu.tick_scroll(dt as f32);
         // The picker's own clock - the turntable - off the same fixed tick.
         if let Some(picker) = &mut self.picker {
             #[expect(

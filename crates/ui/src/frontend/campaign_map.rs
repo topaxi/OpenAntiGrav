@@ -221,6 +221,7 @@
 //! most plausibly belongs to a Hardcore *difficulty* flag this pass found no
 //! authored data for, not a rung this map ever needs to draw.
 
+use crate::kinetic::{Bounds, Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
 use super::touch::{LABEL_SCALE, Launch};
@@ -382,7 +383,8 @@ pub struct CampaignMap {
     /// after it.
     earned: Vec<Option<EarnedTier>>,
     pub(super) selected: usize,
-    scroll: (f32, f32),
+    /// The view's scroll over the canvas, x then y, in grid units.
+    scroll: [Kinetic; 2],
     /// The craft a fresh boot is about to race, before the player ever
     /// touches `Team` this session - `settings.race.team`/`variant`,
     /// combined the same way a campaign launch eventually loads with
@@ -410,6 +412,30 @@ impl CampaignMap {
         ]
     }
 
+    /// The view's scroll over the canvas, in grid units.
+    pub(super) fn scroll(&self) -> (f32, f32) {
+        (self.scroll[0].offset(), self.scroll[1].offset())
+    }
+
+    /// One axis of the canvas: its range, its marker pitch, and a rubber
+    /// band half the view long past either end. Unsnapped - the map is a
+    /// free canvas with no item to come to rest on.
+    fn extent(axis: usize, view: (f32, f32)) -> Extent {
+        let (canvas, view, pitch) = match axis {
+            0 => (CANVAS.0, view.0, PITCH.0),
+            _ => (CANVAS.1, view.1, PITCH.1),
+        };
+        Extent {
+            pitch,
+            snap: false,
+            bounds: Bounds::Clamp {
+                min: 0.0,
+                max: (canvas - view).max(0.0),
+                band: view * 0.5,
+            },
+        }
+    }
+
     /// Scrolls so the selected marker is as close to the middle of the
     /// view as the canvas allows.
     fn follow(&mut self, view: (f32, f32)) {
@@ -417,26 +443,42 @@ impl CampaignMap {
             return;
         };
         let [x, y, w, h] = Self::marker(event);
-        self.scroll = (
-            (x + w * 0.5 - view.0 * 0.5).clamp(0.0, (CANVAS.0 - view.0).max(0.0)),
-            (y + h * 0.5 - view.1 * 0.5).clamp(0.0, (CANVAS.1 - view.1).max(0.0)),
-        );
+        self.scroll[0].set((x + w * 0.5 - view.0 * 0.5).clamp(0.0, (CANVAS.0 - view.0).max(0.0)));
+        self.scroll[1].set((y + h * 0.5 - view.1 * 0.5).clamp(0.0, (CANVAS.1 - view.1).max(0.0)));
     }
 
-    /// Pans the view by a finger drag (the canvas follows the finger) or a
-    /// wheel (one marker row per detent), clamped to the canvas.
+    /// Pans the view by a finger (the canvas follows it, coasts after a
+    /// flick and bounces off the edges, through [`crate::kinetic`]) or a
+    /// wheel (one marker row per detent), and returns the pointer as the
+    /// map should read it - without the tap that caught a coasting map.
     ///
     /// **Chosen, not measured**: the original's `<TouchScroll>` is a Vita
-    /// touch widget, so how a mouse wheel moves it is ours. The selection
-    /// stays where it is - a pan reveals the map, it does not pick an
-    /// event, and the next pad move re-centres on the selection.
-    fn pan(&mut self, pointer: &Pointer, view: (f32, f32)) {
-        let wheel = pointer.scroll as f32 * PITCH.1;
-        let (dx, dy) = (-pointer.drag.0, wheel - pointer.drag.1);
-        self.scroll = (
-            (self.scroll.0 + dx).clamp(0.0, (CANVAS.0 - view.0).max(0.0)),
-            (self.scroll.1 + dy).clamp(0.0, (CANVAS.1 - view.1).max(0.0)),
-        );
+    /// touch widget whose feel was not measured, and how a mouse wheel
+    /// moves it is ours. The selection stays where it is - a pan reveals
+    /// the map, it does not pick an event, and the next pad move re-centres
+    /// on the selection.
+    fn pan(&mut self, pointer: &Pointer, view: (f32, f32)) -> Pointer {
+        if pointer.scroll != 0 {
+            let y = Self::extent(1, view);
+            let wheel = pointer.scroll as f32 * PITCH.1;
+            let to = (self.scroll[1].offset() + wheel).clamp(0.0, (CANVAS.1 - view.1).max(0.0));
+            self.scroll[1].set(to);
+            self.scroll[1].settle(&y);
+        }
+        let seen = self.scroll[0].gesture(pointer, -pointer.drag.0, &Self::extent(0, view));
+        self.scroll[1].gesture(&seen, -pointer.drag.1, &Self::extent(1, view))
+    }
+
+    /// Advances a coast or a bounce by one tick.
+    pub(super) fn tick(&mut self, dt: f64, view: (f32, f32)) {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a tick is milliseconds; f32 holds it exactly"
+        )]
+        let dt = dt as f32;
+        for (axis, scroll) in self.scroll.iter_mut().enumerate() {
+            scroll.tick(dt, &Self::extent(axis, view));
+        }
     }
 
     /// [`ProgressState`] for the event at `index` - `Locked` when
@@ -485,7 +527,7 @@ impl Frontend {
             .unwrap_or(0);
         self.campaign.earned = vec![None; events.len()];
         self.campaign.events = events;
-        self.campaign.scroll = (0.0, 0.0);
+        self.campaign.scroll = Default::default();
         self.campaign.follow(self.space.size);
     }
 
@@ -658,11 +700,12 @@ impl Frontend {
         if pointer.is_idle() {
             return true;
         }
-        self.campaign.pan(pointer, self.space.size);
+        let pointer = &self.campaign.pan(pointer, self.space.size);
         let Some(at) = pointer.at else {
             return true;
         };
-        let at = (at.0 + self.campaign.scroll.0, at.1 + self.campaign.scroll.1);
+        let (sx, sy) = self.campaign.scroll();
+        let at = (at.0 + sx, at.1 + sy);
         let hit = self
             .campaign
             .events
@@ -736,7 +779,7 @@ impl Frontend {
         let open = self.global_colour("Blue2048");
         let cursor = self.global_colour("Orange2048");
         let white = [1.0, 1.0, 1.0, 1.0];
-        let (sx, sy) = self.campaign.scroll;
+        let (sx, sy) = self.campaign.scroll();
         let hex_filled = self.placed(HEX_FILLED);
         let hex_outline = self.placed(HEX_OUTLINE);
         let hex_select = self.placed(HEX_SELECT);

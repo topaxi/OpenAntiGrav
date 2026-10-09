@@ -43,16 +43,17 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
   whether the Vita build draws a pointer at all under PS TV is unread, and
   `data/FE/Images/TV.gxt` (43,760 bytes) beside it has not been decoded.
   If a real pointer turns up, it replaces `assets/cursors/2048.svg`.
-- **Drag-to-scroll is built and unit-tested, not live-tested.** A finger
-  drag scrolls a long `Menu` page and pans 2048's campaign map
-  (`Pointer::drag`, `oag_game::pointer::Window`), tap is decided on lift,
-  and the wheel pans the map; see menus.md "A mouse and a finger". Only
-  headless unit tests drove it: no touch can be injected on the Xvfb, and
-  the Waydroid/phone pass is the maintainer's. Check on a phone: a drag on
-  GRAPHICS scrolls without selecting, a tap on a row still selects, and the
-  2048 map pans. The 12 px threshold, the row-per-pitch rule, the 40 px
-  wheel detent and the map's wheel step are **chosen, not measured**; no
-  fling exists.
+- **Touch scrolling is built and unit-tested; the phone pass is the
+  maintainer's.** Every drag-scrolled view (long `Menu` pages, HD's two hex
+  grids, 2048's campaign map) scrolls through `oag_ui::kinetic` since
+  2026-10-09: follow, flick, settle on an item, rubber band, tap-to-stop
+  (menus.md "A mouse and a finger", selection-screens.md for the constants).
+  Check on a phone: a flick on GRAPHICS coasts and rests on a row, a tap on a
+  coasting list stops it without activating, a flick on HD Team Selection
+  coasts across teams, and the 2048 map bounces off its edges. Menu pages
+  move in whole rows because `Draw` has no vertical clip; a clip would let
+  them follow the finger by the pixel. Pulse's `Grid Selection` pages by its
+  arrows and takes no swipe; a swipe-to-page there is open.
 - **Headless captures cannot click.** `--press` drives buttons through the
   capture's own tick loop, but the pointer arrives only through winit
   events in `main/app.rs`; a `--click X,Y` would need `capture::run` to
@@ -68,4 +69,4 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-every front-end screen answers a mouse and a finger and each title draws its own cursor (`../../docs/architecture/menus.md`, "A mouse and a finger"); left open are a live pass over Pure's language picker, whether 2048 draws a real pointer under PS TV (`TV.gxt` undecoded), drag-to-scroll, and a `--click` for headless captures
+every front-end screen answers a mouse and a finger and each title draws its own cursor (`../../docs/architecture/menus.md`, "A mouse and a finger"); left open are a live pass over Pure's language picker, whether 2048 draws a real pointer under PS TV (`TV.gxt` undecoded), a phone pass over touch scrolling, and a `--click` for headless captures

@@ -29,23 +29,27 @@
 //!   with no row list can be confirmed from by pointing. A click on the
 //!   backdrop outside both is nothing, so a stray click does not start a
 //!   race.
-//! - **A horizontal finger drag** over HD's hex grids pans the columns -
-//!   see [`Picker::pan_by`]. **Chosen, not measured**: the original is a
-//!   pad-only PS3 game.
+//! - **A horizontal finger drag** over HD's hex grids pans the columns,
+//!   and a flick coasts them, through [`oag_ui::kinetic`] - see
+//!   [`Picker::pan`]. **Chosen, not measured**: the original is a pad-only
+//!   PS3 game.
 //! - **The secondary button** backs out, as circle does; **the wheel** steps
 //!   the entry, up for previous.
 
 use oag_ui::frontend::Placed;
+use oag_ui::kinetic::Extent;
 use oag_ui::menu::Skin;
 use oag_ui::pointer::{Pointer, contains, hex_contains};
 use oag_ui::screen::Image;
 
 use super::{Event, Layout, Picker};
 
-/// Seconds a drag must be still before the grid eases back to its column.
-pub const PAN_SETTLE_DELAY: f32 = 0.1;
-/// Fraction of the remaining pan the settle removes per second.
-const PAN_SETTLE_RATE: f32 = 12.0;
+/// How far off its column, in columns, the grid must be before the column
+/// beside it is the selection. **Chosen, not measured**: past half a column
+/// the neighbour is nearer the centre, and the tenth beyond that keeps a
+/// finger resting on the halfway line from flipping the selection - and
+/// reloading the preview - every time it trembles.
+pub const STEP_AT: f32 = 0.6;
 
 /// What a click on one of the screen's targets does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,14 +230,19 @@ impl Picker {
         }
         if pointer.scroll != 0 {
             out.extend(self.step_entry(pointer.scroll.signum()));
+            self.scroll.settle(&Extent::wrapping());
         }
-        if pointer.drag.0 != 0.0
-            && targets
-                .iter()
-                .any(|target| matches!(target.what, What::Cell { .. }))
-        {
-            out.extend(self.pan_by(pointer.drag.0 / super::hd::hex::PITCH[0]));
-        }
+        let grid = targets
+            .iter()
+            .any(|target| matches!(target.what, What::Cell { .. }));
+        let travel = if grid {
+            pointer.drag.0 / super::hd::hex::PITCH[0]
+        } else {
+            0.0
+        };
+        // A touch-down catches a coasting grid, and its tap selects nothing.
+        let pointer = &self.scroll.gesture(pointer, travel, &Extent::wrapping());
+        out.extend(self.fold_pan());
         let hit = pointer.at.and_then(|at| hit(targets, at));
         // What was selected before this tick's gesture: a tap is a move and
         // a click in one tick, and the click must not confirm the row the
@@ -274,49 +283,36 @@ impl Picker {
         out
     }
 
-    /// The grid's fractional column offset while a finger drags it: positive
-    /// slides the columns right, so the column on the left is coming to the
-    /// centre. `0.0` at rest and always inside `-1.0..1.0`.
+    /// The grid's fractional column offset while a finger drags it or it
+    /// coasts: positive slides the columns right, so the column on the left
+    /// is coming to the centre. `0.0` at rest and always inside
+    /// `-STEP_AT..=STEP_AT` once [`Self::fold_pan`] has run.
     #[must_use]
     pub fn pan(&self) -> f32 {
-        self.pan
+        self.scroll.offset()
     }
 
-    /// Drags HD's hex grid `columns` sideways (a finger's travel over the
-    /// column pitch). The content follows the finger; each whole column it
-    /// passes steps the selection the way left/right do on the pad - drag
-    /// right brings the previous entry to the centre - wrapping at the ends,
-    /// so the `Event::Moved` it returns is the same one the pad's step makes.
+    /// Folds whole columns the grid has travelled out of the pan, stepping
+    /// the selection once per column the way left/right do on the pad -
+    /// drag right brings the previous entry to the centre - wrapping at the
+    /// ends, so each `Event::Moved` is the one the pad's step makes.
     ///
-    /// **Chosen, not measured**: a drag shorter than a column steps nothing
-    /// and the grid eases back once it has been still for
-    /// [`PAN_SETTLE_DELAY`], since the pointer layer reports no release.
-    pub(super) fn pan_by(&mut self, columns: f32) -> Vec<Event> {
+    /// The offset itself is [`oag_ui::kinetic`]'s: it follows the finger,
+    /// coasts after a flick and settles onto the nearest column, and this
+    /// only keeps the selection on whichever column is nearest the centre
+    /// (past [`STEP_AT`]). Called from [`Self::pointer`] and from
+    /// [`Self::update`], which runs every tick, so a coast steps as it goes.
+    pub(super) fn fold_pan(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
-        self.pan += columns;
-        self.since_drag = 0.0;
-        while self.pan >= 1.0 {
-            self.pan -= 1.0;
+        while self.scroll.offset() > STEP_AT {
+            self.scroll.shift(-1.0);
             out.extend(self.step_entry(-1));
         }
-        while self.pan <= -1.0 {
-            self.pan += 1.0;
+        while self.scroll.offset() < -STEP_AT {
+            self.scroll.shift(1.0);
             out.extend(self.step_entry(1));
         }
         out
-    }
-
-    /// Eases a pan left over back to the selected column, off the screen's
-    /// own tick, once no drag has moved it for [`PAN_SETTLE_DELAY`].
-    pub(super) fn settle_pan(&mut self, dt: f32) {
-        self.since_drag += dt;
-        if self.pan == 0.0 || self.since_drag < PAN_SETTLE_DELAY {
-            return;
-        }
-        self.pan *= (1.0 - dt * PAN_SETTLE_RATE).max(0.0);
-        if self.pan.abs() < 0.005 {
-            self.pan = 0.0;
-        }
     }
 
     /// Puts the selection on team `entry` and its livery `variant`: the

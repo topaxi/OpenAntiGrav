@@ -69,6 +69,13 @@ pub struct Pointer {
     /// reports no `at`, no hover and no click, so a scroll never selects.
     /// See `oag_game::pointer::Window`.
     pub drag: (f32, f32),
+    /// A finger touched down this tick. Carries no position, no move and no
+    /// click - a touch is decided on lift - and is only what a moving
+    /// scroll needs to be caught by (see [`crate::kinetic`]).
+    pub pressed: bool,
+    /// The finger lifted this tick, whether it tapped or dragged, or its
+    /// touch was cancelled. What a scroll needs to coast and settle.
+    pub released: bool,
 }
 
 impl Pointer {
@@ -79,7 +86,13 @@ impl Pointer {
     /// out a page to find out it was not pointed at is work for nothing.
     #[must_use]
     pub fn is_idle(&self) -> bool {
-        !self.moved && !self.clicked && !self.back && self.scroll == 0 && self.drag == (0.0, 0.0)
+        !self.moved
+            && !self.clicked
+            && !self.back
+            && self.scroll == 0
+            && self.drag == (0.0, 0.0)
+            && !self.pressed
+            && !self.released
     }
 
     /// The position, if the pointer is over the screen at all.
@@ -254,6 +267,14 @@ mod tests {
             },
             Pointer {
                 drag: (0.0, 3.0),
+                ..Pointer::default()
+            },
+            Pointer {
+                pressed: true,
+                ..Pointer::default()
+            },
+            Pointer {
+                released: true,
                 ..Pointer::default()
             },
         ] {

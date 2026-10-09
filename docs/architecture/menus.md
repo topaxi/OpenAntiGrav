@@ -1035,17 +1035,34 @@ nothing stays highlighted under a finger nobody is holding there. Past the
 threshold the finger is a drag for good, even if it comes back: its travel is
 `Pointer::drag` (grid units, the content follows the finger) and it reports
 no position, no hover and no click, so a scroll never selects. One finger is
-followed; a second is ignored until the first lifts. No fling: the list
-stops with the finger (chosen).
+followed; a second is ignored until the first lifts. Touch-down and lift
+are reported as their own edges, `Pointer::pressed` and `Pointer::released`
+(a cancelled touch and a focus loss with a finger down lift it too), with
+no position: they are what the shared touch-scroll model needs to catch a
+moving scroll and to let one coast.
+
+**Every drag-scrolled view scrolls through one model, `oag_ui::kinetic`**
+(2026-10-09, **chosen, not measured**; no original has touch). The content
+follows the finger 1:1; on lift the finger's velocity over the last 0.1 s
+decides a coast under exponential friction (iOS's normal deceleration,
+`exp(-2t)`), aimed so it lands on the nearest item; a critically damped
+spring (18 rad/s) settles the last stretch, or pulls an overrun back onto
+the end it passed, which is the bounce. Past either end of content that
+does not wrap the finger pulls against a rubber band (iOS's 0.55
+coefficient); HD's hex grids wrap instead. A touch-down on moving content
+stops it, and that touch's tap selects nothing. The constants, the reason
+for each, and the unit tests are in `crates/ui/src/kinetic.rs`;
+[selection-screens.md](../ui/selection-screens.md) lists them in a table.
 
 **What scrolls, and how** (the whole set; checked across Pulse, Pure, HD,
 Fury, 2048 and Omega, which share these models):
 
 | Surface | Wheel (one detent; trackpad pixels accumulate at 40 px, chosen) | Finger drag |
 | --- | --- | --- |
-| A `Menu` page longer than the screen (GRAPHICS, CONTROLS and the like) | scrolls the **view** a row per detent, clamped at both ends, the cursor pushed inside the window as a drag pushes it (until 2026-10-07 it walked the cursor, which the maintainer found wrong: the list should move, not the selection) | scrolls the **view** a row per row-pitch of travel (pitch read off the page's own regions); the cursor is pushed only as far as keeps it in the new window, so selection and view stay coherent |
-| 2048's campaign map | pans one marker row (`PITCH.1`) down the canvas, chosen; selection untouched | pans the canvas with the finger, clamped to it; selection untouched |
-| Language picker, selection screens, the race box chooser, campaign grids | steps the entry as before; none of them has more rows than the screen holds | nothing to scroll |
+| A `Menu` page longer than the screen (GRAPHICS, CONTROLS and the like) | scrolls the **view** a row per detent, clamped at both ends, the cursor pushed inside the window as a drag pushes it (until 2026-10-07 it walked the cursor, which the maintainer found wrong: the list should move, not the selection) | scrolls the **view** to the row nearest the finger (pitch read off the page's own regions), coasts after a flick and rests on a row; the cursor is pushed only as far as keeps it in the new window, so selection and view stay coherent. Whole rows only: `Draw` has no clip to cut a row at the header or footer, so the rubber band is felt rather than seen. A pad move, a page change or a wheel turn stops a coast |
+| 2048's campaign map | pans one marker row (`PITCH.1`) down the canvas, chosen; selection untouched | pans the canvas with the finger on both axes, coasts after a flick (no snap: a free canvas), rubber-bands half a view past an edge and springs back; selection untouched |
+| HD's `Team Selection` and track hex grids | steps the entry as before | pans the columns; a flick coasts across several, each column passed is the pad's own step; rests on a column (see [selection-screens.md](../ui/selection-screens.md)) |
+| Language picker, PSP selection screens, the race box chooser, campaign grids, prompts, tag entry | steps the entry as before; none of them has more rows than the screen holds (Pulse's `Grid Selection` pages by its own arrows and draws nothing between pages) | nothing to scroll |
 
 No scroll indicator or scroll arrow is drawn by any of the front-end models
 (2048's `<TouchScroll>` scrollbar thumb is only measured in the frame

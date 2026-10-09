@@ -21,16 +21,22 @@
 //!   steps the value forward the way cross does, unless the click landed on
 //!   one of HD's step arrows, which step the way it points.
 //! - **On a page longer than the screen, the wheel scrolls the view** one
-//!   row per detent, the way a desktop list does, and **a finger drag
-//!   scrolls it** one row per row-pitch of travel, the list following the
-//!   finger. The window moves and the cursor is pushed only as far as keeps
-//!   it inside the new window, so the selection and the view stay coherent
-//!   the way a pad walk keeps them; nothing is selected or activated by
-//!   either (the composition root reports no position or click for a drag).
-//!   Both stop at the ends rather than wrapping. Until 2026-10-07 the wheel
-//!   walked the cursor instead, which the maintainer found wrong on a long
-//!   page: the rows moved under a list that should have moved itself.
-//!   **Chosen, not measured**: one row per detent and per pitch, no fling.
+//!   row per detent, the way a desktop list does, and **a finger scrolls
+//!   it** through [`crate::kinetic`]: the list follows the finger, a flick
+//!   coasts on after the lift and comes to rest on a row, and a touch-down
+//!   catches a coasting list without activating anything. The window moves
+//!   and the cursor is pushed only as far as keeps it inside the new
+//!   window, so the selection and the view stay coherent the way a pad walk
+//!   keeps them; nothing is selected or activated by either (the
+//!   composition root reports no position or click for a drag). Both stop
+//!   at the ends rather than wrapping. Until 2026-10-07 the wheel walked
+//!   the cursor instead, which the maintainer found wrong on a long page:
+//!   the rows moved under a list that should have moved itself.
+//!   **Chosen, not measured**: one row per detent. The view moves in whole
+//!   rows - the row nearest the finger's offset - because a page draws
+//!   from a whole first row and `Draw` has no clip to cut a row at the
+//!   header or the footer, so the rubber band past an end is felt (the
+//!   pull gives less) rather than seen.
 //! - **On a page that fits, the wheel walks the cursor** one row per detent
 //!   and stops at the ends, since there is no view to move; a drag there
 //!   does nothing.
@@ -48,6 +54,7 @@
 //! `Menu::scroll` and the skin. Only the rows on screen get regions, off
 //! the same window `draw` shows.
 
+use crate::kinetic::{Extent, Kinetic};
 use crate::pointer::{Pointer, contains};
 
 use super::{Frame, Menu, MenuEvent, Skin, strip};
@@ -127,6 +134,7 @@ impl Menu {
 
         if pointer.scroll != 0 && rows > self.visible {
             self.shift_view(i64::from(pointer.scroll));
+            self.scroller.kinetic.set(self.scroll() as f32);
         } else if pointer.scroll != 0 && rows > 0 {
             let last = rows - 1;
             let moved_to = usize::try_from(
@@ -137,9 +145,7 @@ impl Menu {
             self.move_cursor(page, moved_to);
         }
 
-        if pointer.drag.1 != 0.0 {
-            self.drag(pointer.drag.1, regions);
-        }
+        let pointer = &self.scroll_gesture(pointer, regions);
 
         let hit = pointer.at.and_then(|at| hit(regions, at));
 
@@ -166,33 +172,73 @@ impl Menu {
         out
     }
 
-    /// Scrolls the view by a finger's travel of `dy` grid units down the
-    /// screen: the content follows the finger, so a drag down reveals the
-    /// rows above.
+    /// One tick of a finger on a page longer than the screen: `dy` grid
+    /// units of travel down the screen scroll the view up (the content
+    /// follows the finger), a touch-down catches a coasting list, and a lift
+    /// lets it coast. Returns the pointer as the rows should read it.
     ///
     /// The row pitch is read off `regions` - the same rects the page was
-    /// drawn with - and the fraction of a row not yet travelled is carried
-    /// in [`Self::drag_rows`] rather than thrown away.
-    fn drag(&mut self, dy: f32, regions: &[Region]) {
+    /// drawn with.
+    fn scroll_gesture(&mut self, pointer: &Pointer, regions: &[Region]) -> Pointer {
         let page = self.current();
         let rows = self.definition.pages[page].entries.len();
-        let visible = self.visible;
-        if rows <= visible {
-            return;
+        if rows <= self.visible {
+            return *pointer;
         }
         let mut rects = regions.iter().filter(|r| r.part == Part::Row);
         let pitch = match (rects.next(), rects.next()) {
             (Some(a), Some(b)) if b.rect[1] > a.rect[1] => b.rect[1] - a.rect[1],
             (Some(a), _) => a.rect[3],
-            _ => return,
+            _ => 0.0,
         };
-        if pitch <= 0.0 {
+        let travel = if pitch > 0.0 {
+            -pointer.drag.1 / pitch
+        } else {
+            0.0
+        };
+        if self.scroller.page != page || self.scroller.kinetic.is_still() {
+            self.scroller.page = page;
+            self.scroller.kinetic.set(self.scroll() as f32);
+        }
+        let extent = Extent::rows((rows - self.visible) as f32);
+        let seen = self.scroller.kinetic.gesture(pointer, travel, &extent);
+        self.follow_scroller();
+        seen
+    }
+
+    /// Advances a coasting list by one tick of `dt` seconds. A pad move, a
+    /// page change or a wheel turn since the last tick stops it: the view
+    /// is theirs.
+    pub fn tick_scroll(&mut self, dt: f32) {
+        let page = self.current();
+        let rows = self.definition.pages[page].entries.len();
+        let stale = self.scroller.page != page || self.scroller.cursor != self.selected();
+        if rows <= self.visible || (stale && !self.scroller.kinetic.is_held()) {
+            self.scroller.kinetic.set(self.scroll() as f32);
+            self.scroller.page = page;
+            self.scroller.cursor = self.selected();
             return;
         }
-        self.drag_rows -= dy / pitch;
-        let whole = self.drag_rows.trunc();
-        self.drag_rows -= whole;
-        self.shift_view(whole as i64);
+        let extent = Extent::rows((rows - self.visible) as f32);
+        self.scroller.kinetic.tick(dt, &extent);
+        self.follow_scroller();
+    }
+
+    /// Moves the view onto the row nearest the scroller's offset.
+    fn follow_scroller(&mut self) {
+        let page = self.current();
+        let last = self.definition.pages[page].entries.len() - self.visible;
+        let want = self
+            .scroller
+            .kinetic
+            .offset()
+            .round()
+            .clamp(0.0, last as f32) as i64;
+        let by = want - self.scroll() as i64;
+        if by != 0 {
+            self.shift_view(by);
+        }
+        self.scroller.cursor = self.selected();
     }
 
     /// Moves a page longer than the screen's window `by` rows (down the list
@@ -237,4 +283,15 @@ impl Menu {
         self.cursor[page] = row;
         self.scroll[page] = self.scroll();
     }
+}
+
+/// A finger's scroll of a long page: the [`Kinetic`] model in rows, and
+/// what it was started on, so a page change or a pad move stops it.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(super) struct Scroller {
+    kinetic: Kinetic,
+    /// The page the scroll belongs to.
+    page: usize,
+    /// The cursor as the scroll last left it.
+    cursor: usize,
 }

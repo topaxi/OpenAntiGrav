@@ -325,9 +325,10 @@ fn a_horizontal_drag_pans_the_circuits_along_the_row_and_wraps() {
     let pitch = crate::picker::hd::hex::PITCH[0];
     let mut picker = grid();
     let found = targets(&picker, &layout, &skin, &|_| None);
-    assert!(picker.pointer(&drag(pitch * 0.9), &found).is_empty());
+    assert!(picker.pointer(&drag(pitch * 0.5), &found).is_empty());
     assert_eq!(picker.index(), 0);
-    // Past a column: the previous circuit, which wraps to the row's last.
+    // Nearer the next column than its own: the previous circuit, which
+    // wraps to the row's last.
     assert_eq!(
         picker.pointer(&drag(pitch * 0.2), &found),
         vec![Event::Moved]

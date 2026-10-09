@@ -498,6 +498,33 @@ fn drag_by(dx: f32) -> oag_ui::pointer::Pointer {
     }
 }
 
+fn touch_down() -> oag_ui::pointer::Pointer {
+    oag_ui::pointer::Pointer {
+        pressed: true,
+        ..oag_ui::pointer::Pointer::default()
+    }
+}
+
+fn lift() -> oag_ui::pointer::Pointer {
+    oag_ui::pointer::Pointer {
+        released: true,
+        ..oag_ui::pointer::Pointer::default()
+    }
+}
+
+/// Runs `ticks` ticks the way the front end does - the clock, then the pad
+/// with nothing pressed - and returns what the coast stepped.
+fn settle(picker: &mut Picker, ticks: usize) -> Vec<Event> {
+    let mut out = Vec::new();
+    let mut input = Input::default();
+    for _ in 0..ticks {
+        picker.tick(1.0 / 60.0);
+        input.begin_frame(0);
+        out.extend(picker.update(&mut input));
+    }
+    out
+}
+
 fn pan_targets(picker: &Picker) -> Vec<crate::picker::pointer::Target> {
     let skin = oag_ui::menu::Skin::new(
         oag_pulse::FRONT_END.menu.unwrap(),
@@ -568,7 +595,7 @@ fn a_drag_never_clicks_and_the_pad_and_vertical_drags_are_untouched() {
 }
 
 #[test]
-fn the_grid_follows_the_finger_and_settles_back_when_it_stops() {
+fn the_grid_follows_the_finger_and_settles_on_the_nearest_column() {
     let layout = layout();
     let grid = layout.hd.as_deref().unwrap().hex.unwrap();
     let rest = grid.cells(1, 3, 0.0);
@@ -584,12 +611,84 @@ fn the_grid_follows_the_finger_and_settles_back_when_it_stops() {
     assert!(moved.len() > rest.len(), "a column slides in at the left");
     assert!(moved.iter().any(|c| c.weight < 1.0));
     assert!(rest.iter().all(|c| c.weight == 1.0));
+    // Held, the grid stays where the finger put it however long it waits.
     let mut picker = picker_of(&["A", "B", "C"], "B");
-    picker.pointer(&drag_by(PITCH_X * 0.7), &pan_targets(&picker));
-    picker.tick(0.05);
-    assert!(picker.pan() > 0.69, "held still for less than the delay");
-    for _ in 0..120 {
-        picker.tick(1.0 / 60.0);
-    }
+    let found = pan_targets(&picker);
+    picker.pointer(&touch_down(), &found);
+    picker.pointer(&drag_by(PITCH_X * 0.4), &found);
+    settle(&mut picker, 60);
+    assert!((picker.pan() - 0.4).abs() < 1e-4, "{}", picker.pan());
+    // Lifted short of half a column, it settles back onto its own.
+    picker.pointer(&lift(), &found);
+    assert!(settle(&mut picker, 60).is_empty());
     assert_eq!((picker.pan(), picker.index()), (0.0, 1));
+    // Lifted past half a column, it settles onto the neighbour, which is
+    // then the selection - the pad's own step.
+    picker.pointer(&touch_down(), &found);
+    picker.pointer(&drag_by(PITCH_X * 0.55), &found);
+    settle(&mut picker, 30);
+    picker.pointer(&lift(), &found);
+    assert_eq!(settle(&mut picker, 60), vec![Event::Moved]);
+    assert_eq!((picker.pan(), picker.index()), (0.0, 0));
+}
+
+#[test]
+fn a_flick_coasts_across_columns_stepping_each_and_rests_on_one() {
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
+    let found = pan_targets(&picker);
+    picker.pointer(&touch_down(), &found);
+    // A quarter column a tick leftward: 15 columns a second.
+    let mut stepped = Vec::new();
+    for _ in 0..6 {
+        stepped.extend(picker.pointer(&drag_by(-PITCH_X * 0.25), &found));
+        stepped.extend(settle(&mut picker, 1));
+    }
+    picker.pointer(&lift(), &found);
+    let coasted = settle(&mut picker, 240);
+    assert_eq!(picker.pan(), 0.0, "at rest on a column");
+    assert!(
+        coasted.len() >= 4,
+        "it kept going after the lift: {coasted:?}"
+    );
+    assert!(coasted.iter().all(|e| *e == Event::Moved));
+    let total = stepped.len() + coasted.len();
+    assert_eq!(picker.index(), total % 8, "one step per column passed");
+}
+
+#[test]
+fn a_tap_on_a_coasting_grid_stops_it_and_selects_nothing() {
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
+    let found = pan_targets(&picker);
+    picker.pointer(&touch_down(), &found);
+    for _ in 0..6 {
+        picker.pointer(&drag_by(-PITCH_X * 0.25), &found);
+        settle(&mut picker, 1);
+    }
+    picker.pointer(&lift(), &found);
+    settle(&mut picker, 4);
+    let index = picker.index();
+    // A tap, landing on a cell, while it moves.
+    let found = pan_targets(&picker);
+    let cell = found
+        .iter()
+        .find(|t| matches!(t.what, What::Cell { .. }))
+        .unwrap();
+    let at = (
+        cell.rect[0] + cell.rect[2] * 0.5,
+        cell.rect[1] + cell.rect[3] * 0.5,
+    );
+    let tap = oag_ui::pointer::Pointer {
+        at: Some(at),
+        moved: true,
+        clicked: true,
+        pressed: true,
+        released: true,
+        ..oag_ui::pointer::Pointer::default()
+    };
+    let events = picker.pointer(&tap, &found);
+    assert!(events.is_empty(), "{events:?}");
+    let more = settle(&mut picker, 60);
+    assert!(more.len() <= 1, "it stopped, then settled: {more:?}");
+    assert_eq!(picker.pan(), 0.0);
+    assert!(picker.index().abs_diff(index) <= 1);
 }
