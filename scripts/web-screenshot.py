@@ -13,7 +13,9 @@ and writes `<out>/<seconds>s.png` at each `--at` time after the pick.
 hold one and let it go (Playwright key names: `x`, `Enter`, `Space`, `ArrowLeft`).
 `--click X,Y@SECONDS` clicks the mouse at a viewport position.
 `--fps SECONDS` counts animation frames for that long at the end. The page's console goes to
-stdout. The browser is muted. See docs/tools/web.md.
+stdout. The browser is muted. `--url` drives a page some other server already
+serves (`npx wrangler pages dev`, which sends the Cloudflare `_headers`) instead
+of serving `--dist`. See docs/tools/web.md.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ def main() -> None:
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--url", default="", help="a page already served elsewhere")
     parser.add_argument("--size", default="960x544")
     parser.add_argument("--chromium", default="/usr/bin/chromium")
     args = parser.parse_args()
@@ -75,7 +78,8 @@ def main() -> None:
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
-    server = serve(args.dist, args.port)
+    server = None if args.url else serve(args.dist, args.port)
+    url = args.url or f"http://127.0.0.1:{args.port}/"
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
@@ -84,8 +88,9 @@ def main() -> None:
             page = browser.new_page(viewport={"width": width, "height": height})
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
             page.on("pageerror", lambda e: print(f"pageerror: {e}", flush=True))
-            page.goto(f"http://127.0.0.1:{args.port}/" + (f"?log={args.log}" if args.log else ""))
+            page.goto(url + (f"?log={args.log}" if args.log else ""))
             print("webgpu:", page.evaluate("!!navigator.gpu"), flush=True)
+            print("crossOriginIsolated:", page.evaluate("crossOriginIsolated"), flush=True)
             page.screenshot(path=str(args.out / "picker.png"))
             page.set_input_files("#file", str(args.image))
             start = time.monotonic()
@@ -119,7 +124,8 @@ def main() -> None:
                 print(f"fps: {frames / args.fps:.1f} over {args.fps:g}s", flush=True)
             browser.close()
     finally:
-        server.shutdown()
+        if server:
+            server.shutdown()
 
 
 if __name__ == "__main__":

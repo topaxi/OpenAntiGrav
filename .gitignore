@@ -124,3 +124,6 @@ scratch-*.md
 
 # Session scratch space (agent-local tmpfiles, not build output).
 /tmp/
+
+# Wrangler's local state (`npx wrangler pages dev`, docs/tools/web.md).
+.wrangler/

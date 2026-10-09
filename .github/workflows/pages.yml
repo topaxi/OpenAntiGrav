@@ -9,8 +9,11 @@ name: Pages
 # the page and it is read in their browser tab, never uploaded. The build ends
 # with scripts/check-leakage.py over the folder that is published.
 #
-# Single-threaded, so no COOP/COEP headers are needed (Pages cannot set them)
-# and no coi-serviceworker is shipped.
+# Built once, deployed twice from the same folder: GitHub Pages (the `deploy`
+# job) and Cloudflare Pages (`deploy-cloudflare`, project `openantigrav`,
+# served at oag.topaxi.com). Cloudflare reads the folder's `_headers` and sends
+# COOP/COEP and long cache lifetimes; GitHub Pages cannot set headers and the
+# page works without them. No coi-serviceworker is shipped.
 #
 # Triggers: a pushed `v*` tag, or a manual run from the Actions tab. Pages has
 # to be enabled once in the repository settings with "GitHub Actions" as the
@@ -65,6 +68,15 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: target/web/dist
+      # The same folder again as a plain artifact for Cloudflare: the Pages
+      # artifact is a tarball in a format that action owns, not an interface.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: target/web/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
   deploy:
     name: deploy
@@ -79,3 +91,25 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    name: deploy (Cloudflare Pages)
+    needs: build
+    runs-on: ubuntu-latest
+    # Skipped where the account is not configured (a fork, say). The token is
+    # the repository secret CLOUDFLARE_API_TOKEN, the account id the
+    # repository variable CLOUDFLARE_ACCOUNT_ID.
+    if: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+    environment:
+      name: cloudflare-pages
+      url: https://oag.topaxi.com/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name openantigrav --branch main

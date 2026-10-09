@@ -1,0 +1,16 @@
+# Response headers for Cloudflare Pages (docs/tools/web.md, "Hosting"). GitHub
+# Pages ignores this file and serves it as a plain file; the page works there
+# without these headers.
+#
+# Cross-origin isolation: makes `crossOriginIsolated` true, which is what
+# SharedArrayBuffer and wasm threads need. The page loads nothing from another
+# origin, so require-corp blocks nothing it uses.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+
+# pkg/<content hash>/ never changes under the same name (build-web.sh). The page
+# itself (index.html, main.js, style.css) keeps Cloudflare's default, which
+# revalidates on every load, so a deploy is picked up at once.
+/pkg/*
+  Cache-Control: public, max-age=31536000, immutable
