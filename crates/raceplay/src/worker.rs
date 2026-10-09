@@ -132,7 +132,13 @@ impl LoadWorker {
                 let loaded = {
                     let _scope = stages.open();
                     load()
-                };
+                }
+                .map(|mut loaded| {
+                    // CPU work the page's thread would otherwise do in the
+                    // scene build; see `Loaded::started`.
+                    loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
+                    loaded
+                });
                 *crate::web_thread::lock_spinning(&result.loaded) = Some(loaded);
                 result
                     .done

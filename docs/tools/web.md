@@ -283,8 +283,10 @@ under wasmtime. All pass, debug and release (2026-10-09, wasmtime 49). The same
 suites pass built the way the web module is, with the pinned nightly,
 `-Z build-std=std,panic_abort -Z panic-abort-tests` and
 `+atomics,+bulk-memory,+mutable-globals` (2026-10-09, run with
-`CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime -W threads=y"`): the simulation
-itself still runs on one thread, and the atomics feature changes no float.
+`CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime -W threads=y"`). That run
+covers the atomics code generation, which is what could touch a float; its
+memory was not shared (no `--shared-memory` link argument), which no
+simulation code can observe on one thread.
 
 ## Troubleshooting
 
@@ -376,11 +378,11 @@ survive):
 
 | | before (inline) | after (worker) |
 | --- | --- | --- |
-| page frozen at LAUNCH | 5.3 s, then 4.2 s | none during the load; 1.5 s at its end |
-| circuit load (`race::load`) | 5.9 s on the page's thread | 1.8 to 1.9 s on a worker |
-| scene build (`build_race_stage`) | 2.9 to 4.2 s | 1.2 to 1.5 s, page's thread |
+| page frozen at LAUNCH | 5.3 s, then 4.2 s | none during the load; 0.7 to 0.85 s at its end |
+| circuit load (`race::load`) | 5.9 s on the page's thread | 1.5 to 1.8 s on a worker, `Race::start` included |
+| scene build (`build_race_stage`) | 2.9 to 4.2 s | 0.7 to 0.83 s, page's thread |
 | loading screen | never drew | draws and animates its bar |
-| load plus build | about 9.5 s, all frozen | about 3.4 s, 1.5 s of it frozen |
+| load plus build | about 9.5 s, all frozen | about 2.5 s, 0.8 s of it frozen |
 
 The load's 5.9 s before, inclusive:
 
@@ -397,7 +399,17 @@ The build's 2.9 s (the profiled run): `Scene::new` 1.8 s, of which
 `writeBuffer` 1.6 s (140 MiB of vertices and indices, about 88 MB/s; 80
 pipelines created in 4 ms, the browser compiles them elsewhere), and
 `Race::start` 1.1 s, CPU only (`SpeedPlan::build_within`'s simulated laps). On
-the threaded build the same two measured 0.7 s and 0.65 s.
+the threaded build the same two measured 0.7 s and 0.65 s, and `Race::start`
+then moved onto the worker too (below), which is the after column.
+
+Four HD loads in one tab (launch, escape to the campaign page, launch again,
+one of them Mallavol): each reached its race, the module's memory read 876,
+908, 908 and 908 MiB after them, and the page made no disc read at all between
+LAUNCH and the scene being built, every one of the 185 to 207 reads per load
+being the worker's (the `web: image fetch ... on a worker` debug line). So the
+locks the page shares with a worker (the disc cache, the mount table) are
+never contended during a load. Escaping to the menus still freezes 0.5 to
+0.6 s, which this lane did not look at.
 
 ### The choice: threads, not resumable steps
 
@@ -426,8 +438,10 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    closure in a table and calls the page's `oagSpawnWorker(module, memory,
    id)` (`web/main.js`), which starts `web/worker.js` as a module worker; that
    imports the same glue, instantiates the module on the same memory, and calls
-   `oag_worker_entry(id)`. No crate is added and no `unsafe` is needed. A panic
-   on a worker reaches the page's `oagFatal` through a message.
+   `oag_worker_entry(id)`, then `__wbindgen_thread_destroy` to hand its stack
+   and TLS block back before it closes. No new third-party crate (`oag-raceplay`
+   gains `wasm-bindgen` and `js-sys`, already in the build) and no `unsafe`. A
+   panic on a worker reaches the page's `oagFatal` through a message.
 3. **The page's thread never waits.** `memory.atomic.wait32`, where a
    contended `std::sync::Mutex` ends up, traps there. `LoadWorker` polls an
    `AtomicBool` the worker sets after it has stored the result and let go of
@@ -437,20 +451,26 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    (`mesh_render/texture_sink/web.rs`) and `Texels::Uploaded`, which holds a
    `wgpu::TextureView`, exists only on native, so `race::Loaded` is `Send`. The
    textures then wait on the CPU for the scene build: the module's memory was
-   876 MiB after the HD load above (`web: module memory ... after the race
+   876 to 908 MiB after the HD loads above (`web: module memory ... after the race
    load`, logged once per load), of a 4 GiB ceiling that never shrinks.
    Omega's Tech De Ra, whose BC7 textures were 2.3 GiB at their peak, would not
    fit, but no Vita or PS4 package opens in the browser.
-5. **The simulation stays single-threaded and deterministic**: nothing in it
-   moved, and its suites pass built with these flags ("Verifying it").
+5. **CPU work of the scene build moves too where it can.** `race::Race` is
+   `Send`, so the worker also runs `Race::start` on a copy of the setup and
+   hands the started race over in `Loaded::started`; `build_race_stage` uses
+   it instead of starting one. Native leaves it `None` (its build runs on a
+   thread anyway).
+6. **The simulation stays single-threaded and deterministic**: nothing in it
+   changed, a race started on the worker is the same `Race::start` on an equal
+   setup, and the sim suites pass built with the atomics flags ("Verifying
+   it").
 
 ### What is still on the page's thread
 
-- **The scene build**, 1.2 to 1.5 s at the end of the HD load, the loading
-  screen's last frame held for that long. `Race::start` (0.65 s) is CPU work
-  and could run on the worker if `Loaded` carried a started race; the buffer
-  uploads (`writeBuffer`, about half of `Scene::new`) could be spread over
-  frames under a byte budget. Neither is done.
+- **The scene build's GPU half**, 0.7 to 0.85 s at the end of the HD load, the
+  loading screen's last frame held for that long. The buffer uploads
+  (`writeBuffer`, about half of `Scene::new`) could be spread over frames under
+  a byte budget; not done.
 - **The boot**: about 2 s between the pick and the first frame (Chromium), and
   the menus' own reads (a flyer, a ship), still synchronous requests.
 - **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
@@ -477,4 +497,6 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
   Firefox, headless); Pulse PS2 was booted to its front end only and Pure not
   at all. HD drew its race with no Tint error on the one circuit tried.
 - **Firefox draws slowly**: 9 to 14 fps in a race in headless Firefox 155,
-  against Chromium's 60 on the same machine. Not investigated.
+  against Chromium's 60 on the same machine, and the same before threads
+  (Pulse, Moa Therma White: 12.2 fps on the single-threaded module, 12.4 on
+  the threaded one). Not investigated.

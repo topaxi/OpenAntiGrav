@@ -8,7 +8,8 @@ COOP/COEP from `web/_headers`), the only host since GitHub Pages was dropped.
 Pulse PSP EU and HD EU race in headless Chromium 153 and Firefox 155; the race
 load runs on a Web Worker reading the disc through `FileReaderSync`, so the
 loading screen draws during it (HD Talon's Junction: about 9.5 s frozen
-before, 1.9 s of load on the worker plus a 1.5 s scene-build stall after).
+before; after, 1.5 to 1.8 s on the worker, `Race::start` included, then a 0.7
+to 0.85 s scene-build stall).
 The image is read a slice at a time on the page's thread (synchronous XHR
 behind a 64 MiB block cache). Settings and records persist in `localStorage`.
 Architecture, measurements, hosting and limits:
@@ -20,20 +21,21 @@ Architecture, measurements, hosting and limits:
   in CI: the nightly install step (`dtolnay/rust-toolchain@master` with
   `nightly-2026-10-08` and `rust-src`) is untried. `act` fails on this podman
   host before any step.
-- **The scene build still stalls the page** 1.2 to 1.5 s at the end of an HD
-  load: `Race::start` (0.65 s, CPU, `SpeedPlan::build_within`) could run on the
-  worker if `Loaded` carried a started race; `Scene::new`'s `writeBuffer`
-  uploads (about 0.35 s of its 0.7 s) could go up under a per-frame budget.
+- **The scene build still stalls the page** 0.7 to 0.85 s at the end of an HD
+  load (GPU work; `Race::start` already moved to the worker): `Scene::new`'s
+  `writeBuffer` uploads (about half of it) could go up under a per-frame
+  budget. Escaping a race to the menus freezes 0.5 to 0.6 s, not looked at.
 - **The boot** still freezes about 2 s after the pick (Chromium), and the menus'
   reads are synchronous requests on the page's thread. Moving the boot onto a
   worker is the same pattern as the race load, if its result is `Send`.
 - **No texture sink on the web**: textures wait on the CPU until the scene
-  build. 876 MiB of module memory after the HD load; Omega's Tech De Ra (2.3
+  build. 876 to 908 MiB of module memory over four HD loads in one tab; Omega's Tech De Ra (2.3
   GiB of BC7 at peak) would not fit in 4 GiB, though no PS4 package opens in
   the browser. A channel sink (worker decodes, page uploads under a budget)
   would bound it.
-- **Firefox races at 9 to 14 fps** headless against Chromium's 60. Not
-  investigated: Firefox's WebGPU, the headless compositor, or this build.
+- **Firefox races at 9 to 14 fps** headless against Chromium's 60, the same
+  before threads (Pulse 12.2 fps single-threaded, 12.4 threaded). Not
+  investigated: Firefox's WebGPU or the headless compositor.
 - **Not tried in a headed browser or on another machine.** Safari, Firefox on
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language

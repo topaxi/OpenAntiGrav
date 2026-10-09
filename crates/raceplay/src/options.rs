@@ -702,6 +702,13 @@ pub struct Setup {
 pub struct Loaded {
     /// The simulation half.
     pub setup: Setup,
+    /// A race already started from a copy of [`Self::setup`], where the
+    /// loader had a thread to spare: the web build's load worker runs
+    /// [`crate::Race::start`] (the AI's speed plans, 0.65 s for an HD circuit
+    /// in the browser) so the page's thread does not (docs/tools/web.md,
+    /// "Threads"). `None` from [`crate::load`]; the scene build starts one
+    /// itself then.
+    pub started: Option<Box<crate::Race>>,
     /// Which title the source turned out to be.
     ///
     /// **Carried out of [`load`] because `--race` has no other way to know**,

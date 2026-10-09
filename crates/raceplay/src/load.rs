@@ -848,6 +848,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     stages::reach(stages::Stage::CraftsBuilt);
     let models = &craft_title.weapon_models;
     let mut loaded = Loaded {
+        started: None,
         title,
         platform: archives.layout.platform,
         setup: Setup {

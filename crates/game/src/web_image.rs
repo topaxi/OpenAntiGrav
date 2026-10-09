@@ -133,7 +133,15 @@ impl Sliced {
             ));
         }
         bytes.copy_to(into);
-        log::debug!("web: image fetch at {offset}, {} bytes", into.len());
+        log::debug!(
+            "web: image fetch at {offset}, {} bytes, on {}",
+            into.len(),
+            if oag_raceplay::web_thread::on_worker() {
+                "a worker"
+            } else {
+                "the page"
+            }
+        );
         Ok(())
     }
 

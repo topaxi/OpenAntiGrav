@@ -15,7 +15,10 @@ self.onmessage = async ({ data: { glue, module, memory, id, file } }) => {
   // A panic here has no page to draw on: hand it to the page's `oagFatal`.
   self.oagFatal = (cause) => postMessage({ fatal: cause });
   const glueModule = await import(glue);
-  await glueModule.default({ module_or_path: module, memory });
+  const exports = await glueModule.default({ module_or_path: module, memory });
   glueModule.oag_worker_entry(id);
+  // Hands this thread's stack and TLS block back to the shared memory, which
+  // never shrinks: without it every race load would leak them.
+  exports.__wbindgen_thread_destroy();
   close();
 };
