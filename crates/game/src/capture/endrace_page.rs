@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::capture::menu_page::{PreviewRequest, open_for_previews};
+use crate::capture::preview_pass::{PreviewRequest, open_for_previews};
 use oag_tables::race_campaign::Medal;
 
 /// Which EndRace screen a `--menu-page` name asks for.

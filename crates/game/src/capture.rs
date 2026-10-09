@@ -20,14 +20,13 @@ mod loading;
 mod menu_page;
 mod offscreen;
 mod presented;
+mod preview_pass;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
-use menu_page::{
-    PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
-    picker_stills,
-};
+use menu_page::{menu_page, picker_kind, picker_page, picker_stills};
 use offscreen::{offscreen, read_back, touch_preview, write_png};
+use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
 /// What to capture.
 #[derive(Debug, Clone)]

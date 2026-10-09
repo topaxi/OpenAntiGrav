@@ -35,6 +35,39 @@ pub const YAW0: f32 = 0.6;
 /// Near and far planes (**chosen**; the model sits within 180 +- 80 units).
 const DEPTH: [f32; 2] = [10.0, 2000.0];
 
+impl crate::preview::Preview {
+    /// Draws the circuit model `seconds` into the screen: its own camera, the
+    /// turntable, and (through [`crate::preview::Preview::with_ramp`]) its own
+    /// material. `false` when there is nothing to draw.
+    #[allow(clippy::too_many_arguments)]
+    pub fn draw_track_model(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: Space,
+        widget: &TrackModel,
+        seconds: f32,
+    ) -> bool {
+        let (view_projection, model) = matrices(widget, space, seconds);
+        self.draw_matrices(
+            device,
+            queue,
+            encoder,
+            view,
+            viewport,
+            target_size,
+            space,
+            view_projection,
+            model,
+            seconds,
+        )
+    }
+}
+
 /// The view-projection and model matrices of the circuit model `seconds` into
 /// the screen, for [`crate::preview::Preview::draw_matrices`].
 #[must_use]

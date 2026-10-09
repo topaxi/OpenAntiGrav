@@ -439,6 +439,53 @@ impl PickerStage {
         }
     }
 
+    /// Draws the preview mesh over the finished frame: the circuit model on
+    /// HD's own camera, otherwise the circuit's `<Mode3D>` camera or the orbit.
+    pub(crate) fn draw_preview(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: oag_display::space::Space,
+    ) {
+        let (orbit, seconds, rect) = (self.orbit(), self.model.seconds(), self.layout.preview);
+        // `Track Creation`'s own `<Mode3D>` camera, when authored.
+        let mode3d_model = self.mode3d_model().cloned();
+        let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
+        let Some(preview) = self.preview.as_mut() else {
+            return;
+        };
+        if let Some(widget) = track_model {
+            preview.draw_track_model(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                &widget,
+                seconds,
+            );
+        } else {
+            preview.draw_auto(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                mode3d_model.as_ref(),
+                rect,
+                orbit,
+                seconds,
+            );
+        }
+    }
+
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
         if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
