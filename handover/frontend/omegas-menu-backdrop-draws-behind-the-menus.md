@@ -27,9 +27,9 @@ Fury `--anim-seconds 4` one). Disc-backed:
   `menu_stage.rs` passes `shown` (the movie, else `styled.picture`) to every campaign list builder and
   ticks `styled` each frame. Walked windowed under Xvfb + lavapipe, 2026-10-02 (`omega-talon-crash`):
   `Main Menu`, `Grid Selection` and `Cell Selection` all draw the scene
-  (`data/scratch/omega-talon-crash/walk_1.png` to `walk_3.png`), so no code was needed; this line was stale.
+  (`walk_1.png` to `walk_3.png`), so no code was needed; this line was stale.
   Only the **end-of-race screens** are still open (lane `pulse-end-photo` held that code, and nothing was
-  changed there). Omega authors no track or ship picker, so there is nothing to draw there.
+  changed there). Omega's Track Select draws (`omega-track-model`, 2026-10-09) and its backdrop is the same white scene, so the rim-lit circuit model loses its edge on it: whether the original's page is this light is unmeasured.
 - **The boot screens have none in the original**: they are outside `Top FE Screen`. Not a gap.
 - **Bands** (`use_bands`, always false), **`GroundPlane`** (named `_VR`), both not drawn.
 - **Chosen, not measured**: the blur kernel (`0x003e3e50` unread), linear sampling of the scene target,

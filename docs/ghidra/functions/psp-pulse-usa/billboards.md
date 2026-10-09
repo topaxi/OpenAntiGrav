@@ -761,7 +761,7 @@ nothing was changed. Wipeout HD has its own `Billboard_CreateFromColour_q`
 ## 2026-10-06 (billboards-3 lane): the original samples the advert with `TEXSCALE` V = -1
 
 The `start.ppdmp` frame of Talon's Junction (547 prims) put through a state-tracking
-census (`data/scratch/billboards-3/gestate.py`): the `TEXSCALE` pair in force at each
+census: the `TEXSCALE` pair in force at each
 textured prim is `(1, 1)` on 450 of them, an authored animation transform on the rest
 (positive scales and offsets), and **`(1, -1)` with `TEXOFFSET (0, 0)` on exactly the
 prims that read the 128 x 128 target** (`tex = 0x154000`: slot 7's strip, slot 8's cells

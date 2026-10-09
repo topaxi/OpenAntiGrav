@@ -47,7 +47,7 @@ Basilico Black is `01_Track`.
 - **`06_Track`'s join at 1196-1200** (upper floor ending, 24-unit drop, no
   `Reset`) was not measured in the original; Vertica is reachable now.
 - The original's `01_Track` grid at tick 0 is in the Single Race log
-  (`data/scratch/sunk-craft-2/orig01-single-hold.csv`, not committed): the
+  (`orig01-single-hold.csv`, not committed): the
   left-side grid capture `grid.md` says does not exist.
 
 ## Next Steps

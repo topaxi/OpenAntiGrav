@@ -24,7 +24,7 @@ do not: `projectile_tilt_ground_truth.rs` rides each on a bank on Pulse and HD
 and all stay within 15 degrees of the floor under them. One real fault, the
 Plasma falling along world `-Y` instead of its carried normal, is fixed
 ([projectile-floor.md](../../docs/gameplay/projectile-floor.md), last section).
-Banked frames now exist (`data/scratch/projectile-tilt/shots/`).
+Banked frames now exist.
 
 ## Open
 

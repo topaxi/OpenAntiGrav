@@ -168,8 +168,7 @@ port keeps the chase camera at 11.6 units, where kind 0 would be four times as
 strong. Kind 7 has no falloff and is started.
 
 **The wash matches the original's frame by frame for Plasma.** Struck minus the
-frame before, over two dark track patches away from the fireball
-(`data/scratch/pulse-impact-visuals/measure.py`), red, green, blue added:
+frame before, over two dark track patches away from the fireball, red, green, blue added:
 
 | frames after the flash starts | original | ours |
 | ---: | --- | --- |

@@ -139,8 +139,8 @@ rail-riding count - the same "isolated transient" character the sibling
 thread's live original capture has, not continuous overload). No gain
 changed in `crates/audio` or `crates/sound/src` this pass.
 
-Captures: `/home/topaxi/oag-scratch/race_ambience_8craft.wav` (whole mix),
-`/home/topaxi/oag-scratch/race_sfx_only_8craft.wav` (music muted).
+Captures: `race_ambience_8craft.wav` (whole mix),
+`race_sfx_only_8craft.wav` (music muted).
 
 **Gate, 2026-09-08 pass**: no `.rs` file changed. `just check-docs` passes.
 
@@ -159,7 +159,7 @@ test. `the_densest_circuit_on_the_disc_fits_in_the_pool_too` (`14_Track`, the
 circuit with 9 of the 12 circuits' cones) now reports "97 omnidirectional
 emitter(s) and 9 cone(s)" and "92 of 106 emitter(s) resolved to a cue" -
 106, not 97, is the give-away that cones are in the resolve pass now. A
-60 s, 8-craft headless render of `14_Track` (`/home/topaxi/oag-scratch/soundcone-14track.wav`)
+60 s, 8-craft headless render of `14_Track` (`soundcone-14track.wav`)
 plays without a crash or a silent buffer (99.98% non-zero samples).
 
 ## Open

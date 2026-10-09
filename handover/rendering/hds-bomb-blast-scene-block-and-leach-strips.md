@@ -15,7 +15,7 @@ The weapon-drawable scene work landed (`docs/rendering/hd-unlit-programs.md`,
   `pulse_leechbeam1_ADD.mip` (the WARN is gone; the report says the strips are
   unbuilt). **2026-10-07: not started** - the Bomb took the lane. The
   scratch interpreter that read the Bomb (`hd-weapon-blasts`'s
-  `data/scratch/.../{ppcdis,emu,runblast,spec}.py`, and `bomb_blast::hd::tests`
+  `{ppcdis,emu,runblast,spec}.py`, and `bomb_blast::hd::tests`
   for the shape of the check) is the way past Ghidra's AltiVec truncation.
 - **Ghost static.** `search_strings` in `/hdfury/EBOOT-ps3-hdfury-eu.elf` finds
   no `staticglow` and no `static.gtf`; `GhostShip.cpp` exists. So nothing in

@@ -131,7 +131,7 @@ on the disc too), so the nine-patch geometry the disc's `file2.gtf` (64 x 64
 ### The campaign
 
 **Same campaign as the disc's HD branch, measured by diff.** Read from the
-install and the disc (`data/scratch/hd-psn-campaign/`, cmp over every file):
+install and the disc (cmp over every file):
 
 | What | PSN | Disc | Result |
 | --- | --- | --- | --- |
@@ -155,8 +155,7 @@ install (`rpcs3 --no-gui <EBOOT.BIN>`, a private profile copy, `Vulkan` on lavap
 audio renderer `Null`, about 5.7 fps, so every key is held about a second) goes
 health warning, "Are you new", autosave notice, **MAIN MENU** (`CAMPAIGN` first),
 confirm, **`EVENT 01/08`** (no HD/Fury list in between), confirm, **`CHOOSE RACE`**.
-Frames: `data/scratch/hd-psn-campaign/shots/rpcs3-psn-main.png`, `rpcs3-psn-grid.png`,
-`rpcs3-psn-cell.png` (not committed). Not measured: a second entry point.
+Not measured: a second entry point.
 
 **Ours, walked live** (windowed on `:96`, software Vulkan, `--no-audio`, a private
 profile): RACE CAMPAIGN clicked with the pointer opens `Grid Selection`
@@ -250,8 +249,7 @@ unmeasured: chosen, not measured.
 --hold cross`: **the simulation is bit-for-bit the same on both** (tick 400, speed
 104.26, position `[-74.7, 37.9, -96.6]`, 836 draws, 301,772 triangles). The picture
 differs where the data does: the PSN hull's livery and a darker track grade, and the
-engine trail is the plain ribbon rather than Fury's. Screenshots under
-`data/scratch/hd-psn/shots/` (not committed).
+engine trail is the plain ribbon rather than Fury's.
 
 ## Lineage check (2048 / Omega)
 

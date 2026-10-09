@@ -135,6 +135,13 @@ pub struct TeamScreen {
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
+    /// What a variant adds to the classic hull's bar is drawn in this colour:
+    /// `FEGlobals->HD_Blue`, `0xffac0717` on Fury's palette - the value a
+    /// settled RPCS3 frame of a Fury model reads to the pixel. The screen
+    /// authors no colour for it, so **which global the widget reaches for is
+    /// a match on the value, not a read**; `None` when the front end carries
+    /// no `HD_Blue`.
+    pub bonus: Option<u32>,
     /// The `NAVIGATE TEAM` honeycomb - see [`hex`].
     pub hex: Option<hex::HexGrid>,
 }
@@ -184,6 +191,7 @@ pub fn read(
     let top = find_screen(&root, TOP_LEVEL)?;
     let mut extra = TeamScreen::default();
     walk(top, (0.0, 0.0), screens, strings, &mut extra);
+    extra.bonus = screens.resolve(BONUS_GLOBAL).and_then(parse_argb);
 
     // The first bracket frames `CHOOSE TEAM` - the logo - and is where a
     // click steps the team; the one authoring `middle` frames `SHIP MODEL`
@@ -328,6 +336,9 @@ const MINI_TEXT_INSET: f32 = 20.0;
 /// and the loyalty block beside them.
 const STAT_BLOCKS: [&str; 4] = ["Slide_0", "Slide_1", "Slide_2", "Slide_3"];
 const LOYALTY_BLOCK: &str = "Slide_4";
+/// The palette entry a variant's added rating is drawn in, see
+/// [`TeamScreen::bonus`].
+const BONUS_GLOBAL: &str = "FEGlobals->HD_Blue";
 
 /// The body of the screen - see the module doc for what is and is not here.
 pub(super) fn body(
@@ -375,15 +386,25 @@ pub(super) fn body(
     }
 
     let stats = selected_stats(picker);
+    let base = base_stats(picker);
     for (index, name) in STAT_BLOCKS.iter().enumerate() {
         let Some(block) = find_block(screen, name) else {
             continue;
         };
         let value = stats.map(|stats| stats.values()[index]);
-        stat_bar(block, value, layout, extra, frame, sprites, &mut out);
+        let base = base.map(|base| base.values()[index]);
+        stat_bar(
+            block,
+            (value, base),
+            layout,
+            extra,
+            frame,
+            sprites,
+            &mut out,
+        );
     }
     if let Some(block) = find_block(screen, LOYALTY_BLOCK) {
-        stat_bar(block, None, layout, extra, frame, sprites, &mut out);
+        stat_bar(block, (None, None), layout, extra, frame, sprites, &mut out);
     }
     out
 }
@@ -423,6 +444,20 @@ fn selected_stats(picker: &Picker) -> Option<Stats> {
     }
 }
 
+/// The ratings of the team's classic hull - the livery row's empty id, which
+/// is HD's `""` variant - the part of a selected variant's bar that is not
+/// drawn as an addition. `None` when the row has no such entry (a skin row,
+/// or a team that offers one hull) or the entry carries no ratings.
+fn base_stats(picker: &Picker) -> Option<Stats> {
+    match picker.selected().map(|entry| &entry.details) {
+        Some(Details::Ship { stats, .. }) => {
+            let classic = picker.variants().iter().position(|v| v.0.is_empty())?;
+            stats.get(classic).copied().flatten()
+        }
+        _ => None,
+    }
+}
+
 /// `Data\Ships\<team>\FE\Logo.gtf` - the texture the `Logo` widget shows for
 /// `team`. Named by no widget; see [`TeamScreen::logo`]. `pub` so the boot
 /// can put all twelve on the sheet.
@@ -451,7 +486,7 @@ pub fn logo_src(team: &str) -> String {
 /// loyalty block) the block draws in its own colour, as any block does.
 fn stat_bar(
     block: &BlockWidget,
-    value: Option<u8>,
+    (value, base): (Option<u8>, Option<u8>),
     layout: &Layout,
     extra: &TeamScreen,
     frame: &Frame,
@@ -477,6 +512,21 @@ fn stat_bar(
         match (split, solid) {
             (Some(split), Some(solid)) => {
                 oag_ui::menu::block::draw_split_fill(&whole, split, argb_to_rgba(solid), &art, out);
+                // What this variant adds over the classic hull, in the
+                // palette's red: from the classic rating's end to this one's.
+                if let (Some(value), Some(base), Some(bonus)) = (value, base, extra.bonus)
+                    && value > base
+                {
+                    let at =
+                        |rating: u8| block.x + block.width * (f32::from(rating) / 100.0).min(1.0);
+                    oag_ui::menu::block::draw_span(
+                        &whole,
+                        at(base),
+                        at(value),
+                        argb_to_rgba(bonus),
+                        out,
+                    );
+                }
                 oag_ui::menu::block::draw_border(&whole, &art, (1.0, 1.0), out);
             }
             _ => oag_ui::menu::block::draw(&whole, &art, (1.0, 1.0), out),

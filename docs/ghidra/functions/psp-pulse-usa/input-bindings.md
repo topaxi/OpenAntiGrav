@@ -123,8 +123,7 @@ column leans on `input.md`'s index list, which is itself at 90.
 ```c
 u32 Options_ButtonForAction(int action) {
     return Options_ControlSchemeFlag() == 0
-        ? novice_table[action]      // 0x08ab0c90
-        : veteran_table[action];    // 0x08ab0cb0
+        ? novice_table[action]      // 0x08ab0c90: veteran_table[action];    // 0x08ab0cb0
 }
 ```
 
@@ -298,7 +297,7 @@ runtime between steer `3.0` (both) and `10.94` (one side); its exact value,
 
 Confidence **95**: an instruction-level read, every row of it reproduced by a
 live capture, and the bracket around the threshold measured on both sides.
-Capture script and raw rows: `data/scratch/novice-airbrake/probe.py` and
+Capture script and raw rows: a throwaway script, not kept and
 `novice-run1.json` (derived data, not committed).
 
 **The port** (`oag_gameplay::controls::novice_airbrakes`) applies the

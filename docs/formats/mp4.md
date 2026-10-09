@@ -200,7 +200,7 @@ unlike `.PMF` or `.IPF`.
 asserts what comes back out of the cache is, byte for byte, what `ffmpeg`
 decodes straight from the `.mp4`, over the first 90 frames (3.003 s) - far
 enough in to land inside the leaf-on-tarmac shot, so the test also writes one
-decoded frame to `data/scratch/drive-2026-09-21/mp4/cache_frame.png` as a
+decoded frame as a
 picture a person can look at rather than only a byte count. 90 frames rather
 than all 2,984 for the reason the module doc of that test states: this
 project's own `.PMF` intro transcode - a *smaller* picture - already measures

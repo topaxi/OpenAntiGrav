@@ -260,7 +260,7 @@ pub const HEX_TEXTURES: [(&str, &str); 5] = [
 /// shelved, found nothing, and drew no icon at all (`sprites(&image.src)`
 /// answering `None`, the same silent, honest-absence path a genuinely
 /// missing texture takes) - confirmed on a live capture,
-/// `data/scratch/drive-2026-09-27/hd-targets/after-cell-select-2.png`.
+/// `after-cell-select-2.png`.
 pub const OTHER_TEXTURES: [&str; 4] = [
     r"Data\FE\Images\NonSelectable_Arrow_HD.gtf",
     r"Data\FE\Images\Subtitle_Arrow_HD.gtf",

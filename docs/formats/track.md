@@ -95,8 +95,7 @@ the opposite. Nothing in the circuit's number or in the entry's position predict
 so the table is the only source.
 
 **Evidence.** The disc rows come from reading all 24 entries off
-`pulse-psp-usa.chd` and `pulse-psp-eu.chd` (identical on both; raw dump in
-`data/scratch/pulse-variant-map/titles-usa.tsv`). Live rows, PPSSPP 1.20.4,
+`pulse-psp-usa.chd` and `pulse-psp-eu.chd` (identical on both; raw dump was not kept). Live rows, PPSSPP 1.20.4,
 2026-10-03, dev-unlock byte, Time Trial, VENOM, the Track Select entry started
 by its on-screen title (screenshots beside the dump), craft position once the
 countdown ended, against our own start on each layout

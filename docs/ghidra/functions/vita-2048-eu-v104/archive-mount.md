@@ -38,7 +38,7 @@ calls this once behind a `DAT_815192f4 == 0` guard and sets `DAT_81578168`.
 The mount order is **seen live too**: Vita3K, which loads the game's own
 `libfios2.suprx`, logs `sceIoOpen` of `app0:/PSP2/data.psarc`, `data1.psarc`,
 `data2.psarc`, then `addcont0:/DLC1W2048PACKAGE/PSP2/dlc1.psarc` and the DLC2 one,
-in that order (`data/scratch/title-patches/data2-corrupt.log`).
+in that order.
 
 ## Which copy answers a path all of them carry
 
@@ -71,7 +71,7 @@ shadow the patch; this project keeps them behind the base, as it did before,
 because their order against the patch is untested and the four circuits both
 carry are byte-different in 290 of 312 shared paths.
 
-The numbers behind it, from `data/scratch/title-patches/overlap.txt` (SHA-1 of
+The numbers behind it, from `overlap.txt` (SHA-1 of
 the inflated entry): `data1` and `data` share 753 paths and 734 differ; `data2`
 and `data` 1,132 and 1,122; `data1` and `data2` 570 and 552; `dlc1` and `data`
 312 and 290; `dlc1` and `data1` 172 and 172; `dlc2` and `data2` 16 and 0.

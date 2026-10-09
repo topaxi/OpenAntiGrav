@@ -27,7 +27,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   X/Start/click; SELECT does nothing. **Still open on it**: photo mode itself (`forward="select"` goes to `InGame Photo`), why the fade is
   0.7 s, and the real `Pulse_14.fnt` atlas (ours is the menu face scaled, narrowed by a chosen 0.90 that matches width, not height).
 - **Noticed, not investigated:** in one windowed run the HUD was French while the `Race End Photo` legend and `Results` were English, and in the next the legend was French. The EndRace string table and the HUD's language did not always agree within a session.
-- **A player wreck never reaches `Race End Photo`** (measured 2026-10-02, `data/scratch/pulse-end-photo/wreck/log.json`, `wreck-watch/log.json`): mode
+- **A player wreck never reaches `Race End Photo`** (measured 2026-10-02, `log.json`, `wreck-watch/log.json`): mode
   state goes to 3 and the HUD hides at `k+31`, then the front end stays on `InGame` for 17,800+ frames with the field racing on and the spectator
   camera cutting. **Maintainer decision 2026-10-02, "hold, then results"**: ours keeps the world running after a Single Race wreck and shows
   the same legend and panels on the line's timing - the legend at all, and its delay, **chosen, not measured, contradicted by the original**.
@@ -39,7 +39,7 @@ the whole field keeps lapping, and 61 frames after the flag a spectator director
   (12 ahead, 3 above, looking back), 65 degrees, measured on PPSSPP (407 frames, rotation exact, eye to `6e-5`). **2026-10-04 (pulse-postfinish):** modes `1` (nose) and `4` (far chase) are measured and ported with `Race End Photo`'s d-pad (up/down cycle the mode, left/right the craft); `cam+0x274` and mode `8` are the multiplayer GriefReport path and mode `0` has no writer, none reachable after a single-player finish. Open: whether a barrel roll is inside the craft matrix the views ride on; the original's subject/drawn-craft drift after a left/right press (not ported).
 - **A station camera still draws a wall the original sees past** (2026-10-02, **open, localised**): after the mask fix below, Talon's Junction's station 0 on a wreck at
   `(-104.2, -49.7, -180.3)` shows a paneled dark wall and lid across the frame in ours, where the original shows the stand and the `AG-SYS` banner beyond the two silver
-  pillars (`data/scratch/pulse-spectator-cam/cmpw2.png`, original on the left; the original's own frames `wreckB/k*.png`). **Not** the section mask (the original reads
+  pillars (`cmpw2.png`, original on the left; the original's own frames `wreckB/k*.png`). **Not** the section mask (the original reads
   section 11 there, ours too, and the 64-bit row is **identical**, `08000003f0003c02`, read live at `g_display+0x5bb8+11*8` against `TrackPvs::visible_from(11)`), **not** PVS on
   or off, **not** the near plane (`8.0` instead of `1.0` changes nothing), **not** the huge node-545 meshes. The wall is a handful of **opaque, back-face-culled 12-triangle
   boxes**: bisecting the opaque draw list found `#572` (node 524, texture 51, section bit 30, centre `(-137.5, -31.0, -142.1)`, radius 45, **on the line from the eye to the craft**)

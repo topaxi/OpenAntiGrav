@@ -193,7 +193,7 @@ layer), the SCREAM voice each slot holds (`Scream_GetVoice`, array
 `*0x008c0044`, `100` bytes each, bitmask at voice `+0x24`). 126 hardware voices
 over five scans. Scripts: `scripts/rpcs3-hd-engine-audio-capture.py` (`--park`
 runs a file under the one GDB connection the stub serves, `--probe` the fixed
-scans). Raw scans: `data/scratch/hd-engine-level/` (`s-*.json`, `r2-*.json`).
+scans).
 
 **The chain, each link read off the same voice** (confidence 88 for all four):
 

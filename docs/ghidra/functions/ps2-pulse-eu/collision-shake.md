@@ -263,7 +263,7 @@ breakpoint fires on this build, so two breakpoints were swapped within one call:
 (read the camera struct, `0x130` bytes from the `a0` camera pointer: the basis rows `+0x40/+0x50/+0x60`
 and the shake fields), one at `0x08878af0`, after the shake block and before the copy-out
 (read `+0x40..+0x70` again). The pair is the shake's own input and output for one call, so a variable
-timestep and the craft's motion do not enter. Scripts and raw captures: `data/scratch/pulse-camera-shake/`
+timestep and the craft's motion do not enter. Scripts and raw captures: a scratch directory, not kept
 (`cam_capture2.py`, `fit4.py`; `cap2`, `cap5`, `cap7`).
 
 PSP camera struct offsets, the PS2's `+0x190..+0x1d4` block at its PSP place: `shake_timer +0xe4`, reciprocal

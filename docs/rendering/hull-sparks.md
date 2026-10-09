@@ -25,7 +25,7 @@ hit, `amount 2.0`).
   wing roots, 2 and 3 the nose, 4 and 5 the tail, and ours are the same indices
   (the world positions agree to the craft scale, `0.75`).
 - **Ours**, a scratch hook (not committed; text in
-  `data/scratch/pulse-hull-sparks/scratch-hooks.patch`) that calls
+  `scratch-hooks.patch`) that calls
   `cannon::direct_hit` and `throw_hit_sparks` at a named tick with the picks
   forced the same way, `--race --mode single_race --ticks N --screenshot`.
 - **Metric.** Struck frame minus the *same run's* unstruck frame (the craft is
@@ -131,7 +131,7 @@ locators on both sides (3, 2, 1, 0, 4, 5): original / ours per hit
 `0.95 0.82 0.92 0.88 0.87 0.81`. The "2.6x weaker later hits" was the two sides
 throwing their random picks at different locators, plus the three causes above;
 with the picks forced the same, ours is never the weaker one. Frames:
-`data/scratch/pulse-hull-sparks/seq-cmp.png` (top the original, bottom ours).
+`seq-cmp.png` (top the original, bottom ours).
 
 **What is left.** Ours reads 7-11 % brighter on a single hit and up to 20 % on
 the sixth, where the flashes overlap and the framebuffer saturates. Not

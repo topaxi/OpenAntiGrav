@@ -2,7 +2,7 @@
 //! the four emblems, the corner marks and the barcode all reach the sheet and
 //! the draw list.
 //!
-//! The picture of the screen is `data/scratch/hd-cell-select/` and
+//! The picture of the screen is a scratch directory, not kept, and
 //! `docs/ui/campaign-screens.md`, "`Cell Selection`'s card, field, icons and
 //! brackets".
 //!

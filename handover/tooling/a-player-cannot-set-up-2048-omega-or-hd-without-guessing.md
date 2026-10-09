@@ -4,7 +4,7 @@
 (2026-10-07). Pulse (PSP and PS2) and Pure work as dropped in. The rest of
 the title list does not, and the program's own messages do not say why.
 Ranked by how badly each stops a player; the full list is the
-lane's scratch file `data/scratch/readme-setup/friction.md` in the main
+lane's scratch file `friction.md` in the main
 checkout (gitignored), summarised here.
 
 ## Open

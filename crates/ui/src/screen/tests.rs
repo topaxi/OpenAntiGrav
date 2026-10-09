@@ -575,7 +575,7 @@ const SRCLESS_IMAGE: &str = r#"
 /// Wipeout HD/Fury's own `EndRace Results` shape, cut down to the one thing
 /// this test cares about: a `<NavigationController>` nested directly inside
 /// a named screen, the same as `EndRace_Definition.xml`'s own copy
-/// (`data/scratch/drive-2026-09-25/hd-xml/DATA02/...`).
+///.
 const ENDRACE_RESULTS_WITH_NAV_CONTROLLER: &str = r#"
 <Screen>
   <Screen type="EndRace Results" name="EndRace Results">

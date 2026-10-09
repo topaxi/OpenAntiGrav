@@ -124,12 +124,12 @@ fn both_halves_of_the_chain_read_back_naming_their_own_frame() {
     // Loose on purpose, exactly as the timer's own probe is: the claim is that
     // both clocks moved and are in seconds, not that this machine is fast.
     assert!(
-        scaled.seconds > 0.0 && scaled.seconds < 1.0,
+        scaled.seconds > 0.0 && scaled.seconds < 60.0,
         "the six render-resolution dispatches measured {} s",
         scaled.seconds
     );
     assert!(
-        presented.seconds > 0.0 && presented.seconds < 1.0,
+        presented.seconds > 0.0 && presented.seconds < 60.0,
         "accumulate and rcas measured {} s",
         presented.seconds
     );

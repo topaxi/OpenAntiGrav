@@ -1,7 +1,7 @@
 # The gantry hexagon is TurboIcon, legitimate - the grant-timing bug is fixed; the advert-board blur was texture level selection, fixed 2026-09-30
 
 2026-09-07. A maintainer-requested side-by-side
-(`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/gantry-compare.md`,
+(`gantry-compare.md`,
 `gantry-compare/side-by-side-countdown.png`) flagged a green hexagon over
 our start gantry with no counterpart in the original, in every Time Trial
 gantry screenshot taken that day.

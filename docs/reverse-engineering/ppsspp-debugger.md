@@ -667,8 +667,8 @@ Identified by screenshot of each entry's title. Which `NN_Track` each title
 loads is in [track.md](../formats/track.md#white-and-black), read off the disc's
 own definition and string table and confirmed by start position for four of
 them (2026-10-03, `pulse-variant-map`). The working scripts
-(`unlock.py`, `to_track_select.py`, `race_log.py`, `place_trace.py`) were
-scratch, under `data/scratch/sunk-craft-2/`.
+(`unlock.py`, `to_track_select.py`, `race_log.py`, a throwaway script, not kept) were
+scratch, under a scratch directory, not kept.
 
 **Zone was selectable on a used profile (2026-10-02, `zone-bloom`).** On a copy of
 a 70-run PPSSPP profile, `Racebox -> Custom Race -> RACE TYPE`, `right` x5, one
