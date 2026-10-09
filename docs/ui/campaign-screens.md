@@ -1632,17 +1632,17 @@ directory with its own `oag/records.toml` (`dirs::config_dir()` honours it)
 rather than editing the real, shared `~/.config/oag/records.toml` - e.g.:
 
 ```sh
-mkdir -p data/scratch/hd-medals/scratch-cfg/oag
-cat > data/scratch/hd-medals/scratch-cfg/oag/records.toml <<'EOF'
+mkdir -p <scratch>/hd-medals/scratch-cfg/oag
+cat > <scratch>/hd-medals/scratch-cfg/oag/records.toml <<'EOF'
 [[campaign]]
 title = "wipeout hd"
 cell = "grid8_2_1"
 best_medal = "gold"
 best_difficulty = "hard"
 EOF
-XDG_CONFIG_HOME=data/scratch/hd-medals/scratch-cfg cargo run -q -p oag-game -- \
+XDG_CONFIG_HOME=<scratch>/hd-medals/scratch-cfg cargo run -q -p oag-game -- \
   data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
-  --screenshot data/scratch/hd-medals/cell-select.png
+  --screenshot <scratch>/hd-medals/cell-select.png
 ```
 
 ## One shape per difficulty, not just one colour per tier - confirmed 2026-09-28
@@ -3790,6 +3790,58 @@ unmeasured. Tests: `picker::hd::tests::*` (the miniature) and
 `hd_reads_its_own_team_selection` (the disc: the five colours, the origin,
 Feisar's open rows and thumbnails, every model's thumbnail on the sheet).
 
+### Ship Select follows the variant, and draws what it adds in red, 2026-10-09 (hd-ship-variants)
+
+A maintainer report from play: the livery row listed `HD`, `Fury Concept`,
+`Fury Nitro`, but the craft stayed on the classic hull, and the stat bars were
+plain on a Fury variant where the original paints the difference red.
+
+**The preview follows the variant.** The picker's livery key was `None` on the
+variant axis, so the hull never reloaded. It now keys on the variant id, reads
+the hull from `variant_location` (the team's directory joined with the suffix by
+the title's own `VariantJoin`: `Feisar` + `_c1` is `Data\Ships\Feisar_c1\ship.vex`,
+`oag_game::preview::variant`), and a variant whose hull is not on the disc draws
+the team's default and logs it (`model_or_default`; all 36 team directories exist, census `hd_fury_variant_probe`, and Feisar's three
+hulls were loaded, so the fallback is for a missing hull rather than a known case). The headless `--menu-page ship-select` capture takes the same path
+(`PreviewRequest::fallback`). Test:
+`hd_ship_preview_ground_truth::each_variant_directory_has_a_hull_of_its_own`
+(Feisar's three hulls are three different meshes). The skin axis (Pulse) is
+untouched: the Pulse ship picker frame is byte-identical before and after
+(`--menu-page ship-select` on `pulse-psp-eu`).
+
+**The red, measured off an RPCS3 frame of a Fury variant** (`concept1`,
+`data/reference/hd-capture/ship-variants/fury-concept-feisar.png`, Feisar,
+1697x1058): the classic hull (`normal`) is the base. `SPEED` reads `080` against
+the base `070` and `THRUST` `085` against `080`; `HANDLING` (`100`) and `SHIELD`
+(`080`) equal the base and carry no red. The red span runs from the base rating's
+end to the variant's (`0.70..0.80` and `0.80..0.85` of the block; on `SPEED` x 853..901 px
+against a block spanning 517..995), the bar's two greys otherwise
+unchanged, the nobble and the value at the variant's rating. Its inside colour is
+`(172, 7, 23)` flat and opaque, which is `FEGlobals->HD_Blue` = `0xffac0717` (the
+Fury palette, `DATA00`'s `skin.xml`) to the value, so the colour is read from the
+data. **Which global the widget reaches for is a match on the value, not a read**:
+`Team_Selection_Definition.xml` authors no colour for it (the five `Slide_N`
+blocks author `HD_Grey` and `AlwaysSolidColor` only) and the widget class is
+unread. Confidence 75: one frame, two bars that move, the other two that do not.
+
+Drawn by `oag_ui_screens::picker::hd` (`TeamScreen::bonus`, `base_stats`,
+`stat_bar`) through `oag_ui::menu::block::draw_span`, opaque and under the border.
+The base is the livery row's entry with the empty id; a row without one (a skin
+row, a team offering one hull) and a variant that rates lower than the base draw
+no red (**chosen**, no frame shows a lower variant). Tests:
+`picker::hd::tests::a_variants_added_rating_is_drawn_in_the_bonus_colour`,
+`the_classic_hull_and_a_missing_colour_draw_no_red`,
+`the_bonus_colour_is_the_fronts_hd_blue`.
+
+Not done: the preview's pose (`hull_orbit`) is still the one fitted to the classic
+Feisar frame, so the Fury hulls, which are shaped differently, sit a little off the
+reference's framing (**chosen, not measured**). The `_n1` bars have no reference
+frame. Omega: **checked, applies, not wired**: it has no Ship Select
+(`team_select`, `team_variants` and `ship_preview_hull` are `None` in `oag-omega`),
+so neither the variant preview nor the red has a screen to draw on; its
+`Team_Selection_Definition.xml` is HD's, and `HD_Blue` exists in its `Fury_Colours`
+(`0xffac0717`). Hull directories of Omega's ships were not censused.
+
 ### The layout scale: the original is not drawn 1:1, 2026-10-08
 
 Open question 12 of `hd-frontend.md` ("is the 1920x1080 space presented 1:1")
@@ -4162,7 +4214,7 @@ hold 24 `Tournament` cells in the archive read, none walked).
    authored (`ShipModel`, `OriginX=1220 OriginY=412 z=-24 RotX=0.4 RotY=-0.5`).
    Omega: checked, applies (draws an empty frame too), not wired.
    **Fixed 2026-10-08 (hd-fe-look): the craft draws** - the team's race hull
-   (`Data\Ships\<team>\ship.vex` + `.rcsmodel`, livery as the race paints it)
+   (`Data\Ships\<team>\ship.vex` + `.rcsmodel`, livery as the race paints it; since 2026-10-09 the selected variant's own directory)
    at a fixed pose, `FrontEnd::ship_preview_hull` Title data (`Some("ship.vex")`
    on HD only). Two things found: HD's hull has one stray vertex hundreds of
    units out (bound 257 against a hull some 13 long), so the viewer's

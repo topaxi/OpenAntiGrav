@@ -24,8 +24,7 @@ reading of this same sequence was wrong.
 Observed on **both** pressings, `pure-psp-usa.chd` and `pure-psp-eu.chd`, with
 the same shape and the same timings. The only difference found between them is
 the picker's contents: USA offers three languages (English, Español, Français),
-EU five (those plus Deutsch, Italiano). Screenshots for each step are under
-`data/shots/pure-cold-boot-2026-08-10/`.
+EU five (those plus Deutsch, Italiano).
 
 The chain is also exactly what Pure's own `Skin.xml` declares, redirect for
 redirect: `Language Selection`'s `LanguageAutoRedirect` goes to
@@ -256,7 +255,7 @@ Pure's `Skin.xml` runs the picker first and Pure's runtime agrees. **Pulse's
 cold boot of `pulse-psp-eu.chd` opens straight into `LogoFMV` playing
 `Data\Movies\Intro.PMF`, whose own first frames are an SCEE presents card, and
 runs on to `Show Logo` with no picker in between. Confidence **90**,
-cold-boot observed; frames under `data/shots/pulse-cold-boot-2026-08-10/`.
+cold-boot observed.
 
 Two consequences:
 

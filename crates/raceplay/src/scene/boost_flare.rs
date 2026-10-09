@@ -89,7 +89,7 @@ use super::*;
 // ever introduced as a substitute for the missing texture falloff, and
 // that falloff now exists. So it was tried, at the original's own pose
 // (`data/traces/pad0-boost.csv` tick 62), against the original's own
-// frame (`data/shots/pad0-boost/tick00062.png`), over the capture's own
+// frame (the original's frame at that tick), over the capture's own
 // plume mask (`min(r, b) - g > 25` and `luma > 60`):
 //
 // | build | plume px | mean | `b - r` | orange px |

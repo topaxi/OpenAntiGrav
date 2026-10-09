@@ -318,7 +318,9 @@ fn ubc1_decodes_to_something_a_human_can_check() {
     let png = oag_texture::png::encode_rgba(width, height, &packed);
     let out = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/shots/2048_ubc1_manual_page.png");
+        .join("data")
+        .join("shots")
+        .join("2048_ubc1_manual_page.png");
     std::fs::create_dir_all(out.parent().expect("has a parent")).expect("creating data/shots");
     std::fs::write(&out, &png).unwrap_or_else(|e| panic!("writing {}: {e}", out.display()));
     println!("wrote {}", out.display());

@@ -20,7 +20,7 @@ the most recently added one, so the craft address is learned first from one
 `Ship_UpdateCraft` hit and the StartSound breakpoint is armed afterwards.
 
     uv run --with websocket-client scripts/psp-countdown-cues.py --port 45195 \\
-        --out data/scratch/countdown-voice/timetrial.csv
+        --out timetrial.csv
 """
 
 import argparse

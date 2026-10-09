@@ -15,6 +15,7 @@
 use oag_texture::gxt;
 
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
+const DATA_DIR: &str = "data";
 
 fn twiddle(x: u32, y: u32, across: u32, down: u32) -> u32 {
     let (mut w, mut h) = (across, down);
@@ -117,11 +118,11 @@ fn sample(entry: &str, unit: usize, label: &str) -> anyhow::Result<()> {
     let real_bytes: Vec<u8> = real.iter().flatten().copied().collect();
     let raster_bytes: Vec<u8> = raster.iter().flatten().copied().collect();
     std::fs::write(
-        format!("data/shots/2048_{label}_twiddled.png"),
+        format!("{DATA_DIR}/shots/2048_{label}_twiddled.png"),
         oag_texture::png::encode_rgba(width, height, &real_bytes),
     )?;
     std::fs::write(
-        format!("data/shots/2048_{label}_raster.png"),
+        format!("{DATA_DIR}/shots/2048_{label}_raster.png"),
         oag_texture::png::encode_rgba(width, height, &raster_bytes),
     )?;
     Ok(())

@@ -62,8 +62,7 @@
 //!    only proves `DATA06`'s copy loads *somewhere* - not that `Cell
 //!    Selection` specifically reads from it rather than `DATA02`'s (the two
 //!    archives could in principle be read per-screen). A live RPCS3 frame on
-//!    `grid8_3_2` (`Elimination`, `TARGET 200 (NOVICE)` row,
-//!    `data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`) settles that:
+//!    `grid8_3_2` (`Elimination`, `TARGET 200 (NOVICE)` row) settles that:
 //!    it shows real gold/silver/bronze medal icons where `DATA02`'s own
 //!    `Cell Selection` authors a plain grey `Subtitle_Arrow_HD.gtf` bullet
 //!    and only `DATA06`'s differently-shaped `Target0/1/2 Medal` widget
@@ -94,8 +93,7 @@
 //! is equally live. Switching the screen's own widgets and the campaign's
 //! own numbers are different-sized changes - the numbers feed
 //! [`oag_tables::race_campaign::Cell::evaluate_medal`], a medal-law question
-//! this lane did not verify end to end. See
-//! `data/scratch/drive-2026-09-27/hd-targets.md` for the full writeup.
+//! this lane did not verify end to end.
 //!
 //! # What is genuinely new
 //!
@@ -182,14 +180,13 @@ const TITLE_ID: &str = "FE_RC";
 ///
 /// `footer_overlay` is [`hd_cell_draw_list`]'s own parameter, unchanged:
 /// `Campaign Selection`'s own RPCS3 frames
-/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
-/// `01-l1-tap.png`) show `NAVIGATION`/`CONFIRM`/`BACK` under a screen the
+/// (RPCS3 frames of the right tap and the L1 tap) show `NAVIGATION`/`CONFIRM`/`BACK` under a screen the
 /// shared front-end root also draws the footer for - the
 /// `NavigationController` is not gated to one screen - so this one gets it
 /// too. **Correction, 2026-09-25**: an earlier pass cited
-/// `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png` here as `Grid
+/// a default-cell frame here as `Grid
 /// Selection Fury` showing a third `CHANGE DIFFICULTY` prompt; every frame
-/// in that directory is actually `Cell Selection` (`grid8`'s own hex grid,
+/// in that capture set is actually `Cell Selection` (`grid8`'s own hex grid,
 /// confirmed by `01-down.png`/`02-square.png`/`02-triangle.png`'s clean,
 /// legible captures of the same session), and `Grid Selection`/`Grid
 /// Selection Fury` author no `DifficultyButton` widget anywhere in
@@ -506,7 +503,6 @@ pub fn hd_cell_draw_list(
     // same way, on the same evidence.** The pre-switch gate here
     // (`TimeTrial | Zone | Elimination | SpeedLap`) excluded `Race`, and
     // `grid8_3_1`'s own frame
-    // (`data/scratch/drive-2026-09-27/hd-targets/fury-race-3-1.png`)
     // contradicts that directly: a real `TARGET (NOVICE)` row with
     // `1ST`/`2ND`/`3RD` beside gold/silver/bronze icons, on a `Race` cell.
     // Combined with `grid8_3_2` (`Elimination`) and `grid8_4_2` (`Speed
@@ -536,7 +532,7 @@ pub fn hd_cell_draw_list(
             // `EPoints Title`'s own `<Values string="00/16 POINTS">` is a
             // dummy placeholder, not the runtime format - measured directly
             // against a live RPCS3 frame on this exact cell
-            // (`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`,
+            // (a live RPCS3 frame,
             // `grid8_3_2` selected, a fresh zero-medal profile): the real
             // screen reads `"0/21 POINTS"`, not zero-padded, and `21` is
             // `grid_summary.max_points` (`3 * cell_count`, `Grid_PointsPossible`),
@@ -672,8 +668,7 @@ pub fn hd_cell_draw_list(
 /// - **A placement target reads as an ordinal, not a bare number.**
 ///   `grid8_3_1` (`Race`) and `grid8_3_2` (`Elimination`) both show `1ST`/
 ///   `2ND`/`3RD` beside the gold/silver/bronze icons
-///   (`data/scratch/drive-2026-09-27/hd-targets/fury-race-3-1.png`,
-///   `data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`), never the raw
+///   (live RPCS3 frames), never the raw
 ///   `1`/`2`/`3` [`Cell::targets_for_difficulty`] actually carries for those
 ///   cells (`grid_08.xml`'s own `EasyGold Target="1"` and siblings, on
 ///   every `Race`/`Elimination`/`NitroBattle`/`Detonator` cell in the
@@ -708,7 +703,7 @@ fn hd_target_value(value: i64, cell: &Cell, strings: &StringTable) -> String {
 
 /// `1`/`2`/`3` to `"1ST"`/`"2ND"`/`"3RD"` through
 /// `IG_HUD_1ST`/`IG_HUD_2ND`/`IG_HUD_3RD`
-/// (`data/scratch/lane-hd-sel/english-entries-data06.xml`) -
+/// (the `DATA06` English string entries) -
 /// [`hd_target_value`]'s own placement-mode arm. A value outside `1..=3`
 /// falls back to the bare number: every placement target measured on this
 /// disc is exactly one of the three (see [`hd_target_value`]'s own doc), so
@@ -726,8 +721,7 @@ fn hd_ordinal(value: i64, strings: &StringTable) -> String {
 
 /// Centiseconds to `M.SS.CC` - **`Time Trial`/`Speed Lap`'s own separator on
 /// Wipeout HD/Fury is a period throughout, not [`super::draw::format_centiseconds`]'s
-/// `M:SS.CC` colon**, measured directly: `grid8_4_2`'s own live frame
-/// (`data/scratch/drive-2026-09-27/hd-targets/fury-speedlap-4-2.png`) reads
+/// `M:SS.CC` colon**, measured directly: `grid8_4_2`'s own live frame reads
 /// `"0.47.50"`/`"0.49.50"`/`"0.51.50"` for its own gold/silver/bronze lap
 /// targets (`EasyGold Target="4750"`/`EasySilver Target="4950"`/`EasyBronze
 /// Target="5150"`, `grid_08.xml`) - every one all-period. Kept as its own

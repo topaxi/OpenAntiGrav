@@ -377,9 +377,7 @@ and only moving nodes take slots).
 
 Two captures of Tower at the grid, `--anim-seconds 0` and `20`, differ by
 28,327 pixels: the sky traffic the clip flies in past the statue
-(`data/shots/2048_tower_anim_0s_20s.png`, top and bottom; the craft's
-airbrakes before and after the node table in
-`data/shots/2048_feisar_airbrakes_before_after.png`). Altima's
+(a 0 s and 20 s frame pair, top and bottom; the craft's airbrakes before and after the node table). Altima's
 grid view shows none of its 130 moving meshes - the nearest, a cat balloon,
 is 190 units off and 37 degrees above the camera's frame - so the fix there
 is only measurable, not visible, from the grid.

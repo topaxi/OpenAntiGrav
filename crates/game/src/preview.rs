@@ -34,6 +34,7 @@ use crate::render::letterbox_in;
 
 pub mod psp2_scene;
 pub mod track_model;
+pub mod variant;
 
 /// The craft's framing on a title whose `Team Selection` draws the race hull
 /// ([`oag_title::FrontEnd::ship_preview_hull`]): **fixed, not a turntable** -
@@ -210,15 +211,14 @@ pub fn orbit_for(kind: oag_ui_screens::picker::Kind, seconds: f32) -> Orbit {
 /// rounding of `-(-145, 13) * (640/480, 448/272)`) suggested it, and applying
 /// the PSP's own sign to the PS2's raw values confirmed it live - the outline
 /// lands bottom-left of the panel instead of inside it
-/// (`data/scratch/pulse-mode3d/shots/track-select-ps2.png` before the flip
-/// below). **What is not independently confirmed:** the `<Model>`'s own
+/// before the flip
+/// below. **What is not independently confirmed:** the `<Model>`'s own
 /// rotation order and axis handedness - PSP code builds its transform in a
 /// form consistent with row-vector composition, `v * RotY * RotX * T`, which
 /// this reads into this renderer's column-vector convention as `T * RotX *
 /// RotY` applied innermost-first the same way, a plausible transpose rather
 /// than a breakpoint-confirmed one. A live PSP screenshot at this reading
-/// looks right (`data/scratch/pulse-mode3d/shots/track-select-psp.png`
-/// against a live PPSSPP capture of the same panel), which does not prove the
+/// looks right against a live PPSSPP capture of the same panel, which does not prove the
 /// order - RotY here is `0.1` rad, small enough that a wrong order would be
 /// hard to see on this circuit alone.
 #[must_use]
@@ -232,7 +232,7 @@ pub fn mode3d_view_projection(model: &oag_ui::screen::Model, space: Space) -> Op
     // The PS2 pressing's own OriginX/OriginY read negated relative to the
     // PSP's - see this function's own doc - confirmed live 2026-09-28:
     // applying the PSP sign to the PS2's raw values landed the outline
-    // bottom-left of the panel instead of inside it (`data/scratch/pulse-mode3d/`).
+    // bottom-left of the panel instead of inside it.
     let sign = if space.size == Space::PS2.size {
         -1.0
     } else {

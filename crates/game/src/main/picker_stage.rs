@@ -45,6 +45,9 @@ pub(crate) enum PreviewSource {
     Ship {
         location: String,
         skins: Vec<(String, String)>,
+        /// How a variant's suffix joins the team's directory, where the team
+        /// has a variant table - the preview follows the selected variant.
+        join: Option<oag_title::VariantJoin>,
     },
 }
 
@@ -254,7 +257,7 @@ impl PickerStage {
         let index = self.model.index();
         let livery = match self.livery_axis {
             LiveryAxis::Skin => self.model.variant().map(|(id, _)| id.clone()),
-            LiveryAxis::Variant => None,
+            LiveryAxis::Variant => self.model.variant().map(|(id, _)| id.clone()),
         };
         let key = (index, livery);
         if self.built_for.as_ref() == Some(&key) {
@@ -274,7 +277,7 @@ impl PickerStage {
         let circuit_model =
             oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
         self.preview = if self.previews.meshes || hull_only || circuit_model {
-            match self.load_preview(gpu, index, key.1.as_deref()) {
+            match self.load_preview(gpu, index, key.1.as_deref(), self.livery_axis) {
                 Ok(preview) => Some(preview),
                 Err(error) => {
                     warn!("{error:#} - the preview draws nothing");
@@ -347,7 +350,13 @@ impl PickerStage {
         }
     }
 
-    fn load_preview(&mut self, gpu: &Gpu, index: usize, skin: Option<&str>) -> Result<Preview> {
+    fn load_preview(
+        &mut self,
+        gpu: &Gpu,
+        index: usize,
+        livery: Option<&str>,
+        axis: LiveryAxis,
+    ) -> Result<Preview> {
         let source = self
             .sources
             .get(index)
@@ -358,12 +367,35 @@ impl PickerStage {
             .with_context(|| format!("entry {index} has no circuit model on the disc"))?;
         let circuit_model =
             oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
+        // The variant row picks the directory the hull is read from; the
+        // skin row picks a paint over it.
+        let (skin, variant) = match axis {
+            LiveryAxis::Skin => (livery, None),
+            LiveryAxis::Variant => (None, livery.filter(|id| !id.is_empty())),
+        };
+        let variant_name = match (&source, variant) {
+            (PreviewSource::Ship { location, join, .. }, Some(variant))
+                if self.previews.ship_hull.is_some() =>
+            {
+                let located = oag_game::preview::variant::variant_location(*join, location, variant);
+                PreviewSource::Ship {
+                    location: located,
+                    skins: Vec::new(),
+                    join: None,
+                }
+                .entry_name(self.previews.ship_hull, self.previews.front_end)
+            }
+            _ => None,
+        };
         let mut model = if circuit_model {
             oag_game::preview::psp2_scene::circuit_model(&mut self.archives, &name)
+                .with_context(|| format!("{name} did not resolve as a preview mesh"))?
         } else {
-            oag_game::preview::model(&mut self.archives, &name)
-        }
-        .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
+            let entry = variant_name.as_deref().unwrap_or(&name);
+            oag_game::preview::variant::model_or_default(&mut self.archives, entry, Some(&name))
+                .with_context(|| format!("{entry} did not resolve as a preview mesh"))?
+                .0
+        };
         // The chosen paint over the hull's own texture slots - the same
         // swap a race makes (`oag_livery::ship_skin`), and the same
         // rule when it fails: the hull keeps its own paint, and the log
@@ -504,6 +536,7 @@ mod tests {
         let source = PreviewSource::Ship {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
+            join: None,
         };
         assert_eq!(source.entry_name(None, None).as_deref(),
             Some(r"Data\Ships\Feisar\ship_FE.vex"));
@@ -515,6 +548,7 @@ mod tests {
         let source = PreviewSource::Ship {
             location: r"Data\Ships\Feisar_c1".to_string(),
             skins: Vec::new(),
+            join: None,
         };
         assert_eq!(
             source.entry_name(Some("ship.vex"), None).as_deref(),

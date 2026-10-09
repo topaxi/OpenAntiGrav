@@ -52,7 +52,7 @@ pub(crate) struct GhostArgs {
     ///
     /// ```sh
     /// cargo run -p oag-game -- --race --mode time_trial --autopilot \
-    ///     --ticks 9000 --record-ghost data/scratch/lap.oagr --screenshot /dev/null
+    ///     --ticks 9000 --record-ghost lap.oagr --screenshot /dev/null
     /// ```
     #[arg(long, value_name = "FILE.oagr")]
     pub(crate) record_ghost: Option<PathBuf>,
@@ -277,7 +277,6 @@ pub(crate) struct IntroArgs {
     /// would. Chosen, not measured: the controls are this project's own.
     #[arg(long, value_name = "POSE")]
     pub(crate) touch_overlay: Option<String>,
-
 }
 
 /// The motion blur's two overrides.

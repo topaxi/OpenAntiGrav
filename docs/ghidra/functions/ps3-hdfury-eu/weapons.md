@@ -1049,7 +1049,7 @@ executable: not checkable here (no PS4 emulator).
 - **Node clock.** `write_node_anims(age)` scales `sphere`/`bloom` 1x to 18x (model radius 6.44, so 9.3x = 60 units at 0.1 s).
 - **Chosen, not measured:** the orientation (the struck craft's own; `Start`'s source matrix unresolved), the
   per-viewport visibility gate (not reproduced), alphas held to 1, the 16 rotated entries at `+0x190` not drawn.
-- **Matched pair** (Talon's Junction, `--force-missile-hit`, `pair_d.png`, film `m5`
+- **Matched pair** (Talon's Junction, `--force-missile-hit`, a matched frame pair (not kept), film `m5`
   `h_011..h_028`): ours draws the cream-yellow core, orange ray arcs and ring discs, shape and colour like the film, but mean luma
   is 136/175/200/192/178 at ages 0.03/0.1/0.2/0.37/0.5 s against the film's 217/224/242/208/182. **Not reproduced:** the film's
   white to the frame edge that also washes the HUD and the player's craft, jumping 139 to 217 in one 30 fps frame. The model does not
@@ -1082,7 +1082,7 @@ begin with immediate vertex data. No draw on any other target follows and the sa
 the HUD with or without an explosion. (Subchannels other than 0 hold 23-24 blits per frame; they are the bloom
 chain's resolves or copies, not read further.) So the HUD is not washed by a later pass. It *looks* washed because most of it is
 translucent: the opaque hexes (lap, position, the damage ring) keep their colours over the white in every
-screenshot, while the lap-time panel and the speed readout fade (`hit0.png`,
+screenshot, while the lap-time panel and the speed readout fade (frames not kept,
 `run3/hit1.png`). The film's "HUD washed" is translucency over white, **confidence 85**.
 
 **2. The wash is already in the scene target, the bloom adds to it.** `run3` read the scene target `00f50000`
@@ -1091,7 +1091,7 @@ through the GDB stub, see `rpcs3-capture.md`) at the same pause as the screensho
 209, final 232; pixels at or above 250 are **22.7 % of the scene and 45.8 % of the final**. At 0.50 s: 96 to 113 and
 5.0 % to 8.3 %. At 0.033 s: 88 to 92 (no wash yet) and at rest 89 to 91. The explosion in the scene target is
 yellow-orange ring discs and long light streaks over lit walls, no flat white
-(`sheet5.png`, left final, right scene). The composite and bloom chain (`00741f41` down to
+(a contact sheet, not kept: left final, right scene). The composite and bloom chain (`00741f41` down to
 320x180 and 160x90, blurs `00741fc1`/`00741881`/`00741c01`, composite `007434c1` onto `00cc0000`) is the same set of
 programs with or without an explosion: the seven fragment programs (`741f40`, `741fc0`, `741880`, `741c00`, `7434c0`, and
 the HUD's `744140`/`744180`) disassemble to the same text with the same patched constants in `base`, `hit0` and `hit1`, so

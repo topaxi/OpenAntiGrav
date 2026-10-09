@@ -49,3 +49,47 @@ fn the_race_hull_frames_to_a_hull_sized_sphere() {
         );
     }
 }
+
+/// The preview follows the selected variant: each of a team's three
+/// directories carries a hull of its own, and the three are not one mesh.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn each_variant_directory_has_a_hull_of_its_own() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let options = oag_game::boot::Options {
+        language: None,
+        source: image.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-hd-ship-preview-ground-truth"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+    };
+    let (_, mut archives, title) = oag_game::boot::load_shell(&options).expect("HD boots");
+    let join = title.race.team_variants_for("Feisar").map(|v| v.join);
+    assert!(join.is_some(), "HD offers Feisar a variant table");
+    let mut shapes = Vec::new();
+    for variant in ["", "_c1", "_n1"] {
+        let location =
+            oag_game::preview::variant::variant_location(join, r"Data\Ships\Feisar", variant);
+        let entry = oag_game::preview::ship_entry(title, &location);
+        let (model, loaded) =
+            oag_game::preview::variant::model_or_default(&mut archives, &entry, None)
+                .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+        assert_eq!(loaded, entry, "no fallback for a hull the disc ships");
+        shapes.push((model.vertices.len(), model.indices.len()));
+    }
+    shapes.sort_unstable();
+    shapes.dedup();
+    assert_eq!(
+        shapes.len(),
+        3,
+        "three directories, three hulls: {shapes:?}"
+    );
+}

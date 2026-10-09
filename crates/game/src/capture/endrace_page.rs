@@ -277,6 +277,7 @@ fn endrace_page(
                 .map(|trophy| PreviewRequest {
                     hull_only: false,
                     entry: trophy.placement.model.src.clone(),
+                    fallback: None,
                     skin: None,
                     rect: [0.0, 0.0, grid[0], grid[1]],
                     kind: oag_ui_screens::picker::Kind::Ship,

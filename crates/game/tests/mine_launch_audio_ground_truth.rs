@@ -53,7 +53,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 }
 
 /// Lays a whole cluster from a moving craft, mixes it through the real audio
-/// path and writes the result to `data/shots/mine-launch.wav`.
+/// path and writes the result to a `.wav` under `data/shots/`.
 ///
 /// **What this proves that the unit tests in `race::tests::cues` cannot**: not
 /// only that a `CueEvent` is queued, but that it survives `place()`'s range

@@ -697,7 +697,7 @@ fn every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone() {
 /// visible: the sprites were missing from `ALWAYS_ON`, and the eleven
 /// `ZonePlus<N>` labels carry no `idstring`, so `oag_hud::draw_list`'s
 /// text allow-list dropped every one of them. Checked against the reference
-/// frame `data/shots/hd_zone_hud_original.png` (gitignored), which is a Zone
+/// frame (a maintainer capture, gitignored), which is a Zone
 /// race on zone 1: `SUB-VENOM` on the current row, `1` beside it, and the ten
 /// rows below it numbered `2` to `11`.
 ///
@@ -805,7 +805,7 @@ fn a_zone_race_draws_the_ladder_and_numbers_it_from_the_current_zone() {
 
 /// **The zone-8 reference frame, row for row.**
 ///
-/// `data/shots/hd_zone_hud_original_zone8.png` (gitignored) is the capture that
+/// The zone-8 frame (a maintainer capture, gitignored) is the capture that
 /// settled two things at once: the recovered threshold table's widest band so
 /// far, and where the next class's name goes. It reads
 ///

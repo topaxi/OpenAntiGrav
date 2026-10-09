@@ -159,7 +159,7 @@ Under this law, release on tick 273, the time on tick `273 + k` is
 test's `lit_white`) are zero for `k` in 18-30, 59-67 and 104-116, centres +24,
 +63, +110. The capture's dark centres, both boots: **+23, +61, +109**. The held
 loop this replaces gave +50, +89, +129. Side by side at matched ticks:
-`strip_a_step.png` and `strip_b_pulses.png` (local
+Two strips, step A and pulses B (local
 scratch, not committed).
 
 One tick is soft: the window check runs in the race manager and the advance
@@ -238,7 +238,7 @@ panel (z -3.9 against -6.15), so this is the board-shading gap in
 
 **Lead's question on the start tick:** not pinned this pass; nothing here
 explains the backdrop turning green two ticks early in
-`strip_a_step.png`.
+the step-A strip (not kept).
 
 ## Open
 
