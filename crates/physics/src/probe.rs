@@ -356,6 +356,8 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         four_corner: _,
         // Not hashed, for `on_grid`'s reason.
         hover_cap: _,
+        // Not hashed: the race writes it from the title every tick.
+        hover_rig: _,
         launch,
         time_airborne,
         mag_lock_blend,

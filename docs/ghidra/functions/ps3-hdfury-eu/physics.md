@@ -457,4 +457,5 @@ The craft's `+0x120..+0x150` and `+0x160..+0x190` hold four hull points and thei
 points in world space; in the body's frame they sit at `(+/-1.5, -1.125, +/-4.5)` and
 `(+/-1.5, -5.25, +/-4.5)`. This engine's two Pulse probes sit at `(0, -1.125, +/-4.5)`
 with a 4.125 reach. Same fore-aft arm, same drop, same reach, and four springs instead
-of two: the first place to look for HD's shallower pitch.
+of two. The spring law behind them, and why it pitches shallower, is on
+[hover-four-point.md](hover-four-point.md) (2026-10-09).

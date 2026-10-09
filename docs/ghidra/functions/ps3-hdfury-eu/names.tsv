@@ -674,3 +674,9 @@
 0x00aec2c0	data	WeaponPad_CoolingGlowVector	90	pads.md
 0x00aec2d0	data	WeaponPad_GlowScaleVector	90	pads.md
 0x002e0450	function	WeaponPad_InitStatics	75	pads.md
+# 2026-10-09 hd-pitch-airbrake: the four-point hover and the craft terms beside it
+0x000ede88	function	Craft_HoverFourPoint	88	hover-four-point.md
+0x000edb50	function	Craft_UpdateSteering	85	hover-four-point.md
+0x000eda30	function	Craft_ApplyAngularDamping	75	hover-four-point.md
+0x000eff78	function	Craft_ApplyLateralGrip	78	hover-four-point.md
+0x000f0700	function	Craft_UpdateBrake	72	hover-four-point.md

@@ -255,6 +255,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // preview with the stills the entry's own `screen.xml` authors.
     preview_meshes: false,
     ship_preview_hull: None,
+    circuit_models: &[],
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,

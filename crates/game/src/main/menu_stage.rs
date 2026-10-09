@@ -507,28 +507,14 @@ impl MenuStage {
                 viewport,
                 footer::resolve_clip(None, ticker_clip, frozen_race),
             );
-            let (orbit, seconds, rect) = (
-                picker.orbit(),
-                picker.model.seconds(),
-                picker.layout.preview,
+            picker.draw_preview(
+                gpu,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                self.skin.space(),
             );
-            // `Track Creation`'s own `<Mode3D>` camera, when authored.
-            let mode3d_model = picker.mode3d_model().cloned();
-            if let Some(preview) = picker.preview.as_mut() {
-                preview.draw_auto(
-                    &gpu.device,
-                    &gpu.queue,
-                    encoder,
-                    view,
-                    viewport,
-                    target_size,
-                    self.skin.space(),
-                    mode3d_model.as_ref(),
-                    rect,
-                    orbit,
-                    seconds,
-                );
-            }
             return Ok(());
         }
         // The Race Campaign's own screens - no preview mesh, no slideshow:

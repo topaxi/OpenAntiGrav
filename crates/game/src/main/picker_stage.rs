@@ -67,17 +67,22 @@ impl PreviewSource {
     /// the files it named were the in-race hull and the full 4 MB racing
     /// circuit - a stand-in that looked legible, which is exactly how a
     /// wrong picture survives review.
-    fn entry_name(&self, ship_hull: Option<&str>) -> String {
+    ///
+    /// `None` for a circuit its title draws no model for - see
+    /// [`oag_game::preview::track_entry`].
+    fn entry_name(
+        &self,
+        ship_hull: Option<&str>,
+        front_end: Option<&oag_title::FrontEnd>,
+    ) -> Option<String> {
         match self {
             Self::Track {
                 location, reversed, ..
-            } => {
-                let run = if *reversed { "reverse" } else { "forward" };
-                format!(r"{location}\FE\{run}.vex")
-            }
-            Self::Ship { location, .. } => {
-                format!(r"{location}\{}", ship_hull.unwrap_or("ship_FE.vex"))
-            }
+            } => oag_game::preview::track_entry(front_end?, location, *reversed),
+            Self::Ship { location, .. } => Some(format!(
+                r"{location}\{}",
+                ship_hull.unwrap_or("ship_FE.vex")
+            )),
         }
     }
 }
@@ -95,6 +100,9 @@ pub(crate) struct Previews {
     /// [`oag_title::FrontEnd::ship_preview_hull`]. Ship screens only: a
     /// circuit still needs [`Self::meshes`].
     pub(crate) ship_hull: Option<&'static str>,
+    /// The title's front end, for the per-circuit model table - see
+    /// [`oag_title::FrontEnd::circuit_models`].
+    pub(crate) front_end: Option<&'static oag_title::FrontEnd>,
     /// The front end's own `FEGlobals` table. A per-entity `screen.xml`
     /// declares no globals and still names them for its stills' colour, so
     /// without this Pure's stills tint white - invisible on its white front
@@ -263,7 +271,9 @@ impl PickerStage {
         // A title that previews with stills alone has no mesh to fail to
         // load, so there is nothing here to report as missing.
         let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
-        self.preview = if self.previews.meshes || hull_only {
+        let circuit_model =
+            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
+        self.preview = if self.previews.meshes || hull_only || circuit_model {
             match self.load_preview(gpu, index, key.1.as_deref()) {
                 Ok(preview) => Some(preview),
                 Err(error) => {
@@ -343,7 +353,9 @@ impl PickerStage {
             .get(index)
             .with_context(|| format!("entry {index} has no preview source"))?
             .clone();
-        let name = source.entry_name(self.previews.ship_hull);
+        let name = source
+            .entry_name(self.previews.ship_hull, self.previews.front_end)
+            .with_context(|| format!("entry {index} has no circuit model on the disc"))?;
         let mut model = oag_game::preview::model(&mut self.archives, &name)
             .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
         // The chosen paint over the hull's own texture slots - the same
@@ -361,19 +373,35 @@ impl PickerStage {
         if self.previews.ship_hull.is_some() && matches!(source, PreviewSource::Ship { .. }) {
             oag_game::preview::frame_hull(&mut model);
         }
+        // The circuit model's own material: the ramp comes out of the model
+        // and the preview recolours its vertices every frame.
+        let circuit_model =
+            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
+        let ramp = if circuit_model {
+            Some(
+                oag_game::preview::track_model::Ramp::take(&mut model)
+                    .with_context(|| format!("{name}: reading its material"))?,
+            )
+        } else {
+            None
+        };
         debug!(
             "preview {name}: {} vertices, {} triangles",
             model.vertices.len(),
             model.indices.len() / 3
         );
-        Preview::new(
+        let preview = Preview::new(
             &gpu.device,
             &gpu.queue,
             gpu.config.format,
             self.anisotropy,
             model,
         )
-        .with_context(|| format!("building the preview for {name}"))
+        .with_context(|| format!("building the preview for {name}"))?;
+        Ok(match ramp {
+            Some(ramp) => preview.with_ramp(ramp),
+            None => preview,
+        })
     }
 
     /// Copies whatever the distance worker has measured so far onto the
@@ -405,6 +433,53 @@ impl PickerStage {
         }
     }
 
+    /// Draws the preview mesh over the finished frame: the circuit model on
+    /// HD's own camera, otherwise the circuit's `<Mode3D>` camera or the orbit.
+    pub(crate) fn draw_preview(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        space: oag_display::space::Space,
+    ) {
+        let (orbit, seconds, rect) = (self.orbit(), self.model.seconds(), self.layout.preview);
+        // `Track Creation`'s own `<Mode3D>` camera, when authored.
+        let mode3d_model = self.mode3d_model().cloned();
+        let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
+        let Some(preview) = self.preview.as_mut() else {
+            return;
+        };
+        if let Some(widget) = track_model {
+            preview.draw_track_model(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                &widget,
+                seconds,
+            );
+        } else {
+            preview.draw_auto(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                mode3d_model.as_ref(),
+                rect,
+                orbit,
+                seconds,
+            );
+        }
+    }
+
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
         if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
@@ -426,7 +501,8 @@ mod tests {
             location: r"Data\Ships\Feisar".to_string(),
             skins: Vec::new(),
         };
-        assert_eq!(source.entry_name(None), r"Data\Ships\Feisar\ship_FE.vex");
+        assert_eq!(source.entry_name(None, None).as_deref(),
+            Some(r"Data\Ships\Feisar\ship_FE.vex"));
     }
 
     /// HD names its race hull, not a `ship_FE.vex` that no HD archive carries.
@@ -437,8 +513,8 @@ mod tests {
             skins: Vec::new(),
         };
         assert_eq!(
-            source.entry_name(Some("ship.vex")),
-            r"Data\Ships\Feisar_c1\ship.vex"
+            source.entry_name(Some("ship.vex"), None).as_deref(),
+            Some(r"Data\Ships\Feisar_c1\ship.vex")
         );
     }
 
@@ -452,8 +528,8 @@ mod tests {
             zone: false,
         };
         assert_eq!(
-            forward.entry_name(None),
-            r"Data\Environments\01_Vineta_K\FE\forward.vex"
+            forward.entry_name(None, Some(oag_pulse::FRONT_END)).as_deref(),
+            Some(r"Data\Environments\01_Vineta_K\FE\forward.vex")
         );
         let reversed = PreviewSource::Track {
             location: r"Data\Environments\01_Vineta_K".to_string(),
@@ -461,8 +537,8 @@ mod tests {
             zone: false,
         };
         assert_eq!(
-            reversed.entry_name(None),
-            r"Data\Environments\01_Vineta_K\FE\reverse.vex"
+            reversed.entry_name(None, Some(oag_pulse::FRONT_END)).as_deref(),
+            Some(r"Data\Environments\01_Vineta_K\FE\reverse.vex")
         );
         let zone = PreviewSource::Track {
             location: r"Data\Environments\01_Vineta_K".to_string(),
@@ -470,8 +546,30 @@ mod tests {
             zone: true,
         };
         assert_eq!(
-            zone.entry_name(None),
-            r"Data\Environments\01_Vineta_K\FE\forward.vex"
+            zone.entry_name(None, Some(oag_pulse::FRONT_END)).as_deref(),
+            Some(r"Data\Environments\01_Vineta_K\FE\forward.vex")
+        );
+    }
+
+    /// HD names each circuit's own scene, and a circuit with no row has no
+    /// model at all.
+    #[test]
+    fn hd_track_names_its_circuit_scene() {
+        let source = |location: &str| PreviewSource::Track {
+            location: location.to_string(),
+            reversed: true,
+            zone: false,
+        };
+        assert_eq!(
+            source(r"Data\Environments\10_Sebenco_Climb")
+                .entry_name(None, Some(oag_hd::frontend::FRONT_END))
+                .as_deref(),
+            Some(r"Data\Environments\10_Sebenco_Climb\FE\track06.vex")
+        );
+        assert_eq!(
+            source(r"Data\Environments\99_Nowhere")
+                .entry_name(None, Some(oag_hd::frontend::FRONT_END)),
+            None
         );
     }
 }

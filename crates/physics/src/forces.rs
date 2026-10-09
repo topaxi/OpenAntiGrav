@@ -522,7 +522,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         state.hover_cap,
     );
     let hover = hover::evaluate(state, handling, env, raycaster, target_height);
-    for probe in &hover.probes {
+    for probe in hover.active() {
         if probe.contact {
             state.body.add_force_at_point(probe.force, probe.point);
         }
@@ -532,7 +532,7 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     acc.world_angular += hover.alignment_torque;
 
     // From here on, this frame's contacts.
-    state.grounded = ShipState::quantise_grounded(hover.contacts);
+    state.grounded = state.hover_rig.grounded(hover.contacts);
     // **The landing response is armed in the air, not on touchdown**, and only once the
     // flight has outlasted `rebound_jump_time`: `Ship_UpdateCraft` (`0x08849df0`) keeps
     // `craft+0x284` as the airborne clock and `Ship_HoverTwoPoint` does the arming. A

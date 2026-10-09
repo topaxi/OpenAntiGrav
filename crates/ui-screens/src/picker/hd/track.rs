@@ -28,9 +28,14 @@
 //! Also drawn: the `TrackHexSelection` grid, a circuit per hexagon (see
 //! [`draw_grid`]).
 //!
-//! Not drawn, and said so: the `FlyByMovie` (`preview.bik`, Bink), the
-//! `TrackModel` circuit model, the page squares, the `Padlock` (HD's circuit
-//! gate is open) and the small direction glyphs on the forward hexagon.
+//! The `TrackModel` circuit model is a 3-D pass over this screen's draws:
+//! [`TrackScreen::model`] carries its authored pose, `oag_game::preview::track_model`
+//! places and shades it, and the scene each circuit draws is
+//! `oag_title::FrontEnd::circuit_models`.
+//!
+//! Not drawn, and said so: the `FlyByMovie` (`preview.bik`, Bink), the page
+//! squares, the `Padlock` (HD's circuit gate is open) and the small direction
+//! glyphs on the forward hexagon.
 
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
@@ -69,7 +74,8 @@ pub struct TrackScreen {
     pub common: TeamScreen,
     /// The `Emblem` image's rect. It authors no `src`.
     pub emblem: Option<[f32; 4]>,
-    /// `TrackModel`'s own pose: read and carried, nothing draws it.
+    /// `TrackModel`'s own pose, which `oag_game::preview::track_model` draws
+    /// the circuit's scene at.
     pub model: Option<TrackModel>,
     /// The `TrackHexSelection` widget: circuits on hexagons, see [`super::hex`].
     pub hex_grid: Option<hex::HexGrid>,

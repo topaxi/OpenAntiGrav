@@ -362,6 +362,31 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
 /// provenance rather than this. They have since converged: [`MENU_SKIN`] is
 /// confidence 92 off six agreeing copies of an authored file, and [`BOOT_CHAIN`]
 /// is 85 off two boots that were watched.
+/// The circuit-model scene of each circuit, off the track-select record array
+/// at `0x00924314` (stride `0x1c`, field `+0x0c`; `renderer.md`, confidence
+/// 88). Twelve rows, all present on the disc: the first eight on `DATA02`,
+/// the last four (the pack circuits, named by circuit rather than by number)
+/// on `DATA00`.
+const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
+    const fn row(environment: &'static str, file: &'static str) -> oag_title::CircuitModel {
+        oag_title::CircuitModel { environment, file }
+    }
+    [
+        row("01_Vineta_K", "track01.vex"),
+        row("15_Anulpha_Pass", "track08.vex"),
+        row("03_Track", "track03.vex"),
+        row("04_Chenghou_Project", "track04.vex"),
+        row("02_Track", "track02.vex"),
+        row("10_Sebenco_Climb", "track06.vex"),
+        row("05_Ubermall", "track05.vex"),
+        row("12_Sol_2", "track07.vex"),
+        row("Talons_Junction", "talons_junction.vex"),
+        row("Amphiseum", "Amphiseum.vex"),
+        row("Modesto_Heights", "modesto.vex"),
+        row("Tech_De_Ra", "tech_de_ra.vex"),
+    ]
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -384,11 +409,12 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_setup: None,
     // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
     // which HD's `screen.xml`s name and no HD archive carries. The craft the
-    // original draws on `Team Selection` is the race hull, named here; the
-    // circuit model has no such file and stays undrawn. See
-    // `oag_ui_screens::picker::hd`.
+    // original draws on `Team Selection` is the race hull, named here, and
+    // `Track Selection` draws each circuit's own scene, named in
+    // `circuit_models`. See `oag_ui_screens::picker::hd`.
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
+    circuit_models: &CIRCUIT_MODELS,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
     // [`names::FRONTEND_ROOT`] documents reaching `DATA00`'s `skin.xml`.

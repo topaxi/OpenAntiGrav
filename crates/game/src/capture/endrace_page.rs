@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result};
 
-use crate::capture::menu_page::{PreviewRequest, open_for_previews};
+use crate::capture::preview_pass::{PreviewRequest, open_for_previews};
 use oag_tables::race_campaign::Medal;
 
 /// Which EndRace screen a `--menu-page` name asks for.
@@ -281,6 +281,8 @@ fn endrace_page(
                     rect: [0.0, 0.0, grid[0], grid[1]],
                     kind: oag_ui_screens::picker::Kind::Ship,
                     mode3d: Some(trophy.placement.model.clone()),
+                    track_model: None,
+                    seconds: 0.0,
                 });
             let model = oag_ui_screens::endrace::Rewards {
                 medal,
