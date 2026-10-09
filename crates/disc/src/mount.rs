@@ -41,6 +41,18 @@ pub fn len(file: &ImageFile) -> io::Result<u64> {
     file.metadata().map(|metadata| metadata.len())
 }
 
+/// Everything at `path`, through [`open`]: a file natively, a registered blob
+/// on the web. How a key file beside an image is read on both.
+///
+/// # Errors
+/// As [`open`], or the read failed.
+pub fn read_all(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    open(path)?.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
 #[cfg(target_arch = "wasm32")]
 pub use web::{Blob, ImageFile, len, open, register};
 

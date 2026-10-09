@@ -371,12 +371,18 @@ pub fn keys_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|d| d.join("oag").join("keys"))
 }
 
-/// Every key the player has put where this build looks: beside the image, then
+/// Every key the player has put where this build looks: beside the image (on
+/// the web, a key file registered under the image's mount path), then
 /// every `*.dkey` / `*.key` in [`keys_dir`]. An unreadable or malformed file is
 /// skipped silently (its content may be a key; it is never echoed).
 #[must_use]
 pub fn find_keys(image: &Path) -> Vec<DiscKey> {
-    let mut paths = sibling_key_paths(image);
+    let mut keys: Vec<DiscKey> = sibling_key_paths(image)
+        .iter()
+        .filter_map(|p| crate::mount::read_all(p).ok())
+        .filter_map(|bytes| DiscKey::parse(&bytes))
+        .collect();
+    let mut paths = Vec::new();
     if let Some(dir) = keys_dir()
         && let Ok(read) = std::fs::read_dir(dir)
     {
@@ -388,11 +394,13 @@ pub fn find_keys(image: &Path) -> Vec<DiscKey> {
         stored.sort();
         paths.extend(stored);
     }
-    paths
-        .iter()
-        .filter_map(|p| std::fs::read(p).ok())
-        .filter_map(|bytes| DiscKey::parse(&bytes))
-        .collect()
+    keys.extend(
+        paths
+            .iter()
+            .filter_map(|p| std::fs::read(p).ok())
+            .filter_map(|bytes| DiscKey::parse(&bytes)),
+    );
+    keys
 }
 
 /// Stores `key` in [`keys_dir`] as `<name>.dkey` (the name only picks the

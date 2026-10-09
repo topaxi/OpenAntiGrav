@@ -49,8 +49,10 @@ Architecture, measurements, hosting and limits:
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language
   Selection only; Pure reaches its Press Start title and no further.
-- **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
-  package's sibling files cannot be found beside one picked file.
+- **Vita and PS4 packages** cannot open: a package's sibling files cannot be
+  found beside one picked file. (An encrypted PS3 image opens with its key,
+  which the page takes as a dropped or picked file or as hex; the key path is
+  untried in Firefox and WebKit.)
 - **Movies (2026-10-09, web-video lane)**: the PSP's `.PMF`s play through
   WebCodecs (Pulse intro and backdrop, Pure's dev/pub reel; Chromium's frames
   byte-equal to native). Open: the PS2's MPEG-2 (`.PSS`, `.IPF`) and HD's Bink

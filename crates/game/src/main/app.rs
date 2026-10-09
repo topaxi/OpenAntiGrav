@@ -635,6 +635,13 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } => session.pointer.wheel(delta),
             WindowEvent::Touch(touch) => session.touch(touch),
 
+            // A file dragged onto the chooser: a disc key or a disc image
+            // (see `Launcher::dropped`). winit's Wayland backend reports none
+            // of these, so a drop works under X11 and on Windows and macOS.
+            WindowEvent::HoveredFile(_) => session.file_hover(true),
+            WindowEvent::HoveredFileCancelled => session.file_hover(false),
+            WindowEvent::DroppedFile(path) => session.file_dropped(&path),
+
             WindowEvent::ModifiersChanged(modifiers) => {
                 crate::clipboard::set_ctrl_held(modifiers.state().control_key());
             }

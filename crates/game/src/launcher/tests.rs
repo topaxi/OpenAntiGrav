@@ -519,3 +519,99 @@ fn the_desktop_not_found_screen_names_its_folder_and_fits() {
         assert!(named, "the folder is spelled out for {folder}");
     }
 }
+
+const GOOD_KEY: &[u8] = b"00112233445566778899aabbccddeeff\n";
+
+/// A key dropped with no prompt open is tried on every locked row, stored
+/// for each it opens, and those rows are re-read; the ones it does not open
+/// stay locked.
+#[test]
+fn a_dropped_key_opens_the_locked_rows_it_fits() {
+    use std::cell::RefCell;
+    let stored = RefCell::new(Vec::new());
+    let mut l = Launcher::new(vec![locked("a.iso"), locked("b.iso")]);
+    l.dropped_key_with(
+        GOOD_KEY,
+        |image, _| image.ends_with("b.iso"),
+        |_, name| {
+            stored.borrow_mut().push(name.to_string());
+            Ok(())
+        },
+    );
+    assert_eq!(*stored.borrow(), ["b"], "only the disc it opens is stored");
+    assert!(l.entry().is_none(), "a key that fit asks nothing further");
+}
+
+#[test]
+fn a_dropped_key_that_fits_nothing_opens_the_prompt_with_the_reason() {
+    let mut l = Launcher::new(vec![locked("a.iso")]);
+    l.dropped_key_with(GOOD_KEY, |_, _| false, |_, _| panic!("nothing to store"));
+    let entry = l.entry().expect("the prompt opens on the locked row");
+    assert_eq!(entry.message(), Some("THAT KEY DOES NOT OPEN THIS DISC"));
+}
+
+#[test]
+fn a_dropped_file_that_is_no_key_says_so_and_stores_nothing() {
+    let mut l = Launcher::new(vec![locked("a.iso")]);
+    l.dropped_key_with(b"hello", |_, _| true, |_, _| panic!("nothing to store"));
+    assert_eq!(
+        l.entry().and_then(|e| e.message()),
+        Some("THAT FILE IS NOT A DISC KEY")
+    );
+    let mut plain = Launcher::new(vec![broken("x.iso")]);
+    plain.dropped_key_with(b"hello", |_, _| true, |_, _| panic!("nothing to store"));
+    assert!(plain.entry().is_none(), "no locked row, no prompt to open");
+}
+
+/// With the prompt open the key lands in it and is submitted as ENTER would:
+/// stored, the prompt closed, the row re-read.
+#[test]
+fn a_dropped_key_with_the_prompt_open_is_submitted_through_it() {
+    let mut l = Launcher::new(vec![locked("a.iso")]);
+    let mut input = Input::new();
+    press(&mut input, Button::Cross);
+    l.update(&mut input);
+    assert!(l.typing_is_open());
+    l.dropped_key_with(
+        GOOD_KEY,
+        |_, _| false,
+        |_, _| panic!("a wrong key is not stored"),
+    );
+    assert_eq!(
+        l.entry().and_then(|e| e.message()),
+        Some("THAT KEY DOES NOT OPEN THIS DISC")
+    );
+    assert_eq!(l.entry().map(key_entry::KeyEntry::len), Some(32));
+    l.dropped_key_with(GOOD_KEY, |_, _| true, |_, _| Ok(()));
+    assert!(!l.typing_is_open(), "an accepted key closes the prompt");
+}
+
+#[test]
+fn hovering_a_file_says_it_will_be_used() {
+    let mut l = Launcher::new(vec![broken("x.iso")]);
+    let says = |l: &Launcher| {
+        draw_list(l)
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "DROP THE FILE TO USE IT"))
+    };
+    assert!(!says(&l));
+    l.set_hovering(true);
+    assert!(says(&l));
+    l.set_hovering(false);
+    assert!(!says(&l));
+}
+
+/// A dropped file bigger than a key is an image: listed, the cursor on it,
+/// and not played when it will not open.
+#[test]
+fn a_dropped_non_image_is_listed_as_one_that_will_not_open() {
+    let dir = std::env::temp_dir().join(format!("oag-drop-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("junk.iso");
+    std::fs::write(&file, vec![0u8; 4096]).unwrap();
+    let mut l = Launcher::new(vec![broken("x.iso")]);
+    assert_eq!(l.dropped(&file), None);
+    assert_eq!(l.rows().len(), 2);
+    assert!(!l.rows()[1].is_playable());
+    std::fs::remove_dir_all(&dir).ok();
+}

@@ -128,7 +128,11 @@ its absolute LBA lies in a gap between sector 0's plain regions (AES-128-CBC, IV
 twelve zero bytes plus the LBA big-endian, chaining reset per sector, exactly as
 above). `DiscImage::open` finds a key itself: `<stem>.dkey`/`<stem>.key` beside
 the image, then every `.dkey`/`.key` in `<config>/oag/keys/`; the chooser's key
-prompt writes there. See [installing](../overview/installing.md#hd--fury-the-disc-is-read-encrypted-in-place).
+prompt writes there. On the web the page mounts a key it was given as
+`<stem>.dkey` beside the image, the same first place
+([web.md](../tools/web.md#disc-keys)); `oag_disc::ps3_probe` answers "does this
+need a key, and does this one open it" for the page and the launcher's file drop.
+See [installing](../overview/installing.md#hd--fury-the-disc-is-read-encrypted-in-place).
 
 - **The oracle is the decision, never the region table.** A decrypted image keeps
   sector 0's table, so "table says encrypted" and "a key exists" cannot choose

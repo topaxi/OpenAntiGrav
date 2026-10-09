@@ -11,10 +11,22 @@ h1 { margin-top: 0; font-weight: 600; letter-spacing: .04em; }
   border: 1px solid #4af; border-radius: 4px; background: #123; color: #def;
   font: inherit; cursor: pointer; }
 .button:hover { background: #246; }
-.button input { display: none; }
+.button { position: relative; }
+/* Visually hidden but still focusable, so the keyboard reaches the file pickers. */
+.button input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .small, .formats { font-size: .85em; color: #999; }
 #status { min-height: 1.5em; color: #fc6; }
 a { color: #8cf; }
+h2 { font-size: 1.05em; margin: 1rem 0 .3rem; }
+#keybox, #saved { border: 1px solid #345; border-radius: 6px; padding: .2rem 1rem .6rem; margin: .8rem 0; }
+.keyrow { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; margin: .4rem 0; }
+.keyrow label { flex-basis: 100%; }
+.keyrow input { flex: 1 1 14rem; min-width: 0; padding: .5rem; font: inherit; font-family: ui-monospace, monospace;
+  background: #000; color: #def; border: 1px solid #4af; border-radius: 4px; }
+#saved-keys { list-style: none; margin: 0; padding: 0; }
+#saved-keys li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.button:focus-visible, .keyrow input:focus-visible, .button:focus-within { outline: 2px solid #fc6; outline-offset: 2px; }
+body.dragging #picker { border-color: #4af; box-shadow: 0 0 0 3px #4af8; }
 #oag-canvas:fullscreen { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; }
 #picker { max-height: 92vh; overflow-y: auto; box-sizing: border-box; width: calc(100% - 1rem); max-width: 44rem; }
 table { border-collapse: collapse; width: 100%; font-size: .85em; margin: 1rem 0; }

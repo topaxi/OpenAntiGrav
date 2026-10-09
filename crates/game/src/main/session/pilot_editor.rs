@@ -596,6 +596,24 @@ impl Session {
             .is_some_and(crate::overlay::Prompt::is_typing)
     }
 
+    /// A file is being dragged over the window (`true`) or has left it. Only
+    /// the chooser says anything about it.
+    pub(crate) fn file_hover(&mut self, over: bool) {
+        if let Stage::Launcher(stage) = &mut self.stage {
+            stage.launcher.set_hovering(over);
+        }
+    }
+
+    /// A file dropped on the window. The chooser takes a disc key or a disc
+    /// image; every other stage leaves it alone.
+    pub(crate) fn file_dropped(&mut self, path: &std::path::Path) {
+        if let Stage::Launcher(stage) = &mut self.stage
+            && stage.picked.is_none()
+        {
+            stage.picked = stage.launcher.dropped(path);
+        }
+    }
+
     /// Ctrl+V while the chooser's disc-key prompt is open: asks it to paste.
     pub(crate) fn request_paste(&mut self) {
         if let Stage::Launcher(stage) = &mut self.stage {

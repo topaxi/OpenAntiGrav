@@ -225,15 +225,16 @@ there, measured in headless Chromium and Firefox on 2026-10-09 and listed on the
 page's own picker (`web/index.html`). A test
 ([web_picker_table.rs](../../crates/game/tests/web_picker_table.rs)) compares
 this table with the page's, row for row, so neither can change alone. Only `.chd`
-and plain `.iso` open on the web: an encrypted PS3 image with its `.dkey`, and
-every Vita or PS4 `.pkg`, do not yet ([web.md, "What is missing"](../tools/web.md#what-is-missing)).
+and plain `.iso` open on the web, an encrypted PS3 image with its key (a dropped
+`.dkey`, a picked one or pasted hex digits) among them; every Vita or PS4 `.pkg`
+does not yet ([web.md, "What is missing"](../tools/web.md#what-is-missing)).
 
 | Game | Console | Region | Accepts | Today |
 | --- | --- | --- | --- | --- |
 | Wipeout Pulse | PSP | Europe, USA | .chd, .iso | Races |
 | Wipeout Pulse | PS2 | Europe | .chd, .iso | Front end only |
 | Wipeout Pure | PSP | Europe, USA | .chd, .iso | Not yet |
-| WipEout HD / Fury | PS3 | Europe | decrypted .iso | Races |
+| WipEout HD / Fury | PS3 | Europe | .iso, with its key if encrypted | Races |
 | WipEout 2048 | Vita | Europe, USA | none | Not yet |
 | WipEout: Omega Collection | PS4 | Europe | none | Not yet |
 
