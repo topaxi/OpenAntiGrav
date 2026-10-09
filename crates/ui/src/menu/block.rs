@@ -411,7 +411,8 @@ pub fn draw_split_fill(
 
 /// A stretch of a block's inside drawn in one opaque colour, from drawing-grid
 /// `from` to `to` (clamped to the fill's own extent), top band to bottom edge
-/// - HD's `Team Selection` stat bar marks what a Fury model adds over the
+/// `Team Selection` stat bar marks what a Fury model adds over the classic hull
+/// this way). **Opaque, not [`draw_split_fill`]'s translucent
 /// classic hull this way. **Opaque, not [`draw_split_fill`]'s translucent
 /// coverage**: the original's frame reads the palette entry itself
 /// (`HD_Blue`, `0xffac0717`) with no black showing through. Drawn between
