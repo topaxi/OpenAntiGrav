@@ -114,8 +114,8 @@ renames now verified landed on `ps3-hdfury-eu`.
 
 Working notes with every address checked and every dead end: not committed
 (untracked scratchpad, deleted along with this thread file when the work lands, per this
-project's own convention for `handover-scratch/`-style working files) -
-`handover-scratch/hd-zone-tracklist-re-notes.md` in the worktree this session ran in, for
+project's own convention for scratch-style working files) -
+`hd-zone-tracklist-re-notes.md` in the worktree this session ran in, for
 anyone picking this up in the same checkout.
 
 **Next concrete lead**: find the generic `List`-widget framework class's own item-count /

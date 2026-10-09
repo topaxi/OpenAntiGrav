@@ -36,5 +36,5 @@ boot's seeds, the build reproduces that boot's RAM exactly (four boots, both
    original's own cloud mask. Read the group seeds from RAM (`group+0x70`),
    build ours with them (patch `CHOSEN_SEEDS` in a scratch build), and
    render with `--pose-from` a `psp-trace.py --camera` row of the same tick
-   and `--team` matching. Scripts: `data/scratch/pulse-clouds/ab.py`,
-   `scan.py`, `reproduce.py` (scratch, not permanent).
+   and `--team` matching. Scripts: a throwaway script, not kept,
+   `scan.py`, a throwaway script, not kept (scratch, not permanent).

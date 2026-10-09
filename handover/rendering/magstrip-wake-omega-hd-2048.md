@@ -50,7 +50,7 @@ in `shiphd.bnk`) are weapon and collision cues, not the magstrip loop; who plays
 is the static floor, already handled in `docs/formats/rcsmaterial.md`.
 
 Not done: the Vita PSARCs and the Omega sound banks were not listed or extracted.
-`data/scratch/magfloor-omega-re/` holds the HD and Omega path lists this table came from.
+a scratch directory, not kept holds the HD and Omega path lists this table came from.
 
 ## The law, ready to wire (magstrip-omega-law lane, 2026-10-05)
 

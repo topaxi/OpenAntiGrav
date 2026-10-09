@@ -38,7 +38,7 @@ capture, or a pause on the pulse's own value) is what this lane waits for.
 
 1. Read the open `(E, a)` pairs, then decide the accumulation weight: if `a = 0.15 * E`
    holds at four points, take it as measured. About 30 minutes with
-   `scripts/rpcs3-hd-postchain.py --plan boost:0.2 ...` and `data/scratch/hd-motion-blur/ema.py`
+   `scripts/rpcs3-hd-postchain.py --plan boost:0.2 ...` and a throwaway script, not kept
    (promote it to `scripts/` when used again).
 2. Find what fires `FUN_0029ef40`: break on a write to `0x00ad7880` (the glow state array)
    with `scripts/rpcs3_debugger.py`, then press a speed pad, roll, and take the start boost.

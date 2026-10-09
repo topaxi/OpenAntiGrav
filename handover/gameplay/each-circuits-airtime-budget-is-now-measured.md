@@ -13,7 +13,7 @@ New file: `crates/game/tests/airtime_budget_ground_truth.rs`
 (measurement-only, `OAG_SWEEP`-gated, `#[ignore]`d - never runs in CI or
 `just test-data`; three tests, all print rather than assert). Full data and
 narrative: scratch report at
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/airtime-budget.md`
+`airtime-budget.md`
 (not committed - a scratch path, per this project's own convention for a
 long finding). No axis was tuned this pass - `roll_caution`, `roll_airtime`,
 `roll_chance`, `roll_floor` all untouched. That decision is the maintainer's,
