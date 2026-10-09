@@ -187,6 +187,11 @@ pub struct Picker {
     /// Entries per row on a screen that lays them out as a grid whose rows
     /// are directions - see [`Self::with_rows`]. `0` for a plain list.
     columns: usize,
+    /// How far a finger has dragged HD's hex grid sideways, in columns -
+    /// see [`pointer::PAN_SETTLE_DELAY`]. `0.0` at rest.
+    pan: f32,
+    /// Seconds since a drag last moved the grid.
+    since_drag: f32,
 }
 
 impl Picker {
@@ -212,6 +217,8 @@ impl Picker {
             since_selection: 0.0,
             across: false,
             columns: 0,
+            pan: 0.0,
+            since_drag: 0.0,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -321,6 +328,7 @@ impl Picker {
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
         self.since_selection += dt;
+        self.settle_pan(dt);
     }
 
     /// Rewrites one info row of a circuit entry - how a distance measured on

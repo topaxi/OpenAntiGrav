@@ -42,6 +42,13 @@
 //! off the frame, `185/35/55`), the ghost of an open
 //! row's thumbnail in the neighbouring columns (the frame shows faint ship
 //! silhouettes there; their tint is ours), and the pointer targets.
+//!
+//! # Panning under a finger
+//!
+//! **Chosen, not measured** (the original is pad-only): `cells`' `pan`
+//! slides every column by a fraction of [`PITCH`]`[0]` while a touch drag
+//! moves the grid, with the column entering at one edge and the one leaving
+//! at the other faded by their `Cell::weight`. See `Picker::pan_by`.
 
 use oag_ui::frontend::{Draw, Placed};
 use oag_ui::screen::argb_to_rgba;
@@ -49,7 +56,7 @@ use oag_ui::screen::argb_to_rgba;
 use super::super::Picker;
 
 /// Distance between column centres, and between row centres, in units.
-const PITCH: [f32; 2] = [72.2, 82.8];
+pub(in crate::picker) const PITCH: [f32; 2] = [72.2, 82.8];
 /// A cell's art against the authored 72x62 hexagon.
 const HEX_SCALE: f32 = 1.22;
 /// The hexagon's visible centre inside its 128x64 texture, in texels.
@@ -122,6 +129,9 @@ pub struct Cell {
     /// Visible hexagon, `[x, y, width, height]`.
     pub rect: [f32; 4],
     pub distance: usize,
+    /// How much of the cell shows: `1.0` for every column but the two that
+    /// slide in and out of the grid's edge while it is panned.
+    pub weight: f32,
 }
 
 /// The fill and lock colours `Team Selection` authors, for a grid whose own
@@ -155,20 +165,38 @@ impl HexGrid {
 
     /// Every cell, left column first, for a picker of `count` teams with
     /// `selected` the centre column's.
+    ///
+    /// `pan` is the grid's fractional column offset while a finger drags it
+    /// (see [`super::super::Picker::pan`]): positive slides the columns
+    /// right, which brings one more column in at the left edge and lets the
+    /// right-most one out, each fading by how far it has travelled.
     #[must_use]
-    pub fn cells(&self, selected: usize, count: usize) -> Vec<Cell> {
+    pub fn cells(&self, selected: usize, count: usize, pan: f32) -> Vec<Cell> {
         let mut out = Vec::new();
         if count == 0 || self.columns == 0 {
             return out;
         }
         let centre = self.columns / 2;
-        for column in 0..self.columns {
-            let offset = column as i64 - centre as i64;
+        let slide = pan.abs().min(1.0);
+        let first = if pan > 0.0 { -1 } else { 0 };
+        let last = self.columns as i64 - if pan < 0.0 { 0 } else { 1 };
+        let heave = |column: i64| if column.rem_euclid(2) == 1 { 1.0 } else { 0.0 };
+        for column in first..=last {
+            let offset = column - centre as i64;
             let entry = (selected as i64 + offset).rem_euclid(count as i64) as usize;
-            let shift = if column % 2 == 1 { PITCH[1] * 0.5 } else { 0.0 };
+            let toward = column + if pan < 0.0 { -1 } else { 1 };
+            let shift = PITCH[1] * 0.5 * (heave(column) * (1.0 - slide) + heave(toward) * slide);
+            let weight = if column < 0 || column >= self.columns as i64 {
+                slide
+            } else if (pan > 0.0 && column == self.columns as i64 - 1) || (pan < 0.0 && column == 0)
+            {
+                1.0 - slide
+            } else {
+                1.0
+            };
             for row in 0..self.rows {
                 let (cx, cy) = (
-                    self.origin[0] + column as f32 * PITCH[0],
+                    self.origin[0] + (column as f32 + pan) * PITCH[0],
                     self.origin[1] + row as f32 * PITCH[1] + shift,
                 );
                 out.push(Cell {
@@ -181,6 +209,7 @@ impl HexGrid {
                         HEX_SIZE[1],
                     ],
                     distance: offset.unsigned_abs() as usize,
+                    weight,
                 });
             }
         }
@@ -254,13 +283,15 @@ pub(super) const TEAM_RING: [f32; 4] = [0.73, 0.14, 0.22, 1.0];
 pub(super) fn draw_cells(
     grid: &HexGrid,
     (selected, count): (usize, usize),
+    pan: f32,
     cursor: Option<usize>,
     ring: [f32; 4],
     face: &dyn Fn(&Cell) -> Face,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
-    for cell in grid.cells(selected, count) {
+    for cell in grid.cells(selected, count, pan) {
+        let first_draw = out.len();
         let chosen = cell.distance == 0;
         let (cx, cy) = centre(cell.rect);
         if let Some(placed) = sprites(HEX_SRC) {
@@ -331,6 +362,13 @@ pub(super) fn draw_cells(
             ];
             out.push(sprite(placed, rect, ring));
         }
+        if cell.weight < 1.0 {
+            for draw in &mut out[first_draw..] {
+                if let Draw::Sprite { color, .. } = draw {
+                    color[3] *= cell.weight;
+                }
+            }
+        }
     }
 }
 
@@ -354,6 +392,7 @@ pub(super) fn draw(
     draw_cells(
         grid,
         (picker.index(), picker.entries().len()),
+        picker.pan(),
         cursor,
         TEAM_RING,
         &face,
