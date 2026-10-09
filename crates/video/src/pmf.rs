@@ -398,6 +398,59 @@ pub fn frame_count(video: &[u8]) -> usize {
     }
 }
 
+/// Splits an H.264 Annex B elementary stream into access units, as byte
+/// ranges of `video` with their start codes.
+///
+/// Cut where [`frame_count`] counts, so the two agree: at each access unit
+/// delimiter (NAL type 9), or at the first slice of each picture when a stream
+/// has none. Whatever precedes the first cut (a parameter set ahead of the
+/// first delimiter) stays on the first unit, which is the one a decoder starts
+/// on and needs it. A decoder that takes one picture per chunk (the browser's
+/// WebCodecs) is fed these.
+#[must_use]
+pub fn access_units(video: &[u8]) -> Vec<std::ops::Range<usize>> {
+    let delimited = nal_units(video).any(|nal| nal.first().is_some_and(|b| b & 0x1f == 9));
+    let mut cuts = Vec::new();
+    let mut at = 0;
+    while let Some(start) = find_start_code(video, at) {
+        let body = start + 3;
+        let starts_picture = video.get(body).is_some_and(|&first| match first & 0x1f {
+            9 => delimited,
+            1 | 5 => !delimited && video.get(body + 1).is_some_and(|b| b & 0x80 != 0),
+            _ => false,
+        });
+        if starts_picture {
+            // A four-byte start code's leading zero belongs to this unit.
+            let cut = if start > 0 && video[start - 1] == 0 {
+                start - 1
+            } else {
+                start
+            };
+            cuts.push(cut);
+        }
+        at = body;
+    }
+    if let Some(first) = cuts.first_mut() {
+        *first = 0;
+    }
+    let mut ends: Vec<usize> = cuts.iter().skip(1).copied().collect();
+    ends.push(video.len());
+    cuts.into_iter()
+        .zip(ends)
+        .map(|(start, end)| start..end)
+        .collect()
+}
+
+/// The WebCodecs codec string (`avc1.PPCCLL`) for a stream's first sequence
+/// parameter set: its profile, constraint flags and level, in hex.
+#[must_use]
+pub fn avc_codec(video: &[u8]) -> Option<String> {
+    nal_units(video)
+        .find(|nal| nal.first().is_some_and(|b| b & 0x1f == 7))
+        .and_then(|sps| sps.get(1..4))
+        .map(|p| format!("avc1.{:02x}{:02x}{:02x}", p[0], p[1], p[2]))
+}
+
 /// Iterates the NAL units of an Annex B stream, without their start codes.
 pub fn nal_units(video: &[u8]) -> impl Iterator<Item = &[u8]> {
     NalUnits { rest: video }
@@ -600,6 +653,19 @@ mod tests {
         es.extend_from_slice(&[0, 0, 0, 1, 0x21, 0x88]);
         es.extend_from_slice(&[0, 0, 0, 1, 0x21, 0x0a]);
         assert_eq!(frame_count(&es), 2);
+        assert_eq!(access_units(&es), vec![0..6, 6..18]);
+    }
+
+    #[test]
+    fn access_units_cut_at_delimiters_and_keep_the_parameter_sets_on_the_first() {
+        let mut es = vec![0, 0, 0, 1, 0x67, 0x4d, 0x40, 0x1e];
+        for _ in 0..2 {
+            es.extend_from_slice(&[0, 0, 0, 1, 0x09, 0x10]);
+            es.extend_from_slice(&[0, 0, 1, 0x21, 0x88, 0x84]);
+        }
+        assert_eq!(access_units(&es), vec![0..20, 20..32]);
+        assert_eq!(access_units(&es).len(), frame_count(&es));
+        assert_eq!(avc_codec(&es).as_deref(), Some("avc1.4d401e"));
     }
 
     #[test]
