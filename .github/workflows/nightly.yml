@@ -73,6 +73,19 @@ jobs:
     # with a throwaway key.
     secrets: inherit
 
+  # The browser build, deployed to Cloudflare Pages by pages.yml, on the same
+  # nights the native builds run: only when `check` found a new commit. It is
+  # independent of `build` and `publish`, so a failing Android or macOS job
+  # does not hold the web page back, and a failing deploy does not hold the
+  # release back. pages.yml asks for `contents: read` only, which the top-level
+  # permissions already grant; its secrets come through `inherit`.
+  web:
+    name: deploy the web build
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    uses: ./.github/workflows/pages.yml
+    secrets: inherit
+
   publish:
     name: publish the nightly pre-release
     needs: [check, build]
