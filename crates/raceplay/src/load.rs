@@ -921,6 +921,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,
+            zoom_ring: title.race.zoom_ring,
             weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
             weapon_pads,

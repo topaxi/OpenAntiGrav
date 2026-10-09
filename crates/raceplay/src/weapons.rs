@@ -166,6 +166,7 @@ impl Race {
                         slot,
                     ));
                     self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+                    self.fire_zoom_boost(slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {

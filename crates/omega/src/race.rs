@@ -100,6 +100,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_palette: None,
     zone_stages: None,
     zone_transition: None,
+    zoom_ring: None,
     zone_stage_textures: None,
     zone_sky: None,
     team_variants: None,

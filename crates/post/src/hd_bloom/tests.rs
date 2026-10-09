@@ -25,6 +25,7 @@ fn params() -> Params {
         tone_adaption_boost: 1.0,
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
+        zoom: None,
     }
 }
 

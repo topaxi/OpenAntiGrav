@@ -2,7 +2,7 @@
 # Restore an RPCS3 save state into a long-lived, drivable `serve`: working virtual
 # pad, GDB proxy and /proc memory, in about 10 s.
 #
-#   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--serial BCES00664]
+#   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--interpreter] [--serial BCES00664]
 #
 # <lane> is the scratch dir of a private tree (scripts/emu-env.sh <lane> ...).
 # --restart then runs the pause menu's Restart Race (another ~8 s), which prints
@@ -12,11 +12,12 @@
 # Stop with `scripts/rpcs3-drive.py stop`. The state file is copied, never consumed.
 set -euo pipefail
 lane=${1:?lane}; state=${2:?state file}; shift 2
-restart=0; serial=BCES00664; nogdb=0
+restart=0; serial=BCES00664; nogdb=0; interp=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --restart) restart=1 ;;
     --no-gdb) nogdb=1 ;;
+    --interpreter) interp=--interpreter ;;
     --serial) serial=$2; shift ;;
     *) echo "unknown $1" >&2; exit 2 ;;
   esac; shift
@@ -27,6 +28,7 @@ W=$main/data/scratch/$lane
 # shellcheck disable=SC1091
 source "$W/env.sh"
 unset OAG_RPCS3_ATTACH
+# --interpreter: the PPU interpreter, the only decoder where a `Z0` breakpoint fires.
 # --no-gdb: the stub off, for a run that will take the next state (a stub on makes the
 # save hang, see emu-rebuild-states.sh).
 [ "$nogdb" = 1 ] && { unset OAG_RPCS3_GDB; export OAG_RPCS3_NO_GDB=1; }
@@ -36,7 +38,7 @@ sleep 3
 : > "$W/serve.log"
 t0=$(date +%s.%N)
 (nohup env -u WAYLAND_DISPLAY uv run --with evdev python3 -u scripts/rpcs3-drive.py \
-   --image "$main/data/images/hdfury-ps3-eu-dec.iso" --log-dir "$W/serve" serve \
+   --image "$main/data/images/hdfury-ps3-eu-dec.iso" --log-dir "$W/serve" $interp serve \
    --load-state "$state" --serial "$serial" > "$W/serve.log" 2>&1 &)
 for _ in $(seq 1 480); do
   grep -q "^serving\|Error\|Traceback" "$W/serve.log" && break

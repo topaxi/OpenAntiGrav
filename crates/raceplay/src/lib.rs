@@ -615,3 +615,4 @@ pub const BOOST_FOV_CLOSE_RATE: f32 = 3.5;
 
 #[cfg(test)]
 mod tests;
+mod zoom;

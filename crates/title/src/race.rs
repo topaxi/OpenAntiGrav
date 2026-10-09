@@ -219,6 +219,11 @@ pub struct RaceDefaults {
     /// fades by a factor nothing traced writes, and Pulse and Pure ship no
     /// stage table to transition between.
     pub zone_transition: Option<&'static ZoneTransition>,
+    /// HD/Fury's boost and damage zoom-streak ring. See [`crate::ZoomRing`].
+    ///
+    /// `None` where the title draws no such ring or its own is unread, which is
+    /// every title but HD/Fury.
+    pub zoom_ring: Option<&'static crate::ZoomRing>,
     /// Where this title keeps the per-stage textures a Zone race swaps as it
     /// escalates. See [`ZoneStageTextures`].
     ///

@@ -67,6 +67,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Read off `Environment_UpdateStageBlend` and reproduced live - see
     // `ZONE_TRANSITION`.
     zone_transition: Some(ZONE_TRANSITION),
+    zoom_ring: Some(&ZOOM_RING),
     zone_stage_textures: Some(ZONE_STAGE_TEXTURES),
     zone_sky: Some(ZONE_SKY),
     team_variants: Some(&TEAM_VARIANTS),
@@ -266,6 +267,53 @@ pub const ZONE_TRANSITION: &oag_title::ZoneTransition = &oag_title::ZoneTransiti
     acceleration: 0.1,
     radius_cap: 20_000.0,
     weight_step: 0.01,
+};
+
+/// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.
+///
+/// **Not a motion blur**: a pass an event switches on, a speed pad or a Turbo for
+/// about 1.2 s (`E`) or damage for 0.6 s (`P`), and it does not run on speed alone.
+/// Every number is one of two kinds, named per field in
+/// `docs/ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md`:
+///
+/// - **Read off the executable and then seen live.** `FunkLayer_RunBloomChain`
+///   (`0x003b4690`) builds the history draw's alpha as `10 * F[0] * E` capped at
+///   `0.95` (`F[0] = 0.025`, the constants at `0x008b7518` and `0x008b74e8`), crops
+///   its sample by `0.05 * E` (the field `+0x18`, written as `0.05 * E` and read
+///   live on Talon's Junction and Metropia), and the boost pulse is
+///   `EngineFlare_TriggerZoomGlow`/`_UpdateZoomGlow`'s own law, read at 2 ms
+///   steps on RPCS3 against the formula.
+/// - **Read live from the ring's CPU mesh**: 24 quads, radii `0.62` and `1.5`,
+///   tap pulls `0.15` and `0.95`, the damage tint `(1 - 0.9 P, 1 - 0.08 P, 1)`
+///   (checked at `P` = 0.34 and 0.82).
+///
+/// The one-update lag between the pulse and what a captured frame shows is the
+/// original's CPU/GPU pipelining and is not modelled.
+pub const ZOOM_RING: oag_title::ZoomRing = oag_title::ZoomRing {
+    history_weight: 0.25,
+    history_weight_cap: 0.95,
+    history_crop: 0.05,
+    inner_radius: 0.62,
+    outer_radius: 1.5,
+    segments: 24,
+    tap_pull: [0.15, 0.95],
+    boost: oag_title::zoom::BoostPulse {
+        start: 0.8,
+        fall_rate: 8.0 / 7.0,
+        slope: 1.25,
+        offset: 0.075,
+        gain: 5.0,
+        decay_per_update: 0.035,
+    },
+    damage: oag_title::zoom::DamagePulse {
+        tint: [0.9, 0.08],
+        decay_per_second: 1.666_7,
+    },
+    jitter: oag_title::zoom::SizeJitter {
+        retain: 0.75,
+        step: 0.000_2,
+        range: 100,
+    },
 };
 
 /// The cubemap a Zone race draws in place of the circuit's own `sky.gtf`.

@@ -158,6 +158,9 @@ pub struct Params {
     pub tone_darkening_clamp: f32,
     /// `Tone maximum brightness`: the exposure on a black frame.
     pub tone_maximum_brightness: f32,
+    /// HD's boost and damage zoom-streak ring, when the title has one. See
+    /// [`super::hd_zoom`].
+    pub zoom: Option<super::hd_zoom::Tuning>,
 }
 
 /// Whether this chain's glow reaches the resolve.
@@ -337,6 +340,10 @@ pub struct Chain {
     /// The drawn rectangle last written into the three uniform buffers, so a
     /// frame that moved nothing writes nothing.
     written: std::cell::Cell<Option<(u32, u32)>>,
+    /// The zoom-streak ring, when the title has one, and the pulses it draws
+    /// this frame. See `zoom.rs`.
+    zoom: Option<super::hd_zoom::Zoom>,
+    zoom_frame: std::cell::Cell<Option<super::hd_zoom::Frame>>,
 }
 
 impl Chain {
@@ -457,6 +464,7 @@ impl Chain {
             &[],
         );
         let sized = Self::sized(device, &layout, &sampler, size, params);
+        let zoom = Self::zoom_for(device, &params, &sized)?;
         Ok(Self {
             params,
             glow,
@@ -474,6 +482,8 @@ impl Chain {
             current: std::cell::Cell::new(0),
             fresh: std::cell::Cell::new(true),
             written: std::cell::Cell::new(None),
+            zoom,
+            zoom_frame: std::cell::Cell::new(None),
         })
     }
 
@@ -493,6 +503,9 @@ impl Chain {
     /// restarts from zero, which the next frame's rate-1 jump re-seeds.
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
         self.sized = Self::sized(device, &self.layout, &self.sampler, size, self.params);
+        self.zoom = Self::zoom_for(device, &self.params, &self.sized)
+            .ok()
+            .flatten();
         // The three uniform buffers are new and hold the whole rectangle, so
         // whatever was last written is no longer what is in them.
         self.written.set(None);
@@ -808,8 +821,9 @@ impl Chain {
         // `pipeline` is an `Option` for one caller: the suppressed glow below
         // needs the resolve's bloom input *cleared*, which is this same pass
         // with its draw left off rather than a second copy of the descriptor.
-        let mut pass =
-            |label: &str,
+        let pass =
+            |encoder: &mut wgpu::CommandEncoder,
+             label: &str,
              pipeline: Option<&wgpu::RenderPipeline>,
              stage: &Pass,
              target: Option<&wgpu::TextureView>,
@@ -857,6 +871,7 @@ impl Chain {
                 _ => &self.reduce,
             };
             pass(
+                encoder,
                 "hd bloom downsample",
                 Some(pipeline),
                 stage,
@@ -866,6 +881,7 @@ impl Chain {
                 opening.take(),
             );
         }
+        self.zoom_history(queue, encoder, viewport);
         let current = self.current.get();
         let adapt_pipeline = if self.fresh.replace(false) {
             &self.adapt_jump
@@ -873,6 +889,7 @@ impl Chain {
             &self.adapt
         };
         pass(
+            encoder,
             "hd bloom adapt",
             Some(adapt_pipeline),
             &self.sized.adapt[current],
@@ -884,6 +901,7 @@ impl Chain {
         match self.glow {
             Glow::Drawn => {
                 pass(
+                    encoder,
                     "hd bloom gate",
                     Some(&self.gate),
                     &self.sized.gate[current],
@@ -893,6 +911,7 @@ impl Chain {
                     None,
                 );
                 pass(
+                    encoder,
                     "hd bloom blur-v",
                     Some(&self.blur),
                     &self.sized.blur_vertical,
@@ -902,6 +921,7 @@ impl Chain {
                     None,
                 );
                 pass(
+                    encoder,
                     "hd bloom blur-h",
                     Some(&self.blur),
                     &self.sized.blur_horizontal,
@@ -917,6 +937,7 @@ impl Chain {
             // the texture holds the previous frame's glow otherwise, and the
             // first frame after a resize holds whatever the allocation did.
             Glow::Suppressed => pass(
+                encoder,
                 "hd bloom suppressed",
                 None,
                 &self.sized.blur_horizontal,
@@ -926,11 +947,13 @@ impl Chain {
                 None,
             ),
         }
+        self.zoom_ring(queue, encoder, viewport);
         // The closing write, on the chain's genuinely last pass - see
         // [`ChainTimestamps`]. The only stage that writes into `view` (the
         // caller's shared canvas) rather than a dedicated scratch texture, so
         // it is the only one that needs `origin`.
         pass(
+            encoder,
             "hd encode",
             Some(&self.encode),
             &self.sized.encode[current],
@@ -962,6 +985,8 @@ fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) ->
         axis(level.1, viewport.1, scene.1),
     )
 }
+
+mod zoom;
 
 #[cfg(test)]
 mod tests;

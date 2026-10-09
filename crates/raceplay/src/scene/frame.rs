@@ -927,6 +927,9 @@ impl Scene {
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
         if let Some(hd) = &self.hd {
+            // HD's zoom-streak ring reads the race's pulses, stepped once a tick;
+            // a race with no ring sets none, and the chain draws none of it.
+            hd.set_zoom_frame(race.hd_zoom_frame());
             hd.run(
                 queue,
                 encoder,

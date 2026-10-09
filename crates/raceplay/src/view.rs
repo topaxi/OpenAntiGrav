@@ -91,6 +91,9 @@ pub struct RaceView {
     /// exhaustively on purpose, and adding a visual field there would move the
     /// pinned hashes for no reason.
     pub(super) exhaust: [Exhaust; MAX_SHIPS],
+    /// HD/Fury's zoom-streak pulses, stepped once a tick; `None` on a title with
+    /// no ring. Render-side only, like [`Self::exhaust`]. See [`crate::zoom`].
+    pub(super) zoom: Option<oag_post::hd_zoom::Pulse>,
     /// The flicker's generators, deliberately **not** `world.rng`.
     ///
     /// The exhaust draws two random numbers per tick. Taking them from the

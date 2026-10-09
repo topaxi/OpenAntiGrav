@@ -627,6 +627,7 @@ pub(super) fn envsettings_bloom(
         tone_adaption_boost,
         tone_darkening_clamp,
         tone_maximum_brightness,
+        zoom: None,
     })
 }
 
@@ -766,7 +767,11 @@ pub(super) fn staging(
     // and what is this project's. Gated to the PS3 path like the fog above.
     let hd_bloom = ps3_geometry
         .then(|| envsettings_bloom(archives, track, report))
-        .flatten();
+        .flatten()
+        .map(|params| oag_post::hd_bloom::Params {
+            zoom: title.race.zoom_ring.map(crate::zoom::tuning),
+            ..params
+        });
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten();

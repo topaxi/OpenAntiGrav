@@ -633,6 +633,9 @@ pub struct Setup {
     pub hover_rig: Option<&'static oag_title::hover_rig::HoverRig>,
     /// The title's craft-body laws, `oag_title::RaceDefaults::craft_laws` ([`crate::launch_hover`]).
     pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
+    /// HD/Fury's boost and damage zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`
+    /// ([`oag_post::hd_zoom`]); `None` on every other title.
+    pub zoom_ring: Option<&'static oag_title::ZoomRing>,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.
