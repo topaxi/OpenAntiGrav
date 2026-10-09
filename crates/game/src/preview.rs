@@ -32,6 +32,7 @@ use oag_ui_screens::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
+pub mod psp2_scene;
 pub mod track_model;
 
 /// The craft's framing on a title whose `Team Selection` draws the race hull
@@ -460,6 +461,13 @@ fn ps3_model(
     let geometry = archives
         .read_name(&sibling)
         .with_context(|| format!("{entry}: reading its {sibling}"))?;
+    if let Some((mut model, report)) = psp2_scene::build(archives, entry, blob, &geometry)
+        .with_context(|| format!("decoding the preview mesh {entry}"))?
+    {
+        log::debug!("preview {entry}: {report}");
+        model.keep_nearest();
+        return Ok((model, Vec::new()));
+    }
     // The `.gtf` requests come in texture-slot order, which is how a draw
     // names its texture.
     let mut textures = Vec::new();

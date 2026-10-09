@@ -155,6 +155,29 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     fallback_images: &[],
 };
 
+/// The circuit-model scene of each circuit Omega ships under `Data/environments`
+/// in `data00.psarc`: the same twelve pairs HD names, in HD's record order,
+/// under Omega's own folder names (`02_metropia`, `03_moa_therma`).
+const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
+    const fn row(environment: &'static str, file: &'static str) -> oag_title::CircuitModel {
+        oag_title::CircuitModel { environment, file }
+    }
+    [
+        row("01_vineta_k", "track01.vex"),
+        row("15_anulpha_pass", "track08.vex"),
+        row("03_moa_therma", "track03.vex"),
+        row("04_chenghou_project", "track04.vex"),
+        row("02_metropia", "track02.vex"),
+        row("10_sebenco_climb", "track06.vex"),
+        row("05_ubermall", "track05.vex"),
+        row("12_sol_2", "track07.vex"),
+        row("talons_junction", "talons_junction.vex"),
+        row("amphiseum", "amphiseum.vex"),
+        row("modesto_heights", "modesto.vex"),
+        row("tech_de_ra", "tech_de_ra.vex"),
+    ]
+};
+
 /// Omega's front end: the layout it authors and the boot order it takes.
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
@@ -194,11 +217,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // rather than opening a screen a player cannot read; measured 2026-09-30, the open item in
     // `docs/formats/omega-status.md`.
     team_select: None,
-    track_select: None,
+    track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
     preview_meshes: false,
     ship_preview_hull: None,
-    circuit_models: &[],
+    circuit_models: &CIRCUIT_MODELS,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
     // draws `EndRace Results`, but `EndRace Menu` then draws no option blocks
@@ -243,6 +266,11 @@ pub mod names {
     /// `oag_assets`'s path folding resolves either spelling identically. Read
     /// off `data09.psarc`, confirmed present.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
+    /// `Track Creation`, at HD's own path; `data08` and `data09` carry it, and
+    /// the front end's `skin.xml` includes it as HD's does.
+    pub const TRACK_SELECTION_DEFINITION: &str =
+        r"Data\Plugins\Frontend\Gui\Track_Selection_Definition.xml";
 
     /// `Studio Logo`'s own `<Movie>` widget:
     /// `src="Data/FE/Images/StudioLiverpool.bik"` - **the base name, not
