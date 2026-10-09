@@ -171,8 +171,7 @@ fn draw_grid(
     grid.rows = grid.rows.min(rows);
     hex::draw_cells(
         &grid,
-        (picker.index() % width.max(1), width),
-        picker.pan(),
+        (picker.index() % width.max(1), width, picker.pan()),
         Some(picker.index() / width.max(1)),
         RING,
         &face,

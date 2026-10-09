@@ -282,8 +282,7 @@ pub(super) const TEAM_RING: [f32; 4] = [0.73, 0.14, 0.22, 1.0];
 /// then the cursor ring on the cell at `cursor` of the centre column.
 pub(super) fn draw_cells(
     grid: &HexGrid,
-    (selected, count): (usize, usize),
-    pan: f32,
+    (selected, count, pan): (usize, usize, f32),
     cursor: Option<usize>,
     ring: [f32; 4],
     face: &dyn Fn(&Cell) -> Face,
@@ -391,8 +390,7 @@ pub(super) fn draw(
     };
     draw_cells(
         grid,
-        (picker.index(), picker.entries().len()),
-        picker.pan(),
+        (picker.index(), picker.entries().len(), picker.pan()),
         cursor,
         TEAM_RING,
         &face,
