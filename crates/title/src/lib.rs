@@ -574,10 +574,10 @@ pub struct FrontEnd {
     ///
     /// `false` for HD, where the screens preview with stills and widgets of
     /// their own (its track screen's emblem, see [`Self::track_select`]) and
-    /// no mesh is loaded. HD authors `<Model
-    /// name="TrackModel">` / `<Model name="ShipModel">` widgets with a camera
-    /// stated, which is a third convention again, and reading it is what
-    /// would set this to `true`.
+    /// no mesh is loaded through this path: the craft is
+    /// [`Self::ship_preview_hull`] and the circuit is [`Self::circuit_models`].
+    /// HD authors `<Model name="TrackModel">` / `<Model name="ShipModel">`
+    /// widgets, a third convention again.
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub preview_meshes: bool,
@@ -588,6 +588,13 @@ pub struct FrontEnd {
     /// (checked 2026-10-08: no `*FE*` mesh under any HD `Data\Ships\<team>`).
     /// `None` everywhere a title has no such screen or draws stills.
     pub ship_preview_hull: Option<&'static str>,
+    /// The model each circuit's selection screen draws in its circuit-model
+    /// frame, found by the circuit's environment folder: HD's track-select
+    /// record names `<environment>\FE\track0N.vex` per circuit, and the
+    /// number is not the folder's (`10_Sebenco_Climb` is `track06`). A circuit
+    /// with no row here has no model on the disc and the screen draws nothing
+    /// for it. Empty on a title whose screen draws no such model.
+    pub circuit_models: &'static [CircuitModel],
     /// The definition file that authors the three screens a race ends on -
     /// `EndRace Results`/`EndRace Rewards`/`EndRace Menu` - or `None` for a
     /// title whose copy has not been read.
@@ -622,7 +629,41 @@ pub struct FrontEnd {
     pub endrace_style: Option<EndRaceStyle>,
 }
 
+/// One circuit's front-end model, see [`FrontEnd::circuit_models`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CircuitModel {
+    /// The circuit's environment folder name, matched ignoring case against
+    /// the last component of its location.
+    pub environment: &'static str,
+    /// The scene file under that folder's `FE` directory.
+    pub file: &'static str,
+}
+
 impl FrontEnd {
+    /// Whether this title's circuit screen draws a model per circuit - see
+    /// [`Self::circuit_models`].
+    #[must_use]
+    pub fn draws_circuit_models(&self) -> bool {
+        !self.circuit_models.is_empty()
+    }
+
+    /// The model entry of the circuit whose environment folder is `location`
+    /// (`Data\Environments\01_Vineta_K`), or `None` when the title draws no
+    /// model for it.
+    #[must_use]
+    pub fn circuit_model(&self, location: &str) -> Option<String> {
+        let folder = location
+            .trim_end_matches(['\\', '/'])
+            .rsplit(['\\', '/'])
+            .next()?;
+        let row = self
+            .circuit_models
+            .iter()
+            .find(|row| row.environment.eq_ignore_ascii_case(folder))?;
+        let base = location.trim_end_matches(['\\', '/']);
+        Some(format!(r"{base}\FE\{}", row.file))
+    }
+
     /// The language plugins a source with this `serial` offers, in picker order.
     ///
     /// The release's own manifest when one is recorded, otherwise

@@ -162,6 +162,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,
     ship_preview_hull: None,
+    circuit_models: &[],
     // `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - `oag_game::endrace`'s
     // own long-standing constant, restated here now that a second title
     // needs this axis. See `oag_title::FrontEnd::endrace_entry`.

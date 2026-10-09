@@ -32,6 +32,8 @@ use oag_ui_screens::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
+pub mod track_model;
+
 /// The craft's framing on a title whose `Team Selection` draws the race hull
 /// ([`oag_title::FrontEnd::ship_preview_hull`]): **fixed, not a turntable** -
 /// the original's hull held the same pose across five seconds of frames
@@ -56,6 +58,49 @@ pub fn draws_hull(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) 
         && title
             .front_end
             .is_some_and(|f| !f.preview_meshes && f.ship_preview_hull.is_some())
+}
+
+/// Whether `title`'s `kind` screen draws a model per circuit - the one test
+/// the live picker and the capture both ask, see
+/// [`oag_title::FrontEnd::circuit_models`].
+#[must_use]
+pub fn draws_circuit_model(
+    front_end: Option<&oag_title::FrontEnd>,
+    kind: oag_ui_screens::picker::Kind,
+) -> bool {
+    kind == oag_ui_screens::picker::Kind::Track
+        && front_end.is_some_and(oag_title::FrontEnd::draws_circuit_models)
+}
+
+/// Whether `title`'s `kind` screen draws a mesh at all: the title's own
+/// preview meshes, the race hull ([`draws_hull`]), or a per-circuit model
+/// table ([`draws_circuit_model`]).
+#[must_use]
+pub fn draws_mesh(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) -> bool {
+    title
+        .front_end
+        .is_some_and(|front_end| front_end.preview_meshes)
+        || draws_hull(title, kind)
+        || draws_circuit_model(title.front_end, kind)
+}
+
+/// The archive entry a circuit's selection screen draws as its model.
+///
+/// Pulse's is the outline ribbon, `<location>\FE\forward.vex` or
+/// `reverse.vex`. A title with a [`oag_title::FrontEnd::circuit_models`]
+/// table (HD) names each circuit's own scene, and a circuit with no row has
+/// no model: `None`, and the screen draws nothing for it.
+#[must_use]
+pub fn track_entry(
+    front_end: &oag_title::FrontEnd,
+    location: &str,
+    reversed: bool,
+) -> Option<String> {
+    if !front_end.draws_circuit_models() {
+        let run = if reversed { "reverse" } else { "forward" };
+        return Some(format!(r"{location}\FE\{run}.vex"));
+    }
+    front_end.circuit_model(location)
 }
 
 /// The craft entry a `--menu-page ship-select` capture previews for a team at
@@ -455,6 +500,9 @@ pub struct Preview {
     bind_group: wgpu::BindGroup,
     /// This pass's own depth attachment, sized to the last target drawn into.
     depth: Option<(wgpu::TextureView, u32, u32)>,
+    /// The circuit model's material, which colours its vertices afresh for
+    /// every [`Self::draw_matrices`] - see [`track_model::Ramp`].
+    ramp: Option<track_model::Ramp>,
 }
 
 impl std::fmt::Debug for Preview {
@@ -541,7 +589,16 @@ impl Preview {
             uniform_buffer,
             bind_group,
             depth: None,
+            ramp: None,
         })
+    }
+
+    /// Gives this preview the circuit model's own material, taken out of the
+    /// model before it was built - see [`track_model::Ramp::take`].
+    #[must_use]
+    pub fn with_ramp(mut self, ramp: track_model::Ramp) -> Self {
+        self.ramp = Some(ramp);
+        self
     }
 
     #[must_use]
@@ -758,6 +815,14 @@ impl Preview {
         }
 
         write_uniforms_raw(queue, &self.uniform_buffer, view_projection, model_matrix);
+        if let Some(ramp) = &self.ramp {
+            ramp.shade(&mut self.model.vertices, model_matrix);
+            queue.write_buffer(
+                &self.built.vertex_buffer,
+                0,
+                bytemuck::cast_slice(&self.model.vertices),
+            );
+        }
         self.render(
             device,
             queue,

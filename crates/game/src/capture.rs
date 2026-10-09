@@ -20,14 +20,13 @@ mod loading;
 mod menu_page;
 mod offscreen;
 mod presented;
+mod preview_pass;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
-use menu_page::{
-    PreviewRequest, draw_preview, menu_page, open_for_previews, picker_kind, picker_page,
-    picker_stills,
-};
+use menu_page::{menu_page, picker_kind, picker_page, picker_stills};
 use offscreen::{offscreen, read_back, touch_preview, write_png};
+use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
 /// What to capture.
 #[derive(Debug, Clone)]
@@ -649,8 +648,7 @@ pub fn run(
                 // ask for, and asking would log a miss for a file that is
                 // not supposed to be there - see
                 // `oag_title::FrontEnd::preview_meshes`.
-                preview_request = request
-                    .filter(|r| r.hull_only || title.front_end.is_some_and(|f| f.preview_meshes));
+                preview_request = request.filter(|r| crate::preview::draws_mesh(title, r.kind));
                 (backdrop, format, list, space)
             } else if let Some(kind) = campaign_kind(page) {
                 // The Race Campaign's own two screens - the disc's, opened

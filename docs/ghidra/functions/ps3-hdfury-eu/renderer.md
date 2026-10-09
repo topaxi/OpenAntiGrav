@@ -807,13 +807,14 @@ adds one thing.
 
 **`EBOOT.elf` contains no `.rcsmaterial` extension string**, unlike `.rcsmodel`
 which it has twice and appends by hand. Every material the executable knows
-about it names in full, and there are **exactly 11**, all the same file per
-circuit:
+about it names in full, and there are **exactly 12** (recounted 2026-10-09 by
+reading the record array; this page said 11), all the same file per circuit:
 
 ```text
 data/environments/01_vineta_k/fe/materials/cf_fetracks.rcsmaterial
 data/environments/15_anulpha_pass/fe/materials/cf_fetracks.rcsmaterial
-...  11 in total, one per front-end circuit
+...  12 in total, one per front-end circuit (the last four are
+`talons_junction`, `amphiseum`, `modesto_heights`, `tech_de_ra`)
 ```
 
 They are not referenced from code. They are **field 6 of a 7-pointer record**
@@ -831,8 +832,13 @@ in `.data`, stride `0x1c`, the array starting at `0x00924314`:
 
 That is the **track-select record**: an emblem, its Fury variant, a preview
 video, and the scene/geometry/material/gradient set for the little rotating
-circuit model. **88** - the stride is confirmed by eleven consecutive records
-and the field roles are the filenames' own.
+circuit model. **88** - the stride is confirmed by twelve consecutive records
+(`0x00924314` to `0x00924464`; the thirteenth slot starts another array, of
+ship thumbnails) and the field roles are the filenames' own. The twelve scene
+files in order are `track01`, `track08`, `track03`, `track04`, `track02`,
+`track06`, `track05`, `track07`, `talons_junction`, `Amphiseum`, `modesto`,
+`tech_de_ra` - drawn by `oag_hd::frontend::CIRCUIT_MODELS`, see
+`docs/ui/campaign-screens.md`, "The circuit model, drawn".
 
 Its consequence for the format work is the pairing at `+0x10` and `+0x14`: a
 `.rcsmodel` and a `.rcsmaterial` **named side by side, as separate assets**.
