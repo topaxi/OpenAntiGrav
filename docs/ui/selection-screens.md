@@ -260,22 +260,49 @@ read-out with no pointer behaviour. A title with no loyalty counter
 **Chosen, not measured**: the original is a pad-only PS3 game, so every line
 here is this build's own, with no confidence score. On both HD hex grids
 (`Team Selection`'s `NAVIGATE TEAM` and `TrackHexSelection`) a horizontal
-touch drag pans the columns:
+touch drag pans the columns, through the front end's one touch-scroll model,
+`oag_ui::kinetic` (the same model long menu pages and 2048's campaign map
+scroll through):
 
 - The columns follow the finger: `Picker::pan` is a fractional column offset
   (drag travel over the 72.2-unit column pitch), and a column slides in at the
   edge it is revealed from while the opposite one slides out, each faded by
   how far it has travelled. The half-row stagger of odd columns eases with the
   pan instead of jumping.
-- Each whole pitch the drag passes steps the selection by one, wrapping, with
-  the pad's own `Event::Moved` (selection sound and preview included).
-  Dragging right brings the column on the left to the centre.
-- The pointer layer reports no release, so a pan left over (less than a
-  column) eases back to the selected column once the finger has been still for
-  0.1 s. A drag never selects or confirms, and a vertical drag does nothing,
-  as before. Pulse and Pure pickers are unchanged.
-- Only a touch produces `Pointer::drag` today (`oag_game::main::pointer`); a
-  mouse drag does not, so a mouse still clicks cells and uses the wheel.
+- The selection is the column nearest the centre: once the pan passes 0.6 of
+  a column (`picker::pointer::STEP_AT`; half a column, plus a tenth so a
+  finger resting on the halfway line does not flip the selection and reload
+  the preview as it trembles) the selection steps by one, wrapping, with the
+  pad's own `Event::Moved` (selection sound and preview included). Dragging
+  right brings the column on the left to the centre.
+- On lift a flick coasts on across columns, stepping each one it passes, and
+  comes to rest on a column; a slow lift settles onto the nearest column. A
+  tap on a coasting grid stops it and selects nothing. A pad or wheel step
+  during a coast settles it on the column it steps to. A drag never selects or
+  confirms, and a vertical drag does nothing. Pulse and Pure pickers are
+  unchanged.
+- Only a touch produces `Pointer::drag` (`oag_game::main::pointer`); a mouse
+  drag does not, so a mouse still clicks cells and uses the wheel.
+
+The model's constants, all **chosen, not measured**:
+
+| Constant | Value | Why |
+| --- | --- | --- |
+| `FRICTION` | 2.0 /s | A coast's speed decays by `exp(-2t)`, travelling `speed / 2`: iOS's normal deceleration (0.998 per ms), the feel players already have |
+| `FRICTION_RANGE` | 1.0..8.0 /s | The decay an aimed coast may be given to land on the item the unaimed one would stop nearest |
+| `SPRING` | 18 rad/s | Critically damped settle: half an item to within 1% in about a third of a second, solved exactly so a long tick cannot make it ring |
+| `HANDOFF` | 2 items/s | A coast slower than this hands over to the spring |
+| `MIN_FLING` | 1 item/s | A slower lift is not a flick; it settles straight onto the nearest item |
+| `MAX_FLING` | 24 items/s | A hard swipe; under one column a tick at 30 fps, since each column passed on `Team Selection` reloads the preview |
+| `VELOCITY_WINDOW` | 0.1 s | The finger's velocity is read off this much of the recent past (Android's tracker window); a finger held still that long flings nothing |
+| `RUBBER_BAND` | 0.55 | Past an end of clamped content the pull gives `c x b / (c x + b)`, iOS's coefficient; HD's grids wrap and have no band |
+| `CATCH_SPEED` | 0.5 items/s | A touch-down on content moving faster than this catches it and swallows its tap |
+| `REST_SPEED` | 0.1 items/s | An unsnapped coast (2048's map) slower than this has stopped |
+
+The finger's velocity is estimated by the model from the screen's own tick
+`dt` and the per-tick drag, not from event timestamps, so it is deterministic
+and unit-tested (`crates/ui/src/kinetic/tests.rs`: fling distance, snap
+target, rubber band, bounce, tap-to-stop, wrap, determinism).
 
 ## The PS2 pressing
 
