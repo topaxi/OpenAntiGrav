@@ -127,8 +127,8 @@ def key_hex_text(path: Path) -> str:
 
 def deliver(page, args) -> None:
     """Hands the image (and the key, by --key-mode) to the page."""
-    mode = args.key_mode if args.key else "none"
-    if mode in ("drop", "drop-image"):
+    mode = args.key_mode if args.key or args.key_mode == "drop-image" else "none"
+    if mode in ("drop", "drop-image", "key-first"):
         # A real drop needs real File objects: a hidden input yields them.
         page.evaluate(
             "() => { const i = document.createElement('input'); i.type = 'file';"
@@ -136,9 +136,15 @@ def deliver(page, args) -> None:
             " document.body.append(i); }"
         )
         files = [args.image] + ([args.key] if mode == "drop" else [])
+        if mode == "key-first":
+            files = [args.key, args.image]
         page.set_input_files("#oag-drop-files", [str(f) for f in files])
-        page.evaluate(DROP_JS, [f.name for f in files])
-        print(f"dropped {[f.name for f in files]}", flush=True)
+        # key-first drops one file, waits, then the next.
+        batches = [[f] for f in files] if mode == "key-first" else [files]
+        for batch in batches:
+            page.evaluate(DROP_JS, [f.name for f in batch])
+            print(f"dropped {[f.name for f in batch]}", flush=True)
+            page.wait_for_timeout(1500)
         return
     page.set_input_files("#file", str(args.image))
     if mode == "pick":
@@ -201,11 +207,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--key-mode",
-        choices=("pick", "drop", "hex", "drop-image", "none"),
+        choices=("pick", "drop", "hex", "drop-image", "key-first", "none"),
         default="none",
         help="how --key reaches the page: pick (the key file input after the image), "
         "drop (both files dropped at once), hex (its digits typed into the field), "
-        "drop-image (the image alone dropped), none (the image alone, through its input)",
+        "drop-image (the image alone dropped, --key not needed), "
+        "key-first (the key alone dropped, then the image), none (the image alone, through its input)",
     )
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--url", default="", help="a page already served elsewhere")

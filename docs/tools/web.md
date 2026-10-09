@@ -4,7 +4,7 @@
 through WebGPU, with no launcher. The page asks for a disc image, reads it in the
 tab, and boots it. It boots Wipeout Pulse (PSP, EU) to the front end, walks the
 menus with the keyboard and the mouse, and races, in headless Chromium at 60 fps
-(2026-10-09). Wipeout HD (a 2.2 GB decrypted PS3 ISO) races too, its circuit
+(2026-10-09). Wipeout HD (a 2.2 GB PS3 ISO, decrypted or encrypted with its key) races too, its circuit
 loaded on a Web Worker while the loading screen draws (see "Threads"), in
 headless Chromium and Firefox; Pulse PS2 (a 3.7 GB CHD) boots to Language
 Selection, the image read a slice at a time. It plays sound: the effects on
@@ -215,11 +215,28 @@ target file reads as its magic), not a format check alone.
   stored key that no longer opens its disc is dropped. The picker lists every
   saved key by serial with a Forget button. The key stays in this browser's
   storage for this origin: it is never sent, logged or put in a URL.
-- **Cost.** The race load decrypts on the worker, in software AES: HD's first
-  event reached `CraftsBuilt` after 5,988 ms on the encrypted image and 2,575 ms
-  on the decrypted one in the same dev build (one run each; the desktop's release
-  build measures no difference, see [installing](../overview/installing.md)). The
-  page's thread is not involved.
+- **Cost.** Decryption is software AES, wherever the read happens. The race
+  load reads on a worker, so the page stays responsive: HD's first event reached
+  `CraftsBuilt` after 5,988 ms on the encrypted image and 2,575 ms on the
+  decrypted one in the same dev build (one run each; the desktop's release build
+  measures no difference, see [installing](../overview/installing.md)). The
+  boot's and the menus' reads still run on the page's thread and decrypt there:
+  the longest gap between animation frames after the pick was 2.0 to 4.0 s on
+  the encrypted image (five runs) and 0.8 to 3.0 s on the decrypted one (two
+  runs) in dev builds on a loaded machine, so the difference is not separated
+  from the noise. Not measured on the `dist` build.
+- **One mount per file.** `inspect` registers the picked image once; `start`
+  and a retry after a wrong key pass nothing and reuse it, because an in-memory
+  image (`?read=memory`) is a copy in the module's memory, which never shrinks,
+  and a second registration would hold the image twice.
+- **Also dropped alone, in either order.** The decrypted ISO dropped alone boots
+  to the front end; the encrypted one dropped alone shows the key box; a key
+  dropped first is held and the image dropped 1.5 s later boots (all headless
+  Chromium, dev build). Tab reaches the file inputs, "Choose, and remember it"
+  and each Forget button; Enter on a Forget removes the stored key (checked,
+  `localStorage` read back) and the next pick of that image asks again; Enter in
+  the hex field submits it (a wrong key gives the "does not open" line). At
+  390 px `#picker.scrollWidth` equals its `clientWidth`.
 
 ### First-run defaults and the options pages
 
@@ -359,6 +376,10 @@ uv run --with playwright python3 scripts/web-screenshot.py \
     --press Enter@20 --press Enter@24 --press Enter@28 \
     --down x@50 --down ArrowLeft@72 --up ArrowLeft@74 --fps 5
 ```
+
+The encrypted HD image takes its key from the same command with
+`--key data/images/hdfury-ps3-eu.dkey --key-mode drop` (or `pick`, `hex`,
+`key-first`); `--key-mode drop-image` drops the image alone.
 
 And Wipeout HD into the campaign's first event (Blitzed, Talon's Junction,
 Venom, Assegai), the load "Threads" measures:
@@ -691,6 +712,8 @@ of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
 - **Images over about 2 GB in a browser without synchronous slice reads.**
   The fallback copies the whole image into the module's memory, which wasm32
   caps at 4 GiB. Every browser tried reads slices (Chromium, Firefox, WebKit).
+- **The key path beyond Chromium.** Firefox and WebKit were not tried with an
+  encrypted image, and the decrypt cost is measured on a dev build only.
 - **Vita and PS4 packages.** A package's sibling files cannot be found beside
   a picked file; only CHD and ISO (an encrypted PS3 one with its key, "Disc
   keys") go through `oag_disc::mount`.

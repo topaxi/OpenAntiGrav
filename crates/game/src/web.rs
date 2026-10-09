@@ -13,9 +13,17 @@ mod web_image;
 
 /// Registers the page's image under `/web/<name>` and returns that path.
 /// `image` is as [`start`] describes it.
+///
+/// `image` undefined or null means the page already mounted this file (its
+/// first `inspect`): nothing is registered again. An in-memory image
+/// (`?read=memory`) is a copy in the module's memory, which never shrinks, so a
+/// second registration would double what that fallback holds.
 fn mount_image(name: &str, image: &wasm_bindgen::JsValue) -> Result<String, wasm_bindgen::JsValue> {
     use wasm_bindgen::JsCast;
     let path = format!("{MOUNT_DIR}/{}", name.replace('/', "_"));
+    if image.is_undefined() || image.is_null() {
+        return Ok(path);
+    }
     let blob: std::sync::Arc<dyn oag_disc::mount::Blob> =
         match image.dyn_ref::<js_sys::Uint8Array>() {
             Some(bytes) => {

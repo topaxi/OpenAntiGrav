@@ -331,14 +331,17 @@ async function stage(file, key, already) {
     const image = already?.image ?? await makeImage(file);
     await init();
     staged = { file, image };
+    // The module mounts the image once, on the first `inspect` of this file;
+    // an in-memory copy is never made twice (docs/tools/web.md).
+    const mount = already ? undefined : image;
     let supplied = key;
     let stored = false;
-    let result = inspect(file.name, image, supplied ?? undefined);
+    let result = inspect(file.name, mount, supplied ?? undefined);
     // A remembered key, found by the disc's serial and not its file name.
     if (result.state === "missing" && result.serial) {
       const remembered = storedKey(result.serial);
       if (remembered) {
-        const again = inspect(file.name, image, remembered);
+        const again = inspect(file.name, undefined, remembered);
         if (again.state === "ready") {
           result = again;
           supplied = remembered;
@@ -363,7 +366,7 @@ async function stage(file, key, already) {
     if (result.keyHex && !stored && result.serial && keyRemember.checked) {
       saveKey(result.serial, result.keyHex);
     }
-    await boot(file, image, supplied);
+    await boot(file, supplied);
   } catch (error) {
     say(`Could not start: ${error}`);
     console.error(error);
@@ -371,7 +374,7 @@ async function stage(file, key, already) {
 }
 
 let booted = false;
-async function boot(file, image, key) {
+async function boot(file, key) {
   if (booted) return;
   booted = true;
   imageFile = file;
@@ -382,7 +385,7 @@ async function boot(file, image, key) {
     canvas.focus();
     // `?log=debug` (or `trace`) widens what reaches the console.
     const log = new URLSearchParams(location.search).get("log") ?? undefined;
-    await start(file.name, image, log, key ?? undefined);
+    await start(file.name, undefined, log, key ?? undefined);
   } catch (error) {
     booted = false;
     picker.hidden = false;
