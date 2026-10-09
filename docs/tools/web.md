@@ -146,6 +146,40 @@ The simulation's determinism on wasm is checked by `just test-wasm`: the
 `wasm32-wasip1` (the browser target's code generation, with a runner) and run
 under wasmtime. All pass, debug and release (2026-10-09, wasmtime 49).
 
+## Troubleshooting
+
+**The page shows "OpenAntiGrav stopped".** A Rust panic, a lost GPU device or a
+GPU out-of-memory/internal error lands on the page instead of a white canvas
+(`web/main.js`, `window.oagFatal`, called from `gpu::web::fatal` and the panic
+hook). It prints the cause and, when the adapter is a CPU one, the flags below.
+The full text, with the stack, is in the browser console.
+
+**The log says `renderer: webgpu:  (cpu)`.** The browser gave WebGPU a software
+adapter (the `web: adapter "" (Cpu)` line says the same); frames then take 40 to
+90 ms. On Linux Chrome and Chromium this is what you get without the Vulkan
+feature. Start the browser with
+
+```sh
+google-chrome --enable-unsafe-webgpu --enable-features=Vulkan
+```
+
+or switch "Vulkan" and "Unsafe WebGPU Support" on in `chrome://flags`, restart,
+and open `chrome://gpu`: its "WebGPU" line should read "Hardware accelerated"
+and the adapter list should name your GPU rather than SwiftShader. A hardware
+adapter logs `renderer: webgpu:  (setting: default, ...)` with no `(cpu)`.
+
+**A `createBuffer ... mappedAtCreation == true` RangeError on a software
+adapter** (2026-10-09: reproduced at the first window resize on
+`--use-webgpu-adapter=swiftshader` with no Vulkan feature, 32-byte buffer) was
+the small constant buffers built mapped. They are filled through
+`oag_gpu::init_buffer` now, which writes through the queue on the web and maps
+only on native, so a software adapter no longer panics there. That bare
+SwiftShader mode still never presents the canvas (it stays white; the game runs
+behind it), which is a reason to use the flags above, not something the game
+can repair. `scripts/web-screenshot.py --software` runs the presenting CPU
+adapter and `--software bare` that mode; `--resize WxH@SECONDS` resizes the
+viewport mid-run.
+
 ## Deploying
 
 `.github/workflows/pages.yml` runs `scripts/build-web.sh` on `ubuntu-latest`

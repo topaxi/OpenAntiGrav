@@ -279,24 +279,11 @@ impl Bloom {
 
         let texel = [1.0 / BLOOM_WIDTH as f32, 1.0 / BLOOM_HEIGHT as f32];
         let strength = f32::from(COMPOSITE_STRENGTH) / 255.0;
-        // Mapped at creation rather than written through a queue: every value
+        // Filled at creation rather than written through a queue: every value
         // here is a compile-time constant, so the buffer never needs updating
         // and `new` never needs a `Queue`.
         let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
-            let bytes = bytemuck::bytes_of(&c);
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: bytes.len() as u64,
-                usage,
-                mapped_at_creation: true,
-            });
-            buffer
-                .slice(..)
-                .get_mapped_range_mut()
-                .expect("a freshly mapped buffer maps")
-                .copy_from_slice(bytes);
-            buffer.unmap();
-            buffer
+            oag_gpu::init_buffer::init(device, label, usage, bytemuck::bytes_of(&c))
         };
         let whole = Constants {
             texel,

@@ -4,8 +4,6 @@
 //! (`just check-size`) rather than because the two are conceptually apart -
 //! this is the parent module's own uniform and nothing else uses it.
 
-use anyhow::{Context, Result};
-
 use oag_display::display::{Brightness, Gamma};
 
 /// What the blit does to the picture on its way onto the surface, as the
@@ -136,27 +134,17 @@ impl Source {
 
 /// A grade uniform, filled at creation rather than through the queue.
 ///
-/// Through the mapping because [`super::Framebuffer::new`] has no queue and should not
-/// need one: building a framebuffer stays a device-only operation, which is
-/// what lets a capture path build one without a frame loop around it.
-pub(super) fn grade_buffer(
-    device: &wgpu::Device,
-    label: &str,
-    graded: Grade,
-) -> Result<wgpu::Buffer> {
-    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some(label),
-        size: std::mem::size_of::<Grade>() as u64,
-        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        mapped_at_creation: true,
-    });
-    buffer
-        .slice(..)
-        .get_mapped_range_mut()
-        .context("mapping the grade buffer")?
-        .copy_from_slice(bytemuck::bytes_of(&graded));
-    buffer.unmap();
-    Ok(buffer)
+/// [`super::Framebuffer::new`] has no queue and should not need one: building a
+/// framebuffer stays a device-only operation, which is what lets a capture path
+/// build one without a frame loop around it. [`oag_gpu::init_buffer`] maps on
+/// native and writes through the browser's registered queue on the web.
+pub(super) fn grade_buffer(device: &wgpu::Device, label: &str, graded: Grade) -> wgpu::Buffer {
+    oag_gpu::init_buffer::init(
+        device,
+        label,
+        wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        bytemuck::bytes_of(&graded),
+    )
 }
 
 /// Which rectangle of the bound source the blit reads.

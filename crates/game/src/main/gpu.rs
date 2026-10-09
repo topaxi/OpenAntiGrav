@@ -431,7 +431,7 @@ impl GpuContext for Handles {
 /// docs/tools/web.md.
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod web {
-    use std::cell::RefCell;
+    use std::cell::{Cell, RefCell};
 
     use anyhow::{Context, Result};
     use oag_game::adapter;
@@ -448,6 +448,23 @@ pub(crate) mod web {
 
     thread_local! {
         static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
+        /// Whether the browser handed out a CPU adapter, which is what the page's
+        /// message names the Chrome flags for.
+        static SOFTWARE: Cell<bool> = const { Cell::new(false) };
+    }
+
+    /// Shows `cause` on the page, through the `oagFatal` function `web/main.js`
+    /// defines, instead of leaving a white canvas. A missing function (a page
+    /// that is not ours) is ignored: the console already has the line.
+    pub(crate) fn fatal(cause: &str) {
+        use wasm_bindgen::JsCast;
+        let global = js_sys::global();
+        let Ok(show) = js_sys::Reflect::get(&global, &"oagFatal".into()) else {
+            return;
+        };
+        if let Ok(show) = show.dyn_into::<js_sys::Function>() {
+            let _ = show.call2(&global, &cause.into(), &SOFTWARE.with(Cell::get).into());
+        }
     }
 
     /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
@@ -468,6 +485,23 @@ pub(crate) mod web {
             })
             .await
             .context("requesting the device")?;
+        oag_gpu::init_buffer::set_web_queue(queue.clone());
+        let info = adapter.get_info();
+        log::info!("web: adapter {:?} ({:?})", info.name, info.device_type);
+        SOFTWARE.with(|cell| cell.set(info.device_type == wgpu::DeviceType::Cpu));
+        device.set_device_lost_callback(|reason, message| {
+            log::error!("web: the WebGPU device was lost ({reason:?}): {message}");
+            if reason != wgpu::DeviceLostReason::Destroyed {
+                fatal(&format!("The GPU device was lost ({reason:?}): {message}"));
+            }
+        });
+        device.on_uncaptured_error(std::sync::Arc::new(|error: wgpu::Error| match error {
+            wgpu::Error::Validation { .. } => log::error!("web: WebGPU validation: {error}"),
+            _ => {
+                log::error!("web: WebGPU error: {error}");
+                fatal(&format!("The GPU reported an error: {error}"));
+            }
+        }));
         PREPARED.with(|cell| {
             *cell.borrow_mut() = Some(Prepared {
                 instance,

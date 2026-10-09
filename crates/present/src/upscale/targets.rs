@@ -41,7 +41,7 @@ pub(super) fn output(
     });
     let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
     let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
-    let grade = grade_buffer(device, "presentation grade", graded)?;
+    let grade = grade_buffer(device, "presentation grade", graded);
     let bind_group = bind(device, layout, sampler, &grade, &view);
     Ok(Output {
         view,

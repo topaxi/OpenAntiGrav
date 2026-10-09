@@ -34,6 +34,36 @@ async function remembered(handle) {
   });
 }
 
+// A panic or a lost GPU device would otherwise leave a white canvas. The wasm
+// side calls this (`gpu::web::fatal`); the first cause stays, since later ones
+// are usually fallout. Added to the page here so the HTML stays plain.
+let fatalShown = false;
+window.oagFatal = (cause, software) => {
+  if (fatalShown) return;
+  fatalShown = true;
+  const box = document.createElement("div");
+  box.setAttribute("role", "alert");
+  box.style.cssText = "position:fixed;inset:0;z-index:10;overflow:auto;padding:2rem;"
+    + "background:#101418;color:#eee;font:16px/1.5 system-ui,sans-serif;";
+  const add = (tag, text) => {
+    const el = document.createElement(tag);
+    el.textContent = text;
+    box.append(el);
+    return el;
+  };
+  add("h2", "OpenAntiGrav stopped");
+  add("p", "The game hit an error and cannot go on. Reloading the page starts it again.");
+  if (software) {
+    add("p", "Your browser gave WebGPU a software (CPU) adapter, which is slow and fails on "
+      + "things a graphics card does not. On Linux, start Chrome with "
+      + "--enable-unsafe-webgpu --enable-features=Vulkan (or enable those in chrome://flags), "
+      + "and check chrome://gpu for the WebGPU line. Details: docs/tools/web.md, \"Troubleshooting\".");
+  }
+  add("pre", cause.split("\n").slice(0, 3).join("\n").slice(0, 700)).style.cssText = "white-space:pre-wrap;word-break:break-word;background:#1c232b;padding:1rem;";
+  add("p", "The full text is in the browser console (F12).");
+  document.body.append(box);
+};
+
 let booted = false;
 async function boot(file) {
   if (booted) return;

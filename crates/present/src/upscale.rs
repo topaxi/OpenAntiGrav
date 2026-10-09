@@ -284,7 +284,7 @@ impl Framebuffer {
         // if the settings say otherwise: an untouched picture is what a fresh
         // install draws.
         let graded = Grade::new(Brightness::NEUTRAL, Gamma::NEUTRAL, false);
-        let grade = grade_buffer(device, "upscale grade", graded)?;
+        let grade = grade_buffer(device, "upscale grade", graded);
 
         let (texture, view, perceptual, bind_group) =
             target(device, &layout, &sampler, &grade, format, size);

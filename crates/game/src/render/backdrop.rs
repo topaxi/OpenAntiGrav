@@ -132,7 +132,6 @@ impl FuryBackdrop {
         page_format: wgpu::TextureFormat,
         clouds: &[PointCloud],
     ) -> Self {
-        use wgpu::util::DeviceExt as _;
         let clouds = clouds
             .iter()
             .map(|cloud| {
@@ -147,11 +146,12 @@ impl FuryBackdrop {
                     })
                     .collect();
                 Cloud {
-                    instances: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("fury cloud"),
-                        contents: bytemuck::cast_slice(&instances),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    }),
+                    instances: oag_gpu::init_buffer::init(
+                        device,
+                        "fury cloud",
+                        wgpu::BufferUsages::VERTEX,
+                        bytemuck::cast_slice(&instances),
+                    ),
                     count: instances.len() as u32,
                 }
             })

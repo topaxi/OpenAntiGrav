@@ -350,21 +350,12 @@ impl Chain {
             cache: None,
         });
 
-        let uniform = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("omega tonemap uniform"),
-            size: size_of::<Uniform>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: true,
-        });
-        uniform
-            .slice(..)
-            .get_mapped_range_mut()
-            .expect("a freshly mapped buffer maps")
-            .copy_from_slice(bytemuck::bytes_of(&Uniform::new(
-                params,
-                ([1.0, 1.0], [1.0, 1.0]),
-            )));
-        uniform.unmap();
+        let uniform = oag_gpu::init_buffer::init(
+            device,
+            "omega tonemap uniform",
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            bytemuck::bytes_of(&Uniform::new(params, ([1.0, 1.0], [1.0, 1.0]))),
+        );
         // Zeroed: `primed` is 0, so the first dispatch seeds the history.
         let state = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("omega tonemap state"),
