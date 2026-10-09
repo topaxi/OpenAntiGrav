@@ -309,8 +309,17 @@ impl Kinetic {
 
     /// A finger lands: the content stops where it is drawn.
     pub fn press(&mut self, extent: &Extent) {
-        let speed = self.velocity.abs() / extent.pitch.max(f32::MIN_POSITIVE);
-        let moving = matches!(self.phase, Phase::Coast { .. } | Phase::Settle { .. });
+        // A finger lifted off a flick the tick before has not launched yet:
+        // its own speed is what is moving.
+        let velocity = match self.phase {
+            Phase::Lifted => self.finger_velocity(),
+            _ => self.velocity,
+        };
+        let speed = velocity.abs() / extent.pitch.max(f32::MIN_POSITIVE);
+        let moving = matches!(
+            self.phase,
+            Phase::Coast { .. } | Phase::Settle { .. } | Phase::Lifted
+        );
         self.swallow = moving && speed > CATCH_SPEED;
         self.velocity = 0.0;
         self.pending = 0.0;

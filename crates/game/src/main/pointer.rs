@@ -90,6 +90,12 @@ pub(crate) struct Window {
     pressed: bool,
     /// The followed finger lifted, or was cancelled, since the last take.
     released: bool,
+    /// Touch events that arrived after a lift not yet taken, replayed on
+    /// the next take: a lift and a new touch-down in one tick would lose
+    /// their order, and a tap on a list still coasting from the lift would
+    /// then read as a tap on a list at rest. A frame stall (a preview
+    /// loading) is all it takes to put both in one tick.
+    queued: Vec<Touch>,
     /// Whether the last device to speak was the mouse - see
     /// [`Self::cursor_at`]. `false` until it has said anything, so a fresh
     /// window shows no arrow until the mouse moves.
@@ -133,6 +139,10 @@ impl Window {
     }
 
     pub(crate) fn touch(&mut self, touch: Touch) {
+        if self.released || !self.queued.is_empty() {
+            self.queued.push(touch);
+            return;
+        }
         self.mouse_spoke_last = false;
         let at = (touch.location.x as f32, touch.location.y as f32);
         match touch.phase {
@@ -207,6 +217,7 @@ impl Window {
         }
         self.dragging = false;
         self.drag = (0.0, 0.0);
+        self.queued.clear();
     }
 
     /// Where to draw the cursor right now, in window pixels: the latest
@@ -245,6 +256,9 @@ impl Window {
         if std::mem::take(&mut self.lifted) {
             self.at = None;
             self.moved = true;
+        }
+        for touch in std::mem::take(&mut self.queued) {
+            self.touch(touch);
         }
         pointer
     }
@@ -406,6 +420,26 @@ mod tests {
         let tick = window.take();
         assert_eq!(tick.at, Some((10.0, 20.0)));
         assert!(!tick.clicked && tick.scroll == 0);
+    }
+
+    /// The live failure this exists for: a flick's lift and a tap that
+    /// should catch the coast arrived in one tick behind a stalled frame,
+    /// and read as one gesture whose tap selected.
+    #[test]
+    fn a_touch_after_an_untaken_lift_waits_for_the_next_tick() {
+        let mut window = Window::default();
+        window.touch(touch(1, TouchPhase::Started, 100.0, 100.0));
+        window.touch(touch(1, TouchPhase::Moved, 40.0, 100.0));
+        window.take();
+        window.touch(touch(1, TouchPhase::Ended, 30.0, 100.0));
+        window.touch(touch(2, TouchPhase::Started, 200.0, 50.0));
+        window.touch(touch(2, TouchPhase::Ended, 200.0, 50.0));
+        let lift = window.take();
+        assert!(lift.released && !lift.pressed && !lift.clicked, "{lift:?}");
+        let tap = window.take();
+        assert!(tap.pressed && tap.released && tap.clicked, "{tap:?}");
+        assert_eq!(tap.at, Some((200.0, 50.0)));
+        assert!(window.take().at.is_none());
     }
 
     #[test]
