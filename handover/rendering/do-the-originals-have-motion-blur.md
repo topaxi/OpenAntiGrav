@@ -31,8 +31,8 @@ Leads, from strings and docs only, none verified:
   through a Turbo. What blurs the 529 km/h capture is `FunkLayerZoom`, a boost-start and
   damage pulse pass, plus the bloom: see
   [funklayer-zoom.md](../../docs/ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md). The
-  `original` setting value is therefore not offered on HD. The pass itself is read and not
-  ported: its own thread is `hds-boost-zoom-pass-is-read-and-not-ported.md`.
+  `original` setting value is therefore not offered on HD. The pass itself is ported (2026-10-09)
+  for a pad and a Turbo: its own thread is `hd-zoom-ring-open-triggers.md`.
 - **Omega**: [lightmap-prelit.md](../../docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md)
   (around line 182) shows a settings registrar naming a `MotionBlur` group
   beside Vignette, DepthOfField and Water. It most likely has one; its keys and
