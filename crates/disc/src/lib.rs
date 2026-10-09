@@ -35,6 +35,7 @@ pub mod mount;
 pub mod package;
 pub mod platform;
 pub mod ps3_crypt;
+pub mod ps3_probe;
 pub mod ps4_pkg;
 pub mod raw_source;
 pub mod sfo;

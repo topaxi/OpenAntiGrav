@@ -109,6 +109,50 @@ def write_tap(tap: dict, path: Path) -> None:
     )
 
 
+DROP_JS = """(names) => {
+    const input = document.getElementById("oag-drop-files");
+    const transfer = new DataTransfer();
+    for (const file of input.files) if (names.includes(file.name)) transfer.items.add(file);
+    for (const type of ["dragenter", "dragover", "drop"]) {
+        document.body.dispatchEvent(new DragEvent(type, {
+            dataTransfer: transfer, bubbles: true, cancelable: true }));
+    }
+}"""
+
+
+def key_hex_text(path: Path) -> str:
+    raw = path.read_bytes()
+    return raw.hex() if len(raw) == 16 else raw.decode().strip()
+
+
+def deliver(page, args) -> None:
+    """Hands the image (and the key, by --key-mode) to the page."""
+    mode = args.key_mode if args.key else "none"
+    if mode in ("drop", "drop-image"):
+        # A real drop needs real File objects: a hidden input yields them.
+        page.evaluate(
+            "() => { const i = document.createElement('input'); i.type = 'file';"
+            " i.multiple = true; i.id = 'oag-drop-files'; i.hidden = true;"
+            " document.body.append(i); }"
+        )
+        files = [args.image] + ([args.key] if mode == "drop" else [])
+        page.set_input_files("#oag-drop-files", [str(f) for f in files])
+        page.evaluate(DROP_JS, [f.name for f in files])
+        print(f"dropped {[f.name for f in files]}", flush=True)
+        return
+    page.set_input_files("#file", str(args.image))
+    if mode == "pick":
+        page.wait_for_selector("#keybox", state="visible", timeout=60000)
+        page.screenshot(path=str(args.out / "keybox.png"))
+        page.set_input_files("#keyfile", str(args.key))
+    elif mode == "hex":
+        page.wait_for_selector("#keybox", state="visible", timeout=60000)
+        page.screenshot(path=str(args.out / "keybox.png"))
+        page.fill("#keyhex", key_hex_text(args.key))
+        page.screenshot(path=str(args.out / "keybox-filled.png"))
+        page.click("#keygo")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dist", type=Path, default=Path("target/web/dist"))
@@ -152,6 +196,17 @@ def main() -> None:
     )
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--read", default="", help="the page's ?read= (memory: no slices)")
+    parser.add_argument(
+        "--key", type=Path, help="the disc key file of an encrypted PS3 image (data/ only, never committed)"
+    )
+    parser.add_argument(
+        "--key-mode",
+        choices=("pick", "drop", "hex", "drop-image", "none"),
+        default="none",
+        help="how --key reaches the page: pick (the key file input after the image), "
+        "drop (both files dropped at once), hex (its digits typed into the field), "
+        "drop-image (the image alone dropped), none (the image alone, through its input)",
+    )
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--url", default="", help="a page already served elsewhere")
     parser.add_argument("--size", default="960x544")
@@ -234,7 +289,7 @@ def main() -> None:
             print("webgpu:", page.evaluate("!!navigator.gpu"), flush=True)
             print("crossOriginIsolated:", page.evaluate("crossOriginIsolated"), flush=True)
             page.screenshot(path=str(args.out / "picker.png"))
-            page.set_input_files("#file", str(args.image))
+            deliver(page, args)
             start = time.monotonic()
             picked = page.evaluate("performance.now()")
             events = [(t, "shot", "") for t in shots] + keys
