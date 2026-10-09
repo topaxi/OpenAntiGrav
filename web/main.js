@@ -3,6 +3,8 @@
 import init, { start } from "./pkg/oag_web.js";
 // Sound: the AudioContext and its worklet (audio.js).
 import "./audio.js";
+// Movies: the WebCodecs decoder the module feeds (movie.js).
+import "./movie.js";
 
 // The same glue again, for the workers `oagSpawnWorker` starts. build-web.sh
 // rewrites both names to the content-hashed directory.
