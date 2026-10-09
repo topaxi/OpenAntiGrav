@@ -623,8 +623,12 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
         // signs, everything near the camera - dropped it. Only the far background
         // and the hull ever saw it.
-        let lit_linear =
-            surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow;
+        // **Times the program's own output scale.** The final instruction of every
+        // lit HD program carries `/2` in its scale field (renderer.md, "Every lit
+        // program ends on a /2 output scale"), so the sum below is what the
+        // arithmetic states and the scene holds half of it.
+        let lit_linear = scene.light.output_scale
+            * (surface_linear * authored + specular + zone_glow_term + glow_linear + pad_glow + mag_glow);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

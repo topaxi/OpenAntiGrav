@@ -474,7 +474,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut archives,
         &track,
         environment::GeometryKind::of(ps3_geometry.as_deref()),
-        title.race,
+        title,
         options.mode,
         options.zone_stage,
         &mut report,

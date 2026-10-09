@@ -985,7 +985,7 @@ lands ~4x lower in linear light. A uniform `x0.25` matches the road's quantiles 
 already 1.0 at that pose (byte-identical when pinned). (2) Restoring the lightmap's sRGB decode would be wrong: its
 sampler word is nibble 0. (3) The ambient, vertex-light and sun summands are zero or near it on that road.
 
-**Open / next.** Sky-law method on the corridor road draw: hook-dump unit 1 and unit 0 of a `fp 0x759ac1` draw in full
+**Open / next (done 2026-10-09, see the entry below).** Sky-law method on the corridor road draw: hook-dump unit 1 and unit 0 of a `fp 0x759ac1` draw in full
 (`rpcs3-drive.py place --hook`, a copy of `hd-sky-law`'s `hook_sky.py`), predict the road's bytes from the live
 constants and diff against `hd-exposure/placeA/00-40cc0000.bin`; then check our lightmap sample (atlas, UV set, mip,
 colour/alpha split of the DXT5) against it. Also fix two stale comments (`hd_bloom.rs` header, `fs_encode`) that still call
@@ -997,3 +997,16 @@ the final `pow` a stand-in.
 adaptation fade should cancel; ours reads `adapted` about 0.1 (estimate), the original's behaves as `>= ~0.25`. Table, method,
 frames and the saved grid state are in [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Metropia's white lamp
 blobs". **Next**: (1) read back our own `adapted` at tick 0 on that pose (the sweep brackets it in 0.09-0.13, yet the frame's linear luma is 0.28, which would fully fade it, so our reduction or scene mean is suspect, not the original's input); (2) read the original's `adapted` at the grid (the `FunkLayer + 0x254` read at `0xc50ee0` came back zero; break on the lerp store in `FunkLayer_RunBloomChain`). The first guess, that the original averages encoded bytes, was checked and is not supported. Same check applies to every Fury/DLC circuit (`01_vineta_k`, `03_track`, `05_ubermall`, `12_sol_2`, ...) that authors a large frame term.
+2026-10-09 (`hd-corridor-road`): **the corridor's excess was a dropped output scale, not the lightmap term.** Full account in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Every lit program ends on a /2 output scale". The road
+program evaluated on live textures lands on the live scene target at 1.03; the final instruction of every lit program drawn into
+the scene (draws 87-522) carries scale `/2`, which `ps3-microcode.py` never printed. Ported: `Looks::lit_output_halved` (HD),
+`Light::output_scale`, fog colour halved with it; the exposure's adaptation now averages encoded luminance (inferred), because
+otherwise ours' exposure rose to 1.73 on the halved frame. Steady-state corridor 2.49x -> 1.23x, grid 1.17x; Pulse byte-identical.
+The earlier "`fp 0x759ac1` road draw" was a wall program.
+
+**Open.** (1) **The matched pairs are probably stock-config (`Write Color Buffers` off) captures and so read about 1.77x too bright** (same corridor pose: 0.587/0.589 off, 0.331/0.342 on); retire them as references and re-shoot the poses that matter with the option on; the older "ours darker" readings that used them are suspect. Verify the `hd_behind_glass_frame` teal window the same way. (2) Amphiseum steady state was not captured (Racebox presses are
+unreliable: 9 landed on Talon's, 10 on Modesto); its remaining 2x deficit is in vertex-lit or emissive terms. (3) Non-road families
+read 1.1-1.4 (sun, `x8` specular scale, saturation). (4) Particles and effects end on `/2` too and `oag-fx` does not apply it.
+(5) Omega: a GCN `omod` census of the circuit pixel shaders.
+||||||| c3b22f033

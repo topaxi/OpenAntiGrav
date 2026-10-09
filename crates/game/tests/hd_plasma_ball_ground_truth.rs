@@ -95,7 +95,10 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
 fn dark_core(frame: &[u8]) -> usize {
     (230..330)
         .flat_map(|y| (420..540).map(move |x| (x, y)))
-        .filter(|&(x, y)| frame[y * SIZE.0 + x] < 40)
+        // Was `< 40`; HD's lit programs end on a /2 output scale (2026-10-09), so the
+        // road and the bolt's core both read darker, and 24 keeps the control
+        // under 50 (18) with the bolt over 200 (275).
+        .filter(|&(x, y)| frame[y * SIZE.0 + x] < 24)
         .count()
 }
 

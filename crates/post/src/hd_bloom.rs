@@ -1,6 +1,6 @@
 //! Wipeout HD's post chain: a linear float scene target, the read
-//! `FunkLayerBloom` passes over it, and the encode that stands in for the
-//! unread exposure stage.
+//! `FunkLayerBloom` passes over it, and the final sRGB encode the original's
+//! ROP performs on write.
 //!
 //! Recovered from the EBOOT twice over - the fragment microcode of every
 //! pass (`scripts/ps3-microcode.py`) and the PPU function that runs the
@@ -45,10 +45,16 @@
 //! - **The resolve's `scaleFeedback` mix and `fullscreenTintColour`** are
 //!   inert at authored defaults (no circuit authors `Bloom feedback`; the
 //!   tint is an event effect) and left out.
-//! - **The final gamma encode.** The original's resolve ends on its
-//!   `ADD_SAT`; the `pow(1/2.2)` after it here remains
-//!   [ADR-0026](../../../../docs/architecture/adr/0026-hd-authored-lighting-is-linear.md)'s
-//!   display-encode stand-in.
+//! - **The final gamma encode is the ROP's, not a stand-in for an exposure
+//!   stage.** The exposure is the `scale` of the resolve above (1.0 on every
+//!   frame measured); the original writes the result through the surface's
+//!   sRGB encode (`SET_SHADER_PACKER` is 1 on the scene and ladder draws,
+//!   0 on the swap buffer). `pow(1/2.2)` here is the project's single-curve
+//!   approximation of that encode, nothing more.
+//! - **The adaptation averages the encoded luminance.** The PPU reads the
+//!   reduced buffer's bytes, which the ROP wrote through the sRGB encode, so
+//!   `adapted` is a luma of encoded values. Inferred, not read: it is the
+//!   reading that gives the original's exposure scale of 1.0 on a dim frame.
 //!
 //! # Why the chain owns the scene target
 //!

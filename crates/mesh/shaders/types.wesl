@@ -89,7 +89,8 @@ struct Light {
     direction: vec3<f32>,
     enabled: f32,
     ambient: vec3<f32>,
-    _lpad0: f32,
+    // The lit programs' output scale: 0.5 where they end on `/2`, else 1.0.
+    output_scale: f32,
     sun: vec3<f32>,
     // 1.0 where the prelit term is Wipeout: Omega Collection's - see
     // `mesh_render::Light::with_nova_prelit` and `lit_texel`.

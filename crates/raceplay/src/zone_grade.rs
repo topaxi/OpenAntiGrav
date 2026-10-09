@@ -652,6 +652,7 @@ impl ZoneGrade {
             // Not in this schema at all, so the circuit's own value stands.
             base.specular_scale,
         );
+        let graded = graded.with_output_scale(base.output_scale);
         // **`authored` clears Omega's prelit flag and bias**, so a graded
         // Omega rig would silently go back to HD's combination. Omega ships no
         // Zone palette today (`zone_palette: None`), so nothing reaches this

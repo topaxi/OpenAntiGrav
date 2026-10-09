@@ -99,11 +99,12 @@ fn the_ceiling_panes_show_the_teal_behind_the_glass() {
     let frame = rgb_of(&std::fs::read(&out).expect("the frame"));
     std::fs::remove_dir_all(&scratch).ok();
     // The right ceiling, the capture's `(1250, 120)-(1880, 380)` at this size.
+    // Windows scaled by 0.73 (the encoded value of one half, 2026-10-09): HD's lit programs end on a /2 output scale, so every lit surface reads half the light it did.
     let teal = (62..194)
         .flat_map(|y| (640..958).map(move |x| (x, y)))
         .map(|(x, y)| frame[y * SIZE.0 + x])
-        .filter(|&[r, g, b]| r < 45 && (45..140).contains(&g) && (45..140).contains(&b))
-        .filter(|&[_, g, b]| g.abs_diff(b) < 20)
+        .filter(|&[r, g, b]| r < 33 && (33..102).contains(&g) && (33..102).contains(&b))
+        .filter(|&[_, g, b]| g.abs_diff(b) < 15)
         .count();
     // Teal pixels of 41,976: 33,430 with the target, 3,387 with the glass
     // drawn over our own frame (two blended passes, before 2026-10-07), 116

@@ -7670,3 +7670,91 @@ may be in our reduction rather than in the original's input.
 **Omega: checked, differs.** Omega authors a `Tonemap` block, not `HDR and Bloom`, so there is no gate, frame term or adaptation
 fade to share; its Metropia is not compared (no capture path for PS4).
 **Pulse**: no code changed, so its picture is unchanged by construction (no before/after screenshot taken for that reason).
+## Every lit program ends on a /2 output scale, and the adaptation averages encoded luminance (2026-10-09, `hd-corridor-road`)
+
+**Question** (the open item of the section above): the corridor road reads about 4x too bright in ours although the
+program's equation, constants and raw lightmap unit match. **Answer: the equation was read without its output scale.**
+The fragment-program disassembler (`scripts/ps3-microcode.py`) dropped the scale field of every instruction (the
+`SRC1` dword's bits 28-30; it now prints `x2`, `x4`, `x8`, `/2`, `/4`, `/8`), and the final instruction of every lit
+program drawn into the scene carries `/2`. What would have falsified it: the road program evaluated on the live
+textures and constants not landing on the live scene target. It lands at 1.03.
+
+**Method (the sky-law method, on a lit draw).** `scripts/hd_lit_predict/hook.py` as a `rpcs3-drive.py place --hook`
+module dumps one paused frame: the command stream, every draw's index batches, the vertex ranges and the unit 0 and
+unit 1 textures of the lightmapped draws, in full, and the resolved scene target (`--dump 0x40cc0000:0x384000`, which
+reads zero unless `Write Color Buffers` is on in the private RPCS3 config). `scripts/hd_lit_predict/pred.py`
+rasterises the dumped vertices (position `s16 * c[210] + c[211]`, view-projection in constants 256-259, normal 11:11:10,
+`f16` UV pairs), samples the live DXT texels, evaluates the program text and compares with the scene. Three boots on
+Talon's Junction (the same pose twice for the draws, a third with the scene target valid), one on the grid.
+
+| Finding | Value |
+| --- | --- |
+| Road draw (the earlier `fp 0x759ac1` was a **wall** program: its textures `05068000`/`04ddeb00` are the side bank) | unit 0 `DXT3` 4096x1024, 13 mips, gamma nibble 7; unit 1 `DXT5` 1024^2, 9 mips, nibble 0 (raw) |
+| Road program | `fog( albedo * (4 * lm^2 + f[TC1]) )`; no sun, no normal, no specular; final `MAD` scale code 5 = **/2** |
+| Scale codes | 5 is `/2` **measured** (below). 1 `x2`, 2 `x4`, 3 `x8`, 6 `/4`, 7 `/8` follow nouveau's `NVFX_FP_OP_DST_SCALE` as recalled, not fetched and not measured; `x8` appears on a `MOV_SAT` of `N.L` in the wall family (specular), `x2` and `/4` on a few effect programs |
+| Which draws | every program of the 436 scene draws 87-522 (lit, emissive, effect, additive-blended alike) ends scaled; the six sky draws and the late blended draws 523-547 carry none |
+| Road, live | predicted/scene luminance **1.028** median (25-75 %: 1.005-1.042; 465,372 pixels); without the `/2` the same prediction is 0.514 |
+| Walls (family `d26301`), live | median 0.98 with the `/2` and the `x8` specular scale |
+
+**Ours against the same scene target, linear luminance, per program family (camera pose of the original, native size, no craft).**
+
+| Family (pixels) | Before | `/2` only | `/2` + encoded adaptation |
+| --- | ---: | ---: | ---: |
+| road (317k) | 2.41 | 1.92 | **1.11** (median 1.02) |
+| walls `d26301` (74k) | 2.69 | 2.25 | 1.29 |
+| `28b1cc` (44k) | 1.98 | 1.72 | 1.02 |
+| `72d44c` (13k) | 2.10 | 1.74 | 1.26 |
+| whole frame, rows 170-640 | 2.49 | 2.05 | 1.23 |
+| grid pose, whole frame (steady state, craft at rest) | not measured | not measured | 1.17 |
+
+`/2` alone moves the corridor by 0.8 and not 0.5, because ours' exposure then rises: `scale = max - min(adapted * boost,
+clamp)` with Talon's `20`, `3.0`, `4.0` is 1.0 only while `adapted >= 0.15`, and ours averaged the **linear** luminance
+of the float scene (0.12 on the halved corridor, scale 1.73). The original's exposure measures 1.0 on every frame
+(final over scene 1.03-1.05 on both of this lane's captures too). **The reading that makes it so: the PPU reads back the
+reduced buffer's bytes, and that buffer is written through the ROP's sRGB encode (`SET_SHADER_PACKER` 1 on the ladder
+draws)**, so `adapted` is a luma of *encoded* values (0.35 on the same frame, `>= 0.15`, scale 1.0). Inferred, not read: the
+readback itself is not located. `hd_bloom.wesl`'s `fs_adapt` now encodes the mean before the luma. The bloom gate's fade
+reads the same `adapted`, so the bloom is a little weaker at steady state; that follows the original's arithmetic.
+
+**What does not close, stated.**
+
+1. **The matched pairs (`talons-matched`, `sol2-matched`, `amphiseum-matched`) read lower after the fix** (whole frame, ours
+   over reference: Talon's 00/01/03 0.84/0.83/0.77 before, 0.61/0.61/0.73 after; Sol 2 00/01 0.84/- before, 0.68/0.67 after;
+   Amphiseum 00/01 0.97/- before, 0.45/0.67 after) **and are probably not steady-state references: they were shot in September on what
+   was then RPCS3's stock config (`Write Color Buffers` off; inferred from the date and the config a private tree copies, not
+   recorded with the pairs).** The same corridor pose shot on four boots reads screenshot luminance 0.587 and
+   0.589 on two with it off (the stock config, resolution scale 150) and 0.331 and 0.342 on two with it on (this lane's
+   corridor and grid captures; 1.77x, rows 170-640, one weighting), with a clipped white sky on the first pair and a
+   cloudy one on the second. With it off the PPU's readback of the reduced buffer is not the frame's bytes, `adapted`
+   stays low and the exposure `scale` heads for `Tone maximum brightness` (4.0): the resolve is brighter without any
+   change to the lit programs. So **the "ours darker everywhere" family (the 0.77-0.84 grid and tunnel readings, `bloom-racing`'s
+   "HD bloom reads weaker", Sol 2's `byte/128` fit and its "race-start exposure transient") was measured, at least in part, against this
+   artefact**, and the 1.54x corridor reading (`hd-exposure`'s `placeA`, taken with the option on) was the true one. The
+   pairs are retired as brightness references; judge frames against captures with `Write Color Buffers` on. **Not
+   re-shot:** the pairs' own poses with the option on (Sol 2 and Amphiseum need a circuit pick the Racebox presses do not
+   give reliably).
+2. **Amphiseum steady state was not captured** (the Racebox carousel presses landed on Talon's Junction with nine presses
+   and Modesto Heights with ten: the count is not reliable on this save). Its pair 00 is a stock-config capture (item 1) and says
+   nothing either way; whether its vertex-lit and emissive surfaces match is open.
+3. Non-road families still read 1.1-1.4: the sun and specular terms (`x8` on the specular) and per-draw saturation are not
+   matched term by term outside the road.
+4. Particles and effects (draws 444-522) also end on `/2`; `oag-fx` does not apply it.
+
+**Ported to ours:** `Looks::lit_output_halved` (a `Rule`, HD `Measured`, every other title `UNREAD`) sets
+`Light::output_scale` to 0.5 in the loader; `shade.wesl` multiplies the whole authored lit sum by it (specular and glows
+included, because the `/2` is on the program's last instruction) and `fog.wesl` multiplies the fog colour by it (the
+fog lerp is inside that instruction). Pulse's race frame is byte-identical before and after (`cmp` of two 960x544
+screenshots).
+
+**Six HD pixel-count ground truths pinned the old brightness** (`hd_behind_glass_frame`, `hd_weapon_scene` x3, `hd_leach_ball`, `hd_plasma_ball`): their colour windows are re-scaled by 0.73, the encoded value of one half, in their own commit, and each count lands back near its old figure (teal pane pixels pass; green 5,804 against 5,751, violet 9,180 against 10,521, flash 3,176 against 2,916). They are eye-position guards. **One window is not independent of the artefact:** `hd_behind_glass_frame`'s teal pane window comes from a September capture's median `(4, 87, 87)`, shot on the stock config; if that capture carries the 1.77x of item 1, the original's pane is about `(3, 64, 64)` and the rescaled window is the right one. Unverified: it needs a Vineta K frame with the option on.
+
+**Other titles.** Wipeout 2048: no RSX (**not checkable** here). Omega: **checked, not established** - its pixel
+shaders export fp16 linear (`ps4-omega-eu/lightmap-prelit.md`) and that read did not look at a final output modifier
+(`omod`); no half-range scene exists to compare, and `output_scale` stays 1.0 there. A GCN `omod` census of the circuit
+shaders is the check.
+
+**Confidences.** Scale field read per instruction: 90 (the field is in the dword, the road program with `/2` reproduces the
+scene at 1.03 over 465k pixels). Code 5 = `/2`: 90 (measured). Other codes: unmeasured. The `/2` on every scene draw 87-522:
+85 (one frame census). Encoded-luma adaptation: **inferred** (reading, not located; it is what makes the measured exposure 1.0
+at steady state). The stock-config artefact: measured on one pose, three boots, two configs (the lit-program scale is unaffected by it).
+||||||| c3b22f033

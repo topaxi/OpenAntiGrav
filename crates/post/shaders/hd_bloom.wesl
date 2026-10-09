@@ -157,7 +157,14 @@ override rate_override: f32 = 0.0;
 fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
     let mean = textureSample(source_tex, source_sampler, vec2<f32>(0.5, 0.5)).rgb;
     let previous = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
-    let luminance = dot(mean, vec3<f32>(0.3, 0.59, 0.11));
+    // The PPU reads the reduced buffer's own bytes, and that buffer is written
+    // through the ROP's sRGB encode, so the luminance it averages is of the
+    // encoded value. Inferred, not read: the encode is measured
+    // (`SET_SHADER_PACKER` is 1 on the ladder's draws), that the readback takes
+    // raw bytes is the reading that makes the original's exposure scale 1.0 on
+    // a dim frame, which it measures.
+    let encoded = pow(clamp(mean, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+    let luminance = dot(encoded, vec3<f32>(0.3, 0.59, 0.11));
     let rate = max(constants.adaption_rate, rate_override);
     let adapted = previous + rate * (luminance - previous);
     return vec4<f32>(adapted, 0.0, 0.0, 1.0);
@@ -206,8 +213,9 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // float; no circuit file authors the key, default 0) and the persistent
 // `fullscreenTintColour` (an event tint this renderer does not model).
 //
-// The `pow` at the end is not the original's - its resolve ends on the
-// ADD_SAT - and remains ADR-0026's display-encode stand-in.
+// The `pow` at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
+// is 1 on the scene and ladder draws), approximated by one `1/2.2` curve; it is
+// not an exposure stage. The original's resolve itself ends on the ADD_SAT.
 @fragment
 fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
     let scene = surface(textureSample(source_tex, source_sampler, drawn(in.uv))).rgb;

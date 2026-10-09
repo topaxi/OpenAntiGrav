@@ -386,6 +386,15 @@ def fp_src_plain(bits: int, const: list[float] | None, input_src: int) -> str:
     return f"{neg}?{bits:08x}"
 
 
+#: The instruction's output scale, `SRC1` word (`d2`) bits 28-30, applied to the
+#: result before the saturate. Not printed before 2026-10-09: every reading of
+#: a fragment program here dropped it. Measured value: 5 is `/2` (Talon's
+#: corridor road, whose final `MAD` carries it: the program evaluated on live
+#: textures lands on the scene target at 1.03 with it and 2.0 without). The
+#: other codes follow nouveau's `NVFX_FP_OP_DST_SCALE` as recalled
+#: (1 x2, 2 x4, 3 x8, 6 /4, 7 /8) and are not measured.
+FP_SCALE = {1: "x2", 2: "x4", 3: "x8", 5: "/2", 6: "/4", 7: "/8"}
+
 FP_COND = ("FL", "LT", "EQ", "LE", "GT", "NE", "GE", "TR")
 # `TR` on every lane: the unconditional default, and the value observed on
 # every ordinary instruction in every block read so far.
@@ -527,6 +536,8 @@ def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
         out_reg = (d0 >> 1) & 0x3F
         wm = mask((d0 >> 9) & 0xF, (("x", 1), ("y", 2), ("z", 4), ("w", 8)))
         sat = "_SAT" if d0 & (1 << 31) else ""
+        scale_code = (d2 >> 28) & 7
+        scale = f" {FP_SCALE.get(scale_code, f'scale{scale_code}')}" if scale_code else ""
         input_src = (d0 >> 13) & 0xF
         arity = FP_SRC_ARITY.get(name, 2)
         words = (d0, d1, d2, d3)
@@ -547,7 +558,7 @@ def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
             tail = f" [const@slot {slot + 1:#x}{named}]"
         end = " END" if d0 & 1 else ""
         cond = fp_cond(d1)
-        print(f"@{slot:#04x}  {name}{sat} {half}{out_reg}{wm}, {ops}{unit}{tail}{cond}{end}")
+        print(f"@{slot:#04x}  {name}{sat}{scale} {half}{out_reg}{wm}, {ops}{unit}{tail}{cond}{end}")
         pos += 32 if const is not None else 16
         if d0 & 1:
             break
