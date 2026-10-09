@@ -558,8 +558,8 @@ pub struct Menu {
     /// Ticks since the page on screen arrived, or `None` once settled. See
     /// `focus.rs`.
     arrival: Option<u32>,
-    /// A finger drag's travel not yet worth a whole row, in rows. See `pointer.rs`.
-    drag_rows: f32,
+    /// A finger's scroll of a long page, in rows. See `pointer.rs`.
+    scroller: pointer::Scroller,
     /// The navigation sounds this menu has called for since the caller last
     /// drained them with [`Self::take_nav`].
     nav: nav::Log,
@@ -597,7 +597,7 @@ impl Menu {
             strip_layout: false,
             focus,
             arrival: Some(0),
-            drag_rows: 0.0,
+            scroller: pointer::Scroller::default(),
             nav: nav::Log::default(),
         }
     }
