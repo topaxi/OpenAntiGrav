@@ -132,8 +132,9 @@ uv run --with playwright python3 scripts/web-screenshot.py \
 ```
 
 `/usr/bin/chromium` (Chromium 153) is the browser it was run with: Playwright's
-own Chromium build has no WebGPU on Linux. Headless Chromium here renders
-through its own Vulkan path on the machine's GPU; `fps: 60.2` is the
+own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
+adapter (`GPUAdapterInfo`: vendor `amd`, architecture `rdna-3`,
+`isFallbackAdapter` false), not SwiftShader; `fps: 60.2` is the
 `requestAnimationFrame` rate during the race, which is the cap, not a measure of
 headroom. Native and web frames of the Language Selection screen match glyph for
 glyph; the native one has the menu's backdrop movie behind it and the web one
