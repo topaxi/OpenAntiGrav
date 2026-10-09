@@ -346,7 +346,7 @@ fn a_hex_is_a_pointer_target_only_when_its_model_is_open() {
     );
     let targets = targets(&picker, &layout, &skin, &|_| None);
     let grid = layout.hd.as_deref().unwrap().hex.unwrap();
-    let cells = grid.cells(0, 3);
+    let cells = grid.cells(0, 3, 0.0);
     let at = |column: usize, row: usize| {
         let cell = cells[column * 7 + row];
         (
@@ -385,7 +385,7 @@ fn clicking_a_hex_selects_its_team_and_livery_and_the_chosen_one_confirms() {
         22.0,
     );
     let grid = layout.hd.as_deref().unwrap().hex.unwrap();
-    let cell = grid.cells(0, 3)[3 * 7 + 2];
+    let cell = grid.cells(0, 3, 0.0)[3 * 7 + 2];
     let at = (
         cell.rect[0] + cell.rect[2] * 0.5,
         cell.rect[1] + cell.rect[3] * 0.5,
@@ -399,7 +399,7 @@ fn clicking_a_hex_selects_its_team_and_livery_and_the_chosen_one_confirms() {
     assert_eq!(events, vec![Event::Moved]);
     assert_eq!((picker.index(), picker.variant_index()), (1, 1));
     // The same spot is now the centre column's `concept1`: already chosen.
-    let centre = grid.cells(1, 3)[2 * 7 + 2];
+    let centre = grid.cells(1, 3, 0.0)[2 * 7 + 2];
     let at = (
         centre.rect[0] + centre.rect[2] * 0.5,
         centre.rect[1] + centre.rect[3] * 0.5,
@@ -489,4 +489,107 @@ fn the_classic_hull_and_a_missing_colour_draw_no_red() {
     let mut bare = extra.clone();
     bare.bonus = None;
     assert!(red_fills(&variant_picker("_c1"), &bare, &layout).is_empty());
+}
+
+fn drag_by(dx: f32) -> oag_ui::pointer::Pointer {
+    oag_ui::pointer::Pointer {
+        drag: (dx, 0.0),
+        ..oag_ui::pointer::Pointer::default()
+    }
+}
+
+fn pan_targets(picker: &Picker) -> Vec<crate::picker::pointer::Target> {
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    targets(picker, &layout(), &skin, &|_| None)
+}
+
+const PITCH_X: f32 = hex::PITCH[0];
+
+#[test]
+fn a_drag_past_a_column_steps_the_team_and_less_does_not() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    let found = pan_targets(&picker);
+    assert!(picker.pointer(&drag_by(PITCH_X * 0.6), &found).is_empty());
+    assert_eq!(picker.index(), 1);
+    assert!((picker.pan() - 0.6).abs() < 1e-4);
+    // Content follows the finger: dragging right brings the left column,
+    // the previous team, to the centre.
+    assert_eq!(
+        picker.pointer(&drag_by(PITCH_X * 0.6), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 0);
+    assert!((picker.pan() - 0.2).abs() < 1e-4);
+    assert_eq!(
+        picker.pointer(&drag_by(-PITCH_X * 1.5), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 1);
+}
+
+#[test]
+fn a_long_drag_steps_several_columns_and_wraps_at_both_ends() {
+    let mut picker = picker_of(&["A", "B", "C"], "A");
+    let found = pan_targets(&picker);
+    let events = picker.pointer(&drag_by(PITCH_X * 1.1), &found);
+    assert_eq!((events, picker.index()), (vec![Event::Moved], 2));
+    let events = picker.pointer(&drag_by(-PITCH_X * 2.3), &found);
+    assert_eq!(events.len(), 2);
+    assert_eq!(
+        picker.index(),
+        1,
+        "left past the last team wraps to the first"
+    );
+}
+
+#[test]
+fn a_drag_never_clicks_and_the_pad_and_vertical_drags_are_untouched() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    let found = pan_targets(&picker);
+    let vertical = oag_ui::pointer::Pointer {
+        drag: (0.0, 90.0),
+        ..oag_ui::pointer::Pointer::default()
+    };
+    assert!(picker.pointer(&vertical, &found).is_empty());
+    assert_eq!((picker.index(), picker.pan()), (1, 0.0));
+    assert!(
+        !picker
+            .pointer(&drag_by(PITCH_X * 2.0), &found)
+            .contains(&Event::Confirmed)
+    );
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    assert_eq!(picker.update(&mut input), vec![Event::Moved]);
+}
+
+#[test]
+fn the_grid_follows_the_finger_and_settles_back_when_it_stops() {
+    let layout = layout();
+    let grid = layout.hd.as_deref().unwrap().hex.unwrap();
+    let rest = grid.cells(1, 3, 0.0);
+    let moved = grid.cells(1, 3, 0.4);
+    let (a, b) = (
+        rest.iter().find(|c| c.distance == 0 && c.row == 2).unwrap(),
+        moved
+            .iter()
+            .find(|c| c.distance == 0 && c.row == 2)
+            .unwrap(),
+    );
+    assert!((b.rect[0] - a.rect[0] - 0.4 * PITCH_X).abs() < 1e-3);
+    assert!(moved.len() > rest.len(), "a column slides in at the left");
+    assert!(moved.iter().any(|c| c.weight < 1.0));
+    assert!(rest.iter().all(|c| c.weight == 1.0));
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    picker.pointer(&drag_by(PITCH_X * 0.7), &pan_targets(&picker));
+    picker.tick(0.05);
+    assert!(picker.pan() > 0.69, "held still for less than the delay");
+    for _ in 0..120 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!((picker.pan(), picker.index()), (0.0, 1));
 }

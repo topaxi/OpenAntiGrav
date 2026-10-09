@@ -255,6 +255,28 @@ as `TeamSelection_Update` calls it; `crates/ui-screens/src/picker/body.rs`). It 
 read-out with no pointer behaviour. A title with no loyalty counter
 (`Details::Ship::loyalty` is `None`) still leaves the block out whole.
 
+### HD's hex grids pan under a finger (2026-10-09)
+
+**Chosen, not measured**: the original is a pad-only PS3 game, so every line
+here is this build's own, with no confidence score. On both HD hex grids
+(`Team Selection`'s `NAVIGATE TEAM` and `TrackHexSelection`) a horizontal
+touch drag pans the columns:
+
+- The columns follow the finger: `Picker::pan` is a fractional column offset
+  (drag travel over the 72.2-unit column pitch), and a column slides in at the
+  edge it is revealed from while the opposite one slides out, each faded by
+  how far it has travelled. The half-row stagger of odd columns eases with the
+  pan instead of jumping.
+- Each whole pitch the drag passes steps the selection by one, wrapping, with
+  the pad's own `Event::Moved` (selection sound and preview included).
+  Dragging right brings the column on the left to the centre.
+- The pointer layer reports no release, so a pan left over (less than a
+  column) eases back to the selected column once the finger has been still for
+  0.1 s. A drag never selects or confirms, and a vertical drag does nothing,
+  as before. Pulse and Pure pickers are unchanged.
+- Only a touch produces `Pointer::drag` today (`oag_game::main::pointer`); a
+  mouse drag does not, so a mouse still clicks cells and uses the wheel.
+
 ## The PS2 pressing
 
 The same two screens, in the same `Selection_Definition.xml`, on the PS2's

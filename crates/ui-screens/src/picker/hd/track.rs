@@ -171,7 +171,7 @@ fn draw_grid(
     grid.rows = grid.rows.min(rows);
     hex::draw_cells(
         &grid,
-        (picker.index() % width.max(1), width),
+        (picker.index() % width.max(1), width, picker.pan()),
         Some(picker.index() / width.max(1)),
         RING,
         &face,
@@ -544,7 +544,7 @@ pub(in crate::picker) fn targets(
         let (width, rows) = shape(picker);
         let mut grid = *grid;
         grid.rows = grid.rows.min(rows);
-        for cell in grid.cells(picker.index() % width.max(1), width) {
+        for cell in grid.cells(picker.index() % width.max(1), width, picker.pan()) {
             out.push(Target {
                 what: What::Cell {
                     entry: cell.row * width + cell.entry,

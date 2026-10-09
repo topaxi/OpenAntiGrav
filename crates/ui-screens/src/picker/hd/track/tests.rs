@@ -309,3 +309,71 @@ fn the_ring_follows_the_direction_row_and_dropping_the_grid_draws_nothing() {
     let without = body(&picker, &layout, &bare, &Frame::default(), &sheet);
     assert!(with.len() > without.len());
 }
+
+#[test]
+fn a_horizontal_drag_pans_the_circuits_along_the_row_and_wraps() {
+    let layout = layout();
+    let skin = oag_ui::menu::Skin::new(
+        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let drag = |dx: f32| oag_ui::pointer::Pointer {
+        drag: (dx, 0.0),
+        ..oag_ui::pointer::Pointer::default()
+    };
+    let pitch = crate::picker::hd::hex::PITCH[0];
+    let mut picker = grid();
+    let found = targets(&picker, &layout, &skin, &|_| None);
+    assert!(picker.pointer(&drag(pitch * 0.9), &found).is_empty());
+    assert_eq!(picker.index(), 0);
+    // Past a column: the previous circuit, which wraps to the row's last.
+    assert_eq!(
+        picker.pointer(&drag(pitch * 0.2), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 2);
+    assert_eq!(
+        picker.pointer(&drag(-pitch * 1.2), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 0);
+    // The reverse row keeps its row while panning.
+    let mut reverse =
+        Picker::new(Kind::Track, grid().entries().to_vec(), Some("b"), None).with_rows(3);
+    assert_eq!(reverse.index(), 1);
+    let found = targets(&reverse, &layout, &skin, &|_| None);
+    assert_eq!(
+        reverse.pointer(&drag(-pitch * 1.5), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(reverse.index(), 2);
+    // A vertical drag does nothing, and a drag never confirms.
+    let vertical = oag_ui::pointer::Pointer {
+        drag: (0.0, 80.0),
+        ..oag_ui::pointer::Pointer::default()
+    };
+    assert!(reverse.pointer(&vertical, &found).is_empty());
+    assert_eq!(reverse.index(), 2);
+    // The cells' hit rects follow the finger.
+    let mut panning = grid();
+    let found = targets(&panning, &layout, &skin, &|_| None);
+    panning.pointer(&drag(pitch * 0.5), &found);
+    let moved = targets(&panning, &layout, &skin, &|_| None);
+    let centre = 210.0 + 4.0 * pitch;
+    let near = |t: &[crate::picker::pointer::Target], x: f32| {
+        t.iter()
+            .filter(|t| {
+                t.what
+                    == (What::Cell {
+                        entry: 0,
+                        variant: 0,
+                    })
+            })
+            .map(|t| t.rect[0] + t.rect[2] * 0.5)
+            .min_by(|a, b| (a - x).abs().total_cmp(&(b - x).abs()))
+            .unwrap()
+    };
+    assert!((near(&found, centre) - centre).abs() < 1e-2);
+    assert!((near(&moved, centre + pitch * 0.5) - centre - pitch * 0.5).abs() < 1e-2);
+}

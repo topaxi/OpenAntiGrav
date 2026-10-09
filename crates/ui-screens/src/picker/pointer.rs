@@ -29,6 +29,9 @@
 //!   with no row list can be confirmed from by pointing. A click on the
 //!   backdrop outside both is nothing, so a stray click does not start a
 //!   race.
+//! - **A horizontal finger drag** over HD's hex grids pans the columns -
+//!   see [`Picker::pan_by`]. **Chosen, not measured**: the original is a
+//!   pad-only PS3 game.
 //! - **The secondary button** backs out, as circle does; **the wheel** steps
 //!   the entry, up for previous.
 
@@ -38,6 +41,11 @@ use oag_ui::pointer::{Pointer, contains, hex_contains};
 use oag_ui::screen::Image;
 
 use super::{Event, Layout, Picker};
+
+/// Seconds a drag must be still before the grid eases back to its column.
+pub const PAN_SETTLE_DELAY: f32 = 0.1;
+/// Fraction of the remaining pan the settle removes per second.
+const PAN_SETTLE_RATE: f32 = 12.0;
 
 /// What a click on one of the screen's targets does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -144,7 +152,7 @@ fn hd_targets(picker: &Picker, layout: &Layout, extra: &super::hd::TeamScreen) -
     if let Some(grid) = &extra.hex {
         // Open cells only: a padlocked cell is nothing, and its neighbour
         // hexagons are tested as hexagons, not boxes (`hex_contains`).
-        for cell in grid.cells(picker.index(), picker.entries().len()) {
+        for cell in grid.cells(picker.index(), picker.entries().len(), picker.pan()) {
             let Some(variant) = super::hd::hex::variant_at(picker, &cell) else {
                 continue;
             };
@@ -219,6 +227,13 @@ impl Picker {
         if pointer.scroll != 0 {
             out.extend(self.step_entry(pointer.scroll.signum()));
         }
+        if pointer.drag.0 != 0.0
+            && targets
+                .iter()
+                .any(|target| matches!(target.what, What::Cell { .. }))
+        {
+            out.extend(self.pan_by(pointer.drag.0 / super::hd::hex::PITCH[0]));
+        }
         let hit = pointer.at.and_then(|at| hit(targets, at));
         // What was selected before this tick's gesture: a tap is a move and
         // a click in one tick, and the click must not confirm the row the
@@ -257,6 +272,51 @@ impl Picker {
             out.push(Event::Back);
         }
         out
+    }
+
+    /// The grid's fractional column offset while a finger drags it: positive
+    /// slides the columns right, so the column on the left is coming to the
+    /// centre. `0.0` at rest and always inside `-1.0..1.0`.
+    #[must_use]
+    pub fn pan(&self) -> f32 {
+        self.pan
+    }
+
+    /// Drags HD's hex grid `columns` sideways (a finger's travel over the
+    /// column pitch). The content follows the finger; each whole column it
+    /// passes steps the selection the way left/right do on the pad - drag
+    /// right brings the previous entry to the centre - wrapping at the ends,
+    /// so the `Event::Moved` it returns is the same one the pad's step makes.
+    ///
+    /// **Chosen, not measured**: a drag shorter than a column steps nothing
+    /// and the grid eases back once it has been still for
+    /// [`PAN_SETTLE_DELAY`], since the pointer layer reports no release.
+    pub(super) fn pan_by(&mut self, columns: f32) -> Vec<Event> {
+        let mut out = Vec::new();
+        self.pan += columns;
+        self.since_drag = 0.0;
+        while self.pan >= 1.0 {
+            self.pan -= 1.0;
+            out.extend(self.step_entry(-1));
+        }
+        while self.pan <= -1.0 {
+            self.pan += 1.0;
+            out.extend(self.step_entry(1));
+        }
+        out
+    }
+
+    /// Eases a pan left over back to the selected column, off the screen's
+    /// own tick, once no drag has moved it for [`PAN_SETTLE_DELAY`].
+    pub(super) fn settle_pan(&mut self, dt: f32) {
+        self.since_drag += dt;
+        if self.pan == 0.0 || self.since_drag < PAN_SETTLE_DELAY {
+            return;
+        }
+        self.pan *= (1.0 - dt * PAN_SETTLE_RATE).max(0.0);
+        if self.pan.abs() < 0.005 {
+            self.pan = 0.0;
+        }
     }
 
     /// Puts the selection on team `entry` and its livery `variant`: the
