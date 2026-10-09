@@ -4,28 +4,43 @@
 through WebGPU, with no launcher. The page asks for a disc image, reads it in the
 tab, and boots it. It boots Wipeout Pulse (PSP, EU) to the front end, walks the
 menus with the keyboard and the mouse, and races, in headless Chromium at 60 fps
-(2026-10-09). Wipeout HD (a 2.2 GB decrypted PS3 ISO) boots to its front end and
-Pulse PS2 (a 3.7 GB CHD) to Language Selection, the image read a slice at a time.
-It has not been tried in a browser on a real desktop, on a phone,
-or with a gamepad. "What is missing" lists the rest.
+(2026-10-09). Wipeout HD (a 2.2 GB decrypted PS3 ISO) races too, its circuit
+loaded on a Web Worker while the loading screen draws (see "Threads"), in
+headless Chromium and Firefox; Pulse PS2 (a 3.7 GB CHD) boots to Language
+Selection, the image read a slice at a time. It has not been tried in a browser
+on a real desktop, on a phone, or with a gamepad. "What is missing" lists the
+rest.
 
 ```sh
 just web            # target/web/dist: dist profile (fat LTO) + wasm-opt -O
 just web --dev      # a debug build, no wasm-opt: quicker to iterate on
-just web --serve    # then serve target/web/dist on http://127.0.0.1:8000/
+just web --serve    # then serve target/web/dist on http://127.0.0.1:8000/ with COOP/COEP
 ```
 
-One-time setup: `rustup target add wasm32-unknown-unknown`, the
-`wasm-bindgen` CLI at the exact version `Cargo.lock` pins
-(`cargo install wasm-bindgen-cli --version <v>`; the script says which), and
-`wasm-opt` from binaryen (any recent release; 130 is what CI pins).
+One-time setup: the pinned nightly the threaded module is built with
+(`rustup toolchain install nightly-2026-10-08 --component rust-src --target
+wasm32-unknown-unknown`; `OAG_WEB_TOOLCHAIN` overrides the name, and the
+script says which it wants), the `wasm-bindgen` CLI at the exact version
+`Cargo.lock` pins (`cargo install wasm-bindgen-cli --version <v>`; the script
+says which), and `wasm-opt` from binaryen (any recent release; 130 is what CI
+pins). The rest of the workspace stays on the pinned stable toolchain; the web
+build has a target directory of its own, `target/web-threads`, because its
+flags rebuild `std` and every crate.
 
-The published folder is `index.html`, `main.js`, `style.css`,
+**The page needs cross-origin isolation.** The module's memory is shared
+between threads, and a browser only creates shared memory on a page whose
+server sends `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`. A plain `python3 -m http.server`
+does not, and the page then says so instead of starting. `just web --serve`
+runs `scripts/serve-web.py`, which sends both; `npx wrangler pages dev
+target/web/dist` is the closer copy of the real host (it reads `_headers`).
+
+The published folder is `index.html`, `main.js`, `worker.js`, `style.css`,
 `pkg/<hash>/oag_web.js` (the wasm-bindgen glue, 105 KB),
-`pkg/<hash>/oag_web_bg.wasm` (9.9 MB; 3.6 MB at `gzip -9`), the licence files,
-`_headers` (Cloudflare's, see "Hosting") and `.nojekyll`. `<hash>` is the first
+`pkg/<hash>/oag_web_bg.wasm` (about 10 MB), the licence files and `_headers`
+(Cloudflare's, see "Hosting"). `<hash>` is the first
 16 hex digits of the SHA-256 of the glue and the module together, and
-`build-web.sh` rewrites `main.js`'s one import to name it, so the two files can
+`build-web.sh` rewrites `main.js`'s glue path to name it, so the two files can
 be cached forever and a deploy never pairs new glue with an old module. A `--dev`
 module is 20 MB; Cloudflare Pages refuses any file over 25 MiB, so only the
 `dist` build is meant for publishing. `scripts/build-web.sh` ends by running
@@ -51,9 +66,9 @@ makes no request after loading itself.
   two: a reader that fetches slices of the picked `File` on demand
   (`web_image::Sliced`, below), or, as a fallback, the whole file as a
   `Uint8Array` copied into the module's memory.
-- **Reading in slices.** The disc readers are synchronous and run on the
-  page's thread, which may not wait for a promise, and `File` only reads
-  asynchronously there. What reads it synchronously is a synchronous
+- **Reading in slices.** The disc readers are synchronous, and on the
+  page's thread, which may not wait for a promise, `File` only reads
+  asynchronously. What reads it synchronously is a synchronous
   `XMLHttpRequest` on a blob URL of `file.slice(offset, offset + length)`
   (`slicedReader` in `web/main.js`), with the response as text in the
   `x-user-defined` charset, one char per byte: the only binary response a
@@ -71,6 +86,15 @@ makes no request after loading itself.
   (browsers warn, none has removed it); if one does, the probe's exception
   drops that browser back to the in-memory path rather than breaking it.
 
+  **A worker reads differently.** A race load runs on a Web Worker ("Threads"),
+  where the page's reader object does not exist: `web/worker.js` gets the
+  picked `File` with its start message and puts its own reader at
+  `oagImageReader`, `FileReaderSync.readAsArrayBuffer` on a slice, which a
+  worker may call and which hands the bytes over as they are. Each thread finds
+  its realm's reader on its first read; the block cache is shared. The page's
+  thread only ever `try_lock`s it and reads past it while a worker holds it
+  (a contended lock would trap there, below).
+
   Measured in headless browsers on the HD ISO, 64 reads of 1 MiB spread over
   the file (2026-10-09): Chromium 153 57 MB/s warm (34 cold), Firefox 155
   350 MB/s, WebKit 26.6 287 MB/s, all byte-identical with the asynchronous
@@ -80,35 +104,24 @@ makes no request after loading itself.
   its load reached its last stage after 1,328 ms against 989 ms held in memory
   (a debug build). HD to its front end: 131 fetches, 131 MiB.
 
-  The design the earlier version of this page proposed, the image read in a
-  Web Worker through `FileReaderSync` and handed over a `SharedArrayBuffer`,
-  needs cross-origin isolation, which GitHub Pages cannot give, and a
-  main-thread wait: `Atomics.wait` is refused on a page's main thread, so it
-  would spin. A synchronous request already blocks the thread exactly as long
-  as the read takes, the same way the race load already runs inline (below),
-  works on both hosts, and needs no second file.
 - **The main thread, not a Web Worker.** The game itself stays on the page's
   thread because winit cannot run in a worker: its web event loop calls
   `web_sys::window()` and panics without one (`only callable from inside the
   Window`, winit 0.30.13), and `WindowAttributesExtWebSys::with_canvas` takes an
   `HtmlCanvasElement`, never an `OffscreenCanvas`. Running in a worker means
-  driving `App` without winit. With reads in slices it no longer buys a size
-  limit; what it would still buy is a page that stays responsive while a race
-  loads.
-- **No threads.** `wasm32-unknown-unknown` without the `atomics` target feature
-  has none ("Threads" below says what turning it on takes). So every place the desktop build moves
-  work onto a thread runs it inline on wasm, behind
-  `cfg(target_arch = "wasm32")`: the race load (`oag_raceplay::LoadWorker`), the
-  race scene build (`race_build::BuildWorker`), dropping a parked race, and the
-  boot's media (`boot::MediaWorker`). The frame that starts one of these stalls
-  for it: Moa Therma White's load reached its last stage after 674 ms in the
-  dist build. A CHD read is
-  already serial when `available_parallelism` fails, which it does here. The
-  circuit-length worker and the race music fetch fail to spawn and log it, as
-  they would on any machine that refuses a thread. wgpu's
-  `fragile-send-sync-non-atomic-wasm` feature keeps the `Send` bounds those
-  native threads need compiling; it is sound only because nothing here runs on
-  a second thread.
+  driving `App` without winit. The race load moved to a worker instead
+  ("Threads"), which is what keeps the page responsive while a race loads.
+- **One worker, for the race load.** The race load
+  (`oag_raceplay::LoadWorker`) runs on a Web Worker; see "Threads". The other
+  places the desktop build moves work onto a thread still run it inline on
+  wasm, behind `cfg(target_arch = "wasm32")`: the race scene build
+  (`race_build::BuildWorker`, which is GPU work and wgpu's web types belong to
+  the page's thread), dropping a parked race (GPU resources again), and the
+  boot's media (`boot::MediaWorker`; no movie decodes on the web, so it has
+  nothing slow to move). A CHD read is serial when `available_parallelism`
+  fails, which it does here. The circuit-length worker and the race music fetch
+  use `std::thread`, which this target refuses even with atomics, so they fail
+  to spawn and log it, as they would on any machine that refuses a thread.
 - **Time.** `std::time::Instant::now` panics on this target, so the render-side
   crates (`oag-game`, `oag-raceplay`, `oag-present`) use `web_time::Instant`,
   which is `std::time::Instant` itself on native and `performance.now()` here.
@@ -148,8 +161,8 @@ makes no request after loading itself.
   2026-10-09). Records go through the same seam and were not exercised in a
   browser. Ghosts (binary files in a directory) and pilot files still hit
   `std::fs`, which returns `Unsupported` here, and each degrades as before:
-  nothing kept between reloads. The storage is per origin, so the GitHub and
-  Cloudflare copies keep separate profiles.
+  nothing kept between reloads. The storage is per origin, so a local serve and
+  `oag.topaxi.com` keep separate profiles.
 - **The page.** `web/` is plain HTML, CSS and one ES module, no bundler. A plain
   `<input type="file">` is the way in, in every browser. Where
   `showOpenFilePicker` exists (Chromium), a second button keeps the file's handle
@@ -181,24 +194,55 @@ picker visible, pick the image again, the front end draws (a dev build, the
 walk in `web-screenshot.py`'s style with a second pick). Native quit is
 unchanged. Errors still go through `oagFatal`, never through a reload.
 
+### Leaving mid-load
+
+Reloading or closing the tab while a race loads used to panic in Firefox:
+`winit-0.30.13 .../web/event_loop/runner.rs:683` "RefCell already borrowed".
+The load then ran on the page's thread, its reads were synchronous requests,
+and Firefox runs a nested event loop inside one that delivered `pagehide` to
+winit while a winit handler was still on the stack. Reproduced in headless
+Firefox 155 by reloading one second into an HD race load: 2 of 2 runs panicked
+(2026-10-09, `web-screenshot.py --browser firefox --reload 51` on the walk in
+"Verifying it").
+
+Two things now close it. The race load reads on a worker, so the page's thread
+is not inside a synchronous request while it loads (0 of 2 on the threaded
+build). And `web/main.js` registers a capturing `pagehide` listener before the
+game starts that stops the event reaching winit while a synchronous read is on
+the page's stack, which the menus' and the boot's reads still are: with only
+that listener and the old inline load, 0 of 2. Nothing is lost by winit missing
+that one `pagehide`: the page is going away, and settings and records are
+already in `localStorage`. A worker still running when the page goes is
+terminated with it. Reloading during the boot's reads did not reproduce the
+panic either way (0.3 s and 0.6 s after the pick, Firefox).
+
 ## Browser support
 
 WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is
 `PRIMARY`, which includes the browser's WebGPU and excludes GL, for the reason
 that constant's own documentation gives). WebGPU ships in Chrome and Edge 113+
 (Windows, macOS, ChromeOS; Android 121+), Safari 26, and Firefox 141+ on Windows.
-Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`.
-The page says so when `navigator.gpu` is missing rather than failing later.
+Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
+Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`
+set in `about:config` (Firefox 155 then hands out a hardware adapter, headless
+included). The page says so when `navigator.gpu` is missing rather than
+failing later, and when the page is not cross-origin isolated (above), which
+every one of these browsers supports.
 
 ## Verifying it
 
 `scripts/web-screenshot.py` serves a built `dist` folder, opens it in headless
 Chromium with WebGPU on, hands an image to the file input, and writes
 screenshots at given times; it presses, holds and releases keys, clicks, and
-counts animation frames. The browser is muted. `--url` drives a page another
-server already serves instead of serving `--dist` itself, `--read memory`
+counts animation frames. The browser is muted. It serves `--dist` through
+`scripts/serve-web.py`, COOP/COEP included; `--url` drives a page another
+server already serves instead (`npx wrangler pages dev`), `--read memory`
 forces the in-memory fallback, and the script prints `crossOriginIsolated`.
-The walk this page's claims rest
+`--browser firefox` runs Playwright's Firefox with the two WebGPU prefs above;
+`--stalls MS` lists every gap between animation frames longer than `MS` once
+the run ends, timed from the pick, which is the responsiveness number (a
+screenshot waits for a free page thread, so its timestamp hides a stall);
+`--reload SECONDS` reloads the page then. The walk this page's claims rest
 on, from Language Selection to a race on Moa Therma White:
 
 ```sh
@@ -209,6 +253,18 @@ uv run --with playwright python3 scripts/web-screenshot.py \
     --press Enter@20 --press Enter@24 --press Enter@28 \
     --down x@50 --down ArrowLeft@72 --up ArrowLeft@74 --fps 5
 ```
+
+And Wipeout HD into the campaign's first event (Blitzed, Talon's Junction,
+Venom, Assegai), the load "Threads" measures:
+
+```sh
+uv run --with playwright python3 scripts/web-screenshot.py \
+    --image data/images/hdfury-ps3-eu-dec.iso --out data/web-shots \
+    --at 50.3,50.8,51.3,51.8,52.3,53,60 --press Enter@15 --press Enter@25 \
+    --press Enter@35 --press Enter@45 --press Enter@50 --log debug --stalls 100
+```
+
+Firefox draws slower, so its walks want the presses further apart.
 
 `/usr/bin/chromium` (Chromium 153) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
@@ -223,7 +279,12 @@ The simulation's determinism on wasm is checked by `just test-wasm`: the
 `oag-core` determinism test against its committed reference, and the
 `oag-physics`, `oag-gameplay`, `oag-race` and `oag-ai` suites, built for
 `wasm32-wasip1` (the browser target's code generation, with a runner) and run
-under wasmtime. All pass, debug and release (2026-10-09, wasmtime 49).
+under wasmtime. All pass, debug and release (2026-10-09, wasmtime 49). The same
+suites pass built the way the web module is, with the pinned nightly,
+`-Z build-std=std,panic_abort -Z panic-abort-tests` and
+`+atomics,+bulk-memory,+mutable-globals` (2026-10-09, run with
+`CARGO_TARGET_WASM32_WASIP1_RUNNER="wasmtime -W threads=y"`): the simulation
+itself still runs on one thread, and the atomics feature changes no float.
 
 ## Troubleshooting
 
@@ -261,76 +322,138 @@ viewport mid-run.
 
 ## Hosting
 
-The same folder is published to two hosts by one workflow,
-`.github/workflows/pages.yml`, which builds once and deploys twice:
-
-| Host | URL | Headers |
-| --- | --- | --- |
-| GitHub Pages | https://topaxi.github.io/OpenAntiGrav/ (expected; the `deploy` job's `page_url` is authoritative) | none can be set |
-| Cloudflare Pages, project `openantigrav` | https://oag.topaxi.com/ | `web/_headers` |
+Cloudflare Pages, project `openantigrav`, at https://oag.topaxi.com/, is the
+only host; `.github/workflows/pages.yml` ("Pages (Cloudflare)") builds the
+folder and deploys it. GitHub Pages was dropped on 2026-10-09 (maintainer's
+decision): it cannot send response headers, and the threaded module needs two.
 
 Cloudflare reads `_headers` from the deployed folder: `Cross-Origin-Opener-Policy:
 same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on every path, which
-make `crossOriginIsolated` true (what `SharedArrayBuffer` and wasm threads
-need), and `Cache-Control: public, max-age=31536000, immutable` on `pkg/*`,
-whose directory name is the content hash. The page itself keeps Cloudflare's
-default, `public, max-age=0, must-revalidate`, so a deploy is seen on the next
-load. The page loads nothing from another origin, so `require-corp` blocks
-nothing it uses. GitHub Pages serves `_headers` as a plain file and sends none
-of it; nothing the page does needs them today, so both copies behave the same.
-They are there so a threaded build (below) has somewhere to run.
+make `crossOriginIsolated` true (what `SharedArrayBuffer` and so the module's
+shared memory need), and `Cache-Control: public, max-age=31536000, immutable`
+on `pkg/*`, whose directory name is the content hash. The page itself keeps
+Cloudflare's default, `public, max-age=0, must-revalidate`, so a deploy is
+seen on the next load. The page loads nothing from another origin, so
+`require-corp` blocks nothing it uses; `worker.js` and the module are
+same-origin. No `coi-serviceworker` and no second, single-threaded module.
 
 The workflow: `build` runs `scripts/build-web.sh` on `ubuntu-latest` with the
-pinned toolchain, `wasm-bindgen` at the `Cargo.lock` version and binaryen 130
-from their release tarballs, then uploads `target/web/dist` twice: as the Pages
-artifact (`actions/upload-pages-artifact`, a tarball in a format that action
-owns) and as a plain `web-dist` artifact for Cloudflare. `deploy` publishes the
-first with `actions/deploy-pages`; `deploy-cloudflare` downloads the second and
-runs `cloudflare/wrangler-action@v3` with `pages deploy dist --project-name
-openantigrav --branch main`, the token from the repository secret
-`CLOUDFLARE_API_TOKEN` and the account from the repository variable
-`CLOUDFLARE_ACCOUNT_ID`. That job is skipped when the variable is unset (a
-fork). One build means both hosts serve byte-identical files. It runs on a `v*`
-tag or by hand. GitHub Pages has to be switched on once in the repository's
-settings, with "GitHub Actions" as the source.
+pinned nightly (`nightly-2026-10-08`, `rust-src`, the wasm32 target),
+`wasm-bindgen` at the `Cargo.lock` version and binaryen 130 from their release
+tarballs, then uploads `target/web/dist` as the `web-dist` artifact;
+`deploy-cloudflare` downloads it and runs `cloudflare/wrangler-action@v3` with
+`pages deploy dist --project-name openantigrav --branch main`, the token from
+the repository secret `CLOUDFLARE_API_TOKEN` and the account from the
+repository variable `CLOUDFLARE_ACCOUNT_ID`. That job is skipped when the
+variable is unset (a fork). It runs on a `v*` tag or by hand.
 
-Neither deploy has run on GitHub yet. `act` cannot run the workflow on a podman
+The deploy has not run on GitHub yet. `act` cannot run the workflow on a podman
 host (`docker cp` into the image's `/var/run/act` fails with "path escapes from
-parent", with or without `--use-new-action-cache`), so the build job's own steps
-were run in a clean `rust:1.99-bookworm` container from an export of the
-committed tree instead: the tool downloads, the dist build, `wasm-opt` and the
-leakage check passed in 2 min 30 s from a cold cache. The Cloudflare side was
-checked locally against `npx wrangler pages dev target/web/dist --port 8796`
-(wrangler 4.149), which applies `_headers` the way Pages does: `curl -I` shows
-both COOP/COEP headers on `/` and the immutable lifetime on the module,
-`crossOriginIsolated` reads true in the page, and a Pulse PSP race runs there at
-60 fps. `actionlint` passes on the workflow. `wrangler-action` installs its own
-default wrangler for the deploy; only `pages dev` from 4.149 was exercised
-here.
+parent", with or without `--use-new-action-cache`), so the single-threaded
+build job's steps were run in a clean `rust:1.99-bookworm` container from an
+export of the committed tree instead (2 min 30 s from a cold cache); the
+threaded build has been run locally only, and the nightly install step is
+untried in CI. The Cloudflare side was checked locally against `npx wrangler
+pages dev target/web/dist --port 8798` (wrangler 4.149), which applies
+`_headers` the way Pages does: `curl -I` shows both COOP/COEP headers on `/`
+and on `worker.js`, `crossOriginIsolated` reads true in the page, and an HD and
+a Pulse race run there (2026-10-09). `actionlint` passes on the workflow.
 
 ## Threads
 
-Out of scope so far; what turning them on would take, now that one host sends
-the headers:
+The browser build is threaded since 2026-10-09, for one job: **the race load.**
+Before it, starting a Wipeout HD race froze the page for the whole load: the
+loading screen never drew, Firefox offered to stop the page, and a reload
+mid-load panicked ("Leaving mid-load", above).
 
-1. A nightly toolchain for the web build only, `-Z build-std=std,panic_abort`
-   with `-C target-feature=+atomics,+bulk-memory,+mutable-globals` (the
-   prebuilt `std` is not compiled with atomics), and `wasm-bindgen` run on the
-   result, which then emits a shared memory.
-2. Threads that are Web Workers: `std::thread::spawn` does not work on this
-   target even with atomics. `wasm-bindgen-rayon` or a small spawner that starts
-   a worker running the same module on the shared memory would back the
-   `LoadWorker`, `BuildWorker` and `MediaWorker` sites that run inline today.
-3. The main thread may still not block: `Atomics.wait` is refused there, so a
-   `Mutex` the main thread contends spins, and every channel `recv` on it must
-   become `try_recv` polled from the frame loop, which those three workers
-   already are on native.
-4. wgpu's `fragile-send-sync-non-atomic-wasm` feature has to go, since its
-   soundness rests on there being one thread, and wgpu's web types are then
-   not `Send`: the GPU stays on the main thread and only CPU work moves.
-5. A fallback for GitHub Pages, where `crossOriginIsolated` is false and a
-   shared memory cannot be created: either a second, single-threaded module
-   chosen at load, or a `coi-serviceworker` there.
+### What the load cost, and where
+
+HD EU, the campaign's first event (Talon's Junction, Venom, Assegai), dist
+build, headless Chromium 153 on a hardware adapter, 2026-10-09. The gaps
+between animation frames (`--stalls`), and a CPU profile (the Chrome DevTools
+protocol's `Profiler` over the dist module before `wasm-opt`, so function names
+survive):
+
+| | before (inline) | after (worker) |
+| --- | --- | --- |
+| page frozen at LAUNCH | 5.3 s, then 4.2 s | none during the load; 1.5 s at its end |
+| circuit load (`race::load`) | 5.9 s on the page's thread | 1.8 to 1.9 s on a worker |
+| scene build (`build_race_stage`) | 2.9 to 4.2 s | 1.2 to 1.5 s, page's thread |
+| loading screen | never drew | draws and animates its bar |
+| load plus build | about 9.5 s, all frozen | about 3.4 s, 1.5 s of it frozen |
+
+The load's 5.9 s before, inclusive:
+
+- **Disc reads, 3.75 s**: 200 synchronous requests for 200 MiB, of which the
+  request itself was 2.5 s and the page's byte loop over the `x-user-defined`
+  text 1.0 s; a further 1.7 s of garbage collection over the run came mostly
+  from those 1 MiB response strings. On a worker the same reads go through
+  `FileReaderSync` and return an `ArrayBuffer`, with no text and no loop.
+- **Inflate**, 1.3 s (`miniz_oxide`); **parse and decode** the rest, about
+  0.7 s.
+- **GPU work**: only the texture sink's uploads, about 0.15 s.
+
+The build's 2.9 s (the profiled run): `Scene::new` 1.8 s, of which
+`writeBuffer` 1.6 s (140 MiB of vertices and indices, about 88 MB/s; 80
+pipelines created in 4 ms, the browser compiles them elsewhere), and
+`Race::start` 1.1 s, CPU only (`SpeedPlan::build_within`'s simulated laps). On
+the threaded build the same two measured 0.7 s and 0.65 s.
+
+### The choice: threads, not resumable steps
+
+The load is CPU work with one exception, the texture sink, so it can move off
+the page's thread whole; cutting `race::load` into steps that yield between
+frames would mean rewriting one long function into a state machine, and each
+step would still freeze the page for as long as its slowest read. Threads also
+took the disc reads off the synchronous request, which was most of the cost.
+The scene build is GPU work, and wgpu's web types are not `Send` once the
+module has atomics (wgpu's `send_sync` cfg drops them whatever
+`fragile-send-sync-non-atomic-wasm` says), so it stays on the page's thread.
+
+### How it is built
+
+1. **The module.** A pinned nightly with `-Z build-std=std,panic_abort` (the
+   prebuilt `std` has no atomics), `-C
+   target-feature=+atomics,+bulk-memory,+mutable-globals`, and linker
+   arguments rustc does not add on its own for this target: `--shared-memory
+   --import-memory --max-memory=4294967296` and the four TLS exports
+   wasm-bindgen sets a thread up with (`scripts/build-web.sh`). wasm-bindgen
+   then emits a glue whose `init` takes a memory; the script fails the build if
+   it does not (`thread_stack_size` missing from the glue). `wasm-opt` gets
+   `--enable-threads`.
+2. **A worker is a thread.** `std::thread::spawn` stays unsupported on this
+   target even with atomics. `oag_raceplay::web_thread::spawn` parks the
+   closure in a table and calls the page's `oagSpawnWorker(module, memory,
+   id)` (`web/main.js`), which starts `web/worker.js` as a module worker; that
+   imports the same glue, instantiates the module on the same memory, and calls
+   `oag_worker_entry(id)`. No crate is added and no `unsafe` is needed. A panic
+   on a worker reaches the page's `oagFatal` through a message.
+3. **The page's thread never waits.** `memory.atomic.wait32`, where a
+   contended `std::sync::Mutex` ends up, traps there. `LoadWorker` polls an
+   `AtomicBool` the worker sets after it has stored the result and let go of
+   its lock; the disc cache is `try_lock`ed (above); `web_thread`'s own table
+   is locked by spinning on `try_lock`. The allocator already spins.
+4. **No GPU on a worker.** The texture sink is a stub on wasm
+   (`mesh_render/texture_sink/web.rs`) and `Texels::Uploaded`, which holds a
+   `wgpu::TextureView`, exists only on native, so `race::Loaded` is `Send`. The
+   textures then wait on the CPU for the scene build: the module's memory was
+   876 MiB after the HD load above (`web: module memory ... after the race
+   load`, logged once per load), of a 4 GiB ceiling that never shrinks.
+   Omega's Tech De Ra, whose BC7 textures were 2.3 GiB at their peak, would not
+   fit, but no Vita or PS4 package opens in the browser.
+5. **The simulation stays single-threaded and deterministic**: nothing in it
+   moved, and its suites pass built with these flags ("Verifying it").
+
+### What is still on the page's thread
+
+- **The scene build**, 1.2 to 1.5 s at the end of the HD load, the loading
+  screen's last frame held for that long. `Race::start` (0.65 s) is CPU work
+  and could run on the worker if `Loaded` carried a started race; the buffer
+  uploads (`writeBuffer`, about half of `Scene::new`) could be spread over
+  frames under a byte budget. Neither is done.
+- **The boot**: about 2 s between the pick and the first frame (Chromium), and
+  the menus' own reads (a flyer, a ship), still synchronous requests.
+- **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
 
 ## What is missing
 
@@ -350,6 +473,8 @@ the headers:
 - **Ghosts and pilot files** last one tab; settings and records persist.
 - **Untested inputs.** gilrs's Gamepad API backend is compiled in and not tried
   with a pad; touch is not tried. The keyboard and the mouse work.
-- **Other titles in the browser.** Pulse PSP races; HD and Pulse PS2 were
-  booted to their front ends only. Pure should open the same way. HD's race
-  shaders are the likeliest to meet another Tint uniformity error.
+- **Other titles in the browser.** Pulse PSP and HD race (Chromium and
+  Firefox, headless); Pulse PS2 was booted to its front end only and Pure not
+  at all. HD drew its race with no Tint error on the one circuit tried.
+- **Firefox draws slowly**: 9 to 14 fps in a race in headless Firefox 155,
+  against Chromium's 60 on the same machine. Not investigated.

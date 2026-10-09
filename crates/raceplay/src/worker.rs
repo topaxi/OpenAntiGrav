@@ -202,6 +202,12 @@ impl LoadWorker {
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
         #[cfg(target_arch = "wasm32")]
         return self.handle.take().and_then(|result| {
+            // wasm32 caps the shared memory at 4 GiB and it never shrinks, so
+            // its high-water mark is the number a load has to stay under.
+            log::info!(
+                "web: module memory {} MiB after the race load",
+                core::arch::wasm32::memory_size::<0>() / 16
+            );
             // Only reached once `done`, so the worker has let go: never waits.
             crate::web_thread::lock_spinning(&result.loaded).take()
         });

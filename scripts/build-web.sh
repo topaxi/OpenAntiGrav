@@ -44,10 +44,16 @@ if ! rustup run "$toolchain" rustc --version >/dev/null 2>&1; then
   echo "the $toolchain toolchain is needed: rustup toolchain install $toolchain --component rust-src --target wasm32-unknown-unknown" >&2
   exit 1
 fi
-# Shared memory, up to wasm32's whole 4 GiB (rustc's default cap with atomics
-# is 1 GiB, below what an HD race load holds).
+# Shared, imported memory up to wasm32's whole 4 GiB, and the TLS exports
+# wasm-bindgen sets each thread up with. rustc does not pass these for the
+# atomics feature alone (nightly-2026-10-08 linked an unshared memory).
+link=""
+for arg in --shared-memory --import-memory --max-memory=4294967296 \
+  --export=__wasm_init_tls --export=__tls_size --export=__tls_align --export=__tls_base; do
+  link+=" -C link-arg=$arg"
+done
 CARGO_TARGET_DIR=$target_dir \
-  RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=4294967296 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base" \
+  RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals $link" \
   cargo "+$toolchain" build -Z build-std=std,panic_abort \
   --target wasm32-unknown-unknown --profile "$profile" \
   -p oag-game --example oag_web --features web
@@ -58,6 +64,10 @@ wasm="$target_dir/wasm32-unknown-unknown/$dir/examples/oag_web.wasm"
 rm -rf "$out"
 mkdir -p "$out/pkg"
 wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
+# wasm-bindgen only emits thread support for a module on shared memory; a
+# build that lost the atomics flags would boot and then fail on its first
+# worker, so it fails here instead.
+grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
 if [[ $profile != dev ]]; then
   # The `dist` profile's own goal (docs/tools/packaging.md), for the module:
   # wasm-bindgen's output is not size-optimised, and binaryen's -O pass takes a
