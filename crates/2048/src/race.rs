@@ -76,6 +76,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: Some(ZONE_STAGES),
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zoom_ring: None,
     zone_stage_textures: None,
     // `None`: no Zone sky swap has been looked for on this title. HD/Fury's is
     // a named file its loader picks by a mode gate; nothing equivalent has been

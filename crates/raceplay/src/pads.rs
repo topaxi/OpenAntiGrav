@@ -147,6 +147,7 @@ impl Race {
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
                 self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+                self.fire_zoom_boost(slot);
                 // The sound is on the same edge and from the same branch:
                 // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",
                 // ...)` here, immediately beside `ExhaustFlare_OnSpeedupPad`.

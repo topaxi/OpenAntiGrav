@@ -65,8 +65,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     //
     // **Two sources when `craft_source` names a Race Remix** - see
     // `oag_source::remix::Remix`. `archives`/`title` stay the track's; a
-    // craft-governed load reads `craft_title` and `craft_of(&mut
-    // craft, &mut archives)` instead.
+    // craft-governed load reads `craft_title` and `craft_of(&mut craft, &mut archives)` instead.
     let remix = oag_source::remix::Remix::open(
         &options.source,
         options.craft_source.as_deref(),
@@ -921,6 +920,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,
+            zoom_ring: title.race.zoom_ring,
             weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
             weapon_pads,

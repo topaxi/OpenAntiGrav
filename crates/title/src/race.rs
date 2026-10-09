@@ -104,8 +104,7 @@ pub use transition::ZoneTransition;
 pub use variants::{GuestRoster, HullVariant, TeamVariant, TeamVariants, VariantJoin};
 
 /// The circuit and team a race falls back to on one title.
-// `PartialEq` without `Eq` since 2026-09-15: `zone_transition` carries
-// floats.
+// `PartialEq` without `Eq` since 2026-09-15: `zone_transition` carries floats.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RaceDefaults {
     /// Archive entry of the `.vex` a race loads when the caller names none.
@@ -117,8 +116,7 @@ pub struct RaceDefaults {
     /// The team id a race uses when the caller names none.
     ///
     /// An **id** - the folder under [`Self::ship_dir`] - and not the name a
-    /// player reads, which comes from the string table. See
-    /// `oag_raceplay::catalogue`.
+    /// player reads, which comes from the string table. See `oag_raceplay::catalogue`.
     pub team: &'static str,
     /// The archive directory a team's hull, plume, shield and handling stats
     /// all sit under, one subdirectory per team id.
@@ -219,6 +217,8 @@ pub struct RaceDefaults {
     /// fades by a factor nothing traced writes, and Pulse and Pure ship no
     /// stage table to transition between.
     pub zone_transition: Option<&'static ZoneTransition>,
+    /// HD/Fury's zoom-streak ring (see [`crate::ZoomRing`]); `None` on every other title.
+    pub zoom_ring: Option<&'static crate::ZoomRing>,
     /// Where this title keeps the per-stage textures a Zone race swaps as it
     /// escalates. See [`ZoneStageTextures`].
     ///

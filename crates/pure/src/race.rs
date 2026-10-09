@@ -94,6 +94,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: None,
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zoom_ring: None,
     zone_stage_textures: None,
     // `None` for the same reason as Pulse's.
     zone_sky: None,

@@ -58,6 +58,7 @@ pub mod speed;
 pub mod touch;
 pub mod weapon_pad;
 pub mod weapons;
+pub mod zoom;
 
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use campaign::{Campaign, CampaignDialect};
@@ -81,6 +82,7 @@ pub use race::{
     ZoneClassAnnouncer, ZoneCraft, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};
+pub use zoom::ZoomRing;
 
 /// One title's release-level facts.
 ///

@@ -152,6 +152,7 @@ impl Race {
     /// force law is already using to decide whether the auto-speed thrust applies
     /// this tick.
     pub(super) fn advance_exhausts(&mut self) {
+        self.advance_zoom();
         for slot in 0..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active {
                 continue;
@@ -728,6 +729,11 @@ impl Race {
             player.advance(remainder, Self::FULL_THRUST, speed, rng);
         }
         player.boost(exhaust::BOOST_SECONDS);
+        // The zoom-streak pulse at the same age, so a posed frame shows the ring at the
+        // `E` a paused capture of the original shows that long after the trigger.
+        if let Some(pulse) = &mut self.view.zoom {
+            pulse.pose_boost(age, self.sim.dt);
+        }
         let aged = (age / self.sim.dt).round() as u32;
         for _ in 0..aged {
             player.advance(self.sim.dt, Self::FULL_THRUST, speed, rng);

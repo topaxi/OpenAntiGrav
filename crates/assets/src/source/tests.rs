@@ -93,6 +93,7 @@ const TITLE: &Title = &Title {
         zone_palette: None,
         zone_stages: None,
         zone_transition: None,
+        zoom_ring: None,
         zone_stage_textures: None,
         zone_sky: None,
         // Unread here too: nothing in this crate resolves a team's variant.

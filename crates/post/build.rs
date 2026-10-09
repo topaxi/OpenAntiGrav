@@ -15,6 +15,7 @@ const ARTIFACTS: &[(&str, &str, &[&str])] = &[
     ("motion_blur", "package::motion_blur", &[]),
     ("omega_tonemap", "package::omega_tonemap", &[]),
     ("hd_bloom", "package::hd_bloom", &[]),
+    ("hd_zoom", "package::hd_zoom", &[]),
     ("ps2_bloom", "package::ps2_bloom", &[]),
     ("bloom", "package::bloom", &[]),
     ("fsr3_clear", "package::fsr3::clear", &[]),
