@@ -1115,7 +1115,7 @@ Time Trial layouts all compose the same `Info1`-`Info4` through
 reading of HD's `Info1` as an elimination-only text box was wrong - and HD's own
 English table carries `ER_GMA`/`ER_SMA`/`ER_BMA`: the line draws in HD's font at
 the place its layout authors (`medal_message_ground_truth`, and
-`data/scratch/hud-medal/shots/hd-zone.png`; legibility on a bright backdrop is
+`hd-zone.png`; legibility on a bright backdrop is
 poor, HD authors no backing frame for it). **Pure's table has no `ER_GMA`**, so
 nothing draws there - an id a table lacks draws nothing, never the raw id; a
 Pure phrase (its `zone_gold`/`zone_silver`/`zone_bronze` voice lines suggest
@@ -1142,8 +1142,7 @@ capture of a real run shows exactly what the window would:
 `--campaign-cell grid8_3_2` (Pulse Speed Lap, silver at 44 s) or
 `--campaign-cell grid0_4_2` (Pulse Zone, or HD's own `grid0_4_2`). Seen on live
 frames: Pulse Speed Lap silver at the lap that earned it and still up ten
-seconds on, Pulse Zone silver at zone 19, HD Zone bronze at zone 14
-(`data/scratch/hud-medal-2/shots/`). On a very bright backdrop (Pulse's cyan
+seconds on, Pulse Zone silver at zone 19, HD Zone bronze at zone 14. On a very bright backdrop (Pulse's cyan
 Zone circuit) the line is as hard to read as every other authored Pulse HUD
 label there; nothing here adds a backing the layout does not author.
 

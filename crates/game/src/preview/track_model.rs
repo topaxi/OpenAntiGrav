@@ -2,7 +2,10 @@
 //! turns.
 //!
 //! **Authored**, on the screen's `<Model name="TrackModel">` widget:
-//! `OriginX=1308 OriginY=440` and `z=-180`. 1308 and 440 are the centre of the
+//! `OriginX=1308 OriginY=440` and `z=-180`. Omega authors the same widget with
+//! `OriginX=960 OriginY=540`, `x=0.525 y=0.125 z=-2.05` and `orthoScaleX/Y/Z=0.012`,
+//! which stand 43.8, 10.4 and -170.8 units from the axis. Its `FoV=100` and
+//! `nearZ=0.1` are not read: the field of view stays [`FOV_Y`] (see that). 1308 and 440 are the centre of the
 //! `CIRCUIT MODEL` frame in the 1920 by 1080 grid (the frame spans 862 to 1747
 //! across and 180 to 675 down), so they are an absolute screen point, the
 //! reading [`crate::flyer::flyer_view_projection`] already makes of the same
@@ -79,8 +82,14 @@ pub fn matrices(widget: &TrackModel, space: Space, seconds: f32) -> (Mat4, Mat4)
         0.0,
     );
     let yaw = YAW0 + seconds * std::f32::consts::TAU / TURN_SECONDS;
-    let model = Mat4::from_translation(Vec3::new(0.0, 0.0, widget.z))
-        * Mat4::from_rotation_x(PITCH)
+    // `orthoScale` scales the placement, not the model: the same reading the
+    // campaign flyer's widget gets (`crate::flyer::campaign_pose`).
+    let scale = widget.ortho_scale;
+    let model = Mat4::from_translation(Vec3::new(
+        widget.offset[0] / scale[0],
+        widget.offset[1] / scale[1],
+        widget.z / scale[2],
+    )) * Mat4::from_rotation_x(PITCH)
         * Mat4::from_rotation_y(yaw);
     (Mat4::from_translation(shift) * projection, model)
 }
@@ -120,6 +129,87 @@ pub struct Ramp {
 }
 
 impl Ramp {
+    /// The ramp of the circuit model `entry`, whichever material it names: a
+    /// PS4 `.rcsmodel` (Omega) carries `FrontEndConstantFranelBlend`'s
+    /// uniforms ([`Self::fresnel`]), HD's names `cf_fetracks` and a texture
+    /// ([`Self::take`]).
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::take`] and [`Self::fresnel`].
+    pub fn of(archives: &mut oag_assets::Archives, entry: &str, model: &mut Model) -> Result<Self> {
+        let geometry = oag_mesh::mesh::rcs::sibling_name(entry)
+            .and_then(|sibling| archives.read_name(&sibling).ok());
+        match geometry {
+            Some(blob) if oag_mesh::mesh::rcs::psp2::is_psp2(&blob) => {
+                let parsed = oag_rcs::rcsmodel::psp2::parse(&blob)
+                    .with_context(|| format!("{entry}: reading its materials"))?;
+                let material = parsed
+                    .materials
+                    .first()
+                    .with_context(|| format!("{entry}: the circuit model has no material"))?;
+                Self::fresnel(material, model)
+            }
+            _ => Self::take(model),
+        }
+    }
+
+    /// Omega's circuit model colour, `FrontEndConstantFranelBlend`'s own
+    /// pixel shader (`data00.psarc`, read as GCN, the `Shdr` at `0x323c` of
+    /// `15_anulpha_pass`'s copy, 2026-10-09):
+    /// `colourDiffAlpha + Constant1 * constantAmbientColour * refl`, with
+    /// `refl = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower`
+    /// (`1 - N.V` clamped to 0..1), then fogged by the vertex's own factor.
+    /// The model's one material authors all of them but the ambient colour
+    /// (`Constant1` 1 1 1, `colourDiffAlpha` 0.06 0.048 0.029, min 0.05, scale
+    /// 1, power 3 on Anulpha Pass), so the circuit is a dark warm base with a
+    /// bright rim. Unlit, like [`Self::take`]'s.
+    ///
+    /// **Chosen, not measured**: `constantAmbientColour`, which no instance
+    /// authors (taken as 1, as the multiplier of HD's `cf_fetracks` is), and
+    /// no fog, which the screen's own state would set.
+    ///
+    /// # Errors
+    ///
+    /// The material authors none of the uniforms.
+    pub fn fresnel(
+        material: &oag_rcs::rcsmodel::psp2::material::Material,
+        model: &mut Model,
+    ) -> Result<Self> {
+        let uniform = |name: &str, width: usize| -> Result<Vec<f32>> {
+            material
+                .param(oag_rcs::rcsmaterial::name_hash(name))
+                .filter(|value| value.len() >= width)
+                .with_context(|| format!("the material authors no {name}"))
+        };
+        let base = uniform("colourDiffAlpha", 3)?;
+        let constant = uniform("Constant1", 3)?;
+        let (min, scale, power) = (
+            uniform("ReflectivityMin", 1)?[0],
+            uniform("ReflectivityScale", 1)?[0],
+            uniform("ReflectivityPower", 1)?[0],
+        );
+        let ambient = uniform("constantAmbientColour", 3).unwrap_or_else(|_| vec![1.0; 3]);
+        const STEPS: usize = 256;
+        let row = (0..STEPS)
+            .map(|step| {
+                let rim = 1.0 - step as f32 / (STEPS - 1) as f32;
+                let reflected = min + scale * rim.powf(power);
+                std::array::from_fn(|c| base[c] + constant[c] * ambient[c] * reflected)
+            })
+            .collect();
+        Self::unlit(model);
+        Ok(Self { row })
+    }
+
+    /// Leaves `model` drawn by its vertex colour alone.
+    fn unlit(model: &mut Model) {
+        model.vertex_colour_is_light = false;
+        for vertex in &mut model.vertices {
+            vertex.lit = 0.0;
+        }
+    }
+
     /// Takes the ramp out of `model`'s first texture and leaves a white one
     /// in its place, so the shader's `texture * colour` is the colour alone.
     ///
@@ -163,10 +253,7 @@ impl Ramp {
         }));
         // The colour this writes is the whole surface colour, a tint on the
         // white texture and not HD's baked light term.
-        model.vertex_colour_is_light = false;
-        for vertex in &mut model.vertices {
-            vertex.lit = 0.0;
-        }
+        Self::unlit(model);
         Ok(Self { row })
     }
 

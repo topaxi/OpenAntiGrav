@@ -139,7 +139,7 @@ endrace-results-tournament-leg`/`endrace-results-tournament-standings` draws
 it off a synthetic four-team field (`crates/game/src/capture/endrace_page.rs`),
 since a real tournament leg run to a finish is the same multi-minute
 autopilot cost `tournament.md`'s own "Live verification" section names, not
-attempted again this pass. Kept under `data/scratch/pulse-tourney/shots/`
+attempted again this pass. Kept under a scratch directory, not kept
 (gitignored - game content).
 
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
@@ -201,7 +201,7 @@ tie), `Deaths: | Team | Kills`, eight rows with **display names** (`AG Systems`,
 populated Eliminator table are therefore covered by the unit tests and the
 `--menu-page endrace-results-eliminator` still, laid against the original's frame, not
 by a live race with kills in it. The original's frame for comparison:
-`data/scratch/pulse-endrace-modes/shots/original-eliminator-results.png` (gitignored).
+`original-eliminator-results.png` (gitignored).
 
 Both tables' cells draw in the upper-case front-end font, as the lap table's already do,
 where the frames show the mixed-case default face - the shared-table font gap
@@ -240,7 +240,7 @@ decodes `TrophyPanel`'s three through `oag_game::preview::model`, and
 
 Captures: `--menu-page endrace-rewards-gold`/`-silver`/`-bronze` (new page
 names), and a live campaign race that earned bronze -
-`data/scratch/drive-2026-09-28/erp/shots/p11a.png`/`p11b.png` (gitignored).
+`p11a.png`/`p11b.png` (gitignored).
 
 ### `EndRace Menu`
 
@@ -544,7 +544,7 @@ a screenshot did.
 
 ### 2026-09-28: the Menu's cursor, and a Results grid that fits eight rows
 
-A live HD campaign walk (`data/scratch/drive-2026-09-28/campaign-launch-walk.md`)
+A live HD campaign walk
 found two things wrong, both fixed from the executable rather than chosen:
 
 - **`EndRace Menu` had no visible cursor** - white rows on the light panel,
@@ -584,7 +584,7 @@ arrow on its lit phase in one of four consecutive frames (`h06-crops.png`);
 Up, Down Down stepping top-to-bottom (`h13-15-crops.png`); pointer hover
 moving the focus and a click on `RETURN TO GRID` landing on Cell Selection
 (`h16-hover-crop.png`, `h17-after-click.png`). All under
-`data/scratch/drive-2026-09-28/erp/` (gitignored).
+a scratch directory, not kept (gitignored).
 
 ### HD's loyalty block on `Results` (2026-10-02, `hd-endrace-loyalty`)
 
@@ -637,7 +637,7 @@ Capture: `--menu-page endrace-results --size 1280x720` against
 block the file authors (`x = 1180`, `y = 368`) - the numbers are the capture's
 own **chosen** sample (a three-lap single race on the medium rung banked onto
 3885), since a `--menu-page` capture has no race behind it. Kept under
-`data/scratch/hd-endrace-loyalty/` (gitignored).
+a scratch directory, not kept (gitignored).
 
 ### Captures
 
@@ -645,7 +645,7 @@ own **chosen** sample (a three-lap single race on the medium rung banked onto
 `--track Data\Environments\Talons_Junction --mode single_race` (a
 synthetic two-craft field - no live `Session`/`RaceStage` behind a
 `--menu-page` capture, the same gap Pulse's own capture above has). Kept
-under `data/scratch/lane-hd-endrace/shots/` (gitignored - game content).
+under a scratch directory, not kept (gitignored - game content).
 `POS`/`TIME` headers, `1ST PLACE`, and the player's own row (`1`, `3.11.76`)
 all draw at their own real positions; the applicable `EndRace Menu` options
 (`RACE AGAIN`/`RETURN TO GRID`/`VIEW RESULTS AGAIN`) draw at their own

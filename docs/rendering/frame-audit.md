@@ -16,7 +16,7 @@ with nothing either side adds:
 | Size | 480x272, `InternalResolution = 1`, window 480x272 | `--size 480x272 --render-scale 100` |
 | Filters | no post shader, `TexScalingLevel = 1`, `AnisotropyLevel = 0`, FPS counter off | `--msaa off --motion-blur off --screen-filter off --anisotropy off` |
 | State | the craft's pose and camera read per tick by `psp-trace.py --camera --shot-every 1` | `--pose-from` that CSV, `--pose-tick`, **`--ticks 1`** |
-| Config | own `HOME`/`XDG_CONFIG_HOME` under `data/scratch/pulse-frame-audit/` | an isolated `XDG_CONFIG_HOME` (English, bloom on) so the maintainer's `settings.toml` (200 % render scale, 4x MSAA, `psp-3000` filter) never reaches a screenshot |
+| Config | own `HOME`/`XDG_CONFIG_HOME` under a scratch directory, not kept | an isolated `XDG_CONFIG_HOME` (English, bloom on) so the maintainer's `settings.toml` (200 % render scale, 4x MSAA, `psp-3000` filter) never reaches a screenshot |
 
 Circuits: Talon's Junction (`16_Track`, bright outdoor), Metropia (`03_Track`),
 Tech De Ra (`04_Track`, indoor). Same team (Assegai), same Venom time trial.
@@ -566,7 +566,7 @@ the box being the dump's own). **No score** for "the transparent missing draws a
 outside the view" or for any transparent rule: 13 draws from about eight nodes on
 one circuit and one boot, against a base rate of 75 %. Scripts:
 `scripts/pvs-moving-residue.py`, the `pvs_moving_phase` example; raw dumps
-`data/scratch/pulse-moving-draws/poses/`.
+a scratch directory, not kept.
 
 ## Reproducing
 

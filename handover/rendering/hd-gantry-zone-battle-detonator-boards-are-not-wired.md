@@ -13,8 +13,7 @@ fixed the halo that read as a blurry countdown. The per-mode boards are the part
   (Detonator) each show their own board before the release; 3 and 8 show `3 2 1 GO`. Same ids as the
   PS4 allowlist. Evidence and pictures: `docs/rendering/start-gantry.md`, "the gantry is a card".
 - **`321Go_Zone.vex` as a card draws a blank white panel** (both archive copies). The picture to match is a
-  dark panel with a loop icon assembling from light pieces, 210 ticks before the release
-  (`data/scratch/hd-gantry/zcd2`). Not found: which of `DATA00` (8.4 KB, bars) and `DATA02` (2.6 KB,
+  dark panel with a loop icon assembling from light pieces, 210 ticks before the release. Not found: which of `DATA00` (8.4 KB, bars) and `DATA02` (2.6 KB,
   `cf_321_zone` + `321_go_64_zone2.gtf`) the game loads, and why ours draws the model empty (the card's clear is
   transparent and the model's own dark background panel may be a draw ours drops).
 - **`oag_race::Mode` has Zone only.** Zone Battle and Detonator need modes before their boards can be chosen.

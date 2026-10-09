@@ -26,7 +26,7 @@ and is not repeated here.
   same `exhaust.boost` the flame's blend reads). On `Assegai_n1` at tick
   295, the panels either side of the nozzle go flat white with the craft
   binding and keep their structure without it:
-  `data/scratch/hd-svc1-bit/rear-ab.png`. Two same-command runs differ by
+  `rear-ab.png`. Two same-command runs differ by
   about 2 % of pixels at that tick from motion blur, so read the frames, not
   a pixel count. The white wing rims and the pink on the `_n1` wings stay
   with the binding removed. They are a separate term.
@@ -80,7 +80,7 @@ breadth from the housing), cropped around the craft's rear:
   Junction, 443 km/h on a speed pad - the capture whose records include the
   `440`s). The engine housings are **copper, unsaturated**; the hull's rear
   is its livery; the bloom is the plume's and the pad's.
-- **Ours**: `data/scratch/hd-engine-light/talons-t487.png` (same circuit, the
+- **Ours**: `talons-t487.png` (same circuit, the
   probe's boost tick). The **whole rear of the hull washes warm-white** and
   the bloom gate picks the wash up.
 
@@ -105,7 +105,7 @@ the light than ours.
   player is confirmed Piranha (renderer.md's own "Live, RPCS3" entry); the
   wash this thread chased (`rear-ab.png`, `talons-t487.png`) is
   `Assegai_n1`. A same-command A/B this session across three ships
-  (`data/scratch/hd-light-boost/{piranha,assegai_n1,harimau}-snap.png`,
+  (`{piranha,assegai_n1,harimau}-snap.png`,
   same circuit, same tick, same boost cadence) found Piranha does not wash
   and both Assegai_n1 and Harimau do - **and `EngineLightData.xml` gives a
   disc-verified reason**: Piranha's `Distance` is `0.4` (anchor pulled back

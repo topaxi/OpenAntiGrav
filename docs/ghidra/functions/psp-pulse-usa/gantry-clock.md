@@ -150,7 +150,7 @@ only at branch level.
   teleport is at 350, never reached; no digit is replayed. That is the 21 s
   stationary capture.
 - **The loop's own seam, seen in the capture.** The 2026-09-30 contact sheet
-  (`data/scratch/pulse-gantry-cut/sheet2.png`, one frame per ~0.15 s of HUD
+  (`sheet2.png`, one frame per ~0.15 s of HUD
   clock) shows, among the strobing `GO` frames, one frame at **0.02.3** of race
   clock with a dim `3 2 1` ghost on the green board. 2.3 s after the release is
   exactly one window period, and frame 192 is the frame that ghost belongs to

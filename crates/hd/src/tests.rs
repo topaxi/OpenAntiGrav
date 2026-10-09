@@ -163,7 +163,7 @@ fn the_front_end_is_wired_and_its_chain_has_been_watched() {
 }
 
 /// The cycle reproduces the two fragment-program constants read off RPCS3 on
-/// `01_vineta_k` (`data/scratch/hd-weapon-pads/cap1`, draws 108 and 109), one
+/// `01_vineta_k` (a scratch directory, not kept, draws 108 and 109), one
 /// pad in the third keyframe's span and one in the first's, both from the same
 /// frame and both at the one scale `1/255`.
 ///

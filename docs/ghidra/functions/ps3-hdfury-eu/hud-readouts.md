@@ -275,8 +275,7 @@ the owner.
 ## What the running original does at low shield
 
 2026-10-02, a private RPCS3 (Recompiler), the Fury campaign's Talon's Junction
-single race, Feisar, 1280x720 at 30 fps through the emulator's own recorder
-(`data/scratch/hd-hud-flash/flash2/`), the shield poked through the GDB stub.
+single race, Feisar, 1280x720 at 30 fps through the emulator's own recorder, the shield poked through the GDB stub.
 The cells, found by scanning for the 140.0 the Feisar's pool starts at and
 confirmed by writing 70.0 and reading the HUD's record follow within 0.5 s:
 

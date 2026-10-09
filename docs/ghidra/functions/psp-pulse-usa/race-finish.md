@@ -115,7 +115,7 @@ The prediction written before the `sr-back` run was `100` flat for a not-first f
 it **failed**, and the reason is `ref.spread`, which puts the target behind `ref` rather than on it. The place is the
 finishing place and stays put: the player's `+0x344` read `4` for all 25 s although three crafts passed it on progress.
 Capture: `scripts/psp-postrace.py --hold-back --arm-after 300 --laps-hack 1`, which also logs the racer records and the
-player's driver now; `data/scratch/pulse-postfinish/sr-back/log.json`.
+player's driver now; `log.json`.
 
 **Not read**: the `spread` value's own law (`FUN_08852ef4`, a random wander between per-driver bounds, not renamed),
 so the unsaturated regime cannot be reproduced without the opponents' spreads; the steering half of
@@ -208,7 +208,7 @@ position back 5 along the turned forward: **an eye 5 units ahead of the nose at 
 flies**. Case 4 is case 3 with the same 180-degree turn first, so case 3's `(0, 3, 12)` offsets (`0x08ab10c8/cc/d0`) land
 **12 behind and 3 above, looking the way it flies**. Both set `65` degrees. Measured with the mode word forced to 1 and 4
 (`scripts/psp-spectator-capture.py --attach --force 1:20:180,4:220:380`, breakpoint on the view's exit): 200 and 179
-frames, rotation exact, eye to `5.4e-5` (`data/scratch/pulse-postfinish/cam14/`, `v0100.png` mode 1, `v0300.png` mode 4).
+frames, rotation exact, eye to `5.4e-5` (a scratch directory, not kept, `v0100.png` mode 1, `v0300.png` mode 4).
 Confidence **92**.
 
 **Not reachable after a single-player finish** (clean negatives):

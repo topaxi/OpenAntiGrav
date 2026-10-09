@@ -254,7 +254,7 @@ PPSSPP v1.20.4, **software renderer**, Time Trial on Talon's Junction White
 (`16_Track`), Assegai, native 480x272. One emulator boot, two race loads (a
 `psp-drive.py restart` between), the readings below identical on both. Raw
 frames and the JSON dumps are under
-`data/scratch/magfloor-pulse-live/` (`orig/`, `ours/`); nothing from the disc is committed.
+a scratch directory, not kept (`orig/`, `ours/`); nothing from the disc is committed.
 
 **Where the object is: `*(*0x08b317b4 + 0x2c0) + 0x8bc`.** That is the ship
 entity (`Ship_UpdateCraft`'s `a0`, `entity+0x94`, reads **0** at `+0x8bc`; the

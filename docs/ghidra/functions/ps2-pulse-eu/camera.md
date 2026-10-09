@@ -200,8 +200,7 @@ that state.
 | eye, in the craft's forward/up/right axes | `(-11.250, +3.000, 0.000)`: the rig's scaled close eye, unmoved by `Camera_UpdatePlayerView`'s pull-in |
 | `DAT_00284fe8` | `0` (`4:3`) |
 
-Identical on two loads of the state and again 30 frames after each
-(`data/scratch/ps2-framing/scripts/cam_live.py`). Confidence **95** that the
+Identical on two loads of the state and again 30 frames after each. Confidence **95** that the
 PS2 race renders a vertical field of exactly the authored `fov` at aspect `10/7`
 with the eye of the rig, at the `4:3` setting: a live read of the matrix itself,
 twice, agreeing with the literal `0x3fb6db6e` at `0x0013e604` the decompile
@@ -223,7 +222,7 @@ At the same eye, a hull's apparent width in the frame goes as
 to every source, so ours was `tan 30 * 1.765 = 1.019` and drew the hull
 `0.825 / 1.019 = 0.81` as wide. Measured on the craft, original (this state)
 against ours, both 640x448, same eye: wing span in the crops
-`data/scratch/ps2-framing/shots/crops_orig_before_after.png` (3x, read by eye,
+`crops_orig_before_after.png` (3x, read by eye,
 about +-3 px of 375): original 375, ours before 305 (0.81, as predicted), ours
 after 375 (1.00). Same vertical span. **The `38 % against 23 %` of the shield
 lane's report is not reproduced: this matched-pose pair gives 25.5 % against

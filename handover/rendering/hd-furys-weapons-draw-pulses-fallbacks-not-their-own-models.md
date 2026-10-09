@@ -236,7 +236,7 @@ lead is closed (0.996105 is our own law at age 0.81), but ours' core still white
    `Shockwave_scalar` its age. **Open:** the lifetime (what retires it), the
    16 entries, and the four-plus materials' programs (`sphere`, `bloom`,
    `rays`, `shockwave` nodes). The harness is
-   `data/scratch/hd-weapon-blasts/{ppcdis,emu,runblast,spec}.py`; the camera
+   `{ppcdis,emu,runblast,spec}.py`; the camera
    table's lane masks at `0xc47730` are runtime-initialised and must be seeded.
 4. ~~Settle the Plasma explosion's scale~~ **Done 2026-09-23**. ~~Read what
    `node + 0xc0` is on the `PTR_PTR_008b3988` node class~~ **Done
@@ -278,7 +278,7 @@ shot (`docs/reverse-engineering/rpcs3-capture.md`, "Giving the player a weapon")
 State 9 is the Bomb, 7 the Plasma, 8 the Cannon ("Machine Gun"), 0 the Rocket,
 4 the Turbo. Not done from it, in order of ready-ness:
 
-- **Plasma ring reference.** State 7 was fired twice on one boot (`data/scratch/hd-weapon-ref/e11/s3.png`):
+- **Plasma ring reference.** State 7 was fired twice on one boot:
   a white flash and violet sparks at the craft within 0.3 game seconds, **no growing violet
   shell** in the 5 fps contact sheet. That is not the "violet shell around the track" this
   build draws; the shot hit something at the craft's nose, so it may be the bolt's own
@@ -315,7 +315,7 @@ Open:
 - **Vertex RGB is white, chosen**: the original samples a lighting volume (`0x002a4280` ->
   `0x003c2598`/`0x003c2488`, data at `*0x00d43cc4`), unread. Live it ran `0xbaffff` to `0x2b5d7b`
   on the dumped circuit, so ours is the bright end. Matched pair (team and grid view differ from
-  the film): `data/scratch/hd-rocket-trail/ours/pair_trail.png`; ours reads greyer than the film.
+  the film): `pair_trail.png`; ours reads greyer than the film.
 - **Engine trail facing may be two-sided too**: `hd_enginetrail_bluered.rcsmaterial`'s facing `MIN`
   carries the same NV40 `SRC0_ABS` bit (word 1 bit 29) that made the smoke two-sided, and
   `exhaust.wesl` draws it one-sided (`clamp(dot, 0, 0.15)`). `ps3-microcode.py` prints `|x|` now.

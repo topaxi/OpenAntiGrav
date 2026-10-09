@@ -117,8 +117,11 @@ fn time_the_chain(adapter: &wgpu::Adapter, name: &str) {
             reading.frame, frame,
             "{name}: the reading named the wrong frame"
         );
+        // The ceiling only rejects a garbage reading (a wrapped or unscaled
+        // counter), not a slow one: llvmpipe on a loaded machine measured this
+        // 16x16 chain at 1.07 s during a gate.
         assert!(
-            reading.seconds > 0.0 && reading.seconds < 1.0,
+            reading.seconds > 0.0 && reading.seconds < 60.0,
             "{name}: the chain measured {} s",
             reading.seconds
         );

@@ -578,7 +578,7 @@ it, so `WO_ROCKET_FLARE` reads `rocket+0xa0` live every frame - the
 quarter-turned basis. The model never sees the quarter-turn.
 
 **Measured**, twelve consecutive `Rocket_Update` calls across the three
-rockets of one volley (`data/scratch/weapon-pose/psp/rocket-basis.json`,
+rockets of one volley (`rocket-basis.json`,
 not committed), every one agreeing to four places:
 
 ```text
@@ -639,7 +639,7 @@ only its first frame; and an unmanaged Xvfb places the SDL window off-screen.
 rockets there like anywhere else (a first reading that they were frozen was the
 nested-breakpoint trap above). It has no opponents and no weapon pickups, which
 is exactly why it is the clean place to compare a free flight. The capture
-frames and the probe JSON are under `data/scratch/pulse-weapons/` (not
+frames and the probe JSON are under a scratch directory, not kept (not
 committed).
 
 **Measured, 3 rockets of one volley, two runs: identical to 0.1 unit.** (Ours: a temporary, uncommitted `eprintln!` of `world.projectiles.slots` after `race.tick` in `race/capture/tick.rs`, reverted; the original: `psp-weapon-pair.py --probe rocket`.) Every
@@ -778,7 +778,7 @@ run.
   `*(craft+0xad8)`, the bounds `Collision_SweepSegment`'s second query takes), is not
   separated. Not reproduced and not chosen.
 - **The wide orange glow at fire+3..+8 is still not matched.** (**Closed in size 2026-10-01**: see "the launch glow" below; the paragraph is what it said at the time.) Read at 480x272 beside the
-  original (`data/scratch/pulse-weapon-laws/rocket-pair-after.png`): the original's is a
+  original: the original's is a
   large white-orange bloom over the craft's nose and the road ahead; ours is a smaller
   yellow glow at the nose in the middle two rows. Closer than the 15 px spot before the
   spawn moved, not equal. `WO_ROCKET_FLARE`'s parameters are the unread part (section
@@ -834,7 +834,7 @@ after-ageing test, with a rounding epsilon. This is the shared
 original gives to check it against are the flare's `1.05` and the SHAZZAM draw count.
 The craft-hit blast's frame series (`rocket-visuals.md`, 2026-09-24) was not re-run.
 
-**Result** (`data/scratch/pulse-rocket-look`, fire minus a no-fire control, warm light
+**Result** (a scratch directory, not kept, fire minus a no-fire control, warm light
 only - red minus blue, summed over the frame - mean of fire+3..+10, ours at tick
 `402 + k`, a one-tick alignment that moves ours by up to 8 %):
 
@@ -940,7 +940,7 @@ fire+9, 16, 20 and 25 (4.0, 4.2, 3.8, 3.5) with the ticks between at the origina
 against 2.1, 2.0, 2.0, 2.0): the excess is episodic, not a steady surplus.
 
 **Finding 3 - the pool is equal, so the excess is not the effect's law (confidence 80: one probe run in one boot).** `--probe flare` and `--probe rolled` on the original against a temporary
-(reverted, `data/scratch/pulse-weapon-look/psys-debug-print.patch`) per-spec print in `Stage::extend_vertices`:
+(reverted, `psys-debug-print.patch`) per-spec print in `Stage::extend_vertices`:
 
 | quantity | original, per rocket | ours |
 | --- | --- | --- |

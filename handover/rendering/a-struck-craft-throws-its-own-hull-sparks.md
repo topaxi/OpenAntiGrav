@@ -25,7 +25,7 @@ Evidence:
 - [contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md): corrects the old "death burst only" reading.
 - Code: `oag_raceplay::hit_sparks` and `oag_weapons::projectile::WeaponHit`.
 
-Frames are in `data/scratch/hit-sparks/` (gitignored):
+Frames are in a scratch directory, not kept (gitignored):
 
 - `cannon-orig-vs-ours.png` and `cannon-orig-vs-ours-zoom.png`. The top row is PPSSPP k=0..80, the bottom row ours at ticks 300..380.
 - On both sides the hit is posted into the player's pending-damage channel every 6 frames. It is not a fired Cannon.

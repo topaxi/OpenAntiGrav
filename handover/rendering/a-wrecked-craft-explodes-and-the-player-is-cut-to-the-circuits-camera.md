@@ -26,12 +26,12 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   steps its cosmetics under the results (`Race::tick_cosmetics`, called by `Session::frame` and the headless capture where they stopped
   stepping a finished race): the player's state-5 shake (armed in every mode now), the wreck's fire, the big explosion 1.5 s on, its
   ring, the screen flashes and the destroy camera's ease. It writes nothing under `sim` (`world.tick` included), so the standings and
-  the board stay frozen; `wreck_finished` pins the hash. Seen at 480x272 (`data/scratch/pulse-wreck-3/shots/sheet.png`): the camera
+  the board stay frozen; `wreck_finished` pins the hash. Seen at 480x272: the camera
   stays on the wreck, the explosion's fireball and the kind 7 wash play under the panels, the picture is clear again by about 100
   frames; a Zone wreck plays the same (`sheet_z.png`; Zone's own overexposed circuit look). **Over it the results panel is drawn at once**,
-  and the original's is not: `data/scratch/pulse-fx-3/hudT` (the original, a player wreck after GO) shows no panel at 40, 80 or 120 frames
+  and the original's is not: a scratch directory, not kept (the original, a player wreck after GO) shows no panel at 40, 80 or 120 frames
   with the circuit's camera and the fire/wreck clear, so the sequence this change plays is **hidden by ours** for the player
-  (`data/scratch/pulse-wreck-3/shots/cmp_original_vs_ours.png`: same camera composition, panel on ours only). That is the
+  (`cmp_original_vs_ours.png`: same camera composition, panel on ours only). That is the
   `Race End Photo` state (`after-the-finish.md`: about a second of clean view, then the legend, then the panels on X), which the
   EndRace lane owns. **2026-10-02 (pulse-end-photo): not that state after all** - the original's front end stays on `InGame` after a player wreck for 17,800+ frames with no panel and no legend (the field races on), so the line's `Race End Photo` does not help here. **Resolved by the maintainer's "hold, then results" (2026-10-02, pulse-end-photo)**: a Single Race wreck now runs the world on, shows no panel for 61 ticks and then the legend, so the explosion (at 90 ticks) plays under the legend alone, not a panel; Zone still shows its panels at once. **Chosen, not measured:** only the player's wreck was looked at, so the opponents, shots in flight and trails stay
   frozen under it (the original goes on running them).
@@ -39,7 +39,7 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   update is `Ship_UpdateRespawn` (`FUN_088418e0`'s per-state jump table at `0x08a7bb88`: state 8 goes to the call at `0x08841e44`),
   so the Eliminator waits state 5's `1.5` s and then state 8's `1.0` s (the player) or `0.8` s (anyone else; was `2.0`, corrected by a live run 2026-10-02):
   `eliminator::eliminator_respawn_delay`. The destroy camera is on the wreck as the explosion goes off and lets go with the respawn
-  (`data/scratch/pulse-wreck-3/shots/sheet_e.png`: the fireball seen from the circuit's camera, then the RESET wash and the chase
+  (`sheet_e.png`: the fireball seen from the circuit's camera, then the RESET wash and the chase
   camera). Confidence 88: the table and the call read, no live run of an Eliminator wreck.
 - ~~**State 6 is `FUN_08840500`, a bare `+0x874` countdown; does a single race's wrecked AI craft ever come back?**~~ **Closed
   2026-10-02 (pulse-state6): no.** Live on PPSSPP, two runs (`Ship_SetState(4)` on slot 1, `Ship_Damage` on slot 2), the craft goes
@@ -60,7 +60,7 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   test); ours drew it with its *parent's* sprite (`SHIP_DEBRIS`'s grey atlas, centre alpha `0`) because `ParticleSystem_DrawParticle` binds the
   texture header in the **template record** (`+0x890`) and the port took the emitter's. All 28 PSP templates now draw their own
   ([particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md#a-sprite-templates-own-sprite-and-what-the-explosions-first-five-frames-are-2026-10-01-pulse-fx-3)):
-  the wash, its extent and its hard edge match at frames 122-125 (`data/scratch/pulse-fx-3/pair_glow.png`). The ring was never 1.5-2x dim in
+  the wash, its extent and its hard edge match at frames 122-125. The ring was never 1.5-2x dim in
   its draw: at equal step count the horizon band reads `185, 158, 110, 73` against `176, 148, 105, 76` (within 7 %); the original's `ShipShockwave_Update`
   steps `(int)(dt / (1/60))` with no remainder, which on PPSSPP skipped 29 of 81 frames (`ship-shockwave.md`). **Still open here:** the mode-2 emitters
   (`SHIP_DEBRIS`, `FIRESPIKES`) spread 15 to 30 % more than the uniform frame scale gives; the fire still

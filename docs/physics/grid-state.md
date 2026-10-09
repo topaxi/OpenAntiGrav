@@ -22,7 +22,7 @@ Trial, and reads the player's rigid body each time (position, the three axes,
 velocity, angular momentum), the craft's throttle word, and with `--full` the
 first `0x400` bytes of the craft. Cross held from the restart through the
 countdown makes the first non-zero throttle word GO. Four runs agree to the
-digits quoted (`data/scratch/pulse-start-pose/orig-tt-16-{a,b,c,d}.json`).
+digits quoted.
 
 | Frames from placement | Original | Notes |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ so a respawn after the start can never re-enter it.
 | z at GO + 120 | `-196.86` | `-198.70` | `-196.39` |
 
 (`crates/game/tests/start_pose_ground_truth.rs` pins the first, second and fourth
-rows; the last two are from `data/scratch/pulse-start-pose/ours-tt-16-gate.txt`.)
+rows; the last two are from `ours-tt-16-gate.txt`.)
 
 ## What is still different at GO, and what is not this page's
 

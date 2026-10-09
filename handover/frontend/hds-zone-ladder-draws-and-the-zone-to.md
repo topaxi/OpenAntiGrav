@@ -314,7 +314,7 @@ now watched stepping in a continuous run rather than at one forced
 `hd_zone_ladder_zone<N>_stage<S>.png` (zones 1, 2, 5, 16, 20, 35, 42, plus the
 eliminated end state and the `zone_2`-track zone-52 frame below), gitignored
 like every other capture this thread cites. The full tick-by-tick log and the
-rest of this session's working are in `.claude/scratch/zone-grade-report.md`
+rest of this session's working are in `zone-grade-report.md`
 inside the worktree this landed from - not linked further, since a worktree
 scratch path does not survive the worktree.
 

@@ -34,7 +34,7 @@ elimination and by the live frame below, not by a name string).
 
 **Live, fresh profile (PPSSPP, own `HOME`, nothing pressed on the row):** the Racebox with
 `RACE TYPE ELIMINATOR` shows `KILLS 5`, every other row on its first entry too (`AI DIFFICULTY
-EASY`). Frame: `data/scratch/eliminator-finish/shots/rb-settings.png` (gitignored).
+EASY`). Frame: `rb-settings.png` (gitignored).
 The previous lane's Racebox Eliminator drew `KILLS (5)` in the HUD and ended at exactly five
 kills. Confidence 90 that a Racebox Eliminator on a fresh profile uses 5.
 

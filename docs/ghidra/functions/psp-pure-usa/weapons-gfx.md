@@ -58,7 +58,7 @@ either side.
 The first pass drew a spike filling the chase camera for the Mine and a canister filling it for the Bomb,
 and doubted the picture. Matched stationary captures (Time Trial, Venom, Feisar, Vineta K, craft held still,
 PPSSPP 1.20.4 software, `scripts/psp-pure-weapon-fire.py`, plus ad-hoc probes in
-`data/scratch/pure-laid-pose/`) show the original draws the same thing; ours was wrong in two ways:
+a scratch directory, not kept) show the original draws the same thing; ours was wrong in two ways:
 
 - **Drop point (confidence 80, one craft, two circuits).** The Mine entity's translation and `Bomb_Init`'s `a1`
   both equal the anchor matrix at `holder+0xa0` (`*(ship+0xd0)`), not the body matrix at `ship+0x40`: body
@@ -88,7 +88,7 @@ Single Player, Time Trial, Venom, Alpha, Vineta K, Feisar, confirm). `Ship_Updat
 (`0x0892935c`, `a0` the ship) is hit once per game update, about 30 a second at 60 emulated Hz here.
 At hit 150 after RESTART the script writes the id into `*(ship+0xd0)+0x1d8` and a `1` at
 `*(*(ship+200)+0x48)+0x15`; the fire branch runs the same frame. The craft was at about 229 km/h
-(Pure's HUD, `2.1 s` race time) when it fired. Sequences: `data/scratch/pure-weapon-gfx/emu/` (rocket,
+(Pure's HUD, `2.1 s` race time) when it fired. Sequences: a scratch directory, not kept (rocket,
 mine, bomb, plasma). One boot per weapon after RESTART, repeated rocket twice; a number seen on one
 boot is reported as seen once.
 
@@ -97,7 +97,7 @@ boot is reported as seen once.
   about four updates; ours is the same shape but **darker** (shading differs, open). **Bomb**: a
   grey octagonal canister with red lamps and a red glow drops under the camera for one update.
   **Plasma**: a purple ring charges at the nose, the bolt leaves with a crackle of lightning.
-- Our frames: `data/scratch/pure-weapon-gfx/ours/`, fired at tick 404 of `weapon-after-go.inputs`.
+- Our frames: a scratch directory, not kept, fired at tick 404 of `weapon-after-go.inputs`.
   The craft state is matched by race time (about `2.1 s` after GO), not by speed: Pure's HUD km/h and
   our speed unit differ, so the pair is **time-matched**, not state-matched.
 

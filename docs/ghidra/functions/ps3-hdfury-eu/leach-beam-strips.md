@@ -1,7 +1,7 @@
 # The LeachBeam strips: a PPU ribbon, not a ThickLine pool, read statically
 
 Read 2026-10-08 (`hd-leach-beam`) from `/hdfury/EBOOT-ps3-hdfury-eu.elf` with
-Ghidra and `data/scratch/hd-weapon-blasts/ppcdis.py` (capstone) where the
+Ghidra and a throwaway script, not kept (capstone) where the
 decompiler truncates at AltiVec. **Nothing here was run on RPCS3 or in the
 scratch interpreter**: every law is a static read, and the page says which.
 Nothing is wired. Ghidra's caller lists are incomplete for this code (it
@@ -128,7 +128,7 @@ PS4 capture path exists. Not wired on Omega.
 
 ## 2026-10-08 (`hd-leach-path`): measured live on RPCS3, path law and material read
 
-Two boots of a held LeachBeam (`data/scratch/hd-leach-path/run5`, `run6`; Racebox-free
+Two boots of a held LeachBeam (a scratch directory, not kept, `run6`; Racebox-free
 Fury campaign walk, player placed 40 units behind the nearest rival at that rival's
 speed, slot state written, TRIANGLE held), agreeing on every structure below.
 `+0xf0` of the pickup slot is the *owner* craft, not a target (a write there was
@@ -181,7 +181,7 @@ trail**, not a line:
   between the ring write and the strip build).
 
 **The nodes** (`LeachBeamStrip_BuildRibbon` run in the scratch interpreter,
-`data/scratch/hd-leach-path/emu_strip.py`, conf 85): per sample from the shooter end,
+a throwaway script, not kept, conf 85): per sample from the shooter end,
 `forward = unit(sample[i] - sample[i-1])` (sample 0 reuses sample 1's), `up =
 unit(ref - (ref . forward) forward)` with `ref = (0, -1, 0)` (`RibbonNode_FromDirection`
 `0x002a3f70`), `right = up x forward`; half-width **1.0** (node `+0x68`), `u +=
@@ -211,7 +211,7 @@ ring and walker are EBOOT code, not decoded for Omega.
 
 ## 2026-10-08 (`hd-leach-draw`): the draw state, the wobble, the walk's direction; wired on HD
 
-Boot `data/scratch/hd-leach-draw/c4`, `c5` on RPCS3 (own config, `scripts/rpcs3-trace`-style session,
+Boot a scratch directory, not kept, `c5` on RPCS3 (own config, `scripts/rpcs3-trace`-style session,
 `scripts/rsx-draw-list.py --samplers --const N` added for this), a held beam (state 10) with the
 player placed behind the nearest rival, then the pushbuffer of the paused frame read. A complete frame
 is rare (1 in 15-25 pauses); the beam's hold was kept alive across retries by rewriting the beam clock
@@ -232,7 +232,7 @@ is rare (1 in 15-25 pauses); the beam's hold was kept alive across retries by re
 The fragment program reads unit 0 as the noise and unit 1 as the glow, so the units are fixed by size
 and by the program, conf 85 for the names. Topology: 3 fins, `(a0, a1, b0), (a1, b0, b1)` per segment per
 fin (the index buffer), 36-byte vertices `{pos, normal, uv, colour}`, half-width 1.0 (pair 2.0 apart), `u`
-0.019 per 0.38 units, colour `0xffffffff` in state 4. All as the Rocket's ribbon, and as `emu_strip.py`.
+0.019 per 0.38 units, colour `0xffffffff` in state 4. All as the Rocket's ribbon, and as a throwaway script, not kept.
 
 **`time`** is the engine clock in seconds: the fragment constants `c[464]`/`c[466]` of the draw read 161.59
 and 190.09 on two boots at about 160 and 190 s of play; `c[467]` is the eye. conf 80.
@@ -273,7 +273,7 @@ staging, not the strip**.
 
 ## 2026-10-08 (`hd-leach-bright`): why the strip read faint, and what the live draw says
 
-Two boots of RPCS3 (`data/scratch/hd-leach-bright/c1`, `c2`; a held LeachBeam placed behind the
+Two boots of RPCS3 (a scratch directory, not kept, `c2`; a held LeachBeam placed behind the
 nearest rival, pushbuffer plus the strip's own memory read paused). Both agree on every row below.
 
 **The faint streak was the staging, conf 70** (the original's straight-chase facing table is one frame; `t1`, `t2` and `t3` are the same paused frame): The `hd-leach-draw` comparison frame (`--force-leach-lock
@@ -321,8 +321,7 @@ paused frame did not pair with the anchor sample (`place.read_pose` came back 62
 | program | the leach fragment program is the 18-instruction one with the facing term (found by its microcode in the dump); its address changes boot to boot | unchanged |
 
 The noise change moves the glow lookup only (the decoded noise averages 0.10 against 0.33 raw): before/after
-at four dense frames differ by 0 to 7,200 pixels with the frame's mean luminance unchanged to 0.01
-(`data/scratch/hd-leach-bright/ba/`). It is a correctness change to the program's inputs, **not** the
+at four dense frames differ by 0 to 7,200 pixels with the frame's mean luminance unchanged to 0.01. It is a correctness change to the program's inputs, **not** the
 brightness fix; the brightness gap was the staging.
 
 **Three things this lane's tools got wrong, so the previous pages should be read with them:**

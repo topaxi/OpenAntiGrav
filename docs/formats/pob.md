@@ -1554,7 +1554,7 @@ whiteout), at 2048 three emitters still did. `SHEET_SIZE` is now 4096 (**chosen,
 measured**; 64 MiB) and an emitter whose sprite still does not fit is a WARN report line
 ("did not fit the sprite sheet"), not a silent substitution. The authored palettes of these
 emitters are plain white (`pal0 = pal128 = [1,1,1]`), so all of the colour is the sprite's.
-Frames: `data/scratch/logwarn-2048/shots/ex/omega4096-strip.png` (ticks 90 to 240, orange
+Frames at ticks 90 to 240, orange
 fireball, debris and sparks) against `omega-strip.png` (before). Pulse's own rocket blast
 (`pulse-150.png`) is orange the same way. Effect on other titles: a sheet that held their
 sprites at 1024 places them identically (rects scale with the size); a title whose sprites

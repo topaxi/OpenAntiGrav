@@ -8,7 +8,7 @@ arch lights lost their glow", its section 3 "The behind-the-glass target is draw
 **Landed (`hd-behind-glass`):** the behind-the-glass target is drawn (640x360, the sky plus the `0x10` chunks, 4/3
 wider tangent, the `0x20` alternate fog, single-sided), and the glass is one opaque draw reading it. Pose A's right
 ceiling panes: reference `(4, 87, 87)`, before `(135, 176, 57)`, after `(14, 72, 72)`. Lane scratch:
-`data/scratch/hd-behind-glass/` (`report.md`, `shots/`, `sweep/`).
+a scratch directory, not kept (`report.md`, `shots/`, `sweep/`).
 
 ## Open
 

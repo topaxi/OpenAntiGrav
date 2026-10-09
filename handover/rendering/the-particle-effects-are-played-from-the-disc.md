@@ -49,8 +49,7 @@ All 174 of 2048's `.pob` parse (4 refused by name); a race reads
 `Effect::parse_with`). 27 of the 36 `RACE_EFFECTS` load. **Firing today, with the
 title-neutral triggers:** wall-contact sparks, weapon visuals (Rocket, Missile,
 Plasma, Shuriken, Mine, Bomb, Cannon, Quake, Repulser, LeachBeam), trail hits.
-Seen on screen: wall sparks, a rocket flare and a rocket detonation
-(`data/scratch/v2048-particles/shots/`). **Not firing, trigger unread or Pulse-gated:**
+Seen on screen: wall sparks, a rocket flare and a rocket detonation. **Not firing, trigger unread or Pulse-gated:**
 
 - Wreck (`wreck_fx`, Pulse-gated): 2048 authors `WO_SHIP_EXPLOSION_PLAYER`,
   `WO_ZONE_SHIP_EXPLOSION`, `WO_SHIP_DEATH_DAMAGE_PLUME`, not the Pulse names.
@@ -76,9 +75,7 @@ and 110/112 (95/97) parse since 2026-10-06 (logwarn-2048): blend class 8 (distor
 heat haze: rocket, missile, mine, bomb-ring, plasma-expand, `WO_RB_HEAT*`) is read as
 `Blend::Distort` and **drawn** (2026-10-06, `heat-haze-3`: an offset pass in `oag_fx::psys`, composited by
 `oag_post::omega_tonemap`; strength the emitter's `+0xc84` float; see `pob.md` and
-`ps4-omega-eu/heat-haze.md`, `heat-haze-3` section). Seen: wall sparks, rocket flare
-(`data/scratch/omega-particles/shots/`), the rocket explosion with and without the distortion
-(`data/scratch/heat-haze-3/shots/`). Open on the distortion: the heat-haze set (`WO_RB_HEAT*`,
+`ps4-omega-eu/heat-haze.md`, `heat-haze-3` section). Seen: wall sparks, rocket flare, the rocket explosion with and without the distortion. Open on the distortion: the heat-haze set (`WO_RB_HEAT*`,
 `WO_ENV_*`) has no recovered trigger; the offset target is half floats where the original is
 `R8G8_SNORM`; the depth gate is our own depth buffer, planar, where the original reads an `R16F`
 its scene shaders fill (planar `w` or radial unread); all 80 Omega circuit `.envsettings` author the `Tonemap` block the composite hangs off (census
@@ -126,13 +123,13 @@ names that 2048 and Omega never authors") and no longer load there.
   needed four interpreter laws, now played: the emitter's playback rate, selector 5 as
   the lifetime co-factor, flag `0x200000`'s even ring and the ring's azimuth sign. It
   also needed the beads to ride the blast's live matrix (flag `0x2`, owner matrix by
-  pointer). Frames: `data/scratch/pulse-psys-ring/shots/final-cmp.png`. See
+  pointer). Frames: `final-cmp.png`. See
   [particle-system.md](../../docs/ghidra/functions/psp-pulse-usa/particle-system.md),
   "The emitter's clock and the burst laws". Still open from it:
   - ~~**The wave-start whiteout is now only the `shazzam` template**~~ Closed 2026-10-06 (weapon-visuals): PPSSPP replays of two GE dumps show the out-of-range quad is dropped and an in-range one draws a band; played as `oag_fx::psys::guard`. Still open: the boundary itself, and the other wave's `shazzam` absent from later submissions.
   - **Every class-6 emitter changed draw** (23 on the PSP disc): it is a bar `2 size`
     wide, capped by `aspect * size`, not the wedge. Before/after frames of the Missile,
-    Shuriken, LeachBeam and Fort Gale rain (`data/scratch/pulse-psys-shape8/shots/ba-*.png`)
+    Shuriken, LeachBeam and Fort Gale rain
     show no breakage, but none caught its class-6 effect on screen except the Missile's
     trail, and none was compared against the original.
   - **The class-6 `+0x60` end is read, not played**: the pool bar's other end is last
@@ -164,8 +161,7 @@ names that 2048 and Omega never authors") and no longer load there.
   `oag_physics::wall::WallResponse` without touching `reacts()`.
 - Read the welder's streak law (render class `Streak`, `Capped`) against one
   live particle.
-- `WO_REPULSER`'s `shazzam`: take a GE dump 3 to 6 updates after the waves start
-  (`data/scratch/pulse-psys-shape8/probe5.py 45091 <dir> 1 <skip>`), when the quad is
+- `WO_REPULSER`'s `shazzam`: take a GE dump 3 to 6 updates after the waves start, when the quad is
   15 to 40 units out and inside `+-2048` px. A drawn band there makes the guard-band
   cull the law; then cull psys triangles by it in `upload_particles`, where `vp` is.
 - Read `FUN_08918160`, the class-7 pool draw, the way `0x08917c7c` was read.

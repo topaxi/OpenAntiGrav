@@ -1,4 +1,4 @@
-//! Scratch probe (data/scratch/w2048-campaign): for every `SP.xml` event
+//! Scratch probe (a scratch directory, not kept): for every `SP.xml` event
 //! instance, dump `M_PPLAYERSHIPMODELDATA`/`M_PGRIDSHIPMODELDATA`/
 //! `M_PPLAYERSHIPCREATORPARAMS`/`M_PGRIDSHIPCREATORPARAMS` so authored (non
 //! -empty) craft references can be found and joined against `WOShipModelData`

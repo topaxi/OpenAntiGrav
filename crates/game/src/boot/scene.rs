@@ -55,11 +55,10 @@ fn build_model(
     vex: &[u8],
 ) -> anyhow::Result<(Model, String)> {
     let geometry = mesh::rcs::sibling_name(src).and_then(|name| archives.read_name(&name).ok());
-    if let Some(geometry) = geometry.filter(|blob| mesh::rcs::psp2::is_psp2(blob)) {
-        let (model, built) = mesh::rcs::psp2::build_with_vex(src, &geometry, vex, &mut |path| {
-            archives.read_name(path).ok()
-        })?;
-        return Ok((model, built.describe()));
+    if let Some(geometry) = geometry
+        && let Some(built) = crate::preview::psp2_scene::build(archives, src, vex, &geometry)?
+    {
+        return Ok(built);
     }
     let model = crate::preview::model(archives, src)?;
     let triangles = model.indices.len() / 3;

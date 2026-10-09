@@ -28,7 +28,7 @@ Evidence and addresses:
 - [pob.md](../../docs/formats/pob.md), "Correction: the two texture offsets are from the resource base".
 - [rocket-visuals.md](../../docs/ghidra/functions/psp-pulse-usa/rocket-visuals.md), "The craft-hit blast against the original".
 
-Matched original frames live in `data/scratch/fx-brightness/` (gitignored):
+Matched original frames live in a scratch directory, not kept (gitignored):
 
 - Quake: `quake-compare-1.png`. Top row PPSSPP `run3` frames 12/16/20/30, middle row ours before, bottom row ours after.
 - Rocket: `rocket-compare-1.png`. Top row PPSSPP craft hit at 51 units (`ppsspp-rocket/report.md`), middle before, bottom after.
@@ -55,7 +55,7 @@ landed, Pulse PSP only.** Evidence:
   rate is the unparsed `+0x778` channel, now
   `oag_pob::Emitter::frame_rate`.
 
-Frames are in `data/scratch/psys-draw/` (gitignored):
+Frames are in a scratch directory, not kept (gitignored):
 
 - `rocket-main-vs-flash.png`: original, then main, then this lane.
 - `rocket-main-vs-frames.png`: the frame advance alone.
@@ -115,7 +115,7 @@ Frames are in `data/scratch/psys-draw/` (gitignored):
   anchor, and the Quake feeds its `/ 50` in as severity again. Checked
   against main (a84003c7): PS2 Quake t305/t312 and HD Quake, and PS2/HD
   engine flares at t240, all pixel-identical
-  (`data/scratch/fx-brightness/ps2-hd-gated-vs-main.png`, `after2/`). So
+  (`ps2-hd-gated-vs-main.png`, `after2/`). So
   PS2's Quake still blows out white exactly as on main - its `.pob`s embed
   no sprite. Sprite sampling and the resource-base offsets are format facts
   and stay on everywhere they apply.

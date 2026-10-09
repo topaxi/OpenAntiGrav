@@ -2,7 +2,7 @@
 
 **Binary:** `pulse-psp` `BOOT.BIN` (USA), image base `0x08804000`. PPSSPP v1.20.4
 (SDL, OpenGL software renderer), debugger on `:45497`, fresh profile, Xvfb.
-Screenshots under `data/scratch/pulse-h2h/` (gitignored).
+Screenshots under a scratch directory, not kept (gitignored).
 
 ## The question
 

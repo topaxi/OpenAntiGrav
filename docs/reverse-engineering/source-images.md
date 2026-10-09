@@ -263,10 +263,10 @@ and the exact patch in
 Apply that patch to the `LibOrbisPkg` checkout before the `dotnet build` step
 below and both `pkg_extract` invocations on this page recover real content
 that the unpatched tool silently zeroed - re-extraction with the fix landed
-2026-09-27 under `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/` and
+2026-09-27 under a scratch directory, not kept and
 became `data/extracted/ps4/{omega-eu,omega-eu-patch}` 2026-09-29 (the short-read
 copy is `data/extracted/ps4.bak`; the old scratch paths are symlinks now); see
-`data/scratch/drive-2026-09-27/omega-psarc.md` for the before/after numbers.
+`omega-psarc.md` for the before/after numbers.
 
 **`omega-ps4-eu-patch.pkg` extracts separately and adds content, rather than
 completing the base `.pkg`'s.** `pkg_extract` takes exactly one `.pkg` and
