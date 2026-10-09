@@ -116,7 +116,10 @@ fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
 
     let (with, without) = (dark_core(&fired), dark_core(&control));
     println!("dark pixels in the bolt's box: {with} with a bolt, {without} without");
-    assert!(without < 50, "the control's box is not road any more");
+    // 47 dark road pixels before the HD adaptation read the encoded mean
+    // (exposure 1.0 instead of a x1.5 lift on this frame), 50 after; the
+    // bolt's own count is 326 and 399. The ceiling keeps the two far apart.
+    assert!(without < 100, "the control's box is not road any more");
     assert!(
         with > 200,
         "the bolt's core is not dark: a white disc is the eye read from the origin"

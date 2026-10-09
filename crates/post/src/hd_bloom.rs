@@ -51,10 +51,11 @@
 //!   sRGB encode (`SET_SHADER_PACKER` is 1 on the scene and ladder draws,
 //!   0 on the swap buffer). `pow(1/2.2)` here is the project's single-curve
 //!   approximation of that encode, nothing more.
-//! - **The adaptation averages the encoded luminance.** The PPU reads the
-//!   reduced buffer's bytes, which the ROP wrote through the sRGB encode, so
-//!   `adapted` is a luma of encoded values. Inferred, not read: it is the
-//!   reading that gives the original's exposure scale of 1.0 on a dim frame.
+//! - **The adaptation averages the encoded luminance.** The ladder halves the
+//!   linear scene; the PPU then reads the bytes left in the last level, which
+//!   the ROP wrote through the sRGB encode, so `adapted` is a luma of encoded
+//!   texels (`fs_adapt` encodes each texel once, never the mean again). See
+//!   renderer.md, "The adaptation is the encoded linear mean".
 //!
 //! # Why the chain owns the scene target
 //!
@@ -187,7 +188,7 @@ pub enum Glow {
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
 #[derive(Debug)]
 struct Target {
-    #[expect(dead_code, reason = "held so the view stays valid")]
+    #[cfg_attr(not(test), expect(dead_code, reason = "held so the view stays valid"))]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
@@ -205,7 +206,14 @@ impl Target {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: SCENE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            // A test writes its scene texels directly.
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | if cfg!(test) {
+                    wgpu::TextureUsages::COPY_DST
+                } else {
+                    wgpu::TextureUsages::empty()
+                },
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -307,6 +315,11 @@ pub struct Chain {
     params: Params,
     glow: Glow,
     copy: wgpu::RenderPipeline,
+    /// The first luminance-reduction step: an exact 2x2 mean of the quarter-res
+    /// scene, every texel weighing 1.
+    reduce_first: wgpu::RenderPipeline,
+    /// The later reduction steps: the same mean, weighted by coverage.
+    reduce: wgpu::RenderPipeline,
     adapt: wgpu::RenderPipeline,
     /// The adapt pipeline with the lerp rate forced to 1, run once: the
     /// state starts at zero and a single captured frame would otherwise
@@ -416,6 +429,14 @@ impl Chain {
             })
         };
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
+        let reduce_first = pipeline(
+            "hd bloom reduce first",
+            "fs_reduce_first",
+            SCENE_FORMAT,
+            None,
+            &[],
+        );
+        let reduce = pipeline("hd bloom reduce", "fs_reduce", SCENE_FORMAT, None, &[]);
         let adapt = pipeline("hd bloom adapt", "fs_adapt", SCENE_FORMAT, None, &[]);
         let adapt_jump = pipeline(
             "hd bloom adapt jump",
@@ -441,6 +462,8 @@ impl Chain {
             params,
             glow,
             copy,
+            reduce_first,
+            reduce,
             adapt,
             adapt_jump,
             gate,
@@ -459,6 +482,12 @@ impl Chain {
     #[must_use]
     pub fn scene_view(&self) -> &wgpu::TextureView {
         &self.sized.scene.view
+    }
+
+    /// The scene target's texture, for a test that writes its texels directly.
+    #[cfg(test)]
+    fn scene_texture(&self) -> &wgpu::Texture {
+        &self.sized.scene.texture
     }
 
     /// Rebuilds the targets for a new viewport size. The adaptation state
@@ -491,9 +520,9 @@ impl Chain {
         // its readback.
         let mut reductions = Vec::new();
         let (mut w, mut h) = quarter;
-        while w > 1 || h > 1 {
-            w = (w / 2).max(1);
-            h = (h / 2).max(1);
+        while (w > 1 && h > 1) || reductions.is_empty() {
+            w = w.div_ceil(2);
+            h = h.div_ceil(2);
             reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
         }
         let adapted = [
@@ -820,10 +849,17 @@ impl Chain {
         // `self.sized.downsamples` always has at least two entries - see its
         // own construction - so the opening write always lands on a real pass
         // and `opening` never survives this loop unconsumed.
-        for stage in &self.sized.downsamples {
+        for (index, stage) in self.sized.downsamples.iter().enumerate() {
+            // The two halvings are the gate's and the blur's quarter-res
+            // scene; what follows is the luminance reduction.
+            let pipeline = match index {
+                0 | 1 => &self.copy,
+                2 => &self.reduce_first,
+                _ => &self.reduce,
+            };
             pass(
                 "hd bloom downsample",
-                Some(&self.copy),
+                Some(pipeline),
                 stage,
                 None,
                 clear,

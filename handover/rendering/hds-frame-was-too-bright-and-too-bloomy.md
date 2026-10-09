@@ -1009,4 +1009,12 @@ The earlier "`fp 0x759ac1` road draw" was a wall program.
 unreliable: 9 landed on Talon's, 10 on Modesto); its remaining 2x deficit is in vertex-lit or emissive terms. (3) Non-road families
 read 1.1-1.4 (sun, `x8` specular scale, saturation). (4) Particles and effects end on `/2` too and `oag-fx` does not apply it.
 (5) Omega: a GCN `omod` census of the circuit pixel shaders.
-||||||| c3b22f033
+
+2026-10-09 (`hd-bloom-adapt`): **The Metropia blobs are fixed in the reduction, and the fix shows the frame-wide darkness.** Our `adapted` read 0.098 (a biased
+ladder) where the original's is the encoded linear mean (exact linear ladder with the sRGB write on, read as raw bytes, 1/255, every texel left when a side reaches 1);
+`oag_post::hd_bloom` now does the same: Metropia ceiling clipped share 10.87 % -> 1.38 % (original 3.07 %; throttle 08 20.27 % -> 2.63 % against 11.56 %), exposure 1.0
+as in the original. renderer.md, "The adaptation is the encoded linear mean". **Cost, read with "Open / next" above**: whole-frame luma Metropia 0.364 (original 0.488, was 0.518),
+Amphiseum 0.191 / 0.355 (0.286 / 0.430, was 0.280 / 0.486), Talon's within 0.010 of before, Sol 2 identical. The old low `adapted` lifted dark circuits by a x1.5-2 exposure that hid a
+scene 25-29 % darker than the original's at scale 1; the cause is unattributed (the same 0.77-0.84 ratio at the Talon's and Sol 2 grids; the corridor-road lane's 4x-too-bright road
+points the other way). **Next**: (1) the live read of the original's `adapted` (`FunkLayer + 0x25c`; `0x003b4690` never hit under `wait_at`, use `wait_for_stop` on `0x003b5318`);
+(2) find the circuit-wide darkness at scale 1 (sky and unlit surfaces match, per the exposure section, so look at lit surfaces).

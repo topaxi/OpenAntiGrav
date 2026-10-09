@@ -140,6 +140,51 @@ fn surface(texel: vec4<f32>) -> vec4<f32> {
     return clamp(texel, vec4<f32>(0.0), vec4<f32>(1.0));
 }
 
+// The luminance reduction's halving step, in two forms.
+//
+// **Linear, like the original's ladder.** Every ladder draw in the original
+// has the ROP's sRGB write on and its units decode on fetch (gamma nibble 7;
+// renderer.md, "The exposure is unity ..."), so each halving averages light
+// and stores the encoded byte. Ours halves the linear scene the same way.
+//
+// **Each step is an exact, coverage-weighted 2x2 mean.** A bilinear tap over
+// an odd-sized level reads the middle of a texel pair and drops a row or
+// column, and the last step of a 3x2 level read one column alone: the ladder
+// came out ~30 % under the true mean of the frame it was given. A level here
+// carries, in its alpha, the share of each texel's footprint that holds
+// picture, so the half-empty last texel of an odd level weighs what it covers.
+// `first` is the step that reads the scene's quarter-res copy, whose alpha is
+// the glow mask and not a coverage: every texel there weighs 1.
+fn reduce_sum(pixel: vec2<i32>, first: bool) -> vec4<f32> {
+    let dims = vec2<f32>(textureDimensions(source_tex));
+    let last = vec2<i32>(max(round(dims * constants.uv_scale), vec2<f32>(1.0))) - vec2<i32>(1);
+    var rgb = vec3<f32>(0.0);
+    var weight = 0.0;
+    for (var k = 0; k < 4; k = k + 1) {
+        let at = pixel * 2 + vec2<i32>(k & 1, k >> 1);
+        if (at.x <= last.x && at.y <= last.y) {
+            let texel = textureLoad(source_tex, at, 0);
+            var share = texel.a;
+            if (first) {
+                share = 1.0;
+            }
+            rgb = rgb + texel.rgb * share;
+            weight = weight + share;
+        }
+    }
+    return vec4<f32>(rgb / max(weight, 1e-6), weight * 0.25);
+}
+
+@fragment
+fn fs_reduce_first(in: VertexOutput) -> @location(0) vec4<f32> {
+    return reduce_sum(vec2<i32>(in.position.xy), true);
+}
+
+@fragment
+fn fs_reduce(in: VertexOutput) -> @location(0) vec4<f32> {
+    return reduce_sum(vec2<i32>(in.position.xy), false);
+}
+
 // The adaptation update FUN_003b4690 runs on the CPU after reading back the
 // fully-downsampled frame:
 //
@@ -155,16 +200,26 @@ override rate_override: f32 = 0.0;
 
 @fragment
 fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
-    let mean = textureSample(source_tex, source_sampler, vec2<f32>(0.5, 0.5)).rgb;
+    // The CPU half of FUN_003b4690's readback: every texel the ladder left
+    // (it stops when either side reaches 1), each read as the encoded byte the
+    // original's 8-bit surface holds, summed and divided by the count. No
+    // decode anywhere between those bytes and the luma.
+    let dims = vec2<f32>(textureDimensions(source_tex));
+    let count = vec2<i32>(max(round(dims * constants.uv_scale), vec2<f32>(1.0)));
+    var rgb = vec3<f32>(0.0);
+    var weight = 0.0;
+    for (var y = 0; y < count.y; y = y + 1) {
+        for (var x = 0; x < count.x; x = x + 1) {
+            let texel = textureLoad(source_tex, vec2<i32>(x, y), 0);
+            rgb = rgb
+                + pow(clamp(texel.rgb, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2))
+                    * texel.a;
+            weight = weight + texel.a;
+        }
+    }
+    let mean = rgb / max(weight, 1e-6);
     let previous = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
-    // The PPU reads the reduced buffer's own bytes, and that buffer is written
-    // through the ROP's sRGB encode, so the luminance it averages is of the
-    // encoded value. Inferred, not read: the encode is measured
-    // (`SET_SHADER_PACKER` is 1 on the ladder's draws), that the readback takes
-    // raw bytes is the reading that makes the original's exposure scale 1.0 on
-    // a dim frame, which it measures.
-    let encoded = pow(clamp(mean, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
-    let luminance = dot(encoded, vec3<f32>(0.3, 0.59, 0.11));
+    let luminance = dot(mean, vec3<f32>(0.3, 0.59, 0.11));
     let rate = max(constants.adaption_rate, rate_override);
     let adapted = previous + rate * (luminance - previous);
     return vec4<f32>(adapted, 0.0, 0.0, 1.0);
