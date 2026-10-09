@@ -861,12 +861,67 @@ fn a_drag_or_a_wheel_pans_the_campaign_map_and_selects_nothing() {
     };
     assert!(frontend.pointer(&wheel));
     assert_eq!(first_marker(&frontend)[1] - after[1], -111.0);
-    // Dragged back past the top-left corner it stops there rather than
-    // showing past the canvas: the marker cannot move further than the
-    // scroll that was accumulated.
+    // Dragged back far past the top-left corner it gives only against the
+    // rubber band - never more than half a view - and let go, it springs
+    // back onto the corner.
+    let view = frontend.space().size;
     assert!(frontend.pointer(&drag(1e6, 1e6)));
-    let clamped = first_marker(&frontend);
+    let banded = frontend.campaign.scroll();
+    assert!(banded.0 < 0.0 && banded.0 > -view.0 * 0.5, "{banded:?}");
+    assert!(banded.1 < 0.0 && banded.1 > -view.1 * 0.5, "{banded:?}");
     assert_eq!(frontend.selected_event().map(|e| e.name.clone()), selected);
-    assert!(frontend.pointer(&drag(1e6, 1e6)));
-    assert_eq!(first_marker(&frontend), clamped, "already at the corner");
+    assert!(frontend.pointer(&Pointer {
+        released: true,
+        ..Pointer::default()
+    }));
+    for _ in 0..120 {
+        frontend.update(1.0 / 60.0, &mut input, None);
+    }
+    assert_eq!(
+        frontend.campaign.scroll(),
+        (0.0, 0.0),
+        "rests on the corner"
+    );
+}
+
+#[test]
+fn a_flick_coasts_the_campaign_map_on_after_the_finger_lifts() {
+    let mut frontend = boot(0);
+    frontend.set_campaign(three_events());
+    let mut input = Input::new();
+    reach_the_shell(&mut frontend, &mut input);
+    let first_x = |frontend: &Frontend| {
+        frontend
+            .draw_list()
+            .iter()
+            .find_map(|draw| match draw {
+                Draw::Fill { rect, color } if rect[2] == 108.0 && color[3] == 1.0 => Some(rect[0]),
+                _ => None,
+            })
+            .expect("a marker in view")
+    };
+    let start = first_x(&frontend);
+    let mut drag = Pointer {
+        pressed: true,
+        drag: (-8.0, 0.0),
+        ..Pointer::default()
+    };
+    for _ in 0..5 {
+        assert!(frontend.pointer(&drag));
+        frontend.update(1.0 / 60.0, &mut input, None);
+        drag.pressed = false;
+    }
+    let lifted = first_x(&frontend);
+    assert_eq!(lifted, start - 40.0, "followed the finger one to one");
+    assert!(frontend.pointer(&Pointer {
+        released: true,
+        ..Pointer::default()
+    }));
+    for _ in 0..240 {
+        frontend.update(1.0 / 60.0, &mut input, None);
+    }
+    let coasted = lifted - first_x(&frontend);
+    // 8 px a tick is 480 px a second, which coasts 480 / FRICTION.
+    let expected = 480.0 / crate::kinetic::FRICTION;
+    assert!((coasted - expected).abs() < 40.0, "coasted {coasted}");
 }
