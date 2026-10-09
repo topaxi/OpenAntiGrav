@@ -28,6 +28,11 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
   after it), at samples 2700-2749 and 3150-3199, where traffic hands character back. Zeroing the
   traffic term there too gave 505 but put `craft_sticking_ground_truth` at 2,002 against its
   2,000 limit. Numbers and both rejected variants: `docs/gameplay/ai.md`, "Tight corners".
+- **The AI's steering loop leaves lock unused while running wide** (measured on the same corner,
+  2026-10-09): over Talon's samples 3080-3190 the steering ramp sits at -60 to -82 of 100 and the
+  yaw rate at 1.30-1.35 rad/s while the craft is 12-14.6 units outside the line; the rate loop's
+  pure-pursuit aim does not ask harder as the craft drifts. Not pursued; a smarter-driving lever
+  that costs no speed.
 - **`oag-trace`'s own spawns** (`crates/trace/src/main.rs`, the two `box_inertia()` sites) still
   give every craft Pulse's tensor and unclamped ramp. Harmless while it replays Pulse captures; an
   HD replay there would need `CraftLaws` passed in.

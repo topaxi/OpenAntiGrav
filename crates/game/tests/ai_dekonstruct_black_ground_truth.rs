@@ -149,7 +149,11 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// (`ai_dekonstruct_black_board`, `OAG_SEEDS=23`), destroyed went 138 -> 142 and
 /// wall-contact ticks 86,765 -> 84,889; by class VENOM 15 -> 10, FLASH 16 -> 15,
 /// RAPIER 46 -> 46, PHANTOM 61 -> 71 (forward 25 -> 33, reversed 36 -> 38).
-/// PHANTOM forward is the one class that moved beyond seed spread.
+/// Read as seed spread: PHANTOM forward's 25 -> 33 is about 1.2 standard
+/// deviations for two cells of 161 craft (VENOM forward went 9 -> 4 the other
+/// way), its wall-contact clusters are the same (2850 at 973 -> 978 ticks, 2400
+/// at 992 -> 973), and its deaths stay in the region they were in (samples
+/// 2700-2970: 11 -> 15; the rest scattered).
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),

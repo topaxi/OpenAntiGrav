@@ -3870,7 +3870,10 @@ pair-ticks) and `ram_ground_truth` pass. Pulse's de Konstruct field (`ai_dekonst
 seeds 1-23, every class, both layouts, weapons on): destroyed 138 to 142, wall-contact ticks
 86,765 to 84,889; by class VENOM 15 to 10, FLASH 16 to 15, RAPIER 46 to 46, PHANTOM 61 to 71
 (forward 25 to 33). Four cells of `ai_dekonstruct_black_ground_truth` rose by one and their bounds
-were raised in a separate commit; PHANTOM forward is the one class past seed spread.
+were raised in a separate commit. Read as seed spread: PHANTOM forward's 25 to 33 is about 1.2
+standard deviations for two cells of 161 craft (VENOM forward went 9 to 4 the other way), its
+wall-contact clusters are the same, and its deaths stay in the region they were in (samples
+2700-2970, 11 to 15).
 
 **Two variants measured and not kept:**
 
