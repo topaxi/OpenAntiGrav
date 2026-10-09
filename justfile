@@ -213,6 +213,12 @@ fsr-reference:
 build:
     cargo build --workspace
 
+# The build a shipped binary gets (`[profile.dist]`: fat LTO, one codegen unit),
+# slow to build and into `target/dist/`. The local `--release` recipes stay on
+# the quick profile. See docs/tools/packaging.md, "The dist profile".
+build-dist *ARGS:
+    cargo build --profile dist -p oag-game {{ARGS}}
+
 # A release `oag-game` tuned for a CPU tier, in its own target directory so the
 # baseline build is untouched: `just build-cpu` for `x86-64-v3` (AVX2, FMA,
 # BMI2 - any Intel since Haswell, any Zen), `just build-cpu znver2` for the

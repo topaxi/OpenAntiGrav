@@ -23,7 +23,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
 version=""
-profile=release
+profile=dist
 x86=auto
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -61,8 +61,8 @@ stage="$out/stage"
 rm -rf "$stage"
 mkdir -p "$stage/lib/arm64-v8a"
 
-cargo_profile=(--release)
-[ "$profile" = release ] || cargo_profile=()
+cargo_profile=(--profile dist)
+[ "$profile" = dist ] || cargo_profile=()
 ndk_targets=(-t arm64-v8a)
 if [ "$x86" = auto ] && rustup target list --installed 2>/dev/null | grep -qx x86_64-linux-android; then
     x86=yes

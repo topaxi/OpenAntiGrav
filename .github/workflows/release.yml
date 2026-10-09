@@ -94,7 +94,7 @@ jobs:
           name="OpenAntiGrav-${VERSION}-linux-x86_64"
           stage="stage/${name}"
           mkdir -p "$stage"
-          binary="data/appimage/container/target/release/oag-game"
+          binary="data/appimage/container/target/dist/oag-game"
           install -m 755 "$binary" "$stage/oag-game"
           strip "$stage/oag-game"
           cp LICENSE-MIT LICENSE-APACHE "$stage/"
@@ -142,7 +142,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: cargo build --release -p oag-game
+      - run: cargo build --profile dist -p oag-game
         env:
           OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
       - name: Stage the zip
@@ -150,7 +150,7 @@ jobs:
         run: |
           name="OpenAntiGrav-${VERSION}-windows-x86_64"
           mkdir -p "stage/${name}" dist
-          cp target/release/oag-game.exe "stage/${name}/"
+          cp target/dist/oag-game.exe "stage/${name}/"
           cp LICENSE-MIT LICENSE-APACHE "stage/${name}/"
           cp -r licences "stage/${name}/licences"
           (cd stage && 7z a -tzip "../dist/${name}.zip" "${name}" >/dev/null)
