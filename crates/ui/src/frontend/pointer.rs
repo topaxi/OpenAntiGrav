@@ -85,26 +85,12 @@ impl Frontend {
     pub(super) fn language_row_at(&self, at: (f32, f32)) -> Option<usize> {
         let screen = self.screens.language_selection()?;
         let rows = self.language_rows(screen.menu.as_ref());
-        let width = self.band_width(rows.scale);
-        // The drawing anchors the pen at `x` and the alignment decides
-        // which way the glyphs run from it; the band follows.
-        let left = match rows.align {
-            crate::frontend::Align::Left => rows.x,
-            crate::frontend::Align::Centre => rows.x - width * 0.5,
-            crate::frontend::Align::Right => rows.x - width,
-        };
-        // Down the glyphs, not the pens: the face keeps room for accents
-        // above its cap line, and a band laid from the pen would light the
-        // row above the one pointed at. See `RowInk`. From the pen itself
-        // when nothing measured the face, which is every test fixture.
-        let top = self
-            .row_ink
-            .map_or(rows.y, |ink| ink.band_top(rows.y, rows.scale, rows.pitch));
+        let band = self.language_band(&rows);
         row_at(
             at,
-            left - 6.0,
-            width + 6.0,
-            top,
+            band.left,
+            band.width,
+            band.top,
             rows.pitch,
             self.languages.len(),
         )

@@ -109,6 +109,14 @@ the pink `MenuHighLightArrowColor` the palette declares - no pink appears
 anywhere on this screen. This build drew an invented translucent bar until this
 page existed.
 
+The language picker follows the same rule since 2026-10-09 (Pulse's rows pulse by
+the same `selected_ink`, no bar; HD and Omega, with no measured ink, keep a
+band that is the pointer's own hit rect, chosen, not measured). Other titles'
+pickers: Pure unchanged (static ink, no bar), Pulse PS2 as PSP, 2048 not
+checked (its picker is not this widget), Omega shares HD's path but its disc
+is `.pkg`-only and was not captured. See `frontend-boot.md`, "The Language
+Selection screen".
+
 ### The highlight's pulse - period and depth measured 2026-09-05
 
 **Confidence 90 for the period, 90 for the peak, 75 for the trough.** The two

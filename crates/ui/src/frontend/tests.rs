@@ -16,6 +16,7 @@ mod event_card;
 mod intro;
 mod pointer;
 mod screens;
+mod selection;
 mod wipeout2048;
 
 use super::*;

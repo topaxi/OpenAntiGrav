@@ -948,9 +948,23 @@ probe, not the answer.
 - **Near-black text is lifted.** The picker's title is `0xFF000000`, because the
   real screen sits on the menu's lit background, which nothing draws yet. Black
   on black would look like a bug in our code rather than a missing background.
-- **The selection highlight has no XML backing.** The filled bar behind the
-  current row and its white text are this viewer's own affordance for showing
-  what is selected, not something the disc's own `Menu` widget draws.
+- **The selection cue is the menus' own, not a bar (2026-10-09).** Nothing in
+  the XML draws a highlight for the picker's `Menu`, and no capture of any
+  title's picker shows a band (Pure's does not). A title with a measured
+  selected ink (`MenuSkin::selected`: Pulse, Pure) marks the row by ink through
+  `oag_ui::menu::selected_ink`, the one function `menu::Skin::selected` also
+  uses, so Pulse's picker pulses toward white with the main menu's measured
+  1.1 s period and Pure's holds its static ink. Only a title with no measured
+  selected ink (HD, Omega) keeps a translucent band, **chosen, not measured**,
+  and it is built from `Frontend::language_band`, the rect the pointer
+  hit-tests. **Why Pulse's bar sat above the text:** it was the old `Fill`
+  `[x - 6, y - 4, 220, row - 4]` laid from the pen `y` less a guessed 4 units,
+  while the glyph ink starts several units below the pen (the face keeps accent
+  room above its capitals), so the bar covered the strip over "English" and the
+  pointer, which already used `RowInk`, disagreed with it. The original's
+  picker was **not captured**: PPSSPP leaves `Language Selection` in under a
+  frame on `pulse-psp-eu.chd` and setting the system language to Dutch
+  (`[SystemParam] Language = 6`) still plays the intro movie straight away.
 
 The font itself is no longer on this list: the `.fnt` atlas decodes for real
 now (see [fnt.md](../formats/fnt.md)), so `Français` draws with its own ç and

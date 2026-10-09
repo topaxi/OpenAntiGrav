@@ -981,6 +981,7 @@ mod strip;
 
 pub use frame::{Frame, read as read_frame, settings::Layout as SettingsLayout};
 pub use layers::{Layers, Transition};
+pub(crate) use skin::selected_ink;
 pub use skin::{List, Skin, Strip, visible_rows};
 
 /// Where the visible window starts, given where it was pushed to and where the
