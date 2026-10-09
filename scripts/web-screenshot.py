@@ -11,6 +11,7 @@ own build has no WebGPU on Linux), hands the image to the page's file input,
 and writes `<out>/<seconds>s.png` at each `--at` time after the pick.
 `--press KEY@SECONDS` presses a key into the canvas; `--down`/`--up KEY@SECONDS`
 hold one and let it go (Playwright key names: `x`, `Enter`, `Space`, `ArrowLeft`).
+`--click X,Y@SECONDS` clicks the mouse at a viewport position.
 `--fps SECONDS` counts animation frames for that long at the end. The page's console goes to
 stdout. The browser is muted. See docs/tools/web.md.
 """
@@ -54,6 +55,7 @@ def main() -> None:
     parser.add_argument("--press", action="append", default=[])
     parser.add_argument("--down", action="append", default=[])
     parser.add_argument("--up", action="append", default=[])
+    parser.add_argument("--click", action="append", default=[])
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--port", type=int, default=8000)
@@ -65,7 +67,12 @@ def main() -> None:
     def keyed(specs: list[str], kind: str) -> list[tuple[float, str, str]]:
         return [(float(at), kind, key) for key, at in (s.rsplit("@", 1) for s in specs)]
 
-    keys = keyed(args.press, "press") + keyed(args.down, "down") + keyed(args.up, "up")
+    keys = (
+        keyed(args.press, "press")
+        + keyed(args.down, "down")
+        + keyed(args.up, "up")
+        + keyed(args.click, "click")
+    )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
     server = serve(args.dist, args.port)
@@ -91,6 +98,12 @@ def main() -> None:
                     path = args.out / f"{at:g}s.png"
                     page.screenshot(path=str(path))
                     print(f"wrote {path}", flush=True)
+                elif kind == "click":
+                    x, y = (float(v) for v in key.split(","))
+                    page.mouse.move(x, y, steps=5)
+                    page.wait_for_timeout(300)
+                    page.mouse.click(x, y)
+                    print(f"clicked {x:g},{y:g} at {at:g}s", flush=True)
                 else:
                     getattr(page.keyboard, kind)(key)
                     print(f"{kind} {key} at {at:g}s", flush=True)
