@@ -1,6 +1,6 @@
 // The page around the wasm build: pick a disc image, read it here, hand it to
 // the game. Nothing is sent anywhere. See docs/tools/web.md.
-import init, { start } from "./pkg/oag_web.js";
+import init, { inspect, start } from "./pkg/oag_web.js";
 // Sound: the AudioContext and its worklet (audio.js).
 import "./audio.js";
 
@@ -192,41 +192,200 @@ async function slicesWork(file) {
   }
 }
 
-let booted = false;
-async function boot(file) {
+// Disc keys: an encrypted PS3 image needs its key, which the page cannot find
+// beside the picked file. The key is read here, checked by the game module
+// (`inspect`), and kept in this browser's localStorage by the disc's serial
+// (never by file name) so the next visit does not ask. It is never sent
+// anywhere and never logged.
+const KEY_PREFIX = "oag:diskey:";
+const KEY_MAX_BYTES = 256;
+const keybox = document.getElementById("keybox");
+const keyFileInput = document.getElementById("keyfile");
+const keyHex = document.getElementById("keyhex");
+const keyGo = document.getElementById("keygo");
+const keyRemember = document.getElementById("keyremember");
+const savedBox = document.getElementById("saved");
+const savedList = document.getElementById("saved-keys");
+
+function savedKeys() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const name = localStorage.key(i);
+      if (name?.startsWith(KEY_PREFIX)) out.push(name.slice(KEY_PREFIX.length));
+    }
+  } catch { /* storage refused: no saved keys */ }
+  return out.sort();
+}
+
+function renderSaved() {
+  savedList.replaceChildren();
+  const serials = savedKeys();
+  savedBox.hidden = serials.length === 0;
+  for (const serial of serials) {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = `Disc ${serial}`;
+    const forget = document.createElement("button");
+    forget.type = "button";
+    forget.className = "button";
+    forget.textContent = "Forget";
+    forget.setAttribute("aria-label", `Forget the saved key for disc ${serial}`);
+    forget.addEventListener("click", () => {
+      try { localStorage.removeItem(KEY_PREFIX + serial); } catch { /* nothing kept */ }
+      renderSaved();
+      say(`Forgot the key for ${serial}.`);
+    });
+    item.append(label, forget);
+    savedList.append(item);
+  }
+}
+
+function saveKey(serial, hex) {
+  try { localStorage.setItem(KEY_PREFIX + serial, hex); } catch { /* not kept */ }
+  renderSaved();
+}
+
+function storedKey(serial) {
+  try {
+    const hex = serial && localStorage.getItem(KEY_PREFIX + serial);
+    return hex ? new TextEncoder().encode(hex) : null;
+  } catch {
+    return null;
+  }
+}
+
+const hexBytes = (text) => new TextEncoder().encode(text.trim());
+
+// The image waiting for a key, and a key waiting for an image.
+let staged = null;
+let heldKey = null;
+
+async function readKeyFile(file) {
+  if (file.size > KEY_MAX_BYTES) {
+    throw new Error(`${file.name} is too big to be a key file (a key is 16 bytes, or 32 hex digits).`);
+  }
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+// A dropped or picked set of files: a small one is a key, a larger one the
+// disc image. Both may arrive together, in either order.
+async function receive(files) {
   if (booted) return;
+  let image = null;
+  for (const file of files) {
+    if (file.size <= KEY_MAX_BYTES || /\.(dkey|key)$/i.test(file.name)) {
+      try {
+        heldKey = await readKeyFile(file);
+      } catch (error) {
+        say(`${error.message}`);
+        return;
+      }
+    } else {
+      image = file;
+    }
+  }
+  if (image) await stage(image, heldKey);
+  else if (staged) await stage(staged.file, heldKey, staged);
+  else if (heldKey) say("Key received. Now choose the disc image it belongs to.");
+}
+
+// Reads `file` into whatever the module's mount takes: slices where the
+// browser can do synchronous slice reads, the whole file otherwise.
+async function makeImage(file) {
+  const params = new URLSearchParams(location.search);
+  // `?read=memory` takes the fallback on purpose, to test it.
+  if (params.get("read") !== "memory" && await slicesWork(file)) return slicedReader(file);
+  // Today's fallback: the whole file in memory, which wasm32 caps.
+  console.warn("reading the whole image into memory instead of in slices");
+  say(`Reading ${file.name} (${(file.size / 1e6).toFixed(0)} MB)...`);
+  return new Uint8Array(await file.arrayBuffer());
+}
+
+function precheck() {
   if (!navigator.gpu) {
     say("This browser has no WebGPU, which the game draws with.");
-    return;
+    return false;
   }
   // The module's memory is shared between threads, which a page may only
   // create when its server sends COOP/COEP (web/_headers).
   if (!window.crossOriginIsolated) {
     say("This page was served without cross-origin isolation (COOP/COEP headers), "
       + "which the game's threads need. See docs/tools/web.md, \"Hosting\".");
-    return;
+    return false;
   }
+  return true;
+}
+
+const KEY_WORDS = {
+  malformed: "That is not a disc key. A key is a 16-byte .dkey file, or 32 hex digits (0-9, a-f).",
+  wrong: "That key does not open this disc. It has to be the key for this exact disc.",
+  missing: "This disc image is encrypted. Add its key (a .dkey file, or its 32 hex digits) to go on.",
+};
+
+// Looks at the image, asks the module whether it needs a key and whether
+// `key` is it, and boots or shows what is missing.
+async function stage(file, key, already) {
+  if (booted || !precheck()) return;
+  try {
+    const image = already?.image ?? await makeImage(file);
+    await init();
+    staged = { file, image };
+    // The module mounts the image once, on the first `inspect` of this file;
+    // an in-memory copy is never made twice (docs/tools/web.md).
+    const mount = already ? undefined : image;
+    let supplied = key;
+    let stored = false;
+    let result = inspect(file.name, mount, supplied ?? undefined);
+    // A remembered key, found by the disc's serial and not its file name.
+    if (result.state === "missing" && result.serial) {
+      const remembered = storedKey(result.serial);
+      if (remembered) {
+        const again = inspect(file.name, undefined, remembered);
+        if (again.state === "ready") {
+          result = again;
+          supplied = remembered;
+          stored = true;
+        } else {
+          // Stale: it no longer opens the disc it was saved for.
+          try { localStorage.removeItem(KEY_PREFIX + result.serial); } catch { /* nothing kept */ }
+          renderSaved();
+        }
+      }
+    }
+    if (result.state !== "ready") {
+      keybox.hidden = false;
+      keyHex.value = "";
+      say(supplied && result.state !== "missing" ? KEY_WORDS[result.state] : KEY_WORDS.missing);
+      if (supplied && result.state !== "missing") heldKey = null;
+      (supplied ? keyHex : keyFileInput).focus();
+      return;
+    }
+    keybox.hidden = true;
+    heldKey = null;
+    if (result.keyHex && !stored && result.serial && keyRemember.checked) {
+      saveKey(result.serial, result.keyHex);
+    }
+    await boot(file, supplied);
+  } catch (error) {
+    say(`Could not start: ${error}`);
+    console.error(error);
+  }
+}
+
+let booted = false;
+async function boot(file, key) {
+  if (booted) return;
   booted = true;
   imageFile = file;
   try {
-    const params = new URLSearchParams(location.search);
-    let image;
-    // `?read=memory` takes the fallback on purpose, to test it.
-    if (params.get("read") !== "memory" && await slicesWork(file)) {
-      image = slicedReader(file);
-    } else {
-      // Today's fallback: the whole file in memory, which wasm32 caps.
-      console.warn("reading the whole image into memory instead of in slices");
-      say(`Reading ${file.name} (${(file.size / 1e6).toFixed(0)} MB)...`);
-      image = new Uint8Array(await file.arrayBuffer());
-    }
     say("Starting...");
     await init();
     picker.hidden = true;
     canvas.focus();
     // `?log=debug` (or `trace`) widens what reaches the console.
-    const log = params.get("log") ?? undefined;
-    await start(file.name, image, log);
+    const log = new URLSearchParams(location.search).get("log") ?? undefined;
+    await start(file.name, undefined, log, key ?? undefined);
   } catch (error) {
     booted = false;
     picker.hidden = false;
@@ -237,8 +396,59 @@ async function boot(file) {
 
 fileInput.addEventListener("change", () => {
   const file = fileInput.files?.[0];
-  if (file) boot(file);
+  fileInput.value = "";
+  if (file) receive([file]);
 });
+
+keyFileInput.addEventListener("change", async () => {
+  const file = keyFileInput.files?.[0];
+  keyFileInput.value = "";
+  if (file) await receive([file]);
+});
+
+async function useTypedKey() {
+  const text = keyHex.value;
+  keyHex.value = "";
+  if (!text.trim()) {
+    say("Type or paste the key's 32 hex digits first.");
+    return;
+  }
+  heldKey = hexBytes(text);
+  if (staged) await stage(staged.file, heldKey, staged);
+  else say("Key received. Now choose the disc image it belongs to.");
+}
+keyGo.addEventListener("click", useTypedKey);
+keyHex.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") useTypedKey();
+});
+
+// Dropping files anywhere on the page. `dragenter`/`dragleave` pair up per
+// child element, so a counter keeps the highlight steady.
+let dragDepth = 0;
+const hasFiles = (event) => [...(event.dataTransfer?.types ?? [])].includes("Files");
+window.addEventListener("dragenter", (event) => {
+  if (!hasFiles(event)) return;
+  event.preventDefault();
+  dragDepth++;
+  document.body.classList.add("dragging");
+});
+window.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) document.body.classList.remove("dragging");
+});
+window.addEventListener("dragover", (event) => {
+  // Without this the browser opens the dropped file in the tab.
+  if (hasFiles(event)) event.preventDefault();
+});
+window.addEventListener("drop", (event) => {
+  if (!hasFiles(event)) return;
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("dragging");
+  receive([...event.dataTransfer.files]);
+});
+
+renderSaved();
 
 if (canRemember) {
   openHandle.hidden = false;
@@ -248,7 +458,7 @@ if (canRemember) {
         types: [{ description: "Disc image", accept: { "application/octet-stream": [".chd", ".iso"] } }],
       });
       await remembered(handle).catch(() => {});
-      boot(await handle.getFile());
+      receive([await handle.getFile()]);
     } catch (error) {
       if (error.name !== "AbortError") say(`${error}`);
     }
@@ -264,10 +474,10 @@ if (canRemember) {
         say("Permission to read the remembered image was not given.");
         return;
       }
-      boot(await handle.getFile());
+      receive([await handle.getFile()]);
     });
   }).catch(() => {});
 }
 
-// For a test harness, which hands a File in without the dialog.
-window.oagBoot = boot;
+// For a test harness, which hands Files in without the dialog or a real drop.
+window.oagBoot = (...files) => receive(files);

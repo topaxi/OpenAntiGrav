@@ -41,6 +41,7 @@
 
 use std::path::{Path, PathBuf};
 
+use oag_disc::ps3_crypt::{self, DiscKey};
 use oag_disc::{DiscImage, Platform, Ps3State};
 use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
@@ -270,6 +271,8 @@ pub struct Launcher {
     can_paste: bool,
     /// The prompt asked for a paste and nothing has serviced it yet.
     paste_requested: bool,
+    /// A file is being dragged over the window, not yet dropped.
+    hovering: bool,
 }
 
 impl Launcher {
@@ -289,6 +292,7 @@ impl Launcher {
             entry: None,
             can_paste: false,
             paste_requested: false,
+            hovering: false,
         }
     }
 
@@ -314,6 +318,7 @@ impl Launcher {
             entry: None,
             can_paste: false,
             paste_requested: false,
+            hovering: false,
         }
     }
 
@@ -421,6 +426,119 @@ impl Launcher {
                 }
             }
         }
+    }
+
+    /// Whether a file is being dragged over the window, for the screen to say
+    /// it will be used.
+    pub fn set_hovering(&mut self, hovering: bool) {
+        self.hovering = hovering;
+    }
+
+    /// A file dropped on the window: a small one is a disc key, a larger one a
+    /// disc image. Returns the source to boot when the drop was a playable
+    /// image, which the stage treats as the row picked.
+    pub fn dropped(&mut self, path: &Path) -> Option<String> {
+        self.hovering = false;
+        let size = std::fs::metadata(path).ok()?.len();
+        if size > KEY_FILE_MAX {
+            return self.dropped_image(path);
+        }
+        let key = std::fs::read(path).ok()?;
+        self.dropped_key_with(
+            &key,
+            |image, key| ps3_crypt::key_opens(image, key).unwrap_or(false),
+            |key, name| ps3_crypt::store_key(key, name).map(drop),
+        );
+        None
+    }
+
+    /// A dropped disc image: listed if it is not yet, the cursor put on it,
+    /// and returned when it plays. An encrypted one gets the key prompt, which
+    /// a key dropped next fills.
+    fn dropped_image(&mut self, path: &Path) -> Option<String> {
+        let row = examine(path);
+        let source = row.source.clone();
+        let at = match self.rows.iter().position(|r| r.source == source) {
+            Some(at) => {
+                self.rows[at] = row;
+                at
+            }
+            None => {
+                self.rows.push(row);
+                self.notice = None;
+                self.rows.len() - 1
+            }
+        };
+        self.cursor = at;
+        if self.rows[at].is_playable() {
+            return Some(source);
+        }
+        self.open_entry();
+        None
+    }
+
+    /// A dropped file that holds a key. With the prompt open it fills and
+    /// submits it, as a paste then ENTER would; without, it is tried on every
+    /// row that needs a key and stored for each one it opens, and a key that
+    /// opens none opens the prompt on the first such row, with the reason.
+    /// `opens` and `store` are the seams a test fills in.
+    pub fn dropped_key_with(
+        &mut self,
+        bytes: &[u8],
+        opens: impl Fn(&Path, &DiscKey) -> bool,
+        store: impl Fn(&DiscKey, &str) -> std::io::Result<()>,
+    ) {
+        let name_of = |source: &str| {
+            Path::new(source)
+                .file_stem()
+                .map_or_else(|| "disc".to_string(), |s| s.to_string_lossy().into_owned())
+        };
+        let Some(key) = DiscKey::parse(bytes) else {
+            if self.entry.is_none() {
+                self.open_first_locked();
+            }
+            if let Some(entry) = &mut self.entry {
+                entry.say("THAT FILE IS NOT A DISC KEY");
+            }
+            return;
+        };
+        if let Some(entry) = &mut self.entry {
+            let image = entry.image().to_path_buf();
+            let name = name_of(&image.to_string_lossy());
+            let outcome = entry.offer(&key, |k| opens(&image, k), |k| store(k, &name));
+            self.settle(outcome);
+            return;
+        }
+        let mut opened = false;
+        for at in 0..self.rows.len() {
+            if !matches!(self.rows[at].state, State::NeedsKey) {
+                continue;
+            }
+            let source = self.rows[at].source.clone();
+            if opens(Path::new(&source), &key) && store(&key, &name_of(&source)).is_ok() {
+                self.rows[at] = examine(Path::new(&source));
+                opened = true;
+            }
+        }
+        if !opened
+            && self.open_first_locked()
+            && let Some(entry) = &mut self.entry
+        {
+            entry.say("THAT KEY DOES NOT OPEN THIS DISC");
+        }
+    }
+
+    /// Puts the cursor on the first row that needs a key and opens the prompt.
+    fn open_first_locked(&mut self) -> bool {
+        let Some(at) = self
+            .rows
+            .iter()
+            .position(|r| matches!(r.state, State::NeedsKey))
+        else {
+            return false;
+        };
+        self.cursor = at;
+        self.open_entry()
     }
 
     /// Opens the prompt on the row under the cursor, if it needs a key.
@@ -606,6 +724,20 @@ pub fn not_found_notice_desktop(folder: &str) -> Vec<String> {
 /// own default is the PSP's.
 #[must_use]
 pub fn draw_list(launcher: &Launcher) -> Vec<Draw> {
+    let mut out = list_draw(launcher);
+    if launcher.hovering {
+        out.push(text(
+            MARGIN,
+            SCREEN.1 - 34.0,
+            1.0,
+            SELECTED,
+            "DROP THE FILE TO USE IT",
+        ));
+    }
+    out
+}
+
+fn list_draw(launcher: &Launcher) -> Vec<Draw> {
     if let Some(entry) = launcher.entry() {
         return entry.draw();
     }
@@ -753,6 +885,10 @@ const TEXT: [f32; 4] = [0.72, 0.78, 0.86, 1.0];
 const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 const DIM: [f32; 4] = [0.48, 0.53, 0.60, 1.0];
 const UNAVAILABLE_COLOUR: [f32; 4] = [0.55, 0.36, 0.36, 1.0];
+
+/// The largest file taken for a disc key when dropped: a key is 16 bytes, or
+/// 32 hex digits and a line ending. Anything bigger is a disc image.
+const KEY_FILE_MAX: u64 = 256;
 
 const HINT: &str = "UP/DOWN CHOOSE   ENTER OR X START   ESCAPE QUIT";
 

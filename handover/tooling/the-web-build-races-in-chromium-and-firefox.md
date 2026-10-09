@@ -49,8 +49,10 @@ Architecture, measurements, hosting and limits:
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language
   Selection only; Pure reaches its Press Start title and no further.
-- **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
-  package's sibling files cannot be found beside one picked file.
+- **Vita and PS4 packages** cannot open: a package's sibling files cannot be
+  found beside one picked file. (An encrypted PS3 image opens with its key,
+  which the page takes as a dropped or picked file or as hex; the key path is
+  untried in Firefox and WebKit.)
 - **No movies.** The AV1 decoder does not build for wasm32 (`re_rav1d` uses
   `libc` items the target lacks) and the movie cache is files made by
   `ffmpeg`; HD's Bink movies' audio goes through the same cache. Options:

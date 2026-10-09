@@ -16,14 +16,37 @@
   engine. It plays <strong>your own</strong> disc image: pick one below. The
   image is read here, in this browser tab, and is never uploaded anywhere.</p>
   <p class="formats">The image is read a piece at a time, as the game asks for
-  it. <code>.chd</code> and plain <code>.iso</code> are what a browser can open;
+  it. <code>.chd</code> and <code>.iso</code> are what a browser can open
+  (an encrypted PS3 <code>.iso</code> also needs its key);
   the table below says which discs get how far.</p>
   <label class="button" for="file">Choose a disc image
     <input id="file" type="file" accept=".chd,.iso">
   </label>
   <button id="open-handle" class="button" hidden>Choose, and remember it</button>
   <button id="resume" class="button" hidden></button>
+  <p class="small">You can also drop the image, and a PS3 disc's key file, anywhere on this page.</p>
   <p id="status" role="status"></p>
+  <section id="keybox" aria-labelledby="keybox-title" hidden>
+    <h2 id="keybox-title">This disc needs its key</h2>
+    <p class="small">A PS3 disc image is encrypted. Its key is a small <code>.dkey</code>
+    or <code>.key</code> file, or 32 hex digits. It is used in this tab only and is never
+    uploaded.</p>
+    <label class="button" for="keyfile">Choose the key file
+      <input id="keyfile" type="file" accept=".dkey,.key,.txt">
+    </label>
+    <div class="keyrow">
+      <label for="keyhex">Or paste the key</label>
+      <input id="keyhex" type="text" autocomplete="off" autocapitalize="off"
+        spellcheck="false" maxlength="80" placeholder="32 hex digits">
+      <button id="keygo" class="button" type="button">Use this key</button>
+    </div>
+    <label class="small"><input id="keyremember" type="checkbox" checked>
+      Remember this key in this browser, for this disc</label>
+  </section>
+  <section id="saved" aria-labelledby="saved-title" hidden>
+    <h2 id="saved-title">Keys saved in this browser</h2>
+    <ul id="saved-keys"></ul>
+  </section>
   <table id="images">
     <caption>Disc images, and how far each gets in the browser</caption>
     <thead><tr><th>Game</th><th>Console</th><th>Region</th><th>Accepts</th><th>Today</th><th>Note</th></tr></thead>
@@ -31,7 +54,7 @@
     <tr><td data-label="Game">Wipeout Pulse</td><td data-label="Console">PSP</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="races">Races</td><td data-label="Note">Races on Moa Therma White (Europe: Chromium and Firefox; USA: Chromium).</td></tr>
     <tr><td data-label="Game">Wipeout Pulse</td><td data-label="Console">PS2</td><td data-label="Region">Europe</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="front">Front end only</td><td data-label="Note">Reaches the front end; a race is untried here.</td></tr>
     <tr><td data-label="Game">Wipeout Pure</td><td data-label="Console">PSP</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">.chd, .iso</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">Reaches Language Selection and the title; got no further in a browser.</td></tr>
-    <tr><td data-label="Game">WipEout HD / Fury</td><td data-label="Console">PS3</td><td data-label="Region">Europe</td><td data-label="Accepts">decrypted .iso</td><td data-label="Today" class="races">Races</td><td data-label="Note">An encrypted .iso with its .dkey does not open on the web yet.</td></tr>
+    <tr><td data-label="Game">WipEout HD / Fury</td><td data-label="Console">PS3</td><td data-label="Region">Europe</td><td data-label="Accepts">.iso, with its key if encrypted</td><td data-label="Today" class="races">Races</td><td data-label="Note">An encrypted .iso opens with its .dkey (or the key typed in); a decrypted one needs none.</td></tr>
     <tr><td data-label="Game">WipEout 2048</td><td data-label="Console">Vita</td><td data-label="Region">Europe, USA</td><td data-label="Accepts">none</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">A .pkg or .vpk is not read in a browser.</td></tr>
     <tr><td data-label="Game">WipEout: Omega Collection</td><td data-label="Console">PS4</td><td data-label="Region">Europe</td><td data-label="Accepts">none</td><td data-label="Today" class="no">Not yet</td><td data-label="Note">A .pkg pair is not read in a browser.</td></tr>
     </tbody>
@@ -40,7 +63,7 @@
   Windows; Firefox on Linux with <code>dom.webgpu.enabled</code> and
   <code>gfx.webgpu.ignore-blocklist</code> set in <code>about:config</code>, Chromium on Linux
   with <code>--enable-unsafe-webgpu --enable-features=Vulkan</code>.
-  Keyboard and gamepad; no sound or movies yet.
+  Keyboard and gamepad; no movies yet.
   <a href="https://github.com/topaxi/OpenAntiGrav">Source</a> ·
   <a href="https://github.com/topaxi/OpenAntiGrav/releases/tag/nightly">Nightly downloads</a></p>
 </main>

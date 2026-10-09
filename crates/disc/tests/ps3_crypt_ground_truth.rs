@@ -99,3 +99,50 @@ fn without_any_key_the_image_reports_locked_and_a_wrong_key_is_rejected() {
     assert_eq!(disc.ps3_state(), Ps3State::Locked);
     assert!(!oag_disc::ps3_crypt::key_opens(&path, &wrong).unwrap());
 }
+
+mod probe {
+    use oag_disc::ps3_probe::{KeyCheck, probe};
+
+    fn key_bytes() -> Option<Vec<u8>> {
+        std::fs::read(oag_testdata::exact("hdfury-ps3-eu.dkey")?).ok()
+    }
+
+    #[test]
+    #[ignore = "needs the encrypted HD image and its key"]
+    fn the_probe_names_the_locked_disc_and_judges_the_key() {
+        let (Some(enc), Some(key)) = (oag_testdata::exact("hdfury-ps3-eu.iso"), key_bytes()) else {
+            return;
+        };
+        let missing = probe(&enc, None).expect("probe");
+        assert_eq!(missing.check, KeyCheck::Missing);
+        let serial = missing.serial.expect("the serial reads without the key");
+
+        let ok = probe(&enc, Some(&key)).expect("probe");
+        assert_eq!(ok.serial.as_deref(), Some(serial.as_str()));
+
+        // The key as its hex text is the same key.
+        let KeyCheck::Accepted(ref accepted) = ok.check else {
+            panic!("the key opens the disc");
+        };
+        let again = probe(&enc, Some(accepted.to_hex().as_bytes())).unwrap();
+        assert_eq!(again.check, ok.check);
+
+        let wrong = probe(&enc, Some(&[7u8; 16])).expect("probe");
+        assert_eq!(wrong.check, KeyCheck::Wrong);
+        let bad = probe(&enc, Some(b"not a key")).expect("probe");
+        assert_eq!(bad.check, KeyCheck::Malformed);
+    }
+
+    #[test]
+    #[ignore = "needs the decrypted HD image"]
+    fn a_decrypted_dump_needs_no_key_and_ignores_one() {
+        let Some(dec) = oag_testdata::exact("hdfury-ps3-eu-dec.iso") else {
+            return;
+        };
+        assert_eq!(probe(&dec, None).unwrap().check, KeyCheck::NotNeeded);
+        assert_eq!(
+            probe(&dec, Some(&[7u8; 16])).unwrap().check,
+            KeyCheck::NotNeeded
+        );
+    }
+}

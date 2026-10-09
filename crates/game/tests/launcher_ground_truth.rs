@@ -99,6 +99,54 @@ fn an_encrypted_ps3_image_is_listed_with_the_fix_rather_than_hidden() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
+/// A key file dropped on the chooser, judged by the real disc: the key beside
+/// the image opens it, another does not, and neither is written anywhere (the
+/// store seam only records).
+#[cfg(unix)]
+#[test]
+#[ignore = "needs the encrypted HD image and its key"]
+fn a_dropped_key_file_unlocks_the_encrypted_image_it_belongs_to() {
+    use std::cell::RefCell;
+    let (Some(encrypted), Some(key_file)) =
+        (image("hdfury-ps3-eu.iso"), image("hdfury-ps3-eu.dkey"))
+    else {
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("oag-launcher-drop-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let link = dir.join("hdfury-ps3-eu.iso");
+    let _ = std::fs::remove_file(&link);
+    std::os::unix::fs::symlink(&encrypted, &link).unwrap();
+    let rows = launcher::survey(std::slice::from_ref(&link));
+    if !matches!(rows[0].state, State::NeedsKey) {
+        // This machine's own keys directory already unlocks it.
+        std::fs::remove_dir_all(&dir).ok();
+        return;
+    }
+    let key = std::fs::read(key_file).unwrap();
+    let opens = |image: &std::path::Path, key: &oag_disc::ps3_crypt::DiscKey| {
+        oag_disc::ps3_crypt::key_opens(image, key).unwrap()
+    };
+
+    let stored = RefCell::new(0);
+    let mut chooser = launcher::Launcher::new(rows.clone());
+    chooser.dropped_key_with(&[7u8; 16], opens, |_, _| {
+        *stored.borrow_mut() += 1;
+        Ok(())
+    });
+    assert_eq!(*stored.borrow(), 0, "a key for another disc is not stored");
+    assert!(chooser.entry().is_some(), "and the prompt says why");
+
+    let mut chooser = launcher::Launcher::new(rows);
+    chooser.dropped_key_with(&key, opens, |_, name| {
+        assert_eq!(name, "hdfury-ps3-eu", "stored under the image's own stem");
+        *stored.borrow_mut() += 1;
+        Ok(())
+    });
+    assert_eq!(*stored.borrow(), 1, "the disc's own key is stored once");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 /// The PS4 extract is a directory rather than a disc image, so
 /// `oag_source::source::candidates` needs its own scan for it - see
 /// `oag_source::source::ps4_search_path` and its own doc for why that shape
