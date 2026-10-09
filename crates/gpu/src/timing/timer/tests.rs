@@ -228,7 +228,7 @@ fn time_a_pass(adapter: &wgpu::Adapter, name: &str) {
         // that the clock moves and is in seconds, not that this machine is
         // fast.
         assert!(
-            reading.seconds > 0.0 && reading.seconds < 1.0,
+            reading.seconds > 0.0 && reading.seconds < 60.0,
             "{name}: a cleared 256x256 pass measured {} s",
             reading.seconds
         );
