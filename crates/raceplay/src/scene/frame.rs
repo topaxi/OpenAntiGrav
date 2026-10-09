@@ -41,8 +41,7 @@ impl Scene {
     /// `oag_audio::Output::spectrum`'s own snapshot, read by the caller once
     /// a frame. Empty outside a Zone race or with nothing to draw it into is
     /// fine: [`oag_mesh::mesh_render::zone::write_vis`] is a no-op on an
-    /// empty slice. See [`crate::zone_grade::ZoneGrade`] for the stage
-    /// tint this is coloured by.
+    /// empty slice. See [`crate::zone_grade::ZoneGrade`] for the stage tint this is coloured by.
     #[allow(clippy::too_many_arguments)]
     pub fn render(
         &self,
@@ -155,8 +154,7 @@ impl Scene {
         // The sky is deliberately left unfogged. It rides on the camera at a
         // radius of 18 to 62 units while fog starts at 30 to 250, so fogging it
         // would drown it in fog colour; the original's sky geometry is authored
-        // `_nolight` and stands in for infinity, which is behind the fog rather
-        // than inside it.
+        // `_nolight` and stands in for infinity, which is behind the fog rather than inside it.
         let eye = race.camera_position();
         // Outside every volume, Wipeout HD's authored distance fog binds
         // instead - static for the race, since its curve reads view depth
@@ -927,8 +925,7 @@ impl Scene {
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
         if let Some(hd) = &self.hd {
-            // HD's zoom-streak ring reads the race's pulses, stepped once a tick;
-            // a race with no ring sets none, and the chain draws none of it.
+            // The zoom-streak ring's pulses (stepped once a tick); `None` draws none.
             hd.set_zoom_frame(race.hd_zoom_frame());
             hd.run(
                 queue,

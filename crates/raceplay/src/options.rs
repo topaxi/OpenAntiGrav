@@ -24,8 +24,7 @@ pub struct Options {
     /// behind `source`'s own archives.
     ///
     /// Independent of which release `source` is, on purpose: the original tied
-    /// a pack to its own territory's disc and this does not. See
-    /// `docs/formats/dlc-pack.md`.
+    /// a pack to its own territory's disc and this does not. See `docs/formats/dlc-pack.md`.
     pub dlc: Vec<PathBuf>,
     /// Archive entry name of the track's `.vex`, or `None` for the source's own.
     ///
@@ -65,8 +64,7 @@ pub struct Options {
     /// **Not a team-identity change**, unlike [`Self::team`]'s own RACE-page
     /// VARIANT sibling on HD/2048: [`oag_livery::load`] applies this to
     /// slot 0 alone, and everything else about the team - its tuning, its
-    /// label, its roster membership - stays exactly `team`'s. See
-    /// `oag_title::race::HullVariant`.
+    /// label, its roster membership - stays exactly `team`'s. See `oag_title::race::HullVariant`.
     pub hull_variant: Option<String>,
     /// The `PI_ModelSkin` the **player's** craft is painted with - the
     /// declared name (`Alternative`, `Eliminator`), not a path.
@@ -633,8 +631,7 @@ pub struct Setup {
     pub hover_rig: Option<&'static oag_title::hover_rig::HoverRig>,
     /// The title's craft-body laws, `oag_title::RaceDefaults::craft_laws` ([`crate::launch_hover`]).
     pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
-    /// HD/Fury's boost and damage zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`
-    /// ([`oag_post::hd_zoom`]); `None` on every other title.
+    /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
