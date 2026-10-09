@@ -840,7 +840,7 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
 /// `settings.toml` and the `pilots/` directory.
 #[must_use]
 pub fn path() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("oag").join("records.toml"))
+    crate::profile::config_dir().map(|dir| dir.join("oag").join("records.toml"))
 }
 
 const HEADER: &str = "\
@@ -881,7 +881,7 @@ pub fn load() -> Store {
     let Some(path) = path() else {
         return Store::default();
     };
-    let text = match std::fs::read_to_string(&path) {
+    let text = match crate::profile::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Store::default(),
         Err(e) => {
@@ -904,7 +904,7 @@ pub fn load() -> Store {
                 "{}.invalid",
                 path.file_name().unwrap_or_default().to_string_lossy()
             ));
-            match std::fs::rename(&path, &backup) {
+            match crate::profile::rename(&path, &backup) {
                 Ok(()) => error!(
                     "{} would not parse ({e:#}); moved aside to {} and starting with no race \
                      records",
@@ -940,10 +940,10 @@ pub fn save(store: &Store) -> Result<()> {
         toml::to_string_pretty(store).context("serialising race records")?
     );
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
+        crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+    crate::profile::write(&path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 #[cfg(test)]

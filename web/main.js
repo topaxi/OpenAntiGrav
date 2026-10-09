@@ -1,5 +1,5 @@
-// The page around the wasm build: pick a disc image, read it here, hand its
-// bytes to the game. Nothing is sent anywhere. See docs/tools/web.md.
+// The page around the wasm build: pick a disc image, read it here, hand it to
+// the game. Nothing is sent anywhere. See docs/tools/web.md.
 import init, { start } from "./pkg/oag_web.js";
 
 const picker = document.getElementById("picker");
@@ -63,6 +63,49 @@ window.oagFatal = (cause, software) => {
   add("p", "The full text is in the browser console (F12).");
   document.body.append(box);
 };
+// Reads `file` a slice at a time, synchronously, for the game's disc readers:
+// a synchronous XMLHttpRequest on a blob URL of `file.slice(..)`. The game runs
+// on this page's thread and its readers cannot wait for a promise; a worker
+// cannot hold the game (docs/tools/web.md). No Range header is involved, and no
+// byte leaves the tab: a blob URL names memory this tab already holds.
+function slicedReader(file) {
+  return {
+    size: file.size,
+    read(offset, length) {
+      const url = URL.createObjectURL(file.slice(offset, offset + length));
+      try {
+        const request = new XMLHttpRequest();
+        request.open("GET", url, false);
+        // Bytes as one char each (U+0000-00FF or U+F780-F7FF): the only binary
+        // response a synchronous request on a page may have.
+        request.overrideMimeType("text/plain; charset=x-user-defined");
+        request.send();
+        if (request.status !== 200) throw new Error(`read at ${offset}: status ${request.status}`);
+        const text = request.responseText;
+        const bytes = new Uint8Array(text.length);
+        for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+        return bytes;
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    },
+  };
+}
+
+// Whether `slicedReader` returns the right bytes in this browser: one 64 KiB
+// slice from the middle, against the same slice read the asynchronous way.
+async function slicesWork(file) {
+  try {
+    const length = Math.min(file.size, 65536);
+    const offset = Math.floor((file.size - length) / 2);
+    const got = slicedReader(file).read(offset, length);
+    const want = new Uint8Array(await file.slice(offset, offset + length).arrayBuffer());
+    return got.length === want.length && got.every((byte, i) => byte === want[i]);
+  } catch (error) {
+    console.warn("sliced reads unavailable:", error);
+    return false;
+  }
+}
 
 let booted = false;
 async function boot(file) {
@@ -73,15 +116,24 @@ async function boot(file) {
   }
   booted = true;
   try {
-    say(`Reading ${file.name} (${(file.size / 1e6).toFixed(0)} MB)...`);
-    const bytes = new Uint8Array(await file.arrayBuffer());
+    const params = new URLSearchParams(location.search);
+    let image;
+    // `?read=memory` takes the fallback on purpose, to test it.
+    if (params.get("read") !== "memory" && await slicesWork(file)) {
+      image = slicedReader(file);
+    } else {
+      // Today's fallback: the whole file in memory, which wasm32 caps.
+      console.warn("reading the whole image into memory instead of in slices");
+      say(`Reading ${file.name} (${(file.size / 1e6).toFixed(0)} MB)...`);
+      image = new Uint8Array(await file.arrayBuffer());
+    }
     say("Starting...");
     await init();
     picker.hidden = true;
     canvas.focus();
     // `?log=debug` (or `trace`) widens what reaches the console.
-    const log = new URLSearchParams(location.search).get("log") ?? undefined;
-    await start(file.name, bytes, log);
+    const log = params.get("log") ?? undefined;
+    await start(file.name, image, log);
   } catch (error) {
     booted = false;
     picker.hidden = false;

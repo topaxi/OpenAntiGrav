@@ -1,29 +1,49 @@
 //! `oag-game` in the browser: the same body as the desktop binary
 //! (`main_body.rs`), built for `wasm32-unknown-unknown` as the cdylib
 //! `wasm-bindgen` wraps (`just web`). The page in `web/` reads the disc image
-//! the player picks and hands its bytes to [`start`]. See docs/tools/web.md.
+//! the player picks and hands it to [`start`]. See docs/tools/web.md.
 
 include!("main_body.rs");
 
 /// Where the picked image is registered, and so the path the run is told.
 const MOUNT_DIR: &str = "/web";
 
-/// Boots the game on the image the page read: `name` is the file's own name,
-/// `image` its bytes, `log` the page's `?log=` parameter (`debug`, `trace`;
-/// absent is `info` for this project's own lines and `warn` for the rest).
+#[path = "web_image.rs"]
+mod web_image;
+
+/// Boots the game on the image the page picked: `name` is the file's own name,
+/// `image` either its bytes (a `Uint8Array`, copied into the module's memory
+/// once) or a reader object `{ size, read(offset, length) }` that returns a
+/// slice of the file synchronously (`web_image`), and `log` the page's `?log=`
+/// parameter (`debug`, `trace`; absent is `info` for this project's own lines
+/// and `warn` for the rest).
 ///
-/// The bytes are copied into the module's memory once and the page's copy can
-/// go; see `oag_disc::mount`. The promise resolves once the event loop has been
-/// handed to the browser, which then drives every frame, and rejects with the
-/// reason when there is no WebGPU or the image does not open (a file that is not
-/// a disc image, say).
+/// The promise resolves once the event loop has been handed to the browser,
+/// which then drives every frame, and rejects with the reason when there is no
+/// WebGPU or the image does not open (a file that is not a disc image, say).
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub fn start(name: String, image: js_sys::Uint8Array, log: Option<String>) -> js_sys::Promise {
+pub fn start(name: String, image: wasm_bindgen::JsValue, log: Option<String>) -> js_sys::Promise {
+    use wasm_bindgen::JsCast;
     web_log::install(log.as_deref().and_then(|level| level.parse().ok()));
     let path = format!("{MOUNT_DIR}/{}", name.replace('/', "_"));
-    oag_disc::mount::register(path.clone(), std::sync::Arc::new(image.to_vec()));
-    drop(image);
-    log::info!("web: {path} registered");
+    let blob: std::sync::Arc<dyn oag_disc::mount::Blob> =
+        match image.dyn_ref::<js_sys::Uint8Array>() {
+            Some(bytes) => {
+                log::info!("web: {path} held in memory ({} bytes)", bytes.length());
+                std::sync::Arc::new(bytes.to_vec())
+            }
+            None => match web_image::Sliced::new(image) {
+                Ok(sliced) => {
+                    log::info!(
+                        "web: {path} read in slices ({} bytes)",
+                        oag_disc::mount::Blob::size(&sliced)
+                    );
+                    std::sync::Arc::new(sliced)
+                }
+                Err(why) => return js_sys::Promise::reject(&why),
+            },
+        };
+    oag_disc::mount::register(path.clone(), blob);
     wasm_bindgen_futures::future_to_promise(async move {
         let started = match crate::gpu::web::prepare().await {
             Ok(()) => run(Cli::parse_from(["oag-game", &path, "--no-audio"])),

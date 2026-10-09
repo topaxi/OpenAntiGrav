@@ -50,14 +50,21 @@ if [[ $profile != dev ]]; then
     --enable-multivalue \
     -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
 fi
-cp web/index.html web/style.css web/main.js "$out/"
+# The module and its glue go under a directory named for their content, so a
+# host may cache them forever (`_headers`) and a deploy never pairs new glue
+# with an old module: the page's one import is rewritten to name it.
+hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
+mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
+cp web/index.html web/style.css web/_headers "$out/"
+sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
+grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
 # The same notices every other release artifact carries (release.yml).
 cp LICENSE-MIT LICENSE-APACHE "$out/"
 cp -r licences "$out/licences"
 # GitHub Pages runs Jekyll over the artifact unless this file is there.
 touch "$out/.nojekyll"
 python3 scripts/check-leakage.py --dir "$out"
-ls -la "$out" "$out/pkg"
+ls -la "$out" "$out/pkg/$hash"
 
 if [[ -n $serve ]]; then
   echo "serving $out on http://127.0.0.1:$port/"

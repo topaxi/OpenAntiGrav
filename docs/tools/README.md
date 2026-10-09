@@ -21,9 +21,9 @@ arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
 
 [The web build](web.md) covers `just web`: `oag-game` for the browser on
-WebAssembly and WebGPU, the page that reads the player's own image in the tab,
-the GitHub Pages workflow, and what is not there yet (sound, movies, images over
-about 2 GB).
+WebAssembly and WebGPU, the page that reads the player's own image in the tab a
+slice at a time, the workflow that deploys it to GitHub Pages and Cloudflare
+Pages, and what is not there yet (sound, movies, threads).
 
 [Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
 
