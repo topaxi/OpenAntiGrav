@@ -63,6 +63,11 @@ window.oagFatal = (cause, software) => {
   add("p", "The full text is in the browser console (F12).");
   document.body.append(box);
 };
+// The player quit. winit's web loop cannot be started a second time in one
+// page and wasm memory never shrinks, so the page reloads and shows the picker
+// again; a Chromium remembered handle then offers "Play <name> again". Settings
+// and records are already in localStorage (written as they change, synchronously).
+window.oagQuit = () => { setTimeout(() => location.reload(), 0); };
 // Reads `file` a slice at a time, synchronously, for the game's disc readers:
 // a synchronous XMLHttpRequest on a blob URL of `file.slice(..)`. The game runs
 // on this page's thread and its readers cannot wait for a promise; a worker

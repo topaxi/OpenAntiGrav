@@ -159,6 +159,28 @@ makes no request after loading itself.
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
 
+### Quitting
+
+QUIT (or escape at the root of the menus) ends the event loop, and before
+this change that left the last frame frozen on the canvas with no way back
+short of reloading by hand (headless Chromium, escape on the title screen:
+the title still on screen 9.5 s later, the picker hidden). Now the quit path
+calls the page's `oagQuit` (wasm only, `gpu::web::quit`, from
+`about_to_wait`) and the page reloads itself, which shows the picker, and
+with a remembered handle the one-click "Play <name> again".
+
+A reload and not a second `start` in the same page, on purpose: winit's web
+backend leaves the first loop's canvas listeners and its `spawn_app` state in
+place with no way to tear them down, `oag_gpu::init_buffer`'s registered
+queue and the device in `PREPARED` are one-per-page, and wasm linear memory
+never shrinks, so a second run would sit on top of the first one's peak. The
+reload costs nothing in saved state: settings and records are written to
+`localStorage` synchronously as they change (`profile.rs`), so there is
+nothing left to flush. Measured on a Pulse PSP image: boot, title, escape,
+picker visible, pick the image again, the front end draws (a dev build, the
+walk in `web-screenshot.py`'s style with a second pick). Native quit is
+unchanged. Errors still go through `oagFatal`, never through a reload.
+
 ## Browser support
 
 WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is

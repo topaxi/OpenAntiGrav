@@ -467,6 +467,19 @@ pub(crate) mod web {
         }
     }
 
+    /// Tells the page the player quit, through the `oagQuit` function
+    /// `web/main.js` defines: the page reloads itself and so shows the image
+    /// picker again. A missing function (a page that is not ours) is ignored.
+    pub(crate) fn quit() {
+        use wasm_bindgen::JsCast;
+        let global = js_sys::global();
+        if let Ok(done) = js_sys::Reflect::get(&global, &"oagQuit".into()) {
+            if let Ok(done) = done.dyn_into::<js_sys::Function>() {
+                let _ = done.call0(&global);
+            }
+        }
+    }
+
     /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
     /// on native with the same descriptor.
     pub(crate) async fn prepare() -> Result<()> {
