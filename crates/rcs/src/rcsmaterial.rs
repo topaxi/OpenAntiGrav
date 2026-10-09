@@ -642,6 +642,7 @@ impl RcsMaterial {
     }
 }
 
+mod factor;
 pub mod fragment;
 pub mod names;
 pub mod vertex;
