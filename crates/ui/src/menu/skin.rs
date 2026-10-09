@@ -593,13 +593,7 @@ impl Skin {
     /// See `docs/ui/menus-original.md`.
     #[must_use]
     pub fn selected(&self) -> [f32; 4] {
-        let peak = self.skin.selected.map_or(OUR_SELECTED, argb);
-        let Some(period) = self.skin.selected_pulse_period_secs.filter(|p| *p > 0.0) else {
-            return peak;
-        };
-        let phase = (self.pulse_elapsed / period).fract();
-        let t = 0.5 - 0.5 * (phase * std::f32::consts::TAU).cos();
-        lerp_color(self.normal(), peak, t)
+        selected_ink(self.skin, self.normal(), self.pulse_elapsed)
     }
 
     /// A full-screen fill for a frame whose own screen carries neither a
@@ -834,6 +828,28 @@ pub(super) fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
 /// but this module's `sin`/`cos` reach a pixel rather than a hash (see that
 /// script's own `ALLOWED` entry for this file), and there is still no reason
 /// for a menu colour to reassociate float arithmetic it does not need to.
+/// A title's selected-row ink `elapsed` seconds into its pulse, given the
+/// unselected ink `normal`: the one rule [`Skin::selected`] (the menus) and the
+/// language picker's rows both draw a selection by, so the two cannot differ.
+///
+/// The peak is [`oag_title::MenuSkin::selected`], or [`OUR_SELECTED`] where none
+/// was measured; with a measured pulse period the ink rides a raised cosine
+/// between `normal` and the peak (the shape is ours, see [`Skin::selected`]),
+/// flat at the peak otherwise.
+pub(crate) fn selected_ink(
+    skin: &oag_title::MenuSkin,
+    normal: [f32; 4],
+    elapsed: f32,
+) -> [f32; 4] {
+    let peak = skin.selected.map_or(OUR_SELECTED, argb);
+    let Some(period) = skin.selected_pulse_period_secs.filter(|p| *p > 0.0) else {
+        return peak;
+    };
+    let phase = (elapsed / period).fract();
+    let t = 0.5 - 0.5 * (phase * std::f32::consts::TAU).cos();
+    lerp_color(normal, peak, t)
+}
+
 fn lerp_color(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
     let t = t.clamp(0.0, 1.0);
     let mut out = [0.0; 4];

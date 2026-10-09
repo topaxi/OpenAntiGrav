@@ -896,66 +896,48 @@ impl Frontend {
             .and_then(|skin| skin.text)
             .or_else(|| menu.map(|m| m.color))
             .map_or([1.0, 1.0, 1.0, 1.0], argb_to_rgba);
-        // The selected row's own ink, when this title carries a *static*
-        // measured one. `selected_pulse_period_secs` being `Some` (Pulse's
-        // shape: its own ink brightens toward white and back on a clock, see
-        // `oag_title::MenuSkin::selected_pulse_period_secs`) is deliberately
-        // excluded here rather than approximated - a static swap would be a
-        // different, invented animation, not this title's measured one - so
-        // that title keeps its pre-existing fallback below untouched.
-        let static_selected = self
-            .menu_skin
-            .filter(|skin| skin.selected_pulse_period_secs.is_none())
-            .and_then(|skin| skin.selected);
+        // **A title with a measured selected ink marks the row by ink, as its
+        // own menus do, and draws no bar.** `selected_ink` is the one rule
+        // `menu::Skin::selected` also reads, so Pulse's picker pulses with the
+        // main menu's period and Pure's holds its static ink. The old bar was
+        // this viewer's own affordance (no capture of either title's picker
+        // shows one; Pure's does not, see `docs/formats/pure-status.md`).
+        let ink_skin = self.menu_skin.filter(|skin| skin.selected.is_some());
+        let band = self.language_band(&LanguageRows {
+            x: menu_x,
+            y: menu_y,
+            scale,
+            pitch: row,
+            align,
+        });
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a pulse clock is seconds; f32 holds it"
+        )]
+        let elapsed = if self.on_screen_for.is_finite() {
+            self.on_screen_for as f32
+        } else {
+            0.0
+        };
 
         for (index, language) in self.languages.iter().enumerate() {
             let y = menu_y + index as f32 * row;
             let selected = index == self.selected;
-            let row_color = match (selected, static_selected) {
-                (true, Some(measured)) => argb_to_rgba(measured),
+            let row_color = match (selected, ink_skin) {
+                (true, Some(skin)) => crate::menu::selected_ink(skin, color, elapsed),
                 _ => color,
             };
-            // **No highlight `Fill` when a measured selected ink is in
-            // hand.** A real capture of Pure's own `Language Selection`
-            // (PPSSPP, `pure-psp-usa.chd`, 2x native) has no translucent band
-            // at all: row 0 (`English`) selected samples solid
-            // `rgb(21-22,173-174,208-209)` glyph ink, pixel-for-pixel
-            // `MENU_SKIN.selected` (`0xFF16AED1`), against `rgb(137-138,214,
-            // 232)` (`TextColor`, `0xFF88D6E8`) on the unselected rows either
-            // side - no third colour anywhere in the row's own band. The old
-            // `Fill` here (`[menu_x - 6.0, y - 4.0, 220.0, row - 4.0]`, both
-            // `-4.0`s an unmeasured guess, `git blame` `918f78215`) was
-            // therefore never a mispositioned highlight to begin with: this
-            // title's real picker never draws one, so there was no rect to
-            // measure. See `docs/formats/pure-status.md`'s `Language
-            // Selection has no highlight band at all` finding.
-            //
-            // The same capture also shows a real selection cue this build
-            // still does not draw: a `6x11` pink (`0xFFED4796`,
-            // `MenuHighLightArrowColor`) `ArrowSelect` image, authored on
-            // `Intro Screen` (`Data\FE\Images\FETextures.mip`), sitting to
-            // the selected row's left. Left unwired - its runtime placement
-            // (offset from the row, not the `x="0" y="0"` the widget's own
-            // definition carries) is not measured, and a guessed position
-            // would be exactly the kind of invented stand-in this project's
-            // own rule against un-evidenced visuals exists to prevent.
-            //
-            // **Only when a static measured colour exists.** A title with no
-            // `menu_skin` (every test fixture in this file) or one whose
-            // `selected` pulses (Pulse) keeps the old `Fill`-plus-row-colour
-            // fallback below exactly as it was - unverified against a real
-            // Pulse capture, so left unchanged rather than guessed at.
-            if selected && static_selected.is_none() {
-                // A pitch read off the face is the whole row, so the band is
-                // the row - the table's `- 4.0` insets are guesses sized for
-                // Pulse's 13-unit line and would light the top half only.
-                let rect = if self.picker_line_height.is_some() {
-                    [menu_x - 6.0, y, self.band_width(scale), row]
-                } else {
-                    [menu_x - 6.0, y - 4.0, 220.0, row - 4.0]
-                };
+            // Without a measured selected ink (HD, Omega, a bare fixture) a
+            // translucent band is the only cue, **chosen, not measured**, and
+            // it is the rect the pointer hit-tests: [`Self::language_band`].
+            if selected && ink_skin.is_none() {
                 out.push(Draw::Fill {
-                    rect,
+                    rect: [
+                        band.left,
+                        band.top + index as f32 * row,
+                        band.width,
+                        row,
+                    ],
                     color: [0.37, 0.86, 0.96, 0.35],
                 });
             }
