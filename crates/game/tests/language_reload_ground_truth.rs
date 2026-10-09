@@ -34,7 +34,7 @@
 //! `Shell::from_boot` reads to build `Teams`/`RaceModes`'s row labels. A
 //! player-visible before/after screenshot of the HUD case, and of the OPTIONS
 //! page's own live switch, are in
-//! `data/scratch/drive-2026-09-27/live-language/`.
+//! a scratch directory, not kept.
 //!
 //! **The chain default matters here.** The PSP EU pressing's English is `PI000`
 //! (it has no `PI012`). `oag_pulse::LANGUAGE_PLUGINS` once ended in `PI012`, so

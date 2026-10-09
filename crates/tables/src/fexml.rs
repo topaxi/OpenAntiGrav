@@ -162,7 +162,7 @@ pub fn expand(data: &[u8]) -> Result<String> {
 /// tolerates it. The same shape recurs in `stats_definition.xml` and
 /// `endrace_definition.xml` (`<Values ... RotY="-0.5"</Values>` trophy/rank
 /// blocks, all three HD archives); `rg --no-ignore -n '="[^"]*"</[A-Za-z]'` over
-/// `data/scratch/drive-2026-09-25/hd-xml` found no other shape and no false
+/// a scratch directory, not kept, found no other shape and no false
 /// positive.
 ///
 /// The tag ends at `index - 1`, one short of the `<`: callers' `close + 1`

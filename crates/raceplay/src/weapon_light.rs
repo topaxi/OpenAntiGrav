@@ -32,7 +32,7 @@
 //! one volley)**: while rockets flew, the visible buffer held the player's
 //! engine light `(4, 10, 40)` and three `(7, 5, 1)` records of `D = 50`,
 //! `w = 1` at the three rockets' positions, which then ran off down the
-//! track; `scratch/hd-weapon-lights/live1/snaps.json`.
+//! track; a scratch file, not kept.
 //!
 //! **Not this**: `Rocket_Update`'s own `0x006778c8` call at `0x001246cc`
 //! (`D = 100`, colour `(14, 10, 2)`, where `r15 = 2.0` from `lis r15, 0x4000`
@@ -59,8 +59,8 @@
 //!
 //! `x` and `s` are not closed-form in the disassembly (three writers and a
 //! `powf`), so they are **read off the original's own update run in the
-//! emulator** (`scratch/hd-weapon-blasts/emu.py` stepping `0x001503d8` at
-//! 60 Hz and calling `0x001512f8`; `scratch/hd-weapon-lights/bomblight.py`),
+//! emulator** (a throwaway script, not kept, stepping `0x001503d8` at
+//! 60 Hz and calling `0x001512f8`; a throwaway script, not kept),
 //! which every sample below reproduces to four digits:
 //!
 //! | age (s) | `x` | `s` |

@@ -75,7 +75,7 @@ const ORIGINAL_18: [[f32; 3]; 8] = [
 ];
 
 /// The located records of Metropia reversed's walk, slot 8 first: `+0x00` of the record
-/// at `0x0882bb54`'s `s7`, read live on 2026-10-02 (`data/scratch/pulse-grid-walk`). Its
+/// at `0x0882bb54`'s `s7`, read live on 2026-10-02. Its
 /// `w` lane read `0.999755859375` on all eight, which is the record scale.
 const LIVE_18_CHAIN: [[f32; 3]; 8] = [
     [391.9265, -14.3851, 181.0272],
