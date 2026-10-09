@@ -242,6 +242,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
+        material_colour_factor: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),

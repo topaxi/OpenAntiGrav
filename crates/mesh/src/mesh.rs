@@ -96,6 +96,10 @@ pub struct Model {
     /// table to read this from. See `mesh::rcs::skin::roles` and
     /// `oag_rcs::rcsmaterial::fragment::Program::specular_exponent`.
     pub material_specular_exponent: Vec<f32>,
+    /// Per material slot: whether its program takes `VertexColour1` as a factor
+    /// on the light rather than a baked light to add - see
+    /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
+    pub material_colour_factor: Vec<bool>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -253,6 +257,7 @@ impl Model {
             wave_maps: Vec::new(),
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
+            material_colour_factor: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),
@@ -284,7 +289,7 @@ mod anim_track;
 pub use anim_track::AnimTrack;
 
 mod vertex;
-pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, slots};
+pub use vertex::{DEFAULT_SPECULAR_EXPONENT, GpuVertex, NO_SPECULAR, factor_sun_mask, slots};
 
 mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
@@ -848,6 +853,7 @@ fn build_class(
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
+        material_colour_factor: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
 

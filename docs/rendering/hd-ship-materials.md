@@ -356,33 +356,74 @@ independent reasons, each sufficient on its own:
 Both points independently close this as "name the gap," per `CLAUDE.md`'s rule
 against inventing a stand-in.
 
-## Finding 3 (low confidence, flagged for follow-up, not acted on): VertexColour1 may feed TC0, not TC1, on a hull material
+## Finding 3, resolved (2026-10-09, `hd-hull-bright`): `VertexColour1` is a factor on the light
 
-`Mesh::vertex_light` (`crates/rcs/src/rcsmodel.rs`) and `mesh.wgsl` both treat
-`VertexColour1` as HD's `f[TC1]` per-vertex light term, a convention read off
-**track** materials. Tracing where `feisar_c1`'s hull materials' own vertex
-program writes `VertexColour1` (`v[4]`, confirmed via
-`vertex::Program::attribute_slot`) finds it feeding **`o[7]`** - which, per
-this project's own vertex-output numbering
-(`crates/rcs/src/rcsmaterial/vertex.rs`'s `FIRST_TEXCOORD_DEST = 7`), is
-**`TC0`**, the diffuse UV register, not `TC1` (`o[8]`).
+The write-mask question is closed by decoding the blocks instead of the vertex
+program (`scripts/ps3-microcode.py fp-file`). `diffuse_vcol`'s lit block
+(`@0x32e0`, `HalfBrightAmbientSunSpot0SVC0`) is
 
-**Why this is not asserted as a finding, only flagged.** `vertex::Instruction`
-does not currently expose a destination **write mask**, so it cannot be told
-from this reading alone whether `VertexColour1` overwrites `TC0`'s real UV
-(`.xy`) entirely, or rides in unused lanes (`.zw`) alongside a UV written by a
-different instruction - a common old-shader idiom for packing extra per-vertex
-data into an interpolator's spare channels. Confidence 50 (plausible, could be
-wrong) on "this attribute's real destination is TC0, not TC1, on a hull
-material" - below the line for acting on it, per the confidence rubric,
-without extending the vertex microcode reader (which does not fit this
-session's remaining scope) or a runtime register trace.
+```text
+@0x04  DP3_SAT H0.w, N, sunDirection
+@0x06  MAD H0.xyz, H0.w, sunColour, ambient     ; ambient + sun * N.L
+@0x0e  MUL H2.xyz, f[TC0], H0                   ; VertexColour1 * that
+@0x11  TEX H1.xyz, f[TC3] unit0                 ; albedo (TC3, not TC0)
+@0x12  MAD R1.xyz, H1, H2, -fog
+@0x15  MAD /2 H0.xyz, ...  END
+```
 
-If it holds up: this project's `vertex_light`/`sun_mask` feed for ships would
-be reading whichever bytes ride in an unrelated register on the real
-executable, on top of - not in place of - the `ADD_SECOND` bug above. Left
-for the next thread to confirm; the open question is precisely which
-component mask the write covers.
+`f[TC0]` is `VertexColour1` (the vertex block writes it to `o[7]` = `TC0`) and
+the albedo samples `f[TC3]`; the `/2` ends all three ship variants read, and
+the ship scene already receives the track's `0.5`-scaled light, so the `/2` is
+matched and was never the cause. The same factor shape holds in
+`diffuse_with_specular_from_alpha_n_vcol` (`MOV H2.xyz, f[TC0]`, then
+`H1 = H2 * light`, specular `* H2`), in the `SVC1` twin (`@0x7c90`:
+`H2 = f[TC0] * (f[TC1] + ambient + sun * N.L)`, the SPU light *inside* the
+product) and in the `ShadowMap` variant (`@0x36e0`, sun gated by the two map
+taps, then `* f[TC1]`). The `IBL` variants (`@0x3950`) swap the constant
+ambient for a unit-1 sphere-map lookup; the n_vcol program also adds a unit-2
+environment lookup (sampler `0x9edd3243`, no `.gtf` bound, still unread).
+
+**What drew the housing 3x bright.** `mesh.wesl` added `VertexColour1` to the
+light sum as a baked light (`colorSet1`'s shape), gated the sun by its fourth
+byte, and drew the shared-32 specular on `diffuse_vcol`, whose program has no
+`LG2` at all. Now `mesh::rcs::skin::light_inputs` classifies a material from
+its programs (the vertex block routes `VertexColour1` into `o[TCn]`; the
+fragment block only `MOV`s or `MUL`s `f[TCn]`; `Program::input_is_only_a_factor`),
+marks its chunks' `sun_mask` as `-1 - mask`, and a hull (`receives_shadow` not
+the track's `2`) lights `colour * (ambient + sun * N.L * occlusion + spu light)`
+with no prelit or added vertex term, specular `* colour`, and none at all for a
+material with no `LG2` (`NO_SPECULAR`). **Tracks keep the additive reading**:
+the rule also matches materials on `01_vineta_k`, `04_chenghou_project` and
+`amphiseum`, whose frames move only through the craft's exposure effect (<= 2
+levels outside the craft on Vineta K) but are unmeasured against their own
+references, so they are left as they were. Open: whether the track programs
+multiply too.
+
+**Numbers** (Metropia grid, `feisar_c1` concept1, box (880,670,1000,750) in the
+`metropia-grid-wcb-on-s150` frame; ours at the same hull panel, box
+(880,452,1000,532) with `--pose 530.17,-13.17,169.75`, 1882x1058, bloom on):
+
+| | luma |
+| --- | ---: |
+| original, WCB on (boot 1 / boot 2) | 0.087 / 0.091 |
+| ours before, `--shadows off` (comparison setting) | 0.297 |
+| ours before, `--shadows original` (HD's default) | 0.196 |
+| ours after, `--shadows off` | 0.205 |
+| ours after, `--shadows original` | 0.110 |
+
+Under `original` the sun-occlusion map zeroes the sun at this indoor grid, so
+the whole 0.110 is ambient times the vertex factor plus specular and glow. The
+`off` tier has no occlusion, so its sun term stays and it reads 0.205: not a
+match, and not a bug of this fix. Whole frame at the same pose, `off`: 0.2757
+before, 0.2742 after. **Open**: the 0.02 residual under `original`, the orange
+rim (likely the unbound unit-2 environment lookup and/or the `IBL` variant,
+unmeasured which program the original binds), and the rest-pose pylons.
+
+**Other titles.** Omega and 2048: checked, not wired - their materials are
+PS4/Vita shader blocks this microcode reader does not decode, so the
+classification has nothing to read; the same `VertexColour1` factor shape is a
+question for their own shader reads. Pulse, Pure: untouched (race screenshots
+byte-identical, see the thread).
 
 ## What has not moved
 

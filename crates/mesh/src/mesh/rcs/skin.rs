@@ -4,6 +4,7 @@
 //! Split out of `mesh/rcs.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
+mod light_inputs;
 mod lightmapped;
 
 use std::sync::Arc;
@@ -457,6 +458,7 @@ pub(super) fn roles(
     let mut cache: std::collections::HashMap<String, Option<Vec<u8>>> = Default::default();
     let mut out = Vec::with_capacity(model.materials.len());
     let mut specular_exponent = Vec::with_capacity(model.materials.len());
+    let mut colour_factor = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
         let mut packed = slots::DEFAULT;
         if material.lightmap_entry().is_some() {
@@ -472,46 +474,14 @@ pub(super) fn roles(
         let program = variant
             .zip(blob.as_deref())
             .and_then(|(variant, blob)| Program::parse(blob, variant.fragment.offset));
-        // **A resolved `0.0` is checked against the model's own patch table
-        // before it is discarded.** `Program::specular_exponent`'s own doc
-        // comment carries the disc-wide evidence that `0.0` is the strongest
-        // candidate for `SpecularPower` patched at draw time rather than a
-        // real value baked in the file - `pow(x, 0) = 1` is not a plausible
-        // authored shininess. That is now checked rather than assumed:
-        // `Program::patches` says whether the exponent's own code slot is one
-        // `SpecularPower` overwrites, and where it is, the material's own
-        // parameter table (the same table `Flame::from_material` reads) has
-        // the value the engine actually puts there. Verified disc-wide before
-        // being wired - `crates/render/examples/hd_specular_patch_census.rs` -
-        // every one of 62 materials across 16 circuits whose `0.0` chain is
-        // patched this way also authors a non-zero `SpecularPower`, at values
-        // (30 to 100, non-round) the shared-literal population never carries.
-        // A `0.0` that is *not* patched, or a material with no authored value
-        // for it, still falls back to `DEFAULT_SPECULAR_EXPONENT` - every
-        // other resolved value is wired exactly as read.
-        let resolved = program.as_ref().and_then(|program| {
-            let value = program.specular_exponent()?;
-            if value != 0.0 {
-                return Some(value);
-            }
-            let slot = program.specular_exponent_slot()?;
-            program
-                .patches(rcsmaterial::SPECULAR_POWER)
-                .any(|patched| patched == slot)
-                .then(|| {
-                    material
-                        .parameters
-                        .iter()
-                        .find(|p| p.hash == rcsmaterial::SPECULAR_POWER)
-                        .map(|p| p.value[0])
-                })
-                .flatten()
-                .filter(|value| *value != 0.0)
-        });
-        if resolved.is_none() {
-            report.specular_exponent_unresolved += 1;
-        }
-        specular_exponent.push(resolved.unwrap_or(crate::mesh::DEFAULT_SPECULAR_EXPONENT));
+        let factor = light_inputs::colour_factor(variant, blob.as_deref(), program.as_ref());
+        specular_exponent.push(light_inputs::specular_exponent(
+            program.as_ref(),
+            material,
+            factor,
+            report,
+        ));
+        colour_factor.push(factor);
         let declared = variant.zip(blob.as_deref()).and_then(|(variant, blob)| {
             rcsmaterial::Declared::parse(blob, variant.fragment.offset)
         });
@@ -602,6 +572,7 @@ pub(super) fn roles(
     Roles {
         packed: out,
         specular_exponent,
+        colour_factor,
     }
 }
 
@@ -614,6 +585,9 @@ pub(super) fn roles(
 pub(super) struct Roles {
     pub(super) packed: Vec<u32>,
     pub(super) specular_exponent: Vec<f32>,
+    /// Whether each material's program takes `VertexColour1` as a factor on
+    /// its light - see `light_inputs`.
+    pub(super) colour_factor: Vec<bool>,
 }
 
 /// Which texture unit each of a material's two `.gtf` slots reaches, read from
