@@ -24,6 +24,10 @@ use oag_raceplay::Race;
 const IMAGE: &str = "data/images/hdfury-ps3-eu-dec.iso";
 
 fn started(track: &str) -> Option<Race> {
+    started_seeded(track, None)
+}
+
+fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
     let image = oag_testdata::image(IMAGE)?;
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),
@@ -32,6 +36,7 @@ fn started(track: &str) -> Option<Race> {
         difficulty: oag_ai::Difficulty::Ace,
         weapons_override: Some(false),
         track: Some(track.to_string()),
+        seed,
         ..race::Options::default()
     })
     .expect("loading the race");
@@ -73,20 +78,43 @@ struct Lap {
     shield: f32,
 }
 
-/// Runs `race` for `ticks` and returns each listed slot's completed laps.
-fn laps_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Vec<Lap>> {
-    let mut laps: Vec<Vec<Lap>> = slots.iter().map(|_| Vec::new()).collect();
+/// One craft's run: its completed laps, and every tick its shield fell by more than a
+/// point while no wall charged it (tick, line index, loss).
+#[derive(Default)]
+struct Run {
+    laps: Vec<Lap>,
+    off_wall_hits: Vec<(u64, u32, f32)>,
+}
+
+/// Runs `race` for `ticks` and returns each listed slot's run.
+fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
+    let mut runs: Vec<Run> = slots.iter().map(|_| Run::default()).collect();
     let mut mark: Vec<(u32, u64, u32, u32)> = slots
         .iter()
         .map(|&slot| (race.sim.world.ships[slot].standing.lap, 0, 0, 0))
         .collect();
     for tick in 0..ticks {
+        let before: Vec<(f32, f32)> = slots
+            .iter()
+            .map(|&slot| {
+                (
+                    race.sim.world.ships[slot].physics.shield,
+                    race.wall_shield_charged_of(slot),
+                )
+            })
+            .collect();
         race.tick(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
-            let now = race.sim.world.ships[slot].standing.lap;
+            let ship = &race.sim.world.ships[slot];
+            let lost = before[i].0 - ship.physics.shield;
+            let charged = race.wall_shield_charged_of(slot) - before[i].1;
+            if lost > 1.0 && charged <= 0.0 {
+                runs[i].off_wall_hits.push((tick, ship.driver.index, lost));
+            }
+            let now = ship.standing.lap;
             let (lap, started, contacts, respawns) = mark[i];
             if now != lap {
-                laps[i].push(Lap {
+                runs[i].laps.push(Lap {
                     ticks: tick - started,
                     contacts: race.wall_contact_ticks_of(slot) - contacts,
                     respawns: race.respawns_of(slot) - respawns,
@@ -101,11 +129,11 @@ fn laps_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Vec<Lap>> {
             }
         }
     }
-    laps
+    runs
 }
 
-fn print_laps(laps: &[Lap]) {
-    for (n, lap) in laps.iter().enumerate() {
+fn print_run(race: &Race, slot: usize, run: &Run, ticks: u64) {
+    for (n, lap) in run.laps.iter().enumerate() {
         println!(
             "    lap {}: {:.2}s  wall-contact ticks {:<4} respawns {}  shield at lap end {:.1}",
             n + 1,
@@ -115,6 +143,15 @@ fn print_laps(laps: &[Lap]) {
             lap.shield
         );
     }
+    println!(
+        "    end of run ({ticks} ticks): wall-contact ticks {}  respawns {}  shield {:.1}  \
+         wall-charged {:.1}  shield spent off walls (barrel rolls: tick, line index, cost) {:?}",
+        race.wall_contact_ticks_of(slot),
+        race.respawns_of(slot),
+        race.sim.world.ships[slot].physics.shield,
+        race.wall_shield_charged_of(slot),
+        run.off_wall_hits
+    );
 }
 
 /// The twelve racing circuits (the four Zone environments left out), one opponent alone.
@@ -151,46 +188,47 @@ fn lone_opponent_board() {
         } else {
             "corner model"
         };
-        let laps = laps_of(&mut race, &[1], TICKS).remove(0);
+        let run = runs_of(&mut race, &[1], TICKS).remove(0);
         println!("{environment} (speed plan {plan})");
-        print_laps(&laps);
-        println!(
-            "    end of run ({TICKS} ticks): wall-contact ticks {}  respawns {}  shield {:.1}",
-            race.wall_contact_ticks_of(1),
-            race.respawns_of(1),
-            race.sim.world.ships[1].physics.shield
-        );
+        print_run(&race, 1, &run, TICKS);
         assert!(
-            laps.len() >= 2,
+            run.laps.len() >= 2,
             "{environment}: the lone opponent finished no lap"
         );
     }
 }
 
-/// The full AI field, weapons off: every opponent's laps and its end of run.
+/// The full AI field, weapons off, at five seeds: every opponent's laps and its end of run,
+/// then one summary line per seed.
 fn field(environment: &str) {
     const TICKS: u64 = 12_000;
-    let Some(mut race) = started(&oag_hd::names::track(environment)) else {
-        return;
-    };
-    race.sim.world.ships[0].active = false;
-    let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
-    let laps = laps_of(&mut race, &slots, TICKS);
-    let mut total = 0;
-    for (laps, &slot) in laps.iter().zip(&slots) {
-        println!("{environment} slot {slot}");
-        print_laps(laps);
+    for seed in 1..=5u64 {
+        let Some(mut race) = started_seeded(&oag_hd::names::track(environment), Some(seed)) else {
+            return;
+        };
+        race.sim.world.ships[0].active = false;
+        let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
+        let runs = runs_of(&mut race, &slots, TICKS);
+        let (mut contacts, mut charged, mut lost, mut laps, mut lap_ticks) = (0, 0.0, 0.0, 0, 0);
+        for (run, &slot) in runs.iter().zip(&slots) {
+            println!("{environment} seed {seed} slot {slot}");
+            print_run(&race, slot, run, TICKS);
+            contacts += race.wall_contact_ticks_of(slot);
+            charged += race.wall_shield_charged_of(slot);
+            lost += 95.0 - race.sim.world.ships[slot].physics.shield;
+            // Flying laps only: the first is the standing start.
+            for lap in run.laps.iter().skip(1) {
+                laps += 1;
+                lap_ticks += lap.ticks;
+            }
+        }
         println!(
-            "    end of run ({TICKS} ticks): wall-contact ticks {}  respawns {}  shield {:.1}",
-            race.wall_contact_ticks_of(slot),
-            race.respawns_of(slot),
-            race.sim.world.ships[slot].physics.shield
+            "{environment} seed {seed}: field wall-contact ticks {contacts}  wall-charged {charged:.1}  \
+             shield lost {lost:.1}  mean flying lap {:.2}s over {laps}",
+            lap_ticks as f32 / 60.0 / laps.max(1) as f32
         );
-        total += race.wall_contact_ticks_of(slot);
     }
-    println!("{environment} field wall-contact ticks {total}");
 }
-
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn field_on_talons_junction() {

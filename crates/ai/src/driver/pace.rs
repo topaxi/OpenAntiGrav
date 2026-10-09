@@ -48,7 +48,7 @@ pub(super) fn curvature_chord(tuning: &Tuning, step: f32) -> f32 {
 ///
 /// `07_Track`'s tightest arc (curvature 0.047, radius 21) admits **33 units/s**.
 /// The hull's ceiling is `steer * Turning.amount / (5 * I_yy)` = `100 * 1.68 /
-/// 108` = 1.556 rad/s, within a few per cent of the 1.42-1.51
+/// 108` = 1.556 rad/s on Pulse's craft, within a few per cent of the 1.42-1.51
 /// `docs/ghidra/functions/psp-pulse-usa/engine.md` measures on the original.
 /// The grip limit said 74, the craft arrived at 94 and shed **34-35 shield a
 /// lap** on the outside wall. Dropping [`Tuning::lateral_accel`] 260 to 90
