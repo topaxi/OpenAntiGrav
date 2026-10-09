@@ -33,6 +33,7 @@ use std::collections::BTreeMap;
 use crate::{Context, Driver, Line, Tuning};
 
 mod brake;
+mod clearance;
 pub mod probe;
 #[cfg(test)]
 mod tests;
@@ -104,6 +105,10 @@ pub struct SpeedPlan {
     /// flying lap, or infinity where it never stood: what `Tuning::pace_share`
     /// is a share of.
     pace: Vec<f32>,
+    /// Samples where the last verification run passed a wall closer than
+    /// [`clearance::MARGIN`] without touching it: where the plan is clean only on
+    /// its own line. See [`Self::tight_within`].
+    tight: Vec<bool>,
     /// The braking the backward pass was built with.
     decel: Decel,
 }
@@ -204,6 +209,7 @@ impl SpeedPlan {
             hold: vec![false; n],
             spacing: spacing_of(line),
             pace: vec![f32::INFINITY; n],
+            tight: vec![false; n],
             decel: Decel::FALLBACK,
         }
     }
@@ -252,6 +258,43 @@ impl SpeedPlan {
             return f32::INFINITY;
         }
         self.pace[index % self.pace.len()]
+    }
+
+    /// Whether a sample the plan passed a wall within [`clearance::MARGIN`] of
+    /// lies within `distance` along the line ahead of `index`.
+    #[must_use]
+    pub fn tight_within(&self, index: usize, distance: f32) -> bool {
+        let n = self.tight.len();
+        if n == 0 {
+            return false;
+        }
+        let mut at = index % n;
+        let mut travelled = 0.0;
+        for _ in 0..n {
+            if self.tight[at] {
+                return true;
+            }
+            if travelled >= distance {
+                break;
+            }
+            travelled += self.spacing[at];
+            at = (at + 1) % n;
+        }
+        false
+    }
+
+    /// This plan with sample `index` marked tight, for a test of what a driver
+    /// does near one.
+    #[cfg(test)]
+    pub(crate) fn with_tight(mut self, index: usize) -> Self {
+        self.tight[index] = true;
+        self
+    }
+
+    /// How many samples [`Self::tight_within`] can find, for a loader report.
+    #[must_use]
+    pub fn tight_samples(&self) -> usize {
+        self.tight.iter().filter(|&&tight| tight).count()
     }
 
     /// The braking the plan was built with.
@@ -571,6 +614,7 @@ impl SpeedPlan {
         report.verify_lap_ticks = None;
         report.verify_respawns = 0;
         let mut pace = vec![f32::INFINITY; self.len()];
+        let mut tight = vec![false; self.len()];
         let mut respawned_on_flying_lap = false;
         let limit = (4 * n as u64).max(4_000) as u32 * 2;
         while run.progress < 2 * n && run.tick < limit {
@@ -581,6 +625,17 @@ impl SpeedPlan {
             contacts += u32::from(tick.contact);
             if run.progress >= n {
                 pace[run.driver.index as usize] = forward_speed(&run.state);
+            }
+            if !tick.contact
+                && run.state.time_airborne <= 0.0
+                && clearance::too_close(
+                    &run.state,
+                    &craft.handling,
+                    course.env.self_collider,
+                    course.raycaster,
+                )
+            {
+                tight[run.driver.index as usize] = true;
             }
             if lap_mark.is_none() && run.progress >= n {
                 lap_mark = Some(run.tick);
@@ -617,6 +672,7 @@ impl SpeedPlan {
             report.verify_lap_ticks = lap_mark.map(|mark| run.tick - mark);
         }
         self.pace = pace;
+        self.tight = tight;
         report.verify_failures = failures;
         report.verify_contacts = contacts;
         failures

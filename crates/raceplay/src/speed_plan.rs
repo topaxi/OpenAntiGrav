@@ -163,10 +163,13 @@ impl Race {
         let (plan, report) = self.build_speed_plan(1);
         let clean = report.verify_failures == 0 && report.verify_respawns == 0;
         info!(
-            "ai speed plan: {} steps, lap {:?} ticks, {} unresolved, verification {} - {}",
+            "ai speed plan: {} steps, lap {:?} ticks, {} unresolved, {} of {} samples tight, \
+             verification {} - {}",
             report.steps,
             report.verify_lap_ticks,
             report.unresolved.len(),
+            plan.tight_samples(),
+            plan.len(),
             if clean { "clean" } else { "not clean" },
             if clean {
                 "followed"

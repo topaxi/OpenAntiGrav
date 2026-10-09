@@ -139,18 +139,33 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// projectile to attribute), and the spread is per-seed divergence: over
 /// PHANTOM and RAPIER seeds 4-13 (80 races) deaths were 40 with the fix and 41
 /// with the old spacing (forward 18 against 19, reversed 22 against 22).
+///
+/// **Four cells raised 2026-10-09 for holding the plan's line into a tight
+/// corner** (lane `hd-ai-talon`; within 200 units of a sample the plan passed a
+/// wall closer than a unit, a driver spends none of its level's plan slack, see
+/// `docs/gameplay/ai.md`, "Tight corners"): FLASH 2 reversed 0 -> 1, FLASH 3
+/// forward 0 -> 1, PHANTOM 1 reversed 1 -> 2, PHANTOM 2 forward 2 -> 3; only
+/// the exceeded halves. Over seeds 1-23, every class, both layouts
+/// (`ai_dekonstruct_black_board`, `OAG_SEEDS=23`), destroyed went 138 -> 142 and
+/// wall-contact ticks 86,765 -> 84,889; by class VENOM 15 -> 10, FLASH 16 -> 15,
+/// RAPIER 46 -> 46, PHANTOM 61 -> 71 (forward 25 -> 33, reversed 36 -> 38).
+/// Read as seed spread: PHANTOM forward's 25 -> 33 is about 1.2 standard
+/// deviations for two cells of 161 craft (VENOM forward went 9 -> 4 the other
+/// way), its wall-contact clusters are the same (2850 at 973 -> 978 ticks, 2400
+/// at 992 -> 973), and its deaths stay in the region they were in (samples
+/// 2700-2970: 11 -> 15; the rest scattered).
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),
     ("VENOM", 3, 0, 0),
     ("FLASH", 1, 2, 1),
-    ("FLASH", 2, 0, 0),
-    ("FLASH", 3, 0, 2),
+    ("FLASH", 2, 0, 1),
+    ("FLASH", 3, 1, 2),
     ("RAPIER", 1, 1, 1),
     ("RAPIER", 2, 1, 2),
     ("RAPIER", 3, 3, 3),
-    ("PHANTOM", 1, 0, 1),
-    ("PHANTOM", 2, 2, 3),
+    ("PHANTOM", 1, 0, 2),
+    ("PHANTOM", 2, 3, 3),
     ("PHANTOM", 3, 3, 2),
 ];
 
