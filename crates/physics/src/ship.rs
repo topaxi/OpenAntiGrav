@@ -468,6 +468,10 @@ pub struct ShipState {
     /// measured its own. Written by the race from the title, not hashed, for
     /// [`Self::on_grid`]'s reason.
     pub hover_rig: crate::hover::Rig,
+    /// The steering ramp stops at its target, as Wipeout HD's `Craft_UpdateSteering` does
+    /// ([`crate::controls::ramp_steering_clamped`]); `false` is Pulse's unclamped ramp. Written
+    /// by the race from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
+    pub steer_ramp_clamped: bool,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -630,6 +634,7 @@ impl Default for ShipState {
             four_corner: false,
             hover_cap: None,
             hover_rig: crate::hover::Rig::TWO_POINT,
+            steer_ramp_clamped: false,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

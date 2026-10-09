@@ -19,6 +19,7 @@
 use oag_core::math::Vec3;
 use oag_physics::hover::{MAX_PROBES, NormalMean, Rig};
 use oag_race::RaceState;
+use oag_title::craft_laws::CraftLaws;
 use oag_title::hover_rig::HoverRig;
 use oag_title::launch_hover::LaunchHover;
 
@@ -61,14 +62,21 @@ pub(crate) fn physics_rig(rig: Option<&HoverRig>) -> Rig {
     }
 }
 
+/// The craft's inertia tensor for a title's [`CraftLaws`], Pulse's for `None`.
+pub(crate) fn craft_inertia(laws: Option<&CraftLaws>) -> Vec3 {
+    laws.map_or_else(oag_physics::forces::ship_inertia, |laws| {
+        oag_physics::forces::ship_inertia_at(laws.inertia_mass.value)
+    })
+}
+
 /// Ticks since the grid state ended, counting the tick it ended on as the first.
 fn released_ticks(world_tick: u64) -> u64 {
     (world_tick + 1).saturating_sub(oag_race::COUNTDOWN_TICKS) + 1
 }
 
 impl Race {
-    /// Writes this tick's grid hover clamp to every craft (`None` for a title with none), and the
-    /// title's hover probe set.
+    /// Writes this tick's grid hover clamp to every craft (`None` for a title with none), the
+    /// title's hover probe set and its steering clamp.
     pub(super) fn set_hover_caps(&mut self) {
         let cap = self
             .sim
@@ -77,6 +85,7 @@ impl Race {
         for ship in &mut self.sim.world.ships {
             ship.physics.hover_cap = cap;
             ship.physics.hover_rig = self.sim.hover_rig;
+            ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
         }
     }
 }
