@@ -217,30 +217,57 @@ the screen lists has one. The HD folder names (`03_Track`) are not Omega folders
 **Geometry** is 2048's container: `oag_mesh::mesh::rcs::psp2::build_with_vex`, the builder the
 menu backdrop already joins a PS4 scene with, now shared through `oag_game::preview::psp2_scene`.
 The Omega pairs hold HD's own geometry (Moa Therma's bounds match HD's `03_Track` to four
-places). Not every Omega `.vex` says so in its header, so the preview path asks the sibling
-`.rcsmodel` which container it is.
+places). Not every Omega `.vex` says so in its header, so `psp2_scene::circuit_model` asks the
+sibling `.rcsmodel` which container it is - scoped to the circuit screen, so `preview::model`
+(the flyer cards, the end-of-race placements) is unchanged.
 
 **The material is not HD's `cf_fetracks`.** All 26 models name
-`FrontEndConstantFranelBlend.rcsmaterial`, which carries no texture (there is no `fe_grad`).
-Its pixel shader (GCN, the `Shdr` at `0x323c` of `15_anulpha_pass`'s copy, decoded 2026-10-09;
-the uniform order is the reflection table's) computes, per pixel:
+`FrontEndConstantFranelBlend.rcsmaterial` (`_1`, `_2` and `cf_FEtracks*` files sit in the same
+folders and no model, `.vex` or material names them), which carries no texture: there is no
+`fe_grad`. Its pixel shader reads, per pixel, **confidence 80** (a hand-built GCN decoder over
+one shader, member order from the file's own reflection table, no emulator run):
 
 ```text
 refl  = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower
 rgb   = colourDiffAlpha.rgb + Constant1 * constantAmbientColour * refl
-out   = fog(rgb)           ; by the vertex's own factor
+out   = fog(rgb)           ; fogColour mixed in by the vertex's own factor
 ```
 
-The model's material instance authors every term but one: `Constant1` `1 1 1` (the Zone ones
-`0.98 0.97 0.94`), `colourDiffAlpha` `0.060 0.048 0.029` (Zone `0.002 0.001 0.0006`),
-`ReflectivityMin` `0.05`, `ReflectivityPower` `3`, and `ReflectivityScale` `1` or `2`
-(Talons Junction and Tech De Ra `2`). A circuit is dark face-on and bright at the rim, unlit.
+Evidence: the pixel shader is the `Shdr` at byte `0x323c` of
+`Data/environments/15_anulpha_pass/fe/Materials/FrontEndConstantFranelBlend.rcsmaterial`
+(`data00.psarc`; type `0` by the footer's `(byte 8 >> 2) & 0xf`, 436 bytes). Its constant buffer
+members, in reflection order, are `colourDiffAlpha`@dw0 (4), `ReflectivityMin`@4,
+`ReflectivityScale`@5, `ReflectivityPower`@6, `Constant1`@8, `constantAmbientColour`@12,
+`fogColour`@16, `fadeResCoeffs`@20, and the lines that carry the law are:
+
+```text
+v_mad_f32  v7, -v6, v7, 1.0 clamp   ; 1 - N.V, from two interpolants normalised by v_rsq
+s_buffer_load_dword s[22], s[0:3], 0x6        ; ReflectivityPower
+v_log_f32  v7, |v7|
+v_mul_f32  v7, s22, v7              ; * power
+v_exp_f32  v7, v7                   ; (1 - N.V)^power
+v_mov_b32  v12, s20                 ; s20 = ReflectivityMin (dw4)
+v_mac_f32  v12, s21, v7             ; + ReflectivityScale (dw5) * that      = refl
+v_mul_f32  v10, s4, v10             ; s4.. = Constant1 (dw8..10) * constantAmbientColour (dw12..14)
+v_mad_f32  v6, v10, v12, s0         ; * refl + colourDiffAlpha (dw0..2)
+v_mac_f32  v3, -s12, v0 / v_mad_f32 v3, v0, v6, s12   ; fog: fogColour (dw16..18) mixed by attr0.w
+```
+
+The model's material instance authors every uniform but one: `Constant1` `1 1 1` (the Zone
+circuits `0.98 0.97 0.94`), `colourDiffAlpha` `0.060 0.048 0.029` (Zone `0.002 0.001 0.0006`),
+`ReflectivityMin` `0.05`, `ReflectivityPower` `3`, and `ReflectivityScale` `1` or `2` (Talons
+Junction and Tech De Ra `2`). A circuit is dark face-on and bright at the rim.
 `oag_game::preview::track_model::Ramp::fresnel` evaluates it once per vertex per frame, the same
 way HD's texture ramp is (`Ramp::of` picks by the model's container, never by title).
-**Chosen, not measured**: `constantAmbientColour`, which no instance authors and no other file
-supplies (taken as 1, as HD's multiplier is), and no fog. HD's same-named material (unreferenced
-there) has the same shape with the exponent fixed at 5 (`ps3-microcode.py fp-file`, block #2),
-so the lineage agrees; the Omega shader is the one that was read.
+
+**Chosen, not measured**: `constantAmbientColour` (no instance authors it; its source was not
+located; taken as 1, as HD's multiplier is), no fog, and **unlit**: the same file carries pixel
+shaders of the same material that also declare `liveLighting0diffuse`/`direction` (`0x3dbc`,
+`0x49dc`), and which variant the screen selects is unread. At `ReflectivityScale` 2 the rim
+reaches 2.11 and clamps in the 8-bit target; whether Omega's front end tonemaps is unread. HD's
+same-named material (unreferenced there) shares the idea, a fresnel term over a constant
+(`ps3-microcode.py fp-file`, block #2: `Constant1` mixed toward a second constant by
+`(1 - N.V)^5`), but its form is not Omega's and the Omega shader is the one that was read.
 
 **The widget** is authored differently: `OriginX/Y` `960/540`, `x` `0.525`, `y` `0.125`, `z`
 `-2.05`, `orthoScaleX/Y/Z` `0.012`, `nearZ` `0.1`, `FoV` `100`. `orthoScale` scales the

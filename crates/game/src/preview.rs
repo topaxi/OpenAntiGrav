@@ -419,18 +419,6 @@ pub fn model_named(
     let blob = archives
         .read_name(entry)
         .with_context(|| format!("reading the preview mesh {entry}"))?;
-    // A PS4 scene (Omega's) is a `.vex` with a 2048-container `.rcsmodel` beside
-    // it, and not every such `.vex` says so in its own header the way HD's do,
-    // so the sibling is asked rather than the `.vex`.
-    if let Some(sibling) = oag_mesh::mesh::rcs::sibling_name(entry)
-        && let Ok(geometry) = archives.read_name(&sibling)
-        && let Some((mut model, report)) = psp2_scene::build(archives, entry, &blob, &geometry)
-            .with_context(|| format!("decoding the preview mesh {entry}"))?
-    {
-        log::debug!("preview {entry}: {report}");
-        model.keep_nearest();
-        return Ok((model, Vec::new()));
-    }
     // A PS3 `.vex` keeps its geometry in the `.rcsmodel` beside it, and its
     // materials and textures in other entries of the same archive set - which
     // is why this takes `Archives` rather than a blob. `build` below is the

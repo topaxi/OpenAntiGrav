@@ -79,7 +79,7 @@ fn every_circuit_of_the_table_builds_a_model_and_a_ramp() {
         let location = format!(r"Data\{folder}\{}", row.environment);
         let entry = oag_game::preview::track_entry(front_end, &location, false)
             .unwrap_or_else(|| panic!("{location}: no model entry"));
-        let mut model = oag_game::preview::model(&mut archives, &entry)
+        let mut model = oag_game::preview::psp2_scene::circuit_model(&mut archives, &entry)
             .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
         assert!(model.indices.len() / 3 > 100, "{entry} is a circuit's mesh");
         let ramp = oag_game::preview::track_model::Ramp::of(&mut archives, &entry, &mut model)
