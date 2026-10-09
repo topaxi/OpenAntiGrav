@@ -714,10 +714,10 @@ pub(super) fn staging(
     archives: &mut oag_assets::Archives,
     track: &str,
     geometry: GeometryKind,
-    // The three Zone axes travel together and all come off the same title
-    // record, so this takes the record rather than three loose fields - which
-    // is also what keeps the argument count under `clippy::too_many_arguments`.
-    race: &'static oag_title::RaceDefaults,
+    // The Zone axes and the lit-output scale all come off the same title
+    // record, so this takes the record rather than loose fields - which is
+    // also what keeps the argument count under `clippy::too_many_arguments`.
+    title: &'static oag_title::Title,
     mode: oag_race::Mode,
     zone_stage: Option<u32>,
     report: &mut Vec<String>,
@@ -742,6 +742,13 @@ pub(super) fn staging(
         geometry == GeometryKind::Ps4,
         report,
     );
+    // Every lit program of a title whose `lit_output_halved` rule applies ends
+    // on a `/2` output scale (HD's: `oag_title::Looks::lit_output_halved`).
+    let light = if title.looks.lit_output_halved.applies_everywhere() {
+        light.with_output_scale(0.5)
+    } else {
+        light
+    };
     // The circuit's authored distance fog, on the same file. **The curve is no
     // longer a guess**: every fogged fragment variant of an HD circuit
     // `.rcsmaterial` computes `exp(-(coefficient * view_depth)^2)` and lerps a
@@ -768,7 +775,7 @@ pub(super) fn staging(
         authored_fog,
         hd_bloom,
         omega_tonemap,
-        zone_grade: zone_grade(archives, race, mode, zone_stage, track, report),
+        zone_grade: zone_grade(archives, title.race, mode, zone_stage, track, report),
     }
 }
 

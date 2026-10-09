@@ -474,18 +474,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut archives,
         &track,
         environment::GeometryKind::of(ps3_geometry.as_deref()),
-        title.race,
+        title,
         options.mode,
         options.zone_stage,
         &mut report,
     );
-    // Every lit program of a title whose `lit_output_halved` rule applies ends
-    // on a `/2` output scale (HD's: `oag_title::Looks::lit_output_halved`).
-    let light = if title.looks.lit_output_halved.applies_everywhere() {
-        light.with_output_scale(0.5)
-    } else {
-        light
-    };
     let spu_vertex_lights = engine_light::spu_vertex_lights_enabled(
         &mut archives,
         &track,
