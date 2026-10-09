@@ -7611,3 +7611,62 @@ original" is rescoped to grid frames as above.
 **Other titles.** Nothing is wired, so there is nothing to port. Omega shares HD's front end and 2048's circuits: the
 `SET_SHADER_PACKER` read is RPCS3-only (**not checkable** on Omega, no PS4 capture path); 2048 has no RSX. **Evidence**:
 a scratch directory, not kept (`report.md`, `placeA`, `placeB`, `pairS`, `pl1-00-draws.txt`, `abl-*.png`).
+
+## Metropia's white lamp blobs are the gate's frame term, left unfaded by a low adapted luminance (2026-10-09, `hd-metropia-bloom`)
+
+A from-play report: on `02_track` (Metropia) lights, signs and glowing panels bloom into overly white blobs, already on
+the grid before GO. **Measured, attributed, not fixed** (the cause of the low `adapted` is a hypothesis, below).
+
+**Method.** One RPCS3 race (Racebox, Feisar, `concept1` hull, defaults), at the grid after `START RACE`. `scripts/hd-grid-capture.py`
+pauses the target through the GDB stub for each frame and pairs a fixed 1882x1058 crop of the window with the pushbuffer
+camera (six grid frames, three throttle frames; the grid camera sways enough that `pick_camera` accepts it). Ours is
+rendered at the same pose with `scripts/hd-frame-compare.py`'s comparison settings at 1882x1058. Blob statistics
+(`scripts/hd-blob-stats.py`): connected components of min-channel >= 250 over the ceiling band, y < 420. Frames kept in
+`data/reference/hd-capture/metropia-bloom/` (`00`-`08` original with pose JSON, `ours/`, `ceil_pair.png`, `light_pair.png`).
+The state is `data/saves/hd-fury/hd-racebox-metropia-feisar-grid-flyover.SAVESTAT.zst` (`START RACE` up; 11.8 s to restore).
+
+**The picture.** A ceiling lamp is a ~17 px disc with a thin halo in the original and a ~28 px disc with a wide soft halo in ours;
+the lamp housing rim is gone. Ceiling band, pose 00, boot 1 (poses 03 and 05 and a second boot from the restored state agree
+within 0.1 point):
+
+| frame | clipped-white share | blob px (>= 20 px comps) | mean RGB |
+| --- | ---: | ---: | --- |
+| original | 3.07 % (3.02, 3.14; restore 3.83) | 22.3 k | 153.9 140.9 128.9 |
+| ours, as shipped | **10.87 %** (10.80, 10.74; restore 10.80) | 82.4 k | 163.1 154.5 142.8 |
+| ours, bloom summand off (`Glow::Suppressed`) | 3.69 % (3.66, 3.60) | 26.1 k | 150.5 136.7 128.4 |
+| ours, `Bloom from alpha contribution` = 0 | 10.87 % (byte-identical to shipped) | 82.4 k | 163.1 154.5 142.8 |
+| ours, `Bloom from frame contribution` = 0 | 3.69 % (identical to summand off) | 26.1 k | 150.5 136.7 128.4 |
+
+**Attribution confidence 90** (deterministic ablation, three poses, two boots, one machine). So the lamps are **not too bright before bloom** (surfaces and the lamp discs match within 0.6 points and 5 levels of mean), the
+glow-mask alpha term contributes nothing here, and **the whole excess is the gate's frame-luminance term**.
+
+**The parameters are the engine's own (confidence 92: direct live read of the values, one boot).** Read live from the settings singleton (`*0x8b6fb4 + 0x52c`) during the race:
+rate 0.025, frame contribution 1.0, exponent 3.0, alpha contribution 2.5, adaption boost 15.0, tone 20/3/4, sizes 0.7 - exactly what
+`envsettings_bloom` loads. Metropia's file authors frame contribution **1.0** and boost 15 where Talon's authors 0.03 and 5, and omits
+the tone clamp and maximum (carried from the front end, as already documented).
+
+**The fade is what is missing (confidence 85 that the excess is the frame term and that our fade is incomplete; the value of our
+`adapted` is an estimate).** The gate multiplies that term by `1 - min(adapted * 15 * 0.25, 1)`, which is zero once
+`adapted >= 0.267`. Sweeping `Bloom adaption boost` in ours: 15 -> 10.87 %, 20 -> 10.15 %, 30 -> 8.24 %, 45 and above -> 3.69 %
+(fully faded, equal to the summand off). Full fade at 45 and partial fade at 30 bracket our effective `adapted` in
+[0.089, 0.133) (derived from the sweep, no readback). The original's lamps show almost no frame-term bloom, so its fade is near
+zero, `adapted` >= ~0.25: **inferred from blob size alone, no score**. That Talon's (frame term 0.03) has the same gap but
+invisibly is also **inferred, not measured**.
+
+**The first hypothesis was checked and is not supported.** I guessed the original averages encoded bytes (about 0.5) where ours
+averages linear light (about 0.1). The one-minute check: whole-frame luma `(0.3, 0.59, 0.11)` of the mean of the original's bytes
+is **0.488** and of ours (`^2.2`, linear) **0.279**. Ours at 0.28 would already be fully faded (>= 0.267), and it is not, so the
+low effective `adapted` is **not** explained by the frame's linear mean, and the encoded-domain explanation is not needed to get
+past 0.267. (Both numbers include the HUD, which the scene target does not carry, so the true scene mean is lower; by how much is
+unmeasured.) What is open is therefore why our chain's `adapted` reads in [0.09, 0.13) on this frame: the scene target's own mean
+without HUD and craft, the ladder (`hd bloom reduce`: integer halving to 1x1, bilinear taps), or the `1 - min(...)` fade. The
+original's `adapted` was not read either: `FunkLayer_RunBloomChain` (`0x003b4690`) lerps into `*(FunkLayer + viewport_offset +
+0x254)` where `FunkLayer = *0x8b73bc = 0xc50ee0`; live reads of `0xc50ee0 + 0x230..0x270` and `+0x900..0x980` hold no changing
+floats, so the viewport offset (`*(r16 + 0x894)`) or an unmodelled pointer step is wrong. **Next, in this order**: (1) a 1x1
+readback of our `adapted` texture at tick 0 on this pose, to replace the bracket with a number and compare with 0.267; (2) break
+on the lerp's `stfs` in `0x003b4690` and read the original's `adapted` at the grid. No fix is justified before (1): the fault
+may be in our reduction rather than in the original's input.
+
+**Omega: checked, differs.** Omega authors a `Tonemap` block, not `HDR and Bloom`, so there is no gate, frame term or adaptation
+fade to share; its Metropia is not compared (no capture path for PS4).
+**Pulse**: no code changed, so its picture is unchanged by construction (no before/after screenshot taken for that reason).
