@@ -7742,6 +7742,8 @@ included, because the `/2` is on the program's last instruction) and `fog.wesl` 
 fog lerp is inside that instruction). Pulse's race frame is byte-identical before and after (`cmp` of two 960x544
 screenshots).
 
+**Six HD pixel-count ground truths pinned the old brightness** (`hd_behind_glass_frame`, `hd_weapon_scene` x3, `hd_leach_ball`, `hd_plasma_ball`): their colour windows are re-scaled by 0.73, the encoded value of one half, in their own commit, and each count lands back near its old figure (teal pane pixels pass; green 5,804 against 5,751, violet 9,180 against 10,521, flash 3,176 against 2,916). They are eye-position guards, not comparisons with the original.
+
 **Other titles.** Wipeout 2048: no RSX (**not checkable** here). Omega: **checked, not established** - its pixel
 shaders export fp16 linear (`ps4-omega-eu/lightmap-prelit.md`) and that read did not look at a final output modifier
 (`omod`); no half-range scene exists to compare, and `output_scale` stays 1.0 there. A GCN `omod` census of the circuit

@@ -122,7 +122,9 @@ fn a_laid_mine_shows_its_green_halo_spikes() {
         return;
     };
     let green = count(&frame, (0, 0, SIZE.0, SIZE.1), |[r, g, b]| {
-        g > 200 && r < 120 && b < 130
+        // Windows scaled by 0.73 (the encoded value of one half, 2026-10-09): HD's
+        // lit programs end on a /2 output scale.
+        g > 146 && r < 88 && b < 95
     });
     println!("green pixels: {green}");
     assert!(
@@ -186,7 +188,7 @@ fn the_cannons_muzzle_flash_takes_the_circuits_scene() {
         return;
     };
     let white = count(&frame, (383, 246, 449, 318), |p| {
-        p.into_iter().max() > Some(230)
+        p.into_iter().max() > Some(168)
     });
     println!("near-white pixels in the flash's box: {white}");
     assert!(
@@ -210,7 +212,7 @@ fn a_plasma_explosions_shells_glow_violet_from_the_real_eye() {
     };
     let violet = count(&frame, (0, 0, SIZE.0, SIZE.1), |[r, g, b]| {
         let (r, g, b) = (i32::from(r), i32::from(g), i32::from(b));
-        b > 170 && r > 110 && r < 235 && g + 20 < r && b > g + 50
+        b > 124 && r > 80 && r < 172 && g + 15 < r && b > g + 37
     });
     println!("violet pixels: {violet}");
     assert!(

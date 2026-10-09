@@ -102,7 +102,7 @@ fn frame_of(image: &Path, scratch: &Path, locked: bool) -> Vec<u8> {
 fn white(frame: &[u8]) -> usize {
     (235..300)
         .flat_map(|y| (440..520).map(move |x| (x, y)))
-        .filter(|&(x, y)| frame[y * SIZE.0 + x] > 240)
+        .filter(|&(x, y)| frame[y * SIZE.0 + x] > 175)
         .count()
 }
 
