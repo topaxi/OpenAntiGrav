@@ -146,7 +146,7 @@ This corrects the "every named mode builds the arc wake" result above as a state
 - **Measured.** Single Player Campaign, Queens Mall Time Trial: `0x8153fd24` goes `0` (front end) to
   **`0x026886dc`** at load, and the buffer reads `Data/Particles2048/Tex/explosion_fijets_8x8.gxt` then
   `.../smoke_256x256_plain.gxt` (the predicate false side), back to `0` on quitting to the map. Log:
-  `data/scratch/magstrip-2048-mode-check/watch-final.log`. **Seen once, on one boot**: a second load
+  `watch-final.log`. **Seen once, on one boot**: a second load
   of an event was not reached (the menu walk is touch-fragile). It agrees with the static CRC reading
   of the 577 `SP.xml`/`MP.xml` names, which is why the confidence is 80 and not 90.
 - **Not seen.** A Vita3K frame of the `.POB` sparks on a strip: Queens Mall's strip (50 surface-3

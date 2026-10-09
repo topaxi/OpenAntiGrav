@@ -236,7 +236,7 @@ pub(super) fn campaign_page(
     // 01/08` (`docs/ui/campaign-screens.md`'s "measured on RPCS3" section).
     // Defaults to `Fury` - the measured default `CampaignSelection::new`
     // itself starts on and the campaign every RPCS3 reference frame this
-    // pass found is actually of (`data/scratch/lane-hd/rpcs3-grid0-3-2`,
+    // pass found is actually of (a scratch directory, not kept,
     // `lane-hd-sel/rpcs3-campaign-selection`) - so a `--menu-page`
     // `grid-select`/`cell-select` still is directly comparable to those
     // frames rather than to a base-campaign state nothing on disk shows.

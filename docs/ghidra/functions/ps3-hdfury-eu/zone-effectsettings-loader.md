@@ -3790,8 +3790,7 @@ the seven that run before the fifteen-stage loop take **non-stage** destinations
 and the last two of those are the answer:
 
 ```
-3d5bfc  lwz  r24, -23172(r2)   ; r24 = 0x00c7dfb0   (the alternate entry path
-                               ;  taken from the test at 0x003d0c04)
+3d5bfc  lwz  r24, -23172(r2)   ; r24 = 0x00c7dfb0   (the alternate entry path; taken from the test at 0x003d0c04)
 3d4fa4  addi r26, r24, 13504   ; r26 = 0x00c81470
 3d5094  bl   0x005d4418        ; f32 helper; r4 = r26, r5 = "Texture U scale"
 3d5090  addi r26, r26, 4

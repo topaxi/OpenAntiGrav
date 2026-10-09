@@ -629,7 +629,7 @@ should look like, so per `CLAUDE.md`'s rule against drawing one:
 `load::weapon_models::LEACH_BALL_DRAWN` stays `false`. The model still
 loads and reports what it found (see that constant's own doc comment for
 the load report line); nothing is drawn. Screenshots and the `--draws`
-capture above are `data/scratch/` (gitignored), not committed.
+capture above are a scratch directory, not kept (gitignored), not committed.
 
 **Superseded the same day (third pass): the ball draws.** The grey sphere had
 two causes, neither of them the black vertex colour, which no program here
@@ -671,7 +671,7 @@ non-null. The blast loads, from TOC `0x008ab18c..`: `HD_bomb_sphere` (`+0x2e4`),
 `HD_bomb_sphere_white` (`+0x2e8`), `hd_bomb_sphere_bloomring` (`+0x2ec`) and
 `hd_bomb_shockwaves` **eight times** (`+0x2f0..+0x30c`). `HD_Mine_halo` is the
 Mine's. None of the four carries a moving Anim Transform key (one constant
-scale and one constant translation each, `data/scratch/hd-weapon-blasts/keys.txt`
+scale and one constant translation each, `keys.txt`
 via `crates/render/examples/hd_weapon_anim_keys.rs`), so every size and fade is
 the blast's own code, not the file's.
 
@@ -756,7 +756,7 @@ set-time calls over random cameras, positions and orientations. The
 arithmetic above reproduces its matrices to 4e-3 on rows of about ten units
 (the executable's own polynomial `sin`/`cos`) and its clocks, windows and
 `ColourAnim` to 2e-4, for every tick of the run. Scratch:
-`data/scratch/hd-weapon-blasts/` (`emu.py`, `runblast.py`, `spec.py`; not
+a scratch directory, not kept (`emu.py`, `runblast.py`, `spec.py`; not
 committed - the oracle numbers that matter are in `bomb_blast::hd::tests`).
 
 **Materials.** `hd_bombfire_glow` (`@0x1d90`, fireball and core, cut-out),
@@ -799,7 +799,7 @@ programs are unread.
 
 The first RPCS3 reference for the detonation (recipe and the weapon-state table:
 [rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md), "Giving the player a
-weapon"; frames `data/scratch/hd-weapon-ref/pair_bomb_stationary.png`, ours on the
+weapon"; frames `pair_bomb_stationary.png`, ours on the
 right). Held state **9 is the Bomb**.
 
 **What the original shows that this build does not.** The laid Bomb carries a pink ring and a
@@ -866,7 +866,7 @@ standing player's bomb laid at the craft, `--size 1280x720`, our eye pinned (`--
 `ExternalCameraFar` load line, checked against the original's pre-lay frame, `pre_cmp3.png`), the
 rival put on the bomb to trip it (`--force-bomb-trip`; the sim's owner exclusion was a permanent one when these were taken and is a 0.5 s window since 2026-10-07). Frames at
 age 0.2, 0.5, 0.8, 1.1, 1.4, 1.7, 2.0, 2.6 s, original left:
-`data/scratch/hd-bomb-match/frames/pairA.png`, `pairB.png`.
+`pairA.png`, `pairB.png`.
 
 Read as a player would:
 
@@ -936,7 +936,7 @@ the bomb body now draws a scale-1 ring as well; test
 the offset is dropped.
 
 **Read as a player would** (Talon's Junction, `feisar_c1`, far camera pinned 40 units behind the bomb,
-`data/scratch/hd-bomb-halo/frames/sheet3.png`, `sheet4.png`; the owner window was widened locally to
+`sheet3.png`, `sheet4.png`; the owner window was widened locally to
 keep the bomb past 0.5 s, and restored): a pink Fresnel shell grows from about 2 to 19 units across
 every 0.5 s and resets, with a smaller steady ring inside it (the body's chunk), as the film shows
 (`hd-weapon-ref/e12/ring.png`). **Not reproduced:** the film's white disc at the reset.
@@ -1006,7 +1006,7 @@ per claim; no name is applied (nothing here is above 70 that was not already nam
   reads 1, 2, 3, 4 at the bounces and 5 as it ends, against the Missile's `MAX_BOUNCES = 5`; confidence 70); state 2 is a different projectile with a large yellow-white
   burst that does not use this pool (unresolved, not the Quake's wave in the film either way);
   state 10 does nothing at the grid.
-- **The picture, original only.** `m5` (known firer, rival 12 units ahead, `data/scratch/hd-weapon-fx/runs/m5`,
+- **The picture, original only.** `m5` (known firer, rival 12 units ahead, a scratch directory, not kept,
   contact sheet `burst.png`, 30 fps frames `f/h_*.png`): the count rose at host 4.47 s, which is video
   9.6 s (offset +5.1 s), and the frame's mean luma goes 135 (9.60 s) to 218 (9.67), 246 (9.80), 241
   (9.93), 209 (10.00), 162 (10.13), 150 (10.20). So the white-out starts within 0.1 s of the rise, is
@@ -1049,7 +1049,7 @@ executable: not checkable here (no PS4 emulator).
 - **Node clock.** `write_node_anims(age)` scales `sphere`/`bloom` 1x to 18x (model radius 6.44, so 9.3x = 60 units at 0.1 s).
 - **Chosen, not measured:** the orientation (the struck craft's own; `Start`'s source matrix unresolved), the
   per-viewport visibility gate (not reproduced), alphas held to 1, the 16 rotated entries at `+0x190` not drawn.
-- **Matched pair** (Talon's Junction, `--force-missile-hit`, `data/scratch/hd-missile-blast/frames/pair_d.png`, film `m5`
+- **Matched pair** (Talon's Junction, `--force-missile-hit`, `pair_d.png`, film `m5`
   `h_011..h_028`): ours draws the cream-yellow core, orange ray arcs and ring discs, shape and colour like the film, but mean luma
   is 136/175/200/192/178 at ages 0.03/0.1/0.2/0.37/0.5 s against the film's 217/224/242/208/182. **Not reproduced:** the film's
   white to the frame edge that also washes the HUD and the player's craft, jumping 139 to 217 in one 30 fps frame. The model does not
@@ -1070,7 +1070,7 @@ all three agreeing), 70 for "no flash object" (one static callee check, below).
 units behind the nearest rival (`rpcs3-mem-poll.py`'s recipe), waits for the pool count at `manager + 0x10c` to rise,
 sleeps a delay, pauses, takes the screenshot, then dumps the frame the RSX has queued (`rpcs3_draw_hook.py`) and/or the
 render targets. `scripts/rsx-draw-list.py` prints a dumped frame's draws with the state each was issued under.
-Raw captures `data/scratch/hd-whiteout/{run1,run2,run3}` (gitignored). Three boots: `run1` draws and screenshots at
+Raw captures a scratch directory, not kept (gitignored). Three boots: `run1` draws and screenshots at
 pool ages 0.083 and 0.517 s, `run2` screenshots at 0.062/0.216/0.367/0.502, `run3` targets at 0.033/0.267/0.500.
 
 **1. Nothing is drawn after the HUD, and the HUD's programs do not change.** In all three dumped frames (`base`,
@@ -1082,7 +1082,7 @@ begin with immediate vertex data. No draw on any other target follows and the sa
 the HUD with or without an explosion. (Subchannels other than 0 hold 23-24 blits per frame; they are the bloom
 chain's resolves or copies, not read further.) So the HUD is not washed by a later pass. It *looks* washed because most of it is
 translucent: the opaque hexes (lap, position, the damage ring) keep their colours over the white in every
-screenshot, while the lap-time panel and the speed readout fade (`data/scratch/hd-whiteout/run2/hit0.png`,
+screenshot, while the lap-time panel and the speed readout fade (`hit0.png`,
 `run3/hit1.png`). The film's "HUD washed" is translucency over white, **confidence 85**.
 
 **2. The wash is already in the scene target, the bloom adds to it.** `run3` read the scene target `00f50000`
@@ -1091,7 +1091,7 @@ through the GDB stub, see `rpcs3-capture.md`) at the same pause as the screensho
 209, final 232; pixels at or above 250 are **22.7 % of the scene and 45.8 % of the final**. At 0.50 s: 96 to 113 and
 5.0 % to 8.3 %. At 0.033 s: 88 to 92 (no wash yet) and at rest 89 to 91. The explosion in the scene target is
 yellow-orange ring discs and long light streaks over lit walls, no flat white
-(`data/scratch/hd-whiteout/sheet5.png`, left final, right scene). The composite and bloom chain (`00741f41` down to
+(`sheet5.png`, left final, right scene). The composite and bloom chain (`00741f41` down to
 320x180 and 160x90, blurs `00741fc1`/`00741881`/`00741c01`, composite `007434c1` onto `00cc0000`) is the same set of
 programs with or without an explosion: the seven fragment programs (`741f40`, `741fc0`, `741880`, `741c00`, `7434c0`, and
 the HUD's `744140`/`744180`) disassemble to the same text with the same patched constants in `base`, `hit0` and `hit1`, so
@@ -1149,7 +1149,7 @@ emulator in the toolchain, so **not checkable**. Nothing renamed; no `names.tsv`
 ### The Bomb's core, read on the original (`hd-whiteout`, `bomb1`: one boot, one complete frame)
 
 `scripts/rpcs3-hd-whiteout.py --bomb` (state 9, the player standing, the bomb trips on its owner) dumped one
-complete frame with the fireball live (`data/scratch/hd-whiteout/bomb1/bomb0*`). **The original does draw the core
+complete frame with the fireball live. **The original does draw the core
 while the eye is inside it.** Four draws sit on the scene target with a large world matrix:
 
 | Draw | Scale | State | Reading |
@@ -1210,7 +1210,7 @@ programs add it to the pre-albedo diffuse. This engine's `SpuLights` list and
 
 **The Rocket's light is `0x00123de8`, not the one at `0x001246cc`.** Read live
 on RPCS3 (Talon's Junction, one rocket volley, `scripts` driver
-`data/scratch/hd-weapon-lights/lightdump.py`, six snapshots over the first
+a throwaway script, not kept, six snapshots over the first
 1.0 s of flight): the visible buffer held the player's engine light
 `(4, 10, 40)` and **three** records `(7, 5, 1)`, `D = 50`, `w = 1` that moved
 with the three rockets (`x` from -116 to +256 across the snapshots), and the
@@ -1230,7 +1230,7 @@ calls): `x = 1` to 0.1 s, `1 - (t - 0.1) / 0.7` to 0.8 s, `((t - 0.8) / 0.7)^0.2
 Closed forms fitted to the emulated samples (four digits), breakpoints read
 from them: confidence 75.
 
-**Matched pairs** (Talon's Junction, `data/scratch/hd-weapon-lights/frames/`,
+**Matched pairs** (Talon's Junction, a scratch directory, not kept,
 `sheet_missile.png`, `sheet_rocket.png`, `sheet_bomb.png`, light off left, on
 right):
 
@@ -1280,7 +1280,7 @@ checked, differs.
 
 ## 2026-10-08 (`hd-blast-fill`): the three blast-look gaps re-measured
 
-Method and every number: `data/scratch/hd-blast-fill/report.md` (gitignored). Ours was read with a temporary env-gated probe
+Method and every number: `report.md` (gitignored). Ours was read with a temporary env-gated probe
 (`OAG_BLAST_PROBE`: eye from the inverse of the view-projection, node scales from `NodeAnims::sample`; reverted, not committed), the
 original with `scripts/rpcs3-hd-whiteout.py` and `scripts/rpcs3-hd-lightpoll.py` (new: a `/proc/PID/mem` poller of the SPU light list). No `.rs` changed.
 

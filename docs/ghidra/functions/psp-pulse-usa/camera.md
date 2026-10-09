@@ -1450,7 +1450,7 @@ by `data/traces/pad0-boost.csv`, whose eye sits 11.64 units from the craft - thi
 own capture section above already said so while the project's default stayed `far`.
 
 **Side by side, native 480x272, original (left) against ours (right), three ticks**
-(`data/scratch/pulse-camera/side-by-side.png`; GO+60/90/120 against our ticks
+(`side-by-side.png`; GO+60/90/120 against our ticks
 343/373/403, which are matched by the standing-start offset and not by tick count -
 our standing start is about ten ticks slower): with the default changed the craft's
 span on screen agrees at all three, where before it was about 1.4 times narrower
@@ -1553,10 +1553,10 @@ function is a callee of the view and neither is renamed here.
 2 is the close rear view and 3 is the front view. Neither was ever above the craft.
 
 **Measured**: for every frame in mode 2 and 3 the rotation of the written matrix equalled the
-prediction exactly and the eye to `5.7e-5` units (`data/scratch/pulse-spectator-cam/analyse2.py`,
+prediction exactly and the eye to `5.7e-5` units (a throwaway script, not kept,
 407 frames, 199 in mode 2 and 208 in mode 3), with the craft matrices read live, including banked and
 pitched ones (`up.y` down to 0.86). `oag_render::camera::craft_view` carries the two most banked
-frames as tests. Frames: `data/scratch/pulse-spectator-cam/cap1/m.png` (mode 2 on top, mode 3
+frames as tests. Frames: `m.png` (mode 2 on top, mode 3
 below).
 
 ### What `cam+0x1e8` is, and what the director cuts by

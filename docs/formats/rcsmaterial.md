@@ -2302,7 +2302,7 @@ mode 2 to the alpha-tested list, where before **every** Omega and 2048 draw was 
 - **Chosen, not measured:** the blend equation (alpha-over; Omega's header carries no factor pair - the additive
   family is now HD's own pair by name, see the next section) and the alpha-test reference `0.5` (HD's).
 - **Looks:** Tech De Ra's glass tubes now show the crowd through them and its road panels take their see-through
-  layer; 2048's cockpit glass and billboard signs draw. Frames `data/scratch/transparent-floors/shots/{before,after}_{tdr,2048}_300.png`.
+  layer; 2048's cockpit glass and billboard signs draw.
 - **Not done:** HD is untouched (its own factor path); the `etched_glass_tech` sheen and `Transparency` param on
   Omega are not read; GCN pixel programs were not read for an alpha source, so a blended draw uses the first texture's alpha.
 
@@ -2515,8 +2515,7 @@ This is the `Pick` collision of the glass-floor case (a), not a UV, decode or co
 `Texel::Mixed`, so the unit trace cannot name the picture either; the declared-sampler filter does.
 
 **Fix.** `skin::lightmapped_albedo`: the first non-lookup entry **among those the resolved variant declares**, the old
-rule where no variant resolves. Before/after at the capture's own camera (`hd-frame-compare`'s comparison setting):
-`data/scratch/hd-vineta-floor/before_03.png` / `after_03.png` beside `pair/03.png`.
+rule where no variant resolves. Before/after at the capture's own camera (`hd-frame-compare`'s comparison setting).
 Pinned by `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (fails with the filter removed).
 
 **Disc-wide census** (`crates/render/examples/hd_lightmap_albedo_census.rs`, all 28 circuit models, 8,129 lightmapped
@@ -2588,7 +2587,7 @@ circuit model before/after: 718,576 -> 860,624 vertices, 147 -> 194 role words, 
 Modesto Heights 52k -> 62k, Talon's Junction 29k -> 61k, Tech De Ra, Vineta K, Anulpha Pass, Sebenco Climb, Ubermall,
 Chenghou, Sol 2 and the main track among them). Checked against a reference where one exists: `talons-matched/03`
 (the only pose of 00/01/03 that moves, 9,622 px of 1.7 M) gains **brighter cyan light bars on the upper-left wall,
-matching the reference's cyan bars** (`data/scratch/hd-vineta-ceiling/tal_crop03.png`). No second-circuit reference
+matching the reference's cyan bars**. No second-circuit reference
 frame was taken beyond Talon's Junction.
 
 **Still open on this frame (not this lane):** the sky behind the glass (blue/purple, a volcano drawn saturated red)
@@ -2602,8 +2601,7 @@ and does not run on either.
 
 **Reports** (maintainer play): Sebenco Climb's rails and surfaces violet (tick 720, world `[-337.1, 16.7, -14.9]`; tick
 4380, `[-429.9, 21.7, 369.4]`), and Vineta K's tunnel glass showing a saturated red shape. **References:** RPCS3
-`place` captures, `data/scratch/hd-sebenco/ref/` (forward, both poses), `ref2/` (forward sky poses), `ref3/`
-(reversed); ours at the kept pose beside each (`pair_00.png`, `pair_01.png`, `rvpair_0.png`, `rvpair_1.png`,
+`place` captures (forward, both poses; forward sky poses; reversed); ours at the kept pose beside each (`pair_00.png`, `pair_01.png`, `rvpair_0.png`, `rvpair_1.png`,
 `vk_rab.png`; untracked).
 
 Three materials, one cause class: **a lightmapped or opaque material's picture was bound by file order, and the entry
@@ -2628,8 +2626,7 @@ land colour (`glass_2nduv_reflect_glow` on 02/03/04/Sol 2/Vineta K, `2rocksandbl
 `mt_diffuse_glow_specular_01` on Anulpha, `sebenco_ice`); the opaque fallback adds 68 more over 9 families (window glass,
 `nr_twinblend`, `nr_facinglcdstrips`). Blended materials are deliberately excluded from the fallback (glass has its own
 rules, not measured here). **Reference check:** Sol 2 pose 00 (the only pose of Sol 2 00/01 and Talon's 00/01 that moves,
-12k px) shows the right-hand building's window rows gaining colour with no visible regression
-(`data/scratch/hd-sebenco/cmp/sol2_00_rab.png`); Talon's 00/01 are bit-identical. The other 66 slots have no reference.
+12k px) shows the right-hand building's window rows gaining colour with no visible regression; Talon's 00/01 are bit-identical. The other 66 slots have no reference.
 Pins: `crates/render/tests/hd_lightmapped_albedo_ground_truth.rs` (three new tests, each fails with its rule removed),
 `a_unit_sampled_one_lane_wide_is_not_a_colour`.
 
@@ -2641,8 +2638,7 @@ re-read); 60 for the 127 other slots (rule justified by the program text, not by
 
 **Reports:** Vineta K's sea behind the tunnel glass is blue where the RPCS3 capture is teal, and Sebenco Climb's pool is
 snow-white where it has cyan streaks. **References:** `data/reference/hd-capture/vineta-floor/03.png` (camera
-`-861.568,-145.613,178.961`), `data/scratch/hd-sebenco/ref/01.png`; before/after frames in `data/scratch/hd-water/`
-(untracked).
+`-861.568,-145.613,178.961`); before/after frames were untracked and are not kept.
 
 ### Census (measured, confidence 95)
 
@@ -2742,7 +2738,7 @@ the three colours in three consecutive glow-table entries, binds snow first and 
 
 **Chosen, not measured:** `N'` is the vertex normal, so `F` is smooth where the original's streaks; the three colours are
 display values decoded with `pow(2.2)` to the domain the textures are sampled in; the program's own specular is left to
-the generic one. **Result** (`data/scratch/hd-water/sb_obl_before.png` / `sb_obl_ice2.png`, an oblique camera at the pond;
+the generic one. **Result** (an oblique camera at the pond;
 `OAG_WATER_OFF=1` restores the before): the pool goes from a snow-white sheet to an authored pond - deep-blue blotches in
 the middle (the mask's dark region), pale icy blue around, white beyond. The reference (`ref/01.png`) is paler
 and brighter - pool pixels `(155,244,249)` with 63 % cyan and 39 % white, against ours `(19,95,130)` in the pond - and
@@ -2770,8 +2766,7 @@ original does not show; purple textures at the start line. **Method:** one RPCS3
 (`place --pose=-839.8,-146.6,215.0`, kept `-840.6,-146.7,214.2`, three boots agree to 0.1) and one at the start slot
 (`178.0,36.9,-116.75`), each with the RSX command stream, every fragment program, the index and vertex ranges and the
 first bytes of every bound texture read out of guest memory while the emulator was paused
-([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Capturing one frame's draws"). Frames, dumps and analysis:
-`data/scratch/vineta-k-fidelity/` (untracked; the report there lists each file). 285 draws at pose A (ours: 463).
+([rpcs3-capture.md](../reverse-engineering/rpcs3-capture.md), "Capturing one frame's draws"). Dumps and analysis were untracked and are not kept. 285 draws at pose A (ours: 463).
 
 ### 1. Purple start line = the emissive term was never bound (fixed; confidence 85)
 
@@ -2817,8 +2812,7 @@ in RAM (`ps3-fp-live.py`) is the one this page decoded from the disc:
   `slots::ICE` with `WATER_FLAG` (glow-entry rate 2.0) selects, in `shade.wesl`, picture = vertex colour and
   light = ambient + sun diffuse, with no vertex-light or prelit term. Pinned by `hd_light_bar_ground_truth`.
 - **`paraboloidReflectionTex` is bound, at unit 1, and is a runtime render target.** `0xc4065380` in VRAM, 512x256 linear
-  `A8R8G8B8`, clamp (`0x60730303`). With RPCS3's `Write Color Buffers` on its contents read back
-  (`data/scratch/vineta-k-fidelity/probe11.png`): **a dual paraboloid of the environment - two discs, the sky with its clouds,
+  `A8R8G8B8`, clamp (`0x60730303`). With RPCS3's `Write Color Buffers` on its contents read back: **a dual paraboloid of the environment - two discs, the sky with its clouds,
   mountain horizon and sun glow above the middle row, a teal sea gradient below it.** The row split at `v = 0.5` is the
   program's own coordinate law (`v = 0.5 - 0.5 d.y`). Seen from below, the sheet reads the **lower** half: mean
   `(0.15, 0.36, 0.41)` (upper half `(0.43, 0.59, 0.57)`, whole texture `(0.31, 0.49, 0.51)`). Without `Write Color Buffers` the same address reads as stale noise, which is what an earlier
@@ -2880,7 +2874,7 @@ node-placed chunks the PVS allows with no frustum test, against the original's 5
 the main view, in both the node and the world-space pass; the load report counts them and says the target is not
 drawn. Pinned by `hd_behind_glass_ground_truth` (census: 210 chunks in each direction, no other file; build: none of
 them reaches a draw, the capture's main-view chunks do). At the tunnel pose the dark band and the mid-height girder
-are gone and the tunnel reads like the reference (`data/scratch/hd-glass-opus/trioA.png`: reference, before,
+are gone and the tunnel reads like the reference (reference, before,
 after); the start slot is unchanged (`trioB.png`). **Not drawn until later the same day: the behind-the-glass
 target itself** (now drawn, see "The behind-the-glass target is drawn" below), so the panes
 now multiply the sky drawn behind them (cyan) where the original shows its target (sea surface and dunes under the
@@ -2890,7 +2884,7 @@ main view's tangent, the `0x20` alternate fog inside it (33 of the 35 alternate-
 sampling it under that projection. **What this costs, measured:** pane colour moves further from the reference at the matched camera
 (right ceiling panes: reference `(17,86,84)`, before `(75,130,149)`, after `(139,213,164)`), because the panes now
 multiply the sky instead of the scenery ours used to draw behind them; both are wrong, and only the target fixes it.
-A lap sweep (`data/scratch/hd-glass-opus/sweep/`, 8 autopilot frames each direction, both builds, identical poses)
+A lap sweep (8 autopilot frames each direction, both builds, identical poses)
 changes pixels only inside glass panes; no opaque scenery outside glass moves. Draws at the matched camera: 540
 before, 489 after (the original: 285). The rest of the gap is chiefly node-placed chunks under an **animated**
 anchor (`DrawCall::moving`), which this renderer cannot frustum-test without their current matrix; static
@@ -2947,7 +2941,7 @@ half of the target. The models reuse the main view's material decode and keep on
 `fog(C + grab * W)`, with the grab read at the point above; the two blended passes and `slots::REFRACT_GRAB` are
 gone. `OAG_DUMP_BEHIND_GLASS=<png>` writes the target after a `--screenshot`.
 
-**Judged against the capture** (`data/scratch/hd-behind-glass/shots/`, the capture's own camera at pose A,
+**Judged against the capture** (the capture's own camera at pose A,
 `--camera-pose` from draw 90's `c[256]`, fov 60):
 
 - The target (`target_pair.png`, capture above, ours below): the arch struts and their boxes, the strut column on the
@@ -3003,7 +2997,7 @@ draws a separate behind-glass pass is not checkable (no PS4 capture path).
 
 ## The glass floor's gamma, curve and sun weight (2026-10-07, `talons-glass`)
 
-**Report:** on Talon's Junction the glass floor's rainbow reads far stronger than the original's. **Method:** RPCS3 teleport (`scripts/rpcs3-drive.py place`) to `327,-42,-158` and `76.9,-46,148`, a draw hook that disassembles every draw's fragment program and keeps the one whose code is block #7 (`etched_glass_tech`, `fp 0x7777c0` in the first boot), its vertex constants, texture registers and, for one blended glass chunk, its vertices. Raw captures: `data/scratch/talons-glass/capA`, `capC`.
+**Report:** on Talon's Junction the glass floor's rainbow reads far stronger than the original's. **Method:** RPCS3 teleport (`scripts/rpcs3-drive.py place`) to `327,-42,-158` and `76.9,-46,148`, a draw hook that disassembles every draw's fragment program and keeps the one whose code is block #7 (`etched_glass_tech`, `fp 0x7777c0` in the first boot), its vertex constants, texture registers and, for one blended glass chunk, its vertices.
 
 **Falsifier written first:** if the original's glass draw is block #7 with a 0..1 sun weight, our floor-region chroma stays above the reference after the fix. It is block #7 (constants below), so the arithmetic is the original's and the gap had to be in inputs. Findings:
 

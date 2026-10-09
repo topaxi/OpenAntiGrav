@@ -117,7 +117,7 @@ the animation's `+0x40` (clock), `+0x58` (`AnimEnd`), `+0x84` (pause), the camer
 
 Unexplained, and recorded rather than guessed at: a fresh load from the menu walk on `03_Track`
 and Metropia reached the intro's first reachable call already in substate 2 with the counter at
-zero (`RaceMode_UpdateIntro` trace, `data/scratch/pulse-flyby/it-r`); RESTART RACE on both
+zero (`RaceMode_UpdateIntro` trace, a scratch directory, not kept); RESTART RACE on both
 played the flyby. `16_Track` fresh played it.
 
 ## The track-description panel: which strings, and how it fades
@@ -165,7 +165,7 @@ parent; eight `Image`, two `Text` and the `Viewport`.
 | the viewport's width | `deltaWidth * fraction`: the title's ink reached its full 333 px width at fraction `0.71` (`470 * 0.71 = 333`), and while leaving the clip edge followed `470 * fraction` to within a glyph (`WH` at `0.57`, `JUNCTION` at `0.48`). The screenshot gives only the cut glyph's edge, so this is read to about 20 px, not fitted |
 | text alpha | equals the images' (`+0x64`), **not multiplied by the viewport's**: the paragraph is solid white while the viewport is a third open |
 
-Frames: `data/scratch/pulse-flyby-panel/{fade-a,w-c}` (scratch, not committed). The panel is gone at
+Frames: a scratch directory, not kept (scratch, not committed). The panel is gone at
 call 146, 44 calls after substate 2 first read, and still `0.34` when substate 3 begins at call 130
 (substate 2's `0.5` s), which is when the HUD arrives: the two overlap for the panel's last 16 calls.
 

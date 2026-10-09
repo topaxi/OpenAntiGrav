@@ -1431,8 +1431,7 @@ rejoining at `0x002a0b48`, the only thing between it and `0x002a0bb8`
 ```
 002a0b54: lwz  r9,0x7a60(craft)      ; craft+0x7a60
 002a0b58: cmpwi r9,-1 ; beq -> r10 = 1
-002a0b60: lwz  r0,0x0(r25)           ; *0x008c1430, the view index (0/1 halve the
-                                     ;  viewport at 0x002a0ad8-0x002a0b2c; < 0 skips that)
+002a0b60: lwz  r0,0x0(r25)           ; *0x008c1430, the view index (0/1 halve the; viewport at 0x002a0ad8-0x002a0b2c; < 0 skips that)
 002a0b68: blt r0 < 0 -> r10 = 0
 002a0b70-80: r10 = (r9 != r0)        ; xor / abs / sign-bit idiom
 002a0b84-0ba4, 002a11b0-11d4, 002a14d0-14fc:

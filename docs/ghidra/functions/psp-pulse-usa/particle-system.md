@@ -978,7 +978,7 @@ what keeps the tint up. Kind 7 authors three keys, not two - white, yellow at
 `t = 0.1`, red to nothing - which the table above cannot show in one row.
 
 **Measured.** The PPSSPP capture of a craft-hit Rocket 51 units from the eye
-is `data/scratch/fx-brightness/ppsspp-rocket/scenarioB`, gitignored. Kind 0
+is a scratch directory, not kept, gitignored. Kind 0
 predicts:
 
 - nothing added to blue;
@@ -1440,7 +1440,7 @@ centroids, which sit half-way along).
 ## A sprite template's own sprite, and what the explosion's first five frames are (2026-10-01, pulse-fx-3)
 
 **The broad white band the original draws for five frames over the ship explosion is the `Glow` template's quad, not the shockwave
-ring.** The GE dump of the running original (`data/scratch/pulse-fx-recheck/geA`, frame ~122 after the call) has, after the ring's three
+ring.** The GE dump of the running original (a scratch directory, not kept, frame ~122 after the call) has, after the ring's three
 strips, one view-space additive quad (`ci 6898`): half-extents `45 x 30` (the template's size `30` at aspect `1.5`), depth `31.5`,
 colour `fff3d9` (the template's age-1 colour), bound to a **32x32, 8 bpp** texture whose palette is a grey ramp with alpha equal to its
 colour (`TEXSIZE 0x505`, `CLUT8`). Centred on the wreck it covers about `670 x 450` px; the floor's depth test cuts its lower edge at a
@@ -1454,10 +1454,10 @@ The explosion's `Glow` hangs on `SHIP_DEBRIS` (128x64, 4 bpp, a grey atlas whose
 32x32, 3-level glow with a white centre. The Missile's `glow` (64x64 against the parent's 32x32), the Mine's `BANG` (32x32 against
 64x64), the Plasma's `glow2`, the Quake's `shazzam`, the Shuriken's, the weapon absorb's and the fx-node's `Glow` all differ the
 same way and now draw their own. Confidence **90** (the decompile, the GE dump's texture size and palette and the file agree).
-Picture, native 480x272, same wreck and circuit (`data/scratch/pulse-fx-3/pair_glow.png`, original left, ours right, frames
+Picture, native 480x272, same wreck and circuit (`pair_glow.png`, original left, ours right, frames
 122-125 after the call): the wash, its extent, and the hard lower edge now match; mean blue added over the frame (frame 124 minus 120/161) `23.5` on the original
 against `6.4` before and `28.1` after (red `136`/`134`, green `127`/`121`; `diff_blue.png`); a contact sheet of all 28 template sprites reads as clean
-glows, rings, star bursts and bangs (`data/scratch/pulse-fx-3/tpl_sheet.png`, none sheared).
+glows, rings, star bursts and bangs (`tpl_sheet.png`, none sheared).
 
 **The ring leads the particles by about 2.7 frames, and the call's own frame is read.** `Ship_SpawnExplosionBig` (`0x088407b0`) is called at
 frame `119.09` (`--hits 088407b0`), `ShipShockwave_Update` first runs at `119.16`, and the `Glow` template's first draw (age 0) is at
@@ -1573,7 +1573,7 @@ out along the hull's path".
 **Measured against the PSP** (Talon's Junction, Assegai, parked, fire at tick 500,
 the same update offsets as `pulse-repulser-2`'s `psp-live2-*.png`): the ring is wide
 and beaded at update 10, compact at 20 and 30, a white puff at 40, and gone at 47, on
-both sides (`data/scratch/pulse-psys-ring/shots/final-cmp.png`). Before this change,
+both sides. Before this change,
 ours started 13.6 units out and collapsed by update 20.
 
 **`Repulser_AdvanceWave` rescales its wave's extent.** Confidence **85**, read in the
@@ -1619,7 +1619,7 @@ Read for `WO_REPULSER`, the only shape-8 emitter on the PSP disc (render mode 5,
 aspect `0.05`, flags `0x06100099`, extent `50`, two particles an emission, life 24 ticks).
 Every law below was read in the listing and then measured on PPSSPP 1.20.4 (software
 renderer, Talon's Junction Time Trial, a Repulser fired through the fire word): memory
-sampled at `Repulser_Update` (`data/scratch/pulse-psys-shape8/live1.jsonl`) and three
+sampled at `Repulser_Update` and three
 GE frame dumps (`ge/`, `ge-s1/`, `ge-s2/`). Played by `oag_fx::psys` since this
 change.
 
@@ -1766,10 +1766,10 @@ hypothesis above from 65 to **80**: two frames, the boundary not located, and th
 is PPSSPP's rasteriser, not a PSP. Played by `oag_fx::psys::guard::GuardBand` on `WO_REPULSER`'s template
 quads alone, on Pulse's PSP source (the screen flash's predicate). An A/B with the guard on and off showed it
 also moves the Quake's start frame (AE 0.18 of the frame at tick 303), and there the PSP's
-first frame is a white wash across the upper screen (`data/scratch/fx-brightness/ppsspp-quake-montage.png`),
+first frame is a white wash across the upper screen,
 so the guard stays off it until the Quake's own quad is measured; rockets, plasma and the Repulser
 outside its wave start were identical (AE 0). The law is presumably every primitive's. Our frame at the wave start is
-now the blue tint (`data/scratch/weapon-visuals/strip_ours_rep_after.png` against
+now the blue tint (`strip_ours_rep_after.png` against
 `strip_psp_orig.png`). The second wave's `shazzam` absent from later submissions stays
 unexplained. The class-6 root's white blob was already replaced by the bars (2026-10-04);
 no `crates/pob` change was needed, both were decoded. Cross-title: **checked, differs by scope** - HD and 2048 load a `WO_REPULSER`-named effect

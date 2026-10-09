@@ -1193,11 +1193,11 @@ wired: the Omega lane owns that reader.
 **The unlock box and points figures were corrected on the same frames**, see the
 paragraphs under the screen's widget table above.
 
-Evidence: RPCS3 frames `data/scratch/hd-flyer/rpcs3-raw/grid-hd-t0..t7-settled`
+Evidence: RPCS3 frames a scratch directory, not kept
 and `grid-fury-t0/t1-settled` (Xvfb `:91`, silent config, untrimmed, 1600 by
-1200); ours `data/scratch/hd-fury-cards/final/` and side by side
-`data/scratch/hd-fury-cards/exp/cmp-m-*.png`; the joint fit
-`data/scratch/hd-fury-cards/fit/joint_m2.py`. Pinned on the disc by
+1200); ours a scratch directory, not kept and side by side
+`cmp-m-*.png`; the joint fit
+a throwaway script, not kept. Pinned on the disc by
 `crates/game/tests/hd_flyer_ground_truth.rs` (all sixteen cards decode, each
 authors its camera, the widget's values); the flattening and the pose's left
 edge by `oag_game::flyer`'s unit tests. The pose, the window and the moment
@@ -1393,7 +1393,7 @@ to `hex=[350, 332, 128, 64]`, drawn at the identical rect - exactly
 `Outline_3_1`'s own position and size, since `Selector`'s widget authors no
 width/height of its own either and so takes the hex's exact size, making
 the centring term zero. Confidence 95: reproduced directly (before/after
-capture, `data/scratch/lane-hd/before-cell-select.png` vs
+capture, `before-cell-select.png` vs
 `after-cell-select.png`, this session's own files, not committed - game
 content) and pinned by `hex_rect_prefers_outline_over_an_oversized_medal_atlas`
 (`crates/ui-screens/src/campaign/tests.rs`), a synthetic fixture asserting
@@ -1495,7 +1495,7 @@ for the disc-backed pin.
 **Which rotation frame is "the" icon**: `u=0` matches `Target0 Medal`'s own
 choice, and two independent RPCS3 captures agree it does not visibly
 animate over the timescale a capture script's own button presses span -
-`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png` and `01-down.png`
+`02-square.png` and `01-down.png`
 (a different moment in the same drive script, `grid8_3_2`'s own `TARGET
 200 (NOVICE)` row in both) show pixel-indistinguishable gold/silver/bronze
 icons once cropped to the same window. Most of that directory's other
@@ -1564,7 +1564,7 @@ screen parser at all) - wrong, caught by checking directly:
 these are not 3-D trophies. **What they are instead is inferred, not
 independently confirmed by the pixels themselves**: every `.xml` this
 project holds an extracted copy of was greped for `Hexmedal`
-(`data/scratch/lane-hd-sel/*.xml` and `data/scratch/hd-rewards/*.xml` -
+(`*.xml` and `*.xml` -
 not a full disc-wide sweep, only the front-end screens this project has
 already pulled a copy of), and the *only* widgets that source it anywhere
 on either archive's `Cell Selection` are `Medal_{x}_{y}` (both archives, no
@@ -1583,7 +1583,7 @@ off `DATA06`, not `DATA02` - the same open question
 
 **A second screen checked and ruled clean - `EndRace Results`,
 2026-09-27**: `Target0/1/2 Image` on `EndRace Results`
-(`data/scratch/hd-rewards/endrace-0{2..6}.xml`, every archive copy this
+(`endrace-0{2..6}.xml`, every archive copy this
 project has extracted) **does** author a real crop of `Hexmedal_HD.mip` -
 `width="60" height="60" U="0"`, `V="0"/"61"/"122"` for `Target0`/`1`/`2`,
 matching `hd_medal_frame`'s own numbers exactly (a second independent
@@ -1609,7 +1609,7 @@ answers `None`), the same absence the sibling `Target0`/`1`/`2` *text*
 widgets are already explicitly given. Net effect: the whole target row
 draws nothing on `Results`, in any session, not a wrong render - an honest
 absence (`--menu-page endrace-results`, checked directly,
-`data/scratch/drive-2026-09-27/hd-medals/endrace-results.png`), not a
+`endrace-results.png`), not a
 second instance of this bug. `EndRace Rewards`'s own XML has no `Hexmedal`
 reference at all, on any copy - nothing to check there.
 `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
@@ -1749,8 +1749,8 @@ assumed.** Every frame from this pass's own `grid8_3_1` boot (`Race`,
 `TARGET (<rung>)`, `1st`/`2nd`/`3rd`) reads **`AI DIFFICULTY (<rung>)`**, not
 the bare `DIFFICULTY (<rung>)` the 2026-09-25 section records - and that is
 not a crop that clipped an `AI` off: re-checking that section's own source
-frames (`data/scratch/lane-hd/rpcs3-grid0-3-2/02-triangle.png`,
-`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`)
+frames (`02-triangle.png`,
+`difficulty-icon-zoom.png`)
 directly, both are `grid8_3_2` (`Eliminator`, The Amphiseum, `TARGET 200
 (<rung>)`), and both genuinely read the bare `DIFFICULTY (<rung>)` with no
 `AI` - a wider crop of the same frame confirms nothing is cut off to its
@@ -1826,11 +1826,11 @@ math matching the atlas's own content bands proves the *code* is internally
 consistent, not that the original draws Easy as the plain hex - but it is a
 useful end-to-end check that the archive fix, the block arithmetic and the
 difficulty plumbing agree with each other. Seeding
-`data/scratch/hd-medals/scratch-cfg/oag/records.toml` with
+`records.toml` with
 `best_difficulty = "easy"`/`"medium"`/`"hard"` on `grid8_2_1` and rendering
 `--menu-page cell-select` (recipe above) drew the plain hex, the cane and
 the swirl respectively on the `Medal_{x}_{y}` grid badge (keyed on the
-seeded `best_difficulty`) - not committed (game content, `data/scratch/` is
+seeded `best_difficulty`) - not committed (game content, a scratch directory, not kept is
 gitignored), reproducible with the recipe above.
 **Correction, 2026-09-28**: the `Target0/1/2 Medal` row does **not** vary
 with the seeded record the way the paragraph here previously claimed.
@@ -1841,7 +1841,7 @@ at all - `CellSelection::new` hardwires it to `Difficulty::Medium`
 draws `Target0/1/2 Medal` at the cane shape regardless of what
 `best_difficulty` a scratch `records.toml` seeds. Only `Medal_{x}_{y}` reads
 the seeded value. This pass's own render
-(`data/scratch/hd-campaign-live/ours-cellselect-default.png`) is the
+ is the
 `Target0/1/2 Medal` row's actual internal-consistency check - one rung
 (`Medium`/`SKILLED`), matching the live RPCS3 read above at that same rung.
 
@@ -1935,11 +1935,11 @@ capture-by-capture evidence:
 
 ### Captures
 
-`data/scratch/drive-2026-09-27/hd-targets/`: `fury-race-3-1.png` (`grid8_3_1`,
+a scratch directory, not kept: `fury-race-3-1.png` (`grid8_3_1`,
 `Race`), `fury-speedlap-4-2.png` (`grid8_4_2`, `Speed Lap`) - both fresh RPCS3
 captures this pass took (own config, Xvfb `:92`, audio off); `grid8_3_2`
 (`Elimination`) reuses the earlier pass's own
-`data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png`, not recaptured. This
+`02-square.png`, not recaptured. This
 build's own before/after: `after-cell-select.png` (medal icon missing, the
 `.gtf`/`.mip` bug above, on `grid8_2_1`/`NitroBattle`) through
 `after-cell-select-4.png` (final: `TARGET 15 (SKILLED)` header, `NitroElimSkilled
@@ -2050,7 +2050,7 @@ disagreement on a different file) settles it:
 through `oag_ui::screen::Screens::collect`.** All three are `<MiniText>`,
 and adding a `MiniText` arm to that parser was tried first - it made this
 build's own screen reachable, but a scratch survey
-(`rg -c "<MiniText" data/scratch/lane-hd-sel/*.xml`) found `<MiniText>` on
+ found `<MiniText>` on
 `MainMenu_Definition.xml`, `RaceBox_Definition.xml`,
 `Additional_Definition.xml` and `RecordGrid_Definition.xml` too - collecting
 it generically would have started drawing widgets on every title's every
@@ -2137,10 +2137,10 @@ reproduce.
 ### The toggle: measured on RPCS3, `right` reaches the base campaign
 
 Three RPCS3 boots this pass, Xvfb `:77`, own `--config` copy under
-`data/scratch/lane-hd-sel/` (not committed - game content), `just
+a scratch directory, not kept (not committed - game content), `just
 rpcs3-preflight` clean beforehand:
 
-1. **Boot 1** (`data/scratch/lane-hd-sel/drive-campaign-selection.py`): at
+1. **Boot 1**: at
    `Campaign Selection` with no prior d-pad input (matching the earlier
    pass's own default-Fury finding), `left` then confirm still lands on
    `Grid Selection Fury` - consistent with `left` being a no-op at the
@@ -2154,7 +2154,7 @@ rpcs3-preflight` clean beforehand:
    on `Grid Selection` again - reproduces boot 1's own finding on a
    completely separate boot, the same two-boots-agree bar the original
    Fury-default finding was held to.
-3. **Boot 3** (`data/scratch/lane-hd-sel/drive-persistence-check.py`),
+3. **Boot 3**,
    built to settle the boot-1 confound directly: `right` -> confirm ->
    `Grid Selection` -> `circle` (back, two presses needed - the first was
    dropped, matching `RACE_WALK`'s own doc comment on ~9fps dropped presses
@@ -2255,8 +2255,8 @@ Pinned on the disc by `campaign_selections_cards_land_where_rpcs3_shows_them`
 in `crates/game/tests/hd_flyer_ground_truth.rs` (both selections, against the
 measured columns), and by `oag_ui_screens::campaign::selection`'s tests for the stand-ins
 and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
-`data/scratch/hd-flyer/rpcs3-raw/`; ours and the comparisons
-`data/scratch/hd-fury-cards/exp/cmp-cs-sel0.png`, `cmp-cs-sel1.png`.
+a scratch directory, not kept; ours and the comparisons
+`cmp-cs-sel0.png`, `cmp-cs-sel1.png`.
 
 ### Verification
 
@@ -2270,7 +2270,7 @@ and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
   undrawn flyer card in the real game; `Wipeout HD`'s own label is
   `FEGlobals->HD_Grey` and visible), each entry name centred in its own half
   of the Bracket rather than cut by the selector border. Screenshot:
-  `data/scratch/lane-hd-sel/shots/campaign-select-v5.png`, not committed
+  `campaign-select-v5.png`, not committed
   (`v4` was the left-aligned version the advisor caught, kept alongside it
   for the before/after).
   Command:
@@ -2312,7 +2312,7 @@ and counters. Evidence: RPCS3 `campaign-settled-a`/`-b` and `campaign-right` in
     nothing about `RACE CAMPAIGN` specifically. The same `open_campaign`
     sentinel confirmed this: absent here too.
   - Both attempts' own sentinel/log evidence is in
-    `data/scratch/lane-hd-sel/live-walk/` and `data/scratch/lane-hd-sel/cascade-full.log`,
+    a scratch directory, not kept and `cascade-full.log`,
     not committed. **Left for whoever next has a working interactive Xvfb
     setup** - the headless `--menu-page` capture above and the RPCS3
     measurements are what this pass leans on instead, and neither exercises
@@ -2467,7 +2467,7 @@ solo look at the new draw caught:
    seamless wrap only works unclipped, so the honest trade is a brief,
    real gap at each wrap instead of a seam this build cannot clip away
    (see `oag_ui_screens::campaign::footer::ticker_draw`'s own doc). Confirmed live,
-   `data/scratch/lane-pulse/shots/crop-ticker-left.png`: the text now cuts
+   `crop-ticker-left.png`: the text now cuts
    cleanly at the tab's own edge.
 2. **`Confirm` ran into both button glyphs beside it.** `ControlTextConfirm`
    authors no `font=` in `Skin.xml`, and this crate's fallback (`"Default"`,
@@ -2480,7 +2480,7 @@ solo look at the new draw caught:
    only if that still does not clear the confirm glyph on its other side -
    both **chosen, not measured**, since nothing on disc says where the
    word should end or how far it may shrink. Confirmed live,
-   `data/scratch/lane-pulse/shots/FIXED-cellselect-ticker-clipped-legend-fit.png`.
+   `FIXED-cellselect-ticker-clipped-legend-fit.png`.
 
 **Not fixed, and now written down rather than silently left**: neither
 defect's *root cause* is reachable from this crate. This build loads
@@ -2505,7 +2505,7 @@ is the `Title` role, not a body face. Two consequences, both left open:
   class`/`Line1`..`8`/`Title`/`Track Line` all author `font="default"`, so
   every one of them picks the real face up automatically, no per-label
   change needed. Confirmed live,
-  `data/scratch/lane-hd-sel/shots/pulse-cellselect-after-facerouting.png`
+  `pulse-cellselect-after-facerouting.png`
   (`pulse-psp-eu.chd`, French: `Catégorie`/`Tours`/`Armes`/`Points`/
   `Meilleur` all read mixed-case where they read upper-case before).
 - ~~`AI difficulty (Medium)` reads `CHANGE DIFFICULTY`~~ - **fixed,
@@ -2534,7 +2534,7 @@ existed ("a capture is one static frame with no `MenuStage` clock behind it,
 so there is nothing here for a value marquee to be mid-scroll of"). That
 comment was true until this lane gave the still a second scrolling thing to
 draw and did not give it a second clip. Confirmed by screenshot before the
-fix (`data/scratch/drive-2026-09-27/ticker/psp-eu-main-before-clip-fix.png`,
+fix (`psp-eu-main-before-clip-fix.png`,
 `ps2-eu-main-before-clip-fix.png`): the German `TKR_NOTOURN` text ran off the
 right edge of the frame on PSP and past its own bar on PS2. `Cell Selection`'s
 own still (`crate::capture::campaign_page`) never hit this because its
@@ -2548,7 +2548,7 @@ flatten - the identical `position`-after-`flatten` idiom `MenuStage::render`
 uses for the Race Campaign's own grid/cell screens - rather than a hand-
 tracked index a later `.extend()` could invalidate. `capture::run` threads it
 through to `renderer.render`'s own `clip` parameter. Confirmed live,
-`data/scratch/drive-2026-09-27/ticker/psp-eu-main.png`/`ps2-eu-main.png`: the
+`psp-eu-main.png`/`ps2-eu-main.png`: the
 text now cuts cleanly at each platform's own viewport edge (PSP
 `[85, 235, 370, 32]`; PS2 `[113, 392, 493, 53]`, its own front-end root's own
 grid, not a scaled copy of the PSP's). Also confirmed scrolling (not just
@@ -2577,7 +2577,7 @@ unit tests only check the *draw*, never how a caller clips it.
 boots. The cursor is read as raw state, not only from a picture: a breakpoint at `CellSelection_Update`
 (`0x088d6430`) reads the screen object (`a0`, `0x08d73170` on every read, so the same object throughout), its
 selected-cell pointer at `+0xdc`, and that cell's name (the pointer at `cell+0x74`). Screenshots under
-`data/scratch/pulse-cursor-live/` (gitignored).
+a scratch directory, not kept (gitignored).
 
 **Falsifier written before the first capture.** The decompile
 ([`CellSelection_OnEnter`](../ghidra/functions/psp-pulse-usa/race-campaign.md#where-cell-selection-keeps-its-cursor-across-a-back-out-2026-10-02-pulse-loyaltybar))
@@ -2627,7 +2627,7 @@ reboot), which hides the glyph on its six hex neighbours without touching their 
 | **G1** | gold on `grid0_3_2`; cursor left on `grid0_2_2` (byte `+0xb9` read **1**, glyph hidden by the gold neighbour); leave and re-enter `grid0` | `grid0_2_2` | **the glyph decides: the raw byte rule would have reset it** |
 | G2 | same boot; cursor left on `grid0_2_1` (byte absent, glyph still drawn, no medal beside it); leave and re-enter | `grid0_3_1` (default) | control: a visible glyph resets it |
 
-G1/G2 are one boot each, one walk each (frames `71`-`74` under `data/scratch/pulse-cursor-live/`). The first
+G1/G2 are one boot each, one walk each (frames `71`-`74` under a scratch directory, not kept). The first
 implementation keyed on `Locked == false` and would have failed G1; it now asks the screen's own lock predicate
 (`CellSelection::selected_is_locked`: byte set, no medal of its own, no medalled hex neighbour).
 
@@ -2764,7 +2764,7 @@ glyph filter (a runtime read, G1 and its control seen once each, the decompile's
     "two different bitmap fonts, cap-height ratios need not match line-height
     ratios" - but that reasoning doesn't survive comparing the *same* widget
     on the *same* capture instead of two different widgets on two different
-    captures. `data/scratch/pulse-campaign/captures/ours-cell-select-fresh.png`
+    captures. `ours-cell-select-fresh.png`
     (this build, fresh profile, `--menu-page cell-select`) and
     `02-cell-selection-default-window.png` (a fresh live PPSSPP capture this
     pass took, `pulse-psp-usa.chd`, both 960x544) crop identically at
@@ -2928,7 +2928,7 @@ that this build does not model at all, and its default reaches `Fury`
 (`"Campaign Selection", "Grid Selection Fury", "Cell Selection", ...`) but
 this is the first pass to boot it and notice what it implies. Confirmed
 twice, on separate boots (own `--config` copy under
-`data/scratch/lane-hd/rpcs3-scratch-config.yml`, Xvfb :77, `just
+`rpcs3-scratch-config.yml`, Xvfb :77, `just
 rpcs3-preflight` OK beforehand):
 
 1. Pressing `cross` with no d-pad input at every screen (every other step's
@@ -2952,7 +2952,7 @@ measured, three separate RPCS3 boots, as the toggle to the base `Wipeout
 HD` campaign, and `crate::campaign_stage::CampaignStage` now opens on it
 for HD, slicing the sixteen grids into `grid0`..`grid7`/`grid8`..`grid15`
 per the confirmed entry. Screenshots:
-`data/scratch/lane-hd/rpcs3-grid0-3-2/01-down.png` (`grid8`, `NOVICE`
+`01-down.png` (`grid8`, `NOVICE`
 rung), `02-triangle.png` (`SKILLED` rung, same cell) - this session's own
 worktree, not committed (game content). Confidence 85 on "the screen exists
 and defaults to Fury" (two independent boots, consistent); confidence 85 on
@@ -3157,7 +3157,7 @@ and its own "what is not determined" section.
   still does not draw it, matching Pulse's own scope. Confirmed live via
   `--menu-page cell-select` against `hdfury-ps3-eu-dec.iso`: `CONFIRM`/
   `BACK` both draw at the screen's own authored position
-  (`data/scratch/drive-2026-09-25/shots/hd-cellselect2.png`, not committed).
+  (`hd-cellselect2.png`, not committed).
   HD's own ticker stays unbuilt - confirmed by direct read that its shared
   `Skin.xml` authors no `TextInfoIsAlwaysLast` viewport at all, so
   `TickerLayout::read` correctly answers `None` rather than there being
@@ -3168,8 +3168,8 @@ and its own "what is not determined" section.
 **Side-by-side pass**: `--menu-page campaign-select`/`grid-select`/`cell-select`
 against `hdfury-ps3-eu-dec.iso` at 1280x720, next to the RPCS3 frames already
 on disk from the 2026-09-14/09-21 passes above
-(`data/scratch/lane-hd-sel/rpcs3-campaign-selection/`,
-`data/scratch/lane-hd/rpcs3-grid0-3-2/`) - no new RPCS3 boot needed, the
+(a scratch directory, not kept,
+a scratch directory, not kept) - no new RPCS3 boot needed, the
 existing captures cover all three screens once the settled (not mid-animation)
 frames are used (`01-right-tap.png`/`01-l1-tap.png` for `Campaign Selection`,
 not the corrupted `00-default.png` grabbed mid-transition).
@@ -3236,13 +3236,12 @@ authors no `TextInfoIsAlwaysLast` viewport at all).
   behind `Grid Selection`" and "The two cards".
 
 **Recaptured after the fixes above**, all HD, `hdfury-ps3-eu-dec.iso`,
-1280x720, `data/scratch/drive-2026-09-25/hd-campaign/` (not committed, game
+1280x720, a scratch directory, not kept (not committed, game
 content): `ours-campaign-select-v4.png`, `ours-grid-select-v4.png`,
 `ours-cell-select-v4.png`. `cell-select-v4`'s own default cell now reads
 `grid8`'s first entry (`19_Track`, `NitroBattle` mode) rather than `grid0`'s
 - `class="NitroBattle"` on the `Speed Class` row is not a misread: `grid_08.xml`
-itself authors `class="NitroBattle"` for this cell
-(`data/scratch/drive-2026-09-25/hd-xml/DATA00/data/plugins/grids/grid_08.xml`),
+itself authors `class="NitroBattle"` for this cell,
 the disc's own value, read as-is rather than second-guessed.
 
 Confidence 85: the `Event 01/16` reading and the RPCS3 footer evidence are
@@ -3279,7 +3278,7 @@ cannot serve both.
 production uses and dumps the codepoints this build actually asks it for:
 `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/`DifficultyButtonIcon` (`ε`/`γ`/`δ`) all
 carry real glyph boxes, and the atlas dump
-(`data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`)
+
 shows exactly a circled cross, circle and square - matching RPCS3's own
 `Ⓧ CONFIRM`/`Ⓞ BACK`/`⬜ DIFFICULTY (...)` shape for shape. The first attempt
 at this probe read the *wrong* archive entry (`/data/fe/fonts/ps_buttons.gtf`,
@@ -3305,7 +3304,7 @@ none (`1.0` by default) - the shrink block now only applies when
 
 **Correction to the "measured on RPCS3" section above: `00-default.png` is
 `Cell Selection`, not `Grid Selection Fury`.** The 2026-09-14/09-21 passes
-cited `data/scratch/lane-hd/rpcs3-grid0-3-2/00-default.png` as a corrupted
+cited `00-default.png` as a corrupted
 capture of `Grid Selection Fury` showing a third footer prompt,
 `CHANGE DIFFICULTY`. Re-reading the same directory this pass: every *clean*
 capture in it (`01-down.png`, `02-square.png`, `02-triangle.png`) is
@@ -3322,7 +3321,7 @@ not a remaining gap.
 authored `"Change Difficulty"` string - a real, measured mismatch, left open
 rather than guessed at.** Zoomed crops of the clean captures
 (`02-square.png`'s own `difficulty-icon-zoom.png`, re-derived this pass as
-`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`)
+`difficulty-icon-zoom.png`)
 read `⬜ DIFFICULTY (NOVICE)` and, after a `Triangle` press,
 `⬜ DIFFICULTY (SKILLED)` - composed at runtime from the current difficulty
 rung, not the literal `string="Change Difficulty"`
@@ -3424,7 +3423,7 @@ capture this pass, which would be the direct check.
 **The `GOLD MEDALS` denominator is closed - `87` for `Wipeout HD`, `80` for
 `Fury`, both exactly a campaign's own total cell count.** RPCS3 reads
 `"0 / 87"` beside the `HD` flyer and `"0 / 80"` beside `Fury`'s
-(`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
+(`01-right-tap.png`/
 `01-left-tap.png`) - two different numbers, one per campaign, which is what
 an earlier pass's own note ("this build's own parse of `DATA00`'s eight Fury
 grids totals 80 cells, a gap this pass does not explain") missed: it read
@@ -3463,7 +3462,7 @@ function's own doc for the mechanism, `crates/tables/src/fexml/tests.rs`'s
 `the_precedence_resolved_campaign_is_sixteen_grids_mixed_schema`/
 `every_grid_file_on_every_archive_parses` for the real-disc ones (`grid4` =
 10 cells, `DATA02`/`04`/`06` each total 87). A blast-radius check
-(`rg --no-ignore -n '="[^"]*"</[A-Za-z]' data/scratch/drive-2026-09-25/hd-xml`)
+
 found the identical shape recurring in `stats_definition.xml`'s and
 `endrace_definition.xml`'s own `<Values ... RotY="-0.5"</Values>`
 trophy/rank-model blocks (all three HD archives that carry either file) -
@@ -3559,7 +3558,7 @@ reproduce. What a player sees, screen by screen (two or more frames each):
     Enter - the cursor came back on the Eliminator cell. That is our
     `CellCursors` (now the shared `CellCursor`, see "Where the cursor lives"), still **chosen, not measured** on HD.
 
-Screenshots are under `data/scratch/drive-2026-09-28/clw/shots/h*.png`
+Screenshots are under `h*.png`
 (gitignored, game content). Left open by this walk: the `EndRace Menu`
 cursor's visibility on HD, the 8th Results row overlapping the footer bar,
 and whether HD's original has a ship screen on the campaign path.
@@ -3579,7 +3578,7 @@ that the screen is on the campaign path, from four independent lines:
    `screen-Team-Selection.png` on two cold boots
    (`data/reference/hd-capture/talons-matched/`, see
    `docs/reverse-engineering/rpcs3-capture.md`) and on the fresh-profile
-   boot (`data/scratch/hd-difficulty/rpcs3-fresh-default/`).
+   boot.
 3. **The authored redirect.** Both copies of `CellMode_Definition.xml`
    (`DATA02`, `DATA06`) give `Cell Selection` a `Cell Mode Redirect Team`
    whose `Default` is `goto="Team Selection"`; the `Launch Game` redirect
@@ -3663,7 +3662,7 @@ fills the two halves side by side and draws the border once over both
 `scripts/rpcs3-drive.py`'s session with a scratch walk that taps `right`,
 `down`, `up` and `left` and photographs after each press (isolated
 `XDG_CONFIG_HOME`, `Xvfb :94`, muted; shots and the script in
-`data/scratch/hd-frontend-polish/`). Two boots on a **fresh profile**
+a scratch directory, not kept). Two boots on a **fresh profile**
 (`savedata` empty, `EpilepsyWarning` and `FirstPlay` answered), one on the
 old save of 2026-09-21.
 
@@ -3812,7 +3811,7 @@ centre would not move the centre, and this one does.
 
 ### The hex grid, 2026-10-08 (`hd-track-select`)
 
-Measured off RPCS3 frame `data/scratch/hd-fe-look/ref/racebox/030-track-settled0.png`
+Measured off RPCS3 frame `030-track-settled0.png`
 (Vineta K selected, 2000x1200), one frame:
 
 - **Same geometry as `Team Selection`'s `HexSelection`** (72.2 x 82.8 units per
@@ -3921,7 +3920,7 @@ reloads it. The per-frame cost is the recolour (1 to 5 ms in a debug build for
 45k to 152k vertices) and a whole-buffer upload of 4 to 14 MB; a colour-only
 stream would cut the upload if it ever shows.
 
-Pictures: `data/scratch/hd-track-model/sheet1.png` (Vineta K, Metropia, Moa
+Pictures: `sheet1.png` (Vineta K, Metropia, Moa
 Therma, Ubermall at 1 s and 4 s), against `track-carousel/02.png` (Moa
 Therma) and `12.png`/`24.png` (Vineta K).
 
@@ -3944,7 +3943,7 @@ Selection` -> `Grid Selection` -> `Cell Selection` -> Enter -> `SHIP SELECT`
 team, on the hex frame's top half -> the previous livery, on the ship frame
 -> the race loads. Enter on `Fury Concept` flies `Data\Ships\Feisar_c1`.
 `RACEBOX` -> START -> `SHIP SELECT` -> `Escape` -> the RACE page. Shots in
-`data/scratch/hd-team-select/live/`.
+a scratch directory, not kept.
 
 That walk found a real bug, fixed in the same change: the ship picker chose
 its livery axis by whether the row's first id was empty, which HD's variant
@@ -3999,7 +3998,7 @@ repeat.
 
 **Measured 2026-09-29, confidence 90**: the grid's two rows are the two
 directions. An RPCS3 walk pressing `right`, `down`, `right`, `down`, `up`,
-`left` on `Track Creation` (`data/scratch/hd-frontend-polish/rpcs3-racebox-oldsave/`):
+`left` on `Track Creation`:
 `Right` Anulpha Pass -> Moa Therma; `Down` on Anulpha Pass drew `REVERSE`
 and the circular arrow icon with the lower hex highlighted, `Right` from
 there stepped Moa Therma reversed (the same order), a second `Down` stayed
@@ -4080,7 +4079,7 @@ glyph; `Right` twice -> Moa Therma reversed; Enter -> `SHIP SELECT`; Escape ->
 `TRACK SELECT` still on Moa Therma reversed; Enter, Enter -> the race loads
 `Data\Environments\03_Track\track_reversed.vex`. Mouse: a click on the
 frame's right half stepped, the left half stepped back, a right click
-returned to the RACE page. Shots in `data/scratch/hd-track-select/live/`.
+returned to the RACE page. Shots in a scratch directory, not kept.
 
 ## Wipeout HD/Fury and Omega: a hover lands on the hexagon drawn, 2026-09-30
 
@@ -4144,7 +4143,7 @@ after) against this build, walked live under software Vulkan (Xvfb,
 `--no-audio`, a fresh profile; about 5 fps, so bursts of ours are slow motion
 and **no geometry is read off the live crops**) and as `--menu-page` stills
 at 1280x720. Sheets (original above, ours below) are under
-`data/scratch/hd-fe-look/sheets/page-*.png`, raw frames under `ref/` and
+`page-*.png`, raw frames under `ref/` and
 `ours-live/` there. Sightings: Main Menu, Ship Select and Racebox setup on two
 boots (this lane and `hd-capture/*`), Campaign Selection and Grid on this
 boot plus the `hd-flyer` lane's; Cell Selection once. **Confounds, not
@@ -4228,10 +4227,10 @@ mismatch on The Amphiseum was two different cells (`grid8_3_2` Elimination,
 
 ### `Cell Selection`'s card, field, icons and brackets (2026-10-08, hd-cell-select)
 
-Measured against `data/scratch/hd-fe-look/ref/campaign/088-cell-settled1.png`
+Measured against `088-cell-settled1.png`
 (RPCS3, the first cell of `09_blitzed`, a fresh zero-medal profile) and drawn
 with `--menu-page cell-select` on the same grid; sheets under
-`data/scratch/hd-cell-select/` (`before.png`, `a5.png`, `b3.png`).
+a scratch directory, not kept (`before.png`, `a5.png`, `b3.png`).
 
 **The red card is the grid's flyer seen from behind.** `Cell Selection` authors
 no `<Flyer>` of its own (the top-level `FlyerModel` is shared), and
@@ -4332,10 +4331,10 @@ campaign, a case rule), and `GridNum`'s `font="Title"` draws in the title face. 
   prompts the legend read; they are now a `PromptKind::Navigation` in the legend.
 
 **What was looked at after the change, and not only on Fury** (stills,
-`data/scratch/hd-cell-select/`): the base campaign's `cell-select-hd` and
+a scratch directory, not kept): the base campaign's `cell-select-hd` and
 `grid-select-hd` (`d_base.png`, `e_both.png`), Omega's `cell-select` and
 `grid-select` (`checks.png`, `om-*.png`), HD's `Main Menu` and Ship Select
-(`checks.png`). **Walked live** (windowed, Xvfb, lvp, keyboard, `data/scratch/hd-cell-select/live/`):
+(`checks.png`). **Walked live** (windowed, Xvfb, lvp, keyboard, a scratch directory, not kept):
 Main Menu, Campaign Select, Grid and Cell Selection on Fury, and one Down press
 moving the cursor to the first `Elimination` cell, whose card, `ELIMINATOR` icon,
 `THE AMPHISEUM` emblem, `INFINITE` laps and `TARGET 200` line draw

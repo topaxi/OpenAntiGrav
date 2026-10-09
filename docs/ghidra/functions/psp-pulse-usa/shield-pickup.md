@@ -557,7 +557,7 @@ Junction, Venom/Assegai), the emulator window is photographed at 480x272 up to
 240 frames later (two runs, 16 and 17 frames each), and ours is
 `oag-game --race --mode time_trial --give shield` with the same
 `weapon-after-go.inputs`, at the tick `fire + k - 2` (two frames of display lag).
-Frames: `data/scratch/pulse-weapons/shield-orig-tt1`, `-tt2`,
+Frames: a scratch directory, not kept, `-tt2`,
 `shield-ours-tt480` (not committed).
 
 What matches, at player size:
@@ -634,7 +634,7 @@ framebuffer), at three shield clocks, plus the displayed frame read out of EDRAM
 at `0x04000000`/`0x04088000` and the same frame again after hiding the shell in
 place (`obj+0x74 = 0` and bit 2 of both models' `+0x2c` cleared, about 0.7 s of
 game time, restored afterwards). The difference of the two frames is the shell's
-own contribution, camera and craft unchanged. Harness: `data/scratch/pulse-shield-look/scripts/`
+own contribution, camera and craft unchanged. Harness: a scratch directory, not kept
 (`shield_cap.py`, `ge_prims.py`, `emu_shell.py`); raw frames stay under `data/`.
 
 ### What the shell's two draws set (read off the dumps, three clocks agree)
@@ -739,7 +739,7 @@ Residual, reported and not tuned toward: ours reads 10 to 14 % brighter in the
 fit (k about .9), the hull occludes the shell in ours over the craft's own box,
 and the emulator frame lags the pause by one frame. No term was adjusted.
 
-Frames, dumps and the numbers: `data/scratch/pulse-shield-look/` (`off2`, `off3`,
+Frames, dumps and the numbers: a scratch directory, not kept (`off2`, `off3`,
 `ours6`; `report.md`).
 
 ## What is not verified

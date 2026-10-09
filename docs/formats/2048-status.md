@@ -249,7 +249,6 @@ checked, not read:** the title's own `Airbrake` handler is unread, so
 `psp2_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
 deflection raises the flap and flares it outward, both sides) on all 20 native craft and the 12 HD-derived hulls. Only
 the player's craft swings, as on Pulse; a rival's flaps stay stowed.
-Frames: `data/scratch/airbrake-flaps/` (`2048_*.png, k_2048_*.png, kcs_2048.png`).
 
 ## The one axis 2048 forced into existence
 

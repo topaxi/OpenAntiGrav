@@ -48,7 +48,7 @@ Two things this pass could not settle from the two evidence pages alone, carried
 - **Timing**: the original arms before the same frame's submit and decrements after, so the first frame after an arm shows the full timer. `Race::tick` advanced the shake at the end of the tick, one tick in; it now advances first.
 - **No accumulation**: the basis is rebuilt each frame (the next call's entry basis matches the last to `9e-5` while the copy-out differed by up to `0.1`), and the shake is applied before the copy-out. Closes the "read back before or after the copy-out" item for the PSP.
 
-**Judged as a player would** (original forced-armed at magnitude `0.3`, ours forced-armed the same, same start pose, frames before, at impact, `+2`, `+4`, `+7`, settled; `data/scratch/pulse-camera-shake/shots/`): the scene shifts and rolls the same way on both and settles within about `0.4` s. **One difference that is not the shake's**: ours blurs the whole frame on the first shaken frame (the velocity-buffer motion blur reads the one-frame view jump as fast camera motion), the original does not blur there. See Open.
+**Judged as a player would** (original forced-armed at magnitude `0.3`, ours forced-armed the same, same start pose, frames before, at impact, `+2`, `+4`, `+7`, settled; a scratch directory, not kept): the scene shifts and rolls the same way on both and settles within about `0.4` s. **One difference that is not the shake's**: ours blurs the whole frame on the first shaken frame (the velocity-buffer motion blur reads the one-frame view jump as fast camera motion), the original does not blur there. See Open.
 
 ## Open
 

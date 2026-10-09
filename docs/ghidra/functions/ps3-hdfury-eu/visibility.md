@@ -408,9 +408,7 @@ byte counts chunks.
 ## 2026-10-07, `hd-glass-opus`: the frustum cull, and the behind-the-glass target that chunk flag `0x10` draws into
 
 Run against a live RPCS3 frame at the Vineta K tunnel pose (`place --pose=-839.8,-146.6,215.0`, kept
-`-840.6,-146.7,214.2`), with guest memory read while the target was paused
-(`data/scratch/hd-glass-opus/out/boot1`), and against the earlier capture of the same pose
-(`data/scratch/vineta-k-fidelity/out/boot6`). Every draw of the track model was tied to its chunk by its vertex
+`-840.6,-146.7,214.2`), with guest memory read while the target was paused, and against the earlier capture of the same pose. Every draw of the track model was tied to its chunk by its vertex
 array's IO offset: the scene object **is** the loaded file (`*0x00d42c68 = 0x418d6080`), so a draw's vertex
 offset minus `0x018d6080` is a file offset, and exactly one surface descriptor names it (125 of 125 track draws
 mapped, none ambiguous; `py/draw2chunk.py`).

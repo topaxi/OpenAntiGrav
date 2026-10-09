@@ -541,16 +541,16 @@ against the original, not a note about this one.
 cargo build --release -p oag-game
 # from the repo root, so data/ resolves:
 target/release/oag-game --race --pose-from data/traces/pad0-boost.csv \
-    --pose-tick 0 --ticks 0 --screenshot data/scratch/ours_t0.png --size 960x544
+    --pose-tick 0 --ticks 0 --screenshot ours_t0.png --size 960x544
 
 # the free control, which is not optional - far scenery no mesh scale can move:
 python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 0,20,960,200 --range 0.70,1.40,0.01 --search 70
+    ours_t0.png --box 0,20,960,200 --range 0.70,1.40,0.01 --search 70
 #   => 1.1195
 
 # the craft, for comparison against it:
 python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 440,330,525,430 --range 0.70,1.40,0.01 --search 70
+    ours_t0.png --box 440,330,525,430 --range 0.70,1.40,0.01 --search 70
 ```
 
 **The script refuses a peak that lands on an end of the sweep**, rather than

@@ -742,7 +742,7 @@ Corrects that section's "keyframe evaluator" reading, which followed the wrong
 vtable (the correction [gantry-clock.md](gantry-clock.md) already recorded).
 
 **The data side, negative.** `crates/render/examples/hd_weapon_anim_keys.rs`
-dumps every `0x3c0` node of the trio (`data/scratch/hd-weapons/keys.txt` has
+dumps every `0x3c0` node of the trio (`keys.txt` has
 the run). Each of `HD_plasma_ring`, `_sphere` and `_halo` authors exactly one
 `Anim Transform` node, `Root`, with a single scale key `(256, 256, 256)` (1.0)
 and a single translation key at frame 36000 with a `1.8e-43` quantum, no

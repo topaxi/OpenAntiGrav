@@ -401,7 +401,7 @@ render-space width (`+0x50`); nothing in this chain touches a widget's separatel
 `TxtrWidth`/sample-space attribute, so the decompile alone is consistent with either
 "stretch the full texture into a narrower box" or "sample proportionally less of it". A
 free-running capture of `Title Screen`'s own barcode patch mid-reveal
-(`data/scratch/pure-reveal/reveal_150ms.png`, `pure-psp-eu.chd`, PPSSPP v1.20.4) shows a
+(`reveal_150ms.png`, `pure-psp-eu.chd`, PPSSPP v1.20.4) shows a
 crisp, correctly-proportioned partial pattern - bars at their own native width, growing
 from the left - not a squeezed one. `crates/ui/src/frontend/draw.rs` shrinks the sampled
 UV width by the same amount as the render width, which is what reproduces that: a real

@@ -115,7 +115,7 @@ at ticks 30 to 120 and 1000 (the wipe reaching the paragraph's right edge at 2 s
 ticks after the flyby ends (`--intro-ticks 1529 --ticks N`, against the original's calls 112, 122
 and 132): the bars thin out together, the title and paragraph are cut from the right as the
 viewport closes, and the HUD arrives over a panel still a third visible. Scratch:
-`data/scratch/pulse-flyby-panel/{montage-enter,montage-exit,cmp-moa,cmp-exit,cmp-bottom}.png`.
+`{montage-enter,montage-exit,cmp-moa,cmp-exit,cmp-bottom}.png`.
 
 ## Other titles (census 2026-10-07)
 

@@ -434,8 +434,7 @@ struct-of-arrays at `&DAT_000577f8`, sized for exactly eight entrants, that
 for (racer_index = 0; racer_index < g_racer_count; racer_index++) {
     id = *(int *)(&DAT_000577f8 + 0x508 + racer_index * 4);   // FUN_08806bbc
     is_local_player = (id == FUN_0895ebf0());                  // local pad/entrant index, clamped 0..7
-    name_ptr = (id == -1 || id == 8) ? &DEFAULT_NAME
-                                      : &DAT_000577f8 + 0x488 + id * 0x10; // FUN_0894da24 -> FUN_08806b80
+    name_ptr = (id == -1 || id == 8) ? &DEFAULT_NAME: &DAT_000577f8 + 0x488 + id * 0x10; // FUN_0894da24 -> FUN_08806b80
     slot = <this racer's compacted grid slot, from the permutation table above>;
     if (is_local_player) FUN_0882821c(mgr, racer_index, id, slot, name_ptr);
     else                 Race_SpawnAiRacer(mgr, racer_index, id, slot, name_ptr);

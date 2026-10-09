@@ -22,7 +22,7 @@ its address (a TOC slot), then every function with a `lwz/ld/addi d(r2)` whose
 script over all 52 `WO_` strings the executable carries (`strings -a`).
 **Validated on the known answer first**: `0x007a1c68` -> slot `0x008b3f6c` ->
 `0x002d9730` (`ShipCollisionFx_Trigger`), nothing else. Results:
-`data/scratch/hd-particle-triggers/toc_scan.txt` (scratch, not committed). A name
+`toc_scan.txt` (scratch, not committed). A name
 whose slot is in a data table (`0x008a9xxx`-`0x008abxxx`, the weapon tables) has no
 function load: that is a third hop, listed as "table" below, not as "no trigger".
 
@@ -111,7 +111,7 @@ the nearest of at most ten `Ship Collision Fx` locators to the contact, severity
 `1.0`, the locator's own up axis. **Chosen, not measured:** the severity, and the
 roll (the two angles' axes were not read). Live: `--race --opponents --give cannon
 --hold cross --press square` on HD fires 114 bursts in 900 ticks;
-`data/scratch/hd-particle-triggers/shots/crop_t42.png` shows the white spark streak
+`crop_t42.png` shows the white spark streak
 on the struck craft one tick after a hit.
 
 ### The damage smoke: `0x002a17e8`, read in full 2026-10-07
@@ -156,7 +156,7 @@ measured**.
 
 **Wired**, `oag_raceplay::damage_fx`, HD only through `Trigger::DamageMild`,
 `DamageModerate` and `DamageCritical`. `--force-shield` plus the new
-`--force-hit TICK:SLOT` reaches it headless (`data/scratch/hd-particles/shots/`,
+`--force-hit TICK:SLOT` reaches it headless (a scratch directory, not kept,
 `cmp_*.png`: the same tick with and without the smoke). Not wired: the Zone
 variant, the death plume (`param_4 != 0`) and the damage sound cue.
 
@@ -177,7 +177,7 @@ covered by `a_leachbeam_hit_throws_the_attached_spark_where_the_title_has_no_loc
 
 **What the original draws** (RPCS3, Talon's Junction campaign event 01, craft at rest,
 `scripts/rpcs3-hd-weapon.py`, two boots, burst at video frame 199 of 30 fps;
-`data/scratch/hd-rocket-smoke/`): a white flash for about 0.1 s, orange sparks to about
+a scratch directory, not kept): a white flash for about 0.1 s, orange sparks to about
 0.4 s, then dense dark **teal-grey** smoke bodies that last past 3 s. **The axis is game
 time**: the HUD race clock reads 22.9, 23.9, 24.9, 25.9 at video frames 199, 229, 259,
 289, so 30 video frames is 1.0 game second here (the 0.6x of earlier hosts did not

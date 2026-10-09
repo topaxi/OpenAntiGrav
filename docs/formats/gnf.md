@@ -340,8 +340,7 @@ never-looped `Read`.
    the same read returns all 65,536 bytes of every sector with **zero**
    invalid-mode BC7 blocks across the 4,096 sampled, and this project's own,
    completely unmodified `oag_texture::gnf::Texture::decode` turns the
-   result into a fully legible ship-livery texture -
-   `data/scratch/drive-2026-09-27/omega-psarc/harimau_c1_livery4_patched.gnf.png`.
+   result into a fully legible ship-livery texture.
    The file as extracted before 2026-09-29 (`data/extracted/ps4.bak/omega-eu`) still
    correctly raises `Error::CorruptBlocks { count: 49899 }` on the same
    entry - the refusal this project's reader is supposed to make on
@@ -352,9 +351,7 @@ Confidence 90, not higher: read from the exact pinned tool's own source
 (not decompiled or guessed) and confirmed by a controlled before/after
 intervention against the real archive, but short of this project's own
 "Established" band, which is reserved for this project's *own* engine
-claims verified against a runtime trace. See
-`data/scratch/drive-2026-09-27/omega-psarc.md` for the full transcript,
-including the exact patch diff and repro commands.
+claims verified against a runtime trace. The full transcript, with the exact patch diff and repro commands, was a scratch file and is not kept.
 
 **Not fixable in this project's own code** - the defect is upstream, in a
 third-party extraction tool this project depends on but does not vendor.

@@ -123,7 +123,7 @@ fn three_fins_of_six_vertices_per_segment() {
     assert!(vertices.iter().all(|v| v.colour == [1.0; 4]));
 }
 
-/// The live capture's own numbers (`data/scratch/hd-leach-draw/c5`, beam of 40
+/// The live capture's own numbers (a scratch directory, not kept, beam of 40
 /// samples): progress 0.58344 at sample 0 and 0.55055 at the last, phases all
 /// 10.93334, and the stored last sines -0.75139, -0.99273 and 0.22650.
 #[test]

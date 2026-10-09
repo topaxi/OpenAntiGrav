@@ -9,7 +9,7 @@ title's skin would work here. Confidence scores follow the
 [rubric](../reverse-engineering/confidence-rubric.md); a number with no score is
 a measurement of a file, not a claim about the original.
 
-Raw captures and extracts are under `data/scratch/hud-skins/` (gitignored):
+Raw captures and extracts are under a scratch directory, not kept (gitignored):
 `shots/` (PPSSPP and ours, same frame), `x/` (extracted fonts and atlases),
 `img/` (atlas montages). Reproducers: `oag-tools` examples `psarc_extract`
 (list or extract a PSARC entry by substring) and `hud_font_probe` (describe a
@@ -49,7 +49,7 @@ qualitative for that reason.
 | **Halo clipped to the glyph box** (`borderExtendPixels`) | Pulse's own language definition declares `HUD ... borderExtendPixels="5"` and `HUDSmall ... "3"` (Data.wad entries 1132-1140, every language; HD's copy says the same). **Nothing in `crates/` reads it** (`rg` finds it only in docs), and `render/text.rs` draws each glyph as a quad of exactly the metric box (`cell.width x cell.height`). The atlas dump of the '0' shows 2 px of dark outline (alpha 170-216) *left* of the box edge `u0`, more on the right, and glow below `v1`. Experiment (env-gated, reverted): extend rect and UV by 2 and by 5 texels | Original: a dark halo outside the strokes (3 px left at -5 %, 8 px below at -25 to -45 %). Ours as shipped: **none** (87 87 87 87 then the stroke). With the quad extended, ours grows the same shadow (87 87 77 73 70 then the stroke), and the zoomed glyphs (`shots/cmp-ext.png`) look like the original's soft-edged ones. Backgrounds differ slightly, so the depth is not matched, only the presence. **The most likely cause of "less legible than the original at the same size". Confidence 75** (presence of the halo and of the clip are certain; that this is the *whole* gap is not) |
 | Outline alpha (`BorderColor` 0x40, 25 %) | experiment: outline forced opaque (alpha = atlas coverage, the straight modulate a GE would do) | **Worse, not better**: digits fill with black halos the original does not show. The 25 % model is closer than the straight one; the original's exact blend of the glow is still not derived. Confidence 60 that 25 % is the right order of magnitude |
 | Text drawn at scale 0.6 (`BestTime`) | at **480x272**: body peak of the `0.00.00` digits original 195 over a 105 background, ours 140 over 110, separating dots lost; nearest sampling is complete but 255. At **960x544**: original 230, ours 255, dots present | A **minification** artefact: it appears only below about 800x450, where a 0.6-scale glyph is smaller than its atlas. At any window a player runs (1440x816 and up) it is magnified and intact (`c-ours-1440.png`). Real at 1x, irrelevant at the default. Confidence 70 |
-| Bloom composite over the HUD | three moving frames on this circuit, readout region, bloom on against off: mean change 0-1.5 levels, maximum 29 of 255 | The composite lands over the HUD in the original too (`Bloom_Draw` key 0x70 over HUD keys 0x52-0x6d, [bloom](../rendering/glow-mask.md)), so this is faithful, and small here. It cannot explain a washed-out readout on a dark-backed frame; on a bright boost-pad backdrop it adds to scene light that is already there. The lead's bright frame (`data/scratch/ptbr-a/shots/ptbr-race-hud-400.png`) was **not reproduced** - open. Confidence 65 |
+| Bloom composite over the HUD | three moving frames on this circuit, readout region, bloom on against off: mean change 0-1.5 levels, maximum 29 of 255 | The composite lands over the HUD in the original too (`Bloom_Draw` key 0x70 over HUD keys 0x52-0x6d, [bloom](../rendering/glow-mask.md)), so this is faithful, and small here. It cannot explain a washed-out readout on a dark-backed frame; on a bright boost-pad backdrop it adds to scene light that is already there. The lead's bright frame was **not reproduced** - open. Confidence 65 |
 | Scale up and filter | default `--presented` is 1440x816, a 3x linear stretch of a 480x272 design; PPSSPP's own window is a 2x bilinear stretch of the same raster. 4K is about 8x | Every raster HUD edge is a 3 px ramp at 3x. Same family of softness as PPSSPP's own window, but three times larger on screen than the PSP's 4.3 inch panel, where the baked glow was tuned. Confidence 75 as a contributor, no measurement against a sharper alternative yet |
 
 Reading the rows together: **the glyph body is faithful, the glyph's outer halo
@@ -84,8 +84,7 @@ The three descendant titles ship **Pulse's HUD sprite atlas at exactly 4x**, and
 **The atlas.** HD (`pulsehud.gtf`, DXT, 1024x1024), Omega (`Data/hud/textures/
 pulsehud.gnf`, BC7, 1024x1024) and 2048 (`PulseHUD.gxt`, PVRTC, 1024x1024)
 carry the same artwork as Pulse's `PulseHUD.mip` (256x256): same sheet layout,
-same icons, 4x the pixels. Montage: `data/scratch/hud-skins/img/
-cmp-atlases-omega-2048-hd.png` (HD's is vertically flipped because a `.gtf`'s
+same icons, 4x the pixels. Montage: `cmp-atlases-omega-2048-hd.png` (HD's is vertically flipped because a `.gtf`'s
 rows run bottom-up, [hd-hud.md](../formats/hd-hud.md); Omega's and 2048's are
 upright). The scale is exact, not eyeballed: HD's `hud_timers.xml` names the
 clock hexagon as `U=208 V=344 width=112 height=92`, which is Pulse's own
@@ -139,7 +138,7 @@ compared. Confidence 40.
 | `splitscreen_hud`, `splitscreenzone_hud` | 31, 10 | 31, 16 | 31, 16 | two-viewport play, which this build has no mode for |
 
 Counts are archive entries from the lead's listings
-(`data/scratch/{omega,2048}-list.txt`) and HD's PSARC listings; Omega counts are
+ and HD's PSARC listings; Omega counts are
 the union of base and patch archives. HD has `detonator_hud`, `duel_hud` and
 `mptag_hud` with no retro twin ([hd-hud.md](../formats/hd-hud.md)).
 
@@ -270,8 +269,7 @@ bites the rect shrinks with it.
 
 **A glyph's reach is cut to half its distance to the nearest other glyph's
 box. Chosen, not measured.** Extended in full, Pulse's PSP menu text came out
-garbled (every glyph drew a sliver of its neighbour; `data/scratch/hud-crisp/
-shots/menu-after.png` of the first attempt). The census,
+garbled (every glyph drew a sliver of its neighbour; `menu-after.png` of the first attempt). The census,
 `crates/game/tests/font_border_ground_truth.rs` (English plugin of every
 title present, `just test-data`):
 
@@ -302,7 +300,7 @@ PPSSPP window halved back to 480x272 with a box filter). Metric: mean
 luminance in rings 1-8 px outside the readout's ink (`>= 190`) divided by the
 mean 9-11 px out, on the leading `0.` of `CurrentTime` (the one part both
 frames show; the other digits differ), three frames from one boot (the timer
-differed, the rings did not); script `data/scratch/hud-crisp/ring.py`
+differed, the rings did not); script a throwaway script, not kept
 (scratch, not committed). A first capture on PPSSPP's GL backend (the ini
 asked for software and PPSSPP ignored it) showed a *deeper* halo (rings 2-4
 0.60 / 0.61 / 0.64); it is discarded as not the reference.
@@ -343,8 +341,7 @@ texel and 2160p is 7.94, and a strict floor would draw 3 and 7. Sprites that
 are rotated, tiled, chamfered or text are not resized as sprites (text is laid
 out at the whole size instead).
 
-**Default `sharp-bilinear`, from screenshots** (`data/scratch/hud-crisp/shots/
-crop-pulse-*.png`, `crop-pure-*.png`; Pulse PSP EU Time Trial and Pure PSP EU,
+**Default `sharp-bilinear`, from screenshots** (`crop-pulse-*.png`, `crop-pure-*.png`; Pulse PSP EU Time Trial and Pure PSP EU,
 four modes at each size):
 
 | Output | Pixels per texel | `integer` draws | Result |

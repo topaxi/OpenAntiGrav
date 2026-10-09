@@ -615,7 +615,7 @@ until it reaches `--screen`, the identical path `RACE_WALK` already names -
 Selection`, landing on `grid8_3_1` (`Fury`, `Race`, Talon's Junction, Venom,
 weapons on, 3 laps - the grid's own first cell with an authored
 `Locked="false"`, `oag_hd::campaign`'s own precedence-resolved order,
-`data/scratch/.../grid_08.xml` read directly off `DATA00.PSARC` confirms the
+`grid_08.xml` read directly off `DATA00.PSARC` confirms the
 cell name). **A `--nav "Cell Selection=..."` entry is dead here**: `browse`'s
 walk loop breaks out the moment `current_screen() == args.screen`, before
 `session.navigate(plan)` ever runs - so reaching a *different* cell (an
@@ -936,7 +936,7 @@ Ghidra call: **the held weapon is a state word in the craft's pickup slot.**
 
 Confidence 85: 12 states written on the player on four boots, each changing the HUD
 icon, and the AI craft's own slots carried the same pairs when they held a weapon
-(`ai*_state*.bin` in `data/scratch/hd-weapon-ref/e6/`).
+(`ai*_state*.bin` in a scratch directory, not kept).
 
 **Buttons** (the virtual pad, measured on the player): **triangle fires**, **circle
 absorbs** (state goes back to `-1` and the blue absorb glow plays), square, r1, l1, r2
@@ -980,7 +980,7 @@ laid Bomb or Mine stays in front of the camera instead of under the craft.
 
 ### What a Bomb does in the original (Talon's Junction, the player standing, 0 km/h)
 
-Measured by `data/scratch/hd-weapon-ref/e11` (bomb under the craft) and `e12` (craft put 30
+Measured by a scratch directory, not kept (bomb under the craft) and `e12` (craft put 30
 units behind it):
 
 - **The bomb tripped on its own owner**, 17 video frames (0.57 s of video time) after it was laid,
@@ -999,13 +999,13 @@ units behind it):
   fills the screen **pale yellow-white with a marbled texture** for the first 0.9 s (the HUD
   stays on top), recedes to the right of the frame by 1.2 s with the craft flung ahead at
   155 km/h, and leaves white haze by 1.8 s. No brown haze and no orange rim. Frames:
-  `data/scratch/hd-weapon-ref/pair_bomb_stationary.png` (left original, right ours;
+  `pair_bomb_stationary.png` (left original, right ours;
   rows: the armed bomb, then +0.2, +0.67, +1.17, +1.8 s).
 
 ### Video time is the bomb's age, not the HUD clock (`hd-bomb-match`, 2026-10-07)
 
 The HUD race clock ran 0.59x of the recorder's time in these boots, and the entity ages follow
-the recorder. Measured on `e11`/`e12` with `ffmpeg signalstats` per frame (`data/scratch/hd-bomb-match/yavg.clean`,
+the recorder. Measured on `e11`/`e12` with `ffmpeg signalstats` per frame (`yavg.clean`,
 `e12c.clean`), in recorder seconds:
 
 | Event | Film | Law (bomb age) |
@@ -1041,7 +1041,7 @@ above manages one a second.
   sat at video 5.2-6.2 s for host 0.0-1.0 s, so **video = host + about 5 s** in `m4`
   (confidence 60: one boot, the recorder's start latency varies).
 
-Measured with it (`data/scratch/hd-weapon-fx/runs/m1..m4`, Talon's Junction, the player
+Measured with it (`m1..m4`, Talon's Junction, the player
 standing on the grid):
 
 | Fired state | What the memory and film show | Conf |
@@ -1065,7 +1065,7 @@ branch.
 (`manager + 0x10c`, found as in "Polling guest memory live") rises, then screenshots and reads the queued
 frame (`--no-draws` skips the pushbuffer and reads render targets only; `--bomb` fires state 9 instead and pauses
 `--delay` seconds after the press). `scripts/rsx-draw-list.py <dir> <stem>` prints the dumped frame's draws with
-blend, depth, colour mask, viewport, render target (`0x210`) and bound textures. Three boots (`data/scratch/hd-whiteout`)
+blend, depth, colour mask, viewport, render target (`0x210`) and bound textures. Three boots
 and what they taught:
 
 - **The pool's age field and the dumped frame differ by about two ticks**: the CPU's `+0x170` read at the pause was
@@ -1105,7 +1105,7 @@ each worth knowing before the next capture:
   chain and the HUD, which are the last passes of a frame, so "program X did not run"
   reads true on a half. `HOOK_NEED_SCREEN=1` retries until a bloom-chain-end draw
   (`0x02240000`) is followed by a screen-buffer draw (`0x00010000` or `0x00394000`);
-  `data/scratch/hd-motion-blur/frametab.py` applies the same test offline. Two of ten
+  a throwaway script, not kept applies the same test offline. Two of ten
   early frames here were halves.
 - **Name a live fragment program by its microcode, not its address.** The same address
   (`0x00741f40`, the `FunkLayerBloomDownsample_fp` copy) serves thirteen draws whose constants are
@@ -1161,5 +1161,4 @@ Detonator. **The first `right` was swallowed on this machine**, so Zone took fiv
 "Single Player=right,right,right,right,right,cross"`), Zone Battle six, Detonator seven; read the result
 off `TTY.log`'s `BackendRoot has g_GameState.GetMode()==N` (Zone 6, Zone Battle 13, Detonator 14, Eliminator 8) rather than
 counting. Naming a bound texture needs more than the first 64 bytes: a flat first DXT block matches several
-files, so compare the head and the samples at `+0x400`, `+0x1000`, `+0x4000`, `+0x10000`
-(`data/scratch/hd-gantry/namegtf.py`). The main surface word `0x3148` is A8R8G8B8 with 2x MSAA, not fp16.
+files, so compare the head and the samples at `+0x400`, `+0x1000`, `+0x4000`, `+0x10000`. The main surface word `0x3148` is A8R8G8B8 with 2x MSAA, not fp16.

@@ -83,7 +83,7 @@ below is what excludes it.
 A live PPSSPP capture of a campaign Zone or Speed Lap cell across a medal
 threshold was **not obtained**: a fresh profile has only `grid0`'s centre cell
 unlocked, and the Zone and Speed Lap cells are behind medals (a campaign walk
-screenshot is in the lane's scratch, `data/scratch/hud-medal/shots/cells.png`).
+screenshot is in the lane's scratch, `cells.png`).
 The static census above is what stands in for it. To close it: unlock a Zone
 cell on a PPSSPP profile (or write the cell record) and watch `hud+0xe0` and
 the four slot busy bytes across the threshold; the prediction is that none

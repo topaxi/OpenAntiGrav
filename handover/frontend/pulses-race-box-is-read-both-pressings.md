@@ -222,7 +222,7 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
    `docs/ui/selection-screens.md`'s "no PCSX2 walk exists yet" gap. Full
    captures and the `RACEBOX` row list itself (which turned up a separate,
    real gap - see below) are under
-   `data/scratch/drive-2026-09-27/ps2-walk/`.
+   a scratch directory, not kept.
 
    **New finding from the same walk: `RACEBOX` authors two rows this
    build's `race` page does not.** The disc's screen (`racebox1.png`) has

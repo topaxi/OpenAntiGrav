@@ -19,7 +19,7 @@ no circuit material. Still open below: a GCN read, the plain scroll's sign,
 `TimeScaler`-alone, flipbook, inline-`time`, and a frame where an inherited
 surface is isolated (the one candidate on Anulpha Pass is confounded by node
 animation; the plain scroll on Altima's "WELCOME" ring is proven by a static
-camera diff, `data/scratch/psp2-scroll/shots/sign_diff.png`).
+camera diff, `sign_diff.png`).
 
 ## Open
 

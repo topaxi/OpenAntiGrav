@@ -33,7 +33,7 @@ passes read here. Several early frames were such halves and were dropped.
 States: the grid with nothing held; throttle held for 6 s (436 to 438 km/h on the straight,
 read off the HUD); `state 4` (Turbo) written to the pickup slot and triangle pressed, the
 recipe of [weapons.md](weapons.md); and a bomb fired standing still. Raw captures:
-`data/scratch/hd-motion-blur/run{1..7}` (gitignored).
+`run{1..7}` (gitignored).
 
 ## Which programs ran
 
@@ -126,7 +126,7 @@ a    = 1 - (1 - col.a)^2               ; col = the interpolated vertex colour
   bound, mean 0.038). With `E = 0` it is 1.0 (a bomb frame) or `1.0001` (the frame after a
   boost, the decay of `A`).
 
-What it looks like: `data/scratch/hd-motion-blur/run4/boost2.png` (E = 1.0, 647 km/h)
+What it looks like: `boost2.png` (E = 1.0, 647 km/h)
 against `run4/speed1.png` (436 km/h). At the boost the world on the right edge and the
 ceiling stretches outward from the screen centre, the HUD fades toward the middle, and
 the periphery reads as smeared along the radius while the ship at the centre is sharp.
