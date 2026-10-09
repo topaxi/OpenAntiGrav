@@ -386,3 +386,137 @@ fn the_encode_pass_honours_the_scenes_own_offset() {
          pass's own clear colour"
     );
 }
+
+/// The luminance reduction is an exact linear mean whose result is read as
+/// encoded bytes, whatever the level sizes.
+///
+/// Half of an 80x76 scene is linear 0 and half 0.4, so the ladder's odd levels
+/// (20x19, 10x10, 5x5, 3x3, 2x2) must still return 0.2 and the readback encodes
+/// it: `adapted = 0.2^(1/2.2)`. The resolve's exposure `max - adapted * boost`
+/// turns that into the right half's byte (203). A mean of the *linear* scene
+/// (0.2), a mean taken after encoding each texel (0.33) or a ladder that
+/// dropped a row or column (205 on the edge-duplicating one) all land more than
+/// the tolerance away. See `renderer.md`, "The adaptation reads encoded bytes".
+#[test]
+fn the_adaptation_is_the_encoded_linear_mean() {
+    let instance = wgpu::Instance::default();
+    let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::PRIMARY));
+    if adapters.is_empty() {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    }
+    let adapter = &adapters[0];
+    let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))
+        .expect("a device with no extra features");
+
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let size = (80u32, 76u32);
+    let chain_params = Params {
+        tone_adaption_boost: 1.0,
+        tone_darkening_clamp: 10.0,
+        tone_maximum_brightness: 2.0,
+        ..params()
+    };
+    let chain = Chain::new(&device, format, size, chain_params, Glow::Suppressed)
+        .expect("the pipelines build");
+    // The left half black, the right half 0.4 (as the half float 0x3666,
+    // 0.3999023), written straight into the scene texture.
+    let value = |linear: f32| (if linear == 0.0 { 0u16 } else { 0x3666 }).to_le_bytes();
+    let mut texels = Vec::new();
+    for _row in 0..size.1 {
+        for column in 0..size.0 {
+            let linear = if column < size.0 / 2 { 0.0 } else { 0.4 };
+            for channel in [linear, linear, linear, 0.0] {
+                texels.extend_from_slice(&value(channel));
+            }
+        }
+    }
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: chain.scene_texture(),
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        &texels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(size.0 * 8),
+            rows_per_image: Some(size.1),
+        },
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let output = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hd bloom adaptation test output"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = output.create_view(&Default::default());
+    let stride = (size.0 * 4).next_multiple_of(256);
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hd bloom adaptation test readback"),
+        size: u64::from(stride) * u64::from(size.1),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    chain.run(&queue, &mut encoder, &view, (0.0, 0.0), size, None);
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &output,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(stride),
+                rows_per_image: Some(size.1),
+            },
+        },
+        wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    readback.slice(..).map_async(wgpu::MapMode::Read, |r| {
+        r.expect("the readback maps");
+    });
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let data = readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("the buffer is mapped");
+    let at = (size.1 / 2 * stride + (size.0 * 3 / 4) * 4) as usize;
+    let got = f64::from(data[at]);
+    drop(data);
+    readback.unmap();
+
+    let stored = 0.399_902_3f64;
+    let adapted = (stored / 2.0).powf(1.0 / 2.2);
+    let scale = 2.0 - adapted;
+    let want = (stored * scale).min(1.0).powf(1.0 / 2.2) * 255.0;
+    assert!(
+        (got - want).abs() <= 2.5,
+        "the right half resolved to byte {got}, the encoded linear mean predicts {want:.1}"
+    );
+}
