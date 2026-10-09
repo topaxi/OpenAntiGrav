@@ -31,6 +31,16 @@ Also enforced, two rules from CLAUDE.md:
 Both are one-directional: a `handover/` thread citing a `docs/` page, or one
 thread citing another, is how every thread here is written, and is unchecked.
 
+3. No tracked file, `handover/` included, may cite a path under a `data/`
+   directory on `DISPOSABLE_DATA_DIRS`. `data/` is gitignored, and its
+   throwaway parts (`scratch/`, `shots/`, a lane's probe directory) are wiped
+   wholesale once their lane merges, so a citation into one dangles the same way
+   a deleted thread does (maintainer rule, 2026-10-09). The durable directories
+   (disc images and what is extracted or cached from them, reference frames,
+   save states, traces) stay citable: tests and tools read them by path. A
+   script that *writes* scratch output names the directory without a literal
+   `data/<dir>/<name>` path.
+
 `docs/ghidra/captures/*.tsv` is exempt from rule 2: it is a verbatim capture
 of what a Ghidra database held on a date, governed by its own check
 (`check-ghidra-captures.py`'s `KNOWN_DANGLING`), where a dangling reference is
@@ -65,6 +75,29 @@ HANDOVER_CITATION_EXEMPT = {
     "scripts/check-ghidra-captures.py",
     "scripts/patches/ghidra-allegrex-psp-elf-extension-priority.patch",
 }
+# Rule 3: a path into a `data/` subdirectory. It must start the path (nothing
+# path-like before `data/`), because 2048's and Omega's own archive paths begin
+# with `data/` too (`data/art/...`, `data/audio/...`) and are not this checkout's
+# `data/`. The character after the second slash must start a name, so a mention
+# of the directory itself (`data/scratch/` in prose, `data/scratch/<lane>/` in a
+# template) is not a citation.
+DATA_CITATION = re.compile(r"(?<![A-Za-z0-9_./:\\-])data/([A-Za-z0-9_.-]+)/[A-Za-z0-9_.-]")
+# The disposable `data/` subdirectories: lane scratch, screenshots and one-off
+# probes, wiped once their lane merges. A deny-list rather than an allowlist of
+# the durable ones (images, extracted, reference, saves, traces, ...) because
+# of the archive-path collision above: an allowlist flags every in-game path.
+DISPOSABLE_DATA_DIRS = {
+    "ghidra-reloc-experiment",
+    "lod-measure",
+    "perf",
+    "pulse-absorb-probe",
+    "pulse-bloom",
+    "scratch",
+    "shots",
+    "wine",
+}
+# This script names a disposable path in its own docstring.
+DATA_CITATION_EXEMPT = {"scripts/check-doc-links.py"}
 # Directories whose Markdown is not this project's to check.
 #
 # **`.claude` is the one that is easy to leave out and bites.** It holds this
@@ -261,12 +294,37 @@ def handover_citations(root: Path) -> list[str]:
     return problems
 
 
+def data_citations(root: Path) -> list[str]:
+    """Rule 3: no tracked file cites a disposable `data/` directory."""
+    problems = []
+
+    for rel in tracked_files(root):
+        if rel in DATA_CITATION_EXEMPT:
+            continue
+
+        try:
+            text = (root / rel).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+
+        for number, line in enumerate(text.splitlines(), start=1):
+            for match in DATA_CITATION.finditer(line):
+                if match.group(1) not in DISPOSABLE_DATA_DIRS:
+                    continue
+                problems.append(
+                    f"{rel}:{number}: cites disposable data/{match.group(1)}/ - "
+                    f"{line.strip()}"
+                )
+
+    return problems
+
+
 def main() -> int:
     root = Path(__file__).resolve().parent.parent
-    problems = check(root) + handover_citations(root)
+    problems = check(root) + handover_citations(root) + data_citations(root)
 
     if problems:
-        print(f"{len(problems)} broken link(s):\n", file=sys.stderr)
+        print(f"{len(problems)} problem(s):\n", file=sys.stderr)
         for p in problems:
             print(f"  {p}", file=sys.stderr)
         return 1
