@@ -385,7 +385,10 @@ key that your own dump tool recorded for that disc (redump publishes it as a
    so this works under X11, XWayland, Windows and macOS, and not on a native
    Wayland window; paste and the file beside the image work everywhere. The
    launcher's logic is covered by unit tests and a disc-backed test
-   (`launcher_ground_truth`); a real drag was not driven.
+   (`launcher_ground_truth`), and a real drop was driven under Xvfb with
+   `scripts/xdnd-drop.py` (2026-10-09): the hover line appears, the drop of the
+   HD `.dkey` stores it in the keys folder and the row turns from `NEEDS DISC
+   KEY` to `WIPEOUT HD`.
 
    **In the browser**, the page takes the same key as a dropped or picked file
    or as pasted digits, and remembers it per disc: see
