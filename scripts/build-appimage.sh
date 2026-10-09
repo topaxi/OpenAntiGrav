@@ -85,7 +85,7 @@ die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 
-step "Building oag-game (release${target_cpu:+, target-cpu=$target_cpu})"
+step "Building oag-game (dist${target_cpu:+, target-cpu=$target_cpu})"
 
 # Both build paths below read these. Empty for a baseline build, so nothing
 # about one changes; a tier build gets its own target directory so the two
@@ -145,19 +145,19 @@ Build natively instead and mind the glibc floor this script prints."
     [[ $engine == docker ]] && icon_args+=(--user "$(id -u):$(id -g)")
 
     "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
-        bash -c 'ldd --version | head -1 && cargo build --release -p oag-game'
-    binary="$container_target/release/oag-game"
+        bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game'
+    binary="$container_target/dist/oag-game"
 elif (( skip_build )); then
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
-    echo "skipped, using whatever is in $native_target/release"
-    binary="$native_target/release/oag-game"
+    echo "skipped, using whatever is in $native_target/dist"
+    binary="$native_target/dist/oag-game"
 else
-    # `target/cpu-<cpu>`, the directory `just build-cpu` uses, so the two share
-    # one incremental build.
+    # `target/cpu-<cpu>`, the directory `just build-cpu` uses; the two keep
+    # separate `release` and `dist` outputs there.
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
     CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
-        cargo build --release -p oag-game --manifest-path "$project_root/Cargo.toml"
-    binary="$native_target/release/oag-game"
+        cargo build --profile dist -p oag-game --manifest-path "$project_root/Cargo.toml"
+    binary="$native_target/dist/oag-game"
 fi
 
 [[ -x $binary ]] || die "$binary not found; run without --skip-build"

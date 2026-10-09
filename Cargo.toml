@@ -222,6 +222,16 @@ imprecise_flops = "allow"
 [profile.release]
 debug = 1
 
+# What a shipped build uses (release.yml, the AppImage and the APK); local
+# `cargo run --release` recipes keep the quick `release` build above. Whole
+# program LTO and one codegen unit buy cross-crate inlining into the render
+# and sim hot loops at the price of a much slower build. Binary size is not a
+# concern here. Measured in docs/tools/packaging.md, "The dist profile".
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+
 # Link time, not compile time, is what the test gate spends on `oag-game`: it
 # has 84 integration-test binaries, each statically linking wgpu, cpal and the
 # rest of the composition root, and every edit to the library relinks all of

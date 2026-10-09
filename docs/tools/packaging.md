@@ -15,10 +15,10 @@ not on a machine with no working GPU driver. See
 [menus](../architecture/menus.md).
 
 ```sh
-just appimage                       # release build, then pack
+just appimage                       # dist-profile build, then pack
 just appimage-portable              # the same, built against an older glibc
 just appimage-deck                  # portable, compiled for the Steam Deck's CPU
-just appimage --skip-build          # pack whatever is in target/release
+just appimage --skip-build          # pack whatever is in target/dist
 just appimage --out /tmp/oag.AppImage
 ```
 
@@ -43,6 +43,57 @@ freshly built binary's own `--write-icon`, which rasterises
 [`assets/icons/64x64.svg`](../../assets/icons/64x64.svg) through `oag_game::icon`
 - the same code path `main/window.rs` uses for the live window/taskbar icon, so
 the two can never draw two different pictures.
+
+## The dist profile
+
+Shipped builds use `[profile.dist]` in `Cargo.toml`, which inherits `release`
+and adds `lto = "fat"` and `codegen-units = 1` (`debug = 1` kept as `release`
+has it). `release.yml` (the Linux container build, the tarball and the Windows
+zip), `scripts/build-appimage.sh` and `scripts/build-apk.sh` build with
+`--profile dist` and read the binary from `target/dist/` (the APK's
+`.so` from `target/<triple>/dist/examples/`). Every local
+`cargo run --release` recipe keeps the quick `release` profile, and
+`just build-dist` is a local dist build. `just build-cpu` stays `release`.
+Binary size is not a concern; load time and runtime speed are.
+
+Measured 2026-10-09, AMD Ryzen 9 7900 (12 cores, 24 threads), Linux, rustc 1.99,
+`RUSTC_WRAPPER` unset (sccache would hide build times), the EU Pulse CHD and
+the EU HD/Fury ISO, `oag-game <image> --race --no-audio --screenshot out.png
+--hold cross --ticks N`, 9 interleaved rounds, medians (min-max). Machine load
+average (1 minute) was 3.3-6.0 during the runs, the maintainer's own session
+and other lanes included; the build times were taken at load 2 (release),
+27 falling to 8 (dist) and 6.5-9 (CPU tiers), so read them as indicative.
+
+| | release | dist | dist + x86-64-v2 | dist + x86-64-v3 |
+| --- | --- | --- | --- | --- |
+| Pulse load to first frame (`--ticks 0`), s | 0.879 (0.862-0.896) | 0.862 (0.849-0.870) | 0.858 (0.841-0.881) | 0.847 (0.840-1.141) |
+| HD load to first frame (`--ticks 0`), s | 1.815 (1.801-1.838) | 1.782 (1.759-1.816) | 1.809 (1.781-1.829) | 1.790 (1.770-2.280) |
+| Pulse 100,000 sim ticks, s | 3.395 (3.353-3.446) | 2.842 (2.813-2.912) | 2.924 (2.896-3.398) | 2.753 (2.727-3.928) |
+| Sim cost per tick (that minus load, / 100,000), us | 25.2 | 19.8 | 20.7 | 19.1 |
+| Clean build of `oag-game` | 1 m 02 s | 2 m 19 s | 2 m 22 s | 2 m 38 s |
+| Binary size | 231 MB | 147 MB | n/a | n/a |
+
+What it says. The sim loop is the clear win: 21% fewer microseconds a tick
+(race + physics + AI, no rendering). Load time barely moves (2% Pulse, 2% HD),
+because it is disc decoding, shader compilation and GPU setup, most of it
+outside code LTO touches. The dist binary is also 36% smaller, which was not
+the aim. Here a clean dist build costs about 2.2x the wall time of a release one; a CI runner has fewer cores than this machine and will pay more (not measured). `x86-64-v2` is within noise of
+plain dist. `x86-64-v3` is 3.5% faster again on the sim loop and 1-2% on
+load, which is too small to give up the CPUs it would drop (anything before
+Haswell/Excavator and Zen 1: no AVX2/FMA/BMI2, including every Intel
+Pentium/Celeron before 2020-ish and some VMs that mask AVX), so it is not wired.
+The Deck AppImage keeps its `znver2` build, now with the dist profile too.
+
+Not isolated: the CPU cost of a rendered frame. `--screenshot` renders one
+frame at the end, so it sits inside the load figure, and the frame meter
+(`oag_present::Meter`) only runs in a windowed game. A windowed comparison
+needs a GPU on a display; this was left to the maintainer.
+
+Determinism: `cargo test --profile dist -p oag-core --test determinism` (2
+passed) and `-p oag-physics --test determinism` (5 passed) match the committed
+reference hashes, both on the plain dist profile and with
+`RUSTFLAGS="-C target-cpu=x86-64-v3"`. `just check-determinism` is a source
+scan and does not depend on the profile (OK, 351 files). LTO and codegen units do not license float reassociation, and the hashes agree.
 
 ## A CPU-tier build
 
