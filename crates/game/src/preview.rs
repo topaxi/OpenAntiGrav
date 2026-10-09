@@ -34,6 +34,7 @@ use crate::render::letterbox_in;
 
 pub mod psp2_scene;
 pub mod track_model;
+pub mod variant;
 
 /// The craft's framing on a title whose `Team Selection` draws the race hull
 /// ([`oag_title::FrontEnd::ship_preview_hull`]): **fixed, not a turntable** -
