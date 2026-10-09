@@ -212,7 +212,7 @@ fn verify(line: &Line, plan: &SpeedPlan) -> Report {
         pad: &|_, _| None,
     };
     let craft = craft(line);
-    let yaw = crate::hull_yaw_ceiling(&craft.handling);
+    let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
     let mut report = Report::default();
     plan.clone()
         .verify(&course, &craft, &tuning(), yaw, &mut report);

@@ -439,7 +439,7 @@ fn inbound_ticks_are_not_contact_ticks() {
 /// *independent*, and `oag_physics::airbrake`'s is `speed * Airbrake.turn *
 /// imbalance * 0.001`, speed *proportional*. Through the same steady state
 /// [`hull_yaw_ceiling`](oag_ai::hull_yaw_ceiling) uses (`omega = torque / (5 *
-/// I_yy)`, and `5 * 21.6 = 108`):
+/// I_yy)`, and `5 * 21.6 = 108` on Pulse's craft):
 ///
 /// ```text
 /// v * k = [S + v * T] / 108      S = 100 * Turning.amount

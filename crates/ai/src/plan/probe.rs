@@ -52,7 +52,7 @@ pub fn drive<R: Raycaster + ?Sized>(
     ticks: u32,
     skip: usize,
 ) -> Vec<Row> {
-    let yaw = crate::hull_yaw_ceiling(&craft.handling);
+    let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
     let n = course.line.len();
     let mut run = SpeedPlan::start_run(craft);
     let mut rows = Vec::with_capacity(ticks as usize);

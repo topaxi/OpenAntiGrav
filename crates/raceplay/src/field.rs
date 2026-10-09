@@ -247,7 +247,7 @@ impl Race {
         }
         // The player's own hull, the same way an opponent gets its own. See
         // `oag_ai::pace::hull_yaw_ceiling`.
-        let yaw_ceiling = oag_ai::hull_yaw_ceiling(&ship.handling);
+        let yaw_ceiling = oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body);
         let route = ship.driver.branching.route;
         ship.driver.drive(
             &ship.physics,
@@ -398,7 +398,7 @@ impl Race {
                         // eight teams is eight different yaw ceilings and one
                         // global belief was wrong for all of them. See
                         // `oag_ai::hull_yaw_ceiling`.
-                        yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling)),
+                        yaw_ceiling: Some(oag_ai::hull_yaw_ceiling(&handling, &ship.physics.body)),
                         plan: super::routes::plan_for(
                             &self.sim.routes,
                             self.sim.speed_plan.as_ref(),

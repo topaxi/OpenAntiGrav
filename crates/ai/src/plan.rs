@@ -523,7 +523,7 @@ impl SpeedPlan {
         if plan.len() < 3 {
             return (plan, report);
         }
-        let yaw = crate::hull_yaw_ceiling(&craft.handling);
+        let yaw = crate::hull_yaw_ceiling(&craft.handling, &craft.start.body);
         let (decel, steps) = brake::calibrate(course, craft, tuning, yaw);
         report.steps += steps;
         plan.decel = decel;

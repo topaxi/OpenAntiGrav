@@ -92,13 +92,17 @@ pub(super) fn corner_target(
 /// `1 / oag_physics::forces::YAW_INVERSE_INERTIA`; full lock is
 /// `oag_physics::controls::CONTROL_RANGE` (`100`).
 ///
-/// # `I_yy` is global and `Turning.amount` is not
+/// # `I_yy` is the craft's own, per title, and `Turning.amount` is per team
 ///
-/// The inertia box `(12, 8, 12)` and mass `0.9` are code literals at one call
-/// site, so every craft has `I_yy` 21.6 (see
-/// [`oag_physics::forces::YAW_INVERSE_INERTIA`]). `<Turning amount>` is **per
-/// team, constant across speed classes**, measured by
-/// `crates/game/tests/ai_clean_lap_board.rs`:
+/// `I_yy` is read off `body.inertia`, the tensor the race seated the craft
+/// with, so the AI plans on the hull it actually flies. The inertia box
+/// `(12, 8, 12)` is a code literal at one call site and the mass it is built
+/// with is a per-title literal: Pulse passes `0.9` (`I_yy` 21.6,
+/// [`oag_physics::forces::YAW_INVERSE_INERTIA`]), Wipeout HD `1.0` (`I_yy` 24,
+/// `oag_title::craft_laws::CraftLaws`, measured on RPCS3), so HD's ceilings
+/// are `0.9` of the table below. A title with no `CraftLaws` flies Pulse's.
+/// `<Turning amount>` is **per team, constant across speed classes**,
+/// measured by `crates/game/tests/ai_clean_lap_board.rs`. On Pulse:
 ///
 /// | team | `amount` | ceiling | against `Tuning::max_turn_rate` 1.8 |
 /// | --- | ---: | ---: | ---: |
@@ -110,12 +114,17 @@ pub(super) fn corner_target(
 ///
 /// No craft reaches 1.8, so the old kinematic limit asked every one for a
 /// corner speed its hull could not rotate at. The 1.556 row is the Outpost 7
-/// thread's hand measurement.
+/// thread's hand measurement. HD's Feisar reads `1.5`, the yaw rate RPCS3
+/// measures (`docs/physics/hd-handling-ground-truth.md`).
+///
+/// The steering ramp is not modelled here: the steady state does not depend
+/// on it, and the speed plan's own simulation steps the real ramp through
+/// `oag_physics`, clamped where the craft's `ShipState::steer_ramp_clamped`
+/// says so.
 #[must_use]
-pub fn hull_yaw_ceiling(handling: &oag_physics::Handling) -> f32 {
-    let i_yy = 1.0 / oag_physics::forces::YAW_INVERSE_INERTIA;
+pub fn hull_yaw_ceiling(handling: &oag_physics::Handling, body: &oag_physics::Body) -> f32 {
     oag_physics::controls::CONTROL_RANGE * handling.turning.amount
-        / (-oag_physics::passive::YAW_DAMPING * i_yy)
+        / (-oag_physics::passive::YAW_DAMPING * body.inertia.y)
 }
 
 /// Thrust, and the brake held on **both** sides, from the speed the corner
@@ -278,5 +287,52 @@ pub(super) fn airbrakes(brake: f32, differential: f32, floor: f32) -> (f32, f32)
         (low, high)
     } else {
         (high, low)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hull_yaw_ceiling;
+    use oag_physics::{Body, Handling};
+
+    fn body(inertia: oag_core::math::Vec3) -> Body {
+        Body {
+            inertia,
+            ..Body::default()
+        }
+    }
+
+    /// A Pulse craft's ceiling is bit for bit the one Pulse's global `I_yy` gave before the
+    /// craft's own inertia was read.
+    #[test]
+    fn a_pulse_craft_reads_pulses_ceiling_bit_for_bit() {
+        let mut handling = Handling::default();
+        for amount in [1.30f32, 1.42, 1.55, 1.68, 1.80] {
+            handling.turning.amount = amount;
+            let before = oag_physics::controls::CONTROL_RANGE * amount
+                / (-oag_physics::passive::YAW_DAMPING
+                    * (1.0 / oag_physics::forces::YAW_INVERSE_INERTIA));
+            let seated = body(oag_physics::forces::ship_inertia_at(
+                oag_physics::forces::INERTIA_MASS,
+            ));
+            assert_eq!(
+                hull_yaw_ceiling(&handling, &seated).to_bits(),
+                before.to_bits()
+            );
+            assert_eq!(
+                hull_yaw_ceiling(&handling, &Body::default()).to_bits(),
+                before.to_bits()
+            );
+        }
+    }
+
+    /// HD builds its inertia with mass `1.0`, so `I_yy` is 24 and its Feisar turns at `1.5`
+    /// rad/s, not Pulse's `1.667`.
+    #[test]
+    fn an_hd_craft_reads_its_own_inertia() {
+        let mut handling = Handling::default();
+        handling.turning.amount = 1.80;
+        let hd = hull_yaw_ceiling(&handling, &body(oag_physics::forces::ship_inertia_at(1.0)));
+        assert!((hd - 1.5).abs() < 1e-5, "{hd}");
     }
 }
