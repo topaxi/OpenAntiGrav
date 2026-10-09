@@ -226,7 +226,7 @@ fn hd_tinted_medal_draw_crops_one_frame_of_the_right_tier_at_its_own_authored_po
 /// `Target1 Medal`), so the plain [`image_draw`] path already reads it
 /// through `sprite_draw`. Pins the geometry this pass switched to drawing
 /// for real (see the module doc's "The winning archive" section) against
-/// the exact numbers `data/scratch/lane-hd-sel/cs_data06.xml` authors.
+/// the exact numbers the `DATA06` campaign-selection XML authors.
 #[test]
 fn a_target_medal_widget_crops_through_the_plain_image_path_with_no_extra_help() {
     let image = Image {

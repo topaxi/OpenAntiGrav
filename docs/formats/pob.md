@@ -1276,7 +1276,7 @@ confidence scores in its own module doc; the summary:
 - **`WO_SHIP_COLL_SPARK_DAMAGE` confirms it names the texture `pob.md`
   already resolved from the slot table**: its root's positional texture is
   32x32/3-level, matching `quakesmoke32x32.tga`'s own size, and decodes
-  (`data/shots/quakesmoke32x32.png`, gitignored) to a soft grey puff; its
+  (a render, not kept in the repository) to a soft grey puff; its
   three siblings' positional textures all point at one shared 64x64/4-level
   pool matching `orange_glow2.tga`, which decodes to the documented
   white-hot-core-to-orange glow. `WO_PLASMA_HEAD` is the counter-example -

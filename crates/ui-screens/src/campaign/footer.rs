@@ -133,8 +133,7 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// disc: `oag-tools --example hd_buttons_font_probe` decodes real
 /// circled-glyph art at the codepoints `FE_CONFIRM_BUTTON`/`FE_BACK_BUTTON`/
 /// `DifficultyButtonIcon` resolve to (`ε`/`γ`/`δ`), a cross, a circle and a
-/// square, matching `data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`
-/// against the RPCS3 captures shape for shape (compared by eye, not a pixel
+/// square, matching the RPCS3 captures shape for shape (compared by eye, not a pixel
 /// diff). **Not Pulse**: Pulse's own
 /// `ControlTextConfirmButton`/`BackButton` author `font="small"`, not
 /// `"buttons"` (`docs/ui/campaign-screens.md`'s "measured on RPCS3"
@@ -396,7 +395,7 @@ impl NavigationLegend {
         // `FE_CONFIRM`'s own word left-aligned at its authored `x="368"`
         // runs into `FE_BACK_BUTTON`'s own glyph at `x="415"` even at this
         // build's smallest available role scale - measured directly,
-        // `data/scratch/lane-pulse/shots/crop-legend2-zoom.png`: "CONFIRM"
+        // "CONFIRM"
         // draws straight through the back button's own circle. This
         // build's only loaded menu-face atlas (`Pulse_20.fnt`, the `menu`
         // role every campaign-screen `Draw::Text` scales rather than
@@ -421,8 +420,7 @@ impl NavigationLegend {
         // check this crate would otherwise have to invent one of. RPCS3
         // draws HD's own `CONFIRM` left-aligned at that authored `x="534"`,
         // 186 native pixels short of `BACK`'s own `x="720"`
-        // (`data/scratch/drive-2026-09-25/hd-footer-glyphs/difficulty-icon-zoom.png`
-        // and the clean `02-square.png`/`02-triangle.png` captures) - plenty
+        // (the RPCS3 difficulty-icon zoom and the clean square and triangle captures) - plenty
         // of room at `scale="0.8"`, so applying Pulse's own shrink-to-fit
         // hack there would move `CONFIRM` to a position and alignment RPCS3
         // never shows, not fix an overlap that does not exist on this title.

@@ -328,7 +328,7 @@ pub(super) const NEXT_CLASS_WIDGETS: [&str; 2] = ["NextSpeedClassBG", "NextSpeed
 /// class is named beside **the zone number it starts at**. So the bar sits on
 /// that zone's ladder row and slides down as the bands widen - at zone 1 the
 /// next bump is zone 2, one row down, which is what the reference frame
-/// (`data/shots/hd_zone_hud_original.png`) shows.
+/// (a maintainer capture) shows.
 ///
 /// # The rule: the name sits on its row's own line, inset like the current one
 ///
@@ -402,7 +402,7 @@ pub(super) const CURRENT_ROW_CLASS: &str = "SpeedClass";
 /// zero.
 ///
 /// **A Zone frame of the running original reads `1` through `11`**
-/// (`data/shots/hd_zone_hud_original.png`), with the current row's `1` beside
+/// (a maintainer capture), with the current row's `1` beside
 /// `SUB-VENOM` - zone 1; a second at zone 8 reads `8` through `18`. Confidence
 /// **88**: the name, the placeholders and two frames all say `zone + N`, against
 /// no disassembly of what writes them.

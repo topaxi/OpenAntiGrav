@@ -1632,17 +1632,17 @@ directory with its own `oag/records.toml` (`dirs::config_dir()` honours it)
 rather than editing the real, shared `~/.config/oag/records.toml` - e.g.:
 
 ```sh
-mkdir -p data/scratch/hd-medals/scratch-cfg/oag
-cat > data/scratch/hd-medals/scratch-cfg/oag/records.toml <<'EOF'
+mkdir -p <scratch>/hd-medals/scratch-cfg/oag
+cat > <scratch>/hd-medals/scratch-cfg/oag/records.toml <<'EOF'
 [[campaign]]
 title = "wipeout hd"
 cell = "grid8_2_1"
 best_medal = "gold"
 best_difficulty = "hard"
 EOF
-XDG_CONFIG_HOME=data/scratch/hd-medals/scratch-cfg cargo run -q -p oag-game -- \
+XDG_CONFIG_HOME=<scratch>/hd-medals/scratch-cfg cargo run -q -p oag-game -- \
   data/images/hdfury-ps3-eu-dec.iso --menu-page cell-select --no-audio \
-  --screenshot data/scratch/hd-medals/cell-select.png
+  --screenshot <scratch>/hd-medals/cell-select.png
 ```
 
 ## One shape per difficulty, not just one colour per tier - confirmed 2026-09-28

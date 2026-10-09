@@ -197,7 +197,7 @@ def run_sweep(gdb, cells, seconds):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--image", default="data/images/hdfury-ps3-eu-dec.iso")
-    ap.add_argument("--out", default="data/scratch/hud-probe")
+    ap.add_argument("--out", default=str(Path("data") / "scratch" / "hud-probe"))
     ap.add_argument("--record-window", default="0x307c0000,0x30844000",
                     help="heap window scanned for the HUD's player record")
     ap.add_argument("--hud-window", default="0x32800000,0x32a40000")

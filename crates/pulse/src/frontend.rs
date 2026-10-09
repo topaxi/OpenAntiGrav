@@ -79,8 +79,7 @@ pub mod states {
 /// frame after power-on is *inside* `Data\Movies\Intro.PMF` - the movie's own
 /// SCEE presents card, in a proportional font rather than the front end's bitmap
 /// one - and the sequence runs on to `Show Logo` with no picker in between.
-/// Confidence **90**, observed 2026-08-10; frames under
-/// `data/shots/pulse-cold-boot-2026-08-10/`.
+/// Confidence **90**, observed 2026-08-10.
 ///
 /// This is the measurement that makes a boot sequence a per-title table rather
 /// than anything derivable: the same question asked of Pure's XML gets the right

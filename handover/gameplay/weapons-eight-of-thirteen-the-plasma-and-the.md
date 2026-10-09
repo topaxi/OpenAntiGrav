@@ -1171,7 +1171,7 @@ suite (931 passed).
   already read. Confidence 78 on that reading; see `mine.md`'s 2026-09-06
   section for the instruction-level evidence and `oag-wad sounds` output
   confirming all six cues live in `weapons.bnk`. A WAV of a real cluster
-  drop, real disc, real mixer: `data/shots/mine-launch.wav`
+  drop, real disc, real mixer, written by the test
   (`crates/game/tests/mine_launch_audio_ground_truth.rs`).
   **The other five stay silent, each for a distinct, checked reason:**
   - **`MINERADAR`** (the Mine's own second cue) anchors to a *new emitter

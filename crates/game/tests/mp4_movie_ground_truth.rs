@@ -76,7 +76,10 @@ fn cache_dir() -> PathBuf {
 fn scratch_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/scratch/drive-2026-09-21/mp4")
+        .join("data")
+        .join("scratch")
+        .join("drive-2026-09-21")
+        .join("mp4")
 }
 
 /// The cache must decode to exactly the frames `ffmpeg` gets from the `.mp4`

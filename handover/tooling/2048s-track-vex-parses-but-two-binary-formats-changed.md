@@ -375,7 +375,7 @@ track.vex: 413358 triangle(s) over 2800 submesh(es), 2782/2800 draw(s)
            textured from 521 of 527 material(s), 18 unresolved
 ```
 
-`data/shots/2048_altima_textured.png` is the picture: Altima's start straight
+The screenshot (not kept in the repository) is the picture: Altima's start straight
 with legible grandstand advertising, the overhead gantry banner, a panelled
 road surface, and the Feisar craft in its livery with its wordmark readable on
 the tail.
@@ -791,7 +791,7 @@ declaration-lookup terms `texcoords` already uses, and
 `oag_mesh::mesh::rcs::psp2::Report::decoded_tangents` counts it into the
 load report (`just play 2048 --race` now says e.g. "260533 tangent(s)
 decoded, unused (no normal-map consumer yet)" for Altima). **Confirmed
-byte-identical before and after** (`cmp` on `data/shots/2048_tangent_before.png`
+byte-identical before and after** (`cmp` on the pre-change render
 against the post-change render): nothing in this title's mesh path samples a
 tangent-space normal map, and the shared `GpuVertex` vertex layout /
 `mesh.wgsl` - used by every title's mesh path - was deliberately left

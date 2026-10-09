@@ -171,9 +171,7 @@ pub(super) fn hd_tinted_medal_draw(
 /// `DATA02`'s per-target `IG_HUD_GOLD`/`SILVER`/`BRONZE` labels (see
 /// [`hd_medal_frame`]'s own doc). **Composed, not read verbatim from the
 /// widget's own `idstring="IG_HUD_TARGET"`** - three live RPCS3 frames on
-/// this exact widget (`data/scratch/drive-2026-09-27/hd-targets/`,
-/// `fury-race-3-1.png`/`fury-speedlap-4-2.png`, plus
-/// `data/scratch/lane-hd/rpcs3-grid0-3-2/02-square.png` for `Elimination`)
+/// this exact widget (the Fury race and speed-lap frames, plus the `Elimination` frame)
 /// show text the bare idstring alone cannot produce:
 ///
 /// | Cell | Mode | Frame reads |
@@ -186,7 +184,7 @@ pub(super) fn hd_tinted_medal_draw(
 /// - **The base label is mode-dependent.** `Race`'s own is `IG_HUD_TARGET`
 ///   (`"TARGET"`) unchanged; `Speed Lap`'s is a different idstring entirely,
 ///   `FE_TLTIME` (`"TARGET LAP TIME"`,
-///   `data/scratch/lane-hd-sel/english-entries-data06.xml`). `Time
+///   the `DATA06` English string entries). `Time
 ///   Trial`'s own case is inferred, not captured: `FE_TARGTIME` (`"TARGET
 ///   TIME"`) is the only other `FE_TARG*`/`FE_TL*` idstring on the disc,
 ///   named for exactly the mode this function has no frame for -
@@ -247,7 +245,7 @@ pub(super) fn hd_target_title(
 
 /// `Easy`/`Medium`/`Hard`'s own idstring names, `0` through `2` - the same
 /// three ids this disc's own difficulty rungs resolve
-/// (`data/scratch/lane-hd-sel/english-entries-data06.xml`: `<entry
+/// (the `DATA06` English string entries: `<entry
 /// id="Easy" string="NOVICE">`, `id="Medium" string="SKILLED">`, `id="Hard"
 /// string="ELITE">`), this title's own words for the same rung
 /// (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s own

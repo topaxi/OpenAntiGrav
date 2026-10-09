@@ -458,7 +458,7 @@ HD single race at the start grid, 3200x1800, MSAA 4x, blur off, shadows
 | the `sun_occlusion` call | 22.1 | 0.36 |
 
 What landed, cumulative, **16 captures byte-identical at each step** (the ten
-of `data/perf/matrix.sh`, plus a 2048 race, HD with `--msaa off`, HD with
+of a throwaway script, not kept, plus a 2048 race, HD with `--msaa off`, HD with
 `--shadows off`, an Omega race and the HD and Pulse `main` menu pages):
 
 | step | track solid |

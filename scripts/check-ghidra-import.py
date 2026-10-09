@@ -245,8 +245,7 @@ def check(url: str, program: str, verbose: bool) -> bool:
     return ok
 
 
-# Real probe output, copied from a headless run against psp-pulse-usa
-# (data/ghidra-reloc-experiment/afull.log), and the same shape as it would read
+# Real probe output, copied from a headless run against psp-pulse-usa, and the same shape as it would read
 # once the relocation fix is installed. `path=` is updated from the original
 # capture to the program's current name after the switch_program basename
 # rename (see apply-ghidra-names.py's BINARY_PROGRAMS) - everything else here

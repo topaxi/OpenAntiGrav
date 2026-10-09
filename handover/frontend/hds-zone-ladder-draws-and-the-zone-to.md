@@ -12,8 +12,7 @@ off a *speed lap* frame, which authors none of them), the eleven `ZonePlus<N>`
 labels carry no `idstring` and so fell off `draw_list`'s text allow-list, and
 `RotationTheta` was neither parsed nor correctly applied. Checked against a Zone
 frame of the running original the maintainer supplied
-(`data/shots/hd_zone_hud_original.png`, gitignored) and reproduced at
-`data/shots/hd_zone_hud_ours.png`.
+(a maintainer capture, not kept) and reproduced in our own render (not kept).
 
 ## A renderer bug fell out of it, and it had been latent since the reticle landed
 
@@ -107,7 +106,7 @@ asset file.
 
 ## A zone-8 frame settled the placement and confirmed the table a third time
 
-The maintainer supplied it (`data/shots/hd_zone_hud_original_zone8.png`,
+The maintainer supplied it (a zone-8 capture,
 gitignored; low contrast, the Zone palette at that rung being nearly white). It
 reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
 

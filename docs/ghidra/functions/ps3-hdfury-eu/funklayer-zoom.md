@@ -126,7 +126,7 @@ a    = 1 - (1 - col.a)^2               ; col = the interpolated vertex colour
   bound, mean 0.038). With `E = 0` it is 1.0 (a bomb frame) or `1.0001` (the frame after a
   boost, the decay of `A`).
 
-What it looks like: `boost2.png` (E = 1.0, 647 km/h)
+What it looks like (a frame not kept in the repository; E = 1.0, 647 km/h)
 against `run4/speed1.png` (436 km/h). At the boost the world on the right edge and the
 ceiling stretches outward from the screen centre, the HUD fades toward the middle, and
 the periphery reads as smeared along the radius while the ship at the centre is sharp.

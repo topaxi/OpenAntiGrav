@@ -9,7 +9,7 @@
 #   scripts/wine-run.sh determinism           the four determinism tests as .exe under wine
 #
 # Linker: x86_64-w64-mingw32-gcc if installed, else `zig cc` (zig ships the MinGW
-# runtime). Env: OAG_WINEPREFIX (default data/wine/prefix, never ~/.wine),
+# runtime). Env: OAG_WINEPREFIX (default a prefix under data/, never ~/.wine),
 # CARGO_TARGET_DIR, RELEASE=1.
 
 set -euo pipefail
@@ -38,7 +38,7 @@ else
     die "need MinGW-w64 (x86_64-w64-mingw32-gcc) or zig on PATH"
 fi
 export CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER="$linker"
-export WINEPREFIX="${OAG_WINEPREFIX:-$root/data/wine/prefix}"
+export WINEPREFIX="${OAG_WINEPREFIX:-$root/data}/wine/prefix"
 export WINEDEBUG="${WINEDEBUG:--all}"
 mkdir -p "$WINEPREFIX"
 target_dir="${CARGO_TARGET_DIR:-$root/target}"

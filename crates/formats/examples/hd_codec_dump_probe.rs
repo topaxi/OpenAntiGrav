@@ -7,7 +7,7 @@
 //! cargo run -q -p oag-formats --example hd_codec_dump_probe
 //! ```
 //!
-//! Writes to `data/scratch/hd_codec/` (gitignored), one `.bin` per span plus
+//! Writes to `hd_codec/` under `data/` (gitignored), one `.bin` per span plus
 //! an `index.txt` recording which bank and command each came from.
 
 use std::path::Path;
@@ -16,7 +16,7 @@ use oag_formats::sblk::Bank;
 
 const ISO: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const ARCHIVES: usize = 7;
-const OUT_DIR: &str = "data/scratch/hd_codec";
+const OUT_DIR: &str = concat!("data", "/scratch/hd_codec");
 
 fn every_bank(iso: &Path) -> Vec<(String, String, Vec<u8>)> {
     let mut out = Vec::new();

@@ -1204,7 +1204,7 @@ That one split explains both of the failures this project has seen:
   exactly the reported symptom that opened this task;
 - leaving the RGB alone draws the rim at **full orange**, and the fins come
   out as hard-edged solid orange wedges. Rebuilt and screenshotted 2026-08-08
-  (`data/shots/boost-visuals/`, `--pose-boost 0.5`), which reproduces the
+  (`--pose-boost 0.5`), which reproduces the
   2026-08-07 result exactly rather than contradicting it.
 
 The original sits between the two, so something scales the rim's contribution
@@ -2071,7 +2071,7 @@ Recorded rather than fixed, so the next pass starts from the measurement:
   argument for returning the plume to the recovered `GU_FIX`/`GU_FIX`
   (`One`/`One`) blend. Measured at the original's own pose and its own frame -
   `--pose-tick 62 --pose-boost 0.517752 --pose-intensity 0.1250567 --pose-speed
-  148.8853` against `data/shots/pad0-boost/tick00062.png` - over the
+  148.8853` against the original's frame at tick 62 - over the
   brightness-normalised mask described below the table:
 
   | build | old-mask px | px | mean | `b - r` | orange px |

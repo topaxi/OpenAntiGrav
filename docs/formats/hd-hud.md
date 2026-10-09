@@ -562,7 +562,7 @@ other two:
    [`oag_hd::hud::ALWAYS_ON`](../../crates/hd/src/hud.rs)'s "deliberately left
    out" list, because the frame that set was read off is a **speed lap** and
    authors none of them. The maintainer supplied a Zone frame
-   (`data/shots/hd_zone_hud_original.png`, gitignored) and all thirteen are up
+   (a maintainer capture, not kept in the repository) and all thirteen are up
    in it. They cost the other seventeen layouts nothing: only the three Zone
    roots author any of them, asserted by
    `every_zone_ladder_widget_is_authored_by_the_zone_layouts_alone`.
@@ -963,7 +963,7 @@ the same state (`just play hd --race --mode single_race --team feisar
 --ticks 30`) draws the same five and the same one, a full blue hexagon and a
 blue `100`.
 
-**A second mode agrees, independently.** `data/shots/hd_zone_hud_original_zone8.png`,
+**A second mode agrees, independently.** the zone-8 capture (not kept in the repository),
 a Zone frame of the running original (Zone mode's id is not one of the five
 white ones), shows both brackets **red above and blue below** with a blue `42`
 over them - the fill cropped from the top to 42 %, drawn over a background on

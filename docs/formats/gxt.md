@@ -121,7 +121,7 @@ thin horizontal band whose *shape* escalates across the stage ladder (solid
 at stage 0, increasingly dashed by 7 and 14) while its *area* does not - see
 `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages` in
 `crates/texture/tests/gxt_ground_truth.rs`, whose renders this rests on, and
-`data/shots/2048_zone_track_stage{0,7,14}.png`.
+the renders at stages 0, 7 and 14 (not kept in the repository).
 
 **Why 80 and not higher**: the escalating-shape check is real evidence but a
 weaker oracle than a font atlas or an HD-decoded ground truth - unlike
@@ -356,12 +356,11 @@ wrong answer the way PVRTC does:
 
 Both renders are pinned in `crates/texture/tests/gxt_ground_truth.rs`
 (`ubc1_decodes_to_something_a_human_can_check`,
-`ubc3_decodes_to_something_a_human_can_check`) and written to
-`data/shots/2048_ubc1_manual_page.png`/`2048_ubc3_callout.png`. The
+`ubc3_decodes_to_something_a_human_can_check`) and written to a `.png` under `data/shots/`. The
 roughness numbers above are not part of that pinned test - they come from
 the scratch probe `crates/game/examples/vita_gxt_ubc13_picture_check.rs`,
 which also writes the raster-order control PNGs
-(`data/shots/2048_ubc1_manual_page_raster.png`/`2048_ubc3_callout_raster.png`)
+(the control PNGs the probe writes under `data/shots/`)
 that are the actual evidence for the twiddle claim on these two formats -
 the ground-truth test only renders the correct decode. `UBC1`'s own
 check cannot reuse `UBC2`/`UBC3`'s shared `render_checkerboard` helper - BC1
