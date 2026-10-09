@@ -15,13 +15,18 @@ hold one and let it go (Playwright key names: `x`, `Enter`, `Space`, `ArrowLeft`
 `--fps SECONDS` counts animation frames for that long at the end. The page's console goes to
 stdout. The browser is muted. `--url` drives a page some other server already
 serves (`npx wrangler pages dev`, which sends the Cloudflare `_headers`) instead
-of serving `--dist`. See docs/tools/web.md.
+of serving `--dist`. `--audio-wav FILE` records `--audio-seconds` of exactly
+what the page's audio worklet outputs (the page's `?audiotap=`), from its first
+quantum, and writes it as a 32-bit float WAV with the worklet's under-run count;
+the browser stays muted throughout. See docs/tools/web.md.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import http.server
+import struct
 import sys
 import threading
 import time
@@ -35,6 +40,9 @@ FLAGS = [
     "--use-angle=vulkan",
     "--ignore-gpu-blocklist",
     "--mute-audio",
+    # No audio device at all: Chromium renders to a fake sink, which still
+    # drives an AudioWorklet, so nothing reaches the host's sound server.
+    "--disable-audio-output",
 ]
 
 
@@ -59,11 +67,17 @@ SOFTWARE_FLAGS = {
         "--enable-unsafe-swiftshader",
         "--use-webgpu-adapter=swiftshader",
         "--mute-audio",
+    # No audio device at all: Chromium renders to a fake sink, which still
+    # drives an AudioWorklet, so nothing reaches the host's sound server.
+    "--disable-audio-output",
     ],
     "bare": [
         "--enable-unsafe-webgpu",
         "--use-webgpu-adapter=swiftshader",
         "--mute-audio",
+    # No audio device at all: Chromium renders to a fake sink, which still
+    # drives an AudioWorklet, so nothing reaches the host's sound server.
+    "--disable-audio-output",
     ],
 }
 
@@ -76,6 +90,23 @@ def serve(directory: Path, port: int) -> http.server.ThreadingHTTPServer:
     server = importlib.import_module("serve-web").server(directory, port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
+
+
+def write_tap(tap: dict, path: Path) -> None:
+    """Writes the page's audio tap (interleaved stereo f32) as a float WAV."""
+    data = base64.b64decode(tap["samples"])
+    rate = int(tap["rate"])
+    header = b"RIFF" + struct.pack("<I", 36 + len(data)) + b"WAVE"
+    header += b"fmt " + struct.pack("<IHHIIHH", 16, 3, 2, rate, rate * 8, 8, 32)
+    header += b"data" + struct.pack("<I", len(data))
+    path.write_bytes(header + data)
+    seconds = len(data) / 8 / rate if rate else 0.0
+    print(
+        f"audio: wrote {path}, {seconds:.2f} s at {rate} Hz (complete: {tap['done']}), "
+        f"{tap['underruns']} under-run(s) in {tap['quanta']} quanta, "
+        f"context {tap['state']} at {tap['currentTime']:.2f} s",
+        flush=True,
+    )
 
 
 def main() -> None:
@@ -139,6 +170,8 @@ def main() -> None:
         help="an extra Chromium flag, repeatable (added after the default or --software set)",
     )
     parser.add_argument("--chromium", default="/usr/bin/chromium")
+    parser.add_argument("--audio-wav", type=Path, help="write what the audio worklet output here")
+    parser.add_argument("--audio-seconds", type=float, default=30.0)
     parser.add_argument(
         "--browser",
         choices=("chromium", "firefox"),
@@ -146,6 +179,10 @@ def main() -> None:
         help="firefox: Playwright's own build, WebGPU switched on by pref",
     )
     args = parser.parse_args()
+    # Firefox has no fake audio sink: its stream would reach the host's sound
+    # server, muted only by volume. So it runs silent, and records nothing.
+    if args.browser == "firefox" and args.audio_wav:
+        parser.error("--audio-wav needs Chromium's fake audio sink; Firefox has none")
 
     shots = sorted(float(t) for t in args.at.split(","))
     def keyed(specs: list[str], kind: str) -> list[tuple[float, str, str]]:
@@ -187,7 +224,12 @@ def main() -> None:
                 )
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
             page.on("pageerror", lambda e: print(f"pageerror: {e}", flush=True))
-            query = "&".join(q for q in (args.log and f"log={args.log}", args.read and f"read={args.read}") if q)
+            query = "&".join(q for q in (
+                args.log and f"log={args.log}",
+                args.read and f"read={args.read}",
+                args.audio_wav and f"audiotap={args.audio_seconds:g}",
+                args.browser == "firefox" and "audio=off",
+            ) if q)
             page.goto(url + (f"?{query}" if query else ""))
             print("webgpu:", page.evaluate("!!navigator.gpu"), flush=True)
             print("crossOriginIsolated:", page.evaluate("crossOriginIsolated"), flush=True)
@@ -247,6 +289,8 @@ def main() -> None:
                     print(f"stall: {gap:.0f} ms ending {at / 1000:.2f}s after the pick", flush=True)
                 longest = max((gap for _, gap in gaps), default=0.0)
                 print(f"stalls: {len(gaps)} over {args.stalls:g} ms, longest {longest:.0f} ms", flush=True)
+            if args.audio_wav:
+                write_tap(page.evaluate("window.oagAudioTapTake()"), args.audio_wav)
             browser.close()
     finally:
         if server:

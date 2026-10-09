@@ -128,6 +128,7 @@ winit = { workspace = true, features = ["android-native-activity"] }
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
 # web), and the console as the log sink. See docs/tools/web.md.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+oag-thread.workspace = true
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
 js-sys = "0.3.106"

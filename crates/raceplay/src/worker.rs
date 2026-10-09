@@ -49,15 +49,10 @@ use super::{Loaded, Options, TextureSink};
 /// [`super::Setup`]'s own "no GPU anywhere in sight".
 #[derive(Debug)]
 pub struct LoadWorker {
-    /// `None` once joined, which is what makes [`Self::join`] idempotent.
-    #[cfg(not(target_arch = "wasm32"))]
-    handle: Option<std::thread::JoinHandle<anyhow::Result<Loaded>>>,
-    /// On the web the load runs on a Web Worker (`crate::web_thread`) and
-    /// leaves its result here. The page's thread may not wait on a lock, so
-    /// it reads `done` first and takes the result only once the worker has
-    /// let go of it. See `docs/tools/web.md`, "Threads".
-    #[cfg(target_arch = "wasm32")]
-    handle: Option<Arc<WebResult>>,
+    /// The load, on a thread natively and on a Web Worker in the browser,
+    /// where the page's thread polls it and never waits (`oag_thread::Task`;
+    /// `docs/tools/web.md`, "Threads").
+    task: oag_thread::Task<anyhow::Result<Loaded>>,
     /// What the screen puts on the line where the other phases put an entry
     /// name. Shared rather than owned because the thread refines it: the
     /// circuit a caller *asked* for may be `None`, and only the load knows
@@ -117,65 +112,33 @@ impl LoadWorker {
         })
     }
 
-    #[cfg(target_arch = "wasm32")]
     fn spawn_with(
         label: Option<String>,
         load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
     ) -> Self {
         let current = Arc::new(Mutex::new(label));
         let stages = LoadStages::default();
-        let result = Arc::new(WebResult::default());
-        let spawned = crate::web_thread::spawn({
+        // Named for the same reason `boot-media` is: it should be obvious in a
+        // debugger and in `top` which thread the window is waiting on.
+        let task = oag_thread::Task::spawn("race-load", {
             let stages = stages.clone();
-            let result = Arc::clone(&result);
             move || {
                 let loaded = {
                     let _scope = stages.open();
                     load()
-                }
-                .map(|mut loaded| {
-                    // CPU work the page's thread would otherwise do in the
-                    // scene build; see `Loaded::started`.
+                };
+                // On the web, CPU work the page's thread would otherwise do in
+                // the scene build; see `Loaded::started`.
+                #[cfg(target_arch = "wasm32")]
+                let loaded = loaded.map(|mut loaded| {
                     loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
                     loaded
                 });
-                *crate::web_thread::lock_spinning(&result.loaded) = Some(loaded);
-                result
-                    .done
-                    .store(true, std::sync::atomic::Ordering::Release);
+                loaded
             }
         });
-        if let Err(why) = &spawned {
-            log::error!("race load: {why}");
-        }
         Self {
-            handle: spawned.ok().map(|()| result),
-            current,
-            stages,
-        }
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    fn spawn_with(
-        label: Option<String>,
-        load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
-    ) -> Self {
-        let current = Arc::new(Mutex::new(label));
-        let stages = LoadStages::default();
-        let handle = std::thread::Builder::new()
-            // Named for the same reason `boot-media` is: it should be obvious
-            // in a debugger and in `top` which thread the window is waiting on.
-            .name("race-load".to_string())
-            .spawn({
-                let stages = stages.clone();
-                move || {
-                    let _scope = stages.open();
-                    load()
-                }
-            })
-            .ok();
-        Self {
-            handle,
+            task,
             current,
             stages,
         }
@@ -188,15 +151,7 @@ impl LoadWorker {
     /// error surfaces from [`Self::join`] instead, where it can be reported.
     #[must_use]
     pub fn is_finished(&self) -> bool {
-        #[cfg(target_arch = "wasm32")]
-        return self
-            .handle
-            .as_ref()
-            .is_none_or(|result| result.done.load(std::sync::atomic::Ordering::Acquire));
-        #[cfg(not(target_arch = "wasm32"))]
-        self.handle
-            .as_ref()
-            .is_none_or(std::thread::JoinHandle::is_finished)
+        self.task.is_finished()
     }
 
     /// Takes the result, waiting if it is not in yet.
@@ -206,27 +161,20 @@ impl LoadWorker {
     /// `crate::boot::MediaWorker::join` has. `None` on the second call, and
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
+        let joined = self.task.join()?;
+        // wasm32 caps the shared memory at 4 GiB and it never shrinks, so its
+        // high-water mark is the number a load has to stay under.
         #[cfg(target_arch = "wasm32")]
-        return self.handle.take().and_then(|result| {
-            // wasm32 caps the shared memory at 4 GiB and it never shrinks, so
-            // its high-water mark is the number a load has to stay under.
-            log::info!(
-                "web: module memory {} MiB after the race load",
-                core::arch::wasm32::memory_size::<0>() / 16
-            );
-            // Only reached once `done`, so the worker has let go: never waits.
-            crate::web_thread::lock_spinning(&result.loaded).take()
-        });
-        #[cfg(not(target_arch = "wasm32"))]
-        let handle = self.handle.take()?;
-        #[cfg(not(target_arch = "wasm32"))]
-        Some(match handle.join() {
-            Ok(loaded) => loaded,
-            // A panic on the load thread is reported as a failed load rather
-            // than resumed here, which would take the window down with it. The
-            // caller's own error path puts the player back in the menus.
-            Err(_) => Err(anyhow::anyhow!("the circuit load panicked")),
-        })
+        log::info!(
+            "web: module memory {} MiB after the race load",
+            core::arch::wasm32::memory_size::<0>() / 16
+        );
+        // A panic on the load thread is reported as a failed load rather than
+        // resumed here, which would take the window down with it. The caller's
+        // own error path puts the player back in the menus.
+        Some(joined.unwrap_or_else(|oag_thread::Panicked| {
+            Err(anyhow::anyhow!("the circuit load panicked"))
+        }))
     }
 
     /// What the screen should name as loading, right now.
@@ -255,15 +203,6 @@ impl LoadWorker {
             stage: self.stages.reached(),
         }
     }
-}
-
-/// Where a load on a Web Worker leaves its result.
-#[cfg(target_arch = "wasm32")]
-#[derive(Debug, Default)]
-struct WebResult {
-    loaded: Mutex<Option<anyhow::Result<Loaded>>>,
-    /// Set once `loaded` is filled and its lock released.
-    done: std::sync::atomic::AtomicBool,
 }
 
 /// A race load's progress as the host's loading screen reads it.

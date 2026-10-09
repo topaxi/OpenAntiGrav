@@ -379,7 +379,11 @@ impl<'a> ParticleSystem<'a> {
             return Err(Error::SlotOutOfRange { index });
         };
         let baked = self.order.u32(fixup_bytes, 0);
-        let target = resource_base + baked as usize;
+        // Checked: on a 32-bit target (the browser build) the file's own word
+        // can overflow `usize` when added.
+        let Some(target) = resource_base.checked_add(baked as usize) else {
+            return Err(Error::SlotOutOfRange { index });
+        };
         let name_end = resource_base + NAME_LEN;
         if target < name_end || data.len() <= target {
             return Err(Error::SlotOutOfRange { index });

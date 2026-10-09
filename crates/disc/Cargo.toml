@@ -15,6 +15,10 @@ num-bigint.workspace = true
 miniz_oxide.workspace = true
 thiserror.workspace = true
 
+# The browser's mount table is shared with Web Workers; see `mount`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+oag-thread.workspace = true
+
 [lints]
 workspace = true
 

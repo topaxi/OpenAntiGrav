@@ -35,6 +35,7 @@ pub struct Tap {
 impl Tap {
     /// Room for `samples` interleaved stereo samples.
     #[must_use]
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn new(samples: usize) -> Self {
         Self {
             samples: Mutex::new(Vec::with_capacity(samples)),
@@ -50,6 +51,7 @@ impl Tap {
     /// only other holder is the frame loop taking it once, at the end, and a
     /// recording with a hole in it is better than a dropout in the thing being
     /// recorded.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn push(&self, stereo: &[f32]) {
         let len = self.len.load(Relaxed);
         if len >= self.capacity {

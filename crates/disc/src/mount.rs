@@ -83,9 +83,10 @@ mod web {
     /// Makes `blob` openable at `path`, replacing whatever was there.
     pub fn register(path: impl Into<PathBuf>, blob: Arc<dyn Blob>) {
         let path = path.into();
-        let mut mounts = MOUNTS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // Spinning rather than waiting on the page's thread, where a worker
+        // opening an image at the same moment would otherwise make it trap.
+        let mut mounts =
+            oag_thread::lock(&MOUNTS).unwrap_or_else(std::sync::PoisonError::into_inner);
         mounts.retain(|(at, _)| *at != path);
         mounts.push((path, blob));
     }
@@ -110,9 +111,7 @@ mod web {
     /// # Errors
     /// [`io::ErrorKind::NotFound`] when nothing is registered there.
     pub fn open(path: &Path) -> io::Result<ImageFile> {
-        let mounts = MOUNTS
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mounts = oag_thread::lock(&MOUNTS).unwrap_or_else(std::sync::PoisonError::into_inner);
         mounts
             .iter()
             .find(|(at, _)| at == path)

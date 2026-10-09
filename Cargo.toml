@@ -36,6 +36,7 @@ members = [
   "crates/source",
   "crates/tables",
   "crates/testdata",
+  "crates/thread",
   "crates/texture",
   "crates/title",
   "crates/tools",
@@ -89,6 +90,7 @@ oag-rcs = { path = "crates/rcs" }
 oag-render = { path = "crates/render" }
 oag-replay = { path = "crates/replay" }
 oag-testdata = { path = "crates/testdata" }
+oag-thread = { path = "crates/thread" }
 oag-tables = { path = "crates/tables" }
 oag-texture = { path = "crates/texture" }
 oag-title = { path = "crates/title" }

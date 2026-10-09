@@ -37,6 +37,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
+#[cfg(not(target_arch = "wasm32"))]
 use log::info;
 use oag_core::hash::StateHasher;
 
@@ -436,6 +437,35 @@ fn cache_path(riff: &[u8], format: Format, cache_dir: &Path) -> PathBuf {
 /// Split from [`decode_riff`] so that [`ensure_cached`] can reach the same
 /// conversion without the read-back, rather than growing a second copy of it.
 fn transcode(riff: &[u8], out: &Path, format: Format) -> Result<()> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (riff, out, format);
+        return Err(NoDecoderHere.into());
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    transcode_with_ffmpeg(riff, out, format)
+}
+
+/// The music this module decodes cannot be decoded where the game runs: in a
+/// browser there is no `ffmpeg` to run, and no Rust ATRAC3+ decoder exists
+/// (the decision on one is deferred). The music stays absent, never faked; a
+/// caller tells this apart with `downcast_ref` to say so once rather than per
+/// track. See docs/tools/web.md, "Sound".
+#[derive(Debug, Clone, Copy)]
+pub struct NoDecoderHere;
+
+impl std::fmt::Display for NoDecoderHere {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(
+            "ATRAC3+ and RIFF-wrapped ATRAC9 are decoded by ffmpeg, which a browser cannot run",
+        )
+    }
+}
+
+impl std::error::Error for NoDecoderHere {}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn transcode_with_ffmpeg(riff: &[u8], out: &Path, format: Format) -> Result<()> {
     let cache_dir = out.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
@@ -506,6 +536,7 @@ fn content_key(bytes: &[u8]) -> String {
 /// matches the geometry its own name records. Verified to be a no-op on
 /// `frontend1.at3`: forcing 2 channels at 44,100 Hz and letting `ffmpeg`
 /// choose produce byte-identical output.
+#[cfg(not(target_arch = "wasm32"))]
 fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
     info!(
         "decoding {} into {} (once; cached after this)",

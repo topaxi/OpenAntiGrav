@@ -102,6 +102,7 @@ pub struct Health {
 
 impl Health {
     /// One buffer of `frames` went out.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn buffer(&self, frames: usize) {
         self.buffers.fetch_add(1, Relaxed);
         self.buffer_frames.store(frames as u64, Relaxed);
@@ -119,6 +120,7 @@ impl Health {
     }
 
     /// The mixer lock was still held when the budget ran out.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn dropped(&self) {
         self.dropped.fetch_add(1, Relaxed);
     }
@@ -135,6 +137,7 @@ impl Health {
     /// that was actually rendered and did not follow a drop: the ramp either
     /// side of a gap is a deliberate discontinuity and counting it would bury
     /// the accidental ones.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn scan(&self, stereo: &[f32], tail: [f32; 2]) {
         let mut previous = tail;
         let mut worst = 0.0f32;
@@ -172,6 +175,17 @@ impl Health {
 
     /// More time passed since the previous callback than the buffer between
     /// them was worth, by `over` microseconds.
+    /// The browser's counters, which the worklet keeps in the shared ring
+    /// rather than calling in here: quanta played, each `frames` long, and
+    /// those it could not fill. Read back into the fields the report reads.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn observe_worklet(&self, quanta: u64, frames: u64, underruns: u64) {
+        self.buffers.store(quanta, Relaxed);
+        self.buffer_frames.store(frames, Relaxed);
+        self.dropped.store(underruns, Relaxed);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn late(&self, over_us: u64) {
         self.late.fetch_add(1, Relaxed);
         self.worst_late_us.fetch_max(over_us, Relaxed);

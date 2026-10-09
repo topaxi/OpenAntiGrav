@@ -304,9 +304,11 @@ impl Spectrum {
 
     /// The most recent published levels, each `0.0..=1.0`.
     #[must_use]
+    ///
+    /// Read on the frame loop's thread, which in the browser is the page's and
+    /// may not wait on a lock: [`oag_thread::lock`] spins there instead.
     pub fn levels(&self) -> [f32; BANDS] {
-        self.levels
-            .lock()
+        oag_thread::lock(&self.levels)
             .map(|guard| *guard)
             .unwrap_or([0.0; BANDS])
     }

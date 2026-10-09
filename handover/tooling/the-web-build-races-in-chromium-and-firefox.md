@@ -1,6 +1,6 @@
 # The web build races in Chromium and Firefox
 
-2026-10-09, lanes `web-pages`, `web-next` then `web-load`. `just web` builds
+2026-10-09, lanes `web-pages`, `web-next`, `web-load` then `web-audio`. `just web` builds
 `oag-game` for `wasm32-unknown-unknown` + WebGPU into `target/web/dist`,
 threaded (pinned nightly, `-Z build-std`, `+atomics`, shared memory);
 `pages.yml` builds it and deploys it to Cloudflare Pages (`oag.topaxi.com`,
@@ -12,6 +12,9 @@ before; after, 1.5 to 1.8 s on the worker, `Race::start` included, then a 0.7
 to 0.85 s scene-build stall).
 The image is read a slice at a time on the page's thread (synchronous XHR
 behind a 64 MiB block cache). Settings and records persist in `localStorage`.
+Sound plays through an `AudioWorklet` reading a ring in shared memory that a
+worker renders into (0 under-runs over an HD walk to a race, through the
+scene-build stall); HD's MP3 music plays, Pulse's/Pure's ATRAC3+ is absent.
 Architecture, measurements, hosting and limits:
 [docs/tools/web.md](../../docs/tools/web.md).
 
@@ -48,17 +51,25 @@ Architecture, measurements, hosting and limits:
   Selection only; Pure reaches its Press Start title and no further.
 - **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
   package's sibling files cannot be found beside one picked file.
-- **No sound, no movies.** Audio is `--no-audio`; the AV1 decoder does not
-  build for wasm32 (`re_rav1d` uses `libc` items the target lacks); the movie
-  and audio caches are files made by `ffmpeg`. Options: WebCodecs for
-  H.264/AV1, the Web Audio API through cpal's wasm backend, and the decode
-  caches in memory or OPFS (whose synchronous handles a worker now could use).
+- **No movies.** The AV1 decoder does not build for wasm32 (`re_rav1d` uses
+  `libc` items the target lacks) and the movie cache is files made by
+  `ffmpeg`; HD's Bink movies' audio goes through the same cache. Options:
+  WebCodecs for H.264/AV1, the cache in memory or OPFS.
+- **Pulse/Pure music (ATRAC3+) is absent in the browser**: `ffmpeg` only, and
+  the Rust-decoder decision is the maintainer's, deferred. Pulse PS2's front
+  end plays its soundtrack in the browser; its race and Pure were not tried.
+- **Locks the page shares with a worker**, audited for the music fetch now on
+  a worker: the disc block cache (`try_lock`), the mount table and the mixer
+  (`oag_thread::lock`, spinning); each fetch opens its own `DiscImage`. Not
+  audited: `OnceLock`/`LazyLock` initialisers a worker and the page could hit
+  together (a wait there traps the page too).
+- **Sound is checked in headless Chromium's fake sink only** (`--audio-wav`):
+  not on a real output device, not in Firefox or WebKit. The context starts on
+  the first key/click if the browser wants a gesture; not tried by hand.
 - **Ghosts and pilot files are not persisted** (binary, a directory; still
   `std::fs`). Records persist through the same seam as settings but were not
   exercised in a browser (needs a finished race).
 - **Gamepad and touch** are compiled in and untried.
-- **The audio health warning repeats** on the null mixer in the console once a
-  second during a race (`106 voice(s) refused ... of 0 buffer(s)`).
 
 ## Next Steps
 
@@ -68,4 +79,5 @@ Architecture, measurements, hosting and limits:
    fill while it loads.
 2. Disable GitHub Pages in the repository settings (Settings, Pages) if it was
    ever switched on.
-3. Plug in a pad and drive one race in that tab.
+3. Plug in a pad and drive one race in that tab, with sound on: the HD front
+   end's music should start once the page has had a click.

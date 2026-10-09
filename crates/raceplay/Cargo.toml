@@ -47,6 +47,7 @@ oag-sound.workspace = true
 oag-source.workspace = true
 oag-tables.workspace = true
 oag-texture.workspace = true
+oag-thread.workspace = true
 oag-title.workspace = true
 oag-trace.workspace = true
 oag-ui.workspace = true
@@ -63,11 +64,6 @@ toml.workspace = true
 toml_edit = "0.25"
 wgpu.workspace = true
 winit.workspace = true
-
-# Workers for the web build's threads (`web_thread`). See docs/tools/web.md.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-js-sys = "0.3.106"
-wasm-bindgen = "0.2.129"
 
 [features]
 # See `oag-render`'s feature of the same name. Off by default.
