@@ -7,9 +7,11 @@ menus with the keyboard and the mouse, and races, in headless Chromium at 60 fps
 (2026-10-09). Wipeout HD (a 2.2 GB decrypted PS3 ISO) races too, its circuit
 loaded on a Web Worker while the loading screen draws (see "Threads"), in
 headless Chromium and Firefox; Pulse PS2 (a 3.7 GB CHD) boots to Language
-Selection, the image read a slice at a time. It has not been tried in a browser
-on a real desktop, on a phone, or with a gamepad. "What is missing" lists the
-rest.
+Selection, the image read a slice at a time. It plays sound: the effects on
+every title, and Wipeout HD's MP3 music, through an `AudioWorklet` fed from a
+Web Worker (see "Sound"); Pulse's and Pure's ATRAC3+ music is absent. It has
+not been tried in a browser on a real desktop, on a phone, or with a gamepad.
+"What is missing" lists the rest.
 
 ```sh
 just web            # target/web/dist: dist profile (fat LTO) + wasm-opt -O
@@ -111,17 +113,20 @@ makes no request after loading itself.
   `HtmlCanvasElement`, never an `OffscreenCanvas`. Running in a worker means
   driving `App` without winit. The race load moved to a worker instead
   ("Threads"), which is what keeps the page responsive while a race loads.
-- **One worker, for the race load.** The race load
-  (`oag_raceplay::LoadWorker`) runs on a Web Worker; see "Threads". The other
+- **Workers for the race load, the race music and the mix.** The race load
+  (`oag_raceplay::LoadWorker`) and the soundtrack fetch
+  (`oag_sound::MusicFetchWorker`) are `oag_thread::Task`s, each a Web Worker
+  here; the mixer's render-ahead loop is a third, for as long as the page
+  lives ("Sound", "Threads"). The other
   places the desktop build moves work onto a thread still run it inline on
   wasm, behind `cfg(target_arch = "wasm32")`: the race scene build
   (`race_build::BuildWorker`, which is GPU work and wgpu's web types belong to
   the page's thread), dropping a parked race (GPU resources again), and the
   boot's media (`boot::MediaWorker`; no movie decodes on the web, so it has
   nothing slow to move). A CHD read is serial when `available_parallelism`
-  fails, which it does here. The circuit-length worker and the race music fetch
-  use `std::thread`, which this target refuses even with atomics, so they fail
-  to spawn and log it, as they would on any machine that refuses a thread.
+  fails, which it does here. The circuit-length worker uses `std::thread`, which
+  this target refuses even with atomics, so it fails to spawn and logs it, as it
+  would on any machine that refuses a thread.
 - **Time.** `std::time::Instant::now` panics on this target, so the render-side
   crates (`oag-game`, `oag-raceplay`, `oag-present`) use `web_time::Instant`,
   which is `std::time::Instant` itself on native and `performance.now()` here.
@@ -242,8 +247,14 @@ forces the in-memory fallback, and the script prints `crossOriginIsolated`.
 `--stalls MS` lists every gap between animation frames longer than `MS` once
 the run ends, timed from the pick, which is the responsiveness number (a
 screenshot waits for a free page thread, so its timestamp hides a stall);
-`--reload SECONDS` reloads the page then. The walk this page's claims rest
-on, from Language Selection to a race on Moa Therma White:
+`--reload SECONDS` reloads the page then; `--audio-wav FILE` records
+`--audio-seconds` of what the audio worklet outputs ("Sound"). Chromium runs
+with `--mute-audio --disable-audio-output`: the second renders to a fake sink,
+which still drives the worklet, so no stream reaches the host's sound server at
+all (checked with `pactl list sink-inputs` during a run). Firefox has no such
+sink, so `--browser firefox` loads the page with `?audio=off` and refuses
+`--audio-wav`. The walk this page's
+claims rest on, from Language Selection to a race on Moa Therma White:
 
 ```sh
 just web
@@ -434,7 +445,8 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    it does not (`thread_stack_size` missing from the glue). `wasm-opt` gets
    `--enable-threads`.
 2. **A worker is a thread.** `std::thread::spawn` stays unsupported on this
-   target even with atomics. `oag_raceplay::web_thread::spawn` parks the
+   target even with atomics. `oag_thread::web::spawn` (crate `oag-thread`,
+   below every crate that moves work off the frame loop) parks the
    closure in a table and calls the page's `oagSpawnWorker(module, memory,
    id)` (`web/main.js`), which starts `web/worker.js` as a module worker; that
    imports the same glue, instantiates the module on the same memory, and calls
@@ -442,11 +454,14 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
    and TLS block back before it closes. No new third-party crate (`oag-raceplay`
    gains `wasm-bindgen` and `js-sys`, already in the build) and no `unsafe`. A
    panic on a worker reaches the page's `oagFatal` through a message.
+   `oag_thread::Task<T>` is the cross-target shape on top: `std::thread`
+   natively, a worker plus a done flag here.
 3. **The page's thread never waits.** `memory.atomic.wait32`, where a
-   contended `std::sync::Mutex` ends up, traps there. `LoadWorker` polls an
-   `AtomicBool` the worker sets after it has stored the result and let go of
-   its lock; the disc cache is `try_lock`ed (above); `web_thread`'s own table
-   is locked by spinning on `try_lock`. The allocator already spins.
+   contended `std::sync::Mutex` ends up, traps there. A `Task` is polled
+   through an `AtomicBool` the worker sets after it has stored the result and
+   let go of its lock; the disc cache is `try_lock`ed (above); the worker table
+   and the audio mixer are locked by spinning on `try_lock`
+   (`oag_thread::lock`). The allocator already spins.
 4. **No GPU on a worker.** The texture sink is a stub on wasm
    (`mesh_render/texture_sink/web.rs`) and `Texels::Uploaded`, which holds a
    `wgpu::TextureView`, exists only on native, so `race::Loaded` is `Send`. The
@@ -475,6 +490,102 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
   the menus' own reads (a flyer, a ship), still synchronous requests.
 - **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
 
+## Sound
+
+Sound plays in the browser since 2026-10-09. Three threads, as on the desktop:
+
+1. **The frame loop** starts, stops and retunes voices on the page's thread
+   under the mixer lock (`Output::with_mixer`), which spins there rather than
+   wait (`oag_thread::lock`).
+2. **The render-ahead loop** (`oag_audio::output::render::Ahead`, the same code
+   the desktop runs on its `oag-audio-render` thread) mixes 512 frames at a time
+   into a ring, held at the same depth as natively (`MIN_BUFFER`, 60 ms, or two
+   and a half frames of the frame cap). Here it runs on a Web Worker.
+3. **The audio thread** is an `AudioWorkletProcessor` (`web/audio-worklet.js`)
+   that copies out of the ring. It runs no wasm at all: the ring
+   (`oag_audio::output::shared_ring`) lives in the module's shared memory with
+   a fixed header (read index, write index, under-run count, quanta played),
+   and the processor reads it by address through `Atomics`. It never blocks;
+   whatever the ring lacks plays as silence, ramped down over 64 frames as the
+   desktop callback does, and the quantum is counted. `Output::report_health`
+   reads the counters back into the same report the desktop logs.
+
+**Why a worker for the mix, not the page.** The page's thread stalls far longer
+than any ring a player would accept: 1.7 to 1.9 s at the boot, 0.55 s on the
+first menu, 0.72 to 0.78 s at the end of an HD race load (the scene build), all
+measured in the runs below with `--stalls 100`. A mixer on the page's thread
+would starve through every one of them; on the worker the HD walk below counted
+**0 under-runs**, the front-end music playing on through the loading screen and
+the scene-build stall.
+
+**Why not cpal's `audioworklet` host.** It runs the stream's callback, which is
+our Rust, inside the worklet: it instantiates the whole module (10 MB) on the
+audio thread, our callback calls `Instant::now`, which panics on this target,
+and it builds its own `AudioContext` inside `build_output_stream`, which here
+runs after an `await`, outside any gesture. The JavaScript processor above is
+85 lines and cannot panic.
+
+**The context.** `web/audio.js` owns the `AudioContext`. The module asks for it
+(`oagAudioOpen`) when the game opens its audio, after the pick, and builds its
+mixer at the context's own sample rate (48 kHz on a real output, 44.1 kHz on
+Chromium's fake one; the mixer resamples every source, as natively). A page
+that already had a click (the picker's) starts it at once; otherwise the first
+key press, click or touch resumes it. Headless Chromium counts the page as
+already activated (`navigator.userActivation.hasBeenActive` is true before any
+input, with `--autoplay-policy=user-gesture-required` too), so the browser's
+own refusal was not reproduced; the resume itself was: a context suspended
+through `oagAudioSetPaused(true)` stopped advancing and ran again on the next
+key press. A hidden tab suspends the context: the
+ring stays full and the worker idles. `?audio=off` opens no context and runs
+the null mixer, as `--no-audio` does natively. The audio settings page works
+unchanged: SFX VOLUME at 75 scaled the menu's navigation sounds from a 0.297 to
+a 0.223 peak in the tap, exactly 0.75.
+
+### What plays, per title
+
+| Title | Effects | Music |
+| --- | --- | --- |
+| Pulse PSP | menus, race | **absent**: ATRAC3+, decoded by `ffmpeg` into a file cache natively |
+| Pure | not booted in a browser | absent, the same codec |
+| Pulse PS2 | front end (race not tried) | front end: soundtrack track 0, in process as natively (45 s tap, -18.5 dBFS, 0 under-runs) |
+| HD / Fury | menus, race | front end and race, MP3 through `symphonia` in process |
+| 2048, Omega | no package opens in a browser | `atrac9dec` builds into the web module; unreachable |
+
+The absent music logs once, at warn, and every later track goes to debug:
+`audio: no music (decoding Data\Music\FEMusic\frontend1.at3: ATRAC3+ and
+RIFF-wrapped ATRAC9 are decoded by ffmpeg, which a browser cannot run); this
+music stays absent` (`oag_music::at3::NoDecoderHere`). Nothing stands in for
+it. HD's MP3 and Omega's ATRAC9 have no decode cache natively either, so
+nothing had to move into memory or OPFS. HD's pre-race fly-over is silent by
+the disc's own mix (`PreRace` has music at 0, and the fly-over fires no cues),
+so a walk that never presses on from it records 60 s of silence, which is not
+a fault.
+
+### Verifying it without speakers
+
+`scripts/web-screenshot.py --audio-wav FILE --audio-seconds S` sets the page's
+`?audiotap=S`: the worklet copies exactly what it hands the browser, from its
+first quantum, to the page in chunks, and the script writes a 32-bit float WAV
+and prints the under-run count. Headless Chromium 153, dev build, 2026-10-09,
+`--disable-audio-output` (no stream reached PipeWire):
+
+| Run | Length | RMS | Peak | Under-runs |
+| --- | --- | --- | --- | --- |
+| Pulse PSP, the walk above to Moa Therma White | 75 s | -15.6 dBFS | 0.0 dBFS | 0 of 25,840 quanta |
+| HD, the walk above plus Enter at 62 s and thrust from 68 s | 83.2 s | -21.0 dBFS | -3.0 dBFS | 0 of 28,672 quanta |
+| The same HD walk on the `dist` build (`just web`) | 80 s | -21.1 dBFS | -3.5 dBFS | 0 of 27,563 quanta |
+| Pulse PS2, boot to its front end | 45 s | -18.5 dBFS | -8.2 dBFS | 0 of 15,504 quanta |
+
+Against the desktop's own WAV (`oag-game --dump-audio`, the null backend, so a
+tick-exact render): Pulse's race without its music (`ffmpeg` off `PATH`,
+holding thrust) reads -10.5 dBFS against -12 to -17 dBFS a 3 s window in the
+browser walk's race, whose driving differs; HD's race after the countdown reads
+-17 dBFS in both, and HD's front-end music -20.4 dBFS natively against -21 to
+-23 dBFS in the browser. The two cannot be compared sample for sample: the
+browser's walk is real time and its presses land on different ticks. The
+desktop's dump stayed byte-identical through this change (the four sequences
+of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
+
 ## What is missing
 
 - **Images over about 2 GB in a browser without synchronous slice reads.**
@@ -483,9 +594,12 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
 - **Encrypted PS3 images, Vita and PS4 packages.** A disc key or a package's
   sibling files cannot be found beside a picked file; only CHD and plain ISO go
   through `oag_disc::mount`.
-- **Sound.** No audio device is opened (`--no-audio`); music and effects would
-  also need their decode caches, which are files. Nothing is played rather than
-  anything faked.
+- **Pulse's and Pure's music.** ATRAC3+ (and RIFF-wrapped ATRAC9) decodes
+  through `ffmpeg` into a file cache, and a page can run neither; no Rust
+  ATRAC3+ decoder exists and that decision is deferred. Logged once, never
+  faked ("Sound").
+- **Sound in Firefox and WebKit, and on a real output device.** The worklet ran
+  in headless Chromium on its fake sink only.
 - **Movies.** The AV1 decoder (`re_rav1d`) does not build for wasm32, and the
   movie cache it reads is made by `ffmpeg` into a directory; the boot movies and
   the menu backdrop are absent, and the loader report says so (`no picture: ...`,

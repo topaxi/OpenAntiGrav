@@ -692,7 +692,7 @@ impl Audio {
                 debug!("audio: music {}, {seconds:.1} s, looping", loaded.what);
             }
             Ok(None) => warn!("audio: this source carries no music this can play"),
-            Err(error) => warn!("audio: no music ({error:#})"),
+            Err(error) => race_music::warn_no_music("no music", &error),
         }
     }
 

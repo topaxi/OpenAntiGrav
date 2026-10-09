@@ -8,7 +8,7 @@
 //! image is not in memory. Images of any size open this way; the cache is the
 //! only part held.
 //!
-//! A race load reads on a Web Worker (`oag_raceplay::web_thread`), where the
+//! A race load reads on a Web Worker (`oag_thread::web`), where the
 //! page's reader object does not exist: `web/worker.js` puts its own there as
 //! `oagImageReader`, a `FileReaderSync` over the same `File`, and each thread
 //! picks up its realm's reader on first use. The cache is shared; the page's
@@ -136,7 +136,7 @@ impl Sliced {
         log::debug!(
             "web: image fetch at {offset}, {} bytes, on {}",
             into.len(),
-            if oag_raceplay::web_thread::on_worker() {
+            if oag_thread::web::on_worker() {
                 "a worker"
             } else {
                 "the page"
@@ -181,7 +181,7 @@ impl oag_disc::mount::Blob for Sliced {
         // The page's thread may not wait on a lock (a contended one traps
         // there), and a worker holds this one across its fetches: so the page
         // reads past the cache while a worker is in it.
-        let mut cache = if oag_raceplay::web_thread::on_worker() {
+        let mut cache = if oag_thread::web::on_worker() {
             self.cache
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)

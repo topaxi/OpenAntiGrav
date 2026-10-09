@@ -46,7 +46,7 @@ pub fn start(name: String, image: wasm_bindgen::JsValue, log: Option<String>) ->
     oag_disc::mount::register(path.clone(), blob);
     wasm_bindgen_futures::future_to_promise(async move {
         let started = match crate::gpu::web::prepare().await {
-            Ok(()) => run(Cli::parse_from(["oag-game", &path, "--no-audio"])),
+            Ok(()) => run(Cli::parse_from(["oag-game", &path])),
             Err(why) => Err(why),
         };
         started

@@ -14,10 +14,16 @@
 //! `oag_input::Controls::without_pad`, which exists for exactly the same reason.
 
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
-use anyhow::{Context, Result};
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+#[cfg(not(target_arch = "wasm32"))]
+use anyhow::Context;
+use anyhow::Result;
+use cpal::traits::StreamTrait;
+#[cfg(not(target_arch = "wasm32"))]
+use cpal::traits::{DeviceTrait, HostTrait};
 use log::{error, warn};
 
 use crate::mixer::{CHANNELS, Mixer};
@@ -25,7 +31,11 @@ use crate::spectrum::Spectrum;
 
 mod health;
 mod render;
+#[cfg(any(test, target_arch = "wasm32"))]
+mod shared_ring;
 mod tap;
+#[cfg(target_arch = "wasm32")]
+mod web;
 pub use health::Health;
 pub use tap::Tap;
 
@@ -77,6 +87,7 @@ pub const MIN_BUFFER: Duration = Duration::from_millis(60);
 /// zeroed outright, which puts a step discontinuity into the signal wherever
 /// the waveform happened to be - and a step is a click, which is far more
 /// audible than the millisecond of missing music around it.
+#[cfg(not(target_arch = "wasm32"))]
 const DECLICK_FRAMES: usize = 64;
 
 /// A mixer, and optionally the device draining it.
@@ -93,6 +104,10 @@ pub struct Output {
     /// accepting or yielding - but this one never leaves the callback reading a
     /// ring nobody is filling.
     ahead: Option<render::Ahead>,
+    /// The browser's stream: the ring the page's `AudioWorklet` drains, in
+    /// place of [`Self::stream`], which stays `None` there. See [`web`].
+    #[cfg(target_arch = "wasm32")]
+    web: Option<web::Stream>,
     sample_rate: u32,
     device: Option<String>,
     /// What the callback saw, shared with the callback itself.
@@ -145,6 +160,8 @@ impl Output {
             device: None,
             health: Arc::new(Health::default()),
             ahead: None,
+            #[cfg(target_arch = "wasm32")]
+            web: None,
             tap: None,
             // No render-ahead thread ever runs on the null backend, so this
             // never publishes - which is the honest reading for a machine
@@ -162,6 +179,10 @@ impl Output {
     /// cannot pause a stream is logged and left playing; that is the only
     /// failure there is.
     pub fn set_paused(&self, paused: bool) {
+        #[cfg(target_arch = "wasm32")]
+        if let Some(web) = &self.web {
+            web.set_paused(paused);
+        }
         let Some(stream) = &self.stream else {
             return;
         };
@@ -185,6 +206,7 @@ impl Output {
     /// If there is no default device, its configuration cannot be read, or the
     /// stream cannot be built or started. Callers that would rather be silent
     /// than fail should use [`Output::open_or_null`].
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn open(tap: Option<&TapSpec>, buffer: Duration) -> Result<Self> {
         let host = cpal::default_host();
         let device = host
@@ -274,6 +296,21 @@ impl Output {
         })
     }
 
+    /// Opens the page's audio output: an `AudioWorklet` reading a ring this
+    /// module renders into from a Web Worker. See [`web`].
+    ///
+    /// # Errors
+    ///
+    /// The page offers no audio (not this project's page, no `AudioContext`,
+    /// or `?audio=off`), or it refused to start the worklet.
+    #[cfg(target_arch = "wasm32")]
+    pub fn open(tap: Option<&TapSpec>, buffer: Duration) -> Result<Self> {
+        if tap.is_some() {
+            warn!("audio: --tap-audio records nothing in a browser; the page's ?audiotap= does");
+        }
+        web::open(buffer)
+    }
+
     /// Opens the default device, falling back to silence with a note on stdout.
     ///
     /// The same degradation the video path already takes when its decoder is
@@ -304,6 +341,10 @@ impl Output {
     /// Whether a real device is attached.
     #[must_use]
     pub fn is_streaming(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        if self.web.is_some() {
+            return true;
+        }
         self.stream.is_some()
     }
 
@@ -366,6 +407,10 @@ impl Output {
         if !self.health.due() {
             return;
         }
+        #[cfg(target_arch = "wasm32")]
+        if let Some(web) = &self.web {
+            web.observe(&self.health);
+        }
         let (starved, clipped) = self.with_mixer(|mixer| (mixer.starved(), mixer.clipped()));
         self.health.report(starved, clipped);
     }
@@ -373,13 +418,15 @@ impl Output {
     /// Runs `f` against the mixer.
     ///
     /// This is how a tick starts, stops and retunes voices. It blocks against
-    /// the audio callback, which only ever holds the lock for one buffer.
+    /// the render-ahead thread, which only ever holds the lock for one chunk;
+    /// in the browser, where the page's thread may not block, it spins for
+    /// that long instead ([`oag_thread::lock`]).
     ///
     /// # Panics
     ///
     /// If a previous call panicked while holding the lock.
     pub fn with_mixer<T>(&self, f: impl FnOnce(&mut Mixer) -> T) -> T {
-        let mut mixer = self.mixer.lock().expect("the audio mixer lock is poisoned");
+        let mut mixer = oag_thread::lock(&self.mixer).expect("the audio mixer lock is poisoned");
         f(&mut mixer)
     }
 
@@ -394,7 +441,7 @@ impl Output {
     ///
     /// If a previous call panicked while holding the lock.
     pub fn render_tick(&self, tick_hz: u32, out: &mut Vec<f32>) -> usize {
-        if self.stream.is_some() {
+        if self.is_streaming() {
             return 0;
         }
         self.with_mixer(|mixer| mixer.render_tick(tick_hz, out))
@@ -402,6 +449,7 @@ impl Output {
 }
 
 /// The formats to try, the device's own default first, then `i16` and `f32`.
+#[cfg(not(target_arch = "wasm32"))]
 fn formats_to_try(default: cpal::SampleFormat) -> Vec<cpal::SampleFormat> {
     let mut formats = vec![default];
     for fallback in [cpal::SampleFormat::I16, cpal::SampleFormat::F32] {
@@ -420,6 +468,7 @@ fn formats_to_try(default: cpal::SampleFormat) -> Vec<cpal::SampleFormat> {
 /// `IllegalArgument`, where the same device takes `i16`. The ring's consumer is
 /// moved into the callback and lost when a build fails, so each attempt gets
 /// a ring of its own and the producer of the one that worked is returned.
+#[cfg(not(target_arch = "wasm32"))]
 fn build_stream(
     device: &cpal::Device,
     config: cpal::StreamConfig,
@@ -465,6 +514,7 @@ fn build_stream(
     Err(first_error.unwrap_or_else(|| anyhow::anyhow!("no sample format to try")))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn build<T>(
     device: &cpal::Device,
     config: cpal::StreamConfig,
@@ -578,6 +628,7 @@ where
 
 /// What the callback remembers from one buffer to the next, so that a starved
 /// one is a gap rather than a click. See [`DECLICK_FRAMES`].
+#[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug, Default, Clone, Copy)]
 struct Declick {
     /// The last stereo frame actually emitted, which a gap ramps down from.
@@ -587,6 +638,7 @@ struct Declick {
 }
 
 /// The last stereo frame in a buffer, or silence if there is none.
+#[cfg(not(target_arch = "wasm32"))]
 fn last_frame(stereo: &[f32]) -> [f32; CHANNELS] {
     let frames = stereo.len() / CHANNELS;
     if frames == 0 {
@@ -598,6 +650,7 @@ fn last_frame(stereo: &[f32]) -> [f32; CHANNELS] {
 
 /// Ramps the end of a short buffer down to zero, so the gap after it does not
 /// start with a step.
+#[cfg(not(target_arch = "wasm32"))]
 fn fade_out(stereo: &mut [f32]) {
     let frames = stereo.len() / CHANNELS;
     if frames == 0 {
@@ -614,6 +667,7 @@ fn fade_out(stereo: &mut [f32]) {
 
 /// Decays a silent buffer from `tail`, for the gap that begins with a buffer
 /// the ring could not fill at all.
+#[cfg(not(target_arch = "wasm32"))]
 fn ramp_from(stereo: &mut [f32], tail: [f32; CHANNELS]) {
     let frames = stereo.len() / CHANNELS;
     let ramp = frames.min(DECLICK_FRAMES);
@@ -626,6 +680,7 @@ fn ramp_from(stereo: &mut [f32], tail: [f32; CHANNELS]) {
 }
 
 /// Ramps a buffer up from silence, the other edge of the same gap.
+#[cfg(not(target_arch = "wasm32"))]
 fn ramp_up(stereo: &mut [f32]) {
     let frames = stereo.len() / CHANNELS;
     let ramp = frames.min(DECLICK_FRAMES);
@@ -643,6 +698,7 @@ fn ramp_up(stereo: &mut [f32]) {
 /// Fewer than two channels take the left; more than two get silence in the
 /// extras rather than a copy, because duplicating a stereo pair into surrounds
 /// is a mix decision and not one this layer should be making quietly.
+#[cfg(not(target_arch = "wasm32"))]
 fn spread<T: cpal::FromSample<f32> + cpal::Sample>(stereo: &[f32], out: &mut [T], channels: usize) {
     let silence = T::from_sample_(0.0f32);
     if channels == CHANNELS {

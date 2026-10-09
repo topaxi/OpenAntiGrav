@@ -60,7 +60,53 @@ const POLL: Duration = Duration::from_millis(5);
 #[derive(Debug)]
 pub(crate) struct Ahead {
     stop: Arc<AtomicBool>,
+    /// Natively the thread, joined on drop. In the browser the loop runs on a
+    /// Web Worker (`oag_thread::web`), which the page's thread may not wait
+    /// for: dropping only raises `stop`, and the worker ends at its next poll.
+    #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<()>>,
+}
+
+/// Where [`Ahead`] puts what it renders: `rtrb`'s producer natively, the
+/// browser worklet's [`super::shared_ring::SharedRing`] on the web.
+pub(crate) trait Sink: Send + 'static {
+    /// Samples the ring holds when full.
+    fn capacity(&self) -> usize;
+    /// Samples that still fit.
+    fn slots(&self) -> usize;
+    /// Writes `samples`, which the caller has checked fit.
+    fn push(&mut self, samples: &[f32]);
+}
+
+impl Sink for rtrb::Producer<f32> {
+    fn capacity(&self) -> usize {
+        self.buffer().capacity()
+    }
+
+    fn slots(&self) -> usize {
+        rtrb::Producer::slots(self)
+    }
+
+    fn push(&mut self, samples: &[f32]) {
+        let (_, rest) = self.push_partial_slice(samples);
+        debug_assert!(rest.is_empty(), "room was checked above");
+    }
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+impl Sink for Arc<super::shared_ring::SharedRing> {
+    fn capacity(&self) -> usize {
+        super::shared_ring::SharedRing::capacity(self)
+    }
+
+    fn slots(&self) -> usize {
+        super::shared_ring::SharedRing::slots(self)
+    }
+
+    fn push(&mut self, samples: &[f32]) {
+        let pushed = super::shared_ring::SharedRing::push(self, samples);
+        debug_assert_eq!(pushed, samples.len(), "room was checked above");
+    }
 }
 
 impl Ahead {
@@ -74,51 +120,63 @@ impl Ahead {
     /// ceiling on how late a cue is heard and not a floor.
     pub(crate) fn spawn(
         mixer: Arc<Mutex<Mixer>>,
-        mut ring: rtrb::Producer<f32>,
+        mut ring: impl Sink,
         target: usize,
         sample_rate: u32,
         spectrum: Arc<Spectrum>,
     ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
-        let handle = std::thread::Builder::new()
-            .name("oag-audio-render".to_string())
-            .spawn(move || {
-                let mut scratch = vec![0.0f32; CHUNK_FRAMES * CHANNELS];
-                let capacity = ring.buffer().capacity();
-                // Off the real-time device callback, which is the reason this
-                // can afford to allocate and run a per-band transform at all -
-                // see `spectrum`'s own module docs.
-                let mut analyzer = Analyzer::new();
-                while !flag.load(Ordering::Relaxed) {
-                    // Fill while another whole chunk still fits under the
-                    // target, then sleep. A partial push would leave the ring's
-                    // occupancy sawing against the chunk size for no gain.
-                    while capacity - ring.slots() + scratch.len() <= target
-                        && ring.slots() >= scratch.len()
-                    {
-                        match mixer.lock() {
-                            Ok(mut mixer) => mixer.render(&mut scratch),
-                            // A poisoned mixer is a panic somewhere else that
-                            // this thread cannot fix; it stops rather than
-                            // spinning on a lock that will never be taken.
-                            Err(_) => return,
-                        }
-                        // Analysed on exactly what was just rendered, before it
-                        // leaves for the ring - the freshest samples this
-                        // thread ever sees, and the same ones the device will
-                        // play a queue-depth later.
-                        spectrum.publish(analyzer.process(&scratch, sample_rate));
-                        let (_, rest) = ring.push_partial_slice(&scratch);
-                        debug_assert!(rest.is_empty(), "room was checked above");
+        let job = move || {
+            let mut scratch = vec![0.0f32; CHUNK_FRAMES * CHANNELS];
+            let capacity = ring.capacity();
+            // Off the real-time device callback, which is the reason this
+            // can afford to allocate and run a per-band transform at all -
+            // see `spectrum`'s own module docs.
+            let mut analyzer = Analyzer::new();
+            while !flag.load(Ordering::Relaxed) {
+                // Fill while another whole chunk still fits under the
+                // target, then sleep. A partial push would leave the ring's
+                // occupancy sawing against the chunk size for no gain.
+                while capacity - ring.slots() + scratch.len() <= target
+                    && ring.slots() >= scratch.len()
+                {
+                    match mixer.lock() {
+                        Ok(mut mixer) => mixer.render(&mut scratch),
+                        // A poisoned mixer is a panic somewhere else that
+                        // this thread cannot fix; it stops rather than
+                        // spinning on a lock that will never be taken.
+                        Err(_) => return,
                     }
-                    std::thread::sleep(POLL);
+                    // Analysed on exactly what was just rendered, before it
+                    // leaves for the ring - the freshest samples this
+                    // thread ever sees, and the same ones the device will
+                    // play a queue-depth later.
+                    spectrum.publish(analyzer.process(&scratch, sample_rate));
+                    ring.push(&scratch);
                 }
-            })
-            .expect("spawning the audio render thread");
-        Self {
-            stop,
-            handle: Some(handle),
+                std::thread::sleep(POLL);
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let handle = std::thread::Builder::new()
+                .name("oag-audio-render".to_string())
+                .spawn(job)
+                .expect("spawning the audio render thread");
+            Self {
+                stop,
+                handle: Some(handle),
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // A worker that will not start leaves the ring empty: the worklet
+            // plays silence and counts nothing, since it never saw a sample.
+            if let Err(why) = oag_thread::web::spawn(job) {
+                log::error!("audio: no render worker ({why}); running silent");
+            }
+            Self { stop }
         }
     }
 }
@@ -126,6 +184,7 @@ impl Ahead {
 impl Drop for Ahead {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(handle) = self.handle.take() {
             // Joined rather than detached: the thread holds an `Arc` to the
             // mixer, and a run that exits while it is mid-render is a render

@@ -6,7 +6,8 @@
 //! for a worker instead: `oagSpawnWorker(module, memory, entry)`, defined in
 //! `web/main.js`, starts `web/worker.js`, which instantiates this same module
 //! on the same shared memory and calls [`oag_worker_entry`] with `entry`, the
-//! id the closure waits under. See docs/tools/web.md, "Threads".
+//! id the closure waits under. See docs/tools/web.md, "Threads". Most callers
+//! want the crate's cross-target [`crate::Task`] and [`crate::lock`] instead.
 //!
 //! **The page's thread may not block.** `Atomics.wait`, and the
 //! `memory.atomic.wait32` a contended `std::sync::Mutex` ends in, trap on it,
@@ -16,8 +17,8 @@
 
 use std::cell::Cell;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Mutex, MutexGuard, TryLockError};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{LockResult, Mutex, MutexGuard, PoisonError, TryLockError};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::{JsCast, JsValue};
@@ -48,6 +49,58 @@ pub fn lock_spinning<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
             Err(TryLockError::Poisoned(poisoned)) => return poisoned.into_inner(),
             Err(TryLockError::WouldBlock) => std::hint::spin_loop(),
         }
+    }
+}
+
+/// [`lock_spinning`] that reports a poisoned lock instead of taking it, the
+/// contract `Mutex::lock` has.
+///
+/// # Errors
+///
+/// The lock is poisoned.
+pub fn try_lock_spinning<T>(mutex: &Mutex<T>) -> LockResult<MutexGuard<'_, T>> {
+    loop {
+        match mutex.try_lock() {
+            Ok(guard) => return Ok(guard),
+            Err(TryLockError::Poisoned(poisoned)) => {
+                return Err(PoisonError::new(poisoned.into_inner()));
+            }
+            Err(TryLockError::WouldBlock) => std::hint::spin_loop(),
+        }
+    }
+}
+
+/// Where a worker leaves a [`crate::Task`]'s result: the page reads `done`
+/// first and takes the value only once the worker has stored it and let go.
+#[derive(Debug)]
+pub(crate) struct Slot<T> {
+    done: AtomicBool,
+    value: Mutex<Option<T>>,
+}
+
+impl<T> Default for Slot<T> {
+    fn default() -> Self {
+        Self {
+            done: AtomicBool::new(false),
+            value: Mutex::new(None),
+        }
+    }
+}
+
+impl<T> Slot<T> {
+    pub(crate) fn fill(&self, value: T) {
+        *lock_spinning(&self.value) = Some(value);
+        self.done.store(true, Ordering::Release);
+    }
+
+    pub(crate) fn is_done(&self) -> bool {
+        self.done.load(Ordering::Acquire)
+    }
+
+    /// Only called once [`Self::is_done`], so the worker has let go: never
+    /// spins for long.
+    pub(crate) fn take(&self) -> Option<T> {
+        lock_spinning(&self.value).take()
     }
 }
 

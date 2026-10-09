@@ -1,6 +1,8 @@
 // The page around the wasm build: pick a disc image, read it here, hand it to
 // the game. Nothing is sent anywhere. See docs/tools/web.md.
 import init, { start } from "./pkg/oag_web.js";
+// Sound: the AudioContext and its worklet (audio.js).
+import "./audio.js";
 
 // The same glue again, for the workers `oagSpawnWorker` starts. build-web.sh
 // rewrites both names to the content-hashed directory.
@@ -77,7 +79,7 @@ let imageFile = null;
 
 // Threads (docs/tools/web.md, "Threads"): the module asks for a worker running
 // `oag_worker_entry(id)` on its own shared memory. Called from Rust
-// (`oag_raceplay::web_thread::spawn`); throws if the browser refuses.
+// (`oag_thread::web::spawn`); throws if the browser refuses.
 window.oagSpawnWorker = (module, memory, id) => {
   const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
   worker.onmessage = ({ data }) => {
