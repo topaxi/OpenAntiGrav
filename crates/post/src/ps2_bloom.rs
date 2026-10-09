@@ -197,20 +197,7 @@ impl Ps2Bloom {
             shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
         };
         let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
-            let bytes = bytemuck::bytes_of(&c);
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: bytes.len() as u64,
-                usage,
-                mapped_at_creation: true,
-            });
-            buffer
-                .slice(..)
-                .get_mapped_range_mut()
-                .expect("a freshly mapped buffer maps")
-                .copy_from_slice(bytes);
-            buffer.unmap();
-            buffer
+            oag_gpu::init_buffer::init(device, label, usage, bytemuck::bytes_of(&c))
         };
         let constants_down = buffer(
             "ps2 bloom down constants",

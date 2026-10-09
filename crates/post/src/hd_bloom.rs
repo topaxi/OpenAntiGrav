@@ -544,23 +544,16 @@ impl Chain {
         ];
 
         let constants = |label: &str| {
-            let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: size_of::<Constants>() as u64,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: true,
-            });
-            buffer
-                .slice(..)
-                .get_mapped_range_mut()
-                .expect("a freshly mapped buffer maps")
-                .copy_from_slice(bytemuck::bytes_of(&Constants::new(
+            oag_gpu::init_buffer::init(
+                device,
+                label,
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                bytemuck::bytes_of(&Constants::new(
                     params,
                     [0.0, 0.0],
                     ([1.0, 1.0], [1.0, 1.0]),
-                )));
-            buffer.unmap();
-            buffer
+                )),
+            )
         };
         let still = constants("hd bloom constants");
         let vertical = constants("hd bloom blur-v constants");

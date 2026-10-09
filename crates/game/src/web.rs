@@ -70,14 +70,17 @@ mod web_log {
         fn flush(&self) {}
     }
 
-    /// Installs the console logger and a panic hook that logs through it.
+    /// Installs the console logger and a panic hook that logs through it and puts
+    /// the panic on the page.
     pub(super) fn install(ours: Option<LevelFilter>) {
         let ours = ours.unwrap_or(LevelFilter::Info);
         if log::set_logger(Box::leak(Box::new(Console { ours }))).is_ok() {
             log::set_max_level(ours.max(LevelFilter::Warn));
         }
         std::panic::set_hook(Box::new(|info| {
-            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!("panic: {info}")));
+            let text = format!("panic: {info}");
+            web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&text));
+            crate::gpu::web::fatal(&text);
         }));
     }
 }

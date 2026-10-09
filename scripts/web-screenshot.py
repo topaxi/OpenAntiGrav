@@ -3,7 +3,7 @@
 
     uv run --with playwright python3 scripts/web-screenshot.py \\
         --dist target/web/dist --image data/images/pulse-psp-eu.chd \\
-        --out data/web-shots --at 5,10,15 [--press Enter@12] [--port 8000]
+        --out data/web-shots --at 5,10,15 [--press Enter@12] [--port 8000] [--software] [--resize 1280x720@12]
 
 Serves `--dist` on 127.0.0.1, opens it in Chromium with WebGPU enabled
 (`--chromium` names the binary, `/usr/bin/chromium` by default; Playwright's
@@ -36,6 +36,27 @@ FLAGS = [
 ]
 
 
+# `--software`: a CPU adapter that presents (swiftshader through Vulkan).
+# `--software bare`: only `--use-webgpu-adapter=swiftshader`, which hands out
+# the same `(cpu)` adapter but never presents the canvas (it stays white) and
+# is where the grade buffer's `mappedAtCreation` RangeError reproduced.
+SOFTWARE_FLAGS = {
+    "vulkan": [
+        "--enable-unsafe-webgpu",
+        "--enable-features=Vulkan",
+        "--use-vulkan=swiftshader",
+        "--enable-unsafe-swiftshader",
+        "--use-webgpu-adapter=swiftshader",
+        "--mute-audio",
+    ],
+    "bare": [
+        "--enable-unsafe-webgpu",
+        "--use-webgpu-adapter=swiftshader",
+        "--mute-audio",
+    ],
+}
+
+
 def serve(directory: Path, port: int) -> http.server.ThreadingHTTPServer:
     handler = functools.partial(
         http.server.SimpleHTTPRequestHandler, directory=str(directory)
@@ -56,10 +77,29 @@ def main() -> None:
     parser.add_argument("--down", action="append", default=[])
     parser.add_argument("--up", action="append", default=[])
     parser.add_argument("--click", action="append", default=[])
+    parser.add_argument(
+        "--resize",
+        action="append",
+        default=[],
+        help="WxH@SECONDS: resize the viewport (a window resize, which rebuilds the output target)",
+    )
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--size", default="960x544")
+    parser.add_argument(
+        "--software",
+        nargs="?",
+        const="vulkan",
+        choices=sorted(SOFTWARE_FLAGS),
+        help="force WebGPU's software (swiftshader) adapter, the CPU path of docs/tools/web.md",
+    )
+    parser.add_argument(
+        "--flag",
+        action="append",
+        default=[],
+        help="an extra Chromium flag, repeatable (added after the default or --software set)",
+    )
     parser.add_argument("--chromium", default="/usr/bin/chromium")
     args = parser.parse_args()
 
@@ -72,6 +112,7 @@ def main() -> None:
         + keyed(args.down, "down")
         + keyed(args.up, "up")
         + keyed(args.click, "click")
+        + keyed(args.resize, "resize")
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -79,7 +120,8 @@ def main() -> None:
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(
-                executable_path=args.chromium, headless=True, args=FLAGS
+                executable_path=args.chromium, headless=True,
+                args=(SOFTWARE_FLAGS[args.software] if args.software else FLAGS) + args.flag,
             )
             page = browser.new_page(viewport={"width": width, "height": height})
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
@@ -98,6 +140,10 @@ def main() -> None:
                     path = args.out / f"{at:g}s.png"
                     page.screenshot(path=str(path))
                     print(f"wrote {path}", flush=True)
+                elif kind == "resize":
+                    w, h = (int(v) for v in key.split("x"))
+                    page.set_viewport_size({"width": w, "height": h})
+                    print(f"resized {w}x{h} at {at:g}s", flush=True)
                 elif kind == "click":
                     x, y = (float(v) for v in key.split(","))
                     page.mouse.move(x, y, steps=5)

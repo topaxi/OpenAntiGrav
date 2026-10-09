@@ -533,18 +533,12 @@ impl Zoom {
                 [b, b + 1, b + 2, b, b + 2, b + 3]
             })
             .collect();
-        let indices = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("hd zoom ring indices"),
-            size: (index_data.len() * 2) as u64,
-            usage: wgpu::BufferUsages::INDEX,
-            mapped_at_creation: true,
-        });
-        indices
-            .slice(..)
-            .get_mapped_range_mut()
-            .expect("a freshly mapped buffer maps")
-            .copy_from_slice(bytemuck::cast_slice(&index_data));
-        indices.unmap();
+        let indices = oag_gpu::init_buffer::init(
+            device,
+            "hd zoom ring indices",
+            wgpu::BufferUsages::INDEX,
+            bytemuck::cast_slice(&index_data),
+        );
         Ok(Self {
             tuning,
             history_pipeline,

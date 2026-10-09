@@ -474,24 +474,17 @@ impl Fsr3 {
         // `0..PYRAMID_MIPS`, each in its own uniform. An index rather than an
         // extent, so these never have to be rewritten - see the shader's
         // `pyramid_level_size`.
-        // `mapped_at_creation` rather than a queue write, because `new` has no
+        // Filled at creation rather than by a queue write, because `new` has no
         // queue - and wants none: these are build-time constants, not per-frame
         // data.
         let levels = (0..PYRAMID_MIPS)
             .map(|level| {
-                let buffer = device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("fsr3 pyramid level"),
-                    size: 16,
-                    usage: wgpu::BufferUsages::UNIFORM,
-                    mapped_at_creation: true,
-                });
-                buffer
-                    .slice(..)
-                    .get_mapped_range_mut()
-                    .expect("a freshly mapped buffer")
-                    .copy_from_slice(bytemuck::cast_slice(&[level, 0u32, 0, 0]));
-                buffer.unmap();
-                buffer
+                oag_gpu::init_buffer::init(
+                    device,
+                    "fsr3 pyramid level",
+                    wgpu::BufferUsages::UNIFORM,
+                    bytemuck::cast_slice(&[level, 0u32, 0, 0]),
+                )
             })
             .collect();
 
