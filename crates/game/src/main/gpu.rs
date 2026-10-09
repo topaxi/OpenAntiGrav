@@ -507,9 +507,17 @@ pub(crate) mod web {
     }
 
     /// Draws into the page's own canvas rather than one winit would make.
+    ///
+    /// **The page's stylesheet sizes it, not the settings file.** winit's web
+    /// backend writes a requested inner size into the canvas's CSS, which
+    /// made a 1920x1080 window size a canvas larger than the tab, drawn
+    /// cropped to its top-left corner; and a fullscreen request outside a
+    /// click is refused by every browser. Both are dropped here.
     pub(crate) fn canvas(
-        attributes: winit::window::WindowAttributes,
+        mut attributes: winit::window::WindowAttributes,
     ) -> winit::window::WindowAttributes {
+        attributes.inner_size = None;
+        attributes.fullscreen = None;
         use wasm_bindgen::JsCast;
         use winit::platform::web::WindowAttributesExtWebSys;
         let canvas = web_sys::window()

@@ -83,7 +83,10 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
         return 0.0;
     }
     if coverage_mode {
-        return textureSample(shadow_tex, shadow_sampler, uv).r * scene.shadow.strength;
+        // Level 0 named rather than derived: the map has one mip, so the two
+        // read the same texel, and Chrome's WGSL compiler refuses an implicit
+        // derivative here because this branch is not uniform (naga allows it).
+        return textureSampleLevel(shadow_tex, shadow_sampler, uv, 0.0).r * scene.shadow.strength;
     }
     // The depth mode: four taps a texel apart, each compared, and their mean.
     // **The softening is in the comparison, not in the sample** - filtering

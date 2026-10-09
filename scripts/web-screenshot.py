@@ -9,7 +9,9 @@ Serves `--dist` on 127.0.0.1, opens it in Chromium with WebGPU enabled
 (`--chromium` names the binary, `/usr/bin/chromium` by default; Playwright's
 own build has no WebGPU on Linux), hands the image to the page's file input,
 and writes `<out>/<seconds>s.png` at each `--at` time after the pick.
-`--press KEY@SECONDS` presses a key into the canvas. The page's console goes to
+`--press KEY@SECONDS` presses a key into the canvas; `--down`/`--up KEY@SECONDS`
+hold one and let it go (Playwright key names: `x`, `Enter`, `Space`, `ArrowLeft`).
+`--fps SECONDS` counts animation frames for that long at the end. The page's console goes to
 stdout. The browser is muted. See docs/tools/web.md.
 """
 
@@ -50,15 +52,19 @@ def main() -> None:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--at", default="5,10,15")
     parser.add_argument("--press", action="append", default=[])
+    parser.add_argument("--down", action="append", default=[])
+    parser.add_argument("--up", action="append", default=[])
+    parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--size", default="960x544")
     parser.add_argument("--chromium", default="/usr/bin/chromium")
     args = parser.parse_args()
 
     shots = sorted(float(t) for t in args.at.split(","))
-    presses = sorted(
-        (float(at), key) for key, at in (p.rsplit("@", 1) for p in args.press)
-    )
+    def keyed(specs: list[str], kind: str) -> list[tuple[float, str, str]]:
+        return [(float(at), kind, key) for key, at in (s.rsplit("@", 1) for s in specs)]
+
+    keys = keyed(args.press, "press") + keyed(args.down, "down") + keyed(args.up, "up")
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
     server = serve(args.dist, args.port)
@@ -75,9 +81,7 @@ def main() -> None:
             page.screenshot(path=str(args.out / "picker.png"))
             page.set_input_files("#file", str(args.image))
             start = time.monotonic()
-            events = [(t, "shot", None) for t in shots] + [
-                (t, "press", k) for t, k in presses
-            ]
+            events = [(t, "shot", "") for t in shots] + keys
             for at, kind, key in sorted(events, key=lambda e: e[0]):
                 wait = at - (time.monotonic() - start)
                 if wait > 0:
@@ -87,8 +91,18 @@ def main() -> None:
                     page.screenshot(path=str(path))
                     print(f"wrote {path}", flush=True)
                 else:
-                    page.keyboard.press(key)
-                    print(f"pressed {key} at {at:g}s", flush=True)
+                    getattr(page.keyboard, kind)(key)
+                    print(f"{kind} {key} at {at:g}s", flush=True)
+            if args.fps > 0:
+                frames = page.evaluate(
+                    """(ms) => new Promise((done) => {
+                        let n = 0; const end = performance.now() + ms;
+                        const tick = (t) => { n++; t < end ? requestAnimationFrame(tick) : done(n); };
+                        requestAnimationFrame(tick);
+                    })""",
+                    args.fps * 1000,
+                )
+                print(f"fps: {frames / args.fps:.1f} over {args.fps:g}s", flush=True)
             browser.close()
     finally:
         server.shutdown()
