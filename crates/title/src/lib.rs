@@ -640,6 +640,13 @@ pub struct CircuitModel {
 }
 
 impl FrontEnd {
+    /// Whether this title's circuit screen draws a model per circuit - see
+    /// [`Self::circuit_models`].
+    #[must_use]
+    pub fn draws_circuit_models(&self) -> bool {
+        !self.circuit_models.is_empty()
+    }
+
     /// The model entry of the circuit whose environment folder is `location`
     /// (`Data\Environments\01_Vineta_K`), or `None` when the title draws no
     /// model for it.

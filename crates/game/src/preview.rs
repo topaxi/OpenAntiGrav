@@ -60,15 +60,28 @@ pub fn draws_hull(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) 
             .is_some_and(|f| !f.preview_meshes && f.ship_preview_hull.is_some())
 }
 
+/// Whether `title`'s `kind` screen draws a model per circuit - the one test
+/// the live picker and the capture both ask, see
+/// [`oag_title::FrontEnd::circuit_models`].
+#[must_use]
+pub fn draws_circuit_model(
+    front_end: Option<&oag_title::FrontEnd>,
+    kind: oag_ui_screens::picker::Kind,
+) -> bool {
+    kind == oag_ui_screens::picker::Kind::Track
+        && front_end.is_some_and(oag_title::FrontEnd::draws_circuit_models)
+}
+
 /// Whether `title`'s `kind` screen draws a mesh at all: the title's own
 /// preview meshes, the race hull ([`draws_hull`]), or a per-circuit model
-/// table ([`oag_title::FrontEnd::circuit_models`]).
+/// table ([`draws_circuit_model`]).
 #[must_use]
 pub fn draws_mesh(title: &oag_title::Title, kind: oag_ui_screens::picker::Kind) -> bool {
-    title.front_end.is_some_and(|front_end| {
-        front_end.preview_meshes
-            || (kind == oag_ui_screens::picker::Kind::Track && !front_end.circuit_models.is_empty())
-    }) || draws_hull(title, kind)
+    title
+        .front_end
+        .is_some_and(|front_end| front_end.preview_meshes)
+        || draws_hull(title, kind)
+        || draws_circuit_model(title.front_end, kind)
 }
 
 /// The archive entry a circuit's selection screen draws as its model.
@@ -83,7 +96,7 @@ pub fn track_entry(
     location: &str,
     reversed: bool,
 ) -> Option<String> {
-    if front_end.circuit_models.is_empty() {
+    if !front_end.draws_circuit_models() {
         let run = if reversed { "reverse" } else { "forward" };
         return Some(format!(r"{location}\FE\{run}.vex"));
     }

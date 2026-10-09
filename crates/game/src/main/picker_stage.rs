@@ -271,11 +271,8 @@ impl PickerStage {
         // A title that previews with stills alone has no mesh to fail to
         // load, so there is nothing here to report as missing.
         let hull_only = self.model.kind() == picker::Kind::Ship && self.previews.ship_hull.is_some();
-        let circuit_model = self.model.kind() == picker::Kind::Track
-            && self
-                .previews
-                .front_end
-                .is_some_and(|front_end| !front_end.circuit_models.is_empty());
+        let circuit_model =
+            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
         self.preview = if self.previews.meshes || hull_only || circuit_model {
             match self.load_preview(gpu, index, key.1.as_deref()) {
                 Ok(preview) => Some(preview),
@@ -378,11 +375,8 @@ impl PickerStage {
         }
         // The circuit model's own material: the ramp comes out of the model
         // and the preview recolours its vertices every frame.
-        let circuit_model = matches!(source, PreviewSource::Track { .. })
-            && self
-                .previews
-                .front_end
-                .is_some_and(|front_end| !front_end.circuit_models.is_empty());
+        let circuit_model =
+            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
         let ramp = if circuit_model {
             Some(
                 oag_game::preview::track_model::Ramp::take(&mut model)

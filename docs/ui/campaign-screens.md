@@ -3906,11 +3906,20 @@ the 1920 by 1080 grid, so an absolute point as on the campaign flyer), the
 vertical field of view 1.0 the flyer's own widget class measured, and the
 ramp evaluated per vertex once a frame (the mesh shader's material word has no
 free bit for a ramp-by-facing material). **Chosen, not measured**: that this
-widget shares the flyer's field of view, the pitch (0.55), the turntable's
-24 s per revolution and its starting yaw, the near and far planes, and the
-multiplier `0x81db67ea` (taken as 1: nothing in the model or the executable
-gives its value). **Measured**: that the circuit turns (frames 12 and 24 of
+widget shares the flyer's field of view (checked against the frames, not fitted:
+a 24 s sweep of this build, every 2 s, has its widest frame 739 grid units across
+on Vineta K and 797 on Moa Therma, against 790 and 802 in `track-carousel`
+frames 12 and 02, each of which is a lower bound on its circuit's widest yaw), the
+pitch (0.55), the turntable's 24 s per revolution and its starting yaw, the
+near and far planes, and the multiplier `0x81db67ea` (taken as 1: nothing in
+the model or the executable gives its value). **Measured**: that the circuit turns (frames 12 and 24 of
 `track-carousel` show Vineta K at different yaws), not its rate.
+
+**Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
+the real screen, the grey matches the capture's, and stepping the circuit
+reloads it. The per-frame cost is the recolour (1 to 5 ms in a debug build for
+45k to 152k vertices) and a whole-buffer upload of 4 to 14 MB; a colour-only
+stream would cut the upload if it ever shows.
 
 Pictures: `data/scratch/hd-track-model/sheet1.png` (Vineta K, Metropia, Moa
 Therma, Ubermall at 1 s and 4 s), against `track-carousel/02.png` (Moa

@@ -34,6 +34,20 @@ fn every_circuit_of_the_table_builds_a_model() {
     };
     let front_end = title.front_end.expect("HD ships a front end");
     assert_eq!(front_end.circuit_models.len(), 12);
+    // The wiring, not only the table: the Track screen asks for a mesh and
+    // the Team screen does not take the circuit's path.
+    assert!(oag_game::preview::draws_mesh(
+        title,
+        oag_ui_screens::picker::Kind::Track
+    ));
+    assert!(oag_game::preview::draws_circuit_model(
+        title.front_end,
+        oag_ui_screens::picker::Kind::Track
+    ));
+    assert!(!oag_game::preview::draws_circuit_model(
+        title.front_end,
+        oag_ui_screens::picker::Kind::Ship
+    ));
     for row in front_end.circuit_models {
         let location = format!(r"Data\Environments\{}", row.environment);
         let entry = oag_game::preview::track_entry(front_end, &location, false)
@@ -51,5 +65,18 @@ fn every_circuit_of_the_table_builds_a_model() {
             "{entry}: ramp {edge:?} to {face:?}"
         );
         assert!(model.vertices.iter().all(|vertex| vertex.lit == 0.0));
+        // What the live screen pays every frame for this circuit.
+        let started = std::time::Instant::now();
+        let mut vertices = model.vertices.clone();
+        ramp.shade(
+            &mut vertices,
+            oag_core::math::Mat4::from_translation(oag_core::math::Vec3::new(0.0, 0.0, -180.0)),
+        );
+        eprintln!(
+            "{entry}: {} vertices, {} bytes, recolour {:?}",
+            vertices.len(),
+            std::mem::size_of_val(&vertices[..]),
+            started.elapsed()
+        );
     }
 }
