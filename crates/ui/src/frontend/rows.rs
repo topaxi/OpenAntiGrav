@@ -21,7 +21,42 @@ pub(super) struct LanguageRows {
     pub(super) align: Align,
 }
 
+/// Where the first row's band sits and how wide every one is: what the
+/// pointer hit-tests and what a band-drawing title paints, from one place.
+pub(super) struct LanguageBand {
+    pub(super) left: f32,
+    pub(super) width: f32,
+    pub(super) top: f32,
+}
+
 impl super::Frontend {
+    /// The band of row 0; row `i` is `i * pitch` lower.
+    ///
+    /// Down the glyphs, not the pens: the face keeps room for accents above its
+    /// cap line, and a band laid from the pen would light the row above the one
+    /// pointed at (see `RowInk`; from the pen itself when nothing measured the
+    /// face, which is every test fixture). **A drawn band used to start at the
+    /// pen less a guessed 4 units while the pointer used the ink, so the bar sat
+    /// above the text it marked.**
+    pub(super) fn language_band(&self, rows: &LanguageRows) -> LanguageBand {
+        let width = self.band_width(rows.scale);
+        // The drawing anchors the pen at `x` and the alignment decides which way
+        // the glyphs run from it; the band follows.
+        let left = match rows.align {
+            Align::Left => rows.x,
+            Align::Centre => rows.x - width * 0.5,
+            Align::Right => rows.x - width,
+        };
+        let top = self
+            .row_ink
+            .map_or(rows.y, |ink| ink.band_top(rows.y, rows.scale, rows.pitch));
+        LanguageBand {
+            left: left - 6.0,
+            width: width + 6.0,
+            top,
+        }
+    }
+
     /// One line of `font`, in grid units, for a row that states no pitch.
     ///
     /// The `Default` face's own height, read off the atlas this build loaded,
