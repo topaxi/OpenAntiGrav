@@ -83,7 +83,7 @@ fi
 # with an old module: the page's one import is rewritten to name it.
 hash=$(cat "$out/pkg/oag_web.js" "$out/pkg/oag_web_bg.wasm" | sha256sum | cut -c1-16)
 mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$hash"
-cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/_headers "$out/"
+cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
 grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
 # The same notices every other release artifact carries (release.yml).

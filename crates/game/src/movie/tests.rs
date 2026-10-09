@@ -458,3 +458,113 @@ fn clearing_the_ring_leaves_nothing_behind() {
     assert!(ring.take_upto(u64::MAX).is_none());
     assert!(!ring.is_full());
 }
+
+/// A decoder that, like the browser's, has each frame only after being asked
+/// `waits` times: [`Pending`] until then.
+#[derive(Debug)]
+struct Asynchronous {
+    waits: usize,
+    asked: usize,
+    len: usize,
+}
+
+impl VideoDecoder for Asynchronous {
+    fn label(&self) -> &'static str {
+        "asynchronous"
+    }
+
+    fn geometry(&self) -> av1::Geometry {
+        av1::Geometry::new(2, 2)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn frame(&mut self, index: usize, out: &mut VideoFrame) -> Result<()> {
+        if self.asked < self.waits {
+            self.asked += 1;
+            return Err(Pending.into());
+        }
+        self.asked = 0;
+        out.bytes = vec![index as u8; 6];
+        Ok(())
+    }
+
+    fn rewind(&mut self) {}
+}
+
+fn polled(waits: usize, len: usize) -> (Shared, FrameStore) {
+    let shared = Shared {
+        state: Mutex::new(State {
+            ring: Ring::new(LOOKAHEAD),
+            next: 0,
+            epoch: 0,
+            error: None,
+            failed: false,
+            done: false,
+            stop: false,
+        }),
+        wake: Condvar::new(),
+    };
+    let store = FrameStore {
+        path: PathBuf::from("asynchronous"),
+        source: Box::new(Asynchronous {
+            waits,
+            asked: 0,
+            len,
+        }),
+        len,
+        luma_len: 4,
+        chroma_len: 1,
+        chroma_width: 1,
+        chroma_height: 1,
+    };
+    (shared, store)
+}
+
+fn positions(shared: &Shared) -> Vec<u64> {
+    let state = shared.state.lock().unwrap();
+    state
+        .ring
+        .slots
+        .iter()
+        .map(|frame| frame.position)
+        .collect()
+}
+
+#[test]
+fn a_pending_frame_is_retried_on_the_next_poll_and_never_fails_the_feed() {
+    let (shared, mut store) = polled(2, 10);
+    pump(&shared, &mut store, 10, true);
+    assert!(positions(&shared).is_empty(), "nothing out after one poll");
+    pump(&shared, &mut store, 10, true);
+    pump(&shared, &mut store, 10, true);
+    assert_eq!(positions(&shared), [0]);
+    for _ in 0..20 {
+        pump(&shared, &mut store, 10, true);
+    }
+    assert_eq!(positions(&shared), [0, 1, 2, 3], "in order, up to the ring");
+    let state = shared.state.lock().unwrap();
+    assert!(!state.failed && state.error.is_none());
+}
+
+#[test]
+fn a_polled_feed_restarts_at_position_zero_and_wraps_a_repeating_movie() {
+    let (shared, mut store) = polled(0, 3);
+    pump(&shared, &mut store, 3, true);
+    let taken = shared.state.lock().unwrap().ring.take_upto(3).unwrap();
+    assert_eq!(
+        (taken.position, taken.index),
+        (3, 0),
+        "position 3 is frame 0 again"
+    );
+    {
+        let mut state = shared.state.lock().unwrap();
+        state.ring.clear();
+        state.next = 0;
+        state.epoch += 1;
+    }
+    pump(&shared, &mut store, 3, true);
+    assert_eq!(positions(&shared), [0, 1, 2, 3]);
+}

@@ -41,7 +41,11 @@ mod container_audio;
 mod gst;
 mod mp4;
 mod mpeg2_ps;
+#[cfg(any(target_arch = "wasm32", test))]
+mod planes;
 mod track;
+#[cfg(target_arch = "wasm32")]
+mod webcodecs;
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -221,6 +225,23 @@ pub trait VideoDecoder: std::fmt::Debug + Send {
     /// Drops decoder state and starts again from frame zero.
     fn rewind(&mut self);
 }
+
+/// What [`VideoDecoder::frame`] fails with when the frame is not decoded *yet*.
+///
+/// Only an asynchronous decoder returns it (the browser's WebCodecs, in
+/// `webcodecs.rs`), and only the web's inline [`Feed`] sees it: that feed polls
+/// once a frame instead of blocking a thread, and retries the same position on
+/// its next poll. It is not a failure, so it never marks a feed failed.
+#[derive(Debug)]
+pub struct Pending;
+
+impl std::fmt::Display for Pending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the frame is not decoded yet")
+    }
+}
+
+impl std::error::Error for Pending {}
 
 /// Decodes the AV1 movie cache through [`VideoDecoder`].
 ///
@@ -546,6 +567,10 @@ pub struct Feed {
     pub width: u32,
     /// Luma height in samples, and the frame height in pixels.
     pub height: u32,
+    /// The store and `repeat`, on the web, where there is no worker: the
+    /// browser decodes asynchronously, and [`Feed::take_upto`] polls it.
+    #[cfg(target_arch = "wasm32")]
+    inline: (FrameStore, bool),
 }
 
 /// The mutex and the condition the worker parks on.
@@ -586,6 +611,7 @@ impl Feed {
             }),
             wake: Condvar::new(),
         });
+        #[cfg(not(target_arch = "wasm32"))]
         let worker = std::thread::Builder::new()
             // Named so it is obvious in a debugger and in `top` which thread the
             // decode is on, this being the whole point of it existing.
@@ -601,13 +627,18 @@ impl Feed {
 
         Self {
             shared,
+            #[cfg(not(target_arch = "wasm32"))]
             worker: Some(worker),
+            #[cfg(target_arch = "wasm32")]
+            worker: None,
             len,
             decoder_label,
             chroma_width,
             chroma_height,
             width,
             height,
+            #[cfg(target_arch = "wasm32")]
+            inline: (store, repeat),
         }
     }
 
@@ -635,6 +666,8 @@ impl Feed {
     /// `None` is an ordinary answer and means *keep showing what you have*: see
     /// [`Ring::take_upto`] for why that is the only safe fallback.
     pub fn take_upto(&mut self, position: u64) -> Option<Frame> {
+        #[cfg(target_arch = "wasm32")]
+        pump(&self.shared, &mut self.inline.0, self.len, self.inline.1);
         let taken = {
             let mut state = self.lock();
             state.ring.take_upto(position)
@@ -714,6 +747,7 @@ impl Drop for Feed {
 /// Split out of [`Feed::spawn`] so the loop reads as a loop. It owns `store`
 /// outright, which is the point: the only decoder is on this thread, and the
 /// drawing thread has no way to reach it.
+#[cfg(not(target_arch = "wasm32"))]
 fn decode_loop(shared: &Shared, mut store: FrameStore, len: usize, repeat: bool) {
     let lock = || {
         shared
@@ -741,42 +775,85 @@ fn decode_loop(shared: &Shared, mut store: FrameStore, len: usize, repeat: bool)
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
             }
         };
+        decode_step(shared, &mut store, len, repeat, epoch, position);
+    }
+}
 
-        let Some(index) = frame_at(position, len, repeat) else {
-            // A movie that does not repeat, decoded to its end. Its last frame
-            // is still in the ring for whoever wants it.
-            let mut state = lock();
-            if state.epoch == epoch {
-                state.done = true;
-            }
-            continue;
-        };
+/// Decodes into the ring until there is nothing to do or the decoder answers
+/// [`Pending`]: the web's feed, which has no worker, from `take_upto`.
+#[cfg(any(target_arch = "wasm32", test))]
+fn pump(shared: &Shared, store: &mut FrameStore, len: usize, repeat: bool) {
+    while claim(shared)
+        .is_some_and(|(epoch, position)| decode_step(shared, store, len, repeat, epoch, position))
+    {
+    }
+}
 
-        let mut picture = VideoFrame::default();
-        let decoded = store.read_frame(index, &mut picture);
+/// The position to decode next and its epoch, or `None` when there is nothing
+/// to do: [`decode_loop`]'s wait condition, for the web's feed, which polls
+/// rather than waits.
+#[cfg(any(target_arch = "wasm32", test))]
+fn claim(shared: &Shared) -> Option<(u64, u64)> {
+    let state = shared
+        .state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let idle = state.stop || state.failed || state.done || state.ring.is_full();
+    (!idle).then_some((state.epoch, state.next))
+}
 
+/// Decodes the claimed `position` and pushes it; `false` when the decoder had
+/// it [`Pending`], which is retried on the next poll.
+fn decode_step(
+    shared: &Shared,
+    store: &mut FrameStore,
+    len: usize,
+    repeat: bool,
+    epoch: u64,
+    position: u64,
+) -> bool {
+    let lock = || {
+        shared
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
+    let Some(index) = frame_at(position, len, repeat) else {
+        // A movie that does not repeat, decoded to its end. Its last frame
+        // is still in the ring for whoever wants it.
         let mut state = lock();
-        // Restarted while this was decoding: the frame belongs to playback that
-        // no longer exists, so it is dropped rather than pushed. The next pass
-        // round claims position 0 and `read_frame` rewinds by itself.
-        if state.epoch != epoch {
-            continue;
+        if state.epoch == epoch {
+            state.done = true;
         }
-        match decoded {
-            Ok(()) => {
-                state.ring.push(Frame {
-                    position,
-                    index,
-                    picture,
-                });
-                state.next = position + 1;
-            }
-            Err(e) => {
-                state.error = Some(format!("{e:#}"));
-                state.failed = true;
-            }
+        return true;
+    };
+
+    let mut picture = VideoFrame::default();
+    let decoded = store.read_frame(index, &mut picture);
+
+    let mut state = lock();
+    // Restarted while this was decoding: the frame belongs to playback that
+    // no longer exists, so it is dropped rather than pushed. The next pass
+    // round claims position 0 and `read_frame` rewinds by itself.
+    if state.epoch != epoch {
+        return true;
+    }
+    match decoded {
+        Ok(()) => {
+            state.ring.push(Frame {
+                position,
+                index,
+                picture,
+            });
+            state.next = position + 1;
+        }
+        Err(e) if e.downcast_ref::<Pending>().is_some() => return false,
+        Err(e) => {
+            state.error = Some(format!("{e:#}"));
+            state.failed = true;
         }
     }
+    true
 }
 
 /// How much of a movie to convert.
@@ -917,6 +994,19 @@ pub fn open(
     how: Decode,
     watch: Watch<'_>,
 ) -> Result<Movie> {
+    // Only a `.PMF`'s H.264 has a decoder in a browser (WebCodecs); the rest
+    // are opened for their shape and sound alone, and say why.
+    #[cfg(target_arch = "wasm32")]
+    if !blob.starts_with(pmf::MAGIC) && !how.no_video {
+        let only_shape = Decode {
+            no_video: true,
+            ..how
+        };
+        let mut movie =
+            open(blob, key, cache_dir, extent, only_shape, watch).context(webcodecs::NO_DECODER)?;
+        movie.no_picture_reason = Some(webcodecs::NO_DECODER.to_string());
+        return Ok(movie);
+    }
     if blob.starts_with(pmf::MAGIC) {
         open_psmf(blob, key, cache_dir, extent, how, watch)
     } else if blob.starts_with(&mpeg2_ps::START_CODE) {
@@ -1056,7 +1146,13 @@ fn open_psmf(
         }
     }
 
-    match transcode(&demuxed.video, conversion, wanted) {
+    // The web has no cache and cannot run `ffmpeg`, but its browser decodes
+    // H.264 itself: see `webcodecs.rs`.
+    #[cfg(target_arch = "wasm32")]
+    let made = webcodecs::frame_store(&demuxed.video, key, width, height, wanted);
+    #[cfg(not(target_arch = "wasm32"))]
+    let made = transcode(&demuxed.video, conversion, wanted);
+    match made {
         Ok(frames) => Ok(Movie {
             header: Some(header),
             frame_count,
@@ -1410,6 +1506,7 @@ fn transcode_ipu(parsed: &ipf::Ipf<'_>, to: Conversion<'_>, frames: usize) -> Re
 ///
 /// Returns the reason as an error when conversion is impossible, which the
 /// caller turns into a fallback rather than a failure.
+#[cfg(not(target_arch = "wasm32"))]
 fn transcode(video: &[u8], to: Conversion<'_>, frames: usize) -> Result<FrameStore> {
     let Conversion {
         key,
