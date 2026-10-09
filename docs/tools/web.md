@@ -297,6 +297,9 @@ forces the in-memory fallback, and the script prints `crossOriginIsolated`.
 `--stalls MS` lists every gap between animation frames longer than `MS` once
 the run ends, timed from the pick, which is the responsiveness number (a
 screenshot waits for a free page thread, so its timestamp hides a stall);
+`--swipe X0,Y0,X1,Y1,MS@T` drags one finger over `MS` ms and lifts it, and
+`--tap X,Y@T` taps, both as real touches through Chrome DevTools
+(`Input.dispatchTouchEvent`), which winit reports as `WindowEvent::Touch`;
 `--reload SECONDS` reloads the page then; `--audio-wav FILE` records
 `--audio-seconds` of what the audio worklet outputs ("Sound"). Chromium runs
 with `--mute-audio --disable-audio-output`: the second renders to a fake sink,

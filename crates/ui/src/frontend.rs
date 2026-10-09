@@ -875,6 +875,7 @@ impl Frontend {
         }
 
         self.on_screen_for += dt;
+        self.campaign.tick(dt, self.space.size);
 
         if self.leg_has_no_picture() {
             input.inject_press(Button::Start);

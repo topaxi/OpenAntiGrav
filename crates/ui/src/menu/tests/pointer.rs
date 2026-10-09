@@ -448,15 +448,104 @@ fn a_finger_drag_scrolls_the_view_and_keeps_the_cursor_inside_it() {
     menu.pointer(&drag(-100.0 * pitch), &regions);
     assert_eq!(menu.scroll(), last, "stops at the end");
     assert!(inside(&menu));
+    lift_and_settle(&mut menu, &regions);
+    assert_eq!(menu.scroll(), last, "and rests there");
     menu.pointer(&drag(100.0 * pitch), &regions);
     assert_eq!(menu.scroll(), 0, "stops at the top");
     assert!(inside(&menu));
 }
 
+fn lift_and_settle(menu: &mut Menu, regions: &[Region]) {
+    menu.pointer(
+        &Pointer {
+            released: true,
+            ..Pointer::default()
+        },
+        regions,
+    );
+    for _ in 0..120 {
+        menu.tick_scroll(1.0 / 60.0);
+    }
+}
+
 #[test]
-fn a_drag_carries_its_fraction_of_a_row_and_never_activates() {
+fn a_flick_coasts_the_list_on_and_a_touch_down_catches_it() {
     let (mut menu, regions, pitch) = long_page();
-    for expected in [0, 0, 1] {
+    let last = menu.page().entries.len() - visible();
+    // Half a row a tick up the screen: 30 rows a second, past the cap.
+    let mut gesture = Pointer {
+        pressed: true,
+        ..drag(-0.5 * pitch)
+    };
+    for _ in 0..3 {
+        menu.pointer(&gesture, &regions);
+        menu.tick_scroll(1.0 / 60.0);
+        gesture.pressed = false;
+    }
+    let lifted = menu.scroll();
+    assert!(lifted <= 2, "{lifted}");
+    menu.pointer(
+        &Pointer {
+            released: true,
+            ..Pointer::default()
+        },
+        &regions,
+    );
+    for _ in 0..10 {
+        menu.tick_scroll(1.0 / 60.0);
+    }
+    let coasting = menu.scroll();
+    assert!(coasting > lifted, "kept going: {lifted} then {coasting}");
+    // A tap while it coasts stops it and activates nothing.
+    let row = regions.iter().find(|r| r.part == Part::Row).unwrap();
+    let tap = Pointer {
+        at: Some((row.rect[0] + 1.0, row.rect[1] + 1.0)),
+        moved: true,
+        clicked: true,
+        pressed: true,
+        released: true,
+        ..Pointer::default()
+    };
+    let cursor = menu.selected();
+    assert!(menu.pointer(&tap, &regions).is_empty());
+    assert_eq!(menu.selected(), cursor, "the tap selected nothing");
+    for _ in 0..120 {
+        menu.tick_scroll(1.0 / 60.0);
+    }
+    let rested = menu.scroll();
+    assert!(rested <= coasting + 1 && rested < last, "{rested}");
+}
+
+#[test]
+fn a_pad_move_stops_a_coasting_list() {
+    let (mut menu, regions, pitch) = long_page();
+    for _ in 0..3 {
+        menu.pointer(&drag(-0.5 * pitch), &regions);
+        menu.tick_scroll(1.0 / 60.0);
+    }
+    menu.pointer(
+        &Pointer {
+            released: true,
+            ..Pointer::default()
+        },
+        &regions,
+    );
+    menu.tick_scroll(1.0 / 60.0);
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Down as u32);
+    menu.update(&mut input);
+    let (scroll, cursor) = (menu.scroll(), menu.selected());
+    for _ in 0..120 {
+        menu.tick_scroll(1.0 / 60.0);
+    }
+    assert_eq!((menu.scroll(), menu.selected()), (scroll, cursor));
+}
+
+#[test]
+fn a_drag_shows_the_row_nearest_the_finger_and_never_activates() {
+    let (mut menu, regions, pitch) = long_page();
+    for expected in [0, 1, 1] {
         let events = menu.pointer(&drag(-0.4 * pitch), &regions);
         assert!(events.is_empty());
         assert_eq!(menu.scroll(), expected);

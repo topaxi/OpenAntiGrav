@@ -48,7 +48,8 @@
 //! **Chosen, not measured** (the original is pad-only): `cells`' `pan`
 //! slides every column by a fraction of [`PITCH`]`[0]` while a touch drag
 //! moves the grid, with the column entering at one edge and the one leaving
-//! at the other faded by their `Cell::weight`. See `Picker::pan_by`.
+//! at the other faded by their `Cell::weight`. The pan is `oag_ui::kinetic`'s
+//! (follow, flick, settle on a column); see `Picker::fold_pan`.
 
 use oag_ui::frontend::{Draw, Placed};
 use oag_ui::screen::argb_to_rgba;

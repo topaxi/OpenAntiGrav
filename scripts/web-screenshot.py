@@ -120,6 +120,13 @@ def main() -> None:
     parser.add_argument("--up", action="append", default=[])
     parser.add_argument("--click", action="append", default=[])
     parser.add_argument(
+        "--swipe", action="append", default=[],
+        help="X0,Y0,X1,Y1,MS@T: one finger from (X0,Y0) to (X1,Y1) over MS ms, lifted at the end",
+    )
+    parser.add_argument(
+        "--tap", action="append", default=[], help="X,Y@T: one finger down and up in place",
+    )
+    parser.add_argument(
         "--resize",
         action="append",
         default=[],
@@ -193,6 +200,8 @@ def main() -> None:
         + keyed(args.down, "down")
         + keyed(args.up, "up")
         + keyed(args.click, "click")
+        + keyed(args.swipe, "swipe")
+        + keyed(args.tap, "tap")
         + keyed(args.resize, "resize")
         + [(float(at), "reload", "") for at in args.reload]
         + [(float(at), "pick", "") for at in args.pick]
@@ -259,6 +268,29 @@ def main() -> None:
                     w, h = (int(v) for v in key.split("x"))
                     page.set_viewport_size({"width": w, "height": h})
                     print(f"resized {w}x{h} at {at:g}s", flush=True)
+                elif kind in ("swipe", "tap"):
+                    # A real touch through the page's input pipeline, which
+                    # Chromium turns into `pointerType: touch` pointer events,
+                    # the ones winit reports as `WindowEvent::Touch`.
+                    cdp = page.context.new_cdp_session(page)
+                    cdp.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
+                    if kind == "tap":
+                        x0, y0 = (float(v) for v in key.split(","))
+                        x1, y1, ms = x0, y0, 60.0
+                    else:
+                        x0, y0, x1, y1, ms = (float(v) for v in key.split(","))
+                    touch = lambda kind_, x, y: cdp.send(
+                        "Input.dispatchTouchEvent",
+                        {"type": kind_, "touchPoints": [{"x": x, "y": y, "id": 1}] if x is not None else []},
+                    )
+                    touch("touchStart", x0, y0)
+                    steps = max(1, int(ms / 16))
+                    for i in range(1, steps + 1):
+                        page.wait_for_timeout(ms / steps)
+                        f = i / steps
+                        touch("touchMove", x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
+                    touch("touchEnd", None, None)
+                    print(f"{kind} {key} at {at:g}s", flush=True)
                 elif kind == "click":
                     x, y = (float(v) for v in key.split(","))
                     page.mouse.move(x, y, steps=5)
