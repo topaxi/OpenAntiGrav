@@ -38,6 +38,7 @@
 pub mod adverts;
 pub mod boot;
 pub mod campaign;
+pub mod craft_laws;
 pub mod effects;
 pub mod endrace;
 pub mod engine_effects;

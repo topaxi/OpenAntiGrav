@@ -54,6 +54,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
+    craft_laws: Some(&CRAFT_LAWS),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
@@ -691,6 +692,21 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
     cast_every_probe: oag_title::pre_race::Sourced::measured(true),
     along_hit_normal: oag_title::pre_race::Sourced::measured(true),
     quarter_sum_normal: oag_title::pre_race::Sourced::measured(true),
+};
+
+/// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].
+///
+/// - Inertia mass `1.0`: `Ship_Construct` loads the literal (`0x008a8b14`) and calls
+///   `Body_SetMass(1.0)` (`0x000debac`) then `Body_SetBoxInertia(1.0, 12, 8, 12)` (`0x000debc8`)
+///   where Pulse passes `0.9`; read live as `(17.333, 24, 17.333)` at `body+0x10`, and one
+///   airbrake's yaw rate ran `0.900` of ours on every frame before. Confidence 92.
+/// - Steering ramp clamped at its target (`Craft_UpdateSteering`, `0x000edc50`-`0x000edc68` and
+///   `0x000edb9c`-`0x000edba4`); `craft+0x314` parks at 100 live where Pulse's cycles. Confidence 90.
+///
+/// Evidence: `docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`.
+pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
+    inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
+    steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
 };
 
 #[cfg(test)]

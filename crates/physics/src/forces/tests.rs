@@ -618,3 +618,20 @@ fn braking_the_right_airbrake_alone_turns_the_ship_toward_its_own_right() {
         state.body.forward()
     );
 }
+
+/// Pulse's tensor is `ship_inertia_at(INERTIA_MASS)` to the bit, so routing a title's mass
+/// through it cannot move Pulse; HD's literal `1.0` gives the `(17.333, 24, 17.333)` read live at
+/// `body+0x10`/`+0x24`/`+0x38` on RPCS3 (`L / omega = 23.98` on the yaw axis).
+#[test]
+fn a_titles_inertia_mass_rebuilds_the_same_box() {
+    let pulse = ship_inertia();
+    let at = ship_inertia_at(INERTIA_MASS);
+    assert_eq!(pulse.x.to_bits(), at.x.to_bits());
+    assert_eq!(pulse.y.to_bits(), at.y.to_bits());
+    assert_eq!(pulse.z.to_bits(), at.z.to_bits());
+
+    let hd = ship_inertia_at(1.0);
+    assert!((hd.x - 17.333).abs() < 0.001, "I_xx was {}", hd.x);
+    assert!((hd.y - 24.0).abs() < 0.001, "I_yy was {}", hd.y);
+    assert!((hd.z - 17.333).abs() < 0.001, "I_zz was {}", hd.z);
+}

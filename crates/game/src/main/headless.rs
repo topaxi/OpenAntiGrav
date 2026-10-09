@@ -352,6 +352,7 @@ pub(crate) fn write_trace(
     scheme: ControlScheme,
     path: &std::path::Path,
 ) -> Result<()> {
+    use oag_trace::trace::AngularReading;
     use oag_trace::{Flare, Frame, Trace};
 
     let mut race = race::Race::start(loaded.setup);
@@ -379,6 +380,17 @@ pub(crate) fn write_trace(
             position: body.position,
             velocity: body.linear_velocity,
             speed: body.linear_velocity.length(),
+            // Both angular columns in the capture's own convention (negated body-local,
+            // `AngularReading`'s default), so a yaw-rate comparison against a capture
+            // reads one column on both sides. `body+0x160`'s is the momentum `I * omega`.
+            angular_velocity: Some(AngularReading::NegatedLocal.to_recorded(
+                body.orientation * ((body.orientation.inverse() * body.angular_velocity) * body.inertia),
+                (body.right(), body.up(), body.forward()),
+            )),
+            angular_rate: Some(AngularReading::NegatedLocal.to_recorded(
+                body.angular_velocity,
+                (body.right(), body.up(), body.forward()),
+            )),
             // The energy pool, so a comparison can put a number on the recovered
             // contact-damage law instead of watching the bar. `oag-trace
             // replay` writes it too; the capture side is

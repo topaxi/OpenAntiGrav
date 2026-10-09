@@ -154,8 +154,7 @@ pub struct RaceDefaults {
     pub effect_dir: &'static str,
     /// Per-circuit overrides of [`Self::effect_dir`]; see [`Self::effect_dir_for`].
     pub effect_dir_by_circuit: &'static [(&'static str, &'static str)],
-    /// How this title names the circuit a Zone race runs on. See
-    /// [`ZoneCircuit`].
+    /// How this title names the circuit a Zone race runs on. See [`ZoneCircuit`].
     pub zone: ZoneCircuit,
     /// Where this title keeps the craft a Zone race flies. See [`ZoneCraft`].
     pub zone_craft: ZoneCraft,
@@ -188,6 +187,8 @@ pub struct RaceDefaults {
     pub launch_hover: Option<&'static crate::launch_hover::LaunchHover>,
     /// The craft's hover probe set, `None` for Pulse's two-point law: [`crate::hover_rig::HoverRig`].
     pub hover_rig: Option<&'static crate::hover_rig::HoverRig>,
+    /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
+    pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///
@@ -348,8 +349,7 @@ impl ZoneStageTextures {
         format!("{}{stage}{}", self.general, self.extension)
     }
 
-    /// The entry name of the "track" set's texture for `stage` - the set with
-    /// the art in it.
+    /// The entry name of the "track" set's texture for `stage` - the set with the art in it.
     #[must_use]
     pub fn track_entry(&self, stage: u32) -> String {
         format!("{}{stage}{}", self.track, self.extension)

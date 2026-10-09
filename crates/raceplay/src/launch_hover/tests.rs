@@ -70,3 +70,14 @@ fn a_titles_rig_reaches_the_physics_field_for_field() {
     assert!(rig.along_normal);
     assert_eq!(rig.normal_mean, NormalMean::QuarterSum);
 }
+
+/// HD's craft laws reach the tensor (`(17.333, 24, 17.333)`, `Ship_Construct`'s mass `1.0`); a
+/// title with none keeps Pulse's tensor to the bit.
+#[test]
+fn a_titles_craft_laws_build_its_inertia_and_none_keeps_pulses() {
+    let pulse = craft_inertia(None);
+    assert_eq!(pulse, oag_physics::forces::ship_inertia());
+    let hd = craft_inertia(Some(&oag_hd::race::CRAFT_LAWS));
+    assert!((hd.y - 24.0).abs() < 1.0e-3, "I_yy {}", hd.y);
+    assert!((hd.x - 17.333).abs() < 1.0e-3, "I_xx {}", hd.x);
+}

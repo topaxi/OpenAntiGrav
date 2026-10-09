@@ -266,3 +266,49 @@ fn update_drives_the_camera_lean_from_the_raw_stick() {
     assert!(state.steer < 100.0);
     assert!(state.camera_lean_follower > 0.0 && state.camera_lean > 0.0);
 }
+
+/// Full lock held for a second on HD's 500/1000 per-second rates (`<Turning gain="500"
+/// falloff="1000">`): Pulse's unclamped ramp cycles below 100 and averages `91.7`, HD's parks at
+/// 100. Fails if `steer_ramp_clamped` stops selecting the clamped ramp, or if either ramp's law
+/// moves.
+#[test]
+fn a_held_stick_parks_the_clamped_ramp_and_cycles_the_unclamped_one() {
+    let dt = 1.0 / 60.0;
+    let held = |clamped: bool| {
+        let mut handling = test_handling();
+        handling.turning.gain = 500.0;
+        handling.turning.falloff = 1000.0;
+        let mut state = ShipState {
+            steer_ramp_clamped: clamped,
+            ..ShipState::default()
+        };
+        let controls = ShipControls {
+            steer_x: 1.0,
+            ..ShipControls::default()
+        };
+        let mut sum = 0.0;
+        for tick in 0..60 {
+            update(&mut state, &controls, &handling, dt);
+            if tick >= 30 {
+                sum += state.steer;
+            }
+        }
+        (state.steer, sum / 30.0)
+    };
+    let (_, pulse_mean) = held(false);
+    assert!((pulse_mean - 91.67).abs() < 0.1, "Pulse mean {pulse_mean}");
+    let (hd_last, hd_mean) = held(true);
+    assert_eq!(hd_last, 100.0);
+    assert_eq!(hd_mean, 100.0);
+
+    // Mirrored below zero, and the return toward centre also stops at the target.
+    assert_eq!(
+        ramp_steering_clamped(-95.0, -100.0, 500.0, 1000.0, dt),
+        -100.0
+    );
+    assert_eq!(ramp_steering_clamped(60.0, 50.0, 500.0, 1000.0, dt), 50.0);
+    assert_eq!(
+        ramp_steering_clamped(-60.0, -50.0, 500.0, 1000.0, dt),
+        -50.0
+    );
+}
