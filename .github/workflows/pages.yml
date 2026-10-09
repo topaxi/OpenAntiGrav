@@ -1,0 +1,81 @@
+name: Pages
+
+# The browser build (docs/tools/web.md) deployed to GitHub Pages: the page in
+# web/, the oag_web example built for wasm32-unknown-unknown with the `dist`
+# profile (fat LTO, one codegen unit), wasm-bindgen's glue and `wasm-opt -O`,
+# all by scripts/build-web.sh, the script `just web` runs.
+#
+# The artifact holds no game content: the player picks their own disc image in
+# the page and it is read in their browser tab, never uploaded. The build ends
+# with scripts/check-leakage.py over the folder that is published.
+#
+# Single-threaded, so no COOP/COEP headers are needed (Pages cannot set them)
+# and no coi-serviceworker is shipped.
+#
+# Triggers: a pushed `v*` tag, or a manual run from the Actions tab. Pages has
+# to be enabled once in the repository settings with "GitHub Actions" as the
+# source.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+# One deployment at a time; a newer run supersedes a queued one but never
+# cancels one already deploying.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same pinned toolchain as ci.yml and release.yml.
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # wasm-bindgen's CLI has to match the crate version in Cargo.lock
+      # exactly; build-web.sh checks and says which one it wants.
+      - name: wasm-bindgen and wasm-opt
+        run: |
+          bin="$HOME/.local/bin"
+          mkdir -p "$bin"
+          want=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/"/, "", $3); print $3; exit }' Cargo.lock)
+          curl -sSfL "https://github.com/rustwasm/wasm-bindgen/releases/download/${want}/wasm-bindgen-${want}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz --strip-components=1 -C "$bin" "wasm-bindgen-${want}-x86_64-unknown-linux-musl/wasm-bindgen"
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/version_130/binaryen-version_130-x86_64-linux.tar.gz" \
+            | tar -xz --strip-components=2 -C "$bin" binaryen-version_130/bin/wasm-opt
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/wasm-bindgen" --version
+          "$bin/wasm-opt" --version
+      - run: scripts/build-web.sh
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: target/web/dist
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

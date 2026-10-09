@@ -41,6 +41,8 @@ const ABSENCE: &[&str] = &[
     "not in the archive set",
     "shows no stills",
     "did not fit the sprite sheet",
+    // A boot movie with no frames to show (`oag_game::boot::movies`).
+    "no picture:",
 ];
 
 /// Whether a report line says an asset is missing or was not used.
@@ -121,6 +123,7 @@ mod tests {
 
     /// Sentences lifted from the loaders' own reports on a real disc.
     const ABSENT: &[&str] = &[
+        "  no picture: creating data/cache/movies: operation not supported on this platform",
         r"Data\Weapons\Textures\Cannon_bolt.mip: absent - the cannon bolt streak draws nothing",
         r"Data\Weapons\Pulse_Bomb.vex: absent - a laid bomb falls back to a billboard",
         r"Data\Environments\x\cloud.mip: not found - 12 cloud sprite(s) decoded but not drawn",

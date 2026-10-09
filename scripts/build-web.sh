@@ -51,6 +51,9 @@ if [[ $profile != dev ]]; then
     -o "$out/pkg/oag_web_bg.wasm" "$out/pkg/oag_web_bg.wasm"
 fi
 cp web/index.html web/style.css web/main.js "$out/"
+# The same notices every other release artifact carries (release.yml).
+cp LICENSE-MIT LICENSE-APACHE "$out/"
+cp -r licences "$out/licences"
 # GitHub Pages runs Jekyll over the artifact unless this file is there.
 touch "$out/.nojekyll"
 python3 scripts/check-leakage.py --dir "$out"

@@ -9,7 +9,8 @@ include!("main_body.rs");
 const MOUNT_DIR: &str = "/web";
 
 /// Boots the game on the image the page read: `name` is the file's own name,
-/// `image` its bytes.
+/// `image` its bytes, `log` the page's `?log=` parameter (`debug`, `trace`;
+/// absent is `info` for this project's own lines and `warn` for the rest).
 ///
 /// The bytes are copied into the module's memory once and the page's copy can
 /// go; see `oag_disc::mount`. Resolves once the event loop has been handed to
@@ -20,8 +21,12 @@ const MOUNT_DIR: &str = "/web";
 /// The WebGPU adapter or device could not be had, or `run` failed before the
 /// window opened (an image that is not a disc image, say).
 #[wasm_bindgen::prelude::wasm_bindgen]
-pub async fn start(name: String, image: js_sys::Uint8Array) -> Result<(), wasm_bindgen::JsValue> {
-    web_log::install();
+pub async fn start(
+    name: String,
+    image: js_sys::Uint8Array,
+    log: Option<String>,
+) -> Result<(), wasm_bindgen::JsValue> {
+    web_log::install(log.as_deref().and_then(|level| level.parse().ok()));
     let path = format!("{MOUNT_DIR}/{}", name.replace('/', "_"));
     oag_disc::mount::register(path.clone(), std::sync::Arc::new(image.to_vec()));
     drop(image);
@@ -39,12 +44,15 @@ pub async fn start(name: String, image: js_sys::Uint8Array) -> Result<(), wasm_b
 mod web_log {
     use log::{Level, LevelFilter, Log, Metadata, Record};
 
-    struct Console;
+    struct Console {
+        /// How far this project's own lines go; everything else stops at warn.
+        ours: LevelFilter,
+    }
 
     impl Log for Console {
         fn enabled(&self, metadata: &Metadata) -> bool {
             metadata.level() <= Level::Warn
-                || (metadata.level() <= Level::Info && metadata.target().starts_with("oag"))
+                || (metadata.level() <= self.ours && metadata.target().starts_with("oag"))
         }
 
         fn log(&self, record: &Record) {
@@ -68,9 +76,10 @@ mod web_log {
     }
 
     /// Installs the console logger and a panic hook that logs through it.
-    pub(super) fn install() {
-        if log::set_logger(&Console).is_ok() {
-            log::set_max_level(LevelFilter::Info);
+    pub(super) fn install(ours: Option<LevelFilter>) {
+        let ours = ours.unwrap_or(LevelFilter::Info);
+        if log::set_logger(Box::leak(Box::new(Console { ours }))).is_ok() {
+            log::set_max_level(ours.max(LevelFilter::Warn));
         }
         std::panic::set_hook(Box::new(|info| {
             web_sys::console::error_1(&wasm_bindgen::JsValue::from_str(&format!("panic: {info}")));

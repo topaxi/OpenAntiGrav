@@ -49,7 +49,9 @@ async function boot(file) {
     await init();
     picker.hidden = true;
     canvas.focus();
-    await start(file.name, bytes);
+    // `?log=debug` (or `trace`) widens what reaches the console.
+    const log = new URLSearchParams(location.search).get("log") ?? undefined;
+    await start(file.name, bytes, log);
   } catch (error) {
     booted = false;
     picker.hidden = false;
