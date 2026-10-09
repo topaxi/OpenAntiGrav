@@ -78,17 +78,24 @@ window.oagQuit = () => { setTimeout(() => location.reload(), 0); };
 // the game polls `oagTakeFullscreenExit` once a frame.
 let fullscreenLeft = false;
 window.oagFullscreen = (on) => {
+  // The exit this very call causes is not the player's: forget any earlier one.
+  fullscreenLeft = false;
   if (on && !document.fullscreenElement) {
     canvas.requestFullscreen?.().catch((error) => {
       console.warn("fullscreen refused:", error);
       fullscreenLeft = true;
     });
   } else if (!on && document.fullscreenElement) {
+    askedToLeave = true;
     document.exitFullscreen?.().catch(() => {});
   }
 };
+let askedToLeave = false;
 document.addEventListener("fullscreenchange", () => {
-  if (!document.fullscreenElement) fullscreenLeft = true;
+  if (document.fullscreenElement) return;
+  // The leave this page asked for is not the player's own.
+  if (askedToLeave) askedToLeave = false;
+  else fullscreenLeft = true;
 });
 window.oagTakeFullscreenExit = () => {
   const left = fullscreenLeft;

@@ -124,6 +124,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--url", default="", help="a page already served elsewhere")
     parser.add_argument("--size", default="960x544")
+    parser.add_argument("--dpr", type=float, default=1.0, help="the page's devicePixelRatio")
     parser.add_argument(
         "--software",
         nargs="?",
@@ -173,7 +174,9 @@ def main() -> None:
                     executable_path=args.chromium, headless=True,
                     args=(SOFTWARE_FLAGS[args.software] if args.software else FLAGS) + args.flag,
                 )
-            page = browser.new_page(viewport={"width": width, "height": height})
+            page = browser.new_page(
+                viewport={"width": width, "height": height}, device_scale_factor=args.dpr
+            )
             if args.stalls > 0:
                 # Every animation frame's time, from before the page's own
                 # script runs: a gap is the page's thread busy, a load stall.

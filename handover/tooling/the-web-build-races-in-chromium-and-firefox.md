@@ -45,7 +45,7 @@ Architecture, measurements, hosting and limits:
 - **Not tried in a headed browser or on another machine.** Safari, Firefox on
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language
-  Selection only; Pure not booted.
+  Selection only; Pure reaches its Press Start title and no further.
 - **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
   package's sibling files cannot be found beside one picked file.
 - **No sound, no movies.** Audio is `--no-audio`; the AV1 decoder does not

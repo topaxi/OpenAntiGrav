@@ -186,8 +186,14 @@ The render target is held to **720 lines** on the web, always, whatever the
 render-scale row says (`settings::web::render_target`, used by every
 `target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
 `render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
-headless Chromium (2026-10-09). The surface is in physical pixels, so
-`devicePixelRatio` is already inside the number it clamps.
+headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
+`devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is
+960x544 (measured, `web-screenshot.py --dpr 2`), so the cap binds only on a page
+taller than 720 CSS pixels and a phone never reaches it. Render scale above
+what the cap allows has no effect on the web, and its row does not say so. At the
+60 limit the game's own overlay (`graphics.perf_overlay = "fps"`) read `60 FPS
+16.7 MS` in a race, and the same at a limit of 120 (the page's animation frames
+cap it), so 60 does not halve the rate.
 
 The options pages drop VSYNC (a canvas only offers `Fifo`) and MONITOR
 (`settings::web::HIDDEN_ROWS`, `Definition::drop_settings`). WINDOW MODE stays
@@ -199,7 +205,12 @@ mode back to Windowed, saves it and re-seeds the open row. WINDOW SIZE is
 replaced on the web by CANVAS SIZE (`display.canvas_size`: `fit`, the default,
 or a size in CSS pixels): a page has no window, and a size value that means
 "fit" cannot live in `display.window_size`, which every desktop row shares. It is
-dropped on a desktop. winit's own size request is not used (it cropped the
+dropped on a desktop. (Every desktop `settings.toml` therefore gains
+`canvas_size = "fit"` on its next launch, which means nothing there.) The
+fullscreen row is a browser request: Chromium and Firefox honour it from a
+key or a click on the menu (headless, 2026-10-09), a gamepad button is not on
+the user-activation list so a pad alone cannot enter fullscreen, and a click
+on a row while fullscreen lands where that layout puts it. winit's own size request is not used (it cropped the
 canvas); the page sets the canvas's CSS and the surface follows.
 
 The language picked on first boot is saved the frame it is picked, not when the
@@ -536,8 +547,9 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
 - **Untested inputs.** gilrs's Gamepad API backend is compiled in and not tried
   with a pad; touch is not tried. The keyboard and the mouse work.
 - **Other titles in the browser.** Pulse PSP and HD race (Chromium and
-  Firefox, headless); Pulse PS2 was booted to its front end only and Pure not
-  at all. HD drew its race with no Tint error on the one circuit tried.
+  Firefox, headless); Pulse PS2 was booted to its front end only; Pulse USA PSP races (Chromium,
+  2026-10-09); Pure reaches Language Selection and its Press Start title and
+  did not get past it with Enter or Space. HD drew its race with no Tint error on the one circuit tried.
 - **Firefox draws slowly**: 9 to 14 fps in a race in headless Firefox 155,
   against Chromium's 60 on the same machine, and the same before threads
   (Pulse, Moa Therma White: 12.2 fps on the single-threaded module, 12.4 on
