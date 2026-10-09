@@ -356,8 +356,14 @@ impl PickerStage {
         let name = source
             .entry_name(self.previews.ship_hull, self.previews.front_end)
             .with_context(|| format!("entry {index} has no circuit model on the disc"))?;
-        let mut model = oag_game::preview::model(&mut self.archives, &name)
-            .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
+        let circuit_model =
+            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
+        let mut model = if circuit_model {
+            oag_game::preview::psp2_scene::circuit_model(&mut self.archives, &name)
+        } else {
+            oag_game::preview::model(&mut self.archives, &name)
+        }
+        .with_context(|| format!("{name} did not resolve as a preview mesh"))?;
         // The chosen paint over the hull's own texture slots - the same
         // swap a race makes (`oag_livery::ship_skin`), and the same
         // rule when it fails: the hull keeps its own paint, and the log
@@ -375,11 +381,9 @@ impl PickerStage {
         }
         // The circuit model's own material: the ramp comes out of the model
         // and the preview recolours its vertices every frame.
-        let circuit_model =
-            oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
         let ramp = if circuit_model {
             Some(
-                oag_game::preview::track_model::Ramp::take(&mut model)
+                oag_game::preview::track_model::Ramp::of(&mut self.archives, &name, &mut model)
                     .with_context(|| format!("{name}: reading its material"))?,
             )
         } else {

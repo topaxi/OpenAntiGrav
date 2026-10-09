@@ -189,7 +189,103 @@ page's picture). **The live campaign stage draws it too, and did before this was
 `Live::picture`, to every campaign list builder, and `Live::tick` runs per frame): walked windowed under
 Xvfb + lavapipe on `main` `4def1665` plus the texture-limit change, language -> `Main Menu` -> `RACE CAMPAIGN`
 -> `Grid Selection` -> `Cell Selection` by mouse, 2026-10-02, and the scene draws behind all three. The end-of-race screens sit under the
-same widget and do not yet. Omega authors no track or ship picker.
+same widget and do not yet. Omega authors both selection screens
+(`Track_Selection_Definition.xml` and `Team_Selection_Definition.xml`, `data08`/`data09`, the
+files `skin.xml` includes by `SrcRel`); Track Select is read and drawn
+([below](#the-circuit-model-on-track-select-2026-10-09-omega-track-model)), Team Select is not
+(`FrontEnd::team_select`, see `crates/omega/src/frontend.rs`).
+
+## The circuit model on Track Select (2026-10-09, `omega-track-model`)
+
+**Omega draws each circuit's own front-end model on `Track Select`, as HD does.** The screen is
+HD's file (`Track_Selection_Definition.xml`, nine lines of diff in colours and `.4x` texture
+names), read by the same reader (`oag_ui_screens::picker::hd::track`), reached from RACEBOX ->
+START (`track_select` is `Some`; Omega's ship picker is `None`, so a confirmed circuit launches
+the race). Walked live under Xvfb 2026-10-09: RACEBOX, START, `Track Select`, Right steps the
+circuit and the model reloads, a click on a hexagon selects it, Return launches.
+
+**The table** is `oag_omega::frontend`'s `CIRCUIT_MODELS`, 26 rows, each a `fe/` scene on
+`data00.psarc` (`<folder>\FE\<scene>.vex` and its `.rcsmodel`): HD's twelve under Omega's own
+folders (`01_vineta_k` .. `15_anulpha_pass`, `02_metropia`, `03_moa_therma`, the four pack
+circuits `talons_junction`, `amphiseum`, `modesto_heights`, `tech_de_ra`), the four Zone circuits
+(`zone_1..4`, `track01`; the screen lists them as `25_Track`..`28_Track`) and 2048's ten under
+`environments2048` (`Track01.vex`). Every row builds (22 to 156 thousand vertices); every circuit
+the screen lists has one. The HD folder names (`03_Track`) are not Omega folders.
+
+**Geometry** is 2048's container: `oag_mesh::mesh::rcs::psp2::build_with_vex`, the builder the
+menu backdrop already joins a PS4 scene with, now shared through `oag_game::preview::psp2_scene`.
+The Omega pairs hold HD's own geometry (Moa Therma's bounds match HD's `03_Track` to four
+places). Not every Omega `.vex` says so in its header, so `psp2_scene::circuit_model` asks the
+sibling `.rcsmodel` which container it is - scoped to the circuit screen, so `preview::model`
+(the flyer cards, the end-of-race placements) is unchanged.
+
+**The material is not HD's `cf_fetracks`.** All 26 models name
+`FrontEndConstantFranelBlend.rcsmaterial` (`_1`, `_2` and `cf_FEtracks*` files sit in the same
+folders and no model, `.vex` or material names them), which carries no texture: there is no
+`fe_grad`. Its pixel shader reads, per pixel, **confidence 80** (a hand-built GCN decoder over
+one shader, member order from the file's own reflection table, no emulator run):
+
+```text
+refl  = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower
+rgb   = colourDiffAlpha.rgb + Constant1 * constantAmbientColour * refl
+out   = fog(rgb)           ; fogColour mixed in by the vertex's own factor
+```
+
+Evidence: the pixel shader is the `Shdr` at byte `0x323c` of
+`Data/environments/15_anulpha_pass/fe/Materials/FrontEndConstantFranelBlend.rcsmaterial`
+(`data00.psarc`; type `0` by the footer's `(byte 8 >> 2) & 0xf`, 436 bytes). Its constant buffer
+members, in reflection order, are `colourDiffAlpha`@dw0 (4), `ReflectivityMin`@4,
+`ReflectivityScale`@5, `ReflectivityPower`@6, `Constant1`@8, `constantAmbientColour`@12,
+`fogColour`@16, `fadeResCoeffs`@20, and the lines that carry the law are:
+
+```text
+v_mad_f32  v7, -v6, v7, 1.0 clamp   ; 1 - N.V, from two interpolants normalised by v_rsq
+s_buffer_load_dword s[22], s[0:3], 0x6        ; ReflectivityPower
+v_log_f32  v7, |v7|
+v_mul_f32  v7, s22, v7              ; * power
+v_exp_f32  v7, v7                   ; (1 - N.V)^power
+v_mov_b32  v12, s20                 ; s20 = ReflectivityMin (dw4)
+v_mac_f32  v12, s21, v7             ; + ReflectivityScale (dw5) * that      = refl
+v_mul_f32  v10, s4, v10             ; s4.. = Constant1 (dw8..10) * constantAmbientColour (dw12..14)
+v_mad_f32  v6, v10, v12, s0         ; * refl + colourDiffAlpha (dw0..2)
+v_mac_f32  v3, -s12, v0 / v_mad_f32 v3, v0, v6, s12   ; fog: fogColour (dw16..18) mixed by attr0.w
+```
+
+The model's material instance authors every uniform but one: `Constant1` `1 1 1` (the Zone
+circuits `0.98 0.97 0.94`), `colourDiffAlpha` `0.060 0.048 0.029` (Zone `0.002 0.001 0.0006`),
+`ReflectivityMin` `0.05`, `ReflectivityPower` `3`, and `ReflectivityScale` `1` or `2` (Talons
+Junction and Tech De Ra `2`). A circuit is dark face-on and bright at the rim.
+`oag_game::preview::track_model::Ramp::fresnel` evaluates it once per vertex per frame, the same
+way HD's texture ramp is (`Ramp::of` picks by the model's container, never by title).
+
+**Chosen, not measured**: `constantAmbientColour` (no instance authors it; its source was not
+located; taken as 1, as HD's multiplier is), no fog, and **unlit**: the same file carries pixel
+shaders of the same material that also declare `liveLighting0diffuse`/`direction` (`0x3dbc`,
+`0x49dc`), and which variant the screen selects is unread. At `ReflectivityScale` 2 the rim
+reaches 2.11 and clamps in the 8-bit target; whether Omega's front end tonemaps is unread. HD's
+same-named material (unreferenced there) shares the idea, a fresnel term over a constant
+(`ps3-microcode.py fp-file`, block #2: `Constant1` mixed toward a second constant by
+`(1 - N.V)^5`), but its form is not Omega's and the Omega shader is the one that was read.
+
+**The widget** is authored differently: `OriginX/Y` `960/540`, `x` `0.525`, `y` `0.125`, `z`
+`-2.05`, `orthoScaleX/Y/Z` `0.012`, `nearZ` `0.1`, `FoV` `100`. `orthoScale` scales the
+placement (the campaign flyer's reading, `oag_game::flyer::campaign_pose`), which stands the
+circuit 43.8 right, 10.4 up and 170.8 in front of the axis, close to HD's 180. **Chosen, not
+measured, inherited from HD**: the field of view (1.0 radian; `FoV` 100 is unread, it is not
+the flyer's units), pitch, the 24 s turntable and its start yaw. 2048's circuits are larger than
+HD's and overrun the frame a little at this pose.
+
+**Open**: the circuit names (`03 Track`, `altima`) - `CircuitNames::choose` takes a copy of the
+table that names all 38 listed circuits, and Omega's has none, so every circuit shows its id
+where a few (`PRO TOZO`) already have text; the emblem of a 2048 circuit; the page's white
+backdrop, against which the rim-lit circuit loses its edge (the material is authored for a dark
+one); whether Omega's original ever shows this screen outside RACEBOX; Team Select.
+
+**2048, checked, applies, not wired.** 2048's own archives carry `fe/Track0N.vex` only for its
+DLC1 circuits (`Vineta_K`, `Moa_Therma`, `Chenghou_Project`, `Anulpha_Pass`, `zone_1..4`, under
+`art/published/DLC1/environments`), none for its ten own circuits (which Omega adds), and its
+front end authors no circuit screen (`race_box`/`track_select` are `None`), so nothing draws
+them; the reader and the material shape are the same.
 
 ## What a menu-page capture does today
 

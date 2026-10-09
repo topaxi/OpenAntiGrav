@@ -34,7 +34,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Track Select: hex grid LANDED 2026-10-08 (`hd-track-select`, shared
   `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
-  record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`).
+  record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
+  ported 2026-10-09 (`omega-track-model`, its own fresnel material).
   Open: the turntable's rate, pitch and the field of view are chosen (an RPCS3
   capture of the same circuit over time would fix the rate), the multiplier
   `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),

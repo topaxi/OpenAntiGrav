@@ -71,7 +71,11 @@ pub(super) fn draw_preview(
     anisotropy: Anisotropy,
 ) {
     let built = open_for_previews(race).and_then(|mut archives| {
-        let mut model = crate::preview::model(&mut archives, &request.entry)?;
+        let mut model = if request.track_model.is_some() {
+            crate::preview::psp2_scene::circuit_model(&mut archives, &request.entry)?
+        } else {
+            crate::preview::model(&mut archives, &request.entry)?
+        };
         // The chosen paint, the same swap the live screen and a race make;
         // a skin that will not read leaves the hull's own and says so.
         if let Some(entry) = &request.skin {
@@ -83,7 +87,11 @@ pub(super) fn draw_preview(
             crate::preview::frame_hull(&mut model);
         }
         let ramp = if request.track_model.is_some() {
-            Some(crate::preview::track_model::Ramp::take(&mut model)?)
+            Some(crate::preview::track_model::Ramp::of(
+                &mut archives,
+                &request.entry,
+                &mut model,
+            )?)
         } else {
             None
         };

@@ -50,3 +50,37 @@ fn data09_is_the_bulk_candidate_not_an_extra_one() {
             .any(|(name, _)| *name == archives::DATA09)
     );
 }
+
+/// The circuit-model table names Omega's own folders, finds a circuit by the
+/// last component of its location and says nothing for one it has no row for:
+/// HD's `03_Track` is not a folder on this disc.
+#[test]
+fn circuit_models_are_looked_up_by_omega_folder() {
+    let front_end = frontend::FRONT_END;
+    assert!(front_end.draws_circuit_models());
+    assert_eq!(
+        front_end
+            .circuit_model(r"Data\Environments\03_Moa_Therma")
+            .as_deref(),
+        Some(r"Data\Environments\03_Moa_Therma\FE\track03.vex")
+    );
+    assert_eq!(
+        front_end
+            .circuit_model(r"Data\Environments2048\altima")
+            .as_deref(),
+        Some(r"Data\Environments2048\altima\FE\Track01.vex")
+    );
+    assert_eq!(front_end.circuit_model(r"Data\Environments\03_Track"), None);
+    let mut folders: Vec<_> = front_end
+        .circuit_models
+        .iter()
+        .map(|row| row.environment)
+        .collect();
+    folders.sort_unstable();
+    folders.dedup();
+    assert_eq!(
+        folders.len(),
+        front_end.circuit_models.len(),
+        "one row each"
+    );
+}
