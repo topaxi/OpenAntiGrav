@@ -4,7 +4,8 @@
 
 use oag_ui_screens::picker::{Details, Entry};
 
-/// The entries, each one's preview mesh name, and the grid's column count
+/// The entries, each one's preview mesh name (`None` for a circuit its title
+/// draws no model for), and the grid's column count
 /// (`0` off HD's own track screen).
 pub(super) fn track_entries(
     title: &'static oag_title::Title,
@@ -14,7 +15,7 @@ pub(super) fn track_entries(
     tracks: &[oag_raceplay::catalogue::Track],
     layout: &oag_ui_screens::picker::Layout,
     distance: Option<f32>,
-) -> (Vec<Entry>, Vec<String>, usize) {
+) -> (Vec<Entry>, Vec<Option<String>>, usize) {
     let labelled: Vec<(oag_raceplay::catalogue::Track, String)> = tracks
         .iter()
         .map(|track| {
@@ -32,7 +33,7 @@ pub(super) fn track_entries(
         (labelled, 0)
     };
     let laps = oag_raceplay::catalogue::race_laps(mode, settings.race.class.trim());
-    let (entries, previews): (Vec<Entry>, Vec<String>) = labelled
+    let (entries, previews): (Vec<Entry>, Vec<Option<String>>) = labelled
         .iter()
         .map(|(track, label)| {
             // A capture keeps no records store; the distance is the
@@ -57,11 +58,9 @@ pub(super) fn track_entries(
                         reversed: track.reversed,
                     },
                 },
-                format!(
-                    r"{}\FE\{}.vex",
-                    track.location,
-                    if track.reversed { "reverse" } else { "forward" }
-                ),
+                title.front_end.and_then(|front_end| {
+                    crate::preview::track_entry(front_end, &track.location, track.reversed)
+                }),
             )
         })
         .unzip();

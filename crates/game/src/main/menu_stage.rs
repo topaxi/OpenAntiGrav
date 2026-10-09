@@ -514,7 +514,24 @@ impl MenuStage {
             );
             // `Track Creation`'s own `<Mode3D>` camera, when authored.
             let mode3d_model = picker.mode3d_model().cloned();
-            if let Some(preview) = picker.preview.as_mut() {
+            let track_model = picker.layout.hd_track.as_ref().and_then(|screen| screen.model);
+            if let (Some(preview), Some(widget)) = (picker.preview.as_mut(), track_model) {
+                let space = self.skin.space();
+                let (view_projection, model) =
+                    oag_game::preview::track_model::matrices(&widget, space, seconds);
+                preview.draw_matrices(
+                    &gpu.device,
+                    &gpu.queue,
+                    encoder,
+                    view,
+                    viewport,
+                    target_size,
+                    space,
+                    view_projection,
+                    model,
+                    seconds,
+                );
+            } else if let Some(preview) = picker.preview.as_mut() {
                 preview.draw_auto(
                     &gpu.device,
                     &gpu.queue,

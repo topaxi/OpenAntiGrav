@@ -3853,27 +3853,75 @@ Measured off RPCS3 frame `data/scratch/hd-fe-look/ref/racebox/030-track-settled0
   `Track_Selection_Definition.xml` census was run on the PS4 data this lane, so
   whether a track screen is authored there is **open**.
 
-### The circuit model, located 2026-10-08, still not drawn
+### The circuit model, drawn 2026-10-09 (`hd-track-model`)
 
-Rank 7's other half. `fe/preview.bik` was never the model: **`DATA02` ships a
-`<environment>\fe\track0N.rcsmodel` + `.vex` pair per circuit** (the earlier "HD
-ships no `FE\forward.vex`" was true of the Pulse name and missed this one). The
-`.vex` names `Z:/WipeoutPSP/HD/Data/FE/Tracks/Track01.mb`, a `joint1` and a
-`track01Shape`; its materials are `fe\materials\cf_fetracks.rcsmaterial` and
-`frontendconstantfranelblend.rcsmaterial` (a fresnel blend, which is the grey
-translucent look the frame has). Census: `01_vineta_k` track01, `02_track` 02,
-`03_track` 03, `04_chenghou_project` 04, `05_ubermall` 05, `10_sebenco_climb` 06,
-`12_sol_2` 07, `15_anulpha_pass` 08, all on `DATA02`, and `zone_1..4` track01 on
-`DATA00`. **Four of the twelve base circuits have no such pair on `DATA00`-`DATA06`**
-(DLC packs not searched) (so the original draws nothing for them or reads another name; the
-executable's table at `renderer.md` `+0x10` is the lead). The file number is not the
-folder's, so the name needs that table or a folder listing.
+`fe/preview.bik` was never the model: each circuit ships a
+`<environment>\fe\<scene>.vex` + `.rcsmodel` pair, and the executable names
+all twelve. The **track-select record array** at `0x00924314` (stride `0x1c`,
+`renderer.md`, confidence 88) holds the scene in field `+0x0c` and the
+`.rcsmodel` in `+0x10`. Read off the ELF, in the record order (which is the
+order the screen walks them in):
 
-**Not drawn**: the geometry is readable through `oag_game::preview::model`'s PS3
-branch, but the fresnel-blend material is unread (no PS3 `rcsmaterial` shader reader
-draws a grey shaded surface), the mapping above is incomplete, `TrackModel`'s pose
-(`OriginX=1308 OriginY=440 z=-180`) is read but not composed, and
-`preview_meshes` is false on HD. Per the rule, nothing is drawn.
+| Record | Environment folder | Scene file | Archive |
+| ---: | --- | --- | --- |
+| 0 | `01_Vineta_K` | `track01` | `DATA02` |
+| 1 | `15_Anulpha_Pass` | `track08` | `DATA02` |
+| 2 | `03_Track` | `track03` | `DATA02` |
+| 3 | `04_Chenghou_Project` | `track04` | `DATA02` |
+| 4 | `02_Track` | `track02` | `DATA02` |
+| 5 | `10_Sebenco_Climb` | `track06` | `DATA02` |
+| 6 | `05_Ubermall` | `track05` | `DATA02` |
+| 7 | `12_Sol_2` | `track07` | `DATA02` |
+| 8 | `Talons_Junction` | `talons_junction` | `DATA00` |
+| 9 | `Amphiseum` | `Amphiseum` | `DATA00` |
+| 10 | `Modesto_Heights` | `modesto` | `DATA00` |
+| 11 | `Tech_De_Ra` | `tech_de_ra` | `DATA00` |
+
+**All twelve are on the disc** (the earlier census filtered on `/fe/track` and
+missed the four pack circuits' names). The table is `oag_hd::frontend`'s
+`CIRCUIT_MODELS`, carried as `oag_title::FrontEnd::circuit_models`; a circuit
+with no row draws nothing and the load log says so. `zone_1..4` carry a
+`track01` pair on `DATA00` too, but no record names them, so Zone circuits draw
+nothing here (whether Zone mode lists them on this screen is open).
+
+**The material is `cf_fetracks.rcsmaterial`, not the fresnel blend.** Every
+model's one material row is `cf_fetracks` over `fe_grad.gtf`; neither the
+`.vex`, the `.rcsmodel` nor the executable names
+`frontendconstantfranelblend.rcsmaterial`, which sits in the same folder
+unreferenced (it is the Omega/2048 name too). The unfogged fragment variant
+(`ps3-microcode.py fp-file`, block #2) normalises the two interpolators, dots
+them, samples the one sampler at `(N.V, N.V)` and multiplies by the parameter
+`0x81db67ea`; alpha is a literal and the model's state word (`0x006c`/`0x007c`)
+says opaque. So a circuit is `ramp(N.V)`, **unlit**: surfaces facing the camera
+take the ramp's dark end and grazing ones its bright end. `fe_grad.gtf` exists
+twice for the eight base circuits: `DATA00`'s is grey (197 down to 104) and
+`DATA02`'s blue-grey (177/198/222 down to 84/118/123); the mount order serves
+`DATA00`'s, and RPCS3's frames are neutral grey (median 119/120/119 on Vineta
+K, 130/128/129 on Moa Therma), which agrees. The four pack circuits' ramp is
+grey on `DATA00` as well.
+
+**Drawn** by `oag_game::preview::track_model`: the camera from the widget's
+`OriginX=1308 OriginY=440 z=-180` (the centre of the `CIRCUIT MODEL` frame in
+the 1920 by 1080 grid, so an absolute point as on the campaign flyer), the
+vertical field of view 1.0 the flyer's own widget class measured, and the
+ramp evaluated per vertex once a frame (the mesh shader's material word has no
+free bit for a ramp-by-facing material). **Chosen, not measured**: that this
+widget shares the flyer's field of view, the pitch (0.55), the turntable's
+24 s per revolution and its starting yaw, the near and far planes, and the
+multiplier `0x81db67ea` (taken as 1: nothing in the model or the executable
+gives its value). **Measured**: that the circuit turns (frames 12 and 24 of
+`track-carousel` show Vineta K at different yaws), not its rate.
+
+Pictures: `data/scratch/hd-track-model/sheet1.png` (Vineta K, Metropia, Moa
+Therma, Ubermall at 1 s and 4 s), against `track-carousel/02.png` (Moa
+Therma) and `12.png`/`24.png` (Vineta K).
+
+**Omega, checked, applies, not wired.** Omega ships the same pairs, all twelve
+under `data00.psarc`, with the same `cf_FEtracks` and
+`FrontEndConstantFranelBlend` names (numbered `_1`/`_2` variants) but different
+folders (`02_metropia`, `03_moa_therma`, against HD's `02_Track`, `03_Track`)
+and `.gnf` textures, so HD's table does not match and Omega's Track Selection
+is not drawn yet; its own table is the first step.
 
 ### Walked live, 2026-09-29
 
@@ -3970,7 +4018,7 @@ Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 | `Infinity` | (1080,705) | yes, where the race has no lap count |
 | `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | rects only, for layout and pointer |
 | `FlyByMovie` (`preview.bik`, Bink) | (660,360) 260x170 | no |
-| `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | no (read, not drawn) |
+| `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | yes (2026-10-09, `hd-track-model`): the circuit's own scene, see "The circuit model, drawn" |
 | `TrackHexSelection` | (210,500), 9x2 | yes (2026-10-08, `hd-track-select`): a circuit per column, forward and reverse rows - see "The hex grid" below |
 | `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no |
 
@@ -4003,8 +4051,9 @@ original fills them from code. That id choice is **chosen, not measured**.
 
 ### Not drawn, and why
 
-- **The circuit wireframe** (`TrackModel`): HD ships no `FE\forward.vex`; the
-  folder holds only `fe_grad.gtf`, the emblem and `preview.bik`. The pose is read.
+- **The circuit model** (`TrackModel`): drawn since 2026-10-09, see "The
+  circuit model, drawn". Zone's circuits and any circuit outside the
+  executable's twelve-row record draw nothing.
 - **The fly-by** (`FlyByMovie`): `preview.bik` per environment is Bink; the
   screen has no video widget yet.
 - **The hex grid** (`TrackHexSelection`): drawn since 2026-10-08, see below.
@@ -4155,11 +4204,9 @@ hold 24 `Tournament` cells in the archive read, none walked).
    WEAPONS / AI DIFFICULTY / NUMBER OF PLAYERS / SPLIT SCREEN / TARGET / ZONE
    TARGET and a menu-icon panel; ours: `RACE` with MODE / SPEED CLASS / AI
    DIFFICULTY / START / BACK (`page-racebox-setup.png`).
-7. **Track Select.** *(hex grid landed 2026-10-08, `hd-track-select`; the model
-   asset is located, see "The circuit model, located", but not drawn.)* Layout and
-   records table match; missing: the hex grid
-   of circuit emblems, the shaded grey circuit model (it is a shaded model,
-   not a wireframe - the status cell's word is wrong), and the moving fly-by
+7. **Track Select.** *(hex grid landed 2026-10-08, `hd-track-select`; the
+   shaded circuit model landed 2026-10-09, `hd-track-model`.)* Layout and
+   records table match; missing: the moving fly-by
    picture (it moves: 17 % of the window's pixels differ across 1.5 s). Ours
    also draws the hex window's stills as nothing (`no slideshow chain`).
 8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship

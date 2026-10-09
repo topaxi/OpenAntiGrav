@@ -32,10 +32,13 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
 - Track Select: hex grid LANDED 2026-10-08 (`hd-track-select`, shared
-  `hex::draw_cells`; direction glyphs and ring thickness open). Shaded circuit
-  model: the asset is located (`fe/track0N.rcsmodel` on DATA02, `zone_N` on DATA00,
-  8 of 12 base circuits; fresnel-blend material unread; name table at
-  `renderer.md` `+0x10`); the moving fly-by picture (Bink)
+  `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
+  LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
+  record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`).
+  Open: the turntable's rate, pitch and the field of view are chosen (an RPCS3
+  capture of the same circuit over time would fix the rate), the multiplier
+  `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),
+  Omega's own table; the moving fly-by picture (Bink)
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)
 
 ## Next Steps

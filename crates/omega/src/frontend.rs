@@ -198,6 +198,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_setup: None,
     preview_meshes: false,
     ship_preview_hull: None,
+    circuit_models: &[],
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
     // draws `EndRace Results`, but `EndRace Menu` then draws no option blocks

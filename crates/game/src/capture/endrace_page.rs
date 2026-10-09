@@ -281,6 +281,8 @@ fn endrace_page(
                     rect: [0.0, 0.0, grid[0], grid[1]],
                     kind: oag_ui_screens::picker::Kind::Ship,
                     mode3d: Some(trophy.placement.model.clone()),
+                    track_model: None,
+                    seconds: 0.0,
                 });
             let model = oag_ui_screens::endrace::Rewards {
                 medal,

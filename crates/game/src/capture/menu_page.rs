@@ -638,6 +638,13 @@ pub(super) struct PreviewRequest {
     /// the fixed [`crate::preview::hull_orbit`] - see
     /// [`oag_title::FrontEnd::ship_preview_hull`].
     pub hull_only: bool,
+    /// HD's `TrackModel` widget: places the circuit model on its own camera,
+    /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
+    /// the orbit.
+    pub track_model: Option<oag_ui_screens::picker::hd::track::TrackModel>,
+    /// How far into the screen the capture is, for the circuit model's
+    /// turntable: `--menu-picker-seconds`, or `0.0` settled.
+    pub seconds: f32,
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
@@ -685,7 +692,7 @@ pub(super) fn picker_page(
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
-    let (entries, previews): (Vec<Entry>, Vec<String>) = match kind {
+    let (entries, previews): (Vec<Entry>, Vec<Option<String>>) = match kind {
         Kind::Track => {
             let (entries, previews, columns) = track_entries::track_entries(
                 title,
@@ -769,7 +776,7 @@ pub(super) fn picker_page(
                                 models,
                             },
                         },
-                        crate::preview::ship_entry(title, &team.location),
+                        Some(crate::preview::ship_entry(title, &team.location)),
                     )
                 })
                 .unzip()
@@ -802,16 +809,21 @@ pub(super) fn picker_page(
             .map(|skin| skin.location.clone()),
         Kind::Track => None,
     };
-    let request = previews.get(picker.index()).map(|entry| PreviewRequest {
-        entry: entry.clone(),
-        skin: skin_entry,
-        rect: layout.preview,
-        kind,
-        // Filled in by the caller, which already has `picker_stills`'s own
-        // slideshow read - see `capture.rs`.
-        mode3d: None,
-        hull_only: crate::preview::draws_hull(title, kind),
-    });
+    let request = previews
+        .get(picker.index())
+        .and_then(Option::as_ref)
+        .map(|entry| PreviewRequest {
+            entry: entry.clone(),
+            skin: skin_entry,
+            rect: layout.preview,
+            kind,
+            // Filled in by the caller, which already has `picker_stills`'s own
+            // slideshow read - see `capture.rs`.
+            mode3d: None,
+            hull_only: crate::preview::draws_hull(title, kind),
+            track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
+            seconds: seconds.unwrap_or(SETTLED_SECONDS),
+        });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,
         layout,
@@ -871,15 +883,41 @@ pub(super) fn draw_preview(
         if request.hull_only {
             crate::preview::frame_hull(&mut model);
         }
-        crate::preview::Preview::new(
+        let ramp = if request.track_model.is_some() {
+            Some(crate::preview::track_model::Ramp::take(&mut model)?)
+        } else {
+            None
+        };
+        let preview = crate::preview::Preview::new(
             device,
             queue,
             wgpu::TextureFormat::Rgba8Unorm,
             anisotropy,
             model,
-        )
+        )?;
+        Ok(match ramp {
+            Some(ramp) => preview.with_ramp(ramp),
+            None => preview,
+        })
     });
     match built {
+        Ok(mut preview) if request.track_model.is_some() => {
+            let widget = request.track_model.as_ref().expect("checked by the guard");
+            let (view_projection, model) =
+                crate::preview::track_model::matrices(widget, space, request.seconds);
+            preview.draw_matrices(
+                device,
+                queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                view_projection,
+                model,
+                request.seconds,
+            );
+        }
         Ok(mut preview) => preview.draw_auto(
             device,
             queue,

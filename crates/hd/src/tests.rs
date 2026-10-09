@@ -188,3 +188,25 @@ fn the_weapon_pad_cycle_reproduces_both_measured_constants() {
     // Cooling is the vector the static initialiser writes, read live as well.
     assert_eq!(cycle.cooling, [0.025, 0.0, 0.01]);
 }
+
+/// The track-select record names twelve circuit scenes, found by the
+/// environment folder; the file number is not the folder's, and a folder
+/// outside the table has no model.
+#[test]
+fn the_front_end_names_each_circuits_model_scene() {
+    let front_end = TITLE.front_end.expect("HD ships a front end");
+    assert_eq!(front_end.circuit_models.len(), 12);
+    assert_eq!(
+        front_end
+            .circuit_model(r"Data\Environments\10_Sebenco_Climb")
+            .as_deref(),
+        Some(r"Data\Environments\10_Sebenco_Climb\FE\track06.vex")
+    );
+    assert_eq!(
+        front_end
+            .circuit_model(r"Data\Environments\amphiseum\")
+            .as_deref(),
+        Some(r"Data\Environments\amphiseum\FE\Amphiseum.vex")
+    );
+    assert_eq!(front_end.circuit_model(r"Data\Environments\Zone_1"), None);
+}

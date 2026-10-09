@@ -415,6 +415,10 @@ impl Session {
                 .as_ref()
                 .and_then(|shell| shell.title.front_end)
                 .and_then(|front_end| front_end.ship_preview_hull),
+            front_end: self
+                .shell
+                .as_ref()
+                .and_then(|shell| shell.title.front_end),
             globals: self
                 .shell
                 .as_ref()
