@@ -67,7 +67,9 @@ makes no request after loading itself.
   for byte with the same slice read the asynchronous way; on a mismatch or an
   exception it falls back to the whole file in memory, logs that at warn, and
   boots anyway. `?read=memory` on the page's URL takes the fallback on
-  purpose.
+  purpose. A synchronous request on a page's main thread is a deprecated API
+  (browsers warn, none has removed it); if one does, the probe's exception
+  drops that browser back to the in-memory path rather than breaking it.
 
   Measured in headless browsers on the HD ISO, 64 reads of 1 MiB spread over
   the file (2026-10-09): Chromium 153 57 MB/s warm (34 cold), Firefox 155
@@ -208,7 +210,7 @@ The same folder is published to two hosts by one workflow,
 
 | Host | URL | Headers |
 | --- | --- | --- |
-| GitHub Pages | https://topaxi.github.io/OpenAntiGrav/ | none can be set |
+| GitHub Pages | https://topaxi.github.io/OpenAntiGrav/ (expected; the `deploy` job's `page_url` is authoritative) | none can be set |
 | Cloudflare Pages, project `openantigrav` | https://oag.topaxi.com/ | `web/_headers` |
 
 Cloudflare reads `_headers` from the deployed folder: `Cross-Origin-Opener-Policy:
@@ -246,7 +248,9 @@ checked locally against `npx wrangler pages dev target/web/dist --port 8796`
 (wrangler 4.149), which applies `_headers` the way Pages does: `curl -I` shows
 both COOP/COEP headers on `/` and the immutable lifetime on the module,
 `crossOriginIsolated` reads true in the page, and a Pulse PSP race runs there at
-60 fps. `actionlint` passes on the workflow.
+60 fps. `actionlint` passes on the workflow. `wrangler-action` installs its own
+default wrangler for the deploy; only `pages dev` from 4.149 was exercised
+here.
 
 ## Threads
 
