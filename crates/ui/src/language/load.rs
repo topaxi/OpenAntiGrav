@@ -48,7 +48,7 @@ pub fn load_languages(
         match Language::from_definition(plugin, &xml) {
             Some(language) => out.push(Language {
                 disc_strings,
-                ..language
+                ..repair_native_name(archives, language, report)
             }),
             None => report.push(format!(
                 "language plugin {plugin}: {name} declares no language"
@@ -71,6 +71,96 @@ pub fn load_languages(
         ));
     }
     out
+}
+
+/// A native name a plugin's `Definition.xml` carries with its letters already
+/// lost: a `?` where a character the file's author could not save stood.
+///
+/// **Measured, not a decoding fault**: HD's, Omega's and 2048's Russian plugins
+/// hold the bytes `50 3f 3f 3f 3f 3f 3f` (`P` and six `?`) in the file itself.
+/// No real language is spelled with a `?`, so the test is exact enough to leave
+/// the other mis-labelled names (`Svenska` on Japanese) alone.
+#[must_use]
+pub fn is_lossy_name(name: &str) -> bool {
+    name.contains('?') || name.contains('\u{fffd}')
+}
+
+/// Replaces a lossy native name with the one the same plugin's own string table
+/// authors: `OPT_<ID>`, which the Russian `entries.xml` spells `Русский`.
+///
+/// Only a name [`is_lossy_name`] says is lost is touched. When the table has no
+/// such entry the name stays as the disc wrote it, and [`pickable`] then leaves
+/// the language out of a picker rather than draw question marks.
+fn repair_native_name(
+    archives: &mut oag_assets::Archives,
+    mut language: Language,
+    report: &mut Vec<String>,
+) -> Language {
+    if !is_lossy_name(&language.native_name) {
+        return language;
+    }
+    let key = format!("OPT_{}", language.name.to_uppercase());
+    let own = language
+        .entries
+        .as_deref()
+        .and_then(|path| archives.read_name(path).ok())
+        .and_then(|blob| expand(&blob).ok())
+        .and_then(|xml| StringTable::from_xml(&xml).get(&key).map(str::to_string))
+        .filter(|name| !name.is_empty() && !is_lossy_name(name));
+    match own {
+        Some(name) => {
+            report.push(format!(
+                "language plugin {}: native name {:?} is lost in the file itself, \
+                 drawn as {name:?} from its own table's {key}",
+                language.plugin, language.native_name
+            ));
+            language.native_name = name;
+        }
+        None => report.push(format!(
+            "language plugin {}: native name {:?} is lost in the file and its table has no {key}",
+            language.plugin, language.native_name
+        )),
+    }
+    language
+}
+
+/// The languages a picker drawn in `face` can show: those whose native name
+/// every character of which `face` carries a glyph for, and which is not lossy.
+///
+/// **A face that lacks a glyph draws nothing for it**, so a row would read as a
+/// gap in a word. HD's `Default` face is `helv.fnt` with no Cyrillic, and
+/// Russian's name is Cyrillic, so on HD's picker Russian is left out and the
+/// report says so; Russian's own `arialbd.fnt` carries the glyphs, but a row
+/// cannot yet be drawn in a face other than the picker's. Never a substitute
+/// glyph and never a substitute face.
+#[must_use]
+pub fn pickable(
+    languages: &[Language],
+    face: &crate::font::Atlas,
+    report: &mut Vec<String>,
+) -> Vec<Language> {
+    languages
+        .iter()
+        .filter(|language| match undrawable(&language.native_name, face) {
+            None => true,
+            Some(ch) => {
+                report.push(format!(
+                    "language {} ({:?}) is not offered in the picker: its face has no glyph for {ch:?}",
+                    language.name, language.native_name
+                ));
+                false
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+/// The first character of `name` that `face` cannot draw, or a `?` a lost name
+/// leaves behind.
+#[must_use]
+pub fn undrawable(name: &str, face: &crate::font::Atlas) -> Option<char> {
+    name.chars()
+        .find(|&ch| is_lossy_name(&ch.to_string()) || face.cell(ch).is_none())
 }
 
 /// Appends [`PROJECT_LANGUAGES`] after the disc's own, so a picker lists them

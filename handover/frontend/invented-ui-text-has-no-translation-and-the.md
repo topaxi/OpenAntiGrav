@@ -128,9 +128,8 @@ headless run could and could not verify, in
 **Incidental finding, not fixed, not this lane's to fix**: the HD/Fury
 pressing's own sixteen-language table (`hdfury-ps3-eu-dec.iso`) reports
 Japanese, Korean and TraditionalChinese all under the *native name*
-`"Svenska"` (Swedish), and Russian's native name as `"P??????"` - a mojibake
-that survived whatever encoding `Language::from_definition` reads Cyrillic
-through. Neither breaks the mechanism this thread or the 2026-09-27 entry
+`"Svenska"` (Swedish), and Russian's native name as `"P??????"` - literal `?` bytes in the
+disc's file, not a decoding fault (read from its own table since 2026-10-09). Neither breaks the mechanism this thread or the 2026-09-27 entry
 above are about (the *English* name, which both key off, is unaffected), but
 the LANGUAGE row's own picker would show a Swedish label for three languages
 that are not Swedish. Measured with `--race --dry-run --no-audio` against

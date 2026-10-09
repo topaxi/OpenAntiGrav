@@ -500,7 +500,9 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
     // `PortugueseBR` after them (2026-10-06).
     let Some(image) = image() else { return };
     let (shell, mut archives) = shell(&image);
-    assert_eq!(shell.languages.len(), 12 + 1);
+    // Twelve are reachable on an EU disc; the picker's `helv.fnt` has no Cyrillic, so
+    // Russian is not offered (`picker_glyphs_ground_truth`), and `PortugueseBR` follows.
+    assert_eq!(shell.languages.len(), 11 + 1);
     let all = oag_ui::language::load::load_languages(
         &mut archives,
         oag_hd::frontend::LANGUAGE_PLUGINS,
@@ -517,9 +519,12 @@ fn all_sixteen_languages_load_including_the_latin_1_one() {
     assert_eq!(native("Spanish").as_deref(), Some("Español"));
 
     // **Not a bug on this side of the disc.** Four of the sixteen declare their
-    // own name as `Svenska` and `Russian` declares `P??????`; those are the
-    // shipped files, checked byte for byte, and a reader that "corrected" them
-    // would be inventing. See `docs/formats/hd-frontend.md`.
+    // own name as `Svenska`, and `Russian` declares `P??????` (seven bytes `50 3f
+    // 3f 3f 3f 3f 3f`, lost before it reached the disc). Those are the shipped
+    // files. The Russian name is not recovered by guessing: the plugin's own table
+    // authors `OPT_RUSSIAN`, which `load_languages` reads in its place, and the
+    // `Svenska` rows are mislabelled rather than lost, so they stay as written.
+    // See `docs/formats/hd-frontend.md`.
     assert_eq!(native("Japanese").as_deref(), Some("Svenska"));
 }
 

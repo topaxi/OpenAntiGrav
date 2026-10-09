@@ -324,7 +324,7 @@ language plugin names a `2048HUD` role pointing straight at
 `Data\XML\2048_hud\font\2048_hud.fnt` - it was because `oag_2048::TITLE.front_end`
 being `None` starved the loader of a plugin to read it from. And every one of
 Wipeout HD's own language-plugin bugs reproduces here, several byte for byte:
-the `Svenska` name mixups, Russian's mangled `P??????`, and the still-labelled
+the `Svenska` name mixups, Russian's mangled `P??????` (literal `?` bytes; its own table's `OPT_RUSSIAN` is read instead), and the still-labelled
 `Wipeout Pulse` internal id. **`front_end` is `Some` since 2026-09-20**
 ([ADR-0054](../architecture/adr/0054-a-touch-front-end-is-a-second-axis-not-a-menuskin-variant.md)):
 `FrontEnd::menu` became `Option` and a second, touch-icon axis
