@@ -616,21 +616,21 @@ pub struct Setup {
     /// decoded from this title's own `oag_title::ZoneClassAnnouncer` when it
     /// has one.
     pub class_announcer: oag_sound::sfx::ClassAnnouncer,
-    /// This title's own zone-number-to-speed-class ladder, when it is
-    /// recovered - the same [`oag_title::ZoneStages`]
-    /// [`crate::zone_grade::ZoneGrade`] carries, copied here so
-    /// [`Self::class_announcer`] can be triggered off the same edge without
-    /// reaching into the render-facing scene state to get it. `None` on every title but HD/Fury.
+    /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
+    /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
+    /// [`Self::class_announcer`] can be triggered off the same edge without reaching into the
+    /// render-facing scene state to get it. `None` on every title but HD/Fury.
     pub zone_stages: Option<&'static oag_title::ZoneStages>,
     /// Whether this title's `ready` and `go` voice has been measured, so the race raises
     /// [`oag_sound::sfx::Cue::Ready`] and [`oag_sound::sfx::Cue::Go`] at the ticks
-    /// [`crate::countdown`] pins: `oag_title::RaceDefaults::countdown_voice` being `Some`.
-    /// A flag rather than the banks: which bank plays rides [`Self::sounds`]; whether the
-    /// simulation asks for the cue at all is title data, and must not change with whether a
-    /// bank decoded.
+    /// [`crate::countdown`] pins: `oag_title::RaceDefaults::countdown_voice` being `Some`. A flag
+    /// rather than the banks: which bank plays rides [`Self::sounds`]; whether the simulation asks
+    /// for the cue at all is title data, and must not change with whether a bank decoded.
     pub countdown_voice: bool,
     /// The title's grid hover, `oag_title::RaceDefaults::launch_hover` ([`crate::launch_hover`]).
     pub launch_hover: Option<&'static oag_title::launch_hover::LaunchHover>,
+    /// The title's hover probe set, `oag_title::RaceDefaults::hover_rig` ([`crate::launch_hover`]).
+    pub hover_rig: Option<&'static oag_title::hover_rig::HoverRig>,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.

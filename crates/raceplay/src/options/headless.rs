@@ -130,6 +130,7 @@ impl Setup {
             zone_stages: None,
             countdown_voice: false,
             launch_hover: None,
+            hover_rig: None,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),

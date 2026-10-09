@@ -53,6 +53,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // clamped low through the flyby and countdown and released after the green light. See
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
+    hover_rig: Some(&HOVER_RIG),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
@@ -669,6 +670,28 @@ pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
         grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
         release_rate: oag_title::pre_race::Sourced::measured(1.0),
     };
+
+/// HD's hover probe set: [`oag_title::hover_rig::HoverRig`].
+///
+/// Four probes at `(+/-1.5, -1.125, +/-4.5)` (`craft+0xe0..0x110`, read live, and the same four
+/// local offsets at `craft+0x1a0..0x1d0` the damper crosses), `0.15` of the load each
+/// (`0x008a917c`), all four marched every frame by `Craft_IntegrateHull` (`0x000ef450`), each
+/// spring along its hit normal and the normals summed times `0.25` by `Craft_HoverFourPoint`
+/// (`0x000ede88`). Confidence 88: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+/// HD's probe order (left-front, left-rear, right-front, right-rear in its own frame, whose
+/// row 0 points left and row 2 forward) is kept, converted to this engine's frame.
+pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    probes: oag_title::pre_race::Sourced::measured(&[
+        [-1.5, -1.125, -4.5],
+        [-1.5, -1.125, 4.5],
+        [1.5, -1.125, -4.5],
+        [1.5, -1.125, 4.5],
+    ]),
+    spring_share: oag_title::pre_race::Sourced::measured(0.15),
+    cast_every_probe: oag_title::pre_race::Sourced::measured(true),
+    along_hit_normal: oag_title::pre_race::Sourced::measured(true),
+    quarter_sum_normal: oag_title::pre_race::Sourced::measured(true),
+};
 
 #[cfg(test)]
 mod tests {
