@@ -10,7 +10,7 @@
 //!     -E 'binary(oag-game) and test(race_build)'
 //! ```
 
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 use oag_game::settings;
 use oag_raceplay as race;

@@ -228,8 +228,10 @@ pub trait VideoDecoder: std::fmt::Debug + Send {
 /// of anything `oag-game` specific - `oag-formats` builds without `oag-game`
 /// in the tree.
 #[derive(Debug)]
+#[cfg(not(target_arch = "wasm32"))]
 struct Av1CacheDecoder(av1::FrameSource);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl VideoDecoder for Av1CacheDecoder {
     fn label(&self) -> &'static str {
         "av1 cache"
@@ -290,6 +292,7 @@ pub struct FrameStore {
 
 impl FrameStore {
     /// Opens a cached AV1 movie and checks it is the size the caller expects.
+    #[cfg(not(target_arch = "wasm32"))]
     fn open(path: PathBuf, width: u32, height: u32) -> Result<Self> {
         let blob = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         let source = av1::FrameSource::new(blob)
@@ -314,6 +317,16 @@ impl FrameStore {
             source: Box::new(Av1CacheDecoder(source)),
             path,
         })
+    }
+
+    /// The web build has no AV1 decoder (`re_rav1d` does not build for
+    /// `wasm32`), so a cached movie is absent there rather than played.
+    #[cfg(target_arch = "wasm32")]
+    fn open(path: PathBuf, _width: u32, _height: u32) -> Result<Self> {
+        bail!(
+            "{}: the web build has no AV1 decoder for the movie cache",
+            path.display()
+        )
     }
 
     /// Decodes frame `index` into `out`.

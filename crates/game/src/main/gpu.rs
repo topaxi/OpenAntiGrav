@@ -91,7 +91,14 @@ impl Gpu {
         size: winit::dpi::PhysicalSize<u32>,
         renderer: &display::Renderer,
     ) -> Result<BroughtUp> {
+        #[cfg(target_arch = "wasm32")]
+        let (chosen, device, queue) = {
+            let _ = (instance, renderer);
+            web::take()?
+        };
+        #[cfg(not(target_arch = "wasm32"))]
         let chosen = adapter::choose(instance, Some(surface), renderer)?;
+        #[cfg(not(target_arch = "wasm32"))]
         let (device, queue) =
             pollster::block_on(chosen.adapter.request_device(&wgpu::DeviceDescriptor {
                 // **Not the default, which is `MemoryHints::Performance`.**
@@ -215,6 +222,10 @@ impl Gpu {
         if let (false, Some(monitor)) = (borderless, &monitor) {
             attributes = attributes.with_position(centred_on(monitor, size));
         }
+        #[cfg(target_arch = "wasm32")]
+        {
+            attributes = web::canvas(attributes);
+        }
         let window = Arc::new(
             event_loop
                 .create_window(attributes)
@@ -229,6 +240,9 @@ impl Gpu {
         // out too.
         window.set_cursor_visible(false);
 
+        #[cfg(target_arch = "wasm32")]
+        let instance = web::instance()?;
+        #[cfg(not(target_arch = "wasm32"))]
         let instance = adapter::instance();
         let surface = instance
             .create_surface(window.clone())
@@ -406,5 +420,105 @@ impl GpuContext for Handles {
     }
     fn format(&self) -> wgpu::TextureFormat {
         self.format
+    }
+}
+
+/// The browser's half of [`Gpu::new`]: WebGPU hands out its adapter and device
+/// through promises, and the page's main thread may not block on one, so the
+/// web entry point awaits [`web::prepare`] before the event loop starts and
+/// [`Gpu::new`] takes what it left. There is no adapter to choose between on
+/// the web (the browser picks one), so the RENDERER row offers nothing. See
+/// docs/tools/web.md.
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod web {
+    use std::cell::RefCell;
+
+    use anyhow::{Context, Result};
+    use oag_game::adapter;
+
+    /// The id of the `<canvas>` the page draws into.
+    pub(crate) const CANVAS_ID: &str = "oag-canvas";
+
+    struct Prepared {
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+    }
+
+    thread_local! {
+        static PREPARED: RefCell<Option<Prepared>> = const { RefCell::new(None) };
+    }
+
+    /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
+    /// on native with the same descriptor.
+    pub(crate) async fn prepare() -> Result<()> {
+        let instance = adapter::instance();
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                ..Default::default()
+            })
+            .await
+            .context("no WebGPU adapter (does this browser have WebGPU enabled?)")?;
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                memory_hints: wgpu::MemoryHints::MemoryUsage,
+                ..oag_mesh::mesh_render::device_descriptor("oag-game", &adapter)
+            })
+            .await
+            .context("requesting the device")?;
+        PREPARED.with(|cell| {
+            *cell.borrow_mut() = Some(Prepared {
+                instance,
+                adapter,
+                device,
+                queue,
+            });
+        });
+        Ok(())
+    }
+
+    /// The instance [`prepare`] made the adapter from: a surface must come
+    /// from the same one.
+    pub(crate) fn instance() -> Result<wgpu::Instance> {
+        PREPARED.with(|cell| {
+            cell.borrow()
+                .as_ref()
+                .map(|prepared| prepared.instance.clone())
+                .context("the WebGPU device was not prepared before the window opened")
+        })
+    }
+
+    /// The prepared adapter and device, once.
+    pub(crate) fn take() -> Result<(adapter::Chosen, wgpu::Device, wgpu::Queue)> {
+        let prepared = PREPARED
+            .with(|cell| cell.borrow_mut().take())
+            .context("the WebGPU device was not prepared, or was already taken")?;
+        Ok((
+            adapter::Chosen {
+                adapter: prepared.adapter,
+                offered: Vec::new(),
+                in_use: Vec::new(),
+            },
+            prepared.device,
+            prepared.queue,
+        ))
+    }
+
+    /// Draws into the page's own canvas rather than one winit would make.
+    pub(crate) fn canvas(
+        attributes: winit::window::WindowAttributes,
+    ) -> winit::window::WindowAttributes {
+        use wasm_bindgen::JsCast;
+        use winit::platform::web::WindowAttributesExtWebSys;
+        let canvas = web_sys::window()
+            .and_then(|window| window.document())
+            .and_then(|document| document.get_element_by_id(CANVAS_ID))
+            .and_then(|element| element.dyn_into::<web_sys::HtmlCanvasElement>().ok());
+        attributes
+            .with_canvas(canvas)
+            .with_focusable(true)
+            .with_prevent_default(true)
     }
 }

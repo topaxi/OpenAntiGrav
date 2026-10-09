@@ -50,7 +50,14 @@ use super::{Loaded, Options, TextureSink};
 #[derive(Debug)]
 pub struct LoadWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
+    #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<anyhow::Result<Loaded>>>,
+    /// The web build has no threads (`wasm32-unknown-unknown` without
+    /// atomics), so the load runs inside [`Self::spawn_with`] and its result
+    /// waits here. The frame that starts it is the frame that stalls; see
+    /// `docs/tools/web.md`.
+    #[cfg(target_arch = "wasm32")]
+    handle: Option<anyhow::Result<Loaded>>,
     /// What the screen puts on the line where the other phases put an entry
     /// name. Shared rather than owned because the thread refines it: the
     /// circuit a caller *asked* for may be `None`, and only the load knows
@@ -96,6 +103,22 @@ impl LoadWorker {
         })
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn spawn_with(label: Option<String>, load: impl FnOnce() -> anyhow::Result<Loaded>) -> Self {
+        let current = Arc::new(Mutex::new(label));
+        let stages = LoadStages::default();
+        let handle = {
+            let _scope = stages.open();
+            Some(load())
+        };
+        Self {
+            handle,
+            current,
+            stages,
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn spawn_with(
         label: Option<String>,
         load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
@@ -128,6 +151,9 @@ impl LoadWorker {
     /// error surfaces from [`Self::join`] instead, where it can be reported.
     #[must_use]
     pub fn is_finished(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        return true;
+        #[cfg(not(target_arch = "wasm32"))]
         self.handle
             .as_ref()
             .is_none_or(std::thread::JoinHandle::is_finished)
@@ -141,6 +167,9 @@ impl LoadWorker {
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
         let handle = self.handle.take()?;
+        #[cfg(target_arch = "wasm32")]
+        return Some(handle);
+        #[cfg(not(target_arch = "wasm32"))]
         Some(match handle.join() {
             Ok(loaded) => loaded,
             // A panic on the load thread is reported as a failed load rather

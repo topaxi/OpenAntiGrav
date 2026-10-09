@@ -30,7 +30,7 @@
 //! `oag_post::screen` states and `crate::screen` relies on for
 //! edit-save-look authoring.
 
-use std::time::Instant;
+use web_time::Instant;
 
 use log::{debug, warn};
 

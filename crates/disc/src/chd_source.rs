@@ -6,7 +6,6 @@
 //! strongly sequential, and without the cache a hunk gets re-decompressed once
 //! per sector it contains.
 
-use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
@@ -44,7 +43,7 @@ pub struct ChdInfo {
 /// Reads the header and metadata of a CHD without mounting a filesystem.
 pub fn describe(path: impl AsRef<Path>) -> Result<ChdInfo> {
     let path = path.as_ref();
-    let file = File::open(path).map_err(|e| Error::io(path, e))?;
+    let file = crate::mount::open(path).map_err(|e| Error::io(path, e))?;
     let mut chd = Chd::open(BufReader::new(file), None)?;
 
     let header = chd.header();
@@ -198,7 +197,7 @@ struct TrackInfo {
 
 /// A CHD file exposed as a sector source.
 pub struct ChdSource {
-    chd: Chd<BufReader<File>>,
+    chd: Chd<BufReader<crate::mount::ImageFile>>,
     path: PathBuf,
     layout: UnitLayout,
     sectors_per_hunk: u32,
@@ -232,7 +231,7 @@ impl ChdSource {
     /// than one track. Neither occurs for any in-scope Wipeout title.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        let file = File::open(&path).map_err(|e| Error::io(&path, e))?;
+        let file = crate::mount::open(&path).map_err(|e| Error::io(&path, e))?;
         let mut chd = Chd::open(BufReader::new(file), None)?;
 
         let tracks = read_tracks(&mut chd);
@@ -413,7 +412,7 @@ impl ChdSource {
 ///
 /// Returns an empty list for images with no track metadata, which is the
 /// normal case for `createdvd` output.
-fn read_tracks(chd: &mut Chd<BufReader<File>>) -> Vec<TrackInfo> {
+fn read_tracks(chd: &mut Chd<BufReader<crate::mount::ImageFile>>) -> Vec<TrackInfo> {
     let entries: Vec<Metadata> = match chd.metadata_refs().try_into() {
         Ok(entries) => entries,
         Err(_) => return Vec::new(),

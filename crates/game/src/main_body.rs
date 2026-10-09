@@ -165,7 +165,7 @@ fn attach_log_file(cli: &Cli, settings: &settings::Settings) {
 #[global_allocator]
 static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
 
-#[cfg_attr(target_os = "android", allow(dead_code))]
+#[cfg_attr(any(target_os = "android", target_arch = "wasm32"), allow(dead_code))]
 fn main() -> Result<()> {
     init_logging();
     let result = run(Cli::parse());
@@ -643,6 +643,7 @@ fn run(cli: Cli) -> Result<()> {
     // Poll rather than Wait: the intro is animated whether or not input arrives.
     event_loop.set_control_flow(ControlFlow::Poll);
 
+    #[cfg_attr(target_arch = "wasm32", allow(unused_mut))]
     let mut app = App {
         pvs_culling: cli.pvs,
         camera_jitter: cli.camera_jitter,
@@ -685,10 +686,22 @@ fn run(cli: Cli) -> Result<()> {
         suspended: false,
         occluded: false,
     };
-    event_loop.run_app(&mut app)?;
-    app.finish_audio()?;
-    app.finish_prefetch();
-    Ok(())
+    // The browser owns the loop: `spawn_app` returns at once and the page's
+    // own frame callbacks drive `app` from then on, so there is no "after" to
+    // finish audio or a prefetch in (the web build has neither).
+    #[cfg(target_arch = "wasm32")]
+    {
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(app);
+        Ok(())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        event_loop.run_app(&mut app)?;
+        app.finish_audio()?;
+        app.finish_prefetch();
+        Ok(())
+    }
 }
 
 /// What [`tests`] reaches through its own `use super::*`, and `main` itself does

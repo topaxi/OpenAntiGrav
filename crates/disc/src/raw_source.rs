@@ -1,16 +1,16 @@
 //! Reads logical sectors out of a raw `.iso` file.
 
-use std::fs::File;
 use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
+use crate::mount::{self, ImageFile};
 use crate::source::{SECTOR_SIZE, SectorSource};
 
 /// A flat ISO file exposed as a sector source.
 #[derive(Debug)]
 pub struct RawSource {
-    file: BufReader<File>,
+    file: BufReader<ImageFile>,
     path: PathBuf,
     sector_count: u32,
 }
@@ -19,8 +19,8 @@ impl RawSource {
     /// Opens a raw ISO file.
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        let file = File::open(&path).map_err(|e| Error::io(&path, e))?;
-        let len = file.metadata().map_err(|e| Error::io(&path, e))?.len();
+        let file = mount::open(&path).map_err(|e| Error::io(&path, e))?;
+        let len = mount::len(&file).map_err(|e| Error::io(&path, e))?;
 
         // Truncated final sectors are ignored rather than rejected. A partially
         // downloaded image should still list what it does contain.

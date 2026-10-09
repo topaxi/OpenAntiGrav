@@ -53,8 +53,9 @@ oag-music.workspace = true
 oag-sound.workspace = true
 oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
-# plays video. See docs/architecture/adr/0008-av1-movie-cache.md.
-oag-video = { workspace = true, features = ["av1"] }
+# plays video. See docs/architecture/adr/0008-av1-movie-cache.md. Turned on
+# below for every target but `wasm32`, where `re_rav1d` does not build.
+oag-video.workspace = true
 oag-gameplay.workspace = true
 oag-hud.workspace = true
 oag-input.workspace = true
@@ -93,6 +94,9 @@ pollster.workspace = true
 toml.workspace = true
 dirs = "7"
 serde.workspace = true
+# `Instant` that is std's own on native and `performance.now()` on the web,
+# where `std::time::Instant::now` panics. See docs/tools/web.md.
+web-time = "1.1.0"
 
 # Platform-native H.264 decode for the PSP `.PMF` path, behind the
 # `native-video` feature: `just build`/`just check`/CI never touch
@@ -110,15 +114,33 @@ gstreamer-video = { version = "0.25", optional = true }
 # The desktop clipboard, for pasting a disc key into the chooser's key prompt.
 # MIT OR Apache-2.0. Not built for Android, where the prompt's keypad and a key
 # file beside the image are the ways in (`oag_game::launcher::key_entry`).
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(not(any(target_os = "android", target_arch = "wasm32")))'.dependencies]
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+oag-video = { workspace = true, features = ["av1"] }
 
 # Android: NativeActivity (no Java in the APK), winit's backend over
 # `android-activity`. See docs/tools/android.md.
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { workspace = true, features = ["android-native-activity"] }
 
+# The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
+# web), and the console as the log sink. See docs/tools/web.md.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.129"
+wasm-bindgen-futures = "0.4.79"
+js-sys = "0.3.106"
+web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement"] }
+# wgpu's web types hold `Rc`s; this marks them `Send + Sync`, which is sound
+# only because this build has no threads (no `atomics` target feature). It
+# keeps every `Send` bound the native worker threads need compiling here.
+wgpu = { workspace = true, features = ["fragile-send-sync-non-atomic-wasm"] }
+
 [features]
+# Only the web build turns this on (`just web`): the `oag_web` example below,
+# the same arrangement as `android`.
+web = []
 # Only the Android build turns this on (`just apk`): it is what makes the
 # `oag_android` example below exist, so a desktop `--all-targets` neither builds
 # nor links a second copy of the binary.
@@ -154,3 +176,12 @@ name = "oag_android"
 path = "src/android.rs"
 crate-type = ["cdylib"]
 required-features = ["android"]
+
+# The browser entry point: the binary's body once more (`src/web.rs`
+# `include!`s `src/main_body.rs`), as the cdylib `wasm-bindgen` wraps. An
+# example for the reason the Android one is. See docs/tools/web.md.
+[[example]]
+name = "oag_web"
+path = "src/web.rs"
+crate-type = ["cdylib"]
+required-features = ["web"]

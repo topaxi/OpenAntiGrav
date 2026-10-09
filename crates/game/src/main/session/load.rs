@@ -586,7 +586,7 @@ impl Session {
             stage.built_race = Some(result);
             // The reference point the other two diagnostic timestamps are read
             // against - see `Session::race_ready_at`.
-            self.race_ready_at = Some(std::time::Instant::now());
+            self.race_ready_at = Some(web_time::Instant::now());
             return;
         }
         let Some(worker) = stage.race.as_mut() else {
@@ -629,7 +629,7 @@ impl Session {
             }
             Err(e) => {
                 stage.built_race = Some(Err(RaceBuildError::Load(e)));
-                self.race_ready_at = Some(std::time::Instant::now());
+                self.race_ready_at = Some(web_time::Instant::now());
             }
         }
     }
@@ -714,7 +714,7 @@ impl Session {
         // already-finished `MusicFetchWorker` (see `LoadingStage::race_ready`),
         // so this should now read near-instant rather than the 2.83s a cold
         // PS2 track measured before the worker existed.
-        let music_start = std::time::Instant::now();
+        let music_start = web_time::Instant::now();
         match music {
             Some(worker) => self.audio.finish_race_music(
                 worker,

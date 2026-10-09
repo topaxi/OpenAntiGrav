@@ -314,7 +314,7 @@ fn run(options: &Options, progress: &Mutex<Progress>, stop: &AtomicBool) {
     }
 
     info!("prefetch: reading the archives to see what needs converting");
-    let started = std::time::Instant::now();
+    let started = web_time::Instant::now();
     let mut planned = match plan(options) {
         Ok(planned) => planned,
         Err(e) => {
