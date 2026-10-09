@@ -133,18 +133,10 @@ impl Ramp {
         let texture = slot.take().context("the ramp texture did not load")?;
         let (width, height) = (texture.width as usize, texture.height as usize);
         let decoded: Vec<[u8; 4]> = match &texture.texels {
-            Texels::Rgba8(texels) => texels
-                .chunks_exact(4)
-                .map(|texel| [texel[0], texel[1], texel[2], texel[3]])
-                .collect(),
+            Texels::Rgba8(texels) => texels.as_chunks::<4>().0.to_vec(),
             Texels::Chain(levels) => levels
                 .first()
-                .map(|level| {
-                    level
-                        .chunks_exact(4)
-                        .map(|texel| [texel[0], texel[1], texel[2], texel[3]])
-                        .collect()
-                })
+                .map(|level| level.as_chunks::<4>().0.to_vec())
                 .unwrap_or_default(),
             Texels::Blocks { format, levels } => levels
                 .first()
