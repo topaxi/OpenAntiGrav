@@ -3700,7 +3700,7 @@ Pure, Omega, 2048) flies Pulse's (`oag_raceplay::launch_hover::craft_inertia(Non
 | `crates/ai/src/plan.rs` (`SpeedPlan::build_within`), `plan/probe.rs` (`drive`) | the ceiling above | `craft.start.body` |
 | `crates/raceplay/src/field.rs`, the opponent and autopilot calls | the ceiling above | that ship's own `physics.body` |
 | `crates/raceplay/src/start.rs`, the speed plan built in `Race::start` | **the plan's craft had Pulse's two-probe hover and cycling steering ramp on HD**: both were only written by the first tick's `set_hover_caps`, after the plan was built | rig and clamp seated with the inertia, before the plan |
-| `crates/gameplay/src/spawn.rs`, `Ship::place_at` | reset the rig and clamp to Pulse's, so the plan's rescues and route plans started at an index flew Pulse's laws | kept, as mass and inertia already were |
+| `crates/gameplay/src/spawn.rs`, `Ship::place_at` | reset the rig and clamp to Pulse's, so the plan's rescues and route plans started at an index flew Pulse's laws (and a live HD respawn until the next tick's `set_hover_caps`) | kept, as mass and inertia already were |
 
 Nothing in `oag-ai` models the steering ramp in closed form: the ceiling is a steady state the
 ramp does not change, and the plan steps the real ramp through `oag_physics`. The determinism
@@ -3730,23 +3730,23 @@ All movement comes from the plan simulating HD's own hover and steering. Measure
 weapons off, 12,000 ticks). Shield starts at 95. The only shield an opponent loses off a wall is
 a barrel roll's cost, 14.25 each (`roll_cost` 15 % of 95, `oag_physics::barrel_roll::arm`).
 
-**One opponent alone**, flying laps 2 and 3, wall-contact ticks over the run, end-of-run shield
-(no respawns on any circuit, before or after):
+**One opponent alone**, laps 1 (standing start), 2 and 3, wall-contact ticks over the run,
+end-of-run shield (no respawns on any circuit, before or after):
 
 | circuit | laps before | laps after | contacts before | after | shield before | after |
 | --- | --- | --- | ---: | ---: | ---: | ---: |
-| Talon's Junction | 41.18 / 41.22 | 41.07 / 41.08 | 0 | 6 | 95.0 | 94.6 |
-| Vineta K | 34.27 / 34.28 | same | 0 | 0 | 95.0 | 95.0 |
-| Ubermall | 37.17 / 37.22 | 36.97 / 37.00 | 15 | 0 | 93.8 | 95.0 |
-| Amphiseum | 47.72 / 47.63 | 47.77 / 47.73 | 0 | 0 | 95.0 | 95.0 |
-| Modesto Heights | 37.13 / 36.52 | 37.00 / 36.98 | 0 | 0 | 66.5 (2 rolls) | 80.8 (1 roll) |
-| Tech de Ra | 40.23 / 40.23 | 40.22 / 40.22 | 0 | 0 | 95.0 | 95.0 |
-| 02 | 36.38 / 36.48 | 36.25 / 36.32 | 0 | 0 | 95.0 | 95.0 |
-| 03 | 40.98 / 40.87 | same | 0 | 0 | 95.0 | 95.0 |
-| Chenghou Project | 41.43 / 42.08 | 42.08 / 42.10 | 0 | 0 | 80.8 (1 roll) | 66.5 (2 rolls) |
-| Sebenco Climb | 45.67 / 45.67 | 45.05 / 45.13 | 11 | 0 | 94.5 | 95.0 |
-| Sol 2 | 36.67 / 36.67 | 36.38 / 36.38 | 0 | 0 | 95.0 | 95.0 |
-| Anulpha Pass | 37.45 / 36.42 | same | 0 | 0 | 95.0 | 95.0 |
+| Talon's Junction | 47.27 / 41.18 / 41.22 | 47.13 / 41.07 / 41.08 | 0 | 6 | 95.0 | 94.6 |
+| Vineta K | 40.32 / 34.27 / 34.28 | same | 0 | 0 | 95.0 | 95.0 |
+| Ubermall | 43.18 / 37.17 / 37.22 | 43.00 / 36.97 / 37.00 | 15 | 0 | 93.8 | 95.0 |
+| Amphiseum | 53.67 / 47.72 / 47.63 | 53.72 / 47.77 / 47.73 | 0 | 0 | 95.0 | 95.0 |
+| Modesto Heights | 43.13 / 37.13 / 36.52 | 42.35 / 37.00 / 36.98 | 0 | 0 | 66.5 (2 rolls) | 80.8 (1 roll) |
+| Tech de Ra | 46.28 / 40.23 / 40.23 | 46.25 / 40.22 / 40.22 | 0 | 0 | 95.0 | 95.0 |
+| 02 | 42.57 / 36.38 / 36.48 | 42.38 / 36.25 / 36.32 | 0 | 0 | 95.0 | 95.0 |
+| 03 | 47.00 / 40.98 / 40.87 | same | 0 | 0 | 95.0 | 95.0 |
+| Chenghou Project | 48.23 / 41.43 / 42.08 | 47.55 / 42.08 / 42.10 | 0 | 0 | 80.8 (1 roll) | 66.5 (2 rolls) |
+| Sebenco Climb | 51.47 / 45.67 / 45.67 | 51.03 / 45.05 / 45.13 | 11 | 0 | 94.5 | 95.0 |
+| Sol 2 | 42.75 / 36.67 / 36.67 | 42.43 / 36.38 / 36.38 | 0 | 0 | 95.0 | 95.0 |
+| Anulpha Pass | 42.33 / 37.45 / 36.42 | same | 0 | 0 | 95.0 | 95.0 |
 
 Per lap on Talon's Junction after: 2, 1 and 2 contact ticks, shield at lap end 94.9, 94.8, 94.6
 (before: 0 every lap, 95.0). Board total 26 contact ticks before, 6 after.
@@ -3765,6 +3765,37 @@ Per seed on Talon's Junction, contacts before / after: 105 / 159, 163 / 168, 126
 123 / 134, 125 / 189: worse on every seed, so not noise. Ubermall and Sebenco improve on most
 seeds and on the sums, and lap 0.3-0.6 s faster. Across the four fields contacts fall from 2,709
 to 2,597.
+
+Per lap at seed 1, over the seven opponents: mean lap time, summed contact ticks and respawns,
+mean and lowest shield at lap end (shield includes barrel-roll costs). Vineta K is identical
+before and after.
+
+Talon's Junction, seed 1, per lap over the seven opponents:
+
+| lap | before | after |
+| --- | --- | --- |
+| 1 | 47.44s, 6 ticks, 0 resp, shield 94.9 (min 94.7) | 47.49s, 17 ticks, 0 resp, shield 94.8 (min 94.5) |
+| 2 | 40.81s, 28 ticks, 0 resp, shield 94.6 (min 93.7) | 40.79s, 30 ticks, 0 resp, shield 94.4 (min 93.5) |
+| 3 | 40.80s, 0 ticks, 0 resp, shield 94.6 (min 93.7) | 40.79s, 30 ticks, 0 resp, shield 94.1 (min 92.6) |
+| end of run (12,000 ticks) | 105 ticks, 0 resp, shield 93.6 (min 91.9) | 159 ticks, 0 resp, shield 93.0 (min 90.6) |
+
+Ubermall, seed 1, per lap over the seven opponents:
+
+| lap | before | after |
+| --- | --- | --- |
+| 1 | 44.54s, 36 ticks, 0 resp, shield 92.4 (min 80.8) | 44.11s, 16 ticks, 0 resp, shield 92.7 (min 80.8) |
+| 2 | 37.45s, 18 ticks, 0 resp, shield 90.0 (min 66.3) | 36.98s, 9 ticks, 0 resp, shield 88.4 (min 65.6) |
+| 3 | 37.32s, 7 ticks, 0 resp, shield 85.9 (min 51.8) | 37.10s, 1 ticks, 0 resp, shield 84.3 (min 50.9) |
+| end of run (12,000 ticks) | 159 ticks, 0 resp, shield 80.2 (min 51.8) | 111 ticks, 0 resp, shield 83.0 (min 50.9) |
+
+Sebenco Climb, seed 1, per lap over the seven opponents:
+
+| lap | before | after |
+| --- | --- | --- |
+| 1 | 52.06s, 24 ticks, 0 resp, shield 92.7 (min 80.8) | 51.39s, 31 ticks, 0 resp, shield 86.6 (min 66.5) |
+| 2 | 45.55s, 25 ticks, 0 resp, shield 88.4 (min 66.4) | 45.13s, 2 ticks, 0 resp, shield 84.6 (min 52.2) |
+| 3 | 45.75s, 38 ticks, 0 resp, shield 84.0 (min 51.7) | 45.21s, 23 ticks, 0 resp, shield 84.5 (min 52.2) |
+| end of run (12,000 ticks) | 132 ticks, 0 resp, shield 75.2 (min 37.1) | 95 ticks, 0 resp, shield 80.0 (min 38.0) |
 
 **So the fix cuts HD wall contact where the old plan was wrong about the craft (Ubermall,
 Sebenco), and costs some on Talon's Junction**, where the plan built on Pulse's hover happened
