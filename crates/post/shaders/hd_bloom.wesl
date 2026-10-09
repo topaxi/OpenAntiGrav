@@ -219,14 +219,7 @@ fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     let mean = rgb / max(weight, 1e-6);
     let previous = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
-    // The PPU reads the reduced buffer's own bytes, and that buffer is written
-    // through the ROP's sRGB encode, so the luminance it averages is of the
-    // encoded value. Inferred, not read: the encode is measured
-    // (`SET_SHADER_PACKER` is 1 on the ladder's draws), that the readback takes
-    // raw bytes is the reading that makes the original's exposure scale 1.0 on
-    // a dim frame, which it measures.
-    let encoded = pow(clamp(mean, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
-    let luminance = dot(encoded, vec3<f32>(0.3, 0.59, 0.11));
+    let luminance = dot(mean, vec3<f32>(0.3, 0.59, 0.11));
     let rate = max(constants.adaption_rate, rate_override);
     let adapted = previous + rate * (luminance - previous);
     return vec4<f32>(adapted, 0.0, 0.0, 1.0);

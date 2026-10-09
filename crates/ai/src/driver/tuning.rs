@@ -53,8 +53,8 @@ pub struct Tuning {
     /// **This is the permission, not the corner limit.** The kinematic limit in
     /// [`pace::corner_target`] reads
     /// [`pace::hull_yaw_ceiling`](super::pace::hull_yaw_ceiling) (1.204 to
-    /// 1.667 rad/s per team, [`oag_physics::forces::YAW_INVERSE_INERTIA`]) and
-    /// takes the smaller of the two. It keeps [`crate::Difficulty::tune`]'s
+    /// 1.667 rad/s per team on Pulse's `I_yy` 21.6, 1.083 to 1.5 on HD's 24:
+    /// the craft's own inertia) and takes the smaller of the two. It keeps [`crate::Difficulty::tune`]'s
     /// ladder meaningful. Table and board: `docs/gameplay/ai.md`, "Tuning
     /// sweep tables" and "The clean-Ace board".
     pub max_turn_rate: f32,

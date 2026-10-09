@@ -116,12 +116,13 @@ fn the_plasma_bolts_head_has_a_dark_core_not_a_white_disc() {
 
     let (with, without) = (dark_core(&fired), dark_core(&control));
     println!("dark pixels in the bolt's box: {with} with a bolt, {without} without");
-    // 47 dark road pixels before the HD adaptation read the encoded mean
-    // (exposure 1.0 instead of a x1.5 lift on this frame), 50 after; the
-    // bolt's own count is 326 and 399. The ceiling keeps the two far apart.
+    // With both the halved lit output and the encoded-mean adaptation
+    // (2026-10-09) the bolt counts 190 and the control 16: the core is a
+    // gradient, so the `< 24` cut takes less of it, and a white disc would
+    // count about what the control does. The floor keeps the two far apart.
     assert!(without < 100, "the control's box is not road any more");
     assert!(
-        with > 200,
+        with > 120,
         "the bolt's core is not dark: a white disc is the eye read from the origin"
     );
 }

@@ -101,6 +101,10 @@ impl Race {
         // nothing. Dropping the volumes here also makes it impossible for a
         // later change to reach them by accident.
         let inertia = crate::launch_hover::craft_inertia(craft_laws);
+        // Seated with the inertia rather than left to the first tick's `set_hover_caps`:
+        // the speed plan is built below, before any tick, and simulates this very state.
+        let rig = crate::launch_hover::physics_rig(hover_rig);
+        let steer_ramp_clamped = craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value);
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
         let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
 
@@ -151,6 +155,8 @@ impl Race {
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
         ship.physics.body.inertia = inertia;
+        ship.physics.hover_rig = rig;
+        ship.physics.steer_ramp_clamped = steer_ramp_clamped;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
@@ -344,6 +350,8 @@ impl Race {
                 opponent.handling = handling;
                 opponent.physics.body.mass = handling.physical.mass;
                 opponent.physics.body.inertia = inertia;
+                opponent.physics.hover_rig = rig;
+                opponent.physics.steer_ramp_clamped = steer_ramp_clamped;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
                 // the race's own and the craft's slot, so the same race fields
@@ -468,8 +476,8 @@ impl Race {
                 zone_stages,
                 countdown_voice,
                 launch_hover,
-                hover_rig: crate::launch_hover::physics_rig(hover_rig),
-                steer_ramp_clamped: craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value),
+                hover_rig: rig,
+                steer_ramp_clamped,
                 weapon_pad_glow,
                 autopilot: false,
                 cues: Vec::new(),

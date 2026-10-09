@@ -236,6 +236,10 @@ impl Ship {
     pub fn place_at(&mut self, pose: Pose) {
         let mass = self.physics.body.mass;
         let inertia = self.physics.body.inertia;
+        // The title's craft laws are the craft's, not its state, so a reset keeps them as it
+        // keeps the inertia (the speed plan's rescues place a craft through here).
+        let hover_rig = self.physics.hover_rig;
+        let steer_ramp_clamped = self.physics.steer_ramp_clamped;
         let shield = self.physics.shield;
         // **The launch boost is carried across**, like the shield. A respawn does
         // not replay the window in the original (its timer holds through state 3 and
@@ -249,6 +253,8 @@ impl Ship {
         self.physics.body.orientation = pose.orientation;
         self.physics.body.mass = mass;
         self.physics.body.inertia = inertia;
+        self.physics.hover_rig = hover_rig;
+        self.physics.steer_ramp_clamped = steer_ramp_clamped;
         self.physics.shield = shield;
         // **And the weapon slowdown a hit still owes this craft**, which is the
         // one piece of the force law that does not live on `physics` and so is
@@ -696,6 +702,28 @@ mod launch_tests {
         });
 
         assert_eq!(ship.physics.launch, spent);
+    }
+
+    /// A title's craft laws survive a respawn, as the inertia does: HD's four-probe rig and
+    /// clamped steering ramp are the craft's, and the AI's speed plan rescues through here.
+    #[test]
+    fn a_respawn_keeps_the_titles_craft_laws() {
+        let rig = oag_physics::hover::Rig {
+            spring_share: 0.15,
+            along_normal: true,
+            ..oag_physics::hover::Rig::TWO_POINT
+        };
+        let mut ship = Ship::default();
+        ship.physics.hover_rig = rig;
+        ship.physics.steer_ramp_clamped = true;
+
+        ship.place_at(Pose {
+            position: Vec3::ZERO,
+            orientation: Quat::IDENTITY,
+        });
+
+        assert_eq!(ship.physics.hover_rig, rig);
+        assert!(ship.physics.steer_ramp_clamped);
     }
 }
 
