@@ -27,9 +27,11 @@ the HD functions read here are on
 - **Thrust**: Pulse's law fails on HD if the speed at matching game time differs by more
   than 5% anywhere in the first two seconds from rest. It does not (0.7%).
 - **Steering**: fails if the heading after 0.8 s of full lock, or the late turn rate,
-  differs by more than 10%. It does not (2.4% and 0.5%).
-- **Airbrakes and pitch**: the same 10% threshold. The airbrake sits at the edge (9-14%)
-  on four runs that agree with each other to 0.4 deg, so it is reported as a difference.
+  differs by more than 10%. It did not on 2026-10-08 (2.4% and 0.5%), but only because two
+  differences cancelled (below); with both flown it is 0.1% at 0.8 s.
+- **Airbrakes and pitch**: the same 10% threshold. The airbrake sat at the edge (9-14%)
+  on four runs that agree with each other to 0.4 deg, so it was reported as a difference; since
+  2026-10-09 it is within 2% at 0.5 s and 1.0 s.
   Pitch is clearly over it.
 
 ## What was fixed in the capture before anything could be compared
@@ -112,14 +114,14 @@ every value accounted for).
   ="99"` would produce exactly this shape (no effect while `accelcap` limits thrust,
   1% once `amount` does), but no 0.99 or 99 sits on the craft, and the throttle reads 100.
 
-None of these is a table the original authors differently. The pitch law was read and is
-flown (above); the airbrake and late-speed gaps are not, so nothing else was changed.
+None of these is a table the original authors differently. The pitch, inertia and steering-ramp
+laws were read and are flown (above); the late-speed gap is not.
 
 ## Captures
 
-All under `data/scratch/hd-handling/` (gitignored): `b4` (20 runs, frame-keyed),
-`b5`, `b6` (game-time keyed, two reps of each scenario), `b7` (walls), with `ours/` the
-matching `oag-game` traces and `handling-blocks.pkl` the class-block dump. Scenarios:
+Taken by the hd-handling lane and not kept in the repository (guest memory is game content):
+one frame-keyed batch of 20 runs, two game-time-keyed batches with two repeats of each scenario,
+one batch of wall runs, the matching `oag-game` traces and a class-block dump. Scenarios:
 `verification/scenarios/hd-*.inputs`. Talon's Junction, Racebox Time Trial, Venom,
 Feisar concept1 (`--team feisar_c1 --variant concept1`), teleported to grid slot 0
 `(6.10, -51.91, -195.92)` facing +x after a 60-frame settle.

@@ -23,7 +23,10 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 - **The AI's yaw ceiling on HD** (`oag_ai::driver::pace::hull_yaw_ceiling`) still divides by
   Pulse's `I_yy` 21.6, so it reads `1.667` rad/s where HD's Feisar reaches `1.5`. An AI-lane
   change: pass the craft's own inertia in.
-- **Omega's craft laws** are not located: no `12.0f` immediate near the craft code, no steering
+- **`oag-trace`'s own spawns** (`crates/trace/src/main.rs`, the two `box_inertia()` sites) still
+  give every craft Pulse's tensor and unclamped ramp. Harmless while it replays Pulse captures; an
+  HD replay there would need `CraftLaws` passed in.
+- **Omega's craft laws**: not checkable in this pass, not located statically: no `12.0f` immediate near the craft code, no steering
   ramp among the `vminss` users in `0x01310000`-`0x01330000`. Omega keeps Pulse's (`craft_laws:
   None`). 2048 not checked.
 - **Speed past 2 s is about 1% low on HD** (`119.4`-`120.0` against `120.7` at 3 s). Shape fits

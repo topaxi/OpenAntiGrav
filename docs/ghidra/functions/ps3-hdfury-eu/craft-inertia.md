@@ -7,8 +7,10 @@ overshoots and cycles. The old steering match was those two errors cancelling.
 
 Read with the capstone listing of `0x000ed000`-`0x000f7000` and Ghidra (TOC `r2 = 0x008ad4d8`,
 so `-0x4388(r2)` is `0x008a9150`, the documented `-5`). Checked against the per-frame craft dumps
-of `scripts/rpcs3-trace.py` (`data/scratch/hd-handling/b5`, `b6`: Racebox Time Trial, Talon's
-Junction, Venom, Feisar concept1). The measured comparison is on
+of `scripts/rpcs3-trace.py` (the hd-handling lane's game-time-keyed captures, two boots by two
+repeats per scenario, not kept in the repository; the command is in each
+`verification/scenarios/hd-*.inputs` header): Racebox Time Trial, Talon's Junction, Venom,
+Feisar concept1. The measured comparison is on
 [hd-handling-ground-truth.md](../../../physics/hd-handling-ground-truth.md); the hover and the
 other craft terms are on [hover-four-point.md](hover-four-point.md).
 
@@ -99,17 +101,21 @@ Heading at the usual check points (HD four runs):
   at 1.0 s `-36.85`, `-33.29`, HD `-32.73`..`-33.07`.
 - full-lock steering, 0.8 s: `-48.00` before, `-46.28` after, HD `-46.20`..`-46.25`.
 
-Pitch, thrust and sideshift move by under `0.4` in any reported figure.
+Pitch, thrust and sideshift move by under `0.4` in any reported figure. The left airbrake at
+1.0 s (`+28.04` against HD's `+25.4`..`+25.7`) is wall contact, not handling: this engine's shield
+drops from 100 at 0.8 s after onset and the speed falls from 108 to 28, with HD's yaw rate
+collapsing at the same moment.
 
 ## Omega and 2048
 
-- **Omega**: not located in this pass. No `12.0f` immediate sits near the craft code (the five
+- **Omega**: not checkable in this pass: the code was not located statically, and there is no
+  live path. No `12.0f` immediate sits near the craft code (the five
   `0x41400000` immediates are elsewhere, so the box extents load from rodata), and the
   `vminss` census in `0x01310000`-`0x01330000` holds no steering ramp (`FUN_01320c10` is a
   geometry clamp). Next: Omega's craft update from `Craft_UpdateSurfaceProbes` (`0x0131b510`,
   reached by a virtual call, so no static caller), then its steering by the class block's
-  `Turning` offsets. No live capture path (no PS4 emulator), so Omega keeps Pulse's laws
-  (`craft_laws: None`). Recorded as open, not as "applies".
+  `Turning` offsets. No PS4 emulator is in the toolchain, so Omega keeps Pulse's laws
+  (`craft_laws: None`).
 - **2048**: not checked.
 
 ## Wired
