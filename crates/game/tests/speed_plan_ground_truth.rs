@@ -72,8 +72,12 @@ fn slice(class: &str, reversed: bool) {
         let clean = report.verify_failures == 0 && report.verify_respawns == 0;
         let expected = !NOT_CLEAN.contains(&(id.as_str(), class));
         println!(
-            "{id} {class}: clean {clean}, steps {}, lap {:?}, unresolved {:?}",
-            report.steps, report.verify_lap_ticks, report.unresolved
+            "{id} {class}: clean {clean}, steps {}, lap {:?}, unresolved {:?}, tight {} of {}",
+            report.steps,
+            report.verify_lap_ticks,
+            report.unresolved,
+            plan.tight_samples(),
+            plan.len()
         );
         if clean != expected {
             wrong.push(format!(

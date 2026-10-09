@@ -32,19 +32,33 @@ const NOVICE_GAP: f32 = 0.452_277_25;
 ///
 /// **A handicap, scaled with the plan margin**: one with no plan, and on a plan
 /// `(1 - margin)` over [`NOVICE_GAP`], so a balanced Ace holds the plan's line
-/// exactly, an Elite spends a third, a Skilled two thirds, a Novice all. The
+/// exactly, an Elite spends a third, a Skilled two thirds, a Novice all. **Within
+/// [`TIGHT_REACH`] of a sample the plan passed a wall closely, the level's share is
+/// none**, whatever the level: there the plan's line is the only one known to fit.
+/// Traffic still hands character back there (zeroing it too put
+/// `craft_sticking_ground_truth` over its limit, 2,002 pair-ticks against 2,000). The
 /// plan is the speed the craft carries *on* the line; a pilot holding its own
 /// part of the corridor at that speed is a pilot into the wall. On the 96 lone
 /// rows full character was clean on 15, gated on the plan's slack ahead (three
 /// settings) on 15-23, and with none on 45; the field went 41 destroyed to 24.
 /// Chosen, not measured, beyond those three points.
-pub(super) fn plan_slack(ctx: &Context<'_>, personality: &Personality) -> f32 {
-    if !ctx.plan.is_some_and(|plan| plan.len() == ctx.line.len()) {
+pub(super) fn plan_slack(ctx: &Context<'_>, personality: &Personality, index: usize) -> f32 {
+    let Some(plan) = ctx.plan.filter(|plan| plan.len() == ctx.line.len()) else {
         return 1.0;
+    };
+    if plan.tight_within(index, TIGHT_REACH) {
+        return traffic(ctx);
     }
     let level = ((1.0 - plan_margin(ctx.tuning, personality)) / NOVICE_GAP).clamp(0.0, 1.0);
     level.max(traffic(ctx))
 }
+
+/// How far ahead of a sample the plan passed a wall closely (`SpeedPlan::tight_within`)
+/// a driver holds the plan's own line, in world units: on a tight corner the plan is
+/// clean only on its line, at its speed. HD's Talon's Junction, line sample 3188: an
+/// Ace spending 7 % of its line bias drifted wide from about sample 3080, 108 samples
+/// and ~170 units before the wall. **Chosen, not measured.**
+pub(super) const TIGHT_REACH: f32 = 200.0;
 
 /// How close the nearest rival this driver has noticed is: one when touching,
 /// zero at [`TRAFFIC_RANGE`] or with nobody about.
@@ -140,5 +154,53 @@ mod tests {
             ..Personality::NEUTRAL
         };
         assert_eq!(plan_margin(&Tuning::default(), &personality), 1.0);
+    }
+
+    /// A straight line of `n` samples one unit apart.
+    fn straight(n: usize) -> crate::Line {
+        crate::Line::new(
+            (0..n)
+                .map(|i| oag_core::math::Vec3::new(0.0, 0.0, -(i as f32)))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn tight_within_reads_ahead_along_the_line() {
+        let line = straight(400);
+        let plan = SpeedPlan::unlimited(&line).with_tight(150);
+        assert!(!plan.tight_within(0, 100.0));
+        assert!(plan.tight_within(0, TIGHT_REACH));
+        assert!(plan.tight_within(150, 0.0));
+        assert!(!plan.tight_within(151, TIGHT_REACH));
+        assert_eq!(plan.tight_samples(), 1);
+    }
+
+    /// Talon's Junction's Ace: commitment 0.938 spends 7 % of its line on the
+    /// plan, except into a sample the plan passed a wall closely.
+    #[test]
+    fn a_driver_holds_the_plans_line_into_a_tight_sample() {
+        let line = straight(400);
+        let tuning = Tuning::default();
+        let personality = Personality {
+            commitment: 0.938,
+            ..Personality::NEUTRAL
+        };
+        let open = SpeedPlan::unlimited(&line);
+        let tight = SpeedPlan::unlimited(&line).with_tight(150);
+        let slack = |plan: &SpeedPlan, index: usize| {
+            let ctx = Context {
+                plan: Some(plan),
+                ..Context::new(&line, &tuning)
+            };
+            plan_slack(&ctx, &personality, index)
+        };
+        assert!(
+            (slack(&open, 0) - 0.07).abs() < 0.005,
+            "{}",
+            slack(&open, 0)
+        );
+        assert_eq!(slack(&tight, 0), 0.0);
+        assert_eq!(slack(&tight, 151), slack(&open, 151));
     }
 }
