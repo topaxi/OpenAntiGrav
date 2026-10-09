@@ -3681,6 +3681,96 @@ loss on the route (`ai_dekonstruct_black_ground_truth.rs`).
 per-craft construction coin and its own re-commit; pad-seeking while on a route
 (the pads sit on ring indices).
 
+## Each title's craft laws (2026-10-09)
+
+The AI obeys the player's physics, so it has to plan with the craft it actually flies. Wipeout
+HD builds its inertia with mass `1.0` where Pulse passes `0.9` (`I_yy` 24 against 21.6), clamps
+its steering ramp at the target, and hovers on four probes
+([craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md),
+[hover-four-point.md](../ghidra/functions/ps3-hdfury-eu/hover-four-point.md)). The race seats
+those as `oag_title::RaceDefaults::craft_laws` and `hover_rig`; a title with `None` (Pulse,
+Pure, Omega, 2048) flies Pulse's (`oag_raceplay::launch_hover::craft_inertia(None)` and
+`physics_rig(None)`, and `steer_ramp_clamped` is `is_some_and`, so `false`).
+
+### Census: what the AI assumed
+
+| where | assumed | now |
+| --- | --- | --- |
+| `crates/ai/src/driver/pace.rs`, `hull_yaw_ceiling` | `I_yy = 1 / YAW_INVERSE_INERTIA`, Pulse's 21.6, for every craft | `body.inertia.y`, the tensor the race seated the craft with |
+| `crates/ai/src/plan.rs` (`SpeedPlan::build_within`), `plan/probe.rs` (`drive`) | the ceiling above | `craft.start.body` |
+| `crates/raceplay/src/field.rs`, the opponent and autopilot calls | the ceiling above | that ship's own `physics.body` |
+| `crates/raceplay/src/start.rs`, the speed plan built in `Race::start` | **the plan's craft had Pulse's two-probe hover and cycling steering ramp on HD**: both were only written by the first tick's `set_hover_caps`, after the plan was built | rig and clamp seated with the inertia, before the plan |
+| `crates/gameplay/src/spawn.rs`, `Ship::place_at` | reset the rig and clamp to Pulse's, so the plan's rescues and route plans started at an index flew Pulse's laws | kept, as mass and inertia already were |
+
+Nothing in `oag-ai` models the steering ramp in closed form: the ceiling is a steady state the
+ramp does not change, and the plan steps the real ramp through `oag_physics`. The determinism
+probe (`crates/ai/src/probe.rs`) builds its craft from `ShipState::default()`, Pulse's laws, on
+purpose: it is an invented scenario and its hash did not move. Out of this lane and unchanged:
+`oag-trace`'s two spawns (`crates/trace/src/main.rs`, `box_inertia()`) and
+`Setup::headless`'s `None`s, which has no title.
+
+### Pulse is bit for bit
+
+`ship_inertia_at(0.9).y` is the same expression as `1 / YAW_INVERSE_INERTIA`, and
+`a_pulse_craft_reads_pulses_ceiling_bit_for_bit` pins the bits. A Pulse craft's rig and clamp
+are the defaults `place_at` now keeps. `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+prints the same twelve lines before and after (all twelve clean, `01_Track` 0 respawns).
+
+### What moved on HD, and which change moved it
+
+Ablated: with the plan-state fix alone the HD board below is identical to the full change, so
+**the ceiling changes nothing on HD today**. Every HD circuit's speed plan verifies, and a
+followed plan overrides the corner model the ceiling feeds. The ceiling still binds wherever no
+plan is followed: a route whose plan did not verify, and `corner_target`'s fallback. HD's Feisar
+now reads `1.5` rad/s, the yaw rate RPCS3 measures
+([hd-handling-ground-truth.md](../physics/hd-handling-ground-truth.md)), where it read `1.667`.
+
+All movement comes from the plan simulating HD's own hover and steering. Measured by
+`crates/game/tests/hd_ai_craft_laws_ground_truth.rs` (HD/Fury EU, Venom, Ace, Single Race with
+weapons off, 12,000 ticks). Shield starts at 95. The only shield an opponent loses off a wall is
+a barrel roll's cost, 14.25 each (`roll_cost` 15 % of 95, `oag_physics::barrel_roll::arm`).
+
+**One opponent alone**, flying laps 2 and 3, wall-contact ticks over the run, end-of-run shield
+(no respawns on any circuit, before or after):
+
+| circuit | laps before | laps after | contacts before | after | shield before | after |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| Talon's Junction | 41.18 / 41.22 | 41.07 / 41.08 | 0 | 6 | 95.0 | 94.6 |
+| Vineta K | 34.27 / 34.28 | same | 0 | 0 | 95.0 | 95.0 |
+| Ubermall | 37.17 / 37.22 | 36.97 / 37.00 | 15 | 0 | 93.8 | 95.0 |
+| Amphiseum | 47.72 / 47.63 | 47.77 / 47.73 | 0 | 0 | 95.0 | 95.0 |
+| Modesto Heights | 37.13 / 36.52 | 37.00 / 36.98 | 0 | 0 | 66.5 (2 rolls) | 80.8 (1 roll) |
+| Tech de Ra | 40.23 / 40.23 | 40.22 / 40.22 | 0 | 0 | 95.0 | 95.0 |
+| 02 | 36.38 / 36.48 | 36.25 / 36.32 | 0 | 0 | 95.0 | 95.0 |
+| 03 | 40.98 / 40.87 | same | 0 | 0 | 95.0 | 95.0 |
+| Chenghou Project | 41.43 / 42.08 | 42.08 / 42.10 | 0 | 0 | 80.8 (1 roll) | 66.5 (2 rolls) |
+| Sebenco Climb | 45.67 / 45.67 | 45.05 / 45.13 | 11 | 0 | 94.5 | 95.0 |
+| Sol 2 | 36.67 / 36.67 | 36.38 / 36.38 | 0 | 0 | 95.0 | 95.0 |
+| Anulpha Pass | 37.45 / 36.42 | same | 0 | 0 | 95.0 | 95.0 |
+
+Per lap on Talon's Junction after: 2, 1 and 2 contact ticks, shield at lap end 94.9, 94.8, 94.6
+(before: 0 every lap, 95.0). Board total 26 contact ticks before, 6 after.
+
+**The full field** (seven opponents), five seeds each, summed over seeds: wall-contact ticks,
+shield the walls charged, and the mean flying lap. No respawns in any run.
+
+| circuit | contacts before | after | wall shield before | after | mean flying lap before | after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Talon's Junction | 642 | 788 | 55.8 | 67.4 | 40.70 | 40.69 |
+| Vineta K | 137 | 137 | 16.0 | 16.0 | 34.60 | 34.60 |
+| Ubermall | 828 | 777 | 95.7 | 92.9 | 37.39 | 37.11 |
+| Sebenco Climb | 1,102 | 895 | 74.8 | 47.6 | 45.63 | 45.00 |
+
+Per seed on Talon's Junction, contacts before / after: 105 / 159, 163 / 168, 126 / 138,
+123 / 134, 125 / 189: worse on every seed, so not noise. Ubermall and Sebenco improve on most
+seeds and on the sums, and lap 0.3-0.6 s faster. Across the four fields contacts fall from 2,709
+to 2,597.
+
+**So the fix cuts HD wall contact where the old plan was wrong about the craft (Ubermall,
+Sebenco), and costs some on Talon's Junction**, where the plan built on Pulse's hover happened
+to fly a line with more margin. Talon's lone contacts are 0.4 shield over 200 s. Why the correct
+plan scrapes there is open; the lone craft's contact ticks are where to start.
+
 ## Where this sits
 
 The prerequisites were all done before this landed: the

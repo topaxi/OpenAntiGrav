@@ -20,9 +20,12 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 
 ## Open
 
-- **The AI's yaw ceiling on HD** (`oag_ai::driver::pace::hull_yaw_ceiling`) still divides by
-  Pulse's `I_yy` 21.6, so it reads `1.667` rad/s where HD's Feisar reaches `1.5`. An AI-lane
-  change: pass the craft's own inertia in.
+- ~~**The AI's yaw ceiling on HD**~~: closed 2026-10-09 (`ai-craft-laws`). `hull_yaw_ceiling`
+  reads the craft's own `body.inertia`, and the speed plan, built before the first tick, now
+  simulates HD's rig and clamped ramp (they were only written by the tick, and `place_at` reset
+  them). Results and the HD board: `docs/gameplay/ai.md`, "Each title's craft laws". Left open
+  there: on Talon's Junction the correct plan scrapes more (field contacts 642 to 788 over five
+  seeds) while Ubermall and Sebenco Climb improve.
 - **`oag-trace`'s own spawns** (`crates/trace/src/main.rs`, the two `box_inertia()` sites) still
   give every craft Pulse's tensor and unclamped ramp. Harmless while it replays Pulse captures; an
   HD replay there would need `CraftLaws` passed in.
@@ -40,7 +43,9 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 
 ## Next Steps
 
-1. AI: give `hull_yaw_ceiling` the craft's `Body::inertia` so HD's AI plans on `I_yy` 24. 30 min.
+1. ~~AI: give `hull_yaw_ceiling` the craft's `Body::inertia`~~: done 2026-10-09. Follow-up: why HD's
+   lone Ace scrapes Talon's Junction (6 contact ticks, 0 before) on the plan built with HD's own
+   hover; `hd_ai_craft_laws_ground_truth::lone_opponent_board`. 1-2 hours.
 2. Omega: reach the craft update through `Craft_UpdateSurfaceProbes`'s vtable slot, then read its
    steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.
 3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig. 1 hour.
