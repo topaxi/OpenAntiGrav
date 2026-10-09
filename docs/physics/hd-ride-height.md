@@ -40,7 +40,7 @@ Ours is derived from the same floor, not from a raycast of its own mesh; the gri
 sideways there and ours does not (a handling gap that `hd-handling-ground-truth.md` records), on
 a banked slope, so a y at the same x is not the same floor.
 
-Frames: `data/scratch/hd-ride-height/b1/frames/flyby-*.png` (RPCS3, shots 024-032 show the craft
+Frames: `flyby-*.png` (RPCS3, shots 024-032 show the craft
 close), `b3/frames/*.png` (in-race, craft at 4.0), ours `ours/fly-1650.png`, `fly-1800.png`.
 The flyby cameras are not the same shot at the same tick (the original's start is not read off
 the clock), so frames were compared by what they show, not overlaid.
@@ -87,7 +87,7 @@ GO, so the sampler's wall time does not enter):
 The ramp's middle runs about 0.1 above the original at equal tau (one tick of timer step or the
 spring's lag, which ours does not model separately); the end states and the shape match.
 
-Frames: `data/scratch/hd-flyby-hover/ours-sheet2.png` (original flyby shot beside ours), `c2/sheet.png`
+Frames: `ours-sheet2.png` (original flyby shot beside ours), `c2/sheet.png`
 (the original's countdown and GO). The chase camera follows the craft down, so the craft holds the
 same place on the screen through the rise, as the original's frames do. Our livery in the chase
 frames is not the dark Feisar the capture shows; not this lane's.

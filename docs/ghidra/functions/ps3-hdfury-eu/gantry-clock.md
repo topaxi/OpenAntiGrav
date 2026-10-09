@@ -159,7 +159,7 @@ Under this law, release on tick 273, the time on tick `273 + k` is
 test's `lit_white`) are zero for `k` in 18-30, 59-67 and 104-116, centres +24,
 +63, +110. The capture's dark centres, both boots: **+23, +61, +109**. The held
 loop this replaces gave +50, +89, +129. Side by side at matched ticks:
-`data/scratch/hd-go-pulse/strip_a_step.png` and `strip_b_pulses.png` (local
+`strip_a_step.png` and `strip_b_pulses.png` (local
 scratch, not committed).
 
 One tick is soft: the window check runs in the race manager and the advance
@@ -216,7 +216,7 @@ RPCS3, walks the Campaign path into Talon's Junction, skips the fly-over
 without thrust, and writes a later window's bounds over the lap-0 window's
 TOC floats (`0x008a6a74`, `0x008a6a90`), so the original's own renderer plays
 that window from the grid. Shots every 0.35 s (local scratch,
-`data/scratch/hd-gantry-laps/lapboard3/`, sheets `sheet_w*.png`):
+a scratch directory, not kept, sheets `sheet_w*.png`):
 
 | Window | The original shows |
 | --- | --- |
@@ -238,7 +238,7 @@ panel (z -3.9 against -6.15), so this is the board-shading gap in
 
 **Lead's question on the start tick:** not pinned this pass; nothing here
 explains the backdrop turning green two ticks early in
-`data/scratch/hd-go-pulse/strip_a_step.png`.
+`strip_a_step.png`.
 
 ## Open
 

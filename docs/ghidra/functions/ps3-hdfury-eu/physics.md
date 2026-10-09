@@ -381,7 +381,7 @@ which is not enough to say what the struct is.
 ## The handling update, read against a live trace (2026-10-08, hd-handling)
 
 Read with capstone past Ghidra's AltiVec truncation
-(`data/scratch/hd-weapon-blasts/ppcdis.py`) and checked against per-frame dumps of the
+ and checked against per-frame dumps of the
 player's craft from [`scripts/rpcs3-trace.py`](../../../../scripts/rpcs3-trace.py)
 (Racebox Time Trial, Talon's Junction, Venom, Feisar concept1). The measured comparison
 with this engine is [hd-handling-ground-truth.md](../../../physics/hd-handling-ground-truth.md).

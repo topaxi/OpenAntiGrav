@@ -125,7 +125,7 @@ speed pad's own per-frame update carries no colour logic of any kind.
 ## Answered 2026-10-08 (`hd-weapon-pads`): the cycle reaches the light bars' constant
 
 **The red the maintainer sees on Vineta K is this function's cycle.** On RPCS3,
-one RSX frame of `01_vineta_k` (`data/scratch/hd-weapon-pads/cap1`, craft at
+one RSX frame of `01_vineta_k` (a scratch directory, not kept, craft at
 `-804.2,-144.0,262.5`), the weapon-pad fragment programs' inline constant at
 code slot `0x3a` (`MAD H2.xyz, R0.wwww, C, H0`, the `_ne`-alpha-gated term)
 reads `{1.16612, 0.0326835, 0, 1}` on one pad (draws 108 and, in the

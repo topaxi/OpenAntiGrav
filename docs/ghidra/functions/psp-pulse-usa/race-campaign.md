@@ -712,8 +712,7 @@ if mode == 3 (Race):       skill += the one of the four Full/Half x With/Without
                                     the weapons switch  (full grid == 8 ships)
 if a campaign cell is in play and it is not a user grid:
     t     = Cell_SkillForDifficulty(cell, g_skill_level)      # skillEasy/skill/skillHard
-    skill = t < 2.0 ? lerp(track.skill[0], track.skill[1], t - 1.0)
-                    : lerp(track.skill[1], track.skill[2], t - 2.0)
+    skill = t < 2.0 ? lerp(track.skill[0], track.skill[1], t - 1.0): lerp(track.skill[1], track.skill[2], t - 2.0)
 ```
 
 So a cell's `skillEasy="1.1" skill="1.75" skillHard="2.5"` is a **position on
@@ -1387,7 +1386,7 @@ it being a real, authored, twice-referenced widget the way
 
 **The halo is not a one-frame illusion.** Eight frames of `Grid Selection`'s
 own selected tile, `pulse-psp-usa.chd`, ~180ms apart (`Xvfb :93`,
-`data/scratch/pulse-campaign/captures/burst/f1..f8.png`): the halo's own
+`f1..f8.png`): the halo's own
 size and brightness track `Selector`'s documented colour phase exactly -
 small and dim when `Selector` reads cyan (`f1`, `f4`, `f5`, `f8`), large and
 bright when `Selector` reads white (`f2`, `f3`, `f6`, `f7`), the same

@@ -544,7 +544,7 @@ after every HUD widget, so its composite adds the haze on top of the HUD.
   at the same key (`0x08acf474`, 12 and `0x08acf884`, 2), and the 3-D widget
   views (`0x08acb708`) sit at keys `0x52` to `0x6d`. The bloom (`0x08ad148c`,
   this page's method table) is alone at `0x70` and last. The script is
-  `data/scratch/pulse-bloom-roll/queue.py`, its output `queue.txt`.
+  a throwaway script, not kept, its output `queue.txt`.
 - **The pixels agree.** The composite's display list (`*(g_bloom+0x6c)`)
   carries the source factor as the GE word `0xe0afafaf` at `+0x68`. Writing
   `0xe0000000` there turns the composite off and nothing else. With the craft
@@ -595,7 +595,7 @@ display list. The list is in RAM: the one hit for the bytes `af af af e0`
 (`GE_CMD_BLENDFIXEDA`, `0xafafaf`, followed by `ff ff ff e1`) over user RAM was
 `0x08fb61f8` on all three boots. Writing `00 00 00` there through the debugger
 removes the composite on the next frame (a no-op of the `jal` at `0x089077e4`
-did nothing). `data/scratch/bloom-setting/pair.sh` captures 48 ticks of
+did nothing). a throwaway script, not kept captures 48 ticks of
 Talon's Junction (Venom, Assegai), `--shot-every 1`, and pokes at tick 24.
 Because the scene drifts (the mean of ticks 16-27 against 34-47 differs with
 **no** poke), each poke run is paired with a control run that writes the *same*
@@ -671,7 +671,7 @@ because of per-tap truncation" (three boots, controls, two scenes, the
 rounding alternative refuted); **60** for the racing whole-frame ratio, whose
 control subtraction carries about `+-0.4` luma on a number near 1.
 
-Scripts and frames: `data/scratch/bloom-setting/` (`pair.sh`, `nop.py`,
+Scripts and frames: a scratch directory, not kept (a throwaway script, not kept, `nop.py`,
 `ours.sh`, `ours2.sh`, `reg.py`, `cap/`).
 
 ## Is ours stronger than the original in Zone? No, about 0.9x racing (2026-10-02)
@@ -783,7 +783,7 @@ environment, not a mode-dependent bloom" (the same pose is 9x stronger on the
 Zone environment in ours and the original matches ours), **40** for the grid
 band's cause.
 
-Scripts and frames: `data/scratch/zone-bloom/` (`zalt.sh`, `alta.py`,
+Scripts and frames: a scratch directory, not kept (`zalt.sh`, `alta.py`,
 `zpair.sh`, `pp.py`, `oursk.sh`, `ours.sh`, `zed.sh`, `mk.py`, `ge.py`, `cap/`).
 
 ## Racing strength against the original's own scratch buffers (2026-10-08)
@@ -933,5 +933,5 @@ captures (`hd-frame-compare.py`, Talon's Junction poses `00/01/03`): ours is
 halo ring `+2px` `0.82-0.84` against `0.85-0.91`. No new RPCS3 boot was taken.
 Pulse PS2 has its own chain (`ps2-bloom.md`), not touched.
 
-Scripts and frames: `data/scratch/bloom-racing/` (`ours.sh`, `cmp.py`, `tab.py`,
+Scripts and frames: a scratch directory, not kept (`ours.sh`, `cmp.py`, `tab.py`,
 `chk.py`, `inp.py`, `gelist.py`, `e3/`, `em1/`, `ge/moa_rest.ppdmp`, `report.md`).

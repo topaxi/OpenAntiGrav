@@ -3,7 +3,7 @@
 2026-10-08, lane `hd-flyby-hover`. Binary `EBOOT.elf` (BCES-00664, TOC `0x008ad4d8`). The
 question: why does the original's craft sit 1.84 units lower than ours in the pre-race flyby
 ([`hd-ride-height.md`](../../../physics/hd-ride-height.md)), and what lifts it. Read from the
-disassembly (capstone through `data/scratch/hd-weapon-blasts/ppcdis.py`), then checked against
+disassembly (capstone through a throwaway script, not kept), then checked against
 three live RPCS3 boots (`scripts/rpcs3-height.py --count-secs`), so every number below has a
 static source and a live one.
 
@@ -36,7 +36,7 @@ So the target is `0.75 * 3.0x = 2.25 .. 2.31` while the craft is in state 0, and
 `0.75 * 5.5 = 4.125` after `(5.5 - 3.04) = 2.46` s. The craft follows its target to within `0.04`:
 height `+0x260` = target `- 0.16`.
 
-Live (three boots, Talons Junction, Venom, Time Trial, `data/scratch/hd-flyby-hover/c1..c3`):
+Live (three boots, Talons Junction, Venom, Time Trial, `c1..c3`):
 `0.75 * entry+0x348 == entry+0x344` to three decimals on every ramp sample (c2: `4.484 -> 3.363`;
 c1: `5.346 -> 4.010`; c3: `4.810 -> 3.608`), `+0x348` advances `1.00` per game second, the entry's state
 reads 0 and the flag word `3` through the flyby **and the whole countdown**, and flips to state 1

@@ -141,8 +141,7 @@ all, which fits a pickup that has no target.
 `WeaponAi_DecideFireOrAbsorb(self)`, with the VFPU noise and the clamps stripped:
 
 ```c
-rate = (mode == 8 || mode == 0x12) ? g_weapon_ai_rate_eliminator
-                                   : g_weapon_ai_rate;      // mode is DAT_08b31048
+rate = (mode == 8 || mode == 0x12) ? g_weapon_ai_rate_eliminator: g_weapon_ai_rate;      // mode is DAT_08b31048
 
 // An early out that fires immediately and clears the cooldown.
 if (self->0x58 && self->0x54 != 0.0 && !self->0x52 && rand01() < rate[4]) {
@@ -155,8 +154,7 @@ in_range = (self->0x50 && 0.0 < self->0x60 && self->0x60 < 150.0)
         || (self->0x51 && self->0x60 < 0.0 && self->0x60 > -200.0);
 
 stats = self->0x18 + self->0x20 * 0xc;          // the WeaponAIstats row
-use   = in_range ? stats[0x08]                  // useAgainstPlayer
-                 : stats[0x0c];                 // useAgainstAI
+use   = in_range ? stats[0x08]                  // useAgainstPlayer: stats[0x0c];                 // useAgainstAI
 if (mode == 2) use *= 2.0;
 if (mode == 8) use *= 5.0;                      // Eliminator
 

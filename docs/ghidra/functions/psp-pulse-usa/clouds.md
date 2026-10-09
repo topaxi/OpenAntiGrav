@@ -286,7 +286,7 @@ carry `u` 0.75 to 1.0. Among the positions read live at `bank1`
 
 ### Live check: four boots, every record
 
-`data/scratch/pulse-clouds/reproduce.py` ports `PsysRng` and the steps above
+a throwaway script, not kept ports `PsysRng` and the steps above
 in numpy `float32`, takes each group's seed and its cubes' matrices out of a
 RAM dump, and compares against what the original built:
 
@@ -355,7 +355,7 @@ its own `rate`. Earlier versions of this page called the global the camera's
 heading (yaw). By the mist lane's reading, and by the check below, it is the roll.
 
 **Live, de Konstruct Black (`05_Track` forward), PPSSPP software renderer,
-2026-10-04** (`data/scratch/pulse-bloom-roll/roll_check.py`). The two
+2026-10-04**. The two
 `cloudGroup` instances were found in RAM by their `+0x184/+0x188/+0x190/+0x194`
 shape (`0x09790220`, `0x097903e0`; 46 authored records, 14 drawn, each). At
 19 pauses near the clouds (section 34), steering both ways, the angle read off

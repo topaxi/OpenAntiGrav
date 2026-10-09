@@ -435,7 +435,7 @@ own `Draw` presumably reads (not traced this pass) - it is what
 `Widget_CreateFromElement`'s existing "fade duration" finding actually drives.
 
 **Confirmed against a live capture, not just the decompile.** `pulse-psp-usa.chd`
-under PPSSPP 1.20.4, breaking on this function on every hit (`data/scratch/pulse-easing/`):
+under PPSSPP 1.20.4, breaking on this function on every hit:
 across several thousand hits spanning many different widget kinds and screens
 (the front end's own attract-idle timer having fired at least once mid-session,
 corroborating `MainMenu_Update`'s own 60-second idle-to-demo reading elsewhere
@@ -515,7 +515,7 @@ string `orthographic`), `FirstPass` - plus a live capture at `Track
 Creation` reading the exact authored values, `0.0/0/0/-145.0/13.0/1000.0
 /5000.0` for `mode`/`FirstPass`/`mirror`/`OriginX`/`OriginY`/`nearZ`/`farZ`,
 off the widget `Mode3D_EnterView` and `Mode3D_DrawQueued` both hit on
-`0x08fcd150`, `data/scratch/pulse-mode3d/mode3d_capture.json`). The widget's
+`0x08fcd150`, `mode3d_capture.json`). The widget's
 own constructor (`FUN_088b7a04`, not renamed - clear from context but no
 attribute strings of its own to anchor a name to) defaults `OriginX`/
 `OriginY` to `0`, `nearZ`/`farZ` to `20.0`/`100.0` and `mode`/`mirror` to
@@ -599,7 +599,7 @@ dropped, since this circuit authors none) - a plausible transpose of the
 row-vector reading, not one confirmed by stepping through an actual frame.
 A live PSP screenshot at this reading looks right against a live PPSSPP
 capture of `Track Creation`
-(`data/scratch/pulse-mode3d/shots/track-select-psp.png`
+(`track-select-psp.png`
 against a live capture of the same panel) - the ribbon sits in the right
 place, at the right scale, right-side up - but `RotY` on this circuit is a
 small `0.1` rad, small enough that a wrong composition order would be hard
@@ -614,7 +614,7 @@ within rounding of `-(-145, 13) * (640/480, 448/272)`, i.e. the PS2's own
 values read as the PSP's own, negated, scaled to the PS2's `640x448` grid.
 Applying the PSP's own sign to the PS2's raw values landed the outline
 bottom-left of the panel instead of inside it
-(confirmed live, `data/scratch/pulse-mode3d/shots/track-select-ps2.png`
+(confirmed live, `track-select-ps2.png`
 before the flip, `track-select-ps2-fixed.png` after); `oag_game::preview`
 negates `OriginX`/`OriginY` on the PS2's own grid to match. No PS2 Ghidra
 program was consulted for this pass - the sign comes from the two pressings'

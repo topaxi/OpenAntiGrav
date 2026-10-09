@@ -71,7 +71,7 @@ PS2 Pulse (volume date 2009-05-15) shipped after Wipeout HD (2008), so the
 question is whether HD-era code or data reached it. A string census of four
 executables says **no HD format reached the PS2 disc, and the code the two
 share is not yet attributable**. Raw tables, commands and string lists:
-`data/scratch/ps2-lineage/` (a scripted `strings`/`comm` sweep, not a code
+a scripted `strings`/`comm` sweep, not a code
 read).
 
 - **No HD asset format on the PS2.** No PSARC, `.gtf` or `.rcsmodel` on its

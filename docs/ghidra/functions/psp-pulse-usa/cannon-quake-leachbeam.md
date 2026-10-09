@@ -108,8 +108,7 @@ void Weapon_FireCannon(CannonPool *pool, Craft *craft, int craft_index) {
     if (live < 0x3c) {                           // cap 60
         Round *r = pool->slot[live];             // pool + 0x68 + live*4
         bool left = (craft->shots & 1) != 0;     // craft + 0x154, low bit
-        Entity *emitter = left ? craft->entity->barrel[1]   // craft->entity + 0x68
-                               : craft->entity->barrel[0];  // craft->entity + 0x64
+        Entity *emitter = left ? craft->entity->barrel[1]   // craft->entity + 0x68: craft->entity->barrel[0];  // craft->entity + 0x64
         pool->live = live + 1;
         float speed_kmh = craft->entity->body->speed * 3.6;   // entity+0x794+0x398, |velocity|
         r->flags = 0; r->flags = 1;
@@ -2967,7 +2966,7 @@ units of the query, `|down|` and `|lateral|` near `1`, and `s0` counting down
 from `segments - 1` to `0` - all held, so the register mapping is right.
 Consecutive calls of one chain give the before and after of each call: the next
 call's point is the kept point plus the kept step. The scripts are under
-`data/scratch/pulse-capture/` (`bent.py`, `an.py`, `an4.py`); captures
+a scratch directory, not kept (`bent.py`, `an.py`, `an4.py`); captures
 `bent2`..`bent8` there.
 
 **The law is the port's literal one.** Six runs, 585 consecutive transitions:
@@ -2992,7 +2991,7 @@ arithmetic, six runs, every branch; short of the top band because no second
 binary has been read for it. `KeepInTrack` and `ReaimChain` are raised from 80
 to 92. No captured table is committed: the records are the original's own runtime
 track data, which `legal.md` keeps out of the tree, so the numbers stay on this
-page and the captures under `data/scratch/pulse-capture/` (`bent2`..`bent8`).
+page and the captures under a scratch directory, not kept (`bent2`..`bent8`).
 `tube::tests::the_step_is_measured_from_the_point_displaced_the_other_way` pins
 the law on a synthetic road.
 
@@ -3045,7 +3044,7 @@ neither. Five of the six captures above still disconnect on the first update
 cause was not run down.
 
 Frames, native 480x272, three consecutive logged moments of one beam
-(bent8, `beamA_40`, `beamA_66`, `beamA_105` under `data/scratch/pulse-capture/`):
+(bent8, `beamA_40`, `beamA_66`, `beamA_105` under a scratch directory, not kept):
 the arc leaves the craft, runs along the outside of the corner, kinks at the
 two re-aim points and ends on the target, jagged but kept inside the tube. They
 are of the original only: our build cannot be posed against a fake node, so

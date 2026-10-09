@@ -110,7 +110,7 @@ flown (above); the airbrake and late-speed gaps are not, so nothing else was cha
 
 ## Captures
 
-All under `data/scratch/hd-handling/` (gitignored): `b4` (20 runs, frame-keyed),
+All under a scratch directory, not kept (gitignored): `b4` (20 runs, frame-keyed),
 `b5`, `b6` (game-time keyed, two reps of each scenario), `b7` (walls), with `ours/` the
 matching `oag-game` traces and `handling-blocks.pkl` the class-block dump. Scenarios:
 `verification/scenarios/hd-*.inputs`. Talon's Junction, Racebox Time Trial, Venom,

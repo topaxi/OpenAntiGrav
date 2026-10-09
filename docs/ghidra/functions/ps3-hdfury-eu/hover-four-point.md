@@ -1,8 +1,8 @@
 # HD's four-point hover, and the craft terms read beside it (2026-10-09, hd-pitch-airbrake)
 
-Read with capstone past Ghidra's AltiVec truncation (`data/scratch/hd-weapon-blasts/ppcdis.py`;
+Read with capstone past Ghidra's AltiVec truncation (a throwaway script, not kept;
 TOC `r2 = 0x008ad4d8`, so `-0x4358(r2)` is `0x008a9180`) and checked against the per-frame craft
-dumps of `scripts/rpcs3-trace.py` (`data/scratch/hd-handling/b5`, `b6`: Racebox Time Trial,
+dumps of `scripts/rpcs3-trace.py` (a scratch directory, not kept, `b6`: Racebox Time Trial,
 Talon's Junction, Venom, Feisar concept1). The measured comparison is
 [hd-handling-ground-truth.md](../../../physics/hd-handling-ground-truth.md); the craft's fields
 are on [physics.md](physics.md#the-handling-update-read-against-a-live-trace-2026-10-08-hd-handling).

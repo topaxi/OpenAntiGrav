@@ -29,14 +29,14 @@ per-craft "network driver" object, but:
    found **eight drivers in the scanned window (the race had eight craft)**, and on every one: enable byte `0`, network
    neuron and connection pointers `0` (never allocated), and the parameters still at
    `AiNetDriver_Init`'s defaults `10, 20, 30, 0.9, 0.5, -0.2, 0.5`, not any `controlprm_*.txt`
-   value. Script `data/scratch/hd-ai-nnt/tools/probe.py`, result
-   `data/scratch/hd-ai-nnt/live/controllers.json`, frame `live/race.png`.
+   value. Script a throwaway script, not kept, result
+   `controllers.json`, frame `live/race.png`.
 
 5. **Second boot, interpreter decoder (`--interpreter`, the one Z0 breakpoints fire under):**
    the driver of seven of the eight craft sits at `ship - 0x4e0` (the eighth, which has none there,
    is presumably the player's). On all seven: enable byte `0`, and **both** nets (`+0x12c` and
    `+0x298`) have null neuron and connection pointers. Script `tools/bp.py`, output
-   `data/scratch/hd-ai-nnt/live-bp.out`.
+   `live-bp.out`.
 6. **Breakpoints, a negative with a stated hole.** `Z0` on `AiNetDriver_LoadAcn`,
    `AiNet_LoadWeights`, `AiNet_Allocate`, `AiNet_Forward` and `AiNet_TrainStep`, armed on the
    attach-pause at the Main Menu, so a call anywhere in the front-end walk, the track load or the race
@@ -81,7 +81,7 @@ The network object ("net", `0x100`-plus bytes) is embedded twice in the driver, 
 
 ## `AiNetDriver_GetControls` (`0x0010be38`)
 
-Read with capstone (`data/scratch/hd-weapon-blasts/ppcdis.py 10be38 208`); Ghidra's version reads
+Read with capstone; Ghidra's version reads
 the stack outputs as globals.
 
 - **Enable byte clear (the retail path, measured live):** return `this+0xb4` in `f1`, and write

@@ -525,7 +525,6 @@ checked, not read:** the title's own `Airbrake` handler is unread, so
 `hd_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
 deflection raises the flap and flares it outward, both sides) on all twelve teams (Auricom's flap swings sideways like a door, `y` 0.000). Only
 the player's craft swings, as on Pulse; a rival's flaps stay stowed.
-Frames: `data/scratch/airbrake-flaps/` (`hd_*.png, strip_hd.png`).
 
 **Tried, 2026-08-17: the parser accepts them after one change**, and the change
 is one attribute. `handling::from_blob`'s existing dispatch already sends HD

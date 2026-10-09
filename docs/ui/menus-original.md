@@ -443,7 +443,7 @@ This section's own "help text, glyph top" row (`y = 54.0`, off `helptext0`'s
 authored `y="50"`) was measured while the subtitle drew through `Pulse_20.fnt`
 scaled to `13/22` - the switch to `pulse_text.fnt` at its own native scale
 changes *which* atlas supplies that inset, so the row was re-checked rather
-than trusted: `mainmenu-pulse-after.png` (`data/scratch/lane-faces/shots/`,
+than trusted: `mainmenu-pulse-after.png` (a scratch directory, not kept,
 1440x816 at 3x native) puts the subtitle's own ink between capture rows
 161-191, native `y = 53.7`-`63.7` - matching the documented `54.0` top edge
 exactly. `pulse_text.fnt`'s own baked-in vertical inset happens to equal
@@ -475,7 +475,7 @@ walked 65 states; the transition burst is
 `scripts/psp-menu-transition-burst.py` (30 `Gfx_PresentFrame` hits after one
 `cross`, end state asserted as `Grid Selection`). Ours is `oag-game
 data/images/pulse-psp-usa.chd --menu-page <id> --size 960x544`. Sheets (original
-above, ours below) are in `data/scratch/pulse-fe-look/sheets/`: `main`,
+above, ours below) are in a scratch directory, not kept: `main`,
 `custom`, `track`, `team`, `grid`, `cell`, `boot`, `options-orig` against
 `options-ours`, `burst-orig` against `burst-ours` and `burst-ours-options`.
 
@@ -537,7 +537,7 @@ Ranked by how much a player notices, ours first listed worst:
    menu pages, and **draws no transition at all on the campaign and picker
    pages**: `grid-select` at phase 0.0 through 1.0 is the same picture. The
    easing curve is still the invented one (confidence 30); the burst frames at
-   `data/scratch/pulse-fe-look/burst-main-grid/` are the data a fit needs, a
+   a scratch directory, not kept are the data a fit needs, a
    per-frame scale and alpha read off them, and are not fitted yet.
 6. **Selected-hex and row glow.** The original's focused grid hex is a white
    hexagon with a bloom; ours is a flat cyan outline at pulse phase 0. The
@@ -579,7 +579,7 @@ both PSP pressings), confidence 95:
 - `arrowcolor` = `TextColor`: the step arrows are the executable's.
 
 What it does **not** author and was measured instead (a PPSSPP 1.20.4 software
-capture, 2x, `data/scratch/pulse-fe-look/sheets/custom.png`; confidence 80 - the
+capture, 2x, `custom.png`; confidence 80 - the
 `List` widget's own draw code is unread):
 
 - the arrows: two 9x10 texels at `U=289 V=76` and `U=314 V=76` of

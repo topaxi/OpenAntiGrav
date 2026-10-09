@@ -200,7 +200,7 @@ pitch-versus-input samples.
    `FUN_000f18b8` and `FUN_000f1958`) walks four probes, writes each one's
    clearance to `body[+0x364 + 4 * i]` (`0xee260`) and stores their mean to
    `body[+0x354]` (`0.25 * sum`, `0xee044`/`0xee054`). On the twelve live samples
-   of `data/scratch/hd-engine-xfade/probe.json`, `X - body[+0x354]` is
+   of `probe.json`, `X - body[+0x354]` is
    **1.1246 on the first three** (grid and the first thrust) and **1.117 to
    1.264 on the rest** (it moves with the craft's up vector, correlation -0.96
    with `body[+0x1e4]`). So `X` is the first probe's length, and it is the mean

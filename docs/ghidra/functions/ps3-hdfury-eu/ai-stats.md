@@ -2,7 +2,7 @@
 
 **Binary:** `ps3-hdfury-eu` `EBOOT.elf` (PowerPC, TOC `r2 = 0x8ad4d8`).
 Read 2026-10-08 for the `hd-ai-classic` lane: Ghidra (`/hdfury/EBOOT-ps3-hdfury-eu.elf`),
-capstone for the AltiVec stretches Ghidra truncates (`data/scratch/hd-weapon-blasts/ppcdis.py`),
+capstone for the AltiVec stretches Ghidra truncates,
 and a TOC-slot scan for the string loads (a string is loaded as `lwz rX, off(r2)` from a TOC
 word holding its address, so its users are the instructions with that `off`). The Pulse side is
 [`psp-pulse-usa/ai-stats.md`](../psp-pulse-usa/ai-stats.md); the design reading is

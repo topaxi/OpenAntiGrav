@@ -261,7 +261,7 @@ effect-setup function, conf. 50, not renamed).
 
 Static reading of `eboot.bin` plus the HD and Omega discs; nothing run live (no PS4
 emulator). Every address below is a Ghidra address in `/omega/eboot-ps4-omega-eu.bin`.
-Scratch decompiles sit under `data/scratch/magstrip-omega-law/`.
+Scratch decompiles sit under a scratch directory, not kept.
 
 ### The over-strip predicate (`vtable + 200`): `Ship_IsOverMagStrip`, conf 85
 
@@ -278,8 +278,7 @@ The call passes the ship alone (`MOV RDI, RBX` then `CALL [RAX+0xc8]`, `0x017659
 if (ship+0x68fc | 2) == 2:            ; slot kind 0 or 2 - a locally simulated ship
     return Ship_IsOverMagStripBase(ship)       ; 0x012ff590, same test
 else:                                 ; a remote (replicated) ship
-    return (net_table[ship+0x68f4].byte41 >> 1) & 1
-         ; DAT_020fd608 + 0x41 + slot * 0x21 ; bit 1 of the replicated state byte
+    return (net_table[ship+0x68f4].byte41 >> 1) & 1; DAT_020fd608 + 0x41 + slot * 0x21 ; bit 1 of the replicated state byte
 ```
 
 `Ship_IsOverMagStripBase` (`0x012ff590`, conf 80): for kind 0 or 2 it returns

@@ -321,7 +321,7 @@ texture (the original's sampler is unread), and the offset target's **size**, th
 where the executable's shares the `R16F`'s `(param_6, param_7)` of `FUN_01621650`, which
 `FUN_016134d0` creates at 960 by 540 (likely half resolution at 1080p).
 
-Judged (`data/scratch/heat-haze-3/shots/`, Omega Tech De Ra, rocket fired at
+Judged (a scratch directory, not kept, Omega Tech De Ra, rocket fired at
 the wall ahead, 1440x816, `on<tick>.png` and `off<tick>.png` side by side in
 `sheetA.png` and `sheetB.png`, ticks 500, 530, 560, 602, 650, 700): the frames
 with the distortion bend the walls and the hull near the blast by up to about

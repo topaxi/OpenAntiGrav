@@ -428,7 +428,7 @@ python3 scripts/hd-countdown-frames.py <recording.mp4> --out $S/frames
 (Copy `~/.config/rpcs3` into `$S/xdg/config` first, minus `savestates`.) The
 side-by-side: original frames `f` against ours at tick `273 + 2 (f - 223)`, from
 `oag-game --race --track /data/environments/talons_junction/track.vex --ticks N
---screenshot`. Captures: `data/scratch/hd-countdown-capture/` (`boot2.mp4`,
+--screenshot`. Captures: a scratch directory, not kept (`boot2.mp4`,
 `boot3.mp4`, `compare_strip_a_digits_to_go.png`,
 `compare_strip_b_go_pulse.png`, `b2_timer_sheet.png`, `b2_go_perframe.png`,
 `b3_go_perframe.png`, `ours_go_perframe.png`). Limits: 2 ticks per frame, the
@@ -934,7 +934,7 @@ model's own side. See ["Implemented on HD"](#implemented-on-hd-the-same-mechanis
 
 **The maintainer's two reports from play, both measured on RPCS3** (private instance,
 muted, 1280x720 at render scale 100; Talon's Junction, Vineta K). Captures under
-`data/scratch/hd-gantry/` (`pl1`, `pl2`, `zp` RSX dumps; `cd1`, `zcd2`, `zb`, `det`,
+a scratch directory, not kept (`pl1`, `pl2`, `zp` RSX dumps; `cd1`, `zcd2`, `zb`, `det`,
 `elim-cd` recordings). Not a new binary read: the mode numbers below agree with the
 PS4 branch in [`ps4-omega-eu/billboards.md`](../ghidra/functions/ps4-omega-eu/billboards.md).
 
@@ -957,7 +957,7 @@ bytes and three further samples; confidence 85, one boot):**
 **What ours did:** drew `321Go_StartFinish.vex` as a model stood on the mount, straight
 into the scene. Its `GO` came out full white, above the HD bloom gate's knee, and
 `post::hd_bloom` smeared it into a halo wider than the letter strokes. **A/B, same
-camera and tick** (`data/scratch/hd-gantry/ours/cmp-bloom.png`): with the bloom term removed
+camera and tick**: with the bloom term removed
 the letters are crisp but still white; with the card route they are cream, crisp, and carry no halo,
 matching the original frame. So the "blur" is not the texture (64 x 128 with the disc's
 own 8 mips is what the original samples too), not the sampler and not the render scale.
@@ -968,7 +968,7 @@ model is drawn through its own camera into the 512 x 256 target and the track's 
 quad samples it. The gantry's clock, per-window cull and `GO` edge are the ones
 [`gantry-clock.md`](../ghidra/functions/ps3-hdfury-eu/gantry-clock.md) measured; they now drive the
 card. **Not reproduced:** the card's R5G6B5 format (ours is RGBA8, chosen). Pulse's frame is
-byte-identical before and after (`data/scratch/hd-gantry/pulse/`, sha256 `6318e31c...` at tick
+byte-identical before and after (a scratch directory, not kept, sha256 `6318e31c...` at tick
 150, `72fc7de6...` at tick 273).
 
 ### "Zone levels have a different gantry animation": the mode picks the file

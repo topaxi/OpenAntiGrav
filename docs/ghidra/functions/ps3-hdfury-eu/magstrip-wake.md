@@ -119,7 +119,7 @@ page.
 ## 2026-10-05, magstrip-hd-measure lane: HD's own arc pool, read and measured live
 
 Static reading of `EBOOT.elf` plus **two RPCS3 boots** (`rpcs3-drive.py capture --region`,
-`data/scratch/magstrip-hd-measure/live1`, `live2`; Talon's Junction, Fury grid cell). The
+a scratch directory, not kept, `live2`; Talon's Junction, Fury grid cell). The
 vtable slots earlier assumed to hold the arc update were not it:
 
 | Address | Name | Conf | What it is |
@@ -179,7 +179,7 @@ term 2's, unless `rand() & 7 == 0` (1 in 8) draws a fresh one (conf 85).
 
 ### What a frame shows (not a number)
 
-`data/scratch/magstrip-hd-measure/run1.mp4` (RPCS3's recorder, 30 fps, `rpcs3-drive.py record`),
+`run1.mp4` (RPCS3's recorder, 30 fps, `rpcs3-drive.py record`),
 frames 31-36 of the 28 s window against ours at ticks 1136-1141 (`ours_consec.png`,
 `orig_consec.png`): the original's arcs look several times wider and whiter on screen than ours,
 and wavier (smooth, not zig-zag). **This is not a matched pose**: the original is ~0:18 on the
@@ -290,7 +290,7 @@ The vertex colour is the arc's own brightness, **with no multiplier**: the body 
 - **`INTENSITY = 3.0` is not in the original's shading.** Vertex colour, vertex program and
   fragment program carry no gain (conf 85). Deleted.
 - **With the original's law the arcs are faint in our frame** (brightness at most `0.2`, times the
-  texture's colour and alpha). `data/scratch/magstrip-arc-fp/cmp_g1138.png`: top the old
+  texture's colour and alpha). `cmp_g1138.png`: top the old
   `INTENSITY = 3`, bottom the original's math, same tick (1138), same `feisar_c1` autopilot ace
   pose. The same arcs are there, thin and dim, and the contact glows are nearly gone. The
   original's frames (`magstrip-hd-measure`, not a matched pose) read wider and whiter.
@@ -312,7 +312,7 @@ The vertex colour is the arc's own brightness, **with no multiplier**: the body 
 
 ## 2026-10-05, magstrip-arc-gap lane: why our arcs were fainter, and the destination alpha
 
-Static reading plus six RPCS3 boots (own display, config and pad; `data/scratch/magstrip-arc-gap/run1`
+Static reading plus six RPCS3 boots (own display, config and pad; a scratch directory, not kept
 to `run6`). **No matched-pose arc/arc-free pair was obtained** (below), so the size of the effect against
 the original is unmeasured; what is established is a missing feed.
 
@@ -332,13 +332,13 @@ the original is unmeasured; what is established is a missing feed.
    previous port kept the frame's alpha (`ZERO, ONE_MINUS_SRC_ALPHA`, the PS4 reading), so the
    gate saw nothing: arcs without their halo.
 4. The original's frames show it: soft white halos at the contact points several times the
-   geometry's size (`data/scratch/magstrip-arc-gap/run2/on064.png`, run1 `018.png`/`019.png`).
+   geometry's size (`on064.png`, run1 `018.png`/`019.png`).
 
 Our side: texture upload is `Rgba8Unorm` (no sRGB decode, correct for a program with no transfer
 function), the add is raw into the linear target (the engine-tube precedent), and our bloom gate
 already reads scene alpha. Changed: the arc's alpha blend is `ONE, ONE` and its fragment alpha is
 `vertex.a * tex.a` (`Style::alpha_is_fragment`). Ours, `feisar_c1` autopilot ace, tick 1138:
-`data/scratch/magstrip-arc-gap/ours/cmpA_crop.png` (top before, bottom after): the arcs gain the
+`cmpA_crop.png` (top before, bottom after): the arcs gain the
 halo and read more present; **they are still thinner than the original's**, and the original's floor
 here is a different, brighter one, so no ratio is claimed.
 
