@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Restore an RPCS3 save state into a long-lived, drivable `serve`: working virtual
-# pad, GDB proxy and /proc memory, in about 5 s.
+# pad, GDB proxy and /proc memory, in about 10 s.
 #
 #   scripts/emu-restore-state.sh <lane> <state-file> [--restart] [--no-gdb] [--serial BCES00664]
 #

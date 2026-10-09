@@ -1,8 +1,8 @@
-# Emulator tooling: attach mode and RPCS3 states landed, three loose ends
+# Emulator tooling: attach mode and RPCS3 states landed, five loose ends
 
 `docs/reverse-engineering/emulator-recipes.md` has the tools and the measurements
 (watchdog, `emu-run.py`, `rpcs3-drive.py serve` with attach, `psp-state.py`, and the RPCS3
-save states: `emu-restore-state.sh` restores a drivable race in 3-5 s, `emu-save-state.sh` takes one).
+save states: `emu-restore-state.sh` restores a drivable race in about 10 s, `emu-save-state.sh` takes one).
 
 ## Open
 

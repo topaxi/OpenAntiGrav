@@ -1237,6 +1237,14 @@ def cmd_serve(args):
             proxy.stop = stop
             proxy.start()
             print("gdb proxy on %d (stub on %d)" % (public, public + 1000), flush=True)
+        if args.load_state:
+            # `Savestate has been moved (hidden)` is the last line of the load: the
+            # stub listens at ~1.8 s and the pad binds at ~1.4 s, but the game
+            # shows RPCS3's `Linking PPU Modules` splash until ~8 s (measured).
+            deadline = time.time() + args.timeout
+            while time.time() < deadline and session.proc.poll() is None \
+                    and "Savestate has been moved" not in rpcs3_log_text():
+                time.sleep(0.25)
         info = {"emulator_pid": session.proc.pid, "serve_pid": os.getpid(),
                 "socket": CONTROL_SOCKET, "interpreter": bool(args.interpreter),
                 "config": None if args.config == MUTED else str(args.config),
