@@ -836,11 +836,7 @@ pub(super) fn argb(value: oag_title::menu::Argb) -> [f32; 4] {
 /// was measured; with a measured pulse period the ink rides a raised cosine
 /// between `normal` and the peak (the shape is ours, see [`Skin::selected`]),
 /// flat at the peak otherwise.
-pub(crate) fn selected_ink(
-    skin: &oag_title::MenuSkin,
-    normal: [f32; 4],
-    elapsed: f32,
-) -> [f32; 4] {
+pub(crate) fn selected_ink(skin: &oag_title::MenuSkin, normal: [f32; 4], elapsed: f32) -> [f32; 4] {
     let peak = skin.selected.map_or(OUR_SELECTED, argb);
     let Some(period) = skin.selected_pulse_period_secs.filter(|p| *p > 0.0) else {
         return peak;

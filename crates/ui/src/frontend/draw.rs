@@ -932,12 +932,7 @@ impl Frontend {
             // it is the rect the pointer hit-tests: [`Self::language_band`].
             if selected && ink_skin.is_none() {
                 out.push(Draw::Fill {
-                    rect: [
-                        band.left,
-                        band.top + index as f32 * row,
-                        band.width,
-                        row,
-                    ],
+                    rect: [band.left, band.top + index as f32 * row, band.width, row],
                     color: [0.37, 0.86, 0.96, 0.35],
                 });
             }
