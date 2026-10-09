@@ -150,6 +150,14 @@ ALLOWED = {
         "`fade_alpha`, a plain linear ramp with no transcendental, joined it) "
         "under the 1,000-line rule - same function, same reasoning, new path"
     ),
+    "crates/ui/src/kinetic.rs": (
+        "`exp` is the touch-scroll model's friction and spring decay: how far "
+        "a flicked list, hex grid or map coasts and how it settles. It moves "
+        "a front-end view offset driven by window touch events, which never "
+        "reach `InputSnapshot` or a state hash; a last-bit difference between "
+        "two platforms' `exp` would move a list by a fraction of a pixel. No "
+        "simulation crate names `oag_ui::kinetic`"
+    ),
     "crates/ui/src/menu/skin.rs": (
         "See `crates/ui/src/frontend/draw.rs`'s entry above - `Skin::selected`'s "
         "`cos` is the same presentation-only pulse, just for a menu row's "
