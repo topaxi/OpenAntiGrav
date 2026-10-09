@@ -18,7 +18,9 @@ use winit::window::Window;
 use crate::hints;
 #[cfg(target_os = "linux")]
 use crate::window::APP_ID;
-use crate::window::{centred_on, choose_monitor, fullscreen, present_modes, window_icon};
+use crate::window::{
+    centred_on, choose_monitor, frame_latency, fullscreen, present_modes, window_icon,
+};
 
 /// The window and the GPU objects, which both stages draw through.
 ///
@@ -277,7 +279,7 @@ impl Gpu {
             adapters,
             in_use,
         };
-        gpu.config.present_mode = gpu.present_mode(settings.vsync);
+        gpu.apply_vsync(settings.vsync);
         gpu.surface.configure(&gpu.device, &gpu.config);
         Ok(gpu)
     }
@@ -329,8 +331,15 @@ impl Gpu {
 
     /// Puts `vsync` into effect.
     pub(crate) fn set_vsync(&mut self, vsync: perf::Vsync) {
-        self.config.present_mode = self.present_mode(vsync);
+        self.apply_vsync(vsync);
         self.surface.configure(&self.device, &self.config);
+    }
+
+    /// The present mode and queue depth `vsync` asks for, into the config.
+    fn apply_vsync(&mut self, vsync: perf::Vsync) {
+        self.config.present_mode = self.present_mode(vsync);
+        self.config.desired_maximum_frame_latency =
+            frame_latency(vsync, self.config.present_mode);
     }
 
     /// The viewport, which every stage draws into.
