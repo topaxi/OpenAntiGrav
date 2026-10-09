@@ -186,10 +186,22 @@ pub const ROLL_INVERSE_INERTIA: f32 =
 /// A function only because `f32` division is not `const`.
 #[must_use]
 pub fn ship_inertia() -> Vec3 {
+    ship_inertia_at(INERTIA_MASS)
+}
+
+/// The same box tensor built with `mass` in place of [`INERTIA_MASS`], for a title whose
+/// constructor passes another literal: Wipeout HD's `Ship_Construct` calls
+/// `Body_SetBoxInertia(1.0, 12, 8, 12)` (`0x000debc8`), so its craft carries
+/// `(17.333, 24, 17.333)` (`docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`).
+/// The reciprocal of the reciprocal, as the constants above are, so `INERTIA_MASS` gives
+/// [`ship_inertia`] bit for bit.
+#[must_use]
+pub fn ship_inertia_at(mass: f32) -> Vec3 {
+    let (x, y, z) = (INERTIA_BOX_X, INERTIA_BOX_Y, INERTIA_BOX_Z);
     Vec3::new(
-        1.0 / PITCH_INVERSE_INERTIA,
-        1.0 / YAW_INVERSE_INERTIA,
-        1.0 / ROLL_INVERSE_INERTIA,
+        1.0 / (12.0 / (mass * (y * y + z * z))),
+        1.0 / (12.0 / (mass * (x * x + z * z))),
+        1.0 / (12.0 / (mass * (x * x + y * y))),
     )
 }
 

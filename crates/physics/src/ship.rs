@@ -57,8 +57,9 @@ pub struct Body {
     /// are already right: [`crate::pair`] and [`crate::wall`] apply this diagonal to a
     /// world-space `r x n`, as the original does.
     ///
-    /// **The default is the ship's tensor, not [`Vec3::ONE`], on purpose.** Every craft
-    /// shares it (a code literal at one call site), so
+    /// **The default is the ship's tensor, not [`Vec3::ONE`], on purpose.** Every craft of a
+    /// title shares it (a code literal at one call site; HD's mass differs,
+    /// [`crate::forces::ship_inertia_at`]), so
     /// `Body { position, mass, ..Body::default() }` is nearly always a craft, and a unit
     /// default would silently give `15.6x` the pitch authority and an unstable alignment
     /// oscillator. A test that wants unit inertia says so.
@@ -468,6 +469,10 @@ pub struct ShipState {
     /// measured its own. Written by the race from the title, not hashed, for
     /// [`Self::on_grid`]'s reason.
     pub hover_rig: crate::hover::Rig,
+    /// The steering ramp stops at its target, as Wipeout HD's `Craft_UpdateSteering` does
+    /// ([`crate::controls::ramp_steering_clamped`]); `false` is Pulse's unclamped ramp. Written
+    /// by the race from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
+    pub steer_ramp_clamped: bool,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -630,6 +635,7 @@ impl Default for ShipState {
             four_corner: false,
             hover_cap: None,
             hover_rig: crate::hover::Rig::TWO_POINT,
+            steer_ramp_clamped: false,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,

@@ -86,6 +86,34 @@ pub fn ramp_steering(current: f32, target: f32, gain: f32, falloff: f32, dt: f32
     }
 }
 
+/// [`ramp_steering`] as Wipeout HD's `Craft_UpdateSteering` (`0x000edb50`) runs it: the same two
+/// rates, but each step stops at the target, `min(cur + gain * dt, target)` toward a larger
+/// magnitude (`0x000edc50`-`0x000edc68`) and `max(cur - falloff * dt, target)` back
+/// (`0x000edb9c`-`0x000edba4`, an `fsel`), mirrored below zero.
+///
+/// Pulse's ramp (`0x08848788`) has no clamp, so a held stick overshoots by `f32` rounding
+/// (twelve `8.333334` steps make `100.00002`), falls by `falloff * dt` the next frame and cycles
+/// `83.3 / 91.7 / 100`: a full lock averages `91.7`. HD's parks at `100`, read live at
+/// `craft+0x314` on RPCS3. See `docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`.
+#[must_use]
+pub fn ramp_steering_clamped(current: f32, target: f32, gain: f32, falloff: f32, dt: f32) -> f32 {
+    if target > 0.0 {
+        if target > current {
+            (current + gain * dt).min(target)
+        } else {
+            (current - falloff * dt).max(target)
+        }
+    } else if target < 0.0 {
+        if target < current {
+            (current - gain * dt).max(target)
+        } else {
+            (current + falloff * dt).min(target)
+        }
+    } else {
+        ramp_steering(current, target, gain, falloff, dt)
+    }
+}
+
 /// Advances every control state by one frame, before any force is evaluated, as the original
 /// does: engine, brakes, airbrakes and steering each ramp their own state at the top of their
 /// own update, and all five precede every consumer.
@@ -116,7 +144,12 @@ pub fn update(state: &mut ShipState, controls: &ShipControls, handling: &Handlin
         state.brake = (state.brake - handling.brakes.falloff * dt).max(0.0);
     }
 
-    state.steer = ramp_steering(
+    let steer_ramp = if state.steer_ramp_clamped {
+        ramp_steering_clamped
+    } else {
+        ramp_steering
+    };
+    state.steer = steer_ramp(
         state.steer,
         controls.steer_x * CONTROL_RANGE,
         handling.turning.gain,

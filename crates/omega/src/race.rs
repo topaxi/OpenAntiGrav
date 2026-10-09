@@ -95,6 +95,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     countdown_voice: None,
     launch_hover: None,
     hover_rig: None,
+    craft_laws: None,
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,
