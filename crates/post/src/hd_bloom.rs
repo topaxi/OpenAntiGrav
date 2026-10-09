@@ -51,10 +51,11 @@
 //!   sRGB encode (`SET_SHADER_PACKER` is 1 on the scene and ladder draws,
 //!   0 on the swap buffer). `pow(1/2.2)` here is the project's single-curve
 //!   approximation of that encode, nothing more.
-//! - **The adaptation averages the encoded luminance.** The PPU reads the
-//!   reduced buffer's bytes, which the ROP wrote through the sRGB encode, so
-//!   `adapted` is a luma of encoded values. Inferred, not read: it is the
-//!   reading that gives the original's exposure scale of 1.0 on a dim frame.
+//! - **The adaptation averages the encoded luminance.** The ladder halves the
+//!   linear scene; the PPU then reads the bytes left in the last level, which
+//!   the ROP wrote through the sRGB encode, so `adapted` is a luma of encoded
+//!   texels (`fs_adapt` encodes each texel once, never the mean again). See
+//!   renderer.md, "The adaptation is the encoded linear mean".
 //!
 //! # Why the chain owns the scene target
 //!
