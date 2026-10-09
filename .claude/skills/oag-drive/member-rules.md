@@ -210,6 +210,12 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   scratch. Strike what closed; delete a thread file and its `HANDOVER.md`
   index line together once its work has fully landed. Nothing outside
   `handover/` and `HANDOVER.md` may link into `handover/`.
+- **No tracked file may cite `data/scratch/`** (maintainer, 2026-10-09).
+  Scratch is untracked and gets deleted wholesale once a lane merges, so a
+  doc, thread, comment, test or script pointing into it is a dead reference.
+  Put the evidence itself in the doc (the numbers, the table, the command
+  that reproduces it); a tool worth keeping moves to `scripts/`; a reference
+  frame worth keeping moves to `data/reference/` and is cited there.
 - Avoid em and en dashes in anything you write, and write no decorative
   separator comments.
 
