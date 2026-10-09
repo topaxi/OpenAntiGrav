@@ -7,7 +7,7 @@
 //! race left to run for [`RACE_FRAMES`] and then escaped from, as many times
 //! as asked.
 
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 use log::debug;
 

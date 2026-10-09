@@ -20,6 +20,11 @@ build finds the player's own disc image, and the gamepad mapping.
 arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
 
+[The web build](web.md) covers `just web`: `oag-game` for the browser on
+WebAssembly and WebGPU, the page that reads the player's own image in the tab,
+the GitHub Pages workflow, and what is not there yet (sound, movies, images over
+about 2 GB).
+
 [Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
 
 [Releases and CI](releases.md) covers the two GitHub workflows: what `ci.yml` gates, and

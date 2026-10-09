@@ -41,7 +41,7 @@ pub(super) fn run(
         let mut samples = Vec::with_capacity(runs);
         for _ in 0..runs {
             let mut encoder = encoder(device);
-            let start = std::time::Instant::now();
+            let start = web_time::Instant::now();
             record(&mut encoder, Timestamps::default());
             samples.push(start.elapsed().as_secs_f64() * 1e6);
         }
@@ -91,7 +91,7 @@ pub(super) fn run(
             }
             let commands = encoder.finish();
             let _ = device.poll(wgpu::PollType::wait_indefinitely());
-            let start = std::time::Instant::now();
+            let start = web_time::Instant::now();
             queue.submit(Some(commands));
             let _ = device.poll(wgpu::PollType::wait_indefinitely());
             let elapsed = start.elapsed().as_secs_f64() * 1e6;

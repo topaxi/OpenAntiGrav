@@ -153,7 +153,7 @@ impl Session {
         // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
         // whatever the window is doing. The clock's own catch-up cap is what keeps
         // the race load above from being paid back as a burst of ticks.
-        let now = std::time::Instant::now();
+        let now = web_time::Instant::now();
         let elapsed = now.duration_since(self.last);
         self.last = now;
         self.schedule_next_frame(now);

@@ -36,6 +36,7 @@ Then, depending on what you are here to do:
 | Use the tools | [Tool docs](tools/README.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
 | Build or sideload the Android APK | [Android](tools/android.md) |
+| Build the browser version, or deploy it to GitHub Pages | [Web build](tools/web.md) |
 | Run the game | [Front-end boot](architecture/frontend-boot.md) |
 | Keep the loading screen from freezing | [Load-to-race transition](architecture/race-load-transition.md) |
 | Know where a load spends its time | [Load time](architecture/load-time.md) |

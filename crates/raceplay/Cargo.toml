@@ -15,6 +15,9 @@ name = "oag-headless-sim"
 path = "src/bin/headless_sim.rs"
 
 [dependencies]
+# `Instant` that is std's own on native and `performance.now()` on the web,
+# where `std::time::Instant::now` panics. See docs/tools/web.md.
+web-time = "1.1.0"
 oag-2048.workspace = true
 oag-ai.workspace = true
 oag-assets.workspace = true

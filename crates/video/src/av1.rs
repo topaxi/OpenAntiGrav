@@ -4,9 +4,12 @@
 //! stream into tightly packed 8-bit I420 frames - the layout
 //! `oag-render`'s video pipeline uploads as three `R8` planes.
 //!
-//! This module is behind the `av1` cargo feature, off by default, so that
-//! `oag-formats` stays dependency-free for the tools that only parse Wipeout
-//! containers. `oag-game` turns it on.
+//! The decoder, [`FrameSource`], is behind the `av1` cargo feature, off by
+//! default, so that `oag-formats` stays dependency-free for the tools that only
+//! parse Wipeout containers. `oag-game` turns it on everywhere but
+//! `wasm32`, where `re_rav1d` does not build (it needs `libc` types the
+//! target lacks); [`Geometry`] and [`Error`] are always here, because every
+//! movie decoder describes its frames with them.
 //!
 //! # Why this decoder
 //!
@@ -26,8 +29,10 @@
 //! movies are actually played here - forwards, or looped back to the start -
 //! and it is why no frame index is stored beyond the IVF's own frame list.
 
+#[cfg(feature = "av1")]
 use std::ops::Range;
 
+#[cfg(feature = "av1")]
 use re_rav1d::{Decoder, Picture, PixelLayout, PlanarImageComponent, Settings};
 
 use crate::ivf;
@@ -158,6 +163,7 @@ impl Geometry {
 }
 
 /// Decodes an AV1-in-IVF stream, one frame at a time.
+#[cfg(feature = "av1")]
 pub struct FrameSource {
     blob: Vec<u8>,
     /// Payload ranges into `blob`, in stream order.
@@ -174,6 +180,7 @@ pub struct FrameSource {
 
 // `re_rav1d::Decoder` is not `Debug`, and the workspace warns on types that are
 // not. Everything worth printing is ours anyway.
+#[cfg(feature = "av1")]
 impl std::fmt::Debug for FrameSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FrameSource")
@@ -185,6 +192,7 @@ impl std::fmt::Debug for FrameSource {
     }
 }
 
+#[cfg(feature = "av1")]
 impl FrameSource {
     /// Takes ownership of an IVF blob and prepares to decode it.
     ///
@@ -411,12 +419,13 @@ impl FrameSource {
 /// future `re_rav1d` made `Decoder` thread-bound, the error would otherwise land
 /// in `oag-game` as a confusing `Send` failure inside a closure rather than here,
 /// next to the decoder it is a fact about.
+#[cfg(feature = "av1")]
 const _: fn() = || {
     fn assert_send<T: Send>() {}
     assert_send::<FrameSource>();
 };
 
-#[cfg(test)]
+#[cfg(all(test, feature = "av1"))]
 mod tests {
     use super::*;
 

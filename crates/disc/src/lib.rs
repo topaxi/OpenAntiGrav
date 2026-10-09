@@ -31,6 +31,7 @@ pub mod chd_source;
 pub mod error;
 pub mod image;
 pub mod iso9660;
+pub mod mount;
 pub mod package;
 pub mod platform;
 pub mod ps3_crypt;

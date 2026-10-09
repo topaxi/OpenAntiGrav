@@ -24,7 +24,6 @@
 //! so that the asset-format crates carry no codec dependency in any feature
 //! combination.
 
-#[cfg(feature = "av1")]
 pub mod av1;
 pub mod bik;
 pub mod ipf;

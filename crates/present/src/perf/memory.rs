@@ -10,7 +10,7 @@
 //! fed a duration rather than read a clock itself - a caller passes `now` in,
 //! [`Probe::sample`] never reads it.
 
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 /// How often the resident set is actually re-read.
 ///

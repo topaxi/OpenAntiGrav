@@ -44,7 +44,7 @@ impl Session {
 
     /// The earliest the next frame may start, or `None` for as soon as
     /// possible.
-    pub(crate) fn next_frame_at(&self) -> Option<std::time::Instant> {
+    pub(crate) fn next_frame_at(&self) -> Option<web_time::Instant> {
         self.frame_period().map(|_| self.next_frame)
     }
 
@@ -101,7 +101,7 @@ impl Session {
     /// from now, in either direction: behind means the loop stalled on a load
     /// and must not pay it back as a burst of frames, ahead means the limit
     /// itself just changed and the old period is still on the clock.
-    pub(super) fn schedule_next_frame(&mut self, now: std::time::Instant) {
+    pub(super) fn schedule_next_frame(&mut self, now: web_time::Instant) {
         let limit = self.active_limit();
         if self.logged_limit != Some(limit) {
             self.logged_limit = Some(limit);

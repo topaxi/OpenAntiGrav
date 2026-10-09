@@ -8,6 +8,9 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+# `Instant` that is std's own on native and `performance.now()` on the web,
+# where `std::time::Instant::now` panics. See docs/tools/web.md.
+web-time = "1.1.0"
 oag-display.workspace = true
 oag-gpu.workspace = true
 oag-post.workspace = true

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenAntiGrav</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:,">
+<script type="module" src="main.js"></script>
+</head>
+<body>
+<canvas id="oag-canvas" tabindex="0"></canvas>
+<main id="picker">
+  <h1>OpenAntiGrav</h1>
+  <p>A clean-room reimplementation of the Studio Liverpool anti-gravity racing
+  engine. It plays <strong>your own</strong> disc image: pick one below. The
+  image is read here, in this browser tab, and is never uploaded anywhere.</p>
+  <p class="formats">A Wipeout Pulse or Wipeout Pure PSP image (<code>.chd</code> or
+  <code>.iso</code>) is what this web build is meant for. The whole image is
+  held in memory, so images over about 2 GB will not open.</p>
+  <label class="button" for="file">Choose a disc image
+    <input id="file" type="file" accept=".chd,.iso">
+  </label>
+  <button id="open-handle" class="button" hidden>Choose, and remember it</button>
+  <button id="resume" class="button" hidden></button>
+  <p id="status" role="status"></p>
+  <p class="small">Needs WebGPU (Chrome or Edge 113+, Safari 26+, Firefox 141+ on Windows).
+  Keyboard and gamepad; no sound or movies yet.
+  <a href="https://github.com/topaxi/OpenAntiGrav">Source</a></p>
+</main>
+</body>
+</html>

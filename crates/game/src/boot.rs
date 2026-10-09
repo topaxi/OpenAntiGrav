@@ -1038,7 +1038,12 @@ impl MediaPlan {
 #[derive(Debug)]
 pub struct MediaWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
+    #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<Media>>,
+    /// The web build has no threads, so [`Self::spawn`] loads the media
+    /// inline and the result waits here. See docs/tools/web.md.
+    #[cfg(target_arch = "wasm32")]
+    handle: Option<Media>,
     /// What the loading screen draws its bar from while the thread runs.
     progress: Arc<Mutex<MediaProgress>>,
 }
@@ -1061,6 +1066,9 @@ impl MediaWorker {
             total: plan.loads(),
             ..MediaProgress::default()
         }));
+        #[cfg(target_arch = "wasm32")]
+        let handle = load_media(archives, &screens, &plan, &options, &progress);
+        #[cfg(not(target_arch = "wasm32"))]
         let handle = std::thread::Builder::new()
             // Named so it is obvious in a debugger and in `top` which thread
             // the boot is waiting on, the same way `movie-decode` is.
@@ -1079,6 +1087,9 @@ impl MediaWorker {
     /// Whether the movies have arrived, so the loading screen may start fading.
     #[must_use]
     pub fn is_finished(&self) -> bool {
+        #[cfg(target_arch = "wasm32")]
+        return true;
+        #[cfg(not(target_arch = "wasm32"))]
         self.handle
             .as_ref()
             .is_none_or(std::thread::JoinHandle::is_finished)
@@ -1103,6 +1114,9 @@ impl MediaWorker {
         let Some(handle) = self.handle.take() else {
             return Self::nothing("the boot's movies were already taken");
         };
+        #[cfg(target_arch = "wasm32")]
+        return handle;
+        #[cfg(not(target_arch = "wasm32"))]
         match handle.join() {
             Ok(media) => media,
             Err(_) => Self::nothing(

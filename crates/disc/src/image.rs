@@ -1,6 +1,5 @@
 //! The front door: open an image, list it, read files out of it.
 
-use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -319,7 +318,7 @@ impl DiscImage {
 
 /// Peeks at the first bytes of a file to decide what container it is.
 fn sniff_container(path: &Path) -> Result<Container> {
-    let mut file = File::open(path).map_err(|e| Error::io(path, e))?;
+    let mut file = crate::mount::open(path).map_err(|e| Error::io(path, e))?;
     let mut magic = [0u8; 8];
 
     // A file shorter than 8 bytes is not any container we support.
@@ -366,7 +365,7 @@ mod tests {
 
     fn temp_file(name: &str, contents: &[u8]) -> PathBuf {
         let path = std::env::temp_dir().join(format!("oag-disc-test-{name}"));
-        let mut f = File::create(&path).unwrap();
+        let mut f = std::fs::File::create(&path).unwrap();
         f.write_all(contents).unwrap();
         path
     }
