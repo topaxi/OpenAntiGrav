@@ -275,6 +275,7 @@ impl Session {
                             |team| team.location.clone(),
                         ),
                         skins,
+                        join: title.race.team_variants_for(&choice.value).map(|v| v.join),
                     },
                 )
             })
