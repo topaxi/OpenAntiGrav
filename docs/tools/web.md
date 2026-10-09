@@ -168,6 +168,10 @@ makes no request after loading itself.
   `std::fs`, which returns `Unsupported` here, and each degrades as before:
   nothing kept between reloads. The storage is per origin, so a local serve and
   `oag.topaxi.com` keep separate profiles.
+- **A disc key.** An encrypted PS3 `.iso` needs its key, which the page cannot
+  find beside the picked file (see "Disc keys"). It takes the key as a `.dkey`
+  or `.key` file (dropped with the image, dropped alone, or picked in the key
+  box that appears when an image needs one) or as pasted hex digits.
 - **The page.** `web/` is plain HTML, CSS and one ES module, no bundler. A plain
   `<input type="file">` is the way in, in every browser. Where
   `showOpenFilePicker` exists (Chromium), a second button keeps the file's handle
@@ -176,6 +180,46 @@ makes no request after loading itself.
   every element carrying `hidden` with `display: none !important`: an author
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
+
+### Disc keys
+
+The page asks the module, before booting, whether the image needs a key
+(`oag_web::inspect`, which calls `oag_disc::ps3_probe::probe`, the one check the
+desktop launcher's drop path shares). A plain image, a CHD and a decrypted PS3
+dump are `ready` and ignore any key given; an encrypted PS3 image is `missing`,
+`malformed` or `wrong` until a key opens it, and the page says which in plain
+words under the picker. "Opens" is `ps3_crypt::unlock`'s own oracle (every
+target file reads as its magic), not a format check alone.
+
+- **Three ways in** (headless Chromium 153, the encrypted HD image, dev build,
+  2026-10-09; each reached the front end): both files dropped on the page at once
+  (a small file, 256 bytes or fewer or named `.dkey`/`.key`, is the key, the
+  larger one the image; dropped alone either is held until the other comes), the
+  key file input shown when an encrypted image is picked without a key, and the
+  hex typed or pasted into the field beside it (Enter or "Use this key"). The key
+  box, the saved-keys list and the file inputs are real controls: Tab reaches
+  them, the file inputs are visually hidden and not `display: none`, and the page
+  has no horizontal overflow at 390 px.
+- **The key reaches the engine as a file.** `start` mounts it at
+  `<stem>.dkey` beside the image in `oag_disc::mount`, which is the first place
+  `ps3_crypt::find_keys` looks, so `DiscImage::open` finds it with no web branch
+  and the race-load worker finds it through the shared mount table with no
+  message of its own. `find_keys` reads a sibling through
+  `oag_disc::mount::read_all` (a file natively, the blob here); the keys
+  directory is still `std::fs`, which is nothing on the web.
+- **Remembered per disc, never by name.** On a good key the page writes the key's
+  hex to `localStorage` under `oag:diskey:<serial>` (the serial reads through the
+  encryption: `BCES-00664` for HD EU), unless the "Remember" box is cleared. Any
+  later pick of an image with that serial, whatever its file name, finds the key
+  itself (checked: boot, reload, pick again with no key, front end drawn), and a
+  stored key that no longer opens its disc is dropped. The picker lists every
+  saved key by serial with a Forget button. The key stays in this browser's
+  storage for this origin: it is never sent, logged or put in a URL.
+- **Cost.** The race load decrypts on the worker, in software AES: HD's first
+  event reached `CraftsBuilt` after 5,988 ms on the encrypted image and 2,575 ms
+  on the decrypted one in the same dev build (one run each; the desktop's release
+  build measures no difference, see [installing](../overview/installing.md)). The
+  page's thread is not involved.
 
 ### First-run defaults and the options pages
 
@@ -294,7 +338,8 @@ counts animation frames. The browser is muted. It serves `--dist` through
 server already serves instead (`npx wrangler pages dev`), `--read memory`
 forces the in-memory fallback, and the script prints `crossOriginIsolated`.
 `--browser firefox` runs Playwright's Firefox with the two WebGPU prefs above;
-`--stalls MS` lists every gap between animation frames longer than `MS` once
+`--key FILE --key-mode pick|drop|hex|drop-image` hands an encrypted image's key
+to the page the way the mode says ("Disc keys"); `--stalls MS` lists every gap between animation frames longer than `MS` once
 the run ends, timed from the pick, which is the responsiveness number (a
 screenshot waits for a free page thread, so its timestamp hides a stall);
 `--reload SECONDS` reloads the page then; `--audio-wav FILE` records
@@ -646,9 +691,9 @@ of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
 - **Images over about 2 GB in a browser without synchronous slice reads.**
   The fallback copies the whole image into the module's memory, which wasm32
   caps at 4 GiB. Every browser tried reads slices (Chromium, Firefox, WebKit).
-- **Encrypted PS3 images, Vita and PS4 packages.** A disc key or a package's
-  sibling files cannot be found beside a picked file; only CHD and plain ISO go
-  through `oag_disc::mount`.
+- **Vita and PS4 packages.** A package's sibling files cannot be found beside
+  a picked file; only CHD and ISO (an encrypted PS3 one with its key, "Disc
+  keys") go through `oag_disc::mount`.
 - **Pulse's and Pure's music.** ATRAC3+ (and RIFF-wrapped ATRAC9) decodes
   through `ffmpeg` into a file cache, and a page can run neither; no Rust
   ATRAC3+ decoder exists and that decision is deferred. Logged once, never

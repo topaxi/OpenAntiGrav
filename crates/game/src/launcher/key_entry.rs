@@ -226,6 +226,25 @@ impl KeyEntry {
         }
     }
 
+    /// Puts a key the player dropped in as a file in the buffer, so the pad
+    /// shows what was read, and submits it as ENTER would: `opens` and `store`
+    /// are [`Self::submit_with`]'s.
+    pub fn offer(
+        &mut self,
+        key: &DiscKey,
+        opens: impl FnOnce(&DiscKey) -> bool,
+        store: impl FnOnce(&DiscKey) -> std::io::Result<()>,
+    ) -> Outcome {
+        self.digits = key.to_hex();
+        self.message = None;
+        self.submit_with(opens, store)
+    }
+
+    /// Replaces the prompt's one-line message.
+    pub fn say(&mut self, message: &str) {
+        self.message = Some(message.to_string());
+    }
+
     fn submit(&mut self) -> Outcome {
         let image = self.image.clone();
         let name = image

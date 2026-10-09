@@ -373,6 +373,23 @@ key that your own dump tool recorded for that disc (redump publishes it as a
    against the image first and saved to the keys folder only if it opens it. On
    Android the keypad and a key file beside the image work; there is no paste
    there in this build.
+4. **Dropped on the chooser's window.** Drop a `.dkey` or `.key` file (256
+   bytes or fewer) on the chooser, or on its key prompt: it is read, checked
+   against every locked image listed (the prompt's image, when it is open),
+   saved to the keys folder for each it opens, and the rows are re-read. A key
+   that opens none says `THAT KEY DOES NOT OPEN THIS DISC` in the prompt, and a
+   file that is no key says so. A larger file dropped is taken as a disc image:
+   listed, selected and, if it plays, booted. The window says `DROP THE FILE TO
+   USE IT` while one is dragged over it. **winit's Wayland backend never
+   reports a drop** (`DroppedFile` exists only in its X11 code, winit 0.30.13),
+   so this works under X11, XWayland, Windows and macOS, and not on a native
+   Wayland window; paste and the file beside the image work everywhere. The
+   launcher's logic is covered by unit tests and a disc-backed test
+   (`launcher_ground_truth`); a real drag was not driven.
+
+   **In the browser**, the page takes the same key as a dropped or picked file
+   or as pasted digits, and remembers it per disc: see
+   [the web build](../tools/web.md#disc-keys).
 
 The program never ships a key and never prints yours. A decrypted image
 (`hdfury-ps3-eu-dec.iso`, made by any tool) still works and is tried first.
