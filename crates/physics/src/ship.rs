@@ -349,7 +349,8 @@ pub struct ShipState {
     /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero**; see
     /// [`crate::slowdown`] for why that differs from the sideshift timers.
     pub slowdown_timer: f32,
-    /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}`: probes in contact over two.
+    /// How grounded the ship is: probes in contact over the rig's count ([`crate::hover::Rig::grounded`]),
+    /// `{0.0, 0.5, 1.0}` on Pulse's two probes and quarters on HD's four.
     pub grounded: f32,
     /// Last frame's [`Self::grounded`], which **every control term reads**.
     ///
@@ -648,16 +649,16 @@ impl Default for ShipState {
 }
 
 impl ShipState {
-    /// Whether any hover probe is in contact. Exact, since `grounded` only holds `0.0`,
-    /// `0.5` or `1.0`.
+    /// Whether any hover probe is in contact. Exact, since `grounded` only holds whole
+    /// multiples of one probe's share.
     #[must_use]
     pub fn is_grounded(&self) -> bool {
         self.grounded > 0.0
     }
 
     /// Quantises a probe contact count to `{0.0, 0.5, 1.0}`: the count over two, the whole
-    /// of the original's groundedness. The two-probe assumption is baked into the divisor;
-    /// the original's four-corner variant has an unknown selection rule.
+    /// of the original's groundedness on Pulse's two-point rig. A rig of another size goes
+    /// through [`crate::hover::Rig::grounded`].
     #[must_use]
     pub fn quantise_grounded(contacts: u32) -> f32 {
         (contacts.min(2) as f32) / 2.0

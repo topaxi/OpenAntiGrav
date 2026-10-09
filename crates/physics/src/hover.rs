@@ -571,7 +571,8 @@ fn probe_pair<R: Raycaster + ?Sized>(
 /// airborne tick it is already 2.0 units below the surface and ballistic from there; a
 /// human driving the same section falls through too (`docs/gameplay/ai.md`).
 ///
-/// It sweeps each probe's motion segment, and if that crosses a hoverable face from the
+/// It sweeps Pulse's two probe offsets ([`probe_offsets`]) whatever the craft's rig: a
+/// stand-in of ours, kept on the probes it was built with. It sweeps each probe's motion segment, and if that crosses a hoverable face from the
 /// front, places the craft back on the surface with its inward velocity removed. A
 /// continuous-collision test, chosen deliberately. It runs **only when both probes found
 /// nothing**, so normal contact never reaches it, and needs a surface on the segment, so
