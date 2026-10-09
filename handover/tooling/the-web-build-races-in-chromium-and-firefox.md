@@ -58,8 +58,8 @@ Architecture, measurements, hosting and limits:
   byte-equal to native). Open: the PS2's MPEG-2 (`.PSS`, `.IPF`) and HD's Bink
   have no WebCodecs codec and stay absent (a Rust MPEG-2 decoder is the only
   way to the PS2's); every movie is silent (ATRAC3+; HD's Bink audio needs the
-  file cache a page lacks); Firefox's frames go through its `BGRX` and back,
-  not byte-equal; display-side dropped frames are not counted; Pure's other
+  file cache a page lacks); Firefox's frames go through its BT.709 `BGRX` and
+  back, not byte-equal (the backdrop's below-black samples clip); display-side dropped frames are not counted; Pure's other
   reels and a headed browser are untried.
 - **Pulse/Pure music (ATRAC3+) is absent in the browser**: `ffmpeg` only, and
   the Rust-decoder decision is the maintainer's, deferred. Pulse PS2's front

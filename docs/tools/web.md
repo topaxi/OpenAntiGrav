@@ -743,9 +743,13 @@ native path would transcode, `movie/webcodecs.rs` builds a `FrameStore` whose
    module takes them as I420, the format `upload_frame` and `video.wesl` read
    natively. Chromium hands out `I420`; `NV12` is split into two planes.
    **Firefox 155 hands out `BGRX`** (with `hardwareAcceleration:
-   "prefer-software"` too), which is converted back to BT.601 limited-range
-   I420, the inverse of `video.wesl`'s matrix: close to the native frame, not
-   equal to it.
+   "prefer-software"` too), converted to RGB with **BT.709** limited range
+   (its `colorSpace` says `matrix: "bt709", fullRange: false`; the PSP's
+   streams signal no colour description, and Chromium's I420 frames report
+   `smpte170m`). The module inverts the matrix the frame names
+   (`movie/planes.rs`) to recover the stream's own samples, which `video.wesl`
+   draws as BT.601 as natively: close to the native frame, not equal to it.
+   A frame with no format at all is copied out as RGBA the same way.
 4. **Nothing waits.** The decode runs on the browser's threads and its output
    arrives on the page's event loop between frames. The web's `movie::Feed`
    has no worker (natively a thread decodes into its ring): `take_upto` polls
@@ -760,15 +764,23 @@ read. The copy keeps one format and one shader, and frames comparable byte for
 byte with the native decode; a 480x272 frame is 196 KB, at 30 frames a second.
 
 **Checked, headless, 2026-10-09** (`?log=debug` logs an FNV-1a hash of frame
-30's luma plane, `movie: <key> frame 30 luma fnv1a ...`):
+30's luma plane and the mean of each plane, `movie: <key> frame 30 luma fnv1a
+...`; native's from the AV1 cache, and the same from `ffmpeg` on the H.264):
 
-| | Chromium 153 | Firefox 155 | Native (AV1 cache, and `ffmpeg` on the H.264) |
+| Frame 30 | Chromium 153 | Firefox 155 | Native |
 | --- | --- | --- | --- |
-| Intro, frame 30 | `8b671cb032854bb6` | `c979fd976a39ac17` | `8b671cb032854bb6` |
-| Backdrop, frame 30 | `b64ab88564c708a8` | `98190de5c4f22e87` | `b64ab88564c708a8` |
+| Intro, luma hash | `8b671cb032854bb6` | `05d5306bfa75b6d8` | `8b671cb032854bb6` |
+| Intro, mean Y / Cb / Cr | 98.73 / 142.41 / 95.04 | 98.52 / 141.81 / 95.15 | 98.73 / 142.41 / 95.04 |
+| Backdrop, luma hash | `b64ab88564c708a8` | `91fd55cb81c01a29` | `b64ab88564c708a8` |
+| Backdrop, mean Y / Cb / Cr | 20.84 / 132.38 / 114.41 | 26.72 / 130.39 / 121.10 | 20.84 / 132.38 / 114.41 |
 
 So Chromium's frames are the native ones, byte for byte, and the index is
-right; Firefox's differ by its RGB round trip. Screenshots over the intro show
+right. Firefox's are its RGB round trip: the intro within 0.6 of native on
+every plane. The backdrop is darker than video black in places (luma below 16),
+which RGB clips at 0 and nothing can recover; converting the native frame to
+RGB and back by the same path gives Y 25.7 and Cr 121.0 at best, which is what
+Firefox shows. Before the matrix was read off the frame (BT.601 assumed), the
+intro's mean luma was 5 low in Firefox. Screenshots over the intro show
 its successive screens (SYSTEM STARTUP, CONTROL SYSTEM BIOS, WEAPONS SYSTEMS
 ANALYSIS, ENGINE CORE ENABLED), and the backdrop's rays and ship pass move
 behind Language Selection and the title, as natively. **Enter skips the intro**
@@ -779,6 +791,17 @@ both. The boot's one stall after the pick (1.1 to 1.4 s, Chromium) is the one
 walk above still runs at the 60 fps cap. Dropped frames at the display (the
 ring's skip-ahead) are not counted.
 
+**A browser that cannot decode it.** A decoder error (a browser built
+without H.264, a frame format nothing here reads) is an absence, not a stop:
+natively a failed decode is a broken cache file and ends the frame loop, but a
+browser may lack the codec altogether. The movie logs `movie: <key> has no
+picture in this browser: <why>` once at warn and answers `Pending` from then
+on, so its screen draws no picture and the sequence runs on the player's clock
+as it would with none. Checked by forcing `avc1.ffffff` in a copy of the
+built page: both movies warned once (`NotSupportedError: Unknown or ambiguous
+codec name`), the intro screen stayed black, Enter skipped it, and Language
+Selection drew with no backdrop.
+
 **Sound.** A `.PMF`'s audio is ATRAC3+, which the web build cannot decode
 ("Sound"): the picture plays silent, and the log says so once (`audio:
 LogoFMV plays silently`, warn, and `audio: not decoded (...)` in the loader
@@ -786,7 +809,7 @@ report). Nothing stands in for it.
 
 | Title | Movies in a browser |
 | --- | --- |
-| Pulse PSP | **play**: intro, backdrop (Chromium byte-equal, Firefox by RGB) |
+| Pulse PSP | **play**: intro, backdrop (Chromium byte-equal, Firefox through its BT.709 RGB) |
 | Pure PSP EU | **plays**: the dev/pub reel `IntroMovieP1_EU.PMF` after Language Selection, frame 30 `a6112c4ced558bc4` in Chromium, the native hash; its other reels are `.PMF` too and were not reached |
 | Pulse PS2 | **absent**: `INTRO*.PSS` is MPEG-2, `BG*.IPF` MPEG-2 IPU |
 | HD / Fury | **absent**: Bink |

@@ -26,10 +26,11 @@
 use std::path::PathBuf;
 
 use anyhow::{Result, anyhow, bail};
-use log::{debug, info};
+use log::{debug, info, warn};
 use oag_video::{av1, pmf};
 use wasm_bindgen::{JsCast, JsValue};
 
+use super::planes;
 use super::{FrameStore, Pending, PixelFormat, VideoDecoder, VideoFrame};
 
 /// Why a movie that is not a `.PMF` has no picture in a browser.
@@ -56,6 +57,8 @@ struct WebCodecs {
     submitted: usize,
     delivered: usize,
     flushed: bool,
+    /// The browser could not decode it: the movie stays without a picture.
+    failed: bool,
 }
 
 /// A [`FrameStore`] over the browser's decoder, or why there is none.
@@ -95,6 +98,7 @@ pub(super) fn frame_store(
             submitted: 0,
             delivered: 0,
             flushed: false,
+            failed: false,
         }),
     })
 }
@@ -146,6 +150,44 @@ impl WebCodecs {
             self.flushed = true;
         }
         Ok(())
+    }
+
+    fn decode(&mut self, index: usize, out: &mut VideoFrame) -> Result<()> {
+        let id = self.handle()?;
+        if index < self.delivered {
+            self.rewind();
+        }
+        loop {
+            if let Some(why) = call("oagMovieError", &[id.into()])?.as_string() {
+                bail!("{}: {why}", self.key);
+            }
+            self.top_up(id)?;
+            let frame = call("oagMovieTake", &[id.into()])?;
+            if frame.is_null() || frame.is_undefined() {
+                if self.flushed && backlog(id)? == 0 {
+                    bail!(
+                        "{}: the browser decoded {} of {} frames",
+                        self.key,
+                        self.delivered,
+                        self.len
+                    );
+                }
+                return Err(Pending.into());
+            }
+            let n = self.delivered;
+            self.delivered += 1;
+            if n == index {
+                self.fill(&frame, out)?;
+                if index == 30 {
+                    let (hash, [y, cb, cr]) = planes::summary(&out.bytes, self.geometry);
+                    debug!(
+                        "movie: {} frame 30 luma fnv1a {hash:016x}, means Y {y:.2} Cb {cb:.2} Cr {cr:.2}",
+                        self.key
+                    );
+                }
+                return Ok(());
+            }
+        }
     }
 
     fn fill(&self, frame: &JsValue, out: &mut VideoFrame) -> Result<()> {
@@ -207,7 +249,8 @@ impl WebCodecs {
         } {
             let mut packed = Vec::with_capacity(g.luma_len() * 4);
             plane(0, g.width as usize * 4, g.height, &mut packed)?;
-            to_i420(&packed, g, red_first, &mut out.bytes);
+            let matrix = planes::Matrix::named(&get("matrix").as_string().unwrap_or_default());
+            planes::rgb_to_i420(&packed, g, red_first, matrix, &mut out.bytes);
             return Ok(());
         }
         plane(0, g.width as usize, g.height, &mut out.bytes)?;
@@ -221,8 +264,7 @@ impl WebCodecs {
             "NV12" => {
                 let mut uv = Vec::with_capacity(cw * 2 * ch as usize);
                 plane(1, cw * 2, ch, &mut uv)?;
-                out.bytes.extend(uv.iter().step_by(2));
-                out.bytes.extend(uv.iter().skip(1).step_by(2));
+                planes::split_nv12(&uv, &mut out.bytes);
             }
             other => bail!(
                 "{}: the browser decoded {other:?}, not I420, NV12 or packed RGB",
@@ -246,44 +288,28 @@ impl VideoDecoder for WebCodecs {
         self.len
     }
 
+    /// A movie the browser cannot decode (no H.264 in this build of it, a
+    /// frame format nothing here reads) is an absence, said once at warn, not
+    /// a stop: natively a failed decode is a broken cache file and ends the
+    /// frame loop, but a browser may lack the codec altogether. It answers
+    /// [`Pending`] from then on, so the movie's screen draws no picture and the
+    /// sequence runs on the player's clock as it would with none.
     fn frame(&mut self, index: usize, out: &mut VideoFrame) -> Result<()> {
-        let id = self.handle()?;
-        if index < self.delivered {
-            self.rewind();
+        if self.failed {
+            return Err(Pending.into());
         }
-        loop {
-            if let Some(why) = call("oagMovieError", &[id.into()])?.as_string() {
-                bail!("{}: {why}", self.key);
-            }
-            self.top_up(id)?;
-            let frame = call("oagMovieTake", &[id.into()])?;
-            if frame.is_null() || frame.is_undefined() {
-                if self.flushed && backlog(id)? == 0 {
-                    bail!(
-                        "{}: the browser decoded {} of {} frames",
-                        self.key,
-                        self.delivered,
-                        self.len
-                    );
-                }
-                return Err(Pending.into());
-            }
-            let n = self.delivered;
-            self.delivered += 1;
-            if n == index {
-                self.fill(&frame, out)?;
-                if index == 30 {
-                    // FNV-1a over the luma plane, for comparing a frame with the
-                    // native decode's ("Movies" in docs/tools/web.md).
-                    let luma = &out.bytes[..self.geometry.luma_len()];
-                    let hash = luma.iter().fold(0xcbf2_9ce4_8422_2325_u64, |h, &b| {
-                        (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
-                    });
-                    debug!("movie: {} frame 30 luma fnv1a {hash:016x}", self.key);
-                }
-                return Ok(());
-            }
+        let decoded = self.decode(index, out);
+        if let Err(why) = &decoded
+            && why.downcast_ref::<Pending>().is_none()
+        {
+            warn!(
+                "movie: {} has no picture in this browser: {why:#}",
+                self.key
+            );
+            self.failed = true;
+            return Err(Pending.into());
         }
+        decoded
     }
 
     fn rewind(&mut self) {
@@ -304,46 +330,6 @@ impl Drop for WebCodecs {
             let _ = call("oagMovieClose", &[id.into()]);
         }
     }
-}
-
-/// Packed RGB back into BT.601 limited-range I420, the inverse of the matrix
-/// `video.wesl` draws with, for a browser that hands out only RGB frames
-/// (Firefox 155 gives `BGRX`, software decode or not). The browser already
-/// converted the picture once, so this is close to the native frame, not equal
-/// to it: chroma is the 2x2 average of what the browser upsampled.
-fn to_i420(packed: &[u8], g: av1::Geometry, red_first: bool, out: &mut Vec<u8>) {
-    let (w, h) = (g.width as usize, g.height as usize);
-    let rgb = |x: usize, y: usize| {
-        let p = &packed[(y.min(h - 1) * w + x.min(w - 1)) * 4..][..3];
-        let (r, b) = if red_first {
-            (p[0], p[2])
-        } else {
-            (p[2], p[0])
-        };
-        (f32::from(r), f32::from(p[1]), f32::from(b))
-    };
-    let byte = |v: f32| v.round().clamp(0.0, 255.0) as u8;
-    for y in 0..h {
-        for x in 0..w {
-            let (r, gr, b) = rgb(x, y);
-            out.push(byte(16.0 + 0.256_788 * r + 0.504_129 * gr + 0.097_906 * b));
-        }
-    }
-    let mut cb = Vec::with_capacity(g.chroma_len());
-    let mut cr = Vec::with_capacity(g.chroma_len());
-    for cy in 0..g.chroma_height as usize {
-        for cx in 0..g.chroma_width as usize {
-            let (mut r, mut gr, mut b) = (0.0, 0.0, 0.0);
-            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                let (pr, pg, pb) = rgb(cx * 2 + dx, cy * 2 + dy);
-                (r, gr, b) = (r + pr / 4.0, gr + pg / 4.0, b + pb / 4.0);
-            }
-            cb.push(byte(128.0 - 0.148_223 * r - 0.290_993 * gr + 0.439_216 * b));
-            cr.push(byte(128.0 + 0.439_216 * r - 0.367_788 * gr - 0.071_427 * b));
-        }
-    }
-    out.extend(cb);
-    out.extend(cr);
 }
 
 fn backlog(id: u32) -> Result<u32> {

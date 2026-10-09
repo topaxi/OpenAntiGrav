@@ -15,16 +15,28 @@ function configure(movie) {
     output: (frame) => {
       // A frame from before a reset belongs to playback that no longer exists.
       if (generation !== movie.generation) { frame.close(); return; }
-      const rect = frame.visibleRect;
-      const slot = { format: frame.format, width: rect.width, height: rect.height, bytes: null, layout: null };
-      // Queued now, filled when the copy lands: the copies are asynchronous,
-      // and the module takes frames in the order the decoder put them out.
-      movie.slots.push(slot);
-      const bytes = new Uint8Array(frame.allocationSize());
-      frame.copyTo(bytes).then(
-        (layout) => { slot.layout = layout; slot.bytes = bytes; },
-        (why) => { if (generation === movie.generation) movie.error = `copyTo: ${why}`; },
-      ).finally(() => frame.close());
+      try {
+        const rect = frame.visibleRect;
+        // A frame with no format (one left on the GPU) copies out only as RGB,
+        // which the module converts back.
+        const options = frame.format ? {} : { format: "RGBA" };
+        const slot = {
+          format: frame.format ?? "RGBA", width: rect.width, height: rect.height, bytes: null, layout: null,
+          // The matrix an RGB frame was converted with, for the module to invert.
+          matrix: frame.colorSpace?.matrix ?? null,
+        };
+        const bytes = new Uint8Array(frame.allocationSize(options));
+        // Queued now, filled when the copy lands: the copies are asynchronous,
+        // and the module takes frames in the order the decoder put them out.
+        movie.slots.push(slot);
+        frame.copyTo(bytes, options).then(
+          (layout) => { slot.layout = layout; slot.bytes = bytes; },
+          (why) => { if (generation === movie.generation) movie.error = `copyTo: ${why}`; },
+        ).finally(() => frame.close());
+      } catch (why) {
+        movie.error = `copying a frame out: ${why}`;
+        frame.close();
+      }
     },
     error: (why) => { if (generation === movie.generation) movie.error = String(why); },
   });

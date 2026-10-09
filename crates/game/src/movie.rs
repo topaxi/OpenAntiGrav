@@ -41,6 +41,8 @@ mod container_audio;
 mod gst;
 mod mp4;
 mod mpeg2_ps;
+#[cfg(any(target_arch = "wasm32", test))]
+mod planes;
 mod track;
 #[cfg(target_arch = "wasm32")]
 mod webcodecs;
@@ -665,12 +667,7 @@ impl Feed {
     /// [`Ring::take_upto`] for why that is the only safe fallback.
     pub fn take_upto(&mut self, position: u64) -> Option<Frame> {
         #[cfg(target_arch = "wasm32")]
-        {
-            let (store, repeat) = &mut self.inline;
-            while claim(&self.shared).is_some_and(|(epoch, position)| {
-                decode_step(&self.shared, store, self.len, *repeat, epoch, position)
-            }) {}
-        }
+        pump(&self.shared, &mut self.inline.0, self.len, self.inline.1);
         let taken = {
             let mut state = self.lock();
             state.ring.take_upto(position)
@@ -782,10 +779,20 @@ fn decode_loop(shared: &Shared, mut store: FrameStore, len: usize, repeat: bool)
     }
 }
 
+/// Decodes into the ring until there is nothing to do or the decoder answers
+/// [`Pending`]: the web's feed, which has no worker, from `take_upto`.
+#[cfg(any(target_arch = "wasm32", test))]
+fn pump(shared: &Shared, store: &mut FrameStore, len: usize, repeat: bool) {
+    while claim(shared)
+        .is_some_and(|(epoch, position)| decode_step(shared, store, len, repeat, epoch, position))
+    {
+    }
+}
+
 /// The position to decode next and its epoch, or `None` when there is nothing
 /// to do: [`decode_loop`]'s wait condition, for the web's feed, which polls
 /// rather than waits.
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", test))]
 fn claim(shared: &Shared) -> Option<(u64, u64)> {
     let state = shared
         .state
