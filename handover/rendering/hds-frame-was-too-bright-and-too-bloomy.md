@@ -991,3 +991,11 @@ constants and diff against `hd-exposure/placeA/00-40cc0000.bin`; then check our 
 colour/alpha split of the DXT5) against it. Also fix two stale comments (`hd_bloom.rs` header, `fs_encode`) that still call
 the final `pow` a stand-in.
 
+
+2026-10-09 (`hd-metropia-bloom`): **Metropia's white lamp blobs are attributed, not fixed.** The whole excess (ceiling band clipped
+10.9 % against the original's 3.1 %) is the gate's *frame luminance* term (`Bloom from frame contribution` 1.0, 33x Talon's), which the
+adaptation fade should cancel; ours reads `adapted` about 0.1 (estimate), the original's behaves as `>= ~0.25`. Table, method,
+frames and the saved grid state are in [renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "Metropia's white lamp
+blobs". **Next**: read the original's `adapted` at the grid (store at the lerp in `FunkLayer_RunBloomChain`, the `FunkLayer + 0x254`
+read at `0xc50ee0` came back zero), then test whether the adaptation mean should be taken over the encoded 8-bit bytes. Same
+check applies to every Fury/DLC circuit (`01_vineta_k`, `03_track`, `05_ubermall`, `12_sol_2`, ...) that authors a large frame term.
