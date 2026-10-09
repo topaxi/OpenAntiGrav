@@ -173,7 +173,7 @@ const WALK: [Step; 5] = [
 ];
 
 /// Walks the shipped menu tree, writes the mix to
-/// `data/shots/menu-walk-<disc>.wav`, and reads it back.
+/// a `menu-walk-<disc>.wav` under `data/shots/`, and reads it back.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {

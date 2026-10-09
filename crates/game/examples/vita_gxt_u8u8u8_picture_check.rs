@@ -18,6 +18,7 @@
 
 const ENTRY: &str = "data/FE/NewImages/scepresents/scee_presents_ENG.gxt";
 const BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
+const DATA_DIR: &str = "data";
 
 const ALL_LANGUAGES: [&str; 13] = [
     "ENG", "danish", "dutch", "finnish", "fr", "ger", "it", "norway", "polish", "port", "russian",
@@ -133,10 +134,10 @@ fn main() -> anyhow::Result<()> {
             let rgba = decode(texels, width, height, order, twiddled);
             let label = if twiddled { "twiddled" } else { "raster" };
             std::fs::write(
-                format!("data/shots/2048_u8u8u8_scee_{name}_{label}.png"),
+                format!("{DATA_DIR}/shots/2048_u8u8u8_scee_{name}_{label}.png"),
                 oag_texture::png::encode_rgba(width, height, &rgba),
             )?;
-            println!("wrote data/shots/2048_u8u8u8_scee_{name}_{label}.png");
+            println!("wrote {DATA_DIR}/shots/2048_u8u8u8_scee_{name}_{label}.png");
         }
     }
     Ok(())

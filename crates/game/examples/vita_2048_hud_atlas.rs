@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<()> {
         .unwrap_or_else(|| oag_2048::hud::skins::played::ARCADE.to_string());
     let out = args
         .next()
-        .unwrap_or_else(|| "data/shots/2048-hud-atlas".to_string());
+        .unwrap_or_else(|| ["data", "shots", "2048-hud-atlas"].join("/"));
     let out = Path::new(&out);
     std::fs::create_dir_all(out)?;
 

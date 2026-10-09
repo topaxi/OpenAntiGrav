@@ -247,7 +247,7 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
 /// Zone capture - `ZoneBG`, `CurrentZonePanel` and
 /// `ZonePlusLight0`-`ZonePlusLight10` - are here now, off a Zone frame of the
 /// running original the maintainer supplied
-/// (`data/shots/hd_zone_hud_original.png`, gitignored). All thirteen are up in
+/// (a maintainer capture, gitignored). All thirteen are up in
 /// it with the craft mid-race: the vertical column down the left, the wider
 /// panel across the current zone's row, and the small tick beside each row.
 ///
@@ -310,7 +310,7 @@ pub const ALWAYS_ON: &[&str] = &[
 ///    own - which is the row that says this is the right table rather than a
 ///    plausible one.
 /// 3. **A Zone frame of the running original reads `SUB-VENOM`** in the
-///    `SpeedClass` widget (`data/shots/hd_zone_hud_original.png`), spelled with
+///    `SpeedClass` widget (a maintainer capture), spelled with
 ///    the hyphen the string table has and the effectsettings key does not - so
 ///    the HUD is drawing *these strings*, not the palette keys.
 ///

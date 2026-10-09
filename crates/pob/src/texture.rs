@@ -129,7 +129,7 @@
 //! with no embedded pixels anywhere in the file - while the *positional*
 //! texture at root's own `record_end` decodes to neither that name nor any
 //! other string in the file; visually it reads as an unrelated dark
-//! arc/checker pattern (`data/shots/plasma_head_root.png`, gitignored, not
+//! arc/checker pattern (a local render, not
 //! committed). The file's other three positional textures **do** land on
 //! their neighbouring strings by name (`WO_RING_BW_64x64.tga`,
 //! `plasma_glow_64x64.tga`, `psysed_default_glow.tga`) and decode to

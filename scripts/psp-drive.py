@@ -848,7 +848,7 @@ def place(args):
         print(
             "    uv run --with websocket-client scripts/psp-trace.py "
             "--ticks 1 --camera --craft 0x%08x --out data/traces/placed.csv "
-            "--shot-every 1 --shot-dir data/shots/placed" % craft
+            "--shot-every 1 --shot-dir %s" % (craft, Path("data") / "shots" / "placed")
         )
     finally:
         dbg.resume()
