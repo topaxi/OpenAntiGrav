@@ -3799,8 +3799,90 @@ Sebenco Climb, seed 1, per lap over the seven opponents:
 
 **So the fix cuts HD wall contact where the old plan was wrong about the craft (Ubermall,
 Sebenco), and costs some on Talon's Junction**, where the plan built on Pulse's hover happened
-to fly a line with more margin. Talon's lone contacts are 0.4 shield over 200 s. Why the correct
-plan scrapes there is open; the lone craft's contact ticks are where to start.
+to fly a line with more margin. Talon's lone contacts are 0.4 shield over 200 s. Why, and the
+fix: "Tight corners" below.
+
+### Tight corners (2026-10-09)
+
+**Where the lone Ace scraped.** Every one of its 6 contact ticks on Talon's Junction is at racing
+line samples 3186-3190, one touch a lap, on a left-hander taken at full throttle: plan target and
+ceiling both infinite, speed 114-118 units/s and equal to the plan's own verified pace to 0.1, the
+craft 12-14.6 units right (outside) of the line from sample 3117 on, steering ramp at -60 to -82
+of 100, yaw rate 1.30-1.35 rad/s.
+
+**Which input is wrong: none of the plan's.** The plan flies HD's own craft and its neutral
+verification run laps the corner clean. The race differs in the driver: slot 1's pilot has
+commitment 0.938, so `plan_margin` is `sqrt(0.938) = 0.9685` and `plan_slack` gives it
+`(1 - 0.9685) / 0.4523 = 0.070` of its character, which spends line bias `0.753 * 0.07 = 0.053`.
+Measured: the Ace sits 0.3-0.6 units wider than the neutral driver all through 3080-3190 (lateral
+offset at sample 3186: 11.21 against 10.91). With the driver seed set to zero (the neutral driver)
+the same race has 0 contact ticks; with the Ace's personality and the default tuning, still 6. So
+the plan is clean by under a unit there and any character finds the wall.
+
+**Why it was 0 before.** The plan built with Pulse's two-probe hover and cycling steering ramp
+touched this corner itself and learned ceilings of 110-113 units/s over samples 3144-3192 (its
+verified pace about 110); the real HD craft then took it 4-8 units/s slower with room to spare. 108
+of that plan's 3,448 ceilings were finite against 59 for the correct one. The old margin was an
+accident of the wrong craft.
+
+**The field's contacts** on Talon's, five seeds, by line index (bins of 50 samples):
+
+| bin | before the craft-law fix | after it |
+| --- | ---: | ---: |
+| 2100 | 140 | 112 |
+| 2400 | 31 | 12 |
+| 2700 | 242 | 304 |
+| 3150 | 216 | 341 |
+| other | 13 | 19 |
+| total | 642 | 788 |
+
+**The fix (`oag_ai::plan`, `plan/clearance.rs`, `driver/planned.rs`).** The verification run marks
+a sample *tight* where the hull passed a wall closer than 1.0 unit without touching it: the ten hull
+probes (`oag_physics::wall::hull_probes`) lengthened by the margin, counting a hit only where a
+contact would react, so floors do not count. Within 200 units ahead of a tight sample a driver
+spends none of its level's plan slack, so an Ace holds the plan's line into it. The plan's speeds
+do not change, so no plan verifies differently and the probe's committed plan hash did not move.
+Traffic still hands character back there. Both numbers are **chosen, not measured**: the margin is
+about twice the 0.3-0.6 units measured, and the reach covers the ~170 units over which the Ace's
+offset built up before sample 3188. Tight samples: 0-28 of 2,940-4,020 on HD's twelve circuits
+(Talon's 21); Pulse at FLASH and PHANTOM 0-73 on most layouts, 130 and 140 of 3,216 on `07_Track`
+(4 %).
+
+**Results** (HD/Fury EU, Venom, Ace, weapons off, 12,000 ticks). The lone board: every circuit 0
+wall-contact ticks (before: Talon's 6, the rest 0). Talon's Junction laps 47.08 / 41.02 / 41.03
+(was 47.13 / 41.07 / 41.08), shield 95.0 at every lap end and at the end of the run (was 94.9,
+94.8, 94.6; end 94.6). Ubermall and Sebenco Climb lone rows keep 0 contacts, laps within 0.1 s. The field,
+five seeds summed:
+
+| circuit | before the craft-law fix | after it | this fix |
+| --- | ---: | ---: | ---: |
+| Talon's Junction | 642 | 788 | 808 |
+| Vineta K | 137 | 137 | 137 |
+| Ubermall | 828 | 777 | 777 |
+| Sebenco Climb | 1,102 | 895 | 867 |
+
+Talon's per seed: 152, 172, 138, 129, 217 (was 159, 168, 138, 134, 189). Seeds 1-4 sum 591
+against 599; seed 5 is the difference. **The field stays at the regressed number**: its
+contacts are where traffic hands character back. Pulse's lone board (`ai_clean_lap_board`, 48
+rows, five minutes each): contact ticks 639 to 649, rows with any contact 6 to 9, respawns 3 to
+2. `ai_clean_lap_gate`, `speed_plan_ground_truth`, `craft_sticking_ground_truth` (1,806 to 1,819
+pair-ticks) and `ram_ground_truth` pass.
+
+**Two variants measured and not kept:**
+
+- **Zeroing the traffic term too** near tight samples: Talon's field 505 (57, 129, 95, 145, 79),
+  Sebenco 750, Ubermall and Vineta unchanged, lone board all 0. But
+  `craft_sticking_ground_truth` read 2,002 overlapped pair-ticks against its limit of 2,000 (1,806
+  on main). This is the one variant that met the field target.
+- **Lowering the plan at near misses** instead of holding the line (inside `learn`, then as a
+  separate pass over a verified plan, kept only if it verified clean): the lone board all 0 and
+  Talon's field 587, but Pulse's `ai_clean_lap_gate` failed (`07_Track` FLASH, RAPIER and VENOM
+  1.6-2.1 s slower, `14_Track` PHANTOM 353 contact ticks against 336 + 10). As a change inside
+  `learn` it also un-verified `06_Track` FLASH and made Sebenco's field 1,471. Slowing for a
+  margin costs time wherever Pulse's lines run close to a wall.
+
+Open: the field on Talon's Junction (samples 2700-2749 and 3150-3199) in traffic. The measured
+lever is the traffic term near tight samples, bounded by the sticking ratchet.
 
 ## Where this sits
 
