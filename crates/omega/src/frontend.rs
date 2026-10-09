@@ -155,10 +155,14 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     fallback_images: &[],
 };
 
-/// The circuit-model scene of each circuit Omega ships under `Data/environments`
-/// in `data00.psarc`: the same twelve pairs HD names, in HD's record order,
-/// under Omega's own folder names (`02_metropia`, `03_moa_therma`).
-const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
+/// The circuit-model scene of each circuit Omega ships a `fe` scene for in
+/// `data00.psarc`: the twelve pairs HD names, under Omega's own folder names
+/// (`02_metropia`, `03_moa_therma`), then 2048's ten circuits under
+/// `environments2048`, each `fe/Track01.vex`, and the four Zone circuits
+/// (`zone_1..4`, `fe/track01.vex`), which the screen lists as `25_Track` to
+/// `28_Track`. Looked up by folder, so the order carries nothing (HD's is its
+/// record order; Omega's is unmeasured).
+const CIRCUIT_MODELS: [oag_title::CircuitModel; 26] = {
     const fn row(environment: &'static str, file: &'static str) -> oag_title::CircuitModel {
         oag_title::CircuitModel { environment, file }
     }
@@ -175,6 +179,20 @@ const CIRCUIT_MODELS: [oag_title::CircuitModel; 12] = {
         row("amphiseum", "amphiseum.vex"),
         row("modesto_heights", "modesto.vex"),
         row("tech_de_ra", "tech_de_ra.vex"),
+        row("zone_1", "track01.vex"),
+        row("zone_2", "track01.vex"),
+        row("zone_3", "track01.vex"),
+        row("zone_4", "track01.vex"),
+        row("altima", "Track01.vex"),
+        row("arena", "Track01.vex"),
+        row("bridge", "Track01.vex"),
+        row("cathedral", "Track01.vex"),
+        row("mall", "Track01.vex"),
+        row("park", "Track01.vex"),
+        row("sol", "Track01.vex"),
+        row("square", "Track01.vex"),
+        row("subway", "Track01.vex"),
+        row("tower", "Track01.vex"),
     ]
 };
 

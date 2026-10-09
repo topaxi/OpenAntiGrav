@@ -379,7 +379,7 @@ impl PickerStage {
             oag_game::preview::draws_circuit_model(self.previews.front_end, self.model.kind());
         let ramp = if circuit_model {
             Some(
-                oag_game::preview::track_model::Ramp::take(&mut model)
+                oag_game::preview::track_model::Ramp::of(&mut self.archives, &name, &mut model)
                     .with_context(|| format!("{name}: reading its material"))?,
             )
         } else {

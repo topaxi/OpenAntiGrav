@@ -88,7 +88,15 @@ pub struct TrackScreen {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrackModel {
     pub origin: [f32; 2],
+    /// The widget's `x` and `y`, which place the model beside the axis:
+    /// `0 0` on HD, `0.525 0.125` on Omega.
+    pub offset: [f32; 2],
     pub z: f32,
+    /// `orthoScaleX/Y/Z` (or `orthoScale` for all three), a scale on the
+    /// placement (`x`, `y` and `z` stand `1 / scale` times as far, see
+    /// `oag_game::flyer::campaign_pose`): `1` where the widget authors none
+    /// (HD), `0.012` on Omega.
+    pub ortho_scale: [f32; 3],
 }
 
 /// `<environment>\FE\TrackSelectEmblem_Fury.gtf` - what the `Emblem` widget
@@ -294,7 +302,17 @@ fn walk_track(
                         number(child, "OriginX").unwrap_or(0.0),
                         number(child, "OriginY").unwrap_or(0.0),
                     ],
+                    offset: [
+                        number(child, "x").unwrap_or(0.0),
+                        number(child, "y").unwrap_or(0.0),
+                    ],
                     z: number(child, "z").unwrap_or(0.0),
+                    ortho_scale: ["X", "Y", "Z"].map(|axis| {
+                        number(child, &format!("orthoScale{axis}"))
+                            .or_else(|| number(child, "orthoScale"))
+                            .filter(|scale| *scale > 0.0)
+                            .unwrap_or(1.0)
+                    }),
                 });
             }
             "trackhexselection" => {

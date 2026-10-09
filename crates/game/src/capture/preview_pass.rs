@@ -83,7 +83,11 @@ pub(super) fn draw_preview(
             crate::preview::frame_hull(&mut model);
         }
         let ramp = if request.track_model.is_some() {
-            Some(crate::preview::track_model::Ramp::take(&mut model)?)
+            Some(crate::preview::track_model::Ramp::of(
+                &mut archives,
+                &request.entry,
+                &mut model,
+            )?)
         } else {
             None
         };
