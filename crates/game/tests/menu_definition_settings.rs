@@ -797,7 +797,10 @@ fn every_settings_row_is_one_the_game_seeds() {
             let Some(setting) = entry.setting() else {
                 continue;
             };
-            if PILOT_EDITOR_ROWS.contains(&setting) {
+            // The web's own rows are dropped on a desktop and seeded only there.
+            if PILOT_EDITOR_ROWS.contains(&setting)
+                || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
+            {
                 continue;
             }
             assert!(
