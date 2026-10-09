@@ -19,8 +19,8 @@ One-time setup: `rustup target add wasm32-unknown-unknown`, the
 `wasm-opt` from binaryen (any recent release; 130 is what CI pins).
 
 The published folder is `index.html`, `main.js`, `style.css`, `pkg/oag_web.js`
-(the wasm-bindgen glue, 105 KB), `pkg/oag_web_bg.wasm` (9.9 MB, about a third
-of that over the wire with the compression Pages applies), the licence files
+(the wasm-bindgen glue, 105 KB), `pkg/oag_web_bg.wasm` (9.9 MB; 3.6 MB at
+`gzip -9`), the licence files
 and `.nojekyll`. `scripts/build-web.sh` ends by running
 `scripts/check-leakage.py --dir` over it, the same audit every other release
 artifact gets. **It holds no game content.** The image the player picks is read
@@ -158,7 +158,9 @@ COOP/COEP headers and ships no `coi-serviceworker`.
 It has not run on GitHub yet. `act` cannot run it on a podman host (`docker cp`
 into the image's `/var/run/act` fails with "path escapes from parent", with or
 without `--use-new-action-cache`), so the job's own steps were run in a clean
-`rust:1.99-bookworm` container from an export of the committed tree instead.
+`rust:1.99-bookworm` container from an export of the committed tree instead:
+the tool downloads, the dist build, `wasm-opt` and the leakage check passed in
+2 min 30 s from a cold cache.
 
 ## What is missing
 
