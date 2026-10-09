@@ -180,7 +180,7 @@ impl App {
         // [`Self::race_profile`] - and using it here saves that first-frame
         // reallocation.
         let render_profile = self.race_profile();
-        let target = upscale::target_size(
+        let target = oag_game::settings::web::render_target(
             display::viewport(gpu.size(), self.settings.display.aspect),
             render_profile.render_scale,
             gpu.device.limits().max_texture_dimension_2d,

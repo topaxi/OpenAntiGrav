@@ -414,6 +414,15 @@ impl Definition {
         }
     }
 
+    /// Drops every row that edits one of `settings`, for a platform that has
+    /// no such thing (the web build has no monitor to pick and one present
+    /// mode). Same once-before-read timing as [`Self::drop_quit`].
+    pub fn drop_settings(&mut self, settings: &[&str]) {
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting().is_none_or(|key| !settings.contains(&key)));
+        }
+    }
+
     /// Drops the CONTROLS page's TOUCH CONTROLS row, for a machine with no
     /// touchscreen to set up. The page stays defined but unreachable. Same
     /// once-before-read timing as [`Self::drop_quit`].

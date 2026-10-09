@@ -55,6 +55,7 @@ OAG_OPTIONS_LANGUAGE = { text = "SPRACHE", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "FENSTERMODUS", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
+OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS-GRÖSSE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "SEITENVERHÄLTNIS", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "MENÜSTIL", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }

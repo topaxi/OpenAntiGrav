@@ -546,7 +546,13 @@ impl Session {
         platform: oag_disc::Platform,
     ) {
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
-            if !model.seed(key, &value) {
+            // Rows this platform drops (`prepare.rs`) are not a gap.
+            let dropped = if cfg!(target_arch = "wasm32") {
+                settings::web::HIDDEN_ROWS.contains(&key) || key == "display.window_size"
+            } else {
+                settings::web::WEB_ONLY_ROWS.contains(&key)
+            };
+            if !model.seed(key, &value) && !dropped {
                 warn!("nothing in the menus edits {key}");
             }
         }

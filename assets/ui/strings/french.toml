@@ -95,6 +95,7 @@ OAG_OPTIONS_LANGUAGE = { text = "LANGUE", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITEUR", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "MODE FENÊTRE", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "TAILLE DE LA FENÊTRE", human = false }
+OAG_DISPLAY_CANVAS_SIZE = { text = "TAILLE DU CANVAS", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "FORMAT D'IMAGE", human = false }
 OAG_DISPLAY_BRIGHTNESS = { text = "LUMINOSITÉ", human = false }
 OAG_DISPLAY_GAMMA = { text = "GAMMA", human = false }

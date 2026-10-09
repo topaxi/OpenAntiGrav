@@ -480,6 +480,44 @@ pub(crate) mod web {
         }
     }
 
+    /// Calls the page's global function `name` with `args`, returning its
+    /// result; `None` for a page that does not define it (not ours).
+    fn call(name: &str, args: &[wasm_bindgen::JsValue]) -> Option<wasm_bindgen::JsValue> {
+        use wasm_bindgen::JsCast;
+        let global = js_sys::global();
+        let function = js_sys::Reflect::get(&global, &name.into())
+            .ok()?
+            .dyn_into::<js_sys::Function>()
+            .ok()?;
+        let array = js_sys::Array::new();
+        for arg in args {
+            array.push(arg);
+        }
+        function.apply(&global, &array).ok()
+    }
+
+    /// Enters or leaves browser fullscreen, through the page's `oagFullscreen`.
+    /// A browser only honours it inside a user gesture; the menu press that
+    /// changed the row is one, as long as this runs on the same event.
+    pub(crate) fn set_fullscreen(on: bool) {
+        call("oagFullscreen", &[on.into()]);
+    }
+
+    /// Whether the player left fullscreen on their own (Escape, F11) since
+    /// this last asked; the page records it on `fullscreenchange`.
+    pub(crate) fn take_fullscreen_exit() -> bool {
+        call("oagTakeFullscreenExit", &[])
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+    }
+
+    /// Sizes the canvas through the page's `oagCanvasSize`: `fit` or `WxH` in
+    /// CSS pixels. Done on the page, in the stylesheet's terms, because
+    /// winit's own request writes a CSS size that cropped the canvas.
+    pub(crate) fn set_canvas_size(size: &str) {
+        call("oagCanvasSize", &[size.into()]);
+    }
+
     /// Requests the adapter and the device, as [`super::Gpu::bring_up`] does
     /// on native with the same descriptor.
     pub(crate) async fn prepare() -> Result<()> {

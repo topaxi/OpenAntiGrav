@@ -72,6 +72,40 @@ window.oagFatal = (cause, software) => {
 // again; a Chromium remembered handle then offers "Play <name> again". Settings
 // and records are already in localStorage (written as they change, synchronously).
 window.oagQuit = () => { setTimeout(() => location.reload(), 0); };
+// Browser fullscreen for the WINDOW MODE row (`settings::web`). A request is
+// honoured only inside a user gesture, which the menu press is. Escape and F11
+// leave fullscreen without the game seeing the key, so the page records it and
+// the game polls `oagTakeFullscreenExit` once a frame.
+let fullscreenLeft = false;
+window.oagFullscreen = (on) => {
+  if (on && !document.fullscreenElement) {
+    canvas.requestFullscreen?.().catch((error) => {
+      console.warn("fullscreen refused:", error);
+      fullscreenLeft = true;
+    });
+  } else if (!on && document.fullscreenElement) {
+    document.exitFullscreen?.().catch(() => {});
+  }
+};
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) fullscreenLeft = true;
+});
+window.oagTakeFullscreenExit = () => {
+  const left = fullscreenLeft;
+  fullscreenLeft = false;
+  return left;
+};
+// The CANVAS SIZE row: `fit` is the stylesheet's own (the whole page), `WxH`
+// is that many CSS pixels, centred. The surface follows the canvas on its own.
+window.oagCanvasSize = (size) => {
+  const match = /^(\d+)x(\d+)$/.exec(size);
+  if (match) {
+    canvas.style.cssText = `width:${match[1]}px;height:${match[2]}px;max-width:100vw;max-height:100vh;`
+      + "position:fixed;inset:0;margin:auto;";
+  } else {
+    canvas.style.cssText = "";
+  }
+};
 // The picked image, which every worker reads for itself (worker.js).
 let imageFile = null;
 

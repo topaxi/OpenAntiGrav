@@ -31,6 +31,50 @@ impl Session {
     /// ignore all three, and a tiling one will ignore at least two. Nothing
     /// depends on any of them being honoured.
     fn apply_window(&mut self) {
+        // A page has no monitor and no window to size: fullscreen is the
+        // browser's, and the canvas is sized by the page - see `settings::web`.
+        #[cfg(target_arch = "wasm32")]
+        {
+            use crate::gpu::web;
+            web::set_fullscreen(
+                self.settings.display.window_mode == display::WindowMode::Borderless,
+            );
+            web::set_canvas_size(&self.settings.display.canvas_size);
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.apply_native_window();
+    }
+
+    /// The web build, once a frame: the player left fullscreen by Escape or
+    /// F11, which the browser handles itself, so the setting follows and the
+    /// open page's row is moved to match. The saved canvas size is applied on
+    /// the first call (fullscreen cannot be, it needs a gesture).
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn sync_web_window(&mut self) {
+        use crate::gpu::web;
+        static SIZED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !SIZED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            web::set_canvas_size(&self.settings.display.canvas_size);
+        }
+        if self.settings.display.window_mode == display::WindowMode::Borderless
+            && web::take_fullscreen_exit()
+        {
+            self.settings.display.window_mode = display::WindowMode::Windowed;
+            if let Stage::Menu(stage) = &mut self.stage {
+                stage.menu.seed(
+                    "display.window_mode",
+                    &menu::Value::Text(display::WindowMode::Windowed.to_string()),
+                );
+            }
+            if let Err(e) = settings::save(&self.settings) {
+                error!("could not save settings: {e:#}");
+            }
+        }
+    }
+
+    /// [`Self::apply_window`] on a desktop.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn apply_native_window(&mut self) {
         let wanted = self.settings.display.clone();
         let monitor = choose_monitor(
             self.gpu.window.available_monitors().collect(),
@@ -125,6 +169,10 @@ impl Session {
                     return;
                 }
             },
+            "display.canvas_size" => {
+                self.settings.display.canvas_size = text;
+                self.apply_window();
+            }
             "display.window_size" => match text.parse::<display::Size>() {
                 Ok(size) => {
                     self.settings.display.window_size = size;

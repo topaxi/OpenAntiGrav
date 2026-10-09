@@ -15,3 +15,4 @@ h1 { margin-top: 0; font-weight: 600; letter-spacing: .04em; }
 .small, .formats { font-size: .85em; color: #999; }
 #status { min-height: 1.5em; color: #fc6; }
 a { color: #8cf; }
+#oag-canvas:fullscreen { width: 100vw !important; height: 100vh !important; max-width: none !important; max-height: none !important; }

@@ -52,6 +52,9 @@ impl Session {
             error!("cannot boot {source}: {e:#}");
         }
 
+        #[cfg(target_arch = "wasm32")]
+        self.sync_web_window();
+
         // Before this frame's ticks, so the front end's own first frame is drawn
         // on the frame after the fade ended rather than a frame later still.
         if let Err(e) = self.finish_loading() {
