@@ -219,11 +219,11 @@ impl Preset {
             self.id
         );
         let source = self.wgsl();
-        let module = wgpu::naga::front::wgsl::parse_str(&source)
+        let module = naga::front::wgsl::parse_str(&source)
             .map_err(|error| anyhow!("{}", error.emit_to_string_with_path(&source, &self.id)))?;
-        wgpu::naga::valid::Validator::new(
-            wgpu::naga::valid::ValidationFlags::all(),
-            wgpu::naga::valid::Capabilities::default(),
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::default(),
         )
         .validate(&module)
         .map_err(|error| anyhow!("{}", error.emit_to_string_with_path(&source, &self.id)))?;

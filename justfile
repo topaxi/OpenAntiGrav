@@ -595,6 +595,18 @@ compare-upscalers image scale="50" out="/tmp":
 appimage *ARGS:
     ./scripts/build-appimage.sh "$@"
 
+# The page in web/, the dist profile and wasm-opt -O; `--dev` for a quick debug
+# build, `--serve` to serve it on 127.0.0.1:8000 after. See docs/tools/web.md.
+# The browser build (wasm32 + WebGPU) into target/web/dist
+web *ARGS:
+    ./scripts/build-web.sh {{ARGS}}
+
+# wasm32-wasip1 is the browser target's codegen with a runner. Needs the
+# target and wasmtime. See docs/tools/web.md.
+# The simulation crates' tests, determinism reference included, on wasm32 under wasmtime
+test-wasm:
+    CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime cargo test --release --target wasm32-wasip1 -p oag-core -p oag-physics -p oag-gameplay -p oag-race -p oag-ai
+
 # The Android APK (NativeActivity, arm64): target/apk/OpenAntiGrav-<v>-android-arm64.apk.
 # Needs cargo-ndk, the aarch64-linux-android target and an SDK + NDK; see
 # docs/tools/android.md.

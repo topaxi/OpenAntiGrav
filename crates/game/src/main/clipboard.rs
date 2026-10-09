@@ -3,10 +3,12 @@
 //! Desktop builds read it through `arboard`. **Android reads nothing**: winit's
 //! `NativeActivity` backend has no clipboard and this project carries no JNI
 //! shim, so [`AVAILABLE`] is `false` there and the key prompt offers its keypad
-//! and, beside the image, a `.dkey` file instead.
+//! and, beside the image, a `.dkey` file instead. **The web build reads nothing
+//! either**: the browser's clipboard is asynchronous and asks permission, and a
+//! key file beside the image does not exist there; see docs/tools/web.md.
 
 /// Whether this build can read a clipboard.
-pub(crate) const AVAILABLE: bool = cfg!(not(target_os = "android"));
+pub(crate) const AVAILABLE: bool = cfg!(not(any(target_os = "android", target_arch = "wasm32")));
 
 static CTRL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -21,13 +23,13 @@ pub(crate) fn ctrl_held() -> bool {
 }
 
 /// The clipboard's text, or `None` when it holds none or cannot be read.
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(target_os = "android", target_arch = "wasm32")))]
 pub(crate) fn read() -> Option<String> {
     arboard::Clipboard::new().ok()?.get_text().ok()
 }
 
 /// See the module doc.
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_arch = "wasm32"))]
 pub(crate) fn read() -> Option<String> {
     None
 }

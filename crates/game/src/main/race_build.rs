@@ -13,7 +13,7 @@
 //! scene holds is tied to the thread that made it, so the stage that comes
 //! back is the same `RaceStage` the frame thread would have built.
 
-use std::time::{Duration, Instant};
+use web_time::{Duration, Instant};
 
 use log::debug;
 
@@ -69,12 +69,26 @@ pub(crate) struct Built {
 
 /// The build, running.
 pub(crate) struct BuildWorker {
+    #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<Built>>,
+    /// The web build has no threads, so the build runs inside [`Self::spawn`]
+    /// and its result waits here. See docs/tools/web.md.
+    #[cfg(target_arch = "wasm32")]
+    handle: Option<Built>,
     allocation: (u32, u32),
 }
 
 impl BuildWorker {
     /// Starts building `loaded` into a race scene.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
+        let allocation = request.allocation;
+        let handle = Some(build(request, loaded));
+        Self { handle, allocation }
+    }
+
+    /// Starts building `loaded` into a race scene.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
         let allocation = request.allocation;
         let handle = std::thread::Builder::new()
@@ -93,6 +107,21 @@ impl BuildWorker {
     /// A worker whose thread would not spawn, or that panicked, reports a
     /// [`RaceBuildError::Gpu`] - the same fatal class a pipeline that would
     /// not build always was.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn take(&mut self) -> Option<Built> {
+        Some(self.handle.take().unwrap_or_else(|| Built {
+            stage: Err(RaceBuildError::Gpu(anyhow::anyhow!(
+                "the race scene was already taken"
+            ))),
+            allocation: self.allocation,
+            build: Duration::ZERO,
+            warm_up: Duration::ZERO,
+        }))
+    }
+
+    /// The result, once the build has returned; `None` while it is still
+    /// running.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn take(&mut self) -> Option<Built> {
         if self.handle.as_ref().is_some_and(|h| !h.is_finished()) {
             return None;
@@ -178,6 +207,13 @@ fn build(request: Request, loaded: race::Loaded) -> Built {
 ///
 /// A thread that will not spawn drops its closure, and the stage with it,
 /// right here: a hitch rather than a leak.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
+    drop(stage);
+}
+
+/// See the wasm twin above: the web build has no thread to drop it on.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
     let spawned = std::thread::Builder::new()
         .name("race-drop".to_string())

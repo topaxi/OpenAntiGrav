@@ -377,7 +377,7 @@ impl App {
             screen_filters,
             missing_screen_filter: None,
             clock: TickClock::new(TickRate::DEFAULT),
-            last: std::time::Instant::now(),
+            last: web_time::Instant::now(),
             meter: perf::Meter::new(),
             scene_cost: perf::Meter::new(),
             drs: oag_present::drs::Controller::new(),
@@ -401,7 +401,7 @@ impl App {
             cursor_title: None,
             stalled: true,
             paused: false,
-            next_frame: std::time::Instant::now(),
+            next_frame: web_time::Instant::now(),
             logged_limit: None,
             race_options: self.race_options.clone(),
             pending: self.pending.take(),
@@ -488,6 +488,7 @@ impl App {
     /// at the first resume - see [`Session::prefetch`]. The window is gone by
     /// now, so a conversion still running has nothing to stay responsive for,
     /// but it does have work worth not throwing away, and it prints as it goes.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) fn finish_prefetch(&mut self) {
         let Some(prefetch) = self
             .state
@@ -754,7 +755,7 @@ impl ApplicationHandler for App {
         // waiting to the platform's own timer; `Poll` is what it was before and
         // is still what an unlimited run does.
         match session.next_frame_at() {
-            Some(deadline) if std::time::Instant::now() < deadline => {
+            Some(deadline) if web_time::Instant::now() < deadline => {
                 event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
             }
             _ => {

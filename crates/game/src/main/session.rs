@@ -100,7 +100,7 @@ pub(crate) struct Session {
     /// Which Pulse releases this machine has. See [`App::music_discs`].
     pub(crate) music_discs: oag_sound::MusicDiscs,
     pub(crate) clock: TickClock,
-    pub(crate) last: std::time::Instant,
+    pub(crate) last: web_time::Instant,
     /// Recent frame times, for the performance overlay.
     ///
     /// Fed from the same `elapsed` the fixed timestep is driven by, which is
@@ -299,7 +299,7 @@ pub(crate) struct Session {
     /// A schedule rather than a stopwatch - see
     /// [`Session::schedule_next_frame`], which is where the difference between
     /// asking for 240 and getting it lives.
-    pub(crate) next_frame: std::time::Instant,
+    pub(crate) next_frame: web_time::Instant,
     /// The limit [`Session::schedule_next_frame`] last logged, so a switch
     /// between the front end's cap and the race's is one line in the log and a
     /// steady run is none.
@@ -513,7 +513,7 @@ pub(crate) struct Session {
     /// and the first frame drawn with the new scene - the last of which is
     /// where a driver that defers pipeline compilation to first use would show
     /// up, since building the pipeline object earlier does not force that.
-    pub(crate) race_ready_at: Option<std::time::Instant>,
+    pub(crate) race_ready_at: Option<web_time::Instant>,
     /// `--measure-race-load`, when this run was asked to time its race
     /// loads. See `session::load_probe`.
     pub(crate) load_probe: Option<load_probe::LoadProbe>,

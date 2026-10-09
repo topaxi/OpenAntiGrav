@@ -2349,6 +2349,7 @@ dependencies = [
  "gstreamer",
  "gstreamer-app",
  "gstreamer-video",
+ "js-sys",
  "log",
  "memory-stats",
  "oag-2048",
@@ -2398,6 +2399,10 @@ dependencies = [
  "resvg",
  "serde",
  "toml",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "web-time",
  "wgpu",
  "winit",
 ]
@@ -2570,6 +2575,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytemuck",
+ "naga",
  "oag-core",
  "oag-gpu",
  "oag-shader-check",
@@ -2594,6 +2600,7 @@ dependencies = [
  "oag-ui",
  "pollster",
  "serde",
+ "web-time",
  "wgpu",
 ]
 
@@ -2679,6 +2686,7 @@ dependencies = [
  "serde",
  "toml",
  "toml_edit",
+ "web-time",
  "wgpu",
  "winit",
 ]

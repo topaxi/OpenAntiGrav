@@ -93,7 +93,7 @@ impl Session {
     /// [`Session::read_timing_and_feed_drs`].
     pub(super) fn draw(
         &mut self,
-        now: std::time::Instant,
+        now: web_time::Instant,
         frame_seconds: Option<f32>,
     ) -> Result<bool> {
         // Recomputed rather than threaded through from `Session::frame`:
@@ -107,7 +107,7 @@ impl Session {
         // where the wait for the refresh lands, and a loop waiting here looks
         // exactly like a loop doing too much work in the frame time alone.
         // See `perf::CpuCost`.
-        let acquire_start = std::time::Instant::now();
+        let acquire_start = web_time::Instant::now();
         let frame = match self.gpu.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
             | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -359,7 +359,7 @@ impl Session {
                 )
             }
             Stage::Race(stage) => {
-                let start = timing_first_race_frame.then(std::time::Instant::now);
+                let start = timing_first_race_frame.then(web_time::Instant::now);
                 // The Zone visualiser's own input - see
                 // `oag_audio::spectrum` and `race::scene::frame::Scene::render`'s
                 // own doc comment on this parameter. Through the recovered
@@ -850,7 +850,7 @@ impl Session {
             timer.resolve(&mut encoder);
         }
 
-        let submit_start = timing_first_race_frame.then(std::time::Instant::now);
+        let submit_start = timing_first_race_frame.then(web_time::Instant::now);
         self.gpu.queue.submit(Some(encoder.finish()));
         // **After the submit**, which is what makes it safe to start a map on
         // the buffer this frame just copied into. What comes back is a frame or
@@ -863,7 +863,7 @@ impl Session {
         // Unconditional, unlike the `submit_start` above it: this one is both
         // the first race frame's diagnostic *and* the second half of the
         // `PRESENT` row, which every frame contributes to.
-        let present_start = std::time::Instant::now();
+        let present_start = web_time::Instant::now();
         self.gpu.queue.present(frame);
         present_seconds += present_start.elapsed().as_secs_f32();
         if timing_first_race_frame {

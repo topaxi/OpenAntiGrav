@@ -20,21 +20,21 @@ const FELT: std::time::Duration = std::time::Duration::from_millis(20);
 /// allowed to be - see `docs/architecture/determinism.md`. Nothing here reaches
 /// the simulation: these are strings for a human.
 pub(super) struct Steps {
-    at: std::time::Instant,
+    at: web_time::Instant,
     steps: Vec<(&'static str, std::time::Duration)>,
 }
 
 impl Steps {
     pub(super) fn new() -> Self {
         Self {
-            at: std::time::Instant::now(),
+            at: web_time::Instant::now(),
             steps: Vec::new(),
         }
     }
 
     /// Closes the step that has been running since the last lap.
     pub(super) fn lap(&mut self, what: &'static str) {
-        let now = std::time::Instant::now();
+        let now = web_time::Instant::now();
         self.steps.push((what, now - self.at));
         self.at = now;
     }

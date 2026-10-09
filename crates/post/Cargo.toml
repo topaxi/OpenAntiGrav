@@ -13,6 +13,11 @@ oag-gpu.workspace = true
 anyhow.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 wgpu.workspace = true
+# `ScreenFilter::validate` parses and validates a player's filter without a
+# device. Named directly rather than through `wgpu::naga`, which wgpu only
+# re-exports where it links wgpu-core: not on the web's WebGPU backend. The
+# same version and feature `oag-shader-check` already pins.
+naga = { version = "30.0.1", default-features = false, features = ["wgsl-in"] }
 serde.workspace = true
 toml.workspace = true
 pollster.workspace = true
