@@ -12,7 +12,8 @@ way. Three rules follow, each backed by a tool.
 2. **A capture says where it stalled, within about two minutes.** Run it in the
    foreground under `scripts/emu-run.py`, or wait on its status file; never poll a
    log for a success marker.
-3. **Save states are a convenience with measured limits** (below), not the default.
+3. **Save states restore a drivable race in about 10 s on HD (RPCS3) and 2 s on Pulse (PPSSPP)** (below);
+   take one at a point you will reuse, and boot fresh only when the measurement needs the boot.
 
 ## Tools
 
@@ -25,7 +26,8 @@ way. Three rules follow, each backed by a tool.
 | `scripts/rpcs3-drive.py serve` / `status` / `press` / `stop` | A **long-lived** RPCS3: boot once, hold the pad and a GDB proxy, stay up. Scripts built on `Session` attach with `OAG_RPCS3_ATTACH=1`. |
 | `scripts/ppsspp-start.sh <lane> <display> <port> <image>` | A private muted PPSSPP SDL under its own Xvfb, stopped by recorded pid (`... <lane> stop`). |
 | `scripts/psp-state.py` | PPSSPP save and load through the pause menu. |
-| `scripts/emu-rebuild-states.sh <lane> pulse-grid\|hd-grid` | Rebuilds a state from the user's own disc into `data/saves/`. |
+| `scripts/emu-rebuild-states.sh <lane> pulse-grid\|hd-grid [name]` | Rebuilds a state from the user's own disc into `data/saves/`. |
+| `scripts/emu-restore-state.sh <lane> <state> [--restart] [--no-gdb]` | Restores an RPCS3 state into a long-lived `serve` with pad, GDB proxy and memory, in about 10 s. `scripts/emu-save-state.sh <lane> <name>` takes one from a running `serve`; `scripts/rpcs3-state-probe.py` checks GDB and memory after a restore. |
 
 ### How attaching works, and what it costs
 
@@ -113,32 +115,90 @@ Classified from `data/scratch/*/*.log` on 2026-10-09 (confidence 70: logs, not a
 | `Main Menu` | race | `walk_to_race()` | **28 s** including the load |
 | any menu | `Main Menu` | `circle` repeatedly (not wired; the attached walk does not need it) | |
 
-**RPCS3 save states, re-measured 2026-10-09 (the 2026-08-19 result was partly stale).**
+**RPCS3 save states: they save and restore reliably and are drivable (measured 2026-10-09,
+second pass; the first pass of the same day, "1 write in 6, restores undrivable", was five
+config mistakes, not an emulator limit).**
 
-- Creating: overlay `ps`, `up` x3 (`SaveState`), `cross`, `cross` (`Save Emulation State And Exit`).
-  Needs `Suspend Emulation Savestate Mode: true` (`OAG_RPCS3_SUSPEND_STATE=1` in the generated config).
-  Gives a 120 MB `.SAVESTAT.zst` in `<config>/rpcs3/savestates/<TITLE>/`.
-- With the GDB stub enabled the write failed both times it was tried (one with the proxy connected, one
-  listening only), and succeeded once with it off; see the next point for what that is worth.
-- **The write is unreliable.** One file in 6 attempts (that one with the stub off; two with the stub
-  on, three more with it off wrote nothing). Each failure logged "User selected savestate in home
-  menu", then nothing, with the emulator left running and unusable (restart it). Whether the stub
-  matters is **not established**; cause not found. `emu-rebuild-states.sh hd-grid` fails with a
-  message instead of looping; run it again from a fresh `serve`.
-- **New: it restores to the grid, not the campaign screen.** Loading the state taken on Talon's
-  grid fly-over (`OAG_RPCS3_LOAD_STATE=<file>`, which passes `--savestate`) shows the fly-over with the
-  `START RACE` prompt **7.7 s** after launch, against about 100-120 s for boot, walk and load cold.
-  Same result in two loads; the earlier "Campaign / Event 01/08" landing was not reproduced.
-- **But a loaded state is not drivable (seen once, confidence 50):** the virtual pad did nothing (a
-  `cross` on `START RACE` was ignored for 40 s; the prompt stayed up and the fly-over looped), the
-  loaded run's effective config showed `GDB Server: ""` although `--config` named a port (one load), and
-  `TTY.log` shows no screen line, so `current_screen()` reads `?`. So a loaded RPCS3 state serves a **still or video of the fly-over
-  and nothing that needs input, GDB or memory-by-screen waits**. For anything else, keep the
-  emulator running and use the routes above.
+One command restores a race with a working pad, GDB proxy and `/proc` memory:
 
-Good RPCS3 points: `grid-flyover-talons` (`data/saves/hd-fury/grid-flyover-talons.SAVESTAT.zst`,
-`scripts/emu-rebuild-states.sh <lane> hd-grid`): restores in 7.7 s, same place, GDB and pad dead.
-Not worth taking: Cell Selection, the pause menu, mid-race (same limits, no input to continue).
+```sh
+scripts/emu-env.sh <lane> 94 23494 ; source data/scratch/<lane>/env.sh
+scripts/emu-restore-state.sh <lane> data/saves/hd-fury/<state>.SAVESTAT.zst   # about 10 s
+OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-state-probe.py   # gdb + mem check
+```
+
+| Point (`data/saves/hd-fury/`) | Lands on | Next |
+| --- | --- | --- |
+| `grid-flyover-talons` | Campaign race, Talon's Junction grid fly-over, `START RACE` up | `cross` when the prompt shows (a `cross` before it is ignored) |
+| `hd-racebox-talons-venom-weapons-grid` | Racebox Single Race, Venom, weapons ON, Feisar, 8 ships, fly-over | same; weapon pickups seen in the race |
+| `hd-timetrial-talons-venom-start` | Racebox Time Trial, Venom, Feisar, 4.5 s after `GO`, ship at 0 km/h | drive at once |
+| `hd-racebox-talons-venom-midrace-absorb` | Racebox race, 312 km/h, `Absorb` pickup held, lap 1 | drive at once |
+
+`scripts/emu-restore-state.sh ... --restart` is for attached scripts that wait for TTY lines: a
+restored run has none (`current_screen()` reads `?`), so the walk's first step finds no screen. After
+**one** `cross` into a running race, `scripts/rpcs3-drive.py restart` (pause menu, Restart Race, 7.7-10 s)
+makes the game print `Play welcome` and the screen reads `HUD`; from there everything attached works.
+`restart` also knows Time Trial's pause menu (screen `InGame Pause SP Time Trial`, an extra `GHOST`
+row, so Restart Race is 6 downs instead of 5). `--restart` itself does not press `START RACE` for
+you, so it only suits a state taken in a running race.
+
+**Restore time (corrected after a review: the first figure was when the GDB stub starts listening, not
+when the game is back).** `emu-restore-state.sh` returns at `Savestate has been moved (hidden)`, the last
+line of RPCS3's load: **9.5 and 10.5 s** from the command (mid-race and Time Trial states), with the first
+visible game frame about 2 s later; before that the screen is RPCS3's `Linking PPU Modules...` splash
+(frame 0.8 s after the return: mean luminance 0.03, then 0.47 and 0.63 at 3.5 s). The stub listens at
+1.8 s and the pad binds at 1.4 s, so a script that waited for either pressed into a splash. Against
+about 100-120 s for a cold boot, walk and load, and the 10 minute boots other lanes paid. Each of the four
+states was checked after a restore: `rpcs3-state-probe.py` (the GDB proxy answers, a 16-byte read of the
+player's craft through GDB equals the same read through `/proc/<pid>/mem`, three states), and the pad:
+`cross` starts the race on the two grid states, `start` opens the pause menu on the mid-race and Time Trial
+states (screens `InGame Pause SP` and `InGame Pause SP Time Trial` appear in `TTY.log`, so the screen
+lines are back after the first switch). The mid-race frame after restore shows `Absorb` still held with the
+race clock continuing (0:55.8 against 0:49.6 saved), which is also the evidence that the Racebox race
+has weapons on; the `Machine Gun` banner that shows in both races is not (the Time Trial has weapons off).
+
+**Why the saves failed and the restores were dead: five causes, all found in `RPCS3.log`.**
+
+1. **`Compatible Savestate Mode` must be `true`** (it is in `rpcs3-debugger.md`'s table, and the generated
+   config did not set it). Off: the write dies with `Thread terminated due to fatal error: Verification
+   failed (object: 0x0)` at `cellSysutil.cpp:119 sysutil_cb_manager::save` and `Saving savestate failed
+   due to fatal error!`.
+2. **The GDB stub's client must be off while the state is taken.** With the proxy connected (stub on,
+   `Compatible` on, 4 s gap, attempt 6, the control that separates this from cause 1 and 3) the overlay
+   prints `Stopping emulator...` and then the join thread loops `Thread [GDB Server] is too sleepy. Waiting
+   for it ...us` (doubling from 0.25 s past 33 s) and never writes. Stub listening with no client, with
+   `Compatible` on and a 4 s gap, was not tried; the two no-client attempts that wrote nothing used a 1.5 s
+   gap (cause 3). `OAG_RPCS3_NO_GDB=1` blanks `GDB Server`: without it the stock `config.yml`'s
+   `127.0.0.1:2345` stays on, which is why earlier "stub off" runs were not off.
+3. **A gap of about 4 s between opening the `SaveState` page and the confirming `cross`.** 1.6 s after
+   it, the log shows `User selected savestate in home menu` and nothing else, the game carries on, and
+   no file appears: the "1 write in 6" signature (seen three times, stub off and on).
+4. **A load ignores `--config` and `--input-config`.** `rpcs3 --savestate` applies
+   `custom_configs/config_<serial>.yml` and the global `input_configs/global/Default.yml` instead.
+   `Used configuration:` after a load showed stock values (`GDB Server: 127.0.0.1:2345`, Compatible off),
+   and `Pad 0: device='Keyboard'` instead of the virtual pad: the "dead pad, stub off" of the first pass.
+   `serve --load-state` (`prepare_state_boot`) writes both into the private config tree, and refuses
+   to run against `~/.config`.
+5. **RPCS3 consumes the file it loads.** It renames it to `used_<name>` (or moves it to
+   `savestates/used_<serial>/`), so a second boot from the same path opens a modal `No savestate file
+   found or savestate not compatible` that reads as a boot hang (two "hangs" in this session, one with
+   the log frozen at `Booting savestate from command line`). `--load-state` boots a private copy.
+
+**Save recipe** (`scripts/emu-rebuild-states.sh <lane> hd-grid [name]`, or
+`scripts/emu-save-state.sh <lane> <name>` on a running `serve`): `OAG_RPCS3_SUSPEND_STATE=1
+OAG_RPCS3_COMPAT_STATE=1 OAG_RPCS3_NO_GDB=1`, no `OAG_RPCS3_GDB`; `ps`, `up` x3, `cross`, wait 4 s,
+`cross`; the file (105-121 MB `.SAVESTAT.zst`) lands in 18 s and **the emulator exits** ("Save Emulation
+State And Exit"), so a save is the last step of a session. **Five of five writes with the recipe**
+(Talon's grid, rebuild, Racebox grid, Time Trial start, mid-race); none of the five earlier tries this
+session had all three conditions (stub off, Compatible on, 4 s gap). A state taken after a `--no-gdb` restore is fine:
+`emu-restore-state.sh --no-gdb`. Confidence 80: one lane, one machine, one RPCS3 build
+(`0.0.42-19980-028d1e8f`), HD EU only.
+
+Racebox route used for the states (`Main Menu`): `right`, `cross` (`Single Player` is the Racebox
+setup page: `RACE TYPE` Single Race / Time Trial by `right`, Venom, weapons ON, novice AI),
+`cross` (`Track Select`), `right` x8 for Talon's Junction (the ninth of twelve), `cross` (Feisar is
+the default), then `walk_to_race`. Throttle is `cross` held (`RemotePad.press("cross", seconds)`), not `r2`.
+
 Fallback: `serve` and the routes above.
 
 ### PPSSPP (Pulse, Pure)
