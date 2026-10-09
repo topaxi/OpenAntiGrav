@@ -306,6 +306,9 @@ makes a shared HD caller likely and a start-boost trigger plausible, but that is
 - **The history runs every tick the chain has a pulse object**, including `E = 0` (weight 0, a
   plain copy), so a pulse always finds a current `Y`. The original's gate for the block (the byte
   at `FunkLayer + 0xa87`) is not read.
+- **The first history draw after the pass is built or resized blends at weight 0.** Its other
+  buffer is the allocation's zeros, a state no player's frame has; without this a single posed
+  frame (`--pose-boost`) read its rim at 0.75 of the scene (corner luma 150 against 170).
 - **The size jitter's random** is a render-side xorshift, not the original's `rand()`.
 - **The damage tint's other branch** (`FunkLayer + 0x50` above zero uses the tuning struct's
   `0x70..0x78` constants) is not drawn; the field read 0 in every capture.
@@ -322,8 +325,9 @@ makes a shared HD caller likely and a start-boost trigger plausible, but that is
 
 **Compared as a player would** (`data/reference/hd-capture/zoom-ring/`, four RPCS3 frames of one
 Turbo at `E = 0.577` on the ramp, `1.000` in the hold, `0.195` and `0.103` on the decay, paused at
-the stated `E`; ours at the matching poses `--pose-boost 0.133 / 0.4 / 1.083 / 1.15`, side by side in
-`sheet-ours-vs-original.png`): the periphery smears along the radius while the craft and the centre
+the stated `E`; ours at the matching poses `--pose-boost 0.133 / 0.4 / 1.083 / 1.15` with
+`--team feisar` on Talon's Junction, side by side in `sheet-ours-vs-original.png`; the original's
+craft is a different livery than `feisar` resolves to here, unresolved): the periphery smears along the radius while the craft and the centre
 stay sharp, strongest in the hold, gone by `E = 0.1`, and the HUD is drawn after the ring in both.
 The scene differs (ours is the grid on Talon's with the default craft, the originals are racing
 at speed), so the comparison is of the ring's character and its envelope, not of pixels.
@@ -369,7 +373,7 @@ at speed), so the comparison is of the ring's character and its envelope, not of
 | The fragment arithmetic and the blend, as read from the microcode | 80 |
 | `E` follows the pulse law above | 80 (static law, five live reads agree with its ramp, hold and decay) |
 | `P` is the damage pulse (static chain, two live reads) | 80 |
-| The damage tint `(1 - 0.9 P, 1 - 0.08 P, 1)` | 90 (CPU loop, then read on the live mesh at five values of `P`) |
+| The damage tint `(1 - 0.9 P, 1 - 0.08 P, 1)` | 85 (CPU loop, then the live mesh at five values of `P` across several Turbos of one restored state on Talon's; seen on that one state, not repeated on another circuit) |
 | BlendBuffer and the Radial blur never draw | 75 |
 | The history draw is a feedback, `weight = 0.25 E` (cap 0.95), crop `c = 0.05 E` | 85 (static read, `F[0] = 0.025` and `F[0x18] = 0.05 E` live on two circuits, eight fitted levels of `E`) |
 | The boost pulse follows the formula, ramp at 0.19 s | 90 (read at 2 ms steps against the static law) |

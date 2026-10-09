@@ -33,6 +33,9 @@
 //! - The scene, the history and the ring all stay in this chain's own scene
 //!   space. The original blends 8-bit surfaces that are all in the one space;
 //!   the clamp it gets from 8 bits is applied where the ring reads and writes.
+//! - The very first history draw after the pass is built or resized blends at
+//!   weight 0 (a plain scene copy): its other buffer is the allocation's zeros, a
+//!   state no player's frame has.
 //! - The one-update lag between the pulse and what a captured frame shows is the
 //!   original's CPU/GPU pipelining, and is not modelled.
 
@@ -147,8 +150,8 @@ impl Pulse {
     }
 
     /// The boost trigger: a speed pad or a Turbo. Writes `A0 = start`, one write,
-    /// as `EngineFlare_TriggerZoomGlow` does; a second trigger during a pulse
-    /// restarts the ramp from `E`'s current value upward.
+    /// as `EngineFlare_TriggerZoomGlow` does; the law then follows from `A0`
+    /// (what a second trigger during a pulse looks like was not captured).
     pub fn fire_boost(&mut self) {
         self.countdown = self.tuning.boost_start;
     }
@@ -575,13 +578,20 @@ impl Zoom {
         rect: (u32, u32),
         mapping: ([f32; 2], [f32; 2]),
     ) {
+        let first = self.last_tick.get().is_none();
         if self.last_tick.get() == Some(frame.tick) {
             return;
         }
         self.last_tick.set(Some(frame.tick));
         let next = 1 - self.current.get();
         self.current.set(next);
-        let (weight, crop) = history(&self.tuning, frame.boost);
+        let (mut weight, crop) = history(&self.tuning, frame.boost);
+        // The very first history draw has no previous frame to blend: its other
+        // buffer is the allocation's zeros. Weight 0 makes it the plain scene
+        // copy, as `hd_bloom`'s adapt_jump does for its own first frame.
+        if first {
+            weight = 0.0;
+        }
         self.write_constants(queue, 0, mapping, weight, crop);
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("hd zoom history"),
