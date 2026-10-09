@@ -65,6 +65,13 @@ pub const HIDDEN_ROWS: [&str; 2] = ["display.vsync", "display.monitor"];
 /// size, which a page cannot have.
 pub const WEB_ONLY_ROWS: [&str; 1] = ["display.canvas_size"];
 
+/// serde `skip_serializing_if` for `display.canvas_size`: a desktop file does
+/// not gain a key that means nothing there (it is still read if present).
+#[must_use]
+pub fn not_on_the_web<T>(_: &T) -> bool {
+    !cfg!(target_arch = "wasm32")
+}
+
 /// What a canvas is sized to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CanvasSize {
@@ -118,6 +125,15 @@ mod tests {
             CanvasSize::parse("1280x720"),
             CanvasSize::Fixed(oag_display::display::Size::new(1280, 720))
         );
+    }
+
+    #[test]
+    fn a_desktop_file_does_not_gain_a_canvas_size() {
+        let text = toml::to_string_pretty(&Settings::default()).expect("serialises");
+        assert!(!text.contains("canvas_size"), "{text}");
+        let read: Settings =
+            toml::from_str("[display]\ncanvas_size = \"960x544\"\n").expect("reads");
+        assert_eq!(read.display.canvas_size, "960x544");
     }
 
     #[test]

@@ -299,6 +299,19 @@ fn the_web_and_the_desktop_each_drop_the_rows_they_cannot_have() {
     assert!(HIDDEN_ROWS.iter().all(|row| !has(&web, row)));
     assert!(!has(&web, "display.window_size"));
     assert!(has(&web, "display.canvas_size") && has(&web, "display.window_mode"));
+    web.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
+    let labels: Vec<String> = web
+        .pages
+        .iter()
+        .flat_map(|page| page.entries.iter())
+        .filter(|entry| entry.setting() == Some("display.window_mode"))
+        .filter_map(|entry| match entry {
+            Entry::Choice { values, .. } => Some(values.iter().map(|c| c.label.clone())),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert!(labels.iter().any(|l| l == "FULLSCREEN"), "{labels:?}");
     let mut desktop = built_in();
     desktop.drop_settings(&WEB_ONLY_ROWS);
     assert!(!has(&desktop, "display.canvas_size"));

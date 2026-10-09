@@ -237,7 +237,10 @@ pub struct Display {
     /// CSS pixels, `1280x720`. Means nothing on a desktop, where
     /// [`Self::window_size`] is the window; a page has no window, so the web
     /// build offers this row instead of that one. See [`web::CanvasSize`].
-    #[serde(default = "default_canvas_size")]
+    #[serde(
+        default = "default_canvas_size",
+        skip_serializing_if = "web::not_on_the_web"
+    )]
     pub canvas_size: String,
     /// The shape the game is drawn at inside its window: `psp`, `ps2` or
     /// `free`. See [`oag_display::display::Aspect`].

@@ -275,6 +275,8 @@ impl Pending {
         if cfg!(target_arch = "wasm32") {
             definition.drop_settings(&settings::web::HIDDEN_ROWS);
             definition.drop_settings(&["display.window_size"]);
+            // The browser's words for the two modes.
+            definition.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
         } else {
             definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
         }

@@ -206,8 +206,9 @@ mode back to Windowed, saves it and re-seeds the open row. WINDOW SIZE is
 replaced on the web by CANVAS SIZE (`display.canvas_size`: `fit`, the default,
 or a size in CSS pixels): a page has no window, and a size value that means
 "fit" cannot live in `display.window_size`, which every desktop row shares. It is
-dropped on a desktop. (Every desktop `settings.toml` therefore gains
-`canvas_size = "fit"` on its next launch, which means nothing there.) The
+dropped on a desktop. (A desktop `settings.toml` is not given the key: it is skipped when
+serialising off the web.) On the web the WINDOW MODE row reads WINDOWED and
+FULLSCREEN (`relabel_choice`; the stored value stays `borderless`). The
 fullscreen row is a browser request: Chromium and Firefox honour it from a
 key or a click on the menu (headless, 2026-10-09), a gamepad button is not on
 the user-activation list so a pad alone cannot enter fullscreen, and a click
