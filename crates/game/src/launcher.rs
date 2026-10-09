@@ -520,10 +520,11 @@ impl Launcher {
                 opened = true;
             }
         }
-        if !opened && self.open_first_locked() {
-            if let Some(entry) = &mut self.entry {
-                entry.say("THAT KEY DOES NOT OPEN THIS DISC");
-            }
+        if !opened
+            && self.open_first_locked()
+            && let Some(entry) = &mut self.entry
+        {
+            entry.say("THAT KEY DOES NOT OPEN THIS DISC");
         }
     }
 
