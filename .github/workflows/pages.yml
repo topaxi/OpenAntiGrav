@@ -15,12 +15,15 @@ name: Pages (Cloudflare)
 # module's shared memory needs, and long cache lifetimes. GitHub Pages cannot
 # send headers and is not deployed to. No coi-serviceworker is shipped.
 #
-# Triggers: a pushed `v*` tag, or a manual run from the Actions tab.
+# Triggers: a pushed `v*` tag, a manual run from the Actions tab, or nightly.yml
+# calling it as a job on a night that builds a new commit (`workflow_call`; the
+# caller passes `secrets: inherit`, which the Cloudflare token needs).
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always

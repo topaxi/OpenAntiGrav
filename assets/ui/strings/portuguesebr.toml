@@ -53,6 +53,7 @@ OAG_OPTIONS_LANGUAGE = { text = "IDIOMA", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "MODO DE JANELA", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "TAMANHO DA JANELA", human = false }
+OAG_DISPLAY_CANVAS_SIZE = { text = "TAMANHO DO CANVAS", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "PROPORÇÃO DA TELA", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "ESTILO DOS MENUS", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }

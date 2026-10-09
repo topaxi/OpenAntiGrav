@@ -177,6 +177,54 @@ makes no request after loading itself.
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
 
+### First-run defaults and the options pages
+
+**Chosen, not measured.** With no `settings.toml` in `localStorage` (a first
+visit), `oag_game::settings::web::first_run` starts light: frame limit 60,
+anisotropy off, shadows off in every title's render profile (the type's own
+default is already `off`; HD's profile does not override it). A saved profile,
+the maintainer's included, keeps what it holds: a file written before this has
+240 and 16x as canonical values and is never rewritten. Dynamic resolution is
+not turned on.
+
+The render target is held to **720 lines** on the web **by default**: only while
+render scale is at its default, 100 (a player cannot tell 100 picked from 100
+untouched, so 100 is the capped value; 125 and up go past 720, 50 and 75 below it, as on a desktop). The options row has no help line to say so, so this page does (`settings::web::render_target`, used by every
+`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
+`render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
+headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
+`devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is
+960x544 (measured, `web-screenshot.py --dpr 2`), so the cap binds only on a page
+taller than 720 CSS pixels and a phone never reaches it. Choosing a
+render scale other than 100 lifts the cap. At the
+60 limit the game's own overlay (`graphics.perf_overlay = "fps"`) read `60 FPS
+16.7 MS` in a race, and the same at a limit of 120 (the page's animation frames
+cap it), so 60 does not halve the rate.
+
+The options pages drop VSYNC (a canvas only offers `Fifo`) and MONITOR
+(`settings::web::HIDDEN_ROWS`, `Definition::drop_settings`). WINDOW MODE stays
+as Windowed/Borderless, the second being the browser's Fullscreen API
+(`oagFullscreen` in `web/main.js`; a menu press is the user gesture, checked in
+Chromium). Escape or F11 leaves fullscreen without the game seeing the key, so
+the page records `fullscreenchange` and the game polls it once a frame, sets the
+mode back to Windowed, saves it and re-seeds the open row. WINDOW SIZE is
+replaced on the web by CANVAS SIZE (`display.canvas_size`: `fit`, the default,
+or a size in CSS pixels): a page has no window, and a size value that means
+"fit" cannot live in `display.window_size`, which every desktop row shares. It is
+dropped on a desktop. (A desktop `settings.toml` is not given the key: it is skipped when
+serialising off the web.) On the web the WINDOW MODE row reads WINDOWED and
+FULLSCREEN (`relabel_choice`; the stored value stays `borderless`). The
+fullscreen row is a browser request: Chromium and Firefox honour it from a
+key or a click on the menu (headless, 2026-10-09), a gamepad button is not on
+the user-activation list so a pad alone cannot enter fullscreen, and a click
+on a row while fullscreen lands where that layout puts it. winit's own size request is not used (it cropped the
+canvas); the page sets the canvas's CSS and the surface follows.
+
+The language picked on first boot is saved the frame it is picked, not when the
+menus open (`session/frame.rs`): a quit from the title screen, which reloads the
+page, used to skip the save and ask again. Checked across a reload in headless
+Chromium with English and with French.
+
 ### Quitting
 
 QUIT (or escape at the root of the menus) ends the event loop, and before
@@ -225,7 +273,9 @@ panic either way (0.3 s and 0.6 s after the pick, Firefox).
 
 WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is
 `PRIMARY`, which includes the browser's WebGPU and excludes GL, for the reason
-that constant's own documentation gives). WebGPU ships in Chrome and Edge 113+
+that constant's own documentation gives). The picker page lists every disc it knows, with the formats it accepts and how
+far each gets; that table is checked against `docs/overview/status.md`,
+section 9, by `crates/game/tests/web_picker_table.rs`. WebGPU ships in Chrome and Edge 113+
 (Windows, macOS, ChromeOS; Android 121+), Safari 26, and Firefox 141+ on Windows.
 Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
 Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`
@@ -359,6 +409,11 @@ tarballs, then uploads `target/web/dist` as the `web-dist` artifact;
 the repository secret `CLOUDFLARE_API_TOKEN` and the account from the
 repository variable `CLOUDFLARE_ACCOUNT_ID`. That job is skipped when the
 variable is unset (a fork). It runs on a `v*` tag or by hand.
+
+`nightly.yml` calls this workflow as its `web` job (`workflow_call`, `secrets:
+inherit`) after its own `check`, only on a night that builds a new commit; a
+manual dispatch of either stays. `actionlint` passes on both; `act -n` plans
+the nightly's first job and cannot go further here (podman, below).
 
 The deploy has not run on GitHub yet. `act` cannot run the workflow on a podman
 host (`docker cp` into the image's `/var/run/act` fails with "path escapes from
@@ -608,8 +663,9 @@ of `--dump-audio` on Pulse and HD, front end and race, hash for hash).
 - **Untested inputs.** gilrs's Gamepad API backend is compiled in and not tried
   with a pad; touch is not tried. The keyboard and the mouse work.
 - **Other titles in the browser.** Pulse PSP and HD race (Chromium and
-  Firefox, headless); Pulse PS2 was booted to its front end only and Pure not
-  at all. HD drew its race with no Tint error on the one circuit tried.
+  Firefox, headless); Pulse PS2 was booted to its front end only; Pulse USA PSP races (Chromium,
+  2026-10-09); Pure reaches Language Selection and its Press Start title and
+  did not get past it with Enter or Space. HD drew its race with no Tint error on the one circuit tried.
 - **Firefox draws slowly**: 9 to 14 fps in a race in headless Firefox 155,
   against Chromium's 60 on the same machine, and the same before threads
   (Pulse, Moa Therma White: 12.2 fps on the single-threaded module, 12.4 on

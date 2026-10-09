@@ -52,6 +52,9 @@ impl Session {
             error!("cannot boot {source}: {e:#}");
         }
 
+        #[cfg(target_arch = "wasm32")]
+        self.sync_web_window();
+
         // Before this frame's ticks, so the front end's own first frame is drawn
         // on the frame after the fade ended rather than a frame later still.
         if let Err(e) = self.finish_loading() {
@@ -63,6 +66,21 @@ impl Session {
         // Checked before this frame's ticks rather than after them, so the frame
         // that entered `Launch Game` is drawn once before the load stalls the
         // window.
+        // Whatever the picker settled on, remembered for next time. Saved the
+        // frame the pick lands, not when the menus open: a player who quits
+        // from the title screen (the web build reloads the page) would
+        // otherwise be asked again. Here rather than in the picker because
+        // `menu.rs` and `frontend.rs` stay ignorant of where settings live.
+        if let Stage::Frontend(stage) = &self.stage
+            && let Some(language) = stage.frontend.chosen()
+            && self.settings.language.as_deref() != Some(language)
+        {
+            self.settings.language = Some(language.to_string());
+            if let Err(e) = settings::save(&self.settings) {
+                warn!("could not save the chosen language: {e:#}");
+            }
+        }
+
         // `Launch Game` opens **our menus**, not a race. The original has a main
         // menu between the picker and a track and this build now has one too; it
         // is simply not the original's, which is why the state whose transition
@@ -76,19 +94,6 @@ impl Session {
         {
             self.launched = true;
             info!("{}: opening the menus", frontend::states::LAUNCH_GAME);
-            // Whatever the picker settled on, remembered for next time. Taken
-            // here rather than in the picker because this is where the front
-            // end is known to be finished with it, and because `menu.rs` and
-            // `frontend.rs` both stay ignorant of where settings live.
-            if let Stage::Frontend(stage) = &self.stage
-                && let Some(language) = stage.frontend.chosen()
-                && self.settings.language.as_deref() != Some(language)
-            {
-                self.settings.language = Some(language.to_string());
-                if let Err(e) = settings::save(&self.settings) {
-                    warn!("could not save the chosen language: {e:#}");
-                }
-            }
             // Wipeout 2048's own Team/Options screens, read the same "only
             // if the player actually touched it" way the language above is -
             // `None` on every title without a touch front end, and on this

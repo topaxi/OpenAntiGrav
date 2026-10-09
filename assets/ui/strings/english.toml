@@ -120,6 +120,7 @@ OAG_OPTIONS_LANGUAGE = { text = "LANGUAGE", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "WINDOW MODE", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "WINDOW SIZE", human = false }
+OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS SIZE", human = false }
 OAG_DISPLAY_ASPECT_RATIO = { text = "ASPECT RATIO", human = false }
 OAG_DISPLAY_FRONT_END_STYLE = { text = "FRONT END STYLE", human = false }
 OAG_DISPLAY_VSYNC = { text = "VSYNC", human = false }

@@ -510,6 +510,16 @@ string_id = "OAG_DISPLAY_WINDOW_SIZE"
 setting = "display.window_size"
 values = ["960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
 
+# The web build's stand-in for WINDOW SIZE: a page has no window, so this sizes
+# the canvas instead, `fit` being the whole page. Dropped on a desktop and
+# WINDOW SIZE on the web - see `settings::web`.
+[[page.entry]]
+kind = "choice"
+label = "CANVAS SIZE"
+string_id = "OAG_DISPLAY_CANVAS_SIZE"
+setting = "display.canvas_size"
+values = ["fit", "960x544", "1280x720", "1440x816", "1600x900", "1920x1080", "2560x1440"]
+
 # The shape the game is drawn at inside whatever window it got, with the
 # leftover left black. These name *shapes*, not machines: `psp` is 30:17, which
 # is the PSP's 480x272 and the Vita's 960x544 both - the same ratio exactly -

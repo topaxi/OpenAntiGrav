@@ -20,6 +20,12 @@ Architecture, measurements, hosting and limits:
 
 ## Open
 
+- **Defaults and options (2026-10-09, web-defaults lane)**: first-run values
+  (60 fps, anisotropy off, shadows off) and the 720-line cap are chosen, not
+  measured; dynamic resolution is not on. Untried: the fullscreen row in a
+  headed browser (Chromium headless entered and left it), the CANVAS SIZE row
+  on a phone, the picker's table on Safari. The nightly's `web` job has not run
+  on GitHub (`actionlint` clean, `act -n` plans only its first job).
 - **The deploy has not run on GitHub**, and the threaded build has never run
   in CI: the nightly install step (`dtolnay/rust-toolchain@master` with
   `nightly-2026-10-08` and `rust-src`) is untried. `act` fails on this podman
@@ -42,7 +48,7 @@ Architecture, measurements, hosting and limits:
 - **Not tried in a headed browser or on another machine.** Safari, Firefox on
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language
-  Selection only; Pure not booted.
+  Selection only; Pure reaches its Press Start title and no further.
 - **Encrypted PS3 images, Vita and PS4 packages** cannot open: a disc key or a
   package's sibling files cannot be found beside one picked file.
 - **No movies.** The AV1 decoder does not build for wasm32 (`re_rav1d` uses

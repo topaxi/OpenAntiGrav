@@ -64,6 +64,7 @@ use oag_mesh::mesh_render::Anisotropy;
 mod controls;
 mod race;
 mod render_profile;
+pub mod web;
 
 pub use controls::{Controls, TriggerSensitivity};
 pub use race::{Race, Remix};
@@ -232,6 +233,15 @@ pub struct Display {
     /// Means nothing in borderless, where the display decides.
     #[serde(default)]
     pub window_size: oag_display::display::Size,
+    /// How big the web build's canvas is: `fit` (the whole page) or a size in
+    /// CSS pixels, `1280x720`. Means nothing on a desktop, where
+    /// [`Self::window_size`] is the window; a page has no window, so the web
+    /// build offers this row instead of that one. See [`web::CanvasSize`].
+    #[serde(
+        default = "default_canvas_size",
+        skip_serializing_if = "web::not_on_the_web"
+    )]
+    pub canvas_size: String,
     /// The shape the game is drawn at inside its window: `psp`, `ps2` or
     /// `free`. See [`oag_display::display::Aspect`].
     #[serde(default)]
@@ -292,6 +302,10 @@ pub struct Display {
     pub pause_on_focus_loss: bool,
 }
 
+fn default_canvas_size() -> String {
+    "fit".to_string()
+}
+
 fn default_pause_on_focus_loss() -> bool {
     true
 }
@@ -302,6 +316,7 @@ impl Default for Display {
             monitor: Default::default(),
             window_mode: Default::default(),
             window_size: Default::default(),
+            canvas_size: default_canvas_size(),
             aspect: Default::default(),
             front_end_style: String::new(),
             vsync: Default::default(),
@@ -625,6 +640,10 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
         None => Settings::default(),
     };
     ensure_known_titles(&mut settings);
+    #[cfg(target_arch = "wasm32")]
+    if on_disk.is_none() {
+        web::first_run(&mut settings);
+    }
 
     let canonical = format!(
         "{HEADER}{}",
@@ -834,6 +853,10 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
+    // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
+    if cfg!(target_arch = "wasm32") {
+        out.push(("display.canvas_size", text(&settings.display.canvas_size)));
+    }
     if let Some(language) = &settings.language {
         out.push(("language", text(language)));
     }

@@ -60,7 +60,7 @@ impl Session {
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.
         let profile = self.render_profile();
-        let floor = upscale::target_size(
+        let floor = oag_game::settings::web::render_target(
             rect,
             profile.minimum_resolution,
             self.gpu.device.limits().max_texture_dimension_2d,
@@ -146,12 +146,19 @@ impl Session {
         // resize is the only thing that reallocates it.
         self.framebuffer
             .resize_output(&self.gpu.device, self.gpu.size());
-        let wanted = upscale::target_size(
+        let wanted = oag_game::settings::web::render_target(
             rect,
             self.render_profile().render_scale,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         if self.framebuffer.resize(&self.gpu.device, wanted) {
+            log::info!(
+                "render target {}x{} for a {}x{} surface",
+                wanted.0,
+                wanted.1,
+                self.gpu.size().0,
+                self.gpu.size().1
+            );
             // A depth attachment whose size does not match the colour one is a
             // validation error, so the race's has to follow - and now that is
             // true of a scene sitting in `LoadingStage::built_race` as well:

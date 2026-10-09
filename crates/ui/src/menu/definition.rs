@@ -414,6 +414,36 @@ impl Definition {
         }
     }
 
+    /// Changes what the row editing `setting` draws for its option `value`,
+    /// leaving the stored value alone (the web build reads `borderless` as
+    /// FULLSCREEN). Same once-before-read timing as [`Self::drop_quit`].
+    pub fn relabel_choice(&mut self, setting: &str, value: &str, label: &str) {
+        for page in &mut self.pages {
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting: key,
+                    values,
+                    ..
+                } = entry
+                    && key == setting
+                {
+                    for choice in values.iter_mut().filter(|c| c.value == value) {
+                        choice.label = label.to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Drops every row that edits one of `settings`, for a platform that has
+    /// no such thing (the web build has no monitor to pick and one present
+    /// mode). Same once-before-read timing as [`Self::drop_quit`].
+    pub fn drop_settings(&mut self, settings: &[&str]) {
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting().is_none_or(|key| !settings.contains(&key)));
+        }
+    }
+
     /// Drops the CONTROLS page's TOUCH CONTROLS row, for a machine with no
     /// touchscreen to set up. The page stays defined but unreachable. Same
     /// once-before-read timing as [`Self::drop_quit`].

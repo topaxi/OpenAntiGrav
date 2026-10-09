@@ -270,6 +270,16 @@ impl Pending {
         if cfg!(target_os = "android") {
             definition.drop_quit();
         }
+        // A page has no monitor to pick and one present mode, and a desktop
+        // has no canvas: see `settings::web`.
+        if cfg!(target_arch = "wasm32") {
+            definition.drop_settings(&settings::web::HIDDEN_ROWS);
+            definition.drop_settings(&["display.window_size"]);
+            // The browser's words for the two modes.
+            definition.relabel_choice("display.window_mode", "borderless", "FULLSCREEN");
+        } else {
+            definition.drop_settings(&settings::web::WEB_ONLY_ROWS);
+        }
         // Only a touchscreen has an overlay to set up.
         if !oag_game::touch_controls::available() {
             definition.drop_touch_controls();

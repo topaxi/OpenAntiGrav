@@ -218,6 +218,25 @@ byte-coverage table showing what fraction of each container a parser actually
 reads (the discipline that caught HD losing 40% of its render geometry to an
 unread field). See that page directly rather than a stale copy of its totals.
 
+## 9. In the browser
+
+What the web build ([web.md](../tools/web.md)) opens and how far each disc gets
+there, measured in headless Chromium and Firefox on 2026-10-09 and listed on the
+page's own picker (`web/index.html`). A test
+([web_picker_table.rs](../../crates/game/tests/web_picker_table.rs)) compares
+this table with the page's, row for row, so neither can change alone. Only `.chd`
+and plain `.iso` open on the web: an encrypted PS3 image with its `.dkey`, and
+every Vita or PS4 `.pkg`, do not yet ([web.md, "What is missing"](../tools/web.md#what-is-missing)).
+
+| Game | Console | Region | Accepts | Today |
+| --- | --- | --- | --- | --- |
+| Wipeout Pulse | PSP | Europe, USA | .chd, .iso | Races |
+| Wipeout Pulse | PS2 | Europe | .chd, .iso | Front end only |
+| Wipeout Pure | PSP | Europe, USA | .chd, .iso | Not yet |
+| WipEout HD / Fury | PS3 | Europe | decrypted .iso | Races |
+| WipEout 2048 | Vita | Europe, USA | none | Not yet |
+| WipEout: Omega Collection | PS4 | Europe | none | Not yet |
+
 ## How to keep this current
 
 A row changes in the same commit that changes the thing it describes - the
