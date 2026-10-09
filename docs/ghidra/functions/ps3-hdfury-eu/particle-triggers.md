@@ -22,7 +22,7 @@ its address (a TOC slot), then every function with a `lwz/ld/addi d(r2)` whose
 script over all 52 `WO_` strings the executable carries (`strings -a`).
 **Validated on the known answer first**: `0x007a1c68` -> slot `0x008b3f6c` ->
 `0x002d9730` (`ShipCollisionFx_Trigger`), nothing else. Results:
-`toc_scan.txt` (scratch, not committed). A name
+The TOC scan (scratch, not committed). A name
 whose slot is in a data table (`0x008a9xxx`-`0x008abxxx`, the weapon tables) has no
 function load: that is a third hop, listed as "table" below, not as "no trigger".
 
@@ -111,7 +111,7 @@ the nearest of at most ten `Ship Collision Fx` locators to the contact, severity
 `1.0`, the locator's own up axis. **Chosen, not measured:** the severity, and the
 roll (the two angles' axes were not read). Live: `--race --opponents --give cannon
 --hold cross --press square` on HD fires 114 bursts in 900 ticks;
-`crop_t42.png` shows the white spark streak
+A crop at tick 42 (not kept) shows the white spark streak
 on the struck craft one tick after a hit.
 
 ### The damage smoke: `0x002a17e8`, read in full 2026-10-07

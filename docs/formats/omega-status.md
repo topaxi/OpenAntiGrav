@@ -746,7 +746,7 @@ admitted by name and authored rate hashes, labelled inherited from HD in the loa
 report (Omega's GCN is unread, so no program confirms `time` there); 11 materials
 on Anulpha Pass, up to 15 on Amphiseum, 0 on any `environments2048` circuit
 (`crates/render/tests/psp2_glow_ground_truth.rs`).
-Frames at ticks 120, 180, 240 and 300 against `before_vineta_300.png`. Before, the panels the glow layer lights are
+Frames at ticks 120, 180, 240 and 300, against a tick-300 frame from before the change (not kept). Before, the panels the glow layer lights are
 dull grey; after, they glow. The only pixels that differ from main's build at
 tick 300 are those surfaces (438 pixels over a threshold of 24, all inside one
 band of the frame). On that panel the texture is near-uniform, so the scroll is
@@ -887,7 +887,7 @@ real race, `--race --hold cross --ticks 120 --screenshot`, on the RX 7800 XT
 refuse it locally (not committed) and differencing the stills: the circuit's
 **road surface**. With it refused, the road in the `--ticks 300` frame is plain
 white where it is textured otherwise (3.3 % of the frame differs, all of it road;
-`talon_t300.png` against `talon_nofloor_t300.png` and `talon_diff_t300.png`), so Talon's Junction draws its floor with the
+the tick-300 frame against a no-floor frame and a difference frame, not kept), so Talon's Junction draws its floor with the
 whole 16,384 texture on this machine, and the white road is also what a refusal
 would look like. Also viewed: `talon_t700.png`, `talon_lvp_t30.png` (lavapipe).
 Tech De Ra's still, HD Dion's and 2048 Altima's are byte-identical before and
@@ -960,8 +960,7 @@ builds no weapon pools. See the handover thread.
   and the 1,534 model nodes the skeleton does not name stand at their own bind
   matrix. The camera droid `CamBot_New2` behind the start line is upright and
   facing the grid at tick 0 and has dropped and turned away by tick 1800
-  (from `droid-t0.png` and
-  `droid-t1800.png`, the same camera pose). The 12,310 mesh objects on nodes with no matrix of their own across Omega's base
+  (from the tick-0 and tick-1800 frames, the same camera pose). The 12,310 mesh objects on nodes with no matrix of their own across Omega's base
   archives (2048's Zone models and a few props) are all on nodes its skeleton
   names, so the census leaves none unplaced; **`Report::unplaced` itself was not
   re-measured through the render path on such a model** (no Omega race loads a

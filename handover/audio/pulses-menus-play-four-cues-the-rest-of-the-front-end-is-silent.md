@@ -4,7 +4,7 @@
 [psp-audio.md](../../docs/formats/psp-audio.md#the-front-ends-navigation-sounds-2026-10-08). The main menu, the
 race-box selection screens, the campaign screens and the EndRace menu now play `UPDOWN`, `LEFTRIGHT`, `ACCEPT` and
 `DECLINE` from `frontend.bnk` on Pulse and Pure, pad and pointer. A headless walk writes
-`data/shots/menu-walk-<disc>.wav` (`menu_sfx_ground_truth.rs`).
+a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
 
 ## Open
 

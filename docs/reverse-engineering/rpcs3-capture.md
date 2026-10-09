@@ -678,7 +678,7 @@ specifically, so unlike every capture above this one is not merely
 OAG_RPCS3_DISPLAY=96 uv run --with evdev python3 scripts/rpcs3-drive.py \
   --image data/images/hdfury-ps3-eu-dec.iso \
   capture --nav-shots --shots 1 --timeout 300 \
-  --out data/scratch/hd-difficulty/rpcs3-fresh-default
+  --out <out-dir>/rpcs3-fresh-default
 ```
 
 `--nav-shots` walks the identical default path (`Main Menu` -> `Campaign

@@ -1556,7 +1556,7 @@ function is a callee of the view and neither is renamed here.
 prediction exactly and the eye to `5.7e-5` units (a throwaway script, not kept,
 407 frames, 199 in mode 2 and 208 in mode 3), with the craft matrices read live, including banked and
 pitched ones (`up.y` down to 0.86). `oag_render::camera::craft_view` carries the two most banked
-frames as tests. Frames: `m.png` (mode 2 on top, mode 3
+frames as tests. Frames (not kept in the repository): mode 2 on top, mode 3
 below).
 
 ### What `cam+0x1e8` is, and what the director cuts by

@@ -142,12 +142,12 @@ alone could reach.
 The compared value is a float, so nothing in the arithmetic says what it counts.
 Two observations of the original pin it, and they pin different rows:
 
-- **A Zone frame supplied by the maintainer** (`data/shots/hd_zone_hud_original.png`)
+- **A Zone frame supplied by the maintainer** (not kept in the repository)
   reads `SUB-VENOM` beside zone `1`. Record 13's band is `[0, 2)`. ✓
 - **The maintainer's own play**: "not every single zone is a speedclass bump",
   and then "zone 2 should already be venom though (kindof the exception)".
   Record 12's threshold is `2` and its band is exactly the single zone `2`. ✓
-- **A second frame, at zone 8** (`data/shots/hd_zone_hud_original_zone8.png`),
+- **A second frame, at zone 8** (not kept in the repository),
   reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`. Record 9's
   band is `[7, 12)` and record 8's threshold is `12`. ✓
 

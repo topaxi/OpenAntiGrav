@@ -1300,7 +1300,7 @@ shows a board.
 
 - Wired (Talon's Junction, default race): slots 2, 3, 5, 7 have a quad and a model and
   get a 512 x 256 card; the load report's `31 billboard-slot placeholder draw(s)
-  suppressed` WARN is gone. Frames: `hd-cards.png` (the four
+  suppressed` WARN is gone. Frames (not kept in the repository) show the four
   cards: EGX, AG Systems "A Friend in Speed", Auricom, FX-350, each upright).
   Tests: `adverts::tests::hd_builds_a_512_by_256_card_for_each_slot_with_a_quad`,
   `hd_cards_draw_something_into_their_targets`,

@@ -290,7 +290,7 @@ The vertex colour is the arc's own brightness, **with no multiplier**: the body 
 - **`INTENSITY = 3.0` is not in the original's shading.** Vertex colour, vertex program and
   fragment program carry no gain (conf 85). Deleted.
 - **With the original's law the arcs are faint in our frame** (brightness at most `0.2`, times the
-  texture's colour and alpha). `cmp_g1138.png`: top the old
+  texture's colour and alpha). A before-and-after comparison (not kept): top the old
   `INTENSITY = 3`, bottom the original's math, same tick (1138), same `feisar_c1` autopilot ace
   pose. The same arcs are there, thin and dim, and the contact glows are nearly gone. The
   original's frames (`magstrip-hd-measure`, not a matched pose) read wider and whiter.
@@ -338,7 +338,7 @@ Our side: texture upload is `Rgba8Unorm` (no sRGB decode, correct for a program 
 function), the add is raw into the linear target (the engine-tube precedent), and our bloom gate
 already reads scene alpha. Changed: the arc's alpha blend is `ONE, ONE` and its fragment alpha is
 `vertex.a * tex.a` (`Style::alpha_is_fragment`). Ours, `feisar_c1` autopilot ace, tick 1138:
-`cmpA_crop.png` (top before, bottom after): the arcs gain the
+A before-and-after crop (not kept; top before, bottom after): the arcs gain the
 halo and read more present; **they are still thinner than the original's**, and the original's floor
 here is a different, brighter one, so no ratio is claimed.
 

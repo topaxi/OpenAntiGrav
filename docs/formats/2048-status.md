@@ -82,7 +82,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   the submeshes the file's own index names. Both lit off the file's own
   authored normals. 18 of the circuit's draws name a `.gxt` that does not
   resolve or will not decode and get no texture rather than a neighbour's. The
-  screenshot is `data/shots/2048_altima_textured.png`. What was still absent
+  screenshot is not kept in the repository. What was still absent
   then is partly closed: `.envsettings` parses (light since 2026-09, the sky
   turn and fog since 2026-10-06, see [2048-sky.md](2048-sky.md) and
   [envsettings.md](envsettings.md)); bloom and exposure remain unread. (`track.pvs` was

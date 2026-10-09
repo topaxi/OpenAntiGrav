@@ -16,7 +16,7 @@ RELEASE=1 just wine-check                                # the same in release, 
 ```
 
 `scripts/wine-run.sh` builds for `x86_64-pc-windows-gnu` (it runs `rustup target
-add` for you) and uses its own prefix, `data/wine/prefix` (`OAG_WINEPREFIX`
+add` for you) and uses its own prefix under `data/` (`OAG_WINEPREFIX`
 overrides it; never `~/.wine`). The linker is `x86_64-w64-mingw32-gcc` when
 installed (`pacman -S mingw-w64-gcc`, `apt install gcc-mingw-w64-x86-64`).
 Without it the script falls back to `zig cc` through
