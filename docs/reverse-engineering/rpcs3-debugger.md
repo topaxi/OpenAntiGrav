@@ -901,6 +901,11 @@ highlight move and so say nothing either way.
 
 ### What it restores to, and why that ends it
 
+**Superseded 2026-10-09:** a state now restores to the grid it was taken on, with a working pad, stub and
+memory, in 3-5 s; the "Campaign / Event 01/08" landing below came from a load that ignored the config.
+See `emulator-recipes.md`, "RPCS3 save states". The two-settings table above stands: `Compatible Savestate
+Mode` must be `true`.
+
 It loads cleanly in about 60 seconds - and restores HD to its **Campaign /
 Event 01/08 screen**, not to the grid the state was taken on. So the trade is a
 60-second load that lands mid-front-end against a 45-second boot that lands at

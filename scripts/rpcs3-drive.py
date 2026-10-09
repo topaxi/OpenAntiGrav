@@ -220,12 +220,19 @@ def scratch_config(path=SCRATCH_CONFIG, interpreter=False, source=STOCK_CONFIG):
     edits = {("Audio", "Renderer"): "\"Null\""}
     if GDB_SERVER:
         edits[("Miscellaneous", "GDB Server")] = GDB_SERVER
+    elif os.environ.get("OAG_RPCS3_NO_GDB") == "1":
+        # A stock config with the stub on (127.0.0.1:2345) makes the overlay's
+        # SaveState a silent no-op, so a state-taking run blanks it explicitly.
+        edits[("Miscellaneous", "GDB Server")] = '""'
     if interpreter:
         edits[("Core", "PPU Decoder")] = "Interpreter (static)"
     if os.environ.get("OAG_RPCS3_SUSPEND_STATE") == "1":
         # Without this the overlay's SaveState writes nothing at all
         # (rpcs3-debugger.md, "Two settings decide whether the file is written").
         edits[("Savestate", "Suspend Emulation Savestate Mode")] = "true"
+    if os.environ.get("OAG_RPCS3_COMPAT_STATE") in ("0", "1"):
+        edits[("Savestate", "Compatible Savestate Mode")] = (
+            "true" if os.environ["OAG_RPCS3_COMPAT_STATE"] == "1" else "false")
     section = None
     out = []
     applied = set()
@@ -955,7 +962,7 @@ class Session:
     #: `down` x5 is Restart Race and x6 is Quit Race.
     PAUSE_RESTART_DOWNS = 5
     PAUSE_QUIT_DOWNS = 6
-    IN_RACE_SCREENS = ("InGame", "HUD", "InGame Pause SP")
+    IN_RACE_SCREENS = ("InGame", "HUD", "InGame Pause SP", "InGame Pause SP Time Trial")
     AUTO_ADVANCE = ("Team Launch Transition", "Launch Game")
 
     def in_race(self):
@@ -983,12 +990,16 @@ class Session:
         return current_screen() in RACE_ARRIVED and not self.in_demo()
 
     def _pause_choose(self, downs):
-        if current_screen() != "InGame Pause SP":
+        if not current_screen().startswith("InGame Pause SP"):
             self.pad.press("start", 0.15)
             deadline = time.time() + 8
-            while time.time() < deadline and current_screen() != "InGame Pause SP":
+            while time.time() < deadline and not current_screen().startswith("InGame Pause SP"):
                 time.sleep(0.3)
         time.sleep(0.8)
+        if current_screen() == "InGame Pause SP Time Trial":
+            # Time Trial's pause menu has a GHOST row between Pilot Assist and
+            # Game Options: Restart Race is 6 downs, Quit Race 7 (2026-10-09).
+            downs += 1
         for _ in range(downs):
             self.pad.press("down", 0.12)
             time.sleep(0.5)
@@ -1136,6 +1147,32 @@ def cmd_display(args):
     return 0
 
 
+def prepare_state_boot(serial, interpreter=False):
+    """Make a save-state boot see the same config and pad a normal boot does.
+
+    `rpcs3 --savestate` ignores both `--config` and `--input-config` (measured
+    2026-10-09): it applies `custom_configs/config_<serial>.yml` and the *global*
+    `input_configs/global/Default.yml`. Without this a restored state has the stub
+    off (or on the stock port), `Compatible Savestate Mode` off, and a Keyboard
+    pad, so the virtual pad does nothing. Writes into the config tree, so it
+    refuses to run against the maintainer's own `~/.config`.
+    """
+    if not os.environ.get("XDG_CONFIG_HOME"):
+        raise SystemExit("--load-state edits <XDG_CONFIG_HOME>/rpcs3 (a custom config "
+                         "and the default pad profile); set XDG_CONFIG_HOME to a "
+                         "private tree (scripts/emu-env.sh) first")
+    root = Path(xdg_config()) / "rpcs3"
+    os.environ.setdefault("OAG_RPCS3_SUSPEND_STATE", "1")
+    os.environ.setdefault("OAG_RPCS3_COMPAT_STATE", "1")
+    config = scratch_config(interpreter=interpreter)
+    custom = root / "custom_configs" / ("config_%s.yml" % serial)
+    custom.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(config, custom)
+    default = Path(rpcs3_pad.input_config_path("Default"))
+    default.parent.mkdir(parents=True, exist_ok=True)
+    default.write_text(rpcs3_pad.input_config_body())
+
+
 def cmd_serve(args):
     """Boot once, hold the pad, and stay up until stopped (`stop`, or SIGTERM).
 
@@ -1164,12 +1201,33 @@ def cmd_serve(args):
         host, _, port = GDB_SERVER.rpartition(":")
         public = int(port)
         GDB_SERVER = "%s:%d" % (host, public + 1000)
+    if args.load_state:
+        prepare_state_boot(args.serial, args.interpreter)
+        # RPCS3 MOVES the file it loads into savestates/used_<serial>/, so a
+        # load from the master leaves nothing for the next boot ("No savestate
+        # file found", a modal that reads as a boot hang). Load a private copy.
+        copy = Path(args.log_dir) / "loaded.SAVESTAT.zst"
+        Path(args.log_dir).mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(args.load_state, copy)
+        os.environ["OAG_RPCS3_LOAD_STATE"] = str(copy.resolve())
     session = Session(args.image, args.log_dir, config=args.config,
                       interpreter=args.interpreter, attach=False)
     with session:
         session.guard.stage("boot", limit=args.timeout)
         print("rpcs3 pid %d" % session.proc.pid, flush=True)
-        if not session.wait_for_screen_pressing("Main Menu", args.timeout):
+        if args.load_state:
+            session.guard.stage("loading", limit=args.timeout)
+            # The stub only opens once the state is restored. Never probe its
+            # port (it serves one client per launch); read the log instead.
+            deadline = time.time() + args.timeout
+            marker = "Started listening" if GDB_SERVER else "Pad 0:"
+            while time.time() < deadline and session.proc.poll() is None:
+                if marker in rpcs3_log_text():
+                    break
+                time.sleep(0.25)
+            if not GDB_SERVER:
+                time.sleep(float(os.environ.get("OAG_STATE_WAIT", "1.5")))
+        elif not session.wait_for_screen_pressing("Main Menu", args.timeout):
             print("never reached the Main Menu (last screen: %s)"
                   % current_screen(), file=sys.stderr)
             return 1
@@ -1334,6 +1392,15 @@ def emulator_screenshots(title_id="BCES00664"):
     root = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     pattern = os.path.join(root, "rpcs3", "screenshots", title_id, "*.png")
     return sorted(glob.glob(pattern), key=os.path.getmtime)
+
+
+def cmd_restart(args):
+    """Pause menu -> Restart Race on the attached emulator (7.7 s). After a state
+    restore this is what makes `TTY.log` carry the lines scripts wait on."""
+    with open_session(args) as session:
+        session.restart_race()
+        print("screen: %s" % current_screen(), flush=True)
+    return 0
 
 
 def cmd_race(args):
@@ -2231,6 +2298,12 @@ def main(argv=None):
 
     serve = sub.add_parser("serve", help="boot once and stay up for attaching scripts")
     serve.add_argument("--timeout", type=float, default=240.0)
+    serve.add_argument("--serial", default="BCES00664",
+                       help="title serial of the state (names its custom config); "
+                            "default is HD/Fury EU")
+    serve.add_argument("--load-state", default="",
+                       help="boot straight into this RPCS3 save state instead of "
+                            "walking to the Main Menu")
     serve.set_defaults(run=cmd_serve)
     press = sub.add_parser("press", help="tap buttons on the live session")
     press.add_argument("buttons", nargs="+")
@@ -2251,6 +2324,8 @@ def main(argv=None):
     shot.add_argument("--settle", type=float, default=12.0)
     shot.set_defaults(run=cmd_shot)
 
+    sub.add_parser("restart", help="Restart Race on the attached emulator").set_defaults(
+        run=cmd_restart)
     race = sub.add_parser("race")
     race.add_argument("--timeout", type=float, default=180.0)
     race.add_argument("--settle", type=float, default=12.0,
