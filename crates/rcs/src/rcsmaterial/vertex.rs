@@ -210,6 +210,28 @@ impl Program {
             .map(|&(_, slot)| slot)
     }
 
+    /// The texture-coordinate interpolators (`0` for `o[TC0]`) this program
+    /// writes attribute `hash` into, unchanged or not: every instruction that
+    /// reads the attribute's input register and writes an output at or past
+    /// `o[TC0]`. Empty for an attribute the block does not declare.
+    #[must_use]
+    pub fn texcoords_fed_by(&self, hash: u32) -> Vec<u32> {
+        let Some(slot) = self.attribute_slot(hash) else {
+            return Vec::new();
+        };
+        self.instructions
+            .iter()
+            .filter(|i| {
+                u32::from(i.input) == slot
+                    && i.vec_op != 0
+                    && i.dest_is_output
+                    && i.dest >= FIRST_TEXCOORD_DEST
+                    && i.sources.iter().any(|&s| s & 3 == SOURCE_INPUT)
+            })
+            .map(|i| i.dest - FIRST_TEXCOORD_DEST)
+            .collect()
+    }
+
     /// Whether this program writes the **negated** attribute `hash` into an
     /// output texture coordinate - the `v = 1 - v` flip the module documents.
     ///

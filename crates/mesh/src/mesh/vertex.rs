@@ -139,6 +139,19 @@ pub struct GpuVertex {
 /// and every HD material the decoder could not resolve to a real value.
 pub const DEFAULT_SPECULAR_EXPONENT: f32 = 32.0;
 
+/// [`GpuVertex::specular_exponent`] for a surface whose material program has no
+/// `pow(N.H, e)` chain to read an exponent from: `mesh.wesl` draws no specular
+/// term for it. `pow(x, 0)` is `1`, so no authored shininess is ever this value.
+pub const NO_SPECULAR: f32 = 0.0;
+
+/// [`GpuVertex::sun_mask`] for a chunk whose `VertexColour1` is a factor on the
+/// light: `-1 - mask`, below zero, which `mesh.wesl` reads as a mode. A hull
+/// ignores the mask in that mode; any other draw decodes it back.
+#[must_use]
+pub fn factor_sun_mask(mask: f32) -> f32 {
+    -1.0 - mask
+}
+
 /// How [`GpuVertex::slots`] packs a material's texture roles.
 ///
 /// Bit-for-bit the same layout `mesh.wesl`'s `fs_main` decodes; the two are

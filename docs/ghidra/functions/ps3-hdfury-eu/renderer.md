@@ -7910,7 +7910,7 @@ every grid pose); Sol 2 and Amphiseum were seen on one boot each.
   Ship Select previews the concept in blue and white. Hull-box luma (120x80 px on the rear engine housing, ours with the
   craft placed by `--pose` 14 units ahead of the original's camera): original 0.097 / 0.100 / 0.086 (two boots, scale 100
   control), ours 0.297. **Ours is about 3x brighter on the hull**, and the gap survives WCB on (the WCB-off frame read 0.203).
-  The original's housing also carries an orange rim ours lacks. Not chased further: the hull lighting is its own question.
+  The original's housing also carries an orange rim ours lacks. **Closed in part by `hd-hull-bright` (2026-10-09)**: the hull programs multiply `VertexColour1` into the light where ours added it - see `docs/rendering/hd-ship-materials.md`, "Finding 3, resolved" (box 0.297 -> 0.205 `off`, 0.110 `original`); the rim stays open.
 - Amphiseum's dark interior pose (frame 10) reads ours 1.21x.
 
 **Not done (deliberately):** the live read of the original's `adapted` (`FunkLayer + 0x25c`). With no gap left to explain,
