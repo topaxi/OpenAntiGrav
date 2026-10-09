@@ -17,6 +17,12 @@ Architecture, measurements, hosting and limits:
 
 ## Open
 
+- **Defaults and options (2026-10-09, web-defaults lane)**: first-run values
+  (60 fps, anisotropy off, shadows off) and the 720-line cap are chosen, not
+  measured; dynamic resolution is not on. Untried: the fullscreen row in a
+  headed browser (Chromium headless entered and left it), the CANVAS SIZE row
+  on a phone, the picker's table on Safari. The nightly's `web` job has not run
+  on GitHub (`actionlint` clean, `act -n` plans only its first job).
 - **The deploy has not run on GitHub**, and the threaded build has never run
   in CI: the nightly install step (`dtolnay/rust-toolchain@master` with
   `nightly-2026-10-08` and `rust-src`) is untried. `act` fails on this podman

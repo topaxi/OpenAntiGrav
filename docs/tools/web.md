@@ -172,6 +172,41 @@ makes no request after loading itself.
   `display` rule otherwise outranks the browser's own, which once drew that
   button empty beside the other two with nothing to replay.
 
+### First-run defaults and the options pages
+
+**Chosen, not measured.** With no `settings.toml` in `localStorage` (a first
+visit), `oag_game::settings::web::first_run` starts light: frame limit 60,
+anisotropy off, shadows off in every title's render profile (the type's own
+default is already `off`; HD's profile does not override it). A saved profile,
+the maintainer's included, keeps what it holds: a file written before this has
+240 and 16x as canonical values and is never rewritten. Dynamic resolution is
+not turned on.
+
+The render target is held to **720 lines** on the web, always, whatever the
+render-scale row says (`settings::web::render_target`, used by every
+`target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
+`render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
+headless Chromium (2026-10-09). The surface is in physical pixels, so
+`devicePixelRatio` is already inside the number it clamps.
+
+The options pages drop VSYNC (a canvas only offers `Fifo`) and MONITOR
+(`settings::web::HIDDEN_ROWS`, `Definition::drop_settings`). WINDOW MODE stays
+as Windowed/Borderless, the second being the browser's Fullscreen API
+(`oagFullscreen` in `web/main.js`; a menu press is the user gesture, checked in
+Chromium). Escape or F11 leaves fullscreen without the game seeing the key, so
+the page records `fullscreenchange` and the game polls it once a frame, sets the
+mode back to Windowed, saves it and re-seeds the open row. WINDOW SIZE is
+replaced on the web by CANVAS SIZE (`display.canvas_size`: `fit`, the default,
+or a size in CSS pixels): a page has no window, and a size value that means
+"fit" cannot live in `display.window_size`, which every desktop row shares. It is
+dropped on a desktop. winit's own size request is not used (it cropped the
+canvas); the page sets the canvas's CSS and the surface follows.
+
+The language picked on first boot is saved the frame it is picked, not when the
+menus open (`session/frame.rs`): a quit from the title screen, which reloads the
+page, used to skip the save and ask again. Checked across a reload in headless
+Chromium with English and with French.
+
 ### Quitting
 
 QUIT (or escape at the root of the menus) ends the event loop, and before
@@ -220,7 +255,9 @@ panic either way (0.3 s and 0.6 s after the pick, Firefox).
 
 WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is
 `PRIMARY`, which includes the browser's WebGPU and excludes GL, for the reason
-that constant's own documentation gives). WebGPU ships in Chrome and Edge 113+
+that constant's own documentation gives). The picker page lists every disc it knows, with the formats it accepts and how
+far each gets; that table is checked against `docs/overview/status.md`,
+section 9, by `crates/game/tests/web_picker_table.rs`. WebGPU ships in Chrome and Edge 113+
 (Windows, macOS, ChromeOS; Android 121+), Safari 26, and Firefox 141+ on Windows.
 Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
 Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`
@@ -348,6 +385,11 @@ tarballs, then uploads `target/web/dist` as the `web-dist` artifact;
 the repository secret `CLOUDFLARE_API_TOKEN` and the account from the
 repository variable `CLOUDFLARE_ACCOUNT_ID`. That job is skipped when the
 variable is unset (a fork). It runs on a `v*` tag or by hand.
+
+`nightly.yml` calls this workflow as its `web` job (`workflow_call`, `secrets:
+inherit`) after its own `check`, only on a night that builds a new commit; a
+manual dispatch of either stays. `actionlint` passes on both; `act -n` plans
+the nightly's first job and cannot go further here (podman, below).
 
 The deploy has not run on GitHub yet. `act` cannot run the workflow on a podman
 host (`docker cp` into the image's `/var/run/act` fails with "path escapes from
