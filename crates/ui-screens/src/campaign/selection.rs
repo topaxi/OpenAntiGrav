@@ -367,8 +367,7 @@ impl CampaignSelection {
 /// cell carries exactly one `<Gold>` target). **Closed, 2026-09-25**: an
 /// RPCS3 frame reads `"0 / 80"` beside `Fury`'s own flyer and `"0 / 87"`
 /// beside `HD`'s
-/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-left-tap.png`/
-/// `01-right-tap.png`) - **two different numbers, one per campaign**, which
+/// (RPCS3 frames of the left and right taps) - **two different numbers, one per campaign**, which
 /// is what this page's own earlier note ("this build's own parse of
 /// `DATA00`'s eight Fury grids totals 80 cells, a gap this pass does not
 /// explain") missed: it read only the `HD`-side capture (`87`) and never the
@@ -381,7 +380,6 @@ impl CampaignSelection {
 ///
 /// `footer_overlay` is [`super::hd::hd_cell_draw_list`]'s own parameter,
 /// unchanged: an RPCS3 frame of this screen
-/// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`)
 /// shows the same `NAVIGATION`/`CONFIRM`/`BACK` footer row `Cell
 /// Selection`'s own frame does.
 #[must_use]

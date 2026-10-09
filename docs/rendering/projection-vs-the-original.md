@@ -136,7 +136,7 @@ resolution and does not change on-screen size at all.
 
 Registering **far scenery** (`y 20..200` - buildings, tower, sky, at effectively
 infinite distance, which **no mesh scale can move**) against registering the
-**craft**, over `data/traces/pad0-boost.csv` and `data/shots/pad0-boost/`:
+**craft**, over `data/traces/pad0-boost.csv` and the frames (not kept in the repository):
 
 | tick | speed | far scenery | craft | craft / far |
 | ---: | ---: | ---: | ---: | ---: |
@@ -300,8 +300,8 @@ the capture nobody had looked at.
   coefficient of **-0.0087** and barely moves the rms. Ticks 40-70 (boost active)
   sit on the same line as ticks 80-148 (boost expired). The widen is present with
   no boost at all, which is why `BoostFovKick` never accounted for it.
-- **Robust to the frame/trace lag.** `data/shots/pad0-boost/measurements.md`
-  records a +0..+2 tick ambiguity. Refitting at each lag moves the coefficient
+- **Robust to the frame/trace lag.** the capture's measurements (not kept in the repository)
+record a +0..+2 tick ambiguity. Refitting at each lag moves the coefficient
   over `0.0769 / 0.0759 / 0.0752` and the intercept over `60.18 / 60.29 / 60.47`
   - every one of them still bracketing `0.075` and `60`. The lag does not decide
   the constants.
@@ -488,7 +488,7 @@ speeds. Unresolved.
 
 `g_camera_fov_degrees` (`0x08b34310`) is the live projection's own fov, and
 `Camera_PublishTripod` is its only writer. **Read it at the exact tick
-`data/shots/pad0-boost/tick00000.png` was captured** - speed 71.84 units/s:
+the tick-0 frame was captured** - speed 71.84 units/s:
 
 - **~65.4** (`60 + 0.075 * 71.5`) confirms this page directly, from the
   executable's own state rather than from pixels, and disposes of the edge fit.
@@ -541,16 +541,16 @@ against the original, not a note about this one.
 cargo build --release -p oag-game
 # from the repo root, so data/ resolves:
 target/release/oag-game --race --pose-from data/traces/pad0-boost.csv \
-    --pose-tick 0 --ticks 0 --screenshot data/scratch/ours_t0.png --size 960x544
+    --pose-tick 0 --ticks 0 --screenshot ours_t0.png --size 960x544
 
 # the free control, which is not optional - far scenery no mesh scale can move:
-python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 0,20,960,200 --range 0.70,1.40,0.01 --search 70
+python3 scripts/frame-register.py <reference-frame.png> \
+    ours_t0.png --box 0,20,960,200 --range 0.70,1.40,0.01 --search 70
 #   => 1.1195
 
 # the craft, for comparison against it:
-python3 scripts/frame-register.py data/shots/pad0-boost/tick00000.png \
-    data/scratch/ours_t0.png --box 440,330,525,430 --range 0.70,1.40,0.01 --search 70
+python3 scripts/frame-register.py <reference-frame.png> \
+    ours_t0.png --box 440,330,525,430 --range 0.70,1.40,0.01 --search 70
 ```
 
 **The script refuses a peak that lands on an end of the sweep**, rather than
@@ -568,6 +568,6 @@ frame** and narrow it only once the answer is bracketed. The ceiling trap is
 famous here because it produced fake numbers; the floor is the same trap and
 only looks different because the guard catches it.
 
-The reference frames are `data/shots/pad0-boost/`, and `data/` is gitignored - so
+The reference frames are not kept in the repository, and `data/` is gitignored - so
 `rg` and `fd` return nothing there with exit code 0 whether it is full or empty.
 Use `/bin/ls`, `find`, `grep` or an absolute path.

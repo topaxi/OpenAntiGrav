@@ -184,8 +184,7 @@ mask pixels that change between age 0 and the peak, inside the box rows 110 to
 hull's lights, against **about 4,000** if the whole overlay stamped (what ours
 did). Inside the hull's neighbourhood the bloom layer's mean is `5.1/5.7/4.8/6.0/5.3`
 (original, boot 1) and `5.4/5.2/4.6/5.9/4.8` (boot 2) against `4.4/5.7/5.2/5.7/4.7`
-(ours after the fix) at ages 0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it
-(`data/scratch/pulse-hull-bloom/cmpstats.py`).
+(ours after the fix) at ages 0.13/0.33/0.53/0.73/0.93, and `35.0/33.6/28.8/33.5/33.1` before it.
 
 **Why: the draw order, read off the GE list** (the same frame, both boots; prim
 numbers of boot 1, boot 2 differs by a constant):
@@ -228,7 +227,7 @@ both buffers.**
 **The hardware backend does not do this.** The same absorb on PPSSPP's OpenGL
 backend (**one boot, seen once**, same pose, 16 frames) draws the hull white-hot, a blob wider than the
 silhouette, as the 2026-09-23 screenshots did and as ours did before the fix
-(`data/scratch/pulse-hull-bloom/compare-sw-hw-ours-before-after.png`, in that order: software PPSSPP, OpenGL PPSSPP, ours before, ours after). A plausible cause,
+(`compare-sw-hw-ours-before-after.png`, in that order: software PPSSPP, OpenGL PPSSPP, ours before, ours after). A plausible cause,
 **not verified**: an alpha-as-stencil emulation can write the stencil only where a
 fragment passes the test, and prim 330's reset is a `REPLACE` on stencil *fail*. The
 software renderer (`DrawPixel.cpp`) runs every stencil outcome on every pixel,
@@ -247,8 +246,7 @@ the other seven teams, and what orders the batches around the shadow pass, is
 not read. At the original's grid pose (ours via `--pose-from`, `--camera-fov 60`),
 at ages 0.13 to 0.93 s, the bloom mean in the hull's neighbourhood is `4.4 / 5.7 /
 5.2 / 5.7 / 4.7` against the original's `5.1 / 5.7 / 4.8 / 6.0 / 5.3` (boot 1) and `5.4 / 5.2 / 4.6 / 5.9 / 4.8` (boot 2), the mask
-pixels at `255` match to within about 8 %, and the frames read alike
-(`data/scratch/pulse-hull-bloom/o1/vs1.png`). `crates/game/tests/absorb_mask_ground_truth.rs` pins it
+pixels at `255` match to within about 8 %, and the frames read alike. `crates/game/tests/absorb_mask_ground_truth.rs` pins it
 on the disc: the full-glow pixels in the hull's box grow by **232 - 119 = 113** at the
 peak against 4,189 - 119 without the fix, and the original's 95 and 123.
 

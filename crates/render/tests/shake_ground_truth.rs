@@ -29,8 +29,7 @@
 //! the pre-shake forward row as the second axis `3e-3`.
 //!
 //! No disc image is needed: these are measurements of the original's behaviour,
-//! not its content, so the test runs in the normal suite. Raw captures live
-//! under `data/scratch/pulse-camera-shake/`, gitignored.
+//! not its content, so the test runs in the normal suite.
 
 use oag_core::Rng;
 use oag_core::math::{Mat4, Vec3};

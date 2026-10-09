@@ -107,8 +107,7 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
 }
 
 /// `Confirm` overlapping `Back`'s own button glyph at the authored,
-/// left-aligned `x="368"` was measured live
-/// (`data/scratch/lane-pulse/shots/crop-legend2-zoom.png`) - this pins the
+/// left-aligned `x="368"` was measured live - this pins the
 /// fix: `Confirm` draws right-aligned, ending a few pixels short of the
 /// back glyph's own `x="415"`, not left-aligned at its own authored start.
 #[test]
@@ -250,7 +249,7 @@ const HD_XML: &str = r#"
 /// The `EndRace Results` shape: a *local* controller (one screen's own, not
 /// the shared root) that also carries an online-only `RecordsCycle` pair
 /// beside `Confirm` - real widget names, off `EndRace_Definition.xml`
-/// directly (`data/scratch/drive-2026-09-25/hd-xml/DATA02/...`). No `Back`
+/// directly. No `Back`
 /// at all on this screen, unlike the shared Bodge controller above.
 const HD_RESULTS_XML: &str = r#"
 <NavigationController name="NavigationController">
@@ -335,8 +334,7 @@ fn wipeout_hds_own_buttons_font_icon_and_word_both_draw() {
 /// the shrink/right-align block (`read`'s own `GAP`/`GLYPH_WIDTH_ESTIMATE`
 /// note) would trigger on HD too if it were not gated - moving `CONFIRM`
 /// off its authored `x="534"` and right-aligning it, which RPCS3 never
-/// shows (`data/scratch/drive-2026-09-25/hd-footer-glyphs/atlas-confirm-back-difficulty.png`
-/// and the clean `02-square.png`/`02-triangle.png` captures both show it
+/// shows (the RPCS3 atlas and the clean square and triangle captures both show it
 /// left-aligned, well short of `BACK`'s own `x="720"`). The gate is
 /// `confirm.scale > 0.99`: HD's own `ControlTextConfirm` authors
 /// `scale="0.8"`, Pulse's authors none (`1.0`).

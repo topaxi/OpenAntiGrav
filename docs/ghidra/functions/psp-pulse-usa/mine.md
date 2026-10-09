@@ -724,8 +724,7 @@ store the watch caught; `a1` is the craft's weapon record):
 088675ac: sw    a0,0x1c0(a1)        ; the second copy the grant's no-repeat rule reads
 088675b0: li    a0,-0x2
 088675b4: and   a0,a2,a0
-088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1 - bit 0x1, which no weapon in the
-                                    ;   jump table above owns; what it flags is unread
+088675b8: sw    a0,0x1b8(a1)        ; fire word &= ~0x1 - bit 0x1, which no weapon in the; jump table above owns; what it flags is unread
 088675bc: li    a0,0x5
 088675c0: sw    a0,0x1ac(a1)        ; rounds = 5        <- the cluster
 088675c4: jr    ra
@@ -1080,7 +1079,7 @@ shared with `Rocket_HitCraft`'s shield check, 60) stay unnamed.
 Read on the bridge, then measured live on PPSSPP (`pulse-psp-usa.chd`,
 Single Race, the player's own weapon record) by setting the fire bit inside
 `Weapons_DispatchFire` and breaking on the node hand-off. Raw samples are in
-`data/scratch/weapon-pose/psp/` (not committed).
+a scratch directory, not kept (not committed).
 
 ### The Mine: `0.6 x Rot(axis, -4 x fuse)`, rebuilt every tick
 
@@ -1172,7 +1171,7 @@ Venom/Assegai; `scripts/psp-weapon-pair.py mine --set-word 0x1ac=5`, the round
 counter a hand-set fire bit does not arm) and photograph every frame. The
 camera is 11.4 behind and 2.6 above the craft (read off the camera node,
 `camera.md`), so a charge laid at the craft's centre passes under the lens
-about 6 frames after the drop. Frames: `data/scratch/pulse-weapons/mine-orig-mv1`,
+about 6 frames after the drop. Frames: a scratch directory, not kept,
 `bomb-orig-mv1` (not committed); ours `mine-ours-tt480`, `bomb-ours-tt480`.
 
 **Measured (a stationary craft, `Mine_PoseNode` probe, 5 mines, fuse 7.00
@@ -1239,7 +1238,7 @@ that owns it.
 Two of the differences the section above named, closed. Same state and method
 (`psp-weapon-pair.py`, Time Trial, Talon's Junction, Venom/Assegai, 106.2 u/s at
 `--go-offset 120`); frames and logs under
-`data/scratch/pulse-weapon-fx/` (not committed).
+a scratch directory, not kept (not committed).
 
 ### The wide flat ring was a node that never moved
 
@@ -1310,7 +1309,7 @@ the craft leaves, as in the original's frames (ours t406 against the original's 
 Same state as the second pass (Venom, Assegai, Talon's Junction, Time Trial, fire at speed
 106.2, native 480x272, the original's own animation clock read per frame and pinned on our
 side with `--anim-seconds`, which puts the ring at the phase the original's frame shows).
-Frames and probes are under `data/scratch/pulse-rocket-look/` (not committed).
+Frames and probes are under a scratch directory, not kept (not committed).
 
 ### The canister at launch
 
@@ -1378,7 +1377,7 @@ applied (that is `Bomb_ApplyBlast`, a separate call the write does not reach).
 ## 2026-10-01: the Mine's explosion, pictured against ours (pulse-fx-3)
 
 Method: a stationary craft in a Single Race on Talon's Junction fires a Mine at stop frame 300 (`scripts/psp-weapon-pair.py mine --no-hold
---fire-frame 300 --set-word 0x1ac=5 --shots ...`, PPSSPP 1.20.4, software renderer, native 480x272; frames `data/scratch/pulse-fx-3/mineB`,
+--fire-frame 300 --set-word 0x1ac=5 --shots ...`, PPSSPP 1.20.4, software renderer, native 480x272; frames a scratch directory, not kept,
 a GE dump at fire+31 and +33 in `mineGE31`, `mineGE33`, the pool probes `mineP_rolled`).
 
 - **A stationary craft trips its own Mine at once**: the explosion starts at fire+30/31 (the arming delay, `screen-flash-callers.md`'s
@@ -1455,7 +1454,7 @@ on Talon's Junction fires at stop frame 300 (`scripts/psp-weapon-pair.py mine --
 --fire-frame 300 --set-word 0x1ac=R`), a frame every one to two frames from fire+29 to fire+64.
 Ours: `oag-game --race --mode time_trial --give mine --input-script
 verification/scenarios/mine-stationary-fire.inputs`, tick `304 + k`. The number plotted is the mean
-brightness of the top 200 rows (`R+G+B)/3`). Frames and logs: `data/scratch/pulse-weapon-look/`
+brightness of the top 200 rows (`R+G+B)/3`). Frames and logs: a scratch directory, not kept
 (`mine-orig-r1`, `mine-orig-r5`, `mine-orig-r5b`, `mine-ours*`).
 
 **Is the three-bump wash the cluster? Yes (confidence 80: one PPSSPP boot, the five-round run restarted twice in it and the one-round run once - restarts, not reboots).** The discriminator written before the capture: one round (`0x1ac=1`) must show one
@@ -1492,7 +1491,7 @@ against the original's 32, 38, 44, 51 with the brightness tail agreeing (123 aga
 `rapier_seed_1` and `rapier_seed_3` over theirs too; all 13 cells pass with slack 0). The seven AI Aces play with weapons on, so
 mine kills are the obvious suspect, but **whether the extra deaths are mine kills or the per-seed divergence the test's own
 notes call chaotic was not checked**. Those ceilings "may only fall" and are the AI lane's, so raising
-them is the maintainer's or the lead's call. The ready patch is `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`
+them is the maintainer's or the lead's call. The ready patch is `mine-drop-six-ticks.patch`
 (commit `9dc9b01b8` on the lane's history, reverted in the next commit); whether the AI should lay or avoid
 mines the way the original does is the open question it carries.
 

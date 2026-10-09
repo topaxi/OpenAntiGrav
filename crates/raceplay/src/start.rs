@@ -15,8 +15,8 @@ impl Race {
     /// quantity stored twice and keeping them equal is this layer's job -
     /// `oag_physics` deliberately does not do it, so that a mismatch stays visible.
     ///
-    /// The inertia comes from [`box_inertia`]; see the module documentation and that
-    /// function for why a derived tensor replaced the `(1, 1, 1)` placeholder.
+    /// The inertia is the title's box tensor (`crate::launch_hover::craft_inertia`, Pulse's
+    /// [`box_inertia`] for `None`); see that function for why a derived tensor is used at all.
     #[must_use]
     pub fn start(setup: Setup) -> Self {
         let Setup {
@@ -54,6 +54,8 @@ impl Race {
             zone_stages,
             countdown_voice,
             launch_hover,
+            hover_rig,
+            craft_laws,
             weapon_pad_glow,
             speedup_pads,
             weapon_pads,
@@ -97,6 +99,7 @@ impl Race {
         // race has no weapon pads to walk rather than a walk that decides
         // nothing. Dropping the volumes here also makes it impossible for a
         // later change to reach them by accident.
+        let inertia = crate::launch_hover::craft_inertia(craft_laws);
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
         let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
 
@@ -146,7 +149,7 @@ impl Race {
         ship.active = true;
         ship.handling = handling;
         ship.physics.body.mass = handling.physical.mass;
-        ship.physics.body.inertia = box_inertia();
+        ship.physics.body.inertia = inertia;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
         // from here (`oag_physics::damage`), and Zone's perfect-zone recharge
@@ -339,7 +342,7 @@ impl Race {
                 opponent.active = true;
                 opponent.handling = handling;
                 opponent.physics.body.mass = handling.physical.mass;
-                opponent.physics.body.inertia = box_inertia();
+                opponent.physics.body.inertia = inertia;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
                 // the race's own and the craft's slot, so the same race fields
@@ -464,6 +467,8 @@ impl Race {
                 zone_stages,
                 countdown_voice,
                 launch_hover,
+                hover_rig: crate::launch_hover::physics_rig(hover_rig),
+                steer_ramp_clamped: craft_laws.is_some_and(|laws| laws.steer_ramp_clamped.value),
                 weapon_pad_glow,
                 autopilot: false,
                 cues: Vec::new(),

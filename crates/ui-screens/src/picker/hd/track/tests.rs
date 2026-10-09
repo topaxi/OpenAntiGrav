@@ -90,6 +90,9 @@ fn the_child_screen_carries_the_parents_widgets_and_none_of_tournament_cs() {
     assert_eq!(extra.common.labels[0].y, 140.0);
     assert_eq!(extra.emblem, Some([270.0, 178.0, 192.0, 192.0]));
     assert_eq!(extra.model.map(|m| m.origin), Some([1308.0, 440.0]));
+    // HD authors no `x`/`y` and no `orthoScale`: the placement is `z` alone.
+    let model = extra.model.expect("the TrackModel widget");
+    assert_eq!((model.offset, model.ortho_scale), ([0.0; 2], [1.0; 3]));
     let grid = extra.hex_grid.expect("the hex selector");
     assert_eq!(
         (grid.origin, grid.columns, grid.rows),

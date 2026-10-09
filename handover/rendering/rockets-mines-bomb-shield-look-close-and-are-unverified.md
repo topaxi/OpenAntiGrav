@@ -46,7 +46,7 @@ checks these first rather than rediscovering them:
 evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has a
 2026-10-01 section); the harness is `scripts/psp-weapon-pair.py` with
 `verification/scenarios/weapon-after-go.inputs` on our side. Frames stay under
-`data/scratch/pulse-weapons/`.
+a scratch directory, not kept.
 
 - *Pulse Rocket* - **flight matched 2026-10-01, second pass; the look is not.** The four rows
   landed one commit each (cruise 222.22 u/s class alone; 0.75 x class until the first surface
@@ -60,11 +60,11 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   `0x7f` with the floor four units below, so the rocket flies 166.67 u/s and falls for them);
   ours finds the floor on its first update. Cause unrecovered, see the page; (b) the wide
   orange glow at fire+3..+8 is still larger on the original than ours (480x272 pair,
-  `data/scratch/pulse-weapon-laws/rocket-pair-after.png`); `WO_ROCKET_FLARE`'s parameters are
+  `rocket-pair-after.png`); `WO_ROCKET_FLARE`'s parameters are
   unread; (c) our standing start puts the craft 2.4 units and 1.7 degrees off the original's
   at the same place, which alone moves a detonation by 30 ticks (spawn/handling, not this
   thread's).
-- *Pulse Mine's explosion, 2026-10-08 (pulse-weapon-look)* - **the cluster is the round counter, and our drop was a tick slow: LANDED 2026-10-08 (pulse-mine-drop), six-tick drop, three Black ceilings raised (seed divergence, 40 against 41 deaths over 80 races).** One round on the original is one blast, five rounds four bumps (the fifth mine's owner is out of the trigger radius); the "hue" gap was a single blast against a five-mine stack (cluster against cluster the mean RGB agrees within 3 %). Ours dropped the cluster at seven-tick spacing (a strict `> 0` on the `0.1` s reload at an exact `1/60` step), so only three blasts go off; at six ticks (`DROP_TIMER_SLACK`, chosen) they go at k=32/38/44/50 against 32/38/44/51. **Not landed: it raises three `ai_dekonstruct_black_ground_truth` cells over their "may only fall" ceilings** (the AI Aces play with weapons on; mine kills or chaotic per-seed divergence, not checked); patch `data/scratch/pulse-weapon-look/mine-drop-six-ticks.patch`, decision: land it and regenerate those ceilings in their own commit, or have the AI avoid its field's mines first. Left: ours' blasts 8-14 % brighter, the original's debris larger and tan. `mine.md`'s 2026-10-08 section.
+- *Pulse Mine's explosion, 2026-10-08 (pulse-weapon-look)* - **the cluster is the round counter, and our drop was a tick slow: LANDED 2026-10-08 (pulse-mine-drop), six-tick drop, three Black ceilings raised (seed divergence, 40 against 41 deaths over 80 races).** One round on the original is one blast, five rounds four bumps (the fifth mine's owner is out of the trigger radius); the "hue" gap was a single blast against a five-mine stack (cluster against cluster the mean RGB agrees within 3 %). Ours dropped the cluster at seven-tick spacing (a strict `> 0` on the `0.1` s reload at an exact `1/60` step), so only three blasts go off; at six ticks (`DROP_TIMER_SLACK`, chosen) they go at k=32/38/44/50 against 32/38/44/51. **Not landed: it raises three `ai_dekonstruct_black_ground_truth` cells over their "may only fall" ceilings** (the AI Aces play with weapons on; mine kills or chaotic per-seed divergence, not checked); patch `mine-drop-six-ticks.patch`, decision: land it and regenerate those ceilings in their own commit, or have the AI avoid its field's mines first. Left: ours' blasts 8-14 % brighter, the original's debris larger and tan. `mine.md`'s 2026-10-08 section.
 - *Pulse Rocket glow, 2026-10-08 (pulse-weapon-look)* - **item (b) above is closed as stated, and a new episodic excess is left.** At fire+3..+8 ours is 2.20M warm light against the original's 2.46M/2.53M (two restarts in one boot), so "larger on the original" is false; from fire+9 ours is about 1.5x in spikes at fire+9/16/20/25. The flare pool (count, size, alpha, colour, position) and the blend equal the original's, so the excess is not the effect's law: the SHAZZAM draw's random sizes or the road's bloom, not isolated. The scenario `weapon-after-go.inputs` was ten ticks late (our start now reaches x 124.9 on tick 393): `weapon-after-go-matched.inputs`, ours at tick `391 + k`. `rocket-visuals.md`'s 2026-10-08 section.
 - *Pulse Mine's explosion, 2026-10-01 (pulse-fx-3)* - **first picture of the original's**: a stationary craft trips its own Mine at fire+30
   (the arming delay; ours now exempts the owner for the same 0.5 s, 2026-10-07), and the burst runs about twenty frames of yellow-white wash, rays and orange debris
@@ -129,7 +129,7 @@ evidence are in `rocket-visuals.md`, `mine.md` and `shield-pickup.md` (each has 
   unidentified; `ship_FE.vex` and race hulls are unflagged): a Bomb comparison taken before 2026-10-01
   read them scrambled. `Pulse_Bomb.vex`'s three textures
   (`pulse_bomb`, `mine001_ADD`, `mine_flash_GLOW`) were sheared noise and now decode as a clean
-  hatch plate and a glow flare (`data/scratch/pulse-shield-look/shots/bomb-tex-before-after.png`);
+  hatch plate and a glow flare;
   `Pulse_Mine.vex` is flagged `0xe4` and did not change. **Re-look at the Bomb against the
   original**: the "bands" read off its canister on 2026-10-01 were this scramble.
 - *Resolved 2026-10-01 (camera lane)*: the original's craft looked about 1.4 x

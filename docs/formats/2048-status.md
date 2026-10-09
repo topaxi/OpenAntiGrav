@@ -82,7 +82,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   the submeshes the file's own index names. Both lit off the file's own
   authored normals. 18 of the circuit's draws name a `.gxt` that does not
   resolve or will not decode and get no texture rather than a neighbour's. The
-  screenshot is `data/shots/2048_altima_textured.png`. What was still absent
+  screenshot is not kept in the repository. What was still absent
   then is partly closed: `.envsettings` parses (light since 2026-09, the sky
   turn and fog since 2026-10-06, see [2048-sky.md](2048-sky.md) and
   [envsettings.md](envsettings.md)); bloom and exposure remain unread. (`track.pvs` was
@@ -249,7 +249,6 @@ checked, not read:** the title's own `Airbrake` handler is unread, so
 `psp2_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
 deflection raises the flap and flares it outward, both sides) on all 20 native craft and the 12 HD-derived hulls. Only
 the player's craft swings, as on Pulse; a rival's flaps stay stowed.
-Frames: `data/scratch/airbrake-flaps/` (`2048_*.png, k_2048_*.png, kcs_2048.png`).
 
 ## The one axis 2048 forced into existence
 

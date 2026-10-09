@@ -56,7 +56,7 @@ happen to net out to exactly the `Default` row face's rendered size, this
 would show as a visibly taller title; it does not. This is the capture the
 project's own rule asks for before flipping a font, and it says don't -
 closing what 2026-09-25 and the first 2026-09-27 pass could each only lean
-on. See `data/scratch/drive-2026-09-27/ps2-walk/measure-title.png` and
+on. See `measure-title.png` and
 `measure-row.png` (the gridded crops) and `back2.png` (the source capture).
 
 A same-image x-position check on the two glyphs' left edges (`M` of `MAIN`
@@ -101,7 +101,7 @@ unmeasured gap.
   `Main Menu`'s row-list numbers; `remix`/`display`/`graphics`/`audio`/
   `controls`/`pilots` not read at all) is unread. Nine of the eleven pages
   rendered clean under `PS2_MENU_SKIN` in the 2026-09-27 sweeps
-  (`data/scratch/drive-2026-09-27/ps2-fe/`, `ps2-walk/`), but "clean" here
+  (a scratch directory, not kept, `ps2-walk/`), but "clean" here
   means "no overlap `first_row_y`/`row_extra_leading` would produce," not
   "confirmed against that screen's own XML" the way `Main Menu` now is.
   `records` is the exception worth a look: the PS2 disc's own `RACE
@@ -113,7 +113,7 @@ unmeasured gap.
   reorganisation this project already makes throughout (`OPTIONS`'s own
   four-screen split versus this build's six flat pages is the same shape of
   difference), not a PS2-specific layout bug. See
-  `data/scratch/drive-2026-09-27/ps2-walk/pcsx2-race-records.png`,
+  `pcsx2-race-records.png`,
   `pcsx2-single-race-records.png` against `ours-records.png`.
 - **A real, non-layout gap found in the same walk**: the PS2's own
   `RACEBOX` screen (`--menu-page race`'s equivalent) authors five rows -
@@ -127,7 +127,7 @@ unmeasured gap.
   PSP build (same `menu.toml`), not PS2-specific, and it is a settings +
   UI feature addition rather than a position/font fix, so it is out of this
   lane's scope - documented here since this walk is what found it. See
-  `data/scratch/drive-2026-09-27/ps2-walk/racebox1.png` (the disc's row
+  `racebox1.png` (the disc's row
   list) against `ours-race.png` (this build's).
 
 ## Next Steps

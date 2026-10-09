@@ -57,8 +57,9 @@ pub struct Body {
     /// are already right: [`crate::pair`] and [`crate::wall`] apply this diagonal to a
     /// world-space `r x n`, as the original does.
     ///
-    /// **The default is the ship's tensor, not [`Vec3::ONE`], on purpose.** Every craft
-    /// shares it (a code literal at one call site), so
+    /// **The default is the ship's tensor, not [`Vec3::ONE`], on purpose.** Every craft of a
+    /// title shares it (a code literal at one call site; HD's mass differs,
+    /// [`crate::forces::ship_inertia_at`]), so
     /// `Body { position, mass, ..Body::default() }` is nearly always a craft, and a unit
     /// default would silently give `15.6x` the pitch authority and an unstable alignment
     /// oscillator. A test that wants unit inertia says so.
@@ -349,7 +350,8 @@ pub struct ShipState {
     /// Counted down in [`crate::forces::evaluate`] and **not clamped to zero**; see
     /// [`crate::slowdown`] for why that differs from the sideshift timers.
     pub slowdown_timer: f32,
-    /// How grounded the ship is, quantised to `{0.0, 0.5, 1.0}`: probes in contact over two.
+    /// How grounded the ship is: probes in contact over the rig's count ([`crate::hover::Rig::grounded`]),
+    /// `{0.0, 0.5, 1.0}` on Pulse's two probes and quarters on HD's four.
     pub grounded: f32,
     /// Last frame's [`Self::grounded`], which **every control term reads**.
     ///
@@ -463,6 +465,14 @@ pub struct ShipState {
     /// ([`crate::hover::capped_target_height`]). Written by the race from the countdown clock
     /// every tick, not hashed, for [`Self::on_grid`]'s reason. `None`: the ordinary target.
     pub hover_cap: Option<f32>,
+    /// The hover probe set ([`crate::hover::Rig`]): Pulse's two-point law unless the title
+    /// measured its own. Written by the race from the title, not hashed, for
+    /// [`Self::on_grid`]'s reason.
+    pub hover_rig: crate::hover::Rig,
+    /// The steering ramp stops at its target, as Wipeout HD's `Craft_UpdateSteering` does
+    /// ([`crate::controls::ramp_steering_clamped`]); `false` is Pulse's unclamped ramp. Written
+    /// by the race from the title every tick, not hashed, for [`Self::on_grid`]'s reason.
+    pub steer_ramp_clamped: bool,
     /// The launch boost, `craft+0x294`; see [`crate::launch`]. Idle unless the race
     /// supplies the disc's `<StartBoost>` (`Environment::start_boost`), and hashed only
     /// once it is not.
@@ -624,6 +634,8 @@ impl Default for ShipState {
             on_grid: false,
             four_corner: false,
             hover_cap: None,
+            hover_rig: crate::hover::Rig::TWO_POINT,
+            steer_ramp_clamped: false,
             released: true,
             launch: crate::launch::LaunchState::default(),
             time_airborne: 0.0,
@@ -643,16 +655,16 @@ impl Default for ShipState {
 }
 
 impl ShipState {
-    /// Whether any hover probe is in contact. Exact, since `grounded` only holds `0.0`,
-    /// `0.5` or `1.0`.
+    /// Whether any hover probe is in contact. Exact, since `grounded` only holds whole
+    /// multiples of one probe's share.
     #[must_use]
     pub fn is_grounded(&self) -> bool {
         self.grounded > 0.0
     }
 
     /// Quantises a probe contact count to `{0.0, 0.5, 1.0}`: the count over two, the whole
-    /// of the original's groundedness. The two-probe assumption is baked into the divisor;
-    /// the original's four-corner variant has an unknown selection rule.
+    /// of the original's groundedness on Pulse's two-point rig. A rig of another size goes
+    /// through [`crate::hover::Rig::grounded`].
     #[must_use]
     pub fn quantise_grounded(contacts: u32) -> f32 {
         (contacts.min(2) as f32) / 2.0

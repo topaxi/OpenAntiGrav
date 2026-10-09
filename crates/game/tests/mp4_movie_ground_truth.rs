@@ -27,7 +27,7 @@
 //! `hd_movie_ground_truth.rs` check pointed at the fifth container: what the
 //! AV1 cache decodes back must be, byte for byte, what `ffmpeg` decodes
 //! straight from the `.mp4`. It also writes one PNG of the decoded picture
-//! under `data/scratch/drive-2026-09-21/mp4/cache_frame.png` so a human (or a
+//! under `cache_frame.png` so a human (or a
 //! future automated check) can look at it rather than trust a byte count -
 //! see that test's own doc for what it shows.
 
@@ -76,7 +76,10 @@ fn cache_dir() -> PathBuf {
 fn scratch_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
-        .join("data/scratch/drive-2026-09-21/mp4")
+        .join("data")
+        .join("scratch")
+        .join("drive-2026-09-21")
+        .join("mp4")
 }
 
 /// The cache must decode to exactly the frames `ffmpeg` gets from the `.mp4`

@@ -125,5 +125,5 @@ Elimination`) are the exclusions, by `g_game_mode_names` in [state-machine.md](s
 here (it is `Mode::Eliminator`). No `EXPLSMALL`/`EXPLBIG` for an opponent. Pinned by
 `race::tests::wreck_voice` (tick, once per wreck, not Eliminator, not the player, not an unvoiced title) and, on
 the disc, by `wreck_voice_ground_truth` (Single Race, an opponent wrecked at tick 300: one cue at tick 438, and the
-third run of speech in the speech-only WAV `data/shots/wreck-voice-single-race.wav` starts at tick 438, 1.5 s long).
+third run of speech in the speech-only WAV (not kept in the repository) starts at tick 438, 1.5 s long).
 The 2.3 s is the live 2.8 s less the 0.5 s this build's `Eliminated` has already spent in state 4.

@@ -908,10 +908,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
             spu_vertex_lights,
-            // Positions only: this list feeds the trail-hit sparks' nearest-of
-            // search (`RaceView::spark_anchor_of`), which has no live hull
-            // orientation to aim along today - see `collision_fx` below for
-            // the field that does.
+            // Positions only: this list feeds the trail-hit sparks' nearest-of search
+            // (`RaceView::spark_anchor_of`), which has no live hull orientation to aim along today
+            // - see `collision_fx` below for the field that does.
             spark_anchors: liveries
                 .iter()
                 .map(|livery| livery.collision_fx.iter().map(|a| a.position).collect())
@@ -927,15 +926,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
             launch_hover: title.race.launch_hover,
+            hover_rig: title.race.hover_rig,
+            craft_laws: title.race.craft_laws,
             weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
             weapon_pads,
             weapons,
             weapon_ai,
-            // No caller of the general `load` sets this - only
-            // `race::load::campaign::load_event` does, on the `Loaded` this
-            // returns, after this whole function has already run. See
-            // `Setup::allowed_weapons`'s own doc comment.
+            // No caller of the general `load` sets this - only `race::load::campaign::load_event`
+            // does, on the `Loaded` this returns, after this whole function has already run.
+            // See `Setup::allowed_weapons`'s own doc comment.
             allowed_weapons: Vec::new(),
             weapon_pad_refresh,
             class_gravity_scale,

@@ -433,8 +433,7 @@ Implemented as `oag_rcs::rcsmodel::psp2::unpack_tangent`, wired into
 `oag_mesh::mesh::rcs::psp2::Report::decoded_tangents` -
 `just play 2048 --race` now reports e.g. "260533 tangent(s) decoded, unused
 (no normal-map consumer yet)" for Altima's own circuit mesh. **Confirmed to
-change nothing visually**: `data/shots/2048_tangent_before.png` (pre-change)
-and the post-change render are byte-identical (`cmp` exit 0) - nothing in
+change nothing visually**: the pre-change render (not kept) and the post-change render are byte-identical (`cmp` exit 0) - nothing in
 this title's mesh path samples a tangent-space normal map yet, so adding the
 data changes only the load report, not a pixel. Neither the shared
 `GpuVertex` vertex layout nor `mesh.wgsl` (used by every title's mesh path)
@@ -624,7 +623,7 @@ allocation when its size is zero.
   one - 33,335,682 of 33,335,682 across the corpus - and off computed face
   normals only where it does not, which is not observed on any shipped file.
 
-The screenshot is `data/shots/2048_altima_textured.png`: the start straight
+The screenshot is not kept in the repository: the start straight
 with legible grandstand advertising, the overhead gantry banner, panelled road
 surface and the craft's own wordmark on its tail.
 

@@ -360,7 +360,7 @@ instruction level, confidence 88:
   stays at 0, so nothing rotates it; the swirl seen in frames is the head's
   rolled class-3 quads (aspect 4.0). Confidence 85. The drawable is written
   without an anim clock.
-- **Seen:** `data/scratch/weapon-visuals/strip_crop2.png` (frames 342-352 of a
+- **Seen:** `strip_crop2.png` (frames 342-352 of a
   solo Eliminator throw): a flat bladed disc under the head and trail rings.
 
 Cross-title: **not checkable here** - no HD, Pure or 2048/Omega blade model name

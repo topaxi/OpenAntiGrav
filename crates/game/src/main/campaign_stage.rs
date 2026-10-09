@@ -461,7 +461,7 @@ impl CampaignStage {
     /// already gives every other number on these screens. `total` is the
     /// denominator RPCS3's own `Campaign Selection` shows next to it -
     /// `"0 / 87"` for `Wipeout HD`, `"0 / 80"` for `Fury`
-    /// (`data/scratch/lane-hd-sel/rpcs3-campaign-selection/01-right-tap.png`/
+    /// (`01-right-tap.png`/
     /// `01-left-tap.png`) - derived, not guessed: a cell on either campaign
     /// always carries exactly one `<Gold>` target of its own (`PI_Cell`'s
     /// own `<Gold Target=...>` child, present on every cell in every grid

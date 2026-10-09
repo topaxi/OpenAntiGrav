@@ -332,7 +332,7 @@ is this artefact, not the original's response to a shove, and its sunk-craft
 craft (so the cached state re-derives at the new pose, with the velocity zeroed
 each time), then log every following hit inside the same breakpoint session. The
 unsunk control then hovers perfectly still (y -39.55 for 60 ticks). The scratch
-script was `data/scratch/sunk-craft/place_trace.py`; folding a `--rewrites` and a
+script was a throwaway script, not kept; folding a `--rewrites` and a
 per-tick log into `psp-drive.py place` is the obvious follow-up. Even so, the
 sunk `03_Track` trial showed one unexplained frame of upward velocity (+1.9) on
 the first free tick; compare from the first frame whose velocity points down.
@@ -359,7 +359,7 @@ the first free tick; compare from the first frame whose velocity points down.
 3. ~~The `01_Track` grid~~: done 2026-09-29 by rule, not capture; Metropia
    reversed was read instead (`grid.md`). `01_Track` *is* reachable now through
    the dev-unlock byte, and the Single Race log above holds the original's whole
-   `01_Track` grid at tick 0 (`data/scratch/sunk-craft-2/orig01-single-hold.csv`,
+   `01_Track` grid at tick 0 (`orig01-single-hold.csv`,
    not committed) - a left-side grid capture waiting to be compared.
 4. A perturbed-input survey (a lateral shove on a live lap) once (1) or (2) says what the
    original does; the shove sweep above is the cheap static form of it.

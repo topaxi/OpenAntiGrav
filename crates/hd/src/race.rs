@@ -53,6 +53,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // clamped low through the flyby and countdown and released after the green light. See
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.
     launch_hover: Some(&LAUNCH_HOVER),
+    hover_rig: Some(&HOVER_RIG),
+    craft_laws: Some(&CRAFT_LAWS),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
@@ -669,6 +671,43 @@ pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
         grid_cap: oag_title::pre_race::Sourced::chosen(3.03825),
         release_rate: oag_title::pre_race::Sourced::measured(1.0),
     };
+
+/// HD's hover probe set: [`oag_title::hover_rig::HoverRig`].
+///
+/// Four probes at `(+/-1.5, -1.125, +/-4.5)` (`craft+0xe0..0x110`, read live, and the same four
+/// local offsets at `craft+0x1a0..0x1d0` the damper crosses), `0.15` of the load each
+/// (`0x008a917c`), all four marched every frame by `Craft_IntegrateHull` (`0x000ef450`), each
+/// spring along its hit normal and the normals summed times `0.25` by `Craft_HoverFourPoint`
+/// (`0x000ede88`). Confidence 88: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+/// HD's probe order (left-front, left-rear, right-front, right-rear in its own frame, whose
+/// row 0 points left and row 2 forward) is kept, converted to this engine's frame.
+pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
+    probes: oag_title::pre_race::Sourced::measured(&[
+        [-1.5, -1.125, -4.5],
+        [-1.5, -1.125, 4.5],
+        [1.5, -1.125, -4.5],
+        [1.5, -1.125, 4.5],
+    ]),
+    spring_share: oag_title::pre_race::Sourced::measured(0.15),
+    cast_every_probe: oag_title::pre_race::Sourced::measured(true),
+    along_hit_normal: oag_title::pre_race::Sourced::measured(true),
+    quarter_sum_normal: oag_title::pre_race::Sourced::measured(true),
+};
+
+/// HD's craft-body laws: [`oag_title::craft_laws::CraftLaws`].
+///
+/// - Inertia mass `1.0`: `Ship_Construct` loads the literal (`0x008a8b14`) and calls
+///   `Body_SetMass(1.0)` (`0x000debac`) then `Body_SetBoxInertia(1.0, 12, 8, 12)` (`0x000debc8`)
+///   where Pulse passes `0.9`; read live as `(17.333, 24, 17.333)` at `body+0x10`, and one
+///   airbrake's yaw rate ran `0.900` of ours on every frame before. Confidence 92.
+/// - Steering ramp clamped at its target (`Craft_UpdateSteering`, `0x000edc50`-`0x000edc68` and
+///   `0x000edb9c`-`0x000edba4`); `craft+0x314` parks at 100 live where Pulse's cycles. Confidence 90.
+///
+/// Evidence: `docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`.
+pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
+    inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
+    steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),
+};
 
 #[cfg(test)]
 mod tests {

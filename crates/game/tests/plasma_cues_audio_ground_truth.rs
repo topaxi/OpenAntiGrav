@@ -93,7 +93,7 @@ fn fire_while_driving() -> oag_gameplay::InputSnapshot {
 }
 
 /// Fires the Plasma's own press/travel/ending cues off a real disc, a real
-/// press and a real bolt, and writes the mix out to `data/shots/plasma-cues.wav`.
+/// press and a real bolt, and writes the mix out to a `.wav` under `data/shots/`.
 ///
 /// **What this proves that the unit tests in `race::tests::cues` and
 /// `audio::sfx::tests` cannot**: not only that a `CueEvent` is queued, but

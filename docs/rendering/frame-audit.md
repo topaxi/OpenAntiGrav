@@ -16,7 +16,7 @@ with nothing either side adds:
 | Size | 480x272, `InternalResolution = 1`, window 480x272 | `--size 480x272 --render-scale 100` |
 | Filters | no post shader, `TexScalingLevel = 1`, `AnisotropyLevel = 0`, FPS counter off | `--msaa off --motion-blur off --screen-filter off --anisotropy off` |
 | State | the craft's pose and camera read per tick by `psp-trace.py --camera --shot-every 1` | `--pose-from` that CSV, `--pose-tick`, **`--ticks 1`** |
-| Config | own `HOME`/`XDG_CONFIG_HOME` under `data/scratch/pulse-frame-audit/` | an isolated `XDG_CONFIG_HOME` (English, bloom on) so the maintainer's `settings.toml` (200 % render scale, 4x MSAA, `psp-3000` filter) never reaches a screenshot |
+| Config | own `HOME`/`XDG_CONFIG_HOME` under a scratch directory, not kept | an isolated `XDG_CONFIG_HOME` (English, bloom on) so the maintainer's `settings.toml` (200 % render scale, 4x MSAA, `psp-3000` filter) never reaches a screenshot |
 
 Circuits: Talon's Junction (`16_Track`, bright outdoor), Metropia (`03_Track`),
 Tech De Ra (`04_Track`, indoor). Same team (Assegai), same Venom time trial.
@@ -151,7 +151,7 @@ Gray -define convolve:scale='!' -morphology Convolve Laplacian:0`, sd x 255):
 previous pass's 16.56 (slope law) and 16.74 (base level). The strips are the two
 with the largest change. The previous pass's own boxes were not recorded, and its
 24.51/22.77 and 28.36/26.40 cannot be recovered from the saved frames
-(`data/shots/frame-audit/far/ours-l0.png` and `ours-slope.png` reproduce its whole-frame
+(our own frames, not kept in the repository, reproduce its whole-frame
 16.74 and 16.57, but hundreds of boxes match each pair to two decimals), so they are
 not directly comparable. Only 74 pixels differ
 between `original` and `maximum` at this size: the far field is small at 480x272.
@@ -422,7 +422,7 @@ batch-set path, if there is one (1,071 static draws pass the section test with n
 twin), the small transparent quads the census cannot match, and a circuit with a
 tunnel or a loop.
 
-**Seen as a player.** `data/shots/frame-audit/talon-fast/roofs-orig-before-after.png`: the
+**Seen as a player.** The frames, not kept in the repository, show the
 original, ours before and ours after at the fast pose. The dark slabs left of the
 silo are gone and the grass, the silo and the trees read as the original's.
 
@@ -566,7 +566,7 @@ the box being the dump's own). **No score** for "the transparent missing draws a
 outside the view" or for any transparent rule: 13 draws from about eight nodes on
 one circuit and one boot, against a base rate of 75 %. Scripts:
 `scripts/pvs-moving-residue.py`, the `pvs_moving_phase` example; raw dumps
-`data/scratch/pulse-moving-draws/poses/`.
+a scratch directory, not kept.
 
 ## Reproducing
 
@@ -596,5 +596,4 @@ oag-game --race --no-audio --size 480x272 --render-scale 100 --msaa off --motion
 `psp-drive.py place` takes `--tangent=-0.9,...` with an equals sign: a value that
 starts with `-` is otherwise read as a flag. Other circuits than Talon's Junction
 need the dev-unlock byte (see the debugger page) written once `Main Menu` is up,
-and `menu --track-down N --any-track`. Crops and montages from this pass are under
-`data/shots/frame-audit/` (derived game data, not committed).
+and `menu --track-down N --any-track`. Crops and montages from this pass are not kept (derived game data, not committed).

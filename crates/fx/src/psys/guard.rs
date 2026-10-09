@@ -15,7 +15,7 @@
 //! law is the GE's and very likely holds for every primitive, but an A/B of the
 //! guard on and off (2026-10-06) showed it moves the Quake's start frame too, and
 //! there the original's first frame **is** a white wash across the upper screen
-//! (`data/scratch/fx-brightness/ppsspp-quake-montage.png`) that our geometry,
+//! that our geometry,
 //! which falls out of range, would lose. Until the Quake's own quad is measured
 //! the guard stays off it. Rockets, plasma and the Repulser's standing frames
 //! other than the wave start were identical, AE 0. The fixed projection is the

@@ -589,9 +589,7 @@ PSP-measurement-only.
 (`lui at,0xbba3`), which is unique in the executable:
 
 ```c
-k = (craft+0x320 < -0.2f)      ? -0.1f     /* 0xbdcccccd */
-  : !(craft->flags & 1)        ? -0.002f   /* 0xbb03126f, airborne */
-  :                              -0.005f;  /* 0xbba3d70a, grounded */
+k = (craft+0x320 < -0.2f)      ? -0.1f     /* 0xbdcccccd */: !(craft->flags & 1)        ? -0.002f   /* 0xbb03126f, airborne */: -0.005f;  /* 0xbba3d70a, grounded */
 worldForce += velocity * craft+0x320 * k;
 ```
 
@@ -743,8 +741,7 @@ from the ramped state:
 
 ```c
 state = craft+0x2e8;
-state += (state < controls->thrust) ?  Engine.gain    * dt
-                                    : -Engine.falloff * dt;
+state += (state < controls->thrust) ?  Engine.gain    * dt: -Engine.falloff * dt;
 craft+0x2e8 = state;
 if (craft+0x2e8 < 0) craft+0x2e8 = 0;
 craft+0x2e8 = controls->thrust;                 /* <- the ramp is discarded */

@@ -730,8 +730,7 @@ Both land within one screen pixel of `total * 0.00124` PSP pixels (the second po
 `(123 - 49) / 30000 = 0.00247` screen px per point, is `0.00123` PSP px). The bar is cropped, not squashed: the
 11th segment is cut mid-bar and the segment pitch is unchanged. Our render comes from `--menu-page
 endrace-rewards-gold` with the page's hardcoded award and total temporarily set to 80 and 50080 (not committed), laid
-next to the capture: ten full segments and a half-cut 11th in both, the same edge to within a pixel
-(`data/scratch/pulse-cursor-live/bar-compare-50080.png`). Preconditions that are pokes, not the game's own path: the
+next to the capture: ten full segments and a half-cut 11th in both, the same edge to within a pixel. Preconditions that are pokes, not the game's own path: the
 record's `+8` was written, and `g_race_laps` was shortened; the displayed total therefore says nothing about earning
 50000 points. Each point was seen once (one race each). Confidence **93**
 for the width law and slope (a runtime trace, one binary); the pre-ticker visibility below is still unchased.

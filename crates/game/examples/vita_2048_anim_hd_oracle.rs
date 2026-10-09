@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! cargo run -q -p oag-game --example vita_2048_anim_hd_oracle -- \
-//!     data/scratch/2048anim/hd_anulpha_track.vex > data/scratch/2048anim/hd_anulpha_anim.tsv
+//!     <track.vex> > <anim.tsv>
 //! ```
 
 use oag_vex::vex;

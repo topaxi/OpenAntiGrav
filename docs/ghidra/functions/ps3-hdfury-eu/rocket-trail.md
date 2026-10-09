@@ -303,7 +303,7 @@ is unread. Not wired on Omega; no PS4 capture path exists.
 ## Reproducing this
 
 The live dump, the decoder and the interpreter harness live in the lane's
-scratch directory (`data/scratch/hd-rocket-trail/`: `rocketdump.py`,
+scratch directory (a scratch directory, not kept: `rocketdump.py`,
 `ana.py`, `side.py`) and are not committed; the dump drives the same front-end
 walk `scripts/rpcs3-hd-weapon.py` does, writes held weapon state 0 and taps
 Triangle, then pauses five times and reads `RaceManager + 0x2dcc`'s pool 4.

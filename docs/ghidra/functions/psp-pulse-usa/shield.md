@@ -266,7 +266,7 @@ trigger, the destruction spawners `FUN_0883e064` (`WO_SHIP_FXNODE_EXPLO`,
 `FUN_0883f540` (`WO_LEACHBEAM_CHARGING`). The complete caller list is 24
 functions. None of them reads the shield level.
 
-The frames are in `data/scratch/hit-sparks/` (gitignored): `cap-cannon/`
+The frames are in a scratch directory, not kept (gitignored): `cap-cannon/`
 (a hit every 6 frames for 60 frames), `cap-lowshield/`, and
 `cannon-orig-vs-ours.png`.
 
@@ -557,7 +557,7 @@ State 4 lasts `0.5` s, state 5 `1.5` s, and state 6's `0.8` s timer crosses zero
 non-zero case). The destroyed bit `0x1000` of `entity+0x860` sets at state 5 and stays; the wreck is the live model
 (`+0x8B0 == +0x8B8`); the craft coasts and comes to rest where it landed (b1: speed `0.0` from about frame 410, at
 `(-544.4, -2.05, 151.5)`, unchanged at frame 910) and is never moved onto the racing line. Nothing reappeared. Raw logs:
-`data/scratch/pulse-state6/{a2,b1}/log.json`. A first run (a1) read the target already in state 2 (the race had ended while the
+`log.json`. A first run (a1) read the target already in state 2 (the race had ended while the
 emulator ran free between commands, `Race_FinishAllCrafts` setting the whole field to 2); it held state 6 and logged the same two
 writes but is **void**. One frame of b1's HUD read `pos 7/7` (unverified against a baseline).
 

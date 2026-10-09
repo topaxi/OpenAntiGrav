@@ -32,7 +32,7 @@ def f32(b, o=0): return struct.unpack_from(">f", b, o)[0]
 
 WINDOW = float(sys.argv[1]) if len(sys.argv) > 1 else 10.0
 N = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-out = Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT / "data/scratch/hd-sound-tick"
+out = Path(sys.argv[3]) if len(sys.argv) > 3 else ROOT / "data" / "scratch" / "hd-sound-tick"
 out.mkdir(parents=True, exist_ok=True)
 
 def snap(d):

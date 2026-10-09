@@ -279,7 +279,7 @@ trail is the same picture either way and does not depend on roll; it is not the
 rocket body's matrix and was not touched. Pulse's basis for the body
 (`row0 = n x f`) equals HD's row 0, so only the sign of the middle row differs.
 
-**Pictures.** `data/scratch/projectile-tilt/shots/pulse-rocket-bank.png` (Moa
+**Pictures.** `pulse-rocket-bank.png` (Moa
 Therma, at the loop's foot, three rockets climbing the wall) and
 `hd-rocket-bank.png`, `hd-missile-bank.png` (Vineta K, at (-282, 86, 106) where the
 autopilot's craft read up.y -0.68): the volley follows the track surface and the

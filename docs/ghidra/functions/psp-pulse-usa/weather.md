@@ -89,7 +89,7 @@ White, Venom. Ported: `oag_fx::psys` now honours flag `0x800`.
   nothing). The difference is a field of faint specks over the upper half of the screen,
   invisible in the full frame at player size. Ours at the same pose and mode gives the
   same picture: its largest per-pixel difference is `58`, the bound above. Scratch frames:
-  `data/scratch/pulse-weather/orig/t3-*.png`, `ours2/start-*.png`, `cmp-start*.png`.
+  `t3-*.png`, `ours2/start-*.png`, `cmp-start*.png`.
 
 ## The mist overlay (2026-10-04)
 
@@ -161,7 +161,7 @@ does. In our terms, with `right`, `up`, `back` the camera's axes:
 `+back * speed`, so `dz > 0`.
 
 **Live, Fort Gale White, Assegai, Time Trial, PPSSPP software renderer, 23 pauses**
-(`data/scratch/pulse-mist/sample.py`, `check.py`, `fg-turn1.json`):
+(a throwaway script, not kept, `check.py`, `fg-turn1.json`):
 
 - **Yaw and pitch recompute exactly** (to five places, every sample) from the back axes
   left in `S+0xd0..e4`. Holding **left**, `dyaw` is **positive** (`+0.008` to
@@ -210,7 +210,7 @@ scrolls by an arbitrary amount.
 values; a circuit whose `Tex` does not decode draws no mist and says so in the load report.
 
 **The draw law against the original's pixels.** At a stationary pose, the original's
-opacity was poked to `0` and back (`data/scratch/pulse-mist/ab.py`), and its
+opacity was poked to `0` and back, and its
 added light was predicted from the quad UVs and colours dumped in the same pause, the
 unswizzled `Mist.mip` alpha, bilinear repeat sampling and the byte-truncated alpha
 (`predict.py`). Masked to pixels the rest of the scene left alone:
@@ -227,7 +227,7 @@ The original's residual includes the drift between the dump and the frame grab.
 Ours draws a different random offset and phase, so its mean differs per frame (texel
 sampling, not a gain): `37` at our start against the original's `30`.
 
-**Frames at player size** (`data/scratch/pulse-mist/`): `cmp-start.png` (original
+**Frames at player size**: `cmp-start.png` (original
 left, ours right) and `cmp-start-diff.png` (each one's on/off difference, times 3);
 `cmp-fg-run.png` (Fort Gale driving: open, tunnel, a left turn, original left);
 `cmp-o7-and-turn.png`: Outpost 7's start line, a matched stationary pose, both

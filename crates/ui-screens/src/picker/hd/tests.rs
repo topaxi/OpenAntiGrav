@@ -10,6 +10,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_ui::frontend::Draw;
 
 const XML: &str = r#"<Variable global="Grey" name="Grey"><Values String="0xff969696"></Values></Variable>
+<Variable global="HD_Blue" name="HD_Blue"><Values String="0xffac0717"></Values></Variable>
 <Screen name="Team Selection Top Level">
   <Model name="ShipModel"><Values OriginX="1220" OriginY="412" z="-24.0" RotX="0.4" RotY="-0.5"></Values></Model>
   <Item OffsetX="160" OffsetY="170">
@@ -410,4 +411,82 @@ fn clicking_a_hex_selects_its_team_and_livery_and_the_chosen_one_confirms() {
     };
     let events = picker.pointer(&click, &targets(&picker, &layout, &skin, &|_| None));
     assert_eq!(events, vec![Event::Confirmed]);
+}
+
+const RED: [f32; 4] = [172.0 / 255.0, 7.0 / 255.0, 23.0 / 255.0, 1.0];
+
+/// The `Fill`s of the stat bar's red, with the block art a served archive
+/// resolves.
+fn red_fills(picker: &Picker, extra: &TeamScreen, layout: &Layout) -> Vec<[f32; 4]> {
+    let placed = |x: u32, width: u32, height: u32| oag_ui::frontend::Placed {
+        x,
+        y: 0,
+        width,
+        height,
+        quad_extent: None,
+        blend: None,
+    };
+    let frame = Frame {
+        blocks: Some(oag_ui::menu::block::BlockArt {
+            frame: placed(0, 64, 64),
+            fill_alpha: 110.0 / 255.0,
+            solid_alpha: 1.0,
+            cursor: None,
+            arrow: None,
+            fury: true,
+        }),
+        ..Frame::default()
+    };
+    body(picker, layout, extra, &frame, &|_| None)
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Fill { rect, color } if color == RED => Some(rect),
+            _ => None,
+        })
+        .collect()
+}
+
+fn variant_picker(variant: &str) -> Picker {
+    let stats = |speed| Stats {
+        speed,
+        thrust: 80,
+        handling: 100,
+        shield: 80,
+    };
+    Picker::new(
+        Kind::Ship,
+        vec![team("Feisar", vec![Some(stats(70)), Some(stats(80))])],
+        None,
+        Some(variant),
+    )
+}
+
+#[test]
+fn the_bonus_colour_is_the_fronts_hd_blue() {
+    let layout = layout();
+    assert_eq!(layout.hd.as_deref().unwrap().bonus, Some(0xffac_0717));
+}
+
+/// Fury Concept's 8.0 speed over the classic hull's 7.0: the block's
+/// `0.70..0.80` is red, and only that.
+#[test]
+fn a_variants_added_rating_is_drawn_in_the_bonus_colour() {
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    let fills = red_fills(&variant_picker("_c1"), extra, &layout);
+    assert_eq!(fills.len(), 1, "{fills:?}");
+    let block = find_block(&layout.screen, "Slide_0").unwrap();
+    let [x, _, width, _] = fills[0];
+    assert!((x - (block.x + block.width * 0.70)).abs() < 0.01, "{x}");
+    assert!((width - block.width * 0.10).abs() < 0.01, "{width}");
+}
+
+#[test]
+fn the_classic_hull_and_a_missing_colour_draw_no_red() {
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    assert!(red_fills(&variant_picker(""), extra, &layout).is_empty());
+    let mut bare = extra.clone();
+    bare.bonus = None;
+    assert!(red_fills(&variant_picker("_c1"), &bare, &layout).is_empty());
 }

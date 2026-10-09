@@ -67,7 +67,7 @@ samples later and grinds longer at a lower speed for the same total. A driver
 that believes it has a third of the grip runs just as wide here.
 
 Full evidence, tables and the reproduction recipe:
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/outpost7-walls.md`.
+`outpost7-walls.md`.
 
 ## Step 2 is done: it is neither the steering nor the grip. The corner is untakeable.
 
@@ -121,7 +121,7 @@ Fraction of each circuit yaw-limited (`k > 1.55^2 / 260`), worst sample:
 14 9 %; 10 8 %; 05 7 %; 04 7 %; 01 3 %. **13's 2.7 shield is not this bug.**
 
 Full evidence, tables, per-tick dumps and the two probes below:
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/steering-saturation.md`.
+`steering-saturation.md`.
 
 ## Step 3 is done: probe B's regression was a latent estimator bug, and it is fixed
 
@@ -254,7 +254,7 @@ the span.
 
 `07` after: **28.19 / 29.08 / 29.69** a lap and reaching lap 4, from 33.46/35.11
 and destroyed on lap 3. Full table, criterion and reproduction:
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/curvature-sweep.md`.
+`curvature-sweep.md`.
 
 ## Open
 
@@ -367,7 +367,7 @@ Opponents take contact damage in the original, and
 return already reproduces the gate.
 
 Full tables, the per-tick dumps and the reproduction:
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/wall-bleed.md`.
+`wall-bleed.md`.
 
 ## Step 6 is done: the two remaining crashes are the estimator, not the wall or the differential gate
 
@@ -403,7 +403,7 @@ corners are the residual the compromise left standing.
 
 Full tables, per-tick data and the two reproduction recipes (both
 instrumentation additions reverted, neither committed):
-`~/.claude/projects/-home-topaxi-projects-OpenAntiGrav/scratch/outpost7-corner-entry.md`.
+`outpost7-corner-entry.md`.
 
 ## Next Steps
 

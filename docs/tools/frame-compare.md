@@ -43,9 +43,9 @@ just pads --before 50 > /tmp/pads.csv
 just drive place --pads-csv /tmp/pads.csv --pad 0 --before 50 --speed 120 --settle 30
 uv run --with websocket-client scripts/psp-trace.py \
     --ticks 20 --camera --out data/traces/pad0.csv \
-    --shot-every 5 --shot-dir data/shots/pad0
+    --shot-every 5 --shot-dir <shot-dir>
 just frame-shot data/traces/pad0.csv 0 /tmp/ours.png
-just frame-compare data/shots/pad0/tick00000.png /tmp/ours.png
+just frame-compare <shot-dir>/tick00000.png /tmp/ours.png
 ```
 
 Needs a PPSSPP with its websocket debugger in a race (`just drive menu` walks

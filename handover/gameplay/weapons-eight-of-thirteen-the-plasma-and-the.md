@@ -395,7 +395,7 @@ still open, most player-visible first:
   next lever is its flag `0x200000` (evenly stepped ring angles) and its
   selector-5 record, still not played by `oag_fx::psys`
   ([pob.md](../../docs/formats/pob.md)). Frames:
-  `data/scratch/pulse-repulser-2/shots/psp-seq.png` against `oag-seq.png`.
+  `psp-seq.png` against `oag-seq.png`.
 - ~~**Open: the wave-start whiteout is confirmed as ours.**~~ Closed 2026-10-06: the `shazzam` quad is dropped by the GE's guard band, see particle-system.md.
 - ~~The junction fork's third wave is not built~~ **built 2026-10-04**: the
   in-run fork (`Repulser_AdvanceWave`, 88) on `oag_race::Course::branches`
@@ -1171,7 +1171,7 @@ suite (931 passed).
   already read. Confidence 78 on that reading; see `mine.md`'s 2026-09-06
   section for the instruction-level evidence and `oag-wad sounds` output
   confirming all six cues live in `weapons.bnk`. A WAV of a real cluster
-  drop, real disc, real mixer: `data/shots/mine-launch.wav`
+  drop, real disc, real mixer, written by the test
   (`crates/game/tests/mine_launch_audio_ground_truth.rs`).
   **The other five stay silent, each for a distinct, checked reason:**
   - **`MINERADAR`** (the Mine's own second cue) anchors to a *new emitter

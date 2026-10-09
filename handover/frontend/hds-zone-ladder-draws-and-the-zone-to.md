@@ -12,8 +12,7 @@ off a *speed lap* frame, which authors none of them), the eleven `ZonePlus<N>`
 labels carry no `idstring` and so fell off `draw_list`'s text allow-list, and
 `RotationTheta` was neither parsed nor correctly applied. Checked against a Zone
 frame of the running original the maintainer supplied
-(`data/shots/hd_zone_hud_original.png`, gitignored) and reproduced at
-`data/shots/hd_zone_hud_ours.png`.
+(a maintainer capture, not kept) and reproduced in our own render (not kept).
 
 ## A renderer bug fell out of it, and it had been latent since the reticle landed
 
@@ -107,7 +106,7 @@ asset file.
 
 ## A zone-8 frame settled the placement and confirmed the table a third time
 
-The maintainer supplied it (`data/shots/hd_zone_hud_original_zone8.png`,
+The maintainer supplied it (a zone-8 capture,
 gitignored; low contrast, the Zone palette at that rung being nearly white). It
 reads `8  SUB-RAPIER` on the current row and `RAPIER` on row `12`, four down.
 
@@ -314,7 +313,7 @@ now watched stepping in a continuous run rather than at one forced
 `hd_zone_ladder_zone<N>_stage<S>.png` (zones 1, 2, 5, 16, 20, 35, 42, plus the
 eliminated end state and the `zone_2`-track zone-52 frame below), gitignored
 like every other capture this thread cites. The full tick-by-tick log and the
-rest of this session's working are in `.claude/scratch/zone-grade-report.md`
+rest of this session's working are in `zone-grade-report.md`
 inside the worktree this landed from - not linked further, since a worktree
 scratch path does not survive the worktree.
 

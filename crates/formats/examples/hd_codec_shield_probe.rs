@@ -13,7 +13,7 @@ use oag_formats::sblk::Bank;
 
 const ISO: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const ARCHIVES: usize = 7;
-const OUT_DIR: &str = "data/scratch/hd_codec";
+const OUT_DIR: &str = concat!("data", "/scratch/hd_codec");
 
 fn main() {
     let iso = Path::new(ISO);

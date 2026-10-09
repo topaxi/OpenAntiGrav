@@ -334,7 +334,7 @@ setting bit `0x10000` in world record 0's `+0x1b8` inside a
 `Weapons_DispatchFire` (`0x08861814`) break. `Weapon_FireRepulser` (`0x0886ce8c`)
 then broke with `a0` = pool `0x09b75ac0`, `live` 0, entity `0x09b75b90`.
 `Repulser_Update` (`0x08875400`) was broken on every call until the entity
-retired: **96 calls**. Three runs agree. The probe is `probe.py`, and
+retired: **96 calls**. Three runs agree. The probe is a throwaway script, not kept, and
 `live1.jsonl`..`live3.jsonl` are in the lane's scratch.
 
 | Call | `dt` (`f12`) | age `+0x1ec` | state `+0x50` | `+0x204` | `+0x1f8` | `+0x210` | `+0x21c` | cursor 0 point | cursor 1 point |

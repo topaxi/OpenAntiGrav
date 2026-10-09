@@ -125,7 +125,7 @@ item below.
    `cargo nextest run -p oag-ui campaign`/`-p oag-game campaign`, both green.
 3. **Refined, not closed: `SelectorGlow` is a real, phase-synced draw this
    build still does not produce - not confirmed absent from the original.**
-   An eight-frame burst (`data/scratch/pulse-campaign/captures/burst/`,
+   An eight-frame burst (a scratch directory, not kept,
    ~180ms apart) shows a soft halo tracking `Selector`'s own cyan/white pulse
    exactly, and `Selector`'s own sprite crop has zero alpha in its padding
    (`docs/ui/campaign-screens.md`'s own texture read), so a plain colour tint

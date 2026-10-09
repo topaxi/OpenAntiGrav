@@ -129,8 +129,7 @@ bound beside the diffuse the way HD binds its second one.
   `mt_uvanim_diffuse_emissive*` and `and_anim_spec` records are HD's own
   materials carried into 2048's DLC1: the same `Emissive_UV_Offset` and
   `Emissive_UV_Scale` values and the same `GlowTint` to three decimals on
-  Anulpha Pass, Vineta K and Chenghou (`crates/render/examples/psp2_scroll_census.rs`,
-  `data/scratch/psp2-scroll/census.txt`). HD's matching fragment program was
+  Anulpha Pass, Vineta K and Chenghou (`crates/render/examples/psp2_scroll_census.rs`). HD's matching fragment program was
   read at instruction level (`MAD R0.w, R0.zzzz, {b}, R0` with `R0.w = time`:
   `(v + a) * b + time`, rcsmaterial.md, "A surface scrolls off an engine
   `time`"), and the engine clock enters at coefficient one. HD's records never
@@ -145,8 +144,7 @@ bound beside the diffuse the way HD binds its second one.
   `fc02_effects_*vscroll*`) are 2048's own, no HD material shares the name, so
   HD's law has nothing to say. What can be said is structural: the GXP parameter
   tables put `time` and `TimeScaler` (and `time` and `speed_multipliaer`) in the
-  **same stage** on every such shader (`crates/render/examples/psp2_scroll_stages.rs`,
-  `data/scratch/psp2-scroll/stages.txt`: fragment for `fc09`/`fc10`, vertex for
+  **same stage** on every such shader (`crates/render/examples/psp2_scroll_stages.rs`: fragment for `fc09`/`fc10`, vertex for
   `fc01`, `fc02`, `fc06`), the shape of HD's `uv + time * rate`. At
   `TimeScaler 1.0` the choice equals HD's coefficient of one.
 - **The plain scroll runs `+v` at `speed_multipliaer` per second: chosen, not
@@ -230,7 +228,7 @@ circuit material (weapons and muzzle flash only), as on HD.
 ## Why a 2048 floor reads white (2026-10-05, fix-2048-particles-floor)
 
 Two causes, found by dropping materials from the build (a temporary needle on the material name, not kept)
-and by drawing unlit; frames in `data/scratch/fix-2048-particles-floor/`.
+and by drawing unlit.
 
 - **Altima: the white floor is `track_a_glass_etched`.** Dropping materials whose name or texture contains
   `glass_etched` (`fc01_emissive_alpha_emistint` 402 triangles, `fc12_phong_alpha_emistint_spectint_specpow`
@@ -264,7 +262,7 @@ compare.
   (79 blended materials in the base package) and `fc12_phong_alpha_emistint_spectint_specpow` (6), both state
   mode 1 (blended). Before `transparent-floors` routed mode 1 they drew opaque, which is the blown-white sheet the
   previous section describes; at tick 300 and 600 on current main Altima's floor is grey panelling with the
-  bright pads as glow decals (`data/scratch/omega-2048-materials/shots/before_altima_*.png`). The blend those two
+  bright pads as glow decals. The blend those two
   use is alpha-over, **chosen**: neither name is in HD, so nothing is inherited.
 - **Tower: not solved.** Its floor is still peach where drawn unlit it is grey. Re-read this pass: the file authors
   `Lighting.ExposureScale 0.4`, `ExposureMax 12` and `ExposureSpeed` (strings `0x81508818`, `0x81508830`,

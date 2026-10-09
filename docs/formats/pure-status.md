@@ -271,7 +271,6 @@ checked, not read:** the title's own `Airbrake` handler is unread, so
 `airbrake_flaps_ground_truth (Pulse's)` asserts the physical claim Pulse's recovered axis makes (a positive
 deflection raises the flap and flares it outward, both sides) on Pure by eye only - no Pure disc test was added. Only
 the player's craft swings, as on Pulse; a rival's flaps stay stowed.
-Frames: `data/scratch/airbrake-flaps/` (`pure_*.png, pure_strip.png`).
 
 ### The geometry is there and it is sane
 

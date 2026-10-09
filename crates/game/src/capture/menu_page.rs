@@ -780,11 +780,31 @@ pub(super) fn picker_page(
             .map(|skin| skin.location.clone()),
         Kind::Track => None,
     };
+    // HD's variants each race out of a directory of their own, and the
+    // preview follows the selected one; the default hull stands in where a
+    // variant ships none.
+    let variant_entry = match kind {
+        Kind::Ship if crate::preview::draws_hull(title, kind) => {
+            let chosen = picker.variant().map_or("", |(id, _)| id.as_str());
+            teams.get(picker.index()).map(|team| {
+                crate::preview::ship_entry(
+                    title,
+                    &crate::preview::variant::variant_location(
+                        title.race.team_variants_for(&team.id).map(|v| v.join),
+                        &team.location,
+                        chosen,
+                    ),
+                )
+            })
+        }
+        _ => None,
+    };
     let request = previews
         .get(picker.index())
         .and_then(Option::as_ref)
         .map(|entry| PreviewRequest {
-            entry: entry.clone(),
+            entry: variant_entry.clone().unwrap_or_else(|| entry.clone()),
+            fallback: variant_entry.is_some().then(|| entry.clone()),
             skin: skin_entry,
             rect: layout.preview,
             kind,

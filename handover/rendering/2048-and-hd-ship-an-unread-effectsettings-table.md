@@ -860,7 +860,7 @@ no longer disagree.
   texels on every sampled stage. See `docs/formats/gxt.md`'s new `U8U8U8U8`
   section and `crates/texture/tests/gxt_ground_truth.rs`'s
   `the_zone_track_art_decodes_to_a_shape_that_escalates_across_stages`, whose
-  renders (`data/shots/2048_zone_track_stage{0,7,14}.png`) this rests on.
+  renders (stages 0, 7 and 14, not kept in the repository) this rests on.
   **Still open**: what the shader does with `Growing Texture.Colour`/`.Scale
   Bias`/`.Factors` against this art - no HD executable has been read for its
   Zone shader, so wiring this into a render is unstarted.

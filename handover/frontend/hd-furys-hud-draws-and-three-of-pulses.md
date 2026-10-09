@@ -121,7 +121,7 @@ other pickup clears did; `ship+0x6958` is the LeachBeam manager's flag.
   outline drawn heavier than the original's** (different scenes - this build was
   rendered at its default circuit, the capture is Talon's - so unmeasured): at 100 % the original's outline is a
   light translucent grey and its top plate shows the scene through it; this build's
-  outline is near-black and its plate opaque (`data/scratch/hd-hud-flash/cmp/ring.png`,
+  outline is near-black and its plate opaque (`ring.png`,
   original left, this build right, same crop). Not touched - it is not the flash,
   and `hd-hud.md` records the outline as measured "in its authored grey" - but the
   two pictures disagree, so check the blend and the baked alpha of that atlas region.

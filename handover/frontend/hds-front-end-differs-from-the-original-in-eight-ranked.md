@@ -8,6 +8,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 
 ## Open
 
+- Ship Select variants (LANDED 2026-10-09, `hd-ship-variants`): the preview
+  follows the selected variant's hull directory and a Fury variant's added
+  rating is drawn in `HD_Blue` red (`docs/ui/campaign-screens.md`). Open: the
+  `hull_orbit` pose is fitted to the classic Feisar hull only; no `_n1` frame;
+  a variant rated below the base draws no marker (no frame shows one)
 - Ship Select: bracket corners, loyalty value; the hex column draws
   (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); compose the
@@ -34,7 +39,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Track Select: hex grid LANDED 2026-10-08 (`hd-track-select`, shared
   `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
-  record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`).
+  record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
+  ported 2026-10-09 (`omega-track-model`, its own fresnel material).
   Open: the turntable's rate, pitch and the field of view are chosen (an RPCS3
   capture of the same circuit over time would fix the rate), the multiplier
   `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),

@@ -45,7 +45,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   and has to be split first.
 - **The tail**: the music the intro starts and stops (`g_music_player` calls at the counter's
   `0x28` and `0`), and the `ScreenFlash` kind 10 wash at its end, are not played.
-  **The wash was photographed 2026-10-02** (`data/scratch/pulse-flyby-panel/fade-a/h0103.png` to
+  **The wash was photographed 2026-10-02** (`h0103.png` to
   `h0125.png`, one frame per call, scratch): the picture is solid white on the call after
   substate 2 first reads (h0103), already half-transparent over the chase view by h0105, and
   clear by about h0120, with the panel fading under it. Colour and curve are not measured; it is

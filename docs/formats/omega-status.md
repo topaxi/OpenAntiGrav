@@ -158,8 +158,7 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   Zone ladder draws no class text.
 
 Frames, 1920x1080, `--race --ticks 700/900/1500` on `data/extracted/ps4`:
-`data/scratch/omega-hud/hud-b700.png` and `hud-b1500.png` (time trial, two
-moments: the timers move), `hud-single_race.png` (Arcade), `hud-zone.png`;
+time trial, two moments: the timers move; Arcade; zone;
 compared with HD's `hud-hd.png` and 2048's `hud-2048.png` in the same directory.
 Omega's time trial is HD's frame element for element; 2048 draws its own
 skin.
@@ -189,9 +188,104 @@ page's picture). **The live campaign stage draws it too, and did before this was
 (`menu_stage.rs` hands the stage's `shown` picture, the movie or else the style's
 `Live::picture`, to every campaign list builder, and `Live::tick` runs per frame): walked windowed under
 Xvfb + lavapipe on `main` `4def1665` plus the texture-limit change, language -> `Main Menu` -> `RACE CAMPAIGN`
--> `Grid Selection` -> `Cell Selection` by mouse, 2026-10-02, and the scene draws behind all three
-(`data/scratch/omega-talon-crash/walk_1.png` to `walk_3.png`). The end-of-race screens sit under the
-same widget and do not yet. Omega authors no track or ship picker.
+-> `Grid Selection` -> `Cell Selection` by mouse, 2026-10-02, and the scene draws behind all three. The end-of-race screens sit under the
+same widget and do not yet. Omega authors both selection screens
+(`Track_Selection_Definition.xml` and `Team_Selection_Definition.xml`, `data08`/`data09`, the
+files `skin.xml` includes by `SrcRel`); Track Select is read and drawn
+([below](#the-circuit-model-on-track-select-2026-10-09-omega-track-model)), Team Select is not
+(`FrontEnd::team_select`, see `crates/omega/src/frontend.rs`).
+
+## The circuit model on Track Select (2026-10-09, `omega-track-model`)
+
+**Omega draws each circuit's own front-end model on `Track Select`, as HD does.** The screen is
+HD's file (`Track_Selection_Definition.xml`, nine lines of diff in colours and `.4x` texture
+names), read by the same reader (`oag_ui_screens::picker::hd::track`), reached from RACEBOX ->
+START (`track_select` is `Some`; Omega's ship picker is `None`, so a confirmed circuit launches
+the race). Walked live under Xvfb 2026-10-09: RACEBOX, START, `Track Select`, Right steps the
+circuit and the model reloads, a click on a hexagon selects it, Return launches.
+
+**The table** is `oag_omega::frontend`'s `CIRCUIT_MODELS`, 26 rows, each a `fe/` scene on
+`data00.psarc` (`<folder>\FE\<scene>.vex` and its `.rcsmodel`): HD's twelve under Omega's own
+folders (`01_vineta_k` .. `15_anulpha_pass`, `02_metropia`, `03_moa_therma`, the four pack
+circuits `talons_junction`, `amphiseum`, `modesto_heights`, `tech_de_ra`), the four Zone circuits
+(`zone_1..4`, `track01`; the screen lists them as `25_Track`..`28_Track`) and 2048's ten under
+`environments2048` (`Track01.vex`). Every row builds (22 to 156 thousand vertices); every circuit
+the screen lists has one. The HD folder names (`03_Track`) are not Omega folders.
+
+**Geometry** is 2048's container: `oag_mesh::mesh::rcs::psp2::build_with_vex`, the builder the
+menu backdrop already joins a PS4 scene with, now shared through `oag_game::preview::psp2_scene`.
+The Omega pairs hold HD's own geometry (Moa Therma's bounds match HD's `03_Track` to four
+places). Not every Omega `.vex` says so in its header, so `psp2_scene::circuit_model` asks the
+sibling `.rcsmodel` which container it is - scoped to the circuit screen, so `preview::model`
+(the flyer cards, the end-of-race placements) is unchanged.
+
+**The material is not HD's `cf_fetracks`.** All 26 models name
+`FrontEndConstantFranelBlend.rcsmaterial` (`_1`, `_2` and `cf_FEtracks*` files sit in the same
+folders and no model, `.vex` or material names them), which carries no texture: there is no
+`fe_grad`. Its pixel shader reads, per pixel, **confidence 80** (a hand-built GCN decoder over
+one shader, member order from the file's own reflection table, no emulator run):
+
+```text
+refl  = ReflectivityMin + ReflectivityScale * (1 - N.V)^ReflectivityPower
+rgb   = colourDiffAlpha.rgb + Constant1 * constantAmbientColour * refl
+out   = fog(rgb)           ; fogColour mixed in by the vertex's own factor
+```
+
+Evidence: the pixel shader is the `Shdr` at byte `0x323c` of
+`Data/environments/15_anulpha_pass/fe/Materials/FrontEndConstantFranelBlend.rcsmaterial`
+(`data00.psarc`; type `0` by the footer's `(byte 8 >> 2) & 0xf`, 436 bytes). Its constant buffer
+members, in reflection order, are `colourDiffAlpha`@dw0 (4), `ReflectivityMin`@4,
+`ReflectivityScale`@5, `ReflectivityPower`@6, `Constant1`@8, `constantAmbientColour`@12,
+`fogColour`@16, `fadeResCoeffs`@20, and the lines that carry the law are:
+
+```text
+v_mad_f32  v7, -v6, v7, 1.0 clamp   ; 1 - N.V, from two interpolants normalised by v_rsq
+s_buffer_load_dword s[22], s[0:3], 0x6        ; ReflectivityPower
+v_log_f32  v7, |v7|
+v_mul_f32  v7, s22, v7              ; * power
+v_exp_f32  v7, v7                   ; (1 - N.V)^power
+v_mov_b32  v12, s20                 ; s20 = ReflectivityMin (dw4)
+v_mac_f32  v12, s21, v7             ; + ReflectivityScale (dw5) * that      = refl
+v_mul_f32  v10, s4, v10             ; s4.. = Constant1 (dw8..10) * constantAmbientColour (dw12..14)
+v_mad_f32  v6, v10, v12, s0         ; * refl + colourDiffAlpha (dw0..2)
+v_mac_f32  v3, -s12, v0 / v_mad_f32 v3, v0, v6, s12   ; fog: fogColour (dw16..18) mixed by attr0.w
+```
+
+The model's material instance authors every uniform but one: `Constant1` `1 1 1` (the Zone
+circuits `0.98 0.97 0.94`), `colourDiffAlpha` `0.060 0.048 0.029` (Zone `0.002 0.001 0.0006`),
+`ReflectivityMin` `0.05`, `ReflectivityPower` `3`, and `ReflectivityScale` `1` or `2` (Talons
+Junction and Tech De Ra `2`). A circuit is dark face-on and bright at the rim.
+`oag_game::preview::track_model::Ramp::fresnel` evaluates it once per vertex per frame, the same
+way HD's texture ramp is (`Ramp::of` picks by the model's container, never by title).
+
+**Chosen, not measured**: `constantAmbientColour` (no instance authors it; its source was not
+located; taken as 1, as HD's multiplier is), no fog, and **unlit**: the same file carries pixel
+shaders of the same material that also declare `liveLighting0diffuse`/`direction` (`0x3dbc`,
+`0x49dc`), and which variant the screen selects is unread. At `ReflectivityScale` 2 the rim
+reaches 2.11 and clamps in the 8-bit target; whether Omega's front end tonemaps is unread. HD's
+same-named material (unreferenced there) shares the idea, a fresnel term over a constant
+(`ps3-microcode.py fp-file`, block #2: `Constant1` mixed toward a second constant by
+`(1 - N.V)^5`), but its form is not Omega's and the Omega shader is the one that was read.
+
+**The widget** is authored differently: `OriginX/Y` `960/540`, `x` `0.525`, `y` `0.125`, `z`
+`-2.05`, `orthoScaleX/Y/Z` `0.012`, `nearZ` `0.1`, `FoV` `100`. `orthoScale` scales the
+placement (the campaign flyer's reading, `oag_game::flyer::campaign_pose`), which stands the
+circuit 43.8 right, 10.4 up and 170.8 in front of the axis, close to HD's 180. **Chosen, not
+measured, inherited from HD**: the field of view (1.0 radian; `FoV` 100 is unread, it is not
+the flyer's units), pitch, the 24 s turntable and its start yaw. 2048's circuits are larger than
+HD's and overrun the frame a little at this pose.
+
+**Open**: the circuit names (`03 Track`, `altima`) - `CircuitNames::choose` takes a copy of the
+table that names all 38 listed circuits, and Omega's has none, so every circuit shows its id
+where a few (`PRO TOZO`) already have text; the emblem of a 2048 circuit; the page's white
+backdrop, against which the rim-lit circuit loses its edge (the material is authored for a dark
+one); whether Omega's original ever shows this screen outside RACEBOX; Team Select.
+
+**2048, checked, applies, not wired.** 2048's own archives carry `fe/Track0N.vex` only for its
+DLC1 circuits (`Vineta_K`, `Moa_Therma`, `Chenghou_Project`, `Anulpha_Pass`, `zone_1..4`, under
+`art/published/DLC1/environments`), none for its ten own circuits (which Omega adds), and its
+front end authors no circuit screen (`race_box`/`track_select` are `None`), so nothing draws
+them; the reader and the material shape are the same.
 
 ## What a menu-page capture does today
 
@@ -283,7 +377,6 @@ not draw" below); `grid-select` shows `EVENT 01/08` and lays out the twelve
 grids that parsed, with `Subtitle_Arrow_HD.gtf`/`Padlock.gtf` also decoding
 through their own `.gnf` siblings; `cell-select` draws the header with no
 cell content (needs a grid selected first, not exercised this lane).
-Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell}.png`.
 
 ### What did not draw, by name
 
@@ -310,7 +403,7 @@ Screenshots: `data/scratch/drive-2026-09-27/omega-gnf/omega-{boot,main,grid,cell
   bottom-up**, where every image a screen names was re-authored top-down. A `.gnf` carries no
   flag, and the sheet leaves a `.gnf` unreversed (right for the 276 re-authored ones), so the
   nine-patch came out mirrored and the swatch texel `(4.5, 58.5)` of the file was read at the
-  wrong row. Census (`data/scratch/omega-frontend/orient-census.txt`, Omega `.gnf` against HD
+  wrong row. Census (Omega `.gnf` against HD
   `.gtf` of the same stem and size, deduplicated across the base and patch archives): the
   re-authored ones match HD's rows reversed (135), the eight above match HD's rows as stored,
   22 are symmetric (no verdict), 41 differ in size, and 971 have no HD file of the stem to
@@ -375,7 +468,7 @@ the real `.pkg`, turns a previously-refused (`Error::CorruptBlocks { count:
 unmodified decoder.
 
 **Checked against a corrected re-extraction
-(first written under `data/scratch/drive-2026-09-27/omega-psarc/extracted-fixed/`, now `data/extracted/ps4/{omega-eu,omega-eu-patch}`), 2026-09-27: every named
+(`data/extracted/ps4/{omega-eu,omega-eu-patch}`), 2026-09-27: every named
 "missing"/"corrupt" texture above recovers, and none of it was genuinely
 absent.** `saveIcons.gnf`, `line.gnf`, `Hexmedal_HD.gnf` and all five
 campaign hex texture names (`Hexagon_HD_OUTLINE`, `Hexagon_HD`, `Hexlock_HD`,
@@ -389,8 +482,7 @@ absence rather than corruption. `vr_headset.gnf` (447x370, `data08.psarc`)
 recovers the same way, previously "no entry at all" for the same manifest
 reason. `StudioLiverpool.bik` remains genuinely absent under that name even
 in the corrected extraction, across all nine archives - not a reading
-artefact. See `data/scratch/drive-2026-09-27/omega-psarc.md` for the exact
-decode results and the full census.
+artefact. The exact decode results and the full census were a scratch file, not kept.
 
 ## Campaign: confirming a cell starts its race, 2026-09-30
 
@@ -481,8 +573,7 @@ spline, the real collision, the real craft and the real circuit geometry with
 its textures, the craft rides the circuit (`grounded 1.0`, 27 units/s after 300
 ticks with accelerate held, 58 units along the spline by tick 900, where it
 stops against the first barrier - nothing steers it), and the frame is legible: an AG Systems hull on Tech De Ra's start gantry with the
-circuit's road, barriers and banners behind it
-(`data/scratch/omega-race/j300.png`). Nothing here is a stand-in for an asset
+circuit's road, barriers and banners behind it. Nothing here is a stand-in for an asset
 the disc authors except what "What does not draw right" lists.
 
 ### What loads, from what, through which reader
@@ -655,8 +746,7 @@ admitted by name and authored rate hashes, labelled inherited from HD in the loa
 report (Omega's GCN is unread, so no program confirms `time` there); 11 materials
 on Anulpha Pass, up to 15 on Amphiseum, 0 on any `environments2048` circuit
 (`crates/render/tests/psp2_glow_ground_truth.rs`).
-Frames: `data/scratch/omega-uv-scroll/after_vineta_{120,180,240,300}.png`
-against `before_vineta_300.png`. Before, the panels the glow layer lights are
+Frames at ticks 120, 180, 240 and 300, against a tick-300 frame from before the change (not kept). Before, the panels the glow layer lights are
 dull grey; after, they glow. The only pixels that differ from main's build at
 tick 300 are those surfaces (438 pixels over a threshold of 24, all inside one
 band of the frame). On that panel the texture is near-uniform, so the scroll is
@@ -797,8 +887,7 @@ real race, `--race --hold cross --ticks 120 --screenshot`, on the RX 7800 XT
 refuse it locally (not committed) and differencing the stills: the circuit's
 **road surface**. With it refused, the road in the `--ticks 300` frame is plain
 white where it is textured otherwise (3.3 % of the frame differs, all of it road;
-`talon_t300.png` against `talon_nofloor_t300.png` and `talon_diff_t300.png` under
-`data/scratch/omega-talon-crash/`), so Talon's Junction draws its floor with the
+the tick-300 frame against a no-floor frame and a difference frame, not kept), so Talon's Junction draws its floor with the
 whole 16,384 texture on this machine, and the white road is also what a refusal
 would look like. Also viewed: `talon_t700.png`, `talon_lvp_t30.png` (lavapipe).
 Tech De Ra's still, HD Dion's and 2048 Altima's are byte-identical before and
@@ -852,9 +941,7 @@ builds no weapon pools. See the handover thread.
   `CamBot_New2` hovers over the stands at `(-73, -1, 89)`, the crowd entities
   stand at their nodes' translations (placed box `(-1275, -79, -1097)..(1402,
   566, 508)`), and the craft's airbrake flaps are back on their hinges at
-  `(±2.16, -0.05, -4.47)` instead of under the cockpit
-  (`data/scratch/omega-nodes-2/omega-{before,after2}-clump.png`,
-  `omega-{before,after1}-t300.png`). **The box at the bottom of
+  `(±2.16, -0.05, -4.47)` instead of under the cockpit. **The box at the bottom of
   `final_300_close.png` is not node-bound and did not move**: it is static
   circuit geometry (`node None`, road level under the start position; the 56-
   and 228-vertex `wohdtrack_0021Shape`/`SFLine_003Shape` boxes contain the
@@ -873,8 +960,7 @@ builds no weapon pools. See the handover thread.
   and the 1,534 model nodes the skeleton does not name stand at their own bind
   matrix. The camera droid `CamBot_New2` behind the start line is upright and
   facing the grid at tick 0 and has dropped and turned away by tick 1800
-  (`data/scratch/omega-catchup/droid-crop.png`, from `droid-t0.png` and
-  `droid-t1800.png`, the same camera pose). The 12,310 mesh objects on nodes with no matrix of their own across Omega's base
+  (from the tick-0 and tick-1800 frames, the same camera pose). The 12,310 mesh objects on nodes with no matrix of their own across Omega's base
   archives (2048's Zone models and a few props) are all on nodes its skeleton
   names, so the census leaves none unplaced; **`Report::unplaced` itself was not
   re-measured through the render path on such a model** (no Omega race loads a
@@ -900,7 +986,7 @@ builds no weapon pools. See the handover thread.
   to 55 % zero on the three atlases sampled, so the sun mask is not the constant
   it is on HD's circuits, and what it means here is a question for the shader.
   Frames (forward circuit, tick 600, hold accelerate, debug build):
-  `data/scratch/omega-catchup/fwd-t600-pre.png` (no lightmap, 11.98 % clipped
+  `fwd-t600-pre.png` (no lightmap, 11.98 % clipped
   white, mean luminance 0.619) against `fwd-t600-lm1.png` (8.32 %, 0.563), with
   HD's Tech De Ra at tick 300 (`hd-tdr-t300.png`, 4.78 %, 0.321) as the only
   comparison there is. The reversed frame at tick 300 goes the other way
@@ -934,7 +1020,6 @@ checked, not read:** the title's own `Airbrake` handler is unread, so
 `psp2_airbrake_flaps_ground_truth` asserts the physical claim Pulse's recovered axis makes (a positive
 deflection raises the flap and flares it outward, both sides) on every Omega hull in `data01.psarc`. Only
 the player's craft swings, as on Pulse; a rival's flaps stay stowed.
-Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
 
   **Wired** in `oag-render` as `Light::with_nova_prelit` and `mesh.wgsl`'s
   `nova` branch, **only for a PS4 container** (`GeometryKind::Ps4`, by
@@ -946,7 +1031,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   the real disc, `omega_lightmap_ground_truth`.
 
   Frames (`oag-game --no-audio --race --hold cross`, debug, 1440x816,
-  `data/scratch/omega-lightmap/shots/`, before from `main` `679bd898`):
+  before from `main` `679bd898`):
 
   | frame | clipped white before -> after | mean luminance |
   | --- | --- | --- |
@@ -1006,7 +1091,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   original shader's own instructions on an emulated lane),
   `the_chain_draws_the_law_on_a_real_device`, and on the disc
   `omega_lightmap_ground_truth`. Frames (`oag-game --no-audio --race --hold cross`,
-  debug, 1440x816, `data/scratch/omega-tonemap/shots/`, before from `main`):
+  debug, 1440x816, before from `main`):
 
   | frame | clipped white before -> after | mean luminance |
   | --- | --- | --- |
@@ -1038,7 +1123,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   `track.pvs` / `track_reversed.pvs` (derived from the `.vex`), which the archive
   does not have, so *neither* direction of any circuit was ever read.
   Measured at the same tick with `--pvs false` and `--pvs true`
-  (`data/scratch/omega-pvs-sound`, debug build, 1440x816, `tech_de_ra`, hold
+  (debug build, 1440x816, `tech_de_ra`, hold
   accelerate; `false` is frustum culling alone, which is on by default - the whole
   scene is 3,198 draws and 2,379,040 triangles):
 
@@ -1111,8 +1196,7 @@ Frames: `data/scratch/airbrake-flaps/` (`omega_*.png, kc2_omega.png`).
   `data01`/`data02`'s reversed circuits
   (`every_reversed_circuit_pairs_with_its_reversed_collision`). `tech_de_ra`
   reversed: 12,880 vertices, 20,757 triangles, 29,104 k-d nodes, four colliders,
-  and the craft rides it (`grounded 1.0`, 27.1 units/s after 300 ticks,
-  `data/scratch/omega-catchup/rev-t300.png`). **This also changes 2048, on
+  and the craft rides it (`grounded 1.0`, 27.1 units/s after 300 ticks). **This also changes 2048, on
   purpose.** Its packages ship `track_col_reversed.col` for 12 of their
   reversed circuits (3 in the base package, 5 in `dlc1`, 4 in `dlc2`; an earlier
   version of this note said none, from a listing cut short). Of the 12
@@ -1145,13 +1229,12 @@ placeholder: `zone_craft` was `PlayerShip`, a "not a finding" value. Omega's
 ship-model loader (`Ship_LoadModelSet`, `0x01301ba0`, confidence 75) names
 `Data\Art\Published\HDShips\Zone\Ship.vex` for game mode 6 without reading the
 craft, now `oag_title::ZoneCraft::OwnShipAt`. A Zone race on `tech_de_ra` with
-`ag_systems` loads and draws it (`data/scratch/zone-craft/omega-zone-hd.png`).
+`ag_systems` loads and draws it.
 Livery key differs from 2048's (`zoneship_team` against `zoneship_zone`).
 **Wired (2026-10-06, `omega-2048-craft`)**: an HD-era craft's `PI_TeamModel
 name="zone"` `texturelocation` (`zoneship_quirex`; all twelve match a
 `Zoneship_<Team>/Team.gnf` on disc, spelt as the disc spells them) replaces the
-key on the hull's team texture request; the pixels change in the hull's patches
-(`data/scratch/omega-2048-craft/ab-egx-default-vs-livery.png`). The five
+key on the hull's team texture request; the pixels change in the hull's patches. The five
 2048-era teams author no zone model, keep the default `Zoneship_Team` skin and
 the loader report says so (`Tigron` and `VanUber` name `livery1`, which has no Zone directory: the swap finds nothing and says so). 2048: **ported**, see
 [2048-status.md](2048-status.md). Evidence:
@@ -1173,8 +1256,7 @@ authors both directories). `omega_2048_era_craft_ground_truth` reads the
 roster off the disc and resolves Ship.vex, ship.rcsmodel and a parsing
 `handlingstats.xml` for all 34 craft ids, asserts each team's table directory
 equals its declared `location` and that no 2048-era craft exists under
-`hdships\`. A race on `Feisar2048\3` loads and draws
-(`data/scratch/omega-2048-craft/single-2048era.png`). Side effect, accepted:
+`hdships\`. A race on `Feisar2048\3` loads and draws. Side effect, accepted:
 Omega now offers CRAFT TITLE "Wipeout 2048" in Race Remix when no 2048 disc is
 present, and its own list drops the 2048-era teams to that row.
 **2048 vs Omega: checked, differs** - 2048 keeps these craft as its own roster

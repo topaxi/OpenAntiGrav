@@ -327,8 +327,7 @@ some other trigger is unmeasured.
 > patch's copy (`data1`/`data2`) authors **six** `GameModeChoice` `<TouchButton>`s
 > itself - `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY` at `x` 228/410/592, `y` 110,
 > then `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY` at `y` 320, 135x135 - which is
-> the Vita3K capture's grid exactly. With the patch mounted this build draws it
-> (`data/scratch/title-patches/gm-after.png`). The hotspot mechanism below is a
+> the Vita3K capture's grid exactly. With the patch mounted this build draws it. The hotspot mechanism below is a
 > separate, DLC-gated map object and is not retracted; whether the original
 > hides these two tiles without the DLC is not read. Choosing HD or Fury leaves
 > a note ("another title's campaign") and stays. This build's RACEBOX and REMIX

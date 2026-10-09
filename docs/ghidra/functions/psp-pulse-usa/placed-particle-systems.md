@@ -105,7 +105,7 @@ five was not, and its nodes go through the same function.
 ## What a player sees, and how ours compares
 
 Frames on Basilico Black at matched poses (`psp-trace.py --camera` rows fed to
-`oag-game --pose-from`), under `data/scratch/pulse-psys/` (gitignored;
+`oag-game --pose-from`), under a scratch directory, not kept (gitignored;
 `welder-orig-vs-ours.png` is the side-by-side). The original's welder at
 `(-756, 31, 741)` reads as a **white core inside a large blue-violet halo**,
 with a few small blue sparks falling, re-flashing every few frames on the
