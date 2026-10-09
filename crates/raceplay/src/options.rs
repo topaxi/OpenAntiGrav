@@ -986,22 +986,5 @@ pub struct Campaign2048Progress {
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
 mod headless;
 
-impl Options {
-    /// Whether this race runs with weapons: the override when one is set,
-    /// otherwise [`Mode::weapons_enabled`]. Every reader that used to ask the
-    /// mode asks this, so pads, damage and the load report agree.
-    #[must_use]
-    pub fn weapons_on(&self) -> bool {
-        self.weapons_override
-            .unwrap_or_else(|| self.mode.weapons_enabled())
-    }
-}
-
-impl Setup {
-    /// [`Options::weapons_on`], on the half of the options a running race keeps.
-    #[must_use]
-    pub fn weapons_on(&self) -> bool {
-        self.weapons_override
-            .unwrap_or_else(|| self.mode.weapons_enabled())
-    }
-}
+/// `weapons_on` for [`Options`] and [`Setup`].
+mod weapons;
