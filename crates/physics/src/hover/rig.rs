@@ -7,7 +7,7 @@
 //! own rig, `oag_title::hover_rig`, into [`crate::ShipState::hover_rig`]).
 //! `Craft_IntegrateHull` (`0x000ef450`) marches the four segments unconditionally and
 //! `Craft_HoverFourPoint` (`0x000ede88`) springs them
-//! (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`, confidence 85).
+//! (`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`, confidence 88).
 //!
 //! The two carry the same vertical stiffness (`4 * 0.15 == 2 * 0.3`) and the same pitch
 //! stiffness on paper (`4 * 0.15 * 4.5^2 == 2 * 0.3 * 4.5^2`). What separates them in pitch is

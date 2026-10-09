@@ -93,10 +93,10 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let shield = race.sim.world.ships[0].physics.shield;
     for tick in 0..ticks {
         race.set_autopilot(true);
-        race.sim.world.ships[0].physics.shield = shield;
         if tick < next_shot {
             let snap = snapshot(Button::Cross.bit(), input.as_ref());
             input = Some(snap.buttons);
+            race.sim.world.ships[0].physics.shield = shield;
             race.tick(&PlayerInputs::single(snap));
             continue;
         }
@@ -118,6 +118,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
             };
             let snap = snapshot(bits, input.as_ref());
             input = Some(snap.buttons);
+            race.sim.world.ships[0].physics.shield = shield;
             race.tick(&PlayerInputs::single(snap));
             let Some(shot) = race
                 .sim

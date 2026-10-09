@@ -677,7 +677,7 @@ pub const LAUNCH_HOVER: oag_title::launch_hover::LaunchHover =
 /// local offsets at `craft+0x1a0..0x1d0` the damper crosses), `0.15` of the load each
 /// (`0x008a917c`), all four marched every frame by `Craft_IntegrateHull` (`0x000ef450`), each
 /// spring along its hit normal and the normals summed times `0.25` by `Craft_HoverFourPoint`
-/// (`0x000ede88`). Confidence 85: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+/// (`0x000ede88`). Confidence 88: `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
 /// HD's probe order (left-front, left-rear, right-front, right-rear in its own frame, whose
 /// row 0 points left and row 2 forward) is kept, converted to this engine's frame.
 pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::HoverRig {
