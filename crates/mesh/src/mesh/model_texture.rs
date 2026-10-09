@@ -101,6 +101,11 @@ pub enum Texels {
     ///
     /// **Tied to the device that was open when it was decoded.** The one
     /// caller that opens a scope builds the scene from the same device.
+    ///
+    /// **Not on the web**, where the load that decodes runs on a Web Worker
+    /// and wgpu's types may not leave the page's thread (docs/tools/web.md,
+    /// "Threads"); without it a [`ModelTexture`] stays `Send` there.
+    #[cfg(not(target_arch = "wasm32"))]
     Uploaded {
         view: wgpu::TextureView,
         /// What the upload occupies, mip chain included - see
@@ -402,6 +407,7 @@ impl ModelTexture {
             Texels::Rgba8(rgba) => rgba.len() as u64,
             Texels::Chain(levels) => levels.iter().map(|level| level.len() as u64).sum(),
             Texels::Blocks { levels, .. } => levels.iter().map(|level| level.len() as u64).sum(),
+            #[cfg(not(target_arch = "wasm32"))]
             Texels::Uploaded { .. } => 0,
         }
     }
@@ -418,7 +424,9 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(rgba),
             Texels::Chain(levels) => levels.first().map(Vec::as_slice),
-            Texels::Blocks { .. } | Texels::Uploaded { .. } => None,
+            Texels::Blocks { .. } => None,
+            #[cfg(not(target_arch = "wasm32"))]
+            Texels::Uploaded { .. } => None,
         }
     }
 
@@ -435,6 +443,7 @@ impl ModelTexture {
         match &self.texels {
             Texels::Rgba8(rgba) => Some(std::borrow::Cow::Borrowed(rgba)),
             Texels::Chain(levels) => levels.first().map(|l| std::borrow::Cow::Borrowed(&l[..])),
+            #[cfg(not(target_arch = "wasm32"))]
             Texels::Uploaded { .. } => None,
             Texels::Blocks { format, levels } => {
                 let decoded = format.decode_level(levels.first()?, self.width, self.height)?;
@@ -461,6 +470,7 @@ impl ModelTexture {
             // An uploaded texture holds no texels to drop, and its view is the
             // one thing the uploader still needs from the stub.
             texels: match &self.texels {
+                #[cfg(not(target_arch = "wasm32"))]
                 Texels::Uploaded { .. } => self.texels.clone(),
                 _ => Texels::Rgba8(Vec::new()),
             },

@@ -105,6 +105,8 @@ pub(super) fn upload_rgba(
 /// source's leading mip levels were left out to fit the device.
 pub(super) struct Placed {
     pub(super) view: wgpu::TextureView,
+    /// Read by the native texture sink only; the web build has none.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(super) gpu_bytes: u64,
     /// **Chosen, not measured**: the base level is skipped whole when it is
     /// wider than `max_texture_dimension_2d`, and so is every level after it
@@ -227,6 +229,7 @@ pub(super) fn upload(
     let limit = device.limits().max_texture_dimension_2d;
     // Decoded under a `texture_sink` scope: the picture is already up, and this
     // is the one place that would otherwise put it there a second time.
+    #[cfg(not(target_arch = "wasm32"))]
     if let Texels::Uploaded {
         view,
         gpu_bytes,
@@ -391,6 +394,7 @@ pub(super) fn plan(texture: &ModelTexture, blocks: bool, limit: u32) -> Option<(
         Some((skip as u32, bytes))
     };
     match &texture.texels {
+        #[cfg(not(target_arch = "wasm32"))]
         Texels::Uploaded {
             gpu_bytes,
             dropped_levels,
@@ -465,6 +469,7 @@ pub(super) fn log_census(model: &crate::mesh::Model, blocks: bool, limit: u32) {
             }
             compressed += usize::from(match &texture.texels {
                 Texels::Blocks { .. } => blocks,
+                #[cfg(not(target_arch = "wasm32"))]
                 Texels::Uploaded {
                     block_compressed, ..
                 } => *block_compressed,

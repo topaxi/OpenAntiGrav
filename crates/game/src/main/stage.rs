@@ -440,6 +440,7 @@ impl Stage {
             track_stats,
             ghost_static,
             ripples,
+            started,
             ..
         } = loaded;
         // Read before `setup` moves into `race::Race::start` below - `mode`
@@ -586,7 +587,12 @@ impl Stage {
         // fallback when the flag was not given.
         let difficulty = setup.difficulty;
         let (mode, seed) = (setup.mode, setup.seed);
-        let mut race = race::Race::start(setup);
+        // Started on the web's load worker already, from a copy of the same
+        // setup (`race::Loaded::started`).
+        let mut race = match started {
+            Some(race) => *race,
+            None => race::Race::start(setup),
+        };
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
         race.set_sight_fov(settings.graphics.fov);

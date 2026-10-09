@@ -2,6 +2,10 @@
 // the game. Nothing is sent anywhere. See docs/tools/web.md.
 import init, { start } from "./pkg/oag_web.js";
 
+// The same glue again, for the workers `oagSpawnWorker` starts. build-web.sh
+// rewrites both names to the content-hashed directory.
+const GLUE = new URL("./pkg/oag_web.js", import.meta.url).href;
+
 const picker = document.getElementById("picker");
 const status = document.getElementById("status");
 const fileInput = document.getElementById("file");
@@ -68,16 +72,48 @@ window.oagFatal = (cause, software) => {
 // again; a Chromium remembered handle then offers "Play <name> again". Settings
 // and records are already in localStorage (written as they change, synchronously).
 window.oagQuit = () => { setTimeout(() => location.reload(), 0); };
-// Reads `file` a slice at a time, synchronously, for the game's disc readers:
-// a synchronous XMLHttpRequest on a blob URL of `file.slice(..)`. The game runs
-// on this page's thread and its readers cannot wait for a promise; a worker
-// cannot hold the game (docs/tools/web.md). No Range header is involved, and no
-// byte leaves the tab: a blob URL names memory this tab already holds.
+// The picked image, which every worker reads for itself (worker.js).
+let imageFile = null;
+
+// Threads (docs/tools/web.md, "Threads"): the module asks for a worker running
+// `oag_worker_entry(id)` on its own shared memory. Called from Rust
+// (`oag_raceplay::web_thread::spawn`); throws if the browser refuses.
+window.oagSpawnWorker = (module, memory, id) => {
+  const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+  worker.onmessage = ({ data }) => {
+    if (data?.fatal) window.oagFatal(data.fatal, false);
+  };
+  worker.onerror = (event) => {
+    event.preventDefault();
+    window.oagFatal(`a worker stopped: ${event.message}`, false);
+  };
+  worker.postMessage({ glue: GLUE, module, memory, id, file: imageFile });
+};
+
+// Reads `file` a slice at a time, synchronously, for the game's disc readers
+// on this page's thread: a synchronous XMLHttpRequest on a blob URL of
+// `file.slice(..)`. The game runs here and its readers cannot wait for a
+// promise; a race load reads on a worker instead (worker.js). No Range header
+// is involved, and no byte leaves the tab: a blob URL names memory this tab
+// already holds.
+// Firefox runs a nested event loop inside a synchronous request and delivers
+// `pagehide` from it: a reload mid-read then reached winit's handler while a
+// winit handler was still on the stack, and its runner panicked ("RefCell
+// already borrowed", winit 0.30.13). Registered before the game starts, so
+// it runs first, and it keeps the event from winit only while a read is on
+// the stack: the page is going away, and settings are already saved. A race
+// load reads on a worker and no longer hits this; menus still read here.
+let readsInFlight = 0;
+window.addEventListener("pagehide", (event) => {
+  if (readsInFlight > 0) event.stopImmediatePropagation();
+}, true);
+
 function slicedReader(file) {
   return {
     size: file.size,
     read(offset, length) {
       const url = URL.createObjectURL(file.slice(offset, offset + length));
+      readsInFlight++;
       try {
         const request = new XMLHttpRequest();
         request.open("GET", url, false);
@@ -91,6 +127,7 @@ function slicedReader(file) {
         for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
         return bytes;
       } finally {
+        readsInFlight--;
         URL.revokeObjectURL(url);
       }
     },
@@ -119,7 +156,15 @@ async function boot(file) {
     say("This browser has no WebGPU, which the game draws with.");
     return;
   }
+  // The module's memory is shared between threads, which a page may only
+  // create when its server sends COOP/COEP (web/_headers).
+  if (!window.crossOriginIsolated) {
+    say("This page was served without cross-origin isolation (COOP/COEP headers), "
+      + "which the game's threads need. See docs/tools/web.md, \"Hosting\".");
+    return;
+  }
   booted = true;
+  imageFile = file;
   try {
     const params = new URLSearchParams(location.search);
     let image;

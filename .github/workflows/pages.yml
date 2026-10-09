@@ -1,23 +1,21 @@
-name: Pages
+name: Pages (Cloudflare)
 
-# The browser build (docs/tools/web.md) deployed to GitHub Pages: the page in
-# web/, the oag_web example built for wasm32-unknown-unknown with the `dist`
-# profile (fat LTO, one codegen unit), wasm-bindgen's glue and `wasm-opt -O`,
-# all by scripts/build-web.sh, the script `just web` runs.
+# The browser build (docs/tools/web.md) deployed to Cloudflare Pages: the page
+# in web/, the oag_web example built for wasm32-unknown-unknown with the `dist`
+# profile (fat LTO, one codegen unit), threaded (a pinned nightly, -Z build-std,
+# +atomics), wasm-bindgen's glue and `wasm-opt -O`, all by
+# scripts/build-web.sh, the script `just web` runs.
 #
 # The artifact holds no game content: the player picks their own disc image in
 # the page and it is read in their browser tab, never uploaded. The build ends
 # with scripts/check-leakage.py over the folder that is published.
 #
-# Built once, deployed twice from the same folder: GitHub Pages (the `deploy`
-# job) and Cloudflare Pages (`deploy-cloudflare`, project `openantigrav`,
-# served at oag.topaxi.com). Cloudflare reads the folder's `_headers` and sends
-# COOP/COEP and long cache lifetimes; GitHub Pages cannot set headers and the
-# page works without them. No coi-serviceworker is shipped.
+# Cloudflare Pages (project `openantigrav`, served at oag.topaxi.com) is the
+# only host: it reads the folder's `_headers` and sends COOP/COEP, which the
+# module's shared memory needs, and long cache lifetimes. GitHub Pages cannot
+# send headers and is not deployed to. No coi-serviceworker is shipped.
 #
-# Triggers: a pushed `v*` tag, or a manual run from the Actions tab. Pages has
-# to be enabled once in the repository settings with "GitHub Actions" as the
-# source.
+# Triggers: a pushed `v*` tag, or a manual run from the Actions tab.
 
 on:
   push:
@@ -42,10 +40,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Same pinned toolchain as ci.yml and release.yml.
-      - uses: dtolnay/rust-toolchain@1.99.0
+      # The threaded module needs nightly's -Z build-std; the date is the one
+      # build-web.sh names (OAG_WEB_TOOLCHAIN). Everything else stays on the
+      # pinned stable of ci.yml and release.yml.
+      - uses: dtolnay/rust-toolchain@master
         with:
+          toolchain: nightly-2026-10-08
           targets: wasm32-unknown-unknown
+          components: rust-src
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:
@@ -65,11 +67,6 @@ jobs:
           "$bin/wasm-bindgen" --version
           "$bin/wasm-opt" --version
       - run: scripts/build-web.sh
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: target/web/dist
-      # The same folder again as a plain artifact for Cloudflare: the Pages
-      # artifact is a tarball in a format that action owns, not an interface.
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
@@ -77,20 +74,6 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
-
-  deploy:
-    name: deploy
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
 
   deploy-cloudflare:
     name: deploy (Cloudflare Pages)

@@ -702,6 +702,13 @@ pub struct Setup {
 pub struct Loaded {
     /// The simulation half.
     pub setup: Setup,
+    /// A race already started from a copy of [`Self::setup`], where the
+    /// loader had a thread to spare: the web build's load worker runs
+    /// [`crate::Race::start`] (the AI's speed plans, 0.65 s for an HD circuit
+    /// in the browser) so the page's thread does not (docs/tools/web.md,
+    /// "Threads"). `None` from [`crate::load`]; the scene build starts one
+    /// itself then.
+    pub started: Option<Box<crate::Race>>,
     /// Which title the source turned out to be.
     ///
     /// **Carried out of [`load`] because `--race` has no other way to know**,
@@ -979,22 +986,5 @@ pub struct Campaign2048Progress {
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
 mod headless;
 
-impl Options {
-    /// Whether this race runs with weapons: the override when one is set,
-    /// otherwise [`Mode::weapons_enabled`]. Every reader that used to ask the
-    /// mode asks this, so pads, damage and the load report agree.
-    #[must_use]
-    pub fn weapons_on(&self) -> bool {
-        self.weapons_override
-            .unwrap_or_else(|| self.mode.weapons_enabled())
-    }
-}
-
-impl Setup {
-    /// [`Options::weapons_on`], on the half of the options a running race keeps.
-    #[must_use]
-    pub fn weapons_on(&self) -> bool {
-        self.weapons_override
-            .unwrap_or_else(|| self.mode.weapons_enabled())
-    }
-}
+/// `weapons_on` for [`Options`] and [`Setup`].
+mod weapons;

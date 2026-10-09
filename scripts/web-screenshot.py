@@ -21,8 +21,8 @@ of serving `--dist`. See docs/tools/web.md.
 from __future__ import annotations
 
 import argparse
-import functools
 import http.server
+import sys
 import threading
 import time
 from pathlib import Path
@@ -36,6 +36,15 @@ FLAGS = [
     "--ignore-gpu-blocklist",
     "--mute-audio",
 ]
+
+
+# Firefox on Linux ships WebGPU off; these two prefs turn it on (Firefox 155,
+# 2026-10-09: a hardware adapter in headless mode). Muted like Chromium.
+FIREFOX_PREFS = {
+    "dom.webgpu.enabled": True,
+    "gfx.webgpu.ignore-blocklist": True,
+    "media.volume_scale": "0.0",
+}
 
 
 # `--software`: a CPU adapter that presents (swiftshader through Vulkan).
@@ -60,11 +69,11 @@ SOFTWARE_FLAGS = {
 
 
 def serve(directory: Path, port: int) -> http.server.ThreadingHTTPServer:
-    handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler, directory=str(directory)
-    )
-    handler.log_message = lambda *args: None  # type: ignore[method-assign]
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    # The same server `just web --serve` runs, COOP/COEP included.
+    sys.path.insert(0, str(Path(__file__).parent))
+    import importlib
+
+    server = importlib.import_module("serve-web").server(directory, port)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -85,7 +94,19 @@ def main() -> None:
         default=[],
         help="WxH@SECONDS: resize the viewport (a window resize, which rebuilds the output target)",
     )
+    parser.add_argument(
+        "--reload",
+        action="append",
+        default=[],
+        help="SECONDS: reload the page then (leaving mid-load, say); repeatable",
+    )
     parser.add_argument("--fps", type=float, default=0.0)
+    parser.add_argument(
+        "--stalls",
+        type=float,
+        default=0.0,
+        help="MS: at the end, list every gap between animation frames longer than this",
+    )
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--read", default="", help="the page's ?read= (memory: no slices)")
     parser.add_argument("--port", type=int, default=8000)
@@ -105,6 +126,12 @@ def main() -> None:
         help="an extra Chromium flag, repeatable (added after the default or --software set)",
     )
     parser.add_argument("--chromium", default="/usr/bin/chromium")
+    parser.add_argument(
+        "--browser",
+        choices=("chromium", "firefox"),
+        default="chromium",
+        help="firefox: Playwright's own build, WebGPU switched on by pref",
+    )
     args = parser.parse_args()
 
     shots = sorted(float(t) for t in args.at.split(","))
@@ -117,6 +144,7 @@ def main() -> None:
         + keyed(args.up, "up")
         + keyed(args.click, "click")
         + keyed(args.resize, "resize")
+        + [(float(at), "reload", "") for at in args.reload]
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -124,11 +152,22 @@ def main() -> None:
     url = args.url or f"http://127.0.0.1:{args.port}/"
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(
-                executable_path=args.chromium, headless=True,
-                args=(SOFTWARE_FLAGS[args.software] if args.software else FLAGS) + args.flag,
-            )
+            if args.browser == "firefox":
+                browser = p.firefox.launch(headless=True, firefox_user_prefs=FIREFOX_PREFS)
+            else:
+                browser = p.chromium.launch(
+                    executable_path=args.chromium, headless=True,
+                    args=(SOFTWARE_FLAGS[args.software] if args.software else FLAGS) + args.flag,
+                )
             page = browser.new_page(viewport={"width": width, "height": height})
+            if args.stalls > 0:
+                # Every animation frame's time, from before the page's own
+                # script runs: a gap is the page's thread busy, a load stall.
+                page.add_init_script(
+                    "window.oagFrames = []; const tick = (t) => {"
+                    " window.oagFrames.push(t); requestAnimationFrame(tick); };"
+                    " requestAnimationFrame(tick);"
+                )
             page.on("console", lambda m: print(f"console.{m.type}: {m.text}", flush=True))
             page.on("pageerror", lambda e: print(f"pageerror: {e}", flush=True))
             query = "&".join(q for q in (args.log and f"log={args.log}", args.read and f"read={args.read}") if q)
@@ -138,6 +177,7 @@ def main() -> None:
             page.screenshot(path=str(args.out / "picker.png"))
             page.set_input_files("#file", str(args.image))
             start = time.monotonic()
+            picked = page.evaluate("performance.now()")
             events = [(t, "shot", "") for t in shots] + keys
             for at, kind, key in sorted(events, key=lambda e: e[0]):
                 wait = at - (time.monotonic() - start)
@@ -147,6 +187,9 @@ def main() -> None:
                     path = args.out / f"{at:g}s.png"
                     page.screenshot(path=str(path))
                     print(f"wrote {path}", flush=True)
+                elif kind == "reload":
+                    page.reload(wait_until="commit", timeout=60000)
+                    print(f"reloaded at {at:g}s", flush=True)
                 elif kind == "resize":
                     w, h = (int(v) for v in key.split("x"))
                     page.set_viewport_size({"width": w, "height": h})
@@ -170,6 +213,17 @@ def main() -> None:
                     args.fps * 1000,
                 )
                 print(f"fps: {frames / args.fps:.1f} over {args.fps:g}s", flush=True)
+            if args.stalls > 0:
+                frames = page.evaluate("window.oagFrames")
+                gaps = [
+                    (b - picked, b - a)
+                    for a, b in zip(frames, frames[1:])
+                    if b - a > args.stalls and b > picked
+                ]
+                for at, gap in gaps:
+                    print(f"stall: {gap:.0f} ms ending {at / 1000:.2f}s after the pick", flush=True)
+                longest = max((gap for _, gap in gaps), default=0.0)
+                print(f"stalls: {len(gaps)} over {args.stalls:g} ms, longest {longest:.0f} ms", flush=True)
             browser.close()
     finally:
         if server:

@@ -16,7 +16,7 @@
 //! Only armed while a bench holds a [`Marks`]: [`mark`] is a no-op otherwise,
 //! and the whole module folds away without the feature.
 
-use std::sync::Mutex;
+use std::cell::RefCell;
 
 /// The most marks one recording can take.
 const CAPACITY: u32 = 64;
@@ -30,7 +30,12 @@ struct Armed {
     labels: Vec<&'static str>,
 }
 
-static ARMED: Mutex<Option<Armed>> = Mutex::new(None);
+thread_local! {
+    /// Per thread, because the queries are the thread's own: a bench arms them
+    /// on the thread that then records the pass, and the web build's wgpu
+    /// types are not `Send` (docs/tools/web.md, "Threads").
+    static ARMED: RefCell<Option<Armed>> = const { RefCell::new(None) };
+}
 
 /// A query set [`mark`] writes into while this is alive.
 #[derive(Debug)]
@@ -79,12 +84,12 @@ impl Marks {
                     count: CAPACITY,
                 })
             });
-        *ARMED.lock().ok()? = Some(Armed {
+        ARMED.set(Some(Armed {
             queries,
             fragments,
             open: false,
             labels: Vec::new(),
-        });
+        }));
         Some(Self {
             resolved: buffer(
                 "perf marks resolved",
@@ -108,18 +113,21 @@ impl Marks {
 
     /// Clears the labels for a fresh recording.
     pub fn begin(&self) {
-        if let Ok(mut armed) = ARMED.lock()
-            && let Some(armed) = armed.as_mut()
-        {
-            armed.labels.clear();
-            armed.open = false;
-        }
+        ARMED.with_borrow_mut(|armed| {
+            if let Some(armed) = armed.as_mut() {
+                armed.labels.clear();
+                armed.open = false;
+            }
+        });
     }
 
     /// Resolves this recording's marks into the readback buffer.
     pub fn resolve(&self, encoder: &mut wgpu::CommandEncoder) {
-        let Ok(armed) = ARMED.lock() else { return };
-        let Some(armed) = armed.as_ref() else { return };
+        ARMED.with_borrow(|armed| self.resolve_armed(armed.as_ref(), encoder));
+    }
+
+    fn resolve_armed(&self, armed: Option<&Armed>, encoder: &mut wgpu::CommandEncoder) {
+        let Some(armed) = armed else { return };
         let count = u32::try_from(armed.labels.len()).unwrap_or(CAPACITY);
         if count == 0 {
             return;
@@ -147,13 +155,12 @@ impl Marks {
     /// counts them. Blocks on the device.
     #[must_use]
     pub fn read(&self, device: &wgpu::Device) -> Vec<Span> {
-        let (labels, counted) = match ARMED.lock() {
-            Ok(armed) => armed
+        let (labels, counted) = ARMED.with_borrow(|armed| {
+            armed
                 .as_ref()
                 .map(|a| (a.labels.clone(), a.fragments.is_some()))
-                .unwrap_or_default(),
-            Err(_) => return Vec::new(),
-        };
+                .unwrap_or_default()
+        });
         if labels.len() < 2 {
             return Vec::new();
         }
@@ -203,9 +210,7 @@ fn read_u64s(device: &wgpu::Device, buffer: &wgpu::Buffer, count: usize) -> Vec<
 
 impl Drop for Marks {
     fn drop(&mut self) {
-        if let Ok(mut armed) = ARMED.lock() {
-            *armed = None;
-        }
+        ARMED.set(None);
     }
 }
 
@@ -215,8 +220,14 @@ pub fn mark(pass: &mut wgpu::RenderPass<'_>, label: &'static str) {
     if !cfg!(feature = "perf-probe") {
         return;
     }
-    let Ok(mut armed) = ARMED.lock() else { return };
-    let Some(armed) = armed.as_mut() else { return };
+    ARMED.with_borrow_mut(|armed| {
+        if let Some(armed) = armed.as_mut() {
+            mark_armed(armed, pass, label);
+        }
+    });
+}
+
+fn mark_armed(armed: &mut Armed, pass: &mut wgpu::RenderPass<'_>, label: &'static str) {
     let Ok(index) = u32::try_from(armed.labels.len()) else {
         return;
     };
@@ -245,10 +256,13 @@ pub fn close(pass: &mut wgpu::RenderPass<'_>) {
     if !cfg!(feature = "perf-probe") {
         return;
     }
-    let Ok(mut armed) = ARMED.lock() else { return };
-    let Some(armed) = armed.as_mut() else { return };
-    if armed.fragments.is_some() && armed.open {
-        pass.end_pipeline_statistics_query();
-        armed.open = false;
-    }
+    ARMED.with_borrow_mut(|armed| {
+        if let Some(armed) = armed.as_mut()
+            && armed.fragments.is_some()
+            && armed.open
+        {
+            pass.end_pipeline_statistics_query();
+            armed.open = false;
+        }
+    });
 }

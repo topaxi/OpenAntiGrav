@@ -6,7 +6,13 @@
 //! `web/main.js`). [`Sliced`] puts a block cache in front of it and registers
 //! as an [`oag_disc::mount::Blob`], so the disc readers above never learn the
 //! image is not in memory. Images of any size open this way; the cache is the
-//! only part held. Why this design and not a Worker: docs/tools/web.md.
+//! only part held.
+//!
+//! A race load reads on a Web Worker (`oag_raceplay::web_thread`), where the
+//! page's reader object does not exist: `web/worker.js` puts its own there as
+//! `oagImageReader`, a `FileReaderSync` over the same `File`, and each thread
+//! picks up its realm's reader on first use. The cache is shared; the page's
+//! thread never waits on it (see [`Sliced::read_at`]). See docs/tools/web.md.
 
 use std::io;
 use std::sync::Mutex;
@@ -31,10 +37,11 @@ pub(crate) struct Sliced {
 }
 
 thread_local! {
-    /// The page's reader object and its `read`. JS handles may not cross
+    /// This thread's reader object and its `read`. JS handles may not cross
     /// threads, and a [`Blob`](oag_disc::mount::Blob) must be `Send + Sync`,
-    /// so they live here and [`Sliced`] holds only plain data. This build has
-    /// one thread; a read on any other would find nothing and fail.
+    /// so they live here and [`Sliced`] holds only plain data: the page's,
+    /// given to [`Sliced::new`], or a worker's `oagImageReader`, found on its
+    /// first read.
     static READER: std::cell::RefCell<Option<(JsValue, js_sys::Function)>> =
         const { std::cell::RefCell::new(None) };
 }
@@ -69,8 +76,37 @@ impl Sliced {
         })
     }
 
+    /// This realm's reader, from `globalThis.oagImageReader` (a worker's).
+    fn realm_reader() -> Result<(JsValue, js_sys::Function), JsValue> {
+        let reader = js_sys::Reflect::get(&js_sys::global(), &JsValue::from_str("oagImageReader"))?;
+        let read = js_sys::Reflect::get(&reader, &JsValue::from_str("read"))?
+            .dyn_into::<js_sys::Function>()
+            .map_err(|_| JsValue::from_str("no image reader on this thread"))?;
+        Ok((reader, read))
+    }
+
     /// Fetches `[offset, offset + into.len())` from the page into `into`.
     fn fetch(cache: &mut Cache, offset: u64, into: &mut [u8]) -> io::Result<()> {
+        Self::fetch_uncounted(offset, into)?;
+        cache.fetches += 1;
+        cache.fetched += into.len() as u64;
+        if cache.fetches.is_power_of_two() || cache.fetches.is_multiple_of(1024) {
+            log::info!(
+                "web: image read {} times, {} MiB fetched",
+                cache.fetches,
+                cache.fetched >> 20
+            );
+        }
+        Ok(())
+    }
+
+    /// [`Self::fetch`] without the cache's counters.
+    fn fetch_uncounted(offset: u64, into: &mut [u8]) -> io::Result<()> {
+        READER.with_borrow_mut(|reader| {
+            if reader.is_none() {
+                *reader = Self::realm_reader().ok();
+            }
+        });
         #[allow(clippy::cast_precision_loss)]
         let bytes = READER
             .with_borrow(|reader| {
@@ -97,16 +133,15 @@ impl Sliced {
             ));
         }
         bytes.copy_to(into);
-        log::debug!("web: image fetch at {offset}, {} bytes", into.len());
-        cache.fetches += 1;
-        cache.fetched += into.len() as u64;
-        if cache.fetches.is_power_of_two() || cache.fetches.is_multiple_of(1024) {
-            log::info!(
-                "web: image read {} times, {} MiB fetched",
-                cache.fetches,
-                cache.fetched >> 20
-            );
-        }
+        log::debug!(
+            "web: image fetch at {offset}, {} bytes, on {}",
+            into.len(),
+            if oag_raceplay::web_thread::on_worker() {
+                "a worker"
+            } else {
+                "the page"
+            }
+        );
         Ok(())
     }
 
@@ -143,10 +178,23 @@ impl oag_disc::mount::Blob for Sliced {
         }
         let n = usize::try_from((self.size - offset).min(buf.len() as u64)).unwrap_or(buf.len());
         let buf = &mut buf[..n];
-        let mut cache = self
-            .cache
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // The page's thread may not wait on a lock (a contended one traps
+        // there), and a worker holds this one across its fetches: so the page
+        // reads past the cache while a worker is in it.
+        let mut cache = if oag_raceplay::web_thread::on_worker() {
+            self.cache
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        } else {
+            match self.cache.try_lock() {
+                Ok(cache) => cache,
+                Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+                Err(std::sync::TryLockError::WouldBlock) => {
+                    Self::fetch_uncounted(offset, buf)?;
+                    return Ok(n);
+                }
+            }
+        };
         if n >= DIRECT {
             Self::fetch(&mut cache, offset, buf)?;
             return Ok(n);

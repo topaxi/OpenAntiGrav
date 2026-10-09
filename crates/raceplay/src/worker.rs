@@ -52,12 +52,12 @@ pub struct LoadWorker {
     /// `None` once joined, which is what makes [`Self::join`] idempotent.
     #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<anyhow::Result<Loaded>>>,
-    /// The web build has no threads (`wasm32-unknown-unknown` without
-    /// atomics), so the load runs inside [`Self::spawn_with`] and its result
-    /// waits here. The frame that starts it is the frame that stalls; see
-    /// `docs/tools/web.md`.
+    /// On the web the load runs on a Web Worker (`crate::web_thread`) and
+    /// leaves its result here. The page's thread may not wait on a lock, so
+    /// it reads `done` first and takes the result only once the worker has
+    /// let go of it. See `docs/tools/web.md`, "Threads".
     #[cfg(target_arch = "wasm32")]
-    handle: Option<anyhow::Result<Loaded>>,
+    handle: Option<Arc<WebResult>>,
     /// What the screen puts on the line where the other phases put an entry
     /// name. Shared rather than owned because the thread refines it: the
     /// circuit a caller *asked* for may be `None`, and only the load knows
@@ -81,6 +81,14 @@ impl LoadWorker {
     /// one: every texture is then uploaded as it is decoded instead of being
     /// held for the scene - see [`super::TextureSink`].
     pub fn spawn(options: Options, label: Option<String>, sink: Option<TextureSink>) -> Self {
+        // No sink on the web: the load runs on a worker there, and wgpu's web
+        // types stay on the page's thread (docs/tools/web.md, "Threads").
+        #[cfg(target_arch = "wasm32")]
+        return {
+            drop(sink);
+            Self::spawn_with(label, move || super::load(&options))
+        };
+        #[cfg(not(target_arch = "wasm32"))]
         Self::spawn_with(label, move || {
             let _scope = TextureSink::open_if(sink.as_ref());
             super::load(&options)
@@ -97,6 +105,12 @@ impl LoadWorker {
         label: Option<String>,
         sink: Option<TextureSink>,
     ) -> Self {
+        #[cfg(target_arch = "wasm32")]
+        return {
+            drop(sink);
+            Self::spawn_with(label, move || super::load_event(&options, &event))
+        };
+        #[cfg(not(target_arch = "wasm32"))]
         Self::spawn_with(label, move || {
             let _scope = TextureSink::open_if(sink.as_ref());
             super::load_event(&options, &event)
@@ -104,15 +118,38 @@ impl LoadWorker {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn spawn_with(label: Option<String>, load: impl FnOnce() -> anyhow::Result<Loaded>) -> Self {
+    fn spawn_with(
+        label: Option<String>,
+        load: impl FnOnce() -> anyhow::Result<Loaded> + Send + 'static,
+    ) -> Self {
         let current = Arc::new(Mutex::new(label));
         let stages = LoadStages::default();
-        let handle = {
-            let _scope = stages.open();
-            Some(load())
-        };
+        let result = Arc::new(WebResult::default());
+        let spawned = crate::web_thread::spawn({
+            let stages = stages.clone();
+            let result = Arc::clone(&result);
+            move || {
+                let loaded = {
+                    let _scope = stages.open();
+                    load()
+                }
+                .map(|mut loaded| {
+                    // CPU work the page's thread would otherwise do in the
+                    // scene build; see `Loaded::started`.
+                    loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
+                    loaded
+                });
+                *crate::web_thread::lock_spinning(&result.loaded) = Some(loaded);
+                result
+                    .done
+                    .store(true, std::sync::atomic::Ordering::Release);
+            }
+        });
+        if let Err(why) = &spawned {
+            log::error!("race load: {why}");
+        }
         Self {
-            handle,
+            handle: spawned.ok().map(|()| result),
             current,
             stages,
         }
@@ -152,7 +189,10 @@ impl LoadWorker {
     #[must_use]
     pub fn is_finished(&self) -> bool {
         #[cfg(target_arch = "wasm32")]
-        return true;
+        return self
+            .handle
+            .as_ref()
+            .is_none_or(|result| result.done.load(std::sync::atomic::Ordering::Acquire));
         #[cfg(not(target_arch = "wasm32"))]
         self.handle
             .as_ref()
@@ -166,9 +206,19 @@ impl LoadWorker {
     /// `crate::boot::MediaWorker::join` has. `None` on the second call, and
     /// on a worker whose thread would not spawn.
     pub fn join(&mut self) -> Option<anyhow::Result<Loaded>> {
-        let handle = self.handle.take()?;
         #[cfg(target_arch = "wasm32")]
-        return Some(handle);
+        return self.handle.take().and_then(|result| {
+            // wasm32 caps the shared memory at 4 GiB and it never shrinks, so
+            // its high-water mark is the number a load has to stay under.
+            log::info!(
+                "web: module memory {} MiB after the race load",
+                core::arch::wasm32::memory_size::<0>() / 16
+            );
+            // Only reached once `done`, so the worker has let go: never waits.
+            crate::web_thread::lock_spinning(&result.loaded).take()
+        });
+        #[cfg(not(target_arch = "wasm32"))]
+        let handle = self.handle.take()?;
         #[cfg(not(target_arch = "wasm32"))]
         Some(match handle.join() {
             Ok(loaded) => loaded,
@@ -205,6 +255,15 @@ impl LoadWorker {
             stage: self.stages.reached(),
         }
     }
+}
+
+/// Where a load on a Web Worker leaves its result.
+#[cfg(target_arch = "wasm32")]
+#[derive(Debug, Default)]
+struct WebResult {
+    loaded: Mutex<Option<anyhow::Result<Loaded>>>,
+    /// Set once `loaded` is filled and its lock released.
+    done: std::sync::atomic::AtomicBool,
 }
 
 /// A race load's progress as the host's loading screen reads it.

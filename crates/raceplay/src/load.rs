@@ -837,9 +837,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class: &options.class,
             difficulty: options.difficulty,
             mode: options.mode,
-            weapons_on: options
-                .weapons_override
-                .unwrap_or_else(|| options.mode.weapons_enabled()),
+            weapons_on: options.weapons_on(),
             full_grid: options.opponents || options.mode.has_opponents(),
             track_stats: track_stats.as_ref(),
         },
@@ -848,6 +846,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     stages::reach(stages::Stage::CraftsBuilt);
     let models = &craft_title.weapon_models;
     let mut loaded = Loaded {
+        started: None,
         title,
         platform: archives.layout.platform,
         setup: Setup {

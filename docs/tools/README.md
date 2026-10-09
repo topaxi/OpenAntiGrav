@@ -22,8 +22,9 @@ does not do yet.
 
 [The web build](web.md) covers `just web`: `oag-game` for the browser on
 WebAssembly and WebGPU, the page that reads the player's own image in the tab a
-slice at a time, the workflow that deploys it to GitHub Pages and Cloudflare
-Pages, and what is not there yet (sound, movies, threads).
+slice at a time, the race load on a Web Worker over shared memory, the
+workflow that deploys it to Cloudflare Pages, and what is not there yet (sound,
+movies).
 
 [Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
 
