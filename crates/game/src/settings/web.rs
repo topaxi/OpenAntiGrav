@@ -15,8 +15,8 @@ use super::Settings;
 /// The tallest render target the web build draws, in pixels. Render scale is a
 /// percentage of the canvas, so on a large or high-density screen it alone
 /// would still ask for a 4K target; this clamps the height and scales the width
-/// by the same factor, and the upscale pass fills the canvas. Always on in the
-/// browser, whatever the render-scale row says.
+/// by the same factor, and the upscale pass fills the canvas. A first-visit
+/// default on the web: see [`capped`].
 pub const RENDER_HEIGHT_CAP: u32 = 720;
 
 /// `size` with its height held to `cap`, the width scaled by the same factor
@@ -31,8 +31,17 @@ pub fn cap_height(size: (u32, u32), cap: u32) -> (u32, u32) {
     (((width as f32 * factor).round() as u32).max(1), cap)
 }
 
+/// Whether a render target at `scale` is held to [`RENDER_HEIGHT_CAP`]: on the
+/// web, only at the default scale. A player who picks another render scale
+/// gets it as on a desktop (so 100 itself is the capped default; 125 and up
+/// go past the cap, and 50 and 75 go below it).
+#[must_use]
+pub fn capped(scale: oag_display::display::Scale) -> bool {
+    cfg!(target_arch = "wasm32") && scale == oag_display::display::Scale::default()
+}
+
 /// The render target for `rect` at `scale`: [`oag_present::upscale::target_size`],
-/// held to [`RENDER_HEIGHT_CAP`] on the web and untouched elsewhere.
+/// held to [`RENDER_HEIGHT_CAP`] where [`capped`] says so.
 #[must_use]
 pub fn render_target(
     rect: (f32, f32, f32, f32),
@@ -40,7 +49,7 @@ pub fn render_target(
     limit: u32,
 ) -> (u32, u32) {
     let size = oag_present::upscale::target_size(rect, scale, limit);
-    if cfg!(target_arch = "wasm32") {
+    if capped(scale) {
         cap_height(size, RENDER_HEIGHT_CAP)
     } else {
         size

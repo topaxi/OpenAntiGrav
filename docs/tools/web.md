@@ -182,15 +182,16 @@ the maintainer's included, keeps what it holds: a file written before this has
 240 and 16x as canonical values and is never rewritten. Dynamic resolution is
 not turned on.
 
-The render target is held to **720 lines** on the web, always, whatever the
-render-scale row says (`settings::web::render_target`, used by every
+The render target is held to **720 lines** on the web **by default**: only while
+render scale is at its default, 100 (a player cannot tell 100 picked from 100
+untouched, so 100 is the capped value; 125 and up go past 720, 50 and 75 below it, as on a desktop). The options row has no help line to say so, so this page does (`settings::web::render_target`, used by every
 `target_size` caller, width scaled by the same factor): a 1920x1080 surface logs
 `render target 1271x720 for a 1920x1080 surface`, and the race held 60.4 fps in
 headless Chromium (2026-10-09). The surface is in CSS pixels, not physical ones: at
 `devicePixelRatio` 2 on a 960x544 page the canvas is 960x544 and the target is
 960x544 (measured, `web-screenshot.py --dpr 2`), so the cap binds only on a page
-taller than 720 CSS pixels and a phone never reaches it. Render scale above
-what the cap allows has no effect on the web, and its row does not say so. At the
+taller than 720 CSS pixels and a phone never reaches it. Choosing a
+render scale other than 100 lifts the cap. At the
 60 limit the game's own overlay (`graphics.perf_overlay = "fps"`) read `60 FPS
 16.7 MS` in a race, and the same at a limit of 120 (the page's animation frames
 cap it), so 60 does not halve the rate.
