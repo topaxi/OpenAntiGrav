@@ -54,6 +54,7 @@ pub mod medal_watch;
 pub mod movie;
 pub mod prefetch;
 pub mod preview;
+pub mod profile;
 pub mod prompts;
 pub mod race_capture;
 pub mod records;

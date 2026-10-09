@@ -10,9 +10,9 @@
 //! `wasm32-unknown-unknown` has no filesystem. The page reads the image the
 //! player picked and the web entry point registers it under a path with
 //! [`register`]; [`open`] then hands out a [`Read`] + [`Seek`] cursor over it.
-//! A [`Blob`] is random-access and synchronous, so a later blob backed by
-//! `FileReaderSync` in a Web Worker plugs in here without the readers above
-//! noticing. See docs/tools/web.md.
+//! A [`Blob`] is random-access and synchronous: the web entry point registers
+//! either the whole image or a reader that fetches slices of the picked file
+//! on demand, and the readers above cannot tell which. See docs/tools/web.md.
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::io;

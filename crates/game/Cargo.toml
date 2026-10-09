@@ -131,7 +131,7 @@ winit = { workspace = true, features = ["android-native-activity"] }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
 js-sys = "0.3.106"
-web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement"] }
+web-sys = { version = "0.3.106", features = ["console", "Window", "Document", "Element", "HtmlCanvasElement", "Storage"] }
 # wgpu's web types hold `Rc`s; this marks them `Send + Sync`, which is sound
 # only because this build has no threads (no `atomics` target feature). It
 # keeps every `Send` bound the native worker threads need compiling here.
