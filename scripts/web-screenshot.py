@@ -3,7 +3,7 @@
 
     uv run --with playwright python3 scripts/web-screenshot.py \\
         --dist target/web/dist --image data/images/pulse-psp-eu.chd \\
-        --out data/web-shots --at 5,10,15 [--press Enter@12] [--port 8000] [--software] [--resize 1280x720@12]
+        --out data/web-shots --at 5,10,15 [--press Enter@12] [--pick 30] [--eval JS@20] [--port 8000] [--software] [--resize 1280x720@12]
 
 Serves `--dist` on 127.0.0.1, opens it in Chromium with WebGPU enabled
 (`--chromium` names the binary, `/usr/bin/chromium` by default; Playwright's
@@ -100,6 +100,18 @@ def main() -> None:
         default=[],
         help="SECONDS: reload the page then (leaving mid-load, say); repeatable",
     )
+    parser.add_argument(
+        "--pick",
+        action="append",
+        default=[],
+        help="SECONDS: hand the image to the page's file input again then (after a quit reloads it)",
+    )
+    parser.add_argument(
+        "--eval",
+        action="append",
+        default=[],
+        help="JS@SECONDS: evaluate JS in the page then and print the result",
+    )
     parser.add_argument("--fps", type=float, default=0.0)
     parser.add_argument(
         "--stalls",
@@ -145,6 +157,8 @@ def main() -> None:
         + keyed(args.click, "click")
         + keyed(args.resize, "resize")
         + [(float(at), "reload", "") for at in args.reload]
+        + [(float(at), "pick", "") for at in args.pick]
+        + keyed(args.eval, "eval")
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -190,6 +204,12 @@ def main() -> None:
                 elif kind == "reload":
                     page.reload(wait_until="commit", timeout=60000)
                     print(f"reloaded at {at:g}s", flush=True)
+                elif kind == "pick":
+                    page.wait_for_selector("#file", state="attached")
+                    page.set_input_files("#file", str(args.image))
+                    print(f"picked again at {at:g}s", flush=True)
+                elif kind == "eval":
+                    print(f"eval {key!r} at {at:g}s: {page.evaluate(key)}", flush=True)
                 elif kind == "resize":
                     w, h = (int(v) for v in key.split("x"))
                     page.set_viewport_size({"width": w, "height": h})
