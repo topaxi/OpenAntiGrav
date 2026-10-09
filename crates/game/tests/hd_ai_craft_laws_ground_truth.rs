@@ -14,7 +14,7 @@
 //! that craft. The speed plan is built in `Race::start`, before the first tick, so the laws
 //! have to be on the craft at seating, not only written by the tick.
 //!
-//! `lone_opponent_board` and `field_on_talons_junction` print laps, wall contacts and shield, the before-and-after
+//! `lone_opponent_board` and the `field_on_*` tests print laps, wall contacts and shield, the before-and-after
 //! record in `docs/gameplay/ai.md`, "Each title's craft laws".
 
 use oag_gameplay::PlayerInputs;
@@ -36,6 +36,33 @@ fn started(track: &str) -> Option<Race> {
     })
     .expect("loading the race");
     Some(Race::start(loaded.setup))
+}
+
+/// Every opponent carries HD's laws from seating, which is when its speed plan was built, and
+/// the yaw ceiling the AI plans with is the one that inertia gives.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_opponents_are_seated_on_hds_craft_laws() {
+    let Some(race) = started(oag_hd::race::DEFAULT_TRACK) else {
+        return;
+    };
+    for slot in 0..race.sim.world.ship_count as usize {
+        let physics = &race.sim.world.ships[slot].physics;
+        assert_eq!(physics.body.inertia.y, 24.0, "slot {slot} I_yy");
+        assert!(physics.steer_ramp_clamped, "slot {slot} steering ramp");
+        let rig = physics.hover_rig;
+        assert_eq!(rig.count, 4, "slot {slot} hover probes");
+        assert_eq!(rig.spring_share, 0.15, "slot {slot} spring share");
+        assert!(rig.along_normal, "slot {slot} spring direction");
+    }
+    let ship = &race.sim.world.ships[1];
+    let ceiling = oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body);
+    let pulse = oag_ai::hull_yaw_ceiling(&ship.handling, &oag_physics::Body::default());
+    println!("slot 1 yaw ceiling {ceiling} rad/s (Pulse's inertia would read {pulse})");
+    assert!(
+        (ceiling / pulse - 0.9).abs() < 1e-5,
+        "{ceiling} against {pulse}"
+    );
 }
 
 /// One lap's record for one craft.
@@ -119,7 +146,11 @@ fn lone_opponent_board() {
         for slot in (0..8).filter(|&slot| slot != 1) {
             race.sim.world.ships[slot].active = false;
         }
-        let plan = if race.speed_plan().is_some() { "followed" } else { "corner model" };
+        let plan = if race.speed_plan().is_some() {
+            "followed"
+        } else {
+            "corner model"
+        };
         let laps = laps_of(&mut race, &[1], TICKS).remove(0);
         println!("{environment} (speed plan {plan})");
         print_laps(&laps);
@@ -129,24 +160,25 @@ fn lone_opponent_board() {
             race.respawns_of(1),
             race.sim.world.ships[1].physics.shield
         );
-        assert!(laps.len() >= 2, "{environment}: the lone opponent finished no lap");
+        assert!(
+            laps.len() >= 2,
+            "{environment}: the lone opponent finished no lap"
+        );
     }
 }
 
-/// The full AI field on Talon's Junction, weapons off: every opponent's laps and its end of
-/// run.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn field_on_talons_junction() {
+/// The full AI field, weapons off: every opponent's laps and its end of run.
+fn field(environment: &str) {
     const TICKS: u64 = 12_000;
-    let Some(mut race) = started(oag_hd::race::DEFAULT_TRACK) else {
+    let Some(mut race) = started(&oag_hd::names::track(environment)) else {
         return;
     };
     race.sim.world.ships[0].active = false;
     let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
     let laps = laps_of(&mut race, &slots, TICKS);
+    let mut total = 0;
     for (laps, &slot) in laps.iter().zip(&slots) {
-        println!("slot {slot}");
+        println!("{environment} slot {slot}");
         print_laps(laps);
         println!(
             "    end of run ({TICKS} ticks): wall-contact ticks {}  respawns {}  shield {:.1}",
@@ -154,5 +186,31 @@ fn field_on_talons_junction() {
             race.respawns_of(slot),
             race.sim.world.ships[slot].physics.shield
         );
+        total += race.wall_contact_ticks_of(slot);
     }
+    println!("{environment} field wall-contact ticks {total}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn field_on_talons_junction() {
+    field("talons_junction");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn field_on_vineta_k() {
+    field("01_vineta_k");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn field_on_ubermall() {
+    field("05_ubermall");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn field_on_sebenco_climb() {
+    field("10_sebenco_climb");
 }
