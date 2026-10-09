@@ -171,7 +171,8 @@ const CIRCUITS: [&str; 12] = [
 ];
 
 /// A lone Ace opponent on every HD circuit: laps, wall contacts, respawns and shield per lap,
-/// then the end of the run. Prints; asserts only that each circuit saw a lap.
+/// then the end of the run. Prints; asserts that each circuit saw a lap and that the
+/// Ace touched no wall.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn lone_opponent_board() {
@@ -189,11 +190,25 @@ fn lone_opponent_board() {
             "corner model"
         };
         let run = runs_of(&mut race, &[1], TICKS).remove(0);
-        println!("{environment} (speed plan {plan})");
+        let tight = race
+            .speed_plan()
+            .map_or(0, oag_ai::SpeedPlan::tight_samples);
+        println!(
+            "{environment} (speed plan {plan}, {tight} of {} samples tight)",
+            race.racing_line().len()
+        );
         print_run(&race, 1, &run, TICKS);
         assert!(
             run.laps.len() >= 2,
             "{environment}: the lone opponent finished no lap"
+        );
+        // Every circuit laps without a wall since the plan marks where it passes one
+        // closely and the Ace holds the plan's line into it (`docs/gameplay/ai.md`,
+        // "Tight corners"); Talon's Junction scraped 6 ticks without that.
+        assert_eq!(
+            race.wall_contact_ticks_of(1),
+            0,
+            "{environment}: the lone Ace touched a wall"
         );
     }
 }

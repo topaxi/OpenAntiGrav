@@ -265,7 +265,7 @@ impl Driver {
         // On a plan a line is a handicap (`Personality::spent`, `plan_slack`).
         // Off one it is untouched, not multiplied by one: that moves bits.
         let personality = if ctx.plan.is_some_and(|plan| plan.len() == line.len()) {
-            personality.spent(plan_slack(ctx, &personality))
+            personality.spent(plan_slack(ctx, &personality, self.index as usize))
         } else {
             personality
         };
