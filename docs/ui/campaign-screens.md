@@ -3925,12 +3925,13 @@ Pictures: `data/scratch/hd-track-model/sheet1.png` (Vineta K, Metropia, Moa
 Therma, Ubermall at 1 s and 4 s), against `track-carousel/02.png` (Moa
 Therma) and `12.png`/`24.png` (Vineta K).
 
-**Omega, checked, applies, not wired.** Omega ships the same pairs, all twelve
-under `data00.psarc`, with the same `cf_FEtracks` and
-`FrontEndConstantFranelBlend` names (numbered `_1`/`_2` variants) but different
-folders (`02_metropia`, `03_moa_therma`, against HD's `02_Track`, `03_Track`)
-and `.gnf` textures, so HD's table does not match and Omega's Track Selection
-is not drawn yet; its own table is the first step.
+**Omega, ported** (`omega-track-model`, 2026-10-09). Omega authors the same screen and ships
+the pairs under its own folder names (`02_metropia`, `03_moa_therma`), as 2048's `.rcsmodel`
+over HD's geometry, with `FrontEndConstantFranelBlend` (a rim-lit fresnel term read off the PS4
+shader, no ramp texture) in place of `cf_fetracks`, and a `TrackModel` widget that authors
+`x`/`y`/`orthoScale`. Its table, the material, the widget and the open items are in
+[omega-status.md](../formats/omega-status.md#the-circuit-model-on-track-select-2026-10-09-omega-track-model);
+HD's own frames are byte-identical before and after.
 
 ### Walked live, 2026-09-29
 

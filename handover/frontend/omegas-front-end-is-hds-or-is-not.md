@@ -29,6 +29,16 @@ content against `hd-frontend.md`.
 
 ## Open
 
+- **Omega's Track Select draws its circuit models (`omega-track-model`,
+  2026-10-09)**: 26 scenes, a fresnel material read off the PS4 shader, the
+  widget's own `orthoScale` placement; `docs/formats/omega-status.md`, "The
+  circuit model on Track Select". Still open there: circuit names show ids
+  (`CircuitNames::choose` finds no copy naming all 38 circuits, 2048's ten
+  included - a per-circuit fallback would name the 28 the table has), a 2048
+  circuit's emblem is missing, `constantAmbientColour` and the field of view
+  are **chosen, not measured**, the page's white backdrop hides the rim, and
+  Team Select (`team_select: None`) is still undrawn.
+
 - **Maintainer observation, 2026-10-06 (authoritative): the Omega front end
   is in a state HD/Fury's was in earlier** ("the menu items do not render
   correctly and they do not animate yet"). **Main menu and settings rows
