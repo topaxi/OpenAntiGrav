@@ -50,8 +50,13 @@ Architecture, measurements, hosting and limits:
   `ffmpeg`; HD's Bink movies' audio goes through the same cache. Options:
   WebCodecs for H.264/AV1, the cache in memory or OPFS.
 - **Pulse/Pure music (ATRAC3+) is absent in the browser**: `ffmpeg` only, and
-  the Rust-decoder decision is the maintainer's, deferred. Pulse PS2's PCM
-  soundtrack and Pure were not tried in a browser.
+  the Rust-decoder decision is the maintainer's, deferred. Pulse PS2's front
+  end plays its soundtrack in the browser; its race and Pure were not tried.
+- **Locks the page shares with a worker**, audited for the music fetch now on
+  a worker: the disc block cache (`try_lock`), the mount table and the mixer
+  (`oag_thread::lock`, spinning); each fetch opens its own `DiscImage`. Not
+  audited: `OnceLock`/`LazyLock` initialisers a worker and the page could hit
+  together (a wait there traps the page too).
 - **Sound is checked in headless Chromium's fake sink only** (`--audio-wav`):
   not on a real output device, not in Firefox or WebKit. The context starts on
   the first key/click if the browser wants a gesture; not tried by hand.
