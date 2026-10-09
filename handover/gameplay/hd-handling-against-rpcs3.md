@@ -6,8 +6,8 @@
 `docs/ghidra/functions/ps3-hdfury-eu/physics.md`, "The handling update", and
 `docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md` and `craft-inertia.md`.
 
-Thrust, steering and its ramp, the airbrake ramp and sideshift match Pulse's laws on HD's own
-tables. ~~Pitch settles 30% shallower~~: closed 2026-10-09. HD hovers on four probes, `0.15` each,
+Thrust, the airbrake ramp and sideshift match Pulse's laws on HD's own tables; steering does with
+HD's ramp clamp and inertia (below). ~~Pitch settles 30% shallower~~: closed 2026-10-09. HD hovers on four probes, `0.15` each,
 all cast every frame and pushed along the hit normal (`Craft_HoverFourPoint`, `0x000ede88`); now
 `oag_hd::race::HOVER_RIG`, and ours settles `+6.25` / `-2.99` deg against HD's `+6.3` / `-2.8`.
 
