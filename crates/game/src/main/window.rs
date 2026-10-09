@@ -154,3 +154,34 @@ pub(crate) fn present_modes(vsync: perf::Vsync) -> &'static [wgpu::PresentMode] 
         perf::Vsync::Smooth => &[wgpu::PresentMode::Mailbox, wgpu::PresentMode::Fifo],
     }
 }
+
+/// How many frames the CPU may queue ahead of the display, for the mode
+/// [`present_modes`] resolved to.
+///
+/// Vulkan's swapchain holds this plus one images. `Mailbox` needs three to
+/// discard into, and `smooth` falling back to `Fifo` keeps three so it still
+/// never halves; both stay at wgpu's default of 2. `on` already accepts the
+/// half-rate cliff, so a second queued frame only adds latency there, and
+/// `Immediate` never waits on an image at all. **Chosen, not measured**: no
+/// input-to-photon number backs the frame this saves yet.
+pub(crate) fn frame_latency(vsync: perf::Vsync, mode: wgpu::PresentMode) -> u32 {
+    match (vsync, mode) {
+        (perf::Vsync::Smooth, _) | (_, wgpu::PresentMode::Mailbox) => 2,
+        _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_mode_that_discards_or_must_not_halve_queues_two_frames() {
+        use wgpu::PresentMode::{Fifo, Immediate, Mailbox};
+        assert_eq!(frame_latency(perf::Vsync::On, Fifo), 1);
+        assert_eq!(frame_latency(perf::Vsync::Off, Immediate), 1);
+        assert_eq!(frame_latency(perf::Vsync::Off, Mailbox), 2);
+        assert_eq!(frame_latency(perf::Vsync::Smooth, Mailbox), 2);
+        assert_eq!(frame_latency(perf::Vsync::Smooth, Fifo), 2);
+    }
+}
