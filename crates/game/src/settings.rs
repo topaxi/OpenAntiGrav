@@ -709,7 +709,6 @@ pub fn menu_seeds(
             "display.window_size",
             text(&settings.display.window_size.to_string()),
         ),
-        ("display.canvas_size", text(&settings.display.canvas_size)),
         ("controls.scheme", text(&settings.controls.scheme)),
         ("controls.triggers", text(&settings.controls.triggers)),
         (
@@ -854,6 +853,10 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
+    // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
+    if cfg!(target_arch = "wasm32") {
+        out.push(("display.canvas_size", text(&settings.display.canvas_size)));
+    }
     if let Some(language) = &settings.language {
         out.push(("language", text(language)));
     }
