@@ -1,25 +1,31 @@
-# HD handling against RPCS3: one airbrake and late speed still differ
+# HD handling against RPCS3: late speed still differs
 
-2026-10-08, `hd-handling`; 2026-10-09, `hd-pitch-airbrake`. Results:
+2026-10-08, `hd-handling`; 2026-10-09, `hd-pitch-airbrake`, `hd-airbrake`. Results:
 `docs/physics/hd-handling-ground-truth.md`. Tool: `scripts/rpcs3-trace.py`
 (`docs/reverse-engineering/rpcs3-capture.md`, "A per-frame craft trace"). HD functions:
 `docs/ghidra/functions/ps3-hdfury-eu/physics.md`, "The handling update", and
-`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md`.
+`docs/ghidra/functions/ps3-hdfury-eu/hover-four-point.md` and `craft-inertia.md`.
 
 Thrust, steering and its ramp, the airbrake ramp and sideshift match Pulse's laws on HD's own
 tables. ~~Pitch settles 30% shallower~~: closed 2026-10-09. HD hovers on four probes, `0.15` each,
 all cast every frame and pushed along the hit normal (`Craft_HoverFourPoint`, `0x000ede88`); now
 `oag_hd::race::HOVER_RIG`, and ours settles `+6.25` / `-2.99` deg against HD's `+6.3` / `-2.8`.
 
+~~One airbrake turns HD 9-14% less~~: closed 2026-10-09 (`hd-airbrake`). HD builds the craft's
+box inertia with mass `1.0` (`I_yy` 24, `Ship_Construct` `0x000debc8`) where Pulse passes `0.9`,
+and HD's steering ramp stops at its target where Pulse's cycles `83.3/91.7/100`; the old steering
+match was the two cancelling. Both are `oag_hd::race::CRAFT_LAWS`; one airbrake `-11.54` against
+HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within 1.6% every frame.
+`oag-game --trace-out` now writes `omega_*`/`avel_*`.
+
 ## Open
 
-- **One airbrake turns HD 9-14% less** (`-11.3` deg against `-12.8` at 0.5 s with the new rig).
-  The yaw rate runs 9-13% under ours from the second frame at matching speed (drive-scale shape).
-  Ruled out on HD: the airbrake force law (`0x000ee730`), steering (`0x000edb50`, same torque
-  accumulator), lateral grip (`0x000eff78`), angular damping (`0x000eda30`), the four-point hull.
-  Not located: HD's weathervane; whether the yaw inertia is applied in world axes as on Pulse;
-  whether ours' traced ramp is one tick off the one its torque used (ours' per-frame yaw rate
-  leads `speed * R * 9 * 0.001 / 21.6` by 14-25% on the first frames, HD's trails it by 3-12%).
+- **The AI's yaw ceiling on HD** (`oag_ai::driver::pace::hull_yaw_ceiling`) still divides by
+  Pulse's `I_yy` 21.6, so it reads `1.667` rad/s where HD's Feisar reaches `1.5`. An AI-lane
+  change: pass the craft's own inertia in.
+- **Omega's craft laws** are not located: no `12.0f` immediate near the craft code, no steering
+  ramp among the `vminss` users in `0x01310000`-`0x01330000`. Omega keeps Pulse's (`craft_laws:
+  None`). 2048 not checked.
 - **Speed past 2 s is about 1% low on HD** (`119.4`-`120.0` against `120.7` at 3 s). Shape fits
   Pilot Assist's `generalThrustPercentWhenEnabled="99"`, but the flag is cleared and no 0.99
   sits on the craft.
@@ -31,8 +37,9 @@ all cast every frame and pushed along the hit normal (`Craft_HoverFourPoint`, `0
 
 ## Next Steps
 
-1. Add the body's angular velocity to `oag-game --trace-out` and compare per-frame yaw-rate
-   increments against HD's `body+0x1a0` for the airbrake and steering scenarios. 1 hour.
-2. Find HD's weathervane: a `cross(forward, velocity)` into `0x000f5848` among `Craft_Update`'s
-   callees (`0x000f1958`). 1-2 hours.
+1. AI: give `hull_yaw_ceiling` the craft's `Body::inertia` so HD's AI plans on `I_yy` 24. 30 min.
+2. Omega: reach the craft update through `Craft_UpdateSurfaceProbes`'s vtable slot, then read its
+   steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.
 3. Read Omega's spring (the reader of `+0x330..+0x450`) to wire its rig. 1 hour.
+4. The 1% late-speed gap: Pilot Assist's `99` is the only shape that fits; find what scales
+   `amount` past `accelcap`. 1-2 hours.

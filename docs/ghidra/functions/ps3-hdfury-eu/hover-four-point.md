@@ -85,8 +85,9 @@ four springs at `0.15` carry what two at `0.3` carry).
 
 ## The terms the one-airbrake gap is not in
 
-Read to find why one airbrake turns HD about 10% less than this engine (open, see the results
-page). Each is Pulse's law:
+Read to find why one airbrake turns HD about 10% less than this engine. Closed 2026-10-09: the gap
+is HD's inertia mass, and `Craft_UpdateSteering`'s ramp is clamped where Pulse's is not; both on
+[craft-inertia.md](craft-inertia.md). Each term below is otherwise Pulse's law:
 
 - **`Craft_UpdateSteering` (`0x000edb50`)**: ramps `craft+0x314` toward the control's `+0x00` at
   the class block's `+0x38` up / `+0x40` down, then `torque.y = ramp * block+0x3c (Turning amount)`
@@ -109,8 +110,8 @@ page). Each is Pulse's law:
 
 Per frame, HD's body yaw rate (`body+0x1a0`) rises by `0.0078`, `0.0138`, `0.0209`, `0.0265`
 rad/s as the right airbrake ramps `13.5`, `26.7`, `40.2`, `53.5` at `86` units/s, which is 3-12%
-under `speed * R * 9 * 0.001 / 21.6` (`I_yy`) less `5 * w` damping. Not located: HD's weathervane
-term, and whether the yaw inertia is applied in world axes as on Pulse.
+under `speed * R * 9 * 0.001 / 21.6` (`I_yy`) less `5 * w` damping: HD's `I_yy` is `24`, not
+`21.6` ([craft-inertia.md](craft-inertia.md)).
 
 ## Omega and 2048
 
