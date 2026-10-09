@@ -353,12 +353,14 @@ impl super::ParticleSystem<'_> {
     #[must_use]
     pub fn texture_path<'d>(&self, data: &'d [u8], emitter: &super::Emitter) -> Option<&'d str> {
         let base = self.resource_base();
-        let site = base + emitter.offset + 0x4c4;
-        let baked = self.order.u32(data.get(site..site + 4)?, 0) as usize;
+        // Checked: `baked` is the file's own word, and on a 32-bit target
+        // (the browser build) adding it to `base` can overflow `usize`.
+        let site = base.checked_add(emitter.offset)?.checked_add(0x4c4)?;
+        let baked = self.order.u32(data.get(site..site.checked_add(4)?)?, 0) as usize;
         if baked == 0 {
             return None;
         }
-        let tail = data.get(base + baked..)?;
+        let tail = data.get(base.checked_add(baked)?..)?;
         let end = tail.iter().position(|&b| b == 0)?;
         let text = std::str::from_utf8(&tail[..end]).ok()?;
         (!text.is_empty()).then_some(text)
