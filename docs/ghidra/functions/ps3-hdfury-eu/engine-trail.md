@@ -2102,8 +2102,10 @@ the floor. Frames at tick 300 of `verification/scenarios/hd-airbrake-left.inputs
 `fs_main_velocity` now writes zero motion weighted by its own alpha (the velocity
 target blends source-alpha over). **Chosen, not measured**: no original to compare.
 The engine flare sprite is not drawn for the player's own craft, so the glow in
-question is the flame mesh and the tube. Scoped to the HD tube pipeline; the same reasoning applies to the other
-alpha-blended fx (particles, clouds); left as they were.
+question is the flame mesh and the tube. Scoped to the HD tube pipeline. The flame mesh and the boost plume, which are
+meshes with a previous-tick matrix, write their own motion instead (the follow-up
+that closed the rest of the flame ghost); see `docs/rendering/motion-blur.md`,
+"What an alpha-blended effect writes to velocity".
 
 ## Reproducing this
 

@@ -692,6 +692,7 @@ pub fn build_with(
         stencil: Default::default(),
         bias: Default::default(),
     };
+    let (blend_entry, velocity_target) = velocity.mesh_blend();
     let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
         // The second target rides along **write-masked empty** when
         // [`Velocity::Write`] adds one: a blended draw writes no depth, so
@@ -704,7 +705,7 @@ pub fn build_with(
                 blend,
                 write_mask: glow.blend_writes(),
             },
-            velocity.target(true),
+            velocity_target.clone(),
         );
         let primitive = wgpu::PrimitiveState {
             cull_mode: cull.then_some(wgpu::Face::Back),
@@ -713,7 +714,7 @@ pub fn build_with(
         pipeline_cache::cached_pipeline(
             "vs_main",
             &vertex_buffers,
-            "fs_main_blend",
+            blend_entry,
             &targets,
             primitive,
             Some(blend_depth_stencil.clone()),
@@ -731,7 +732,7 @@ pub fn build_with(
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
-                        entry_point: Some("fs_main_blend"),
+                        entry_point: Some(blend_entry),
                         targets: &targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
                             constants,

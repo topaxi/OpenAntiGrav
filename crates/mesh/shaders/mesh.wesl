@@ -14,7 +14,7 @@ import package::refraction::{opaque_colour};
 import package::shade::{lit_texel};
 import package::shadow::{shadowed};
 import package::spu_light::{spu_light_sum};
-import package::types::{MrtOutput, VertexInput, VertexOutput};
+import package::types::{BlendMrtOutput, MrtOutput, VertexInput, VertexOutput};
 import package::velocity::{velocity_of};
 
 @vertex
@@ -117,6 +117,22 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     );
 }
 
+// `fs_main_blend` for a model that rides a craft (`Velocity::Attached`): the
+// same colour, and the surface's own motion in the velocity target weighted by
+// the same alpha, so a plume or shield follows its craft rather than the track
+// behind it. Chosen, not measured: the originals have no motion blur.
+@fragment
+fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
+    let shaded = lit_texel(in);
+    return BlendMrtOutput(
+        vec4<f32>(
+            fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth),
+            shaded.a
+        ),
+        vec4<f32>(velocity_of(in), 0.0, shaded.a),
+    );
+}
+
 // Used only by the cutout pipeline - see
 // `oag_mesh::mesh::Model::alpha_tested_draws`. Unlike `fs_main_blend`, this
 // keeps depth write on (see `mesh_render::build`): a batch tagged
@@ -165,10 +181,11 @@ fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
 
 // The velocity-writing twins of `fs_main` and `fs_main_alpha_test`, for the
 // pipelines built against the race's two attachments (`mesh_render::Velocity`).
-// The blended pipelines have no twin on purpose: they write no depth, so the
+// The blended pipelines have no twin by default: they write no depth, so the
 // velocity at their pixels belongs to the surface behind them - their second
 // target carries an empty write mask instead, keeping velocity and depth
-// describing the same surface at every pixel.
+// describing the same surface at every pixel. `fs_main_blend_velocity` above is
+// the opt-in for a model attached to a craft.
 @fragment
 fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
     let shaded = lit_texel(in);

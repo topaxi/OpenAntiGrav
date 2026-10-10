@@ -201,6 +201,7 @@ pub(super) fn build(
                     zone_art,
                     shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
+                    mesh_render::Velocity::Attached,
                 )?),
                 None => None,
             },
@@ -232,6 +233,7 @@ pub(super) fn build(
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
+                mesh_render::Velocity::Attached,
             )?));
         }
     }

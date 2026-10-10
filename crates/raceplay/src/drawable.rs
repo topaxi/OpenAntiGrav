@@ -133,6 +133,9 @@ impl Drawable {
         zone: &mesh_render::zone::StageArt,
         shadow_maps: mesh_render::ShadowMaps<'_>,
         receives_shadow: mesh_render::ShadowReceiver,
+        // `Attached` for a model that rides a craft, `Write` otherwise - see
+        // [`mesh_render::Velocity`].
+        velocity: mesh_render::Velocity,
     ) -> Result<Self> {
         Self::new_with(
             device,
@@ -150,6 +153,7 @@ impl Drawable {
             mesh_render::Texcoords::Interleaved,
             false,
             false,
+            velocity,
         )
     }
 
@@ -179,6 +183,7 @@ impl Drawable {
         // Whether the opaque and cutout lists cull back faces - see
         // `mesh_render::build_with`.
         cull_back: bool,
+        velocity: mesh_render::Velocity,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -215,9 +220,10 @@ impl Drawable {
             // Everything a race draws writes the velocity buffer (or, for
             // its blended pipelines, carries the masked second target) -
             // the buffer is always on in the game path, whatever the
-            // motion blur setting says. See `mesh_render::Velocity` and
+            // motion blur setting says. `Attached` models write their own
+            // blended motion too. See `mesh_render::Velocity` and
             // `race::Scene::velocity`.
-            mesh_render::Velocity::Write,
+            velocity,
             zone,
             shadow_maps,
             receives_shadow,

@@ -53,6 +53,7 @@ impl TrackShine {
             mesh_render::Texcoords::Streamed,
             false,
             false,
+            mesh_render::Velocity::Write,
         )?;
         Ok(Some(Self {
             drawable,
