@@ -139,3 +139,30 @@ link on `windows-latest`, `7z` availability there, or the GitHub-hosted steps
 (`upload-artifact`, `gh release create`), which only a real run exercises. The
 container had no Vulkan driver, so GPU tests skipped there. `act`
 is not installed on the development machine.
+
+### Runner images and action runtimes
+
+Checked 2026-10-10, ahead of two GitHub changes due 2026-10-19 (Node 20 actions
+forced onto Node 24; `ubuntu-latest` moving to Ubuntu 26.04).
+
+- **Linux jobs pin `ubuntu-24.04`** in all four workflows. The shipped AppImage
+  does not depend on the runner's glibc: it is built inside Debian bookworm
+  (`--container`) and references glibc 2.34 symbols at most, see
+  [packaging.md](packaging.md#glibc). The jobs that do lean on the image are
+  the `apt-get` lines, the Android SDK path (`sdkmanager "ndk;27.3.13750724"`)
+  and the host `strip` of the tarball binary, none of which were checked on
+  26.04. Moving a pin to 26.04 is a deliberate change, made after a trial run.
+- **Actions** moved to their Node 24 majors: `actions/checkout` v4 -> v7,
+  `actions/setup-python` v5 -> v7, `actions/upload-artifact` v4 -> v7,
+  `actions/download-artifact` v4 -> v8, `cloudflare/wrangler-action` v3 -> v4.
+  `Swatinem/rust-cache@v2` already runs on node24; `dtolnay/rust-toolchain` and
+  `taiki-e/install-action` are composite actions (no Node).
+- **Behaviour that matters here.** download-artifact v8 still takes `pattern`
+  and `merge-multiple` (the nightly publish filter); its v5 change only affects
+  download by artifact ID, which nothing uses. v8 errors on a digest mismatch
+  and unzips by Content-Type, neither a concern for our zip artifacts.
+  upload-artifact keeps `include-hidden-files` (pages.yml sets it).
+  checkout v7 blocks fork PR checkouts under `pull_request_target` and
+  `workflow_run`, which no workflow uses. wrangler-action v4 installs Wrangler 4
+  by default; the one command (`pages deploy`) exists in both.
+  Only `actionlint` and `act --list` have run; nothing ran on GitHub.
