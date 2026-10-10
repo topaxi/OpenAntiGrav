@@ -113,9 +113,10 @@ pub struct Controls {
     /// title now does. A corridor spring that yaws the craft off a wall it is
     /// about to meet, at a few percent of thrust.
     ///
-    /// **Normal by default on Android only, off elsewhere** (maintainer, 2026-10-10):
+    /// **Extreme by default on Android only, off elsewhere** (maintainer, 2026-10-10):
     /// touch controls are far harder than a pad, and a desktop player is assumed to
-    /// know Wipeout. A file written when this was a switch holds `true` or `false`;
+    /// know Wipeout. Extreme rather than Normal because Normal barely moved a
+    /// never-steering run off the wall (docs/physics/pilot-assist.md). A file written when this was a switch holds `true` or `false`;
     /// they read as Extreme and Off, which is what the switch ran, so nobody's saved
     /// choice changes meaning. A token this build does not know reads as the default.
     #[serde(default = "default_pilot_assist", with = "pilot_assist_level")]
@@ -124,7 +125,7 @@ pub struct Controls {
 
 fn default_pilot_assist() -> Level {
     if cfg!(target_os = "android") {
-        Level::Normal
+        Level::Extreme
     } else {
         Level::Off
     }

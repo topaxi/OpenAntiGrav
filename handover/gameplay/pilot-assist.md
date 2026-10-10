@@ -3,7 +3,7 @@
 Pilot Assist is built title-agnostic in `oag_physics::pilot_assist` with 2048's three levels
 (Off, Normal, Extreme) on every title: the disc's numbers where it authors them, 2048's as
 labelled stand-ins ("chosen, not measured") where it does not. Switch: `[controls]
-pilot_assist`, Normal by default on Android only. HD and 2048 draw the indicator (Extreme only).
+pilot_assist`, Extreme by default on Android only (maintainer, 2026-10-10, after Normal barely helped). HD and 2048 draw the indicator (Extreme only).
 Behaviour, the per-title table and the measured runs:
 [`docs/physics/pilot-assist.md`](../../docs/physics/pilot-assist.md); evidence:
 [`ps3-hdfury-eu/pilot-assist.md`](../../docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md),
@@ -25,7 +25,7 @@ Behaviour, the per-title table and the measured runs:
 - **A mid-race switch** (HD's pause-menu row) would have to become a replayed input; today the
   setting applies from the next race only.
 - **Cost on mobile**: `oag_raceplay::pilot_assist::candidates` scans the spline twice per probe,
-  four full scans a tick while the assist runs (Android's default is Normal, so most of a lap).
+  four full scans a tick while the assist runs (Android's default is Extreme, so most of a lap).
   One pass tracking the best sample and the best on another path halves it; a windowed search
   around the player's last index would remove most of it.
 - **`pilot_assist_disable` volumes** (`PilotAssistDisable_Importer.cpp`, 2048 and Omega): who reads
@@ -35,6 +35,11 @@ Behaviour, the per-title table and the measured runs:
 - **Omega's HUD indicator** is not wired (`oag_omega::hud`'s `assist: None`); check whether its
   layouts embed `HUD_assist_indicator.xml`.
 - **2048 live**: nothing of 2048's assist was run on Vita3K.
+- **Normal measured only at its weakest.** The demo never steers, and 2048's Normal carries
+  `notInUseStrength 0.1`, read (confidence 65) as the strength while the player is not
+  steering. So 13 contacts against Off's 16 may be Normal's floor, not what a steering player
+  gets. Measure Normal with a scripted steering line into a tight corner before judging it
+  weak, and confirm what `notInUseStrength` gates on 2048 (live on Vita3K, or a closer read).
 
 ## Next Steps
 

@@ -122,9 +122,10 @@ on the side of the wall it steered away from.
   as the other choice rows), applied from the next race, as the control scheme is: a mid-race
   switch is not in the input stream a replay records. A recording's header carries
   `pilot_assist = "normal"|"extreme"` when it was on (`oag_game::ghosts::race_options`); the
-  older `"true"` read as Extreme. **Normal on Android, off everywhere else** (maintainer,
+  older `"true"` read as Extreme. **Extreme on Android, off everywhere else** (maintainer,
   2026-10-10: touch controls are much harder than a pad; a desktop player is assumed to know
-  Wipeout). A file from when this was a switch holds `true`/`false`, read as Extreme/Off so a
+  Wipeout. Extreme rather than Normal because Normal barely moved the never-steering run off
+  the wall: 13 contacts against Off's 16, Extreme's 0). A file from when this was a switch holds `true`/`false`, read as Extreme/Off so a
   saved choice keeps what it ran. A headless capture or trace takes `--pilot-assist
   off|normal|extreme` (`on` still means Extreme), default off. The row's values are the
   tokens: the menu has no per-title value strings, so 2048's own "Super" shows only in its
