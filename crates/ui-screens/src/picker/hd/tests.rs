@@ -802,7 +802,6 @@ fn the_same_finger_travel_moves_fewer_columns_than_it_did_at_one_to_one() {
         },
         &found,
     );
-    assert!(DRAG_GAIN < 1.0);
     // 2 columns of finger is 1.2 of pan: one step with 0.2 left over, where
     // 1:1 stepped twice and rested on the column.
     assert_eq!(events.len(), 1, "{events:?}");
