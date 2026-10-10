@@ -51,6 +51,36 @@ use super::{Event, Layout, Picker};
 /// reloading the preview - every time it trembles.
 pub const STEP_AT: f32 = 0.6;
 
+/// How much of a finger's travel the hex grids follow: the columns move
+/// this fraction of the finger, so a column takes `1 / DRAG_GAIN` times the
+/// finger travel it would at 1:1. **Chosen, not measured**: the grid is
+/// authored on a 1280-unit canvas, so on a phone a column (72.2 units) is
+/// about 8 mm of finger and a specific team or circuit is hard to land on;
+/// 0.6 makes it about 13 mm. The fling speed is read off the scaled travel,
+/// so this slows a flick by the same factor. The window's DPI is not
+/// consulted: the pointer layer reports grid units only.
+pub const DRAG_GAIN: f32 = 0.6;
+
+/// The fastest a hex-grid flick may leave the finger, in columns a second
+/// (the shared default is [`oag_ui::kinetic::MAX_FLING`], 24). **Chosen, not
+/// measured**: half, so a hard swipe coasts at most 4 columns rather than 12.
+pub const HEX_MAX_FLING: f32 = 12.0;
+
+/// The decay of a hex-grid coast, per second (the shared default is
+/// [`oag_ui::kinetic::FRICTION`], 2.0). **Chosen, not measured**: a flick
+/// travels `speed / friction`, so 3.0 stops it a third sooner.
+pub const HEX_FRICTION: f32 = 3.0;
+
+/// What the hex grids scroll over: columns that wrap and snap, with the
+/// calmer fling [`DRAG_GAIN`], [`HEX_MAX_FLING`] and [`HEX_FRICTION`] give.
+pub(super) fn hex_extent() -> Extent {
+    Extent {
+        max_fling: HEX_MAX_FLING,
+        friction: HEX_FRICTION,
+        ..Extent::wrapping()
+    }
+}
+
 /// What a click on one of the screen's targets does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum What {
@@ -230,7 +260,7 @@ impl Picker {
         }
         if pointer.scroll != 0 {
             out.extend(self.step_entry(pointer.scroll.signum()));
-            self.scroll.settle(&Extent::wrapping());
+            self.scroll.settle(&hex_extent());
         }
         let on_tile = |at| {
             targets.iter().any(|target| {
@@ -247,12 +277,12 @@ impl Picker {
             .iter()
             .any(|target| matches!(target.what, What::Cell { .. }));
         let travel = if grid && self.grabbed {
-            pointer.drag.0 / super::hd::hex::PITCH[0]
+            pointer.drag.0 * DRAG_GAIN / super::hd::hex::PITCH[0]
         } else {
             0.0
         };
         // A touch-down catches a coasting grid, and its tap selects nothing.
-        let pointer = &self.scroll.gesture(pointer, travel, &Extent::wrapping());
+        let pointer = &self.scroll.gesture(pointer, travel, &hex_extent());
         out.extend(self.fold_pan());
         let hit = pointer.at.and_then(|at| hit(targets, at));
         // What was selected before this tick's gesture: a tap is a move and

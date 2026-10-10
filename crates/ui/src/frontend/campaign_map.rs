@@ -427,6 +427,8 @@ impl CampaignMap {
         };
         Extent {
             pitch,
+            max_fling: crate::kinetic::MAX_FLING,
+            friction: crate::kinetic::FRICTION,
             snap: false,
             bounds: Bounds::Clamp {
                 min: 0.0,
