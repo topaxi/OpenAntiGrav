@@ -19,6 +19,7 @@ AltiVec truncation by hand from the bridge's disassembly. The behaviour page is
 | `0x000f8c58` | `PilotAssist_ThrustScale` | 90 | three returns read straight off the table: `thrustPercentOnUse`, `1.0`, `generalThrustPercentWhenEnabled`, each times `0.01` |
 | `0x000f8cb8` | `PilotAssist_ProbeCorridor` | 68 | locates on `"AI track data"` and measures the lateral offset against `+0x30`/`+0x44`/`+0x48` of the 0x70-byte spline record ([track.md](../../../formats/track.md#control-points)) |
 | `0x000f8fe8` | `PilotAssist_Update` | 85 | the per-tick law below; one caller, `Craft_Update` at `0x000f1e24` |
+| `0x00089c90` | `Hud_UpdateAssistIndicator` | 80 | binds nothing itself; reads the four widgets `0x0009bb30` binds at `hud+0x5a0`..`+0x5ac` by name (`"AssistIndicatorBG"`..`"AssistIndicatorRight"`), the option byte `+0x473` and the craft's acting sign; 2048's `0x81152488` is the same function |
 | `0x0098d6b0` (data) | `g_PilotAssistClassTable` | 80 | `0x008a9398`'s target, the parser's `0x2c` stride from `0x0098d600 + 0xb0`, and `PilotAssist_ThrustScale` indexes it with `g_GameState+0xd4` (the speed class) |
 
 `0x0098d600` is the global settings block `<Global>` fills (`0x008a8674` in the parser's TOC);
@@ -132,6 +133,23 @@ ship's track cursor, passed through to the locate.
 So `L + R` is zero in the middle of the corridor, positive within `radius` of the left edge
 and negative within `radius` of the right. The edges are the track's **half-widths**
 (`+0x44`/`+0x48`), not the AI corridor (`+0x4c`/`+0x50`).
+
+## The HUD indicator (`Hud_UpdateAssistIndicator`, `0x00089c90`)
+
+    if !(option byte +0x473) (and the online allowance): hide all four; return
+    show BG (hud+0x5a0)
+    acting == -1: t_main = 3.0, t_right = 1.5        # 0x008a7768, 0x008a776c
+    acting == +1: t_main = 3.0, t_left  = 1.5
+    t_main, t_left, t_right -= dt, floored at 0
+    phase = t_main == 0 ? 0 : phase + dt
+    Main  (hud+0x5a4) up while t_main != 0
+    Left  (hud+0x5a8) up while t_left  != 0 and frac(phase * 4) < 0.5   # 0x008a7770, 0x008a764c
+    Right (hud+0x5ac) up while t_right != 0 and frac(phase * 4) < 0.5
+
+`frac` is `0x00677508`, a `modf`. The widgets are `/data/xml/hud_assist_indicator.xml`'s, embedded
+by the arcade, elimination, time trial and speed lap layouts and by none of Zone's, Detonator's or
+Duel's (`hd_hud_runtime_ground_truth::the_assist_indicator_is_authored_where_a_race_can_use_it`).
+Wired: `oag_hud::assist`, `oag_hd::hud::RUNTIME.assist`.
 
 ## Read live (2026-10-10)
 

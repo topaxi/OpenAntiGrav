@@ -109,3 +109,43 @@ fn every_arc_segment_is_authored_where_its_arc_is() {
         "the arcade layout carries both arcs: {with_arcs:?}"
     );
 }
+
+/// Pilot Assist's indicator: which of the default skin's layouts author the six
+/// widgets `oag_hd::hud::RUNTIME.assist` names. A layout without them draws no
+/// indicator, which is the original's behaviour for that mode.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_assist_indicator_is_authored_where_a_race_can_use_it() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let assist = oag_hd::hud::RUNTIME
+        .assist
+        .expect("HD authors an indicator");
+    let names: Vec<&str> = [assist.background, assist.main]
+        .into_iter()
+        .chain(assist.left.iter().copied())
+        .chain(assist.right.iter().copied())
+        .collect();
+    let mut carrying = Vec::new();
+    for &root in DEFAULT_SKIN {
+        let layout = composed(&mut archives, root).layout;
+        let found = names.iter().filter(|n| layout.sprite(n).is_some()).count();
+        println!("{root}: {found} of {}", names.len());
+        for name in &names {
+            if let Some(sprite) = layout.sprite(name) {
+                println!(
+                    "    {name}: rect {:?} src {} color {:?}",
+                    sprite.rect, sprite.src, sprite.color
+                );
+            }
+        }
+        if found == names.len() {
+            carrying.push(root);
+        }
+    }
+    assert!(
+        carrying.contains(&"/data/xml/arcade_hud.xml"),
+        "the arcade layout embeds HUD_assist_indicator.xml: {carrying:?}"
+    );
+}

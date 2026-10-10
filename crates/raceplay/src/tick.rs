@@ -806,6 +806,7 @@ impl Race {
         self.advance_energy_bar_delay();
         // 2048's `ThrustBar` chase - see `Self::advance_thrust_chase`.
         self.advance_thrust_chase();
+        self.advance_assist_indicator();
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically

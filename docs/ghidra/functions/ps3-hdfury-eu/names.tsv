@@ -689,3 +689,4 @@
 0x000f8cb8	function	PilotAssist_ProbeCorridor	68	pilot-assist.md
 0x000f8fe8	function	PilotAssist_Update	85	pilot-assist.md
 0x0098d6b0	data	g_PilotAssistClassTable	80	pilot-assist.md
+0x00089c90	function	Hud_UpdateAssistIndicator	80	pilot-assist.md

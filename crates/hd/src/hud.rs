@@ -194,6 +194,15 @@ pub const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         prefix: "PosBar",
         segments: 8,
     },
+    // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
+    // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
+    // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.
+    assist: Some(oag_title::hud::AssistIndicator {
+        background: "AssistIndicatorBG",
+        main: "AssistIndicatorMain",
+        left: &["AssistIndicatorLeft", "AssistIndicatorLeftBig"],
+        right: &["AssistIndicatorRight", "AssistIndicatorRightBig"],
+    }),
 };
 
 /// The sprite widgets HD draws whenever its HUD is up.

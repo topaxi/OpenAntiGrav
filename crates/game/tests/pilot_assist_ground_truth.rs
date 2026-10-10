@@ -120,3 +120,30 @@ fn no_opponent_ever_gets_the_assist() {
         );
     }
 }
+
+/// The HUD reads the switch: the indicator's background is up for the whole run
+/// with the option on, the main icon after a correction, and nothing with it off.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_hud_indicator_follows_the_switch_and_the_corrections() {
+    let (Some(mut off), Some(mut on)) = (
+        started(oag_race::Mode::TimeTrial),
+        started(oag_race::Mode::TimeTrial),
+    ) else {
+        return;
+    };
+    on.set_pilot_assist(true);
+    let inputs = thrust();
+    let (mut main_ticks, mut arrow_ticks) = (0, 0);
+    for _ in 0..TICKS {
+        off.tick(&inputs);
+        on.tick(&inputs);
+        assert_eq!(off.readout().assist, Default::default());
+        let shown = on.readout().assist;
+        assert!(shown.enabled);
+        main_ticks += u32::from(shown.main);
+        arrow_ticks += u32::from(shown.left || shown.right);
+    }
+    println!("main icon up {main_ticks} ticks, an arrow up {arrow_ticks}");
+    assert!(main_ticks > 0 && arrow_ticks > 0);
+}
