@@ -152,3 +152,46 @@ fn the_device_descriptor_asks_for_the_adapters_own_texture_limit() {
             || device.limits().max_texture_dimension_2d > 8192
     );
 }
+
+/// A BC7 chain parked under a scope drains in block-row bands wgpu accepts
+/// (a band that split a block would be a validation panic), holds every byte of
+/// every level, and parks nothing for a caller that did not ask.
+#[test]
+fn a_block_chain_parks_every_level_and_drains_in_whole_block_rows() {
+    let Some((device, queue)) = small_device(8192, true) else {
+        eprintln!("no BC adapter: skipped");
+        return;
+    };
+    // BC7, 1024 x 1024: level 0 is 1 MiB, so 256 KiB bands make four of it.
+    let levels: Vec<Vec<u8>> = (0..11)
+        .map(|level| {
+            let side = (1024u32 >> level).max(1);
+            vec![level as u8 + 1; (side.div_ceil(4).pow(2) * 16) as usize]
+        })
+        .collect();
+    let whole: u64 = levels.iter().map(|level| level.len() as u64).sum();
+    let texture = std::sync::Arc::new(ModelTexture {
+        label: "bc7 parked".into(),
+        width: 1024,
+        height: 1024,
+        texels: Texels::Blocks {
+            format: BlockFormat::Bc7,
+            levels,
+        },
+        mip_count: None,
+    });
+    let scope = oag_gpu::deferred_upload::Scope::open(&queue);
+    let immediate = upload_shared(&device, &queue, &texture, true, false).expect("fits");
+    assert_eq!(oag_gpu::deferred_upload::pending_bytes(), 0);
+    drop(immediate);
+    // A fresh `Arc`: the cache an open `pipeline_cache::Scope` keeps is not
+    // open here, so this is a second upload of the same bytes.
+    upload_shared(&device, &queue, &texture, true, true).expect("fits");
+    assert_eq!(oag_gpu::deferred_upload::pending_bytes(), whole);
+    let mut steps = 0;
+    while oag_gpu::deferred_upload::drain(|| false) > 0 {
+        steps += 1;
+    }
+    assert!(steps >= 4, "level 0 alone is four bands, took {steps}");
+    drop(scope);
+}

@@ -71,20 +71,39 @@ pub(crate) struct Built {
 pub(crate) struct BuildWorker {
     #[cfg(not(target_arch = "wasm32"))]
     handle: Option<std::thread::JoinHandle<Built>>,
-    /// The web build has no threads, so the build runs inside [`Self::spawn`]
-    /// and its result waits here. See docs/tools/web.md.
+    /// The web build has no threads, so the scene is built inside
+    /// [`Self::spawn`] with its big uploads parked, and each [`Self::take`]
+    /// writes a frame's worth of them. See [`Staged`].
     #[cfg(target_arch = "wasm32")]
-    handle: Option<Built>,
+    staged: Option<Staged>,
+    /// Open from the build until the last parked write has landed.
+    #[cfg(target_arch = "wasm32")]
+    uploads: Option<oag_gpu::deferred_upload::Scope>,
+    /// Frames the parked uploads have taken, for the log line.
+    #[cfg(target_arch = "wasm32")]
+    upload_frames: u32,
     allocation: (u32, u32),
 }
+
+/// What one frame of [`BuildWorker::take`] may spend writing parked uploads on
+/// the web. **Chosen, not measured**: a third of a 60 Hz frame, so the loading
+/// screen's own frame (a bar and a wave) still fits beside it.
+#[cfg(target_arch = "wasm32")]
+const UPLOAD_BUDGET: Duration = Duration::from_millis(5);
 
 impl BuildWorker {
     /// Starts building `loaded` into a race scene.
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn spawn(request: Request, loaded: race::Loaded) -> Self {
         let allocation = request.allocation;
-        let handle = Some(build(request, loaded));
-        Self { handle, allocation }
+        let uploads = oag_gpu::deferred_upload::Scope::open(&request.gpu.queue);
+        let staged = Some(build_stage(request, loaded));
+        Self {
+            staged,
+            uploads: Some(uploads),
+            upload_frames: 0,
+            allocation,
+        }
     }
 
     /// Starts building `loaded` into a race scene.
@@ -107,16 +126,38 @@ impl BuildWorker {
     /// A worker whose thread would not spawn, or that panicked, reports a
     /// [`RaceBuildError::Gpu`] - the same fatal class a pipeline that would
     /// not build always was.
+    ///
+    /// On the web each call writes parked uploads for [`UPLOAD_BUDGET`], and
+    /// the warmup draw waits until the last of them has landed: it would draw
+    /// zeros otherwise.
     #[cfg(target_arch = "wasm32")]
     pub(crate) fn take(&mut self) -> Option<Built> {
-        Some(self.handle.take().unwrap_or_else(|| Built {
-            stage: Err(RaceBuildError::Gpu(anyhow::anyhow!(
-                "the race scene was already taken"
-            ))),
-            allocation: self.allocation,
-            build: Duration::ZERO,
-            warm_up: Duration::ZERO,
-        }))
+        let Some(staged) = self.staged.take() else {
+            return Some(Built {
+                stage: Err(RaceBuildError::Gpu(anyhow::anyhow!(
+                    "the race scene was already taken"
+                ))),
+                allocation: self.allocation,
+                build: Duration::ZERO,
+                warm_up: Duration::ZERO,
+            });
+        };
+        if staged.stage.is_ok() && oag_gpu::deferred_upload::pending_bytes() > 0 {
+            let start = Instant::now();
+            let left = oag_gpu::deferred_upload::drain(|| start.elapsed() < UPLOAD_BUDGET);
+            self.upload_frames += 1;
+            if left > 0 {
+                self.staged = Some(staged);
+                return None;
+            }
+            debug!(
+                "race scene uploads landed over {} frames, {:?} in the last",
+                self.upload_frames,
+                start.elapsed()
+            );
+        }
+        self.uploads = None;
+        Some(warm(staged))
     }
 
     /// The result, once the build has returned; `None` while it is still
@@ -141,7 +182,27 @@ impl BuildWorker {
     }
 }
 
+/// A scene built but not yet warmed up: the half of [`build`] that has to
+/// finish before the other can start, because on the web the first half leaves
+/// uploads parked (see [`BuildWorker::take`]).
+struct Staged {
+    stage: Result<Box<RaceStage>, RaceBuildError>,
+    gpu: Handles,
+    warm_target: wgpu::TextureView,
+    allocation: (u32, u32),
+    extent: (u32, u32),
+    fov: oag_display::display::Fov,
+    frustum_culling: bool,
+    pvs_culling: bool,
+    anim_seconds: Option<f32>,
+    build: Duration,
+}
+
 fn build(request: Request, loaded: race::Loaded) -> Built {
+    warm(build_stage(request, loaded))
+}
+
+fn build_stage(request: Request, loaded: race::Loaded) -> Staged {
     let Request {
         gpu,
         allocation,
@@ -174,7 +235,33 @@ fn build(request: Request, loaded: race::Loaded) -> Built {
     );
     let build = start.elapsed();
     debug!("race scene built in {build:?}, off the frame thread");
-    let mut stage = built.map_err(RaceBuildError::Gpu);
+    Staged {
+        stage: built.map_err(RaceBuildError::Gpu),
+        gpu,
+        warm_target,
+        allocation,
+        extent,
+        fov: settings.graphics.fov,
+        frustum_culling: settings.graphics.frustum_culling,
+        pvs_culling,
+        anim_seconds,
+        build,
+    }
+}
+
+fn warm(staged: Staged) -> Built {
+    let Staged {
+        mut stage,
+        gpu,
+        warm_target,
+        allocation,
+        extent,
+        fov,
+        frustum_culling,
+        pvs_culling,
+        anim_seconds,
+        build,
+    } = staged;
     let warm_start = Instant::now();
     // **Building the pipeline objects is not the same as the driver having
     // compiled them.** Several backends defer that to the first real draw, so
@@ -186,8 +273,8 @@ fn build(request: Request, loaded: race::Loaded) -> Built {
             &warm_target,
             allocation,
             (0.0, 0.0, extent.0 as f32, extent.1 as f32),
-            settings.graphics.fov,
-            settings.graphics.frustum_culling,
+            fov,
+            frustum_culling,
             pvs_culling,
             anim_seconds,
         );

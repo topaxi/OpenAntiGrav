@@ -11,29 +11,55 @@
 //! A race load reads on a Web Worker (`oag_thread::web`), where the
 //! page's reader object does not exist: `web/worker.js` puts its own there as
 //! `oagImageReader`, a `FileReaderSync` over the same `File`, and each thread
-//! picks up its realm's reader on first use. The cache is shared; the page's
-//! thread never waits on it (see [`Sliced::read_at`]). See docs/tools/web.md.
+//! picks up its realm's reader on first use. The page's thread and a worker
+//! each have a cache of their own ([`Shape`]), and the page's thread never
+//! waits on a lock (see [`Sliced::read_at`]). See docs/tools/web.md.
 
 use std::io;
 use std::sync::Mutex;
 
 use wasm_bindgen::{JsCast, JsValue};
 
-/// One cached block: 1 MiB, the unit a miss fetches. Chosen, not measured
-/// against anything but the fetch cost below: one fetch costs about 1 ms
-/// whatever its size up to a few MiB in Chromium 153, and copies at about
-/// 110 MB/s.
-const BLOCK: u64 = 1 << 20;
-/// Blocks kept, least recently used dropped first: 64 MiB of the module's
-/// memory. Chosen, not measured.
-const BLOCKS: usize = 64;
-/// A read at least this long skips the cache and is fetched whole.
-const DIRECT: usize = 4 << 20;
+/// How one realm's cache cuts the image up. The page's thread and a worker read
+/// differently and are cached apart, because each undid the other's cache:
+/// the worker's 200 MiB of race load evicted every block the front end had
+/// read, so leaving a race re-read the menus' data through synchronous
+/// requests on the page's thread (41 reads, about 1.5 s frozen), and the page's
+/// scattered small reads (a table of contents, a name, a sprite) each pulled a
+/// whole 1 MiB block, 119 MiB for the HD boot.
+struct Shape {
+    /// The unit a miss fetches. A fetch costs a fixed request plus the copy
+    /// out of the response, which was measured at about 110 MB/s, so a size
+    /// that wastes nothing on scattered reads wins on the page and the fixed
+    /// part wins on a worker's sequential ones. Chosen, not measured, except
+    /// for those two costs.
+    block: u64,
+    /// Blocks kept, least recently used dropped first.
+    blocks: usize,
+    /// A read at least this long skips the cache and is fetched exactly.
+    direct: usize,
+}
+
+/// The page's thread: 64 MiB of 128 KiB blocks.
+const PAGE: Shape = Shape {
+    block: 128 << 10,
+    blocks: 512,
+    direct: 512 << 10,
+};
+
+/// A worker, whose reads are the race load's long ones: 32 MiB of 1 MiB blocks.
+const WORKER: Shape = Shape {
+    block: 1 << 20,
+    blocks: 32,
+    direct: 4 << 20,
+};
 
 /// The page's reader behind a block cache.
 pub(crate) struct Sliced {
     size: u64,
-    cache: Mutex<Cache>,
+    /// The page's thread's blocks, and a worker's: see [`Shape`].
+    page: Mutex<Cache>,
+    worker: Mutex<Cache>,
 }
 
 thread_local! {
@@ -72,7 +98,8 @@ impl Sliced {
         READER.with_borrow_mut(|slot| *slot = Some((reader, read)));
         Ok(Self {
             size,
-            cache: Mutex::new(Cache::default()),
+            page: Mutex::new(Cache::default()),
+            worker: Mutex::new(Cache::default()),
         })
     }
 
@@ -146,18 +173,18 @@ impl Sliced {
     }
 
     /// The cached block `index`, fetched on a miss.
-    fn block<'a>(&self, cache: &'a mut Cache, index: u64) -> io::Result<&'a [u8]> {
+    fn block<'a>(&self, cache: &'a mut Cache, shape: &Shape, index: u64) -> io::Result<&'a [u8]> {
         cache.clock += 1;
         let now = cache.clock;
         if let Some(at) = cache.blocks.iter().position(|(i, _, _)| *i == index) {
             cache.blocks[at].2 = now;
             return Ok(&cache.blocks[at].1);
         }
-        let start = index * BLOCK;
-        let len = usize::try_from(BLOCK.min(self.size - start)).unwrap_or(usize::MAX);
+        let start = index * shape.block;
+        let len = usize::try_from(shape.block.min(self.size - start)).unwrap_or(usize::MAX);
         let mut bytes = vec![0; len].into_boxed_slice();
         Self::fetch(cache, start, &mut bytes)?;
-        if cache.blocks.len() >= BLOCKS
+        if cache.blocks.len() >= shape.blocks
             && let Some(oldest) = (0..cache.blocks.len()).min_by_key(|&i| cache.blocks[i].2)
         {
             cache.blocks.swap_remove(oldest);
@@ -179,14 +206,21 @@ impl oag_disc::mount::Blob for Sliced {
         let n = usize::try_from((self.size - offset).min(buf.len() as u64)).unwrap_or(buf.len());
         let buf = &mut buf[..n];
         // The page's thread may not wait on a lock (a contended one traps
-        // there), and a worker holds this one across its fetches: so the page
-        // reads past the cache while a worker is in it.
+        // there), and a worker holds its own across its fetches. The two have
+        // a cache each (see [`Shape`]), so the page only ever meets a held lock
+        // while a worker is in *its* cache and the page is not - which is
+        // never: the page does not touch the worker's. `try_lock` stays for
+        // the page's own, which nothing else holds, and as a guard.
+        let (lock, shape) = if oag_thread::web::on_worker() {
+            (&self.worker, &WORKER)
+        } else {
+            (&self.page, &PAGE)
+        };
         let mut cache = if oag_thread::web::on_worker() {
-            self.cache
-                .lock()
+            lock.lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
         } else {
-            match self.cache.try_lock() {
+            match lock.try_lock() {
                 Ok(cache) => cache,
                 Err(std::sync::TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
                 Err(std::sync::TryLockError::WouldBlock) => {
@@ -195,15 +229,15 @@ impl oag_disc::mount::Blob for Sliced {
                 }
             }
         };
-        if n >= DIRECT {
+        if n >= shape.direct {
             Self::fetch(&mut cache, offset, buf)?;
             return Ok(n);
         }
         let mut done = 0;
         while done < n {
             let at = offset + done as u64;
-            let block = self.block(&mut cache, at / BLOCK)?;
-            let within = usize::try_from(at % BLOCK).unwrap_or(0);
+            let block = self.block(&mut cache, shape, at / shape.block)?;
+            let within = usize::try_from(at % shape.block).unwrap_or(0);
             let take = (block.len() - within).min(n - done);
             buf[done..done + take].copy_from_slice(&block[within..within + take]);
             done += take;

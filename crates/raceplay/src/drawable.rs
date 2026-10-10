@@ -224,6 +224,7 @@ impl Drawable {
             texcoords,
             prepass,
             cull_back,
+            true,
         )?;
         let reversed_indices = prepass.is_some().then(|| {
             let reversed: Vec<u32> = model
@@ -241,7 +242,7 @@ impl Drawable {
                 usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
-            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&reversed));
+            oag_gpu::deferred_upload::write_buffer(queue, &buffer, reversed);
             buffer
         });
         let texcoords = (texcoords == mesh_render::Texcoords::Streamed).then(|| {
@@ -252,7 +253,7 @@ impl Drawable {
                 usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
-            queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&coordinates));
+            oag_gpu::deferred_upload::write_buffer(queue, &buffer, coordinates);
             buffer
         });
 
@@ -292,10 +293,14 @@ impl Drawable {
         // the texels it decoded them from.
         let mut model = model;
         model.release_texels();
+        let model = std::sync::Arc::new(model);
+        if oag_gpu::deferred_upload::active() {
+            mesh_render::deferred::defer_geometry(&vertices, &indices, &model);
+        }
         Ok(Self {
             opaque_ranges,
             lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
-            model: std::sync::Arc::new(model),
+            model,
             pipeline,
             alpha_test_pipeline,
             cutout_pipelines,

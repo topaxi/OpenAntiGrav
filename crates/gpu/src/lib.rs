@@ -9,10 +9,13 @@
 //! - [`formats`] are the two offscreen target formats the scene pass and the
 //!   post chain have to agree on.
 //! - [`perfprobe`] is the off-by-default `perf-probe` instrumentation.
+//! - [`deferred_upload`] is the browser's way of spreading a scene build's big
+//!   writes over frames instead of freezing the page for all of them.
 //! - [`init_buffer`] is a small constant buffer created holding its contents,
 //!   by mapping on native and through the queue in a browser.
 //! - [`timing`] is whether the GPU can be asked how long it took.
 
+pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;
 pub mod perfprobe;
