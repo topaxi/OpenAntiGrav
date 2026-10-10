@@ -147,3 +147,42 @@ fn the_hud_indicator_follows_the_switch_and_the_corrections() {
     println!("main icon up {main_ticks} ticks, an arrow up {arrow_ticks}");
     assert!(main_ticks > 0 && arrow_ticks > 0);
 }
+
+/// Each title's own engine-wide table, read the way a race reads it: HD, 2048 and
+/// Omega author `<PilotAssist>` for all four classes, Pulse for none.
+#[test]
+#[ignore = "needs the HD, 2048, Omega and Pulse sources"]
+fn which_titles_author_pilot_assist() {
+    use oag_tables::handling::{self, SpeedClass};
+    let mut sources: Vec<(&str, oag_assets::Archives, bool)> = Vec::new();
+    if let Some(path) = oag_testdata::image(IMAGE) {
+        sources.push((
+            "HD",
+            oag_hd::open(&path.display().to_string()).unwrap(),
+            true,
+        ));
+    }
+    if let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") {
+        let archives = oag_2048::open(&path.display().to_string()).unwrap();
+        sources.push(("2048", archives, true));
+    }
+    if let Some(path) = oag_testdata::exact("data/extracted/ps4") {
+        let archives = oag_omega::open(&path.display().to_string()).unwrap();
+        sources.push(("Omega", archives, true));
+    }
+    if let Some(path) = oag_testdata::image("data/images/pulse-psp-eu.chd") {
+        let archives = oag_pulse::open(&path.display().to_string()).unwrap();
+        sources.push(("Pulse", archives, false));
+    }
+    for (title, mut archives, expected) in sources {
+        let blob = archives.read_name(handling::GLOBAL_ENTRY).expect(title);
+        let global = handling::global_from_blob(&blob)
+            .expect(title)
+            .expect(title);
+        for class in SpeedClass::ALL {
+            let assist = global.pilot_assist(class);
+            println!("{title} {class:?}: {assist:?}");
+            assert_eq!(assist.is_some(), expected, "{title} {class:?}");
+        }
+    }
+}

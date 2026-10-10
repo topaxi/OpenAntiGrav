@@ -80,15 +80,24 @@ its `PilotAssist` image (`data/xml/2048_hud/HUD_assist_indicator.xml`,
 
 ## Omega
 
-**Checked, applies, not wired.** Omega's executable carries every string above (`laDistConst`,
-`PilotAssist`, `PilotAssistPenalty`, `generalThrustPercentWhenEnabled`, `SteerAssist`,
-`notInUseStrength`, `PilotAssistDisable_Importer.cpp`), so it inherits 2048's two-table shape.
-Its global `Data/xml/handlingstats.xml` sits in `data00.psarc`; reading its values is open.
+**Extreme: ported. Normal: checked, applies, not wired.** Omega's executable carries every
+string above (`laDistConst`, `PilotAssist`, `PilotAssistPenalty`,
+`generalThrustPercentWhenEnabled`, `SteerAssist`, `notInUseStrength`,
+`PilotAssistDisable_Importer.cpp`), so it inherits 2048's two-table shape, and its own global
+`Data/xml/handlingstats.xml` authors 2048's `<PilotAssist>` numbers on all four rungs
+(`pilot_assist_ground_truth::which_titles_author_pilot_assist`); the race reads them.
 
 ## Pulse and Pure
 
 **Neither has Pilot Assist.** No `PilotAssist`, `laDist` or `springMul` string in Pulse's
 `BOOT.BIN` (Ghidra) or Pure's (`strings`); both carry only the Autopilot pickup's names.
+
+## In this engine
+
+The race runs **Extreme's** law: the global `<PilotAssist>` rungs are what
+`oag_tables::handling::Global::pilot_assist` reads, on 2048 as on HD. Normal (the per-ship
+`<Assist>` block and `<SteerAssist>`) is not built; 2048's `OptionsPilot` list is not tied to
+the switch yet. Both are open on the handover thread.
 
 ## Open
 

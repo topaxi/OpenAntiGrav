@@ -127,7 +127,8 @@ ship's track cursor, passed through to the locate.
     if dot(dir, rec.tangent) < -0.6: L = R = 0          # 0x00782900; facing back down the track
     if sibling(track, cursor) (0x000a96d8): the same for the neighbour record; when the two
         records' |dot(down, point - pos)| differ by more than 25 take the nearer, else the one
-        with the larger push
+        with the smaller push (`0x000f8f8c`-`0x000f8fb8`: the
+        neighbour wins when its `max(|L|, |R|)` is below the first's): the path the point fits
     out_left  = max(out_left, L); out_right = min(out_right, R)
 
 So `L + R` is zero in the middle of the corridor, positive within `radius` of the left edge

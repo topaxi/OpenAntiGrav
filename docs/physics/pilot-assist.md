@@ -53,5 +53,50 @@ on the side of the wall it steered away from.
 
 ## Other titles
 
-- **Omega**: checked, applies, not wired: its executable carries 2048's whole set of names.
-- **Pulse, Pure**: no Pilot Assist in either executable.
+- **Omega: ported.** Its executable carries 2048's whole set of names, and its own
+  `Data/xml/handlingstats.xml` authors `<PilotAssist>` with 2048's numbers on all four rungs
+  (`pilot_assist_ground_truth::which_titles_author_pilot_assist`), so the generic race load
+  hands Omega's own table to the same law. Its HUD indicator is not wired
+  (`oag_omega::hud`'s `assist: None`).
+- **Pulse, Pure**: no Pilot Assist in either executable and no table on either disc. They
+  get none unless the maintainer rules otherwise: no recovered law means no assist.
+
+## In this engine
+
+- **The law**: `oag_physics::pilot_assist`, called from `forces::evaluate` once the hover has
+  set this tick's contact, with the throttle scaled straight after `controls::update` the way
+  `Craft_UpdateThrottle` scales it. Its state is `ShipState::pilot_assist` (HD's `craft+0x380`),
+  hashed only once it leaves its default, so a race with the option off steps and hashes
+  exactly as it did before the assist existed.
+- **The numbers**: `oag_tables::handling::Global::pilot_assist`, per class, from the title's
+  own `<GlobalClass>` rungs; `oag_raceplay`'s global loader reports whether the class has one.
+- **The corridor**: the race's spline table (`oag_raceplay::pilot_assist`). The located record
+  is the nearest sample; the fork sibling is the nearest sample on another path within 20
+  units of it, **chosen, not measured** (the original takes it off its junction graph).
+- **Who gets it**: the player's craft only. Opponents never do (maintainer: the AI flies the
+  player's physics), pinned by `pilot_assist_ground_truth::no_opponent_ever_gets_the_assist`.
+  Off in Zone, as in the original, and on the grid.
+- **The switch**: `[controls] pilot_assist`, the CONTROLS page's PILOT ASSIST row, applied to
+  a running race at once. **On by default on Android only** (maintainer, 2026-10-10: touch
+  controls are much harder than a pad; a desktop player is assumed to know Wipeout). A
+  headless capture or trace takes `--pilot-assist on|off` only, default off.
+- **The HUD**: `oag_hud::assist` draws HD's four `AssistIndicator*` widgets by the original's
+  rule; 2048's `PilotAssist` icon is up while the switch is on.
+
+## Measured in this engine
+
+HD, Talon's Junction, time trial, Venom, a new player who holds thrust from the start and
+never touches the stick, 1800 ticks (`pilot_assist_ground_truth::a_new_player_meets_fewer_walls_with_pilot_assist_on`):
+
+| Assist | Wall contacts | Ticks touching a wall | Distance round the lap |
+| --- | ---: | ---: | ---: |
+| off | 16 | 1297 | 706 |
+| on | 0 | 0 | 2857 |
+
+The same run as a player sees it: `oag-game --race --mode time_trial --class venom --hold
+cross --pilot-assist off|on --ticks 1000 --screenshot <png>` against the HD image shows the
+unassisted craft scraping the left-hand wall at 79 km/h and the assisted one mid-track at
+441 km/h, with the indicator's arrow blinking on the side of the wall it was turned from.
+
+The regression gate (`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`)
+reads the same before and after: twelve clean laps, no respawns.
