@@ -182,6 +182,7 @@ mod models;
 mod options;
 mod pads;
 mod perfect_start;
+mod pilot_assist;
 pub mod pilots;
 mod reconcile;
 mod replay;

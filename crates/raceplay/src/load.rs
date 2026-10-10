@@ -293,6 +293,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         start_boost,
         zone,
         weapon_pad_refresh,
+        pilot_assist,
     } = global::resolve(&mut archives, options, &mut report);
     // Nothing is scaled here: the four pre-scaled fields are converted exactly once
     // and this is not the place it happens, and neither `<SpeedupPads>` nor
@@ -932,6 +933,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             weapon_pad_refresh,
             class_gravity_scale,
             start_boost,
+            pilot_assist,
             pose_override,
             camera_override: options.camera,
         },

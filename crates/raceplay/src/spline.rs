@@ -250,6 +250,27 @@ impl Spline {
         best.map(|(index, distance)| (index, &self.samples[index], distance))
     }
 
+    /// The nearest sample to `position` with its distance and path, skipping the
+    /// path `exclude` names: Pilot Assist's located record and its fork sibling.
+    #[must_use]
+    pub fn nearest_with_path(
+        &self,
+        position: Vec3,
+        exclude: Option<u16>,
+    ) -> Option<(&Sample, f32, u16)> {
+        let mut best: Option<(usize, f32)> = None;
+        for (index, sample) in self.samples.iter().enumerate() {
+            if exclude == Some(self.paths[index]) {
+                continue;
+            }
+            let distance = (Vec3::from_array(sample.pos) - position).length();
+            if best.is_none_or(|(_, previous)| distance < previous) {
+                best = Some((index, distance));
+            }
+        }
+        best.map(|(index, distance)| (&self.samples[index], distance, self.paths[index]))
+    }
+
     /// The nearest sample to `position`, searching only `window` samples either
     /// side of `around` in table order.
     ///

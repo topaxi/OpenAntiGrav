@@ -245,6 +245,7 @@ impl Race {
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
+        let pilot_assist = self.pilot_assist_input(player);
         let ship = &mut self.sim.world.ships[player];
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
         // throttle armed last tick is consumed by this step and nothing after
@@ -269,6 +270,7 @@ impl Race {
             // regenerates, exactly as the disc's manual text describes. See
             // `oag_gameplay::damage_rules`.
             damage_rules: env_damage_rules,
+            pilot_assist,
             ..Environment::default()
         };
         let evaluated = oag_physics::step(

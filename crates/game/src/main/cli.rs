@@ -607,6 +607,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) autopilot: bool,
 
+    /// Pilot Assist for the player's craft in a headless run (`--screenshot`,
+    /// `--trace-out`): `on` or `off`, default off. The settings file's
+    /// `[controls] pilot_assist` drives the windowed game; a capture or trace
+    /// takes only this flag so it never depends on a machine's settings.
+    #[arg(long, value_parser = ["on", "off"])]
+    pub(crate) pilot_assist: Option<String>,
+
     /// With `--autopilot`, fly the player with a named pilot instead of the
     /// neutral baseline `Driver::default` otherwise leaves slot 0 at.
     ///

@@ -95,6 +95,8 @@ pub struct Options {
     /// `--autopilot`: fly the race this hands off to with an opponent's
     /// driver. See `crate::race_capture::CaptureOptions::autopilot`.
     pub autopilot: bool,
+    /// `--pilot-assist on`. See `crate::race_capture::CaptureOptions::pilot_assist`.
+    pub pilot_assist: bool,
     /// `--autopilot-pilot`. See `crate::race_capture::CaptureOptions::autopilot_pilot`.
     pub autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`. See `crate::race_capture::CaptureOptions::autopilot_skill`.
@@ -444,6 +446,7 @@ pub fn run(
                 pressed: options.pressed,
                 input_script: None,
                 autopilot: options.autopilot,
+                pilot_assist: options.pilot_assist,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,
                 force_shake: None,

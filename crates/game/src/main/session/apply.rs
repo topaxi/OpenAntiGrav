@@ -612,6 +612,21 @@ impl Session {
                     return;
                 }
             },
+            "controls.pilot_assist" => {
+                let on = match text.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    _ => {
+                        warn!("ignoring {setting} = {text:?}: expected on or off");
+                        return;
+                    }
+                };
+                self.settings.controls.pilot_assist = on;
+                // Read every tick, so a pause-menu change applies at once.
+                if let Stage::Race(stage) = &mut self.stage {
+                    stage.race.set_pilot_assist(on);
+                }
+            }
             "controls.touch_scheme" => match oag_input::touch::Scheme::parse(&text) {
                 // Read by the next tick's `feed_touch`.
                 Some(scheme) => self.settings.controls.touch_scheme = scheme.name().to_string(),

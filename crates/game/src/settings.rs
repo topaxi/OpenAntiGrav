@@ -720,6 +720,14 @@ pub fn menu_seeds(
             }),
         ),
         (
+            "controls.pilot_assist",
+            text(if settings.controls.pilot_assist {
+                "on"
+            } else {
+                "off"
+            }),
+        ),
+        (
             "controls.touch_scheme",
             text(&settings.controls.touch_scheme),
         ),

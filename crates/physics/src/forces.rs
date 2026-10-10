@@ -289,6 +289,10 @@ pub struct Environment {
     /// that have not read it. `None` leaves [`crate::ship::ShipState::launch`] idle and the
     /// engine multiplier at `1.0` ([`crate::launch`]).
     pub start_boost: Option<crate::launch::StartBoost>,
+    /// Pilot Assist's numbers, switch and corridor ([`crate::pilot_assist`]), or `None`
+    /// for a craft it never applies to (every AI craft, a title with no table). `None`
+    /// changes nothing, bit for bit.
+    pub pilot_assist: Option<crate::pilot_assist::Input>,
 }
 
 impl Default for Environment {
@@ -303,6 +307,7 @@ impl Default for Environment {
             damage_rules: crate::damage::DamageRules::default(),
             thrust_scale: 1.0,
             start_boost: None,
+            pilot_assist: None,
         }
     }
 }
@@ -430,6 +435,12 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     let control_contact = control_grounded > 0.0;
 
     controls::update(state, input, handling, dt);
+    // `Craft_UpdateThrottle` (`0x000efb50`) scales the throttle it has just written by
+    // `PilotAssist_ThrustScale`, read here from the state the last tick left.
+    if let Some(assist) = &env.pilot_assist {
+        state.thrust *=
+            crate::pilot_assist::thrust_scale(&state.pilot_assist, Some(&assist.params));
+    }
 
     let forward = state.body.forward();
     let up = state.body.up();
@@ -561,6 +572,14 @@ pub fn evaluate<R: Raycaster + ?Sized>(
     }
     let contact_grounded = state.grounded;
     let contact = contact_grounded > 0.0;
+
+    // Pilot Assist, gated on this tick's contact as HD's `craft+0x304 != 0` is.
+    if let Some(assist) = &env.pilot_assist {
+        let out =
+            crate::pilot_assist::update(&mut state.pilot_assist, assist, &state.body, contact, dt);
+        acc.local_angular.y += out.local_yaw;
+        acc.world_force += out.world_force;
+    }
 
     // The barrel roll's landing payout: on this tick's airborne-to-grounded transition,
     // resolve the self-completing ramp and, if the roll finished, arm
