@@ -96,7 +96,7 @@ pub struct Options {
     /// driver. See `crate::race_capture::CaptureOptions::autopilot`.
     pub autopilot: bool,
     /// `--pilot-assist on`. See `crate::race_capture::CaptureOptions::pilot_assist`.
-    pub pilot_assist: bool,
+    pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`. See `crate::race_capture::CaptureOptions::autopilot_pilot`.
     pub autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`. See `crate::race_capture::CaptureOptions::autopilot_skill`.

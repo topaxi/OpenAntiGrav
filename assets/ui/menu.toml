@@ -1344,15 +1344,17 @@ string_id = "OAG_CONTROLS_TRIGGERS"
 setting = "controls.triggers"
 values = ["airbrakes", "thrust_brake"]
 
-# Pilot Assist (HD/Fury and 2048's own option): the track's corridor yaws the
-# craft off a wall it is about to meet, for a few percent of thrust. Default on
-# on Android only (maintainer's rule). See `docs/physics/pilot-assist.md`.
+# Pilot Assist (HD/Fury and 2048's own option, on every title): the track's
+# corridor yaws the craft off a wall it is about to meet, for a few percent of
+# thrust. `normal` is the gentle level (2048's default), `extreme` is HD's own
+# law (2048 calls it Super). Default normal on Android only, off elsewhere
+# (maintainer's rule). See `docs/physics/pilot-assist.md`.
 [[page.entry]]
 kind = "choice"
 label = "PILOT ASSIST"
 string_id = "OAG_CONTROLS_PILOT_ASSIST"
 setting = "controls.pilot_assist"
-values = ["on", "off"]
+values = ["off", "normal", "extreme"]
 
 # How much airbrake a given pull asks for, as a percentage of a linear one.
 # Ordered low to high rather than default-first, the way BRIGHTNESS is: the

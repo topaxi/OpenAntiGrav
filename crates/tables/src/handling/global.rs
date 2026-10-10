@@ -4,8 +4,8 @@
 //! lookups [`Global::extra`] documents.
 
 use super::{
-    Error, Node, PilotAssist, Result, SpeedClass, Zone, child, descendant, fexml, number,
-    pilot_assist,
+    Error, Node, PilotAssist, Result, SpeedClass, SteerAssist, Zone, child, descendant, fexml,
+    number, pilot_assist,
 };
 
 /// The speed-pad boost, per speed class. `<SpeedupPads amount time/>`.
@@ -290,6 +290,9 @@ pub struct Global {
     /// `<GlobalClass><PilotAssist/><PilotAssistPenalty/></GlobalClass>`, indexed
     /// by [`SpeedClass`]; `None` where the rung authors neither (Pulse, Pure).
     pub pilot_assist: [Option<PilotAssist>; 4],
+    /// `<GlobalClass><SteerAssist/></GlobalClass>`, indexed by [`SpeedClass`]:
+    /// 2048's Normal speed ramp; `None` where the rung authors none.
+    pub steer_assist: [Option<SteerAssist>; 4],
 }
 
 impl Global {
@@ -297,6 +300,12 @@ impl Global {
     #[must_use]
     pub fn pilot_assist(&self, class: SpeedClass) -> Option<PilotAssist> {
         self.pilot_assist[class as usize]
+    }
+
+    /// 2048's Normal speed ramp for one class, `None` when the title authors none.
+    #[must_use]
+    pub fn steer_assist(&self, class: SpeedClass) -> Option<SteerAssist> {
+        self.steer_assist[class as usize]
     }
 
     /// The speed-pad tunables for one class.
@@ -375,6 +384,7 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
         weapon_pads,
         extra,
         pilot_assist: pilot_assist::per_class(global)?,
+        steer_assist: pilot_assist::steer_per_class(global)?,
     }))
 }
 

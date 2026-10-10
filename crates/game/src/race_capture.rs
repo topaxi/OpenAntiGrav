@@ -38,8 +38,8 @@ pub struct CaptureOptions {
     /// shows the results table: `--hold cross` drives into the first wall. See
     /// [`Race::set_autopilot`], a verification aid.
     pub autopilot: bool,
-    /// `--pilot-assist on`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
-    pub pilot_assist: bool,
+    /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
+    pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
     pub autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`: a stated AI skill. See [`Race::set_autopilot_tuning`].

@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use oag_input::bindings::Bindings;
 use oag_input::pad::TriggerMode;
 use oag_input::prompt::PromptStyle;
+use oag_physics::pilot_assist::Level;
 
 /// How the pilot's buttons reach the ship.
 ///
@@ -107,22 +108,62 @@ pub struct Controls {
     /// `docs/ui/button-prompts.md`.
     #[serde(default = "default_prompt_style")]
     pub prompt_style: String,
-    /// Pilot Assist for the player's craft: a corridor spring that yaws it off a
-    /// wall it is about to meet, at a few percent of thrust (`oag_physics::pilot_assist`).
-    /// Only titles that author its table have it.
+    /// Pilot Assist for the player's craft: `off`, `normal` or `extreme`
+    /// (`oag_physics::pilot_assist::Level`), the three levels 2048 offers and every
+    /// title now does. A corridor spring that yaws the craft off a wall it is
+    /// about to meet, at a few percent of thrust.
     ///
-    /// **On by default on Android only** (maintainer, 2026-10-10): touch controls are
-    /// far harder than a pad, and a player on a desktop is assumed to know Wipeout.
-    #[serde(default = "default_pilot_assist")]
-    pub pilot_assist: bool,
+    /// **Normal by default on Android only, off elsewhere** (maintainer, 2026-10-10):
+    /// touch controls are far harder than a pad, and a desktop player is assumed to
+    /// know Wipeout. A file written when this was a switch holds `true` or `false`;
+    /// they read as Extreme and Off, which is what the switch ran, so nobody's saved
+    /// choice changes meaning. A token this build does not know reads as the default.
+    #[serde(default = "default_pilot_assist", with = "pilot_assist_level")]
+    pub pilot_assist: Level,
 }
 
-fn default_pilot_assist() -> bool {
-    cfg!(target_os = "android")
+fn default_pilot_assist() -> Level {
+    if cfg!(target_os = "android") {
+        Level::Normal
+    } else {
+        Level::Off
+    }
 }
 
 fn default_prompt_style() -> String {
     PromptStyle::default().name().to_string()
+}
+
+/// `[controls] pilot_assist` on disk: a level's token, reading the old switch's bool too.
+mod pilot_assist_level {
+    use oag_physics::pilot_assist::Level;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub(super) fn serialize<S: Serializer>(level: &Level, out: S) -> Result<S::Ok, S::Error> {
+        out.serialize_str(level.name())
+    }
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OnDisk {
+        Switch(bool),
+        Token(String),
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Level, D::Error> {
+        Ok(match OnDisk::deserialize(d)? {
+            OnDisk::Switch(true) => Level::Extreme,
+            OnDisk::Switch(false) => Level::Off,
+            OnDisk::Token(token) => Level::from_name(token.trim()).unwrap_or_else(|| {
+                let fallback = super::default_pilot_assist();
+                log::warn!(
+                    "controls.pilot_assist = {token:?} is not off, normal or extreme; using {}",
+                    fallback.name()
+                );
+                fallback
+            }),
+        })
+    }
 }
 
 impl Controls {
@@ -319,6 +360,31 @@ impl Default for Controls {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parsed(line: &str) -> Level {
+        toml::from_str::<Controls>(line).unwrap().pilot_assist
+    }
+
+    /// A file from when this was a switch keeps meaning what it ran.
+    #[test]
+    fn the_old_switch_reads_as_extreme_or_off() {
+        assert_eq!(parsed("pilot_assist = true"), Level::Extreme);
+        assert_eq!(parsed("pilot_assist = false"), Level::Off);
+    }
+
+    #[test]
+    fn a_level_round_trips_and_a_bad_token_reads_as_the_default() {
+        for level in Level::ALL {
+            let text = toml::to_string(&Controls {
+                pilot_assist: level,
+                ..Controls::default()
+            })
+            .unwrap();
+            assert_eq!(parsed(&text), level, "{text}");
+        }
+        assert_eq!(parsed("pilot_assist = \"wild\""), default_pilot_assist());
+        assert_eq!(parsed(""), default_pilot_assist());
+    }
 
     #[test]
     fn a_neutral_sensitivity_is_a_linear_pull() {

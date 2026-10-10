@@ -56,7 +56,13 @@ e.g. `laDistConst 10, laDistVelMul 0.4, laDistMax 75, springMul -12, torqueMul 1
 maxTorque 50, maxAngVel 2, thrustPercentOnUse 95, penaltyDuration 0.25, notInUseStrength 0.1`.
 Which `<Assist>` attribute sits at the block's `+0x84`..`+0xa0`, and what `(*(craft+0x8c))+0x10`
 is (`notInUseStrength` is the candidate), was not read: the per-ship reader is not located.
-Confidence on Normal stays 65 for that reason.
+Confidence on Normal stays 65 for that reason. The engine reads the block by attribute name
+(`oag_tables::handling::Assist`) and takes `notInUseStrength` for the multiplier.
+
+**Census (2026-10-10, `pilot_assist_levels_ground_truth::every_native_craft_authors_the_same_assist`):**
+the `<Assist>` block above is on all 100 class blocks of 2048's 20 native craft and on all 100 of
+Omega's 20, and is **identical** on every one. The twelve HD-derived guest teams
+(`hdships\<Team>\handlingstats.xml`) author none.
 
 ## The HUD indicator (`Hud_UpdateAssistIndicator`, `0x81152488`)
 
@@ -94,10 +100,12 @@ string above (`laDistConst`, `PilotAssist`, `PilotAssistPenalty`,
 
 ## In this engine
 
-The race runs **Extreme's** law: the global `<PilotAssist>` rungs are what
-`oag_tables::handling::Global::pilot_assist` reads, on 2048 as on HD. Normal (the per-ship
-`<Assist>` block and `<SteerAssist>`) is not built. 2048's `OptionsPilot` list sets the switch:
-Off off, Super on, Normal left as it was.
+The race runs both levels through `oag_physics::pilot_assist`: Extreme on the global
+`<PilotAssist>` rungs (`oag_tables::handling::Global::pilot_assist`), Normal on the ship's
+`<Assist>` block with `<SteerAssist>`'s ramp. 2048's `OptionsPilot` list sets the level: Off,
+Normal, Super. Omega: **ported**, both levels (its 20 native craft carry the same block).
+Pulse, Pure and HD run these numbers as chosen stand-ins
+([`docs/physics/pilot-assist.md`](../../../physics/pilot-assist.md)).
 
 ## Open
 

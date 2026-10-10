@@ -304,7 +304,7 @@ fn setup(handling: Handling) -> Setup {
         // engine-wide file is unreadable.
         class_gravity_scale: 1.0,
         start_boost: None,
-        pilot_assist: None,
+        pilot_assist: Default::default(),
     }
 }
 

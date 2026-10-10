@@ -522,9 +522,9 @@ pub struct Setup {
     /// The disc's `<StartBoost>`, `None` where it authors none: the launch boost.
     /// Presence is the only gate. See `oag_physics::launch`.
     pub start_boost: Option<oag_physics::launch::StartBoost>,
-    /// The disc's per-class Pilot Assist tuning (`<GlobalClass><PilotAssist/>`), `None`
-    /// where the title authors none. See `oag_physics::pilot_assist`.
-    pub pilot_assist: Option<oag_physics::pilot_assist::Params>,
+    /// The laws of the player's two Pilot Assist levels: the disc's where it authors
+    /// them, a labelled stand-in where it does not (`load::pilot_assist`).
+    pub pilot_assist: oag_physics::pilot_assist::Laws,
     /// The chase camera's seven values, from `<ExternalCameraFar>`.
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two

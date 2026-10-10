@@ -216,7 +216,7 @@ mod pilot_assist;
 
 pub use cameras::{AirbrakeGraphics, BonnetCamera, Camera, ExternalCamera};
 pub use names::{SHIP_DIR, entry_name, entry_name_in};
-pub use pilot_assist::PilotAssist;
+pub use pilot_assist::{Assist, PilotAssist, SteerAssist};
 
 /// Hull dimensions and the shield pool. `<Misc/>`. Per ship, shared by all four
 /// `<Class>` blocks.
@@ -591,6 +591,9 @@ pub struct Class {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub pitch: Option<Pitch>,
+    /// `<Assist/>`, 2048's per-ship Pilot Assist (its Normal level), `None` where
+    /// the file authors none (Pulse, Pure, HD).
+    pub assist: Option<Assist>,
 }
 
 impl Class {
@@ -623,6 +626,7 @@ impl Class {
                 .next()
                 .map(Pitch::from_node)
                 .transpose()?,
+            assist: Assist::from_class(node)?,
         })
     }
 }

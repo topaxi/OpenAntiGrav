@@ -39,6 +39,7 @@ fn craft(x: f32, speed: f32) -> Body {
 fn input(enabled: bool) -> Input {
     Input {
         params: PARAMS,
+        strength: 1.0,
         enabled,
         here: [Some(straight()), None],
         ahead: [Some(straight()), None],
@@ -232,4 +233,85 @@ fn on_a_fork_the_better_fitting_record_wins() {
     fork.here = [Some(narrow), Some(far_below)];
     let out = update(&mut state, &fork, &craft(14.0, 0.0), true, 1.0 / 60.0);
     assert!(out.world_force.x < 0.0, "the near record pushes");
+}
+
+const RAMP: Ramp = Ramp {
+    min_speed: 50.0,
+    ramp_up_range: 25.0,
+    full: 0.1,
+};
+
+#[test]
+fn the_ramp_is_zero_below_its_floor_and_full_above_its_range() {
+    assert_eq!(RAMP.strength(0.0), 0.0);
+    assert_eq!(RAMP.strength(50.0), 0.0);
+    assert_eq!(RAMP.strength(62.5), 0.05);
+    assert_eq!(RAMP.strength(75.0), 0.1);
+    assert_eq!(RAMP.strength(300.0), 0.1);
+}
+
+/// Normal's blend settles at its ramped strength, not at `1`, so the same intrusion
+/// pushes a tenth as hard as Extreme's.
+#[test]
+fn a_ramped_strength_scales_the_blend_target() {
+    let mut full = State::default();
+    let mut gentle = State::default();
+    let mut weak = input(true);
+    weak.strength = 0.1;
+    for _ in 0..120 {
+        update(
+            &mut full,
+            &input(true),
+            &craft(17.0, 100.0),
+            true,
+            1.0 / 60.0,
+        );
+        update(&mut gentle, &weak, &craft(17.0, 100.0), true, 1.0 / 60.0);
+    }
+    assert_eq!(full.blend, 1.0);
+    assert_eq!(gentle.blend, 0.1);
+    let (a, b) = (
+        update(
+            &mut full,
+            &input(true),
+            &craft(17.0, 100.0),
+            true,
+            1.0 / 60.0,
+        ),
+        update(&mut gentle, &weak, &craft(17.0, 100.0), true, 1.0 / 60.0),
+    );
+    assert_eq!(a.world_force, Vec3::new(-200.0, 0.0, 0.0));
+    assert!(
+        (b.world_force.x - -20.0).abs() < 1e-4,
+        "{:?}",
+        b.world_force
+    );
+}
+
+/// Under `0.001` Normal is skipped: no push, no yaw, no thrust charge.
+#[test]
+fn a_negligible_strength_does_not_run() {
+    let mut state = settled();
+    let mut idle = input(true);
+    idle.strength = 0.0;
+    let out = update(&mut state, &idle, &craft(19.0, 100.0), true, 1.0 / 60.0);
+    assert_eq!(out, Output::default());
+    assert!(!state.enabled);
+    assert_eq!(state.penalty_timer, 0.0);
+    assert_eq!(thrust_scale(&state, Some(&PARAMS)), 1.0);
+}
+
+#[test]
+fn a_level_without_a_law_offers_none() {
+    let law = Law {
+        params: PARAMS,
+        ramp: None,
+    };
+    let laws = Laws {
+        normal: None,
+        extreme: Some(law),
+    };
+    assert_eq!(laws.get(Level::Off), None);
+    assert_eq!(laws.get(Level::Normal), None);
+    assert_eq!(laws.get(Level::Extreme), Some(law));
 }

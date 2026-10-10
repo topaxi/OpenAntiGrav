@@ -13,6 +13,12 @@
 //! probe radii, the blend rates, the upright and heading cosines and the `25`
 //! torque threshold.
 //!
+//! # Levels
+//!
+//! 2048 offers three: Off, Normal and Extreme ([`Level`]). Both run this one law.
+//! Extreme runs it on the global table at full strength; Normal on the ship's own
+//! gentler `<Assist>` block, with a blend target that follows speed ([`Ramp`]).
+//!
 //! # Sign conventions
 //!
 //! HD's positive local yaw is a right turn and its lateral force runs along body
@@ -42,6 +48,97 @@ const BLEND_RISE: f32 = 2.0;
 const BLEND_FALL: f32 = 20.0;
 /// A yaw torque past this marks the tick as a correction (`0x008a93b0`).
 const ACTING_TORQUE: f32 = 25.0;
+
+/// The three settings of 2048's Pilot Assist list, which every title offers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
+pub enum Level {
+    /// No assist.
+    #[default]
+    Off,
+    /// The gentle shape: the ship's `<Assist>` block, strength ramped in with speed.
+    Normal,
+    /// HD's authored law (2048 calls it Super).
+    Extreme,
+}
+
+impl Level {
+    /// Every level, in the order a menu lists them.
+    pub const ALL: [Self; 3] = [Self::Off, Self::Normal, Self::Extreme];
+
+    /// The token a settings file, a menu row and a recording header spell it as.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Normal => "normal",
+            Self::Extreme => "extreme",
+        }
+    }
+
+    /// [`Self::name`] read back; `None` for any other spelling.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|level| level.name() == name)
+    }
+}
+
+/// Below this ramped strength Normal does not run at all (`0x3a83126f`).
+pub const MIN_STRENGTH: f32 = 0.001;
+
+/// 2048's Normal strength: `k * full`, where `k` runs `0..1` from `min_speed` over
+/// `ramp_up_range` (`0x811d0010`-`0x811d0130`).
+///
+/// `full` is `notInUseStrength`, the candidate for the multiplier the original
+/// reads at `(*(craft+0x8c))+0x10`; that offset was not tied to the attribute in
+/// the code (confidence 65 in `docs/ghidra/functions/vita-2048-eu-v104/pilot-assist.md`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Ramp {
+    /// `SteerAssist min_speed`.
+    pub min_speed: f32,
+    /// `SteerAssist ramp_up_range`.
+    pub ramp_up_range: f32,
+    /// The strength at the top of the ramp.
+    pub full: f32,
+}
+
+impl Ramp {
+    /// The blend target at `speed`.
+    #[must_use]
+    pub fn strength(&self, speed: f32) -> f32 {
+        let k = ((speed - self.min_speed) / self.ramp_up_range).clamp(0.0, 1.0);
+        k * self.full
+    }
+}
+
+/// One level's law: its numbers and, for Normal, the speed ramp.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Law {
+    /// The numbers.
+    pub params: Params,
+    /// `None` runs at strength `1`, as Extreme does.
+    pub ramp: Option<Ramp>,
+}
+
+/// The laws a race offers for the player's craft and class; `None` where it has none.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Laws {
+    /// [`Level::Normal`]'s.
+    pub normal: Option<Law>,
+    /// [`Level::Extreme`]'s.
+    pub extreme: Option<Law>,
+}
+
+impl Laws {
+    /// The law `level` runs, `None` for Off or a level this race has no law for.
+    #[must_use]
+    pub fn get(&self, level: Level) -> Option<Law> {
+        match level {
+            Level::Off => None,
+            Level::Normal => self.normal,
+            Level::Extreme => self.extreme,
+        }
+    }
+}
 
 /// One speed class's numbers, verbatim from `<PilotAssist>`/`<PilotAssistPenalty>`.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -94,6 +191,9 @@ pub type Candidates = [Option<Corridor>; 2];
 pub struct Input {
     /// The class's numbers.
     pub params: Params,
+    /// The blend target while grounded and upright: `1` for Extreme, [`Ramp::strength`]
+    /// for Normal. At or below `0.001` the law does not run.
+    pub strength: f32,
     /// The option is on and the race lets it act (racing, not Zone or Detonator).
     pub enabled: bool,
     /// Records located at the craft.
@@ -191,8 +291,8 @@ fn probe(point: Vec3, heading: Vec3, radius: f32, candidates: &Candidates) -> (f
 pub fn update(state: &mut State, input: &Input, body: &Body, grounded: bool, dt: f32) -> Output {
     state.acting = 0;
     state.penalty_timer = (state.penalty_timer - dt).max(0.0);
-    state.enabled = input.enabled;
-    if !input.enabled {
+    state.enabled = input.enabled && input.strength > MIN_STRENGTH;
+    if !state.enabled {
         return Output::default();
     }
     let params = &input.params;
@@ -211,7 +311,11 @@ pub fn update(state: &mut State, input: &Input, body: &Body, grounded: bool, dt:
         .flatten()
         .next()
         .is_none_or(|record| record.down.dot(body.up()) <= MAX_UPRIGHT_DOT);
-    let target = if grounded && upright { 1.0 } else { 0.0 };
+    let target = if grounded && upright {
+        input.strength
+    } else {
+        0.0
+    };
     state.blend = if state.blend <= target {
         (state.blend + BLEND_RISE * dt).min(target)
     } else {

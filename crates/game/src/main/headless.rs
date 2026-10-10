@@ -223,7 +223,7 @@ pub(crate) fn run_windowless(
             &capture::Options {
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.driver.autopilot,
-                pilot_assist: cli.driver.pilot_assist.as_deref() == Some("on"),
+                pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
                 path,
@@ -359,7 +359,7 @@ pub(crate) fn write_trace(
 
     let mut race = race::Race::start(loaded.setup);
     race.set_control_scheme(scheme);
-    race.set_pilot_assist(cli.driver.pilot_assist.as_deref() == Some("on"));
+    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
@@ -564,7 +564,7 @@ pub(crate) fn run_race(
                     scheme,
                     loaded.setup.difficulty,
                     cli.driver.autopilot,
-                    cli.driver.pilot_assist.as_deref() == Some("on"),
+                    cli.driver.pilot_assist.unwrap_or_default(),
                     give_weapon(cli.give.as_deref()).ok().flatten(),
                 );
                 (path, header)
@@ -577,7 +577,7 @@ pub(crate) fn run_race(
                 gpu,
                 give: give_weapon(cli.give.as_deref())?,
                 autopilot: cli.driver.autopilot,
-                pilot_assist: cli.driver.pilot_assist.as_deref() == Some("on"),
+                pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,

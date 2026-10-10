@@ -613,17 +613,13 @@ impl Session {
                 }
             },
             "controls.pilot_assist" => {
-                let on = match text.as_str() {
-                    "on" => true,
-                    "off" => false,
-                    _ => {
-                        warn!("ignoring {setting} = {text:?}: expected on or off");
-                        return;
-                    }
+                let Some(level) = oag_physics::pilot_assist::Level::from_name(&text) else {
+                    warn!("ignoring {setting} = {text:?}: expected off, normal or extreme");
+                    return;
                 };
                 // From the next race, as the scheme is: a mid-race switch is not in
                 // the input stream a replay records, so it could not be reproduced.
-                self.settings.controls.pilot_assist = on;
+                self.settings.controls.pilot_assist = level;
             }
             "controls.touch_scheme" => match oag_input::touch::Scheme::parse(&text) {
                 // Read by the next tick's `feed_touch`.
