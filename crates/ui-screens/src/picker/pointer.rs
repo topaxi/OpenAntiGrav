@@ -232,10 +232,21 @@ impl Picker {
             out.extend(self.step_entry(pointer.scroll.signum()));
             self.scroll.settle(&Extent::wrapping());
         }
+        let on_tile = |at| {
+            targets.iter().any(|target| {
+                matches!(target.what, What::Cell { .. }) && hex_contains(target.rect, at)
+            })
+        };
+        // A drag pans only a gesture whose press began on a tile, and keeps
+        // panning when the finger later leaves the grid. **Chosen, not
+        // measured.**
+        if pointer.pressed {
+            self.grabbed = pointer.press_at.is_some_and(on_tile);
+        }
         let grid = targets
             .iter()
             .any(|target| matches!(target.what, What::Cell { .. }));
-        let travel = if grid {
+        let travel = if grid && self.grabbed {
             pointer.drag.0 / super::hd::hex::PITCH[0]
         } else {
             0.0

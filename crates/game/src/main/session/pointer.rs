@@ -47,6 +47,7 @@ pub(super) fn in_grid(pointer: Pointer, space: Space, rect: (f32, f32, f32, f32)
     let tip = to_grid(space, rect, pointer.drag);
     Pointer {
         at: pointer.at.map(|at| to_grid(space, rect, at)),
+        press_at: pointer.press_at.map(|at| to_grid(space, rect, at)),
         drag: (tip.0 - origin.0, tip.1 - origin.1),
         ..pointer
     }
