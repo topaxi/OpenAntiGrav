@@ -190,6 +190,10 @@ pub struct Picker {
     /// HD's hex grid under a finger, in columns off the selected one - see
     /// [`Self::pan`]. At rest on `0.0`.
     scroll: oag_ui::kinetic::Kinetic,
+    /// Whether the finger now down may pan the grid: its press landed on a
+    /// hex tile - see [`Self::pointer`]. `true` until a press says
+    /// otherwise, so a drag whose touch-down was never seen still pans.
+    grabbed: bool,
 }
 
 impl Picker {
@@ -216,6 +220,7 @@ impl Picker {
             across: false,
             columns: 0,
             scroll: oag_ui::kinetic::Kinetic::default(),
+            grabbed: true,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))

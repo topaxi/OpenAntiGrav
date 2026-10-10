@@ -498,11 +498,9 @@ fn drag_by(dx: f32) -> oag_ui::pointer::Pointer {
     }
 }
 
-fn touch_down() -> oag_ui::pointer::Pointer {
-    oag_ui::pointer::Pointer {
-        pressed: true,
-        ..oag_ui::pointer::Pointer::default()
-    }
+/// A finger landing on a tile, as a touch screen reports it.
+fn touch_down(found: &[crate::picker::pointer::Target]) -> oag_ui::pointer::Pointer {
+    press_at(tile_and_backdrop(found).0)
 }
 
 fn lift() -> oag_ui::pointer::Pointer {
@@ -614,7 +612,7 @@ fn the_grid_follows_the_finger_and_settles_on_the_nearest_column() {
     // Held, the grid stays where the finger put it however long it waits.
     let mut picker = picker_of(&["A", "B", "C"], "B");
     let found = pan_targets(&picker);
-    picker.pointer(&touch_down(), &found);
+    picker.pointer(&touch_down(&found), &found);
     picker.pointer(&drag_by(PITCH_X * 0.4), &found);
     settle(&mut picker, 60);
     assert!((picker.pan() - 0.4).abs() < 1e-4, "{}", picker.pan());
@@ -624,7 +622,7 @@ fn the_grid_follows_the_finger_and_settles_on_the_nearest_column() {
     assert_eq!((picker.pan(), picker.index()), (0.0, 1));
     // Lifted past half a column, it settles onto the neighbour, which is
     // then the selection - the pad's own step.
-    picker.pointer(&touch_down(), &found);
+    picker.pointer(&touch_down(&found), &found);
     picker.pointer(&drag_by(PITCH_X * 0.55), &found);
     settle(&mut picker, 30);
     picker.pointer(&lift(), &found);
@@ -636,7 +634,7 @@ fn the_grid_follows_the_finger_and_settles_on_the_nearest_column() {
 fn a_flick_coasts_across_columns_stepping_each_and_rests_on_one() {
     let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
     let found = pan_targets(&picker);
-    picker.pointer(&touch_down(), &found);
+    picker.pointer(&touch_down(&found), &found);
     // A quarter column a tick leftward: 15 columns a second.
     let mut stepped = Vec::new();
     for _ in 0..6 {
@@ -659,7 +657,7 @@ fn a_flick_coasts_across_columns_stepping_each_and_rests_on_one() {
 fn a_tap_on_a_coasting_grid_stops_it_and_selects_nothing() {
     let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
     let found = pan_targets(&picker);
-    picker.pointer(&touch_down(), &found);
+    picker.pointer(&touch_down(&found), &found);
     for _ in 0..6 {
         picker.pointer(&drag_by(-PITCH_X * 0.25), &found);
         settle(&mut picker, 1);
@@ -691,4 +689,80 @@ fn a_tap_on_a_coasting_grid_stops_it_and_selects_nothing() {
     assert!(more.len() <= 1, "it stopped, then settled: {more:?}");
     assert_eq!(picker.pan(), 0.0);
     assert!(picker.index().abs_diff(index) <= 1);
+}
+
+fn press_at(at: (f32, f32)) -> oag_ui::pointer::Pointer {
+    oag_ui::pointer::Pointer {
+        pressed: true,
+        press_at: Some(at),
+        ..oag_ui::pointer::Pointer::default()
+    }
+}
+
+/// A point inside a hex tile, and one on no tile at all.
+fn tile_and_backdrop(found: &[crate::picker::pointer::Target]) -> ((f32, f32), (f32, f32)) {
+    use crate::picker::pointer::What;
+    let cell = found
+        .iter()
+        .find(|target| matches!(target.what, What::Cell { .. }))
+        .unwrap();
+    let [x, y, w, h] = cell.rect;
+    let tile = (x + w / 2.0, y + h / 2.0);
+    let backdrop = (0.0, 0.0);
+    assert!(oag_ui::pointer::hex_contains(cell.rect, tile));
+    assert!(
+        !found
+            .iter()
+            .any(|target| matches!(target.what, What::Cell { .. })
+                && oag_ui::pointer::hex_contains(target.rect, backdrop))
+    );
+    (tile, backdrop)
+}
+
+#[test]
+fn a_drag_that_starts_off_the_tiles_does_not_pan_or_step() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    let found = pan_targets(&picker);
+    let (_, backdrop) = tile_and_backdrop(&found);
+    assert!(picker.pointer(&press_at(backdrop), &found).is_empty());
+    assert!(picker.pointer(&drag_by(PITCH_X * 2.0), &found).is_empty());
+    assert!(picker.pointer(&drag_by(-PITCH_X * 3.0), &found).is_empty());
+    assert!(picker.pointer(&lift(), &found).is_empty());
+    assert_eq!((picker.index(), picker.pan()), (1, 0.0));
+    assert!(settle(&mut picker, 120).is_empty());
+    assert_eq!(picker.index(), 1);
+}
+
+#[test]
+fn a_drag_that_starts_on_a_tile_pans_and_steps_as_before() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    let found = pan_targets(&picker);
+    let (tile, _) = tile_and_backdrop(&found);
+    picker.pointer(&press_at(tile), &found);
+    assert!(picker.pointer(&drag_by(PITCH_X * 0.4), &found).is_empty());
+    assert!((picker.pan() - 0.4).abs() < 1e-4);
+    assert_eq!(
+        picker.pointer(&drag_by(PITCH_X * 0.4), &found),
+        vec![Event::Moved]
+    );
+    assert_eq!(picker.index(), 0);
+}
+
+#[test]
+fn a_drag_that_started_on_a_tile_keeps_panning_off_the_grid_and_the_next_press_decides_again() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    let found = pan_targets(&picker);
+    let (tile, backdrop) = tile_and_backdrop(&found);
+    picker.pointer(&press_at(tile), &found);
+    // The finger has left the grid: no pointer position, only travel.
+    for _ in 0..3 {
+        picker.pointer(&drag_by(PITCH_X * 0.5), &found);
+    }
+    assert_ne!(picker.index(), 1, "1.5 columns right left the first column");
+    picker.pointer(&lift(), &found);
+    settle(&mut picker, 120);
+    let at_rest = picker.index();
+    picker.pointer(&press_at(backdrop), &found);
+    assert!(picker.pointer(&drag_by(PITCH_X * 2.0), &found).is_empty());
+    assert_eq!(picker.index(), at_rest);
 }
