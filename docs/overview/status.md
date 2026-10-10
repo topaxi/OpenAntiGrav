@@ -200,7 +200,7 @@ transferred to EU, so EU's count includes names that add no page.
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
 | [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 200 (173 fn, 27 data) | 1 (0%) | 20 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+1 measurement script) | 2026-10-06, [billboards.md](../ghidra/functions/ps2-pulse-eu/billboards.md) |
-| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 635 (573 fn, 62 data) | 37 (5%) | 62 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+22 measurement scripts) | 2026-10-09, [craft-inertia.md](../ghidra/functions/ps3-hdfury-eu/craft-inertia.md) |
+| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 635 (573 fn, 62 data) | 37 (5%) | 62 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+26 measurement scripts) | 2026-10-10, [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 104 (100 fn, 4 data) | 9 (8%) | 18 | none | 2026-10-07, [player-input.md](../ghidra/functions/ps4-omega-eu/player-input.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 430 (413 fn, 17 data) | 74 (17%) | 4 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-09-23, [lighting.md](../ghidra/functions/psp-pulse-eu/lighting.md) |
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1295 (1162 fn, 133 data) | 31 (2%) | 83 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-10-08, [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md) |
@@ -221,7 +221,8 @@ unread field). See that page directly rather than a stale copy of its totals.
 ## 9. In the browser
 
 What the web build ([web.md](../tools/web.md)) opens and how far each disc gets
-there, measured in headless Chromium and Firefox on 2026-10-09 and listed on the
+there, measured in headless Chromium and Firefox on 2026-10-09 (Pulse PS2 and Pure
+races from the maintainer's own play, 2026-10-10) and listed on the
 page's own picker (`web/index.html`). A test
 ([web_picker_table.rs](../../crates/game/tests/web_picker_table.rs)) compares
 this table with the page's, row for row, so neither can change alone. Only `.chd`
@@ -232,8 +233,8 @@ does not yet ([web.md, "What is missing"](../tools/web.md#what-is-missing)).
 | Game | Console | Region | Accepts | Today |
 | --- | --- | --- | --- | --- |
 | Wipeout Pulse | PSP | Europe, USA | .chd, .iso | Races |
-| Wipeout Pulse | PS2 | Europe | .chd, .iso | Front end only |
-| Wipeout Pure | PSP | Europe, USA | .chd, .iso | Not yet |
+| Wipeout Pulse | PS2 | Europe | .chd, .iso | Races |
+| Wipeout Pure | PSP | Europe, USA | .chd, .iso | Races |
 | WipEout HD / Fury | PS3 | Europe | .iso, with its key if encrypted | Races |
 | WipEout 2048 | Vita | Europe, USA | none | Not yet |
 | WipEout: Omega Collection | PS4 | Europe | none | Not yet |

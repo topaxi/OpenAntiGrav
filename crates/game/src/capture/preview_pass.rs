@@ -30,6 +30,9 @@ pub(super) struct PreviewRequest {
     /// the fixed [`crate::preview::hull_orbit`] - see
     /// [`oag_title::FrontEnd::ship_preview_hull`].
     pub hull_only: bool,
+    /// HD's `ShipModel` widget: frames the race hull on its own authored pose,
+    /// see [`crate::preview::ship_model`]. Takes the place of the fixed orbit.
+    pub ship_model: Option<oag_ui_screens::picker::hd::ShipModel>,
     /// HD's `TrackModel` widget: places the circuit model on its own camera,
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
@@ -135,6 +138,23 @@ pub(super) fn draw_preview(
                 space,
                 widget,
                 request.seconds,
+            );
+        }
+        Ok(mut preview) if request.hull_only && request.ship_model.is_some() => {
+            let widget = request.ship_model.as_ref().expect("checked by the guard");
+            let (view_projection, model) =
+                crate::preview::ship_model::matrices(widget, space, swap.scale);
+            preview.draw_matrices(
+                device,
+                queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                view_projection,
+                model,
+                0.0,
             );
         }
         Ok(mut preview) => preview.draw_auto(

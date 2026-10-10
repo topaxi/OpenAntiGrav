@@ -915,9 +915,9 @@ the cache is made by `ffmpeg`, which a page cannot run.
 - **Untested inputs.** gilrs's Gamepad API backend is compiled in and not tried
   with a pad; touch is not tried. The keyboard and the mouse work.
 - **Other titles in the browser.** Pulse PSP and HD race (Chromium and
-  Firefox, headless); Pulse PS2 was booted to its front end only; Pulse USA PSP races (Chromium,
-  2026-10-09); Pure reaches Language Selection and its Press Start title and
-  did not get past it with Enter or Space. HD drew its race with no Tint error on the one circuit tried.
+  Firefox, headless); Pulse USA PSP races (Chromium, 2026-10-09); Pulse PS2
+  and Pure PSP play through the front end and race (the maintainer's own play,
+  2026-10-10; browser not recorded). HD drew its race with no Tint error on the one circuit tried.
 - **Firefox draws slowly**: 9 to 14 fps in a race in headless Firefox 155,
   against Chromium's 60 on the same machine, and the same before threads
   (Pulse, Moa Therma White: 12.2 fps on the single-threaded module, 12.4 on
