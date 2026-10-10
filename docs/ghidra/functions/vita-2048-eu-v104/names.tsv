@@ -133,3 +133,10 @@
 0x81014308	function	FileSystemFios_CreateOnce	70	archive-mount.md
 # 2026-10-07 stick-curve lane (player-input.md)
 0x811b3072	function	PlayerInput_Update	75	player-input.md
+# 2026-10-10 pilot-assist lane (pilot-assist.md)
+0x811ace10	function	Handling_ReadGlobalSettings	80	pilot-assist.md
+0x811d4cf0	function	PilotAssist_UpdateExtreme	72	pilot-assist.md
+0x811d5148	function	PilotAssist_ThrustScale	80	pilot-assist.md
+0x811a5df6	function	PilotAssist_UpdateNormal	65	pilot-assist.md
+0x811a5b38	function	PilotAssist_SetStrength	70	pilot-assist.md
+0x81152488	function	Hud_UpdateAssistIndicator	72	pilot-assist.md

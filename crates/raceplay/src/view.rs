@@ -237,6 +237,8 @@ pub struct RaceView {
     /// 2048's `ThrustBar` chase value in percent, advanced by
     /// [`super::Race::advance_thrust_chase`]. Render-side, out of the hash.
     pub(super) thrust_chase_percent: f32,
+    /// Pilot Assist's HUD indicator timers. Render-side, out of the hash.
+    pub(super) assist_indicator: oag_hud::assist::Indicator,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

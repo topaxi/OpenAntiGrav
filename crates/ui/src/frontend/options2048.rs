@@ -35,10 +35,9 @@
 //! [`Frontend::music_choice`]/[`Frontend::sfx_choice`], which carry a plain
 //! index/percentage for the composition root to apply, the same "`None`
 //! until touched" contract [`Frontend::chosen`] already sets for the
-//! language picker. **`OptionsControls`'s `Motion Sensor` list and
-//! `OptionsPilot`'s `Pilot Assist` list draw and cycle and reach nothing** -
-//! this build has no motion-sensor axis and no pilot-assist difficulty
-//! setting to wire either into.
+//! language picker; [`Frontend::pilot_choice`] is `OptionsPilot`'s `Pilot
+//! Assist` list on the same terms. **`OptionsControls`'s `Motion Sensor` list
+//! draws and cycles and reaches nothing** - this build has no motion-sensor axis.
 //!
 //! **The starting index is `CameraP1`'s own authored `default="OPT_CLOSE"`
 //! (index 0), which is also what [`oag_display::display::CameraView::default`]
@@ -62,8 +61,10 @@ const CAMERA_ENTRIES: [&str; 3] = ["OPT_CLOSE", "OPT_FAR", "OPT_INT"];
 
 /// `CameraP1`'s authored `default="OPT_CLOSE"`: index 0 of [`CAMERA_ENTRIES`].
 const CAMERA_DEFAULT_INDEX: u8 = 0;
-/// `Pilot Assist`'s own three entries - `OptionsPilot`. Drawn, not wired.
+/// `Pilot Assist`'s own three entries - `OptionsPilot`. See [`Frontend::pilot_choice`].
 const PILOT_ENTRIES: [&str; 3] = ["FE_OFF", "FE_NORMAL", "FE_SUPER"];
+/// `Pilot Assist`'s authored `default="FE_NORMAL"`: index 1 of [`PILOT_ENTRIES`].
+const PILOT_DEFAULT_INDEX: u8 = 1;
 /// `Motion Sensor`'s own three entries - `OptionsControls`. Drawn, not wired.
 const CONTROLS_ENTRIES: [&str; 3] = ["FE_CTRL_WIPEOUT", "FE_CTRL_RACER", "FE_CTRL_MOTION"];
 
@@ -76,6 +77,13 @@ impl Frontend {
     #[must_use]
     pub fn camera_choice(&self) -> Option<u8> {
         self.touch.camera_choice
+    }
+
+    /// `OptionsPilot`'s own choice once moved - `0` off, `1` normal, `2` super,
+    /// the list's own order. `None` until touched.
+    #[must_use]
+    pub fn pilot_choice(&self) -> Option<u8> {
+        self.touch.pilot_choice
     }
 
     /// `OptionsAudio`'s `Music Volume` slider, `0..=100`. `None` until moved.
@@ -142,8 +150,8 @@ impl Frontend {
             }
             w2048::OPTIONS_PILOT => {
                 let len = PILOT_ENTRIES.len() as i32;
-                self.touch.pilot_index =
-                    (self.touch.pilot_index as i32 + step).rem_euclid(len) as usize;
+                let index = self.touch.pilot_choice.unwrap_or(PILOT_DEFAULT_INDEX) as i32;
+                self.touch.pilot_choice = Some((index + step).rem_euclid(len) as u8);
             }
             w2048::OPTIONS_AUDIO => {
                 let current_value = if self.touch.audio_slider == 0 {
@@ -231,7 +239,13 @@ impl Frontend {
             }
             w2048::OPTIONS_PILOT => {
                 if let Some(list) = screen.touch_lists.first() {
-                    self.draw_touch_list(list, &PILOT_ENTRIES, self.touch.pilot_index, cursor, out);
+                    self.draw_touch_list(
+                        list,
+                        &PILOT_ENTRIES,
+                        self.touch.pilot_choice.unwrap_or(PILOT_DEFAULT_INDEX) as usize,
+                        cursor,
+                        out,
+                    );
                 }
             }
             w2048::OPTIONS_AUDIO => {

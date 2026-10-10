@@ -738,6 +738,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     frame
         .sprites
         .extend(super::runtime::arc_sprites(cx, readout));
+    frame.sprites.extend(super::assist::sprites(cx, readout));
 
     // The lock-on reticle, over the bars and under the text - it is the only
     // HUD sprite anchored on the *world* rather than on the screen, so it moves

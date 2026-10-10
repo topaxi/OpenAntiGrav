@@ -67,6 +67,7 @@ pub mod maglock;
 pub mod pair;
 pub mod params;
 pub mod passive;
+pub mod pilot_assist;
 pub mod probe;
 pub mod reset;
 pub mod ship;

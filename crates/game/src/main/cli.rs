@@ -589,52 +589,8 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) trail_sparks: bool,
 
-    /// Let an opponent's driver fly the player's craft.
-    ///
-    /// A verification aid - see `race::Race::set_autopilot` - and the only way
-    /// to reach the **end** of a race without a human at the keyboard for four
-    /// minutes: a race finishes when the player crosses the line for the last
-    /// time, so nothing that holds the throttle in a straight line ever gets
-    /// there. It is what makes a screenshot of the results table possible:
-    ///
-    /// ```sh
-    /// cargo run -p oag-game -- --race --mode single_race --autopilot \
-    ///     --ticks 8000 --screenshot /tmp/scoreboard.png
-    /// ```
-    ///
-    /// The capture stops on the tick the race ends, so a `--ticks` past the
-    /// flag lands on the board rather than overshooting it.
-    #[arg(long)]
-    pub(crate) autopilot: bool,
-
-    /// With `--autopilot`, fly the player with a named pilot instead of the
-    /// neutral baseline `Driver::default` otherwise leaves slot 0 at.
-    ///
-    /// One of the same characters a real single race deals from
-    /// [`oag_raceplay::pilots::load`]: the four built-ins - `balanced`, `aggressive`,
-    /// `passive`, `shy` - or a name out of `<config dir>/oag/pilots/`. This is
-    /// what makes `--autopilot` useful for checking *a character*, not only
-    /// for reaching the finish line unattended - the roster a player edits in
-    /// the pilot screen is the same one this flag can fly.
-    ///
-    /// Tempered by `--autopilot-skill`, or by `[ai] difficulty` when that flag
-    /// is not given - the same temper an opponent's own entry gets, so naming
-    /// `aggressive` here is exactly the character a grid slot could draw, not
-    /// a stronger or weaker claim.
-    #[arg(long, value_name = "PILOT", requires = "autopilot")]
-    pub(crate) autopilot_pilot: Option<String>,
-
-    /// With `--autopilot`, fly the player at a stated AI skill instead of the
-    /// race's own: `novice`, `skilled`, `elite` or `ace`. See
-    /// [`oag_ai::Difficulty`].
-    ///
-    /// **Independent of `[ai] difficulty`** - the opponents still race at
-    /// whatever that resolves to, only the autopiloted craft moves. That is
-    /// the point: it is what lets a claim like "Ace corners a third faster
-    /// than Novice" be checked by flying both across the same field, without
-    /// restarting the race between them and losing the comparison.
-    #[arg(long, value_name = "SKILL", requires = "autopilot")]
-    pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+    #[command(flatten)]
+    pub(crate) driver: extra::DriverArgs,
 
     /// With `--race --screenshot`, arm the camera's impact shake at the end of
     /// a tick as a wall hit of that severity would: `TICK:SEVERITY`, severity

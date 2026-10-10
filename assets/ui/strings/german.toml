@@ -97,6 +97,7 @@ OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "LUFTBREMSE RECHTS", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "KAMERAANSICHT", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "SEITLICHE BEWEGUNG", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "TRIGGER", human = false }
+OAG_CONTROLS_PILOT_ASSIST = { text = "PILOTENHILFE", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "EMPFINDLICHKEIT (TRIGGER)", human = false }
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "GO-BREMSZONEN", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "TOUCH-SCHEMA", human = false }

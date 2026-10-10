@@ -116,6 +116,9 @@ const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {
         prefix: "PosBar",
         segments: 8,
     },
+    // Indicator not wired; the assist itself runs off Omega's own `<PilotAssist>`
+    // table. See `docs/physics/pilot-assist.md`.
+    assist: None,
 };
 
 /// Widgets drawn in every frame whatever the race state, HD's list. **Chosen,

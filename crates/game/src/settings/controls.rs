@@ -107,6 +107,18 @@ pub struct Controls {
     /// `docs/ui/button-prompts.md`.
     #[serde(default = "default_prompt_style")]
     pub prompt_style: String,
+    /// Pilot Assist for the player's craft: a corridor spring that yaws it off a
+    /// wall it is about to meet, at a few percent of thrust (`oag_physics::pilot_assist`).
+    /// Only titles that author its table have it.
+    ///
+    /// **On by default on Android only** (maintainer, 2026-10-10): touch controls are
+    /// far harder than a pad, and a player on a desktop is assumed to know Wipeout.
+    #[serde(default = "default_pilot_assist")]
+    pub pilot_assist: bool,
+}
+
+fn default_pilot_assist() -> bool {
+    cfg!(target_os = "android")
 }
 
 fn default_prompt_style() -> String {
@@ -299,6 +311,7 @@ impl Default for Controls {
             touch_opacity: default_touch_opacity(),
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
+            pilot_assist: default_pilot_assist(),
         }
     }
 }

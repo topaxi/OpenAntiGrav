@@ -263,6 +263,8 @@ def main():
     ap.add_argument("--settle", type=int, default=90, help="ticks with nothing held after a teleport")
     ap.add_argument("--run", action="append", default=[], help="name=script[@x,y,z,yaw[,speed]]")
     ap.add_argument("--repeat", type=int, default=1)
+    ap.add_argument("--run-assist", action="append", default=[],
+                    help="name=on|off: write the Pilot Assist flag before that run (it is read every frame)")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -272,6 +274,7 @@ def main():
         k, _, v = item.partition("=")
         mapping[k] = v
     runs = [parse_run(r) for r in args.run]
+    run_assist = dict(item.partition("=")[::2] for item in args.run_assist)
     plan = {}
     for item in args.nav:
         screen, _, buttons = item.partition("=")
@@ -350,6 +353,8 @@ def main():
         for rep in range(args.repeat):
             for name, script, pose in runs:
                 states = input_script.parse(Path(script).read_text())
+                if name in run_assist:
+                    set_pilot_assist(gdb, run_assist[name] == "on")
                 if pose:
                     gdb.pause()
                     rows = None

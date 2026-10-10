@@ -97,6 +97,7 @@ pub fn race_options(
     scheme: oag_gameplay::ControlScheme,
     difficulty: oag_ai::Difficulty,
     autopilot: bool,
+    pilot_assist: bool,
     give: Option<oag_tables::weapons::Weapon>,
 ) -> std::collections::BTreeMap<String, String> {
     let mut options = std::collections::BTreeMap::new();
@@ -104,6 +105,11 @@ pub fn race_options(
     options.insert("difficulty".to_string(), difficulty.name().to_string());
     if autopilot {
         options.insert("autopilot".to_string(), "true".to_string());
+    }
+    // Pilot Assist changes the player's physics, so a replay that does not know it
+    // was on cannot reproduce the run. Absent means off, as every earlier file is.
+    if pilot_assist {
+        options.insert("pilot_assist".to_string(), "true".to_string());
     }
     if let Some(weapon) = give {
         options.insert("give".to_string(), weapon.as_type().to_string());
