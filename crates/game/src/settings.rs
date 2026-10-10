@@ -721,11 +721,7 @@ pub fn menu_seeds(
         ),
         (
             "controls.pilot_assist",
-            text(if settings.controls.pilot_assist {
-                "on"
-            } else {
-                "off"
-            }),
+            text(settings.controls.pilot_assist.name()),
         ),
         (
             "controls.touch_scheme",

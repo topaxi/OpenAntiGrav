@@ -9,6 +9,7 @@ use oag_display::display;
 use oag_display::space::Space;
 use oag_game::{records, report, settings};
 use oag_gameplay::input::Button;
+use oag_physics::pilot_assist::Level;
 use oag_raceplay as race;
 use oag_ui::frontend::{self};
 use oag_ui::strings;
@@ -117,13 +118,13 @@ impl Session {
                         _ => display::CameraView::Far,
                     };
                 }
-                // 2048's Super is the law this build runs; Normal (the ship's own
-                // gentler `<Assist>` block) is not built, so it leaves the switch
-                // as it was rather than claim a law it does not have.
-                match stage.frontend.pilot_choice() {
-                    Some(0) => self.settings.controls.pilot_assist = false,
-                    Some(2) => self.settings.controls.pilot_assist = true,
-                    _ => {}
+                // `OptionsPilot`'s list is `FE_OFF`, `FE_NORMAL`, `FE_SUPER`.
+                if let Some(index) = stage.frontend.pilot_choice() {
+                    self.settings.controls.pilot_assist = match index {
+                        0 => Level::Off,
+                        1 => Level::Normal,
+                        _ => Level::Extreme,
+                    };
                 }
                 if let Some(percent) = stage.frontend.music_choice() {
                     self.settings.audio.music_volume =

@@ -9,6 +9,8 @@
 
 use super::*;
 
+mod pilot_assist;
+
 /// What a race takes out of the engine-wide `<Global>` block.
 ///
 /// Every field has a stated fallback and every fallback is *reported*, because
@@ -31,9 +33,9 @@ pub(super) struct GlobalTunables {
     /// `<StartBoost/>`, or `None` where the file authors none (Pure) or cannot
     /// be read: no launch boost, rather than one on invented numbers.
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
-    /// `<GlobalClass><PilotAssist/><PilotAssistPenalty/></GlobalClass>` for this
-    /// rung, `None` where the title authors none (Pulse, Pure).
-    pub(super) pilot_assist: Option<oag_physics::pilot_assist::Params>,
+    /// Both Pilot Assist levels' laws for the player's craft, with their sources
+    /// ([`pilot_assist`]).
+    pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
 }
 
 /// Reads the file and resolves the rung `options.class` names.
@@ -53,6 +55,7 @@ pub(super) struct GlobalTunables {
 pub(super) fn resolve(
     archives: &mut oag_assets::Archives,
     options: &Options,
+    stats: &handling::Stats,
     report: &mut Vec<String>,
 ) -> GlobalTunables {
     // Three distinct failures, reported as three distinct lines. The decoder was
@@ -194,26 +197,8 @@ pub(super) fn resolve(
         None => "<StartBoost>: absent, so no launch boost this run".to_string(),
     });
 
-    let pilot_assist = global
-        .as_ref()
-        .zip(handling::SpeedClass::from_name(&options.class))
-        .and_then(|(global, class)| global.pilot_assist(class))
-        .map(|p| oag_physics::pilot_assist::Params {
-            la_dist_const: p.la_dist_const,
-            la_dist_vel_mul: p.la_dist_vel_mul,
-            la_dist_max: p.la_dist_max,
-            spring_mul: p.spring_mul,
-            torque_mul: p.torque_mul,
-            max_torque: p.max_torque,
-            max_ang_vel: p.max_ang_vel,
-            general_thrust_percent: p.general_thrust_percent,
-            thrust_percent_on_use: p.thrust_percent_on_use,
-            penalty_duration: p.penalty_duration,
-        });
-    report.push(match pilot_assist {
-        Some(_) => format!("<PilotAssist>: authored for the {} class", options.class),
-        None => "<PilotAssist>: not authored, so no Pilot Assist this run".to_string(),
-    });
+    let ship = stats.class_named(&options.class);
+    let pilot_assist = pilot_assist::resolve(global.as_ref(), ship, &options.class, report);
 
     GlobalTunables {
         pilot_assist,

@@ -6,7 +6,7 @@
 //! See `docs/physics/pilot-assist.md`.
 
 use oag_core::math::Vec3;
-use oag_physics::pilot_assist::{Candidates, Corridor, Input, look_ahead};
+use oag_physics::pilot_assist::{Candidates, Corridor, Input, Level, MIN_STRENGTH, look_ahead};
 use oag_race::Mode;
 use oag_vex::track::Sample;
 
@@ -20,23 +20,38 @@ use crate::spline::Spline;
 const SIBLING_RANGE: f32 = 20.0;
 
 impl Race {
-    /// Turns the player's Pilot Assist on or off, from the settings or a pause menu.
-    /// A title that authors no Pilot Assist table ignores it.
-    pub fn set_pilot_assist(&mut self, on: bool) {
-        self.sim.pilot_assist_on = on;
+    /// Sets the player's Pilot Assist level, from the settings. A level this race has
+    /// no law for does nothing.
+    pub fn set_pilot_assist(&mut self, level: Level) {
+        self.sim.pilot_assist_level = level;
     }
 
-    /// Whether this race offers Pilot Assist at all: the title authors its table.
+    /// The level the player has chosen.
     #[must_use]
-    pub fn pilot_assist_available(&self) -> bool {
-        self.sim.pilot_assist.is_some()
+    pub fn pilot_assist_level(&self) -> Level {
+        self.sim.pilot_assist_level
+    }
+
+    /// The laws this race loaded for its two levels, and so what the load report said
+    /// about where their numbers came from.
+    #[must_use]
+    pub fn pilot_assist_laws(&self) -> oag_physics::pilot_assist::Laws {
+        self.sim.pilot_assist
+    }
+
+    /// Whether this race has a law for `level`.
+    #[must_use]
+    pub fn pilot_assist_available(&self, level: Level) -> bool {
+        self.sim.pilot_assist.get(level).is_some()
     }
 
     /// Whether the HUD shows the assist as on: both originals read the option
     /// byte itself here, not the craft's per-tick gate, so the countdown shows it.
+    /// 2048 ties its background and icon to the Extreme byte alone; Normal, which
+    /// runs on a state object the indicator never reads, draws none.
     #[must_use]
     pub fn pilot_assist_shown(&self) -> bool {
-        self.sim.pilot_assist_on && self.sim.pilot_assist.is_some()
+        self.sim.pilot_assist_level == Level::Extreme && self.sim.pilot_assist.extreme.is_some()
     }
 
     /// Advances the HUD indicator off the player's assist state this tick.
@@ -46,27 +61,33 @@ impl Race {
         self.view.assist_indicator.advance(shown, acting, dt);
     }
 
-    /// The player's assist input for this tick, or `None` when the title has no
-    /// table, which leaves the step bit-for-bit as it was.
+    /// The player's assist input for this tick, or `None` when the race has no law
+    /// for the chosen level, which leaves the step bit-for-bit as it was.
     pub(crate) fn pilot_assist_input(&self, player: usize) -> Option<Input> {
-        let params = self.sim.pilot_assist?;
+        let level = self.sim.pilot_assist_level;
+        let law = self.sim.pilot_assist.get(level)?;
         let physics = &self.sim.world.ships[player].physics;
+        let body = &physics.body;
+        let strength = law
+            .ramp
+            .map_or(1.0, |ramp| ramp.strength(body.linear_velocity.length()));
         // HD's gate: racing (`craft+0x2f8 == 1`, not the grid) and not Zone,
         // Zone Battle or Detonator (modes 6, 13, 14). Of those this engine runs Zone.
-        let enabled =
-            self.sim.pilot_assist_on && !physics.on_grid && self.sim.world.mode() != Mode::Zone;
-        if !enabled && physics.pilot_assist == Default::default() {
+        let enabled = !physics.on_grid && self.sim.world.mode() != Mode::Zone;
+        let params = law.params;
+        if !(enabled && strength > MIN_STRENGTH) && physics.pilot_assist == Default::default() {
             // Nothing to decay and nothing to apply: skip both scans.
             return Some(Input {
                 params,
-                enabled,
+                strength,
+                enabled: false,
                 here: [None, None],
                 ahead: [None, None],
             });
         }
-        let body = &physics.body;
         Some(Input {
             params,
+            strength,
             enabled,
             here: candidates(&self.sim.spline, body.position),
             ahead: candidates(&self.sim.spline, look_ahead(body, &params)),

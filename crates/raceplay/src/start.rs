@@ -512,7 +512,7 @@ impl Race {
                 class_gravity_scale,
                 start_boost,
                 pilot_assist,
-                pilot_assist_on: false,
+                pilot_assist_level: Default::default(),
                 pad_current: [None; MAX_SHIPS],
                 pad_previous_position: [None; MAX_SHIPS],
                 scheme: ControlScheme::default(),

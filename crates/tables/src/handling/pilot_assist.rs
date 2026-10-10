@@ -7,6 +7,11 @@
 //! and takes each attribute from whichever carries it. Pulse and Pure author
 //! neither element, which is [`None`] rather than zeroes. Evidence:
 //! `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.
+//!
+//! 2048's gentler **Normal** level reads two more things: the ship's own
+//! `<Class><Assist/></Class>` block ([`Assist`]) and the global
+//! `<GlobalClass><SteerAssist/></GlobalClass>` speed ramp ([`SteerAssist`]);
+//! `docs/ghidra/functions/vita-2048-eu-v104/pilot-assist.md`.
 
 use super::{Error, Node, Result, SpeedClass, number};
 
@@ -33,6 +38,84 @@ pub struct PilotAssist {
     pub thrust_percent_on_use: f32,
     /// `penaltyDuration`: seconds the penalty runs after a correction.
     pub penalty_duration: f32,
+}
+
+/// One ship class's `<Assist>` block: the numbers of 2048's Normal level, verbatim.
+///
+/// It authors no `generalThrustPercentWhenEnabled`: Normal pays only
+/// [`Self::thrust_percent_on_use`] while its penalty runs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Assist {
+    /// `laDistConst`.
+    pub la_dist_const: f32,
+    /// `laDistVelMul`.
+    pub la_dist_vel_mul: f32,
+    /// `laDistMax`.
+    pub la_dist_max: f32,
+    /// `springMul`.
+    pub spring_mul: f32,
+    /// `torqueMul`.
+    pub torque_mul: f32,
+    /// `maxTorque`.
+    pub max_torque: f32,
+    /// `maxAngVel`.
+    pub max_ang_vel: f32,
+    /// `thrustPercentOnUse`.
+    pub thrust_percent_on_use: f32,
+    /// `penaltyDuration`.
+    pub penalty_duration: f32,
+    /// `notInUseStrength`: the strength the speed ramp scales (the candidate for
+    /// the `(*(craft+0x8c))+0x10` multiplier; not confirmed in the code).
+    pub not_in_use_strength: f32,
+}
+
+impl Assist {
+    const ELEMENT: &'static str = "Assist";
+
+    /// `Ok(None)` when the class authors no `<Assist>`.
+    pub(super) fn from_class(class: &Node) -> Result<Option<Self>> {
+        let Some(node) = class.children_named(Self::ELEMENT).next() else {
+            return Ok(None);
+        };
+        let e = Self::ELEMENT;
+        Ok(Some(Self {
+            la_dist_const: number(node, e, "laDistConst")?,
+            la_dist_vel_mul: number(node, e, "laDistVelMul")?,
+            la_dist_max: number(node, e, "laDistMax")?,
+            spring_mul: number(node, e, "springMul")?,
+            torque_mul: number(node, e, "torqueMul")?,
+            max_torque: number(node, e, "maxTorque")?,
+            max_ang_vel: number(node, e, "maxAngVel")?,
+            thrust_percent_on_use: number(node, e, "thrustPercentOnUse")?,
+            penalty_duration: number(node, e, "penaltyDuration")?,
+            not_in_use_strength: number(node, e, "notInUseStrength")?,
+        }))
+    }
+}
+
+/// `<GlobalClass><SteerAssist min_speed ramp_up_range/></GlobalClass>`: the speed
+/// ramp 2048's Normal strength follows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SteerAssist {
+    /// `min_speed`: no strength at or below this speed.
+    pub min_speed: f32,
+    /// `ramp_up_range`: full strength this far above `min_speed`.
+    pub ramp_up_range: f32,
+}
+
+impl SteerAssist {
+    const ELEMENT: &'static str = "SteerAssist";
+
+    fn from_class(class: &Node) -> Result<Option<Self>> {
+        let Some(node) = class.children_named(Self::ELEMENT).next() else {
+            return Ok(None);
+        };
+        let e = Self::ELEMENT;
+        Ok(Some(Self {
+            min_speed: number(node, e, "min_speed")?,
+            ramp_up_range: number(node, e, "ramp_up_range")?,
+        }))
+    }
 }
 
 const ELEMENTS: [&str; 2] = ["PilotAssist", "PilotAssistPenalty"];
@@ -83,6 +166,21 @@ pub(super) fn per_class(global: &Node) -> Result<[Option<PilotAssist>; 4]> {
             continue;
         };
         out[class as usize] = PilotAssist::from_class(node)?;
+    }
+    Ok(out)
+}
+
+/// Every recognised `<GlobalClass>`'s [`SteerAssist`], indexed by [`SpeedClass`].
+pub(super) fn steer_per_class(global: &Node) -> Result<[Option<SteerAssist>; 4]> {
+    let mut out = [None; 4];
+    for node in global.children_named("GlobalClass") {
+        let Some(class) = node
+            .value("name")
+            .and_then(|name| SpeedClass::from_name(name.trim()))
+        else {
+            continue;
+        };
+        out[class as usize] = SteerAssist::from_class(node)?;
     }
     Ok(out)
 }

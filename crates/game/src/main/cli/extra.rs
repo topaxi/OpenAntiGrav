@@ -335,11 +335,12 @@ pub(crate) struct DriverArgs {
     pub(crate) autopilot: bool,
 
     /// Pilot Assist for the player's craft in a headless run (`--screenshot`,
-    /// `--trace-out`): `on` or `off`, default off. The settings file's
+    /// `--trace-out`): `off`, `normal`, `extreme` or `on` (Extreme, the old switch's
+    /// spelling), default off. The settings file's
     /// `[controls] pilot_assist` drives the windowed game; a capture or trace
     /// takes only this flag so it never depends on a machine's settings.
-    #[arg(long, value_parser = ["on", "off"])]
-    pub(crate) pilot_assist: Option<String>,
+    #[arg(long, value_parser = parse_pilot_assist)]
+    pub(crate) pilot_assist: Option<oag_physics::pilot_assist::Level>,
 
     /// With `--autopilot`, fly the player with a named pilot instead of the
     /// neutral baseline `Driver::default` otherwise leaves slot 0 at.
@@ -369,4 +370,13 @@ pub(crate) struct DriverArgs {
     /// restarting the race between them and losing the comparison.
     #[arg(long, value_name = "SKILL", requires = "autopilot")]
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+}
+
+/// `--pilot-assist`'s value: a level's token, or `on` for Extreme as the switch spelled it.
+fn parse_pilot_assist(text: &str) -> Result<oag_physics::pilot_assist::Level, String> {
+    use oag_physics::pilot_assist::Level;
+    if text == "on" {
+        return Ok(Level::Extreme);
+    }
+    Level::from_name(text).ok_or_else(|| format!("expected off, normal, extreme or on, not {text:?}"))
 }

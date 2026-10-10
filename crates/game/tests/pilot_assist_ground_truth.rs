@@ -15,6 +15,7 @@
 
 use oag_core::buttons::{Button, Input};
 use oag_gameplay::{InputSnapshot, PlayerInputs};
+use oag_physics::pilot_assist::Level;
 use oag_raceplay as race;
 use oag_raceplay::Race;
 
@@ -74,8 +75,11 @@ fn a_new_player_meets_fewer_walls_with_pilot_assist_on() {
     ) else {
         return;
     };
-    assert!(on.pilot_assist_available(), "HD authors <PilotAssist>");
-    on.set_pilot_assist(true);
+    assert!(
+        on.pilot_assist_available(Level::Extreme),
+        "HD authors <PilotAssist>"
+    );
+    on.set_pilot_assist(Level::Extreme);
     let (off_ticks, off_contacts, off_progress) = fly(&mut off);
     let (on_ticks, on_contacts, on_progress) = fly(&mut on);
     println!(
@@ -102,7 +106,7 @@ fn no_opponent_ever_gets_the_assist() {
     let Some(mut race) = started(oag_race::Mode::SingleRace) else {
         return;
     };
-    race.set_pilot_assist(true);
+    race.set_pilot_assist(Level::Extreme);
     let inputs = thrust();
     for _ in 0..600 {
         race.tick(&inputs);
@@ -132,7 +136,7 @@ fn the_hud_indicator_follows_the_switch_and_the_corrections() {
     ) else {
         return;
     };
-    on.set_pilot_assist(true);
+    on.set_pilot_assist(Level::Extreme);
     let inputs = thrust();
     let (mut main_ticks, mut arrow_ticks) = (0, 0);
     for _ in 0..TICKS {
