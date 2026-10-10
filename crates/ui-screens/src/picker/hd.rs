@@ -43,9 +43,8 @@
 //!
 //! - **The 3-D ship** is the team's race hull (`ship.vex` plus
 //!   `ship.rcsmodel`; HD ships no `ship_FE.vex`), drawn by `oag_game` at a
-//!   fixed pose in this screen's `SHIP MODEL` frame. The pose is chosen, not
-//!   measured: the widget's own `ShipModel` values ([`ShipModel`]) are read
-//!   and not yet composed.
+//!   pose in this screen's `SHIP MODEL` frame, composed from the widget's own
+//!   `ShipModel` values ([`ShipModel`]) by `oag_game::preview::ship_model`.
 //! - **The `Bracket` corner marks**, the `Padlock` and the `Unlockcondition`
 //!   text (this build keeps no unlock state), and the loyalty value, its
 //!   nobbles. `LiveryString` is authored empty and filled by code this
@@ -111,8 +110,8 @@ pub struct Bracket {
 }
 
 /// The `<Model name="ShipModel">` widget's own values - where and how the
-/// original poses the selected craft. Read and carried; nothing draws it
-/// yet (see the module doc).
+/// original poses the selected craft. Drawn by
+/// `oag_game::preview::ship_model`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShipModel {
     pub origin: [f32; 2],
