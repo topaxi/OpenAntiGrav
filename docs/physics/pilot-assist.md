@@ -35,3 +35,23 @@ the last three seconds.
 **Measured on RPCS3** (the table is on the evidence page): aimed at the right-hand wall at
 100 units/s and let go, the craft hits it and drops to 16 units/s with the option off, and
 is yawed back clear of it and holds 100-120 units/s with it on.
+
+## 2048: Normal and Extreme (confidence 65-72, static)
+
+2048's three settings are Off, **Normal (its default)** and Extreme ("Super"). Extreme is HD's
+law above, read from 2048's own global `<PilotAssist>` rungs, which are softer than HD's.
+Normal is the same law run on a second object, read from the ship's own `<Assist>` block,
+which is far gentler (a torque cap of 50 against 600-1000). Its strength ramps in with speed
+between `SteerAssist.min_speed` and `min_speed + ramp_up_range`. The two never run together.
+Evidence: [vita-2048-eu-v104/pilot-assist.md](../ghidra/functions/vita-2048-eu-v104/pilot-assist.md).
+
+## The HUD indicator
+
+Both HD and 2048 author four widgets: a background shown while the assist is enabled, a main
+icon shown for 3 s after it acts, and a left and a right arrow that blink at 4 Hz for 1.5 s
+on the side of the wall it steered away from.
+
+## Other titles
+
+- **Omega**: checked, applies, not wired: its executable carries 2048's whole set of names.
+- **Pulse, Pure**: no Pilot Assist in either executable.

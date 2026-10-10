@@ -206,7 +206,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1295 (1162 fn, 133 data) | 31 (2%) | 83 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-10-08, [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 73 (72 fn, 1 data) | 2 (2%) | 12 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-10-08, [weapons-gfx.md](../ghidra/functions/psp-pure-usa/weapons-gfx.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 111 (101 fn, 10 data) | 6 (5%) | 24 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-07, [archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 117 (107 fn, 10 data) | 7 (5%) | 25 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-10, [pilot-assist.md](../ghidra/functions/vita-2048-eu-v104/pilot-assist.md) |
 
 <!-- re-coverage:end -->
 
