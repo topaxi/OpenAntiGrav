@@ -52,6 +52,16 @@ Candidates raised by the 2026-10-10 drive, not approved (the maintainer said
 - The two asset layers (fallback and mod override): **not before Sunday
   2026-10-11 18:00** ([its thread](an-own-asset-layer-behind-the-disc.md)).
 
+- **Disc tests share fixed `/tmp` paths across worktrees** (found 2026-10-10): 30
+  test files under `crates/*/tests` put `oag-game`'s `XDG_*` dirs or outputs at
+  `std::env::temp_dir().join("oag-...")`, the same path in every checkout. A gate in
+  one worktree reads what another wrote: the lead's gate on `ede0ba744` failed four
+  tests (`zone_airbrake_flaps_ground_truth` x3, `omega_menu_backdrop_ground_truth`)
+  because a newer branch's run had left `pilot_assist = "off"` in the shared
+  `settings.toml`, which that older build parsed as a bool. Green on the next head;
+  the fix is a per-run directory (`tempfile`, or one keyed by the process), not a
+  rerun. A candidate lane, not approved.
+
 ## Next Steps
 
 1. Ask the maintainer which of lanes 1-5 to queue, and the ATRAC3+ answer.
