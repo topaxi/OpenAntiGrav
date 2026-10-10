@@ -707,3 +707,8 @@ steer (tick 240, forced boost) changes by 6 pixels of 5356: its saturated white
 plume hides a smear that is already small, so that frame is not evidence either
 way. `crates/render/tests/velocity_target.rs` pins the mechanism: `Write` leaves
 a blended draw masked, `Attached` writes its motion weighted by alpha.
+
+**Not checked**: both 2026-10-10 fixes were judged on headless captures, where
+the forced boost and the airbrake pose apply to the captured frame alone. The
+temporal upscaler's history (a windowed run with FSR3) was never exercised, so
+whether a ghost survives through reprojection there is open.
