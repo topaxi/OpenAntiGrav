@@ -13,6 +13,12 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   rating is drawn in `HD_Blue` red (`docs/ui/campaign-screens.md`). Open: the
   `hull_orbit` pose is fitted to the classic Feisar hull only; no `_n1` frame;
   a variant rated below the base draws no marker (no frame shows one)
+- Ship Select swap (LANDED 2026-10-10, `hd-ship-select-anim`): no turntable
+  (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
+  step (`oag_game::preview::hull_swap`). Open: the settle's start size is per
+  team (chosen 1.06), the step's particle burst (no `.pob` located), per-team
+  framing (the original frames each team differently; `hull_orbit` fits
+  Feisar) - read each team's `ShipModel` `RotX`/`RotY`
 - Ship Select: bracket corners, loyalty value; the hex column draws
   (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); compose the

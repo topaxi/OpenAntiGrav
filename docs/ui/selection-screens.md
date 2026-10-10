@@ -235,6 +235,38 @@ for Assegai), turning once every twelve seconds seen slightly from above -
 the period and the pitch are this build's own readings of two frames a
 second apart, not recovered numbers.
 
+### The craft's swap on HD/Fury, measured 2026-10-10 (hd-ship-select-anim)
+
+Pulse's `ship_FE.vex` turns on a turntable (above). **HD/Fury's does not**:
+the race hull (`Data\Ships\<team>\ship.vex`) holds one pose. Method: RPCS3
+(`hdfury-ps3-eu.iso`, own `serve`), the Xvfb display grabbed with ffmpeg
+`x11grab` into a lossless clip while `scripts/rpcs3-hd-shipselect-film.py`
+tapped the pad on a timetable; `scripts/hd-shipselect-series.py` reads the
+silhouette (pixels with every channel above 60, in the `SHIP MODEL` frame) per
+frame. Clips: a 30 fps run (entry, five steps, 25 s hold) and a 60 fps run
+(three steps; 1,080 frames in 18 s, no duplicate frame, so the emulator
+presents at least 60 fps there). Reference frames and the per-frame series:
+`data/reference/hd-capture/ship-select-anim/`. One boot, two films.
+
+| Thing | Reading | Confidence |
+| --- | --- | --- |
+| Turntable | **none.** Silhouette identical to the pixel across 18 s of hold (width and height of the 1-99 percentile box constant to 1 px after the settle; frame-to-frame crop RMSE 0.3% where no particle crosses it) | 85 |
+| Opening the screen | craft **absent** while the screen's particle transition plays, then **cut in** whole at rest pose, no settle: first frame 119-120 of a press at frame 90, 30 fps, so 0.97 s less about 0.1 s of input latency | 60 |
+| Stepping, either direction | old craft cut in **one frame**; **empty frame 3 captured frames at 60 fps twice, 4 once (50-67 ms)**, and 3 at 30 fps (100 ms) in the heavier capture - counted in emulator frames, not a fixed time; new craft cut in solid (no alpha ramp, no slide) | 70 |
+| Settle after a step | the new craft appears slightly off its rest size and **eases to it in 0.45 s** (5% left at 26-28 frames of 60). Excess per 50 ms: `1.00 1.03 0.97 0.83 0.56 0.39 0.24 0.17 0.10 0.06 0.03 0.01 0`. Pure scale about a pivot right of and above the hull's centre (Qirex: fit of both silhouette edges to 1 px) | 65 (curve), 40 (what is scaled) |
+| Start size of the settle | **per team**: 0.95 of rest (Feisar), 1.08 and 1.12 (two others), independent of the step direction (the same team entered from either side starts alike). Not recovered | 50 |
+| Particle burst | a red then orange/yellow streak cloud starts about 2 frames after each cut at the left of the craft and decays over about a second; red wisps also drift past with no press. Which is the screen's backdrop and which a step effect is **not separated**; no `.pob` named | open |
+| Camera | different teams are framed differently (Feisar nose up-right and seen from above, Qirex from below and behind, Icaras from above and behind) at about 1.5x our fit's size. The authored `ShipModel` is per team's `screen.xml`; not read for this lane | open |
+
+What this build does ([`oag_game::preview::hull_swap`](../../crates/game/src/preview/hull_swap.rs)):
+absent for 0.9 s after the screen opens, a 60 ms gap on every step, then the
+craft eases from 1.06x to 1x over 0.45 s along the measured curve. **The
+1.06 start scale is chosen, not measured** (the original's is per team).
+Headless stills: `--menu-page ship-select --menu-picker-seconds T` (entry) and
+`--menu-picker-step-seconds T` (a step). Omega: checked, applies, not wired
+(`ship_preview_hull` is `None` there and its `Team_Selection_Definition.xml` is
+HD's own; the swap is title-agnostic and reaches Omega with the hull itself).
+
 **The livery row is the skin axis, as on the original.** `Classic` is the
 disc's own string id for the baseline paint (the Japanese plugin
 translates it; English falls back to the id), and each further entry is a

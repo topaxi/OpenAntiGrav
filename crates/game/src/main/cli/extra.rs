@@ -135,6 +135,17 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_picker_seconds: Option<f32>,
 
+    /// With `--menu-page ship-select` on a title that draws the race hull,
+    /// draw the screen this many seconds after a selection step.
+    ///
+    /// HD/Fury cuts the old craft, shows an empty frame for about 60 ms and
+    /// cuts the new one in, which then eases to rest over about 0.5 s
+    /// (`docs/ui/selection-screens.md`, "The craft's swap"). A still has no
+    /// step to be after, so this stands for one: the screen is otherwise
+    /// settled, or `--menu-picker-seconds` after it opened. `None` draws no step.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) menu_picker_step_seconds: Option<f32>,
+
     /// With `--menu-page`, draw a modal prompt over it: `rename`,
     /// `rename-note`, `delete`, `delete-built-in` or `binding`.
     ///

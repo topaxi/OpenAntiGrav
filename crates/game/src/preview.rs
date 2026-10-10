@@ -32,6 +32,7 @@ use oag_ui_screens::picker::slideshow::Slideshow;
 
 use crate::render::letterbox_in;
 
+pub mod hull_swap;
 pub mod psp2_scene;
 pub mod track_model;
 pub mod variant;
