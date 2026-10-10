@@ -11,7 +11,6 @@ use crate::boot::Boot;
 use crate::input::Input;
 use crate::render::{Renderer, VideoFormat};
 use oag_raceplay as race;
-use oag_ui::frontend::Draw;
 mod campaign_page;
 mod card;
 mod endrace_page;
@@ -21,6 +20,7 @@ mod menu_page;
 mod offscreen;
 mod presented;
 mod preview_pass;
+mod video;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
@@ -819,7 +819,7 @@ pub fn run(
             // the backdrop and build its planes for the backdrop, exactly as
             // `--menu-page` does. The draw says which movie it means, so this
             // follows the list rather than guessing from the state.
-            match video_source(&list) {
+            match video::video_source(&list) {
                 Some(oag_ui::frontend::Video::Backdrop) => {
                     let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
                     let format = showing.and_then(VideoFormat::of);
@@ -916,7 +916,7 @@ pub fn run(
 
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
-        video_frame(&list),
+        video::video_frame(&list),
     ) {
         let mut picture = crate::movie::VideoFrame::default();
         frames.read_frame(wanted.min(frames.len - 1), &mut picture)?;
@@ -984,19 +984,4 @@ pub fn run(
     touch_preview(options, &device, &queue, &mut encoder, &target)?;
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
-}
-
-fn video_frame(list: &[Draw]) -> Option<usize> {
-    list.iter().find_map(|draw| match draw {
-        Draw::Video { frame, .. } => Some(*frame),
-        _ => None,
-    })
-}
-
-/// Which movie the list's video draw wants a frame of, if it has one.
-fn video_source(list: &[Draw]) -> Option<oag_ui::frontend::Video> {
-    list.iter().find_map(|draw| match draw {
-        Draw::Video { source, .. } => Some(*source),
-        _ => None,
-    })
 }

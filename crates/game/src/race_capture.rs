@@ -13,6 +13,7 @@ use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
 
@@ -631,7 +632,7 @@ pub fn capture(
         let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race capture primer"),
         });
-        let spectrum = zone_spectrum(options, audio);
+        let spectrum = spectrum::zone_spectrum(options, audio);
         scene.render(
             &device,
             &queue,
@@ -679,7 +680,7 @@ pub fn capture(
     if scene.sync_zone_grade(&race) {
         scene.rebind_zone_art(&device, &queue);
     }
-    let spectrum = zone_spectrum(options, audio);
+    let spectrum = spectrum::zone_spectrum(options, audio);
     oag_gpu::perfprobe::reset();
     oag_gpu::perfprobe::mark("frame-start");
     // `OAG_RENDER_BENCH` and `OAG_RENDER_GPU_BENCH`: see `bench`. `cfg!`
@@ -982,22 +983,4 @@ pub fn capture(
     println!("wrote {} ({width}x{height})", options.path.display());
     scene.dump_offscreen_if_asked(&device, &queue)?;
     Ok(())
-}
-
-/// The spectrum to feed `Scene::render` with: a fixed, deterministic ramp
-/// under [`CaptureOptions::zone_spectrum_test`], or [`Output::spectrum`]'s
-/// live one otherwise. See that field's own doc comment for why a capture
-/// wants the override.
-///
-/// [`Output::spectrum`]: oag_audio::Output::spectrum
-fn zone_spectrum(options: &CaptureOptions, audio: &oag_sound::Audio) -> [f32; oag_audio::BANDS] {
-    if options.zone_spectrum_test {
-        std::array::from_fn(|i| {
-            #[expect(clippy::cast_precision_loss, reason = "BANDS is 16, so exact")]
-            let t = i as f32 / (oag_audio::BANDS - 1) as f32;
-            t
-        })
-    } else {
-        audio.output().spectrum().levels()
-    }
 }

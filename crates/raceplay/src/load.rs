@@ -295,9 +295,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         weapon_pad_refresh,
         pilot_assist,
     } = global::resolve(&mut archives, options, &mut report);
-    // Nothing is scaled here: the four pre-scaled fields are converted exactly once
-    // and this is not the place it happens, and neither `<SpeedupPads>` nor
-    // `<Special>` is one of them.
+    // Nothing is scaled here: the four pre-scaled fields are converted exactly once and this
+    // is not the place it happens, and neither `<SpeedupPads>` nor `<Special>` is one of them.
     // `None` where this team's file does not author the requested rung: a race
     // that cannot be set up, rather than one run on somebody else's tuning.
     let handling =

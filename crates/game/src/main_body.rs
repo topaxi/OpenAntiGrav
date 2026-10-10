@@ -627,12 +627,12 @@ fn run(cli: Cli) -> Result<()> {
 
     let scheme = pending.scheme();
     let give = give_weapon(cli.give.as_deref())?;
-    let autopilot_pilot = autopilot_pilot(cli.autopilot_pilot.as_deref())?;
-    let autopilot_skill = cli.autopilot_skill;
+    let autopilot_pilot = autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?;
+    let autopilot_skill = cli.driver.autopilot_skill;
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
         cli.pick_language,
-        cli.autopilot,
+        cli.driver.autopilot,
         cli.trace,
         cli.log_every,
     );
