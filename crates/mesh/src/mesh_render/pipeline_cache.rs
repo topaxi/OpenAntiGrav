@@ -298,4 +298,4 @@ pub(crate) fn cached_texture_view(
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

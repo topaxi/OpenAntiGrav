@@ -125,6 +125,25 @@ def key_hex_text(path: Path) -> str:
     return raw.hex() if len(raw) == 16 else raw.decode().strip()
 
 
+def report_profile(session, path: Path) -> None:
+    """Stops a CDP profile, writes it, and prints the heaviest functions by self time."""
+    import json
+
+    profile = session.send("Profiler.stop")["profile"]
+    path.write_text(json.dumps(profile))
+    nodes = {n["id"]: n for n in profile["nodes"]}
+    self_us: dict[str, float] = {}
+    deltas = profile["timeDeltas"]
+    for node_id, delta in zip(profile["samples"], deltas):
+        frame = nodes[node_id]["callFrame"]
+        name = f"{frame['functionName'] or '(anonymous)'} {frame['url'].rsplit('/', 1)[-1]}"
+        self_us[name] = self_us.get(name, 0.0) + delta
+    total = sum(self_us.values()) or 1.0
+    print(f"profile {path}: {total / 1000:.0f} ms sampled", flush=True)
+    for name, us in sorted(self_us.items(), key=lambda kv: -kv[1])[:25]:
+        print(f"  {us / 1000:8.1f} ms {100 * us / total:5.1f}%  {name[:110]}", flush=True)
+
+
 def deliver(page, args) -> None:
     """Hands the image (and the key, by --key-mode) to the page."""
     mode = args.key_mode if args.key or args.key_mode == "drop-image" else "none"
@@ -207,6 +226,15 @@ def main() -> None:
         default=0.0,
         help="MS: at the end, list every gap between animation frames longer than this",
     )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        default=[],
+        metavar="FROM-TO",
+        help="Chromium only: a CPU profile of the page's thread between these seconds after "
+        "the pick, its 25 heaviest functions by self time printed (and <out>/profile-FROM.cpuprofile "
+        "written). Wants a module with names: build with OAG_WEB_NO_OPT=1",
+    )
     parser.add_argument("--log", default="", help="the page's ?log= level")
     parser.add_argument("--read", default="", help="the page's ?read= (memory: no slices)")
     parser.add_argument(
@@ -268,6 +296,8 @@ def main() -> None:
         + [(float(at), "reload", "") for at in args.reload]
         + [(float(at), "pick", "") for at in args.pick]
         + keyed(args.eval, "eval")
+        + [(float(w.split("-")[0]), "profstart", w) for w in args.profile]
+        + [(float(w.split("-")[1]), "profstop", w) for w in args.profile]
     )
     width, height = (int(v) for v in args.size.split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -309,6 +339,7 @@ def main() -> None:
             start = time.monotonic()
             picked = page.evaluate("performance.now()")
             events = [(t, "shot", "") for t in shots] + keys
+            profiles: dict = {}
             for at, kind, key in sorted(events, key=lambda e: e[0]):
                 wait = at - (time.monotonic() - start)
                 if wait > 0:
@@ -317,6 +348,14 @@ def main() -> None:
                     path = args.out / f"{at:g}s.png"
                     page.screenshot(path=str(path))
                     print(f"wrote {path}", flush=True)
+                elif kind == "profstart":
+                    prof = page.context.new_cdp_session(page)
+                    prof.send("Profiler.enable")
+                    prof.send("Profiler.setSamplingInterval", {"interval": 200})
+                    prof.send("Profiler.start")
+                    profiles[key] = prof
+                elif kind == "profstop":
+                    report_profile(profiles.pop(key), args.out / f"profile-{key}.cpuprofile")
                 elif kind == "reload":
                     page.reload(wait_until="commit", timeout=60000)
                     print(f"reloaded at {at:g}s", flush=True)

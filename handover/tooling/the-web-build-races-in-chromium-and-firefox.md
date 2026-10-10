@@ -9,7 +9,7 @@ Pulse PSP EU and HD EU race in headless Chromium 153 and Firefox 155; the race
 load runs on a Web Worker reading the disc through `FileReaderSync`, so the
 loading screen draws during it (HD Talon's Junction: about 9.5 s frozen
 before; after, 1.5 to 1.8 s on the worker, `Race::start` included, then a 0.7
-to 0.85 s scene-build stall).
+to 0.85 s scene-build stall, since 2026-10-10 spread over frames).
 The image is read a slice at a time on the page's thread (synchronous XHR
 behind a 64 MiB block cache). Settings and records persist in `localStorage`.
 Sound plays through an `AudioWorklet` reading a ring in shared memory that a
@@ -30,13 +30,18 @@ Architecture, measurements, hosting and limits:
   in CI: the nightly install step (`dtolnay/rust-toolchain@master` with
   `nightly-2026-10-08` and `rust-src`) is untried. `act` fails on this podman
   host before any step.
-- **The scene build still stalls the page** 0.7 to 0.85 s at the end of an HD
-  load (GPU work; `Race::start` already moved to the worker): `Scene::new`'s
-  `writeBuffer` uploads (about half of it) could go up under a per-frame
-  budget. Escaping a race to the menus freezes 0.5 to 0.6 s, not looked at.
-- **The boot** still freezes about 2 s after the pick (Chromium), and the menus'
-  reads are synchronous requests on the page's thread. Moving the boot onto a
-  worker is the same pattern as the race load, if its result is `Send`.
+- **The page's thread after the freeze fixes (2026-10-10, web-freezes lane)**:
+  the end of an HD load, Escape from a race and the boot were profiled and
+  fixed where the cause was ours (docs/tools/web.md, "Freezes after the
+  threads"). ~~The scene build's upload stall~~ and ~~Escape's 0.5 to 0.6 s~~
+  closed; what is left: (1) 0.4 to 0.55 s between frames at the end of the
+  load while the browser compiles 80 pipelines, the page's thread idle;
+  (2) the boot's about 1 s: 307 synchronous requests (38 MiB), the front-end
+  music's MP3 decode inline in `Audio::start_music` (0.16 to 0.24 s), inflate;
+  moving the music decode onto the music worker is the cheapest next piece, the
+  boot's loads touching the GPU keep the rest on the page's thread;
+  (3) the menus' own flyer previews rebuild on every return to Cell Selection
+  (`oag_game::preview`, another lane's file).
 - **No texture sink on the web**: textures wait on the CPU until the scene
   build. 876 to 908 MiB of module memory over four HD loads in one tab; Omega's Tech De Ra (2.3
   GiB of BC7 at peak) would not fit in 4 GiB, though no PS4 package opens in
