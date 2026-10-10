@@ -110,6 +110,12 @@ pub struct Extent {
     /// Units per item. Speeds are in items a second, so a caller scrolling
     /// in pixels gives its row pitch here.
     pub pitch: f32,
+    /// The fastest a flick may leave the finger, in items a second: the
+    /// caller's own [`MAX_FLING`] where it wants a different cap.
+    pub max_fling: f32,
+    /// The decay of a free coast, per second: the caller's own [`FRICTION`]
+    /// where it wants a flick to travel a different distance.
+    pub friction: f32,
     /// Whether the content comes to rest on a whole multiple of `pitch`.
     pub snap: bool,
     /// The ends, if the content has any.
@@ -134,6 +140,8 @@ impl Extent {
     pub fn wrapping() -> Self {
         Self {
             pitch: 1.0,
+            max_fling: MAX_FLING,
+            friction: FRICTION,
             snap: true,
             bounds: Bounds::Wrap,
         }
@@ -145,6 +153,8 @@ impl Extent {
     pub fn rows(last: f32) -> Self {
         Self {
             pitch: 1.0,
+            max_fling: MAX_FLING,
+            friction: FRICTION,
             snap: true,
             bounds: Bounds::Clamp {
                 min: 0.0,
@@ -424,7 +434,7 @@ impl Kinetic {
     /// Turns a lifted finger into a coast or a settle.
     fn launch(&mut self, extent: &Extent) {
         let pitch = extent.pitch.max(f32::MIN_POSITIVE);
-        let limit = MAX_FLING * pitch;
+        let limit = extent.max_fling * pitch;
         let velocity = self.finger_velocity().clamp(-limit, limit);
         let outside = extent.clamp(self.offset) != self.offset;
         if velocity.abs() < MIN_FLING * pitch || outside {
@@ -433,11 +443,11 @@ impl Kinetic {
             return;
         }
         self.velocity = velocity;
-        let natural = self.offset + velocity / FRICTION;
+        let natural = self.offset + velocity / extent.friction;
         if !extent.snap {
             self.phase = Phase::Coast {
                 target: None,
-                rate: FRICTION,
+                rate: extent.friction,
             };
             return;
         }
