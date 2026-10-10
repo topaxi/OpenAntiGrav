@@ -16,7 +16,13 @@ HD's Pilot Assist is recovered (read live on RPCS3), built title-agnostic in
 - **2048's Normal** (its default): the same law on the ship's `<Assist>` block, strength ramped
   by `<SteerAssist>`. Not built. Which `<Assist>` attribute sits at which block offset
   (`+0x84`..`+0xa0`, and `(*(craft+0x8c))+0x10`) needs the per-ship reader.
-- **2048's `OptionsPilot` list** (Off/Normal/Super) is drawn and not tied to the switch.
+- **2048's `OptionsPilot` Normal** leaves the switch untouched (Off and Super are wired).
+- **A mid-race switch** (HD's pause-menu row) would have to become a replayed input; today the
+  setting applies from the next race only.
+- **Cost on mobile**: `oag_raceplay::pilot_assist::candidates` scans the spline twice per probe,
+  four full scans a tick while the assist is on (Android's default). One pass tracking the best
+  sample and the best on another path halves it; a windowed search around the player's last
+  index would remove most of it.
 - **`pilot_assist_disable` volumes** (`PilotAssistDisable_Importer.cpp`, 2048 and Omega): who reads
   them, and the tip's "Extreme kicks in automatically in the trickiest parts".
 - **HD's pause-menu row** (`Pilot Assist` between Continue and Game Options) is not in this
@@ -29,7 +35,6 @@ HD's Pilot Assist is recovered (read live on RPCS3), built title-agnostic in
 
 1. Get the ruling on Pulse/Pure, then either hide the row on titles with no table or give them
    the chosen law. 30 minutes either way.
-2. Tie 2048's `OptionsPilot` list to the switch: Off -> off, Super -> on. Normal waits on step 3.
-   1 hour with pointer support.
+2. Fold the two corridor scans into one pass, then measure the tick on the S24. 1 hour.
 3. Read 2048's per-ship `<Assist>` reader (search `notInUseStrength`'s xrefs in
    `/2048/eboot-vita-2048-eu-v104.elf`) and build Normal as a second `Params` source. 2-3 hours.

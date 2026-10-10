@@ -670,6 +670,52 @@ fn options_camera_is_reached_directly_from_home_and_the_choice_cycles() {
     );
 }
 
+/// `OptionsPilot`'s list starts on its authored `FE_NORMAL` and reports a choice only once
+/// moved: one Right is `FE_SUPER` (2), the law this build runs; see
+/// `crate::main::session::frame` for how each index reaches `[controls] pilot_assist`.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn options_pilot_reports_the_players_choice() {
+    let Some(source) = source() else { return };
+    let loaded = boot::load(&options(&source)).expect("the whole boot");
+    let mut frontend = loaded.frontend;
+    drive_to_home(&mut frontend);
+    let mut input = Input::new();
+    for _ in 0..3 {
+        press_release(&mut frontend, &mut input, Button::Right);
+    }
+    press_release(&mut frontend, &mut input, Button::Cross);
+    press_release(&mut frontend, &mut input, Button::Circle);
+    assert!(frontend.machine().is(w2048::OPTIONS));
+    // The hub's four buttons, Camera to Pilot, by whichever direction moves its focus.
+    let mut reached = false;
+    'search: for direction in [Button::Right, Button::Down] {
+        for steps in 0..4 {
+            for _ in 0..steps {
+                press_release(&mut frontend, &mut input, direction);
+            }
+            press_release(&mut frontend, &mut input, Button::Cross);
+            if frontend.machine().is(w2048::OPTIONS_PILOT) {
+                reached = true;
+                break 'search;
+            }
+            if !frontend.machine().is(w2048::OPTIONS) {
+                press_release(&mut frontend, &mut input, Button::Circle);
+            }
+        }
+    }
+    assert!(reached, "OptionsPilot is reachable from the hub");
+    assert_eq!(frontend.pilot_choice(), None, "untouched so far");
+    press_release(&mut frontend, &mut input, Button::Right);
+    assert_eq!(
+        frontend.pilot_choice(),
+        Some(2),
+        "FE_NORMAL (1) + 1 is FE_SUPER"
+    );
+    press_release(&mut frontend, &mut input, Button::Right);
+    assert_eq!(frontend.pilot_choice(), Some(0), "and it wraps to FE_OFF");
+}
+
 /// `Home`'s third tile, `FE_PROFILE`, redirects straight to `profile` -
 /// drawn generically, the same path `Community`/`Options` already prove.
 #[test]

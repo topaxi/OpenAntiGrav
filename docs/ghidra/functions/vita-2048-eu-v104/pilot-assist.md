@@ -96,8 +96,8 @@ string above (`laDistConst`, `PilotAssist`, `PilotAssistPenalty`,
 
 The race runs **Extreme's** law: the global `<PilotAssist>` rungs are what
 `oag_tables::handling::Global::pilot_assist` reads, on 2048 as on HD. Normal (the per-ship
-`<Assist>` block and `<SteerAssist>`) is not built; 2048's `OptionsPilot` list is not tied to
-the switch yet. Both are open on the handover thread.
+`<Assist>` block and `<SteerAssist>`) is not built. 2048's `OptionsPilot` list sets the switch:
+Off off, Super on, Normal left as it was.
 
 ## Open
 

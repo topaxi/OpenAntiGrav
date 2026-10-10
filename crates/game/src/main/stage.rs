@@ -622,7 +622,13 @@ impl Stage {
             mode,
             liveries.first().map_or("", |l| l.team.as_str()),
             seed,
-            oag_game::ghosts::race_options(scheme, difficulty, autopilot, None),
+            oag_game::ghosts::race_options(
+                scheme,
+                difficulty,
+                autopilot,
+                settings.controls.pilot_assist,
+                None,
+            ),
         );
         Ok(Box::new(RaceStage {
             scene,

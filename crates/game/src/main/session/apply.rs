@@ -621,11 +621,9 @@ impl Session {
                         return;
                     }
                 };
+                // From the next race, as the scheme is: a mid-race switch is not in
+                // the input stream a replay records, so it could not be reproduced.
                 self.settings.controls.pilot_assist = on;
-                // Read every tick, so a pause-menu change applies at once.
-                if let Stage::Race(stage) = &mut self.stage {
-                    stage.race.set_pilot_assist(on);
-                }
             }
             "controls.touch_scheme" => match oag_input::touch::Scheme::parse(&text) {
                 // Read by the next tick's `feed_touch`.

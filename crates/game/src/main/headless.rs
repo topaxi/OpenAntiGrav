@@ -564,6 +564,7 @@ pub(crate) fn run_race(
                     scheme,
                     loaded.setup.difficulty,
                     cli.driver.autopilot,
+                    cli.driver.pilot_assist.as_deref() == Some("on"),
                     give_weapon(cli.give.as_deref()).ok().flatten(),
                 );
                 (path, header)

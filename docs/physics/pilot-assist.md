@@ -76,10 +76,15 @@ on the side of the wall it steered away from.
 - **Who gets it**: the player's craft only. Opponents never do (maintainer: the AI flies the
   player's physics), pinned by `pilot_assist_ground_truth::no_opponent_ever_gets_the_assist`.
   Off in Zone, as in the original, and on the grid.
-- **The switch**: `[controls] pilot_assist`, the CONTROLS page's PILOT ASSIST row, applied to
-  a running race at once. **On by default on Android only** (maintainer, 2026-10-10: touch
+- **The switch**: `[controls] pilot_assist`, the CONTROLS page's PILOT ASSIST row, applied
+  from the next race, as the control scheme is: a mid-race switch is not in the input stream a
+  replay records. A recording's header carries `pilot_assist = "true"` when it was on
+  (`oag_game::ghosts::race_options`). **On by default on Android only** (maintainer, 2026-10-10: touch
   controls are much harder than a pad; a desktop player is assumed to know Wipeout). A
   headless capture or trace takes `--pilot-assist on|off` only, default off.
+- **2048's own list**: `OptionsPilot` (`Frontend::pilot_choice`) sets the switch at Launch
+  Game: Off turns it off, Super on. **Normal leaves it as it was**: its law (the ship's own
+  `<Assist>` block) is not built, and mapping it onto Super's would claim a law it is not.
 - **The HUD**: `oag_hud::assist` draws HD's four `AssistIndicator*` widgets by the original's
   rule; 2048's `PilotAssist` icon is up while the switch is on.
 
