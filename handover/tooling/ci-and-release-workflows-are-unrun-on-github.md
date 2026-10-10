@@ -28,6 +28,11 @@ and `check-leakage.py --dir`.
   and `gh release create` on GitHub, and `libpipewire-0.3-dev` plus the other apt
   packages on the real runner image (the Ubuntu 24.04 container matches it closely,
   not exactly).
+- 2026-10-10: action majors bumped for Node 24 and Linux jobs pinned to
+  `ubuntu-24.04` (decisions in `docs/tools/releases.md`); verified by `actionlint`
+  and `act --list` only. First real run should confirm the nightly publish
+  download (`pattern` + `merge-multiple` on download-artifact v8) and the
+  Cloudflare deploy on wrangler-action v4 (Wrangler 4 by default).
 - `data/traces/talons-junction-clean-lap.csv` (817 KB) is now tracked, per
   [ADR-0046](../../docs/architecture/adr/0046-test-referenced-traces-are-tracked-in-git.md):
   three non-`#[ignore]`d `oag-trace` tests panic without it, which is the third

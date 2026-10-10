@@ -22,9 +22,10 @@ Candidate lanes, ranked by what a player notices:
 4. **A vertical clip for menu drawing** (sonnet), so long menu pages scroll by
    the pixel under a finger instead of a whole row (`oag_ui::kinetic` exists).
    Evidence: [pointer input](../frontend/pointer-input-what-is-left.md).
-5. **CI chore** (sonnet, small): `actions/checkout@v4`, `actions/setup-python@v5`
-   and `actions/upload-artifact@v4` target Node 20, which GitHub now forces onto
-   Node 24; `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19.
+5. ~~**CI chore**~~ taken and done (lane `ci-node24-ubuntu26`): actions bumped to
+   their Node 24 majors (checkout v7, setup-python v7, upload-artifact v7,
+   download-artifact v8, wrangler-action v4) and every Linux job pinned to
+   `ubuntu-24.04`. See `docs/tools/releases.md`, "Runner images and action runtimes".
 
 Decisions waiting on the maintainer:
 

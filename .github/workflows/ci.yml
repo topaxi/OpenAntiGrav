@@ -9,10 +9,12 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
 
+# Linux jobs are pinned to `ubuntu-24.04` rather than `ubuntu-latest` (which
+# becomes Ubuntu 26.04 on 2026-10-19); see the note in release.yml.
 jobs:
   check:
     name: fmt / clippy / test / dependency rules
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The 2026-10-07 run (37595443950) filled the runner's disk during
     # `cargo nextest run --workspace`, 24 minutes into the job: `oag-game` alone has 80-odd
     # integration-test binaries, each statically linking wgpu and cpal. Line
@@ -21,7 +23,7 @@ jobs:
       CARGO_PROFILE_DEV_DEBUG: "0"
       CARGO_PROFILE_TEST_DEBUG: "0"
     steps:
-      # ubuntu-latest ships toolchains this job never uses; the workspace's
+      # the runner image ships toolchains this job never uses; the workspace's
       # debug build plus the clippy artefacts beside it outgrew the free space
       # left by default. The two `df` lines measure the headroom gained.
       - name: Free runner disk space
@@ -32,7 +34,7 @@ jobs:
             /usr/share/swift /usr/local/julia* /opt/microsoft /opt/google
           sudo docker image prune --all --force || true
           df -h /
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: rustfmt, clippy
@@ -74,9 +76,9 @@ jobs:
 
   docs:
     name: documentation links
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 scripts/check-doc-links.py
 
   # Cargo.toml's `rust-version` is a promise nothing else checks. `cargo
@@ -89,9 +91,9 @@ jobs:
   # supposed to fail.
   msrv:
     name: MSRV build (1.97.1)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.97.1
         id: msrv-toolchain
       - uses: Swatinem/rust-cache@v2
@@ -107,10 +109,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
       - name: Print determinism hashes (release)
@@ -167,9 +169,9 @@ jobs:
   # reports must print the committed hashes, on a runner that needs no Windows.
   determinism-wine:
     name: determinism (MinGW build under wine)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: x86_64-pc-windows-gnu
@@ -183,8 +185,8 @@ jobs:
 
   leakage:
     name: no game content committed
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Assert no game content (or a reproduction this project writes) is tracked
         run: python3 scripts/check-leakage.py
