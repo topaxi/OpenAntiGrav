@@ -1206,6 +1206,9 @@ impl Pipeline {
                               blend: wgpu::BlendState,
                               write_mask: wgpu::ColorWrites,
                               constants: &[(&str, f64)]| {
+            // HD's tube only; other titles keep the write-masked velocity.
+            let hd_tube = constants.iter().any(|(name, _)| *name == "trail_shape");
+            let (entry, velocity_target) = velocity.blended("fs_main", "fs_main_velocity", hd_tube);
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -1224,7 +1227,7 @@ impl Pipeline {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some(velocity.entry("fs_main", "fs_main_velocity")),
+                    entry_point: Some(entry),
                     // Zero motion weighted by coverage rather than the surface
                     // behind: no previous vertices to difference, and that
                     // surface's motion smears the glow. Chosen, not measured.
@@ -1234,7 +1237,7 @@ impl Pipeline {
                             blend: Some(blend),
                             write_mask,
                         })];
-                        targets.extend(velocity.coverage_target());
+                        targets.extend(velocity_target);
                         targets
                     },
                     compilation_options: wgpu::PipelineCompilationOptions {

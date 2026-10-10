@@ -677,8 +677,8 @@ run new `oag-post` tests under `systemd-run ... -p MemoryMax=8G`.
 
 ## Exhaust glow, 2026-10-10
 
-The exhaust pass (flare, HD trail tube) writes zero velocity weighted by its alpha
+The exhaust pass of HD's tube writes zero velocity weighted by its alpha
 instead of leaving the surface behind it, because a hard turn under a chase camera
 smeared the glow along the track's screen motion. Chosen, not measured; see
-`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Other alpha-blended fx still
+`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Other titles' exhaust and other alpha-blended fx still
 write nothing.
