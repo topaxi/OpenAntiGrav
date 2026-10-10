@@ -47,6 +47,18 @@ impl Velocity {
         }
     }
 
+    /// The second target for a blended pass that writes zero motion weighted by
+    /// its own alpha (source-alpha over), for a pass whose fragment entry is the
+    /// `_velocity` twin: the glow keeps its own, still, velocity.
+    pub fn coverage_target(self) -> Option<Option<wgpu::ColorTargetState>> {
+        self.target(false).map(|target| {
+            target.map(|mut target| {
+                target.blend = Some(wgpu::BlendState::ALPHA_BLENDING);
+                target
+            })
+        })
+    }
+
     /// The fragment entry point for the depth-writing pipelines: `base`, or
     /// its `_velocity` twin when this pipeline also writes the buffer.
     pub fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {

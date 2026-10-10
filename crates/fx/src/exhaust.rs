@@ -1225,30 +1225,16 @@ impl Pipeline {
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some(velocity.entry("fs_main", "fs_main_velocity")),
-                    // The velocity target, when the race adds one: a flare or
-                    // ribbon quad is rebuilt from scratch every draw with no
-                    // frame-to-frame vertex correspondence, so there is no
-                    // previous position to compute a velocity from. It writes
-                    // **zero motion weighted by its own coverage** instead of
-                    // leaving the surface behind it, whose screen motion
-                    // smears the glow on a hard turn. Chosen, not measured:
-                    // the original has no motion blur. See
-                    // `docs/rendering/motion-blur.md`.
+                    // Zero motion weighted by coverage rather than the surface
+                    // behind: no previous vertices to difference, and that
+                    // surface's motion smears the glow. Chosen, not measured.
                     targets: &{
                         let mut targets = vec![Some(wgpu::ColorTargetState {
                             format,
                             blend: Some(blend),
                             write_mask,
                         })];
-                        targets.extend(velocity.target(true).map(|target| {
-                            target.map(|mut target| {
-                                if velocity == oag_mesh::mesh_render::Velocity::Write {
-                                    target.write_mask = wgpu::ColorWrites::ALL;
-                                    target.blend = Some(wgpu::BlendState::ALPHA_BLENDING);
-                                }
-                                target
-                            })
-                        }));
+                        targets.extend(velocity.coverage_target());
                         targets
                     },
                     compilation_options: wgpu::PipelineCompilationOptions {
