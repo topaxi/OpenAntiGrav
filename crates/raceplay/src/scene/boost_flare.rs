@@ -188,7 +188,7 @@ pub(super) fn build(
                 .as_ref()
                 .filter(|model| !model.indices.is_empty())
             {
-                Some(model) => Some(Drawable::new_attached(
+                Some(model) => Some(Drawable::new(
                     device,
                     queue,
                     model.clone(),
@@ -201,6 +201,7 @@ pub(super) fn build(
                     zone_art,
                     shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
+                    mesh_render::Velocity::Attached,
                 )?),
                 None => None,
             },
@@ -214,7 +215,7 @@ pub(super) fn build(
             continue;
         };
         {
-            boost.push(Some(Drawable::new_attached(
+            boost.push(Some(Drawable::new(
                 device,
                 queue,
                 model.clone(),
@@ -232,6 +233,7 @@ pub(super) fn build(
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
+                mesh_render::Velocity::Attached,
             )?));
         }
     }

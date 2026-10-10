@@ -317,6 +317,7 @@ impl Cards {
                 &mesh_render::zone::StageArt::NONE,
                 mesh_render::ShadowMaps::NONE,
                 mesh_render::ShadowReceiver::Never,
+                mesh_render::Velocity::Write,
             )?;
             let target = texture(
                 "advert",

@@ -543,6 +543,7 @@ impl Scene {
                     // depth test disabled, so a shadow on it is a dark patch hanging
                     // in the air.
                     mesh_render::ShadowReceiver::Never,
+                    mesh_render::Velocity::Write,
                 )
             })
             .transpose()?;
@@ -616,6 +617,7 @@ impl Scene {
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
+                mesh_render::Velocity::Write,
             )?);
         }
         let collision = collision_model
@@ -633,6 +635,7 @@ impl Scene {
                     zone_art,
                     shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
+                    mesh_render::Velocity::Write,
                 )
             })
             .transpose()?;
@@ -653,6 +656,7 @@ impl Scene {
                         zone_art,
                         shadow_maps,
                         mesh_render::ShadowReceiver::Mapped,
+                        mesh_render::Velocity::Write,
                     )
                 })
                 .transpose()
@@ -760,6 +764,7 @@ impl Scene {
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
+                mesh_render::Velocity::Write,
             )?),
             None => None,
         };
@@ -814,6 +819,7 @@ impl Scene {
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
+                mesh_render::Velocity::Write,
             )?),
             None => None,
         };

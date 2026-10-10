@@ -72,7 +72,7 @@ impl Build<'_> {
                 let Some(model) = pick(livery).filter(|model| !model.indices.is_empty()) else {
                     return Ok(None);
                 };
-                Drawable::new_attached(
+                Drawable::new(
                     self.device,
                     self.queue,
                     model,
@@ -85,6 +85,7 @@ impl Build<'_> {
                     self.zone_art,
                     self.shadow_maps,
                     receiver,
+                    mesh_render::Velocity::Attached,
                 )
                 .map(Some)
             })

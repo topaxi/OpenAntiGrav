@@ -692,13 +692,7 @@ pub fn build_with(
         stencil: Default::default(),
         bias: Default::default(),
     };
-    // `Attached` draws its blended passes with the surface's own motion
-    // weighted by alpha; every other choice keeps the masked-empty target.
-    let (blend_entry, velocity_target) = velocity.blended(
-        "fs_main_blend",
-        "fs_main_blend_velocity",
-        velocity == Velocity::Attached,
-    );
+    let (blend_entry, velocity_target) = velocity.mesh_blend();
     let make_pipeline = |label: &str, blend: Option<wgpu::BlendState>, cull: bool| {
         // The second target rides along **write-masked empty** when
         // [`Velocity::Write`] adds one: a blended draw writes no depth, so

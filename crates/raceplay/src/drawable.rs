@@ -133,6 +133,9 @@ impl Drawable {
         zone: &mesh_render::zone::StageArt,
         shadow_maps: mesh_render::ShadowMaps<'_>,
         receives_shadow: mesh_render::ShadowReceiver,
+        // `Attached` for a model that rides a craft, `Write` otherwise - see
+        // [`mesh_render::Velocity`].
+        velocity: mesh_render::Velocity,
     ) -> Result<Self> {
         Self::new_with(
             device,
@@ -150,45 +153,7 @@ impl Drawable {
             mesh_render::Texcoords::Interleaved,
             false,
             false,
-            mesh_render::Velocity::Write,
-        )
-    }
-
-    /// [`Self::new`] for a model that rides a craft (plume, flare, shield and
-    /// absorb shells, shine): its blended draws write the craft's own motion
-    /// weighted by alpha, see [`mesh_render::Velocity::Attached`].
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn new_attached(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        model: Model,
-        format: wgpu::TextureFormat,
-        anisotropy: Anisotropy,
-        sample_count: u32,
-        depth: mesh_render::Depth,
-        blend: wgpu::BlendState,
-        glow: mesh_render::GlowMask,
-        zone: &mesh_render::zone::StageArt,
-        shadow_maps: mesh_render::ShadowMaps<'_>,
-        receives_shadow: mesh_render::ShadowReceiver,
-    ) -> Result<Self> {
-        Self::new_with(
-            device,
-            queue,
-            model,
-            format,
-            anisotropy,
-            sample_count,
-            depth,
-            blend,
-            glow,
-            zone,
-            shadow_maps,
-            receives_shadow,
-            mesh_render::Texcoords::Interleaved,
-            false,
-            false,
-            mesh_render::Velocity::Attached,
+            velocity,
         )
     }
 

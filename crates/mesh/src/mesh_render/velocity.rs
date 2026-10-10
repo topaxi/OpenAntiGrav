@@ -80,6 +80,16 @@ impl Velocity {
         (self.entry(base, twin), target)
     }
 
+    /// [`Self::blended`] for the mesh shader's blended entry: `Attached` writes
+    /// the surface's own motion through `fs_main_blend_velocity`.
+    pub(crate) fn mesh_blend(self) -> (&'static str, Option<Option<wgpu::ColorTargetState>>) {
+        self.blended(
+            "fs_main_blend",
+            "fs_main_blend_velocity",
+            self == Self::Attached,
+        )
+    }
+
     /// The fragment entry point for the depth-writing pipelines: `base`, or
     /// its `_velocity` twin when this pipeline also writes the buffer.
     pub(crate) fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {

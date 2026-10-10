@@ -807,6 +807,7 @@ impl Gantry {
             // Scenery, like the track: it stands on the road and the road's
             // own shadow tiers reach it.
             mesh_render::ShadowReceiver::Both,
+            mesh_render::Velocity::Write,
         )?;
         Ok(Self {
             drawable,
