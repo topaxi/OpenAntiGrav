@@ -467,6 +467,8 @@ name this project's docs use for the same picker, authors no row either. This bu
 open from page `race` (depth 2), so the root's `Main Menu` tint never reached them, in
 captures or live; no change was needed there.
 
+Tool: `scripts/hd-fury-row-poll.py` finds the item and prints the current row.
+
 **The brightness law.** The `default` row's tint was edited live (GDB write of three
 floats at `row+0x40`) and the screen grabbed a quarter second after each write, in groups
 of five tints so a group sees one cloud. Mean excess brightness over 28 groups (red
