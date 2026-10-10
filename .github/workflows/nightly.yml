@@ -96,10 +96,14 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       PREVIOUS: ${{ needs.check.outputs.previous }}
     steps:
+      # Only release.yml's artifacts. This run also holds `web-dist` from the
+      # `web` job, which is Pages' content, not a release asset; an unfiltered
+      # download is what put the web build on the nightly release.
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+          pattern: "{linux,steamdeck,windows,android}"
       - name: Checksums
         working-directory: artifacts
         run: sha256sum OpenAntiGrav-* > SHA256SUMS
