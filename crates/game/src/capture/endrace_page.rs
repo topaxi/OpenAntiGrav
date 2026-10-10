@@ -276,6 +276,7 @@ fn endrace_page(
                 .and_then(|medal| screens.trophies.iter().find(|t| t.medal == medal))
                 .map(|trophy| PreviewRequest {
                     hull_only: false,
+                    ship_model: None,
                     entry: trophy.placement.model.src.clone(),
                     fallback: None,
                     skin: None,

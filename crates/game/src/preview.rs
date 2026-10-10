@@ -34,15 +34,14 @@ use crate::render::letterbox_in;
 
 pub mod hull_swap;
 pub mod psp2_scene;
+pub mod ship_model;
 pub mod track_model;
 pub mod variant;
 
 /// The craft's framing on a title whose `Team Selection` draws the race hull
-/// ([`oag_title::FrontEnd::ship_preview_hull`]): **fixed, not a turntable** -
-/// the original's hull held the same pose across five seconds of frames
-/// (2026-10-08). The angles are **chosen, not measured**, fitted by eye to
-/// the original's frame; the widget's authored `RotX`/`RotY` are not yet
-/// composed.
+/// ([`oag_title::FrontEnd::ship_preview_hull`]) **when the screen authors no
+/// `ShipModel`**: fixed, not a turntable. The angles are **chosen, not
+/// measured**. HD's screen authors one and is framed by [`ship_model`] instead.
 #[must_use]
 pub fn hull_orbit() -> Orbit {
     Orbit {
