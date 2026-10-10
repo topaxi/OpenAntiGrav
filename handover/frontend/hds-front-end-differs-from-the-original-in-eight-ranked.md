@@ -22,7 +22,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `default` tint, applied in linear light (`fs_composite` lifts a dim tint); the
   `OnEnable` pulse fires on screen changes, not team steps. Open: the step's
   thickening has no located mechanism (not `OnEnable`); the pulse's amplitude
-  and a screen-change signal into `oag_ui::backdrop::Fury`
+  and a screen-change signal into `oag_ui::backdrop::Fury`; ours still reads
+  fainter and browner than the original at matched screens (the cloud path
+  differs, and this build's music pulse sits at 0.23 where RPCS3's reaches 1.2);
+  `--team Feisar` does not preselect the Ship Select picker, so captures show
+  the default team instead (a CLI bug, found 2026-10-10)
 - Ship Select framing (LANDED 2026-10-10, `hd-ship-framing`): the authored
   `ShipModel` pose (one for all teams) composed on raw hull coordinates
   (`oag_game::preview::ship_model`). Open: the lens (0.41 rad), pitch (0.22 vs

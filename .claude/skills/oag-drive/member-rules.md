@@ -103,6 +103,10 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   `serve`/`Session` recorded (`--all` is for the maintainer's own machine, never
   here); `ppsspp-start.sh <lane> stop` for PPSSPP. Never `pkill -x rpcs3`.
 - Save states live only under `data/saves/<title>/` and are never committed.
+- **`rpcs3-drive.py serve` needs a short `XDG_CACHE_HOME`** (e.g. `/tmp/oag-<lane>-cache`):
+  under a long scratch path the pad socket fails with `AF_UNIX path too long`. Run
+  its `uv` with `UV_CACHE_DIR=~/.cache/uv UV_OFFLINE=1` so the private `XDG_*` dirs
+  do not force a fresh download (found 2026-10-10).
 
 ## Build and gate
 
