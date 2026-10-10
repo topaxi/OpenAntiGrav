@@ -461,8 +461,11 @@ rows at `item+0xb8`..`+0xbc` (`default`, `Main Menu`, `Additional`, `Controls Me
 `Extras`, `SoundTest`, `Manual Part 1..3`, 0x60 bytes each, the tint's four floats at
 `+0x40`), current row at `+0xc4`, `default` at `+0xc8`. `Team Selection`, `Single
 Player`, `Track Creation` and the race `HUD` all point at `default`: `0.12549 x3, 1.0`.
-`TrackHexSelection` authors no row either, so it is `default`'s by the same rule (not
-measured live: no walk reached it).
+The Track Select screen the player sees (title `TRACK SELECT`) logs as `Track Creation` and is
+`default` too, so Ship Select and Track Select get the same tint; `TrackHexSelection`, the
+name this project's docs use for the same picker, authors no row either. This build's pickers
+open from page `race` (depth 2), so the root's `Main Menu` tint never reached them, in
+captures or live; no change was needed there.
 
 **The brightness law.** The `default` row's tint was edited live (GDB write of three
 floats at `row+0x40`) and the screen grabbed a quarter second after each write, in groups
@@ -475,15 +478,21 @@ channel, 14 with the backdrop in view), as a ratio to tint 1:
 | literal scale | 1 | 0.5 | 0.25 | 0.125 | 0.0625 |
 | sRGB encode of the scaled sum | 1 | 0.73 | 0.53 | 0.39 | 0.28 |
 
-At tint 0 nothing draws; at `0.125` the 99th percentile is still 255. So the composite adds
-`tint * source` in **linear light and the buffer encodes it**, as an sRGB render target does.
-This build is gamma-space throughout (ADR-0020), so `fs_composite` encodes itself
-(`srgb_encode(sum * tint)`) and the blend adds. Confidence 75: the shape and the 0.125 point
-are measured, the exact transfer curve is not (the clipped top and a moving cloud limit the
-fit; plain sRGB is the nearest standard curve). Exact where the page behind the backdrop is
-black, which it is under every Fury page. The practical effect: Main Menu is brighter than it
-was (`tint 1` is encoded too, matching the original's white-hot core), and every other page
-shows the cloud, where the literal scale left it near black. Test:
+At tint 0 nothing draws; at `0.125` the 99th percentile is still 255. So the tinted sum is
+added in **linear light** and the buffer encodes it, as an sRGB render target does. This build
+is gamma-space throughout (ADR-0020), so `fs_composite` does it itself:
+`encode(tint * decode(sum))`, with the blend only adding. **Two laws fit these ratios
+identically** - this one, and `encode(tint * sum)` - and differ only at tint 1, where the
+second brightens Main Menu and the first leaves it. The ratios cannot tell them apart; the
+earlier Main Menu census (above, "What still differs", means `13.6, 5.4` against `13.0, 5.2`)
+leaves it alone, so the first is shipped and Main Menu is unchanged. Confidence 75 on the
+shape and the 0.125 point (measured); **the curve is the standard piecewise sRGB, chosen, not
+measured** - it misses the 1/2 and 1/4 points by 0.07-0.09, and a moving cloud and a clipped
+top limit the fit. Exact where the page behind the backdrop is black, which it is under every
+Fury page. The practical effect: every page but Main Menu now shows the cloud, where the
+literal scale left it near black. Tint 1 is dimmer than the original's at the same moment
+(red channel of the backdrop pixels, `q90 148` against `247`, over 20 clocks here and 28 frames there): this build sits `musicPulse` at 0.23
+where RPCS3's menu music takes it to 1.2, not a tint law. Test:
 `crates/game/tests/hd_fury_ship_select_ground_truth.rs`.
 
 **`BackgroundAnimFury_OnEnable` fires on every screen change, not on a team step.** Polling
@@ -502,8 +511,9 @@ constant. The trigger is now located; the amplitude is the open half.
 **Omega:** checked, differs - its skin authors only the scene widget (`BackgroundAnim`,
 [menu-backdrop-scene.md](menu-backdrop-scene.md)), no `BackgroundAnimFury`, so none of this
 applies; whether the scene filter's output is encoded the same way is not checkable (no PS4
-emulator in this project). **Below 720p** (640x360) no Fury cloud draws at all, before and
-after this change: the points are under a pixel. Open, outside this lane.
+emulator in this project). **Below about 414 lines** no Fury cloud draws, before and after this change: `resScale =
+clamp(0.0015 * height - 0.62, 0, 4)` is 0 there, and it scales the particle and ramp
+colours (above), so this is the original's own law, not a gap.
 
 ## Open
 

@@ -15,8 +15,8 @@
 //! Then, inside the page's pass where the draw list's
 //! [`oag_ui::frontend::Draw::FuryBackdrop`] sits:
 //!
-//! 4. **Composite** - fresh plus trail, scaled by the screen's tint and
-//!    encoded as the original's sRGB buffer stores it, added over the page.
+//! 4. **Composite** - fresh plus trail, scaled by the screen's tint in linear
+//!    light (`fs_composite`: a tint of 1 is unchanged), added over the page.
 //!
 //! Every target is `Rgba8Unorm`, which clamps at one the way the original's
 //! 8-bit targets do and is where the composite's `257/256` stretch comes from.

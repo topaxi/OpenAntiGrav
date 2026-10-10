@@ -8,7 +8,7 @@
 //! five frames taken a quarter second apart, `1 : 0.80 : 0.62 : 0.40 : 0.23`
 //! for tints `1, 1/2, 1/4, 1/8, 1/16` - not the `1 : .5 : .25 : .125 : .0625` a
 //! literal scale gives. The tint is applied in linear light and the buffer
-//! encodes it. See docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md,
+//! encodes it (this build leaves a tint of 1 as it was). See docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md,
 //! "The tint is applied in linear light".
 
 use std::path::{Path, PathBuf};
@@ -48,8 +48,8 @@ fn fury(image: &Path) -> std::sync::Arc<boot::fury::FuryAssets> {
 }
 
 /// `Draw::FuryBackdrop` on a black page, read back: the RGBA bytes, or `None`
-/// where there is no GPU adapter. At 1280x720: the clouds' points are smaller
-/// than a pixel at 640x360 and nothing is drawn there, which is a separate gap.
+/// where there is no GPU adapter. At 1280x720: below about 414 lines the
+/// original's `resScale` is zero and no cloud is drawn at all.
 fn draw(
     assets: &boot::fury::FuryAssets,
     backdrop: &std::sync::Arc<boot::backdrop::MenuBackdrop>,
