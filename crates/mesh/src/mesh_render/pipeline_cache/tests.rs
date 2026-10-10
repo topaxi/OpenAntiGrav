@@ -13,7 +13,7 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// `None` when there is no adapter, the same guard `mesh_render::tests` and
 /// the `tests/*.rs` integration suite already use.
-fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
+pub(in crate::mesh_render) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
     let adapter =
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
@@ -40,7 +40,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
 }
 
 /// A one-triangle model - enough to build a real `Built` without a `.vex`.
-fn triangle_model() -> Model {
+pub(in crate::mesh_render) fn triangle_model() -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -95,7 +95,11 @@ fn triangle_model() -> Model {
     }
 }
 
-fn build_once(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model) -> mesh_render::Built {
+pub(in crate::mesh_render) fn build_once(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    model: &Model,
+) -> mesh_render::Built {
     mesh_render::build(
         device,
         queue,

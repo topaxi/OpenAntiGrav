@@ -103,22 +103,18 @@ impl Drawable {
             })
         };
         let anims = buffer("texture animation", mesh_render::TEX_ANIMS_SIZE);
-        queue.write_buffer(
-            &anims,
-            0,
-            bytemuck::bytes_of(&mesh_render::TexAnims::default()),
-        );
+        oag_gpu::deferred_upload::write_value(queue, &anims, &mesh_render::TexAnims::default());
         let node_anims = buffer("node animation", mesh_render::NODE_ANIMS_SIZE);
-        queue.write_buffer(
+        oag_gpu::deferred_upload::write_value(
+            queue,
             &node_anims,
-            0,
-            bytemuck::bytes_of(&mesh_render::NodeAnims::default()),
+            &mesh_render::NodeAnims::default(),
         );
         let emissive = buffer("emissive glow", mesh_render::EMISSIVES_SIZE);
-        queue.write_buffer(
+        oag_gpu::deferred_upload::write_value(
+            queue,
             &emissive,
-            0,
-            bytemuck::bytes_of(&mesh_render::Emissives::of(&self.model)),
+            &mesh_render::Emissives::of(&self.model),
         );
         let bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("animation"),

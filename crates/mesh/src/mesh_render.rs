@@ -43,6 +43,7 @@ pub use vertex_layout::Texcoords;
 pub use crate::capture::{capture_from, capture_pixels_from};
 
 pub mod cutout;
+pub mod deferred;
 pub use cutout::CutoutPipelines;
 
 mod target;
@@ -440,7 +441,7 @@ pub fn build_with(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&anim_buffer, 0, bytemuck::bytes_of(&TexAnims::default()));
+    oag_gpu::deferred_upload::write_value(queue, &anim_buffer, &TexAnims::default());
     // All-identity for the same reason the texture table is: a caller that never
     // writes it draws every mesh where the file's static chain puts it.
     let node_anim_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -449,11 +450,7 @@ pub fn build_with(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(
-        &node_anim_buffer,
-        0,
-        bytemuck::bytes_of(&NodeAnims::default()),
-    );
+    oag_gpu::deferred_upload::write_value(queue, &node_anim_buffer, &NodeAnims::default());
     // **Written here and never again**: every value in it is authored, and the
     // only moving part - the clock - is already a scene uniform. A model with
     // no glow layers writes an all-zero table, which adds nothing.
@@ -463,11 +460,7 @@ pub fn build_with(
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(
-        &emissive_buffer,
-        0,
-        bytemuck::bytes_of(&Emissives::of(model)),
-    );
+    oag_gpu::deferred_upload::write_value(queue, &emissive_buffer, &Emissives::of(model));
     let anim_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("animation"),
         layout: &anim_layout,
@@ -809,7 +802,10 @@ pub fn build_with(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&model.vertices));
+    let deferred = deferred::geometry_deferred();
+    if !deferred {
+        queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&model.vertices));
+    }
 
     let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("indices"),
@@ -817,7 +813,9 @@ pub fn build_with(
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    queue.write_buffer(&index_buffer, 0, bytemuck::cast_slice(&model.indices));
+    if !deferred {
+        queue.write_buffer(&index_buffer, 0, bytemuck::cast_slice(&model.indices));
+    }
 
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         label: Some("albedo"),

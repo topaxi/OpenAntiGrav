@@ -364,6 +364,7 @@ screenshot waits for a free page thread, so its timestamp hides a stall);
 `--swipe X0,Y0,X1,Y1,MS@T` drags one finger over `MS` ms and lifts it, and
 `--tap X,Y@T` taps, both as real touches through Chrome DevTools
 (`Input.dispatchTouchEvent`), which winit reports as `WindowEvent::Touch`;
+`--profile FROM-TO` (Chromium, repeatable) records a CPU profile of the page's thread between those seconds after the pick, prints the 25 heaviest functions by self time and writes `<out>/profile-FROM.cpuprofile` (a module with function names wants `OAG_WEB_NO_OPT=1 just web`, which skips `wasm-opt`; the sampling perturbs frame times, so a stall table comes from a run without it);
 `--reload SECONDS` reloads the page then; `--audio-wav FILE` records
 `--audio-seconds` of what the audio worklet outputs ("Sound"). Chromium runs
 with `--mute-audio --disable-audio-output`: the second renders to a fake sink,
@@ -547,8 +548,8 @@ one of them Mallavol): each reached its race, the module's memory read 876,
 LAUNCH and the scene being built, every one of the 185 to 207 reads per load
 being the worker's (the `web: image fetch ... on a worker` debug line). So the
 locks the page shares with a worker (the disc cache, the mount table) are
-never contended during a load. Escaping to the menus still freezes 0.5 to
-0.6 s, which this lane did not look at.
+never contended during a load. Escaping to the menus froze 0.5 to
+0.6 s then; "Freezes after the threads" below has its cause and its fix.
 
 ### The choice: threads, not resumable steps
 
@@ -610,13 +611,77 @@ module has atomics (wgpu's `send_sync` cfg drops them whatever
 
 ### What is still on the page's thread
 
-- **The scene build's GPU half**, 0.7 to 0.85 s at the end of the HD load, the
-  loading screen's last frame held for that long. The buffer uploads
-  (`writeBuffer`, about half of `Scene::new`) could be spread over frames under
-  a byte budget; not done.
-- **The boot**: about 2 s between the pick and the first frame (Chromium), and
-  the menus' own reads (a flyer, a ship), still synchronous requests.
+- **The scene build's GPU half** no longer holds the page for its uploads
+  (see below); what is left is the browser compiling the 80 pipelines, which
+  shows as a 0.4 to 0.55 s gap between animation frames with the page's own
+  thread idle.
+- **The boot**: about 1 s between the pick and the first frame (Chromium), of
+  which about 0.5 s is synchronous disc reads, 0.16 to 0.24 s the front-end
+  music's MP3 decode (`Audio::start_music`, inline), and the rest inflate and
+  sprite sheets.
 - **Dropping a parked race**, and `boot::MediaWorker`, inline as before.
+
+### Freezes after the threads
+
+2026-10-10, lane `web-freezes`. HD EU, the campaign's first event, headless
+Chromium 153 on a hardware adapter, the shipped `dist` build, the walk above
+plus an Escape from the race (`--press Escape@62`). Every stall of 300 ms or
+more, by run, before and after, interleaved (a1-a3 before, b1-b3 after); the
+machine was shared, load average 12 to 73, so only the direction is a result,
+not a decimal:
+
+| freeze | before, per run | after, per run |
+| --- | --- | --- |
+| boot, pick to first frame | 3333, 2217, 3400 ms | 1033, 2017, 2483 ms |
+| first menu step after the boot | 967, 850, 850 ms | 383, 650, 733 ms |
+| end of the race load (scene build) | 817, 1317, 1400 ms | 550, 917, 433 ms |
+| Escape from a race | 750, 1367, 1417 ms | under 300, 400, 250 ms |
+
+At a load average near 8 the same builds measured boot 1.6 to 1.8 s before and
+1.0 to 1.2 s after, and Escape 0.6 s before and 0.23 s after. Firefox 155
+(presses further apart, stalls of 300 ms or more, one run each, load 10 and
+72): Escape 1745 ms before and 583 ms after, the end of the race load 733 and
+617 ms before and 250 ms after, boot 1116 ms before and 950 ms after.
+
+**The scene build.** Profiled with `--profile`, the 0.7 to 1.5 s was
+`writeTexture` (0.84 s, the disc-authored BC levels) and `writeBuffer` (0.54 s)
+and the cause of the second was not the 140 MiB: 0.5 s of it was thousands of
+calls of a few hundred bytes to a few KiB, the three animation buffers of each
+of 128 instances in each of the weapon pools (`Drawable::own_animation`), at
+about 0.13 ms a call whatever the size. `oag_gpu::deferred_upload` parks every
+buffer and texture write the build makes when its scope is open and
+`BuildWorker::take` writes them 5 ms a frame (256 KiB a step, a texture level
+in row bands), then draws the warmup frame once they have all landed. A parked
+write holds its source, not a copy: vertices and indices read from the
+drawable's `Arc<Model>`, texture levels from the texture's `Arc`; the module's
+memory after the load read 953 MiB before and 969 to 971 MiB after (not
+investigated). The scope opens on the
+web only, so native stays on the immediate `queue.write_*` it always was and
+its load time is untouched. The scene build itself measured 0.8 to 1.4 s
+before and 0.1 to 0.45 s after; the uploads then take 21 to 29 frames, so the
+loading screen is up 0.35 to 0.5 s longer (at 60 Hz) and animates through it.
+What is left of the stall is the browser compiling the pipelines: the CDP
+profile of that stretch has no busy stretch of the page's thread over 150 ms
+while the animation frames are 400 to 550 ms apart. wgpu 30 has no
+asynchronous pipeline creation to hand that to.
+
+**Escape from a race.** Not GPU teardown. The worker's 200 MiB of race-load
+reads went through the same 64-block LRU the page's thread uses, so the front
+end's blocks were gone and reopening Cell Selection made 41 synchronous
+requests on the page's thread (`send` 0.54 s, GC 0.37 s, the byte loop 0.21 s
+in the profile). The page's thread and a worker now each have a cache
+(`web_image::Shape`): after the change Escape makes no request at all.
+
+**Boot.** The chain is `prepare::Pending::windowed`, `boot::load_shell`,
+`sprites::read_front_end_first` and `Archives::read_every_name`: 119
+synchronous 1 MiB requests (119 MiB) for what is a table of contents, a few
+names and a sprite sheet, 0.68 s in `send`, 0.28 s in the byte loop, 0.51 s of
+GC, in our code and not the browser compiling the module. The page's cache now
+cuts the image into 128 KiB blocks (reads of 512 KiB and over fetched exactly)
+and the worker's keeps 1 MiB blocks for the race load's long reads: the boot
+makes 307 requests for 38 MiB. Moving the boot onto a worker is not done: the
+front end's loads touch the GPU (sprite sheets, textures), which wgpu's web
+types keep on the page's thread, so its result is not `Send` as it stands.
 
 ## Sound
 

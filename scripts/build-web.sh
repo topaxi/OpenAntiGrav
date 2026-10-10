@@ -68,7 +68,9 @@ wasm-bindgen --target web --no-typescript --out-dir "$out/pkg" "$wasm"
 # build that lost the atomics flags would boot and then fail on its first
 # worker, so it fails here instead.
 grep -q thread_stack_size "$out/pkg/oag_web.js" || { echo "the module has no shared memory: the threads flags did not apply" >&2; exit 1; }
-if [[ $profile != dev ]]; then
+# OAG_WEB_NO_OPT=1 skips wasm-opt, so the module keeps its function names for
+# a browser CPU profile (`web-screenshot.py --profile`).
+if [[ $profile != dev && -z ${OAG_WEB_NO_OPT:-} ]]; then
   # The `dist` profile's own goal (docs/tools/packaging.md), for the module:
   # wasm-bindgen's output is not size-optimised, and binaryen's -O pass takes a
   # few percent more off after LLVM's. Bulk memory and the other post-MVP

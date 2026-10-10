@@ -95,10 +95,74 @@ pub(super) fn upload_rgba(
         .map(|(_, _, texels)| texels.len() as u64)
         .sum();
     Some(Placed {
-        view: upload_levels(device, queue, label, levels),
+        view: upload_levels(device, queue, label, levels, None),
         gpu_bytes,
         dropped_levels: skip as u32,
     })
+}
+
+/// Writes one mip level's rows into `gpu`, now or - when `owner` names the
+/// texture the bytes are a slice of and a deferral scope is open and the level
+/// is open - a chunk at a time later, see [`oag_gpu::deferred_upload`].
+fn write_level(
+    queue: &wgpu::Queue,
+    gpu: &wgpu::Texture,
+    level: oag_gpu::deferred_upload::Level,
+    bytes: &[u8],
+    owner: Option<(&std::sync::Arc<ModelTexture>, usize)>,
+) {
+    let whole = level.rows as usize * level.bytes_per_row as usize;
+    if let Some((owner, index)) = owner
+        && bytes.len() >= whole
+        && oag_gpu::deferred_upload::active()
+    {
+        oag_gpu::deferred_upload::defer_texture(
+            gpu,
+            level,
+            std::sync::Arc::new(LevelBytes {
+                texture: owner.clone(),
+                index,
+            }),
+            0..whole,
+        );
+        return;
+    }
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            texture: gpu,
+            mip_level: level.mip,
+            origin: wgpu::Origin3d::ZERO,
+            aspect: wgpu::TextureAspect::All,
+        },
+        bytes,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(level.bytes_per_row),
+            rows_per_image: Some(level.rows),
+        },
+        wgpu::Extent3d {
+            width: level.width,
+            height: level.rows * level.block_height,
+            depth_or_array_layers: 1,
+        },
+    );
+}
+
+/// One level of a disc-authored texture, held by a parked write so its bytes
+/// are not copied.
+struct LevelBytes {
+    texture: std::sync::Arc<ModelTexture>,
+    index: usize,
+}
+
+impl oag_gpu::deferred_upload::Bytes for LevelBytes {
+    fn bytes(&self) -> &[u8] {
+        match &self.texture.texels {
+            Texels::Chain(levels) => &levels[self.index],
+            Texels::Blocks { levels, .. } => &levels[self.index],
+            _ => &[],
+        }
+    }
 }
 
 /// A texture on the GPU: its view, what it occupies, and how many of the
@@ -147,11 +211,15 @@ pub(super) fn first_fitting_level(
 /// The shared tail of [`upload_rgba`], which builds its own chain, and of the
 /// disc-authored [`Texels::Chain`], which does not: the level count is the
 /// iterator's, so both cap and complete chains go through the same writes.
+///
+/// `owner` is the texture the levels are slices of and the index of the first
+/// one, when a write may wait for a frame - see [`write_level`].
 fn upload_levels<'a>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     label: &str,
     levels: impl ExactSizeIterator<Item = (u32, u32, &'a [u8])> + Clone,
+    owner: Option<(&std::sync::Arc<ModelTexture>, usize)>,
 ) -> wgpu::TextureView {
     let (width, height, _) = levels.clone().next().expect("a chain has a base level");
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -169,24 +237,18 @@ fn upload_levels<'a>(
         view_formats: &[],
     });
     for (level, (mip_width, mip_height, mip_rgba)) in levels.enumerate() {
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: level as u32,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
+        write_level(
+            queue,
+            &texture,
+            oag_gpu::deferred_upload::Level {
+                mip: level as u32,
+                width: mip_width,
+                bytes_per_row: mip_width * 4,
+                rows: mip_height,
+                block_height: 1,
             },
             mip_rgba,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(mip_width * 4),
-                rows_per_image: Some(mip_height),
-            },
-            wgpu::Extent3d {
-                width: mip_width,
-                height: mip_height,
-                depth_or_array_layers: 1,
-            },
+            owner.map(|(texture, first)| (texture, first + level)),
         );
     }
     texture.create_view(&wgpu::TextureViewDescriptor::default())
@@ -202,7 +264,7 @@ pub(super) fn upload_shared(
     blocks: bool,
 ) -> Option<wgpu::TextureView> {
     super::pipeline_cache::cached_texture_view(texture, || {
-        upload(device, queue, texture, blocks).map(|placed| placed.view)
+        upload_with(device, queue, texture, Some(texture), blocks).map(|placed| placed.view)
     })
 }
 
@@ -224,6 +286,20 @@ pub(super) fn upload(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     texture: &ModelTexture,
+    blocks: bool,
+) -> Option<Placed> {
+    upload_with(device, queue, texture, None, blocks)
+}
+
+/// [`upload`], and with `shared` the texture's own `Arc` a large level's write
+/// may wait on under an open [`oag_gpu::deferred_upload::Scope`], reading its
+/// bytes from the texture rather than from a copy. Without one, or without a
+/// scope, every write is immediate, as it always was.
+fn upload_with(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    texture: &ModelTexture,
+    shared: Option<&std::sync::Arc<ModelTexture>>,
     blocks: bool,
 ) -> Option<Placed> {
     let limit = device.limits().max_texture_dimension_2d;
@@ -256,7 +332,13 @@ pub(super) fn upload(
             (width, height, texels.as_slice())
         });
         return Some(Placed {
-            view: upload_levels(device, queue, &texture.label, kept),
+            view: upload_levels(
+                device,
+                queue,
+                &texture.label,
+                kept,
+                shared.map(|owner| (owner, skip)),
+            ),
             gpu_bytes: levels[skip..].iter().map(|level| level.len() as u64).sum(),
             dropped_levels: skip as u32,
         });
@@ -340,27 +422,21 @@ pub(super) fn upload(
         // last two levels of every mipped texture hit it.
         let width = (base_width >> index).max(1).div_ceil(4) * 4;
         let height = (base_height >> index).max(1).div_ceil(4) * 4;
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &gpu,
-                mip_level: index as u32,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            texels,
+        write_level(
+            queue,
+            &gpu,
             // Block rows, not texel rows: a compressed level is
             // `ceil(w/4) x ceil(h/4)` blocks of `block_len()` bytes, which is
             // what `oag_texture::gtf::Texture::level_len` sliced out.
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(width / 4 * format.block_len()),
-                rows_per_image: Some(height / 4),
-            },
-            wgpu::Extent3d {
+            oag_gpu::deferred_upload::Level {
+                mip: index as u32,
                 width,
-                height,
-                depth_or_array_layers: 1,
+                bytes_per_row: width / 4 * format.block_len(),
+                rows: height / 4,
+                block_height: 4,
             },
+            texels,
+            shared.map(|owner| (owner, skip + index)),
         );
     }
     Some(Placed {
