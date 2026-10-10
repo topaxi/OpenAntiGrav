@@ -96,14 +96,41 @@ pub const SPEED01_RANGE_KMH: f32 = 1000.0;
 /// `speed01`.
 pub const SPEED01_THRUST_CONTRIB: f32 = 0.25;
 
-/// Rings over which the vertex colour fades from white to pure red.
+/// Rings over which the vertex colour fades from its head tint to its tail tint.
 ///
-/// Measured: green and blue fall linearly from 255 at the head to 0 at ring
-/// 27 - half the ring - and stay 0 to the tail. Red never moves. Under the
-/// material's own blue-red lerp this deepens a Fury craft's red trail toward
-/// the tail and darkens a classic craft's blue one through violet; both fall
-/// out of the same multiply.
+/// Measured on the running game (2026-10-10, the SPU's output buffers read
+/// for all eight trails): both variants lerp linearly over the first 27 rings
+/// and hold the tail value to ring 53. **The ramp depends on the craft's
+/// Fury-skin byte** (`craft + 0x7d2c`): overwriting the byte on a live race
+/// changed every trail's vertex colours within a second.
 pub const TINT_FADE_RINGS: f32 = 27.0;
+
+/// The vertex colour at the nozzle and at ring 27 for a Fury-skinned craft
+/// (`craft + 0x7d2c` = 1): white fading to pure red. Measured 255,255,255 to
+/// 255,0,0 (u8).
+pub const FURY_TINT_HEAD: [f32; 3] = [1.0, 1.0, 1.0];
+/// See [`FURY_TINT_HEAD`].
+pub const FURY_TINT_TAIL: [f32; 3] = [1.0, 0.0, 0.0];
+/// The vertex colour at the nozzle and at ring 27 for a classic craft
+/// (`craft + 0x7d2c` = 0): cyan fading to light violet, blue held at full.
+/// Measured 63,255,255 to 254,127,255 (u8, ring 27 and every ring after it).
+pub const CLASSIC_TINT_HEAD: [f32; 3] = [63.0 / 255.0, 1.0, 1.0];
+/// See [`CLASSIC_TINT_HEAD`].
+pub const CLASSIC_TINT_TAIL: [f32; 3] = [1.0, 127.0 / 255.0, 1.0];
+
+/// The vertex colour rgb of ring `k` for a craft whose Fury-skin flag is
+/// `red_mix` (1.0 Fury, 0.0 classic).
+#[must_use]
+pub fn tint_at(k: usize, red_mix: f32) -> [f32; 3] {
+    let t = (k as f32 / TINT_FADE_RINGS).min(1.0);
+    let mut out = [0.0; 3];
+    for c in 0..3 {
+        let classic = CLASSIC_TINT_HEAD[c] + (CLASSIC_TINT_TAIL[c] - CLASSIC_TINT_HEAD[c]) * t;
+        let fury = FURY_TINT_HEAD[c] + (FURY_TINT_TAIL[c] - FURY_TINT_HEAD[c]) * t;
+        out[c] = classic + (fury - classic) * red_mix;
+    }
+    out
+}
 
 /// Rings over which the vertex alpha attacks from 0 at the nozzle to full.
 ///
@@ -311,7 +338,7 @@ impl Tube {
             let fall = 1.0 - k as f32 / SAMPLES as f32;
             brightness * attack * fall
         };
-        let ring_tint = |k: usize| (1.0 - k as f32 / TINT_FADE_RINGS).max(0.0);
+        let ring_tint = |k: usize| tint_at(k, red_mix);
         // The segment tangent: central difference inside the ring, one-sided
         // at its ends, matching the dumped normals' behaviour where samples
         // bunch up (they go degenerate rather than flip).
@@ -352,7 +379,7 @@ impl Tube {
                         // `cross(back, fin) = cross(fin, forward)`, the
                         // dumped orientation - see the fin comment above.
                         normal: fin_dir.cross(d).to_array(),
-                        colour: [1.0, tint, tint, ring_alpha(k)],
+                        colour: [tint[0], tint[1], tint[2], ring_alpha(k)],
                         texcoord: [ring_u(k), (edge + 1.0) * 0.5],
                         lit: red_mix,
                         ..bytemuck::Zeroable::zeroed()

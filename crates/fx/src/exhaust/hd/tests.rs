@@ -343,3 +343,23 @@ fn the_quad_is_four_times_wider_than_it_is_tall() {
     assert!((max_x - half * SPRITE_ASPECT).abs() < 1e-6, "{max_x}");
     assert_eq!(SPRITE_ASPECT, 4.0, "1024 x 256 texels");
 }
+
+#[test]
+fn the_vertex_ramp_follows_the_fury_flag_as_the_running_game_wrote_it() {
+    // Read from the SPU output buffers of a live race (engine-trail.md, "The
+    // vertex colour ramp is per skin"): u8 rgb at rings 0, 3 and 27+.
+    let u8s = |c: [f32; 3]| c.map(|x| (x * 255.0).round() as i32);
+    assert_eq!(u8s(tint_at(0, 1.0)), [255, 255, 255]);
+    assert_eq!(u8s(tint_at(27, 1.0)), [255, 0, 0]);
+    assert_eq!(u8s(tint_at(53, 1.0)), [255, 0, 0]);
+    assert_eq!(u8s(tint_at(0, 0.0)), [63, 255, 255]);
+    let ring3 = u8s(tint_at(3, 0.0));
+    assert!((ring3[0] - 84).abs() <= 1 && (ring3[1] - 240).abs() <= 1 && ring3[2] == 255);
+    assert_eq!(u8s(tint_at(27, 0.0)), [255, 127, 255]);
+    assert_eq!(u8s(tint_at(53, 0.0)), [255, 127, 255]);
+    // A classic ribbon never loses blue or green below half: no trip to red.
+    let tube = full_tube(Vec3::NEG_Z);
+    for v in tube.vertices(1.0, 0.0, 0.0) {
+        assert!(v.colour[1] >= 0.49 && (v.colour[2] - 1.0).abs() < 1e-6);
+    }
+}
