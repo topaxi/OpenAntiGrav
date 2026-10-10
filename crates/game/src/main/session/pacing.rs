@@ -48,6 +48,16 @@ impl Session {
         self.frame_period().map(|_| self.next_frame)
     }
 
+    /// Whether a redraw the browser delivered should be skipped to hold the
+    /// limit. A quarter period of slack, because `requestAnimationFrame` lands
+    /// on display refreshes and a deadline that falls a hair after one would
+    /// otherwise halve a 60 fps cap on a 60 Hz panel.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn too_early_for_frame(&self, now: web_time::Instant) -> bool {
+        self.frame_period()
+            .is_some_and(|period| now + period / 4 < self.next_frame)
+    }
+
     /// What a frame time is measured against in the overlay: the rate this
     /// build is actually trying to present at.
     ///

@@ -730,6 +730,10 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
+                #[cfg(target_arch = "wasm32")]
+                if session.too_early_for_frame(web_time::Instant::now()) {
+                    return;
+                }
                 if let Err(e) = session.frame() {
                     error!("frame error: {e:#}");
                     event_loop.exit();
@@ -766,9 +770,22 @@ impl ApplicationHandler for App {
         // waiting to the platform's own timer; `Poll` is what it was before and
         // is still what an unlimited run does.
         match session.next_frame_at() {
+            // On the web winit's `Poll` and `WaitUntil` both wake the loop
+            // through a `postTask` plus an `AbortController` per wake, a
+            // quarter of the page's thread in a race (measured, 2026-10-10).
+            // `Wait` plus a redraw request is driven by
+            // `requestAnimationFrame` alone, and the limit holds by skipping
+            // redraws in `RedrawRequested`.
+            #[cfg(target_arch = "wasm32")]
+            _ => {
+                event_loop.set_control_flow(ControlFlow::Wait);
+                session.gpu.window.request_redraw();
+            }
+            #[cfg(not(target_arch = "wasm32"))]
             Some(deadline) if web_time::Instant::now() < deadline => {
                 event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
             }
+            #[cfg(not(target_arch = "wasm32"))]
             _ => {
                 event_loop.set_control_flow(ControlFlow::Poll);
                 session.gpu.window.request_redraw();

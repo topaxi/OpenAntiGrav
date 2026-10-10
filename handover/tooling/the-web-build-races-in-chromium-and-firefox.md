@@ -47,9 +47,14 @@ Architecture, measurements, hosting and limits:
   GiB of BC7 at peak) would not fit in 4 GiB, though no PS4 package opens in
   the browser. A channel sink (worker decodes, page uploads under a budget)
   would bound it.
-- **Firefox races at 9 to 14 fps** headless against Chromium's 60, the same
-  before threads (Pulse 12.2 fps single-threaded, 12.4 threaded). Not
-  investigated: Firefox's WebGPU or the headless compositor.
+- **Firefox raced at 9 to 14 fps** headless against Chromium's 60, the same
+  before threads (Pulse 12.2 fps single-threaded, 12.4 threaded). The web loop
+  now waits on `requestAnimationFrame` alone instead of winit's `Poll` and
+  `WaitUntil` (a `postTask` plus `AbortController` per wake, about 25% of the
+  page's thread in a Chromium race; idle 38.9% to 93.1%), and the maintainer
+  reports Firefox improved a lot headed (2026-10-10). Not re-measured
+  headless; the 60 cap on a display that does not divide 60 (144 Hz runs about
+  72) is unverified.
 - **Not tried in a headed browser or on another machine.** Safari, Firefox on
   Windows, Chrome on Windows/macOS/Android are unchecked.
 - **Pure and PS2 beyond the front end.** Pulse PS2 was booted to Language
