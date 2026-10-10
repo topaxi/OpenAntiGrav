@@ -919,8 +919,8 @@ impl Renderer {
                     pass.set_bind_group(0, &video.bind_group, &[]);
                     pass.draw(0..6, 0..1);
                 }
-                (backdrop::Cut::Fury, _, Some(fury), Some((_, frame))) => {
-                    fury.composite(&mut pass, frame.tint);
+                (backdrop::Cut::Fury, _, Some(fury), Some(_)) => {
+                    fury.composite(&mut pass);
                 }
                 (backdrop::Cut::Scene, ..) => {
                     if let Some(scene) = &self.scene {

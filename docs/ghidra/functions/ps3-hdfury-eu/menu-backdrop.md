@@ -76,7 +76,15 @@ style. The Fury widget's `<ScreenSetting>` rows carry `tint` and `equaliser`: `M
 Menu`, `Additional`, `Controls Menu` and `Extras` are `tint="0xFFFFFFFF"`; `default`,
 `SoundTest`, `Controls`, `Race Records` and the five manual pages are `0xFF202020`.
 The capture of the OPTIONS page (`hd-menu-style-toggle/01-before.png`) showing only a
-faint red at the bottom right is that `0x20/255` tint.
+faint red at the bottom right is that `0x20/255` tint, at a moment the cloud was mostly
+out of view: the tint is applied in linear light and reads far brighter than its value
+(below, "The tint is applied in linear light"). **Which row a screen gets** is by name,
+2026-10-10: `Update` (`0x0017e4e0`, in the widget's vtable range) compares the name of
+the screen showing (`TTY.log`'s `Switching Screen "A" to "B"`, B) against each 0x60-byte row
+and falls back to the `default` row `Load` found; a screen that authors no row is
+`default`'s. Read live on RPCS3 (item `+0xc4`, the row pointer, at every screen):
+`Main Menu`, `Additional` (Options) `1.0`; `Single Player` (Racebox), `Track Creation`,
+`Team Selection` and `HUD` `0.12549`. Confidence 90.
 
 ## The shader pairs, and the registration route the census could not see
 
@@ -441,6 +449,61 @@ candidates are the sprite's mip selection (the RSX sampler state
 `PointCloud_DrawRaw` sets, unread - a larger, softer level would widen a dot
 without brightening it), `srcScale` (dropped as one) and the blend pass's quad
 grid, which could draw the particles more than once.
+
+## The tint is applied in linear light, and what a screen change does
+
+2026-10-10, RPCS3 on `hdfury-ps3-eu`, Fury style, lane `fury-backdrop-ship-select`.
+Reference frames: `data/reference/hd-capture/fury-backdrop-ship-select/`.
+
+**Ship Select's backdrop is not brighter than the table says; it is the `default`
+row, and that row reads bright.** Item (`BackgroundAnimFury`) `0x3291a100` in that boot,
+rows at `item+0xb8`..`+0xbc` (`default`, `Main Menu`, `Additional`, `Controls Menu`,
+`Extras`, `SoundTest`, `Manual Part 1..3`, 0x60 bytes each, the tint's four floats at
+`+0x40`), current row at `+0xc4`, `default` at `+0xc8`. `Team Selection`, `Single
+Player`, `Track Creation` and the race `HUD` all point at `default`: `0.12549 x3, 1.0`.
+`TrackHexSelection` authors no row either, so it is `default`'s by the same rule (not
+measured live: no walk reached it).
+
+**The brightness law.** The `default` row's tint was edited live (GDB write of three
+floats at `row+0x40`) and the screen grabbed a quarter second after each write, in groups
+of five tints so a group sees one cloud. Mean excess brightness over 28 groups (red
+channel, 14 with the backdrop in view), as a ratio to tint 1:
+
+| tint | 1 | 1/2 | 1/4 | 1/8 | 1/16 |
+| --- | --- | --- | --- | --- | --- |
+| measured | 1 | 0.80 | 0.62 | 0.40 | 0.23 |
+| literal scale | 1 | 0.5 | 0.25 | 0.125 | 0.0625 |
+| sRGB encode of the scaled sum | 1 | 0.73 | 0.53 | 0.39 | 0.28 |
+
+At tint 0 nothing draws; at `0.125` the 99th percentile is still 255. So the composite adds
+`tint * source` in **linear light and the buffer encodes it**, as an sRGB render target does.
+This build is gamma-space throughout (ADR-0020), so `fs_composite` encodes itself
+(`srgb_encode(sum * tint)`) and the blend adds. Confidence 75: the shape and the 0.125 point
+are measured, the exact transfer curve is not (the clipped top and a moving cloud limit the
+fit; plain sRGB is the nearest standard curve). Exact where the page behind the backdrop is
+black, which it is under every Fury page. The practical effect: Main Menu is brighter than it
+was (`tint 1` is encoded too, matching the original's white-hot core), and every other page
+shows the cloud, where the literal scale left it near black. Test:
+`crates/game/tests/hd_fury_ship_select_ground_truth.rs`.
+
+**`BackgroundAnimFury_OnEnable` fires on every screen change, not on a team step.** Polling
+the item's pulse block (`+0x1648` frame counter, `+0x164c` frames, `+0x1650` seconds, `+0x1654`
+60) at 10 Hz while pressing: `Team Selection` left and right (five presses) change nothing in
+it, and the cloud pointer (`+0x224`) moved once in 16 s, on the clip's own clock; each of
+`Single Player`, `Track Creation`, `Team Selection` and the race entry reset the counter to 0
+and ran it to a new random length (0.704, 0.528, 0.597, 0.391 s measured, inside the
+documented 0.2..1.6). So the pulse is a **screen-change** event of 0.2-1.6 s; the cloud
+thickening around a team step in the 26 s film is **not** `OnEnable` and its mechanism is
+unlocated. Not wired: this build's `Fury` has no screen-change signal, and the pulse's
+brightness peak (`0.65 * lerp + 0.7` through `(1 - sin(PI t)) / 2`, `lerp` from the four seeded
+randoms) is read at confidence 70 from a decompile that was not followed to the shader
+constant. The trigger is now located; the amplitude is the open half.
+
+**Omega:** checked, differs - its skin authors only the scene widget (`BackgroundAnim`,
+[menu-backdrop-scene.md](menu-backdrop-scene.md)), no `BackgroundAnimFury`, so none of this
+applies; whether the scene filter's output is encoded the same way is not checkable (no PS4
+emulator in this project). **Below 720p** (640x360) no Fury cloud draws at all, before and
+after this change: the points are under a pixel. Open, outside this lane.
 
 ## Open
 

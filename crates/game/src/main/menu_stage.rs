@@ -240,7 +240,7 @@ impl MenuStage {
         // One clip frame per tick: the original counts its clip up once per
         // rendered frame at sixty, and the stage's step is the same sixty.
         if let Some(styled) = &mut self.styled {
-            styled.tick(self.menu.depth() == 1);
+            styled.tick(self.menu.depth() == 1 && self.picker.is_none());
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
         // reason: nothing on this stage reads the wall clock, so two runs of
@@ -455,11 +455,14 @@ impl MenuStage {
         };
         // The movie where there is one, else the style's backdrop for this tick
         // - sized to the viewport, for the root (`Main Menu`) or any other page.
+        // A selection screen (`Team Selection`, `TrackHexSelection`) authors no
+        // `<ScreenSetting>` row, so it is `default`'s, never the root's: read
+        // live off the original's widget on Ship Select, `default` and `0.1255`.
         let shown = shown.map(menu::Picture::from).or_else(|| {
             Some(
                 self.styled
                     .as_ref()?
-                    .picture(viewport, self.menu.depth() == 1),
+                    .picture(viewport, self.menu.depth() == 1 && self.picker.is_none()),
             )
         });
         // A selection screen replaces the rows outright, in the same frame; its
