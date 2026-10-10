@@ -492,25 +492,25 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
 /// never appear either - see `oag_ui_screens::endrace`'s own module doc for why.
 ///
 /// **`tournament_next_leg`**: `true` on every leg but a Tournament cell's
-/// own last one, offering `ER_NEXT_RACE` in place of `RACE AGAIN` - the
+/// own last one, offering `ER_NEXT_RACE` first and no `RACE AGAIN` - the
 /// last leg "instead resolves to the ordinary `EndRace Menu` options",
 /// per `docs/gameplay/race-modes.md#tournament`. `false` for every
 /// non-Tournament race, and for a Tournament's own last leg.
 #[must_use]
 pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<MenuOption> {
-    vec![
-        if campaign {
-            MenuOption::ReturnToGrid
-        } else {
-            MenuOption::ReturnToMenu
-        },
-        if tournament_next_leg {
-            MenuOption::NextRace
-        } else {
-            MenuOption::RaceAgain
-        },
-        MenuOption::ViewResultsAgain,
-    ]
+    let leave = if campaign {
+        MenuOption::ReturnToGrid
+    } else {
+        MenuOption::ReturnToMenu
+    };
+    if tournament_next_leg {
+        // `EndRaceMenu_PopulateOptions` adds `ER_NEXT_RACE` first and has no
+        // `ER_RACE_AGAIN` mid-Tournament, so the cursor starts on the next
+        // leg; a leave row first would end the tournament on a plain confirm.
+        vec![MenuOption::NextRace, leave, MenuOption::ViewResultsAgain]
+    } else {
+        vec![leave, MenuOption::RaceAgain, MenuOption::ViewResultsAgain]
+    }
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the whole field, ordered by

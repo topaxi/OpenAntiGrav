@@ -61,3 +61,21 @@ fn the_zone_table_blanks_the_two_rows_it_cannot_count() {
     assert_eq!(table.laps_cleared, None);
     assert_eq!(table.perfect_laps, None);
 }
+
+/// A mid-Tournament menu opens on `ER_NEXT_RACE`, so a plain confirm
+/// continues the tournament instead of leaving it.
+#[test]
+fn mid_tournament_menu_opens_on_next_race() {
+    use super::menu_options;
+    use oag_ui_screens::endrace::MenuOption;
+
+    assert_eq!(
+        menu_options(true, true),
+        [
+            MenuOption::NextRace,
+            MenuOption::ReturnToGrid,
+            MenuOption::ViewResultsAgain
+        ]
+    );
+    assert_eq!(menu_options(true, false)[0], MenuOption::ReturnToGrid);
+}

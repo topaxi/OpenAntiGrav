@@ -432,17 +432,20 @@ fn endrace_page(
             // here - reproduced rather than shared, since a `--menu-page`
             // capture has no `Session` behind it either. See that
             // function's own doc for the redirect this mirrors.
-            let second_row = if tournament_next_leg {
-                oag_ui_screens::endrace::MenuOption::NextRace
-            } else {
-                oag_ui_screens::endrace::MenuOption::RaceAgain
-            };
             let model = oag_ui_screens::endrace::EndRaceMenu::new(
-                vec![
-                    oag_ui_screens::endrace::MenuOption::ReturnToGrid,
-                    second_row,
-                    oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
-                ],
+                if tournament_next_leg {
+                    vec![
+                        oag_ui_screens::endrace::MenuOption::NextRace,
+                        oag_ui_screens::endrace::MenuOption::ReturnToGrid,
+                        oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
+                    ]
+                } else {
+                    vec![
+                        oag_ui_screens::endrace::MenuOption::ReturnToGrid,
+                        oag_ui_screens::endrace::MenuOption::RaceAgain,
+                        oag_ui_screens::endrace::MenuOption::ViewResultsAgain,
+                    ]
+                },
                 Some(seconds_to_ticks(49.34)),
             );
             oag_ui_screens::endrace::endrace_menu_draw_list(
