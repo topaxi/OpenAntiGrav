@@ -309,3 +309,10 @@ struct MrtOutput {
     @location(0) colour: vec4<f32>,
     @location(1) velocity: vec2<f32>,
 }
+
+// `MrtOutput` for a blended pass that writes its own motion: the velocity
+// target blends source-alpha over, so it carries the pass's coverage in `w`.
+struct BlendMrtOutput {
+    @location(0) colour: vec4<f32>,
+    @location(1) velocity: vec4<f32>,
+}

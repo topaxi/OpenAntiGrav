@@ -675,10 +675,35 @@ Tests that allocate frames: `lattice_tests::frames` once shadowed its `count`
 parameter with a byte count and rendered 8 million frames (51 GB resident);
 run new `oag-post` tests under `systemd-run ... -p MemoryMax=8G`.
 
-## Exhaust glow, 2026-10-10
+## What an alpha-blended effect writes to velocity, 2026-10-10
 
-The exhaust pass of HD's tube writes zero velocity weighted by its alpha
-instead of leaving the surface behind it, because a hard turn under a chase camera
-smeared the glow along the track's screen motion. Chosen, not measured; see
-`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`. Other titles' exhaust and other alpha-blended fx still
-write nothing.
+A blended pass writes no depth, so by default its velocity target is masked
+empty and the pixel keeps the velocity of the surface behind it. For an effect
+attached to a craft that is wrong on a hard turn under a chase camera: the
+track behind has a large screen motion, the craft has almost none, and the blur
+drags the glow along with the track (a ghost beside the flame). **Chosen, not
+measured**: the originals have no motion blur, so there is nothing to compare
+against. Repro: `oag-game data/images/hdfury-ps3-eu.iso --race --team feisar_c1
+--no-audio --screenshot out.png --ticks 300 --input-script
+verification/scenarios/hd-airbrake-left.inputs --motion-blur high` (add
+`--pose-boost 0.4` for the plume), against `--motion-blur off`. Crops kept in
+`data/reference/motion-blur/fx-ghosting/`.
+
+| Class | Writes | Why |
+| --- | --- | --- |
+| Craft-attached mesh, blended: boost plume, engine flame mesh, shield and absorb shells, absorb overlays (`Velocity::Attached`, `fs_main_blend_velocity`) | the mesh's own motion (`velocity_of`, from the craft's previous-tick matrix) weighted by alpha | A rigid mesh has a previous matrix, so its motion is exact: about zero under the chase camera, real for an opponent or the `far` and `internal` cameras, where a blanket zero would detach it from its hull. |
+| HD exhaust tube (`exhaust.wesl` `fs_main_velocity`) | zero weighted by alpha | Rebuilt each draw with no previous vertices; a tube and trail hugging the nozzle. Scoped to HD: a global zero broke `shake_blur_ground_truth` (Pulse). |
+| Other titles' exhaust flare quad and ribbon | masked (the surface behind) | Rebuilt each draw, no previous positions. The ribbon is a world-space trail, which should blur with the world; the Pulse crop at tick 420 shows no visible ghost. |
+| Collision and scrape sparks, track-side `.pob` particles, clouds, mist, flashes | masked | World-fixed or short-lived at the contact point; kept blurring with the world. The Pulse wall-scrape frame shows no ghost. |
+| Weapon quads, beams, projectile glows | masked | Rebuilt each frame with no previous position, so no honest per-quad velocity. Not reproduced as a ghost; open if one is seen. |
+| Drop shadow, track glass, stamps, gantry | masked | Decals on or behind world surfaces: the surface's velocity is the right one. |
+| Ghost craft (`render/ghost`) | its own motion, already | Writes velocity from its own previous matrix. |
+
+Measured on the HD frame at tick 300, `high` against `off`, in a 200x126 pixel
+box around the flame: 2085 pixels differed by more than 16 levels before and 823
+after (no boost); with the forced boost, 907 before and 250 after. The crops
+read as the flame sharp again, no smear into the floor. Pulse's plume on a hard
+steer (tick 240, forced boost) changes by 6 pixels of 5356: its saturated white
+plume hides a smear that is already small, so that frame is not evidence either
+way. `crates/render/tests/velocity_target.rs` pins the mechanism: `Write` leaves
+a blended draw masked, `Attached` writes its motion weighted by alpha.

@@ -585,6 +585,7 @@ impl Scene {
             // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
             hd.is_some(),
             false,
+            mesh_render::Velocity::Write,
         )?;
         let adverts = if adverts.is_empty() {
             None

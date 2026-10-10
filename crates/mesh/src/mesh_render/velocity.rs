@@ -27,6 +27,15 @@ pub enum Velocity {
     None,
     /// The race's two attachments: colour, then [`oag_gpu::formats::VELOCITY_FORMAT`].
     Write,
+    /// [`Self::Write`], and the blended pipelines write their own surface's
+    /// motion weighted by alpha (source-alpha over) instead of a masked
+    /// target, through `fs_main_blend_velocity`. For a model that rides a
+    /// craft (plume, flare, shield shell): the mesh carries a previous-tick
+    /// matrix, so the motion is the craft's own and the glow stays on it
+    /// instead of taking the screen motion of the track behind. A world-fixed
+    /// blended model stays on [`Self::Write`], which keeps blurring with the
+    /// world. Chosen, not measured.
+    Attached,
 }
 
 impl Velocity {
@@ -35,7 +44,7 @@ impl Velocity {
     pub fn target(self, masked: bool) -> Option<Option<wgpu::ColorTargetState>> {
         match self {
             Self::None => None,
-            Self::Write => Some(Some(wgpu::ColorTargetState {
+            Self::Write | Self::Attached => Some(Some(wgpu::ColorTargetState {
                 format: oag_gpu::formats::VELOCITY_FORMAT,
                 blend: None,
                 write_mask: if masked {
@@ -48,9 +57,11 @@ impl Velocity {
     }
 
     /// The entry point and second target of a blended pass. With `coverage`, the
-    /// pass writes zero motion weighted by its own alpha (source-alpha over)
-    /// through its `_velocity` twin, so the glow does not take the screen motion
-    /// of the surface behind it; without, the write mask stays empty.
+    /// pass writes through its `_velocity` twin, whose shader chooses the motion
+    /// (zero for HD's exhaust tube, the surface's own for [`Self::Attached`]) and
+    /// weights it by the pass's alpha (source-alpha over), so the glow does not
+    /// take the screen motion of the surface behind it; without, the write mask
+    /// stays empty.
     pub fn blended(
         self,
         base: &'static str,
@@ -74,7 +85,7 @@ impl Velocity {
     pub(crate) fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {
         match self {
             Self::None => base,
-            Self::Write => velocity,
+            Self::Write | Self::Attached => velocity,
         }
     }
 }

@@ -72,7 +72,7 @@ impl Build<'_> {
                 let Some(model) = pick(livery).filter(|model| !model.indices.is_empty()) else {
                     return Ok(None);
                 };
-                Drawable::new(
+                Drawable::new_attached(
                     self.device,
                     self.queue,
                     model,

@@ -188,7 +188,7 @@ pub(super) fn build(
                 .as_ref()
                 .filter(|model| !model.indices.is_empty())
             {
-                Some(model) => Some(Drawable::new(
+                Some(model) => Some(Drawable::new_attached(
                     device,
                     queue,
                     model.clone(),
@@ -214,7 +214,7 @@ pub(super) fn build(
             continue;
         };
         {
-            boost.push(Some(Drawable::new(
+            boost.push(Some(Drawable::new_attached(
                 device,
                 queue,
                 model.clone(),

@@ -192,6 +192,7 @@ impl Target {
                 mesh_render::Texcoords::Interleaved,
                 false,
                 cull_back,
+                mesh_render::Velocity::Write,
             )
         };
         let scenery = |model| {
