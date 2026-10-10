@@ -244,6 +244,7 @@ pub(crate) fn run_windowless(
                 menu_page: cli.menu_args.menu_page.clone(),
                 menu_anim_phase: cli.menu_args.menu_anim_phase,
                 menu_picker_seconds: cli.menu_args.menu_picker_seconds,
+                menu_picker_step_seconds: cli.menu_args.menu_picker_step_seconds,
                 menu_prompt: cli.menu_args.menu_prompt.clone(),
                 presented: cli.presented,
                 // The clone is overridden rather than `settings` itself, so

@@ -134,6 +134,9 @@ pub struct Options {
     /// `--menu-anim-phase`'s equivalent for the race box's own two screens,
     /// which are not `assets/ui/menu.toml` pages and so do not reach it.
     pub menu_picker_seconds: Option<f32>,
+    /// With `--menu-page ship-select`, seconds since a selection step - see
+    /// the CLI flag's own docs. `None` draws no step.
+    pub menu_picker_step_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -623,6 +626,7 @@ pub fn run(
                     &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                     distance,
                     options.menu_picker_seconds,
+                    options.menu_picker_step_seconds,
                 );
                 list.extend(stills);
                 // HD's ship screen's footer legend, as the live one draws it

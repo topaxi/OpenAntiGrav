@@ -481,6 +481,12 @@ impl PickerStage {
         space: oag_display::space::Space,
     ) {
         let (orbit, seconds, rect) = (self.orbit(), self.model.seconds(), self.layout.preview);
+        let hull_swap = self.previews.ship_hull.is_some()
+            && self.model.kind() == picker::Kind::Ship
+            && !self.hull_phase().visible;
+        if hull_swap {
+            return;
+        }
         // `Track Creation`'s own `<Mode3D>` camera, when authored.
         let mode3d_model = self.mode3d_model().cloned();
         let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
@@ -516,10 +522,18 @@ impl PickerStage {
         }
     }
 
+    /// The craft's swap state this tick on a title that draws the race hull -
+    /// see [`oag_game::preview::hull_swap`].
+    fn hull_phase(&self) -> oag_game::preview::hull_swap::Phase {
+        oag_game::preview::hull_swap::phase(self.model.seconds(), self.model.since_selection())
+    }
+
     /// How the preview is framed this tick - see [`oag_game::preview::orbit_for`].
     pub(crate) fn orbit(&self) -> Orbit {
         if self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship {
-            return oag_game::preview::hull_orbit();
+            let mut orbit = oag_game::preview::hull_orbit();
+            orbit.zoom /= self.hull_phase().scale;
+            return orbit;
         }
         oag_game::preview::orbit_for(self.model.kind(), self.model.seconds())
     }

@@ -284,6 +284,7 @@ fn endrace_page(
                     mode3d: Some(trophy.placement.model.clone()),
                     track_model: None,
                     seconds: 0.0,
+                    hull_clock: (0.0, 0.0),
                 });
             let model = oag_ui_screens::endrace::Rewards {
                 medal,

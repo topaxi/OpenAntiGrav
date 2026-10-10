@@ -4225,6 +4225,11 @@ hold 24 `Tournament` cells in the archive read, none walked).
    `RotX`/`RotY` are not composed yet. Sheet: `page-ship-select-after.png`.
    Still missing on this screen: the brackets, the loyalty value, and the
    original's default team (save-state confound).
+   **2026-10-10 (hd-ship-select-anim): the swap is measured and drawn** - the
+   craft is absent for the first 0.9 s, a step cuts it for 60 ms and eases it
+   in over 0.45 s, no turntable; see `selection-screens.md`, "The craft's swap
+   on HD/Fury". Still open: the per-team pose and framing, the step's particle
+   burst.
    **Fixed 2026-10-08 (hd-ship-select): the team hex column draws** - see
    "The `NAVIGATE TEAM` honeycomb" below. Omega: checked, applies (same
    `Team_Selection_Definition.xml` in `data09.psarc`, which `crates/omega`

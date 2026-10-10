@@ -660,6 +660,9 @@ pub(super) fn picker_page(
     // `--menu-picker-seconds` - `None` draws the screen settled, past every
     // `LeftLayer transition` it authors. See [`SETTLED_SECONDS`].
     seconds: Option<f32>,
+    // `--menu-picker-step-seconds` - seconds since a selection step, for the
+    // craft's swap on a title that draws the race hull.
+    step_seconds: Option<f32>,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
@@ -814,6 +817,10 @@ pub(super) fn picker_page(
             hull_only: crate::preview::draws_hull(title, kind),
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
+            hull_clock: {
+                let open = seconds.unwrap_or(SETTLED_SECONDS);
+                (open, step_seconds.unwrap_or(open))
+            },
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,

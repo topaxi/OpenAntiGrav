@@ -37,6 +37,9 @@ pub(super) struct PreviewRequest {
     /// How far into the screen the capture is, for the circuit model's
     /// turntable: `--menu-picker-seconds`, or `0.0` settled.
     pub seconds: f32,
+    /// Seconds since the screen opened and since a selection step, for the
+    /// race hull's swap - see [`crate::preview::hull_swap`].
+    pub hull_clock: (f32, f32),
 }
 
 /// The source a capture's race options name, opened with its packs, for the
@@ -73,6 +76,10 @@ pub(super) fn draw_preview(
     request: &PreviewRequest,
     anisotropy: Anisotropy,
 ) {
+    let swap = crate::preview::hull_swap::phase(request.hull_clock.0, request.hull_clock.1);
+    if request.hull_only && !swap.visible {
+        return;
+    }
     let built = open_for_previews(race).and_then(|mut archives| {
         let mut model = if request.track_model.is_some() {
             crate::preview::psp2_scene::circuit_model(&mut archives, &request.entry)?
@@ -140,7 +147,13 @@ pub(super) fn draw_preview(
             space,
             request.mode3d.as_ref(),
             request.rect,
-            crate::preview::capture_orbit(request.hull_only, request.kind),
+            {
+                let mut orbit = crate::preview::capture_orbit(request.hull_only, request.kind);
+                if request.hull_only {
+                    orbit.zoom /= swap.scale;
+                }
+                orbit
+            },
             0.0,
         ),
         Err(error) => log::warn!("{}: {error:#} - the preview draws nothing", request.entry),
