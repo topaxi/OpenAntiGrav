@@ -26,8 +26,7 @@ fn read_back(
     device
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("polls");
-    let bytes = out.slice(..).get_mapped_range().expect("range").to_vec();
-    bytes
+    out.slice(..).get_mapped_range().expect("range").to_vec()
 }
 
 /// A pattern no two chunks share, so a chunk written twice or not at all shows.
