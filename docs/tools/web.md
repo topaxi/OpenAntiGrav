@@ -679,7 +679,12 @@ names and a sprite sheet, 0.68 s in `send`, 0.28 s in the byte loop, 0.51 s of
 GC, in our code and not the browser compiling the module. The page's cache now
 cuts the image into 128 KiB blocks (reads of 512 KiB and over fetched exactly)
 and the worker's keeps 1 MiB blocks for the race load's long reads: the boot
-makes 307 requests for 38 MiB. Moving the boot onto a worker is not done: the
+makes 307 requests for 38 MiB. Pulse PSP EU raced in the same build (60.2 fps; its scene uploads landed over 7
+frames). **Omega and 2048: checked, applies, not wired** - the deferral and the
+caches are title-agnostic, but no Vita or PS4 package opens in the browser, so
+neither was run there.
+
+Moving the boot onto a worker is not done: the
 front end's loads touch the GPU (sprite sheets, textures), which wgpu's web
 types keep on the page's thread, so its result is not `Send` as it stands.
 
