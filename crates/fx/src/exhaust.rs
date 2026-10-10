@@ -1206,6 +1206,9 @@ impl Pipeline {
                               blend: wgpu::BlendState,
                               write_mask: wgpu::ColorWrites,
                               constants: &[(&str, f64)]| {
+            // HD's tube only; other titles keep the write-masked velocity.
+            let hd_tube = constants.iter().any(|(name, _)| *name == "trail_shape");
+            let (entry, velocity_target) = velocity.blended("fs_main", "fs_main_velocity", hd_tube);
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
@@ -1224,22 +1227,17 @@ impl Pipeline {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some("fs_main"),
-                    // The velocity target, when the race adds one, rides
-                    // along **write-masked empty**: a flare or ribbon quad is
-                    // rebuilt from scratch every draw with no frame-to-frame
-                    // vertex correspondence, so there is no previous position
-                    // to compute a velocity from, and these draws write no
-                    // depth either - the velocity at their pixels stays the
-                    // surface's behind them. See `mesh_render::Velocity` and
-                    // `docs/rendering/motion-blur.md`.
+                    entry_point: Some(entry),
+                    // Zero motion weighted by coverage rather than the surface
+                    // behind: no previous vertices to difference, and that
+                    // surface's motion smears the glow. Chosen, not measured.
                     targets: &{
                         let mut targets = vec![Some(wgpu::ColorTargetState {
                             format,
                             blend: Some(blend),
                             write_mask,
                         })];
-                        targets.extend(velocity.target(true));
+                        targets.extend(velocity_target);
                         targets
                     },
                     compilation_options: wgpu::PipelineCompilationOptions {
