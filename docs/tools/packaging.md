@@ -624,6 +624,9 @@ A rolling pre-release, rebuilt from `main` once a day by
   audit of each artifact), then moves the `nightly` tag to the commit, creates or
   updates a **pre-release** (not a draft, never "latest"), uploads the new files
   and only then deletes the old ones, so a failed upload leaves yesterday's files.
+  The publish job downloads only the four release artifacts (`linux`, `steamdeck`,
+  `windows`, `android`). The `web-dist` artifact of the same run is the Pages
+  deploy's input and never becomes a release asset.
 - **Names and version.** `OpenAntiGrav-nightly-<yyyymmdd>-<sha7>-<platform>.<ext>`
   plus `SHA256SUMS`. The binary reports `0.1.0-nightly (<sha7>)` in `--version`
   and the log header: the workflow sets `OAG_VERSION_SUFFIX=-nightly`, which
