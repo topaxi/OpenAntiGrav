@@ -117,6 +117,8 @@ struct Post {
     wave_scale: vec4<f32>,
     // x: the wave's bias, y: its bias factor.
     wave_bias: vec4<f32>,
+    // rgb: the screen's tint, which the composite applies itself.
+    tint: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> post: Post;
@@ -152,10 +154,38 @@ fn fs_wave(in: ClipUv) -> @location(0) vec4<f32> {
 }
 
 // Fury: fresh particles plus their trail, stretched so a full byte reads as
-// one, added over the page through the constant blend colour - the tint.
+// one, then scaled by the screen's tint. The original adds `tint * sum` through
+// `BlendFunc(CONSTANT_COLOR, ONE)` and its buffer behaves as an sRGB one: a tint
+// of 0.125 reads about 0.4 on screen, not 0.125 (RPCS3, tint edited live;
+// menu-backdrop.md, "The tint is applied in linear light"). A tint of 1 is left
+// exactly as the byte is, so Main Menu is unchanged and only a dimmer tint is
+// lifted: `encode(tint * decode(sum))`. Whether tint 1 is itself encoded cannot
+// be told from the ratios measured, so it is not. The curve is the standard
+// piecewise sRGB, **chosen, not measured**. The page is gamma-space in this
+// build (ADR-0020), so this is done here and the blend just adds; exact where
+// the page behind the backdrop is black.
+fn srgb_decode(encoded: vec3<f32>) -> vec3<f32> {
+    let c = clamp(encoded, vec3<f32>(0.0), vec3<f32>(1.0));
+    return select(
+        pow((c + 0.055) / 1.055, vec3<f32>(2.4)),
+        c / 12.92,
+        c <= vec3<f32>(0.04045),
+    );
+}
+
+fn srgb_encode(linear: vec3<f32>) -> vec3<f32> {
+    let c = clamp(linear, vec3<f32>(0.0), vec3<f32>(1.0));
+    return select(
+        1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055,
+        12.92 * c,
+        c <= vec3<f32>(0.0031308),
+    );
+}
+
 @fragment
 fn fs_composite(in: ClipUv) -> @location(0) vec4<f32> {
     let fresh = textureSample(source, post_sampler, in.uv).rgb;
     let trailed = textureSample(trail, trail_sampler, in.uv).rgb;
-    return vec4<f32>((fresh + trailed) * (257.0 / 256.0) - 1.0 / 257.0, 1.0);
+    let sum = (fresh + trailed) * (257.0 / 256.0) - 1.0 / 257.0;
+    return vec4<f32>(srgb_encode(srgb_decode(sum) * post.tint.rgb), 1.0);
 }

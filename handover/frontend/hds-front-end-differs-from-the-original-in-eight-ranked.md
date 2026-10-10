@@ -17,7 +17,12 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
   step (`oag_game::preview::hull_swap`). Open: the settle's start size is per
   team (chosen 1.06), the step's burst (not a `.pob`: it is the Fury backdrop
-  point cloud, `BackgroundAnimFury_Item`; what a step does to it is unlocated)
+  point cloud, `BackgroundAnimFury_Item`). Backdrop (LANDED 2026-10-10,
+  `fury-backdrop-ship-select`): Ship Select and Track Select draw it under the
+  `default` tint, applied in linear light (`fs_composite` lifts a dim tint); the
+  `OnEnable` pulse fires on screen changes, not team steps. Open: the step's
+  thickening has no located mechanism (not `OnEnable`); the pulse's amplitude
+  and a screen-change signal into `oag_ui::backdrop::Fury`
 - Ship Select framing (LANDED 2026-10-10, `hd-ship-framing`): the authored
   `ShipModel` pose (one for all teams) composed on raw hull coordinates
   (`oag_game::preview::ship_model`). Open: the lens (0.41 rad), pitch (0.22 vs

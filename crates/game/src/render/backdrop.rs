@@ -15,8 +15,8 @@
 //! Then, inside the page's pass where the draw list's
 //! [`oag_ui::frontend::Draw::FuryBackdrop`] sits:
 //!
-//! 4. **Composite** - fresh plus trail, added over the page through the
-//!    constant blend colour, which is the screen's tint.
+//! 4. **Composite** - fresh plus trail, scaled by the screen's tint in linear
+//!    light (`fs_composite`: a tint of 1 is unchanged), added over the page.
 //!
 //! Every target is `Rgba8Unorm`, which clamps at one the way the original's
 //! 8-bit targets do and is where the composite's `257/256` stretch comes from.
@@ -55,6 +55,7 @@ struct PostUniforms {
     source_max: [f32; 4],
     wave_scale: [f32; 4],
     wave_bias: [f32; 4],
+    tint: [f32; 4],
 }
 
 /// One point as the vertex shader reads it: position, `rand.x` and normal,
@@ -327,11 +328,11 @@ impl FuryBackdrop {
         let blend_pipeline = post_pipeline("fury blend", "fs_blend", TARGET_FORMAT, None);
         let wave_pipeline = post_pipeline("fury wave", "fs_wave", TARGET_FORMAT, None);
         // `BlendFunc(CONSTANT_COLOR, ONE)`: the page keeps what it has and
-        // the backdrop is added through the tint. The page's alpha is left
-        // alone.
+        // the backdrop is added. The tint is applied in the shader, which has
+        // to encode it - see `fs_composite`. The page's alpha is left alone.
         let tinted = wgpu::BlendState {
             color: wgpu::BlendComponent {
-                src_factor: wgpu::BlendFactor::Constant,
+                src_factor: wgpu::BlendFactor::One,
                 dst_factor: wgpu::BlendFactor::One,
                 operation: wgpu::BlendOperation::Add,
             },
@@ -417,6 +418,7 @@ impl FuryBackdrop {
                     0.0,
                     0.0,
                 ],
+                tint: frame.tint,
             }),
         );
         let targets = self.targets.as_ref().expect("built above");
@@ -441,22 +443,17 @@ impl FuryBackdrop {
         }
     }
 
-    /// The composite, inside the page's own pass, through `tint`.
+    /// The composite, inside the page's own pass, tinted by the `tint` of the
+    /// frame [`Self::prepare`] was given.
     ///
     /// Nothing is drawn before the first [`Self::prepare`], there being no
     /// targets to read.
-    pub fn composite(&self, pass: &mut wgpu::RenderPass<'_>, tint: [f32; 4]) {
+    pub fn composite(&self, pass: &mut wgpu::RenderPass<'_>) {
         let Some(targets) = &self.targets else {
             return;
         };
         pass.set_pipeline(&self.composite_pipeline);
         pass.set_bind_group(0, &targets.over_trail, &[]);
-        pass.set_blend_constant(wgpu::Color {
-            r: f64::from(tint[0]),
-            g: f64::from(tint[1]),
-            b: f64::from(tint[2]),
-            a: f64::from(tint[3]),
-        });
         pass.draw(0..3, 0..1);
     }
 
