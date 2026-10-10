@@ -11,10 +11,9 @@ Candidate lanes, ranked by what a player notices:
 1. **Firefox runs the web build at 9-14 fps** (sonnet or opus). Measured by
    `web-load` before and after threads (12.2 vs 12.4 fps), so threads are not
    the cause. Profile it. Evidence: [the web thread](the-web-build-races-in-chromium-and-firefox.md).
-2. **The web build's remaining freezes** (sonnet): about 2 s at boot, 0.7-0.85 s
-   at the end of an HD race load (GPU scene build, mostly `writeBuffer`), 0.5 s on
-   escape to the menus. Spreading GPU uploads over frames is the likely fix. Same
-   thread.
+2. ~~**The web build's remaining freezes**~~ taken and done 2026-10-10 (lane
+   `web-freezes`); what is left (pipeline compiles, the boot's MP3 decode, the
+   Cell Selection previews) is in [the web thread](the-web-build-races-in-chromium-and-firefox.md).
 3. **HD's AI field scrapes Talon's Junction** (opus): 808 wall-contact ticks over
    five seeds against a target of 642 or less; the lone Ace is fixed. Evidence:
    [the HD handling thread](../gameplay/hd-handling-against-rpcs3.md) and
@@ -35,8 +34,23 @@ Decisions waiting on the maintainer:
   ported from ffmpeg's decoder (LGPL-2.1+, so LGPL lands in shipped binaries),
   leaving it, or ffmpeg.wasm for the web only. Open questions: where the crate
   would live, and whether LGPL in the binaries is acceptable.
+- **A stale remote branch**: `claude/wipeout-frontend-review-zedf9g` holds one
+  commit never merged (`8dcfe58c4`, 2026-09-27, rejecting Pure EU and HD/Fury
+  discs that opened as Pulse). Checked 2026-10-10: superseded on `main`
+  (`oag_pulse`'s foreign-title list names `UCES-00001`, `oag_disc::platform`
+  identifies PS3 discs, both titles open as themselves) and 5,810 commits
+  behind. The maintainer may delete it:
+  `git push origin --delete claude/wipeout-frontend-review-zedf9g`.
 - **GitHub Pages is removed from the workflows but still live**: the maintainer
   disables it with `gh api -X DELETE repos/topaxi/OpenAntiGrav/pages`.
+
+Candidates raised by the 2026-10-10 drive, not approved (the maintainer said
+"no new lanes" that day):
+
+- Pilot Assist's mobile cost: four full spline scans a tick while it is on
+  ([the Pilot Assist thread](../gameplay/pilot-assist.md), Next Steps 2).
+- The two asset layers (fallback and mod override): **not before Sunday
+  2026-10-11 18:00** ([its thread](an-own-asset-layer-behind-the-disc.md)).
 
 ## Next Steps
 

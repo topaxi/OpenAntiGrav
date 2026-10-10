@@ -555,6 +555,22 @@ pub struct RuntimeHud {
     /// last place shows one and first place shows all of them. `segments`
     /// is the executable's own literal, not the field size.
     pub place_arc: SegmentArc,
+    /// The Pilot Assist indicator's widgets, `None` on a title that authors none.
+    pub assist: Option<AssistIndicator>,
+}
+
+/// Pilot Assist's four indicator widgets; an arrow lists its child images too, which
+/// the layout authors nested under it and the original shows with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AssistIndicator {
+    /// Up while the option is on.
+    pub background: &'static str,
+    /// Up for three seconds after a correction.
+    pub main: &'static str,
+    /// Blinks after a correction off a left-hand wall.
+    pub left: &'static [&'static str],
+    /// Blinks after a correction off a right-hand wall.
+    pub right: &'static [&'static str],
 }
 
 /// A shield readout made of a background, a fill cropped from the top, and

@@ -3,7 +3,10 @@
 //! Split out of [`super`] under the 1,000-line rule, plus the name-keyed
 //! lookups [`Global::extra`] documents.
 
-use super::{Error, Node, Result, SpeedClass, Zone, child, descendant, fexml, number};
+use super::{
+    Error, Node, PilotAssist, Result, SpeedClass, Zone, child, descendant, fexml, number,
+    pilot_assist,
+};
 
 /// The speed-pad boost, per speed class. `<SpeedupPads amount time/>`.
 ///
@@ -284,9 +287,18 @@ pub struct Global {
     ///
     /// [ADR-0022]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0022-title-packages.md
     pub extra: Vec<ForeignGlobalClass>,
+    /// `<GlobalClass><PilotAssist/><PilotAssistPenalty/></GlobalClass>`, indexed
+    /// by [`SpeedClass`]; `None` where the rung authors neither (Pulse, Pure).
+    pub pilot_assist: [Option<PilotAssist>; 4],
 }
 
 impl Global {
+    /// The Pilot Assist tuning for one class, `None` when the title authors none.
+    #[must_use]
+    pub fn pilot_assist(&self, class: SpeedClass) -> Option<PilotAssist> {
+        self.pilot_assist[class as usize]
+    }
+
     /// The speed-pad tunables for one class.
     #[must_use]
     pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
@@ -362,6 +374,7 @@ pub fn parse_global(expanded: &str) -> Result<Option<Global>> {
         gravity_mul,
         weapon_pads,
         extra,
+        pilot_assist: pilot_assist::per_class(global)?,
     }))
 }
 

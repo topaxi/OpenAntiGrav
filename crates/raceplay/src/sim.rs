@@ -291,6 +291,11 @@ pub struct RaceSim {
     pub(super) class_gravity_scale: f32,
     /// The launch boost's parameters - see [`Setup::start_boost`].
     pub(super) start_boost: Option<oag_physics::launch::StartBoost>,
+    /// Pilot Assist's numbers for this class - see [`Setup::pilot_assist`].
+    pub(super) pilot_assist: Option<oag_physics::pilot_assist::Params>,
+    /// Whether the player has Pilot Assist switched on; the settings decide, and a
+    /// pause-menu toggle may change it mid-race.
+    pub(super) pilot_assist_on: bool,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
     pub(super) speedup_pads: Vec<oag_vex::pads::PadVolume>,
     /// Distance from the ship to each pad, one entry per pad, in track units.

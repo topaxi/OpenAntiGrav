@@ -95,6 +95,7 @@ OAG_CONTROLS_AIRBRAKE_RIGHT = { text = "FREIO AÉREO DIREITO", human = false }
 OAG_CONTROLS_CAMERA_VIEW = { text = "VISÃO DA CÂMERA", human = false }
 OAG_CONTROLS_SIDESHIFT = { text = "DESLOCAMENTO LATERAL", human = false }
 OAG_CONTROLS_TRIGGERS = { text = "GATILHOS", human = false }
+OAG_CONTROLS_PILOT_ASSIST = { text = "ASSISTÊNCIA AO PILOTO", human = false }
 OAG_CONTROLS_TRIGGER_SENSITIVITY = { text = "SENSIBILIDADE DOS GATILHOS", human = false }
 OAG_CONTROLS_TOUCH_GO_ZONES = { text = "ZONAS DE FREIO DO GO", human = false }
 OAG_CONTROLS_TOUCH_SCHEME = { text = "ESQUEMA DE TOQUE", human = false }

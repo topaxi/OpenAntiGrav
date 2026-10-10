@@ -54,6 +54,13 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
   move in whole rows because `Draw` has no vertical clip; a clip would let
   them follow the finger by the pixel. Pulse's `Grid Selection` pages by its
   arrows and takes no swipe; a swipe-to-page there is open.
+- **HD's hex grids were retuned for phones on 2026-10-10 and not tried on one.**
+  A drag pans only when the press began on a tile (`Pointer::press_at`), the
+  grid follows 0.6 of the finger (`picker::pointer::DRAG_GAIN`), a flick is
+  capped at 12 columns a second (`HEX_MAX_FLING`) and coasts with friction 3.0
+  (`HEX_FRICTION`), all chosen (selection-screens.md has the table). The
+  maintainer's phone pass decides whether those three constants need tuning;
+  the window's DPI is not consulted, so the feel varies with screen size.
 - **Headless captures cannot click.** `--press` drives buttons through the
   capture's own tick loop, but the pointer arrives only through winit
   events in `main/app.rs`; a `--click X,Y` would need `capture::run` to

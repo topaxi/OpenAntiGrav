@@ -212,9 +212,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 mod cameras;
 mod names;
+mod pilot_assist;
 
 pub use cameras::{AirbrakeGraphics, BonnetCamera, Camera, ExternalCamera};
 pub use names::{SHIP_DIR, entry_name, entry_name_in};
+pub use pilot_assist::PilotAssist;
 
 /// Hull dimensions and the shield pool. `<Misc/>`. Per ship, shared by all four
 /// `<Class>` blocks.

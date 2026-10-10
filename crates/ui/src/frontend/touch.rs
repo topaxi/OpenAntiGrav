@@ -158,9 +158,8 @@ pub struct TouchState {
     /// `OptionsControls`' `Motion Sensor` list. Drawn and cycled; not wired
     /// to any setting - see `frontend::options2048`'s module doc.
     pub controls_index: usize,
-    /// `OptionsPilot`'s `Pilot Assist` list. Drawn and cycled; not wired to
-    /// any setting - see `frontend::options2048`'s module doc.
-    pub pilot_index: usize,
+    /// `OptionsPilot`'s own choice - see [`Frontend::pilot_choice`].
+    pub pilot_choice: Option<u8>,
 }
 
 /// What a tap on a tile does.

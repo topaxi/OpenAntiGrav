@@ -46,6 +46,7 @@ use std::collections::HashMap;
 use oag_tables::fexml::{self, Node};
 
 mod assets;
+pub mod assist;
 mod compose;
 mod dialect_2048;
 mod draw;
@@ -663,11 +664,11 @@ pub struct Readout {
     pub thrust_chase_percent: f32,
     /// Whether 2048's Pilot Assist setting is on, which lights `PilotAssist`.
     ///
-    /// The original reads one global byte (`DAT_81545468 + 0x3260e`). This
-    /// build has no assist setting to read, so a race leaves it `false` and
-    /// the widget stays absent; the field and its draw are wired for the day
-    /// the setting exists.
+    /// The original reads one global byte (`DAT_81545468 + 0x3260e`, the
+    /// Extreme setting); a race sets it from the player's assist switch.
     pub pilot_assist: bool,
+    /// The assist indicator HD authors (`AssistIndicator*`), see [`assist`].
+    pub assist: assist::AssistReadout,
     /// The race's mode. Read by a title's runtime HUD rules, which the
     /// original keys on its own mode id - see `hud::runtime`.
     pub mode: oag_race::Mode,

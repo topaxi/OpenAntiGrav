@@ -177,7 +177,8 @@ impl Race {
             shield_blink_phase_whole: self.view.shield_blink_timer_whole,
             energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
             thrust_chase_percent: self.view.thrust_chase_percent,
-            pilot_assist: false,
+            pilot_assist: self.pilot_assist_shown(),
+            assist: self.view.assist_indicator.readout(),
             mode: self.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the
             // stored best, which live on `RaceStage`, one level up -

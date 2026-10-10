@@ -595,6 +595,9 @@ pub struct ShipState {
     /// Not named `shield_timer`: [`Self::shield`] is the energy pool and
     /// [`crate::damage::Shield`] the per-tick contact outcome.
     pub shield_pickup_timer: f32,
+    /// Pilot Assist's own state, HD's `craft+0x380` ([`crate::pilot_assist`]). Default
+    /// for every craft the race never enables it on, which keeps it out of the hash.
+    pub pilot_assist: crate::pilot_assist::State,
 }
 
 impl Default for ShipState {
@@ -650,6 +653,7 @@ impl Default for ShipState {
             state_timer: 0.0,
             turbo_timer: 0.0,
             shield_pickup_timer: 0.0,
+            pilot_assist: crate::pilot_assist::State::default(),
         }
     }
 }

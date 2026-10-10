@@ -200,13 +200,13 @@ transferred to EU, so EU's count includes names that add no page.
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
 | [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 200 (173 fn, 27 data) | 1 (0%) | 20 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+1 measurement script) | 2026-10-06, [billboards.md](../ghidra/functions/ps2-pulse-eu/billboards.md) |
-| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 635 (573 fn, 62 data) | 37 (5%) | 62 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+26 measurement scripts) | 2026-10-10, [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md) |
+| [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 644 (581 fn, 63 data) | 38 (5%) | 63 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+26 measurement scripts) | 2026-10-10, [engine-trail.md](../ghidra/functions/ps3-hdfury-eu/engine-trail.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 104 (100 fn, 4 data) | 9 (8%) | 18 | none | 2026-10-07, [player-input.md](../ghidra/functions/ps4-omega-eu/player-input.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 430 (413 fn, 17 data) | 74 (17%) | 4 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-09-23, [lighting.md](../ghidra/functions/psp-pulse-eu/lighting.md) |
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1295 (1162 fn, 133 data) | 31 (2%) | 83 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-10-08, [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 73 (72 fn, 1 data) | 2 (2%) | 12 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+34 measurement scripts) | 2026-10-08, [weapons-gfx.md](../ghidra/functions/psp-pure-usa/weapons-gfx.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 111 (101 fn, 10 data) | 6 (5%) | 24 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-07, [archive-mount.md](../ghidra/functions/vita-2048-eu-v104/archive-mount.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 117 (107 fn, 10 data) | 7 (5%) | 25 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-10, [pilot-assist.md](../ghidra/functions/vita-2048-eu-v104/pilot-assist.md) |
 
 <!-- re-coverage:end -->
 

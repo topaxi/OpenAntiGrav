@@ -222,9 +222,10 @@ pub(crate) fn run_windowless(
             video_format,
             &capture::Options {
                 give: give_weapon(cli.give.as_deref())?,
-                autopilot: cli.autopilot,
-                autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
-                autopilot_skill: cli.autopilot_skill,
+                autopilot: cli.driver.autopilot,
+                pilot_assist: cli.driver.pilot_assist.as_deref() == Some("on"),
+                autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
+                autopilot_skill: cli.driver.autopilot_skill,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -358,6 +359,7 @@ pub(crate) fn write_trace(
 
     let mut race = race::Race::start(loaded.setup);
     race.set_control_scheme(scheme);
+    race.set_pilot_assist(cli.driver.pilot_assist.as_deref() == Some("on"));
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
@@ -561,7 +563,8 @@ pub(crate) fn run_race(
                 header.options = oag_game::ghosts::race_options(
                     scheme,
                     loaded.setup.difficulty,
-                    cli.autopilot,
+                    cli.driver.autopilot,
+                    cli.driver.pilot_assist.as_deref() == Some("on"),
                     give_weapon(cli.give.as_deref()).ok().flatten(),
                 );
                 (path, header)
@@ -573,9 +576,10 @@ pub(crate) fn run_race(
             &oag_game::race_capture::CaptureOptions {
                 gpu,
                 give: give_weapon(cli.give.as_deref())?,
-                autopilot: cli.autopilot,
-                autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
-                autopilot_skill: cli.autopilot_skill,
+                autopilot: cli.driver.autopilot,
+                pilot_assist: cli.driver.pilot_assist.as_deref() == Some("on"),
+                autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
+                autopilot_skill: cli.driver.autopilot_skill,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
@@ -697,9 +701,9 @@ pub(crate) fn run_race(
             .prompt_style
             .as_deref()
             .and_then(oag_input::prompt::PromptStyle::from_name),
-        autopilot: cli.autopilot,
-        autopilot_pilot: autopilot_pilot(cli.autopilot_pilot.as_deref())?,
-        autopilot_skill: cli.autopilot_skill,
+        autopilot: cli.driver.autopilot,
+        autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
+        autopilot_skill: cli.driver.autopilot_skill,
         anim_seconds: cli.anim_seconds,
         race: Some(loaded),
         race_options: Some(options),

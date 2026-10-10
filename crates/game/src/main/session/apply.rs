@@ -612,6 +612,19 @@ impl Session {
                     return;
                 }
             },
+            "controls.pilot_assist" => {
+                let on = match text.as_str() {
+                    "on" => true,
+                    "off" => false,
+                    _ => {
+                        warn!("ignoring {setting} = {text:?}: expected on or off");
+                        return;
+                    }
+                };
+                // From the next race, as the scheme is: a mid-race switch is not in
+                // the input stream a replay records, so it could not be reproduced.
+                self.settings.controls.pilot_assist = on;
+            }
             "controls.touch_scheme" => match oag_input::touch::Scheme::parse(&text) {
                 // Read by the next tick's `feed_touch`.
                 Some(scheme) => self.settings.controls.touch_scheme = scheme.name().to_string(),

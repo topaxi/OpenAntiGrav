@@ -371,6 +371,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         state_timer,
         turbo_timer,
         shield_pickup_timer,
+        pilot_assist,
     } = *state;
 
     hash_body(hasher, &body);
@@ -464,6 +465,21 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
     // shield makes `crate::damage::apply_contact` return early, so it can suppress a write to
     // `shield` above; the first scenario that fires one sees both fields move together.
     hasher.write_f32(shield_pickup_timer);
+    // Only once it leaves its default, which a craft never enabled never does: every
+    // reference committed before Pilot Assist existed stays valid, and an assisted run is
+    // covered from its first enabled tick.
+    let crate::pilot_assist::State {
+        enabled,
+        acting,
+        penalty_timer,
+        blend,
+    } = pilot_assist;
+    if pilot_assist != crate::pilot_assist::State::default() {
+        hasher.write_u8(u8::from(enabled));
+        hasher.write_u8(acting.to_le_bytes()[0]);
+        hasher.write_f32(penalty_timer);
+        hasher.write_f32(blend);
+    }
 }
 
 /// The ship a run starts with: on the corridor's centre line, resting on the cushion.

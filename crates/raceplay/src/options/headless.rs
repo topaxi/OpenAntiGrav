@@ -102,6 +102,7 @@ impl Setup {
             },
             class_gravity_scale: 1.0,
             start_boost: None,
+            pilot_assist: None,
             // The cameras, all zeroed. Nothing here draws, and a camera whose
             // numbers were invented to look reasonable is the failure
             // `CLAUDE.md`'s "never invent what the assets already author"

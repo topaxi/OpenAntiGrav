@@ -104,7 +104,7 @@ impl Session {
             // would already be built off the untouched value. See
             // `oag_ui::frontend::team`'s and `::options2048`'s own module
             // docs for what each of these carries and why the rest (skin,
-            // pilot assist, motion sensor) is drawn and not read here.
+            // motion sensor) is drawn and not read here.
             if let Stage::Frontend(stage) = &self.stage {
                 if let Some((team, variant)) = stage.frontend.team_choice() {
                     self.settings.race.team = team.to_string();
@@ -116,6 +116,14 @@ impl Session {
                         2 => display::CameraView::Internal,
                         _ => display::CameraView::Far,
                     };
+                }
+                // 2048's Super is the law this build runs; Normal (the ship's own
+                // gentler `<Assist>` block) is not built, so it leaves the switch
+                // as it was rather than claim a law it does not have.
+                match stage.frontend.pilot_choice() {
+                    Some(0) => self.settings.controls.pilot_assist = false,
+                    Some(2) => self.settings.controls.pilot_assist = true,
+                    _ => {}
                 }
                 if let Some(percent) = stage.frontend.music_choice() {
                     self.settings.audio.music_volume =
