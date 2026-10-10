@@ -264,6 +264,8 @@ fn a_tap_at_rest_still_selects() {
 fn unsnapped_content_coasts_to_a_stop_wherever_it_stops() {
     let extent = Extent {
         pitch: 30.0,
+        max_fling: MAX_FLING,
+        friction: FRICTION,
         snap: false,
         bounds: Bounds::Clamp {
             min: 0.0,

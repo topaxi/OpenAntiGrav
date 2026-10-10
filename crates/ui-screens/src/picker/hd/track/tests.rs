@@ -319,7 +319,7 @@ fn a_horizontal_drag_pans_the_circuits_along_the_row_and_wraps() {
         22.0,
     );
     let drag = |dx: f32| oag_ui::pointer::Pointer {
-        drag: (dx, 0.0),
+        drag: (dx / crate::picker::pointer::DRAG_GAIN, 0.0),
         ..oag_ui::pointer::Pointer::default()
     };
     let pitch = crate::picker::hd::hex::PITCH[0];

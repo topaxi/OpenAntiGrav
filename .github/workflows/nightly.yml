@@ -27,10 +27,12 @@ concurrency:
 permissions:
   contents: read
 
+# Linux jobs are pinned to `ubuntu-24.04` rather than `ubuntu-latest` (which
+# becomes Ubuntu 26.04 on 2026-10-19); see the note in release.yml.
 jobs:
   check:
     name: anything new on main?
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       build: ${{ steps.c.outputs.build }}
       previous: ${{ steps.c.outputs.previous }}
@@ -89,7 +91,7 @@ jobs:
   publish:
     name: publish the nightly pre-release
     needs: [check, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     env:
@@ -99,7 +101,7 @@ jobs:
       # Only release.yml's artifacts. This run also holds `web-dist` from the
       # `web` job, which is Pages' content, not a release asset; an unfiltered
       # download is what put the web build on the nightly release.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

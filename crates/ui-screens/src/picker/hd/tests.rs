@@ -491,9 +491,11 @@ fn the_classic_hull_and_a_missing_colour_draw_no_red() {
     assert!(red_fills(&variant_picker("_c1"), &bare, &layout).is_empty());
 }
 
+/// A drag of `dx` units of *pan* (grid units the columns move); the finger
+/// travels `dx / DRAG_GAIN`, since the hex grids follow only part of it.
 fn drag_by(dx: f32) -> oag_ui::pointer::Pointer {
     oag_ui::pointer::Pointer {
-        drag: (dx, 0.0),
+        drag: (dx / crate::picker::pointer::DRAG_GAIN, 0.0),
         ..oag_ui::pointer::Pointer::default()
     }
 }
@@ -765,4 +767,75 @@ fn a_drag_that_started_on_a_tile_keeps_panning_off_the_grid_and_the_next_press_d
     picker.pointer(&press_at(backdrop), &found);
     assert!(picker.pointer(&drag_by(PITCH_X * 2.0), &found).is_empty());
     assert_eq!(picker.index(), at_rest);
+}
+
+/// Runs one finger swipe of `per_tick` finger units a tick for `ticks` ticks,
+/// lifts, and returns the columns the grid travelled in all.
+fn swipe_travel(per_tick: f32, ticks: usize) -> usize {
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
+    let found = pan_targets(&picker);
+    picker.pointer(&touch_down(&found), &found);
+    let mut steps = 0;
+    for _ in 0..ticks {
+        let drag = oag_ui::pointer::Pointer {
+            drag: (-per_tick, 0.0),
+            ..oag_ui::pointer::Pointer::default()
+        };
+        steps += picker.pointer(&drag, &found).len();
+        steps += settle(&mut picker, 1).len();
+    }
+    picker.pointer(&lift(), &found);
+    steps + settle(&mut picker, 600).len()
+}
+
+#[test]
+fn the_same_finger_travel_moves_fewer_columns_than_it_did_at_one_to_one() {
+    use crate::picker::pointer::DRAG_GAIN;
+    // Two columns of finger at the old 1:1 mapping, held (no flick: it
+    // stops moving before the lift).
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F", "G", "H"], "A");
+    let found = pan_targets(&picker);
+    let events = picker.pointer(
+        &oag_ui::pointer::Pointer {
+            drag: (PITCH_X * 2.0, 0.0),
+            ..oag_ui::pointer::Pointer::default()
+        },
+        &found,
+    );
+    // 2 columns of finger is 1.2 of pan: one step with 0.2 left over, where
+    // 1:1 stepped twice and rested on the column.
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert!((picker.pan() - 2.0 * DRAG_GAIN + 1.0).abs() < 1e-4);
+}
+
+#[test]
+fn a_given_flick_coasts_fewer_columns_than_it_did() {
+    // 6 columns a second of finger at 1:1 (0.1 column a tick): the old
+    // model passed 3 more columns after the lift (6 / FRICTION 2.0).
+    let per_tick = PITCH_X * 0.1;
+    let total = swipe_travel(per_tick, 10);
+    let old_total = 1 + 3; // 10 ticks x 0.1 = 1 column held, then 3 coasted
+    assert!(
+        total < old_total,
+        "{total} columns against the old {old_total}"
+    );
+    // A hard swipe is capped well under the shared 24 columns a second:
+    // at most max_fling / friction past the lift.
+    let hard = swipe_travel(PITCH_X * 2.0, 8);
+    let held = (8.0 * 2.0 * crate::picker::pointer::DRAG_GAIN).round() as usize;
+    let cap = (crate::picker::pointer::HEX_MAX_FLING / crate::picker::pointer::HEX_FRICTION).ceil()
+        as usize;
+    assert!(hard <= held + cap + 1, "{hard} > {held} + {cap}");
+}
+
+#[test]
+fn the_shared_kinetic_defaults_are_unchanged() {
+    use oag_ui::kinetic::{Extent, FRICTION, MAX_FLING};
+    let (rows, wrap) = (Extent::rows(10.0), Extent::wrapping());
+    for extent in [rows, wrap] {
+        assert_eq!((extent.max_fling, extent.friction), (MAX_FLING, FRICTION));
+    }
+    assert_eq!((MAX_FLING, FRICTION), (24.0, 2.0));
+    let hex = crate::picker::pointer::hex_extent();
+    assert!(hex.max_fling < MAX_FLING && hex.friction > FRICTION);
 }

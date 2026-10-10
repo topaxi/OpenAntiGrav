@@ -304,8 +304,8 @@ touch drag pans the columns, through the front end's one touch-scroll model,
 `oag_ui::kinetic` (the same model long menu pages and 2048's campaign map
 scroll through):
 
-- The columns follow the finger: `Picker::pan` is a fractional column offset
-  (drag travel over the 72.2-unit column pitch), and a column slides in at the
+- The columns follow part of the finger: `Picker::pan` is a fractional column
+  offset (drag travel times `DRAG_GAIN` 0.6, over the 72.2-unit column pitch), and a column slides in at the
   edge it is revealed from while the opposite one slides out, each faded by
   how far it has travelled. The half-row stagger of odd columns eases with the
   pan instead of jumping.
@@ -330,7 +330,25 @@ scroll through):
 - Only a touch produces `Pointer::drag` (`oag_game::main::pointer`); a mouse
   drag does not, so a mouse still clicks cells and uses the wheel.
 
+Calmer on a phone (2026-10-10, maintainer: dragging was too fast to land on
+a specific ship or track). Both were at fault: the grid is authored on a
+1280-unit canvas, so on a phone a 72.2-unit column is about 8 mm of finger at
+a 1:1 drag, and a light flick (6 columns/s) coasted 3 more columns at the
+shared friction, up to 12 at the 24 columns/s cap. The hex grids now take
+their own values, `picker::pointer`'s, passed per use through
+`oag_ui::kinetic::Extent::{max_fling, friction}` so long menu pages and 2048's
+campaign map keep the shared defaults below untouched. The window's DPI is not
+consulted: the pointer layer reports grid units only, so the gain is a fixed
+fraction, not a physical distance.
+
+| Hex-grid constant | Value | Why |
+| --- | --- | --- |
+| `DRAG_GAIN` | 0.6 | The columns move 0.6 of the finger, so a column takes about 13 mm instead of 8; the fling speed is read off the scaled travel, so a flick slows by the same factor |
+| `HEX_MAX_FLING` | 12 columns/s (shared 24) | A hard swipe coasts at most 4 columns instead of 12 |
+| `HEX_FRICTION` | 3.0 /s (shared 2.0) | A flick travels `speed / 3`, a third less; an aimed coast still lands on a column (`FRICTION_RANGE`) |
+
 The model's constants, all **chosen, not measured**:
+(The table is the shared defaults; the hex grids override two of them as above.)
 
 | Constant | Value | Why |
 | --- | --- | --- |

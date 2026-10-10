@@ -330,7 +330,7 @@ impl Picker {
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
         self.since_selection += dt;
-        self.scroll.tick(dt, &oag_ui::kinetic::Extent::wrapping());
+        self.scroll.tick(dt, &pointer::hex_extent());
     }
 
     /// Rewrites one info row of a circuit entry - how a distance measured on
@@ -375,7 +375,7 @@ impl Picker {
         }
         // A pad step interrupts a fling; a coast's own steps come after.
         if !out.is_empty() {
-            self.scroll.settle(&oag_ui::kinetic::Extent::wrapping());
+            self.scroll.settle(&pointer::hex_extent());
         }
         out.extend(self.fold_pan());
         if input.take(Button::Cross) || input.take(Button::Start) {
