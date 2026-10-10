@@ -262,9 +262,11 @@ pub(super) fn upload_shared(
     queue: &wgpu::Queue,
     texture: &std::sync::Arc<ModelTexture>,
     blocks: bool,
+    defer: bool,
 ) -> Option<wgpu::TextureView> {
     super::pipeline_cache::cached_texture_view(texture, || {
-        upload_with(device, queue, texture, Some(texture), blocks).map(|placed| placed.view)
+        upload_with(device, queue, texture, defer.then_some(texture), blocks)
+            .map(|placed| placed.view)
     })
 }
 

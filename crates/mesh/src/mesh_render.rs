@@ -250,6 +250,7 @@ pub fn build(
         Texcoords::Interleaved,
         false,
         false,
+        false,
     )
 }
 
@@ -286,6 +287,12 @@ pub fn build_with(
     // asks for but Wipeout HD's behind-the-glass target (`oag_raceplay`'s
     // `scene::behind_glass`), whose every chunk draw the original culls.
     cull_back: bool,
+    // Whether this caller will hand the model's geometry to
+    // [`deferred::defer_geometry`] and takes parked texture writes, which only
+    // has an effect while an [`oag_gpu::deferred_upload::Scope`] is open. A
+    // caller that does not say so (every one but `race::Drawable`) keeps
+    // immediate writes whatever scope is open.
+    defer_uploads: bool,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
@@ -802,7 +809,7 @@ pub fn build_with(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    let deferred = deferred::geometry_deferred();
+    let deferred = defer_uploads && oag_gpu::deferred_upload::active();
     if !deferred {
         queue.write_buffer(&vertex_buffer, 0, bytemuck::cast_slice(&model.vertices));
     }
@@ -911,7 +918,9 @@ pub fn build_with(
     let mut view_of = |texture: &std::sync::Arc<crate::mesh::ModelTexture>| {
         views
             .entry(std::sync::Arc::as_ptr(texture) as usize)
-            .or_insert_with(|| texture::upload_shared(device, queue, texture, blocks))
+            .or_insert_with(|| {
+                texture::upload_shared(device, queue, texture, blocks, defer_uploads)
+            })
             .clone()
     };
 

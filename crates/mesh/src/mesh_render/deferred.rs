@@ -1,22 +1,15 @@
 //! A model's vertex and index writes, parked for a frame under a
 //! [`oag_gpu::deferred_upload::Scope`].
+//!
+//! **The contract.** A caller of [`super::build_with`] that passes
+//! `defer_uploads` must hand the model's geometry to [`defer_geometry`] once it
+//! holds the `Arc` the bytes will be read from, or its buffers stay zeroed
+//! while a scope is open. `race::Drawable` is the only such caller.
 
 use crate::mesh::Model;
 
-/// Whether [`super::build_with`] leaves a model's vertex and index writes to
-/// [`defer_geometry`]: a [`oag_gpu::deferred_upload::Scope`] is open.
-///
-/// **The contract of opening a scope around a build.** Every model built under
-/// it hands its geometry to [`defer_geometry`] once it holds the `Arc` the
-/// bytes will be read from, or its buffers stay zeroed. `race::Drawable` is the
-/// only such caller; the viewer and the capture path never open a scope.
-#[must_use]
-pub fn geometry_deferred() -> bool {
-    oag_gpu::deferred_upload::active()
-}
-
-/// Parks the geometry writes [`super::build_with`] skipped (see [`geometry_deferred`]),
-/// reading from `model` itself rather than a copy of it.
+/// Parks the geometry writes [`super::build_with`] skipped, reading from `model`
+/// itself rather than a copy of it.
 pub fn defer_geometry(
     vertex_buffer: &wgpu::Buffer,
     index_buffer: &wgpu::Buffer,

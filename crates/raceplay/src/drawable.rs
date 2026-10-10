@@ -224,8 +224,8 @@ impl Drawable {
             texcoords,
             prepass,
             cull_back,
+            true,
         )?;
-        let geometry_deferred = mesh_render::deferred::geometry_deferred();
         let reversed_indices = prepass.is_some().then(|| {
             let reversed: Vec<u32> = model
                 .indices
@@ -294,7 +294,7 @@ impl Drawable {
         let mut model = model;
         model.release_texels();
         let model = std::sync::Arc::new(model);
-        if geometry_deferred {
+        if oag_gpu::deferred_upload::active() {
             mesh_render::deferred::defer_geometry(&vertices, &indices, &model);
         }
         Ok(Self {

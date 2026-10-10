@@ -637,10 +637,17 @@ not a decimal:
 | end of the race load (scene build) | 817, 1317, 1400 ms | 550, 917, 433 ms |
 | Escape from a race | 750, 1367, 1417 ms | under 300, 400, 250 ms |
 
-At a load average near 8 the same builds measured boot 1.6 to 1.8 s before and
-1.0 to 1.2 s after, and Escape 0.6 s before and 0.23 s after. Firefox 155
-(presses further apart, stalls of 300 ms or more, one run each, load 10 and
-72): Escape 1745 ms before and 583 ms after, the end of the race load 733 and
+Every stall over 100 ms of those six runs, in order, in ms. Before: a1 433, 3333,
+633, 200, 967, 167, 817, 750; a2 183, 2217, 383, 850, 150, 117, 1317, 1367, 150;
+a3 433, 3400, 600, 850, 117, 117, 1400, 1417, 150. After: b1 1033, 317, 383, 117,
+550, 233; b2 150, 2017, 667, 650, 117, 133, 917, 400, 117; b3 183, 2483, 717,
+733, 167, 433, 200, 250. Loads at the start of each run: a1 40, b1 20, a2 12, b2
+74, a3 51, b3 38. The runs at a load near 8 (a different pair of builds, the
+same walk) measured boot 1.6 to 1.8 s before and 1.0 to 1.2 s after, and
+Escape 0.6 s before and 0.23 s after. Firefox 155
+(presses further apart; stalls of 300 ms or more, because its steady frame gaps
+of 100 to 150 ms put a 100 ms cut on nearly every frame; one run each, load 10
+and 72): Escape 1745 ms before and 583 ms after, the end of the race load 733 and
 617 ms before and 250 ms after, boot 1116 ms before and 950 ms after.
 
 **The scene build.** Profiled with `--profile`, the 0.7 to 1.5 s was
@@ -657,10 +664,10 @@ drawable's `Arc<Model>`, texture levels from the texture's `Arc`; the module's
 memory after the load read 953 MiB before and 969 to 971 MiB after (not
 investigated). The scope opens on the
 web only, so native stays on the immediate `queue.write_*` it always was and
-its load time is untouched. The scene build itself measured 0.8 to 1.4 s
-before and 0.1 to 0.45 s after; the uploads then take 21 to 29 frames, so the
+its load time is untouched. The scene build call itself measured 0.8 to 1.4 s
+before and 0.1 to 0.9 s after (0.9 s in the run at load 74); the uploads then take 21 to 29 frames, so the
 loading screen is up 0.35 to 0.5 s longer (at 60 Hz) and animates through it.
-What is left of the stall is the browser compiling the pipelines: the CDP
+What is left of the stall is, inferred, the browser compiling the pipelines: the CDP
 profile of that stretch has no busy stretch of the page's thread over 150 ms
 while the animation frames are 400 to 550 ms apart. wgpu 30 has no
 asynchronous pipeline creation to hand that to.
@@ -670,7 +677,20 @@ reads went through the same 64-block LRU the page's thread uses, so the front
 end's blocks were gone and reopening Cell Selection made 41 synchronous
 requests on the page's thread (`send` 0.54 s, GC 0.37 s, the byte loop 0.21 s
 in the profile). The page's thread and a worker now each have a cache
-(`web_image::Shape`): after the change Escape makes no request at all.
+(`web_image::Shape`): after the change Escape makes no request at all. The
+worker's is 32 MiB where the shared one was 64: its fetches went from 675-682 to
+783 a load and `CraftsBuilt` stayed inside the noise (2.2 to 4.1 s before, 2.4 to
+5.0 s after), so it was left.
+
+**The picture.** Compared on native at the same tick, which the web cannot
+pin: a temporary patch opened the scope around `Scene::new` and drained before
+the first frame (HD 205 MB parked, Pulse 84 MB), and `oag-game --race
+--screenshot` at ticks 60 and 400 gave byte-identical PNGs with and without it,
+for both titles. Native textures arrive through the texture sink and bypass the
+deferral, so the BC row bands are covered by `a_block_chain_parks_every_level_
+and_drains_in_whole_block_rows` (wgpu validates the bands) and the RGBA
+readback test. In the browser the flyby frames at the same wall times match
+before and after; the countdown was not reached in that walk.
 
 **Boot.** The chain is `prepare::Pending::windowed`, `boot::load_shell`,
 `sprites::read_front_end_first` and `Archives::read_every_name`: 119
