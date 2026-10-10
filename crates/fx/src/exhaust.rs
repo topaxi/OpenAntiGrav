@@ -1224,14 +1224,15 @@ impl Pipeline {
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
-                    entry_point: Some("fs_main"),
-                    // The velocity target, when the race adds one, rides
-                    // along **write-masked empty**: a flare or ribbon quad is
-                    // rebuilt from scratch every draw with no frame-to-frame
-                    // vertex correspondence, so there is no previous position
-                    // to compute a velocity from, and these draws write no
-                    // depth either - the velocity at their pixels stays the
-                    // surface's behind them. See `mesh_render::Velocity` and
+                    entry_point: Some(velocity.entry("fs_main", "fs_main_velocity")),
+                    // The velocity target, when the race adds one: a flare or
+                    // ribbon quad is rebuilt from scratch every draw with no
+                    // frame-to-frame vertex correspondence, so there is no
+                    // previous position to compute a velocity from. It writes
+                    // **zero motion weighted by its own coverage** instead of
+                    // leaving the surface behind it, whose screen motion
+                    // smears the glow on a hard turn. Chosen, not measured:
+                    // the original has no motion blur. See
                     // `docs/rendering/motion-blur.md`.
                     targets: &{
                         let mut targets = vec![Some(wgpu::ColorTargetState {
@@ -1239,7 +1240,15 @@ impl Pipeline {
                             blend: Some(blend),
                             write_mask,
                         })];
-                        targets.extend(velocity.target(true));
+                        targets.extend(velocity.target(true).map(|target| {
+                            target.map(|mut target| {
+                                if velocity == oag_mesh::mesh_render::Velocity::Write {
+                                    target.write_mask = wgpu::ColorWrites::ALL;
+                                    target.blend = Some(wgpu::BlendState::ALPHA_BLENDING);
+                                }
+                                target
+                            })
+                        }));
                         targets
                     },
                     compilation_options: wgpu::PipelineCompilationOptions {

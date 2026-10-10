@@ -49,7 +49,7 @@ impl Velocity {
 
     /// The fragment entry point for the depth-writing pipelines: `base`, or
     /// its `_velocity` twin when this pipeline also writes the buffer.
-    pub(crate) fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {
+    pub fn entry(self, base: &'static str, velocity: &'static str) -> &'static str {
         match self {
             Self::None => base,
             Self::Write => velocity,

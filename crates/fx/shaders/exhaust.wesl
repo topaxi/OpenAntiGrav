@@ -61,8 +61,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     return out;
 }
 
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+fn shade(in: VertexOutput) -> vec4<f32> {
     let texel = textureSample(flare, flare_sampler, in.texcoord);
 
     // The recovered blend is additive weighted by source alpha:
@@ -147,4 +146,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let decoded = gamma_to_target(rgb, linear_out);
     let out_rgb = mix(decoded, rgb, trail_shape);
     return vec4<f32>(out_rgb, shape * in.colour.a * hd_fade);
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
+    return shade(in);
+}
+
+// The twin for the race's two attachments. Colour as `fs_main`; the velocity
+// target takes zero motion weighted by the same coverage (its blend is
+// source-alpha over), so the engine's glow and trail are not smeared by the
+// motion blur and the temporal upscaler along the track's screen motion behind
+// them - which is large exactly when the craft turns hard under a chase camera.
+// **Chosen, not measured**: the original has no motion blur to compare against.
+struct VelocityOutput {
+    @location(0) colour: vec4<f32>,
+    @location(1) velocity: vec4<f32>,
+};
+
+@fragment
+fn fs_main_velocity(in: VertexOutput) -> VelocityOutput {
+    let colour = shade(in);
+    return VelocityOutput(colour, vec4<f32>(0.0, 0.0, 0.0, colour.a));
 }

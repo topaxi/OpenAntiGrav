@@ -119,8 +119,8 @@ two frames, speeds from near-rest to race pace):
   head vertex `u` 0.61510, `+0x11ec` 0.61336, `+0x1210` 0.15526. **The SPU
   writes no scroll into the vertex.** Where the phase does enter is the next
   section.
-- **colour: white to red over the first 27 rings** - green and blue fall
-  linearly `255 -> 0` at ring 27 and stay 0; red never moves.
+- **colour (Fury skin, flag 1): white to red over the first 27 rings** - green and blue fall
+  linearly `255 -> 0` at ring 27 and stay 0; red never moves. A classic craft has a different ramp: see "The vertex colour ramp is per skin".
 - **alpha = brightness x attack x falloff** with `attack = min(k * 10/54, 1)`
   (a 5.4-ring ramp from the nozzle) and `falloff = 1 - k/54` (linear to
   nothing at the tail). At brightness `0.717` the measured peak is `162/255`,
@@ -2030,8 +2030,80 @@ Open, in rough order of visible cost:
 - What the original does to the ring across a **respawn** - the race start is
   read (born full, bunched, dark) but a respawn was never captured; this
   engine re-bunches at the new pose as a stated approximation.
-- Whether the white-to-red vertex ramp differs on a classic (blue) HD grid -
-  every craft in the dumped sessions was a Fury `concept1`.
+- ~~Whether the white-to-red vertex ramp differs on a classic (blue) HD grid~~ -
+  **it does**, see "The vertex colour ramp is per skin, 2026-10-10" below.
+
+## The vertex colour ramp is per skin, 2026-10-10 (`hd-trail-colour-flare-ghost`)
+
+**The "white-to-red vertex ramp is universal" reading was wrong, and it was never
+measured on a classic craft.** The maintainer's play report - an HD trail that
+should be cyan throughout, ours cyan "with a gradient to red" - is right on the
+mechanism. Every dump before this session was a Fury `concept1` grid (the open
+item above said so), and a classic ramp was inferred from the Fury one.
+
+**Method.** RPCS3's guest memory, including the RSX local memory holding the SPU's
+output buffers, is readable through `/proc/<pid>/mem` with no debugger. For all
+eight trails (`alloc + 0x84a0 + slot * 0x1230`: craft pointer `+0x1204`, current
+buffer `+0x1214`) read the 324-vertex buffer, `VertexColour1` u8x4 at `+0x20` of
+each 36-byte vertex. Then, in **one** GDB session, write `0` over `craft + 0x7d2c`
+(the Fury-skin byte, read as 1 on every craft) for all eight craft, resume, wait one
+second, and read the buffers again. Vertices come in pairs, a ring is 2 of them, a
+fin is 108. Scripts: `scripts/rpcs3-hd-trail-flag-ab.py` (the A/B),
+`scripts/rpcs3-hd-trail-colours.py` (read-only full table), `scripts/rpcs3-hd-trail-flag.py`
+(read or set the byte), `scripts/rpcs3-hd-trail-film.py` (frames).
+
+| ring k | flag 1 (Fury) rgb | flag 0 (classic) rgb |
+| --- | --- | --- |
+| 0 | 255, 255, 255 | 63, 255, 255 |
+| 3 | 255, 245, 245 | 84, 240, 255 |
+| 13 | 255, 198, 198 (ring 12) | 106, 226, 255 (ring 12) |
+| 27 and every ring after | 255, 0, 0 | 254, 127, 255 |
+
+Both are a linear lerp over the first 27 rings and then held. The classic ramp is
+cyan to light violet with blue pinned at 255, and it never passes through red; the
+Fury ramp is white to pure red. Same result on all eight slots. The SPU job
+evidently picks the ramp from the lane mask `Trail_WriteCraftContexts` writes from
+the same byte (reading, not yet disassembled; the colours changed within one second
+of the write on a running race, which is the evidence, and the buffers read the same
+on all eight slots).
+
+**What it does to the picture.** The fragment program multiplies the blue texture's
+colour by this vertex colour (`MUL H0.xyz, H0, f[TC0]`). Ours used the Fury ramp for
+every craft, so a classic tail was `texture * (1, 0, 0)` - dark red-violet, the
+reported "gradient to red". It now follows the flag: `oag_fx::exhaust::hd::tint_at`.
+Pinned by `the_vertex_ramp_follows_the_fury_flag_as_the_running_game_wrote_it`.
+
+**Confidence.** 85 for the two ramps (read from the running game's own buffers, eight
+trails, two flag states, one launch; the Fury ramp also matches the three earlier
+sessions' dumps). Not reached on RPCS3: a classic craft in a race. Every route on this
+disc (Racebox Feisar, the HD campaign, three save states) loaded `concept1` with flag
+1 on all eight craft, so the classic frames are a **Fury hull with its byte
+overwritten**, labelled so under `data/reference/hd-capture/trail-colour/classic-trail-flag0/`.
+Those frames show an orange to pink strip behind the nozzle over a dark floor, which
+is the flame plume at the nozzle, not the ribbon; no frame isolates the ribbon's tail
+colour, so **the all-cyan tail is not confirmed by pixels**. The disc never ships a
+classic hull to compare, and a launch where the race was loaded from a restored
+save state aborted in the game itself at the first frame (`abort()` right after
+`Loading Screen Finished`), so reach states from a fresh boot.
+
+Omega: checked, applies in principle, not wired - its `data00.psarc` ships
+`HD_EngineTrail_BlueRed{,_1,_2}.rcsmaterial` (PS4 shaders, see below) and the SPU job
+has no PS4 equivalent we can read; not checkable on a capture path.
+
+## Motion blur smeared the engine glow, 2026-10-10
+
+HD's original has no motion blur; the maintainer's "the glow ghosts a little on tight
+airbrake turns" is therefore ours. The exhaust pass wrote no velocity (write-masked
+empty, so a pixel kept the surface behind it), and on a hard turn under a chase camera
+the track's screen motion is large, so the blur dragged the plume and trail along with
+the floor. Frames at tick 300 of `verification/scenarios/hd-airbrake-left.inputs`
+(`--team feisar_c1`) with `--motion-blur high` before and after, plus `off`, are in
+`data/reference/hd-capture/flare-ghost/`. The exhaust fragment entry
+`fs_main_velocity` now writes zero motion weighted by its own alpha (the velocity
+target blends source-alpha over). **Chosen, not measured**: no original to compare.
+The engine flare sprite is not drawn for the player's own craft, so the glow in
+question is the flame mesh and the tube. The same reasoning applies to the other
+alpha-blended fx (particles, clouds); left as they were.
 
 ## Reproducing this
 
