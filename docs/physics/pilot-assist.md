@@ -5,7 +5,7 @@ track's own spline that yaws the craft back from a wall it is about to meet, pai
 few percent of thrust. This page is the behaviour; the instruction-level evidence for HD is
 [pilot-assist.md](../ghidra/functions/ps3-hdfury-eu/pilot-assist.md).
 
-## HD/Fury's law (confidence 75, static)
+## HD/Fury's law (confidence 85, read live on RPCS3)
 
 Each tick, for a local player's craft with the save option on, racing (not on the grid), in
 any mode but Zone and Detonator:
@@ -27,3 +27,11 @@ any mode but Zone and Detonator:
 
 It never reads the steering input. All numbers are per speed class from
 `/data/xml/handlingstats.xml`'s `<GlobalClass>` rungs.
+
+The penalty timer decays even while the assist is off, and the throttle keeps the
+`thrustPercentOnUse` scale until it reaches zero; switching it off mid-race does not refund
+the last three seconds.
+
+**Measured on RPCS3** (the table is on the evidence page): aimed at the right-hand wall at
+100 units/s and let go, the craft hits it and drops to 16 units/s with the option off, and
+is yawed back clear of it and holds 100-120 units/s with it on.

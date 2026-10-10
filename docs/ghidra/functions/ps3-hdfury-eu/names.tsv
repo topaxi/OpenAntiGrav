@@ -682,10 +682,10 @@
 0x000f0700	function	Craft_UpdateBrake	72	hover-four-point.md
 0x000f5aa0	function	Body_SetBoxInertia	90	craft-inertia.md
 0x000c6af0	function	Handling_ReadGlobalClasses	80	pilot-assist.md
-0x000efb50	function	Craft_UpdateThrottle	72	pilot-assist.md
+0x000efb50	function	Craft_UpdateThrottle	75	pilot-assist.md
 0x000f8c30	function	PilotAssist_Construct	72	pilot-assist.md
 0x000f8c50	function	PilotAssist_SetEnabled	75	pilot-assist.md
-0x000f8c58	function	PilotAssist_ThrustScale	80	pilot-assist.md
+0x000f8c58	function	PilotAssist_ThrustScale	90	pilot-assist.md
 0x000f8cb8	function	PilotAssist_ProbeCorridor	68	pilot-assist.md
-0x000f8fe8	function	PilotAssist_Update	75	pilot-assist.md
+0x000f8fe8	function	PilotAssist_Update	85	pilot-assist.md
 0x0098d6b0	data	g_PilotAssistClassTable	80	pilot-assist.md
