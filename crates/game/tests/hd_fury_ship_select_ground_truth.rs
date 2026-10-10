@@ -142,8 +142,20 @@ fn draw(
     Some(pixels)
 }
 
-fn mean_red(rgba: &[u8]) -> f64 {
-    rgba.chunks(4).map(|p| f64::from(p[0])).sum::<f64>() / (rgba.len() / 4) as f64
+fn decode(v: f64) -> f64 {
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn encode(v: f64) -> f64 {
+    if v <= 0.003_130_8 {
+        12.92 * v
+    } else {
+        1.055 * v.powf(1.0 / 2.4) - 0.055
+    }
 }
 
 #[test]
@@ -171,31 +183,36 @@ fn the_selection_screens_carry_the_default_rows_tint() {
 
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn a_tint_of_an_eighth_reads_as_about_two_fifths_on_screen() {
+fn a_tint_of_an_eighth_is_applied_in_linear_light() {
     let Some(image) = image() else {
         return;
     };
     let assets = fury(&image);
     let backdrop = std::sync::Arc::new(boot::backdrop::MenuBackdrop::Fury(assets.clone()));
-    let eighth = [0.125, 0.125, 0.125, 1.0];
-    // The clip passes through emptier stretches; the densest of a few clocks.
-    let mut best = None;
-    for seconds in [6.0f32, 14.0, 26.0, 38.0] {
-        let Some(full) = draw(&assets, &backdrop, seconds, [1.0; 4]) else {
-            eprintln!("no GPU adapter: skipping");
-            return;
-        };
-        let level = mean_red(&full);
-        if best.as_ref().is_none_or(|(_, l, _)| level > *l) {
-            best = Some((seconds, level, full));
+    // One frame at two tints: only the tint differs, so every pixel is checked
+    // against the law, not a mean against a moving cloud.
+    let Some(full) = draw(&assets, &backdrop, 38.0, [1.0; 4]) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let dim = draw(&assets, &backdrop, 38.0, [0.125, 0.125, 0.125, 1.0]).expect("adapter");
+    let mut checked = 0;
+    for (a, b) in full.chunks(4).zip(dim.chunks(4)) {
+        if !(60..250).contains(&a[0]) {
+            continue;
         }
+        checked += 1;
+        let expected = 255.0 * encode(0.125 * decode(f64::from(a[0]) / 255.0));
+        assert!(
+            (f64::from(b[0]) - expected).abs() <= 3.0,
+            "{} at tint 1 is {} at tint 1/8, linear light says {expected:.0} and a literal scale {:.0}",
+            a[0],
+            b[0],
+            f64::from(a[0]) * 0.125
+        );
     }
-    let (seconds, full_level, _) = best.expect("four clocks");
-    assert!(full_level > 4.0, "the clip is empty at every clock tried");
-    let dim = mean_red(&draw(&assets, &backdrop, seconds, eighth).expect("adapter"));
-    let ratio = dim / full_level;
     assert!(
-        (0.3..0.55).contains(&ratio),
-        "{dim} of {full_level} is {ratio}: a literal scale gives 0.125, the original reads 0.40"
+        checked > 1000,
+        "only {checked} pixels in the middle of the range"
     );
 }
