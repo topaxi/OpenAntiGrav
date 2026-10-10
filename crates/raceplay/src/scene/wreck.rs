@@ -72,6 +72,7 @@ impl Wrecks {
                     zone_art,
                     slots.shadow_maps,
                     mesh_render::ShadowReceiver::Mapped,
+                    mesh_render::Velocity::Write,
                 )?),
                 None => None,
             });

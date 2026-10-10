@@ -85,6 +85,7 @@ impl Build<'_> {
                     self.zone_art,
                     self.shadow_maps,
                     receiver,
+                    mesh_render::Velocity::Attached,
                 )
                 .map(Some)
             })

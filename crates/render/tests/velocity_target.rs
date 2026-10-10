@@ -15,11 +15,11 @@ use oag_mesh::mesh_render::{self, Anisotropy, UNIFORMS_SIZE};
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+fn vertex(position: [f32; 3], alpha: f32) -> GpuVertex {
     GpuVertex {
         position,
         normal: [0.0, 0.0, 1.0],
-        colour: [1.0, 1.0, 1.0, 1.0],
+        colour: [1.0, 1.0, 1.0, alpha],
         texcoord: [0.0, 0.0],
         lightmap_texcoord: [0.0, 0.0],
         lit: 0.0,
@@ -36,31 +36,37 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
 /// A triangle covering the middle of the frame under an identity camera:
 /// clip space *is* model space, so the uniforms below choose the NDC motion
 /// directly.
-fn triangle_model() -> Model {
+fn triangle_model(blended: bool, alpha: f32) -> Model {
+    let call = DrawCall {
+        moving: false,
+        blend: None,
+        blend_state: None,
+        layer: oag_vex::vex::LAYER_DEFAULT,
+        culled: false,
+        range: 0..3,
+        texture: None,
+        bounds: Bounds {
+            centre: [0.0, 0.0, 0.5],
+            radius: 1.5,
+        },
+        node: None,
+        chunk: None,
+        alpha_test_ref: None,
+    };
+    let (draws, transparent_draws) = if blended {
+        (Vec::new(), vec![call])
+    } else {
+        (vec![call], Vec::new())
+    };
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
         lod_groups: Default::default(),
         label: "velocity_target test triangle".into(),
         indices: vec![0, 1, 2],
-        draws: vec![DrawCall {
-            moving: false,
-            blend: None,
-            blend_state: None,
-            layer: oag_vex::vex::LAYER_DEFAULT,
-            culled: false,
-            range: 0..3,
-            texture: None,
-            bounds: Bounds {
-                centre: [0.0, 0.0, 0.5],
-                radius: 1.5,
-            },
-            node: None,
-            chunk: None,
-            alpha_test_ref: None,
-        }],
+        draws,
         alpha_tested_draws: Vec::new(),
-        transparent_draws: Vec::new(),
+        transparent_draws,
         textures: Vec::new(),
         lightmaps: Vec::new(),
         pad_masks: Vec::new(),
@@ -84,9 +90,9 @@ fn triangle_model() -> Model {
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
         vertices: vec![
-            vertex([-0.8, -0.8, 0.5]),
-            vertex([0.8, -0.8, 0.5]),
-            vertex([0.0, 0.8, 0.5]),
+            vertex([-0.8, -0.8, 0.5], alpha),
+            vertex([0.8, -0.8, 0.5], alpha),
+            vertex([0.0, 0.8, 0.5], alpha),
         ],
     }
 }
@@ -130,18 +136,60 @@ fn half_to_f32(bits: u16) -> f32 {
 /// means it moved down the screen). The y sign is the whole point.
 #[test]
 fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
+    let Some((centre, corner)) = draw(mesh_render::Velocity::Write, false, 1.0) else {
+        return;
+    };
+    let (vx, vy) = centre;
+    assert!(
+        (vx + 0.25).abs() < 0.01,
+        "uv x velocity: expected -0.25, got {vx}"
+    );
+    assert!(
+        (vy - 0.25).abs() < 0.01,
+        "uv y velocity: expected +0.25 (the y flip), got {vy}"
+    );
+    // A corner the triangle never covers keeps the cleared zero.
+    assert_eq!(corner, (0.0, 0.0), "the clear leaked velocity");
+}
+
+/// A blended draw on the ordinary `Write` pipeline leaves the velocity of
+/// the surface behind it; on `Attached` it writes its own motion weighted by
+/// its alpha, which is what keeps a plume on its craft under motion blur.
+#[test]
+fn an_attached_blended_draw_writes_its_own_motion_weighted_by_alpha() {
+    let Some((masked, _)) = draw(mesh_render::Velocity::Write, true, 0.5) else {
+        return;
+    };
+    assert_eq!(masked, (0.0, 0.0), "a Write blended draw must stay masked");
+    let Some(((vx, vy), _)) = draw(mesh_render::Velocity::Attached, true, 0.5) else {
+        return;
+    };
+    assert!(
+        (vx + 0.125).abs() < 0.01 && (vy - 0.125).abs() < 0.01,
+        "expected half of (-0.25, 0.25), got ({vx}, {vy})"
+    );
+}
+
+/// Draws the triangle and returns the velocity texel at its centre and at a
+/// corner it never covers; `None` when there is no adapter.
+fn draw(
+    velocity_mode: mesh_render::Velocity,
+    blended: bool,
+    alpha: f32,
+) -> Option<((f32, f32), (f32, f32))> {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
-        return;
+        return None;
     };
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
 
-    let model = triangle_model();
+    let model = triangle_model(blended, alpha);
     let mesh_render::Built {
         pipeline,
+        blend_pipeline,
         vertex_buffer,
         index_buffer,
         texture_binds,
@@ -158,7 +206,7 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
         mesh_render::Depth::Scene,
         mesh_render::TRANSPARENT_BLEND,
         mesh_render::GlowMask::Protected,
-        mesh_render::Velocity::Write,
+        velocity_mode,
         // No Zone stage: this test draws a model, not a race.
         &mesh_render::zone::StageArt::NONE,
         // No shadow map, no depth map and no receiver: this test draws one
@@ -168,6 +216,12 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
     )
     .expect("building the mesh pipeline");
 
+    let pipeline = if blended {
+        let [two_sided, _] = blend_pipeline;
+        two_sided
+    } else {
+        pipeline
+    };
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("velocity uniforms"),
         size: UNIFORMS_SIZE,
@@ -287,17 +341,5 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
         (r, g)
     };
 
-    // Dead centre of the triangle.
-    let (vx, vy) = texel(SIZE / 2, SIZE / 2);
-    assert!(
-        (vx + 0.25).abs() < 0.01,
-        "uv x velocity: expected -0.25, got {vx}"
-    );
-    assert!(
-        (vy - 0.25).abs() < 0.01,
-        "uv y velocity: expected +0.25 (the y flip), got {vy}"
-    );
-    // A corner the triangle never covers keeps the cleared zero.
-    let (cx, cy) = texel(1, 1);
-    assert_eq!((cx, cy), (0.0, 0.0), "the clear leaked velocity");
+    Some((texel(SIZE / 2, SIZE / 2), texel(1, 1)))
 }
