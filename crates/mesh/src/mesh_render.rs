@@ -287,11 +287,9 @@ pub fn build_with(
     // asks for but Wipeout HD's behind-the-glass target (`oag_raceplay`'s
     // `scene::behind_glass`), whose every chunk draw the original culls.
     cull_back: bool,
-    // Whether this caller will hand the model's geometry to
-    // [`deferred::defer_geometry`] and takes parked texture writes, which only
-    // has an effect while an [`oag_gpu::deferred_upload::Scope`] is open. A
-    // caller that does not say so (every one but `race::Drawable`) keeps
-    // immediate writes whatever scope is open.
+    // Whether this caller hands the geometry to [`deferred::defer_geometry`]
+    // and takes parked texture writes, while a deferral scope is open. Every
+    // caller but `race::Drawable` keeps immediate writes.
     defer_uploads: bool,
 ) -> Result<Built> {
     // The blended pipeline never writes depth whichever role this is; the rest
