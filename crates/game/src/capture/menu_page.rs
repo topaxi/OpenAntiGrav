@@ -815,6 +815,7 @@ pub(super) fn picker_page(
             // slideshow read - see `capture.rs`.
             mode3d: None,
             hull_only: crate::preview::draws_hull(title, kind),
+            ship_model: layout.hd.as_ref().and_then(|screen| screen.ship_model),
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {

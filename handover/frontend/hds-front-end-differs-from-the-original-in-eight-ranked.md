@@ -16,13 +16,17 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Ship Select swap (LANDED 2026-10-10, `hd-ship-select-anim`): no turntable
   (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
   step (`oag_game::preview::hull_swap`). Open: the settle's start size is per
-  team (chosen 1.06), the step's particle burst (no `.pob` located), per-team
-  framing (the original frames each team differently; `hull_orbit` fits
-  Feisar) - read each team's `ShipModel` `RotX`/`RotY`
+  team (chosen 1.06), the step's burst (not a `.pob`: it is the Fury backdrop
+  point cloud, `BackgroundAnimFury_Item`; what a step does to it is unlocated)
+- Ship Select framing (LANDED 2026-10-10, `hd-ship-framing`): the authored
+  `ShipModel` pose (one for all teams) composed on raw hull coordinates
+  (`oag_game::preview::ship_model`). Open: the lens (0.41 rad), pitch (0.22 vs
+  authored 0.4) and slide are fitted, not authored - find the original's
+  rotation convention to drop the pitch override; `hull_orbit` remains only
+  for Omega's hull and Pulse-shaped fallbacks
 - Ship Select: bracket corners, loyalty value; the hex column draws
   (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
-  fresh profile locks it (this build offers `_n1`); compose the
-  authored `ShipModel` `RotX`/`RotY` instead of the fitted `hull_orbit`; the
+  fresh profile locks it (this build offers `_n1`); the
   original's default team is the maintainer's save (Feisar), not a gap
 - Cell Selection (closed 2026-10-08, hd-cell-select: back card face-on, 32-hex
   field, four `_bw` icons, `corner2` brackets, next-grid logo, barcode, rule,

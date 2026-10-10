@@ -490,6 +490,13 @@ impl PickerStage {
         // `Track Creation`'s own `<Mode3D>` camera, when authored.
         let mode3d_model = self.mode3d_model().cloned();
         let track_model = self.layout.hd_track.as_ref().and_then(|screen| screen.model);
+        let ship_model = self
+            .layout
+            .hd
+            .as_ref()
+            .and_then(|screen| screen.ship_model)
+            .filter(|_| self.previews.ship_hull.is_some() && self.model.kind() == picker::Kind::Ship);
+        let swap_scale = self.hull_phase().scale;
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
@@ -503,6 +510,21 @@ impl PickerStage {
                 target_size,
                 space,
                 &widget,
+                seconds,
+            );
+        } else if let Some(widget) = ship_model {
+            let (view_projection, model) =
+                oag_game::preview::ship_model::matrices(&widget, space, swap_scale);
+            preview.draw_matrices(
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                viewport,
+                target_size,
+                space,
+                view_projection,
+                model,
                 seconds,
             );
         } else {

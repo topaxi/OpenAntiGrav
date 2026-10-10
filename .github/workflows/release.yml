@@ -26,6 +26,14 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Every Linux job runs on `ubuntu-24.04`, not `ubuntu-latest`: GitHub moves
+# the label to Ubuntu 26.04 on 2026-10-19, and the apt package names, the
+# Android SDK/NDK paths and the container tooling these jobs lean on were only
+# checked on 24.04. The shipped AppImage's glibc floor does not come from the
+# runner (it is built in Debian bookworm, glibc 2.34 symbols), but the tarball
+# and the host-built icon helper do. Moving to 26.04 is a decision, not a
+# surprise: bump the pin on purpose. See docs/tools/releases.md.
+
 # Read-only for every build job. Only `release` is granted write access.
 permissions:
   contents: read
@@ -33,7 +41,7 @@ permissions:
 jobs:
   version:
     name: resolve version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
       suffix: ${{ steps.v.outputs.suffix }}
@@ -62,7 +70,7 @@ jobs:
   linux:
     name: linux (${{ matrix.flavour }})
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -79,7 +87,7 @@ jobs:
       VERSION: ${{ needs.version.outputs.version }}
       OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build the AppImage in the bookworm container
         run: |
           mkdir -p dist
@@ -122,7 +130,7 @@ jobs:
             # The one top-level directory is the artifact root.
             python3 scripts/check-leakage.py --dir unpacked/OpenAntiGrav-*
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.flavour }}
           path: dist/*
@@ -135,11 +143,11 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Same pinned toolchain as ci.yml; rust-toolchain.toml names it too.
       - uses: dtolnay/rust-toolchain@1.99.0
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: cargo build --profile dist -p oag-game
@@ -160,7 +168,7 @@ jobs:
           mkdir unpacked
           7z x -ounpacked dist/*.zip >/dev/null
           python3 scripts/check-leakage.py --dir unpacked/OpenAntiGrav-*
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: dist/*
@@ -176,18 +184,18 @@ jobs:
   android:
     name: android (arm64)
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.version.outputs.version }}
       KEYSTORE_B64: ${{ secrets.OAG_APK_KEYSTORE_B64 }}
       OAG_APK_KEYSTORE_PASS: ${{ secrets.OAG_APK_KEYSTORE_PASS }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.99.0
         with:
           targets: aarch64-linux-android
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # build-apk.sh builds and runs the host oag-game to rasterise the
@@ -209,7 +217,7 @@ jobs:
           scripts/build-apk.sh --version "$VERSION"
           mkdir -p dist
           cp target/apk/OpenAntiGrav-*-android-arm64.apk dist/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: android
           path: dist/*
@@ -223,11 +231,11 @@ jobs:
     name: draft GitHub Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [version, linux, windows, android]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true

@@ -37,12 +37,14 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+# Linux jobs are pinned to `ubuntu-24.04` rather than `ubuntu-latest` (which
+# becomes Ubuntu 26.04 on 2026-10-19); see the note in release.yml.
 jobs:
   build:
     name: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The threaded module needs nightly's -Z build-std; the date is the one
       # build-web.sh names (OAG_WEB_TOOLCHAIN). Everything else stays on the
       # pinned stable of ci.yml and release.yml.
@@ -52,7 +54,7 @@ jobs:
           targets: wasm32-unknown-unknown
           components: rust-src
       - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       # wasm-bindgen's CLI has to match the crate version in Cargo.lock
@@ -70,7 +72,7 @@ jobs:
           "$bin/wasm-bindgen" --version
           "$bin/wasm-opt" --version
       - run: scripts/build-web.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: target/web/dist
@@ -81,7 +83,7 @@ jobs:
   deploy-cloudflare:
     name: deploy (Cloudflare Pages)
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Skipped where the account is not configured (a fork, say). The token is
     # the repository secret CLOUDFLARE_API_TOKEN, the account id the
     # repository variable CLOUDFLARE_ACCOUNT_ID.
@@ -90,11 +92,11 @@ jobs:
       name: cloudflare-pages
       url: https://oag.topaxi.com/
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: web-dist
           path: dist
-      - uses: cloudflare/wrangler-action@v3
+      - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
