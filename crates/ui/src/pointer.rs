@@ -73,6 +73,11 @@ pub struct Pointer {
     /// click - a touch is decided on lift - and is only what a moving
     /// scroll needs to be caught by (see [`crate::kinetic`]).
     pub pressed: bool,
+    /// Where the finger landed, on the tick [`Self::pressed`] is set and
+    /// `None` on every other. Never `at`: a touch is decided on lift, so
+    /// `at` stays empty while it is down; this is what a screen asks to
+    /// know where a drag began (HD's hex grids pan only from a tile).
+    pub press_at: Option<(f32, f32)>,
     /// The finger lifted this tick, whether it tapped or dragged, or its
     /// touch was cancelled. What a scroll needs to coast and settle.
     pub released: bool,

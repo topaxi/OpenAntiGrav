@@ -30,7 +30,8 @@
 //! first lifts.
 //!
 //! Touch-down and lift are reported as edges of their own,
-//! [`Pointer::pressed`] and [`Pointer::released`], with no position: they
+//! [`Pointer::pressed`] and [`Pointer::released`], with no `at` (the landing
+//! point rides [`Pointer::press_at`] on the press tick alone): they
 //! are what `oag_ui::kinetic` needs to catch a moving scroll and to let one
 //! coast, and a scroll is the only thing that reads them. A cancelled touch
 //! and a focus loss with a finger down lift it too, so no scroll is left
@@ -247,6 +248,7 @@ impl Window {
             back: self.back,
             scroll: whole as i32,
             drag: std::mem::take(&mut self.drag),
+            press_at: self.pressed.then_some(self.touch_origin),
             pressed: std::mem::take(&mut self.pressed),
             released: std::mem::take(&mut self.released),
         };
@@ -315,6 +317,16 @@ mod tests {
             0.0, -30.0,
         )));
         assert_eq!(window.take().scroll, 1, "the remainder was carried");
+    }
+
+    #[test]
+    fn a_touch_down_reports_where_the_finger_landed_on_that_tick_only() {
+        let mut window = Window::default();
+        window.touch(touch(1, TouchPhase::Started, 100.0, 50.0));
+        window.touch(touch(1, TouchPhase::Moved, 160.0, 50.0));
+        let tick = window.take();
+        assert_eq!(tick.press_at, Some((100.0, 50.0)), "not where it moved to");
+        assert_eq!(window.take().press_at, None);
     }
 
     #[test]

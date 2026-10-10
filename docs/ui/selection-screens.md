@@ -281,6 +281,12 @@ scroll through):
   during a coast settles it on the column it steps to. A drag never selects or
   confirms, and a vertical drag does nothing. Pulse and Pure pickers are
   unchanged.
+- A drag pans only when the press began on a hex tile (`Pointer::press_at`,
+  tested with `hex_contains` against the open cells). A press on the backdrop,
+  the info panel, the craft or track preview or an arrow pans nothing and
+  steps nothing; a drag that began on a tile keeps panning after the finger
+  leaves the grid. Each new press decides again, and a touch-down still
+  catches a coast wherever it lands.
 - Only a touch produces `Pointer::drag` (`oag_game::main::pointer`); a mouse
   drag does not, so a mouse still clicks cells and uses the wheel.
 
