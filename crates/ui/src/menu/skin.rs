@@ -260,7 +260,15 @@ pub struct Skin {
     /// title with no [`oag_title::MenuSkin::selected_pulse_period_secs`],
     /// where nothing ever reads it.
     pulse_elapsed: f32,
+    /// Whether the last input was a finger, so HD's list rows are drawn
+    /// [`TOUCH_ROW_SCALE`] taller. See [`Self::set_touch_rows`].
+    touch_rows: bool,
 }
+
+/// How much taller (block height and pitch both) an HD list row is while the
+/// last input was a finger. **Ours**: the originals were authored for a pad
+/// and have no touch layout; the maintainer asked for 50%.
+pub const TOUCH_ROW_SCALE: f32 = 1.5;
 
 impl Skin {
     /// Pairs a title's skin with the grid it authors in and the line height of
@@ -337,6 +345,7 @@ impl Skin {
             line_height,
             row_ink: None,
             pulse_elapsed: 0.0,
+            touch_rows: false,
         }
     }
 
@@ -421,12 +430,32 @@ impl Skin {
     /// [`Self::first_row_y`].
     #[must_use]
     pub fn list(&self) -> Option<List> {
+        let height_scale = if self.touch_rows {
+            TOUCH_ROW_SCALE
+        } else {
+            1.0
+        };
         self.skin.list.map(|list| List {
             x: list.x * self.from_theirs.0,
             y: list.y * self.from_theirs.1,
-            pitch: list.pitch * self.from_theirs.1,
+            pitch: list.pitch * self.from_theirs.1 * height_scale,
             text_scale: list.text_scale,
+            height_scale,
         })
+    }
+
+    /// Draws HD's list rows [`TOUCH_ROW_SCALE`] taller while the last input
+    /// was a finger, and at the authored size again once a pad or key is
+    /// used. The caller must refresh [`visible_rows`] when this changes, as
+    /// the taller pitch fits fewer rows.
+    pub fn set_touch_rows(&mut self, touch: bool) {
+        self.touch_rows = touch;
+    }
+
+    /// What [`Self::set_touch_rows`] last said.
+    #[must_use]
+    pub fn touch_rows(&self) -> bool {
+        self.touch_rows
     }
 
     /// A row's subtitle geometry, in the grid being drawn in, for a title
@@ -692,6 +721,9 @@ pub struct List {
     pub pitch: f32,
     /// The rows' own `scale`, on top of the skin's. Authored.
     pub text_scale: f32,
+    /// What multiplies a row block's authored height: `1.0`, or
+    /// [`TOUCH_ROW_SCALE`] in touch mode. `pitch` already carries it.
+    pub height_scale: f32,
 }
 
 /// A row's subtitle geometry, converted into the grid the menus are drawn in.

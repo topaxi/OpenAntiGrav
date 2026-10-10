@@ -593,3 +593,24 @@ fn on_a_long_page_the_wheel_scrolls_the_view_and_keeps_the_cursor_inside_it() {
     assert_eq!(menu.scroll(), 0, "stops at the top");
     assert!(inside(&menu));
 }
+
+/// Touch mode makes an HD list row 50% taller and steps the next row by the
+/// same, and the regions a finger lands on are those taller rects.
+#[test]
+fn touch_mode_makes_an_hd_list_row_half_again_as_tall() {
+    let mut menu = Menu::new(built_in());
+    assert!(menu.open("display"));
+    let frame = hd_frame();
+    let mut skin = hd_skin();
+    let rects = |skin: &Skin| {
+        let regions = pointer::regions(&menu, skin, &frame, &measure);
+        (row_region(&regions, 0).rect, row_region(&regions, 1).rect)
+    };
+    let (first, second) = rects(&skin);
+    skin.set_touch_rows(true);
+    let (tall_first, tall_second) = rects(&skin);
+    assert!((tall_first[3] - first[3] * 1.5).abs() < 1e-3);
+    assert!(((tall_second[1] - tall_first[1]) - (second[1] - first[1]) * 1.5).abs() < 1e-3);
+    skin.set_touch_rows(false);
+    assert_eq!(rects(&skin), (first, second), "a pad brings the size back");
+}

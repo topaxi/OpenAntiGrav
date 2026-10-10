@@ -134,7 +134,7 @@ fn draw_list_rows(
             noted.get_or_insert(message.clone());
             out.push(Draw::Text {
                 x: list.x - 18.0 * sx,
-                y: y + tab_top_pad,
+                y: y + geometry.lift + tab_top_pad,
                 scale: row_scale,
                 color: WARNING,
                 border: None,
@@ -150,7 +150,7 @@ fn draw_list_rows(
         // measured pad, for the same atlas reason `strip.rs` gives.
         out.push(Draw::Text {
             x: list.x + (numbers.marker_offset.0 + numbers.arrow_size) * sx,
-            y: y + tab_top_pad,
+            y: y + geometry.lift + tab_top_pad,
             scale: row_scale,
             color: if inert { DIMMED } else { skin.normal() },
             border: None,
@@ -193,7 +193,7 @@ fn draw_list_rows(
             // The value's inset is the capture's - see `VALUE_TEXT_INSET`.
             out.push(Draw::Text {
                 x: value_x + VALUE_TEXT_INSET * sx,
-                y: y + tab_top_pad,
+                y: y + geometry.lift + tab_top_pad,
                 scale: row_scale,
                 color: if inert { DIMMED } else { skin.normal() },
                 border: None,
@@ -215,7 +215,7 @@ fn draw_list_rows(
                     skin.normal()
                 };
                 let [left_rect, right_rect] =
-                    arrow_rects(&numbers, list.x, label_width, y, (sx, sy));
+                    arrow_rects(&numbers, list.x, label_width, y + geometry.lift, (sx, sy));
                 let uv = [
                     arrow.x as f32,
                     arrow.y as f32,
@@ -526,6 +526,9 @@ struct ListRow {
     label: [f32; 4],
     /// The value block, grown by `focus` toward its focused width.
     value: [f32; 4],
+    /// How far the row's text and arrows drop to stay centred in a block
+    /// taller than the authored one; `0.0` at the authored height.
+    lift: f32,
 }
 
 fn list_row(
@@ -537,7 +540,8 @@ fn list_row(
     focus: f32,
 ) -> ListRow {
     let y = list.y + (row - first) as f32 * list.pitch;
-    let height = numbers.height * sy;
+    let height = numbers.height * sy * list.height_scale;
+    let lift = (height - numbers.height * sy) * 0.5;
     let label_width = numbers.label_width * sx;
     let value_x = list.x + label_width + numbers.gap * sx;
     let grown = numbers.value_width + (numbers.value_focus_width - numbers.value_width) * focus;
@@ -545,6 +549,7 @@ fn list_row(
         y,
         label: [list.x, y, label_width, height],
         value: [value_x, y, grown * sx, height],
+        lift,
     }
 }
 
@@ -658,8 +663,13 @@ pub(super) fn regions(
                     });
                 }
                 if has_value && entry.is_adjustable() && art.arrow.is_some() {
-                    let [left, right] =
-                        arrow_rects(&numbers, list.x, geometry.label[2], geometry.y, (sx, sy));
+                    let [left, right] = arrow_rects(
+                        &numbers,
+                        list.x,
+                        geometry.label[2],
+                        geometry.y + geometry.lift,
+                        (sx, sy),
+                    );
                     out.push(Region {
                         row,
                         part: Part::StepBack,
