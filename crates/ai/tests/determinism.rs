@@ -216,9 +216,10 @@ fn the_scenario_still_exercises_corners_and_craft_that_drive() {
 
 /// The speed plan learned on the probe's circuit, hashed ([`probe::speed_plan`]).
 /// Added 2026-10-03 with the plan; nothing above moved, every scenario there
-/// drives with `plan: None`. Moved 2026-10-11 when a failure stopped lowering
-/// the slow corner behind it (`plan/lower.rs`'s `Lowering::FromTrough`).
-const PLAN_REFERENCE: u64 = 0x3ee4_8cfe_b060_4f5d;
+/// drives with `plan: None`. Moved 2026-10-11 when the build started running
+/// two searches (`plan/lower.rs`'s `Lowering`): the plan here is still the
+/// whole-window one, bit for bit, and only `Report::steps` counts both.
+const PLAN_REFERENCE: u64 = 0x6378_3970_7f54_7e15;
 
 #[test]
 fn the_speed_plan_matches_the_committed_reference() {
