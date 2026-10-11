@@ -23,6 +23,9 @@ pub fn point(pos: [f32; 3]) -> SplinePoint {
         section_id: 0,
         flags: 0,
         light_scale: [0xff; 4],
+        unk_0x5c: None,
+        unk_0x5d: None,
+        unk_0x66: None,
     }
 }
 

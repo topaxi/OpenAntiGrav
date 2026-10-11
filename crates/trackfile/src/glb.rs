@@ -634,6 +634,9 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
             section_id: sf[i][0],
             flags: sf[i][1],
             light_scale: light[i],
+            unk_0x5c: None,
+            unk_0x5d: None,
+            unk_0x66: None,
         };
         finite(
             name,

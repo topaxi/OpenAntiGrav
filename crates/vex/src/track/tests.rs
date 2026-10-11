@@ -506,9 +506,48 @@ fn without_light_scale(paths: &[Path]) -> Vec<Vec<SplinePoint>> {
                 .iter()
                 .map(|p| SplinePoint {
                     light_scale: [0; 4],
+                    unk_0x5c: None,
+                    unk_0x5d: None,
+                    unk_0x66: None,
                     ..*p
                 })
                 .collect()
         })
         .collect()
+}
+
+/// The AI's three bytes: authored from 0x105, forced to the default before it,
+/// and absent from the short record, which has no `+0x5c` of its own.
+#[test]
+fn the_ai_bytes_follow_the_versions_the_original_reads_them_at() {
+    let point_at = HEADER_LEN + RESERVED_LEN + PATH_LEN + JUNCTION_LEN;
+    let mut payload = build(0x105, &[1]);
+    payload[point_at + 0x5c] = 40;
+    payload[point_at + 0x5d] = 200;
+    payload[point_at + 0x66] = 7;
+    let p = parse(&payload).expect("0x105 parses").paths[0].points[0];
+    assert_eq!(
+        (p.unk_0x5c, p.unk_0x5d, p.unk_0x66),
+        (Some(40), Some(200), Some(7))
+    );
+
+    // 0x104 carries the same bytes but the original ignores the first two.
+    let mut older = build(0x104, &[1]);
+    older[point_at + 0x5c] = 40;
+    older[point_at + 0x5d] = 200;
+    older[point_at + 0x66] = 7;
+    let p = parse(&older).expect("0x104 parses").paths[0].points[0];
+    assert_eq!(
+        (p.unk_0x5c, p.unk_0x5d, p.unk_0x66),
+        (Some(0xff), Some(0), Some(7))
+    );
+
+    let short = parse(&build(SHORT_POINT_VERSION, &[1]))
+        .expect("0x107 parses")
+        .paths[0]
+        .points[0];
+    assert_eq!(
+        (short.unk_0x5c, short.unk_0x5d, short.unk_0x66),
+        (None, None, None)
+    );
 }

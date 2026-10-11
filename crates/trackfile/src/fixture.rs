@@ -108,6 +108,9 @@ pub fn oval() -> Track {
                 section_id: 0xff,
                 flags: 0,
                 light_scale: [255; 4],
+                unk_0x5c: None,
+                unk_0x5d: None,
+                unk_0x66: None,
             }
         })
         .collect();
