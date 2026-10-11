@@ -100,8 +100,15 @@ on the side of the wall it steered away from.
 - **Omega: ported.** Its executable carries 2048's whole set of names, and its own
   `Data/xml/handlingstats.xml` authors `<PilotAssist>` with 2048's numbers on all four rungs
   (`pilot_assist_ground_truth::which_titles_author_pilot_assist`), so the generic race load
-  hands Omega's own table to the same law. Its HUD indicator is not wired
-  (`oag_omega::hud`'s `assist: None`).
+  hands Omega's own table to the same law. Its HUD indicator is drawn from Omega's own data
+  (2026-10-11, `omega_assist_hud_ground_truth`): the arcade, time trial and speed lap roots include
+  `Data\XML\HUD_assist_indicator.xml` and the elimination root `HUD_Elim_assist_indicator.xml`, HD's
+  shape exactly (`AssistIndicatorBG`/`Main`/`Left`/`Right` with the `*Big` arrows nested, 227x102 plate
+  at the same 1920-grid spot), so `oag_omega::hud::ART.assist` names HD's widgets with no fragment.
+  Zone's root carries none. Textures resolve as `.gnf` (`HUD_Components`, `hdHUD`, `HUD_Components_02`).
+  The `Data/xml/2048_hud/HUD_assist_indicator.xml` the base package also ships (VR variants in the patch)
+  is 2048's single `PilotAssist` icon, an `Icon_PilotAssist_Extreme` image; it belongs to the `2048_hud`
+  skin set, which no root selects yet (see the Omega HUD thread), so it stays unread.
 - **Pulse, Pure**: no Pilot Assist in either executable and no table on either disc; they run
   the chosen sets in the table above.
 
@@ -138,7 +145,8 @@ on the side of the wall it steered away from.
   Game: `FE_OFF`, `FE_NORMAL`, `FE_SUPER` are Off, Normal, Extreme.
 - **The HUD**: `oag_hud::assist` draws HD's four `AssistIndicator*` widgets by the original's
   rule; 2048's `PilotAssist` icon is up while Extreme is. Pulse and Pure draw the same widgets
-  from the fallback layer's own layout and art (`oag_raceplay::splice_assist_indicator`). Normal
+  from the fallback layer's own layout and art (`oag_raceplay::splice_assist_indicator`); Omega
+  draws HD's widgets out of its own layouts. Normal
   draws no indicator on any title.
 
 ## Measured in this engine

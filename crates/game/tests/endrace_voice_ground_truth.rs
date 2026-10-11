@@ -1,4 +1,4 @@
-//! Pulse's end-of-race voice lines, off real discs.
+//! Pulse's and Wipeout HD/Fury's end-of-race voice lines, off real discs.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content. Run with
 //! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test endrace_voice_ground_truth --run-ignored all`.
@@ -31,10 +31,23 @@ fn load(image: &Path, probe: Option<&str>) -> MenuSfx {
     let mut banks = *title.race.sounds;
     if let (Some(bank), Some(front)) = (probe, banks.frontend.as_mut()) {
         // A census: a bank this title's data does not name for the lines.
-        front.results = Some(Box::leak(bank.to_string().into_boxed_str()));
+        front.results = Some(oag_title::ResultsVoices {
+            bank: Box::leak(bank.to_string().into_boxed_str()),
+            law: law_of(oag_pulse::race::SOUND_BANKS),
+        });
     }
     MenuSfx::load(&mut archives, &banks, tick, false)
 }
+
+fn law_of(banks: &oag_title::SoundBanks) -> oag_title::ResultsLaw {
+    banks
+        .frontend
+        .and_then(|front| front.results)
+        .expect("the title names a results bank")
+        .law
+}
+
+const HD: &str = "hdfury-ps3-eu-dec.iso";
 
 const PULSE: [&str; 3] = ["pulse-psp-usa.chd", "pulse-psp-eu.chd", "pulse-ps2-eu.chd"];
 
@@ -57,11 +70,7 @@ fn pulse_loads_speech_results_and_every_place_and_medal_name_resolves() {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_other_titles_do_not_name_the_bank_and_load_none_of_its_cues() {
-    for name in [
-        "pure-psp-usa.chd",
-        "pure-psp-eu.chd",
-        "hdfury-ps3-eu-dec.iso",
-    ] {
+    for name in ["pure-psp-usa.chd", "pure-psp-eu.chd"] {
         let Some(image) = image(name) else { continue };
         let sfx = load(&image, None);
         for cue in Cue::RESULTS {
@@ -112,9 +121,11 @@ fn the_place_and_medal_lines_sound_on_the_tick_their_screen_opens() {
             false,
         );
         let mut voice = Voice::new(
+            law_of(oag_pulse::race::SOUND_BANKS),
             oag_race::Mode::SingleRace,
             Some(2),
             None,
+            true,
             Some(Medal::Silver),
         );
         let (results_at, rewards_at, end) = (60, 300, 540);
@@ -174,4 +185,120 @@ fn the_place_and_medal_lines_sound_on_the_tick_their_screen_opens() {
         );
         println!("{name}: wrote {}", wav.display());
     }
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_loads_speech_results_and_every_place_and_medal_name_resolves() {
+    let Some(image) = image(HD) else { return };
+    let sfx = load(&image, None);
+    for cue in Cue::RESULTS {
+        assert!(sfx.has(cue), "HD: {} did not load", cue.name());
+    }
+}
+
+/// Ticks from the trigger to the first audible sample: the authored delay of
+/// 200 ticks of the PS3 bank's 240 Hz clock (`FIRST_PLACE` and `gold_med` key
+/// their stereo pair at tick 200 and 205), a little under a second.
+const HD_LEAD_FRAMES: usize = 50;
+
+/// The PCM, its samples per tick, and the `(tick, cue)` pairs played.
+type Dump = (Vec<i16>, usize, Vec<(usize, Cue)>);
+
+/// Plays one HD results voice through the session's own `Voice` and mixer and
+/// returns the PCM, the rate-derived samples per tick, and the cue played.
+fn hd_dump(
+    tag: &str,
+    mode: oag_race::Mode,
+    place: Option<u8>,
+    campaign: bool,
+    medal: Option<Medal>,
+    trigger: usize,
+) -> Option<Dump> {
+    let image = image(HD)?;
+    let mut sfx = load(&image, None);
+    let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../data/shots")
+        .join(format!("endrace-voice-hd-{tag}.wav"));
+    std::fs::create_dir_all(wav.parent().unwrap()).unwrap();
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        Some(wav.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    let mut voice = Voice::new(
+        law_of(oag_hd::race::SOUND_BANKS),
+        mode,
+        place,
+        None,
+        campaign,
+        medal,
+    );
+    let mut played = Vec::new();
+    for tick in 0..trigger + 240 {
+        let screen = if tick < trigger {
+            Screen::Other
+        } else {
+            Screen::Results
+        };
+        if let Some(cue) = voice.tick(screen, false) {
+            assert!(sfx.play(&audio, cue), "HD: {} did not start", cue.name());
+            played.push((tick, cue));
+        }
+        audio.tick();
+    }
+    audio.finish().expect("writing the dump");
+    let file = std::fs::read(&wav).expect("the dump");
+    let rate = u32::from_le_bytes(file[24..28].try_into().unwrap()) as usize;
+    let pcm: Vec<i16> = file[44..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| i16::from_le_bytes(*c))
+        .collect();
+    Some((pcm, rate / 60, played))
+}
+
+/// A free Single Race, third: the place line starts on the tick `Results`
+/// comes up, is silent for its authored lead, then sounds.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_place_line_sounds_after_its_authored_lead_on_the_results_tick() {
+    let trigger = 60;
+    let Some((pcm, per_tick, played)) = hd_dump(
+        "place",
+        oag_race::Mode::SingleRace,
+        Some(3),
+        false,
+        None,
+        trigger,
+    ) else {
+        return;
+    };
+    assert_eq!(played, [(trigger, Cue::ResultsThird)]);
+    assert_eq!(peak_of(&pcm, per_tick, 0, trigger + HD_LEAD_FRAMES - 4), 0);
+    assert!(peak_of(&pcm, per_tick, trigger + HD_LEAD_FRAMES, trigger + 150) > 100);
+}
+
+/// A campaign cell, bronze: HD speaks the medal on its first screen and no
+/// place line, whatever the place.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_medal_line_replaces_the_place_in_a_campaign_cell() {
+    let trigger = 60;
+    let Some((pcm, per_tick, played)) = hd_dump(
+        "medal",
+        oag_race::Mode::SingleRace,
+        Some(1),
+        true,
+        Some(Medal::Bronze),
+        trigger,
+    ) else {
+        return;
+    };
+    assert_eq!(played, [(trigger, Cue::MedalBronze)]);
+    assert_eq!(peak_of(&pcm, per_tick, 0, trigger + HD_LEAD_FRAMES - 4), 0);
+    assert!(peak_of(&pcm, per_tick, trigger + HD_LEAD_FRAMES, trigger + 150) > 100);
 }

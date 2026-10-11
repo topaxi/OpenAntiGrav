@@ -112,6 +112,10 @@ dump backend it drains.
 Levels: the HD walk peaks at 23,148 (HD style) and 27,750 (Fury) of 32,767, no clipped sample. Pulse's `ACCEPT` and
 `DECLINE` clip; HD's do not.
 
+## The end-of-race voices (2026-10-11)
+
+`speech_results.bnk` (the second boot bank, slot `0x00b6cc18`): `EndRaceResults_OnEnter` plays the place line in a free race, `EndRacePhoto_ShowMedal` the medal line in a campaign cell, one or the other, never both. **Wired**: the port plays the place on `EndRace Results` entry and, with no photo screen in its HD flow, the medal there too (chosen, not measured). The whole law, the unread bytes and the 0.83 s authored lead are in [endrace-voices.md](endrace-voices.md).
+
 ## Omega
 
 Omega's `eboot.bin` carries the same `navUp`/`navDown`/`accept_fury`/`reject` strings, and its `data00.psarc` ships a

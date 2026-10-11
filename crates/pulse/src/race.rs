@@ -111,7 +111,14 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     frontend: Some(oag_title::FrontEndSounds {
         bank: r"Data\Sound\frontend.bnk",
         cues: oag_title::MenuCues::PULSE,
-        results: Some(r"Data\Sound\speech_results.bnk"),
+        results: Some(oag_title::ResultsVoices {
+            bank: r"Data\Sound\speech_results.bnk",
+            law: oag_title::ResultsLaw {
+                tournament: oag_title::TournamentPlace::StandingsFlip,
+                place_in_campaign: true,
+                medal_screen: oag_title::MedalScreen::Rewards,
+            },
+        }),
         voices: Some(r"Data\Sound\FRONT_END_VO.bnk"),
     }),
     // A literal string in the executable too, at the same confidence as the

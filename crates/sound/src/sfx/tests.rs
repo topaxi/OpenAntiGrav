@@ -143,7 +143,7 @@ fn every_cue_names_a_bank_and_a_string() {
         BankName::Ship.entry(hd, false)
     );
     // Pure spells them exactly as Pulse does: the finding, not the assumption.
-    // Bar the results and name-voice banks, Pulse's alone (`results`, `voices`).
+    // Bar the results and name-voice banks, Pulse's (`results`, `voices`).
     let mut pulse_without_results = *pulse;
     if let Some(front) = pulse_without_results.frontend.as_mut() {
         front.results = None;
@@ -330,7 +330,12 @@ fn the_results_lines_live_in_their_own_bank_which_only_a_naming_title_has() {
         BankName::SpeechResults.entry(oag_pulse::race::SOUND_BANKS, false),
         r"Data\Sound\speech_results.bnk"
     );
-    for banks in [oag_pure::race::SOUND_BANKS, oag_hd::race::SOUND_BANKS] {
-        assert_eq!(BankName::SpeechResults.entry(banks, false), "");
-    }
+    assert_eq!(
+        BankName::SpeechResults.entry(oag_hd::race::SOUND_BANKS, false),
+        r"Data\Sound\speech_results.bnk"
+    );
+    assert_eq!(
+        BankName::SpeechResults.entry(oag_pure::race::SOUND_BANKS, false),
+        ""
+    );
 }
