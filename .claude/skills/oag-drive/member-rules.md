@@ -69,7 +69,10 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
   member's `oag-game --race` run.
 - **Emulators.** Start your own instance (see "Waiting on an emulator capture" below; PPSSPP with its own `HOME` and
   `XDG_CONFIG_HOME`, debugger port and display; RPCS3 with its own config
-  copy). Never attach to an instance another member started.
+  copy). Never attach to an instance another member started. PPSSPP returns
+  zeroed framebuffers to a capture unless its config sets
+  `[Graphics] SoftwareRenderer = True`, and `scripts/ppsspp-start.sh` does not
+  set it for you (2026-10-11, `pulse-bloom`).
 - **Ghidra.** When the GUI bridge is up it listens on `127.0.0.1:8089` and is
   shared. Pass `program=` explicitly on every call (by path, e.g.
   `/pulse/BOOT-psp-pulse-usa.BIN`, `/hdfury/EBOOT-ps3-hdfury-eu.elf`), and
