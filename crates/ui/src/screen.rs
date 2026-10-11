@@ -25,6 +25,7 @@ use oag_core::buttons::Button;
 pub use oag_tables::fexml::{Node, parse};
 
 mod color;
+mod display_type;
 mod fade;
 mod movie;
 mod read;
@@ -40,6 +41,7 @@ mod touch;
 mod widgets;
 pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
+pub use display_type::DisplayType;
 pub use fade::{MEASURED_HIDDEN_WIDGET_FADE_IN_SECONDS, resolve_fade_in};
 pub use mode3d::{Mode3dModel, Model};
 pub use movie::{DEFAULT_REGION, MOVIE_EXTENSIONS, Movie};
@@ -88,6 +90,8 @@ pub struct Text {
     /// per widget, since no other `pulse="true"` widget has been captured yet
     /// to say whether they share the same numbers.
     pub pulse: bool,
+    /// The authored `DisplayType`. Data only, see [`DisplayType`].
+    pub display_type: DisplayType,
     /// Seconds after the widget's screen appears before it starts drawing at
     /// all, from the `delay` attribute. Zero when absent, which draws at once
     /// exactly as before this field existed.
