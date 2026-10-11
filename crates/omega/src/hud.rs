@@ -96,9 +96,19 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: false,
     message_slots: true,
     runtime: Some(RUNTIME),
-    // Indicator not wired; the assist itself runs off Omega's own `<PilotAssist>`
-    // table. See `docs/physics/pilot-assist.md`.
-    assist: None,
+    // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
+    // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,
+    // TimeTrial, SpeedLap and Elimination, with HD's names and nesting, so no
+    // fragment is spliced. Zone's root carries none, as HD's does not. The
+    // readout rule (3 s, 1.5 s, 4 Hz) is HD's and 2048's shared function. See
+    // `docs/physics/pilot-assist.md`.
+    assist: Some(oag_title::hud::AssistIndicator {
+        background: "AssistIndicatorBG",
+        main: "AssistIndicatorMain",
+        left: &["AssistIndicatorLeft", "AssistIndicatorLeftBig"],
+        right: &["AssistIndicatorRight", "AssistIndicatorRightBig"],
+        fragment: None,
+    }),
 };
 
 const RUNTIME: &oag_title::hud::RuntimeHud = &oag_title::hud::RuntimeHud {

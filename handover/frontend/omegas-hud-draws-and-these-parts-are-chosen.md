@@ -26,6 +26,8 @@ composition" claim was a truncated census (NUL-separated PS4 manifest read by `s
 - **`always_on`, sights, `RUNTIME`, `shield_percent`, `message_slots` are HD's readings**, chosen, not
   measured; every name exists in Omega's layouts, the values are unchecked. No PS4 emulator to compare.
 - **The HUD font's half-size layout is an inference (confidence 60)**, shared with the front end.
+- **Pilot Assist's indicator is wired (2026-10-11)** from the roots' own `HUD_assist_indicator.xml`
+  (HD's four widgets; Zone none); the `2048_hud` set's `PilotAssist` icon waits on the selector above.
 - `hdHUD.gnf` is HD's art in part redrawn (mean difference 17 of 255); what changed is not looked at.
 
 ## Next Steps
