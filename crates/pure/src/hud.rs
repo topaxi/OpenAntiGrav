@@ -169,7 +169,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: false,
     message_slots: true,
     runtime: None,
-    assist: None,
+    // **Chosen, not measured.** Neither disc authors an indicator (census in
+    // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
+    // and art are this project's own fallback, `assets/fallback/`.
+    assist: Some(oag_title::hud::AssistIndicator {
+        background: "AssistIndicatorBG",
+        main: "AssistIndicatorMain",
+        left: &["AssistIndicatorLeft", "AssistIndicatorLeftBig"],
+        right: &["AssistIndicatorRight", "AssistIndicatorRightBig"],
+        fragment: Some("Data\\XML\\HUD_assist_indicator.xml"),
+    }),
 };
 
 /// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in

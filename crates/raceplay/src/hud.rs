@@ -109,6 +109,9 @@ pub(super) fn load_hud(
         }
     };
 
+    let space = oag_display::space::Space::of(archives.layout.platform);
+    let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space));
+
     let sheet = load_atlases(archives, title, layout.as_ref(), entry, report);
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
@@ -206,9 +209,47 @@ pub(super) fn load_hud(
         // layout read in it lands every widget four times oversized and a
         // quarter of the way into the picture. Same call `boot::load_shell`
         // makes for the front end.
-        space: oag_display::space::Space::of(archives.layout.platform),
+        space,
         art: title.hud_art,
     }
+}
+
+/// Splices Pilot Assist's indicator into a layout that does not author it, on a
+/// title whose [`oag_title::hud::AssistIndicator::fragment`] names one.
+///
+/// The fragment is read through the archives like any entry, so it is **the
+/// disc's or a pack's own when one exists and this project's fallback otherwise**
+/// - on Pulse and Pure no disc has it, which is what the fallback is for. With no
+/// fallback mounted the read finds nothing and the layout is returned as it was.
+/// The fragment's grid is the PSP's; on another source's grid it is scaled
+/// ([`oag_hud::assist::splice`]).
+///
+/// A layout that already carries the widgets (HD's, which embed them) is left
+/// alone: the title's own layout is never overridden by a stand-in.
+pub fn splice_assist_indicator(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    mut layout: oag_hud::Layout,
+    space: oag_display::space::Space,
+) -> oag_hud::Layout {
+    let Some(assist) = title.hud_art.assist else {
+        return layout;
+    };
+    let Some(fragment) = assist.fragment else {
+        return layout;
+    };
+    if layout.sprite(assist.background).is_some() {
+        return layout;
+    }
+    if let Some(composed) = oag_hud::compose(fragment, |path| archives.read_name(path).ok()) {
+        oag_hud::assist::splice(
+            &mut layout,
+            composed.layout,
+            oag_display::space::SCREEN,
+            space.size,
+        );
+    }
+    layout
 }
 
 /// Every texture this layout's sprites name, decoded into one sheet.

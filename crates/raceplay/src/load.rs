@@ -995,6 +995,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
     );
+    // **Every answer a layer gave**, the player's override or this project's
+    // fallback, so a mod or a substitute is never silent. A load nothing answered
+    // for adds no line.
+    loaded.report.extend(archives.take_layer_report());
+    if let Some(craft) = craft.as_mut() {
+        loaded.report.extend(craft.take_layer_report());
+    }
     loaded.report.extend(archives.read_memo_summary());
     Ok(loaded)
 }

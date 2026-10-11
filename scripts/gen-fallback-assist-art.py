@@ -46,7 +46,7 @@ def plate(x, y):
     d = rounded_rect(x, y, 112, 48, 10)
     if d > 0:
         return 0.0
-    return 1.0 if d > -2.5 else 0.55
+    return 1.0 if d > -2.5 else 0.8
 
 
 def ring_and_craft(x, y):

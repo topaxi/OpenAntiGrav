@@ -8,7 +8,7 @@
 //! The widget names are the title's ([`oag_title::hud::AssistIndicator`]).
 
 use crate::draw::{Context, sprite_draw};
-use crate::{Draw, Readout};
+use crate::{Draw, Layout, Readout};
 
 /// How long the main icon stays up after a correction (`0x008a7768`).
 const MAIN_SECONDS: f32 = 3.0;
@@ -82,6 +82,25 @@ impl Indicator {
             right: self.enabled && self.right != 0.0 && blink,
         }
     }
+}
+
+/// Appends `fragment`'s sprites to `layout`, scaled from the grid they were
+/// authored on to the one `layout` is in.
+///
+/// For a fragment this project authored on the PSP's 480x272 and a source whose
+/// HUD grid is another size (the PS2's 640x448). A same-size grid copies as is.
+pub fn splice(layout: &mut Layout, fragment: Layout, authored: (f32, f32), onto: (f32, f32)) {
+    let (sx, sy) = (onto.0 / authored.0, onto.1 / authored.1);
+    for mut sprite in fragment.sprites {
+        sprite.rect = [
+            sprite.rect[0] * sx,
+            sprite.rect[1] * sy,
+            sprite.rect[2] * sx,
+            sprite.rect[3] * sy,
+        ];
+        layout.sprites.push(sprite);
+    }
+    layout.skipped.extend(fragment.skipped);
 }
 
 /// The indicator's widgets that are up this frame, on a title that authors them.
