@@ -202,6 +202,9 @@ fn hd_loads_speech_results_and_every_place_and_medal_name_resolves() {
 /// their stereo pair at tick 200 and 205), a little under a second.
 const HD_LEAD_FRAMES: usize = 50;
 
+/// The PCM, its samples per tick, and the `(tick, cue)` pairs played.
+type Dump = (Vec<i16>, usize, Vec<(usize, Cue)>);
+
 /// Plays one HD results voice through the session's own `Voice` and mixer and
 /// returns the PCM, the rate-derived samples per tick, and the cue played.
 fn hd_dump(
@@ -211,7 +214,7 @@ fn hd_dump(
     campaign: bool,
     medal: Option<Medal>,
     trigger: usize,
-) -> Option<(Vec<i16>, usize, Vec<(usize, Cue)>)> {
+) -> Option<Dump> {
     let image = image(HD)?;
     let mut sfx = load(&image, None);
     let wav = Path::new(env!("CARGO_MANIFEST_DIR"))
