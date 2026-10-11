@@ -933,5 +933,155 @@ captures (`hd-frame-compare.py`, Talon's Junction poses `00/01/03`): ours is
 halo ring `+2px` `0.82-0.84` against `0.85-0.91`. No new RPCS3 boot was taken.
 Pulse PS2 has its own chain (`ps2-bloom.md`), not touched.
 
+## Racing strength, second boot, and what the Moa Therma excess is (2026-10-11)
+
+Lane `pulse-bloom`. PPSSPP v1.20.4, **software renderer** (`[Graphics]
+SoftwareRenderer = True`; on the default OpenGL backend the framebuffers read
+back as zero and only A and B are non-zero, so check `fb0` is non-empty before
+trusting a dump), own profile, Xvfb, Time Trial, Venom class, Assegai, `--hold
+cross`. The same method as the 2026-10-08 section: composite poked off at
+`0x08fb61f8`, `scripts/psp-trace.py --flare --camera --edram-every N`, the
+original's added light from its own A as `min(floor(bilinear(A) * 175 / 255),
+255 - fb0)`, ours from `oag-game --race --pose-from ... --pose-boost 0
+--pose-intensity <trace> --pose-speed <trace> --camera-fov 60 + 0.075 * fwd.vel`
+with the bloom on against off (a local, uncommitted skip in
+`Scene::composite_bloom`). The model on this boot's own dumps lands on its A
+at `97.9-98.4 %` of pixels exact. **The 2026-10-08 table was already taken in
+today's composite order** (the reorder is `c6c02de72`, 2026-10-04), so the
+"old order" worry in the thread belonged only to the 2026-10-02 figure.
+
+**Falsifiers, written before capturing.** Talon's: three or four racing poses
+outside `0.95-1.10` would mean the residual is back. Moa: ours' glow-surface
+colour staying above `1.05` with its animated emissives at the trace's own
+phase means a real scene-exposure gap, `0.99-1.01` means a pose artefact. HUD:
+clipping the HUD rows moves the ratio by under `2 %` means the bright pass's
+read of the HUD is not the cause.
+
+**Whole-frame ratio, mean luma the bloom adds, ours over the original (one
+boot per circuit, seven poses each, 40-tick spacing):**
+
+| Circuit (layout file) | Poses | Ratio range | Mean |
+| --- | --- | ---: | ---: |
+| Talon's Junction White (`16_Track`), shadows `original` | tick 40-280, speeds `27 69 99 56 35 27 25` units/s (the craft met a wall after tick 120) | `0.91-1.06` | `1.01` |
+| Metropia White (`02_Track` reversed, entry `18_Track`), shadows `original` | tick 40-280, speeds `27 69 99 114 41 23 20` units/s | `0.97-1.30` | `1.11` |
+| Moa Therma White (`03_Track`), default pose | tick 40-160, speeds `27 48 69 86 99 108 114` units/s | `0.98-1.32` | `1.18` |
+
+Talon's passes its falsifier (`0.91` at tick 280, a slow 25 units/s pose, is the
+only value outside `0.95-1.10`; the three poses at racing speed, ticks 80-120 at
+69-99 units/s, read `1.02`, `1.06`, `1.01`): **the residual is not reproduced on Talon's
+on a second boot**, which agrees with the 2026-10-08 `0.96-1.08`. Metropia's
+`1.30` and `1.17` are the two earliest poses, where the whole add is small
+(`0.99` luma at tick 80, 78 % of it in the sky rows) and the ratio is noise
+over a small denominator; from tick 120 it is `0.97-1.12`.
+
+**Moa Therma: two things move the excess and a remainder is open** (whole-frame
+ratio per pose, ticks 40/60/80/100/120/140/160). The rows with the clock matched
+run the sim `K` ticks before the capture, so the craft sits at its posed place
+for `K` ticks and **drifts**: the craft-box ratio reads `0.65` at tick 100
+(`K = 49`) and the whole frame at tick 40 goes `0.98 -> 1.09`. Read the matched
+rows as indicative, not clean:
+
+| Ours rendered with | Ratios | Mean |
+| --- | --- | ---: |
+| player default (shadows off, animation clock at tick 1) | `0.98 1.11 1.24 1.02 1.32 1.27 1.29` | `1.18` |
+| animation clock matched to the original's phase | `1.09 1.05 1.13 1.02 1.21 1.23 1.16` | `1.13` |
+| `--shadows original` | `0.98 1.10 1.23 1.00 1.17 1.19 1.24` | `1.13` |
+| both | `1.09 1.04 1.12 1.00 1.08 1.17 1.11` | `1.09` |
+
+1. **The chevron strip's animation phase (the 2026-10-08 open item 3).** A
+   `--pose-from` frame starts the track's animated glow textures at tick 1;
+   the original is at its own clock. The glow mask of the arrow strip along
+   the stands is periodic in **60 ticks**: sweeping `--ticks K` (the sim runs
+   `K` ticks before the capture, craft held at the posed place) and comparing
+   the upper-frame mask to the original's alpha gives a mean absolute
+   difference of `20.5` at `K = 0`, falling to `2.2` at `K = 30` and `0.32`
+   against `1.78` at `K = 29` on a second pose, with the same `K - tick = 9
+   (mod 60)` on both ticks 100 and 140. At the matching phase the strip's
+   mask energy is `1.05` of the original's, where an unmatched phase puts the
+   chevrons in different places. A frame from a real run carries the clock, so
+   the strip's placement is a posing effect. **What was measured is the
+   mask's placement and energy; the falsifier as written, the colour under
+   the mask at matched phase, was not.** The craft-drift-free reading is the
+   non-craft "rest" ratio with the clock matched, `1.05 1.12 1.02 1.15 1.17`
+   at ticks 60-140: the scenery still reads `1.12-1.17` at three of five poses.
+   Metropia's glows are not periodic in this way (the mask difference is flat
+   across `K` at ticks 120 and 160).
+2. **The craft's shadow.** The original draws a dark wedge on the track behind
+   the craft (the `Dynamic Shadow Occluder` hull, `shadows.md`); ours draws
+   it only on `--shadows original`, and `Shadows::Off` is the default for
+   every title. Under the ribbon the original's pixels are darker, so the
+   bright pass over the ribbon's mask reads less. Ours with `original`
+   shadows: luma under the ribbon `119/124/82/104/135` against the original's
+   `132/127/103/114/136` at ticks 60-140, against `154/161/100/136/177`
+   before. Craft-box ratio at `K = 1` with shadows `original`: `1.13 1.27
+   0.98 1.12 1.21` (ticks 60-140, no drift). This is a render-option
+   difference the bloom inherits, not a bloom term, **and it is real in play**:
+   a player on the defaults never gets the wedge. `Shadows::Off`'s own doc
+   comment says it stays the default "until `original` exists", and `original`
+   exists on Pulse now; whether the default should move is the maintainer's
+   call, not changed here.
+3. **The remainder (open, no confidence).** Ours' whole-scene luma is
+   `+1.4-2.9 %` (`124.2` against `120.9` at tick 140, `101.3` against `98.4`
+   at tick 100), the standing scene-exposure gap, and the bright pass is a
+   product of the colour and the mask, so a few per cent of colour is a
+   larger fraction of what it adds. The ribbon's screen extent also differs
+   (open item 4): at tick 140 the first ribbon segment (`66`) covers `1,463`
+   pixels to row `265` in ours against `1,051` to row `258` in the original,
+   and `1,018` against `1,050` at tick 100; a real run of ours with the same
+   throttle (`--hold cross`, speed `89.8` and `109.6`, intensity `0.37` and
+   `0.53`) gives `997` and `1,425`, so it is not the synthetic posed ring but
+   something that grows with speed. Not read to a cause. None of this is a
+   chain term, but Moa's leftover (the scenery's `1.12-1.17` at ticks 120-140
+   after the phase is matched, and the ribbon) is not closed.
+
+**HUD (the third falsifier): not isolated.** Clipping the top 40 rows moves the
+ratio by under `2 %` on most frames (the exceptions are Moa tick 40 and 80 and
+Metropia tick 40 and 80), but those rows hold scene glow too (the
+stands, the sky: `25-27 %` of the add on Moa in both original and ours, equal),
+so the clip cannot tell the HUD's read from scenery. The 10-08 finding that the
+original's bright pass reads the HUD stands unmeasured against ours.
+
+**Verdict.** No bloom-chain term is wrong, and nothing in `oag-render` or
+`oag-post` changed. Talon's `1.01` (shadows `original`; the 2026-10-08 `0.96-1.08`
+did not record its shadow tier, so "two boots agree" is agreement of numbers,
+not of settings), Metropia's `1.11` (shadows `original`) and Moa's `1.18` as
+posed by default, `1.09-1.13` with the shadow tier or the clock matched, say
+the thread's "1.2-1.6x on a racing straight" is not a gap in the bloom chain:
+it is about what the original's scene has under the mask (a shadow, glow
+textures at their clock). Confidence **70** that no bloom chain term differs
+materially at racing poses (three circuits, one boot each on Metropia and
+Moa, two on Talon's); Moa's remainder, the ribbon extent and the `+1.4-2.9 %`
+scene luma are open, no confidence.
+
+**A look at the pair (player size).** Chase frames at tick 60, 100, 120 and 140
+read side by side as the same scene; the visible differences are the missing
+shadow wedge under the craft with the default `Shadows::Off`, the original's
+hard square flare quad against ours' round one at the nozzle, and the stands'
+chevron arrows at a different phase. The bloom reads as the same strength on the
+stands and the craft.
+
+**The Zone grid strip: not resolved, how far it got.** Ours reaches a native Zone
+start (`--race --mode zone --track 'Data\Environments\16_Track\zone_track.vex'`,
+tick 100). With the HUD left out (a local skip in `race_capture.rs`; the glow-mask
+dump otherwise carries the HUD's own alpha, `kmh` and the bars included) the
+mask holds `214` on `1,895` pixels, of which `1,533` are a wedge along the
+bottom rows `253-260` (up to `301` pixels a row, not a full-width strip), the rest
+small pieces higher up. The batches that stamp `214` are alpha-tested, `pass_mask
+0x1881`, texture ordinal `0`, in at least ten sizes from 2 to 50 triangles
+(`mesh::glow::batch_value`); the same listing also showed bytes `104`
+(18 batches) and `247` (8), with the list cut at ten lines, so it is not
+exhaustive. Not done: the original's Zone start grid at the same pose
+(Zone selectability on this fresh profile was not tried; it needs the unlock
+walk `psp-drive.py menu --race-type 5` does not finish), a rendered
+isolation of those batches (a local skip of every other batch in the mesh
+builder did not change the picture, and `98` and `245`, present in the mask,
+printed no batch in that builder; the cause was not read), and so whether the
+original's `4` is a depth tie. The grid-only `1.2x` therefore stays the
+countdown-grid artefact it was; nothing was changed.
+
+**Checked against the other titles.** HD's racing strength is still the open
+item the 2026-10-08 section named (RPCS3, not measured here). Pulse PS2 has its
+own chain (`ps2-bloom.md`) and was not run.
+
 Scripts and frames: a scratch directory, not kept (`ours.sh`, `cmp.py`, `tab.py`,
 `chk.py`, `inp.py`, `gelist.py`, `e3/`, `em1/`, `ge/moa_rest.ppdmp`, `report.md`).
