@@ -320,16 +320,10 @@ fn run(cli: Cli) -> Result<()> {
             cli.mode
         )
     })?;
-    // Refused rather than tolerated, and the reason is memory rather than
-    // tidiness: a dump accumulates every sample it renders, so a windowed run
-    // that a player leaves open grows the buffer for as long as they play - a
-    // quarter of a gigabyte in ten minutes, at 48 kHz stereo `f32`. A capture is
-    // bounded by `--ticks`, which is the only route that ends.
-    ensure!(
-        cli.dump_audio.is_none() || cli.screenshot.is_some(),
-        "--dump-audio needs --screenshot: the dump is as long as the run, and only \
-         a capture has an end. Add --screenshot FILE --ticks N."
-    );
+    // A windowed run may dump too (a scripted front-end walk is the only way
+    // to hear the session's own cues). The buffer grows for as long as the
+    // window stays open, about 384 KB a second, so it belongs to a run that
+    // ends itself or is closed by hand, never a player's session.
     // Refused for the same reason `--screen` and `--menu-page` are capture-only:
     // there is no window route that draws a *stated* conversion state, and
     // silently ignoring the flag would look like a screen that does not work.

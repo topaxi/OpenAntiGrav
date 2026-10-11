@@ -6,6 +6,7 @@ use oag_game::endrace_voice::Voice;
 use oag_ui_screens::endrace::Rewards;
 
 use super::ResultsModel;
+use super::endrace_flow::Which;
 
 /// The voice for a race in `mode` whose screens hold `results` and `rewards`.
 ///
@@ -38,6 +39,40 @@ pub(crate) fn voice_for(
         .filter(|rewards| rewards.campaign)
         .and_then(|rewards| rewards.medal);
     Some(Voice::new(mode, place, standings_place, medal))
+}
+
+/// The voice a finished race's screens speak, and the screen-on-top reading
+/// that decides each tick whether it sounds. GPU-free, so the order of the
+/// screens and the lines they speak are tested without a device; the runtime
+/// forwards one call per tick.
+#[derive(Debug)]
+pub(crate) struct Speaker {
+    voice: Option<Voice>,
+}
+
+impl Speaker {
+    #[must_use]
+    pub(crate) fn new(voice: Option<Voice>) -> Self {
+        Self { voice }
+    }
+
+    /// The voice cue that starts this tick, if the screen on top calls for
+    /// one. `results` says whether a Tournament's standings page is showing.
+    pub(super) fn tick(
+        &mut self,
+        which: Which,
+        results: &ResultsModel,
+    ) -> Option<oag_sound::sfx::Cue> {
+        use oag_game::endrace_voice::Screen;
+        let screen = match which {
+            Which::Results => Screen::Results,
+            Which::Rewards => Screen::Rewards,
+            Which::Photo | Which::Menu => Screen::Other,
+        };
+        let standings = matches!(results,
+            ResultsModel::PulseTournament(table) if table.showing_standings());
+        self.voice.as_mut()?.tick(screen, standings)
+    }
 }
 
 #[cfg(test)]

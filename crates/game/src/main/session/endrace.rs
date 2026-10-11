@@ -308,11 +308,9 @@ impl Session {
             menu,
             runs_on_after_the_end,
             self.anisotropy,
+            voice,
         ) {
-            Ok(mut runtime) => {
-                if let Some(voice) = voice {
-                    runtime.set_voice(voice);
-                }
+            Ok(runtime) => {
                 if let Stage::Race(stage) = &mut self.stage {
                     stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
                 }
