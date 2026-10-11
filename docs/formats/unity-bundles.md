@@ -17,6 +17,17 @@ game.
 with the data, no second source; *not exercised* = implemented from the
 published layout but no file in the census uses it, so it is untested.
 
+## Project-authored fixture
+
+`crates/unity/tests/fixtures` holds a track this project built itself with Unity
+6000.6.5f1 (a Catmull-Rom loop: three 258-vertex meshes, a 64x64 DXT1 texture
+with 7 mips, a material, one custom `MonoBehaviour`), as a prefab bundle and a
+two-file scene bundle in LZMA, LZ4HC and uncompressed form. It contains no game
+content, so it is committed and `tests/fixture_track.rs` runs in plain `just
+test` and CI. It is the only real **UnityFS version 8 / SerializedFile version
+23** sample, and UnityPy agrees with it (vertex and triangle counts, |x| sums,
+texture size, mips and byte length). Its `README.md` says how to regenerate it.
+
 ## Census
 
 Counted with `read_dir` over each item directory of the Workshop tree (92 items,
@@ -68,8 +79,11 @@ file, `0x200` = padding before it. **Any other bit is refused** as
 `UnsupportedFlags`; none occurs in the census, and `0x80`/`0x200` are *not
 exercised*.
 
-**Version 7 aligns to 16 bytes after the header** before the blocks info
-(measured on the one v7 bundle; version 6 does not). Blocks info, once
+**Version 7 and later align to 16 bytes after the header** before the blocks info
+(measured on the one v7 bundle and the v8 fixture; version 6 does not). **Archive
+version 8 (Unity 6) is read**; with flag `0x200` the block data is also padded to
+16 after the blocks info (measured on the fixture, whose blocks info ends 7 bytes
+short of a boundary). Blocks info, once
 decompressed: 16 bytes of hash (**not verified**), `i32` block count, each block
 `u32` uncompressed size, `u32` compressed size, `u16` flags (compression in the low 6
 bits, `0x40` "streamed" ignored), then `i32` node count, each node `i64` offset,
@@ -92,9 +106,14 @@ does the same to a real LZ4HC ship and a real LZMA track).
 
 ## SerializedFile
 
-Versions 17 through 22 are read; anything else is
-`UnsupportedSerializedVersion`. The census has 17 and 22 only; **18 to 21 are
-implemented from the published layout and not exercised**.
+Versions 17 through 23 are read; anything else is
+`UnsupportedSerializedVersion`. The Workshop census has 17 and 22; the
+project fixture is **23**; **18 to 21 are implemented from the published layout
+and not exercised**. **Version 23** prefixes each type's typetree with a 16-byte
+content hash and an `i32` byte size (0 = no tree stored), and the blob itself
+starts with `mhtt` and the version again; the node layout is unchanged from 19
+(32 bytes). Measured on the fixture's 6 files: every object consumes exactly its
+bytes.
 
 Header (big endian): `u32` metadata size, `u32` file size, `u32` version, `u32`
 data offset, `u8` endianness (0 little) and 3 reserved bytes. **Version 22
@@ -268,6 +287,7 @@ reader, so the ceiling is 94.
 | Flags `0x80` (info at end) and `0x200` (padding), uncompressed and LZHAM blocks | 55 | published layout only; no census file uses them |
 | SerializedFile version 17 layout | 93 | 109 files, 123,083 objects, each object's walk consuming its bytes exactly |
 | SerializedFile version 22 header with wide fields | 85 | 2 bundle files read exactly, plus 27 install files whose headers, type and object tables parse |
+| SerializedFile version 23 (hash, size and `mhtt` prefix) and UnityFS version 8 | 85 | the fixture, all three codecs, exact consumption, UnityPy agrees; one engine build |
 | SerializedFile versions 18 to 21 | 50 | interpolated from 17 and 22; never seen |
 | Typetree blob nodes of 24 bytes (< 19) and 32 (>= 19) | 93 / 85 | `count x size + strings` closes on all 111 files; 19 to 21 not seen |
 | The built-in common-string table (names from UnityPy; used offsets resolve) | 92 | every high-bit offset in 111 files lands on a boundary and builds a tree that consumes its objects exactly |
