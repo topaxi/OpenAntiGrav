@@ -217,9 +217,10 @@ pub(crate) struct Cli {
     /// speakers by construction rather than by accident.
     ///
     /// Length is a function of the tick count alone: `--ticks 600` is ten
-    /// seconds whatever the machine's frame rate. **Requires `--screenshot`**:
-    /// the buffer grows for as long as the run does, and a capture is the only
-    /// route with an end.
+    /// seconds whatever the machine's frame rate. Without
+    /// `--screenshot` the window writes the file when it closes and the buffer
+    /// grows (about 384 KB a second) until then: for a scripted walk, not a
+    /// play session.
     #[arg(long, value_name = "FILE")]
     pub(crate) dump_audio: Option<std::path::PathBuf>,
 

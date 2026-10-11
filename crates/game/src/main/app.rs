@@ -513,10 +513,9 @@ impl App {
     /// every platform, and a capture that silently produced no file would be
     /// indistinguishable from one that produced silence.
     ///
-    /// Writes nothing today, because `--dump-audio` is refused without
-    /// `--screenshot` and a capture never opens a window. It is wired anyway so
-    /// that lifting that restriction is one edit rather than two, and so a
-    /// windowed run cannot become the one path that quietly drops its dump.
+    /// Writes the `--dump-audio` file when the window closes (a scripted
+    /// front-end walk, the only way to hear the session's own cues), and
+    /// nothing without that flag or under a device.
     ///
     /// # Errors
     ///

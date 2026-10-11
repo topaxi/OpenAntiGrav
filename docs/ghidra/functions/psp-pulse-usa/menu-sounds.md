@@ -255,3 +255,66 @@ the selection screens, the campaign screens and the EndRace menu raise. Chosen, 
 pointer hover and click use the pad's cues (hover sounds once per row change); `LEFTRIGHT` on confirming a toggle (the original has no confirm-steps-
 value); `DECLINE` on closing the root menu. Pure's triggers are Pulse's read applied (Pure's executable carries the
 same six names, minus `PAUSE`, but its call sites were not read).
+
+## Played in a real walk (2026-10-11, lane `voices-ingame`)
+
+The ground truths above drive `Voice`, `MenuSfx` and the name lookup directly, so until this walk nothing had shown the
+**session** starting them. Pulse PSP EU, `oag-game` windowed in a private Xvfb on software Vulkan, keys sent with
+`xdotool`, `--autopilot` flying the player, and `--dump-audio FILE` writing the session's own mix when the window
+closed (a windowed dump is new: it needs no `--screenshot` any more, and clap forbids `--no-audio` beside it, so
+`Audio::open` forces the null backend and the run is silent on the host by construction). Each cue's debug line
+carries `dump frame N`, the WAV frame it starts at (48 kHz).
+
+| Step on screen | Log line | Frame |
+| --- | --- | --- |
+| Racebox, Single Race, Track Select on TALON'S JUNCTION WHITE, Confirm | `menu sound: MenuAccept` and `name voice: Track 16_Track (soundregister 1, started: true)` | same frame |
+| Ship Select on ASSEGAI, Confirm | `name voice: Ship Assegai (soundregister 4, started: true)` | same frame as its `MenuAccept` |
+| Race over, `Race End Photo`, Confirm, `RESULTS 3RD PLACE` | `menu sound: MenuAccept`, then `end-of-race voice: ResultsThird` | `ACCEPT` + 800 (one tick later) |
+| `EndRace Menu`, `VIEW RESULTS AGAIN` | `end-of-race voice: ResultsThird` again (chosen, not measured) | one tick after the confirm |
+| Campaign grid 1, a Single Race cell, Ship Select on ASSEGAI, Confirm | `name voice: Ship Assegai` only (no Track Select is shown in a cell, as recorded) | with `ACCEPT` |
+| That race to the flag, `RESULTS 3RD PLACE`, then `REWARDS BRONZE MEDAL AWARDED` | `ResultsThird`, then `end-of-race voice: MedalBronze` | one tick after each confirm |
+
+**What the WAV shows.** The brief's "silence before each cue" did not hold and is not the test: menu music, the race
+ambience under `Results` and `Rewards`, and (on the confirms) `ACCEPT`, which saturates the output, are all sounding.
+The proof is a normalised cross-correlation of each cue's isolated render (the same `MenuSfx` calls played into a null
+`Audio` and written with `--dump-audio`'s writer, onset trimmed) against the walk's mix around the logged frame, after a
+first-difference high-pass to take the music's bass out:
+
+| Cue | Peak correlation | Lag from the logged frame | z over the lags -0.5 s..+1 s |
+| --- | ---: | ---: | ---: |
+| `ResultsThird`, Single Race | 0.55 | +88 frames (2 ms) | 52 |
+| `ResultsThird`, `VIEW RESULTS AGAIN` | 0.56 | +88 | 52 |
+| `ResultsThird`, campaign cell | 0.60 | +88 | 53 |
+| `MedalBronze` | 0.61 | +88 | 43 |
+| `TMTX_NAME` Assegai, first grain (the team name is two grains ten ticks apart) | 0.67 | +104 | - |
+| `TRTX_NAME` Talon's Junction White | 0.31 | - | 25 |
+
+The isolated renders start 87 to 105 frames after their play call, so +88 is the cue starting on its logged frame.
+Controls, the same templates against three `ACCEPT`-only moments (main menu, `EndRace Menu`, campaign grid): peak
+correlation 0.02 to 0.04, with no consistent lag. The whole-template peak of both name voices sat at about -36 ms,
+which no cue can do. For the team, correlating the first grain alone puts it at +104 (against `ACCEPT`'s own +128), so
+that one is a grain-pairing artefact of the template; the circuit's -36 ms was not chased and stays unexplained
+(the cue is present, z 25, and starts with its `ACCEPT`).
+
+**What the session wiring is tested by.** There is no route that builds a `Session` without a window (`Gpu::new` takes
+the event loop), so the calls are one-line forwards into GPU-free code that tests drive: `Speaker` (the screen-on-top
+reading, with `Flow`, tested through Photo, Results, Rewards, Menu in `race_stage/speaker_tests.rs`), and
+`name_register`/`play_name` (`session/menu_sound/tests.rs`, disc-backed, `#[ignore]`d: the registers 1 and 4 and the
+waveform each kind starts). Eight mutations were run by hand against that:
+
+| Mutation | Test | `just lint` |
+| --- | --- | --- |
+| `Speaker::tick` maps `Results` to no screen | fails | - |
+| `name_register` swaps the circuit and team lists | fails | - |
+| `play_name` swaps the circuit and team voice | fails | - |
+| `EndRaceRuntime::new` handed `None` for the voice (was `set_voice`) | passes | fails (unused variable) |
+| `voice_tick` call dropped in `tick_endrace` | passes | fails (dead method and field) |
+| `play_voice` call dropped in `tick_endrace` | passes | fails (value never read) |
+| both `speak_name` calls dropped in the picker | passes | fails (unused variable) |
+| `Session::speak_name` not playing what it resolved | passes | fails (`play_name` unused) |
+
+So the **Session forwards are guarded by the compiler's dead-code and unused warnings under `-D warnings`, not by a
+test**: a deletion that also removes the binding would pass both. The walk above is what shows them wired.
+
+Open: not heard by a human; a campaign cell speaks only the team (no Track Select there), consistent with the
+recorded triggers; the medal was only walked for bronze (the autopilot finished third on both races).

@@ -33,6 +33,8 @@ mod endrace_flow;
 use endrace_flow::{Flow, Which};
 #[path = "endrace_voice.rs"]
 mod endrace_voice;
+#[cfg(test)]
+mod speaker_tests;
 pub(crate) use endrace_voice::voice_for;
 
 /// `EndRace Results`' own model, title-dispatched: Pulse's per-lap table, or
@@ -83,7 +85,7 @@ pub(crate) struct EndRaceRuntime {
     trophy: Option<(oag_game::preview::Preview, oag_ui::screen::Model)>,
     /// The place and medal lines this race's screens speak; `None` on a title
     /// whose triggers were not read (Wipeout HD/Fury).
-    voice: Option<oag_game::endrace_voice::Voice>,
+    voice: endrace_voice::Speaker,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -123,6 +125,7 @@ impl EndRaceRuntime {
         menu: EndRaceMenu,
         runs_on_after_the_end: bool,
         anisotropy: oag_mesh::mesh_render::Anisotropy,
+        voice: Option<oag_game::endrace_voice::Voice>,
     ) -> Result<Self> {
         let mut screens = screens;
         // `Race End Photo` first after a finish by the line wherever the
@@ -165,27 +168,13 @@ impl EndRaceRuntime {
             menu,
             flow,
             trophy,
-            voice: None,
+            voice: endrace_voice::Speaker::new(voice),
         })
-    }
-
-    /// Gives the flow the voice lines its screens speak. See
-    /// [`oag_game::endrace_voice`].
-    pub(crate) fn set_voice(&mut self, voice: oag_game::endrace_voice::Voice) {
-        self.voice = Some(voice);
     }
 
     /// The voice cue that starts this tick, if the screen on top calls for one.
     pub(crate) fn voice_tick(&mut self) -> Option<oag_sound::sfx::Cue> {
-        use oag_game::endrace_voice::Screen;
-        let screen = match self.flow.which() {
-            Which::Results => Screen::Results,
-            Which::Rewards => Screen::Rewards,
-            Which::Photo | Which::Menu => Screen::Other,
-        };
-        let standings = matches!(&self.results,
-            ResultsModel::PulseTournament(results) if results.showing_standings());
-        self.voice.as_mut()?.tick(screen, standings)
+        self.voice.tick(self.flow.which(), &self.results)
     }
 
     /// One tick of the flow: the clock `Race End Photo`'s clean view and the
