@@ -37,7 +37,7 @@ and are race banks (`weapons`, `ship`, `speech`, ...).
 | `LEFTRIGHT` | 1 | 1 | a value stepping, and the grid controller's left/right |
 | `ACCEPT` | 1 | 1 | a confirm that went through |
 | `DECLINE` | 3 | 1 | back, a refused confirm, a move onto an empty cell |
-| `TELETYPE` | 1 | 1 | a text line typing in, one cue per character |
+| `TELETYPE` | 1 | 1 | a `Menu` row revealing with its cursor on; **no screen reaches it** (see `TELETYPE`) |
 | `PAUSE` | 1 | 1 | **nothing recovered** |
 
 Confidence **88** for the four navigation cues (several independent call sites each, strings in the pointer pool at
@@ -64,9 +64,50 @@ reaches `Sound_*` or `Scream_*`. The cue rides the button that caused the transi
 
 ## `TELETYPE`
 
-`FUN_088b6514` plays it once per revealed character with a pitch argument (the fifth argument to
-`Sound_PlayNamedInSlot`): `(width / 100 - 1) * 0.2 * 90`, `+360` when negative, truncated to an integer, where
-`width` is the widget's measured text width. Not wired: no text-reveal effect in this port types characters in.
+Corrected 2026-10-11 (lane `pulse-teletype`). The earlier reading here, "once per revealed character", was wrong, and
+the cue is **never reached by any screen the shipped front end shows**. Nothing is wired, and that is the finding.
+
+**The caller is `Menu_PlayTeletypeTick` (`FUN_088b6514`, `0x088b6514`), the second virtual slot of the `Menu` and
+`MenuBitmap` widget classes** (vtables `0x08acd75c` and `0x08acd844`, slot at `+0x08` of the pair table; the class names
+are the registered strings `Menu` at `0x08a8029c` and `MenuBitmap` at `0x08a8043c`). It indexes the menu's *entries*
+(`<Entry IDString/String/Value>` children, `FUN_088b5a60`), not characters: while `+0xd0` (reveal complete) is 0, `+0xcc`
+(revealed rows) is below the row count and `+0xf0` (cursor enabled) is set, it calls
+`Sound_PlayNamedInSlot(slot, bank, "TELETYPE", 0x400, pitch, 0, 0)` at `0x088b669c` (pitch in `t0`) and parks the `_`
+cursor widget (`+0xe0`, the string at `0x08a80138`) at the end of row `+0xcc`. The pitch is the formula below from the
+row's measured text width `FUN_08919960(FUN_088cd21c(row text))`: `(width / 100 - 1) * 0.2 * 90`, `+360` when negative,
+truncated to an integer. The reveal state machine is `FUN_088b6088`: `+0xcc` advances once per update through
+`FUN_088883d4`, which is `jal FUN_088885ec; li v0, 1` and so **always reports the row done**, so the reveal-wait branch
+(`FUN_08888418`, the `+0x100` width test) is dead code on this build. A press of input 0 completes the reveal
+(`FUN_088b521c`); input 1 steps the selection and completes it (`FUN_088b528c`, which is also where `UPDOWN` plays).
+
+**What `MenuDisplayType` does** (`FUN_088b5a60`, the `Values` element's attribute): `NORMAL` -> mode 3 and **clears
+`+0xf0`**; `REFRESH_NORMAL` -> mode 2 (completes on the first update); `SCROLLING` -> mode 0; `TELETYPE` -> mode 1. The
+constructor `FUN_088b49a4` defaults to mode 3 with `+0xf0 = 1`.
+
+**Runtime check (PPSSPP v1.20.4, software, cold boot, USA).** A log-only breakpoint on the `jal` at `0x088b669c` and a
+second on `0x088b6514` itself, armed through the whole first boot and then the walk Boot, `Main Menu`, `Single Player`,
+`Racebox` (Time Trial, track select) into the race: **0 hits at the `jal`** against 212 hits at the entry. At the
+entry every Menu object read mode `+0xdc = 3` and `+0xf0 = 0`; the main menu's object revealed its seven rows one per
+frame (`+0xcc` 1..7 over seven consecutive updates) with `+0xf0 = 0`, so it is silent and the rows appear within seven
+frames (about 0.12 s at 60 Hz), not as a visible type-in. Confidence that no screen on that walk plays `TELETYPE`: 85.
+
+**Authored XML.** Across every entry of `Data.wad`, `FE.wad` and `FEData.wad` (USA), `MenuDisplayType` is authored 21
+times: 19 `REFRESH_NORMAL` and 2 `NORMAL`; there is **no `TELETYPE` and no `SCROLLING`**. An unauthored Menu keeps the
+constructor's `+0xf0 = 1` and mode 3, which is the one path that could tick; the walk above met none, and the
+other screens were not walked (open: a Menu with no `MenuDisplayType` on an unvisited page).
+
+**Other titles (checked 2026-10-11).** Pulse PS2: same `frontend.bnk` cue set (psp-audio.md), but its executable was
+not read: not checkable here. HD/Fury: checked, differs - its bank has `TextBox01`..`TextBox04` in place of any
+`TELETYPE`, trigger unread (`ps3-hdfury-eu/menu-sounds.md`). Omega: checked, applies, not wired - HD's front end, no SFX
+path. Pure: `TELETYPE` is in the bank, its caller not read.
+
+**The other `TELETYPE` is a different widget.** `DisplayType="TELETYPE"` on a `<Text>` widget (`<a ... DisplayType=
+"TELETYPE">`, the attribute is tokenised to one letter in some `.cod` files, `o="TELETYPE"` in `01092`) is authored on
+button prompts (`FE_CONFIRM_BUTTON`, `FE_CONFIRM`, `FE_BACK`), screen titles (`PRO_STATS`, `FE_ONLINE`) and
+`BOOT_PRESS_ANY2`, in 13 of the `.cod` files. That type-in is the `Text` class's own and **no `Sound_*` call references
+the `TELETYPE` string except `Menu_PlayTeletypeTick`** (xrefs to `0x08a80100..0x08a8011c` are `FUN_088b528c`,
+`FUN_088b5a60`, `FUN_088b6514`, `FUN_088b49a4`, `FUN_088b4ae8` only), so the original types those in silently. The port
+does not read `DisplayType` at all, so they appear whole; the type-in rate is unmeasured and open.
 
 ## `PAUSE`
 
