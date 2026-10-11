@@ -516,14 +516,22 @@ impl Session {
                 picker.refresh_preview(&self.gpu);
             }
             (Kind::Track, Event::Confirmed) => {
+                let chosen = picker.model.selected().map(|entry| entry.id.clone());
                 stage.picker = None;
+                if let Some(id) = chosen {
+                    self.speak_name(Kind::Track, &id);
+                }
                 let zone = self.race_mode() == oag_race::Mode::Zone;
                 if zone || !self.open_ship_picker() {
                     self.launch_from_settings();
                 }
             }
             (Kind::Ship, Event::Confirmed) => {
+                let chosen = picker.model.selected().map(|entry| entry.id.clone());
                 stage.picker = None;
+                if let Some(id) = chosen {
+                    self.speak_name(Kind::Ship, &id);
+                }
                 self.settings.race.variant_chosen = true;
                 // A campaign cell already built `self.race_options` in full
                 // (`Session::launch_campaign_cell`) - `launch_from_settings`

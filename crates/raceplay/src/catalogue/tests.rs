@@ -391,6 +391,7 @@ fn a_team_label_prefers_the_table_then_the_declared_name_then_the_folder() {
         name: name.map(str::to_string),
         location: format!(r"Data\Ships\{id}"),
         help_text: None,
+        sound_register: None,
         skins: Vec::new(),
         rating: None,
         models: Vec::new(),
@@ -456,6 +457,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             reversed,
             available_in_zone: false,
             unlock_grid: None,
+            sound_register: None,
         },
         if reversed {
             format!("{id} REVERSE")
@@ -489,4 +491,21 @@ fn hd_lays_circuits_out_forward_then_reverse_without_the_zone_environments() {
     let (zone, columns) = direction_rows(oag_hd::TITLE, oag_race::Mode::Zone, &zone_list);
     assert_eq!(zone.len(), 2, "Zone keeps its own environments");
     assert_eq!(columns, 2, "one row");
+}
+
+#[test]
+fn an_entrys_soundregister_is_what_selects_its_name_voice() {
+    let registers: Vec<_> = tracks(DEFINITION)
+        .iter()
+        .map(|t| (t.id.clone(), t.sound_register))
+        .collect();
+    assert_eq!(
+        registers,
+        vec![("16_Track".into(), Some(1)), ("32_Track".into(), Some(2))]
+    );
+    assert_eq!(teams(DEFINITION)[0].sound_register, Some(4));
+    // A pack's own entries carry theirs too, so a downloadable team is spoken
+    // by the value it authors and not by a table kept here.
+    assert_eq!(teams(PACK_MANIFEST)[0].sound_register, Some(11));
+    assert_eq!(tracks(PACK_MANIFEST)[0].sound_register, Some(30));
 }

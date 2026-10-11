@@ -96,6 +96,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
         reversed: true,
         available_in_zone: true,
         unlock_grid: None,
+        sound_register: None,
     };
     let tracks = [track.clone()];
     model.supply(

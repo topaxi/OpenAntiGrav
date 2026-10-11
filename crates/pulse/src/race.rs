@@ -112,6 +112,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         bank: r"Data\Sound\frontend.bnk",
         cues: oag_title::MenuCues::PULSE,
         results: Some(r"Data\Sound\speech_results.bnk"),
+        voices: Some(r"Data\Sound\FRONT_END_VO.bnk"),
     }),
     // A literal string in the executable too, at the same confidence as the
     // five above, and the bank 568 of the 1,164 authored `sound` nodes name.

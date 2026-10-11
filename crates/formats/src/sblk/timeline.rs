@@ -80,6 +80,17 @@ const GOTO: u8 = 0x24;
 const MARKER: u8 = 0x23;
 /// Gotos one tick may run before `Scream_DoGrainGoto` refuses (its depth guard).
 const MAX_GOTOS_PER_TICK: u32 = 8;
+/// The opcode that skips the next command unless a variable holds
+/// (`Scream_OpGuard`), walked only under [`WalkModel::globals`].
+const GUARD: u8 = 0x22;
+/// The opcode that hands the voice to a child cue (`Scream_OpPlayChild`'s
+/// sibling that replaces the playback state), walked as a child only under
+/// [`WalkModel::globals`]; see [`WalkModel::globals`].
+const REPLACE_WITH_CHILD: u8 = 0x08;
+/// How many runtime globals the guard can name: the 32-byte table at
+/// `0x08ac3247 + 1 ..= + 32` of Pulse's `BOOT.BIN`, written by
+/// `Sound_PlayNamedInSlot`'s two last arguments.
+pub const GLOBAL_SLOTS: usize = 32;
 /// Opcodes that return zero and change nothing this walk reports.
 const PASS_THROUGH: [u8; 5] = [0x14, 0x1e, 0x1f, 0x20, 0x21];
 
@@ -108,6 +119,23 @@ pub struct WalkModel {
     /// cue's waveforms sounds"). Off by default so a title opts in per cue
     /// family it has measured.
     pub hd_alternates: bool,
+    /// The runtime globals a `0x22` guard may read, `globals[slot - 1]` for slot
+    /// `1..=`[`GLOBAL_SLOTS`]; `None` leaves the guard unread, as every caller
+    /// had it.
+    ///
+    /// A guard operand is `[variable, mode, immediate]`, all signed. A
+    /// **negative** variable `v` reads global slot `-v` (`0x08ac3247 - v`); a
+    /// non-negative one reads the handler's own parameter byte, zero here
+    /// (`Sound_PlayNamedInSlot` supplies none). Mode 0 skips the next command
+    /// when `immediate <= variable`, mode 1 when `variable != immediate`, mode
+    /// 2 when `variable <= immediate`, any other mode never; a skip is `pc += 1`
+    /// on top of the stepper's own, so the skipped command's delay is not added
+    /// (`docs/ghidra/functions/psp-pulse-usa/sound.md`, `Scream_OpGuard`).
+    ///
+    /// Setting this also walks opcode `0x08` as a child (the same record as
+    /// `0x05`), which `FRONT_END_VO.bnk`'s `TRTX_NAME` selects its circuit
+    /// cue with. A guard naming a slot outside the table is reported unread.
+    pub globals: Option<[i8; GLOBAL_SLOTS]>,
 }
 
 /// One waveform started at one moment.
@@ -166,6 +194,26 @@ impl Timeline {
     pub fn is_complete(&self) -> bool {
         self.unread.is_empty() && self.unresolved == 0
     }
+}
+
+/// `Scream_OpGuard`: whether the command after the guard `word` is skipped, or
+/// `None` for a variable naming a global outside the table.
+fn guard_skips(word: u32, globals: &[i8; GLOBAL_SLOTS]) -> Option<bool> {
+    let variable = (word & 0xff) as u8 as i8;
+    let mode = ((word >> 8) & 0xff) as u8 as i8;
+    let immediate = ((word >> 16) & 0xff) as u8 as i8;
+    let value = if variable < 0 {
+        let slot = usize::from(variable.unsigned_abs());
+        *globals.get(slot.checked_sub(1)?)?
+    } else {
+        0
+    };
+    Some(match mode {
+        0 => immediate <= value,
+        1 => value != immediate,
+        2 => value <= immediate,
+        _ => false,
+    })
 }
 
 /// Where a walk is: shared state that threads through children.
@@ -311,9 +359,18 @@ impl Bank<'_> {
                 } else {
                     walk.out.unread.push(opcode);
                 }
-            } else if opcode == PLAY_CHILD {
+            } else if opcode == PLAY_CHILD
+                || (opcode == REPLACE_WITH_CHILD && walk.model.globals.is_some())
+            {
                 started = true;
                 self.walk_child(word & 0x00ff_ffff, tick, frame, walk);
+            } else if let (GUARD, Some(globals)) = (opcode, walk.model.globals) {
+                match guard_skips(word, &globals) {
+                    Some(true) => pc += 1,
+                    Some(false) => {}
+                    None => walk.out.unread.push(opcode),
+                }
+                walk.out.passed.push(opcode);
             } else if opcode == RANDOM_BEND {
                 if started {
                     // Voices already keyed would be re-pitched by the handler;

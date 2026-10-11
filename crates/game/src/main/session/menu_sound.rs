@@ -47,6 +47,38 @@ impl Session {
         }
     }
 
+    /// Speaks the name of the circuit or team a selection screen just
+    /// confirmed (`TRTX_NAME`, `TMTX_NAME`), by the `soundregister` the
+    /// plugin's own entry authors. Silent where the entry authors none or the
+    /// title's voice bank did not load; nothing is chosen in its place.
+    pub(crate) fn speak_name(&mut self, kind: oag_ui_screens::picker::Kind, id: &str) {
+        use oag_ui_screens::picker::Kind;
+        let mode = self.race_mode();
+        let Some(shell) = self.shell.as_mut() else {
+            return;
+        };
+        let register = match kind {
+            Kind::Track => shell
+                .tracks_for(mode)
+                .iter()
+                .find(|(track, _)| track.id == id)
+                .and_then(|(track, _)| track.sound_register),
+            Kind::Ship => shell
+                .team_details
+                .iter()
+                .find(|team| team.id == id)
+                .and_then(|team| team.sound_register),
+        };
+        let (Some(register), Some(sfx)) = (register, shell.menu_sfx.as_mut()) else {
+            return;
+        };
+        let started = match kind {
+            Kind::Track => sfx.play_circuit_name(&self.audio, register),
+            Kind::Ship => sfx.play_team_name(&self.audio, register),
+        };
+        debug!("name voice: {kind:?} {id} (soundregister {register}, started: {started})");
+    }
+
     /// Starts one of the end-of-race voice lines
     /// ([`oag_game::endrace_voice`]) on the front-end sound path. Silent on a
     /// title whose results bank did not load.

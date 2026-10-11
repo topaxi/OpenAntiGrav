@@ -10,7 +10,7 @@
 
 use oag_core::Rng;
 
-use super::{Audio, Banks, Cue, VoicePlace, start_voices};
+use super::{Audio, Banks, Cue, NameVoices, VoicePlace, start_voices};
 
 /// A different stream from [`super::SFX_SEED`]: a menu choosing an alternate
 /// must not move which collision a later race picks.
@@ -20,6 +20,7 @@ const MENU_SEED: u64 = 0x0aa9_5f10_0000_6d65;
 #[derive(Debug, Clone)]
 pub struct MenuSfx {
     banks: Banks,
+    names: NameVoices,
     rng: Rng,
 }
 
@@ -35,8 +36,12 @@ impl MenuSfx {
         tick: oag_title::SequenceTick,
         fury: bool,
     ) -> Self {
+        let mut loaded = Banks::load_front_end(archives, banks, tick, fury);
+        let names = NameVoices::load(archives, banks, tick);
+        loaded.report.extend(names.report().iter().cloned());
         Self {
-            banks: Banks::load_front_end(archives, banks, tick, fury),
+            banks: loaded,
+            names,
             rng: Rng::new(MENU_SEED),
         }
     }
@@ -64,5 +69,30 @@ impl MenuSfx {
         audio.output.with_mixer(|mixer| {
             !start_voices(mixer, &voices, cue.bus(), VoicePlace::DRY).is_empty()
         })
+    }
+
+    /// Whether the team whose `soundregister` is `value` has a name voice.
+    #[must_use]
+    pub fn has_team_name(&self, value: u8) -> bool {
+        self.names.has_team(value)
+    }
+
+    /// Whether the circuit whose `soundregister` is `value` has a name voice.
+    #[must_use]
+    pub fn has_circuit_name(&self, value: u8) -> bool {
+        self.names.has_circuit(value)
+    }
+
+    /// Speaks the team's name: `TMTX_NAME` with the team's `soundregister`
+    /// written to the table slot its guards read. Silent, and `false`, for a
+    /// value the bank holds no command for.
+    pub fn play_team_name(&mut self, audio: &Audio, value: u8) -> bool {
+        self.names.play_team(audio, &mut self.rng, value)
+    }
+
+    /// Speaks the circuit's name: `TRTX_NAME` with the circuit's
+    /// `soundregister` in its slot. See [`Self::play_team_name`].
+    pub fn play_circuit_name(&mut self, audio: &Audio, value: u8) -> bool {
+        self.names.play_circuit(audio, &mut self.rng, value)
     }
 }

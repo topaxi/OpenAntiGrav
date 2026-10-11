@@ -314,6 +314,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
         cues: oag_title::MenuCues::PULSE,
         // Pure keeps `gold_med`.. in `speech.bnk` and has no place lines; its call sites were not read.
         results: None,
+        voices: None,
     }),
     // Resolves on both Pure pressings and holds an `SBlk` whose own label is
     // `GENTRAK` - Pulse's `gentrak` in Pure's upper case. Name resolution
