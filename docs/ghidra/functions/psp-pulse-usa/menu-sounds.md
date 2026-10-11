@@ -108,8 +108,8 @@ the Tournament standings rank, `tournament.md`):
 1 plays `FIRST_PLACE`, 2 `SECOND_PLACE`, 3 `THIRD_PLACE`; 0 and 4 or worse play nothing and **leave the flag clear**
 (it is set only on a play). The earlier reading of this page and `endrace-screens.md` ("once per results screen, off
 the finishing position") held for modes 3 and 8 only. Confidence 85 (a direct read of the branch; the once-flag's
-reset on re-entry is not read: `OnEnter` never writes `+0xe8`, so whether `VIEW RESULTS AGAIN` speaks again depends
-on the widget being rebuilt, **inferred, not captured**).
+reset on re-entry is not read: `OnEnter` never writes `+0xe8`. `VIEW RESULTS AGAIN` speaking the place again is
+**chosen, not measured**).
 
 **The medal line** (`EndRaceRewards_OnEnter`): only under `DAT_08b30ffc != 0` (a campaign cell in play), on entry,
 off the medal ordinal at `result + 0x1160`: 0 `gold_med`, 1 `silver_med`, 2 `bronze_med`, otherwise nothing. The same

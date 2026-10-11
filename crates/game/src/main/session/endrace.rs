@@ -9,7 +9,7 @@ use oag_ui_screens::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
     EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
-    loyalty_award, menu_options, to_campaign_medal, tournament_results, zone_results,
+    loyalty_award, menu_options, to_campaign_medal, tournament_results, voice_for, zone_results,
 };
 use crate::race_stage::endrace_touch::EndRace;
 use crate::race_stage::hd_loyalty::{HdRace, hd_award};
@@ -287,26 +287,8 @@ impl Session {
             })
         };
         // Pulse's `EndRaceResults_Update` and `EndRaceRewards_OnEnter` speak the
-        // place and the medal; HD's screens were not read playing either.
-        let voice = (!is_hd).then(|| {
-            let place = match &results {
-                ResultsModel::PulseElimination(table) => table.place(),
-                _ => observation.place,
-            };
-            let standings_place = match &results {
-                ResultsModel::PulseTournament(table) => table
-                    .standings
-                    .iter()
-                    .position(|row| row.player)
-                    .and_then(|index| u8::try_from(index + 1).ok()),
-                _ => None,
-            };
-            let medal = rewards
-                .as_ref()
-                .filter(|rewards| rewards.campaign)
-                .and_then(|rewards| rewards.medal);
-            oag_game::endrace_voice::Voice::new(mode, place, standings_place, medal)
-        });
+        // place and the medal; HD's screens were not read speaking either.
+        let voice = voice_for(mode, &results, observation.place, rewards.as_ref());
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
             menu_options(campaign, self.tournament_has_next_leg()),
             new_best_lap_ticks,

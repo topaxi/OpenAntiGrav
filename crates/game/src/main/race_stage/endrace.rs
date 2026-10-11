@@ -31,6 +31,9 @@ use oag_game::render::Renderer;
 #[path = "endrace_flow.rs"]
 mod endrace_flow;
 use endrace_flow::{Flow, Which};
+#[path = "endrace_voice.rs"]
+mod endrace_voice;
+pub(crate) use endrace_voice::voice_for;
 
 /// `EndRace Results`' own model, title-dispatched: Pulse's per-lap table, or
 /// Wipeout HD/Fury's whole-field standings grid
