@@ -80,14 +80,56 @@ formatted name could reach it was not ruled out (confidence 60 that nothing play
 | --- | --- | --- | --- |
 | `FRONT_END_VO` | `TMTX_NAME` | `FUN_088ea048` | `FUN_0898dac0(2, param_2)` before the play (the team) |
 | `FRONT_END_VO` | `TRTX_NAME` | `FUN_088ed9a8` | `FUN_0898dac0(1, param_2)` (the circuit) |
-| `speech_results` | `FIRST_PLACE` / `SECOND_PLACE` / `THIRD_PLACE` | `EndRaceResults_Update` | none; once per results screen, off the finishing position |
-| `speech_results` | `gold_med` / `silver_med` / `bronze_med` | `EndRaceRewards_OnEnter` | none; on entry, when a medal was won |
+| `speech_results` | `FIRST_PLACE` / `SECOND_PLACE` / `THIRD_PLACE` | `EndRaceResults_Update` | wired 2026-10-11, see "The end-of-race voices" |
+| `speech_results` | `gold_med` / `silver_med` / `bronze_med` | `EndRaceRewards_OnEnter` | wired 2026-10-11, see "The end-of-race voices" |
 
 `FUN_0898dac0(slot, value)` stores `value` in a 32-byte table at `0x08ac3247` for `slot` in `1..32`. The banks'
 `TMTX_NAME` is a 24-waveform cue (21 s in all) and `TRTX_NAME` is 66 commands and no waveform of its own (child references): the table is the selector a
 guard operand reads (`Scream_OpGuard`, per-voice and global variables, `sound.md`), but which global the guard reads
 was not followed. Picking a waveform by team index would be an invention, so these stay unplayed. The place and medal
-lines are plain named cues in a bank this port does not load; they are the next addition, not blocked on RE.
+lines are the next section.
+
+## The end-of-race voices
+
+Decompiled headless 2026-10-11 (`/pulse/BOOT-psp-pulse-usa.BIN`, `EndRaceResults_Update` `0x088da530`,
+`EndRaceRewards_OnEnter` `0x088dbbd4`). Both play with `Sound_PlayNamedInSlot(DAT_08ac1e10, DAT_08ac1e00, name,
+0x400, 0, 0, 0)`: the `speech_results` slot, dry. `EndRaceResults_Update` keeps a once-flag at widget `+0xe8`.
+
+**The place line** (`EndRaceResults_Update`; `+0xe4` points at `g_endrace_result`, word 0 the finishing place, word 1
+the Tournament standings rank, `tournament.md`):
+
+| `g_game_mode` | When | Place read |
+| --- | --- | --- |
+| 3 (`Arcade`, Single Race) and 8 (`Elimination`) | every update tick until the flag is set, so the first | word 0 |
+| 4 (`Tournament`) | the first three-second page flip. `EndRaceResults_OnEnter` leaves the page flag `+0xe0` at 1, so the first flip takes the else branch, `ER_TOUR_STAN` | **word 1**, the standings rank, not the leg's place |
+| 0x10 (multiplayer Tournament) | the same flip | the same word; not reachable here, this build has no split-screen |
+| everything else (Time Trial, Speed Lap, Zone, `Head2Head` = 9) | never | - |
+
+1 plays `FIRST_PLACE`, 2 `SECOND_PLACE`, 3 `THIRD_PLACE`; 0 and 4 or worse play nothing and **leave the flag clear**
+(it is set only on a play). The earlier reading of this page and `endrace-screens.md` ("once per results screen, off
+the finishing position") held for modes 3 and 8 only. Confidence 85 (a direct read of the branch; the once-flag's
+reset on re-entry is not read: `OnEnter` never writes `+0xe8`, so whether `VIEW RESULTS AGAIN` speaks again depends
+on the widget being rebuilt, **inferred, not captured**).
+
+**The medal line** (`EndRaceRewards_OnEnter`): only under `DAT_08b30ffc != 0` (a campaign cell in play), on entry,
+off the medal ordinal at `result + 0x1160`: 0 `gold_med`, 1 `silver_med`, 2 `bronze_med`, otherwise nothing. The same
+branch unpauses the matching trophy. Confidence 85.
+
+**Wired** (`oag_game::endrace_voice`, the session's `tick_endrace`): `speech_results.bnk` is a second front-end bank,
+`oag_title::FrontEndSounds::results` (`Some` on Pulse, `None` elsewhere), `oag_sound::sfx::BankName::SpeechResults`
+and `Cue::RESULTS`, loaded by `MenuSfx` beside the navigation cues and only when the title names it. The bank rides
+the speech bus, **chosen, not measured**. `FRONT_END_VO.bnk` (team and circuit names) can reuse the same shape: one
+more optional path in `FrontEndSounds`, one more `BankName`.
+
+**Cross-title** (census by `endrace_voice_ground_truth.rs`):
+
+| Title | Result |
+| --- | --- |
+| Pulse PSP (USA, EU) | **ported**: all six names resolve, `FIRST_PLACE`.. 2 waveforms each, `gold_med`.. 4 each |
+| Pulse PS2 (EU) | **ported**: same bank under the same name in `WADS2.WAD`, same counts |
+| Pure PSP | **checked, differs**: no `speech_results.bnk` entry; `gold_med`/`silver_med`/`bronze_med` sit in `speech.bnk`, there is no place line there. Its call sites were not read, so nothing is wired |
+| HD / Fury | **checked, applies, not wired**: `speech_results.bnk` ships with all six names (2 waveforms each) and the boot loads it (`sound-bank-loads.md`); HD's call sites were not read |
+| 2048, Omega | **not checkable**: both load a `speech_results` bank (`game-boot.md`) but as a nameless v5 bank / Wwise events, with no SFX path to resolve a cue by name |
 
 ## Wired by this lane
 

@@ -30,6 +30,7 @@ pub mod campaign;
 pub mod capture;
 pub mod cursor;
 pub mod endrace;
+pub mod endrace_voice;
 pub mod flyer;
 pub mod ghosts;
 pub mod hud_countdown;

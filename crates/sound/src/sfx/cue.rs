@@ -581,6 +581,23 @@ pub enum Cue {
     /// in, so it is declared with its name and bank and neither loaded nor
     /// fired: it is not in [`Self::FRONT_END`].
     MenuTeletype,
+    /// The finishing-place line for first: `"FIRST_PLACE"`, in `speech_results.bnk`.
+    /// `EndRaceResults_Update` plays it dry (`Sound_PlayNamedInSlot` at `0x400`)
+    /// for a place of 1; see [`Self::RESULTS`] and
+    /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`.
+    ResultsFirst,
+    /// `"SECOND_PLACE"`. See [`Self::ResultsFirst`].
+    ResultsSecond,
+    /// `"THIRD_PLACE"`. See [`Self::ResultsFirst`].
+    ResultsThird,
+    /// The gold medal jingle: `"gold_med"`, in `speech_results.bnk`.
+    /// `EndRaceRewards_OnEnter` plays it dry as the gold trophy is unpaused,
+    /// campaign cells only.
+    MedalGold,
+    /// `"silver_med"`. See [`Self::MedalGold`].
+    MedalSilver,
+    /// `"bronze_med"`. See [`Self::MedalGold`].
+    MedalBronze,
 }
 
 mod tables;

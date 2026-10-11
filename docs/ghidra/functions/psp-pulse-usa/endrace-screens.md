@@ -50,7 +50,7 @@ mechanism below instead.
 | `0x088d98cc` | `EndRaceResults_OnEnter` | 82 | sets `BigTopText`/`Line1`, dispatches to the per-mode populate helper, toggles the two outgoing Redirects |
 | `0x088da8c8` | `EndRaceResults_PopulateLapTable` | 80 | the single-player (`Race`/`Time Trial`/`Head2Head`/`Speed Lap`) per-lap table |
 | `0x088d939c` | `EndRaceResults_ResetTable` | 88 | blanks all 27 `lap{r}.{c}` cells, **hides** the 8 `tablebg` rows, the 5 `perfectlap` icons and `boostimg`, and shows `topbarcenter` - see "Bit `0x4` is the visible bit" below (an earlier revision read every one of these backwards) |
-| `0x088da530` | `EndRaceResults_Update` | 85 | the per-frame update: accumulates the screen timer at `+0xdc`, plays the finishing-place jingle once, flips the Tournament page every 3 s, and re-runs the multiplayer populate every frame in modes `0xe`/`0xf` |
+| `0x088da530` | `EndRaceResults_Update` | 85 | the per-frame update: accumulates the screen timer at `+0xdc`, speaks the finishing place once (Single Race and Eliminator on entry; Tournament at the first page flip, off the standings rank; no other mode - see [menu-sounds.md](menu-sounds.md#the-end-of-race-voices)), flips the Tournament page every 3 s, and re-runs the multiplayer populate every frame in modes `0xe`/`0xf` |
 | `0x088dad90` | `EndRaceResults_PopulateTournamentTable` | 82 | Tournament and Multiplayer Tournament - read on [`tournament.md`](tournament.md) |
 | `0x088db574` | `EndRaceResults_PopulateZoneTable` | 82 | Zone: six label/value rows, no header - see "The variant populates" below |
 | `0x088db1ec` | `EndRaceResults_PopulateEliminationTable` | 92 | Eliminator and Multiplayer Elimination: `Deaths`/`Team`/`Kills` per craft, **read on a live frame** |

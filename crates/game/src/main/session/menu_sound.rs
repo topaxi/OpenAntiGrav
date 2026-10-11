@@ -47,6 +47,21 @@ impl Session {
         }
     }
 
+    /// Starts one of the end-of-race voice lines
+    /// ([`oag_game::endrace_voice`]) on the front-end sound path. Silent on a
+    /// title whose results bank did not load.
+    pub(crate) fn play_voice(&mut self, cue: oag_sound::sfx::Cue) {
+        let Some(sfx) = self
+            .shell
+            .as_mut()
+            .and_then(|shell| shell.menu_sfx.as_mut())
+        else {
+            return;
+        };
+        let started = sfx.play(&self.audio, cue);
+        debug!("end-of-race voice: {cue:?} (started: {started})");
+    }
+
     /// The sound a campaign event calls for: [`Event::nav`], except that a
     /// confirm the screen is about to refuse (a locked tier or cell) is
     /// `DECLINE`, as `ConfirmButton_Update`'s refused confirm is. Reads the

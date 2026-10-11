@@ -78,6 +78,9 @@ pub(crate) struct EndRaceRuntime {
     /// drawn over the screen's own draw list with the `Mode3D` camera the
     /// disc authors for it.
     trophy: Option<(oag_game::preview::Preview, oag_ui::screen::Model)>,
+    /// The place and medal lines this race's screens speak; `None` on a title
+    /// whose triggers were not read (Wipeout HD/Fury).
+    voice: Option<oag_game::endrace_voice::Voice>,
 }
 
 impl std::fmt::Debug for EndRaceRuntime {
@@ -159,7 +162,27 @@ impl EndRaceRuntime {
             menu,
             flow,
             trophy,
+            voice: None,
         })
+    }
+
+    /// Gives the flow the voice lines its screens speak. See
+    /// [`oag_game::endrace_voice`].
+    pub(crate) fn set_voice(&mut self, voice: oag_game::endrace_voice::Voice) {
+        self.voice = Some(voice);
+    }
+
+    /// The voice cue that starts this tick, if the screen on top calls for one.
+    pub(crate) fn voice_tick(&mut self) -> Option<oag_sound::sfx::Cue> {
+        use oag_game::endrace_voice::Screen;
+        let screen = match self.flow.which() {
+            Which::Results => Screen::Results,
+            Which::Rewards => Screen::Rewards,
+            Which::Photo | Which::Menu => Screen::Other,
+        };
+        let standings = matches!(&self.results,
+            ResultsModel::PulseTournament(results) if results.showing_standings());
+        self.voice.as_mut()?.tick(screen, standings)
     }
 
     /// One tick of the flow: the clock `Race End Photo`'s clean view and the

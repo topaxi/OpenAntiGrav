@@ -286,6 +286,27 @@ impl Session {
                 total_ticks: observation.tick,
             })
         };
+        // Pulse's `EndRaceResults_Update` and `EndRaceRewards_OnEnter` speak the
+        // place and the medal; HD's screens were not read playing either.
+        let voice = (!is_hd).then(|| {
+            let place = match &results {
+                ResultsModel::PulseElimination(table) => table.place(),
+                _ => observation.place,
+            };
+            let standings_place = match &results {
+                ResultsModel::PulseTournament(table) => table
+                    .standings
+                    .iter()
+                    .position(|row| row.player)
+                    .and_then(|index| u8::try_from(index + 1).ok()),
+                _ => None,
+            };
+            let medal = rewards
+                .as_ref()
+                .filter(|rewards| rewards.campaign)
+                .and_then(|rewards| rewards.medal);
+            oag_game::endrace_voice::Voice::new(mode, place, standings_place, medal)
+        });
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
             menu_options(campaign, self.tournament_has_next_leg()),
             new_best_lap_ticks,
@@ -306,7 +327,10 @@ impl Session {
             runs_on_after_the_end,
             self.anisotropy,
         ) {
-            Ok(runtime) => {
+            Ok(mut runtime) => {
+                if let Some(voice) = voice {
+                    runtime.set_voice(voice);
+                }
                 if let Stage::Race(stage) = &mut self.stage {
                     stage.endrace = Some(EndRace::Disc(Box::new(runtime)));
                 }
@@ -333,6 +357,7 @@ impl Session {
     pub(crate) fn tick_endrace(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let mut confirmed_option = None;
         let mut navs = Vec::new();
+        let voice: Option<oag_sound::sfx::Cue>;
         {
             let Stage::Race(stage) = &mut self.stage else {
                 return;
@@ -348,6 +373,7 @@ impl Session {
             };
             endrace.tick_flow();
             endrace.tick_tournament_table();
+            voice = endrace.voice_tick();
             if endrace.is_menu() {
                 let mut events = endrace.menu_mut().update(self.controls.buttons_mut());
                 // No pointer-target list here: `EndRace Menu`'s own row
@@ -403,6 +429,9 @@ impl Session {
             }
         }
         self.play_navs(navs);
+        if let Some(cue) = voice {
+            self.play_voice(cue);
+        }
         if let Some(option) = confirmed_option {
             self.handle_endrace_menu_option(option);
         }

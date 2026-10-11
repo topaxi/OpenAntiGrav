@@ -27,6 +27,11 @@ pub enum BankName {
     /// `Data\Sound\frontend.bnk`, the front end's navigation sounds. Only a
     /// title whose [`oag_title::SoundBanks::frontend`] is set has one.
     Frontend,
+    /// `Data\Sound\speech_results.bnk`, the end-of-race place and medal lines.
+    /// Only a title whose [`oag_title::FrontEndSounds::results`] is set has one.
+    /// A voice bank, so [`super::Cue::bus`] puts it on the speech bus (chosen,
+    /// not measured: the original plays it through the one front-end slot).
+    SpeechResults,
 }
 
 impl BankName {
@@ -52,6 +57,7 @@ impl BankName {
             Self::Weapons => banks.weapons,
             Self::Speech => banks.speech,
             Self::Frontend => banks.frontend.map_or("", |front| front.bank),
+            Self::SpeechResults => banks.frontend.and_then(|front| front.results).unwrap_or(""),
         }
     }
 }

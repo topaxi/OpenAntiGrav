@@ -311,3 +311,20 @@ fn an_unplaced_cue_survives_a_slot_that_has_no_craft() {
     let empty = [None; oag_gameplay::MAX_SHIPS];
     assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty).is_some());
 }
+
+#[test]
+fn the_results_lines_live_in_their_own_bank_which_only_a_naming_title_has() {
+    use oag_audio::Bus;
+    for cue in Cue::RESULTS {
+        assert_eq!(cue.bank(), BankName::SpeechResults, "{cue:?}");
+        assert_eq!(cue.bus(), Bus::Speech, "{cue:?}");
+        assert!(!Cue::ALL.contains(&cue) && !Cue::FRONT_END.contains(&cue));
+    }
+    assert_eq!(
+        BankName::SpeechResults.entry(oag_pulse::race::SOUND_BANKS, false),
+        r"Data\Sound\speech_results.bnk"
+    );
+    for banks in [oag_pure::race::SOUND_BANKS, oag_hd::race::SOUND_BANKS] {
+        assert_eq!(BankName::SpeechResults.entry(banks, false), "");
+    }
+}
