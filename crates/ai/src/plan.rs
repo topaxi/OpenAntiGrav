@@ -576,8 +576,8 @@ impl SpeedPlan {
     /// verifies `07_Track` VENOM and HD `04_Track` PHANTOM; the trough search
     /// alone verifies `06_Track` RAPIER, which is left on the corner model on
     /// purpose (see `docs/gameplay/ai.md`, "Floors in the speed plan"). The
-    /// report counts both searches' steps. Chosen, not measured off the
-    /// original.
+    /// trough search runs only after a clean whole-window one, and the report
+    /// counts both searches' steps. Chosen, not measured off the original.
     #[must_use]
     pub fn build_within<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
@@ -585,11 +585,17 @@ impl SpeedPlan {
         tuning: &Tuning,
         budget: u64,
     ) -> (Self, Report) {
+        let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
         let (window, window_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
+        // The trough plan only ever replaces a clean whole-window one, so a
+        // course that one does not verify on (2048 `sol` and its routes, 30,000
+        // to 330,000 steps each) is not searched twice.
+        if !clean(&window_report) {
+            return (window, window_report);
+        }
         let (trough, trough_report) =
             Self::search(course, craft, tuning, budget, Lowering::FromTrough);
         let steps = window_report.steps + trough_report.steps;
-        let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
         let lap = |r: &Report| u64::from(r.verify_lap_ticks.unwrap_or(u32::MAX));
         // A clear win only: the trough plan's verification lap at least
         // [`TROUGH_WIN`] faster, so a layout within a hair of the old plan keeps
