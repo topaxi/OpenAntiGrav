@@ -1,4 +1,4 @@
-# AI pace: the plan's floors are fixed; sol, 06 and the rest are still slow
+# AI pace: the plan's floors are gone where a better plan wins; sol, 06 and the rest are still slow
 
 2026-10-11, lane `ai-pace`, opened on the maintainer's report that the AI
 "slows down a lot" on certain circuits. The measurement, the cause, the change
@@ -9,13 +9,20 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 
 ## Open
 
-- **2048 `sol`: no opponent ever laps.** Every craft hits a `ResetZone` from
-  the grid and is put back at its last on-track sample at standstill. About 68
-  ticks later it hits the same volume again, creeping on about 5 samples a
-  time: 176 respawns per craft in 12,000 ticks. This is rescue placement in
-  `crates/raceplay/src/respawn.rs`, the same family as `29_Track` reversed
-  (one craft at sample 45, 52 respawns in one Ace VENOM field seed). Not the
-  driver. Check whether the player hits it too before fixing it.
+- **2048 `sol`: no opponent ever laps.** Every craft hits a `ResetZone` about
+  65 ticks from the grid. It is put back at its last on-track sample at
+  standstill and hits the same volume again about 68 ticks later, creeping on
+  about 5 samples a time: 176 respawns per craft in 12,000 ticks.
+  - The first exit is the driver's: the autopilot player flies off the edge
+    at about 20 s, where the road bends left while the craft is in the air,
+    and no plan verifies there.
+  - The loop is rescue placement in `crates/raceplay/src/respawn.rs`, the same
+    family as `29_Track` reversed (one craft at sample 45, 52 respawns in one
+    Ace VENOM field seed).
+  - A human is not measured.
+- **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
+  `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
+  Citta Nuova VENOM (1493). The trough plan does not win there.
 - **Pulse `06_Track` RAPIER is a one-line switch, and it is the maintainer's
   call.** Only the trough search verifies it. On that plan the lone Ace laps
   29.16 s against 38.61 s on the corner model (gold 24.0), but the
@@ -42,8 +49,8 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 
 ## Next Steps
 
-1. `sol`: log the `ResetContact` (collider, swept flag) at tick 65, and check
-   whether the player's autopilot loops too. Then decide where a rescue should
+1. `sol`: find where the craft leaves the road around 20 s, the same
+   landing-aim lever as `06_Track` VENOM. Then decide where a rescue should
    place a craft in front of a reset volume it cannot clear from standstill.
    About 2 hours.
 2. Put the `06_Track` RAPIER trade to the maintainer. If they accept it,

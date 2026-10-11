@@ -3625,8 +3625,10 @@ not the original's AI, and HD's are the `DATA02` grids, equal to the hard rung.
 **What it found.**
 
 - **Traffic is not where the time goes.** At VENOM the Elite field's median
-  flying lap is within 8 % of a lone Ace on every Pulse layout, within 6 % on
-  HD and within 4 % on 2048, with or without a player in the race.
+  flying lap is within 8 % of a lone Ace on every Pulse layout (8.4 % with a
+  player in the race), within 6.6 % on HD and 10.2 % on Pure; 2048's Ace field
+  is within 3.4 %. Most of Pulse's worst gap is the level itself: alone, an
+  Elite is 7.5 % slower than an Ace on `07_Track`.
 - **A lone Ace is far off gold on a handful of layouts, and close on the
   rest.** Most rows are within 0-8 % of gold. The far rows are Pulse
   `06_Track` (+43 % VENOM, +61 % RAPIER, both on the corner model), `07_Track`
@@ -3651,10 +3653,23 @@ search artefacts.
 **The change** (`crates/ai/src/plan/lower.rs`, `SpeedPlan::build_within`).
 `Lowering::FromTrough` skips the failing tick. For its first three tries at a
 site, it lowers only from the lookback's slowest point on, when the craft was
-going 1.25x faster at the failure. The build runs both this search and the
-old whole-window one. **The old plan is kept unless both verify clean and the
-trough plan laps its verification 2 % faster**, so every other layout gets
-exactly the plan it had. All of it is **chosen, not measured**.
+going 1.25x faster at the failure. The build runs the old whole-window search
+and, only when that verifies clean, this one. **The old plan is kept unless
+the trough plan also verifies clean and laps its verification 2 % faster**,
+so every other layout gets exactly the plan it had. All of it is **chosen,
+not measured**.
+
+**So the floors are gone only where the trough plan wins.** Plans in use that
+still hold a ceiling at or under 20 u/s (`plan_floor_report`, Pulse, HD and
+Pure, every class):
+
+- Pulse `07_Track` VENOM, samples 2141, 2144-2145 and 2375.
+- HD `04_Track` PHANTOM, 2307.
+- Pure Citta Nuova VENOM, 1493 (19.99 u/s).
+
+Pulse `06_Track` VENOM and RAPIER and HD `15_Track` PHANTOM have floors too,
+but they do not verify and drive the corner model. Pulse at VENOM forward is
+unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
 
 **What it bought**, lone Ace, Pulse, HD and Pure, every class, 240 rows,
 12,000 ticks:
@@ -3667,8 +3682,11 @@ exactly the plan it had. All of it is **chosen, not measured**.
 - Wall contact 2,156 to 2,178. The rise is mostly HD `14_Track` reversed
   PHANTOM, 64 to 105.
 - Respawns 1 and 1.
-- A plan build costs both searches: median steps on Pulse and HD at VENOM go
-  11,549 to 23,093.
+- A plan build costs a second search wherever the first verifies: median
+  steps on Pulse and HD at VENOM go from about 11,500 to 23,093 (maximum
+  70,390). A course whose old plan does not verify (2048 `sol` and its
+  routes) costs exactly what it did. 2048's and Omega's other layouts were not
+  timed.
 - Every AI ground truth passes with no bound or baseline moved, and
   `race_ground_truth`'s twelve circuits stay clean.
 
@@ -3691,11 +3709,14 @@ exactly the plan it had. All of it is **chosen, not measured**.
 
 **Still open, by how much a player sees it:**
 
-- **2048 `sol`.** Every opponent hits a `ResetZone` from the grid, is put back
-  at its last on-track sample at standstill, and hits it again about 68 ticks
-  later. It never completes a lap: 176 respawns in 12,000 ticks for each craft.
-  This is the race's rescue placement, the same family as the `29_Track`
-  reversed loop above, not the driver.
+- **2048 `sol`.** Every opponent hits a `ResetZone` about 65 ticks from the
+  grid. It is put back at its last on-track sample at standstill and hits it
+  again about 68 ticks later, never completing a lap: 176 respawns in 12,000
+  ticks for each craft. The first exit is the driver's. The player's own
+  autopilot, which is the same driver, flies off the edge at about 20 s, where
+  the road bends left while the craft is in the air (no plan verifies there,
+  so it drives the corner model). The loop is the rescue placement: the same
+  family as the `29_Track` reversed loop above. A human is not measured.
 - **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
   samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the
