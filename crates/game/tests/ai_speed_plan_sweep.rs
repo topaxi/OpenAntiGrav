@@ -446,3 +446,67 @@ fn campaign_reference_laps() {
         }
     }
 }
+
+/// Where a layout's plan sits at the search's floor, and what the search could
+/// not resolve: for every layout `OAG_SWEEP_ONLY` names at `OAG_SWEEP_CLASS`
+/// (VENOM by default), the build report's unresolved sites and every run of
+/// samples whose ceiling is at or under `OAG_FLOOR` (20 by default). Prints
+/// only.
+#[test]
+#[ignore = "a probe: set OAG_SWEEP, read the lines"]
+fn plan_floor_report() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else {
+        return;
+    };
+    let class = std::env::var("OAG_SWEEP_CLASS").unwrap_or_else(|_| "VENOM".to_string());
+    let floor: f32 = std::env::var("OAG_FLOOR")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20.0);
+    for reversed in [false, true] {
+        for (id, entry) in layouts(reversed) {
+            let Ok(loaded) = race::load(&race::Options {
+                source: image.display().to_string(),
+                class: class.clone(),
+                mode: oag_race::Mode::SingleRace,
+                track: Some(entry.clone()),
+                ..race::Options::default()
+            }) else {
+                continue;
+            };
+            let race = race::Race::start(loaded.setup);
+            let (plan, report) = race.build_speed_plan(1);
+            let mut runs: Vec<(usize, usize, f32)> = Vec::new();
+            for i in 0..plan.len() {
+                let ceiling = plan.ceiling(i);
+                if ceiling > floor {
+                    continue;
+                }
+                match runs.last_mut() {
+                    Some(run) if run.1 + 1 == i => {
+                        run.1 = i;
+                        run.2 = run.2.min(ceiling);
+                    }
+                    _ => runs.push((i, i, ceiling)),
+                }
+            }
+            println!(
+                "{} {id} {class}: steps {} passes {} lowerings {} respawns {} verify failures {} \
+                 respawns {} lap {:?}; unresolved {:?}; ceilings <= {floor}: {:?}",
+                title(),
+                report.steps,
+                report.passes,
+                report.lowerings,
+                report.respawns,
+                report.verify_failures,
+                report.verify_respawns,
+                report.verify_lap_ticks,
+                report.unresolved,
+                runs
+            );
+        }
+    }
+}
