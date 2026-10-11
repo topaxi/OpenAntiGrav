@@ -254,12 +254,16 @@ else:
 (thrustOffset, thrustMul, spreadMul) =
     AI_InterpolateThrustPoint(offset[i], mult[i], fVar13 - floor) for i in 0..3
 
-spread = spreadMul * class->SpreadDist[grid_position]     # +0x88, PosBalancing - player-coupled
+spread = spreadMul * class->SpreadDist[player_place - 1]  # +0x88, PosBalancing - player-coupled
 ...pack-position-matching loop over every ship's own rank...
 rubberband = leading/behind speed adjustment against DAT_08b34410  # the PLAYER's own ship,
                                                                     # RubberBanding - player-coupled
 thrust = thrustOffset + (posBalancingThrust + rubberband - base) * thrustMul + base
 ```
+
+**Read whole on 2026-10-11** (`orig-ai-pulse`): the law, the pack shuffle that feeds it and the
+steering that sits beside it are on [ai-controls.md](ai-controls.md), and the index above is the
+player's place, not a grid position as this sketch first said.
 
 Three independent offset checks against `ai-stats.md`'s own already-scored-88
 struct layout close on this function, which is the evidence for the address:
