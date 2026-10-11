@@ -230,6 +230,32 @@ The eight Single Race craft hold their heading through the countdown too (read
 at placement, then 2.5 and 3.5 s later on `16_Track`: forward `z` identical to
 four places on all eight), so `on_grid` is right for the opponents as well.
 
+## Pulse has no lowered grid-state hover target (2026-10-11, `pulse-flyby-settle`)
+
+HD lowers its hover target in the grid state (`0.75 * min(5.5, entry+0x348)`, a `3.0x` clamp, see
+[hd-ride-height.md](hd-ride-height.md)). **Pulse does not.** Read in `Ship_UpdateCraft`
+(`0x08849618`, Ghidra `/pulse/BOOT-psp-pulse-usa.BIN`): the hover target `craft+0x2f0` is
+`**(craft+0x70)` (the handling row's ride height) `+ *(craft+0x74)`, minus `min(craft+0x2e0, 4.0)`
+while the slowdown timer is positive, times `(craft+0x280 * 0.2 + 1)` (the magnet-lock gain), times
+`g_craft_scale`. No read of `craft+0x1c0 & 2` or of `craft+0x2a4` sits in that block, and
+`craft+0x348` is a force accumulator that the same function zeroes each tick, not a clamp or a timer.
+Confidence **85** (decompile of the whole function; the state-0 reads elsewhere are the four rows
+above, none of them a target height).
+
+**The flyby's craft is therefore not low.** The original places the craft 2.14 units below its rest
+height (`y -52.221`, table above) and the hover spring raises it to rest by about frame 50; the
+flyby capture reads the same rise (`-51.74` to `-49.58` over about 40 ticks). Ours is placed at rest
+height (tick 0 `y -50.079`, rest `-50.06`; measured 2026-10-11 on `16_Track`, Venom, Time Trial, over
+340 ticks). So from about 1 s into the 25 s flyby and through the countdown the two sit at the same
+height to 0.02; the earlier "two units low" reading was the original's pre-settle placement pose
+read as its flyby pose. **Falsifier met, nothing ported.** What does differ is the first second
+only: the original rises 2.14 units, ours holds still. Whether that is visible depends on the flyby
+camera's first second; a view-side rise of the drawn pose is a possible follow-up (chosen, not
+measured), not done here.
+
+Other titles: Pulse PS2 and Pure not checkable here (no PS2 or Pure program is open in Ghidra); HD
+differs (above); Omega and 2048 not checkable for this branch.
+
 ## Reproducing
 
 ```sh
