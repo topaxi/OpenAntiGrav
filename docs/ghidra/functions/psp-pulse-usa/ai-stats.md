@@ -214,10 +214,13 @@ see [the launch boost](../../../physics/launch-boost.md).
 
 ## What is not determined
 
-- **Units, and what most of these numbers multiply.** The parser stores the
+- ~~**Units, and what most of these numbers multiply.** The parser stores the
   attribute; only the `SkillScale` block's own consumer is found (below) -
   `AIThrust`/`SpreadDist`/the `RubberBanding` six and `StartStats` still have
-  none identified.
+  none identified.~~ **Answered 2026-10-11**: `AIThrust`, `SpreadDist`, the
+  `RubberBanding` six and `AIPackSwapping` are consumed by
+  `AI_ComputeOpponentThrust` and `AiManager_ShufflePack`, measured live; see
+  [ai-controls.md](ai-controls.md). `StartStats` is the launch, below.
 - ~~**The consumer itself.** Normally reached from the caller of
   `AiStats_LoadAll`, which the unrelocated-call-graph problem above makes
   invisible to `get_function_callers`.~~ **Found 2026-09-28 - see [the section
@@ -254,12 +257,16 @@ else:
 (thrustOffset, thrustMul, spreadMul) =
     AI_InterpolateThrustPoint(offset[i], mult[i], fVar13 - floor) for i in 0..3
 
-spread = spreadMul * class->SpreadDist[grid_position]     # +0x88, PosBalancing - player-coupled
+spread = spreadMul * class->SpreadDist[player_place - 1]  # +0x88, PosBalancing - player-coupled
 ...pack-position-matching loop over every ship's own rank...
 rubberband = leading/behind speed adjustment against DAT_08b34410  # the PLAYER's own ship,
                                                                     # RubberBanding - player-coupled
 thrust = thrustOffset + (posBalancingThrust + rubberband - base) * thrustMul + base
 ```
+
+**Read whole on 2026-10-11** (`orig-ai-pulse`): the law, the pack shuffle that feeds it and the
+steering that sits beside it are on [ai-controls.md](ai-controls.md), and the index above is the
+player's place, not a grid position as this sketch first said.
 
 Three independent offset checks against `ai-stats.md`'s own already-scored-88
 struct layout close on this function, which is the evidence for the address:
@@ -268,6 +275,12 @@ the `SkillScalePoint1/2/3` stride (`+0xc4`, `+0xdc`, `+0xf4` - exactly
 `AIThrust`/`SpreadDist` array reads at `+0x68`/`+0x88`, and all six
 `RubberBanding` fields (`+0xa8`..`+0xbc`) in the exact `WhenLeading`/
 `WhenBehind` shape `ai-stats.md`'s own table already has.
+
+**Superseded for the campaign (2026-10-11):** the maintainer's decision of that
+day gives the campaign the original's own opponent, rubber banding included
+(`docs/gameplay/ai.md`, "The original driver, recovered"). The refusal below
+still holds for race box, remix and multiplayer, which keep this project's
+driver. The original text:
 
 **Why this project still does not port it, campaign wiring included**: the
 `SkillScale` triple is not read alone here - it is one input added inside the

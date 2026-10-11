@@ -124,6 +124,8 @@ every truncation and bit flip a named refusal.
 
 ## Mapping into this engine (chosen, not measured)
 
+2026-10-11: the mapping's output is `oag_trackfile::Track`, this project's own track model ([track-file.md](track-file.md), ADR-0063): a mapped track can be written in that format (`oag_trackfile::write`) and raced from the file with the same per-tick world hash, checked on Lion's Den and round-tripped on all 27 `Original` tracks.
+
 `oag_raceplay::foreign` turns a read track into the plain data a race consumes;
 `oag_raceplay::load` has one early return for it (`load/track_inputs.rs`). A race
 on a foreign track runs on the host title's ship, physics and rules (Pulse in every

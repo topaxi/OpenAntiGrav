@@ -115,7 +115,7 @@ fn lions_den_maps_as_the_probe_read_it() {
         .unwrap()
         .path();
     let t = foreign::read(&path).expect("maps");
-    for l in &t.report {
+    for l in &t.notes {
         println!("{l}");
     }
     // The engine's own start-line rule (the slot advanced 154 units along its
@@ -138,7 +138,7 @@ fn lions_den_maps_as_the_probe_read_it() {
     assert_eq!(t.ai.paths[0].points.len(), 307);
     assert_eq!(t.speedup_pads.len(), 48);
     assert!(!t.weapon_pads.is_empty());
-    assert!(t.report.iter().any(|l| l.contains("jump(s)")));
+    assert!(t.notes.iter().any(|l| l.contains("jump(s)")));
 }
 
 /// Measured on Lion's Den: where the engine's start line lands against the

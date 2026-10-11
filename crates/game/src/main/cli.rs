@@ -453,6 +453,13 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) unity_track: Option<String>,
 
+    /// Race a track in this project's own format (ADR-0063): the path of its
+    /// `*.track.toml` manifest, with the `.glb` it names beside it. The source
+    /// still supplies the ship, rules and physics. Conflicts with
+    /// `--unity-track`. See `oag_trackfile`.
+    #[arg(long, conflicts_with = "unity_track")]
+    pub(crate) track_file: Option<std::path::PathBuf>,
+
     /// The team, which selects both the handling stats and the model.
     ///
     /// A team **id**, which is the folder under `Data\Ships\` and not always

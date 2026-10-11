@@ -448,17 +448,24 @@ struct SplinePt {             // 0x70 bytes
     float ai_bound_right;     // +0x50 clamped to >= racing_line + 0.1
     float racing_line;        // +0x54 lateral offset, clamped into the width
     u32   unk_0x58;           // 0x10 in every point sampled
-    u8    unk_0x5c;           // 0xff; defaulted to 0xff before version 0x105
-    u8    unk_0x5d;           // 0x00; defaulted to 0 before version 0x105
+    u8    unk_0x5c;           // 0xff; defaulted to 0xff before version 0x105. AI lane band low end, see below
+    u8    unk_0x5d;           // 0x00; defaulted to 0 before version 0x105. AI lane band high end
     u8    unk_0x5e[2];
     u8    section_id;         // +0x60 links to the `section` node index
     u8    flags;              // +0x61 OR-accumulated across four control points
     u8    light_scale[4];     // +0x62 hull light scales, 2026-09-23 - see below
-    u8    unk_0x66;
+    u8    unk_0x66;           // an AI speed floor below 35, see below
     u8    dist_to_prev;       // +0x67 overwritten at load
     u8    unk_0x68[8];        // zeroed at load before version 0x104
 };
 ```
+
+**Three bytes the AI reads (2026-10-11, static, confidence 70):** `Ai_PlanLane`
+reads `unk_0x5c`/`unk_0x5d` as a lane band (`byte / 127.5 - 1`, applied only when
+the first is below the second, so the shipped `0xff`/`0x00` means "no band"), and
+`Ai_Update` reads `unk_0x66` as a per-point opponent speed floor when it is below
+`35`. Which circuits author either is not counted. See
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#a-per-point-speed-floor).
 
 Every point carries a **full orientation frame**, a track width, an explicit
 **racing line**, and an **AI corridor** around it. The frame is orthonormal:
