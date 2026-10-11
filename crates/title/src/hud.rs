@@ -535,6 +535,14 @@ pub struct HudArt {
     /// `oag_hd::hud::RUNTIME` carries. Pulse's own shield rule is a
     /// different shape and lives on `oag_hud::Readout::shield_forced_red`.
     pub runtime: Option<&'static RuntimeHud>,
+    /// Pilot Assist's HUD indicator: the widget names, and where a layout that
+    /// does not author them gets them from. `None` on a title with no
+    /// indicator.
+    ///
+    /// **Its own field and not part of [`RuntimeHud`]**, which carries HD's
+    /// measured shield readout and arcs: a title with an indicator and none of
+    /// those rules (Pulse, Pure) must not be handed them to get one.
+    pub assist: Option<AssistIndicator>,
 }
 
 /// The widgets a title's HUD update recolours, crops or shows at runtime,
@@ -555,8 +563,6 @@ pub struct RuntimeHud {
     /// last place shows one and first place shows all of them. `segments`
     /// is the executable's own literal, not the field size.
     pub place_arc: SegmentArc,
-    /// The Pilot Assist indicator's widgets, `None` on a title that authors none.
-    pub assist: Option<AssistIndicator>,
 }
 
 /// Pilot Assist's four indicator widgets; an arrow lists its child images too, which
@@ -571,6 +577,11 @@ pub struct AssistIndicator {
     pub left: &'static [&'static str],
     /// Blinks after a correction off a right-hand wall.
     pub right: &'static [&'static str],
+    /// The layout fragment holding these widgets, for a title whose own layouts
+    /// do not include them. Read through the source's archives, so on a title
+    /// whose disc and DLC lack it the fallback layer answers (`oag_assets::layers`).
+    /// `None` where the disc's layouts embed the widgets themselves, as HD's do.
+    pub fragment: Option<&'static str>,
 }
 
 /// A shield readout made of a background, a fill cropped from the top, and

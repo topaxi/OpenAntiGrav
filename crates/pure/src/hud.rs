@@ -169,6 +169,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: false,
     message_slots: true,
     runtime: None,
+    assist: None,
 };
 
 /// Which `<Mode3D><Model>` widget draws each weapon's own icon, indexed in

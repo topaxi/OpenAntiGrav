@@ -10,11 +10,13 @@
 //! - [`source`]: the image search path and the container rules.
 //! - [`title`]: [`title::open_source`], a source opened as whichever title it is.
 //! - [`dlc`]: the downloadable-content directories and the packs in them.
+//! - [`layers`]: the player's override and this project's fallback, mounted around a title's archives.
 //! - [`remix`]: a race's track and craft sources, one or two.
 //! - [`cache`]: where derived movie, audio and DLC copies live.
 
 pub mod cache;
 pub mod dlc;
+pub mod layers;
 pub mod remix;
 pub mod source;
 pub mod title;

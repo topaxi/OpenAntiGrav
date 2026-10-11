@@ -31,6 +31,7 @@ pub mod archive;
 mod blob_source;
 pub mod container;
 pub mod dlc;
+pub mod layers;
 pub mod psarc;
 pub mod read_memo;
 pub mod source;
@@ -132,6 +133,24 @@ pub enum Error {
         hash: u32,
         /// The name it came from, when the caller supplied one.
         name: Option<String>,
+    },
+
+    /// A loose layer entry (see [`layers`]) holds no file by that name.
+    #[error("{layer} has no entry named {name}")]
+    NoSuchLayerEntry {
+        /// Which layer was searched.
+        layer: String,
+        /// The name asked for.
+        name: String,
+    },
+
+    /// A loose layer entry's file would not read.
+    #[error("{path}: {source}")]
+    LayerRead {
+        /// The file.
+        path: String,
+        /// What the filesystem said.
+        source: std::io::Error,
     },
 
     /// An entry index was past the end of the directory.

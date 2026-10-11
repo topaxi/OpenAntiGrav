@@ -171,6 +171,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: false,
     message_slots: false,
     runtime: None,
+    assist: None,
 };
 
 /// What a layout's texture reference becomes on this title.

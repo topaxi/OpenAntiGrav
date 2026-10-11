@@ -24,6 +24,7 @@ use oag_title::Title;
 pub use oag_disc::Platform;
 
 use crate::blob_source::POISONED;
+use crate::layers::{Hit as LayerHit, Kind as LayerKind, Layer};
 use crate::{Container, Error, Result};
 
 /// `Err(Error::WrongTitle)` when `serial` is positively known to belong to some
@@ -235,6 +236,16 @@ pub struct Archives {
     /// What [`Self::read_name`] has already read, once
     /// [`Self::memoising_reads`] asked for it. `None` reads every time.
     pub read_memo: Option<crate::read_memo::ReadMemo>,
+    /// The player's override, searched before everything above. `None` unless
+    /// [`Self::with_override`] mounted one. See [`crate::layers`].
+    pub overrides: Option<Layer>,
+    /// This project's own substitutes, searched after everything above including
+    /// [`Self::packs`]. `None` unless [`Self::with_fallback`] mounted one.
+    pub fallback: Option<Layer>,
+    /// Every name a layer answered, once each, until [`Self::take_layer_report`]
+    /// drains them. Only layer answers are kept: a disc read is the ordinary
+    /// case and would drown the line that matters.
+    pub layer_hits: Vec<LayerHit>,
 }
 
 impl Archives {
@@ -345,6 +356,9 @@ impl Archives {
             packs: mounted,
             manifests,
             read_memo: None,
+            overrides: None,
+            fallback: None,
+            layer_hits: Vec::new(),
         })
     }
 
@@ -377,6 +391,25 @@ impl Archives {
     /// stored - see [`Container::contains`]. This used to take a `u32` hash,
     /// which built the WAD's addressing into the search itself.
     fn holder_of(&self, name: &str) -> Option<Held> {
+        if self
+            .overrides
+            .as_ref()
+            .is_some_and(|layer| layer.contains(name))
+        {
+            return Some(Held::Override);
+        }
+        self.holder_of_archive(name).or_else(|| {
+            self.fallback
+                .as_ref()
+                .is_some_and(|layer| layer.contains(name))
+                .then_some(Held::Fallback)
+        })
+    }
+
+    /// [`Self::holder_of`] over the mounted archives alone, the two loose layers
+    /// left out: the question the hash and neighbour reads put, which a loose
+    /// entry cannot answer.
+    fn holder_of_archive(&self, name: &str) -> Option<Held> {
         if let Some(index) = self.patch.iter().position(|patch| patch.contains(name)) {
             return Some(Held::Patch(index));
         }
@@ -401,13 +434,21 @@ impl Archives {
     /// so the two cannot disagree about precedence: the head of this is always
     /// [`Self::holder_of`]'s answer.
     fn holders_of(&self, name: &str) -> Vec<Held> {
-        let mut out: Vec<Held> = self
-            .patch
-            .iter()
-            .enumerate()
-            .filter(|(_, patch)| patch.contains(name))
-            .map(|(index, _)| Held::Patch(index))
-            .collect();
+        let mut out: Vec<Held> = Vec::new();
+        if self
+            .overrides
+            .as_ref()
+            .is_some_and(|layer| layer.contains(name))
+        {
+            out.push(Held::Override);
+        }
+        out.extend(
+            self.patch
+                .iter()
+                .enumerate()
+                .filter(|(_, patch)| patch.contains(name))
+                .map(|(index, _)| Held::Patch(index)),
+        );
         if self.data.contains(name) {
             out.push(Held::Data);
         }
@@ -428,12 +469,29 @@ impl Archives {
                 .filter(|(_, pack)| pack.contains(name))
                 .map(|(index, _)| Held::Pack(index)),
         );
+        if self
+            .fallback
+            .as_ref()
+            .is_some_and(|layer| layer.contains(name))
+        {
+            out.push(Held::Fallback);
+        }
         out
     }
 
     /// The specifier of the archive a [`Held`] names.
     fn label_at(&self, at: Held) -> &str {
         match at {
+            Held::Override => self
+                .overrides
+                .as_ref()
+                .expect("holder_of found it here")
+                .label(),
+            Held::Fallback => self
+                .fallback
+                .as_ref()
+                .expect("holder_of found it here")
+                .label(),
             Held::Patch(index) => self.patch[index].label(),
             Held::Data => self.data.label(),
             Held::Fe => self.fe.as_ref().expect("holder_of found it here").label(),
@@ -470,8 +528,14 @@ impl Archives {
         self.packs.iter().position(has).map(Held::Pack)
     }
 
+    /// The archive a [`Held`] names. A loose layer is no archive: the callers
+    /// that reach here ask a WAD-shaped question, and are handed
+    /// [`Self::holder_of_archive`]'s answer, which never names one.
     fn held(&mut self, at: Held) -> &mut Container {
         match at {
+            Held::Override | Held::Fallback => {
+                unreachable!("a loose layer is read through read_at, never held")
+            }
             Held::Patch(index) => &mut self.patch[index],
             Held::Data => &mut self.data,
             Held::Fe => self.fe.as_mut().expect("holder_of found it here"),
@@ -517,6 +581,56 @@ impl Archives {
             .collect()
     }
 
+    /// Mounts the player's override in front of every archive.
+    ///
+    /// Empty layers are not mounted, so the common case - the player has
+    /// supplied nothing - is `None` and every lookup is the one it always was.
+    #[must_use]
+    pub fn with_override(mut self, layer: Layer) -> Self {
+        debug_assert_eq!(layer.kind(), LayerKind::Override);
+        self.overrides = (!layer.is_empty()).then_some(layer);
+        self
+    }
+
+    /// Mounts this project's own substitutes behind every archive, DLC included.
+    #[must_use]
+    pub fn with_fallback(mut self, layer: Layer) -> Self {
+        debug_assert_eq!(layer.kind(), LayerKind::Fallback);
+        self.fallback = (!layer.is_empty()).then_some(layer);
+        self
+    }
+
+    /// One line per name a layer answered since the last call, for a load
+    /// report; drains them. Empty when no layer answered anything, which is
+    /// every load on a source with no mod and no fallback consumer.
+    pub fn take_layer_report(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.layer_hits)
+            .iter()
+            .map(LayerHit::describe)
+            .collect()
+    }
+
+    /// Reads `name` out of the archive or layer `at` names, recording a layer's
+    /// answer for [`Self::take_layer_report`].
+    fn read_at(&mut self, at: Held, name: &str) -> Result<Vec<u8>> {
+        let (kind, layer) = match at {
+            Held::Override => (LayerKind::Override, self.overrides.as_ref()),
+            Held::Fallback => (LayerKind::Fallback, self.fallback.as_ref()),
+            _ => return self.held(at).read_entry(name),
+        };
+        let layer = layer.expect("holder_of found it here");
+        let blob = layer.read(name)?;
+        let hit = LayerHit {
+            name: name.to_string(),
+            kind,
+            layer: layer.label().to_string(),
+        };
+        if !self.layer_hits.contains(&hit) {
+            self.layer_hits.push(hit);
+        }
+        Ok(blob)
+    }
+
     /// Reads and decompresses `name` out of whichever archive holds it.
     ///
     /// # Errors
@@ -528,7 +642,7 @@ impl Archives {
             return Ok(blob);
         }
         let blob = match self.holder_of(name) {
-            Some(at) => self.held(at).read_entry(name),
+            Some(at) => self.read_at(at, name),
             None => self.data.read_entry(name),
         }?;
         if let Some(memo) = self.read_memo.as_mut() {
@@ -554,10 +668,7 @@ impl Archives {
             .into_iter()
             .filter_map(|at| {
                 let label = self.label_at(at).to_string();
-                self.held(at)
-                    .read_entry(name)
-                    .ok()
-                    .map(|blob| (label, blob))
+                self.read_at(at, name).ok().map(|blob| (label, blob))
             })
             .collect()
     }
@@ -574,129 +685,6 @@ impl Archives {
         let at = self.holder_of_hash(hash).unwrap_or(Held::Data);
         self.held(at).as_wad_mut("a name hash")?.read_hash(hash)
     }
-
-    /// Reads a `.fnt` and returns it with its glyph atlas attached, wherever
-    /// that atlas lives on this source.
-    ///
-    /// The two builds differ and the file itself says which is which: a PSP
-    /// `.fnt` carries its atlas inside it, a PS2 `.fnt` stops where the atlas
-    /// would begin and keeps the glyph sheet in the **next archive entry**, as
-    /// a [`PSMT4`](oag_texture::ps2_texture::Layout::Psmt4) texture. So the
-    /// embedded atlas is tried first and the following entry is only read when
-    /// there is none, which means a PSP source never touches the fallback and
-    /// this needs no platform test.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::NoSuchEntry`] when `name` is not on this source, and
-    /// [`Error::Font`] when the metrics, or the atlas the following entry is
-    /// supposed to hold, do not decode.
-    pub fn read_font(&mut self, name: &str) -> Result<oag_texture::fnt::Font> {
-        use oag_texture::{fnt, ps2_texture};
-
-        let blob = self.read_name(name)?;
-        let metrics = fnt::Metrics::parse(&blob).map_err(|source| Error::Font {
-            name: name.to_string(),
-            source,
-        })?;
-        if metrics.has_embedded_atlas(&blob) {
-            return fnt::Font::parse(&blob).map_err(|source| Error::Font {
-                name: name.to_string(),
-                source,
-            });
-        }
-
-        let atlas = self.read_following(name)?;
-        let texture = ps2_texture::parse(&atlas).map_err(|source| Error::FontAtlas {
-            name: name.to_string(),
-            source,
-        })?;
-        // The GS calls 128 fully opaque; `alpha_at` is read as 0-255 coverage.
-        let palette = texture
-            .palette
-            .iter()
-            .map(|&[r, g, b, a]| [r, g, b, a.saturating_mul(2)])
-            .collect();
-        fnt::Font::with_atlas(
-            metrics,
-            texture.width,
-            texture.height,
-            palette,
-            texture.indices,
-        )
-        .map_err(|source| Error::Font {
-            name: name.to_string(),
-            source,
-        })
-    }
-
-    /// Reads the entry immediately before `name`'s own entry, in whichever
-    /// archive holds `name`.
-    ///
-    /// This is where a PS2 model's texture set sits: not addressed by any
-    /// name or hash a model declares, but by directory position. Checked
-    /// against every recovered ship team independently, not just one: each
-    /// team's `Ship.vex` has the archive entry directly before it decode as a
-    /// texture set with exactly as many entries as the model has `Texture`
-    /// nodes. See `docs/formats/ps2-texture.md`.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::NoSuchEntry`] when `name` itself is not found, or its entry is
-    /// first in the directory and nothing precedes it.
-    pub fn read_preceding(&mut self, name: &str) -> Result<Vec<u8>> {
-        self.read_neighbour(name, Neighbour::Before)
-    }
-
-    /// Reads the entry immediately after `name`'s own entry, in whichever
-    /// archive holds `name`.
-    ///
-    /// The other half of the PS2's directory-position addressing: a model's
-    /// texture set sits *before* it ([`Self::read_preceding`]), and a font's
-    /// glyph atlas sits *after* it. All five `.fnt` entries in `WADS2.WAD` are
-    /// followed by a `PSMT4` texture whose dimensions cover that font's own
-    /// glyph boxes; see `docs/formats/fnt.md`.
-    ///
-    /// # Errors
-    ///
-    /// [`Error::NoSuchEntry`] when `name` itself is not found, or its entry is
-    /// last in the directory and nothing follows it.
-    pub fn read_following(&mut self, name: &str) -> Result<Vec<u8>> {
-        self.read_neighbour(name, Neighbour::After)
-    }
-
-    /// Directory position is only meaningful **within one archive**, so the
-    /// neighbour is always taken from whichever archive held `name` - never
-    /// from a flattened view across all of them, which would hand a model the
-    /// last entry of the previous archive and decode it as a texture set.
-    fn read_neighbour(&mut self, name: &str, which: Neighbour) -> Result<Vec<u8>> {
-        let hash = oag_formats::wad::hash_name(name);
-        let at = self.holder_of(name).unwrap_or(Held::Data);
-        // A PSARC's entry order is its manifest's and carries no meaning, so it
-        // is refused here rather than answered with the entry that happens to
-        // sit next to this one. See `Error::NotAWad`.
-        let archive = self.held(at).as_wad_mut("the neighbouring entry")?;
-        let index = archive
-            .index_of_hash(hash)
-            .ok_or_else(|| Error::NoSuchEntry {
-                archive: archive.label().to_string(),
-                hash,
-                name: Some(name.to_string()),
-            })?;
-        let (neighbour, edge) = match which {
-            Neighbour::Before => (index.checked_sub(1), "first"),
-            Neighbour::After => (
-                Some(index + 1).filter(|&next| next < archive.directory().entries.len()),
-                "last",
-            ),
-        };
-        let neighbour = neighbour.ok_or_else(|| Error::NoSuchEntry {
-            archive: archive.label().to_string(),
-            hash,
-            name: Some(format!("{name} ({edge} in its directory)")),
-        })?;
-        archive.read(neighbour)
-    }
 }
 
 /// Which mounted archive an entry was found in.
@@ -705,6 +693,8 @@ impl Archives {
 /// immutable; see it for the search order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Held {
+    Override,
+    Fallback,
     Patch(usize),
     Data,
     Fe,
@@ -944,6 +934,11 @@ fn archive_spec(source: &str, relative: &str) -> String {
         format!("{source}:{relative}")
     }
 }
+
+mod neighbour;
+
+#[cfg(test)]
+mod layer_tests;
 
 #[cfg(test)]
 mod tests;

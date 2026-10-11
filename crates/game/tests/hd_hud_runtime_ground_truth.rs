@@ -111,7 +111,7 @@ fn every_arc_segment_is_authored_where_its_arc_is() {
 }
 
 /// Pilot Assist's indicator: which of the default skin's layouts author the six
-/// widgets `oag_hd::hud::RUNTIME.assist` names. A layout without them draws no
+/// widgets `oag_hd::hud::ART.assist` names. A layout without them draws no
 /// indicator, which is the original's behaviour for that mode.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -119,9 +119,7 @@ fn the_assist_indicator_is_authored_where_a_race_can_use_it() {
     let Some(mut archives) = open() else {
         return;
     };
-    let assist = oag_hd::hud::RUNTIME
-        .assist
-        .expect("HD authors an indicator");
+    let assist = oag_hd::hud::ART.assist.expect("HD authors an indicator");
     let names: Vec<&str> = [assist.background, assist.main]
         .into_iter()
         .chain(assist.left.iter().copied())

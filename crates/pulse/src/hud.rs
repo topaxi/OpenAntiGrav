@@ -103,6 +103,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: true,
     message_slots: true,
     runtime: None,
+    assist: None,
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.

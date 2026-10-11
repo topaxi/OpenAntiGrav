@@ -21,6 +21,7 @@ pub mod fnt;
 pub mod gnf;
 pub mod gtf;
 pub mod gxt;
+pub mod mask;
 pub mod png;
 pub mod ps2_texture;
 mod pvrtc;

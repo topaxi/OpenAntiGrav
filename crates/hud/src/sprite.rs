@@ -61,6 +61,18 @@ impl Image {
     /// than letting a doomed one fall through to this function's generic
     /// `.mip`-parser error. See `docs/formats/gnf.md`.
     fn decode(blob: &[u8]) -> Result<Self, String> {
+        // This project's own art first: a magic check no game texture passes,
+        // and the only branch whose complaint is not a `.mip`'s.
+        if oag_texture::mask::is_mask(blob) {
+            return oag_texture::mask::parse(blob)
+                .map(|mask| Self {
+                    width: mask.width,
+                    height: mask.height,
+                    bits_per_pixel: 32,
+                    rgba: mask.rgba,
+                })
+                .map_err(|error| error.to_string());
+        }
         match Texture::parse(blob) {
             Ok(t) => Ok(Self {
                 width: t.width,

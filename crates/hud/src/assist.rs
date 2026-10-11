@@ -86,7 +86,7 @@ impl Indicator {
 
 /// The indicator's widgets that are up this frame, on a title that authors them.
 pub(super) fn sprites(cx: &Context<'_>, readout: &Readout) -> Vec<Draw> {
-    let Some(names) = cx.art.runtime.and_then(|runtime| runtime.assist) else {
+    let Some(names) = cx.art.assist else {
         return Vec::new();
     };
     let state = readout.assist;
