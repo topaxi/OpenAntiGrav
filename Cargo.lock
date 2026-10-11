@@ -2919,6 +2919,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-unity"
+version = "0.1.0"
+dependencies = [
+ "lzma-rs-perf-exp",
+ "oag-testdata",
+ "oag-texture",
+]
+
+[[package]]
 name = "oag-vex"
 version = "0.1.0"
 dependencies = [

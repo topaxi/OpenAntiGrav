@@ -70,13 +70,13 @@ pub(crate) fn selectors(block: &[u8; 8]) -> [usize; 16] {
 }
 
 /// One BC1 (`DXT1`) block: 8 bytes, no alpha channel.
-pub(crate) fn dxt1(block: &[u8; 8]) -> [[u8; 4]; 16] {
+pub fn dxt1(block: &[u8; 8]) -> [[u8; 4]; 16] {
     let colours = palette(block, false);
     selectors(block).map(|index| colours[index])
 }
 
 /// One BC2 (`DXT23`) block: 16 bytes, four bits of alpha per texel.
-pub(crate) fn dxt23(block: &[u8; 16]) -> [[u8; 4]; 16] {
+pub fn dxt23(block: &[u8; 16]) -> [[u8; 4]; 16] {
     let colour: &[u8; 8] = block[8..].try_into().expect("eight bytes");
     let colours = palette(colour, true);
     let mut out = selectors(colour).map(|index| colours[index]);
@@ -89,7 +89,7 @@ pub(crate) fn dxt23(block: &[u8; 16]) -> [[u8; 4]; 16] {
 }
 
 /// One BC3 (`DXT45`) block: 16 bytes, interpolated alpha ramp.
-pub(crate) fn dxt45(block: &[u8; 16]) -> [[u8; 4]; 16] {
+pub fn dxt45(block: &[u8; 16]) -> [[u8; 4]; 16] {
     let colour: &[u8; 8] = block[8..].try_into().expect("eight bytes");
     let colours = palette(colour, true);
     let mut out = selectors(colour).map(|index| colours[index]);

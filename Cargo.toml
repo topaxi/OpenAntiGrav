@@ -43,6 +43,7 @@ members = [
   "crates/trace",
   "crates/ui",
   "crates/ui-screens",
+  "crates/unity",
   "crates/vex",
   "crates/video",
   "crates/view",
@@ -203,6 +204,12 @@ miniz_oxide = { version = "0.8", default-features = false, features = [
   "with-alloc",
 ] }
 
+# LZMA, for the Unity asset bundle container (`oag-unity`): the one compression
+# a track bundle uses that is not a handful of lines to hand-write. The same
+# decoder `chd` already pulls in, pinned so offline resolution cannot drift.
+# Pure Rust. LZ4 is hand-written in `oag-unity` (a block decoder is forty lines).
+lzma-rs-perf-exp = "=0.2.1"
+
 # `scalar-math` disables SIMD. Vectorised paths are free to reassociate and to
 # differ between targets; the simulation must not. See docs/architecture/adr/0002.
 glam = { version = "0.33", default-features = false, features = [
@@ -315,6 +322,11 @@ opt-level = 2
 # the movie cache. `re_rav1d` is reached by `package."*"` above; this entry is
 # for the demuxers around it, which walk a whole file a packet at a time.
 [profile.dev.package.oag-video]
+opt-level = 2
+
+# Unity bundles: LZMA and LZ4 block decodes and a typetree walk over every object
+# of a track, tens of megabytes decompressed. The ground truth opens 79 of them.
+[profile.dev.package.oag-unity]
 opt-level = 2
 
 # The XML tables. A `handlingstats.xml` sweep parses every row on the disc, and
