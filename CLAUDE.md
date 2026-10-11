@@ -32,7 +32,7 @@ just test-data    # also runs #[ignore]d ground-truth tests that need data/image
 just gate-affected # `just` with every check in full but only the tests a branch can reach (scripts/affected.py) - a drive member's gate
 just test-data-affected # `just test-data` narrowed the same way; the per-test ceiling holds, the suite ceiling is the full run's
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
-just check-deps   # asserts the four dependency-boundary rules below (scripts/check-dependency-rules.py)
+just check-deps   # asserts the five dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
@@ -208,6 +208,7 @@ Existing crates:
 | `oag-tables` | `crates/tables` | The tables titles author as XML: handling, weapons, campaign grids, load manifests, lighting rigs. Zero dependencies - the crate the simulation reads its numbers from has no path to a texture decoder. |
 | `oag-video` | `crates/video` | Video containers: `.PMF` (PSP), `IPUF` (PS2), Bink (HD), plus the IVF/AV1 movie cache this project writes. Depends on nothing in the workspace. |
 | `oag-unity` | `crates/unity` | A generic Unity asset-bundle reader: UnityFS, SerializedFiles, typetrees and the built-in classes (`Mesh`, `Texture2D`, `Material`, `GameObject`, `Transform`, `MonoBehaviour` as a pointer plus the generic tree). Knows no game: rule 4 of `just check-deps` allows it no workspace dependency, and a content-specific layer is a separate crate on top, [ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md). |
+| `oag-ballisticng` | `crates/ballisticng` | BallisticNG's Workshop content on top of `oag-unity`: the `.wtrk` and `.csf` wrappers, a track's `TrackDataStorage`, `Section` chain, `Tile`s, AI line and colliders as typed structs, and a whole-texture decode through `oag_texture::bcn`. Reads; maps nothing into this engine (rule 5). |
 | `oag-assets` | `crates/assets` | Runtime asset access: `Archive` reads a WAD by path or straight out of a disc image, by index/name/hash. |
 | `oag-ui-screens` | `crates/ui-screens` | The front end's screens built on `oag-ui`: campaign, end of race, pickers, prompts, the ticker marquee, the track panel. `oag-ui` stays the lower core and never depends on it; same `NOT_TITLE_PACKAGES` classification. |
 | `oag-title` | `crates/title` | The `Title` type and its three axes: archive candidates, entry names, foreign-serial deny-list. Types only, no title's data. |
@@ -245,7 +246,7 @@ added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.
 
-Four dependency rules, all enforced by `just check-deps` (part of the `just` gate,
+Five dependency rules, all enforced by `just check-deps` (part of the `just` gate,
 `scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
 review:
 
@@ -258,6 +259,7 @@ review:
    injected by the caller, as the PS2 texture-name rule and Pulse's animation table were moved
    out of `oag-mesh`. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 4. `oag-unity`, the generic Unity reader, depends on no other workspace crate (an allowlist, empty today). It knows no title and no game; a content-specific layer is a separate crate that depends on it, never the reverse ([ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md)).
+5. `oag-ballisticng`, the first content layer over `oag-unity`, reaches `oag-unity`, `oag-texture` and `oag-formats` and no other workspace crate, and no gameplay crate may depend on it or on `oag-unity` (both are in rule 1's forbidden set). How a foreign track is mapped into this engine is the consumer's choice, not the layer's reading.
 
 Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
 ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 20 as of
