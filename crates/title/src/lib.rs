@@ -54,6 +54,7 @@ pub mod pre_race;
 pub mod pressing;
 pub mod prompts;
 pub mod race;
+pub mod shadow;
 pub mod speed;
 pub mod touch;
 pub mod weapon_pad;
@@ -250,6 +251,10 @@ pub struct Title {
     /// answers a pointer and still needs one to point with. Rasterised and
     /// drawn by `oag_game::cursor`.
     pub cursor: &'static str,
+    /// Whether this title's own `original` shadow tier is built, and so
+    /// whether the shadow setting defaults to it. See
+    /// [`shadow::OriginalShadows`].
+    pub original_shadows: shadow::OriginalShadows,
 }
 
 /// Where a title keeps the music its front end and its races play.

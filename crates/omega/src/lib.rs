@@ -99,6 +99,8 @@ pub const TITLE: &Title = &Title {
     loading: None,
     music: Some(MUSIC),
     cursor: include_str!("../../../assets/cursors/omega.svg"),
+    // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
+    original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     // Unread, on `oag_2048::TITLE`'s own terms: this crate never opened
     // either weapon-stats table this lane, so nothing here can say which of
     // Omega's copies (HD's own two, or a fourth `_2048`-suffixed pair the way

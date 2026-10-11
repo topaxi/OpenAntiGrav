@@ -102,6 +102,7 @@ fn read(text: &str) -> Settings {
     // test below silently stops covering.
     migrate_reconstruction_keys(&mut table);
     migrate_platform_split(&mut table);
+    render_profile::seed_shadow_defaults(&mut table);
     let mut settings: Settings = table.try_into().expect("deserialise");
     ensure_known_titles(&mut settings);
     settings
@@ -797,4 +798,79 @@ fn the_touch_scheme_is_standard_by_default_and_round_trips() {
     );
     let missing: Settings = toml::from_str("[controls]\n").unwrap();
     assert_eq!(missing.controls.touch_scheme, "standard");
+}
+
+/// The tier each title's profile starts on, read through the real `load_from`
+/// so that dropping `seed_shadow_defaults` or `ensure_known_titles`' title
+/// default fails here.
+fn shadows_after_loading(
+    text: Option<&str>,
+) -> std::collections::BTreeMap<String, oag_display::display::Shadows> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "oag-settings-shadows-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    let file = dir.join("settings.toml");
+    if let Some(text) = text {
+        std::fs::write(&file, text).expect("write");
+    }
+    let loaded = load_from(&file).expect("loads");
+    std::fs::remove_dir_all(&dir).ok();
+    loaded
+        .render_profiles
+        .into_iter()
+        .map(|(key, profile)| (key, profile.shadows))
+        .collect()
+}
+
+/// A fresh install starts every title on its own tier: `original` where the
+/// title's `original` is built and draws, `off` elsewhere.
+#[test]
+fn a_fresh_install_defaults_shadows_per_title() {
+    let shadows = shadows_after_loading(None);
+    for (title, platform) in known_profiles() {
+        let want = if title.original_shadows.draws() {
+            oag_display::display::Shadows::Original
+        } else {
+            oag_display::display::Shadows::Off
+        };
+        assert_eq!(
+            shadows[&profile_key(title, platform)],
+            want,
+            "{}",
+            title.name
+        );
+    }
+    // Pinned by name as well, so a flipped `Title` field cannot pass by
+    // agreeing with itself.
+    let tier = |t, p| shadows[&profile_key(t, p)];
+    assert_eq!(
+        tier(oag_pulse::TITLE, oag_disc::Platform::Psp),
+        oag_display::display::Shadows::Original
+    );
+    assert_eq!(
+        tier(oag_hd::TITLE, oag_disc::Platform::Ps3),
+        oag_display::display::Shadows::Original
+    );
+    assert_eq!(
+        tier(oag_pure::TITLE, oag_disc::Platform::Psp),
+        oag_display::display::Shadows::Off
+    );
+}
+
+/// A profile table written before the key existed takes the title's default,
+/// and one that already says `off` keeps it: only an absent key is new.
+#[test]
+fn a_saved_off_stays_off_and_an_absent_key_takes_the_title_default() {
+    let psp = profile_key(oag_pulse::TITLE, oag_disc::Platform::Psp);
+    let ps2 = profile_key(oag_pulse::TITLE, oag_disc::Platform::Ps2);
+    let shadows = shadows_after_loading(Some(&format!(
+        "[render_profiles.\"{psp}\"]\nshadows = \"off\"\n\n[render_profiles.\"{ps2}\"]\nrender_scale = 80\n"
+    )));
+    assert_eq!(shadows[&psp], oag_display::display::Shadows::Off);
+    assert_eq!(shadows[&ps2], oag_display::display::Shadows::Original);
 }

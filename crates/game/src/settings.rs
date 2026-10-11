@@ -71,7 +71,7 @@ pub use race::{Race, Remix};
 pub use render_profile::{RenderProfile, SCREEN_FILTER_OFF, profile_key};
 use render_profile::{
     ensure_known_titles, migrate_platform_split, migrate_reconstruction_keys,
-    migrate_render_profiles,
+    migrate_render_profiles, seed_shadow_defaults,
 };
 
 /// Mirrors [`Anisotropy`] for serde, which cannot derive on a type this crate
@@ -633,6 +633,8 @@ fn load_from(path: &std::path::Path) -> Result<Settings> {
             // platform - see `migrate_platform_split`'s own doc for why it runs
             // after the reconstruction fold rather than before.
             migrate_platform_split(&mut table);
+            // After the split, so the keys it looks up are the final ones.
+            seed_shadow_defaults(&mut table);
             table
                 .try_into()
                 .with_context(|| format!("parsing {}", path.display()))?

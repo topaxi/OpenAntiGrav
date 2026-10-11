@@ -156,9 +156,7 @@ Two things worth carrying forward from doing it:
   or authored-and-inert the way `DirectionalLight` turned out to be. If step 5
   draws only the 119 named ones, say so in the implementation rather than
   silently dropping the rest.
-- **Whether `original` should be the default once it exists.** A design
-  question needing eyes on both tiers side by side, which is now possible for
-  the first time on one of them.
+- ~~Whether `original` should be the default once it exists.~~ **Decided 2026-10-11**, see Next Steps.
 - **Nobody has looked at `blob` in a window.** Every judgement here is from a
   headless capture; the fade's shape, the falloff's darkness and `LIFT`'s size
   are all ours and none has been seen in motion.
@@ -171,7 +169,7 @@ Two things worth carrying forward from doing it:
 
 ## Next Steps
 
-- **Decided 2026-10-11 (maintainer): the shadow default becomes `original` on every title that has the tier**, `off` elsewhere. Today `Shadows::default()` is `Off` everywhere and its doc says "until `original` exists"; `original` exists on Pulse, so a player never sees the occluder wedge out of the box (the `pulse-bloom` lane found the original draws it in the frames it compared). The default must be per title (the per-title render profile in `crates/game/src/settings/render_profile.rs`, not the enum's `#[default]`), carried as title data rather than a `title.name` branch, and a saved settings file that already says `off` keeps it. Update `nothing_casts_a_shadow_by_default` and the two doc comments that promise the change.
+- ~~**Decided 2026-10-11 (maintainer): the shadow default becomes `original` on every title that has the tier**~~ **Landed 2026-10-11.** `Title::original_shadows` (`oag_title::shadow::OriginalShadows`) carries it: Pulse (both platforms) and HD `Built`, so `original`; Pure `Absent` and 2048/Omega `Unbuilt`, so `off`. `RenderProfile::for_title` and `seed_shadow_defaults` apply it, and only to a profile with no `shadows` key, so a saved `off` stays (every existing install, since the game writes every key). The web first run still forces `off`, a cost choice. Open: Omega's `original` was not tried (HD's map mechanism may draw there once its sun is measured; flip the field then).
 - Look at both drawn tiers in a window on one title and judge the four numbers
   that are ours: the fade, the falloff's darkness, the lift, and
   `HULL_DARKNESS`. Every judgement so far is from a headless capture.
