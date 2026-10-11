@@ -62,7 +62,6 @@ oag-2048 = { path = "crates/2048" }
 oag-ai = { path = "crates/ai" }
 oag-assets = { path = "crates/assets" }
 oag-audio = { path = "crates/audio" }
-oag-ballisticng = { path = "crates/ballisticng" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }
@@ -330,6 +329,11 @@ opt-level = 2
 # Unity bundles: LZMA and LZ4 block decodes and a typetree walk over every object
 # of a track, tens of megabytes decompressed. The ground truth opens 79 of them.
 [profile.dev.package.oag-unity]
+opt-level = 2
+
+# The same track bundles, read through the content layer: a typetree walk over
+# every tile, and a per-texel block decode of 1,721 textures in the ground truth.
+[profile.dev.package.oag-ballisticng]
 opt-level = 2
 
 # The XML tables. A `handlingstats.xml` sweep parses every row on the disc, and

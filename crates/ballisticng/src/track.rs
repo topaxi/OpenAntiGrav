@@ -369,6 +369,74 @@ pub struct Track {
     pub unresolved_scripts: usize,
 }
 
+/// The fields of each class this layer reads, by class name. The field census
+/// (`tests/field_census.rs`) holds the other fields of the 32 tracks to a frozen
+/// list with their non-default counts, so a field the tools add is noticed.
+pub const READ_FIELDS: &[(&str, &[&str])] = &[
+    (
+        "TrackDataStorage",
+        &[
+            "AtlasRects",
+            "FloorNormals",
+            "FloorTiles",
+            "FloorVertices",
+            "MidLineIndex",
+            "RechargeTileIndex",
+            "Sections",
+            "SpawnTileIndex",
+            "SpeedTileIndex",
+            "StartLineIndex",
+            "StartSectionIndex",
+            "TrackDiffuseTexture",
+            "TrackIllumTexture",
+            "TrackReflectionTexture",
+            "WallNormals",
+            "WallTiles",
+            "WallVertices",
+            "WeaponTileIndex",
+        ],
+    ),
+    (
+        "Section",
+        &[
+            "AiAlwaysWallAvoid",
+            "AiIgnoreJunction",
+            "AllowOutOfBounds",
+            "ForTeleporter",
+            "Height",
+            "Index",
+            "Junction",
+            "LockOntoUntilClose",
+            "Next",
+            "NoHoverPositionCorrection",
+            "NoMaglockSounds",
+            "NoTiltLock",
+            "Normal",
+            "PitlaneEntance",
+            "Position",
+            "ResetFlyBackwards",
+            "Rotation",
+            "RotationMultiplier",
+            "Type",
+            "Width",
+        ],
+    ),
+    (
+        "Tile",
+        &[
+            "AtlasIndex",
+            "Flipped",
+            "Index",
+            "Indices",
+            "IsMagLock",
+            "IsWet",
+            "Position",
+            "Section",
+            "Type",
+        ],
+    ),
+];
+
 struct Found {
     file: usize,
     path_id: i64,
@@ -665,6 +733,10 @@ fn read_section(v: &Value, resolve: &dyn Fn(PPtr) -> Result<Option<usize>>) -> R
         if flag(v, C, f)? {
             special.push(f);
         }
+    }
+    // Present on 15 of the 32 tracks (an older tools version lacks it).
+    if v.get("AiAlwaysWallAvoid").is_some() && flag(v, C, "AiAlwaysWallAvoid")? {
+        special.push("AiAlwaysWallAvoid");
     }
     if float(v, C, "RotationMultiplier")? != 1.0 {
         special.push("RotationMultiplier");

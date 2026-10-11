@@ -89,6 +89,30 @@ are counted (`Track::unresolved_scripts`) and skipped, never guessed at. The AI
 line has a point per section on all 31 (`SectionNextArrayIndex` equals the
 section's `Next` on Lion's Den).
 
+## Field coverage (measured, `tests/field_census.rs`)
+
+Across the 32 tracks, the fields of `Section`, `Tile` and `TrackDataStorage` this
+layer does **not** read, as `objects carrying it / objects holding a non-default
+value`. The test freezes this list: a field the tools add fails it.
+
+| Class | Unread fields |
+| --- | --- |
+| `Section` (17,608 objects) | `LockOnToDistance` all non-default (2.0 on Lion's Den; the magnet-lock reach, unused), `Tiles` (all; the same link is `Tile.Section`), `Previous` 0 non-default (so unused census-wide), `NextAiOvverride` 0 of 10,052 (15 tracks only) |
+| `Tile` (66,549) | `MapOrder` all, `Swooshable` 316, `UvFlip` 190, `UvOrder` 0, `Color` 0, `ForcedShadow` 0 (visual) |
+| `TrackDataStorage` (32) | `TrackFloor`/`TrackWall` (the mesh pointers, kept for UVs later), `TrackTextures` (per-atlas triples), `UseNewUvSytstem` 32, `SpawnTileReplacementIndex` and `WeaponPadReplacementIndex` 13 each (replacement pad art, meaning inferred from names), `MappedFloorTIles`/`MappedWallTiles` (the inverse of `Tile.Indices`), three editor handles, `DataParent` 0 |
+
+Read but not acted on, so reported by name through `Section::special`:
+`AllowOutOfBounds` (1,871 sections), `NoTiltLock` (1,352), `NoHoverPositionCorrection`
+(1,196), `NoMaglockSounds` (394), `LockOntoUntilClose` (321), `AiAlwaysWallAvoid` (881,
+15 tracks), `ForTeleporter` (7), `ResetFlyBackwards` (3), `AiIgnoreJunction` (0),
+`RotationMultiplier` not 1 (Oblivion carries it on all 693 sections).
+
+**Staten Towers' 92 unreached sections**: no `Next`, `Junction` or
+`NextAiOvverride` leads in (the last is zero everywhere), and no other object of
+the bundle holds a pointer to section 488 but its two floor tiles. They are a
+chain with no entry that rejoins the main loop at 180; what the game does with
+it is unknown.
+
 ## Ground truth
 
 `crates/ballisticng/tests/track_ground_truth.rs` (`just test-data`): all 32
