@@ -23,8 +23,9 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
   `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
   Citta Nuova VENOM (1493). The trough plan does not win there.
-- **Pulse `06_Track` RAPIER is a one-line switch, and it is the maintainer's
-  call.** Only the trough search verifies it. On that plan the lone Ace laps
+- **Pulse `06_Track` RAPIER: decided 2026-10-11 (maintainer) - take the trough plan *and* make
+  the Ace hold the clean line**, so the faster lap lands without the contact; the clean-lap gate stays the bar,
+  no baseline moves for it. Was: a one-line switch, the maintainer's call. Only the trough search verifies it. On that plan the lone Ace laps
   29.16 s against 38.61 s on the corner model (gold 24.0), but the
   `ai_clean_lap_gate` row goes 173 to 304 contact ticks, at samples 750-850.
   The cause is measured: the Ace's commitment margin (0.938, so 3 % under the
@@ -49,6 +50,7 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 
 ## Next Steps
 
+- **Decided 2026-10-11 (maintainer): campaign cells topping out at Elite (`tune_at_scale` clamps at 3.0, no cell reaches Ace) is intended.** Not a gap.
 1. `sol`: find where the craft leaves the road around 20 s, the same
    landing-aim lever as `06_Track` VENOM. Then decide where a rescue should
    place a craft in front of a reset volume it cannot clear from standstill.

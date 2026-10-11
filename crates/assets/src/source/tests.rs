@@ -178,6 +178,7 @@ const TITLE: &Title = &Title {
     loading: None,
     music: None,
     cursor: "",
+    original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
 };
 
 /// The bulk archive's PSP and PS2 names, as the fixture spells them.

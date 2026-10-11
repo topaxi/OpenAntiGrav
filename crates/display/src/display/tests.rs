@@ -623,10 +623,10 @@ fn a_shadow_tier_round_trips_and_refuses_what_it_does_not_offer() {
 }
 
 #[test]
-fn nothing_casts_a_shadow_by_default() {
-    // `off` until `original` exists - a generated falloff cannot be the
-    // default on a title whose own hulls are sitting on the disc. See
-    // `docs/rendering/shadows.md`.
+fn the_enums_own_default_casts_nothing() {
+    // The type's own default is the comparison setting. Which title starts on
+    // `original` is `Title::original_shadows`, applied by the game's
+    // per-title render profile, not by this enum.
     assert_eq!(Shadows::default(), Shadows::Off);
     assert!(!Shadows::default().draws());
     assert!(Shadows::Blob.draws());

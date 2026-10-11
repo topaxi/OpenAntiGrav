@@ -61,9 +61,20 @@ it does not render shadows "better"; it renders *more of them*, dynamically,
 and in doing so **discards art the disc authored**. See
 [What `mapped` actually changes, per title](#what-mapped-actually-changes-per-title).
 
-`off` is the default until `original` exists, and then `original` becomes the
-default for the titles that have one. It stays the comparison setting either
-way - the same role `MotionBlur::Off` plays.
+**The default is per title (maintainer decision, 2026-10-11).** A title starts
+on `original` where that tier is built and draws, and on `off` elsewhere: Pulse
+and HD/Fury `original`; Pure `off` (it authors no shadow, so `original` would
+draw nothing and `off` says so without a pass); 2048 and Omega `off` (nothing
+built, Omega's carry-over from HD untried). The answer is
+`oag_title::Title::original_shadows`, applied by the game's per-title render
+profile (`RenderProfile::for_title`), not by `Shadows`' own `#[default]`, which
+stays `off`. Only a profile with no `shadows` key takes it: a settings file
+that saved `off` keeps `off`, and since the game writes every key on load,
+that is every existing install - only a fresh one (or a hand-deleted key)
+starts on `original`. The web build's first run forces `off` as a cost choice
+(a per-frame pass on a browser's budget), not because of what `original`
+means there. `off` stays the comparison setting either way - the same role
+`MotionBlur::Off` plays.
 
 **There is no `raytraced` variant**, and adding one now would break ADR-0013's
 own rule that "a row for infrastructure that is not there is worse than no
@@ -756,7 +767,7 @@ Each step is a landing that can be reviewed on its own.
    red channel (the descriptor's `remap` broadcasts it there and forces alpha
    opaque, so reading `.a` would draw a full-strength rectangle). Every other
    title gets `Silhouette::falloff`, which is ours, reported per slot in the
-   load report, and is why `off` stays the default.
+   load report, and is why `blob` is never a default.
 
    **What is ours besides the falloff, each said where it is written**: the
    height fade and its `FADE_REACH`, the `LIFT` off the surface, and where in

@@ -203,10 +203,15 @@ pub struct RenderProfile {
     /// a track-proximity projection on 2048, and honest absence on Pure. One
     /// shared value could not carry that.
     ///
-    /// Defaults to `off` on every title and stays there until `original`
-    /// exists - see [`oag_display::display::Shadows::Off`] for why a generated
-    /// falloff is not a default this project may take. Read fresh every
-    /// frame, so the setting applies live.
+    /// **Defaults per title, from [`oag_title::Title::original_shadows`]:**
+    /// `original` where that tier is built and draws (Pulse, HD/Fury), `off`
+    /// where it is not (Pure authors no shadow; 2048 and Omega are unbuilt).
+    /// A generated falloff is never a default - see
+    /// [`oag_display::display::Shadows::Off`]. The serde default of an absent
+    /// key is `off`; [`seed_shadow_defaults`] and [`RenderProfile::for_title`]
+    /// put the title's own answer in before that applies, so a saved `off`
+    /// stays `off` and only a profile that never had the key gets the new
+    /// default. Read fresh every frame, so the setting applies live.
     #[serde(default)]
     pub shadows: oag_display::display::Shadows,
     /// Which screen filter draws the finished frame: `off`, or the id of a
@@ -264,6 +269,58 @@ pub struct RenderProfile {
     pub texture_detail: oag_mesh::mesh_render::TextureDetail,
 }
 
+impl RenderProfile {
+    /// The profile a title starts with: [`Self::default`], except where a
+    /// field's right default depends on the title.
+    ///
+    /// Only `shadows` today: `original` where the title's own tier is built
+    /// ([`oag_title::shadow::OriginalShadows::draws`]), else `off`.
+    #[must_use]
+    pub fn for_title(title: &oag_title::Title) -> Self {
+        Self {
+            shadows: default_shadows(title),
+            ..Self::default()
+        }
+    }
+}
+
+/// See [`RenderProfile::shadows`]: the tier a title starts on.
+fn default_shadows(title: &oag_title::Title) -> oag_display::display::Shadows {
+    if title.original_shadows.draws() {
+        oag_display::display::Shadows::Original
+    } else {
+        oag_display::display::Shadows::Off
+    }
+}
+
+/// Writes each known profile's title default for `shadows` into a
+/// `[render_profiles.<key>]` table that does not carry the key.
+///
+/// Runs on the parsed table, before serde: a missing key and a saved `off`
+/// both arrive at the struct as `off` otherwise, and the profile has no way to
+/// know its title. A table that names `shadows` is left alone, so a player's
+/// saved `off` survives. A profile with no table at all is
+/// [`ensure_known_titles`]'s business.
+pub(super) fn seed_shadow_defaults(table: &mut toml::Table) {
+    let Some(profiles) = table
+        .get_mut("render_profiles")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+    for (title, platform) in known_profiles() {
+        let Some(profile) = profiles
+            .get_mut(&profile_key(title, platform))
+            .and_then(toml::Value::as_table_mut)
+        else {
+            continue;
+        };
+        profile
+            .entry("shadows")
+            .or_insert_with(|| default_shadows(title).name().into());
+    }
+}
+
 /// See [`RenderProfile::screen_filter`]: `off`.
 fn default_screen_filter() -> String {
     SCREEN_FILTER_OFF.to_string()
@@ -305,7 +362,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
         settings
             .render_profiles
             .entry(profile_key(title, platform))
-            .or_default();
+            .or_insert_with(|| RenderProfile::for_title(title));
     }
 }
 
