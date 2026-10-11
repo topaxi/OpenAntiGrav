@@ -31,12 +31,14 @@ use serde::{Deserialize, Serialize};
 pub enum Shadows {
     /// Nothing casts, and no shadow pass runs at all.
     ///
-    /// **The default, and it stays the default until `original` exists.**
-    /// Every title on the discs authors its own shadow mechanism (or, for
-    /// Pure, authors none and says so), so a generated falloff as the default
-    /// would be standing an invention in front of data this project already
-    /// has - see `docs/rendering/shadows.md`. It is also the comparison
-    /// setting, the same role [`super::MotionBlur::Off`] plays.
+    /// **The type's default, and the per-title default only where `original`
+    /// is not built** (Pure, 2048, Omega). A title whose `original` draws
+    /// (Pulse, HD/Fury) starts on [`Self::Original`] instead: the game's
+    /// per-title render profile picks it from `Title::original_shadows`, so
+    /// this attribute is not the answer a player sees. A generated falloff is
+    /// never a default - it would stand an invention in front of data this
+    /// project already has, see `docs/rendering/shadows.md`. It is also the
+    /// comparison setting, the same role [`super::MotionBlur::Off`] plays.
     #[default]
     Off,
     /// A quad under each craft, laid on the surface below it.
