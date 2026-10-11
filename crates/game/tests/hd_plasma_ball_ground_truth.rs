@@ -75,7 +75,7 @@ fn frame_of(image: &Path, scratch: &Path, fire: bool) -> Vec<u8> {
         ])
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
-        .args(["--motion-blur", "off", "--ticks", "112"])
+        .args(["--motion-blur", "off", "--shadows", "off", "--ticks", "112"])
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join("config"))
