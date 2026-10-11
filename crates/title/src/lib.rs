@@ -75,7 +75,9 @@ pub use menu::{
 };
 pub use oag_disc::Platform;
 pub use pressing::{Pressing, Pressings};
-pub use race::sound::{FrontEndSounds, MenuCues, StyledCue};
+pub use race::sound::{
+    FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
+};
 pub use race::{
     CircuitBanks, CountdownVoice, Crossfade, GuestRoster, RaceDefaults, SequenceTick, SoundBanks,
     SpeedClasses, TeamVariant, TeamVariants, TrackBanks, VariantJoin, ZoneAnnouncer, ZoneCircuit,

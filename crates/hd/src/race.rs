@@ -433,8 +433,18 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
                 fury: "reject_fury",
             },
         },
-        // HD ships `speech_results.bnk` with the same six names; its call sites were not read.
-        results: None,
+        // `speech_results.bnk` is the second boot bank; `EndRaceResults` (`0x0022e3d0`) and
+        // `EndRacePhoto` (`0x0021ea10`) play it. `docs/ghidra/functions/ps3-hdfury-eu/endrace-voices.md`.
+        results: Some(oag_title::ResultsVoices {
+            bank: r"Data\Sound\speech_results.bnk",
+            law: oag_title::ResultsLaw {
+                tournament: oag_title::TournamentPlace::OnEntry,
+                place_in_campaign: false,
+                // HD's `EndRace Photo` plays the medal; this flow has no such screen, so the
+                // first screen it shows does. Chosen, not measured.
+                medal_screen: oag_title::MedalScreen::Results,
+            },
+        }),
         voices: None,
     }),
     // The banks a circuit's nodes spell besides their own, each named by the

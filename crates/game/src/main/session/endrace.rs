@@ -286,9 +286,22 @@ impl Session {
                 total_ticks: observation.tick,
             })
         };
-        // Pulse's `EndRaceResults_Update` and `EndRaceRewards_OnEnter` speak the
-        // place and the medal; HD's screens were not read speaking either.
-        let voice = voice_for(mode, &results, observation.place, rewards.as_ref());
+        // The place and the medal, under the title's own law
+        // (`oag_title::ResultsLaw`): Pulse's `EndRaceResults_Update` and
+        // `EndRaceRewards_OnEnter`, HD's `EndRaceResults` entry and `EndRacePhoto`.
+        let voice = voice_for(
+            title_ref
+                .race
+                .sounds
+                .frontend
+                .and_then(|front| front.results)
+                .map(|results| results.law),
+            mode,
+            &results,
+            observation.place,
+            campaign,
+            observation.campaign_medal.map(to_campaign_medal),
+        );
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
             menu_options(campaign, self.tournament_has_next_leg()),
             new_best_lap_ticks,
