@@ -121,6 +121,10 @@ player's driver now; `log.json`.
 so the unsaturated regime cannot be reproduced without the opponents' spreads; the steering half of
 `Ai_ComputeControls`.
 
+**Both read 2026-10-11** (`orig-ai-pulse`): the wander is `Ai_UpdateSpreadWander` and the pack shuffle that
+seeds it, and the steering half of `Ai_ComputeControls` is read at instruction level; the law itself is
+reproduced on 1,140 live opponent samples. See [ai-controls.md](ai-controls.md).
+
 ## The mode state and the HUD
 
 `ArcadeRace_UpdateRacing` (`0x0882c5c4`, [shield.md](shield.md)) tests `player.flags & 0x1000 \|\| Ship_State(player) == 2`, then

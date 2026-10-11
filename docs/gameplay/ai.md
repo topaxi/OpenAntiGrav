@@ -51,20 +51,32 @@ times larger" - because the finding is the coupling, not the number.
 | Pulse's four speed blocks, and which two read the player | **recovered**, corroborated PSP and PS2 | 90 |
 | Pure's larger, earlier model - zones, fatigue, lead/tail | **recovered**, from shipped data | 85 |
 | That `BaseStartThrust` is authored and never read | **recovered** | 90 |
-| What the numbers *mean* - units, and what `AIThrust` multiplies | **unknown** - the consumer is not identified | - |
+| What the numbers *mean* - units, and what `AIThrust` multiplies | **recovered** (2026-10-11): percent of the player's own full throttle, written to the craft's control record and run through the same engine; distances are `racer+0x240` lap-progress units - see [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) | 92 |
+| **The opponent drives the player's physics**: its driver's control record (`driver+0x08`) is the craft's registered input source | **measured** (2026-10-11), every opponent's `craft+0x3c` read live | 92 |
+| **But a kinematic rail sits on top**: `Ai_SnapToLane` writes the body's position and velocity toward the planned lane every tick the craft is fast, grounded and contact-free | **measured** (2026-10-11): fires for every opponent every tick, steady-state move about `0.01` units | 90 |
+| The thrust law (`AI_ComputeOpponentThrust`): place-indexed base, formation gap, field-wide rubber band, the `100` cap near the player, skill interpolation | **measured** (2026-10-11): 1,140 live samples at two skills reproduced to `1e-3` | 94 |
+| The rubber band's direction: `WhenLeading` (the player leads every opponent) **adds**, `WhenBehind` (every opponent leads the player) **subtracts** | **measured** (2026-10-11), agrees with HD's static read | 94 |
+| Pack swapping and the spread wander (`AiManager_ShufflePack`, `Ai_UpdateSpreadWander`), keyed on the integer difficulty | **measured** (2026-10-11) | 90 |
+| One driver's thrust, lane choice and fork choice a tick, round-robin over the field | **measured** (2026-10-11) | 92 |
+| The steering controller (`Ai_ComputeControls`): lookahead aim, cross-track shift, damped heading error, saturation into the airbrakes | **recovered**, instruction-level, not traced | 85 |
+| The lane planner (`Ai_PlanLane`): nine lanes in the AI corridor, a random preferred lane, contact push, a rate-limited 80-slot lane ring | **recovered**, static | 80 |
+| `xtrackMax` and `xtrackDamp` are parsed and never read on Pulse | **recovered**, static | 70 |
+| `SplinePt.unk_0x5c/0x5d` (an authored lane band) and `unk_0x66` (a speed floor) | **recovered**, static; which tracks author them is open | 70 |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
 | Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
 | Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
 
-Nothing here has been run under a debugger. Every score above rests on
-decompilation, shipped data agreement and string evidence, which the
-[rubric](../reverse-engineering/confidence-rubric.md) caps below 95 by design.
-The nine parser functions **are** named in Ghidra, at 88, with their evidence on
-[ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md) and rows in
-`names.tsv`. Nothing on the *consumer* side is named, because nothing on the
-consumer side has been found.
+The rows marked **measured** were run under PPSSPP on 2026-10-11 (lane
+`orig-ai-pulse`); the rest rest on decompilation, shipped data agreement and
+string evidence, which the [rubric](../reverse-engineering/confidence-rubric.md)
+caps below 95. The parser is on
+[ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md); the consumer side,
+the driver as a whole, is on
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md), and the
+implementable summary is [the original driver](#the-original-driver-recovered-2026-10-11)
+below.
 
 ## Evidence
 
@@ -171,6 +183,12 @@ symmetric**: the shipped `WhenBehind` multiplier is several times the
 `WhenLeading` one, in all four classes and on both discs. The catch-up is the
 point; the hold-back is a courtesy. The dead band and the clamp are the same for
 both directions, and the clamp is larger in the two faster classes.
+
+**Measured 2026-10-11: the direction is the code's, below, not the obvious
+reading above** - and both terms are field-wide, the same for every opponent,
+because the gap they read is the smallest over the whole field
+([ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#measured-2026-10-11)).
+The 2026-10-08 static read that first said so:
 
 **The direction above is questioned by the code (2026-10-08, confidence 70).**
 Read in HD's `AI_ComputeOpponentThrust`, which is Pulse's line for line, the
@@ -300,7 +318,11 @@ None of these block writing our own AI. All of them block *reimplementing the
 original's numbers*, which is a thing this page deliberately does not propose
 doing.
 
-1. **Units.** `AIThrust` - per cent of what? The class's own top thrust, a shared
+1. ~~**Units.**~~ **Answered 2026-10-11**: `AIThrust` is percent of the
+   player's own full throttle on the craft's own engine stats (above `100` it
+   also lifts the acceleration cap), and the distances are lap-progress units;
+   see [the original driver](#the-original-driver-recovered-2026-10-11). The
+   original text: `AIThrust` - per cent of what? The class's own top thrust, a shared
    constant, the player's current thrust? `MaxSpeedChange` and
    `MinSpeedChangeDist` - track units, spline distance, per cent? **The parser
    is now read in full and it does not answer this**: it stores each attribute
@@ -335,6 +357,136 @@ whoever reads `+0x68` and `+0xa8` off a class record, and the ordinary route to
 it (callers of the loader) is blocked by that page's unrelocated-address
 problem. A live read under PPSSPP is the cheaper option, and it would settle the
 units at the same time.
+
+## The original driver, recovered (2026-10-11)
+
+The maintainer's decision of 2026-10-11 gives the campaign a third AI mode:
+**the original's own opponent, rubber banding included**, beside this project's
+driver (race box, remix, multiplayer) and this project's driver on the cell's
+`SkillScale` curve (already on main). This section is that mode's specification
+in words; the formulas, addresses and the live measurement are on
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md). Nothing in
+it is built yet.
+
+### What an original opponent is
+
+1. **A driver writes the player's control record.** Steer, thrust, two
+   airbrakes and pitch on the `0..100` scale, into a record the craft registers
+   as its input source exactly as the player's pad record is. The craft then
+   runs the **same** engine, airbrake, steering and pitch physics as the
+   player's. Thrust is a throttle percentage, and above `100` it also lifts the
+   engine's acceleration cap. Measured.
+2. **A rail keeps it on its lane.** After the controls, `Ai_SnapToLane` moves
+   the rigid body directly: up to 70 % of the lateral distance to the lane point
+   and 17.5 % of the sideways velocity per tick, blended in once the craft is
+   above 50 u/s, within 14 units of the surface point and touching nothing, and
+   dropped at once on contact. Orientation is never written. In steady state
+   the move is about a hundredth of a unit a tick: the opponent simply stays on
+   its lane. Measured. **This is the one place the original bypasses physics,
+   and it is reproducible**: a deterministic vector correction on position and
+   velocity, which `oag-physics` would have to accept from outside.
+3. **The lane is planned, not the racing line.** Each opponent holds a lane in
+   `[-1, 1]` across the authored AI corridor (`0` the racing line, `+/-1` the
+   bounds), chosen from nine candidates by a weak pull to the line and a strong
+   pull to a **random preferred lane** re-drawn about once every 400 ticks
+   (biased toward the edges), pushed sideways by contacts, held inside an
+   optional authored band per track point, and laid out ahead in an 80-slot ring
+   (one slot per 1/4000 lap) with a rate-limited lateral velocity.
+4. **The steering controller** aims at the lane point a lookahead of
+   `LookAheadSecs` of smoothed speed ahead (at least 15 units), shifts the aim
+   across the track against the cross-track error (`xtrackMul`), takes the
+   heading error to that point from a yaw-predicted nose, and outputs
+   `(error + SteerDamp * d error) * 950 * SteerMul` clamped to `+/-100`, with
+   the excess beyond `100` becoming the airbrake on that side
+   (`(|steer| - 100) * 80 - 10`). Airborne it also pitches toward the track
+   tangent. Steering runs every tick; an authority factor ramps it in over 40
+   ticks.
+5. **The thrust is a schedule, and it reads the player.** On one tick in eight
+   (round-robin over the field) each opponent sets its throttle to
+   `AIThrust[player's place - 1]`, corrected toward a formation slot ahead of
+   the racer just in front of the player (spacing `SpreadDist[player's place - 1]`
+   per unit of its `spread`), plus the field-wide rubber band (opponents speed up
+   while the player leads everyone by more than the dead band, ease off while
+   everyone leads the player), shifted and scaled by the skill curve, capped at
+   `100` near the player after 20 s, held until its next turn. Below an
+   authored per-point speed, it is forced to full throttle.
+6. **The formation moves over the race.** `spread` starts as `8 - grid slot`,
+   slides linearly to a shuffled order (`numAIPositionSwaps` random adjacent
+   swaps, keyed on the **integer** difficulty), and wanders by up to
+   `intermediateOffsetSize`, re-drawn `numIntermediatePositions` times a race.
+   Measured.
+7. **Weapons and forks are already ported** ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md),
+   [branch choice](#branch-choice-at-a-fork)).
+
+### `OriginalDriver`: a sketch for the follow-up lane
+
+**Chosen, not measured** - the shape below is this project's proposal for
+carrying the recovered law, not something read off the original.
+
+- **Where.** `oag_ai::original`, beside `Driver`, sharing nothing with it but the
+  output type. `Field` picks one per race from the mode: the campaign gets
+  `OriginalDriver`, everything else keeps `Driver` (the maintainer's rule: never a
+  player setting).
+- **Read from the disc, never transcribed** (ADR-0006): `AIControlStats.xml`
+  (`SteerMul`, `SteerDamp`, `LookAheadSecs`, `xtrackMul`) and the whole of
+  `AIRaceStats_<class>.xml` (`oag_tables::ai_race_stats` reads only the thrust
+  half today; `SpreadDist`, the six `RubberBanding` floats and the three
+  `AIPackSwapping` rows join it). The skill scale is the existing
+  `AI_ResolveSkillScale` port; the shuffle also needs the integer difficulty.
+  Per track point it needs `unk_0x5c`, `unk_0x5d` and `unk_0x66`, which
+  `oag_vex::track::SplinePoint` does not carry yet. The executable constants
+  (`950`, `80`, `10`, `0.0676`, `-0.0206`, `0.7/0.3`, `1.5`, `15`, the `0.08`
+  gain decay, `350`, `1000`) are code, cited to `ai-controls.md`.
+- **Field state.** The round-robin index (`0..7`), the shuffle-done flag, the
+  race start progress. One `Rng` stream for the field, seeded from the race
+  seed, used in a fixed order: the shuffle's swaps at race start, then per
+  tick the wander draws and the preferred-lane draws in craft order.
+- **Per-driver state.** Last heading error; smoothed speed; authority; the lane
+  ring (80 `f32` plus head slot, head index, count) and lateral velocity; nine
+  smoothed lane scores; preferred lane; contact push; band side; rail blend and
+  rail time; held thrust; the wander (`start`, `end`, phase, segments,
+  amplitude, previous and next offsets, `spread`); last forward for pitch.
+- **Per-tick inputs.** Own pose, velocity, angular velocity, ground fraction,
+  contact list; own projected track sample with its cursor and excluded fork
+  path; a track sample at an arbitrary progress along that branch; lap length;
+  race time, laps; every racer's lap-progress, place, finished flag and
+  `spread`; which craft is the player and its ship state.
+- **Per-tick outputs.** `ShipControls` (the `0..100` values divided down at the
+  existing `CONTROL_RANGE` boundary), and a `RailCorrection { velocity,
+  position }` the composition root applies to the body. Applying it is the one
+  change `oag-physics` needs: an explicit "set velocity and position" on a
+  craft's body, called at the point in the frame the original calls it.
+- **Determinism.** The steering uses `sin`/`cos` of the predicted yaw and the
+  wander and lane draws use `rand()`: both must go through `oag_core`'s
+  deterministic math and the seeded `Rng`, never libm or OS entropy
+  (`docs/architecture/determinism.md`). `dt * 60` is exactly `1` at the fixed
+  60 Hz tick, so the derivative divides by `1`; keep it literal. The two
+  per-tick exponential smoothings (`0.95/0.05`, `0.9/0.1`) and the authority
+  ramp are order-sensitive `f32` sums: write them exactly as recovered, no
+  reassociation. `HashMap` iteration must not order the field: the racer table
+  order is the round-robin order.
+- **What it does not reproduce faithfully, by design.** The original's variable
+  timestep (ADR-0007): its per-tick constants are per-frame at 60 Hz, which our
+  fixed tick matches. Anything the open list below leaves unread.
+
+### Still open, with the next address
+
+- **Where the rail sits in the frame.** `AiManager_Update` is reached through a
+  vtable (no static caller); whether it runs before or after `Body_StepWorld`
+  (`0x0884f70c`'s loop) decides whether the rail corrects this tick's pose or
+  the next. One run breaking on both, alternately, settles it.
+- **The census of `unk_0x5c/0x5d/0x66`** over Pulse's track files: whether any
+  circuit authors a lane band or a speed floor.
+- **The steering and lane planner, live.** Log the lookahead sample and the lane
+  ring at `Ai_ComputeControls`' entry and recompute the steer, as
+  `scripts/psp-ai-thrust.py` does for the thrust.
+- **`StartStats`** (`StartBoost[8]`): read at the launch
+  ([ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#startboost8-has-a-consumer-the-ais-grade-3)),
+  not part of this pass.
+- **The other titles.** HD's thrust law is Pulse's with four changes
+  ([ps3-hdfury-eu/ai-stats.md](../ghidra/functions/ps3-hdfury-eu/ai-stats.md));
+  its steering, lane planner and rail are not read. Pure, 2048 and Omega are
+  not read.
 
 ## What we build instead
 
