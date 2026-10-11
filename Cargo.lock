@@ -2281,6 +2281,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-ballisticng"
+version = "0.1.0"
+dependencies = [
+ "oag-testdata",
+ "oag-texture",
+ "oag-unity",
+]
+
+[[package]]
 name = "oag-core"
 version = "0.1.0"
 dependencies = [

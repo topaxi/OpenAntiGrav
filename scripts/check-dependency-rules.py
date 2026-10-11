@@ -69,6 +69,11 @@ FORBIDDEN_FOR_GAMEPLAY = {
     "oag-input",
     "winit",
     "wgpu",
+    # Foreign content: the Unity reader and the game layers on top of it are
+    # read by the race loader, never by the simulation. What they produce
+    # reaches a simulation crate as plain data a loader built. ADR-0062.
+    "oag-unity",
+    "oag-ballisticng",
 }
 
 # The crates that link `oag-title` without being title packages: the reader of
@@ -137,6 +142,15 @@ TITLE_FREE_RENDER_CRATES = {
 # ADR-0062.
 GENERIC_READERS = {
     "oag-unity": set(),
+}
+
+# Rule 5: a game-specific Unity layer builds on `oag-unity` and the texture
+# decoders and on nothing else. In particular it reaches no title package, no
+# simulation crate and no renderer: how a foreign track is mapped into this
+# engine is the consumer's choice (`oag-raceplay`), not the layer's reading.
+# `oag-formats` is here because `oag-texture` carries it.
+CONTENT_LAYERS = {
+    "oag-ballisticng": {"oag-unity", "oag-texture", "oag-formats"},
 }
 
 # Rule 2: no crate may depend on the composition root.
@@ -230,6 +244,19 @@ def main() -> int:
                 "layer on top of it instead"
             )
 
+    for crate, allowed in sorted(CONTENT_LAYERS.items()):
+        pkg_id = id_by_name.get(crate)
+        if pkg_id is None:
+            problems.append(f"workspace member {crate!r} not found in cargo metadata")
+            continue
+        hit = (reachable_names(pkg_id, graph, names) & workspace_names) - allowed
+        if hit:
+            problems.append(
+                f"{crate} transitively depends on workspace crates {sorted(hit)}, "
+                "which rule 5 (a content layer reaches the Unity reader and the "
+                "texture decoders only) forbids"
+            )
+
     vocabulary_id = id_by_name.get(TITLE_VOCABULARY)
     if vocabulary_id is None:
         problems.append(f"workspace member {TITLE_VOCABULARY!r} not found in cargo metadata")
@@ -269,7 +296,7 @@ def main() -> int:
         print("\n\n".join(problems), file=sys.stderr)
         return 1
 
-    print("OK: all four dependency-boundary rules hold")
+    print("OK: all five dependency-boundary rules hold")
     return 0
 
 

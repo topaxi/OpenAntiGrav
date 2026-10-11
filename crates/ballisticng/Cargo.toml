@@ -1,0 +1,19 @@
+[package]
+name = "oag-ballisticng"
+description = "BallisticNG's Workshop content on top of the generic Unity reader: .wtrk and .csf wrappers, track data classes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+oag-unity.workspace = true
+oag-texture.workspace = true
+
+[dev-dependencies]
+oag-testdata.workspace = true
+
+[lints]
+workspace = true
