@@ -974,8 +974,12 @@ on a second boot**, which agrees with the 2026-10-08 `0.96-1.08`. Metropia's
 (`0.99` luma at tick 80, 78 % of it in the sky rows) and the ratio is noise
 over a small denominator; from tick 120 it is `0.97-1.12`.
 
-**Moa Therma's excess splits into two pose or option artefacts and a small
-remainder** (whole-frame ratio per pose, ticks 40/60/80/100/120/140/160):
+**Moa Therma: two things move the excess and a remainder is open** (whole-frame
+ratio per pose, ticks 40/60/80/100/120/140/160). The rows with the clock matched
+run the sim `K` ticks before the capture, so the craft sits at its posed place
+for `K` ticks and **drifts**: the craft-box ratio reads `0.65` at tick 100
+(`K = 49`) and the whole frame at tick 40 goes `0.98 -> 1.09`. Read the matched
+rows as indicative, not clean:
 
 | Ours rendered with | Ratios | Mean |
 | --- | --- | ---: |
@@ -994,11 +998,14 @@ remainder** (whole-frame ratio per pose, ticks 40/60/80/100/120/140/160):
    against `1.78` at `K = 29` on a second pose, with the same `K - tick = 9
    (mod 60)` on both ticks 100 and 140. At the matching phase the strip's
    mask energy is `1.05` of the original's, where an unmatched phase puts the
-   chevrons in different places and at a different brightness. So the
-   "brighter glow surfaces in motion" of 10-08 is a **posing artefact** (a
-   frame from a real run carries the clock): the falsifier's `0.99-1.01`
-   branch for the strip. Metropia's glows are not periodic in this way (the
-   mask difference is flat across `K` at ticks 120 and 160).
+   chevrons in different places. A frame from a real run carries the clock, so
+   the strip's placement is a posing effect. **What was measured is the
+   mask's placement and energy; the falsifier as written, the colour under
+   the mask at matched phase, was not.** The craft-drift-free reading is the
+   non-craft "rest" ratio with the clock matched, `1.05 1.12 1.02 1.15 1.17`
+   at ticks 60-140: the scenery still reads `1.12-1.17` at three of five poses.
+   Metropia's glows are not periodic in this way (the mask difference is flat
+   across `K` at ticks 120 and 160).
 2. **The craft's shadow.** The original draws a dark wedge on the track behind
    the craft (the `Dynamic Shadow Occluder` hull, `shadows.md`); ours draws
    it only on `--shadows original`, and `Shadows::Off` is the default for
@@ -1006,9 +1013,14 @@ remainder** (whole-frame ratio per pose, ticks 40/60/80/100/120/140/160):
    bright pass over the ribbon's mask reads less. Ours with `original`
    shadows: luma under the ribbon `119/124/82/104/135` against the original's
    `132/127/103/114/136` at ticks 60-140, against `154/161/100/136/177`
-   before. This is a render-option difference the bloom inherits (the
-   maintainer's default), not a bloom term; recorded, not changed.
-3. **The remainder, `1.09` mean (`1.00-1.17`).** Ours' whole-scene luma is
+   before. Craft-box ratio at `K = 1` with shadows `original`: `1.13 1.27
+   0.98 1.12 1.21` (ticks 60-140, no drift). This is a render-option
+   difference the bloom inherits, not a bloom term, **and it is real in play**:
+   a player on the defaults never gets the wedge. `Shadows::Off`'s own doc
+   comment says it stays the default "until `original` exists", and `original`
+   exists on Pulse now; whether the default should move is the maintainer's
+   call, not changed here.
+3. **The remainder (open, no confidence).** Ours' whole-scene luma is
    `+1.4-2.9 %` (`124.2` against `120.9` at tick 140, `101.3` against `98.4`
    at tick 100), the standing scene-exposure gap, and the bright pass is a
    product of the colour and the mask, so a few per cent of colour is a
@@ -1018,8 +1030,9 @@ remainder** (whole-frame ratio per pose, ticks 40/60/80/100/120/140/160):
    and `1,018` against `1,050` at tick 100; a real run of ours with the same
    throttle (`--hold cross`, speed `89.8` and `109.6`, intensity `0.37` and
    `0.53`) gives `997` and `1,425`, so it is not the synthetic posed ring but
-   something that grows with speed. Not read to a cause. Together these are
-   the whole of what is unexplained on Moa, and none of it is a chain term.
+   something that grows with speed. Not read to a cause. None of this is a
+   chain term, but Moa's leftover (the scenery's `1.12-1.17` at ticks 120-140
+   after the phase is matched, and the ribbon) is not closed.
 
 **HUD (the third falsifier): not isolated.** Clipping the top 40 rows moves the
 ratio by under `2 %` on most frames (the exceptions are Moa tick 40 and 80 and
@@ -1029,13 +1042,16 @@ so the clip cannot tell the HUD's read from scenery. The 10-08 finding that the
 original's bright pass reads the HUD stands unmeasured against ours.
 
 **Verdict.** No bloom-chain term is wrong, and nothing in `oag-render` or
-`oag-post` changed. Talon's `1.01` (two boots now), Metropia's `1.11` and Moa's
-`1.09` after the two artefacts are removed make the thread's "1.2-1.6x on a
-racing straight" a figure for a frame posed with the default shadows and an
-unmatched animation clock, not a gap in the bloom. Confidence **75** that no
-bloom chain term differs materially at racing poses (three circuits, two boots
-on two of them); the ribbon extent and the `+2-3 %` scene exposure are the open
-leads, no confidence.
+`oag-post` changed. Talon's `1.01` (shadows `original`; the 2026-10-08 `0.96-1.08`
+did not record its shadow tier, so "two boots agree" is agreement of numbers,
+not of settings), Metropia's `1.11` (shadows `original`) and Moa's `1.18` as
+posed by default, `1.09-1.13` with the shadow tier or the clock matched, say
+the thread's "1.2-1.6x on a racing straight" is not a gap in the bloom chain:
+it is about what the original's scene has under the mask (a shadow, glow
+textures at their clock). Confidence **70** that no bloom chain term differs
+materially at racing poses (three circuits, one boot each on Metropia and
+Moa, two on Talon's); Moa's remainder, the ribbon extent and the `+1.4-2.9 %`
+scene luma are open, no confidence.
 
 **A look at the pair (player size).** Chase frames at tick 60, 100, 120 and 140
 read side by side as the same scene; the visible differences are the missing
@@ -1052,12 +1068,14 @@ mask holds `214` on `1,895` pixels, of which `1,533` are a wedge along the
 bottom rows `253-260` (up to `301` pixels a row, not a full-width strip), the rest
 small pieces higher up. The batches that stamp `214` are alpha-tested, `pass_mask
 0x1881`, texture ordinal `0`, in at least ten sizes from 2 to 50 triangles
-(`mesh::glow::batch_value`); the track's batches stamp `4`, `98`, `104`, `245`,
-`247` and `214` only. Not done: the original's Zone start grid at the same pose
+(`mesh::glow::batch_value`); the same listing also showed bytes `104`
+(18 batches) and `247` (8), with the list cut at ten lines, so it is not
+exhaustive. Not done: the original's Zone start grid at the same pose
 (Zone selectability on this fresh profile was not tried; it needs the unlock
 walk `psp-drive.py menu --race-type 5` does not finish), a rendered
-isolation of those batches (a skip in the mesh builder did not change the
-picture, so the track is drawn from a path it does not reach), and so whether the
+isolation of those batches (a local skip of every other batch in the mesh
+builder did not change the picture, and `98` and `245`, present in the mask,
+printed no batch in that builder; the cause was not read), and so whether the
 original's `4` is a depth tie. The grid-only `1.2x` therefore stays the
 countdown-grid artefact it was; nothing was changed.
 

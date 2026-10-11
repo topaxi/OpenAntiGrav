@@ -47,26 +47,31 @@ only segments 0 and 1: the screen length of the ribbon. (5) Whether a racing
 frame on a second circuit has any full-screen pass after the composite (one
 rest frame was read). (6) The same readout on HD (RPCS3) at a racing intensity.
 
-## 2026-10-11, `pulse-bloom`: the residual is a posing artefact, not a bloom term
+## 2026-10-11, `pulse-bloom`: not a chain term; Moa's leftover is open
 
 Second boot, three circuits, full numbers in `bloom.md`, "Racing strength,
 second boot, and what the Moa Therma excess is". Whole-frame ours/original:
-Talon's `1.01` (`0.91-1.06`, three poses at racing speed `1.01-1.06`), Metropia
-`1.11`, Moa Therma `1.18` as posed by default and **`1.09` once two artefacts
-are removed**: the track's animated glow textures run on a 60-tick clock that a
-`--pose-from` frame starts at tick 1 (matching it takes the strip's mask from a
-mean difference of `20` to `0.3` and the ratio from `1.18` to `1.13`), and the
-original draws the craft's shadow wedge while the default `Shadows::Off` does not
-(`1.13` alone, `1.09` with both). The chain, the tap, the composite and the mask
-are unchanged and nothing in `oag-render` or `oag-post` moved. The 2026-10-08
-table was already in the post-2026-10-04 composite order.
+Talon's `1.01` (`0.91-1.06`, racing-speed poses `1.01-1.06`, shadows `original`),
+Metropia `1.11` (shadows `original`), Moa Therma `1.18` as posed by default.
+Two things move Moa: the track's animated glow textures run on a 60-tick clock a
+`--pose-from` frame starts at tick 1 (matching it fixes the strip's mask
+placement, mean difference `20 -> 0.3`; the colour under the mask was not
+measured, and the matched renders drift the craft), and the original draws the
+craft's shadow wedge while the default `Shadows::Off` does not (`1.13` alone;
+craft-box `1.13 1.27 0.98 1.12 1.21`). **The shadow part is real in play**: the
+default's doc comment says it holds "until `original` exists", and it exists on
+Pulse now - the maintainer's call. The scenery outside the craft still reads
+`1.12-1.17` at three of five matched poses. The chain, the tap, the composite and
+the mask are unchanged and nothing in `oag-render` or `oag-post` moved. The
+2026-10-08 table was already in the post-2026-10-04 composite order.
 
-**Open.** The ribbon's screen extent grows with speed in ours more than in the
-original (first segment `1,463` pixels to row `265` against `1,051` to `258` at
-tick 140, equal at tick 100; a real run of ours gives `1,425` at the same
-speed). The standing `+1.4-2.9 %` scene luma. The HUD's read by the original's
-bright pass is still not isolated (a top-rows clip cannot separate it from the
-stands). The Zone grid strip was not reached (see `bloom.md`).
+**Open.** Moa's leftover (scenery `1.12-1.17` with the clock matched; the colour
+under the mask at matched phase, one more capture). The ribbon's screen extent
+grows with speed in ours more than in the original (first segment `1,463` pixels
+to row `265` against `1,051` to `258` at tick 140, equal at tick 100; a real run
+of ours gives `1,425` at the same speed). The standing `+1.4-2.9 %` scene luma.
+The HUD's read by the original's bright pass is still not isolated. The Zone grid
+strip was not reached (see `bloom.md`).
 
 ## Measured first
 
@@ -125,8 +130,8 @@ executable's.
 
 ## Open
 
-- ~~Why ours is still 1.2-1.6x on a racing straight~~ answered 2026-10-11 (animation
-  clock and shadow tier of a posed frame; see the section above).
+- Why ours is still 1.2-1.6x on a racing straight: partly answered 2026-10-11 (animation
+  clock, shadow tier; see the section above).
 - A matched boost-pad on/off pair in the original (1 of 4 placed approaches
   triggered the pad in this lane).
 - HD's own strength at matched poses: this lane measured Pulse PSP only.
@@ -147,9 +152,9 @@ executable's.
    the bottom rows (`bloom.md` has the numbers); it needs the original's Zone
    grid at the same pose, so first an unlocked Zone on a PPSSPP profile.
 
-1. ~~Explain the residual 1.2-1.6x on a racing straight.~~ Done 2026-10-11: a
-   pose and option artefact, see the section above. What is left is the
-   ribbon's extent at speed (read a real run's ribbon against the original's at
-   several speeds, `exhaust.md`) and the `+2-3 %` exposure.
+1. Partly explained 2026-10-11 (the section above): not a chain term. Left: Moa's
+   scenery `1.12-1.17`, the colour under the mask at matched phase, the
+   ribbon's extent at speed (a real run's ribbon against the original's at
+   several speeds, `exhaust.md`), the `+1.4-2.9 %` luma.
 2. PS2 bloom: a second circuit (Talon's Junction) and a racing frame at a pose read out of the emulator, for the racing-straight strength the PSP chain still carries 1.2-1.6x on.
 3. Measure HD's bloom strength at matched poses on RPCS3.
