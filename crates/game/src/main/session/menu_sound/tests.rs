@@ -36,9 +36,51 @@ fn a_confirmed_id_resolves_to_the_register_its_plugin_entry_authors() {
     assert_eq!(register(Kind::Ship, "16_Track"), None, "a circuit is not a team");
 }
 
+/// What `start` makes the mixer render over 30 ticks after 30 silent ones,
+/// as the `--dump-audio` file's samples, and the frame the start landed on.
+fn rendered(
+    sfx: &mut oag_sound::sfx::MenuSfx,
+    start: impl FnOnce(&mut oag_sound::sfx::MenuSfx, &oag_sound::Audio) -> bool,
+) -> (Vec<i16>, usize) {
+    let wav = std::env::temp_dir().join(format!("oag-name-voice-{}.wav", std::process::id()));
+    let mut audio = oag_sound::Audio::open(
+        &oag_sound::settings::Settings::default(),
+        Some(wav.clone()),
+        None,
+        oag_audio::MIN_BUFFER,
+        false,
+    );
+    for _ in 0..30 {
+        audio.tick();
+    }
+    let before = audio.dump_frames().expect("a dump");
+    assert!(start(sfx, &audio), "the voice did not start");
+    for _ in 0..30 {
+        audio.tick();
+    }
+    audio.finish().expect("writing the dump");
+    let file = std::fs::read(&wav).expect("the dump");
+    std::fs::remove_file(&wav).ok();
+    let pcm = file[44..]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| i16::from_le_bytes(*c))
+        .collect();
+    (pcm, before)
+}
+
+fn peak(pcm: &[i16], from: usize, to: usize) -> u16 {
+    pcm[from * 2..to * 2]
+        .iter()
+        .map(|s| s.unsigned_abs())
+        .max()
+        .unwrap_or(0)
+}
+
 #[test]
 #[ignore = "needs data/images/pulse-psp-eu.chd, see data/README.md"]
-fn the_register_starts_a_voice_that_sounds_after_its_call_and_not_before() {
+fn the_register_starts_the_circuit_or_team_voice_after_its_call_and_not_before() {
     let Some(mut opened) = pulse() else { return };
     let tick = opened
         .title
@@ -47,43 +89,16 @@ fn the_register_starts_a_voice_that_sounds_after_its_call_and_not_before() {
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
     let banks = *opened.title.race.sounds;
     let mut sfx = oag_sound::sfx::MenuSfx::load(&mut opened.archives, &banks, tick, false);
-    for (kind, register) in [(Kind::Track, 1), (Kind::Ship, 4)] {
-        let wav = std::env::temp_dir().join(format!("oag-name-voice-{kind:?}.wav"));
-        let mut audio = oag_sound::Audio::open(
-            &oag_sound::settings::Settings::default(),
-            Some(wav.clone()),
-            None,
-            oag_audio::MIN_BUFFER,
-            false,
-        );
-        for _ in 0..30 {
-            audio.tick();
-        }
-        let before = audio.dump_frames().expect("a dump");
-        assert!(play_name(&mut sfx, &audio, kind, register), "{kind:?}");
-        for _ in 0..30 {
-            audio.tick();
-        }
-        audio.finish().expect("writing the dump");
-        let file = std::fs::read(&wav).expect("the dump");
-        let pcm: Vec<i16> = file[44..]
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|c| i16::from_le_bytes(*c))
-            .collect();
-        let peak = |from: usize, to: usize| {
-            pcm[from * 2..to * 2]
-                .iter()
-                .map(|s| s.unsigned_abs())
-                .max()
-                .unwrap_or(0)
-        };
-        assert_eq!(peak(0, before), 0, "{kind:?}: sound before the call");
+    let (circuit, before) = rendered(&mut sfx, |sfx, audio| sfx.play_circuit_name(audio, 1));
+    let (team, _) = rendered(&mut sfx, |sfx, audio| sfx.play_team_name(audio, 4));
+    assert_ne!(circuit, team, "a circuit name and a team name are one voice");
+    for (kind, register, expected) in [(Kind::Track, 1, &circuit), (Kind::Ship, 4, &team)] {
+        let (pcm, _) = rendered(&mut sfx, |sfx, audio| play_name(sfx, audio, kind, register));
+        assert_eq!(peak(&pcm, 0, before), 0, "{kind:?}: sound before the call");
         assert!(
-            peak(before, before + 30 * 800) > 100,
+            peak(&pcm, before, before + 30 * 800) > 100,
             "{kind:?}: the voice is silent"
         );
-        std::fs::remove_file(&wav).ok();
+        assert_eq!(&pcm, expected, "{kind:?} plays the other kind's voice");
     }
 }
