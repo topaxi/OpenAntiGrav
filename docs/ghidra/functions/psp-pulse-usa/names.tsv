@@ -1341,7 +1341,7 @@
 0x08834c5c	function	AiManager_AddDriver	85	ai-controls.md
 0x088354c8	function	AiManager_ShufflePack	90	ai-controls.md
 0x088357a0	function	AiStats_SetDefaults	88	ai-controls.md
-0x08852ef4	function	Ai_UpdateSpreadWander	85	ai-controls.md
+0x08852ef4	function	Ai_UpdateSpreadWander	92	ai-controls.md
 0x08854e7c	function	Ai_PlanLane	80	ai-controls.md
 0x08853550	function	Ai_AddLaneBump	85	ai-controls.md
 0x088533bc	function	AiLane_At	85	ai-controls.md

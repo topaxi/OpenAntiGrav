@@ -53,10 +53,10 @@ times larger" - because the finding is the coupling, not the number.
 | That `BaseStartThrust` is authored and never read | **recovered** | 90 |
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **recovered** (2026-10-11): percent of the player's own full throttle, written to the craft's control record and run through the same engine; distances are `racer+0x240` lap-progress units - see [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) | 92 |
 | **The opponent drives the player's physics**: its driver's control record (`driver+0x08`) is the craft's registered input source | **measured** (2026-10-11), every opponent's `craft+0x3c` read live | 92 |
-| **But a kinematic rail sits on top**: `Ai_SnapToLane` writes the body's position and velocity toward the planned lane every tick the craft is fast, grounded and contact-free | **measured** (2026-10-11): fires for every opponent every tick, steady-state move about `0.01` units | 90 |
-| The thrust law (`AI_ComputeOpponentThrust`): place-indexed base, formation gap, field-wide rubber band, the `100` cap near the player, skill interpolation | **measured** (2026-10-11): 1,140 live samples at two skills reproduced to `1e-3` | 94 |
+| **But a kinematic rail sits on top**: `Ai_SnapToLane` writes the body's position and velocity toward the planned lane every tick the craft is fast, grounded and contact-free | **measured firing** (2026-10-11): every opponent every tick, steady-state move about `0.01` units; how much of the line it holds, against the steering, is not separated | 90 |
+| The thrust law (`AI_ComputeOpponentThrust`): place-indexed base, formation gap, field-wide rubber band, the `100` cap near the player, skill interpolation | **measured** (2026-10-11): 1,140 live samples at two skills (Single Race, `g_skill_level` 0 and 2) reproduced to `1e-3`; the unity multipliers, `WhenBehind` below its clamp and the ship-state gate are not discriminated by those samples | 94 |
 | The rubber band's direction: `WhenLeading` (the player leads every opponent) **adds**, `WhenBehind` (every opponent leads the player) **subtracts** | **measured** (2026-10-11), agrees with HD's static read | 94 |
-| Pack swapping and the spread wander (`AiManager_ShufflePack`, `Ai_UpdateSpreadWander`), keyed on the integer difficulty | **measured** (2026-10-11) | 90 |
+| Pack swapping and the spread wander (`AiManager_ShufflePack`, `Ai_UpdateSpreadWander`), keyed on the integer difficulty | **measured** (2026-10-11): the wander recomputes on all 1,140 samples to `5e-7`; the shuffle's row and swap parity checked at both levels | 92 |
 | One driver's thrust, lane choice and fork choice a tick, round-robin over the field | **measured** (2026-10-11) | 92 |
 | The steering controller (`Ai_ComputeControls`): lookahead aim, cross-track shift, damped heading error, saturation into the airbrakes | **recovered**, instruction-level, not traced | 85 |
 | The lane planner (`Ai_PlanLane`): nine lanes in the AI corridor, a random preferred lane, contact push, a rate-limited 80-slot lane ring | **recovered**, static | 80 |
@@ -350,7 +350,9 @@ doing.
    What is open is naming the reader and its caller. See
    [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#the-sixth-ai-file-weaponaistatsxml).
 
-**Where the next session starts:** the consumer, not the parser. The parser is
+**Where the next session starts** (2026-10-11: superseded, the consumer is
+found and measured, see [the original driver](#the-original-driver-recovered-2026-10-11)):
+the consumer, not the parser. The parser is
 done - nine functions, named, with the full struct layout on
 [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md). What is needed is
 whoever reads `+0x68` and `+0xa8` off a class record, and the ordinary route to
@@ -380,9 +382,10 @@ it is built yet.
    the rigid body directly: up to 70 % of the lateral distance to the lane point
    and 17.5 % of the sideways velocity per tick, blended in once the craft is
    above 50 u/s, within 14 units of the surface point and touching nothing, and
-   dropped at once on contact. Orientation is never written. In steady state
-   the move is about a hundredth of a unit a tick: the opponent simply stays on
-   its lane. Measured. **This is the one place the original bypasses physics,
+   dropped at once on contact. Orientation is never written. It fires on every
+   tick (measured); in steady state the move is about a hundredth of a unit,
+   and whether that is the rail holding the lane or the steering already
+   holding it is not separated. **This is the one place the original bypasses physics,
    and it is reproducible**: a deterministic vector correction on position and
    velocity, which `oag-physics` would have to accept from outside.
 3. **The lane is planned, not the racing line.** Each opponent holds a lane in
@@ -432,7 +435,9 @@ carrying the recovered law, not something read off the original.
   `AIRaceStats_<class>.xml` (`oag_tables::ai_race_stats` reads only the thrust
   half today; `SpreadDist`, the six `RubberBanding` floats and the three
   `AIPackSwapping` rows join it). The skill scale is the existing
-  `AI_ResolveSkillScale` port; the shuffle also needs the integer difficulty.
+  `AI_ResolveSkillScale` port; the shuffle also needs the integer difficulty,
+  which in the campaign is the cell's browsed rung (`CellSelection_CommitSelection`
+  writes it to the same `SkillLevel` global, `race-campaign.md`).
   Per track point it needs `unk_0x5c`, `unk_0x5d` and `unk_0x66`, which
   `oag_vex::track::SplinePoint` does not carry yet. The executable constants
   (`950`, `80`, `10`, `0.0676`, `-0.0206`, `0.7/0.3`, `1.5`, `15`, the `0.08`
@@ -456,9 +461,9 @@ carrying the recovered law, not something read off the original.
   position }` the composition root applies to the body. Applying it is the one
   change `oag-physics` needs: an explicit "set velocity and position" on a
   craft's body, called at the point in the frame the original calls it.
-- **Determinism.** The steering uses `sin`/`cos` of the predicted yaw and the
-  wander and lane draws use `rand()`: both must go through `oag_core`'s
-  deterministic math and the seeded `Rng`, never libm or OS entropy
+- **Determinism.** The steering uses `sin`/`cos` of the predicted yaw
+  (`oag_core::math::sin_cos` exists for this) and the wander and lane draws use
+  `rand()` (the seeded `Rng`): never libm or OS entropy
   (`docs/architecture/determinism.md`). `dt * 60` is exactly `1` at the fixed
   60 Hz tick, so the derivative divides by `1`; keep it literal. The two
   per-tick exponential smoothings (`0.95/0.05`, `0.9/0.1`) and the authority

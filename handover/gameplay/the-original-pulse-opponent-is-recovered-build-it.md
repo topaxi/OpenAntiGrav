@@ -25,6 +25,12 @@ its steering and lane planner are read at instruction level (not traced).
   does not carry the bytes yet.
 - **The steering and the lane planner have no live leg.** Read whole, scored
   85 and 80.
+- **What the thrust samples cannot discriminate** (unity multipliers,
+  `WhenBehind` below its clamp, the ship-state gate) and **how much of the line
+  the rail holds** against the steering: both listed with their one-run
+  falsifiers on `ai-controls.md`'s "Measured" section.
+- **The campaign branch of `AI_ResolveSkillScale` was not run live**: the
+  measurement used Single Races at two `g_skill_level` values.
 - **`StartBoost`** at the launch is a separate, already-documented consumer
   (`ai-stats.md`), not wired by this lane.
 - **Other titles.** HD's thrust law is Pulse's with four changes; its steering,
@@ -48,7 +54,11 @@ its steering and lane planner are read at instruction level (not traced).
 5. Wire it into the campaign only, from the mode, never a setting; keep
    `Session::resolve_campaign_ai_skill_scale` for the skill scale and pass the
    integer difficulty for the shuffle.
-6. Falsify on the disc: a campaign race with the original driver, opponents'
+6. Rewrite the doc comments the build falsifies, in the same change: the
+   `oag-ai` `lib.rs` header ("their speed is not"), `oag_tables::ai_race_stats`'s
+   module doc (reads only the thrust half), and `oag_raceplay::finished_thrust`'s
+   "the opponents' `spread` wander this project does not model".
+7. Falsify on the disc: a campaign race with the original driver, opponents'
    thrust logged, compared against a PPSSPP capture of the same cell with
    `scripts/psp-ai-thrust.py`. Then check 2048/Omega and HD per CLAUDE.md's
    cross-title rule.

@@ -15,7 +15,8 @@ story.** After the controls are written, `Ai_SnapToLane` (`0x088542e4`) moves
 the rigid body directly: it removes part of the velocity across the track and
 pulls the position toward the driver's lane point, up to 70 % of the lateral
 error per frame, whenever the craft is fast, near the surface and touching
-nothing. That is a kinematic rail on top of the physics. It is plain vector
+nothing. That is a kinematic rail on top of the physics (measured firing every tick; how much of the line it holds
+is open). It is plain vector
 arithmetic on the body, so it is reproducible deterministically, but our
 physics crate has to expose a write to the body's position and velocity for it.
 
@@ -33,7 +34,7 @@ Confidence is per claim below. Static reading unless a row says measured.
 | `0x08853a80` | `Ai_Update` | 85 (already named) | per driver per tick, below |
 | `0x08855dc4` | `Ai_ComputeControls` | **85** (was 75) | the steering controller and the thrust slot, read at instruction level |
 | `0x08855904` | `AI_ComputeOpponentThrust` | **94** (was 82) | the thrust law, read whole and reproduced on 1,140 live samples |
-| `0x08852ef4` | `Ai_UpdateSpreadWander` | 85 | the pack-position wander (HD's name for the same function) |
+| `0x08852ef4` | `Ai_UpdateSpreadWander` | 92 | the pack-position wander (HD's name for the same function); measured |
 | `0x08854e7c` | `Ai_PlanLane` | 80 | picks a lane in the AI corridor and fills the lane ring |
 | `0x08853550` | `Ai_AddLaneBump` | 85 | adds a trapezoid score bump over the nine candidate lanes |
 | `0x088533bc` | `AiLane_At` | 85 | the planned lane at a track progress |
@@ -132,8 +133,8 @@ point) is null, the craft's `+0x94 -> +0x1c0` has bit `2`, or the craft's
 `mgr+0xa8` counting `0..7` and wrapping (`0x08b34780 = 0x08b34420 + 0x360`).
 So **each driver's thrust law, lane planner and fork choice run once every eight
 ticks**, phased by its index in the racer table, and its thrust is held between
-updates. Steering runs every tick. Confidence 85 (the clear and the set are both
-unambiguous stores; the eight-tick period assumes an eight-craft field).
+updates. Steering runs every tick. The counter wraps at eight whatever the field
+size, so a smaller field gets idle ticks and the period stays eight. Measured, 92.
 
 ## The AI-stats header
 
@@ -414,10 +415,9 @@ orientation. Confidence 80 for that.
 
 **Why this matters.** At full blend the craft is moved 70 % of the way to its
 lane point across the track every frame, and 17.5 % of its sideways velocity is
-removed. An opponent at speed, on the ground and clear of contact is therefore
-pinned to its planned lane; the steering controller mostly has to point the
-nose. Confidence 75 static; `Body_SetPosition`'s call site at `0x088548dc` is the
-breakpoint that measures it.
+removed, so any lateral error an opponent at speed, on the ground and clear of
+contact picks up is closed within a few ticks. Measured below: it fires every
+tick; how much of the line-holding is its doing is open.
 
 ## `Ai_ComputePitch` (`0x08853148`)
 
@@ -457,11 +457,33 @@ writes:
 | `hard-park` | 2 / `3.0` | parked, 8th | 160 | **160** | the `SkillScalePoint2..3` branch at `t = 1` |
 
 **1,140 samples, every one reproduced to `1e-3`, worst residual `0.00000`**, and
-the logged `driver+0x9c` matched the recomputed gap on every sample. That is the
+the logged `driver+0x9c` matched the recomputed gap on every sample. On the same
+1,140 samples the sampled driver's `spread` (`driver+0x74`, rewritten by
+`Ai_UpdateSpreadWander` at the law's entry) recomputes from its logged wander
+state and progress to within `5e-7`: the wander is measured too. That is the
 thrust law above, the place indexing, the field-wide rubber band and its
 direction, the `ref` choice, the cap and the skill interpolation, measured.
 Confidence on `AI_ComputeOpponentThrust`: **94** (runtime trace; HD's static
 read is the same function, a second binary short of a runtime leg there).
+
+**What these samples cannot tell apart**, so the confidence above is for the
+formula as exercised, and these pieces of it rest on the read alone:
+
+- `ThrustMultiplier` and `SpreadMultiplier` ship at unity, so the `A[0]` pivot
+  of the final line and the `SpreadMultiplier` scaling fit any formula of the
+  form `(x - c) * 1 + c`.
+- `WhenBehind` was only seen at its `MaxSpeedChange` clamp, so its `SpeedMul`
+  and dead band are untested; `WhenLeading` never reached its clamp.
+- The ship-state `4..6` gate on the rubber band never fired.
+- Writing non-unity multipliers into the live class record before a
+  `--predict` run is the one-restart falsifier for the first item.
+
+**Two skills, not two campaign cells (a deviation from the brief).** The runs
+are Single Races with `g_skill_level` written to `0` and `2`. A campaign cell
+reaches the same law through the same global (`CellSelection_CommitSelection`
+writes the browsed rung to it, [race-campaign.md](race-campaign.md)), so the
+shuffle's input is the cell's rung; but `AI_ResolveSkillScale`'s campaign
+branch (the cell's `SkillScaleValue` position) was not exercised live here.
 
 The "moved ahead" runs write the player's body position along the leader's
 heading (`--teleport`), because the software renderer runs the emulator at a
@@ -489,10 +511,17 @@ is measured.
   `easy-park` (five opponents every tick, two on about half), every opponent
   every tick in `hard-park`, the player too under the autopilot. Blend `0.17`
   to `1.0`. **But the move it makes is small in steady state**: over 120 calls
-  the position changed by `0.0001` to `0.042` units, median `0.012`. An opponent
-  sits within a few hundredths of a unit of its lane point, which is the rail's
-  equilibrium: it keeps the craft on its lane rather than dragging it back from
-  far off. Confidence on the mechanism: **90**.
+  the position changed by `0.0001` to `0.042` units, median `0.012` (the
+  script's rail phase logs it; the stop is on the `jal`, whose delay slot loads
+  the target's z, so the target is read from the stack buffer `a1` points at).
+  So in steady state an opponent sits within a few hundredths of a unit of its
+  lane point. **Whether that is the rail's doing or the steering already
+  holding the lane is not separated by this**: small moves fit both. The test
+  that separates them is to NOP the `jal` at `0x088548dc` and the velocity
+  stores before it, then log the lateral error. Only the position write is
+  measured; the velocity write and the speed and height gates are static.
+  Confidence on the mechanism firing: **90**; on its effect on the racing
+  line: open.
 - `driver+0x880` read `0` on every driver in every run (the second controller
   is dead in a single race), and `driver+0x21` read `1` on every opponent.
 - Lap length (`*("AI track data")`) `5068.73` on this circuit; `racer+0x240`

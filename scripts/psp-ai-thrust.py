@@ -233,12 +233,17 @@ def capture(args):
         r = regs(dbg, "GPR")
         manager = dbg.read_u32(RACE_MANAGER)
         driver = r["s0"]
+        # The stop is on the `jal` itself, whose delay slot loads `f14`: the target's z is not in a
+        # register yet. Read the whole target from the stack buffer `a1` points at instead.
+        target = floats(dbg, r["a1"], 3)
+        current = floats(dbg, r["a0"] + 0x30, 3)
         log["rail"].append(
             {
                 "driver": driver,
                 "time": dbg.read_f32(manager + 0x2B8),
                 "blend": dbg.read_f32(driver + 0x48),
                 "on_rail_for": dbg.read_f32(driver + 0x4C),
+                "move": sum((a - b) ** 2 for a, b in zip(target, current)) ** 0.5,
             }
         )
     log["final"] = snapshot(dbg)
@@ -317,6 +322,26 @@ def predict_one(sample, skill, record):
     }
 
 
+def wander_one(sample):
+    """`Ai_UpdateSpreadWander`'s output for the sampled driver, from its logged state."""
+    import numpy as np
+
+    F = np.float32
+    st = sample["state"]
+    me = next(x for x in st["racers"] if x.get("driver") == sample["driver"])
+    laps = st["laps"]
+    f = F(0)
+    if 0 < laps < 20:
+        f = (F(me["progress"]) - F(st["start_offset"])) / (F(laps) * F(me["lap_length"]))
+    f = min(max(f, F(0)), F(1))
+    phase = F(me["phase"])
+    low = phase - F(1) / F(me["segments"])
+    w = (f - low) / (phase - low)
+    spread = (F(me["wander_prev"]) * (F(1) - w) + F(me["wander_next"]) * w
+              + F(me["spread_start"]) * (F(1) - f) + F(me["spread_end"]) * f)
+    return abs(float(spread) - me["spread"])
+
+
 def predict(path):
     log = json.loads(Path(path).read_text())
     skill = log["skill_scale"]
@@ -340,6 +365,11 @@ def predict(path):
     for r in rows[:: max(1, len(rows) // 8)]:
         print("  t=%6.2f place %d gap %9.2f band %7.3f cap %6.0f predicted %8.3f read %8.3f" % (
             r["time"], r["place"], r["gap"], r["band"], r["capped"], r["predicted"], r["read"]))
+    # Only the sampled driver: its spread was rewritten at the law's entry this tick, the others'
+    # can be up to seven ticks stale against the snapshot's progress.
+    if all("lap_length" in x for s in log["samples"] for x in s["state"]["racers"] if x.get("driver") == s["driver"]):
+        w = [wander_one(s) for s in log["samples"]]
+        print("  wander: %d of %d samples within 1e-4, worst %.2g" % (sum(d < 1e-4 for d in w), len(w), max(w)))
     rail = log.get("rail", [])
     if rail:
         span = rail[-1]["time"] - rail[0]["time"]
@@ -349,6 +379,9 @@ def predict(path):
         print("  rail: %d Body_SetPosition hits over %.2f s race time, per driver %s" % (
             len(rail), span, sorted(per.values())))
         print("  rail blends: min %.3f max %.3f" % (min(h["blend"] for h in rail), max(h["blend"] for h in rail)))
+        moves = sorted(h["move"] for h in rail if "move" in h)
+        if moves:
+            print("  rail move per call: min %.4f median %.4f max %.4f" % (moves[0], moves[len(moves) // 2], moves[-1]))
 
 
 def main():
