@@ -120,10 +120,11 @@ impl Voice {
         match screen {
             Screen::Other => None,
             Screen::Results => {
-                if entered && self.law.medal_screen == MedalScreen::Results {
-                    if let Some(medal) = self.medal {
-                        return Some(medal_cue(medal));
-                    }
+                if entered
+                    && self.law.medal_screen == MedalScreen::Results
+                    && let Some(medal) = self.medal
+                {
+                    return Some(medal_cue(medal));
                 }
                 if entered {
                     self.spoke_place = false;
