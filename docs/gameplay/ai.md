@@ -3853,16 +3853,77 @@ unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
   and 6 slower, but it moved `21_Track` RAPIER (1.3 % faster) past an
   `ai_dekonstruct_black_ground_truth` bound, and HD `05_Track` VENOM (0.6 %)
   off its zero-contact lone row.
-- **Using the trough plan where only it verifies.** Pulse `06_Track` RAPIER
-  laps 38.61 to 29.16 s on it, against 24.0 gold, but the
-  `ai_clean_lap_gate` contact row goes 173 to 304. The plan's own driver laps
-  it clean. An Ace with commitment 0.938 takes it 3 % under the plan and
-  touches the walls at samples 750-850. Left on the corner model for the
-  maintainer's call.
+- **Using the trough plan where only it verifies, as it came.** Pulse
+  `06_Track` RAPIER laps 38.61 to 29.16 s on it, against 24.0 gold, but the
+  `ai_clean_lap_gate` contact row goes 173 to 304. Hardening it fixes that
+  row and breaks 2048 `cathedral` PHANTOM; see the next section.
 - **An Ace taking the plan whole, with no commitment margin.** Lone: 193
   faster, 12 slower, contact 2,256 to 2,019, and 06 RAPIER clean. But three
   `ai_dekonstruct_black_ground_truth` cells and `02_Track` PHANTOM's
   zero-contact row went red, and it overturns "commitment stays the margin".
+
+**Where only the trough plan verifies (2026-10-12, maintainer's decision
+2026-10-11, not adopted).** The maintainer asked for Pulse `06_Track` RAPIER's
+trough plan *and* an Ace that holds a clean line on it. A fix exists for that
+row, and it breaks another, so nothing was adopted.
+
+*Why the Ace hits the wall on 06 RAPIER, measured.* A balanced Ace at
+commitment 0.938 takes the plan at `sqrt(0.938)` = 0.968. Through samples
+650-730 that is 119-131 units/s against the plan lap's 124-137, and the slower
+craft holds a line 3-4 units off the plan's at 729 (z 130.2 against 133.8).
+There it crosses speed pad 4, which the plan lap misses. The boost (timer
+0.25 s, spent by 757) takes it from 132 to 173 units/s, and it reaches the
+corner at 779 at 171 against the plan lap's 155, into the wall at 779-815. The
+plan's ceilings there read about 300: its own craft never failed there, so
+nothing was learned. No sample of that plan is marked tight (within
+`clearance::MARGIN` of a wall), and line slack is not the cause: with the
+Ace's slack forced to zero it still took the pad and touched 122 ticks.
+
+*The fix that works on 06 RAPIER.* Where only the trough plan verifies, and
+the whole-window one failed on walls alone (no rescue), the ring plan
+(`SpeedPlan::build`, not a fork route's `build_within`) keeps learning at a
+0.96 share of itself until a verification at 0.96 and one at full share both
+come back clean. The `ai_clean_lap_gate` row went 2301 to 1728 ticks (38.35 to
+28.80 s, gold 24.0) and 173 to 0 contact. The other 47 rows, every Pulse, HD
+and Pure sweep row (lone, field and player, both directions, every class)
+and the probe circuit's `PLAN_REFERENCE` were bit-identical. In the Pulse
+field of seven at RAPIER the mean lap went 37.69 to 29.05 s and summed wall
+contact 480 to 107; shield lost per lap rose 5.55 to 5.83 (mean), and end
+shield fell 76.4 to 70.3 (mean).
+
+*What it breaks.* 2048 `cathedral` PHANTOM (forward) is also a course where
+only the trough plan verifies. It drove the corner model (lone Ace 4 clean
+laps, 51.8 s, 125 contact); on the hardened plan the lone Ace is destroyed:
+0 laps, 1702 contact. The plan is sound for the plain driver (seed 0: 39.1 s,
+7 contact). The Ace barrel-rolls over the 1.6 s jump ending at sample 4481
+(shield 133 to 113 at 4412), and the payout takes it from 126 to 231 units/s
+in about 25 samples. It then reaches sample 218 on the next lap at 208 units/s,
+13 units right of the plain driver's line, hits the wall at 223, and grinds
+there at about 1 unit/s with no rescue until destroyed. On the whole-window
+plan, forced, the same Ace laps clean (39.8 s, 0 contact), but that plan does
+not verify and does not harden either (site 4408 stays unresolved after
+109,000 steps). A roll is a random decision of the pilot, so no verification
+lap reproduces it. No rule was found that keeps 06 and excludes `cathedral`.
+
+*Tried on the driver first, and not kept*, all on the 48 gate rows against
+`main`:
+
+- **A cap at the plan's own verified pace** (least over six samples; the
+  verification lap leaves a hole every four or five): 06 RAPIER clean, but four
+  PHANTOM rows took 12-36 ticks of new contact at 1.0x, three rows at 1.05x.
+  The verified pace is noisy as a ceiling: 15 units/s through 06's gap at
+  1211, and 111 under a jump on `05_Track` PHANTOM where the Ace flies at 180.
+- **A cap at the fastest the plan went from 60 samples back to 6 ahead**: 06
+  RAPIER 1728 ticks, 3 contact, but 37 rows slower (still 431 ticks faster in
+  sum). With 2-6 % headroom, 7-9 rows slower; above 1.02x, 06 RAPIER takes
+  124-335 contact.
+- **The corner model wherever the craft is past that reach** (never below the
+  reach, scaled 1.0-1.35): five rows slower by 3-8 ticks every time. Unplanned
+  pads are common and mostly a clean win: `10_Track` VENOM gains 29 % off one
+  at sample 2056, `02_Track` PHANTOM 13 % at 405. A rule that brakes there
+  costs those rows.
+
+All of it is **chosen, not measured**.
 
 **Still open, by how much a player sees it:**
 

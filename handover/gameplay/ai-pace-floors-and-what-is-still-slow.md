@@ -23,14 +23,24 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
   `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
   Citta Nuova VENOM (1493). The trough plan does not win there.
-- **Pulse `06_Track` RAPIER: decided 2026-10-11 (maintainer) - take the trough plan *and* make
-  the Ace hold the clean line**, so the faster lap lands without the contact; the clean-lap gate stays the bar,
-  no baseline moves for it. Was: a one-line switch, the maintainer's call. Only the trough search verifies it. On that plan the lone Ace laps
-  29.16 s against 38.61 s on the corner model (gold 24.0), but the
-  `ai_clean_lap_gate` row goes 173 to 304 contact ticks, at samples 750-850.
-  The cause is measured: the Ace's commitment margin (0.938, so 3 % under the
-  plan). The plan's own driver, and an Ace at the full plan, touch nothing
-  there.
+- **Pulse `06_Track` RAPIER: tried 2026-10-12 (lane `ai-rapier`), not
+  adopted.** Cause measured: the 0.968 Ace takes speed pad 4 at sample 729,
+  which the plan lap misses, and reaches the corner at 779 at 171 against 155
+  u/s. Hardening the trough plan at a 0.96 share fixes the row (1728 ticks, 0
+  contact, everything else on Pulse, HD and Pure bit-identical), but flips 2048
+  `cathedral` PHANTOM onto a plan where the Ace's barrel-roll payout sends it
+  into a wall at sample 223 and it is destroyed. Numbers and the driver-side
+  attempts are on ai.md, "Where only the trough plan verifies". The code is on
+  local branch `ai-rapier-harden-attempt` (`adb9bab82`). Ways forward, each the
+  maintainer's call:
+  - Ship it anyway, taking the `cathedral` PHANTOM loss (and Omega's, which
+    re-ships it; not measured).
+  - Make a roll plan-aware first, for example no roll on a flight whose
+    landing the plan lap took far slower, then re-run the 2048 matrix.
+  - Fix the rescue gap below, then re-measure `cathedral`.
+- **No rescue for a craft grinding a wall at about 1 unit/s.** On the hardened
+  `cathedral` PHANTOM plan the lone Ace sat against the wall at sample 223 for
+  about 28 s with 0 respawns until destroyed. Not looked into.
 - **Pulse `06_Track` VENOM**: corner model, crawling at 15-33 u/s over
   1100-1200. The gap at 1196 clears at about 60 u/s. From 90 u/s the craft
   lands drifting right into the wall at 1238, and too slow it stalls in the gap
@@ -55,7 +65,5 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
    landing-aim lever as `06_Track` VENOM. Then decide where a rescue should
    place a craft in front of a reset volume it cannot clear from standstill.
    About 2 hours.
-2. Put the `06_Track` RAPIER trade to the maintainer. If they accept it,
-   `SpeedPlan::build_within` takes the trough plan where only it verifies, and
-   the gate row's baseline moves in a separate commit.
-3. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
+2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
+3. `06_Track` RAPIER: pick one of the three ways forward above.
