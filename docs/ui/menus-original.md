@@ -366,6 +366,17 @@ for the full candidate table.
   selection is a colour - and no capture shows the brightness changing over
   anything but an instant.
 
+## `<Text DisplayType="TELETYPE">` is drawn whole, as the original does - measured 2026-10-11
+
+A `<Text>` can author `DisplayType` as `NORMAL`, `SCROLLING` or `TELETYPE`; Pulse authors 58 `TELETYPE` ones (button
+prompts, screen titles, `BOOT_PRESS_ANY2`) and no `SCROLLING`. `oag_ui::screen::Text::display_type` carries the authored
+value ([`DisplayType`](../../crates/ui/src/screen/display_type.rs)) and **nothing draws differently for it**, because
+the original does not: the `Text` class's draw prints the whole string, `TELETYPE` only sets a flag bit nothing reads,
+and a live PPSSPP capture shows the prompts and plate titles complete from their first frame (confidence 85 static,
+70 live). Evidence, the flag table and the other titles:
+[text-display-type.md](../ghidra/functions/psp-pulse-usa/text-display-type.md). HD authors 105 and its `Text` class is
+unread; if a capture there shows a type-in, `display_type` is where it would start.
+
 ## Two faces, not one swapped for the other - measured 2026-09-21
 
 **The front end draws every label in one 22px face; the original draws each

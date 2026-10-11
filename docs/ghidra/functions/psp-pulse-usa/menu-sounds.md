@@ -101,13 +101,14 @@ not read: not checkable here. HD/Fury: checked, differs - its bank has `TextBox0
 `TELETYPE`, trigger unread (`ps3-hdfury-eu/menu-sounds.md`). Omega: checked, applies, not wired - HD's front end, no SFX
 path. Pure: `TELETYPE` is in the bank, its caller not read.
 
-**The other `TELETYPE` is a different widget.** `DisplayType="TELETYPE"` on a `<Text>` widget (`<a ... DisplayType=
-"TELETYPE">`, the attribute is tokenised to one letter in some `.cod` files, `o="TELETYPE"` in `01092`) is authored on
-button prompts (`FE_CONFIRM_BUTTON`, `FE_CONFIRM`, `FE_BACK`), screen titles (`PRO_STATS`, `FE_ONLINE`) and
-`BOOT_PRESS_ANY2`, in 13 of the `.cod` files. That type-in is the `Text` class's own and **no `Sound_*` call references
-the `TELETYPE` string except `Menu_PlayTeletypeTick`** (xrefs to `0x08a80100..0x08a8011c` are `FUN_088b528c`,
-`FUN_088b5a60`, `FUN_088b6514`, `FUN_088b49a4`, `FUN_088b4ae8` only), so the original types those in silently. The port
-does not read `DisplayType` at all, so they appear whole; the type-in rate is unmeasured and open.
+**The other `TELETYPE` is a different widget, and it does not type in.** `DisplayType="TELETYPE"` on a `<Text>` widget
+(`<a ... DisplayType="TELETYPE">`, the attribute is tokenised to one letter in some `.cod` files, `o="TELETYPE"` in
+`01092`) is authored on button prompts (`FE_CONFIRM_BUTTON`, `FE_CONFIRM`, `FE_BACK`), screen titles (`PRO_STATS`,
+`FE_ONLINE`) and `BOOT_PRESS_ANY2`, in 13 of the `.cod` files (58 widgets). Read 2026-10-11 (lane `pulse-typein`,
+[text-display-type.md](text-display-type.md)): the `Text` class keeps it as one flag bit that nothing acts on, its
+draw prints the whole string, and the one update path that reads the bit calls an empty function. The widget draws
+whole on its first frame, confirmed live on PPSSPP. The earlier wording here, that the original types these in
+silently, was an inference and is withdrawn.
 
 ## `PAUSE`
 

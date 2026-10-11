@@ -5,7 +5,8 @@
 //! `touch_slider_from_node` into. A move, not a behaviour change.
 
 use super::{
-    Bracket, Fill, Image, Menu, Node, Redirect, Screens, Slot, Text, argb_to_rgba, parse_argb,
+    Bracket, DisplayType, Fill, Image, Menu, Node, Redirect, Screens, Slot, Text, argb_to_rgba,
+    parse_argb,
 };
 use crate::frontend::Draw;
 use oag_core::buttons::button_from_name;
@@ -211,6 +212,10 @@ impl Screens {
                 .is_some_and(|v| v.eq_ignore_ascii_case("middle")),
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
             pulse: node.flag("pulse").unwrap_or(false),
+            display_type: node
+                .value("DisplayType")
+                .map(DisplayType::from_authored)
+                .unwrap_or_default(),
             delay: self.number(node.value("delay")).unwrap_or(0.0),
             wrap_width: node
                 .flag("widthlimited")
