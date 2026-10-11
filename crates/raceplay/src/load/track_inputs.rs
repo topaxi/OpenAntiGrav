@@ -80,7 +80,7 @@ pub(super) fn resolve(
 
     let spec = archives
         .locate(&track)
-        .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, &archives))?
+        .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, archives))?
         .to_string();
 
     let (ai, label) = track_render::load(&spec, &track)?;

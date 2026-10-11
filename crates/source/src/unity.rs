@@ -120,8 +120,15 @@ mod tests {
         assert_eq!(names(tracks_in(&bases)), ["a.wtrk", "b.WTRK"]);
         assert_eq!(names(ships_in(&bases)), ["s.csf"]);
         assert_eq!(resolve_in(&bases, "A").unwrap(), base.join("tracks/a.wtrk"));
-        assert_eq!(resolve_in(&bases, "b.w"), Some(base.join("tracks/b.WTRK")));
-        assert_eq!(resolve_in(&bases, "w"), None, "no exact stem, two partial");
+        assert_eq!(resolve_in(&bases, "b"), Some(base.join("tracks/b.WTRK")));
+        std::fs::write(base.join("tracks/lion one.wtrk"), b"x").unwrap();
+        std::fs::write(base.join("tracks/lion two.wtrk"), b"x").unwrap();
+        let bases = [base.clone()];
+        assert_eq!(resolve_in(&bases, "lion"), None, "two partial matches");
+        assert_eq!(
+            resolve_in(&bases, "one"),
+            Some(base.join("tracks/lion one.wtrk"))
+        );
         assert_eq!(resolve_in(&bases, "zzz"), None);
         std::fs::remove_dir_all(&base).unwrap();
     }
