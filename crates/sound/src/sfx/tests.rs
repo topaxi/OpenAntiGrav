@@ -143,7 +143,12 @@ fn every_cue_names_a_bank_and_a_string() {
         BankName::Ship.entry(hd, false)
     );
     // Pure spells them exactly as Pulse does: the finding, not the assumption.
-    assert_eq!(oag_pure::race::SOUND_BANKS, pulse);
+    // Bar the results bank, which is Pulse's alone (`FrontEndSounds::results`).
+    let mut pulse_without_results = *pulse;
+    if let Some(front) = pulse_without_results.frontend.as_mut() {
+        front.results = None;
+    }
+    assert_eq!(*oag_pure::race::SOUND_BANKS, pulse_without_results);
     // The cues this port holds a handle to, and only those: a held cue must not
     // also fire as a one-shot from the drain loop. The original keeps `~ENGINE`
     // at `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at `craft+0xcac`.
