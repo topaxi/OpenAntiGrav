@@ -16,7 +16,7 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | Key | Meaning |
 | --- | --- |
 | `track.format` | `"oag-track"`; anything else is refused. |
-| `track.version` | `"major.minor"`, now `1.0`. Unknown major: refused. Newer minor: read, unknown keys reported as unread. |
+| `track.version` | `"major.minor"`, now `1.1` (1.1 added the optional `_OAG_AI_BYTES` accessor; a `1.0` file is read with those bytes absent). Unknown major: refused. Newer minor: read, unknown keys reported as unread. |
 | `track.id`, `track.title` | Identifier (keys records and ghosts as `foreign:<id>`) and display title. |
 | `track.glb` | The glb's file name, relative to the manifest. |
 | `track.notes` | The producer's free text (what it chose, ignored, could not map). Printed in the loader report. |
