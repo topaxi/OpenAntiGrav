@@ -1,0 +1,27 @@
+[package]
+name = "oag-unity"
+description = "A generic Unity asset-bundle reader: UnityFS containers, SerializedFiles, typetrees and the built-in classes"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# One dependency, for the LZMA a track bundle is compressed with. LZ4 is
+# hand-written (`compress::lz4_block`). This crate knows no title, no game and
+# no other crate of this workspace: `scripts/check-dependency-rules.py` rule 4
+# holds it to an empty allowlist.
+[dependencies]
+lzma-rs-perf-exp.workspace = true
+
+# Ground-truth tests read real Unity content the player already has. Dev
+# dependencies are not walked by the boundary gate, and neither of these leaks
+# into the library: `oag-texture` supplies the PNG writer a test looks at, and
+# `oag-testdata` the skip-or-fail contract.
+[dev-dependencies]
+oag-testdata.workspace = true
+oag-texture.workspace = true
+
+[lints]
+workspace = true

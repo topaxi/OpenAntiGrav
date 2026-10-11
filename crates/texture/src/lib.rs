@@ -16,7 +16,7 @@
 //! The GE's block swizzle is `oag_formats::swizzle`: byte layout, which three
 //! crates undo.
 
-mod bcn;
+pub mod bcn;
 pub mod fnt;
 pub mod gnf;
 pub mod gtf;
