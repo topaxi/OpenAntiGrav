@@ -3608,6 +3608,134 @@ to ten ticks' worth.
   on the probe's invented circuit; a disc-backed plan is pinned only as
   verified-or-not (`speed_plan_ground_truth.rs`), not bit for bit.
 
+### Floors in the speed plan (2026-10-11)
+
+Opened on a maintainer report from play: *"in certain tracks it slows down a
+lot, making it super easy as a human player"*, on every title.
+
+**The measurement.** `crates/game/tests/ai_speed_plan_sweep.rs` runs every
+layout of a title (`OAG_SWEEP_TITLE`: Pulse, Pure, HD, 2048, Omega) at one
+level (`OAG_SWEEP_LEVEL`) as a lone opponent, a field of seven, and a field
+with slot 0 on the autopilot. It prints each craft's laps, wall contact and
+shield, and with `OAG_SWEEP_PROFILE` it prints where each lap spends its
+time by line-index bin. `campaign_reference_laps` prints the original's own
+reference: every campaign Speed Lap gold. That is a human target with pads,
+not the original's AI, and HD's are the `DATA02` grids, equal to the hard rung.
+
+**What it found.**
+
+- **Traffic is not where the time goes.** At VENOM the Elite field's median
+  flying lap is within 8 % of a lone Ace on every Pulse layout (8.4 % with a
+  player in the race), within 6.6 % on HD and 10.2 % on Pure; 2048's Ace field
+  is within 3.4 %. Most of Pulse's worst gap is the level itself: alone, an
+  Elite is 7.5 % slower than an Ace on `07_Track`.
+- **A lone Ace is far off gold on a handful of layouts, and close on the
+  rest.** Most rows are within 0-8 % of gold. The far rows are Pulse
+  `06_Track` (+43 % VENOM, +61 % RAPIER, both on the corner model), `07_Track`
+  (+19 % VENOM, +29 % PHANTOM), `23_Track` (+20 % FLASH) and `13_Track`
+  (+24 % RAPIER), and HD `04`, `06` and `07` (+17-51 %).
+- **On the plan-driven rows the crawl was the plan's own floor.** The plan
+  held single samples at exactly 16 u/s (`STALL_SPEED * 4`), and the craft
+  crawled through at 9-12 u/s for 1.2-1.8 s a lap: Pulse `07_Track` samples
+  2140-2147 and 2370, `23_Track` 1856 and 2080, HD `04_Track` PHANTOM 2307 and
+  `07_Track` PHANTOM 502. `plan_floor_report` lists them.
+
+**Why, measured with temporary instrumentation in `SpeedPlan::lower`.** Two
+search artefacts.
+
+1. **The failing tick seeded a ceiling.** Its forward speed is what the wall
+   left: sample 2140 read 0.0 straight after 136.
+2. **Failures on the way out of a slow corner kept lowering the corner.** At
+   low speed, 45 ticks reach back over few samples. A failure 40 samples on, at
+   150 u/s, lowered 2143-2147 again from the 16-36 u/s the craft was
+   accelerating through, until they sat at the floor.
+
+**The change** (`crates/ai/src/plan/lower.rs`, `SpeedPlan::build_within`).
+`Lowering::FromTrough` skips the failing tick. For its first three tries at a
+site, it lowers only from the lookback's slowest point on, when the craft was
+going 1.25x faster at the failure. The build runs the old whole-window search
+and, only when that verifies clean, this one. **The old plan is kept unless
+the trough plan also verifies clean and laps its verification 2 % faster**,
+so every other layout gets exactly the plan it had. All of it is **chosen,
+not measured**.
+
+**So the floors are gone only where the trough plan wins.** Plans in use that
+still hold a ceiling at or under 20 u/s (`plan_floor_report`, Pulse, HD and
+Pure, every class):
+
+- Pulse `07_Track` VENOM, samples 2141, 2144-2145 and 2375.
+- HD `04_Track` PHANTOM, 2307.
+- Pure Citta Nuova VENOM, 1493 (19.99 u/s).
+
+Pulse `06_Track` VENOM and RAPIER and HD `15_Track` PHANTOM have floors too,
+but they do not verify and drive the corner model. Pulse at VENOM forward is
+unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
+
+**What it bought**, lone Ace, Pulse, HD and Pure, every class, 240 rows,
+12,000 ticks:
+
+- 28 rows faster, none slower, 34.7 s summed.
+- Largest gains: Pulse `13_Track` RAPIER 33.56 to 30.87 s and PHANTOM 32.15
+  to 29.70 s; HD `02_Track` PHANTOM 28.60 to 26.07 s; HD `07_Track` PHANTOM
+  29.50 to 27.39 s; Pulse `07_Track` FLASH, RAPIER and PHANTOM 1.15-1.37 s;
+  `23_Track` FLASH 1.25 s.
+- Wall contact 2,156 to 2,178. The rise is mostly HD `14_Track` reversed
+  PHANTOM, 64 to 105.
+- Respawns 1 and 1.
+- A plan build costs a second search wherever the first verifies: median
+  steps on Pulse and HD at VENOM go from about 11,500 to 23,093 (maximum
+  70,390). A course whose old plan does not verify (2048 `sol` and its
+  routes) costs exactly what it did. 2048's and Omega's other layouts were not
+  timed.
+- Every AI ground truth passes with no bound or baseline moved, and
+  `race_ground_truth`'s twelve circuits stay clean.
+
+**Measured and not kept:**
+
+- **Taking the faster trough plan on any margin.** It gave 144 rows faster
+  and 6 slower, but it moved `21_Track` RAPIER (1.3 % faster) past an
+  `ai_dekonstruct_black_ground_truth` bound, and HD `05_Track` VENOM (0.6 %)
+  off its zero-contact lone row.
+- **Using the trough plan where only it verifies.** Pulse `06_Track` RAPIER
+  laps 38.61 to 29.16 s on it, against 24.0 gold, but the
+  `ai_clean_lap_gate` contact row goes 173 to 304. The plan's own driver laps
+  it clean. An Ace with commitment 0.938 takes it 3 % under the plan and
+  touches the walls at samples 750-850. Left on the corner model for the
+  maintainer's call.
+- **An Ace taking the plan whole, with no commitment margin.** Lone: 193
+  faster, 12 slower, contact 2,256 to 2,019, and 06 RAPIER clean. But three
+  `ai_dekonstruct_black_ground_truth` cells and `02_Track` PHANTOM's
+  zero-contact row went red, and it overturns "commitment stays the margin".
+
+**Still open, by how much a player sees it:**
+
+- **2048 `sol`.** Every opponent hits a `ResetZone` about 65 ticks from the
+  grid. It is put back at its last on-track sample at standstill and hits it
+  again about 68 ticks later, never completing a lap: 176 respawns in 12,000
+  ticks for each craft. The first exit is the driver's. The player's own
+  autopilot, which is the same driver, flies off the edge at about 20 s, where
+  the road bends left while the craft is in the air (no plan verifies there,
+  so it drives the corner model). The loop is the rescue placement: the same
+  family as the `29_Track` reversed loop above. A human is not measured.
+- **Pulse `06_Track` VENOM**, on the corner model, crawls at 15-33 u/s over
+  samples 1100-1200. Its gap at 1196 clears near 60 u/s; from 90 u/s the craft
+  lands drifting right into the wall at 1238, and too slow it stalls in the
+  gap. A landing-aim question.
+- **HD `06_Track`** is plan-driven and 19-47 % over gold, with long stretches
+  of genuinely low ceilings at samples 300, 700 and 1250-1450. Unexplained.
+- **2048 `bridge`** records no flying lap in 12,000 ticks. Unexplained until
+  its lap counting is checked; not called a slowdown.
+- **Pulse `07_Track` VENOM**'s hairpin exit has a pad that throws a craft from
+  40 to 90 u/s into the wall at 2185. Only the old floors clear it, so it keeps
+  the old plan.
+- **Elite is the default level**, and alone it costs 7.5 % of the Ace's lap on
+  `07_Track` and `23_Track` against 1-2 % elsewhere. That is the level's own
+  margin applied to the plan's lowest corners.
+- **Omega is not measured.** One lone slice did not load its layouts inside
+  500 s.
+- **Pure has no reference laps**: `campaign_reference_laps` finds no grid at
+  Pulse's grid entry names on its disc.
+
 ## Branch choice at a fork
 
 **Recovered 2026-10-05**, `Ai_ChooseBranch` (`0x08854920`), evidence on
