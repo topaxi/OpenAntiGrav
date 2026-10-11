@@ -14,7 +14,7 @@ second source; *chosen* = a decision, never a measurement.
 Tested on the Steam Workshop items (32 tracks, 47 ships, 13 legacy `.shp`).
 Census-level tests read all 32 tracks for structure only; anything that maps,
 renders or drives uses items tagged `Original` and not `Port/Remake` (27 of the
-32; 5 are `Port/Remake`, `Mega Mall` carries both tags and counts as a port).
+32; 5 are `Port/Remake`, item 2216743829 carries both tags and counts as a port).
 
 ## The `.wtrk` wrapper (measured, 32 of 32)
 
@@ -64,7 +64,7 @@ Classes are found by each `MonoBehaviour` type's script (`m_ClassName` of its
   on **31**; **Gehennom** (2864185130) has an 8-section lead-in into a cycle
   that does not include the start section (`LoopEnd::Rho`, `Chains::lap_loop`
   gives the cycle). 33 branch chains in all, **32 pit lanes** (`PitlaneEntance`)
-  and one alternate route (Stanza Inter section 13, a port). Branches may nest
+  and one alternate route (section 13 of Workshop item 2667677046, a port). Branches may nest
   (found by following every junction). **Staten Towers** (1782764483) has 92
   sections (488..579) that no `Next` or `Junction` reaches from the start; the
   chain ends joining the main loop at section 180. They are reported
@@ -122,9 +122,56 @@ tiles, start line at section 52, mid line 219); atlas and texture census.
 `tests/wtrk_synthetic.rs` runs in plain `just test`: the layout on built bytes,
 every truncation and bit flip a named refusal.
 
+## Mapping into this engine (chosen, not measured)
+
+`oag_raceplay::foreign` turns a read track into the plain data a race consumes;
+`oag_raceplay::load` has one early return for it (`load/track_inputs.rs`). A race
+on a foreign track runs on the host title's ship, physics and rules (Pulse in every
+measurement below). Every constant is in `foreign::choice`:
+
+| Choice | Value | Why |
+| --- | --- | --- |
+| World scale, after the track's own placement | x8.7 | Lion's Den's floor (4.6 wide) comes to Pulse's median 40. Laps come out longer (Lion's Den 6,297 units against Pulse's 4,176 to 5,093) |
+| Handedness | Z negated | One horizontal axis must flip; each triangle is re-wound to face as authored (all 1,376 floor and 1,300 wall triangles of Lion's Den needed it, which is the flip showing) |
+| AI corridor | 0.6 of the floor half-width | Pulse's `16_Track` carries 56 to 61 percent; the content authors none |
+| Pad volume reach | 2 below, 8 above | Pulse's `Pad_Bind` literals |
+| Start slot | 154 units behind the lap line | `Course::START_LINE_ADVANCE`, so the engine's own rule lands on the authored line (section 52 on Lion's Den); the 8 authored grid slots are not used, the engine lays its own grid |
+
+**Conventions measured on Pulse's `16_Track`**
+(`crates/game/tests/foreign_conventions_ground_truth.rs`): a spline point's `pos`
+is on the floor (a ray from 3 above along `down` meets it at 3.04), `lateral = tangent x up`
+(`cross(tangent, down) . lateral = -1.000`), floor triangle normals point up
+(+1.000), `half_width_left/right` are the floor either side (20.3 and 20.7 mean),
+and a closed ring may be two paths with two junctions. The mapped output holds
+the same on all 27 `Original` tracks (`crates/raceplay/tests/foreign_ground_truth.rs`):
+floor under the line on at least 88 percent of the ring (the rest are the authored
+jumps and unspanned sections), normals up, racing line inside the corridor, the
+ring closes as a `Course`, floor under the start slot, every pad contains its own centre.
+
+Mapped: the lap loop (`Chains::lap_loop`) as one ring path, floor and wall as collision
+nodes (a `Wall` and a `Floor`), speed and weapon tiles as pad volumes (one per section
+the tiles cover: 48 and 10 on Lion's Den, box from the tiles' own vertices), the AI line
+as `racing_line`, the floor half-widths from the floor tiles' own vertices.
+
+**Named in the loader report, not drawn or borrowed:** sky, fog, lights, scenery meshes
+and the track atlas; scenery colliders (2 of kind scenery on Lion's Den; kind 3 elsewhere);
+recharge strips and pit lanes; sections no link reaches; section flags read but not acted
+on; the lap loop's jumps (Lion's Den: 111 units after section 79, 141 after section 304).
+No sky, fog, cloud, light rig, PVS, intro camera or track emitter of the host is borrowed.
+The floor and wall are drawn flat-shaded from their collision triangles.
+
+**Raced** (`crates/game/tests/foreign_race_ground_truth.rs`, Pulse VENOM, an AI craft
+alone for 18,000 ticks, Ace; a scratch sweep behind `OAG_SWEEP=1`): all 27 `Original`
+tracks load; 26 get round (lap counter at 3 or 4), 14 with a clean lap (13 of them with no
+respawn at all: Rheinland 46.1 s, Shiva's Dance 45.9 s, The Tir 53.0 s ... Desolata 122.9 s),
+12 only with respawns (Lion's Den 6, Cerridan VI 8, Nakbe 18, Gehennom 21), and Valkyrie's
+Flight stalls at lap 1 with 66 respawns. The craft crosses Lion's Den's two jumps only by being
+rescued: nothing here models the original's jump pads. **Nothing was tuned to make any
+of them lap.**
+
 ## Not covered
 
 Ship classes (`CustomShipStorage` and friends), `TrackPad` and the `Mod*Zone`
 components, `LuaContainer` scripts, the 109 legacy-pack tracks, the legacy `.shp`
 format, audio. Collider kind 3 and the meaning of `Section.Type` 2/3 outside
-Lion's Den and Stanza are open.
+Lion's Den and item 2667677046 are open.

@@ -88,7 +88,7 @@ pub struct Section {
     /// `Section.Index`; equal to its position in [`Track::sections`].
     pub index: usize,
     /// `Section.Type`: 0 plain, 2 and 3 mark a branch's first and last section
-    /// (measured on Lion's Den and Stanza Inter, inferred in general).
+    /// (measured on Lion's Den and on Workshop item 2667677046, inferred in general).
     pub kind: i64,
     /// Position in the scaled space (the 1.15 of `[ Track Configuration ]` is in).
     pub position: [f32; 3],

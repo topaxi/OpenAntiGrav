@@ -62,6 +62,7 @@ oag-2048 = { path = "crates/2048" }
 oag-ai = { path = "crates/ai" }
 oag-assets = { path = "crates/assets" }
 oag-audio = { path = "crates/audio" }
+oag-ballisticng = { path = "crates/ballisticng" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }

@@ -34,6 +34,24 @@ use crate::{Context, Driver, Line, Tuning};
 
 mod brake;
 mod clearance;
+mod lower;
+
+use lower::Lowering;
+
+/// How much faster, as a ratio `(numerator, denominator)` of verification-lap
+/// ticks, the trough plan must be to replace the whole-window one: 49/50, a 2 %
+/// win. Below it the measured gains were hair-thin and moved two ground truths
+/// (`21_Track` RAPIER 1.3 %, HD `05_Track` VENOM 0.6 %). **Chosen, not
+/// measured.**
+const TROUGH_WIN: (u64, u64) = (49, 50);
+
+/// What one learning pass may spend, and how it lowers.
+#[derive(Debug, Clone, Copy)]
+struct Pass {
+    /// The build's step budget.
+    budget: u64,
+    lowering: Lowering,
+}
 pub mod probe;
 #[cfg(test)]
 mod tests;
@@ -137,11 +155,6 @@ pub struct Report {
     /// without being put back.
     pub verify_lap_ticks: Option<u32>,
 }
-
-/// How much a failure lowers the ceilings behind it, as a fraction of the speed
-/// there. **Chosen, not measured**: small enough to stay near the limit, large
-/// enough that a corner settles in a handful of tries.
-const LOWER: f32 = 0.96;
 
 /// Seconds in the air past which a wall contact is a fall, not a hop.
 /// **Chosen, not measured**: `06_Track`'s gap at samples 1196-1200 falls over a
@@ -554,12 +567,59 @@ impl SpeedPlan {
 
     /// [`Self::build`] with its own step budget, for a caller that would
     /// rather give up early - a fork's route that cannot be lapped.
+    ///
+    /// **Two searches** ([`Lowering`]): the whole-window search as it always
+    /// was, and the trough search, which clears the floors the first leaves in
+    /// hairpins. The trough plan is kept only where both verify clean and it
+    /// laps its verification [`TROUGH_WIN`] faster; anywhere else the race
+    /// gets exactly the plan it got before. The whole-window search alone
+    /// verifies `07_Track` VENOM and HD `04_Track` PHANTOM; the trough search
+    /// alone verifies `06_Track` RAPIER, which is left on the corner model on
+    /// purpose (see `docs/gameplay/ai.md`, "Floors in the speed plan"). The
+    /// trough search runs only after a clean whole-window one, and the report
+    /// counts both searches' steps. Chosen, not measured off the original.
     #[must_use]
     pub fn build_within<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
         craft: &Craft,
         tuning: &Tuning,
         budget: u64,
+    ) -> (Self, Report) {
+        let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
+        let (window, window_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
+        // The trough plan only ever replaces a clean whole-window one, so a
+        // course that one does not verify on (2048 `sol` and its routes, 30,000
+        // to 330,000 steps each) is not searched twice.
+        if !clean(&window_report) {
+            return (window, window_report);
+        }
+        let (trough, trough_report) =
+            Self::search(course, craft, tuning, budget, Lowering::FromTrough);
+        let steps = window_report.steps + trough_report.steps;
+        let lap = |r: &Report| u64::from(r.verify_lap_ticks.unwrap_or(u32::MAX));
+        // A clear win only: the trough plan's verification lap at least
+        // [`TROUGH_WIN`] faster, so a layout within a hair of the old plan keeps
+        // it bit for bit.
+        let wins = clean(&window_report)
+            && clean(&trough_report)
+            && lap(&trough_report) * TROUGH_WIN.1 < lap(&window_report) * TROUGH_WIN.0;
+        let (plan, mut report) = if wins {
+            (trough, trough_report)
+        } else {
+            (window, window_report)
+        };
+        report.steps = steps;
+        (plan, report)
+    }
+
+    /// One search with one way of lowering: calibration, learning passes and
+    /// their verification.
+    fn search<R: Raycaster + ?Sized>(
+        course: &Course<'_, R>,
+        craft: &Craft,
+        tuning: &Tuning,
+        budget: u64,
+        lowering: Lowering,
     ) -> (Self, Report) {
         let mut plan = Self::unlimited(course.line);
         let mut report = Report::default();
@@ -574,7 +634,14 @@ impl SpeedPlan {
 
         for _ in 0..MAX_PASSES {
             report.passes += 1;
-            plan.learn(course, craft, tuning, yaw, &mut report, budget);
+            plan.learn(
+                course,
+                craft,
+                tuning,
+                yaw,
+                &mut report,
+                Pass { budget, lowering },
+            );
             let verify = plan.verify(course, craft, tuning, yaw, &mut report);
             if verify == 0 || report.steps >= budget {
                 break;
@@ -708,8 +775,9 @@ impl SpeedPlan {
         tuning: &Tuning,
         yaw: f32,
         report: &mut Report,
-        budget: u64,
+        pass: Pass,
     ) {
+        let Pass { budget, lowering } = pass;
         let n = self.len();
         let goal = 2 * n as i64;
         let mut run = Self::start_run(craft);
@@ -786,7 +854,7 @@ impl SpeedPlan {
             let old = self.target.clone();
             report.lowerings += match cause {
                 Cause::ShortOfTheLip(takeoff) => self.hold_run_up(&recent[..takeoff]),
-                _ => self.lower(&recent, tries.get(&site).copied().unwrap_or(1)),
+                _ => self.lower(&recent, tries.get(&site).copied().unwrap_or(1), lowering),
             };
             self.derive_targets();
 
@@ -805,42 +873,6 @@ impl SpeedPlan {
             // the checkpoint.
             recent.retain(|trace| trace.tick <= run.tick);
         }
-    }
-
-    /// Lowers the ceilings over the stretch `recent` covers, to [`LOWER`] of the
-    /// speed the craft actually did there. Returns how many moved.
-    fn lower(&mut self, recent: &[Trace], tries: u32) -> u32 {
-        // Harder the more often this spot has failed: one [`LOWER`] for the
-        // first three tries, two for the next three, and so on, so a corner
-        // needing half the top speed fits inside [`MAX_TRIES`]. A loop of
-        // multiplies, not `powi`: an intrinsic with no portability promise.
-        let mut factor = LOWER;
-        for _ in 0..tries / 3 {
-            factor *= LOWER;
-        }
-        let mut moved = 0;
-        // The last [`LOOKBACK_TICKS`] ticks **on the ground**: a craft that
-        // left the road over a crest and hit a wall spent its recent past in the
-        // air, where a ceiling means nothing; the takeoff speed has to come down.
-        for trace in recent
-            .iter()
-            .rev()
-            .filter(|trace| !trace.airborne)
-            .take(LOOKBACK_TICKS)
-        {
-            let i = trace.index as usize;
-            if self.hold[i] {
-                continue;
-            }
-            // Of the lower of what it did and what it was allowed, so a retry
-            // always moves.
-            let lowered = (trace.speed.min(self.ceiling[i]) * factor).max(STALL_SPEED * 4.0);
-            if lowered < self.ceiling[i] {
-                self.ceiling[i] = lowered;
-                moved += 1;
-            }
-        }
-        moved
     }
 
     /// Marks the run-up to a takeoff as a stretch nothing brakes through, and

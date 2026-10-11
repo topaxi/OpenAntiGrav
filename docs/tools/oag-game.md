@@ -131,6 +131,7 @@ ticks, and the ship is correspondingly slower than under `--hold cross`.
 | `--screen <name>` | With `--screenshot`, draw one named screen straight out of the front-end XML and stop, instead of running the sequence. A debugging view of the screens the boot order does not reach. Names are the XML's own; a `Parent->Child` path works too. `Show Logo` is no longer one of them - the boot order enters it now, so `--until "Show Logo"` reaches the same drawing through the sequence. |
 | `--race` | Go straight to the race. Checked before the front end loads anything, so it never parses the menus or transcodes the intro. |
 | `--track <name>` | The track's `.vex` entry in `Data.wad`. |
+| `--unity-track <name or path>` | Race a Unity (BallisticNG Workshop) track instead: a `.wtrk` path, or a name matched against `tracks/*.wtrk` under `$OAG_UNITY`, `data/unity`, beside the program and `<data dir>/oag/unity`. The source still supplies the ship, rules and physics (Pulse is the host in every measurement). The load report names everything not mapped. See [ballisticng-tracks.md](../formats/ballisticng-tracks.md). |
 | `--team <name>` | Which team's `handlingstats.xml` and model to fly. |
 | `--class <name>` | `venom`, `flash`, `rapier` or `phantom`. |
 | `--art` | Draw the track's art meshes instead of its driveable ribbon. |
