@@ -12,20 +12,22 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    press and silence before the first; a PPSSPP audio dump of the same walk was not made. `ACCEPT` and `DECLINE`
    saturate the 16-bit output on Pulse at the default level (the bank is authored hot and the mixer clamps as the
    hardware does).
-2. **The session's play path has no test of its own.** `Session::play_navs` lives in the binary; the ground truth
-   drives the same `Menu`, `take_nav`, `menu_cue` and `MenuSfx::play`. It was run once for real: a windowed
-   `oag-game --no-audio` in a private Xvfb, keys injected with `xdotool`, the log showing the four `sfx:` load lines at
-   boot and `menu sound: UPDOWN/ACCEPT/DECLINE/LEFTRIGHT (started: true)` for Down, Return on a submenu, BackSpace
-   and Right on a choice. Dropping the call in `frame.rs` or the load in `prepare.rs` would only show there.
+2. **The menu navigation sounds' session path has no test of its own** (`Session::play_navs`): the ground truth drives
+   the same `Menu`, `take_nav`, `menu_cue` and `MenuSfx::play`, and a windowed `oag-game --no-audio` run showed the
+   `menu sound:` lines for Down, Return, BackSpace and Right. Dropping the call in `frame.rs` or the load in `prepare.rs`
+   would only show there. The voices below have a seam now; `play_navs` does not. (The 2026-10-11 walk also logged
+   `MenuUp/Down/StepLeft/StepRight/Accept/Decline` through the whole front end, now into a WAV.)
 3. ~~`TELETYPE`~~ **Closed 2026-10-11 (negative):** it is a per-menu-row cue off the `Menu` class, and 0 hits on PPSSPP across boot, main menu, single player and racebox; no authored `MenuDisplayType` is `TELETYPE` or `SCROLLING` (evidence in menu-sounds.md). Open only: a Menu with no authored type on an unwalked page, and the silent `<Text DisplayType="TELETYPE">` type-in the port draws whole (rate unmeasured).
    The place and medal lines landed 2026-10-11 (lane `pulse-endrace-voice`, [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-end-of-race-voices)):
    Single Race and Eliminator on `Results` entry, Tournament at the first page flip off the standings rank,
-   the medal on `Rewards` entry in a campaign cell. Open on them: not heard by a human; on the speech bus (chosen); whether
+   the medal on `Rewards` entry in a campaign cell. **Walked for real 2026-10-11** (lane `voices-ingame`: `ResultsThird` on
+   Single Race and a campaign cell, `MedalBronze` on `Rewards`, in a WAV of the session's own mix, [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#played-in-a-real-walk-2026-10-11-lane-voices-ingame)); the session wiring is
+   guarded by `-D warnings` dead-code lints rather than a test, see that page. Open on them: Eliminator, Tournament and the gold/silver medals were not walked; not heard by a human; on the speech bus (chosen); whether
    `VIEW RESULTS AGAIN` speaking the place again (chosen, not measured); HD ships the same bank and names, its call sites unread.
 4. ~~**Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME`~~ **Landed 2026-10-11 (lane `pulse-name-voices`,
    [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-name-voices)):** the guard reads the table
    `Sound_PlayNamedInSlot` writes, the value is the `soundregister` each `PI_Team`/`PI_Track` authors, and the voice
-   sounds on Confirm of Team Selection and Track Select, pad and pointer. Open on it: not heard by a human; on the
+   sounds on Confirm of Team Selection and Track Select, pad and pointer. **Walked for real 2026-10-11** (Track 16_Track register 1, Ship Assegai register 4, same frame as the `ACCEPT`; a campaign cell speaks the team only). Open on it: not heard by a human; on the
    speech bus and dry (chosen, not measured); the four DLC teams' registers are inferred (2, 6, 11, 12), no pack was
    mounted on the capture; the PS2 trigger was not observed; HD's voice bank (plays on a team *change*, in a bank this
    disc's `frontend.bnk`/`speech.bnk` do not carry) is not located.
