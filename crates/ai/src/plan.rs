@@ -38,6 +38,13 @@ mod lower;
 
 use lower::Lowering;
 
+/// How much faster, as a ratio `(numerator, denominator)` of verification-lap
+/// ticks, the trough plan must be to replace the whole-window one: 49/50, a 2 %
+/// win. Below it the measured gains were hair-thin and moved two ground truths
+/// (`21_Track` RAPIER 1.3 %, HD `05_Track` VENOM 0.6 %). **Chosen, not
+/// measured.**
+const TROUGH_WIN: (u64, u64) = (49, 50);
+
 /// What one learning pass may spend, and how it lowers.
 #[derive(Debug, Clone, Copy)]
 struct Pass {
@@ -561,14 +568,16 @@ impl SpeedPlan {
     /// [`Self::build`] with its own step budget, for a caller that would
     /// rather give up early - a fork's route that cannot be lapped.
     ///
-    /// **Two searches, and the faster of those that verify clean is kept**
-    /// ([`Lowering`]): the trough rule clears the floors the whole-window
-    /// search leaves in hairpins, and the whole-window search still verifies
-    /// two layouts the trough rule does not (`07_Track` VENOM, HD `04_Track`
-    /// PHANTOM). Measured over 240 lone-Ace rows (Pulse, HD, Pure, every class):
-    /// 144 laps faster, 6 slower by 0.05-0.65 s, 74 s summed, at twice the
-    /// steps (median 11,549 to 23,093 on Pulse and HD at VENOM). The report
-    /// counts both searches' steps. Chosen, not measured off the original.
+    /// **Two searches** ([`Lowering`]): the whole-window search as it always
+    /// was, and the trough search, which clears the floors the first leaves in
+    /// hairpins. The trough plan is kept only where both verify clean and it
+    /// laps its verification [`TROUGH_WIN`] faster; anywhere else the race
+    /// gets exactly the plan it got before. The whole-window search alone
+    /// verifies `07_Track` VENOM and HD `04_Track` PHANTOM; the trough search
+    /// alone verifies `06_Track` RAPIER, which is left on the corner model on
+    /// purpose (see `docs/gameplay/ai.md`, "Floors in the speed plan"). The
+    /// report counts both searches' steps. Chosen, not measured off the
+    /// original.
     #[must_use]
     pub fn build_within<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
@@ -576,17 +585,23 @@ impl SpeedPlan {
         tuning: &Tuning,
         budget: u64,
     ) -> (Self, Report) {
-        let (plan, report) = Self::search(course, craft, tuning, budget, Lowering::FromTrough);
-        let (second, second_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
-        let steps = report.steps + second_report.steps;
+        let (window, window_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
+        let (trough, trough_report) =
+            Self::search(course, craft, tuning, budget, Lowering::FromTrough);
+        let steps = window_report.steps + trough_report.steps;
         let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
-        let lap = |r: &Report| r.verify_lap_ticks.unwrap_or(u32::MAX);
-        let (plan, mut report) =
-            if clean(&second_report) && (!clean(&report) || lap(&second_report) < lap(&report)) {
-                (second, second_report)
-            } else {
-                (plan, report)
-            };
+        let lap = |r: &Report| u64::from(r.verify_lap_ticks.unwrap_or(u32::MAX));
+        // A clear win only: the trough plan's verification lap at least
+        // [`TROUGH_WIN`] faster, so a layout within a hair of the old plan keeps
+        // it bit for bit.
+        let wins = clean(&window_report)
+            && clean(&trough_report)
+            && lap(&trough_report) * TROUGH_WIN.1 < lap(&window_report) * TROUGH_WIN.0;
+        let (plan, mut report) = if wins {
+            (trough, trough_report)
+        } else {
+            (window, window_report)
+        };
         report.steps = steps;
         (plan, report)
     }
