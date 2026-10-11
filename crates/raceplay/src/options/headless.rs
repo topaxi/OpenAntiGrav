@@ -31,6 +31,7 @@ impl Setup {
             junctions: Vec::new(),
         };
         Self {
+            foreign: None,
             mode,
             eliminator_kill_target: None,
             laps_override: None,

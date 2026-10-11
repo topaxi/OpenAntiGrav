@@ -14,7 +14,7 @@ second source; *chosen* = a decision, never a measurement.
 Tested on the Steam Workshop items (32 tracks, 47 ships, 13 legacy `.shp`).
 Census-level tests read all 32 tracks for structure only; anything that maps,
 renders or drives uses items tagged `Original` and not `Port/Remake` (27 of the
-32; 5 are `Port/Remake`, `Mega Mall` carries both tags and counts as a port).
+32; 5 are `Port/Remake`, item 2216743829 carries both tags and counts as a port).
 
 ## The `.wtrk` wrapper (measured, 32 of 32)
 
@@ -64,7 +64,7 @@ Classes are found by each `MonoBehaviour` type's script (`m_ClassName` of its
   on **31**; **Gehennom** (2864185130) has an 8-section lead-in into a cycle
   that does not include the start section (`LoopEnd::Rho`, `Chains::lap_loop`
   gives the cycle). 33 branch chains in all, **32 pit lanes** (`PitlaneEntance`)
-  and one alternate route (Stanza Inter section 13, a port). Branches may nest
+  and one alternate route (section 13 of Workshop item 2667677046, a port). Branches may nest
   (found by following every junction). **Staten Towers** (1782764483) has 92
   sections (488..579) that no `Next` or `Junction` reaches from the start; the
   chain ends joining the main loop at section 180. They are reported
@@ -174,4 +174,4 @@ of them lap.**
 Ship classes (`CustomShipStorage` and friends), `TrackPad` and the `Mod*Zone`
 components, `LuaContainer` scripts, the 109 legacy-pack tracks, the legacy `.shp`
 format, audio. Collider kind 3 and the meaning of `Section.Type` 2/3 outside
-Lion's Den and Stanza are open.
+Lion's Den and item 2667677046 are open.

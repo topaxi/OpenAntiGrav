@@ -724,6 +724,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
+            foreign: track.strip_prefix("foreign:").map(str::to_string),
             ai,
             spline,
             course,

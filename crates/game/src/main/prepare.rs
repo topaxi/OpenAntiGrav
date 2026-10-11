@@ -35,6 +35,8 @@ use crate::session::Shell;
 /// once, the launcher's once per pick - and a player who backs out of a boot
 /// and picks a different image would read it again.
 pub(crate) struct Pending {
+    /// `--unity-track` resolved to a catalogue entry, or `None` when not given.
+    pub(crate) foreign_entry: Option<oag_raceplay::catalogue::Track>,
     pub(crate) cli: Cli,
     pub(crate) settings: settings::Settings,
     /// Our own menu tree, parsed in `main` so that a broken `--menu` file is a
@@ -114,13 +116,10 @@ impl Pending {
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
             track: self.cli.track.clone(),
-            foreign_track: self.cli.unity_track.as_deref().and_then(|name| {
-                let found = oag_source::unity::resolve_in(&oag_source::unity::search_path(), name);
-                if found.is_none() {
-                    log::error!("--unity-track {name}: no such .wtrk, and no unique name match");
-                }
-                found
-            }),
+            foreign_track: self
+                .foreign_entry
+                .as_ref()
+                .and_then(|entry| entry.foreign.clone()),
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See

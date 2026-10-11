@@ -118,9 +118,29 @@ fn lions_den_maps_as_the_probe_read_it() {
     for l in &t.report {
         println!("{l}");
     }
+    // The engine's own start-line rule (the slot advanced 154 units along its
+    // straight tangent, projected onto the ring) against the authored line,
+    // section 52: lap section 52 is the 53rd control point (the lap loop starts
+    // at section 0 and runs 0..=305, 343).
+    let course = oag_race::Course::from_track(&t.ai, Some(Vec3::from_array(t.start.position)))
+        .expect("closes");
+    let line = Vec3::from_array(t.ai.paths[0].points[52].pos);
+    let missed = course
+        .position(course.start_index())
+        .unwrap()
+        .distance(line);
+    println!("start line misses the authored section 52 by {missed:.1} units");
+    assert!(
+        missed < MISSED_MAX,
+        "start line {missed} units from section 52"
+    );
     assert_eq!(t.ai.paths.len(), 1);
     assert_eq!(t.ai.paths[0].points.len(), 307);
     assert_eq!(t.speedup_pads.len(), 48);
     assert!(!t.weapon_pads.is_empty());
     assert!(t.report.iter().any(|l| l.contains("jump(s)")));
 }
+
+/// Measured on Lion's Den: where the engine's start line lands against the
+/// authored one: 5.0 units, one resampled step (control points are 20 apart).
+const MISSED_MAX: f32 = 10.0;

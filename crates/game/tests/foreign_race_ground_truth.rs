@@ -51,6 +51,11 @@ fn lions_den_loads_and_the_report_names_what_it_did_not_map() {
     }
     assert!(loaded.sky_model.is_none() && loaded.fog_volumes.is_empty());
     assert_eq!(loaded.setup.speedup_pads.len(), 48);
+    assert_eq!(
+        loaded.setup.foreign.as_deref(),
+        Some("1392209921"),
+        "records key"
+    );
     assert!(loaded.setup.course.is_some(), "the ring closes: laps count");
     // Nothing of a disc circuit is borrowed for it.
     assert!(

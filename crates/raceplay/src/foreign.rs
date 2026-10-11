@@ -63,3 +63,27 @@ pub fn read(path: &Path) -> anyhow::Result<ForeignTrack> {
         .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     map::map(&wtrk, &track)
 }
+
+/// The catalogue entry for the foreign track at `path`: a synthetic
+/// [`catalogue::Track`](crate::catalogue::Track) carrying the file as data, so
+/// nothing downstream branches on a title or a name to tell it from a disc
+/// circuit. Its `id` is `foreign:` and the Workshop id, which is also what
+/// keys its records and ghosts.
+///
+/// # Errors
+///
+/// A file the `.wtrk` wrapper refuses.
+pub fn entry(path: &Path) -> anyhow::Result<crate::catalogue::Track> {
+    let file = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let wtrk = oag_ballisticng::wtrk::Wtrk::parse(&file)
+        .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+    Ok(crate::catalogue::Track {
+        id: format!("foreign:{}", wtrk.workshop_id),
+        location: path.display().to_string(),
+        reversed: false,
+        available_in_zone: false,
+        unlock_grid: None,
+        sound_register: None,
+        foreign: Some(path.to_path_buf()),
+    })
+}

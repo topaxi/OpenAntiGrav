@@ -153,6 +153,7 @@ fn setup(handling: Handling) -> Setup {
     // build its own `None` rather than assume this one is it.
     let course = Course::from_track(&ai, None);
     Setup {
+        foreign: None,
         airbrake_graphics: oag_gameplay::AirbrakeGraphics {
             amount: 0.4363323,
             up_speed: 30.0,

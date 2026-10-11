@@ -396,6 +396,8 @@ pub struct Setup {
     pub ai: AiTrack,
     /// The spline resampled for locating a ship, and for placing it.
     pub spline: Spline,
+    /// The Workshop id of a foreign track, which keys its records and ghosts.
+    pub foreign: Option<String>,
     /// Zone mode's speed law and recharge, when the source carries them.
     pub zone: Option<oag_tables::handling::Zone>,
     /// The same graph walked into a closed ring, for lap counting.
