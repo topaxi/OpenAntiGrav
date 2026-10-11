@@ -17,8 +17,9 @@ use oag_assets::layers::{Kind, Layer};
 use oag_hud::assist::AssistReadout;
 use oag_ui::frontend::Draw;
 
-const IMAGES: [(&str, &oag_title::Title); 3] = [
+const IMAGES: [(&str, &oag_title::Title); 4] = [
     ("pulse-psp-eu.chd", oag_pulse::TITLE),
+    ("pulse-ps2-eu.chd", oag_pulse::TITLE),
     ("pulse-psp-usa.chd", oag_pulse::TITLE),
     ("pure-psp-eu.chd", oag_pure::TITLE),
 ];
@@ -207,14 +208,32 @@ fn pulse_and_pure_draw_the_indicator_from_the_fallback() {
             report.contains("AssistIndicator.pix"),
             "{name}: and the art it drew"
         );
+
+        // Zone, where the assist never acts, shows no "assist on" plate.
+        let zone = oag_raceplay::load(&oag_raceplay::Options {
+            source: image.display().to_string(),
+            track: (!track.is_empty()).then(|| track.to_string()),
+            mode: oag_race::Mode::Zone,
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("a Zone race loads");
+        assert_eq!(
+            sprites_of(&zone, &indicator_on()),
+            sprites_of(&zone, &off),
+            "{name}: Zone draws no indicator"
+        );
     }
 }
 
 /// With the fallback absent (no layer mounted), the layout a race reads is the
-/// disc's own: the splice finds nothing and changes nothing.
+/// disc's own: the splice finds nothing and changes nothing. Mounted, it adds the
+/// six widgets, every one inside the source's own grid (which checks the PS2's
+/// scaling from the PSP's 480x272), and Zone gets none.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn with_no_fallback_the_layout_is_the_discs_own() {
+    use oag_race::Mode;
     for (name, title) in IMAGES {
         let Some(image) = oag_testdata::image(name) else {
             continue;
@@ -223,15 +242,46 @@ fn with_no_fallback_the_layout_is_the_discs_own() {
         let composed = oag_hud::compose(title.hud.arcade, |p| archives.read_name(p).ok()).unwrap();
         let before = composed.layout.clone();
         let space = oag_display::space::Space::of(archives.layout.platform);
-        let after =
-            oag_raceplay::splice_assist_indicator(&mut archives, title, composed.layout, space);
+        let after = oag_raceplay::splice_assist_indicator(
+            &mut archives,
+            title,
+            composed.layout,
+            space,
+            Mode::SingleRace,
+        );
         assert_eq!(before, after, "{name}");
         assert!(archives.take_layer_report().is_empty(), "{name}");
 
-        // And with it mounted, the same call adds exactly the four sprites.
         let mut mounted = open(&image, title).with_fallback(oag_source::layers::fallback_layer());
-        let again =
-            oag_raceplay::splice_assist_indicator(&mut mounted, title, before.clone(), space);
+        let again = oag_raceplay::splice_assist_indicator(
+            &mut mounted,
+            title,
+            before.clone(),
+            space,
+            Mode::SingleRace,
+        );
         assert_eq!(again.sprites.len(), before.sprites.len() + 6, "{name}");
+        for sprite in &again.sprites[before.sprites.len()..] {
+            let [x, y, w, h] = sprite.rect;
+            assert!(
+                x >= 0.0 && y >= 0.0 && x + w <= space.size.0 && y + h <= space.size.1,
+                "{name}: {} at {:?} is off a {:?} grid",
+                sprite.name,
+                sprite.rect,
+                space.size
+            );
+        }
+
+        let zone = oag_raceplay::splice_assist_indicator(
+            &mut mounted,
+            title,
+            before.clone(),
+            space,
+            Mode::Zone,
+        );
+        assert_eq!(
+            zone, before,
+            "{name}: Zone, where the assist never acts, draws no indicator"
+        );
     }
 }

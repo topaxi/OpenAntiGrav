@@ -13,6 +13,7 @@ oag-tables.workspace = true
 oag-disc.workspace = true
 oag-formats.workspace = true
 oag-title.workspace = true
+log.workspace = true
 thiserror.workspace = true
 
 [lints]

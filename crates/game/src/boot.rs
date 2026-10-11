@@ -657,6 +657,7 @@ pub fn load_shell(
         &mut report,
     );
     steps.lap("sprites");
+    report.extend(archives.take_layer_report());
     // Which step the boot opens on, from this title's own chain. `--reel`
     // replaces the boot step rather than preceding it, and is refused by name on
     // a title with no evidenced reel state rather than pointed at another

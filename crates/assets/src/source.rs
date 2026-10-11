@@ -626,6 +626,9 @@ impl Archives {
             layer: layer.label().to_string(),
         };
         if !self.layer_hits.contains(&hit) {
+            // Logged where it happens as well as reported at the end of a load, so a
+            // consumer that keeps no report (the sound host, a preview) still says it.
+            log::info!("{}", hit.describe());
             self.layer_hits.push(hit);
         }
         Ok(blob)

@@ -34,13 +34,19 @@ parent directories outright. Every file under the title's directory is an entry,
 named by its relative path: `overrides/wipeout-pulse/Data/XML/Arcade_HUD.xml`
 replaces the disc's `Data\XML\Arcade_HUD.xml`. Loose files only, no whole-archive
 mounting. Empty by default; user content, never committed; every entry it answers
-is reported as replacing the disc's own.
+is reported as answered by the override, searched ahead of the disc.
 
 **A mod that changes a table changes the simulation.** A replay carries the
 initial state hash and one every interval ([ADR-0055](adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)), so a replay recorded
 without the mod and played with it reports a desync instead of diverging; a ghost
 is poses and is drawn regardless. The header does not yet say that mods were
 active - open.
+
+Proved through the shipped chain on 2026-10-11, with this project's own art and no disc
+content: a copy of `AssistIndicator.pix` with the main icon made a solid square, placed at
+`$tmp/wipeout-pulse/Data/HUD/Textures/AssistIndicator.pix`, then `OAG_OVERRIDES=$tmp oag-game
+pulse-psp-eu.chd --race --pilot-assist extreme ...`: the log said `Data\HUD\Textures\AssistIndicator.pix
+answered by the player's override`, and the screenshot drew the square where the ring was.
 
 ## The fallback
 
@@ -105,7 +111,7 @@ own layouts do not embed them: `Data\XML\HUD_assist_indicator.xml`, HD's name fo
 `oag_raceplay::splice_assist_indicator` composes that fragment through the archives
 and appends its sprites to the race's HUD layout, scaling from the PSP's 480x272 to the
 source's grid (the PS2's 640x448). A layout that already carries the widgets is left
-alone. On Pulse and Pure nothing holds the name but the fallback; on HD `fragment` is
+alone, and **Zone gets none**: the assist is gated off there and HD's own Zone layout authors none of the six widgets (0 of 6), so a plate saying "assist on" would be false. On Pulse and Pure nothing holds the name but the fallback; on HD `fragment` is
 `None` and the disc's layouts embed the widgets themselves, which the ordering test
 exercises. The show and blink rules are HD's, unchanged
 ([`oag_hud::assist`](../../crates/hud/src/assist.rs)); `RuntimeHud` is untouched, so no

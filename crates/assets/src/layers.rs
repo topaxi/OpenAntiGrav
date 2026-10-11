@@ -180,7 +180,7 @@ impl Hit {
     pub fn describe(&self) -> String {
         match self.kind {
             Kind::Override => format!(
-                "{} answered by the player's override ({}), replacing the disc's own",
+                "{} answered by the player's override ({}), searched ahead of the disc's own entries",
                 self.name, self.layer
             ),
             Kind::Fallback => format!(

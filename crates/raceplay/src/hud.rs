@@ -110,7 +110,7 @@ pub(super) fn load_hud(
     };
 
     let space = oag_display::space::Space::of(archives.layout.platform);
-    let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space));
+    let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
     let sheet = load_atlases(archives, title, layout.as_ref(), entry, report);
 
@@ -224,17 +224,25 @@ pub(super) fn load_hud(
 /// The fragment's grid is the PSP's; on another source's grid it is scaled
 /// ([`oag_hud::assist::splice`]).
 ///
-/// A layout that already carries the widgets (HD's, which embed them) is left
+/// Zone gets none, as HD's own Zone layout has none. A layout that already carries the widgets (HD's, which embed them) is left
 /// alone: the title's own layout is never overridden by a stand-in.
 pub fn splice_assist_indicator(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mut layout: oag_hud::Layout,
     space: oag_display::space::Space,
+    mode: Mode,
 ) -> oag_hud::Layout {
     let Some(assist) = title.hud_art.assist else {
         return layout;
     };
+    // **Not in Zone**, where the assist is gated off (`pilot_assist_input`) and HD's
+    // own Zone layout carries none of the six widgets (0 of 6 in
+    // `hd_hud_runtime_ground_truth::the_assist_indicator_is_authored_where_a_race_can_use_it`):
+    // an "assist on" plate over a race it never acts in would say something false.
+    if mode == Mode::Zone {
+        return layout;
+    }
     let Some(fragment) = assist.fragment else {
         return layout;
     };
