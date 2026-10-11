@@ -57,7 +57,10 @@ impl BankName {
             Self::Weapons => banks.weapons,
             Self::Speech => banks.speech,
             Self::Frontend => banks.frontend.map_or("", |front| front.bank),
-            Self::SpeechResults => banks.frontend.and_then(|front| front.results).unwrap_or(""),
+            Self::SpeechResults => banks
+                .frontend
+                .and_then(|front| front.results)
+                .map_or("", |results| results.bank),
         }
     }
 }

@@ -142,17 +142,59 @@ pub struct FrontEndSounds {
     pub bank: &'static str,
     /// The cue each event plays.
     pub cues: MenuCues,
-    /// The bank of the end-of-race place and medal lines
-    /// (`Data\Sound\speech_results.bnk`: `FIRST_PLACE`.. and `gold_med`..), or
+    /// The end-of-race place and medal lines (`Data\Sound\speech_results.bnk`:
+    /// `FIRST_PLACE`.. and `gold_med`..) and the law of when they sound, or
     /// [`None`] where this title's executable was not read playing them. A
     /// title with no entry here loads no such cue, so a shared lookup cannot
     /// switch the lines on beyond the title they were measured on.
-    pub results: Option<&'static str>,
+    pub results: Option<ResultsVoices>,
     /// The bank of the team and circuit **name voices**
     /// (`Data\Sound\FRONT_END_VO.bnk`: `TMTX_NAME` and `TRTX_NAME`), or
     /// [`None`] where this title's executable was not read playing them. Same
     /// gate as [`Self::results`]: a title that names none loads none.
     pub voices: Option<&'static str>,
+}
+
+/// The end-of-race voice lines: the bank they live in and when the title's
+/// screens play them. Both are read off each executable's own call sites.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResultsVoices {
+    /// The archive entry of the bank.
+    pub bank: &'static str,
+    /// When the lines sound.
+    pub law: ResultsLaw,
+}
+
+/// Where the place and medal lines differ between titles. What they share (the
+/// place is spoken in a Single Race, an Eliminator and a Tournament, first to
+/// third only) is the same in every title read, so it is not data here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResultsLaw {
+    /// Which place a Tournament speaks, and when.
+    pub tournament: TournamentPlace,
+    /// Whether the place line sounds in a campaign cell. Where it does not, the
+    /// medal line is the cell's voice instead.
+    pub place_in_campaign: bool,
+    /// The screen whose entry plays the medal line.
+    pub medal_screen: MedalScreen,
+}
+
+/// What a Tournament's results speak.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TournamentPlace {
+    /// The standings rank, at the first flip to the standings page.
+    StandingsFlip,
+    /// The leg's own place, on entering the results screen.
+    OnEntry,
+}
+
+/// Which screen's entry plays the medal line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MedalScreen {
+    /// `EndRace Rewards`.
+    Rewards,
+    /// The first end-of-race screen the title's flow shows, `EndRace Results`.
+    Results,
 }
 
 /// The cue name for each menu event, in the title's front-end bank.

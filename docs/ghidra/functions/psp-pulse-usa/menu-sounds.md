@@ -244,7 +244,7 @@ more optional path in `FrontEndSounds`, one more `BankName`.
 | Pulse PSP (USA, EU) | **ported**: all six names resolve, `FIRST_PLACE`.. 2 waveforms each, `gold_med`.. 4 each |
 | Pulse PS2 (EU) | **ported**: same bank under the same name in `WADS2.WAD`, same counts |
 | Pure PSP | **checked, differs**: no `speech_results.bnk` entry; `gold_med`/`silver_med`/`bronze_med` sit in `speech.bnk`, there is no place line there. Its call sites were not read, so nothing is wired |
-| HD / Fury | **checked, applies, not wired**: `speech_results.bnk` ships with all six names (2 waveforms each) and the boot loads it (`sound-bank-loads.md`); HD's call sites were not read |
+| HD / Fury | **ported** (2026-10-11): `speech_results.bnk` ships with all six names (2 waveforms each, a stereo pair), and HD's own call sites differ: the place on entry, never standings, and not in a campaign cell, where the medal plays instead; see [endrace-voices.md](../ps3-hdfury-eu/endrace-voices.md) |
 | 2048, Omega | **not checkable**: both load a `speech_results` bank (`game-boot.md`) but as a nameless v5 bank / Wwise events, with no SFX path to resolve a cue by name |
 
 ## Wired by this lane
