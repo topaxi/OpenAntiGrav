@@ -51,6 +51,7 @@ oag-texture.workspace = true
 oag-thread.workspace = true
 oag-title.workspace = true
 oag-trace.workspace = true
+oag-trackfile.workspace = true
 oag-unity.workspace = true
 oag-ui.workspace = true
 oag-ui-screens.workspace = true

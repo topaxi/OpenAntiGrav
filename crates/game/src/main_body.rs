@@ -441,6 +441,7 @@ fn run(cli: Cli) -> Result<()> {
             })
         })
         .transpose()?
+        .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
     let pending = prepare::Pending {

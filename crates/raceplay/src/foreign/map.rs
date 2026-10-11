@@ -7,13 +7,13 @@ use oag_ballisticng::track::{ColliderKind, Placement, Section, Tile, TileKind, T
 use oag_ballisticng::wtrk::Wtrk;
 use oag_core::math::Vec3;
 use oag_race::Course;
+use oag_trackfile::Track as OagTrack;
 use oag_vex::collision::{
     CollisionGeometry, CollisionMesh, CollisionNode, HEADER_WORD, SurfaceKind,
 };
 use oag_vex::pads::PadVolume;
 use oag_vex::track::{AiTrack, Junction, Path, SHORT_POINT_VERSION, SplinePoint, StartPosition};
 
-use super::ForeignTrack;
 use super::choice::{
     AI_CORRIDOR_FRACTION, AI_CORRIDOR_MARGIN, JUMP_FACTOR, PAD_ABOVE, PAD_BELOW, WORLD_SCALE,
 };
@@ -23,7 +23,7 @@ use super::frame::{Frame, mirror, world};
 /// `u16` and a foreign triangle list is not indexed, so three vertices each.
 const TRIANGLES_PER_MESH: usize = 21_845;
 
-pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<ForeignTrack> {
+pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
     let mut report = Vec::new();
     report.push(format!(
         "foreign track {:?} (Workshop item {}), tags {}",
@@ -71,7 +71,7 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<ForeignTrack> {
     ));
     unmapped(track, &mut report);
 
-    Ok(ForeignTrack {
+    Ok(OagTrack {
         id: wtrk.workshop_id.to_string(),
         title: wtrk.title.clone(),
         ai,
@@ -79,7 +79,7 @@ pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<ForeignTrack> {
         nodes,
         speedup_pads,
         weapon_pads,
-        report,
+        notes: report,
     })
 }
 
