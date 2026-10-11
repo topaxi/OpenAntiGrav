@@ -28,11 +28,11 @@ Confidence is per claim below. Static reading unless a row says measured.
 | `0x08834b14` | `AiManager_Update` | 80 (already named) | per tick: `AiManager_SnapshotRacers`; once, `AiManager_ShufflePack`; sets the round-robin `+0x360` byte on one racer; `Ai_Update` on every driver; then every `WeaponAi` |
 | `0x088352c0` | `AiManager_SnapshotRacers` | 80 | copies each craft's body pose and its `craft+0x900..+0xbf0` block into the racer table at `0x08b34420`, clears every racer's `+0x360`, refreshes `DAT_08b34410`/`DAT_08b34418` (player's racer record and craft) |
 | `0x08834c5c` | `AiManager_AddDriver` | 85 | allocates `0x890` bytes, `Ai_Construct`, appends to the racer table (`+0x00` craft, `+0x04` driver, driver `+0x00` = racer record) and to the manager's driver list (`+0x40` count, `+0x44` array), sets `mgr+0xb0` |
-| `0x088354c8` | `AiManager_ShufflePack` | 85 | the `AIPackSwapping` consumer, below |
+| `0x088354c8` | `AiManager_ShufflePack` | 90 | the `AIPackSwapping` consumer, below; measured |
 | `0x088357a0` | `AiStats_SetDefaults` | 88 | the AI-stats header constants and the per-class defaults, below |
 | `0x08853a80` | `Ai_Update` | 85 (already named) | per driver per tick, below |
 | `0x08855dc4` | `Ai_ComputeControls` | **85** (was 75) | the steering controller and the thrust slot, read at instruction level |
-| `0x08855904` | `AI_ComputeOpponentThrust` | **85** (was 82) | the thrust law, read whole |
+| `0x08855904` | `AI_ComputeOpponentThrust` | **94** (was 82) | the thrust law, read whole and reproduced on 1,140 live samples |
 | `0x08852ef4` | `Ai_UpdateSpreadWander` | 85 | the pack-position wander (HD's name for the same function) |
 | `0x08854e7c` | `Ai_PlanLane` | 80 | picks a lane in the AI corridor and fills the lane ring |
 | `0x08853550` | `Ai_AddLaneBump` | 85 | adds a trapezoid score bump over the nine candidate lanes |
@@ -46,7 +46,7 @@ Confidence is per claim below. Static reading unless a row says measured.
 | `0x08852364` | `Ai_LanePointFromCentre` | 85 | the same **without** the racing-line term, see below |
 | `0x088530a0` | `Ai_SampleLookahead` | 80 | the steering's lookahead track sample |
 | `0x08852afc` | `AiTrack_SampleAtProgress` | 80 | walks the path to a progress and evaluates the spline there |
-| `0x088542e4` | `Ai_SnapToLane` | 75 | the kinematic rail |
+| `0x088542e4` | `Ai_SnapToLane` | 90 | the kinematic rail; measured, see below |
 | `0x08853148` | `Ai_ComputePitch` | 75 | pitch input while airborne |
 
 ## Who drives whom: the control record
@@ -77,8 +77,7 @@ four legs:
    pickup swaps the player's control source, which
    [autopilot.md](autopilot.md) left open.
 
-**Not yet measured:** that an opponent's `craft+0x3c` holds `&driver+0x08`. That
-read would take this to 90.
+**Measured (below):** every opponent's `craft+0x3c` holds `&driver+0x08`, so this is 92.
 
 **What `AIThrust` multiplies, then.** The thrust output is the record's
 `+0x04`, the same field the player's accelerate button writes as `0`/`100`.
@@ -332,8 +331,9 @@ What it says, in words:
   player, every opponent gets the `WhenBehind` term subtracted. The names read
   from the player's side: `WhenLeading` is the player leading. This agrees
   with HD's direction ([ps3-hdfury-eu/ai-stats.md](../ps3-hdfury-eu/ai-stats.md#the-thrust-law-pulses-with-four-changes)),
-  at confidence 80 here on the static read and the progress field growing
-  forward (a live leg is below).
+  and it is **measured** here: with the player leading every opponent past
+  the dead band, the logged thrust carries the added `WhenLeading` term on every
+  sample (see [measured](#measured-2026-10-11)). Confidence 94.
 - The rubber band is off while the player's craft is in ship state `4..6`.
 - **Units.** Gap, dead band and `350` are in `racer+0x240` units, which is
   `craft+0xad0`'s lap progress. The [live check](#measured-2026-10-11) is what
@@ -438,4 +438,77 @@ byte means otherwise, is open. Confidence 70 on the reading of `+0x254`.
 
 ## Measured (2026-10-11)
 
-See the section added below by the same lane once the PPSSPP capture ran.
+PPSSPP, `pulse-psp-usa`, Single Race, Talon's Junction, VENOM, eight craft, weapons
+as the fresh profile holds them. The tool is `scripts/psp-ai-thrust.py`: it stops
+right after `AI_ComputeOpponentThrust` returns to the opponent branch
+(`0x088568b0`), reads the result in `f0`, snapshots every input the law reads
+(race time, every racer's progress and place, every driver's spread, the class
+record), and `--predict` recomputes each sample from the log in `float32`. The
+skill scale is read once at `0x088559b8`, after `AI_ResolveSkillScale` returns.
+Two skills, set by writing `g_skill_level` (`0x08b31044`) and restarting the race
+from the pause menu, which is the same global the front end's difficulty row
+writes:
+
+| Run | Skill level / scale | Player | Samples | Exact (`< 1e-3`) | Branches exercised |
+| --- | --- | --- | ---: | ---: | --- |
+| `easy-park` | 0 / `0.9` | parked on the grid, 8th | 160 | **160** | `WhenBehind` at its `MaxSpeedChange` clamp, gap step in both directions and at the `+/-30 %` stops, the own-`ref` zero gap |
+| `easy-auto` | 0 / `0.9` | autopilot, 8th | 320 | **320** | the same, two later stretches of the race |
+| `easy-lead`, `easy-far`, `easy-lead2` .. `easy-lead5` | 0 / `0.9` | moved ahead of the field in six steps, 8th to 1st | 500 | **500** | rubber band off (inside both dead bands), the `100` cap within `350` of the player after 20 s, `ref` = the place-2 racer when the player leads, and the **`WhenLeading` term added** once the player led every opponent by more than its dead band |
+| `hard-park` | 2 / `3.0` | parked, 8th | 160 | **160** | the `SkillScalePoint2..3` branch at `t = 1` |
+
+**1,140 samples, every one reproduced to `1e-3`, worst residual `0.00000`**, and
+the logged `driver+0x9c` matched the recomputed gap on every sample. That is the
+thrust law above, the place indexing, the field-wide rubber band and its
+direction, the `ref` choice, the cap and the skill interpolation, measured.
+Confidence on `AI_ComputeOpponentThrust`: **94** (runtime trace; HD's static
+read is the same function, a second binary short of a runtime leg there).
+
+The "moved ahead" runs write the player's body position along the leader's
+heading (`--teleport`), because the software renderer runs the emulator at a
+few percent of real time and a player who catches the pack on merit is minutes of
+waiting per step. Only the law's inputs change that way; the law itself is what
+is measured.
+
+**The rest, from the same runs:**
+
+- **The control record.** Every opponent's `craft+0x3c` (craft = entity
+  `+0x94`) equals its `driver + 0x08`; the player's `craft+0x40` equals its
+  driver's `+0x08`. The opponent drives through the player's input path:
+  **confidence 92** for the "same physics" answer, the rail below aside.
+- **The round-robin tick.** In a run of consecutive stops the driver cycles with
+  period eight (`racer+0x360` set on indices `2,3,4,5,6,0,1`, and the player's
+  index 7 is the tick with no stop, its branch never calls the law). Confidence 92.
+- **The pack shuffle.** After the restart at level 2 every opponent's wander has
+  `segments = AIPackSwapping3.numIntermediatePositions` and its end slots are a
+  different permutation; at level 0 the same fields hold `AIPackSwapping1`'s.
+  The parity of each end permutation matches the authored swap count (an odd
+  count of adjacent transpositions gives an odd permutation, both runs). So the
+  shuffle reads the integer `g_skill_level`, not the skill scale. Confidence 90.
+- **The rail.** `Ai_SnapToLane`'s `Body_SetPosition` call is hit for every
+  opponent on every tick it is fast and grounded: 400 hits over 66 ticks in
+  `easy-park` (five opponents every tick, two on about half), every opponent
+  every tick in `hard-park`, the player too under the autopilot. Blend `0.17`
+  to `1.0`. **But the move it makes is small in steady state**: over 120 calls
+  the position changed by `0.0001` to `0.042` units, median `0.012`. An opponent
+  sits within a few hundredths of a unit of its lane point, which is the rail's
+  equilibrium: it keeps the craft on its lane rather than dragging it back from
+  far off. Confidence on the mechanism: **90**.
+- `driver+0x880` read `0` on every driver in every run (the second controller
+  is dead in a single race), and `driver+0x21` read `1` on every opponent.
+- Lap length (`*("AI track data")`) `5068.73` on this circuit; `racer+0x240`
+  is in those units, consistent with the wander's `(progress - start) / (laps *
+  lap_length)`.
+
+To reproduce, with a PPSSPP of your own in a Single Race (`psp-drive.py menu
+--single-race`):
+
+```sh
+uv run --with websocket-client --with numpy python3 scripts/psp-ai-thrust.py \
+    --port <port> --out data/scratch/<lane>/easy-park.json --park --samples 160 --gap-seconds 0.25
+uv run --with numpy python3 scripts/psp-ai-thrust.py --predict data/scratch/<lane>/easy-park.json
+```
+
+**Not measured:** the steering controller's outputs against its formula (the
+lookahead sample would have to be logged), the lane planner's choices, the
+pitch controller, and the `SplinePt.unk_0x66` speed floor. Those stay at their
+static scores above.
