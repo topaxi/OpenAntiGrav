@@ -1041,13 +1041,6 @@ impl Audio {
         self.output.set_paused(suspended);
     }
 
-    /// How many stereo frames the dump holds so far, or `None` without one.
-    /// A log line that carries it names the WAV sample its cue starts at.
-    #[must_use]
-    pub fn dump_frames(&self) -> Option<usize> {
-        self.dump.as_ref().map(|dump| dump.samples.len() / 2)
-    }
-
     /// Writes the dump, if there is one.
     ///
     /// # Errors

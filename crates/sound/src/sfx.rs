@@ -194,6 +194,13 @@ pub(super) struct SfxVoices {
 const DT: f32 = 1.0 / TICK_HZ as f32;
 
 impl Audio {
+    /// How many stereo frames the dump holds so far, or `None` without one.
+    /// A log line that carries it names the WAV sample its cue starts at.
+    #[must_use]
+    pub fn dump_frames(&self) -> Option<usize> {
+        self.dump.as_ref().map(|dump| dump.samples.len() / 2)
+    }
+
     /// Plays one tick's worth of a race's sound effects.
     ///
     /// Called inside the fixed-timestep loop immediately after `Race::tick`, so a
