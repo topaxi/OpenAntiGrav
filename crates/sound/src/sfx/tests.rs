@@ -143,7 +143,7 @@ fn every_cue_names_a_bank_and_a_string() {
         BankName::Ship.entry(hd, false)
     );
     // Pure spells them exactly as Pulse does: the finding, not the assumption.
-    // Bar the results bank, which is Pulse's alone (`FrontEndSounds::results`).
+    // Bar the results and name-voice banks, Pulse's alone (`results`, `voices`).
     let mut pulse_without_results = *pulse;
     if let Some(front) = pulse_without_results.frontend.as_mut() {
         front.results = None;
