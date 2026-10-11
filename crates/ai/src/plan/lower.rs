@@ -21,10 +21,10 @@ pub(super) enum Lowering {
     /// [`SpeedPlan::lower`].
     FromTrough,
     /// The whole lookback, failing tick included: the search as it was before
-    /// [`Self::FromTrough`]. Kept as the second try for a course the first does
-    /// not verify on - its stray floors are what clear `07_Track` VENOM's
-    /// hairpin-exit pad and HD `04_Track` PHANTOM at 1227-1231. Chosen, not
-    /// measured.
+    /// [`Self::FromTrough`]. Kept as the second search
+    /// ([`SpeedPlan::build_within`]) - its stray floors are what clear
+    /// `07_Track` VENOM's hairpin-exit pad and HD `04_Track` PHANTOM at
+    /// 1227-1231. Chosen, not measured.
     Window,
 }
 

@@ -560,6 +560,15 @@ impl SpeedPlan {
 
     /// [`Self::build`] with its own step budget, for a caller that would
     /// rather give up early - a fork's route that cannot be lapped.
+    ///
+    /// **Two searches, and the faster of those that verify clean is kept**
+    /// ([`Lowering`]): the trough rule clears the floors the whole-window
+    /// search leaves in hairpins, and the whole-window search still verifies
+    /// two layouts the trough rule does not (`07_Track` VENOM, HD `04_Track`
+    /// PHANTOM). Measured over 240 lone-Ace rows (Pulse, HD, Pure, every class):
+    /// 144 laps faster, 6 slower by 0.05-0.65 s, 74 s summed, at twice the
+    /// steps (median 11,549 to 23,093 on Pulse and HD at VENOM). The report
+    /// counts both searches' steps. Chosen, not measured off the original.
     #[must_use]
     pub fn build_within<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
@@ -568,20 +577,17 @@ impl SpeedPlan {
         budget: u64,
     ) -> (Self, Report) {
         let (plan, report) = Self::search(course, craft, tuning, budget, Lowering::FromTrough);
-        if report.verify_failures == 0 && report.verify_respawns == 0 {
-            return (plan, report);
-        }
-        // Where the trough rule does not verify, the whole-window search
-        // sometimes does: see [`Lowering::Window`]. Its plan is kept only when
-        // it verifies clean, and the report counts both searches' steps.
-        let (second, mut second_report) =
-            Self::search(course, craft, tuning, budget, Lowering::Window);
-        if second_report.verify_failures == 0 && second_report.verify_respawns == 0 {
-            second_report.steps += report.steps;
-            return (second, second_report);
-        }
-        let mut report = report;
-        report.steps += second_report.steps;
+        let (second, second_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
+        let steps = report.steps + second_report.steps;
+        let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
+        let lap = |r: &Report| r.verify_lap_ticks.unwrap_or(u32::MAX);
+        let (plan, mut report) =
+            if clean(&second_report) && (!clean(&report) || lap(&second_report) < lap(&report)) {
+                (second, second_report)
+            } else {
+                (plan, report)
+            };
+        report.steps = steps;
         (plan, report)
     }
 
