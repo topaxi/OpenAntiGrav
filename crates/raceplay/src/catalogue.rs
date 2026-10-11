@@ -177,6 +177,14 @@ pub struct Track {
     /// (`docs/formats/race-setup.md`, "Two unlock axes"). What gates on it is
     /// `crate::unlock`; this only carries what the disc authored.
     pub unlock_grid: Option<String>,
+    /// The `soundregister` the entry authors: the value the front end writes
+    /// to the sound table's circuit slot when it speaks the circuit's name, and
+    /// so which command of `TRTX_NAME` plays (`1` is `TALONS_WHITE`, `2`
+    /// `TALONS_BLACK`, in the bank's own order). `None` where the entry has
+    /// none, which is every title but Pulse. Measured: all three circuits a
+    /// fresh profile lists reached the play call with this value. See
+    /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, "The name voices".
+    pub sound_register: Option<u8>,
 }
 
 impl Track {
@@ -332,6 +340,11 @@ pub struct Team {
     /// The string-table id of the team's description, e.g. the `helpText`
     /// attribute. `None` for a team that declares none.
     pub help_text: Option<String>,
+    /// The `soundregister` the team authors: the value written to the sound
+    /// table's team slot when its name is spoken, so which command of
+    /// `TMTX_NAME` plays. `None` where it declares none. Measured on all eight
+    /// of a fresh profile's teams; see [`Track::sound_register`].
+    pub sound_register: Option<u8>,
     /// The alternate paint jobs this team declares, in file order.
     ///
     /// Every `PI_ModelSkin` nested under this team's
@@ -553,6 +566,9 @@ fn read_team(node: &Node) -> Option<Team> {
         name,
         location,
         help_text: values.attr("helpText").map(str::to_string),
+        sound_register: values
+            .attr("soundregister")
+            .and_then(|v| v.trim().parse().ok()),
         skins: read_skins(node),
         rating: read_rating(node),
         models: read_models(node),
@@ -859,6 +875,9 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
             .children_named("Unlock")
             .find_map(|unlock| unlock.attr("Grid"))
             .map(str::to_string),
+        sound_register: values
+            .attr("soundregister")
+            .and_then(|v| v.trim().parse().ok()),
     })
 }
 

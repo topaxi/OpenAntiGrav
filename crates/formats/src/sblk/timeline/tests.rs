@@ -18,6 +18,8 @@ pub(crate) enum Grain {
     KeyOn { offset: u32, angle: u16, delay: u32 },
     /// `0x05` child by cue index, after `delay` ticks.
     Child { cue: u32, delay: u32, volume: u32 },
+    /// `0x08` child by cue index, after `delay` ticks: the same record as `0x05`.
+    ReplaceChild { cue: u32, delay: u32, volume: u32 },
     /// Any other opcode, after `delay` ticks.
     Other { opcode: u32, delay: u32 },
     /// An opcode with its own operand word, after `delay` ticks.
@@ -85,6 +87,11 @@ pub(crate) fn build(specs: &[Spec]) -> Vec<u8> {
                     block[record..record + 4].copy_from_slice(&volume.to_le_bytes());
                     block[record + 0x0c..record + 0x10].copy_from_slice(&cue.to_le_bytes());
                     (0x05, delay)
+                }
+                Grain::ReplaceChild { cue, delay, volume } => {
+                    block[record..record + 4].copy_from_slice(&volume.to_le_bytes());
+                    block[record + 0x0c..record + 0x10].copy_from_slice(&cue.to_le_bytes());
+                    (0x08, delay)
                 }
                 Grain::Other { opcode, delay } => (opcode, delay),
                 Grain::Raw {
@@ -424,6 +431,7 @@ fn a_bend_after_a_key_on_is_not_modelled() {
 const GOTO_MODEL: WalkModel = WalkModel {
     goto_markers: true,
     hd_alternates: false,
+    globals: None,
 };
 
 /// Wipeout HD's `c_CLEAR`: a goto and the marker it lands on, nothing else.
@@ -497,4 +505,105 @@ fn a_ninth_goto_within_one_tick_is_refused_and_a_waited_loop_terminates() {
     let t = bank.cue_timeline_modelled(&bank.cue_named("A").expect("cue"), &[], GOTO_MODEL);
     assert_eq!(t.unread, vec![0xff]);
     assert!(!t.is_complete());
+}
+
+/// `[variable, mode, immediate]` as a guard's operand word.
+fn guard(variable: i8, mode: u8, immediate: u8) -> Grain {
+    raw(
+        0x22,
+        u32::from(variable as u8) | u32::from(mode) << 8 | u32::from(immediate) << 16,
+        0,
+    )
+}
+
+fn with_globals(slot: usize, value: i8) -> WalkModel {
+    let mut globals = [0; super::GLOBAL_SLOTS];
+    globals[slot - 1] = value;
+    WalkModel {
+        globals: Some(globals),
+        ..WalkModel::default()
+    }
+}
+
+/// `TMTX_NAME`'s shape: each team is a guarded pair of key-ons ten ticks apart.
+fn guarded_pairs() -> Vec<u8> {
+    build(&[Spec(
+        "TEAM",
+        127,
+        vec![
+            guard(-2, 1, 1),
+            key(0, 0, 0),
+            guard(-2, 1, 1),
+            key(16, 0, 10),
+            guard(-2, 1, 2),
+            key(32, 0, 0),
+            guard(-2, 1, 2),
+            key(48, 0, 10),
+        ],
+    )])
+}
+
+#[test]
+fn a_global_guard_keeps_the_pair_whose_immediate_equals_the_global() {
+    let data = guarded_pairs();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("TEAM").expect("cue");
+    for (value, offsets) in [(1, [0, 16]), (2, [32, 48])] {
+        let t = bank.cue_timeline_modelled(&cue, &[], with_globals(2, value));
+        assert!(t.is_complete(), "{:?}", t.unread);
+        let got: Vec<(u32, u32)> = t.grains.iter().map(|g| (g.tick, g.sound.offset)).collect();
+        assert_eq!(
+            got,
+            vec![(0, offsets[0]), (10, offsets[1])],
+            "value {value}"
+        );
+    }
+    // A value no immediate names plays nothing, as the original's missing 10.
+    let none = bank.cue_timeline_modelled(&cue, &[], with_globals(2, 10));
+    assert!(none.is_complete() && none.grains.is_empty());
+}
+
+#[test]
+fn a_global_guard_reads_its_own_slot_and_is_unread_without_a_model() {
+    let data = guarded_pairs();
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("TEAM").expect("cue");
+    // The guards name slot 2; a value in slot 1 selects nothing.
+    let other = bank.cue_timeline_modelled(&cue, &[], with_globals(1, 1));
+    assert!(other.grains.is_empty());
+    // The default walk leaves the guard unread, as before this model existed.
+    assert_eq!(bank.cue_timeline(&cue).unread[0], 0x22);
+}
+
+#[test]
+fn a_replacing_child_is_walked_only_under_the_global_model() {
+    let data = build(&[
+        Spec(
+            "PARENT",
+            127,
+            vec![
+                guard(-1, 1, 1),
+                Grain::ReplaceChild {
+                    cue: 1,
+                    delay: 0,
+                    volume: 127,
+                },
+                guard(-1, 1, 2),
+                Grain::ReplaceChild {
+                    cue: 2,
+                    delay: 0,
+                    volume: 127,
+                },
+            ],
+        ),
+        Spec("ONE", 127, vec![key(0, 0, 0)]),
+        Spec("TWO", 127, vec![key(16, 0, 0)]),
+    ]);
+    let bank = Bank::parse(&data).expect("parse");
+    let cue = bank.cue_named("PARENT").expect("cue");
+    let two = bank.cue_timeline_modelled(&cue, &[], with_globals(1, 2));
+    assert!(two.is_complete(), "{:?}", two.unread);
+    assert_eq!(two.grains.len(), 1);
+    assert_eq!(two.grains[0].sound.offset, 16);
+    assert!(!bank.cue_timeline(&cue).is_complete());
 }
