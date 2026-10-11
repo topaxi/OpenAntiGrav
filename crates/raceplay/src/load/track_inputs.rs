@@ -216,8 +216,8 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
     if options.mode == Mode::Zone {
         anyhow::bail!("Zone is defined by a title's own Zone circuits; a foreign track has none");
     }
-    let f = crate::foreign::read(path)?;
-    report.extend(f.report.iter().cloned());
+    let (f, lines) = crate::foreign::read_any(path)?;
+    report.extend(lines);
     let collision = collision_world(&f.nodes);
     report.push(format!(
         "{} collision node(s) -> {} collider(s), {} triangle(s)",
@@ -244,5 +244,46 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
         speedup_pads: f.speedup_pads,
         weapon_pads: f.weapon_pads,
         drawn: Some(drawn),
+    })
+}
+
+/// A disc circuit as a track in this project's own format: the same inputs
+/// [`resolve`] reads for a race, moved into [`oag_trackfile::Track`]. **Local
+/// use only** - what it returns is content from a disc and must never be
+/// committed (`just audit-leakage`).
+///
+/// What a track file has no field for is dropped, and the track's notes say so
+/// (`oag_trackfile::ABSENT` is the list; the circuit's art, sky, fog, lights,
+/// emitters and visibility sets are all authored in the `.vex` blob).
+pub(super) fn export(
+    options: &Options,
+    archives: &mut Archives,
+    title: &'static oag_title::Title,
+) -> Result<oag_trackfile::Track> {
+    let mut report = Vec::new();
+    let inputs = resolve(options, archives, title, &mut report)?;
+    if inputs.drawn.is_some() {
+        anyhow::bail!(
+            "{}: already a foreign track, nothing to export from a disc",
+            inputs.track
+        );
+    }
+    let start = inputs
+        .start_position
+        .context("the circuit authors no Start Position node; a track file needs one")?;
+    let mut notes = vec![format!(
+        "exported from {}'s circuit {} by this project's local exporter (not for redistribution)",
+        title.name, inputs.track
+    )];
+    notes.extend(report);
+    Ok(oag_trackfile::Track {
+        id: inputs.track,
+        title: inputs.label,
+        ai: inputs.ai,
+        start,
+        nodes: inputs.nodes,
+        speedup_pads: inputs.speedup_pads,
+        weapon_pads: inputs.weapon_pads,
+        notes,
     })
 }

@@ -225,7 +225,7 @@ pub use handles::EffectHandles;
 pub use held_buttons::HeldButtons;
 pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::ripple::{Ripples, SpanPlaces};
-pub use load::{load, load_event};
+pub use load::{export_track, load, load_event};
 pub(crate) use oag_title::Trigger;
 pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
 pub use replay::{Ghost, GhostCapture};

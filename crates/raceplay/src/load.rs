@@ -34,6 +34,24 @@ pub use campaign::load_event;
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 use oag_source::remix::craft_of;
 
+/// A disc circuit as a track in this project's own format, opened the way
+/// [`load`] opens its source. **Local use only**: the result is disc content.
+///
+/// # Errors
+///
+/// Whatever [`load`] would refuse the circuit for, and a circuit with no
+/// `Start Position` node.
+pub fn export_track(options: &Options) -> Result<oag_trackfile::Track> {
+    let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
+        &options.dlc,
+        &oag_source::cache::default_dlc_cache_dir(),
+    );
+    let remix = oag_source::remix::Remix::open(&options.source, None, packs, pure_packs)?;
+    let (opened, _, title, _) = remix.into_parts();
+    let mut archives = opened.archives.memoising_reads();
+    track_inputs::export(options, &mut archives, title)
+}
+
 /// Loads a track, a ship and its handling out of a disc image.
 ///
 /// # Errors

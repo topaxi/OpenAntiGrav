@@ -42,6 +42,7 @@ members = [
   "crates/title",
   "crates/tools",
   "crates/trace",
+  "crates/trackfile",
   "crates/ui",
   "crates/ui-screens",
   "crates/unity",
@@ -99,6 +100,7 @@ oag-texture = { path = "crates/texture" }
 oag-unity = { path = "crates/unity" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
+oag-trackfile = { path = "crates/trackfile" }
 oag-ui = { path = "crates/ui" }
 oag-ui-screens = { path = "crates/ui-screens" }
 oag-vex = { path = "crates/vex" }
