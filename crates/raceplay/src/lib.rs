@@ -222,7 +222,7 @@ pub use camera::chase_params;
 pub use field::{FireLaw, PadSeeking};
 pub use handles::EffectHandles;
 pub use held_buttons::HeldButtons;
-pub use hud::hud_layout;
+pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{load, load_event};
 pub(crate) use oag_title::Trigger;

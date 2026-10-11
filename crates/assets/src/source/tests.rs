@@ -165,6 +165,7 @@ const TITLE: &Title = &Title {
         kill_column: false,
         message_slots: false,
         runtime: None,
+        assist: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both
     // times: an archive is found by name, and what is inside one is nothing
@@ -188,7 +189,7 @@ use crate::testing;
 /// Builds `Archives` over hand-authored files, so the search order can be
 /// tested without a disc. `Layout::resolve` is bypassed on purpose: what is
 /// under test is which archive answers, not how a source is recognised.
-fn mounted(
+pub(super) fn mounted(
     dir: &std::path::Path,
     data: &[(&str, &[u8])],
     packs: Vec<crate::dlc::Pack>,
@@ -220,10 +221,17 @@ fn mounted(
         packs: mounted,
         manifests,
         read_memo: None,
+        overrides: None,
+        fallback: None,
+        layer_hits: Vec::new(),
     }
 }
 
-fn pack(dir: &std::path::Path, name: &str, entries: &[(&str, &[u8])]) -> crate::dlc::Pack {
+pub(super) fn pack(
+    dir: &std::path::Path,
+    name: &str,
+    entries: &[(&str, &[u8])],
+) -> crate::dlc::Pack {
     let sub = dir.join(name);
     std::fs::create_dir_all(&sub).expect("a test pack directory");
     let _ = testing::write_wad(&sub, "PACK.edat", entries);

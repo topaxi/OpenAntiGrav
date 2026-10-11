@@ -86,8 +86,12 @@ speed. Neither moves under the assist-off gate.
 ## The HUD indicator
 
 Drawn at **Extreme only**: 2048 ties its background and icon to the Extreme byte, and Normal
-runs on a state object the indicator never reads. Pulse and Pure draw none yet: their art waits on
-the asset-layer lane (the original has none to draw). Both HD and 2048 author four widgets: a background shown while the assist is enabled, a main
+runs on a state object the indicator never reads. **Pulse and Pure draw one from this project's
+fallback layer** (2026-10-11): neither disc authors any indicator art (census on
+[asset-layers.md](../architecture/asset-layers.md#census-no-pre-hd-disc-authors-one)), so a layout of
+HD's six widget names and art of this project's own stand in, **chosen, not measured**, in a placement
+chosen for Pulse's HUD ([ADR-0061](../architecture/adr/0061-two-asset-layers-around-the-disc.md)).
+Both HD and 2048 author four widgets: a background shown while the assist is enabled, a main
 icon shown for 3 s after it acts, and a left and a right arrow that blink at 4 Hz for 1.5 s
 on the side of the wall it steered away from.
 
@@ -133,8 +137,9 @@ on the side of the wall it steered away from.
 - **2048's own list**: `OptionsPilot` (`Frontend::pilot_choice`) sets the level at Launch
   Game: `FE_OFF`, `FE_NORMAL`, `FE_SUPER` are Off, Normal, Extreme.
 - **The HUD**: `oag_hud::assist` draws HD's four `AssistIndicator*` widgets by the original's
-  rule; 2048's `PilotAssist` icon is up while Extreme is. Normal and the Pulse and Pure
-  titles draw no indicator.
+  rule; 2048's `PilotAssist` icon is up while Extreme is. Pulse and Pure draw the same widgets
+  from the fallback layer's own layout and art (`oag_raceplay::splice_assist_indicator`). Normal
+  draws no indicator on any title.
 
 ## Measured in this engine
 

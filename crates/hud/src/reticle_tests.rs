@@ -202,6 +202,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     kill_column: false,
     message_slots: false,
     runtime: None,
+    assist: None,
 };
 
 fn hd_sheet() -> crate::sprite::Sheet {
@@ -272,6 +273,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     kill_column: false,
     message_slots: false,
     runtime: None,
+    assist: None,
 };
 
 fn hd_leach_sheet() -> crate::sprite::Sheet {
@@ -976,6 +978,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         kill_column: false,
         message_slots: false,
         runtime: None,
+        assist: None,
     };
 
     let layout = Layout::from_xml(SIGHTS);

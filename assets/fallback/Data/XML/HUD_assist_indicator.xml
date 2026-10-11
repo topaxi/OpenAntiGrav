@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pilot Assist's HUD indicator for the titles whose discs author none (Pulse and
+  Pure). This project's own layout, in the dialect the HUD reader parses, at the
+  entry name Wipeout HD and 2048 use for theirs. Authored in the PSP's 480x272
+  grid; a source on another grid has it scaled.
+
+  CHOSEN, NOT MEASURED. The names and the show/blink rules follow HD's
+  (`Hud_UpdateAssistIndicator`); the placement (a plate low and a little left of centre, clear of the craft and its exhaust, the two
+  arrows beside the icon, the two big arrows at the screen's sides) is read off
+  HD's own layout proportions and adapted by eye to Pulse's HUD, not read off
+  anything Pulse authors. The art is geometry drawn by
+  scripts/gen-fallback-assist-art.py.
+-->
+<Screen>
+  <Image name="AssistIndicatorBG" x="156" y="250" width="56" height="24" Centred="true"
+         Src="Data\HUD\Textures\AssistIndicator.pix" U="0" V="56" TxtrWidth="112" TxtrHeight="48"
+         Color="0xF0182438"/>
+  <Image name="AssistIndicatorMain" x="156" y="250" width="20" height="20" Centred="true"
+         Src="Data\HUD\Textures\AssistIndicator.pix" U="0" V="104" TxtrWidth="40" TxtrHeight="40"
+         Color="0xFFFFFFFF"/>
+  <Image name="AssistIndicatorLeft" x="138" y="250" width="10" height="10" Centred="true"
+         Src="Data\HUD\Textures\AssistIndicator.pix" U="40" V="104" TxtrWidth="20" TxtrHeight="20"
+         Color="0xFFFF4040">
+    <Image name="AssistIndicatorLeftBig" x="40" y="136" width="28" height="28" Centred="true"
+           Src="Data\HUD\Textures\AssistIndicator.pix" U="0" V="0" TxtrWidth="56" TxtrHeight="56"
+           Color="0xFFFF4040"/>
+  </Image>
+  <Image name="AssistIndicatorRight" x="174" y="250" width="10" height="10" Centred="true"
+         Src="Data\HUD\Textures\AssistIndicator.pix" U="60" V="104" TxtrWidth="20" TxtrHeight="20"
+         Color="0xFFFF4040">
+    <Image name="AssistIndicatorRightBig" x="440" y="136" width="28" height="28" Centred="true"
+           Src="Data\HUD\Textures\AssistIndicator.pix" U="56" V="0" TxtrWidth="56" TxtrHeight="56"
+           Color="0xFFFF4040"/>
+  </Image>
+</Screen>

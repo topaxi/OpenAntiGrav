@@ -7,6 +7,7 @@ use super::*;
 mod audio;
 mod cameras;
 pub mod campaign;
+mod closing_report;
 mod countdown;
 mod engine_light;
 mod environment;
@@ -45,8 +46,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Which archives this source has, rather than which archives a PSP disc has.
     // Every entry name below is the same on both releases - the PS2 build ships
     // `Data\Ships\<Team>\handlingstats.xml` and `Data\Environments\<n>_Track\...`
-    // under the names the PSP uses - so the layout is the whole of the
-    // difference. See `docs/formats/handling-stats.md`.
+    // under the names the PSP uses, so only the layout differs (`docs/formats/handling-stats.md`).
     // Downloadable content is mounted behind them. A pack is not tied to the
     // release it was sold for here, so this is the same call whichever image
     // `source` names - see `docs/formats/dlc-pack.md`. **Which of the two lists
@@ -995,6 +995,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),
     );
-    loaded.report.extend(archives.read_memo_summary());
+    closing_report::finish(&mut loaded.report, &mut archives, craft.as_mut());
     Ok(loaded)
 }

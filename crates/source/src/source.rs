@@ -78,7 +78,7 @@ pub const DEFAULT_IMAGE: &str = "data/images/pulse-psp-eu.chd";
 /// Inside an AppImage `current_exe` is under the mounted `$APPDIR`, which is
 /// deliberately never searched, so `$APPIMAGE` decides first and the executable
 /// is only asked when it is unset.
-fn portable_directory() -> Option<PathBuf> {
+pub(crate) fn portable_directory() -> Option<PathBuf> {
     portable_directory_of(std::env::var_os("APPIMAGE"), std::env::current_exe().ok())
 }
 

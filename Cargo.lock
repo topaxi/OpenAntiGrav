@@ -2251,6 +2251,7 @@ dependencies = [
 name = "oag-assets"
 version = "0.1.0"
 dependencies = [
+ "log",
  "miniz_oxide",
  "oag-disc",
  "oag-formats",

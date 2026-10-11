@@ -103,6 +103,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     kill_column: true,
     message_slots: true,
     runtime: None,
+    // **Chosen, not measured.** Neither disc authors an indicator (census in
+    // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
+    // and art are this project's own fallback, `assets/fallback/`.
+    assist: Some(oag_title::hud::AssistIndicator {
+        background: "AssistIndicatorBG",
+        main: "AssistIndicatorMain",
+        left: &["AssistIndicatorLeft", "AssistIndicatorLeftBig"],
+        right: &["AssistIndicatorRight", "AssistIndicatorRightBig"],
+        fragment: Some("Data\\XML\\HUD_assist_indicator.xml"),
+    }),
 };
 
 /// The layout constant substituted for the pickup backdrop's authored colour.
