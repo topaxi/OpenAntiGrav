@@ -147,6 +147,7 @@ fn every_cue_names_a_bank_and_a_string() {
     let mut pulse_without_results = *pulse;
     if let Some(front) = pulse_without_results.frontend.as_mut() {
         front.results = None;
+        front.voices = None;
     }
     assert_eq!(*oag_pure::race::SOUND_BANKS, pulse_without_results);
     // The cues this port holds a handle to, and only those: a held cue must not

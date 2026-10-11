@@ -23,8 +23,9 @@
 //!
 //! Confidence **88**: the structure is read off the shipped file and every
 //! entry on the PSP disc resolves to an environment that exists, but nothing
-//! here has been watched running under an emulator, and what `soundregister`,
-//! `Grid` and `availableInZone` select is not established. See
+//! here has been watched running under an emulator, and what `Grid` and
+//! `availableInZone` select is not established (`soundregister` is the register
+//! the name voice reads, `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`). See
 //! `docs/formats/fexml.md`.
 //!
 //! # Teams come from the same file, and so does downloadable content

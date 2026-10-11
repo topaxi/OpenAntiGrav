@@ -22,9 +22,13 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    Single Race and Eliminator on `Results` entry, Tournament at the first page flip off the standings rank,
    the medal on `Rewards` entry in a campaign cell. Open on them: not heard by a human; on the speech bus (chosen); whether
    `VIEW RESULTS AGAIN` speaks the place again (inferred yes); HD ships the same bank and names, its call sites unread.
-4. **Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME` in `FRONT_END_VO.bnk` (team and circuit name voices on
-   the selection screens). The selector is `FUN_0898dac0(slot, value)` writing a 32-byte table; which guard reads it
-   is not followed. A pick by index would be an invention.
+4. ~~**Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME`~~ **Landed 2026-10-11 (lane `pulse-name-voices`,
+   [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-name-voices)):** the guard reads the table
+   `Sound_PlayNamedInSlot` writes, the value is the `soundregister` each `PI_Team`/`PI_Track` authors, and the voice
+   sounds on Confirm of Team Selection and Track Select, pad and pointer. Open on it: not heard by a human; on the
+   speech bus and dry (chosen, not measured); the four DLC teams' registers are inferred (2, 6, 11, 12), no pack was
+   mounted on the capture; the PS2 trigger was not observed; HD's voice bank (plays on a team *change*, in a bank this
+   disc's `frontend.bnk`/`speech.bnk` do not carry) is not located.
 5. **Confirm dialogs, the on-screen keyboard, the language picker, the boot front end and the pause menu's own
    `ConfirmButton`s** raise no sound: only the screens above were routed. A locked tier or cell on the campaign
    screens plays `DECLINE` (`Session::campaign_nav`, read-only on `handle_campaign`'s own refusal tests, the one line
@@ -46,4 +50,4 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
 ## Next Steps
 
 1. Dump PPSSPP's audio for the same walk and compare the cue moments and levels.
-2. Read the guard `FUN_0898dac0` feeds, then play `TMTX_NAME`/`TRTX_NAME` on the selection screens.
+2. ~~Read the guard `FUN_0898dac0` feeds, then play `TMTX_NAME`/`TRTX_NAME`~~ done 2026-10-11 (item 4).
