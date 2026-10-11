@@ -191,7 +191,7 @@ impl Bundle {
             });
         }
 
-        let mut data = Vec::with_capacity(total as usize);
+        let mut data = Vec::with_capacity((total as usize).min(64 << 20));
         for b in &blocks {
             let comp = r.bytes(b.csize as usize)?;
             let out = compress::decompress(

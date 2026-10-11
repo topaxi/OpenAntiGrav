@@ -73,6 +73,8 @@ pub enum Error {
     },
     /// A construct of a built-in class that is recognised but not implemented.
     Unsupported(&'static str),
+    /// A texture format id with no size rule here.
+    UnsupportedTextureFormat(i32),
     /// A value outside the range its meaning allows.
     OutOfRange(&'static str),
     /// A string that is not UTF-8.
@@ -112,6 +114,7 @@ impl fmt::Display for Error {
             }
             Self::Field { class, field } => write!(f, "{class}.{field} missing or wrong kind"),
             Self::Unsupported(what) => write!(f, "unsupported: {what}"),
+            Self::UnsupportedTextureFormat(id) => write!(f, "texture format {id} has no size rule"),
             Self::OutOfRange(what) => write!(f, "out of range: {what}"),
             Self::InvalidUtf8 => write!(f, "string is not UTF-8"),
         }

@@ -113,10 +113,10 @@ fn build_tree(flat: Vec<FlatNode>) -> Result<TypeNode> {
                 break;
             }
         }
-        if let Some(&(lvl, _)) = stack.last() {
-            if f.level != lvl + 1 {
-                return Err(Error::Malformed("typetree levels skip or repeat the root"));
-            }
+        if let Some(&(lvl, _)) = stack.last()
+            && f.level != lvl + 1
+        {
+            return Err(Error::Malformed("typetree levels skip or repeat the root"));
         }
         if usize::from(f.level) > MAX_DEPTH {
             return Err(Error::LimitExceeded {

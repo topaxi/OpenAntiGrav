@@ -11,6 +11,11 @@ pub fn lz4_block(src: &[u8], out_len: usize) -> Result<Vec<u8>> {
         codec: "lz4",
         reason: reason.to_string(),
     };
+    // LZ4 cannot expand by more than 255:1, so a hostile declared size cannot
+    // make this reserve more than the input could ever fill.
+    if out_len > src.len().saturating_mul(255) {
+        return Err(bad("declared size exceeds what the input can expand to"));
+    }
     let mut out = Vec::with_capacity(out_len);
     let mut i = 0usize;
     while i < src.len() {
@@ -78,10 +83,15 @@ pub fn lz4_block(src: &[u8], out_len: usize) -> Result<Vec<u8>> {
 /// The most dictionary memory an LZMA stream may ask for.
 const LZMA_MEMLIMIT: usize = 256 << 20;
 
+/// The most output reserved up front before data has actually arrived.
+const RESERVE_CAP: usize = 64 << 20;
+
 /// Decodes Unity's LZMA framing: five property bytes, then the stream, with the
 /// unpacked size taken from the block table rather than a header field.
 pub fn lzma_block(src: &[u8], out_len: usize) -> Result<Vec<u8>> {
-    let mut out = Vec::with_capacity(out_len);
+    // LZMA has no fixed expansion bound, so reserve a modest amount and let the
+    // vector grow as data actually arrives.
+    let mut out = Vec::with_capacity(out_len.min(RESERVE_CAP));
     let options = lzma_rs_perf_exp::decompress::Options {
         unpacked_size: lzma_rs_perf_exp::decompress::UnpackedSize::UseProvided(Some(
             out_len as u64,

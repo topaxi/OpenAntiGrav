@@ -1,6 +1,13 @@
 //! Every UnityFS bundle in the Workshop census opens.
+//!
+//! Census (92 item files under `data/unity/workshop-473770`, counted by
+//! `read_dir` over each item directory): 47 `.csf` ship bundles, 32 `.wtrk`
+//! track files that wrap a bundle at an offset, 13 `.shp` legacy ships that
+//! hold none.
 
 mod common;
+
+use std::collections::BTreeMap;
 
 use oag_unity::bundle::Bundle;
 
@@ -10,26 +17,43 @@ fn census_opens_every_bundle() {
     let Some(root) = common::workshop() else {
         return;
     };
-    let (mut bundles, mut skipped) = (0, 0);
+    let (mut skipped, mut by_ext) = (0, BTreeMap::<String, usize>::new());
+    let mut shape = BTreeMap::<(u32, String, u32), usize>::new();
+    let mut streams = 0;
     for item in common::items(&root) {
+        *by_ext.entry(item.ext.clone()).or_default() += 1;
         let Some(bytes) = common::bundle_bytes(&item.path) else {
+            assert_eq!(item.ext, "shp", "{} holds no bundle", item.path.display());
             skipped += 1;
             continue;
         };
-        let t = std::time::Instant::now();
         let b = Bundle::parse(&bytes).unwrap_or_else(|e| panic!("{}: {e}", item.path.display()));
-        println!(
-            "{} {} v{} {} blocks={} comp={} nodes={} {:?}",
-            item.id,
-            item.ext,
-            b.archive_version,
-            b.engine_version,
-            b.block_count,
-            b.block_compression,
-            b.nodes().len(),
-            t.elapsed()
-        );
-        bundles += 1;
+        streams += b.nodes().iter().filter(|n| !n.is_serialized_file()).count();
+        *shape
+            .entry((
+                b.archive_version,
+                b.engine_version.clone(),
+                b.block_compression,
+            ))
+            .or_default() += 1;
     }
-    println!("bundles={bundles} skipped={skipped}");
+    assert_eq!(
+        by_ext,
+        [("csf", 47), ("shp", 13), ("wtrk", 32)]
+            .map(|(k, v)| (k.to_string(), v))
+            .into_iter()
+            .collect()
+    );
+    assert_eq!(skipped, 13);
+    // Archive version, engine, block codec (1 = LZMA for tracks, 3 = LZ4HC for ships).
+    let want: BTreeMap<(u32, String, u32), usize> = [
+        ((6, "2018.3.8f1", 1), 31),
+        ((6, "2018.3.8f1", 3), 47),
+        ((7, "2020.3.5f1", 1), 1),
+    ]
+    .map(|((v, e, c), n)| ((v, e.to_string(), c), n))
+    .into_iter()
+    .collect();
+    assert_eq!(shape, want);
+    assert_eq!(streams, 125, "raw .resS and .resource nodes");
 }
