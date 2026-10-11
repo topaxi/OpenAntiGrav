@@ -59,9 +59,9 @@ fn damaged_lzma_track() {
     };
     let item = common::items(&root)
         .into_iter()
-        .find(|i| i.id == "2667677046")
+        .find(|i| i.id == "1392209921")
         .unwrap();
     let bytes = common::bundle_bytes(&item.path).unwrap();
-    let (opened, refused) = damage(&bytes, 80, 0x1234_5679);
-    assert_eq!(opened + refused, 80);
+    let (opened, refused) = damage(&bytes, 60, 0x1234_5679);
+    assert_eq!(opened + refused, 60);
 }

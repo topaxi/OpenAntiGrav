@@ -32,9 +32,11 @@ The crate holds Unity specifics only. Everything below is the layer *on top of i
 - **Block texture decode**: the crate returns raw `DXT1`/`DXT3`/`DXT5` pixels. A consumer decodes
   through `oag_texture::bcn` (`dxt1`, `dxt23`, `dxt45`, now `pub`); a whole-texture helper belongs in
   the layer, not in `oag-unity`.
-- **Not exercised in the census, so untested** (documented in the format page): meshes with more than
-  one vertex stream, non-float channels, triangle strips, `Float16` decoding, compressed meshes,
-  SerializedFile versions 18 to 21, bundles with the info at the end, crunched textures.
+- **Not exercised by any real file, so untested against Unity** (the format page scores each): meshes
+  with more than one vertex stream, non-float channels, triangle strips and `Float16` decoding (only the
+  synthetic tests build these), vertex format ids of 3 or more on engines before 2019 (refused by name:
+  UnityPy's 2017/2018 table disagrees with the older one), compressed meshes, SerializedFile versions 18
+  to 21, bundles with the info at the end, crunched textures. A new content family may hit them first.
 - **Audio** (78 `.resource` streams, 129 MB) is not read, nor are `AudioClip`s.
 - **Scenery colliders**: whether the originating game treats scenery `MeshCollider`s as solid is
   unknown; a minimal race would ignore them and say so in the loader report.

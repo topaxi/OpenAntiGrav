@@ -42,10 +42,13 @@ once, in the test scaffolding (`crates/unity/tests/common/mod.rs`). Unwrapping i
 is the content layer's job.
 
 **Streams are in use.** An earlier probe read "no external `.resS`" off the
-tracks; the ships carry **275 of their 2,302-texture total** in their bundle's
+tracks; the ships carry **275 of the census's 2,302 textures** in their bundle's
 `.resS` node (47 nodes, 136 MB), referenced by `m_StreamData`. They are read
-(`Assets::texture`). The 78 `.resource` nodes (129 MB) are audio streams and are
-not read: **audio is out of scope**.
+(`Assets::texture`). The 78 `.resource` nodes (129 MB) are audio streams,
+measured: all 134 `AudioClip` objects in the census have an
+`m_Resource.m_Source` naming a `.resource` node (asserted in
+`classes_ground_truth`; UnityPy agrees). They are not read: **audio is out of
+scope**.
 
 ## UnityFS container
 
@@ -184,16 +187,26 @@ them have no vertices). Then the index buffer is `u16` (`m_IndexFormat`
 0) or `u32` (1); a submesh is a byte offset, an index count, a topology and a
 base vertex that is added to each index. Indices past the vertex count are refused.
 
-**Format ids differ before and after 2019.** Before: 0 float, 1 float16, 2 UNorm8
-(`Color`), 3 UInt8, 4 UInt32. From 2019: 0 float, 1 float16, 2 UNorm8, 3 SNorm8,
-4 UNorm16, 5 SNorm16, 6 UInt8, 7 SInt8, 8 UInt16, 9 SInt16, 10 UInt32, 11
-SInt32. **Exercised: Float32 (every channel, both engine versions) and
-UNorm8 x4 for 2018 colours (186 meshes). Everything else is *not exercised*,
-as are streams other than 0, index width 32 on 2020, triangle strips and
-`Float16` decoding.** Topology 0 (triangles) is the only one in the census;
-strips are implemented, quads, lines and points are `Unsupported`. A compressed
-mesh (`m_MeshCompression != 0`) and a mesh with data in an external stream are
-refused by name (none in the census).
+**The channel format ids are not one table.** UnityPy carries three: before 2017
+five ids (float, float16, colour, byte, uint32); **2017 and 2018** thirteen, with
+the 8-bit types one higher than later (colour 2, UNorm8 3, SNorm8 4, ...); 2019 and
+later twelve, the public `VertexAttributeFormat` enum (0 float32, 1 float16, 2
+UNorm8, 3 SNorm8, 4 UNorm16, 5 SNorm16, 6 UInt8, 7 SInt8, 8 UInt16, 9 SInt16, 10
+UInt32, 11 SInt32). Ids 0 to 2 mean the same in all three. The reader accepts 0
+to 2 for every engine, **ids 3 to 11 only for engine 2019 and later, and refuses
+an id of 3 or more from an older engine by name** (`Unsupported`): the census
+never uses one, the byte-exact stride check cannot tell the 1-byte types apart,
+and the two older tables disagree with each other.
+
+**What the census exercises:** Float32 on every channel of every mesh, both engine
+versions, and UNorm8 x4 for 2018 vertex colours (186 meshes), all on stream 0
+with 16-bit indices (and 32-bit on 2 meshes), triangle lists only. **Multiple
+streams, Float16, the 2019 table's ids 3 to 11 and triangle strips are
+exercised only by the synthetic tests in `tests/synthetic.rs`**, which build a
+mesh from the reader's own reading of the layout: they prove the code does what
+this page says, not that Unity does. Quads, lines and points are `Unsupported`; a
+compressed mesh (`m_MeshCompression != 0`) and a mesh with data in an external
+stream are refused by name (none in the census).
 
 ### Texture2D
 
@@ -204,10 +217,14 @@ each level up to 4x4 blocks) and refuses an unknown format
 (`UnsupportedTextureFormat(id)`), a size mismatch, a crunched format, and an empty texture
 that carries pixels. A `0 x 0` texture is empty by name, not an error: Unity's
 dynamic-font atlas is the one in every track. Rows are bottom-up in the file;
-`base_level_rgba8` returns top-down for the uncompressed formats. **Block
-formats are not decoded in the crate**: `oag_texture::bcn::dxt1` / `dxt45` decode
-a block, and the export test shows the whole path. `ARGB32` is bytes A,R,G,B;
-the atlas the export test writes reads upright.
+`base_level_rgba8` returns top-down for the uncompressed formats, and **its
+channel order is checked pixel for pixel**: for all 823 `ARGB32`, `RGB24` and
+`RGBA32` textures (`ARGB32` is bytes A,R,G,B) the CRC-32 of the reader's RGBA8
+equals the CRC-32 of UnityPy's `image`. **Block formats are not decoded in the
+crate**: `oag_texture::bcn::dxt1` / `dxt45` decode a block, and the export test
+shows the whole path; the two DXT1 images it wrote (a ship livery and a track
+atlas) were looked at and are upright and legible, which is a look, not a
+measurement.
 
 ## Verification
 
@@ -221,27 +238,65 @@ contract (`OAG_REQUIRE_GAME_DATA=1` makes a missing tree a failure):
   [`scripts/unity-oracle.py`](../../scripts/unity-oracle.py) (UnityPy 1.25.4 as a
   second implementation), **1,529 meshes match** on vertex count, triangle count and
   the absolute sums of positions, normals and UV0; **2,302 textures match** on
-  size, format, mip count and complete image size. UnityPy's exporter refuses 41
+  size, format, mip count and complete image size, and **823 uncompressed
+  textures match pixel for pixel** (CRC-32 of the top-down RGBA8). UnityPy's exporter refuses 41
   meshes; all 41 have no vertices in this reader too.
 - `known_items`: Lion's Den (`1392209921`, 43 meshes / 26,009 triangles / 38,604
   vertices, 79 textures, 2,409 + 162 objects) and Cliffhawk (`2050936018`, 17
   GameObjects, `MatCliffhawkClean`'s three slots resolve to the right textures).
-- `hostile_real` and `synthetic`: damaged input returns errors, never a panic.
+- `hostile_real` (a damaged real LZ4HC ship and LZMA track, Lion's Den) and
+  `synthetic` (a built bundle and SerializedFile with every prefix cut and 20,000
+  bit flips, LZ4 vectors, and the mesh layouts above): damaged input returns
+  errors, never a panic.
 - `install_census`: the game install's 27 version 22 files open and refuse by name.
 - `export_samples` (with `OAG_UNITY_EXPORT=<dir>`): an OBJ and wireframe PNG of
   Cliffhawk's body and Lion's Den's floor, and the two texture PNGs, written for a
   person to look at. Viewed: the ship reads as a ship, the atlas and the livery
   are upright with legible text.
 
+## Confidence
+
+Scores follow the [rubric](../reverse-engineering/confidence-rubric.md); the
+evidence column names the check. Nothing here has a runtime trace of Unity's own
+reader, so the ceiling is 94.
+
+| Claim | Score | Evidence |
+| --- | --- | --- |
+| UnityFS v6 header, blocks info, block and node tables, LZMA and LZ4HC framing | 92 | all 79 bundles open; every block decompresses to exactly its declared size; every node range lies inside the data |
+| Version 7 aligns to 16 after the header | 80 | one v7 bundle, which fails to parse without it |
+| Combined info and directory flag `0x40` (set on all 79); block flag `0x40` "streamed" (ignored) | 70 / 55 | constant across the census, so the reader's ignoring them is untested |
+| Flags `0x80` (info at end) and `0x200` (padding), uncompressed and LZHAM blocks | 55 | published layout only; no census file uses them |
+| SerializedFile version 17 layout | 93 | 109 files, 123,083 objects, each object's walk consuming its bytes exactly |
+| SerializedFile version 22 header with wide fields | 85 | 2 bundle files read exactly, plus 27 install files whose headers, type and object tables parse |
+| SerializedFile versions 18 to 21 | 50 | interpolated from 17 and 22; never seen |
+| Typetree blob nodes of 24 bytes (< 19) and 32 (>= 19) | 93 / 85 | `count x size + strings` closes on all 111 files; 19 to 21 not seen |
+| The built-in common-string table (names from UnityPy; used offsets resolve) | 92 | every high-bit offset in 111 files lands on a boundary and builds a tree that consumes its objects exactly |
+| "The table only ever grew at the end", so a newer table serves older files | 70 | inferred from Unity's habit; only the prefix the census uses is tested |
+| Meta flag `0x4000` aligns to 4 after a node; arrays of 8-bit integers as bytes; `vector` as its array | 93 | exact consumption of every object |
+| Mesh stream layout (stride = largest channel end, streams at 16-byte boundaries) for stream 0 | 93 | `end of last stream == buffer length` on 1,570 meshes and the oracle match on 1,529 |
+| The same for more than one stream | 55 | synthetic test only |
+| Vertex format ids 0 and 2 on engines before 2019; id 0 on 2020 | 93 | 1,570 meshes; 186 with UNorm8 colours |
+| Id 1 (float16) in every table | 65 | agrees across UnityPy's three tables; synthetic test only |
+| The 2019+ table, ids 3 to 11 | 72 | the public enum; never exercised |
+| The 2017 and 2018 table, ids 3 and up | n/a, refused | UnityPy's two older tables disagree about them |
+| Index format, `baseVertex`, submesh topology 0 | 92 | indices stay inside the vertex count on all meshes; triangle counts match UnityPy |
+| Triangle strips | 60 | synthetic only |
+| Texture mip-chain sizes for DXT1, DXT3, DXT5, ARGB32, RGB24, RGBA32 | 93 | pixel bytes equal the mip chain on 2,302 textures; sizes match UnityPy |
+| Channel order of ARGB32, RGB24, RGBA32 | 94 | pixel CRCs match UnityPy on 823 textures |
+| Texture pixels in a bundle's `.resS` node | 93 | 275 streamed textures validate against their mip chain and match UnityPy |
+| `.resource` nodes are audio streams | 90 | 134 of 134 `AudioClip`s name one |
+| `GameObject`, `Transform`, `Material` field meanings and `Assets::transform_path` | 88 | exact consumption on 17,570 objects; one ship's hierarchy path and material slots checked by hand |
+
 ## Not covered
 
-- Meshes: multi-stream layouts, non-float channels, strips, compressed meshes,
-  blend shapes and skinning (the data is read as values; nothing decodes it).
+- Meshes: compressed meshes, blend shapes and skinning (the data is read as
+  values; nothing decodes it), and the exercised-only-synthetically items above.
 - `Texture2D` formats beyond the six seen, crunched textures, cube maps and arrays.
 - Audio clips and the 78 `.resource` streams. The `.wtrk` and `.shp` wrappers.
 - Anything about what a `MonoBehaviour`'s fields mean.
 - Bundles with a `0x80` blocks-info-at-end flag, LZHAM, and SerializedFiles of
   versions 18 to 21, which are implemented from the layout but never seen.
+- Vertex format ids of 3 or more from an engine before 2019 (refused by name).
 
 ## Cross-title check
 

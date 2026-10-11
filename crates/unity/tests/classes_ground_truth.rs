@@ -10,6 +10,8 @@ use oag_unity::bundle::Bundle;
 use oag_unity::classes::{GameObject, Material, Mesh, MonoBehaviour, Transform};
 use oag_unity::serialized::class_id;
 
+const AUDIO_CLIP: i32 = 83;
+
 #[test]
 #[ignore = "needs data/unity"]
 fn every_builtin_class_reads() {
@@ -17,6 +19,7 @@ fn every_builtin_class_reads() {
         return;
     };
     let mut ok: BTreeMap<i32, usize> = BTreeMap::new();
+    let mut clips = 0usize;
     let mut formats: BTreeMap<String, usize> = BTreeMap::new();
     let mut refused: BTreeMap<(i32, String), usize> = BTreeMap::new();
     for item in common::items(&root) {
@@ -28,6 +31,16 @@ fn every_builtin_class_reads() {
         for sf in assets.files() {
             let major: u32 = sf.unity_version.split('.').next().unwrap().parse().unwrap();
             for o in &sf.objects {
+                if o.class_id == AUDIO_CLIP {
+                    let v = sf.read_object(o).unwrap();
+                    let src = v
+                        .get("m_Resource")
+                        .and_then(|r| r.get("m_Source"))
+                        .and_then(|s| s.as_str());
+                    assert!(src.is_some_and(|s| s.ends_with(".resource")), "{src:?}");
+                    clips += 1;
+                    continue;
+                }
                 let r = match o.class_id {
                     class_id::MESH
                     | class_id::TEXTURE_2D
@@ -56,6 +69,7 @@ fn every_builtin_class_reads() {
         }
     }
     assert!(refused.is_empty(), "{refused:?}");
+    assert_eq!(clips, 134, "every AudioClip streams from a .resource node");
     assert_eq!(
         ok,
         [

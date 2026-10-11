@@ -35,6 +35,7 @@ fn meshes_and_textures_match_unitypy() {
         rows.insert((c[1].clone(), c[2].clone(), c[3].parse().unwrap()), c);
     }
     let (mut meshes, mut textures, mut oracle_failed, mut diffs) = (0, 0, 0, Vec::new());
+    let mut pixel_checked = 0usize;
     for item in common::items(&root) {
         let Some(bytes) = common::bundle_bytes(&item.path) else {
             continue;
@@ -130,12 +131,23 @@ fn meshes_and_textures_match_unitypy() {
                             t.mip_count.to_string(),
                             t.data.len().to_string(),
                         ];
+                        // Uncompressed formats: the top-down RGBA8 pixels, by CRC-32.
+                        let pixels_ok = row[9] == "-"
+                            || t.base_level_rgba8().map(|p| crc32(&p).to_string())
+                                == Some(row[9].clone());
+                        if !pixels_ok {
+                            diffs.push(format!(
+                                "texture pixels {tag}: {:?} differ from UnityPy's",
+                                t.format
+                            ));
+                        }
                         if got != row[4..9] {
                             diffs.push(format!(
                                 "texture {tag}: ours {got:?}, oracle {:?}",
                                 &row[4..9]
                             ));
                         }
+                        pixel_checked += usize::from(row[9] != "-");
                         textures += 1;
                     }
                     _ => {}
@@ -152,6 +164,25 @@ fn meshes_and_textures_match_unitypy() {
     }
     assert!(diffs.is_empty());
     assert!(meshes > 1000 && textures > 2000);
+    assert!(pixel_checked > 800, "{pixel_checked}");
+}
+
+fn crc32(data: &[u8]) -> u32 {
+    let mut table = [0u32; 256];
+    for (i, e) in table.iter_mut().enumerate() {
+        let mut c = i as u32;
+        for _ in 0..8 {
+            c = if c & 1 != 0 {
+                0xedb8_8320 ^ (c >> 1)
+            } else {
+                c >> 1
+            };
+        }
+        *e = c;
+    }
+    !data.iter().fold(!0u32, |c, &b| {
+        table[((c ^ u32::from(b)) & 0xff) as usize] ^ (c >> 8)
+    })
 }
 
 fn format_id(t: &Texture2d) -> i32 {

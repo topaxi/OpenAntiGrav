@@ -264,3 +264,134 @@ fn lz4_decodes_literals_and_overlapping_matches_and_refuses_bad_blocks() {
         "absurd declared size"
     );
 }
+
+mod mesh {
+    use oag_unity::classes::Mesh;
+    use oag_unity::error::Error;
+    use oag_unity::value::{Struct, Value};
+    use std::sync::Arc;
+
+    fn st(name: &str, fields: Vec<(&str, Value)>) -> Value {
+        Value::Struct(Struct {
+            type_name: Arc::from(name),
+            fields: fields.into_iter().map(|(n, v)| (Arc::from(n), v)).collect(),
+        })
+    }
+
+    fn channel(stream: u64, offset: u64, format: u64, dimension: u64) -> Value {
+        st(
+            "ChannelInfo",
+            vec![
+                ("stream", Value::UInt(stream)),
+                ("offset", Value::UInt(offset)),
+                ("format", Value::UInt(format)),
+                ("dimension", Value::UInt(dimension)),
+            ],
+        )
+    }
+
+    /// Five vertices over two streams: stream 0 holds float positions, stream 1
+    /// holds an 8-bit colour then half-float UVs. Stream 1 starts at the next
+    /// multiple of 16 after stream 0's 60 bytes.
+    fn mesh_value(compression: i64, colour_format: u64, data_len_delta: isize) -> Value {
+        let mut channels = vec![channel(0, 0, 0, 0); 14];
+        channels[0] = channel(0, 0, 0, 3);
+        channels[3] = channel(1, 0, colour_format, 4);
+        channels[4] = channel(1, 4, 1, 2);
+        let mut data = Vec::new();
+        for v in 0..5u32 {
+            for c in [v as f32, v as f32 * 2.0, -(v as f32)] {
+                data.extend_from_slice(&c.to_le_bytes());
+            }
+        }
+        data.resize(64, 0);
+        for v in 0..5u8 {
+            data.extend_from_slice(&[255, 0, 51, v]);
+            // 1.0, 2.0, -2.0, 0.5 as binary16, cycling.
+            let h: [u16; 2] = [
+                [0x3c00, 0x4000, 0xc000, 0x3800, 0x3c00][usize::from(v)],
+                0x3800,
+            ];
+            for x in h {
+                data.extend_from_slice(&x.to_le_bytes());
+            }
+        }
+        data.resize((data.len() as isize + data_len_delta) as usize, 0);
+        let index: Vec<u8> = [0u16, 1, 2, 3, 4]
+            .iter()
+            .flat_map(|i| i.to_le_bytes())
+            .collect();
+        let sub = st(
+            "SubMesh",
+            vec![
+                ("firstByte", Value::UInt(0)),
+                ("indexCount", Value::UInt(5)),
+                ("topology", Value::Int(1)),
+                ("baseVertex", Value::UInt(0)),
+                ("firstVertex", Value::UInt(0)),
+                ("vertexCount", Value::UInt(5)),
+            ],
+        );
+        st(
+            "Mesh",
+            vec![
+                ("m_Name", Value::String("synthetic".into())),
+                ("m_SubMeshes", Value::Array(vec![sub])),
+                ("m_MeshCompression", Value::UInt(compression as u64)),
+                ("m_IndexFormat", Value::Int(0)),
+                ("m_IndexBuffer", Value::Bytes(index)),
+                (
+                    "m_VertexData",
+                    st(
+                        "VertexData",
+                        vec![
+                            ("m_VertexCount", Value::UInt(5)),
+                            ("m_Channels", Value::Array(channels)),
+                            ("m_DataSize", Value::Bytes(data)),
+                        ],
+                    ),
+                ),
+            ],
+        )
+    }
+
+    #[test]
+    fn two_streams_half_floats_colours_and_strips_decode() {
+        let m = Mesh::from_value(&mesh_value(0, 2, 0), 2018).unwrap();
+        assert_eq!(m.vertex_count, 5);
+        assert_eq!(m.positions().unwrap().unwrap()[3], [3.0, 6.0, -3.0]);
+        let uv = m.uvs(0).unwrap().unwrap();
+        assert_eq!(
+            (uv[0], uv[1], uv[2], uv[3]),
+            ([1.0, 0.5], [2.0, 0.5], [-2.0, 0.5], [0.5, 0.5])
+        );
+        let c = m.colors().unwrap().unwrap();
+        assert_eq!(c[2], [1.0, 0.0, 0.2, 2.0 / 255.0]);
+        assert_eq!(
+            m.triangles(0).unwrap(),
+            vec![[0, 1, 2], [2, 1, 3], [2, 3, 4]]
+        );
+    }
+
+    #[test]
+    fn unverified_tables_compressed_meshes_and_wrong_sizes_are_named() {
+        // Format id 3 is 8-bit UInt in one pre-2019 table and UNorm8 in another: refused, not guessed.
+        assert!(matches!(
+            Mesh::from_value(&mesh_value(0, 3, 0), 2018),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(Mesh::from_value(&mesh_value(0, 3, 0), 2019).is_ok());
+        assert!(matches!(
+            Mesh::from_value(&mesh_value(1, 2, 0), 2018),
+            Err(Error::Unsupported("compressed mesh"))
+        ));
+        assert!(matches!(
+            Mesh::from_value(&mesh_value(0, 2, 1), 2018),
+            Err(Error::Malformed(_))
+        ));
+        assert!(matches!(
+            Mesh::from_value(&mesh_value(0, 2, -1), 2018),
+            Err(Error::Malformed(_))
+        ));
+    }
+}

@@ -32,23 +32,28 @@ pub enum VertexFormat {
 }
 
 impl VertexFormat {
-    /// Maps a channel format id. The ids were renumbered in 2019: before it,
-    /// Unity had five (`Float`, `Float16`, `Color`, `Byte`, `UInt32`).
+    /// Maps a channel format id.
+    ///
+    /// Ids 0 to 2 (float, float16, 8-bit colour) mean the same in every table
+    /// Unity has had, and are the only ones the pre-2019 content exercises. Beyond
+    /// them the table depends on the engine: UnityPy carries three (before 2017
+    /// five ids, 2017 and 2018 thirteen with the 8-bit types shifted up by one,
+    /// 2019 and later the twelve of the public `VertexAttributeFormat` enum). Only
+    /// the last is trusted here; an id of 3 or more from an older engine is
+    /// refused by name rather than guessed.
     pub fn from_id(id: u32, engine_major: u32) -> Result<Self> {
+        match id {
+            0 => return Ok(Self::Float32),
+            1 => return Ok(Self::Float16),
+            2 => return Ok(Self::UNorm8),
+            _ => {}
+        }
         if engine_major < 2019 {
-            return Ok(match id {
-                0 => Self::Float32,
-                1 => Self::Float16,
-                2 => Self::UNorm8,
-                3 => Self::UInt8,
-                4 => Self::UInt32,
-                _ => return Err(Error::Unsupported("vertex channel format")),
-            });
+            return Err(Error::Unsupported(
+                "vertex channel format id 3 or more before engine 2019 (table unverified)",
+            ));
         }
         Ok(match id {
-            0 => Self::Float32,
-            1 => Self::Float16,
-            2 => Self::UNorm8,
             3 => Self::SNorm8,
             4 => Self::UNorm16,
             5 => Self::SNorm16,

@@ -13,7 +13,7 @@ Each item file may be a bare bundle or wrap one at an offset (the signature is
 searched for). Rows, tab separated:
 
     M item file path_id v f vn vt |v|x |v|y |v|z |n|x |n|y |n|z |uv|u |uv|v
-    T item file path_id width height format mips complete_image_size
+    T item file path_id width height format mips complete_image_size rgba_crc32_or_-
     E item file path_id class            (UnityPy itself failed on this object)
 
 `|x|` columns are sums of absolute values over the exported OBJ's vertices, so
@@ -22,6 +22,7 @@ the exporter's axis flips do not matter.
 
 import glob
 import sys
+import zlib
 
 import UnityPy
 from UnityPy.enums import ClassIDType
@@ -53,8 +54,14 @@ def main(root, dest):
                            *abs_sums(v, 3), *abs_sums(vn, 3), *abs_sums(vt, 2)]
                 elif o.type == ClassIDType.Texture2D:
                     t = o.read()
-                    row = ["T", *key, t.m_Width, t.m_Height, int(t.m_TextureFormat),
-                           t.m_MipCount, t.m_CompleteImageSize]
+                    fmt = int(t.m_TextureFormat)
+                    # CRC-32 of the top-down RGBA8 pixels, for the uncompressed formats
+                    # (RGB24, RGBA32, ARGB32, BGRA32) whose channel order is ours to get right.
+                    crc = "-"
+                    if fmt in (3, 4, 5, 14) and t.m_Width and t.m_Height:
+                        crc = zlib.crc32(t.image.convert("RGBA").tobytes())
+                    row = ["T", *key, t.m_Width, t.m_Height, fmt,
+                           t.m_MipCount, t.m_CompleteImageSize, crc]
                 else:
                     continue
             except Exception:
