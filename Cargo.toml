@@ -100,7 +100,6 @@ oag-ui = { path = "crates/ui" }
 oag-ui-screens = { path = "crates/ui-screens" }
 oag-vex = { path = "crates/vex" }
 oag-video = { path = "crates/video" }
-oag-unity = { path = "crates/unity" }
 oag-weapons = { path = "crates/weapons" }
 
 anyhow = "1"
