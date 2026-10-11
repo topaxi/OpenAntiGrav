@@ -1327,3 +1327,4 @@
 # 2026-10-08 pulse-menu-sfx lane: which sounds the front end plays (menu-sounds.md)
 0x0893aba4	function	SoundManager_LoadBootBanks	80	menu-sounds.md
 
+0x088b6514	function	Menu_PlayTeletypeTick	80	menu-sounds.md

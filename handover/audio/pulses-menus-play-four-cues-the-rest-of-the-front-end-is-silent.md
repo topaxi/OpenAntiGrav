@@ -17,8 +17,8 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    `oag-game --no-audio` in a private Xvfb, keys injected with `xdotool`, the log showing the four `sfx:` load lines at
    boot and `menu sound: UPDOWN/ACCEPT/DECLINE/LEFTRIGHT (started: true)` for Down, Return on a submenu, BackSpace
    and Right on a choice. Dropping the call in `frame.rs` or the load in `prepare.rs` would only show there.
-3. **Not wired, recovered:** `TELETYPE` (needs a text-reveal effect; the pitch argument is `(width/100 - 1) * 0.2 * 90`),
-   the place lines (`FIRST_PLACE` ...) and medal lines (`gold_med` ...) from `speech_results.bnk` on EndRace, which are
+3. ~~`TELETYPE`~~ **Closed 2026-10-11 (negative):** it is a per-menu-row cue off the `Menu` class, and 0 hits on PPSSPP across boot, main menu, single player and racebox; no authored `MenuDisplayType` is `TELETYPE` or `SCROLLING` (evidence in menu-sounds.md). Open only: a Menu with no authored type on an unwalked page, and the silent `<Text DisplayType="TELETYPE">` type-in the port draws whole (rate unmeasured).
+   **Not wired, recovered:** the place lines (`FIRST_PLACE` ...) and medal lines (`gold_med` ...) from `speech_results.bnk` on EndRace, which are
    plain named cues in a bank the port does not load.
 4. **Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME` in `FRONT_END_VO.bnk` (team and circuit name voices on
    the selection screens). The selector is `FUN_0898dac0(slot, value)` writing a 32-byte table; which guard reads it
