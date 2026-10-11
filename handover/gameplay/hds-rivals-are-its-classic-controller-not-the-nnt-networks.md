@@ -59,3 +59,12 @@ the identity.
    `s / (sqrt(s*s + 1) + 1)` (`sqrt` only, deterministic under the project's rules), the inputs
    are on [ai-net.md](../../docs/ghidra/functions/ps3-hdfury-eu/ai-net.md) at confidence 65, and
    the result is chosen, not measured.
+
+## 2026-10-11: Pulse's side is read
+
+Pulse's `Ai_ComputeControls` is read at instruction level and its thrust law
+measured live on 1,140 samples, with the lane planner and the lane rail beside
+it ([ai-controls.md](../../docs/ghidra/functions/psp-pulse-usa/ai-controls.md)).
+HD's steering law inside its `AI_ComputeControls` (`0x00100658`) can be read
+against Pulse's now rather than from scratch.
+

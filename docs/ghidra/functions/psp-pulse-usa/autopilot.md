@@ -257,7 +257,13 @@ left as a loose end rather than chased further.
 
 ## Not determined
 
-- **Where the control source is actually swapped.** `Ai_Construct` (`0x088536bc`)
+- **Where the control source is actually swapped. Found 2026-10-11**
+  ([ai-controls.md](ai-controls.md#who-drives-whom-the-control-record)):
+  `Ship_UpdateCraft` reads the craft's controls through `craft+0x78`, which is
+  `craft+0x3c` (the pad record) unless the blend `craft+0x1d4` is non-zero, when
+  it copies `craft+0x40`'s record, the `"autopilot input"` below, over it. What
+  sets the blend from bit `0x800` is still not read. The original note:
+  `Ai_Construct` (`0x088536bc`)
   names the local player's input `"autopilot input"`, which
   [`weapon-stats.md`](../../../formats/weapon-stats.md) already records, so the
   player's craft carries a driver object for exactly this. Which code reads bit

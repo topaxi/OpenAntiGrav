@@ -4,7 +4,7 @@
 
 ## Open
 
-- The units the parser stores are never consumed - the consumer is not identified
+- ~~The units the parser stores are never consumed - the consumer is not identified~~ **Closed 2026-10-11** (`orig-ai-pulse`): the consumer is `AI_ComputeOpponentThrust` plus the driver around it, measured live; see [ai-controls.md](../../docs/ghidra/functions/psp-pulse-usa/ai-controls.md)
 - Pure's `Position` sign convention is unresolved
 - Which of Pure's two per-class blocks is live is unresolved
 - Porting the fire/absorb decision needs the two skill indices at `self+0x34`/`+0x38` and the `0..1` scalar at `+0x2c` - none read yet
@@ -12,7 +12,7 @@
 ## Next Steps
 
 - Land the nine renames on the `ai-recovery` branch's `names.tsv`, or revert them, before a fresh Ghidra import
-- Identify the consumer of the units the parser stores
+- ~~Identify the consumer of the units the parser stores~~ done 2026-10-11, see above
 
 ## 2026-09-16: the fire-or-absorb decision is ported on a branch, and the branch is red
 
