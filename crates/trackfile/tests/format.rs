@@ -210,3 +210,15 @@ fn an_unwritable_track_is_refused_before_a_file_exists() {
     t.id.clear();
     assert!(matches!(to_parts(&t, "x.glb"), Err(Error::Unwritable(_))));
 }
+
+#[test]
+fn the_original_ai_bytes_round_trip_when_a_point_carries_them() {
+    let mut track = fixture::oval();
+    let points = &mut track.ai.paths[0].points;
+    points[3].unk_0x5c = Some(40);
+    points[3].unk_0x5d = Some(200);
+    points[3].unk_0x66 = Some(0);
+    let p = to_parts(&track, "oval.glb").expect("writable");
+    let loaded = from_parts(&p.manifest, &p.glb).expect("reads");
+    assert_eq!(loaded.track, track);
+}

@@ -206,3 +206,17 @@ fn an_attribute_it_does_not_know_is_refused_by_name() {
         Err(Error::UnknownAttribute { attribute, .. }) if attribute == "Extra"
     ));
 }
+
+#[test]
+fn a_ninth_grid_place_is_refused_by_name() {
+    let text = full("").replace(
+        "</StartStats>",
+        r#"<GridPlace9 StartBoost="1" BaseStartThrust="1"/></StartStats>"#,
+    );
+    assert_eq!(
+        parse_full(&text, SpeedClass::Venom),
+        Err(Error::UnknownElement {
+            element: "GridPlace9".to_string()
+        })
+    );
+}

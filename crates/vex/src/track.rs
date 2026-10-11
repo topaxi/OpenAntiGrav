@@ -219,7 +219,9 @@ pub struct SplinePoint {
     /// original's lane planner reads, **as the original sees it**: `0xff` on
     /// every point of a track older than [`LANE_BAND_VERSION`], which the loader
     /// forces. `None` on the short points of [`SHORT_POINT_VERSION`] onwards,
-    /// where `+0x5c` is [`Self::section_id`]. `0xff` with a `0x00` high end
+    /// where `+0x5c` is [`Self::section_id`] (whether the short record
+    /// relocated a band is unplaced: its `+0x5a`/`+0x5b` read `0xff`/`0x00`, the
+    /// disabled default, and are the candidate). `0xff` with a `0x00` high end
     /// disables the band. Unnamed pending the census in `docs/formats/track.md`.
     pub unk_0x5c: Option<u8>,
     /// `+0x5d`, the high end of the lane band; `0x00` before

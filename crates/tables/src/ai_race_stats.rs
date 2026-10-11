@@ -348,6 +348,7 @@ pub fn parse_class_race(expanded: &str, element: &str) -> Result<ClassRace> {
     let thrust = parse_node(balancing)?;
 
     let positions = child(balancing, "PosBalancing")?;
+    only_children(positions, &numbered("PlayerInPos", 8))?;
     let mut spread_dist = [0.0; 8];
     for (index, value) in spread_dist.iter_mut().enumerate() {
         let name = format!("PlayerInPos{}", index + 1);
@@ -357,6 +358,10 @@ pub fn parse_class_race(expanded: &str, element: &str) -> Result<ClassRace> {
     }
 
     let rubber = child(balancing, "RubberBanding")?;
+    only_children(
+        rubber,
+        &["WhenLeading".to_string(), "WhenBehind".to_string()],
+    )?;
     let row = |name: &str| -> Result<RubberRow> {
         let node = child(rubber, name)?;
         only_attributes(
@@ -373,6 +378,7 @@ pub fn parse_class_race(expanded: &str, element: &str) -> Result<ClassRace> {
     let (when_leading, when_behind) = (row("WhenLeading")?, row("WhenBehind")?);
 
     let starts = child(balancing, "StartStats")?;
+    only_children(starts, &numbered("GridPlace", 8))?;
     let mut grid = [GridPlace {
         start_boost: 0.0,
         base_start_thrust: 0.0,
@@ -388,6 +394,9 @@ pub fn parse_class_race(expanded: &str, element: &str) -> Result<ClassRace> {
     }
 
     let skill = child(balancing, "SkillScale")?;
+    let mut allowed = numbered("SkillScalePoint", 3);
+    allowed.extend(numbered("AIPackSwapping", 3));
+    only_children(skill, &allowed)?;
     let mut spread_multiplier = [0.0; 3];
     let mut pack_swapping = [PackSwapping {
         num_ai_position_swaps: 0.0,
@@ -442,6 +451,24 @@ pub fn parse_class_race(expanded: &str, element: &str) -> Result<ClassRace> {
         pack_swapping,
         split_screen,
     })
+}
+
+fn numbered(prefix: &str, count: usize) -> Vec<String> {
+    (1..=count).map(|i| format!("{prefix}{i}")).collect()
+}
+
+/// Refuses a child of `node` outside `known`, naming it.
+fn only_children(node: &Node, known: &[String]) -> Result<()> {
+    match node
+        .children
+        .iter()
+        .find(|c| !known.iter().any(|k| k.eq_ignore_ascii_case(&c.name)))
+    {
+        Some(other) => Err(Error::UnknownElement {
+            element: other.name.clone(),
+        }),
+        None => Ok(()),
+    }
 }
 
 /// Refuses an attribute of `node` outside `known`, naming it.

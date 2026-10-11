@@ -470,7 +470,7 @@ the first is below the second, so the shipped `0xff`/`0x00` means "no band"), an
 **Census (2026-10-12, measured, both PSP pressings, 40 tracks and 34,261 points
 on each; `oag-vex`'s `lane_band_census_ground_truth.rs`).** The three bytes are
 `SplinePoint::unk_0x5c`, `unk_0x5d` and `unk_0x66` (`None` on the short points of
-version `0x107`, whose `+0x5c`/`+0x5d` are the section and flags; `0x5c`/`0x5d`
+version `0x107`, whose `+0x5c`/`+0x5d` are the section and flags; where a 2048 band would live is unplaced, `+0x5a`/`+0x5b` (`0xff`/`0x00` on every 2048 point measured, the disabled default) being the candidate; `0x5c`/`0x5d`
 read as the forced `0xff`/`0x00` before version `0x105`). Every Pulse track is
 version `0x105`.
 
