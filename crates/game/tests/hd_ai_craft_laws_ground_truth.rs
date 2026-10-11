@@ -154,116 +154,128 @@ fn print_run(race: &Race, slot: usize, run: &Run, ticks: u64) {
     );
 }
 
-/// The twelve racing circuits (the four Zone environments left out), one opponent alone.
-const CIRCUITS: [&str; 12] = [
-    "talons_junction",
-    "01_vineta_k",
-    "05_ubermall",
-    "amphiseum",
-    "modesto_heights",
-    "tech_de_ra",
-    "02_track",
-    "03_track",
-    "04_chenghou_project",
-    "10_sebenco_climb",
-    "12_sol_2",
-    "15_anulpha_pass",
-];
-
-/// A lone Ace opponent on every HD circuit: laps, wall contacts, respawns and shield per lap,
-/// then the end of the run. Prints; asserts that each circuit saw a lap and that the
+/// A lone Ace opponent on one HD circuit: laps, wall contacts, respawns and shield per lap,
+/// then the end of the run. Prints; asserts that the circuit saw a lap and that the
 /// Ace touched no wall.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn lone_opponent_board() {
+fn lone_opponent(environment: &str) {
     const TICKS: u64 = 12_000;
-    for environment in CIRCUITS {
-        let Some(mut race) = started(&oag_hd::names::track(environment)) else {
-            return;
-        };
-        for slot in (0..8).filter(|&slot| slot != 1) {
-            race.sim.world.ships[slot].active = false;
-        }
-        let plan = if race.speed_plan().is_some() {
-            "followed"
-        } else {
-            "corner model"
-        };
-        let run = runs_of(&mut race, &[1], TICKS).remove(0);
-        let tight = race
-            .speed_plan()
-            .map_or(0, oag_ai::SpeedPlan::tight_samples);
-        println!(
-            "{environment} (speed plan {plan}, {tight} of {} samples tight)",
-            race.racing_line().len()
-        );
-        print_run(&race, 1, &run, TICKS);
-        assert!(
-            run.laps.len() >= 2,
-            "{environment}: the lone opponent finished no lap"
-        );
-        // Every circuit laps without a wall since the plan marks where it passes one
-        // closely and the Ace holds the plan's line into it (`docs/gameplay/ai.md`,
-        // "Tight corners"); Talon's Junction scraped 6 ticks without that.
-        assert_eq!(
-            race.wall_contact_ticks_of(1),
-            0,
-            "{environment}: the lone Ace touched a wall"
-        );
+    let Some(mut race) = started(&oag_hd::names::track(environment)) else {
+        return;
+    };
+    for slot in (0..8).filter(|&slot| slot != 1) {
+        race.sim.world.ships[slot].active = false;
     }
+    let plan = if race.speed_plan().is_some() {
+        "followed"
+    } else {
+        "corner model"
+    };
+    let run = runs_of(&mut race, &[1], TICKS).remove(0);
+    let tight = race
+        .speed_plan()
+        .map_or(0, oag_ai::SpeedPlan::tight_samples);
+    println!(
+        "{environment} (speed plan {plan}, {tight} of {} samples tight)",
+        race.racing_line().len()
+    );
+    print_run(&race, 1, &run, TICKS);
+    assert!(
+        run.laps.len() >= 2,
+        "{environment}: the lone opponent finished no lap"
+    );
+    // Every circuit laps without a wall since the plan marks where it passes one
+    // closely and the Ace holds the plan's line into it (`docs/gameplay/ai.md`,
+    // "Tight corners"); Talon's Junction scraped 6 ticks without that.
+    assert_eq!(
+        race.wall_contact_ticks_of(1),
+        0,
+        "{environment}: the lone Ace touched a wall"
+    );
 }
 
-/// The full AI field, weapons off, at five seeds: every opponent's laps and its end of run,
-/// then one summary line per seed.
-fn field(environment: &str) {
+/// One test per racing circuit (the four Zone environments left out), one opponent alone:
+/// each is a 12,000-tick run on its own core. A thirteenth circuit is a thirteenth line here.
+macro_rules! lone_opponent_tests {
+    ($($name:ident => $environment:literal),* $(,)?) => {$(
+        #[test]
+        #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+        fn $name() {
+            lone_opponent($environment);
+        }
+    )*};
+}
+
+lone_opponent_tests! {
+    lone_opponent_on_talons_junction => "talons_junction",
+    lone_opponent_on_vineta_k => "01_vineta_k",
+    lone_opponent_on_ubermall => "05_ubermall",
+    lone_opponent_on_amphiseum => "amphiseum",
+    lone_opponent_on_modesto_heights => "modesto_heights",
+    lone_opponent_on_tech_de_ra => "tech_de_ra",
+    lone_opponent_on_02_track => "02_track",
+    lone_opponent_on_03_track => "03_track",
+    lone_opponent_on_chenghou_project => "04_chenghou_project",
+    lone_opponent_on_sebenco_climb => "10_sebenco_climb",
+    lone_opponent_on_sol_2 => "12_sol_2",
+    lone_opponent_on_anulpha_pass => "15_anulpha_pass",
+}
+
+/// The full AI field, weapons off, at one seed: every opponent's laps and its end of run,
+/// then one summary line.
+fn field(environment: &str, seed: u64) {
     const TICKS: u64 = 12_000;
-    for seed in 1..=5u64 {
-        let Some(mut race) = started_seeded(&oag_hd::names::track(environment), Some(seed)) else {
-            return;
-        };
-        race.sim.world.ships[0].active = false;
-        let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
-        let runs = runs_of(&mut race, &slots, TICKS);
-        let (mut contacts, mut charged, mut lost, mut laps, mut lap_ticks) = (0, 0.0, 0.0, 0, 0);
-        for (run, &slot) in runs.iter().zip(&slots) {
-            println!("{environment} seed {seed} slot {slot}");
-            print_run(&race, slot, run, TICKS);
-            contacts += race.wall_contact_ticks_of(slot);
-            charged += race.wall_shield_charged_of(slot);
-            lost += 95.0 - race.sim.world.ships[slot].physics.shield;
-            // Flying laps only: the first is the standing start.
-            for lap in run.laps.iter().skip(1) {
-                laps += 1;
-                lap_ticks += lap.ticks;
-            }
+    let Some(mut race) = started_seeded(&oag_hd::names::track(environment), Some(seed)) else {
+        return;
+    };
+    race.sim.world.ships[0].active = false;
+    let slots: Vec<usize> = (1..race.sim.world.ship_count as usize).collect();
+    let runs = runs_of(&mut race, &slots, TICKS);
+    let (mut contacts, mut charged, mut lost, mut laps, mut lap_ticks) = (0, 0.0, 0.0, 0, 0);
+    for (run, &slot) in runs.iter().zip(&slots) {
+        println!("{environment} seed {seed} slot {slot}");
+        print_run(&race, slot, run, TICKS);
+        contacts += race.wall_contact_ticks_of(slot);
+        charged += race.wall_shield_charged_of(slot);
+        lost += 95.0 - race.sim.world.ships[slot].physics.shield;
+        // Flying laps only: the first is the standing start.
+        for lap in run.laps.iter().skip(1) {
+            laps += 1;
+            lap_ticks += lap.ticks;
         }
-        println!(
-            "{environment} seed {seed}: field wall-contact ticks {contacts}  wall-charged {charged:.1}  \
-             shield lost {lost:.1}  mean flying lap {:.2}s over {laps}",
-            lap_ticks as f32 / 60.0 / laps.max(1) as f32
-        );
     }
-}
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn field_on_talons_junction() {
-    field("talons_junction");
-}
-
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn field_on_vineta_k() {
-    field("01_vineta_k");
+    println!(
+        "{environment} seed {seed}: field wall-contact ticks {contacts}  wall-charged {charged:.1}  \
+         shield lost {lost:.1}  mean flying lap {:.2}s over {laps}",
+        lap_ticks as f32 / 60.0 / laps.max(1) as f32
+    );
 }
 
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn field_on_ubermall() {
-    field("05_ubermall");
+/// One test of [`field`].
+macro_rules! seed_test {
+    ($environment:literal, $name:ident, $seed:literal) => {
+        #[test]
+        #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+        fn $name() {
+            super::field($environment, $seed);
+        }
+    };
 }
 
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn field_on_sebenco_climb() {
-    field("10_sebenco_climb");
+/// A module per circuit with a test per seed 1 to 5: the seeds are independent runs that
+/// assert nothing across each other, so each is its own test.
+macro_rules! field_module {
+    ($module:ident, $environment:literal) => {
+        mod $module {
+            seed_test!($environment, seed_1, 1);
+            seed_test!($environment, seed_2, 2);
+            seed_test!($environment, seed_3, 3);
+            seed_test!($environment, seed_4, 4);
+            seed_test!($environment, seed_5, 5);
+        }
+    };
 }
+
+field_module!(field_on_talons_junction, "talons_junction");
+field_module!(field_on_vineta_k, "01_vineta_k");
+field_module!(field_on_ubermall, "05_ubermall");
+field_module!(field_on_sebenco_climb, "10_sebenco_climb");

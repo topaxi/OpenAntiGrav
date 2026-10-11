@@ -37,47 +37,62 @@ fn fire_law(source: String, mode: oag_race::Mode) -> FireLaw {
     race::Race::start(loaded.setup).fire_law()
 }
 
+/// One title, one mode: a race load each, which is most of a 2048 test's time, so the
+/// modes are the test axis rather than a loop.
+fn fires_original(source: String, mode: oag_race::Mode) {
+    assert_eq!(fire_law(source, mode), FireLaw::Original, "{mode:?}");
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_hd_race_fires_on_the_original_law() {
+fn a_hd_single_race_fires_on_the_original_law() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    for mode in [oag_race::Mode::SingleRace, oag_race::Mode::Eliminator] {
-        assert_eq!(
-            fire_law(image.display().to_string(), mode),
-            FireLaw::Original,
-            "{mode:?}"
-        );
-    }
+    fires_original(image.display().to_string(), oag_race::Mode::SingleRace);
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_hd_eliminator_fires_on_the_original_law() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    fires_original(image.display().to_string(), oag_race::Mode::Eliminator);
 }
 
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn a_2048_race_fires_on_the_original_law() {
+fn a_2048_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    for mode in [oag_race::Mode::SingleRace, oag_race::Mode::Eliminator] {
-        assert_eq!(
-            fire_law(path.display().to_string(), mode),
-            FireLaw::Original,
-            "{mode:?}"
-        );
-    }
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_2048_eliminator_fires_on_the_original_law() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
 }
 
 #[test]
 #[ignore = "needs the extracted Omega packages in data/extracted/ps4/"]
-fn an_omega_race_fires_on_the_original_law() {
+fn an_omega_single_race_fires_on_the_original_law() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    for mode in [oag_race::Mode::SingleRace, oag_race::Mode::Eliminator] {
-        assert_eq!(
-            fire_law(path.display().to_string(), mode),
-            FireLaw::Original,
-            "{mode:?}"
-        );
-    }
+    fires_original(path.display().to_string(), oag_race::Mode::SingleRace);
+}
+
+#[test]
+#[ignore = "needs the extracted Omega packages in data/extracted/ps4/"]
+fn an_omega_eliminator_fires_on_the_original_law() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    fires_original(path.display().to_string(), oag_race::Mode::Eliminator);
 }
