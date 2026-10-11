@@ -100,9 +100,9 @@ impl Voice {
     /// One tick: the screen on top, and whether a Tournament's results are on
     /// their standings page. Returns the cue that starts this tick, if any.
     ///
-    /// Each entry of a screen is a fresh widget in the original, so `VIEW RESULTS
-    /// AGAIN` speaks the place again (inferred from `OnEnter` never touching the
-    /// once-flag; not captured).
+    /// `VIEW RESULTS AGAIN` speaks the place again: **chosen, not measured**. The
+    /// original's once-flag (`+0xe8`) is never written by `OnEnter`, and whether the
+    /// widget is rebuilt on a second entry was not read.
     pub fn tick(&mut self, screen: Screen, standings_showing: bool) -> Option<Cue> {
         let entered = screen != self.screen;
         self.screen = screen;

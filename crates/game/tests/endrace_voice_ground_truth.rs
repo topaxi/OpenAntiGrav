@@ -163,6 +163,11 @@ fn the_place_and_medal_lines_sound_on_the_tick_their_screen_opens() {
             peak_of(&pcm, per_tick, results_at, results_at + 6) > 100,
             "{name}: place line silent"
         );
+        assert_eq!(
+            peak_of(&pcm, per_tick, rewards_at - 30, rewards_at),
+            0,
+            "{name}: the place line is still sounding where the medal is measured"
+        );
         assert!(
             peak_of(&pcm, per_tick, rewards_at, rewards_at + 6) > 100,
             "{name}: medal silent"

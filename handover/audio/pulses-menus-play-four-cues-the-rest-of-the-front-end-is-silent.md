@@ -21,7 +21,7 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    The place and medal lines landed 2026-10-11 (lane `pulse-endrace-voice`, [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-end-of-race-voices)):
    Single Race and Eliminator on `Results` entry, Tournament at the first page flip off the standings rank,
    the medal on `Rewards` entry in a campaign cell. Open on them: not heard by a human; on the speech bus (chosen); whether
-   `VIEW RESULTS AGAIN` speaks the place again (inferred yes); HD ships the same bank and names, its call sites unread.
+   `VIEW RESULTS AGAIN` speaking the place again (chosen, not measured); HD ships the same bank and names, its call sites unread.
 4. **Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME` in `FRONT_END_VO.bnk` (team and circuit name voices on
    the selection screens). The selector is `FUN_0898dac0(slot, value)` writing a 32-byte table; which guard reads it
    is not followed. A pick by index would be an invention.
