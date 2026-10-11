@@ -143,7 +143,12 @@ fn every_cue_names_a_bank_and_a_string() {
         BankName::Ship.entry(hd, false)
     );
     // Pure spells them exactly as Pulse does: the finding, not the assumption.
-    assert_eq!(oag_pure::race::SOUND_BANKS, pulse);
+    // Bar the results bank, which is Pulse's alone (`FrontEndSounds::results`).
+    let mut pulse_without_results = *pulse;
+    if let Some(front) = pulse_without_results.frontend.as_mut() {
+        front.results = None;
+    }
+    assert_eq!(*oag_pure::race::SOUND_BANKS, pulse_without_results);
     // The cues this port holds a handle to, and only those: a held cue must not
     // also fire as a one-shot from the drain loop. The original keeps `~ENGINE`
     // at `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at `craft+0xcac`.
@@ -310,4 +315,21 @@ fn an_unplaced_cue_survives_a_slot_that_has_no_craft() {
     // The announcer has no emitter at all, so it must not be gated by one.
     let empty = [None; oag_gameplay::MAX_SHIPS];
     assert!(place(CueEvent::new(Cue::ShieldActive, 0), &ears(), &empty).is_some());
+}
+
+#[test]
+fn the_results_lines_live_in_their_own_bank_which_only_a_naming_title_has() {
+    use oag_audio::Bus;
+    for cue in Cue::RESULTS {
+        assert_eq!(cue.bank(), BankName::SpeechResults, "{cue:?}");
+        assert_eq!(cue.bus(), Bus::Speech, "{cue:?}");
+        assert!(!Cue::ALL.contains(&cue) && !Cue::FRONT_END.contains(&cue));
+    }
+    assert_eq!(
+        BankName::SpeechResults.entry(oag_pulse::race::SOUND_BANKS, false),
+        r"Data\Sound\speech_results.bnk"
+    );
+    for banks in [oag_pure::race::SOUND_BANKS, oag_hd::race::SOUND_BANKS] {
+        assert_eq!(BankName::SpeechResults.entry(banks, false), "");
+    }
 }

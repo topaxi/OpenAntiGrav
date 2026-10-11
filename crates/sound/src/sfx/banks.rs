@@ -87,7 +87,8 @@ impl Banks {
         Self::load_cues(archives, banks, zone, tick, &Cue::ALL, &|cue| cue.name())
     }
 
-    /// Reads the front end's navigation cues, [`Cue::FRONT_END`], out of the
+    /// Reads the front end's navigation cues, [`Cue::FRONT_END`], and the results
+    /// lines, [`Cue::RESULTS`], out of the
     /// title's front-end bank.
     ///
     /// Empty, with one report line, on a title whose
@@ -106,7 +107,13 @@ impl Banks {
                 ..Default::default()
             };
         };
-        Self::load_cues(archives, banks, false, tick, &Cue::FRONT_END, &|cue| {
+        // The results bank is its own entry and its own title field: a title
+        // that names none loads none of its cues rather than reporting a miss.
+        let mut cues = Cue::FRONT_END.to_vec();
+        if front.results.is_some() {
+            cues.extend(Cue::RESULTS);
+        }
+        Self::load_cues(archives, banks, false, tick, &cues, &|cue| {
             cue.front_end_name(&front.cues, fury).unwrap_or(cue.name())
         })
     }

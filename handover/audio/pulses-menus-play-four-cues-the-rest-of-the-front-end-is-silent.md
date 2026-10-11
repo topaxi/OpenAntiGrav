@@ -18,8 +18,10 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
    boot and `menu sound: UPDOWN/ACCEPT/DECLINE/LEFTRIGHT (started: true)` for Down, Return on a submenu, BackSpace
    and Right on a choice. Dropping the call in `frame.rs` or the load in `prepare.rs` would only show there.
 3. ~~`TELETYPE`~~ **Closed 2026-10-11 (negative):** it is a per-menu-row cue off the `Menu` class, and 0 hits on PPSSPP across boot, main menu, single player and racebox; no authored `MenuDisplayType` is `TELETYPE` or `SCROLLING` (evidence in menu-sounds.md). Open only: a Menu with no authored type on an unwalked page, and the silent `<Text DisplayType="TELETYPE">` type-in the port draws whole (rate unmeasured).
-   **Not wired, recovered:** the place lines (`FIRST_PLACE` ...) and medal lines (`gold_med` ...) from `speech_results.bnk` on EndRace, which are
-   plain named cues in a bank the port does not load.
+   The place and medal lines landed 2026-10-11 (lane `pulse-endrace-voice`, [menu-sounds.md](../../docs/ghidra/functions/psp-pulse-usa/menu-sounds.md#the-end-of-race-voices)):
+   Single Race and Eliminator on `Results` entry, Tournament at the first page flip off the standings rank,
+   the medal on `Rewards` entry in a campaign cell. Open on them: not heard by a human; on the speech bus (chosen); whether
+   `VIEW RESULTS AGAIN` speaks the place again (inferred yes); HD ships the same bank and names, its call sites unread.
 4. **Not wired, selector unread:** `TMTX_NAME` and `TRTX_NAME` in `FRONT_END_VO.bnk` (team and circuit name voices on
    the selection screens). The selector is `FUN_0898dac0(slot, value)` writing a 32-byte table; which guard reads it
    is not followed. A pick by index would be an invention.
@@ -44,5 +46,4 @@ a `menu-walk-<disc>.wav` (written by `menu_sfx_ground_truth.rs`).
 ## Next Steps
 
 1. Dump PPSSPP's audio for the same walk and compare the cue moments and levels.
-2. Load `speech_results.bnk` as a second front-end bank and play the place and medal lines off the EndRace models.
-3. Read the guard `FUN_0898dac0` feeds, then play `TMTX_NAME`/`TRTX_NAME` on the selection screens.
+2. Read the guard `FUN_0898dac0` feeds, then play `TMTX_NAME`/`TRTX_NAME` on the selection screens.

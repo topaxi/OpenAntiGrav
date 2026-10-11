@@ -433,6 +433,8 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
                 fury: "reject_fury",
             },
         },
+        // HD ships `speech_results.bnk` with the same six names; its call sites were not read.
+        results: None,
     }),
     // The banks a circuit's nodes spell besides their own, each named by the
     // executable: the sound manager's constructor loads `generaltrack`,

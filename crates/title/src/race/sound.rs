@@ -142,6 +142,12 @@ pub struct FrontEndSounds {
     pub bank: &'static str,
     /// The cue each event plays.
     pub cues: MenuCues,
+    /// The bank of the end-of-race place and medal lines
+    /// (`Data\Sound\speech_results.bnk`: `FIRST_PLACE`.. and `gold_med`..), or
+    /// [`None`] where this title's executable was not read playing them. A
+    /// title with no entry here loads no such cue, so a shared lookup cannot
+    /// switch the lines on beyond the title they were measured on.
+    pub results: Option<&'static str>,
 }
 
 /// The cue name for each menu event, in the title's front-end bank.

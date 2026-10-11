@@ -29,6 +29,18 @@ impl Cue {
         Self::MenuDecline,
     ];
 
+    /// The end-of-race place and medal lines, loaded by [`crate::sfx::MenuSfx`]
+    /// from the title's results bank ([`oag_title::FrontEndSounds::results`])
+    /// when it names one.
+    pub const RESULTS: [Self; 6] = [
+        Self::ResultsFirst,
+        Self::ResultsSecond,
+        Self::ResultsThird,
+        Self::MedalGold,
+        Self::MedalSilver,
+        Self::MedalBronze,
+    ];
+
     /// The cue name this front-end role plays in the title's bank, in the
     /// style the front end is in, or [`None`] for a cue that is not one.
     #[must_use]
@@ -147,6 +159,12 @@ impl Cue {
             | Self::MenuAccept
             | Self::MenuDecline
             | Self::MenuTeletype => BankName::Frontend,
+            Self::ResultsFirst
+            | Self::ResultsSecond
+            | Self::ResultsThird
+            | Self::MedalGold
+            | Self::MedalSilver
+            | Self::MedalBronze => BankName::SpeechResults,
         }
     }
 
@@ -161,7 +179,7 @@ impl Cue {
     #[must_use]
     pub fn bus(self) -> Bus {
         match self.bank() {
-            BankName::Speech => Bus::Speech,
+            BankName::Speech | BankName::SpeechResults => Bus::Speech,
             BankName::Hud | BankName::Ship | BankName::Weapons | BankName::Frontend => Bus::Sfx,
         }
     }
@@ -237,6 +255,12 @@ impl Cue {
             Self::MenuAccept => "ACCEPT",
             Self::MenuDecline => "DECLINE",
             Self::MenuTeletype => "TELETYPE",
+            Self::ResultsFirst => "FIRST_PLACE",
+            Self::ResultsSecond => "SECOND_PLACE",
+            Self::ResultsThird => "THIRD_PLACE",
+            Self::MedalGold => "gold_med",
+            Self::MedalSilver => "silver_med",
+            Self::MedalBronze => "bronze_med",
         }
     }
 
@@ -428,7 +452,13 @@ impl Cue {
             | Self::MenuStepRight
             | Self::MenuAccept
             | Self::MenuDecline
-            | Self::MenuTeletype => Placement::Unplaced,
+            | Self::MenuTeletype
+            | Self::ResultsFirst
+            | Self::ResultsSecond
+            | Self::ResultsThird
+            | Self::MedalGold
+            | Self::MedalSilver
+            | Self::MedalBronze => Placement::Unplaced,
         }
     }
 }
