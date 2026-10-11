@@ -164,6 +164,7 @@ pub mod engine_light;
 mod field;
 pub mod finish_camera;
 mod finished_thrust;
+pub mod foreign;
 pub mod gantry;
 mod handles;
 mod hash;
