@@ -1,6 +1,7 @@
 //! Writes a disc circuit as a track in this project's own format.
 //!
-//! `cargo run -p oag-raceplay --example export_track -- <image> <track name> <out.track.toml>`
+//! `cargo run -p oag-raceplay --example export_track -- <image> <track name or -> <out.track.toml>`
+//! (`-` is the title's own default circuit)
 //!
 //! **Local use only**: the output is content from the disc, so write it under
 //! `data/` and never commit it. `just audit-leakage` does not catch a `.glb`
@@ -18,7 +19,7 @@ fn main() -> anyhow::Result<()> {
     }
     let options = race::Options {
         source: image.clone(),
-        track: Some(track.clone()),
+        track: (track != "-").then(|| track.clone()),
         ..race::Options::default()
     };
     let exported = race::export_track(&options)?;
