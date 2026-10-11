@@ -89,7 +89,7 @@ fn census(
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn pulse_authors_teletype_texts_and_nothing_scrolls() {
-    let Some(all) = census("pulse-psp-usa.chd", &oag_pulse::TITLE) else {
+    let Some(all) = census("pulse-psp-usa.chd", oag_pulse::TITLE) else {
         return;
     };
     let teletype: Vec<&str> = all
@@ -123,7 +123,7 @@ fn the_screens_reader_keeps_what_the_tree_walk_finds() {
     };
     let mut by_tree = 0;
     let mut by_screens = 0;
-    for (_, _, xml) in front_end_xml(&path.to_string_lossy(), &oag_pulse::TITLE) {
+    for (_, _, xml) in front_end_xml(&path.to_string_lossy(), oag_pulse::TITLE) {
         let mut found = Vec::new();
         authored(&fexml::parse(&xml), &mut found);
         by_tree += found
