@@ -2370,6 +2370,7 @@ dependencies = [
  "oag-ai",
  "oag-assets",
  "oag-audio",
+ "oag-ballisticng",
  "oag-core",
  "oag-disc",
  "oag-display",

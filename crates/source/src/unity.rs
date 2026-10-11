@@ -68,6 +68,30 @@ pub fn ships_in(bases: &[PathBuf]) -> Vec<PathBuf> {
     listed(bases, "ships", "csf")
 }
 
+/// The track a command line names: a path to a `.wtrk` that exists, or a name
+/// matched against the file stems under `bases`, exactly (ignoring case) before
+/// by substring. `None` when nothing matches or a substring matches several.
+#[must_use]
+pub fn resolve_in(bases: &[PathBuf], name: &str) -> Option<PathBuf> {
+    let direct = Path::new(name);
+    if direct.is_file() {
+        return Some(direct.to_path_buf());
+    }
+    let wanted = name.to_lowercase();
+    let all = tracks_in(bases);
+    let stem = |p: &PathBuf| {
+        p.file_stem()
+            .map(|s| s.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    };
+    if let Some(exact) = all.iter().find(|p| stem(p) == wanted) {
+        return Some(exact.clone());
+    }
+    let mut partial = all.iter().filter(|p| stem(p).contains(&wanted));
+    let first = partial.next()?;
+    partial.next().is_none().then(|| first.clone())
+}
+
 /// [`tracks_in`] over [`search_path`].
 #[must_use]
 pub fn tracks() -> Vec<PathBuf> {
@@ -95,6 +119,10 @@ mod tests {
         };
         assert_eq!(names(tracks_in(&bases)), ["a.wtrk", "b.WTRK"]);
         assert_eq!(names(ships_in(&bases)), ["s.csf"]);
+        assert_eq!(resolve_in(&bases, "A").unwrap(), base.join("tracks/a.wtrk"));
+        assert_eq!(resolve_in(&bases, "b.w"), Some(base.join("tracks/b.WTRK")));
+        assert_eq!(resolve_in(&bases, "w"), None, "no exact stem, two partial");
+        assert_eq!(resolve_in(&bases, "zzz"), None);
         std::fs::remove_dir_all(&base).unwrap();
     }
 }

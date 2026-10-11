@@ -40,6 +40,9 @@ pub struct Options {
     /// be resolved earlier: which title a source is comes from the serial in its
     /// own filesystem, which is read by opening it.
     pub track: Option<String>,
+    /// A foreign (Unity) track to race instead of any circuit of the source
+    /// (`crate::foreign`); the source still supplies craft, rules and physics.
+    pub foreign_track: Option<PathBuf>,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -308,6 +311,7 @@ impl Default for Options {
             // fills this in from `source::resolve_dlc`.
             dlc: Vec::new(),
             track: None,
+            foreign_track: None,
             team: None,
             hull_variant: None,
             skin: None,

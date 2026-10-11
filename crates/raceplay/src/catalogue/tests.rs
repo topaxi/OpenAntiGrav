@@ -458,6 +458,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             available_in_zone: false,
             unlock_grid: None,
             sound_register: None,
+            foreign: None,
         },
         if reversed {
             format!("{id} REVERSE")

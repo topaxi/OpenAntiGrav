@@ -114,6 +114,13 @@ impl Pending {
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
             track: self.cli.track.clone(),
+            foreign_track: self.cli.unity_track.as_deref().and_then(|name| {
+                let found = oag_source::unity::resolve_in(&oag_source::unity::search_path(), name);
+                if found.is_none() {
+                    log::error!("--unity-track {name}: no such .wtrk, and no unique name match");
+                }
+                found
+            }),
             // Passed straight through like `track` above, `None` included:
             // `race::load` resolves an unnamed team from the title it opened,
             // which is the only place the title is known. See
