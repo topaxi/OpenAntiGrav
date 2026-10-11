@@ -1331,3 +1331,9 @@
 0x0898dac0	function	Scream_SetGlobalVariable	88	menu-sounds.md
 0x088ea048	function	TeamSelect_PlayNameVoice	92	menu-sounds.md
 0x088ed9a8	function	TrackSelect_PlayNameVoice	92	menu-sounds.md
+# 2026-10-11 pulse-typein lane: the Text widget has no type-in (text-display-type.md)
+0x088ccbe8	function	Text_Construct	90	text-display-type.md
+0x088cdb34	function	Text_ParseValues	90	text-display-type.md
+0x088cd740	function	Text_Enqueue	80	text-display-type.md
+0x088cd860	function	Text_Update	80	text-display-type.md
+0x088ce668	function	Text_Draw	85	text-display-type.md

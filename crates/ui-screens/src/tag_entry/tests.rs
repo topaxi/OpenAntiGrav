@@ -48,6 +48,7 @@ fn geometry(length: u32) -> Geometry {
             middle: false,
             start_enabled: true,
             pulse: false,
+            display_type: oag_ui::screen::DisplayType::default(),
             delay: 0.0,
             wrap_width: None,
             transition: 0.0,
