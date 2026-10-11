@@ -218,8 +218,8 @@ pub(super) fn load_hud(
 /// title whose [`oag_title::hud::AssistIndicator::fragment`] names one.
 ///
 /// The fragment is read through the archives like any entry, so it is **the
-/// disc's or a pack's own when one exists and this project's fallback otherwise**
-/// - on Pulse and Pure no disc has it, which is what the fallback is for. With no
+/// disc's or a pack's own when one exists and this project's fallback otherwise**;
+/// on Pulse and Pure no disc has it, which is what the fallback is for. With no
 /// fallback mounted the read finds nothing and the layout is returned as it was.
 /// The fragment's grid is the PSP's; on another source's grid it is scaled
 /// ([`oag_hud::assist::splice`]).
