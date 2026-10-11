@@ -186,6 +186,9 @@ pub struct Track {
     /// fresh profile lists reached the play call with this value. See
     /// `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`, "The name voices".
     pub sound_register: Option<u8>,
+    /// The foreign (Unity) track file this entry stands for, or `None` for a
+    /// circuit of the source's own. See [`crate::foreign`].
+    pub foreign: Option<std::path::PathBuf>,
 }
 
 impl Track {
@@ -879,6 +882,7 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
         sound_register: values
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
+        foreign: None,
     })
 }
 

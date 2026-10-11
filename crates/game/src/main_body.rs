@@ -422,7 +422,29 @@ fn run(cli: Cli) -> Result<()> {
     // Everything the command line decided that no disc is needed for. The
     // source is deliberately not in here: on the launcher route it is not known
     // until a window has been open for a while. See `crate::prepare`.
+    // A foreign track that cannot be found is a refusal, never the disc's
+    // default circuit raced instead.
+    let foreign_entry = cli
+        .unity_track
+        .as_deref()
+        .map(|name| {
+            let bases = oag_source::unity::search_path();
+            oag_source::unity::resolve_in(&bases, name).ok_or_else(|| {
+                let found: Vec<String> = oag_source::unity::tracks_in(&bases)
+                    .iter()
+                    .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
+                    .collect();
+                anyhow::anyhow!(
+                    "--unity-track {name}: no .wtrk at that path and no unique name match; \
+                     searched {bases:?}, found {found:?}"
+                )
+            })
+        })
+        .transpose()?
+        .map(|path| race::foreign::entry(&path))
+        .transpose()?;
     let pending = prepare::Pending {
+        foreign_entry,
         definition: prepare::definition(&cli, settings.language.as_deref())?,
         settings,
         dlc,

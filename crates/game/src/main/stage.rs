@@ -462,9 +462,15 @@ impl Stage {
         // `race::load` and is not replicated here - the record still lands
         // on a real, disc-authored circuit id rather than [`NO_CIRCUIT`],
         // just not always the exact zone variant `race::load` actually drew.
+        // A foreign track is its own circuit: filed under the disc's default
+        // it would take that circuit's best lap and ghost.
+        let foreign_key = setup.foreign.as_ref().map(|id| format!("foreign:{id}"));
         let result_key = oag_game::records::Key::new(
             title.name,
-            track_entry.or(Some(title.race.track)),
+            foreign_key
+                .as_deref()
+                .or(track_entry)
+                .or(Some(title.race.track)),
             setup.mode.name(),
             &setup.class,
         );

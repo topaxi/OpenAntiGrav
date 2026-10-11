@@ -445,6 +445,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) track: Option<String>,
 
+    /// Race a Unity track the player already has instead of a circuit of the
+    /// source: a path to a `.wtrk`, or a name matched against the files under
+    /// the foreign-track directories (`$OAG_UNITY`, `data/unity`, beside the
+    /// program, `<data dir>/oag/unity`; `tracks/*.wtrk` in each). The source
+    /// still supplies the ship, rules and physics. See `oag_raceplay::foreign`.
+    #[arg(long)]
+    pub(crate) unity_track: Option<String>,
+
     /// The team, which selects both the handling stats and the model.
     ///
     /// A team **id**, which is the folder under `Data\Ships\` and not always
