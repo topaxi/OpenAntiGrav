@@ -72,6 +72,7 @@ out to be wrong.
 | [0059](0059-render-shaders-are-wesl-compiled-to-wgsl-at-build-time.md) | Render shaders may be WESL, compiled to plain WGSL at build time | Accepted after a trial in `oag-mesh` and `oag-post` |
 | [0060](0060-every-render-crate-shader-is-wesl-with-one-shared-module-set.md) | Every render-crate shader is WESL, with one shared module set | Accepted; supersedes ADR-0059 convention 5 |
 | [0061](0061-two-asset-layers-around-the-disc.md) | Two asset layers around the disc: a player override and a project fallback | Accepted; extends [ADR-0021](0021-region-independent-dlc.md) |
+| [0062](0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md) | Unity content is a generic reader with a content-specific layer on top | Accepted; relates to [ADR-0061](0061-two-asset-layers-around-the-disc.md) |
 
 ## Format
 

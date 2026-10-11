@@ -127,6 +127,18 @@ TITLE_FREE_RENDER_CRATES = {
     "oag-post",
 }
 
+# Rule 4: `oag-unity` is a generic Unity asset-bundle reader and reaches no other
+# crate of this workspace at all, so it cannot grow a title, a game-specific
+# crate or anything above it by a `cargo add`. Written as an allowlist
+# (empty today) rather than a denylist: a new workspace crate is forbidden to it
+# by default, and widening the allowlist is a deliberate edit to this line with
+# a reason beside it. Content-specific layers (a game's classes, a track
+# source) are separate crates that depend on `oag-unity`, never the reverse.
+# ADR-0062.
+GENERIC_READERS = {
+    "oag-unity": set(),
+}
+
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
 
@@ -203,6 +215,21 @@ def main() -> int:
                 "inject the table from the caller instead"
             )
 
+    workspace_names = {names[member_id] for member_id in meta["workspace_members"]}
+    for crate, allowed in sorted(GENERIC_READERS.items()):
+        pkg_id = id_by_name.get(crate)
+        if pkg_id is None:
+            problems.append(f"workspace member {crate!r} not found in cargo metadata")
+            continue
+        hit = (reachable_names(pkg_id, graph, names) & workspace_names) - allowed
+        if hit:
+            problems.append(
+                f"{crate} transitively depends on workspace crates {sorted(hit)}, "
+                "which rule 4 (a generic reader reaches no title, game-specific "
+                "crate or anything above it) forbids; build the content-specific "
+                "layer on top of it instead"
+            )
+
     vocabulary_id = id_by_name.get(TITLE_VOCABULARY)
     if vocabulary_id is None:
         problems.append(f"workspace member {TITLE_VOCABULARY!r} not found in cargo metadata")
@@ -242,7 +269,7 @@ def main() -> int:
         print("\n\n".join(problems), file=sys.stderr)
         return 1
 
-    print("OK: all three dependency-boundary rules hold")
+    print("OK: all four dependency-boundary rules hold")
     return 0
 
 

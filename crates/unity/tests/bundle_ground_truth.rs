@@ -19,7 +19,7 @@ fn census_opens_every_bundle() {
     };
     let (mut skipped, mut by_ext) = (0, BTreeMap::<String, usize>::new());
     let mut shape = BTreeMap::<(u32, String, u32), usize>::new();
-    let mut streams = 0;
+    let (mut streams, mut res_s, mut resource) = (0, 0, 0);
     for item in common::items(&root) {
         *by_ext.entry(item.ext.clone()).or_default() += 1;
         let Some(bytes) = common::bundle_bytes(&item.path) else {
@@ -29,6 +29,16 @@ fn census_opens_every_bundle() {
         };
         let b = Bundle::parse(&bytes).unwrap_or_else(|e| panic!("{}: {e}", item.path.display()));
         streams += b.nodes().iter().filter(|n| !n.is_serialized_file()).count();
+        res_s += b
+            .nodes()
+            .iter()
+            .filter(|n| n.path.ends_with(".resS"))
+            .count();
+        resource += b
+            .nodes()
+            .iter()
+            .filter(|n| n.path.ends_with(".resource"))
+            .count();
         *shape
             .entry((
                 b.archive_version,
@@ -55,5 +65,6 @@ fn census_opens_every_bundle() {
     .into_iter()
     .collect();
     assert_eq!(shape, want);
-    assert_eq!(streams, 125, "raw .resS and .resource nodes");
+    // 47 `.resS` (one per ship: texture pixels) and 78 `.resource` (audio) nodes.
+    assert_eq!((streams, res_s, resource), (125, 47, 78));
 }
