@@ -35,6 +35,12 @@ struct FlatNode {
 
 /// Reads a typetree blob (SerializedFile versions 12 and up).
 pub fn read_blob(r: &mut Reader<'_>, version: u32) -> Result<TypeNode> {
+    if version >= 23 {
+        // `mhtt`, then the format version again.
+        if r.bytes(4)? != b"mhtt" || r.u32()? != version {
+            return Err(Error::Malformed("typetree blob magic or version"));
+        }
+    }
     let count = r.u32()? as usize;
     let strings_len = r.u32()? as usize;
     let node_size = if version >= 19 { 32 } else { 24 };

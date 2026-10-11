@@ -7,7 +7,7 @@ use crate::typetree::{self, TypeNode};
 use crate::value::Value;
 
 /// Versions with a known layout.
-pub const SUPPORTED_VERSIONS: std::ops::RangeInclusive<u32> = 17..=22;
+pub const SUPPORTED_VERSIONS: std::ops::RangeInclusive<u32> = 17..=23;
 
 /// Class ids this crate names; the rest are reported by number.
 pub mod class_id {
@@ -120,7 +120,25 @@ fn read_type(
     let old_type_hash: [u8; 16] = r.bytes(16)?.try_into().expect("16 bytes");
     let mut tree = None;
     if has_trees {
-        tree = Some(typetree::read_blob(r, version)?);
+        // Version 23 prefixes the blob with a content hash and its byte size (0 =
+        // no tree stored for this type).
+        let mut blob_len = None;
+        if version >= 23 {
+            r.bytes(16)?;
+            let n = r.i32()?;
+            blob_len = Some(usize::try_from(n).map_err(|_| Error::Malformed("typetree size"))?);
+        }
+        if blob_len != Some(0) {
+            let start = r.pos();
+            tree = Some(typetree::read_blob(r, version)?);
+            if let Some(n) = blob_len
+                && r.pos() - start != n
+            {
+                return Err(Error::Malformed(
+                    "typetree blob differs from its declared size",
+                ));
+            }
+        }
         if version >= 21 {
             if is_ref {
                 r.cstr()?;

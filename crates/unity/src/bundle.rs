@@ -91,7 +91,7 @@ impl Bundle {
             return Err(Error::BadSignature);
         }
         let archive_version = r.u32()?;
-        if !(6..=7).contains(&archive_version) {
+        if !(6..=8).contains(&archive_version) {
             return Err(Error::UnsupportedArchiveVersion(archive_version));
         }
         let player_version = r.cstr()?.to_string();
@@ -191,6 +191,10 @@ impl Bundle {
             });
         }
 
+        if flags & FLAG_PADDING_AT_START != 0 && flags & FLAG_INFO_AT_END == 0 {
+            // Unity 2019.4 and later pad the block data to 16 bytes too.
+            r.align(16)?;
+        }
         let mut data = Vec::with_capacity((total as usize).min(64 << 20));
         for b in &blocks {
             let comp = r.bytes(b.csize as usize)?;
