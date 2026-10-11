@@ -23,9 +23,12 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
   it: the name draws 2-3 % narrower than the original's and the paragraph's wrap width (450) is
   chosen, not measured (line breaks match on `16_Track` and `03_Track`); only Single Race and
   Time Trial were measured; Zone, Eliminator and the others take the same path unwatched.
-- **The world does not settle** under the flyby, by choice (ticking it would move every hash):
-  the craft sits at its placement pose, about two units low on `16_Track`. A faithful fix is a
-  view-side settle of the draw pose, or moving the placement pose, both a decision.
+- ~~**The world does not settle** under the flyby~~ **closed 2026-10-11 (`pulse-flyby-settle`), nothing to
+  port**: Pulse's `Ship_UpdateCraft` has no grid-state hover target (HD's `+0x348` clamp has no
+  analogue), and the original's craft rises 2.14 from its placement to rest in about 50 ticks while
+  ours is placed at rest, so they agree from about 1 s on. The "two units low" was the original's
+  pre-settle pose. Only the first second differs (original rises, ours still); see
+  [grid-state.md](../../docs/physics/grid-state.md#pulse-has-no-lowered-grid-state-hover-target-2026-10-11-pulse-flyby-settle).
 - ~~HD's flyby craft sits 1.84 lower on the original~~ **landed 2026-10-08 (`hd-flyby-hover`)**: the
   original's hover target is `0.75 * min(5.5, entry+0x348)` with `+0x348` a `3.0x` clamp in the grid
   state and a seconds timer from GO, so the craft sits low through the flyby **and the countdown** and
@@ -67,7 +70,7 @@ node, played for `AnimEnd` seconds or until a held Cross, with the world held at
 ## Next Steps
 
 1. Split `scene/frame.rs`, then give the scenery and the gantry's clock `Race::motion_tick`.
-2. Decide Pulse's settle (HD's is landed as a lowered spring): read Pulse's `Ship_UpdateCraft` for the
-   grid-state hover branch, then measure whether its flyby craft sits low.
+2. ~~Pulse's settle~~ closed (see Open). Optional: a view-side rise of the drawn pose over the first ~50
+   flyby ticks, if the flyby camera shows the craft then (chosen, not measured).
 3. Re-measure one of the short circuits (`01_Track`) through to its end, and a fresh-load
    Zone or Eliminator race.

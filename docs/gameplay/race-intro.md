@@ -169,7 +169,9 @@ overlay draws them for HD yet.
   leave starts on the tick the flyby ends where the original's starts 1 or 2 ticks after its
   substate changes.
 - **The world does not settle** under the flyby, by choice: ticking it would move every
-  hash. The craft is two units low at the grid on `16_Track`.
+  hash. Not a visible gap after the first second: the original's craft is placed 2.14 below rest
+  and rises to rest by about frame 50, ours is placed at rest, so both sit level from then on
+  ([grid-state.md](../physics/grid-state.md#pulse-has-no-lowered-grid-state-hover-target-2026-10-11-pulse-flyby-settle)).
 - **The music**: the flyby has its own (`g_music_player` calls at the counter's 40 and 0,
   `RaceMode_UpdateIntro` substate 1); not listened to.
 - **The screen wash** the original starts when the flyby ends (`ScreenFlash` kind 10) is not
