@@ -157,6 +157,7 @@ pub(super) fn timelines(
     let model = WalkModel {
         goto_markers: tick.follows_gotos(),
         hd_alternates: front_end && tick.alternates_in_high_byte(),
+        globals: None,
     };
     let Some(all) = bank.cue_timelines_modelled(&cue, model) else {
         return Ok(None);
@@ -208,6 +209,67 @@ pub(super) fn timelines(
         });
     }
     Ok(Some(out))
+}
+
+/// One cue guarded by a runtime global, as a [`Timeline`] per value of that
+/// global: `slot` is the table slot the guards read (`0x08ac3247 + slot`) and
+/// `values` the values to build. A value no guard selects authors no grain and
+/// is left out, as are the values whose walk is not complete.
+///
+/// `FRONT_END_VO.bnk`'s `TMTX_NAME` (slot 2) and `TRTX_NAME` (slot 1) are the
+/// cues this is for; see [`super::name_voice`].
+///
+/// # Errors
+///
+/// A waveform a timeline reaches does not decode.
+pub(super) fn guarded(
+    bank: &Bank,
+    name: &str,
+    slot: usize,
+    values: std::ops::RangeInclusive<u8>,
+    tick: SequenceTick,
+) -> anyhow::Result<BTreeMap<u8, Timeline>> {
+    let mut out = BTreeMap::new();
+    let (Some(ticks_per_second), Some(cue)) = (tick.ticks_per_second(), bank.cue_named(name))
+    else {
+        return Ok(out);
+    };
+    let mut decoder = Decoder::default();
+    for value in values {
+        let mut globals = [0_i8; oag_formats::sblk::timeline::GLOBAL_SLOTS];
+        let Some(cell) = globals.get_mut(slot.saturating_sub(1)) else {
+            return Ok(out);
+        };
+        *cell = value as i8;
+        let walked = bank.cue_timeline_modelled(
+            &cue,
+            &[],
+            WalkModel {
+                goto_markers: tick.follows_gotos(),
+                globals: Some(globals),
+                ..WalkModel::default()
+            },
+        );
+        if !walked.is_complete() || walked.grains.is_empty() {
+            continue;
+        }
+        let mut layers = Vec::with_capacity(walked.grains.len());
+        for grain in &walked.grains {
+            if let Some(layer) = decoder.layer(bank, name, grain, ticks_per_second)? {
+                layers.push(layer);
+            }
+        }
+        if !layers.is_empty() {
+            out.insert(
+                value,
+                Timeline {
+                    layers,
+                    bends: walked.bends.clone(),
+                },
+            );
+        }
+    }
+    Ok(out)
 }
 
 /// Decoded waveforms shared across the grains of one cue: the samples once per

@@ -115,20 +115,95 @@ No code reference. A byte search of `BOOT.BIN` for `PAUSE\0` has no hit, so the 
 pause menu (`InGame Pause`, `0x08a795ec`) is driven by the same `ConfirmButton_Update` cues as any other. Whether a
 formatted name could reach it was not ruled out (confidence 60 that nothing plays it).
 
-## The voice banks (not wired)
+## The voice banks
 
 | Slot | Cue | Caller | Selector |
 | --- | --- | --- | --- |
-| `FRONT_END_VO` | `TMTX_NAME` | `FUN_088ea048` | `FUN_0898dac0(2, param_2)` before the play (the team) |
-| `FRONT_END_VO` | `TRTX_NAME` | `FUN_088ed9a8` | `FUN_0898dac0(1, param_2)` (the circuit) |
+| `FRONT_END_VO` | `TMTX_NAME` | `TeamSelect_PlayNameVoice` (`0x088ea048`) | table slot 2 = the team's `soundregister`; wired 2026-10-11, see "The name voices" |
+| `FRONT_END_VO` | `TRTX_NAME` | `TrackSelect_PlayNameVoice` (`0x088ed9a8`) | table slot 1 = the circuit's `soundregister`; wired 2026-10-11, see "The name voices" |
 | `speech_results` | `FIRST_PLACE` / `SECOND_PLACE` / `THIRD_PLACE` | `EndRaceResults_Update` | wired 2026-10-11, see "The end-of-race voices" |
 | `speech_results` | `gold_med` / `silver_med` / `bronze_med` | `EndRaceRewards_OnEnter` | wired 2026-10-11, see "The end-of-race voices" |
 
-`FUN_0898dac0(slot, value)` stores `value` in a 32-byte table at `0x08ac3247` for `slot` in `1..32`. The banks'
-`TMTX_NAME` is a 24-waveform cue (21 s in all) and `TRTX_NAME` is 66 commands and no waveform of its own (child references): the table is the selector a
-guard operand reads (`Scream_OpGuard`, per-voice and global variables, `sound.md`), but which global the guard reads
-was not followed. Picking a waveform by team index would be an invention, so these stay unplayed. The place and medal
-lines are the next section.
+## The name voices
+
+Lane `pulse-name-voices`, 2026-10-11. Disassembly of `BOOT.BIN` with `llvm-objdump` (the ELF is relocatable at VMA 0, so
+address = VMA + `0x08804000`; no Ghidra bridge was up) plus a live PPSSPP v1.20.4 run of the USA disc. The earlier
+reading of this page, that `FUN_088ea048` itself calls `FUN_0898dac0`, was wrong in one detail: the two wrappers pass
+the slot and value to `Sound_PlayNamedInSlot` as its two **last arguments**, and that function does the store.
+
+**The play call.** `Sound_PlayNamedInSlot(mgr, bank_slot, name, pitch, flags, table_slot, value)` (`0x0893a768`):
+`$a0..$a3 = mgr, bank slot, name, 0x400`, `$t0 = flags`, `$t1 = table_slot`, `$t2 = value` (sign-extended byte). It
+calls `FUN_0898dac0(table_slot, value)` before it starts the cue. `FUN_0898dac0` (`0x0898dac0`) is `if (0 < slot < 0x21)
+byte[0x08ac3247 + slot] = value`; the store is `sb` at `base + slot - 1` from a base of `0x08ac3248`. **76 of the 79
+call sites pass `$t1 = 0`** (`move $t1, $zero`), which is out of range and stores nothing; one more is a register move
+this scan did not follow, and the two name voices pass 2 and 1. So ordinary menu cues never write slots 1 and 2.
+
+**The reader.** `Scream_OpGuard`'s negative variable reads `0x08ac3247 - variable` (`sound.md`), so variable `-1` is slot 1
+and `-2` slot 2. Every command pair in `TMTX_NAME` is guarded `[0xfe, 1, N]` (variable -2, mode 1 = skip unless equal,
+immediate N) and every command pair in `TRTX_NAME` `[0xff, 1, N]` (variable -1). The writer and the reader agree on the
+slot arithmetic, and both banks' guards name their own slot.
+
+- **`TMTX_NAME`** (cue 11, 48 commands): for N in 1..=9 and 11..=13, a guarded pair of key-ons, the second **10 master
+  ticks** after the first (two grains at 30 and 330 degrees). **N = 10 has no command**: a team whose register is 10
+  says nothing, and no value is made up for it.
+- **`TRTX_NAME`** (cue 1, 66 commands): for N in 1..=32 a guarded `0x08` child record naming the circuit's own cue, in
+  the bank's own order: 1 `TALONS_WHIT`, 2 `TALONS_BLACK`, 3 `MOA_WHITE`, 4 `MOA_BLACK`, 5 `METROPIA_WHITE` ..
+  32 `ORCUS_BLACK` (cues 15..=46). N = 0 passes a no-op `0x14` and plays nothing.
+
+**The value is authored data: the `soundregister` of the node.** `Data\Plugins\PI001\Definition.xml` carries
+`soundregister` (tokenised `k`) on every `PI_Track` (1..=24 in file order on the PSP discs, `16_Track` 1, `32_Track` 2,
+`03_Track` 3, ... ) and every `PI_Team` (`Feisar` 1, `AG_Systems` 3, `Assegai` 4, `Qirex` 5, `Piranha` 7, `Triakis` 8,
+`EGX` 9, `Goteki` 13). `oag_raceplay::catalogue` documented the attribute as "what it selects is not established"; this is
+what it selects. A DLC pack's entries carry theirs; the four DLC teams are presumably the registers the eight base teams leave unused (2, 6, 11, 12), **inferred, not measured** (no pack was mounted on the capture).
+
+**Live capture (PPSSPP, USA disc, a fresh profile).** A breakpoint on `Sound_PlayNamedInSlot` with condition
+`t1 != 0`, `t2` read at each hit, a screenshot taken at the hit, and the selection screen's item array dumped
+(`this + 0xe8` array, `+0xec` count on Team Selection; `this + 0xec` array, `+0xe4` count on Track Select, items
+`+0xac` or `+0x160` the register, `+0x74` the folder id):
+
+| Screen and action | Hit | `t1` | `t2` | What the screen showed |
+| --- | --- | --- | --- | --- |
+| Track Select, Confirm on 1/3 | `TrackSelect_PlayNameVoice` (`ra 0x088ed9e0`) | 1 | **1** | `16_Track`, Talon's Junction White |
+| Track Select, Confirm on 2/3 | the same | 1 | **3** | `03_Track`, Moa Therma White (screenshot) |
+| Track Select item 2 | (array dump) | | **5** | `18_Track`, loading `02_Track` reversed: `METROPIA_WHITE` |
+| Team Selection, Confirm on 1/8 | `TeamSelect_PlayNameVoice` (`ra 0x088ea080`) | 2 | **4** | Assegai (screenshot) |
+| Team Selection, Confirm on 6/8 | the same | 2 | **13** | Goteki (the list's sixth item) |
+| Team Selection array | (dump) | | 4, 5, 1, 3, 9, 13, 8, 7 | Assegai, Qirex, Feisar, AG Systems, EGX, Goteki, Triakis, Piranha: **each equal to that team's `soundregister` in `Definition.xml`** |
+
+**Triggers.** The voice sounds on **Confirm** and never on scroll: 4 downs on Track Select and 14 downs on Team Selection
+(every item visited) produced no hit under the same breakpoint. Pad and pointer reach it the same way; the wrapper's
+`$a1` flag gates it and a screen in its music-select or help state does not speak. The team voice plays on the Confirm
+that leaves Team Selection for `Launch Game Transition`. The circuit voice plays on the Confirm that leaves Track Select
+for Team Selection.
+
+| Address | Name | Confidence | What it does |
+| --- | --- | --- | --- |
+| `0x0898dac0` | `Scream_SetGlobalVariable` | 88 | `(slot, value)`: stores the byte at `0x08ac3247 + slot` for `1 <= slot <= 32`, ignores the rest. `Scream_OpGuard` reads the same table and `Scream_OpSetRegister` (`0x1e`) writes it from a cue's own commands |
+| `0x088ea048` | `TeamSelect_PlayNameVoice` | 92 | `(screen, register)`: `Sound_PlayNamedInSlot(bank slot, "TMTX_NAME", 0x400, 0, table slot 2, register)`. Live: hit at Confirm with `t1 = 2`, `ra = 0x088ea080` |
+| `0x088ed9a8` | `TrackSelect_PlayNameVoice` | 92 | the same with `"TRTX_NAME"` and table slot 1. Live: `t1 = 1`, `ra = 0x088ed9e0` |
+
+The two callers (`0x088ea02c` in `0x088e9fa0`, `0x088ed714` in `0x088ed6cc`) are not renamed: they read the selected
+item's register (`item + 0xac`, `item + 0x160`) behind three string compares of the screen's current page
+(`Pre Race Music Select`, `Team Help`, `Track Help`), which is the gate above, not read further.
+
+**Wired** (`oag_sound::sfx::NameVoices`, `MenuSfx::play_team_name` / `play_circuit_name`, `oag_game`'s
+`Session::speak_name` on the picker's `Event::Confirmed`): each register's voice is the cue's walk with the global set
+(`oag_formats::sblk::timeline::WalkModel::globals`, which also walks the `0x08` child), not one picked waveform, so a
+team is its two grains ten ticks apart and a circuit its own child cue. The title names the bank
+(`oag_title::FrontEndSounds::voices`, `Some` on Pulse only). Played dry on the speech bus, **chosen, not measured**
+(the original plays it through the one front-end slot, as the end-of-race lines). The grains' 30 and 330 degree angles
+play centred: the front end is dry. The ground truth is `crates/game/tests/name_voice_ground_truth.rs`: every circuit
+value's walk equals its child cue's own, the first three are the circuits the capture saw, a team is a pair ten ticks
+apart, eleven teams give eleven different names, the registers read from the discs' definitions are the measured ones,
+and a headless WAV is silent until a confirm and sounds on it.
+
+**Other titles.** Pulse PSP EU and Pulse PS2 EU: **ported**, the same bank entry, the same guards, and the same
+registers in each disc's `Definition.xml` (the PS2 disc lists 32 circuits, each register once); the PS2 trigger was not
+observed running, only its data. Pure: checked, not wired: the executable was not read for these calls
+(`FrontEndSounds::voices` is `None`). Wipeout HD/Fury: **checked, differs**: its page lists `TMTX_NAME` playing when the
+team *changes* (`0x002502d8`, confidence 80), the bank is not `FRONT_END_VO.bnk` (no such entry in its archives) and a
+census of `frontend.bnk` and `speech.bnk` finds no cue of that name, so its voice bank and selector are not located.
+Omega: not checkable, its front end is HD's and there is no PS4 capture path.
 
 ## The end-of-race voices
 
@@ -159,7 +234,7 @@ branch unpauses the matching trophy. Confidence 85.
 **Wired** (`oag_game::endrace_voice`, the session's `tick_endrace`): `speech_results.bnk` is a second front-end bank,
 `oag_title::FrontEndSounds::results` (`Some` on Pulse, `None` elsewhere), `oag_sound::sfx::BankName::SpeechResults`
 and `Cue::RESULTS`, loaded by `MenuSfx` beside the navigation cues and only when the title names it. The bank rides
-the speech bus, **chosen, not measured**. `FRONT_END_VO.bnk` (team and circuit names) can reuse the same shape: one
+the speech bus, **chosen, not measured**. `FRONT_END_VO.bnk` (team and circuit names) reuses the same shape (see "The name voices"): one
 more optional path in `FrontEndSounds`, one more `BankName`.
 
 **Cross-title** (census by `endrace_voice_ground_truth.rs`):

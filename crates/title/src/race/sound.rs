@@ -148,6 +148,11 @@ pub struct FrontEndSounds {
     /// title with no entry here loads no such cue, so a shared lookup cannot
     /// switch the lines on beyond the title they were measured on.
     pub results: Option<&'static str>,
+    /// The bank of the team and circuit **name voices**
+    /// (`Data\Sound\FRONT_END_VO.bnk`: `TMTX_NAME` and `TRTX_NAME`), or
+    /// [`None`] where this title's executable was not read playing them. Same
+    /// gate as [`Self::results`]: a title that names none loads none.
+    pub voices: Option<&'static str>,
 }
 
 /// The cue name for each menu event, in the title's front-end bank.
