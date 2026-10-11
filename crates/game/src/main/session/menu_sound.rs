@@ -43,7 +43,10 @@ impl Session {
             let cue = oag_game::sound::menu_cue(nav, self.pad_dir);
             let started = sfx.play(&self.audio, cue);
             let live = self.audio.output().with_mixer(|mixer| mixer.active_voices());
-            debug!("menu sound: {cue:?} (started: {started}, {live} voice(s) live)");
+            debug!(
+                "menu sound: {cue:?} (started: {started}, {live} voice(s) live, dump frame {:?})",
+                self.audio.dump_frames()
+            );
         }
     }
 
@@ -76,7 +79,10 @@ impl Session {
             Kind::Track => sfx.play_circuit_name(&self.audio, register),
             Kind::Ship => sfx.play_team_name(&self.audio, register),
         };
-        debug!("name voice: {kind:?} {id} (soundregister {register}, started: {started})");
+        debug!(
+            "name voice: {kind:?} {id} (soundregister {register}, started: {started}, dump frame {:?})",
+            self.audio.dump_frames()
+        );
     }
 
     /// Starts one of the end-of-race voice lines
@@ -91,7 +97,10 @@ impl Session {
             return;
         };
         let started = sfx.play(&self.audio, cue);
-        debug!("end-of-race voice: {cue:?} (started: {started})");
+        debug!(
+            "end-of-race voice: {cue:?} (started: {started}, dump frame {:?})",
+            self.audio.dump_frames()
+        );
     }
 
     /// The sound a campaign event calls for: [`Event::nav`], except that a
