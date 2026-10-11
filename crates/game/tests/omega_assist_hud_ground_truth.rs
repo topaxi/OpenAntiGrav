@@ -37,7 +37,9 @@ fn open() -> Option<oag_assets::Archives> {
 fn the_roots_author_the_indicator_and_its_textures_resolve() {
     let Some(mut archives) = open() else { return };
     let hud = oag_omega::TITLE.hud;
-    let assist = oag_omega::hud::ART.assist.expect("Omega draws an indicator");
+    let assist = oag_omega::hud::ART
+        .assist
+        .expect("Omega draws an indicator");
     assert!(assist.fragment.is_none(), "Omega's layouts embed it");
     let wanted: Vec<&str> = [assist.background, assist.main]
         .into_iter()
@@ -112,7 +114,10 @@ fn the_indicator_is_in_the_draw_list_with_the_assist_on_and_absent_off() {
     let base = sprites_of(&loaded, &readout(false));
     assert_eq!(sprites_of(&loaded, &readout(true)), base + 4);
     let report = loaded.report.join("\n");
-    assert!(!report.contains("fallback"), "Omega uses its own art\n{report}");
+    assert!(
+        !report.contains("fallback"),
+        "Omega uses its own art\n{report}"
+    );
 
     let zone = load(oag_race::Mode::Zone);
     assert_eq!(
