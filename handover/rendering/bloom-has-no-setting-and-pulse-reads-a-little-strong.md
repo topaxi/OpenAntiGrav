@@ -47,6 +47,27 @@ only segments 0 and 1: the screen length of the ribbon. (5) Whether a racing
 frame on a second circuit has any full-screen pass after the composite (one
 rest frame was read). (6) The same readout on HD (RPCS3) at a racing intensity.
 
+## 2026-10-11, `pulse-bloom`: the residual is a posing artefact, not a bloom term
+
+Second boot, three circuits, full numbers in `bloom.md`, "Racing strength,
+second boot, and what the Moa Therma excess is". Whole-frame ours/original:
+Talon's `1.01` (`0.91-1.06`, three poses at racing speed `1.01-1.06`), Metropia
+`1.11`, Moa Therma `1.18` as posed by default and **`1.09` once two artefacts
+are removed**: the track's animated glow textures run on a 60-tick clock that a
+`--pose-from` frame starts at tick 1 (matching it takes the strip's mask from a
+mean difference of `20` to `0.3` and the ratio from `1.18` to `1.13`), and the
+original draws the craft's shadow wedge while the default `Shadows::Off` does not
+(`1.13` alone, `1.09` with both). The chain, the tap, the composite and the mask
+are unchanged and nothing in `oag-render` or `oag-post` moved. The 2026-10-08
+table was already in the post-2026-10-04 composite order.
+
+**Open.** The ribbon's screen extent grows with speed in ours more than in the
+original (first segment `1,463` pixels to row `265` against `1,051` to `258` at
+tick 140, equal at tick 100; a real run of ours gives `1,425` at the same
+speed). The standing `+1.4-2.9 %` scene luma. The HUD's read by the original's
+bright pass is still not isolated (a top-rows clip cannot separate it from the
+stands). The Zone grid strip was not reached (see `bloom.md`).
+
 ## Measured first
 
 Ours was 4.4-5.7 times the original over a matched racing frame and 1.4 times
@@ -104,8 +125,8 @@ executable's.
 
 ## Open
 
-- Why ours is still 1.2-1.6x on a racing straight (candidates: the flare and
-  plume's drawn size and mask ramp at 85 km/h; not varied here).
+- ~~Why ours is still 1.2-1.6x on a racing straight~~ answered 2026-10-11 (animation
+  clock and shadow tier of a posed frame; see the section above).
 - A matched boost-pad on/off pair in the original (1 of 4 placed approaches
   triggered the pad in this lane).
 - HD's own strength at matched poses: this lane measured Pulse PSP only.
@@ -122,14 +143,13 @@ executable's.
 
 ## Next Steps
 
-0. Zone grid strip: find which `zone_track.vex` batch stamps `214` across rows
-   231-243 at the countdown (`oag-view --draws` plus node isolation) and why
-   the original's mask is `4` there (depth tie of a coplanar `GEQUAL` decal is
-   the candidate). Only the 1.2x grid residual depends on it.
+0. Zone grid strip: still open. Ours reaches a Zone start and stamps `214` on
+   the bottom rows (`bloom.md` has the numbers); it needs the original's Zone
+   grid at the same pose, so first an unlocked Zone on a PPSSPP profile.
 
-1. Explain the residual 1.2-1.6x on a racing straight (flare and plume mask
-   size at speed) before touching any constant. Re-measure it first: since
-   2026-10-04 the composite comes after motion blur and the HUD, so a number
-   taken before then mixed in the old order.
+1. ~~Explain the residual 1.2-1.6x on a racing straight.~~ Done 2026-10-11: a
+   pose and option artefact, see the section above. What is left is the
+   ribbon's extent at speed (read a real run's ribbon against the original's at
+   several speeds, `exhaust.md`) and the `+2-3 %` exposure.
 2. PS2 bloom: a second circuit (Talon's Junction) and a racing frame at a pose read out of the emulator, for the racing-straight strength the PSP chain still carries 1.2-1.6x on.
 3. Measure HD's bloom strength at matched poses on RPCS3.
