@@ -190,8 +190,16 @@ fn check(c: &mut Census, label: &str, blob: &[u8]) {
     }
 }
 
-/// Every loose `.wem` of an archive, and its bytes.
-fn loose(archive: &mut oag_assets::psarc::Archive) -> Vec<(String, Vec<u8>)> {
+/// How many tests one archive's loose `.wem` census is spread over. The census
+/// is a sum over files, so each shard takes every `SHARDS`-th file of the
+/// archive's path order and asserts the counts of that slice; the shards'
+/// golden `Census` values add up to the archive's whole, which is what the
+/// single test asserted before.
+const SHARDS: usize = 4;
+
+/// The loose `.wem`s of an archive (one shard of them, or all for `None`), and
+/// their bytes.
+fn loose(archive: &mut oag_assets::psarc::Archive, shard: Option<usize>) -> Vec<(String, Vec<u8>)> {
     let paths: Vec<String> = archive
         .paths()
         .iter()
@@ -200,6 +208,9 @@ fn loose(archive: &mut oag_assets::psarc::Archive) -> Vec<(String, Vec<u8>)> {
         .collect();
     paths
         .into_iter()
+        .enumerate()
+        .filter(|(i, _)| shard.is_none_or(|shard| i % SHARDS == shard))
+        .map(|(_, p)| p)
         .map(|p| {
             let blob = archive.read_path(&p).expect("the .wem reads");
             (p, blob)
@@ -224,10 +235,10 @@ fn banks(archive: &mut oag_assets::psarc::Archive) -> Vec<(String, Vec<u8>)> {
         .collect()
 }
 
-fn loose_census(dir: &str, name: &str) -> Option<Census> {
+fn loose_census(dir: &str, name: &str, shard: usize) -> Option<Census> {
     let mut archive = archive(dir, name)?;
     let mut c = Census::default();
-    for (path, blob) in loose(&mut archive) {
+    for (path, blob) in loose(&mut archive, Some(shard)) {
         check(&mut c, &path, &blob);
     }
     Some(c)
@@ -268,61 +279,235 @@ fn embedded_census(dir: &str, name: &str) -> Option<Census> {
     Some(c)
 }
 
-#[test]
-#[ignore = "needs data/extracted/ps4/omega-eu"]
-fn omega_data00_loose_wems_are_atrac9_and_decode() {
-    let Some(c) = loose_census("omega-eu", "data00.psarc") else {
+/// One shard of an archive's loose `.wem` census against its golden counts.
+fn assert_loose_shard(dir: &str, name: &str, shard: usize, expected: Census) {
+    let Some(c) = loose_census(dir, name, shard) else {
         return;
     };
-    assert_eq!(
-        c,
+    assert_eq!(c, expected, "{dir}/{name} shard {shard} of {SHARDS}");
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_data00_loose_wems_are_atrac9_and_decode_shard_0() {
+    assert_loose_shard(
+        "omega-eu",
+        "data00.psarc",
+        0,
         Census {
-            files: 714,
-            atrac9: 714,
+            files: 179,
+            atrac9: 179,
             pcm: 0,
             mono: 0,
-            stereo: 665,
-            quad: 38,
+            stereo: 169,
+            quad: 7,
             hexa: 0,
-            octo: 11,
+            octo: 3,
             rate_24k: 0,
-            plain_chunk_order: 714,
-            consistent: 714,
-            decoded: 665,
+            plain_chunk_order: 179,
+            consistent: 179,
+            decoded: 169,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 10,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_data00_loose_wems_are_atrac9_and_decode_shard_1() {
+    assert_loose_shard(
+        "omega-eu",
+        "data00.psarc",
+        1,
+        Census {
+            files: 179,
+            atrac9: 179,
+            pcm: 0,
+            mono: 0,
+            stereo: 169,
+            quad: 7,
+            hexa: 0,
+            octo: 3,
+            rate_24k: 0,
+            plain_chunk_order: 179,
+            consistent: 179,
+            decoded: 169,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 10,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_data00_loose_wems_are_atrac9_and_decode_shard_2() {
+    assert_loose_shard(
+        "omega-eu",
+        "data00.psarc",
+        2,
+        Census {
+            files: 178,
+            atrac9: 178,
+            pcm: 0,
+            mono: 0,
+            stereo: 162,
+            quad: 13,
+            hexa: 0,
+            octo: 3,
+            rate_24k: 0,
+            plain_chunk_order: 178,
+            consistent: 178,
+            decoded: 162,
             silent: 1,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 49
-        }
+            refused_multichannel: 16,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu"]
+fn omega_data00_loose_wems_are_atrac9_and_decode_shard_3() {
+    assert_loose_shard(
+        "omega-eu",
+        "data00.psarc",
+        3,
+        Census {
+            files: 178,
+            atrac9: 178,
+            pcm: 0,
+            mono: 0,
+            stereo: 165,
+            quad: 11,
+            hexa: 0,
+            octo: 2,
+            rate_24k: 0,
+            plain_chunk_order: 178,
+            consistent: 178,
+            decoded: 165,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 13,
+        },
     );
 }
 
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
-fn omega_data08_loose_wems_are_atrac9_and_decode() {
-    let Some(c) = loose_census("omega-eu-patch", "data08.psarc") else {
-        return;
-    };
-    assert_eq!(
-        c,
+fn omega_data08_loose_wems_are_atrac9_and_decode_shard_0() {
+    assert_loose_shard(
+        "omega-eu-patch",
+        "data08.psarc",
+        0,
         Census {
-            files: 734,
-            atrac9: 734,
+            files: 184,
+            atrac9: 184,
             pcm: 0,
             mono: 0,
-            stereo: 685,
-            quad: 38,
+            stereo: 170,
+            quad: 10,
             hexa: 0,
-            octo: 11,
+            octo: 4,
             rate_24k: 0,
-            plain_chunk_order: 734,
-            consistent: 734,
-            decoded: 685,
+            plain_chunk_order: 184,
+            consistent: 184,
+            decoded: 170,
             silent: 1,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 49
-        }
+            refused_multichannel: 14,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu-patch"]
+fn omega_data08_loose_wems_are_atrac9_and_decode_shard_1() {
+    assert_loose_shard(
+        "omega-eu-patch",
+        "data08.psarc",
+        1,
+        Census {
+            files: 184,
+            atrac9: 184,
+            pcm: 0,
+            mono: 0,
+            stereo: 174,
+            quad: 8,
+            hexa: 0,
+            octo: 2,
+            rate_24k: 0,
+            plain_chunk_order: 184,
+            consistent: 184,
+            decoded: 174,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 10,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu-patch"]
+fn omega_data08_loose_wems_are_atrac9_and_decode_shard_2() {
+    assert_loose_shard(
+        "omega-eu-patch",
+        "data08.psarc",
+        2,
+        Census {
+            files: 183,
+            atrac9: 183,
+            pcm: 0,
+            mono: 0,
+            stereo: 169,
+            quad: 12,
+            hexa: 0,
+            octo: 2,
+            rate_24k: 0,
+            plain_chunk_order: 183,
+            consistent: 183,
+            decoded: 169,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 14,
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu-patch"]
+fn omega_data08_loose_wems_are_atrac9_and_decode_shard_3() {
+    assert_loose_shard(
+        "omega-eu-patch",
+        "data08.psarc",
+        3,
+        Census {
+            files: 183,
+            atrac9: 183,
+            pcm: 0,
+            mono: 0,
+            stereo: 172,
+            quad: 8,
+            hexa: 0,
+            octo: 3,
+            rate_24k: 0,
+            plain_chunk_order: 183,
+            consistent: 183,
+            decoded: 172,
+            silent: 0,
+            prefetch_heads: 0,
+            refused_stereo_or_mono: 0,
+            refused_multichannel: 11,
+        },
     );
 }
 
@@ -489,7 +674,7 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
     };
     // The smallest stereo `.wem`, and the smallest four-channel one, so the
     // check stays cheap and covers a second layout.
-    let mut files = loose(&mut archive);
+    let mut files = loose(&mut archive, None);
     files.sort_by_key(|(_, blob)| blob.len());
     let mut picked: Vec<(u16, &str, &[u8])> = Vec::new();
     for channels in [2u16, 4] {

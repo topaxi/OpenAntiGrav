@@ -652,6 +652,54 @@ index that returns hits in the same order is a physics lane, recommended
 again, not done. `in_parallel::map` applies to any of those sweeps whose races
 are independent.
 
+## Re-profiling the 2048 and Omega tail (2026-10-12)
+
+Full runs that day measured 357-659 s against the 450 s ceiling, the slowest test
+171 s. The tail was 2048 and Omega. What each slow test *was*, measured with
+`cargo nextest run -p oag-game --run-ignored only -E 'binary(...)'` (a contended
+number is an upper bound; the machine was shared all day, load 13-55 here):
+
+| test | shape | before | after |
+| --- | --- | --- | --- |
+| `omega_wem` loose census, data00 / data08 | one sweep over 714 / 734 files | 94 s / 100 s | 15-23 s per shard, 4 shards each |
+| `fire_law_inherit` 2048 | two race loads in a `for mode` | 141 s (72 s at load 10) | 51 s per mode |
+| `zone_airbrake_flaps` 2048 | two modes, each two `oag-game` runs | 157 s | `single_race` 47 s, `zone` 8 s |
+| `magstrip_wire_2048` crossfade | two race loads in a `for mode` | 49 s | 48 s per mode |
+| `hd_ai_craft_laws` `field_on_*` | 5 seeds in a loop, per circuit | 88 s (sebenco, under load) | 17 s per seed |
+| `hd_ai_craft_laws` lone board | 12 circuits in a loop | one test | 12 tests |
+| `ai_fork_split` 2048 altima | **one** 12,600-tick race | 118 s | unchanged |
+| `magstrip_wire_2048` `every_craft_visits...` | **one** 5,600-tick race | 113 s | unchanged |
+
+What was done, none of it touching an assertion:
+
+- **`omega_wem` loose census** is a sum over files, so each archive's sweep is
+  four shards (every fourth file of the archive's path order), each asserting
+  its slice's counts. The eight golden `Census` values add up field by field to
+  the two the single tests asserted (714 and 734 files, 665 and 685 decoded, 1
+  silent, 49 refused multi-channel in each); every file is still decoded.
+- **A `for mode` around a race load is a test per mode** in `fire_law_inherit`,
+  `zone_airbrake_flaps` (title by mode, six tests) and the 2048 crossfade table.
+  The flaps test also runs its two frames (rest and brake) side by side, since
+  they are independent processes.
+- **`hd_ai_craft_laws`**: the seeds of `field_on_*` print and assert nothing
+  across each other, so each of the 20 is a test (`field_on_vineta_k::seed_3`);
+  the lone-opponent board is a test per circuit.
+
+**What is left is one simulation, and it is physics.** Profiled with `perf` on
+`a_2048_race_fires_on_the_original_law`, which flies no tick: **95% of the
+time is `TriangleSoup::raycast_all` and `raycast`** (a linear scan of every
+triangle per ray), in a 2048 `SingleRace` load and `Race::start`. A 2048 `Zone`
+load takes 8 s and a `SingleRace` 47 s, so the cost is in the race setup. The
+two single-race tests above cannot shard: their assertion is over one race's
+edges and forks. A spatial index returning hits in the same order is the lever
+for every row still over 100 s; it is a determinism-bound `oag-physics` change
+and was outside this lane. The same finding is recorded above for `ai_roll`.
+
+**Full-run tail after the change** (`just test-data-affected`, 1,138 tests of
+`oag-game`'s dependants, load 20-100, so the numbers are inflated): suite 289 s,
+slowest 173 s (`ai_fork_split`), then `magstrip_wire_2048` 160 s and the 2048
+loads at 74-92 s. No Omega, flaps or HD field test is in the top ten.
+
 ## Dependency graph clean-up (2026-10-05)
 
 `cargo shear` found 29 unused or misplaced dependencies; they were removed and

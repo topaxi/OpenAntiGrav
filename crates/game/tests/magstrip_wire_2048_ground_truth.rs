@@ -240,18 +240,26 @@ fn the_hum_is_silent_until_the_vita_cue_set_is_measured() {
 /// three-layer `xfship_ZONE_` table in Zone. This goes through
 /// `oag_raceplay::load`, so it fails if that load reads the plain `ship` bank
 /// instead of the axis.
+fn a_race_load_gives_the_player_its_teams_crossfade_table(mode: oag_race::Mode, layers: usize) {
+    let Some(race) = load_mode(mode) else { return };
+    let team = race
+        .sounds()
+        .xfade_team(r"Feisar2048\3")
+        .unwrap_or_else(|| panic!("{mode:?}: no crossfade table for the player's team"));
+    assert_eq!(team.table().layer_count(), layers, "{mode:?}");
+    assert_eq!(team.playable(), 3, "{mode:?}: looping layers that resolved");
+}
+
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita"]
-fn a_race_load_gives_the_player_its_teams_crossfade_table_in_both_modes() {
-    for (mode, layers) in [(oag_race::Mode::SingleRace, 4), (oag_race::Mode::Zone, 3)] {
-        let Some(race) = load_mode(mode) else { return };
-        let team = race
-            .sounds()
-            .xfade_team(r"Feisar2048\3")
-            .unwrap_or_else(|| panic!("{mode:?}: no crossfade table for the player's team"));
-        assert_eq!(team.table().layer_count(), layers, "{mode:?}");
-        assert_eq!(team.playable(), 3, "{mode:?}: looping layers that resolved");
-    }
+fn a_race_load_gives_the_player_its_teams_crossfade_table_in_a_single_race() {
+    a_race_load_gives_the_player_its_teams_crossfade_table(oag_race::Mode::SingleRace, 4);
+}
+
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita"]
+fn a_race_load_gives_the_player_its_teams_crossfade_table_in_zone() {
+    a_race_load_gives_the_player_its_teams_crossfade_table(oag_race::Mode::Zone, 3);
 }
 
 /// `WO_MAGSTRIP_ZONE` and `WO_MAGSTRIP_SPARKS` ship in the base package's

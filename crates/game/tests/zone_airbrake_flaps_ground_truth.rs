@@ -108,11 +108,13 @@ fn columns(brake: &[u8], rest: &[u8]) -> (usize, usize, usize) {
     (left, right, centre)
 }
 
-fn check(source: &Path, tag: &str) {
-    let scratch = std::env::temp_dir().join(format!("oag-zone-flaps-{tag}"));
+fn check(source: &Path, tag: &str, mode: &str) {
+    let scratch = std::env::temp_dir().join(format!("oag-zone-flaps-{tag}-{mode}"));
     std::fs::create_dir_all(&scratch).unwrap();
-    for mode in ["zone", "single_race"] {
-        let rest = frame(source, &scratch, &format!("{mode}-rest"), mode, "cross");
+    // The two frames are independent runs of the game, each a full race
+    // load; side by side they cost one load's wall clock rather than two.
+    let (rest, brake) = std::thread::scope(|scope| {
+        let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, "cross"));
         let brake = frame(
             source,
             &scratch,
@@ -120,54 +122,82 @@ fn check(source: &Path, tag: &str) {
             mode,
             "cross,l,r",
         );
-        let (left, right, centre) = columns(&brake, &rest);
-        println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
-        // Zone's one shared hull is small and white, so its flaps move fewer
-        // pixels than a native craft's: 2048 measures 196 left and 123 right
-        // since `ZoneCraft::OwnShipAt` put it on that hull (it was over 200
-        // each on the player's own craft). A flap off its hinge puts almost
-        // nothing on the sides, so 100 still catches the defect; the
-        // mid-hull check below is the one that names it.
-        let floor = if mode == "zone" { 100 } else { 200 };
-        assert!(
-            left > floor && right > floor,
-            "{tag} {mode}: the brake changed {left} pixels left and {right} right of centre"
-        );
-        // On HD's single race this is what tells a flap on its hinge (about 2
-        // percent) from one at the model origin (over 20); Zone's small white
-        // flaps put few pixels in the band either way, so there it only
-        // guards the gross case.
-        assert!(
-            centre * 10 < left + right,
-            "{tag} {mode}: {centre} of {} changed pixels sit mid-hull - a flap drawn at the model origin",
-            left + right + centre
-        );
-    }
+        (rest.join().expect("the rest frame"), brake)
+    });
+    let (left, right, centre) = columns(&brake, &rest);
+    println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
+    // Zone's one shared hull is small and white, so its flaps move fewer
+    // pixels than a native craft's: 2048 measures 196 left and 123 right
+    // since `ZoneCraft::OwnShipAt` put it on that hull (it was over 200
+    // each on the player's own craft). A flap off its hinge puts almost
+    // nothing on the sides, so 100 still catches the defect; the
+    // mid-hull check below is the one that names it.
+    let floor = if mode == "zone" { 100 } else { 200 };
+    assert!(
+        left > floor && right > floor,
+        "{tag} {mode}: the brake changed {left} pixels left and {right} right of centre"
+    );
+    // On HD's single race this is what tells a flap on its hinge (about 2
+    // percent) from one at the model origin (over 20); Zone's small white
+    // flaps put few pixels in the band either way, so there it only
+    // guards the gross case.
+    assert!(
+        centre * 10 < left + right,
+        "{tag} {mode}: {centre} of {} changed pixels sit mid-hull - a flap drawn at the model origin",
+        left + right + centre
+    );
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_flaps_are_on_their_hinges() {
-    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+fn hd_flaps_are_on_their_hinges_in_zone() {
+    let Some(source) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
-    check(&image, "hd");
+    check(&source, "hd", "zone");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_flaps_are_on_their_hinges_in_single_race() {
+    let Some(source) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    check(&source, "hd", "single_race");
 }
 
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn wipeout_2048_flaps_are_on_their_hinges() {
-    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+fn wipeout_2048_flaps_are_on_their_hinges_in_zone() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
         return;
     };
-    check(&path, "2048");
+    check(&source, "2048", "zone");
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn wipeout_2048_flaps_are_on_their_hinges_in_single_race() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    check(&source, "2048", "single_race");
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulse_flaps_are_on_their_hinges() {
-    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+fn pulse_flaps_are_on_their_hinges_in_zone() {
+    let Some(source) = oag_testdata::image("pulse-psp-eu.chd") else {
         return;
     };
-    check(&image, "pulse");
+    check(&source, "pulse", "zone");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_flaps_are_on_their_hinges_in_single_race() {
+    let Some(source) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    check(&source, "pulse", "single_race");
 }
