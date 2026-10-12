@@ -271,7 +271,7 @@ fn backing_out_of_the_root_closes_the_menus() {
 fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
