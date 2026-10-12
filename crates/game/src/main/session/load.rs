@@ -583,6 +583,16 @@ impl Session {
                     // The finished player's thrust reads the same scale:
                     // `AI_ResolveSkillScale` is its one source too.
                     race_stage.race.set_finished_thrust_skill(scale);
+                    // **The campaign's opponents are the original's own**
+                    // (the maintainer's AI mode 3): from the mode, never a
+                    // setting. The same scale, and the cell's rung as the
+                    // integer difficulty the pack shuffle reads, which is
+                    // what `CellSelection_CommitSelection` writes to the
+                    // original's `g_skill_level`. A class with no tables
+                    // keeps this project's driver on the tuning above.
+                    if let Some(rung) = race_stage.campaign_difficulty {
+                        race_stage.race.use_original_ai(scale, rung_level(rung));
+                    }
                 }
             }
             if let Some(probe) = self.load_probe.as_mut() {
@@ -746,5 +756,15 @@ impl Session {
                 self.settings.language.as_deref(),
             )));
         Ok(())
+    }
+}
+
+/// A campaign rung as the original's integer `g_skill_level`: Easy `0`,
+/// Medium `1`, Hard `2` (`race-campaign.md`, `CellSelection_CommitSelection`).
+fn rung_level(rung: oag_tables::race_campaign::Difficulty) -> usize {
+    match rung {
+        oag_tables::race_campaign::Difficulty::Easy => 0,
+        oag_tables::race_campaign::Difficulty::Medium => 1,
+        oag_tables::race_campaign::Difficulty::Hard => 2,
     }
 }

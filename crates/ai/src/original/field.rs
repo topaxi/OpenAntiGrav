@@ -49,10 +49,10 @@ pub struct OriginalDriver {
 }
 
 impl OriginalDriver {
-    /// A driver for grid slot `slot` (`0` the front).
+    /// A driver for grid position `position`, `1` the front.
     #[must_use]
-    pub fn new(slot: u8) -> Self {
-        let wander = Wander::constructed(slot);
+    pub fn new(position: u8) -> Self {
+        let wander = Wander::constructed(position);
         Self {
             authority: 0.0,
             smoothed_speed: 0.0,
@@ -131,13 +131,16 @@ pub struct Field {
 
 impl Field {
     /// A field for one race. `skill` is `AI_ResolveSkillScale`'s value,
-    /// `level` the integer difficulty the shuffle reads (`0..=2`).
+    /// `level` the integer difficulty the shuffle reads (`0..=2`), `grid`
+    /// each slot's grid position, `1` the front (the live capture's racer
+    /// table puts the player last, at `8`, with a formation slot of `0`).
     #[must_use]
     pub fn new(
         table: ClassRace,
         controller: Controller,
         skill: f32,
         level: usize,
+        grid: [u8; SLOTS],
         seed: u64,
     ) -> Self {
         Self {
@@ -148,7 +151,7 @@ impl Field {
             rng: Rng::new(seed ^ 0x6f72_6967_696e_616c),
             counter: 0,
             shuffled: false,
-            drivers: std::array::from_fn(|slot| OriginalDriver::new(slot as u8)),
+            drivers: std::array::from_fn(|slot| OriginalDriver::new(grid[slot])),
         }
     }
 

@@ -10,7 +10,7 @@ use oag_tables::ai_race_stats::PackSwapping;
 /// One driver's formation slot and its wander (`driver+0x74..+0x98`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Wander {
-    /// The slot at the start (`+0x78`): `8 - grid slot`.
+    /// The slot at the start (`+0x78`): `8 - grid position`.
     pub start: f32,
     /// The slot at the finish (`+0x7c`), after the shuffle.
     pub end: f32,
@@ -27,13 +27,14 @@ pub struct Wander {
 }
 
 impl Wander {
-    /// What `Ai_Construct` leaves: a flat slot, `8 - grid slot`, and a phase
+    /// What `Ai_Construct` leaves: a flat slot, `8 - grid position` (`1` the
+    /// front, read off the live racer table: racer 0 starts at `7`), and a phase
     /// (`1e6`) no race fraction reaches, so a driver the shuffle never touched
     /// holds its grid order. `segments` is not read off `Ai_Construct`; `1` is
     /// chosen so the unused term stays finite (it is multiplied by zero).
     #[must_use]
-    pub fn constructed(grid_slot: u8) -> Self {
-        let slot = 8.0 - f32::from(grid_slot);
+    pub fn constructed(grid_position: u8) -> Self {
+        let slot = 8.0 - f32::from(grid_position);
         Self {
             start: slot,
             end: slot,

@@ -349,6 +349,9 @@ impl Race {
         let damage_rules = self.sim.damage_rules();
         // Once for the whole grid: every craft's view needs the same ordering.
         let places = self.places();
+        // The campaign's original field, when on: its round robin advances
+        // once a tick before any driver, as `AiManager_Update` does.
+        let lane_slot = self.original_ai_begin_tick();
         for slot in 1..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active {
                 continue;
@@ -380,7 +383,19 @@ impl Race {
             // runs *inside* it: the wall counters below must not charge a craft
             // for the tick it was wrecked on, nor for the thousands after.
             let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
-            let mut controls = if was_racing {
+            let mut rail = None;
+            let mut controls = if was_racing && let Some(lane_slot) = lane_slot {
+                // The original's own opponent (`crate::original_ai`): this
+                // project's driver only locates the craft on the line, which
+                // still decides its hover surface below and its respawn.
+                ship.driver.locate(
+                    super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
+                    position,
+                );
+                let output = self.drive_original(slot, lane_slot, &places);
+                rail = output.and_then(|output| output.rail);
+                output.map_or_else(oag_physics::ShipControls::default, |output| output.controls)
+            } else if was_racing {
                 ship.driver.drive(
                     &ship.physics,
                     &oag_ai::Context {
@@ -460,6 +475,17 @@ impl Race {
                 damage_rules,
                 ..Environment::default()
             };
+            // `Ai_SnapToLane`'s body write: inside the AI update, one of which
+            // runs per world step (measured: the round-robin counter read +1
+            // at each of 40 consecutive `Body_StepWorld` entries), so between
+            // this tick's controls and its step.
+            if let Some(rail) = rail {
+                oag_physics::rail::apply(
+                    &mut self.sim.world.ships[slot].physics.body,
+                    rail.velocity,
+                    rail.position,
+                );
+            }
             let evaluated = oag_physics::step(
                 &mut self.sim.world.ships[slot].physics,
                 &controls,
@@ -468,6 +494,9 @@ impl Race {
                 &self.sim.collision,
                 self.sim.dt,
             );
+            if lane_slot.is_some() {
+                self.original_ai_contacts(slot, &evaluated.wall);
+            }
             // **An opponent's hull sounds too**, on its own 0.8-second re-arm
             // and off its own emitter. `shielded` is `false` because nothing
             // hands an opponent a Shield yet - the same gap the shell bulge

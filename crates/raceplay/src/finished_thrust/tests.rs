@@ -26,6 +26,7 @@ fn invented() -> FinishedThrust {
             ],
         },
         skill: 2.0,
+        original: None,
     }
 }
 

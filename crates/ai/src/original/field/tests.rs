@@ -42,7 +42,14 @@ fn field() -> Field {
         look_ahead_secs: 0.5,
         xtrack_mul: 0.0,
     };
-    Field::new(tests_table(), controller, 1.0, 1, 42)
+    Field::new(
+        tests_table(),
+        controller,
+        1.0,
+        1,
+        [8, 1, 2, 3, 4, 5, 6, 7],
+        42,
+    )
 }
 
 const RACERS: [(f32, u8); 3] = [(500.0, 3), (520.0, 2), (540.0, 1)];
@@ -81,7 +88,7 @@ fn the_shuffle_runs_once_and_arms_the_wander() {
     assert_eq!(field.drivers[1].wander.segments, 2.0);
     assert_eq!(
         field.drivers[0].wander,
-        Wander::constructed(0),
+        Wander::constructed(8),
         "the player's is untouched"
     );
     let after = field.drivers[1].wander;

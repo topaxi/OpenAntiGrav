@@ -15,12 +15,19 @@
 //! original's AI has no corner lift of its own to keep, ours does, and the
 //! cap keeps it - the `min` is **chosen, not measured**. The law's other
 //! regime, when the player has fallen about 195 units behind its target and
-//! the clamp lets go, needs the opponents' `spread` wander this project does
-//! not model, and is not reproduced. Opponents are untouched: they race on
-//! this project's own driver (the maintainer's standing rule), and this is
-//! the finished player's own autopilot, which matches the original.
+//! the clamp lets go, reads the opponents' `spread` wander, which
+//! `oag_ai::original` now models for the campaign's opponents; this cap still
+//! takes the lower stop and does not reproduce that regime. Outside the
+//! campaign the opponents race on this project's own driver (the maintainer's
+//! standing rule), and this is the finished player's own autopilot, which
+//! matches the original.
+//!
+//! The same load reads the class's whole `AIRaceStats` file and its
+//! `AIControlStats.xml` row ([`OriginalTables`]) for the campaign's third AI
+//! mode, the original's own opponent (`crate::original_ai`).
 
-use oag_tables::ai_race_stats::{self, AiRaceStats};
+use oag_tables::ai_control_stats;
+use oag_tables::ai_race_stats::{self, AiRaceStats, ClassRace};
 use oag_tables::handling::SpeedClass;
 use oag_tables::race_campaign::Difficulty;
 use oag_tables::track_stats::{self, ModeTerm, TrackStats};
@@ -34,6 +41,63 @@ pub struct FinishedThrust {
     pub stats: AiRaceStats,
     /// `AI_ResolveSkillScale`'s value for this race.
     pub skill: f32,
+    /// The whole file and the class's controller, for the original driver;
+    /// `None`, said so in the loader report, when either does not read.
+    pub original: Option<OriginalTables>,
+}
+
+/// What `oag_ai::original` reads off the disc for one class.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OriginalTables {
+    /// `AIRaceStats_<class>.xml`, whole.
+    pub race: ClassRace,
+    /// `AIControlStats.xml`'s row over the executable's defaults.
+    pub controller: oag_ai::original::Controller,
+}
+
+/// The whole `AIRaceStats` file and the `AIControlStats.xml` row, or a report
+/// line naming which did not read.
+fn read_original(
+    archives: &mut oag_assets::Archives,
+    blob: &[u8],
+    class: SpeedClass,
+    report: &mut Vec<String>,
+) -> Option<OriginalTables> {
+    let race = match ai_race_stats::full_from_blob(blob, class) {
+        Ok(race) => race,
+        Err(e) => {
+            report.push(format!(
+                "original AI: {} did not read whole ({e}); the campaign keeps this \
+                 project's driver",
+                ai_race_stats::entry_name(class)
+            ));
+            return None;
+        }
+    };
+    let entry = ai_control_stats::entry_name();
+    let row = archives
+        .read_name(entry)
+        .map_err(|e| e.to_string())
+        .and_then(|blob| ai_control_stats::from_blob(&blob, class).map_err(|e| e.to_string()));
+    match row {
+        Ok(row) => {
+            let controller = oag_ai::original::Controller::from_disc(&row);
+            report.push(format!(
+                "original AI: {entry} SteerMul {} SteerDamp {} LookAheadSecs {} xtrackMul {}",
+                controller.steer_mul,
+                controller.steer_damp,
+                controller.look_ahead_secs,
+                controller.xtrack_mul
+            ));
+            Some(OriginalTables { race, controller })
+        }
+        Err(e) => {
+            report.push(format!(
+                "original AI: {entry} did not read ({e}); the campaign keeps this project's driver"
+            ));
+            None
+        }
+    }
 }
 
 impl FinishedThrust {
@@ -117,9 +181,9 @@ pub(super) fn read(
         return None;
     };
     let entry = ai_race_stats::entry_name(class);
-    let stats = match archives.read_name(&entry) {
+    let (stats, blob) = match archives.read_name(&entry) {
         Ok(blob) => match ai_race_stats::from_blob(&blob, class) {
-            Ok(stats) => stats,
+            Ok(stats) => (stats, blob),
             Err(e) => {
                 report.push(format!("finished thrust: {entry} did not parse ({e})"));
                 return None;
@@ -139,7 +203,12 @@ pub(super) fn read(
         rung(terms.difficulty),
         mode_term(terms.mode, terms.weapons_on, terms.full_grid),
     );
-    let thrust = FinishedThrust { stats, skill };
+    let original = read_original(archives, &blob, class, report);
+    let thrust = FinishedThrust {
+        stats,
+        skill,
+        original,
+    };
     report.push(format!(
         "finished thrust: {entry}, skill {skill:.2}, first place {:.1} %, last {:.1} %",
         100.0 * thrust.fraction(1),
