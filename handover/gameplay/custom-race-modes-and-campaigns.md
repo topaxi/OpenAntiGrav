@@ -50,12 +50,39 @@ drag race needs:
    records key of its own (best time per track and segment).
 6. **Medals**: target times are chosen per event (no original authors them), labelled chosen.
 
+**A mod supports only the titles it declares** (maintainer, 2026-10-12): the manifest's
+`titles = [...]` (already in `oag-mod.toml`) limits where its modes, campaigns and rows appear; a
+mode offered on one title need not exist on the others, and the menus never list it there.
+
 Decided (mods, potentially WebAssembly), so the order is: first refactor the built-in lap
 modes into **rules as data** (finish = laps or distance, grid sample, weapons, eliminations,
 auto-speed) with every existing race hash unchanged; then a mod declares a mode in its own
 `modes/*.toml` (`schemas/v1/mode.tosd`) built from those rules - a drag race needs no code at
 all; then the WebAssembly rules hook (the ADR the pilot-controller thread calls for, one
 `wasmtime` host shared with mod controllers) for modes data cannot express.
+
+## 1b. A second example: an open-world eliminator (battle arena)
+
+The maintainer's idea, "think Mario Kart balloons": an **arena** instead of a circuit, each craft
+starts with N lives (balloons), a weapon hit pops one, the last craft with lives left wins (or the
+most lives at a time limit). Mostly a custom track plus rules, but the track is the hard part:
+
+1. **An arena track**: an open floor and walls with no lap spline. Everything that assumes a
+   spline today must accept none - spawning (grid points authored in the track file instead),
+   respawn/rescue (back to an authored point, not the nearest spline sample), standings (no
+   progress, so by lives then time), the camera and flyby, the out-of-bounds/reset volumes. The
+   own track format gains an "arena" kind (`track.tosd` minor addition) and the Blender add-on a
+   way to author spawn points.
+2. **Hover over an arbitrary floor**: check how much of `oag-physics`' hover and grounding reads
+   the spline frame versus the collision mesh; an arena needs the mesh path alone.
+3. **Rules**: lives per craft, a hit costs one, elimination at zero, optional time limit, weapon
+   pads respawning - rules as data first (the existing Eliminator mode already counts kills and
+   eliminations), WebAssembly only for what data cannot say.
+4. **AI**: this project's driver follows a racing line; an arena needs navigation in open space
+   (seek the nearest opponent or a weapon pad, avoid walls) - a new controller, which is exactly
+   the kind of thing the mod controller hook (WebAssembly) is for, or a built-in arena controller
+   of ours if data-only mods should ship it.
+5. **HUD**: lives per craft instead of laps; results by survival order.
 
 ## 2. A custom campaign
 
@@ -82,7 +109,7 @@ events as **campaign cells** through one path, record medals in `[[campaign]]` a
 1. Refactor the lap modes into race rules as data, every existing hash unchanged.
 2. Mod-declared modes (`modes/*.toml`, `mode.tosd`) built from those rules; the drag race as an
    example mod: a sprint on an existing loop first (finish gate, grid at a sample, HUD, results,
-   records, replay header), on every title.
+   records, replay header), on the titles the mod declares.
 3. The WebAssembly rules hook (ADR first), shared with mod AI controllers.
 4. The campaign definition format and its schema, the CAMPAIGNS row and picker, one built-in
    OAG campaign containing a drag race event.
