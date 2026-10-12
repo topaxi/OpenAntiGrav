@@ -667,7 +667,13 @@ impl Session {
                 // menu. See `Session::resupply_tracks_for_mode`.
                 self.resupply_tracks_for_mode();
             }
-            "race.class" => self.settings.race.class = text,
+            "race.class" => {
+                self.settings.race.class = text;
+                // RACE REMIX's TEAM row hides a team that does not author
+                // this class (`Session::remix_craft_catalogue`).
+                self.resupply_remix_teams();
+                self.resupply_remix_variant();
+            }
             // VARIANT's own list depends on which team this names - the
             // same reason `race.mode` above resupplies CIRCUIT.
             "race.team" => {

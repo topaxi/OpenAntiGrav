@@ -321,6 +321,20 @@ impl Session {
                     .retain(|choice| Self::is_guest_team(guest, &choice.value));
             }
         }
+        // **A team whose files do not author the chosen class is hidden**
+        // (chosen, not measured; `oag_title::RaceDefaults::team_races_class`).
+        // Pure's VECTOR and 2048's SUPERPHANTOM are on one title's ladder or
+        // one roster only, and a remix can pair them with a craft title whose
+        // teams author neither: the TEAM row narrows, possibly to nothing,
+        // rather than offering a team that fails to load.
+        if let Some(title) = candidate.playable() {
+            let class = self.settings.race.class.trim();
+            if !class.is_empty() {
+                catalogue
+                    .teams
+                    .retain(|team| title.race.team_races_class(&team.value, class) != Some(false));
+            }
+        }
         Some(catalogue)
     }
 
@@ -371,6 +385,20 @@ impl Session {
         }
         if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
             race_options.difficulty = difficulty;
+        }
+        // The TEAM row hides every team that does not author the class; with
+        // none left there is nothing to launch, and racing a default team that
+        // cannot load the class is the failure the row exists to prevent.
+        if self
+            .remix_craft_catalogue()
+            .is_some_and(|catalogue| catalogue.teams.is_empty())
+        {
+            warn!(
+                "no team of {} authors the speed class {:?}; pick another class or craft title",
+                self.settings.remix.craft_title, race_options.class
+            );
+            self.race_options = Some(race_options);
+            return;
         }
 
         let track_title = self.settings.remix.track_title.clone();
