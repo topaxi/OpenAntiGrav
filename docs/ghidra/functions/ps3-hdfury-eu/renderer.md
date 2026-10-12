@@ -5010,6 +5010,24 @@ literal `0.0`**: `pow(x, 0) = 1` is not a plausible authored shininess, and
 that specific value keeps reading as `SpecularPower` patched at draw time
 (finding 1 above) rather than as a sixth real constant.
 
+> **Re-read 2026-10-12 (`hd-pad-leftovers`): the `exp(x)` reading above is wrong,
+> the exclusion is right.** `EX2(log2(e) * LG2(x))` is `x^1.4427`, not `exp(x)`
+> (`exp(y)` is `EX2(log2(e) * y)` with no `LG2`), and a saturated dot is not
+> what these 58 chains are. `crates/render/examples/hd_specular_log2e_excluded.rs`
+> walks every `LG2` that a saturated `DP3` lane-soundly feeds and whose next
+> `MUL`-by-literal reads the `LG2`'s register (13,948 chains disc-wide): the 58
+> with the literal `log2(e)` all have a `MUL` that reads a lane the `LG2` did not
+> write (58 of 58). The first, `ships/glass_texture_n.rcsmaterial` @`0x5e60`,
+> is `LG2 r2.z` then `MUL r2.w = r2.y * 1.4427` then `EX2_SAT r2.w`: the fog
+> curve's multiply reusing the register, not a power of the dot. **A related gap
+> this exposed, not fixed here:** `specular_exponent_chain` matches its `MUL`
+> and `EX2` by register, not lane, and 1,449 of those 13,948 chains (10.4 %)
+> have the `MUL` reading a lane the `LG2` did not write. Some of the 10,087
+> resolved exponents may therefore be a different quantity's multiply; the
+> `32` bucket (the pad's `N.H` power is one) was read by hand and is sound,
+> the others were not re-read. Fixing the matcher moves every population
+> number on this page, so it is a thread item, not a drive-by.
+
 **`200`/`250`/`260`/`35` traced 2026-09-03, over four drafts before the
 method was trustworthy - all four kept in this history rather than silently
 corrected away, per this project's own evidence rule.**
@@ -5623,6 +5641,22 @@ and is filed as its own `## Open` item in the handover thread rather than
 fixed in the same pass that found it - both because scope discipline says a
 gate change needs its own verification pass, and because fixing it will move
 every number measured against the current `6,141`, including the ones below.
+
+> **Re-measured 2026-10-12 (`hd_specular_unresolved_reasons`, 76,358 blocks).**
+> The breakdown below is the 2026-09-04 lane-correct one with `Resolved` still
+> the naive 6,141. With the fixed gate: `Lg2NotDp3Fed` 44,060 (57.7 %), `NoLg2`
+> 21,086 (27.6 %), `Resolved` 10,087 (13.2 %), `Lg2Dp3FedButNoChain` 1,125
+> (1.5 %). The 1,287 blocks that left `NoChain` for `NotDp3Fed` fit inside the
+> 1,679 that were resolved on a wrong-lane `DP3` under the old gate. Feeders of
+> the `LG2` in `Lg2NotDp3Fed`: `ADD` 50.6 %, `DIVSQ`/`DIVSQ_SAT` 23.0 % (this
+> page's `op3B`), `TEX` 11.3 %, `MOV` 5.8 %, `DP3` (unsaturated) 1.2 %.
+> **Source negate (commit `6428eae0`, 2026-10-05) moved none of these:** it only
+> adds `negate`/`cond` fields to `Instruction` and `dp3_feeding`,
+> `specular_exponent_chain` and `reaches_output` read neither, and
+> `hd_dp3_feeding_lane_check` (10,087 of 10,087 lane-sound), `hd_litex2_census`
+> (0 blocks with opcode `0x3c`) and `hd_specular_population_recheck` (10,087
+> total, 6,464 Zone-declaring, `0`/`32`/`260`/`200`/`40`/`35`/`300`/`250` as
+> published) reproduce the 2026-09-05 numbers exactly.
 
 **The 96 % `specular_exponent_unresolved` fallback rate `Report` counts
 (2026-09-04) has a mostly mundane explanation, re-measured disc-wide with a

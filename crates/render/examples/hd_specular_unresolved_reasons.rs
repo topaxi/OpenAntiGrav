@@ -46,13 +46,13 @@
 //! only that one - good enough to size the feeder population, not to claim
 //! it is exhaustive per block.
 //!
-//! **Measured disc-wide, 76,358 blocks, lane-correct**: `Lg2NotDp3Fed`
-//! 56.0%, `NoLg2` 27.6%, `Lg2Dp3FedButNoChain` 8.3%, `Resolved` 8.0%. Within
-//! `Lg2NotDp3Fed` (42,773 blocks): `ADD`/`ADD_SAT` 53.4%, `op3B`/`op3B_SAT`
-//! combined 23.1%, `TEX` 11.4%, `MOV` 5.9%, unsaturated `DP3` 1.2%, the rest
-//! single digits or below. See `renderer.md`'s "Ships have no Lambert
-//! diffuse either" for the full write-up and what changed from the earlier,
-//! naive-gate numbers (`63.3`/`27.6`/`8.0`/`1.1`, `op3B` `~13.6%`).
+//! **Measured disc-wide, 76,358 blocks, re-run 2026-10-12 with the fixed
+//! gate**: `Lg2NotDp3Fed` 44,060 (57.7%), `NoLg2` 21,086 (27.6%), `Resolved`
+//! 10,087 (13.2%), `Lg2Dp3FedButNoChain` 1,125 (1.5%). Feeders in
+//! `Lg2NotDp3Fed`: `ADD` 50.6%, `DIVSQ`/`DIVSQ_SAT` 23.0%, `TEX` 11.3%, `MOV`
+//! 5.8%, unsaturated `DP3` 1.2%. (The 2026-09-04 figures, 56.0/27.6/8.3/8.0
+//! with `Resolved` still the naive gate's 6,141, are in `renderer.md`.) See
+//! `renderer.md`'s "Ships have no Lambert diffuse either".
 
 use oag_rcs::rcsmaterial::RcsMaterial;
 use oag_rcs::rcsmaterial::fragment::{Instruction, Program, Source};

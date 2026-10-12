@@ -497,6 +497,9 @@ on exactly this naming for its pad-glow specular scalar (which, traced by
 hand, turns out to use only `0x3b`/`DIVSQ`, never `0x3d`) - see that page for
 what this clears.
 
+(Re-read 2026-10-12: that scalar is EXP2 fog, `docs/rendering/pads.md`
+"Wired, 2026-10-05"; the naming of `0x3b` is unaffected.)
+
 **`0x3e` is `FENCB`, named the same day off the same header**:
 `RSX_FP_OPCODE_FENCB = 0x3E` ("Fence B?", hedged by RPCS3 like `FENCT`). The
 same census, extended to it, finds **3,115 of 3,115** uses writing destination

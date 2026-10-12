@@ -517,7 +517,8 @@ easy to conflate because both share the `LG2`/`MUL`/`EX2` idiom
 - A **genuine `N·H` specular exponent**, a saturated `DP3` between two
   vectors built from the interpolated input and the unpacked `_ne` normal,
   fed through the identical `LG2`/`MUL(32.0)`/`EX2` idiom, landing in the
-  scalar this page's trace below calls the "specular scalar."
+  scalar this page's trace below calls the "specular scalar" (**it is EXP2 fog,
+  see "Wired, 2026-10-05" below; re-read 2026-10-12, the `N.H` power itself stands**).
 
 **What the trace actually shows, identically shaped on both `Speedup Pad`
 and `Weapon Pad`:**
@@ -567,7 +568,7 @@ and `Weapon Pad`:**
   that fails the test never reaches this arithmetic at all, rather than a
   second gate meaningfully narrowing the ~93% diffuse-alpha region down to
   the ~7% bars.
-- The whole sum is then scaled again by the program's own specular scalar
+- (**2026-10-05: that scalar is EXP2 fog, not specular.**) The whole sum is then scaled again by the program's own "specular scalar"
   (the `EX2(log2(N·H) * 32)` chain, landing in `R0.x` on `Speedup Pad` /
   `R0.z` on `Weapon Pad`) and added to a third term, at the program's true
   final (`end`-flagged) instruction, built entirely from constants and that
@@ -705,6 +706,8 @@ would have.
 
 ### Wiring attempted and stopped, 2026-09-25: the glow term reaches output through a multiply, and that multiply's own chain is undecoded
 
+> **Superseded in part, 2026-10-05 and re-read 2026-10-12:** the "specular scalar" the multiply below blocks on is EXP2 fog (negate bit 17 was dropped by the decoder until `6428eae0`); `mesh.wgsl` already does it. The `N.H` power chain (`LG2`/`MUL 32`/`EX2`) is real and is what "Wired, 2026-10-05" reproduces. The opcode naming below (`0x3b` `DIVSQ`) stands.
+
 **Handover's Next Steps item 1 asked, before touching anything, whether the
 `_ne`-gated term reaches the program's output through ADDs alone (the disc's
 real term, safe to wire) or through a multiply by the specular scalar (needs
@@ -812,6 +815,8 @@ away, but still not what the disc's own microcode computes.
    `mesh.wgsl` rather than approximated.
 
 ### Item 1 cleared, 2026-09-25: `0x3b`/`0x3d` are named, off RPCS3's opcode table
+
+> **Superseded in part, 2026-10-05 and re-read 2026-10-12:** the "specular scalar" the multiply below blocks on is EXP2 fog (negate bit 17 was dropped by the decoder until `6428eae0`); `mesh.wgsl` already does it. The `N.H` power chain (`LG2`/`MUL 32`/`EX2`) is real and is what "Wired, 2026-10-05" reproduces. The opcode naming below (`0x3b` `DIVSQ`) stands.
 
 **Not the existing normalise/rsq hypothesis strengthened - a different
 primary source, found instead.** Mesa's `nvfx_shader.h` (this project's own

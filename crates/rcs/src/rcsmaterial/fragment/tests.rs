@@ -759,11 +759,10 @@ fn a_pow_chain_fed_by_a_texture_sample_is_not_returned() {
     );
 }
 
-/// **`exp(N.H)` is not `pow(N.H, e)`, even fed by a saturated dot and
-/// reaching the output too** - a disc-wide sweep found materials computing
-/// `exp(x) = exp2(log2(e) * log2(x))` off exactly this shape, and the
-/// constant's exact identity is the tell: `mesh.wgsl`'s own fog curve names
-/// `log2(e)` for the identical reason.
+/// **A chain whose exponent literal is `log2(e)` is not returned.** On the
+/// disc that literal is the fog curve's `MUL log2(e)` into `EX2` (the
+/// constant `mesh.wgsl`'s fog names), paired with an unrelated `LG2` through
+/// a shared register; this fixture has the shape without the lane mismatch.
 #[test]
 fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {
     let mut instructions = pow_chain(1, std::f32::consts::LOG2_E, 0xf);
@@ -783,7 +782,7 @@ fn a_pow_chain_whose_exponent_is_log2_e_is_not_returned() {
     assert_eq!(
         program.specular_exponent(),
         None,
-        "log2(e) marks exp(N.H), not a specular pow"
+        "log2(e) is the fog curve, not a specular pow"
     );
 }
 
