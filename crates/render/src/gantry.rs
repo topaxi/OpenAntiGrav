@@ -223,6 +223,78 @@ pub fn flip_served_placeholder_v(model: &mut Model, served: &[u32]) -> usize {
     moved
 }
 
+/// Switches the Zone grade off for the vertices of every placeholder draw whose
+/// slot is in `served`, so a Zone race shows the card on the quad instead of
+/// the stage's own surface: how many vertices were switched off, and how many
+/// were left alone.
+///
+/// Rides a glow-table entry carrying [`oag_mesh::mesh::ZONE_EXEMPT_RATE`], named
+/// by the vertex's material index (`slots::MATERIAL_SHIFT`). **A vertex that
+/// already names an entry is left alone** and counted, and so is every vertex
+/// once the table is full: the caller reports them, since a quad still graded
+/// reads as a card that did not draw.
+///
+/// **Chosen, not measured**: see [`oag_mesh::mesh::ZONE_EXEMPT_RATE`].
+pub fn exempt_served_placeholders_from_zone(model: &mut Model, served: &[u32]) -> (usize, usize) {
+    use oag_mesh::mesh::{Emissive, ZONE_EXEMPT_RATE, rcs::EMISSIVE_LIMIT, slots};
+    let slots_of_served: Vec<usize> = model
+        .textures
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| {
+            t.as_ref()
+                .and_then(|t| slot_number(&t.label))
+                .is_some_and(|n| served.contains(&n))
+        })
+        .map(|(slot, _)| slot)
+        .collect();
+    if slots_of_served.is_empty() {
+        return (0, 0);
+    }
+    let entry = Emissive {
+        tint: [0.0; 3],
+        offset: 0.0,
+        scale: 1.0,
+        rate: ZONE_EXEMPT_RATE,
+    };
+    let index = match model.emissive.iter().position(|seen| *seen == entry) {
+        Some(index) => Some(index),
+        None if model.emissive.len() + 1 < EMISSIVE_LIMIT => {
+            model.emissive.push(entry);
+            Some(model.emissive.len() - 1)
+        }
+        None => None,
+    };
+    let mut seen = vec![false; model.vertices.len()];
+    let (mut exempted, mut skipped) = (0, 0);
+    for draws in [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ] {
+        for draw in draws
+            .iter()
+            .filter(|d| d.texture.is_some_and(|t| slots_of_served.contains(&t)))
+        {
+            for i in draw.range.clone() {
+                let vertex = model.indices[i as usize] as usize;
+                if std::mem::replace(&mut seen[vertex], true) {
+                    continue;
+                }
+                let word = &mut model.vertices[vertex].slots;
+                match index {
+                    Some(index) if *word >> slots::MATERIAL_SHIFT == 0 => {
+                        *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
+                        exempted += 1;
+                    }
+                    _ => skipped += 1,
+                }
+            }
+        }
+    }
+    (exempted, skipped)
+}
+
 /// The slot number a billboard placeholder texture names: `billboard7.tga` is
 /// 7, on either title's spelling. `None` for any other label.
 #[must_use]

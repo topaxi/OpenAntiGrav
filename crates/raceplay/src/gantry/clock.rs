@@ -195,6 +195,23 @@ impl Clock {
         laps: None,
     };
 
+    /// A board whose own timeline runs `assembly_ticks` ticks up to the
+    /// release: frame 0 on tick `release - assembly_ticks`, then free-running.
+    ///
+    /// HD's Zone board, whose assembly was read off the original as starting
+    /// about 3.5 s before the release (`oag_title::adverts::ZoneGantry`). **What
+    /// the board does after the release is chosen, not measured**: the clock
+    /// keeps running to the asset's own end and the caller clamps it.
+    #[must_use]
+    pub const fn assembled_at_release(assembly_ticks: u64) -> Self {
+        Self {
+            start_tick: (COUNTDOWN_TICKS + 1).saturating_sub(assembly_ticks),
+            hold: None,
+            window: None,
+            laps: None,
+        }
+    }
+
     /// Pulse's: frame 0 on tick 92, **measured** (confidence 85), then from
     /// the release the race manager's windows, **read** (confidence 85):
     /// [`PULSE_PRE_LAP_WINDOW`] and [`PULSE_LAP_WINDOWS`].

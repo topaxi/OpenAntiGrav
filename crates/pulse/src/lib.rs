@@ -112,6 +112,7 @@ pub const TITLE: &Title = &Title {
         flip_v: true,
         zone_shares_one_texture: false,
         gantry_card: false,
+        zone_gantry: None,
         origin: oag_title::Origin::Measured,
     }),
 };

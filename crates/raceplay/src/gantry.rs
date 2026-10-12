@@ -324,6 +324,7 @@ pub(super) fn place_card(
     name: &str,
     track_model: &Model,
     spec: &oag_title::adverts::Adverts,
+    zone_board: Option<oag_title::adverts::ZoneGantry>,
     report: &mut Vec<String>,
 ) -> Option<crate::adverts::Card> {
     let Some(mount) = oag_render::gantry::mount(track_model) else {
@@ -344,7 +345,10 @@ pub(super) fn place_card(
     };
     let countdown = oag_render::gantry::panel::fx350_draws(&model);
     let (cull, parked) = panel_cull(&model, countdown, &mount, &HD_LAP_WINDOWS);
-    let clock = hd_clock(&model, name, report);
+    let clock = match zone_board {
+        Some(zone) => zone_clock(zone, name, report),
+        None => hd_clock(&model, name, report),
+    };
     let mut card = match crate::adverts::card_from(8, model, &blob, spec) {
         Ok(card) => card,
         Err(why) => {
@@ -425,6 +429,21 @@ pub(super) enum ClockRule {
 
 /// HD's clock on `model`'s own `GO` edge, or the timeline off the race start
 /// with the reason in the report.
+/// A Zone board's clock: its assembly ends on the release, per
+/// [`oag_title::adverts::ZoneGantry::assembly_ticks`], and the line says what is
+/// and is not measured.
+fn zone_clock(zone: oag_title::adverts::ZoneGantry, name: &str, report: &mut Vec<String>) -> Clock {
+    let clock = Clock::assembled_at_release(zone.assembly_ticks);
+    report.push(format!(
+        "start gantry clock: {name} is this title's Zone board, its assembly starting {} ticks \
+         before the release, on tick {} (read off RPCS3, 2026-10-08, one boot: a few ticks either \
+         way); what it shows after the release is chosen, not measured - the timeline runs on and \
+         is held at its limit",
+        zone.assembly_ticks, clock.start_tick,
+    ));
+    clock
+}
+
 fn hd_clock(model: &Model, name: &str, report: &mut Vec<String>) -> Clock {
     match go_edge(model).map(|edge| (edge, Clock::hd(edge))) {
         Ok((edge, Some(clock))) => {

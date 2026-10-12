@@ -42,3 +42,16 @@ pub struct Emissive {
     /// the rates read, `mesh::rcs::holo_billboard`.)
     pub rate: f32,
 }
+
+/// The `rate` an entry of [`Model::emissive`](super::Model::emissive) carries
+/// to say "this surface takes no Zone grade": a value no material's own entry
+/// reaches (rates are `0`, `1` and the water family's `2`), read by
+/// `shade.wesl` off the entry the vertex's material index names.
+///
+/// **Chosen, not measured.** Wipeout HD's Zone variant of the start gantry's
+/// quad material (`sign_emissive_glow`, block #7) samples no albedo at all, yet
+/// the original's Zone races show the gantry's board on that quad (RPCS3,
+/// 2026-10-08), so the blanket Zone recolour `shade.wesl` applies to every
+/// surface is switched off for the quad that shows a card. How the original
+/// keeps the board is unread; see `docs/rendering/start-gantry.md`.
+pub const ZONE_EXEMPT_RATE: f32 = 4.0;

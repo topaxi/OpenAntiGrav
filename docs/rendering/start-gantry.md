@@ -993,19 +993,84 @@ not read: the four names are only referenced by a name-to-hash registration loop
 The Zone icon starts about 3.5 s (210 ticks) before the release and is complete about 10 frames before it
 (`zcd2`, release at video frame 1066 of 30 fps).
 
-**Not wired, and why.** `oag_race::Mode` has Zone but no Zone Battle or Detonator.
-Substituting `321Go_Zone.vex` for Zone was tried and **reverted**: loaded as a card, the panel
-draws blank white on both archive copies (`DATA00` 8.4 KB / bars, `DATA02` 2.6 KB /
-`cf_321_zone` + `321_go_64_zone2.gtf`; `DATA00` is mounted last by the game, which would make it
-the live copy, but the original's picture has light pieces on a dark panel that the `DATA00`
-copy's textures - `black_fadeout`, an 8x8 - cannot make). A wrong picture is not shipped in place of the known one. Open: which
-copy the game loads, and why ours draws that model empty. A Zone race therefore still shows `3 2 1 GO`.
+**Wired for Zone on 2026-10-12 (`hd-zone-board`); Zone Battle and Detonator still are not.** `oag_race::Mode` has
+Zone but no Zone Battle or Detonator, so only Zone could choose its file. The paragraph this replaces said
+`321Go_Zone.vex` "draws blank white on both archive copies" and that `DATA00`'s textures "cannot make" the
+picture. **Both claims were wrong, and the blank panel was not the model:** see
+["The Zone board", below](#wipeout-hd-the-zone-board---the-model-was-fine-the-zone-grade-was-covering-it-2026-10-12-hd-zone-board).
 
 **Per title** (the rule is a single name table by mode id): **Omega** - ported in the binary's own code
 (`ps4-omega-eu/billboards.md`), checked, not wired (no PS4 capture path); **2048** - checked, differs: no manifest
 of the twenty-six names any of the three files (see the census above), so the rule has nothing to
 substitute there; **Pulse** - checked, differs: one gantry file, no chooser, and its gantry
 stays a placed model (the card route is measured on HD only).
+
+## Wipeout HD: the Zone board - the model was fine, the Zone grade was covering it (2026-10-12, `hd-zone-board`)
+
+**A Zone race in ours now shows the original's Zone board: a dark panel on which a loop icon assembles from
+light pieces over the 210 ticks before the release.** Disc-backed, no RPCS3 frame of this session (see "Not
+captured" below). Frames: Vineta K, `--mode zone`, 1440x816, ticks 63, 100, 140, 180, 220, 262, 273 and 330
+(the board is empty on tick 63 and the loop is whole by about 262); `just play --race --mode zone --track
+/data/environments/01_vineta_k/track.vex --ticks 180 --screenshot out.png`.
+
+**Which copy: `DATA00`'s, 8,368 bytes. Confidence 80 (static; the game's own load order, not a frame).**
+The two `321Go_Zone.vex` copies are different files, not a patch of one another:
+
+| copy | size | nodes | textures | what it is |
+| --- | ---: | ---: | --- | --- |
+| `DATA00` | 8,368 | 37 (16 drawn meshes) | `black_fadeout`, `detonator_scroll`, `hd_flyer_col`, `simpletextureandtexturealphauvoffsetscale` | **animated geometry**: `pPlane5`-`8` keyed `[0, 250-253]`, `Background5`/`6` `[60, 260]`/`[260, 500]`, `planarTrimmedSurface7` `[198, 211]` - pieces flying in and settling |
+| `DATA02` | 2,672 | 11 (3 drawn meshes) | `321_go_zone.gtf` (2048x1024, R/G/B/A = four loop pieces), `honeyblue_noalpha`, `321_go_64_zone2` | static nodes; the loop's four pieces coloured by `cf_321_zone`'s program, pulsing red over 13.3 s |
+
+The game's own `TTY.log` load order is `data01, data02, data03, data04, data05, data06, data00`, last wins
+(`oag_hd::campaign::PER_DIFFICULTY_MEDAL_ARCHIVE`'s own reading), so **`DATA00` is live**. `Archives::read_name`
+agrees by a different rule (the bulk archive first), so this is a coincidence of the two and not a replay of
+the order; a title whose bulk archive differs would need the order asked for. `DATA00`'s copy is the one that
+draws the assembly (above), `DATA02`'s does not move. **A read, not live:** `DATA02`'s `cf_321_zone.rcsmaterial`
+fragment program (`ps3-microcode.py fp-file`) is `x = bg; x = lerp(x, c1, tex.r); x = lerp(x, c2, tex.g);
+x = lerp(x, c3, tex.b); x = lerp(x, c4, tex.a)` with `c1..c4` and `bg` five `float3` parameters (alpha out 0),
+the four colours driven by the material's curve (the same red ramp on all four). It is not wired; nothing live
+reaches it.
+
+**Why ours drew a blank white panel: the Zone grade, not the model.** `shade.wesl` replaces every surface's
+albedo with the Zone stage's own surface in a Zone race (a documented blanket approximation: "the original
+applies it per material"), and the slot 8 quad is one of them, so the card was never sampled. The same card
+showed `3` `2` `1` `GO` in a single race, and the model (loaded as a card, read back off the GPU) held the
+assembly all along. **Switching the grade's mix weights to zero showed the board at once**, which is the
+evidence. The material is `sign_emissive_glow`, whose Zone variant (fragment block #7) declares
+`zoneColourTint` and samples `zoneTexInner`, **no albedo**: by that program the original would not show the
+card in a Zone race either, **and RPCS3 (2026-10-08) shows it does**. Open: how the original keeps the board
+(a variant the engine does not select for this chunk, or Zone effects being off until the release, or the
+board drawn some other way). **What was done is chosen, not measured:** the grade is switched off for the
+card's own quad vertices in a Zone race (`oag_render::gantry::exempt_served_placeholders_from_zone`, a
+glow-table entry carrying `ZONE_EXEMPT_RATE`, read in `shade.wesl`; the load report says how many vertices).
+Every other surface keeps the blanket grade, so the sky, pads and the rest of the track are unchanged: an HD
+single race and a Pulse race are byte-identical before and after (sha256 of one frame each), and only the board
+region differs in a Zone frame.
+
+**The clock.** `Clock::assembled_at_release(210)`: frame 0 on tick 63, so the board's own `t` is 3.5 s on the
+release (tick 273). 210 is the thread's reading of "starts about 3.5 s before the release"; the asset's own keys
+run about 250 frames and the thread also reads the icon as complete about 10 video frames (20 ticks) before the
+release, which would make the assembly about 190 ticks: **a mismatch of roughly 45 ticks between the two
+readings, not resolved**. **What the board shows after the release is chosen, not measured**: the timeline keeps
+running and is held at `CLOCK_LIMIT`, so the pieces fade to the arrow by about 6 s into the clock, and the
+original's behaviour there is unread.
+
+**Not captured.** An RPCS3 frame beside ours was not obtained: under Xvfb RADV cannot present (no DRI3) and
+the NVIDIA ICD boots but the guest freezes on the grid ("The PS3 application has likely crashed" after a
+frozen `START RACE`). Nothing here compares a pixel of the original. The command that gives the same frames on a host where the
+emulator runs: `rpcs3-drive.py countdown --load 75 --drive 25 --nav "Main Menu=right" --nav "Single
+Player=right,right,right,right,right,cross"`, then `scripts/hd-countdown-frames.py` on the recording.
+
+**Zone Battle and Detonator: what their boards need.** The same chooser (`ZoneGantry` is a `Mode::Zone` rule
+today; it would become a table by mode id, `13`/`21` Zone Battle, `14` Detonator, per the PS4 branch) and two
+new `oag_race::Mode`s, which is not this lane. Their files are `321Go_HD_Zone_Battle.vex` and
+`321Go_HD_Detonator.vex`; `DATA00`'s `321Go_Zone.vex` already references `detonator_scroll.gtf`, so some of the
+Detonator board's art is on the disc under another file's name.
+
+**Per title (2026-10-12).** **2048:** checked, applies, not wired - its `base/PSP2/data.psarc` ships a
+`321Go_Zone.vex` (8,448 bytes, not HD's 8,368) but 2048 draws no card and no manifest names it. **Omega:** not
+checkable - no extracted copy of its archives and the binary only names the file in its mode table
+(`ps4-omega-eu/billboards.md`). **Pulse:** differs - one gantry file, no chooser.
 
 ## Wipeout 2048: eight files plus `fx350`, two reached by any of 26 manifests, a third countdown mechanism
 

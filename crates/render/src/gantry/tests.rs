@@ -370,3 +370,47 @@ fn a_placeholder_label_names_its_slot_on_either_titles_spelling() {
     assert_eq!(slot_number("321backplate.tga"), None);
     assert_eq!(slot_number("billboardwall.tga"), None);
 }
+
+/// The Zone grade is switched off for the served card's own vertices and for
+/// nothing else, through one glow-table entry carrying the exemption rate.
+#[test]
+fn a_served_card_quad_is_exempted_from_the_zone_grade_and_nothing_else_is() {
+    use oag_mesh::mesh::{ZONE_EXEMPT_RATE, slots};
+
+    let mut model = textured_draws("billboard8.tga");
+    assert_eq!(
+        exempt_served_placeholders_from_zone(&mut model, &[7]),
+        (0, 0),
+        "a slot with no card stays graded"
+    );
+    assert!(model.emissive.is_empty());
+
+    assert_eq!(
+        exempt_served_placeholders_from_zone(&mut model, &[8]),
+        (3, 0)
+    );
+    assert_eq!(model.emissive.len(), 1);
+    assert_eq!(model.emissive[0].rate, ZONE_EXEMPT_RATE);
+    let index = |v: usize| model.vertices[v].slots >> slots::MATERIAL_SHIFT;
+    assert_eq!([index(0), index(1), index(2)], [1, 1, 1]);
+    assert_eq!(
+        [index(3), index(4), index(5)],
+        [0, 0, 0],
+        "the art is graded"
+    );
+}
+
+/// A vertex that already names a glow entry keeps it, and is counted rather than
+/// silently left graded.
+#[test]
+fn a_quad_vertex_with_its_own_glow_entry_is_reported_not_overwritten() {
+    use oag_mesh::mesh::slots;
+
+    let mut model = textured_draws("billboard8.tga");
+    model.vertices[1].slots = 5 << slots::MATERIAL_SHIFT;
+    assert_eq!(
+        exempt_served_placeholders_from_zone(&mut model, &[8]),
+        (2, 1)
+    );
+    assert_eq!(model.vertices[1].slots >> slots::MATERIAL_SHIFT, 5);
+}
