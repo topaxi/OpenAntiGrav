@@ -36,16 +36,42 @@
 //! `0x0641512d`. [`uvs`] carries the other two pairs in the vertex's
 //! `lightmap_texcoord` and `texcoord2`, as the ice pool already does.
 //!
+//! # The three shapes of the one program
+//!
+//! The same combine ships three ways, and all three bind here, each reading
+//! its own three numbers (scanline drift rate, second-layer scroll per second,
+//! second-layer coordinate scale) and handing them to the shader in the
+//! glow-table entry's tint:
+//!
+//! - **inline literals** (Amphiseum's `nr_` file): the rates are the program's
+//!   own `0.25` and `5.625`; the scroll is the negated `MAD`, so it is stored
+//!   as `-5.625`, and the scale is the absent multiply, `1`;
+//! - **parameters** (`wes_` on every circuit, `nr_` on Modesto Heights): the
+//!   rates are material parameters [`DRIFT`], [`SCROLL`] and [`SCALE`], read
+//!   from the material record, never typed. The program adds `t * SCROLL` to
+//!   the layer's `v` (`MAD`, no negate) and multiplies *both* layer
+//!   coordinates by `SCALE` afterwards;
+//! - **the DLC copy** (`02_track`, inline `0.25`/`5.625`): the advert tap is
+//!   predicated `[NE(xyzx)]`. The condition register it tests is written by
+//!   the preceding unit-2 tap (`TEX H2.xyz, R3.zwzz unit2` carries the
+//!   condition-write bit, dword 0 bit 8, the one the `SLT` select also
+//!   carries), not by the `FENCT`, so the predicate says "skip the advert
+//!   where the layer sample is zero in a lane" and the product that follows is
+//!   `advert * 0 = 0` there either way. Drawn as the unpredicated combine.
+//!   **That reading does not rest on `FENCT` setting the condition register**
+//!   (the confidence-60 reading `dc_lightcone` uses); it rests on bit 8 of a
+//!   `TEX` meaning what it means on the `SLT`.
+//!
+//! Every shape reads the same three attributes (see above): the vertex
+//! programs of all three write `v[2].xy`, `v[8].xy` and `v[8].zw`, only into
+//! different interpolators.
+//!
 //! # What it does not take
 //!
-//! The same three samplers sit under two other programs, both refused by
-//! [`is_holo`] so those slots keep the generic emissive reading, counted in the
-//! load report's `holo_billboard_other_shape`: the **parameter-driven** one
-//! (`wes_` on every circuit, `nr_` on Modesto Heights), whose rates and scale are
-//! material parameters (`0x088b2c6a`, `0x4f2aef81`, `0xef6e4697`) behind a
-//! `FENCT`; and the DLC copy under `02_track`, whose literals are inline but
-//! whose advert tap is predicated on a `FENCT`-set condition register. The
-//! combine looks the same; the routing and the predicate are unread.
+//! `scanlinebillboard` (Talon's Junction, Tech de Ra) declares the same three
+//! samplers but is another program: more parameters (a tint, a different
+//! coordinate scale pair) and no `time` literal. [`classify`] refuses it, and
+//! it is counted in the load report's `holo_billboard_other_shape`.
 
 use std::sync::Arc;
 
@@ -70,6 +96,14 @@ const TIME: u32 = 0x906b_67ba;
 const SECOND_UV: u32 = 0xb052_8e1e;
 /// The declared coordinate pair feeding the scanline texture: `v[2].xy`.
 const SCAN_UV: u32 = 0x0641_512d;
+/// The second layer's scroll, per second, added to its `v` (`MAD` with `time`).
+const SCROLL: u32 = 0x088b_2c6a;
+/// The scanline texture's drift rate (`MUL` by `time`).
+const DRIFT: u32 = 0x4f2a_ef81;
+/// The scale applied to both of the second layer's coordinates.
+const SCALE: u32 = 0xef6e_4697;
+/// The fog colour, which only the fogged blocks declare.
+const FOG: u32 = 0x3dc3_1258;
 /// The condition field of an unconditional instruction.
 const UNCONDITIONAL: u16 = 0x727;
 
@@ -125,20 +159,44 @@ fn declares_the_three(declared: &rcsmaterial::Declared) -> bool {
     hashes == want
 }
 
-/// Whether the family's program is the inline-literal shape: `time`, the `SLT`
-/// select with its predicated `MUL`, and no `FENCT` (the parameter-driven
-/// shape's).
-fn is_holo(declared: &rcsmaterial::Declared, program: &Program) -> bool {
-    declared.parameters.contains(&TIME)
-        && program.instructions.iter().any(|i| i.name() == Some("SLT"))
+/// The three numbers the shader takes - scanline drift rate, second-layer
+/// scroll per second (signed, added to `v`) and second-layer scale - or `None`
+/// for a program that is not one of the three shapes.
+///
+/// The select (`SLT` and the predicated `MUL x2`) and `time` are common to all
+/// of them; what tells the shapes from `scanlinebillboard` is the parameter
+/// list, which here may hold nothing beyond `time`, the fog colour and the
+/// three rate parameters.
+fn classify(
+    declared: &rcsmaterial::Declared,
+    program: &Program,
+    parameters: &[oag_rcs::rcsmodel::material::Parameter],
+) -> Option<[f32; 3]> {
+    let has = |name: &str, half: bool| {
+        program
+            .instructions
+            .iter()
+            .any(|i| i.name() == Some(name) && i.dst_half == half)
+    };
+    let select = declared.parameters.contains(&TIME)
+        && has("SLT", false)
         && program
             .instructions
             .iter()
-            .any(|i| i.name() == Some("MUL") && i.dst_half && i.cond != UNCONDITIONAL)
-        && program
-            .instructions
-            .iter()
-            .all(|i| i.name() != Some("FENCT"))
+            .any(|i| i.name() == Some("MUL") && i.dst_half && i.cond != UNCONDITIONAL);
+    let allowed = |h: &u32| [TIME, FOG, SCROLL, DRIFT, SCALE].contains(h);
+    if !select || !declared.parameters.iter().all(allowed) {
+        return None;
+    }
+    if [SCROLL, DRIFT, SCALE]
+        .iter()
+        .all(|h| declared.parameters.contains(h))
+    {
+        let value = |hash| parameters.iter().find(|p| p.hash == hash).map(|p| p.value[0]);
+        return Some([value(DRIFT)?, value(SCROLL)?, value(SCALE)?]);
+    }
+    let (drift, scroll) = rates(declared, program)?;
+    Some([drift, -scroll, 1.0])
 }
 
 type Pairs = Option<Vec<[f32; 2]>>;
@@ -198,11 +256,7 @@ pub(super) fn holo_billboard(
         if !declares_the_three(&declared) {
             continue;
         }
-        if !is_holo(&declared, &program) {
-            report.holo_billboard_other_shape += 1;
-            continue;
-        }
-        let Some((scan, scroll)) = rates(&declared, &program) else {
+        let Some(tint) = classify(&declared, &program, &material.parameters) else {
             report.holo_billboard_other_shape += 1;
             continue;
         };
@@ -231,7 +285,7 @@ pub(super) fn holo_billboard(
             continue;
         };
         let layer = Emissive {
-            tint: [scan, scroll, 0.0],
+            tint,
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,

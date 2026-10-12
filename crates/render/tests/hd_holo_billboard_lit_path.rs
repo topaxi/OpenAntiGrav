@@ -22,13 +22,13 @@ const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
 const GLOW_SLOT: u32 = 1 << slots::MATERIAL_SHIFT;
 
-fn vertex(position: [f32; 3], role: u32) -> GpuVertex {
+fn vertex(position: [f32; 3], layer_uv: [f32; 2], role: u32) -> GpuVertex {
     GpuVertex {
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],
         texcoord: [0.0, 0.0],
-        lightmap_texcoord: [0.0, 0.0],
+        lightmap_texcoord: layer_uv,
         lit: 1.0,
         anim: 0,
         xform: 0,
@@ -53,6 +53,19 @@ fn texture(label: &str, rgb: [u8; 3]) -> Arc<ModelTexture> {
 /// A billboard quad: the advert is the albedo, the scanlines the second
 /// texture and the layer the third.
 fn model(advert: u8, scanlines: [u8; 3], layer: u8, role: u32) -> Model {
+    let tint = [0.25, -5.625, 1.0];
+    model_with(advert, scanlines, texture("layer", [layer; 3]), (tint, [0.0; 2]), role)
+}
+
+/// The general fixture: any layer texture, the tint the material path writes
+/// (drift, signed scroll, scale) and the layer coordinate the vertices carry.
+fn model_with(
+    advert: u8,
+    scanlines: [u8; 3],
+    layer: Arc<ModelTexture>,
+    (tint, layer_uv): ([f32; 3], [f32; 2]),
+    role: u32,
+) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -79,7 +92,7 @@ fn model(advert: u8, scanlines: [u8; 3], layer: u8, role: u32) -> Model {
         alpha_tested_draws: Vec::new(),
         textures: vec![Some(texture("advert", [advert; 3]))],
         lightmaps: vec![Some(texture("scanlines", scanlines))],
-        pad_masks: vec![Some(texture("layer", [layer; 3]))],
+        pad_masks: vec![Some(layer)],
         wave_maps: Vec::new(),
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
@@ -99,15 +112,15 @@ fn model(advert: u8, scanlines: [u8; 3], layer: u8, role: u32) -> Model {
         anim_tracks: Vec::new(),
         anim_nodes: Vec::new(),
         emissive: vec![Emissive {
-            tint: [0.25, 5.625, 0.0],
+            tint,
             offset: 0.0,
             scale: 1.0,
             rate: 0.0,
         }],
         vertices: vec![
-            vertex([-0.9, -0.9, 0.5], role),
-            vertex([0.9, -0.9, 0.5], role),
-            vertex([0.0, 0.9, 0.5], role),
+            vertex([-0.9, -0.9, 0.5], layer_uv, role),
+            vertex([0.9, -0.9, 0.5], layer_uv, role),
+            vertex([0.0, 0.9, 0.5], layer_uv, role),
         ],
     }
 }
@@ -161,6 +174,49 @@ fn the_billboard_is_an_overlay_of_the_advert_layer_product_under_the_scanlines()
     // which does not combine them this way.
     let generic = at(&model(128, lines, 128, 0));
     assert_ne!(low, generic, "the role bit is what selects the combine");
+}
+
+/// A two-texel-wide layer: dark on the left half, bright on the right.
+fn halves() -> Arc<ModelTexture> {
+    Arc::new(ModelTexture {
+        label: "layer halves".into(),
+        width: 2,
+        height: 1,
+        texels: Texels::Rgba8(vec![51, 51, 51, 255, 204, 204, 204, 255]),
+        mip_count: None,
+    })
+}
+
+#[test]
+fn the_tints_scale_moves_the_layer_coordinate_and_unity_leaves_it() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let at = |scale: f32| {
+        let mut scene = Scene::off();
+        scene.light.enabled = 1.0;
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        // The layer coordinate (0.2, 0.5) sits in the dark half; times 3 it is
+        // (0.6, 1.5), in the bright half. The scanlines are (0.5, 0.5, 1).
+        let m = model_with(
+            255,
+            [128, 128, 255],
+            halves(),
+            ([0.0, 0.0, scale], [0.2, 0.5]),
+            slots::HOLO_BILLBOARD,
+        );
+        draw(&device, &queue, &m, scene)
+    };
+    let (kept, scaled) = (at(1.0), at(3.0));
+    assert!(
+        scaled[0] > kept[0] + 20,
+        "scale 3 samples the bright half, scale 1 the dark: {kept:?} vs {scaled:?}"
+    );
 }
 
 /// Identity camera and model, so clip space is model space.
