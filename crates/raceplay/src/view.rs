@@ -198,6 +198,11 @@ pub struct RaceView {
     /// of the hash; advanced a tick at a time by [`Race::tick`], so a paused race
     /// holds them still. Raised by [`Race::raise_message`].
     pub(super) messages: oag_hud::messages::MessageBoard,
+    /// The lap-crossing lines (`PLAP`, `NEWLAP_REC`, `FIN_LAP`), or `None` for a
+    /// title whose HUD has no message slots. Set by [`Race::watch_laps`].
+    pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
+    /// The lap-line time gap, on and off with [`Self::lap_watch`].
+    pub(super) split_gap: Option<super::split_gap::SplitGap>,
     /// The shield bar's blink accumulator.
     ///
     /// `Hud_UpdateEnergyBar`'s own `hud+0x1dc`: advances by the tick's `dt`

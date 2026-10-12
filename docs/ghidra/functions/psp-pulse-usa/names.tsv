@@ -1359,3 +1359,7 @@
 0x08944160	function	SceneNode_SubmitTree	85	clouds.md
 0x0891e908	function	Gfx_GetVisibleSectionMask	80	clouds.md
 0x08922974	function	Section_BindVisibilityRow	78	clouds.md
+0x08819b64	function	Hud_Construct	80	hud-message-triggers.md
+0x0881f890	function	Hud_UpdateTimeDiff	85	hud-message-triggers.md
+0x08808bec	function	Profile_IsNewLapRecord	80	hud-message-triggers.md
+0x088090a0	function	Profile_GetStoredLapRecord	75	hud-message-triggers.md

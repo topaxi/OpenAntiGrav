@@ -389,6 +389,13 @@ pub fn capture(
     race.set_texture_detail(options.texture_detail);
     race.set_sight_screen(hud.space.size);
     race.set_sight_dialect(hud.art.sights);
+    race.watch_laps(
+        &hud,
+        options
+            .previous_best
+            .as_ref()
+            .and_then(|record| record.best_lap_ticks),
+    );
     race.set_camera_view(options.camera_view);
     race.set_control_scheme(options.scheme);
     race.set_autopilot(options.autopilot);

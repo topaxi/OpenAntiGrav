@@ -619,7 +619,7 @@ geometry - the geometry is 95 throughout.
 | Shield | `ShieldBar`, `ShieldBarBg`, `ShieldBarMark`, `ShieldBarText` | 75 | no runtime pool exists yet; see [roadmap](../overview/roadmap.md) M5 |
 | Lap | `Lap`, `LapOf`, `Lap Outof`, `LapTxt` | 60 | **lap counting is unrecovered** - see below |
 | Position | `Position`, `PositionOf`, `Position Outof`, `PositionTxt` | 95 | **drawn** as of 2026-08-11, from `Race::places()`, and checked against the original's own `pos 8 / 8`; only `Arcade_HUD.xml` carries them, and they take the anchor off `TotalTime` - see below |
-| Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game. **`TotalTime` is not drawn in a single race**: it shares an anchor with `Position` and yields it - see below |
+| Times | `CurrentTime`, `BestTime`, `TotalTime`, `CountdownTime`, `TimeDiffText`, `TimeDiffIcon`, `TimeIcon` | 70 | format `m.ss.hh`, observed as `1.11.08` on the running game. **`TimeDiffText`/`TimeDiffIcon` are the lap-line time gap** (`"+ 2.8"` red behind, `"- 2.8"` green ahead, once a lap), not a clock: [hud-message-triggers.md](../ghidra/functions/psp-pulse-usa/hud-message-triggers.md). **`TotalTime` is not drawn in a single race**: it shares an anchor with `Position` and yields it - see below |
 | Weapon | `PickupBackground`, `SubWeapon`, **13** `<Type>Icon` widgets | 95 | **drawn**; the icon is found by *name* - see below. `SubWeapon` is not driven |
 | Warnings | `ForwardWarningIcons`, `RearWarningIcons` and children | 55 | incoming-weapon indicators; nothing drives them |
 | Countdown | `ReadyText`, `GoText`, plus the `Mode3D` models | 65 | |

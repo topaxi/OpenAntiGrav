@@ -282,6 +282,9 @@ pub(super) fn text_for(
             .and_then(|slot| readout.messages[slot].as_ref())
             .and_then(|line| strings.get(&line.text).map(str::to_string)),
 
+        // The lap-line time gap - see [`super::time_gap`].
+        "TimeDiffText" => readout.time_gap.as_ref().map(|line| line.text.clone()),
+
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {
             label.idstring.as_deref().map_or_else(
@@ -657,7 +660,8 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
     let ungated;
     let readout = if (cx.art.kill_column
         || (readout.kill_tags.is_empty() && readout.kill_target == 0))
-        && (cx.art.message_slots || readout.messages.iter().all(Option::is_none))
+        && (cx.art.message_slots
+            || (readout.messages.iter().all(Option::is_none) && readout.time_gap.is_none()))
     {
         readout
     } else {
@@ -677,6 +681,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             } else {
                 Default::default()
             },
+            time_gap: readout.time_gap.clone().filter(|_| cx.art.message_slots),
             ..readout.clone()
         };
         &ungated
@@ -781,6 +786,16 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
 
     frame.sprites.extend(lap_split_sprites(cx, readout));
 
+    // The time gap's icon, tinted as its text is. Up only with a line.
+    if let Some(line) = &readout.time_gap
+        && line.icon
+        && let Some(sprite) = cx.layout.sprite("TimeDiffIcon")
+    {
+        let mut tinted = sprite.clone();
+        tinted.color = line.color;
+        frame.sprites.extend(sprite_draw(&tinted, cx.sheet));
+    }
+
     // Decided once for the frame rather than per widget: it is a fact about the
     // layout, the readout and the title together, and two widgets have to agree.
     let place_shown = place_owns_the_anchor(cx.layout, readout)
@@ -846,6 +861,7 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
             color: super::messages::colour(readout, &label.name)
+                .or_else(|| super::time_gap::colour(readout, &label.name))
                 .or_else(|| super::time_trial_pace::time_trial_colour(readout, &label.name))
                 .or_else(|| super::runtime::colour(cx, readout, &label.name))
                 .unwrap_or(label.color),

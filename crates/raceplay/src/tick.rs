@@ -647,6 +647,7 @@ impl Race {
             if outcome.lap_completed || outcome.first_crossing {
                 self.grant_free_turbo(player);
             }
+            self.raise_lap_messages(&outcome, contact && !evaluated.shield.absorbed);
             if outcome.lap_completed {
                 // Eliminator's own per-lap mechanic, a no-op on every other
                 // mode - see `Race::eliminator_lap_health_refill`.
@@ -660,6 +661,7 @@ impl Race {
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
         self.update_standings();
+        self.tick_split_gap();
 
         // **After the standings**, so the wave's own proximity test reads
         // every craft's freshest `Standing::progress` rather than last
