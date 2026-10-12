@@ -97,6 +97,8 @@ OAG_RACE_START = { text = "START", human = false }
 OAG_REMIX_PAGE_TITLE = { text = "RACE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TRACK TITLE", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "CRAFT TITLE", human = false }
+OAG_REMIX_CUSTOM = { text = "CUSTOM", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "still checking this file", human = false }
 
 # RECORDS' own title - its MODE and TRACK rows reuse OAG_RACE_MODE/
 # OAG_RACE_TRACK above, and BACK reuses OAG_MENU_BACK, the same sharing RACE

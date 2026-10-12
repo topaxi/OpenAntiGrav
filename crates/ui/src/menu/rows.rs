@@ -128,10 +128,14 @@ fn draw_list_rows(
 
         let note = menu
             .warning(entry)
-            .map(|warning| &warning.message)
-            .or_else(|| menu.restart_note(entry).map(|restart| &restart.message));
+            .map(|warning| warning.message.clone())
+            .or_else(|| {
+                menu.restart_note(entry)
+                    .map(|restart| restart.message.clone())
+            })
+            .or_else(|| menu.unavailable(entry).map(str::to_string));
         if let Some(message) = note {
-            noted.get_or_insert(message.clone());
+            noted.get_or_insert(message);
             out.push(Draw::Text {
                 x: list.x - 18.0 * sx,
                 y: y + geometry.lift + tab_top_pad,
@@ -326,10 +330,14 @@ fn draw_text_rows(
         // same channel would collide with those three. See `WARNING`.
         let note = menu
             .warning(entry)
-            .map(|warning| &warning.message)
-            .or_else(|| menu.restart_note(entry).map(|restart| &restart.message));
+            .map(|warning| warning.message.clone())
+            .or_else(|| {
+                menu.restart_note(entry)
+                    .map(|restart| restart.message.clone())
+            })
+            .or_else(|| menu.unavailable(entry).map(str::to_string));
         if let Some(message) = note {
-            noted.get_or_insert(message.clone());
+            noted.get_or_insert(message);
             out.push(Draw::Text {
                 x: margin_x - 18.0,
                 y,
@@ -381,7 +389,7 @@ fn draw_text_rows(
                 layout.value_x,
                 y,
                 row_scale,
-                if inert {
+                if inert || menu.unavailable(entry).is_some() {
                     DIMMED
                 } else if selected && entry.is_adjustable() {
                     skin.selected()
@@ -399,7 +407,11 @@ fn draw_text_rows(
                 x: skin.value_right(),
                 y,
                 scale: row_scale,
-                color: if selected && entry.is_adjustable() && !inert {
+                color: if selected
+                    && entry.is_adjustable()
+                    && !inert
+                    && menu.unavailable(entry).is_none()
+                {
                     skin.selected()
                 } else {
                     DIMMED

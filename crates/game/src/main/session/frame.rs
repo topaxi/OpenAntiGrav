@@ -27,6 +27,7 @@ impl Session {
         // frame it times is all of this one. A no-op on every other run.
         self.probe_begin_frame();
         self.refresh_prompts();
+        self.poll_custom_tracks();
         // Whatever the audio callback could not render while this thread held
         // the mixer lock, said out loud from a thread that can afford to
         // allocate a sentence. Here rather than in the tick loop because a

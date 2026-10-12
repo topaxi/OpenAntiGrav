@@ -81,6 +81,8 @@ OAG_RACE_START = { text = "DÉPART", human = false }
 OAG_REMIX_PAGE_TITLE = { text = "COURSE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TITRE DU CIRCUIT", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "TITRE DU VAISSEAU", human = false }
+OAG_REMIX_CUSTOM = { text = "PERSONNALISÉ", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "vérification du fichier en cours", human = false }
 
 # OPTIONS and its submenu rows.
 OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONS", human = false }

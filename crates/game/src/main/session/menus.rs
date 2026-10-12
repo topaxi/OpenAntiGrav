@@ -306,8 +306,7 @@ impl Session {
         // `Self::remix_craft_catalogue`. Nothing is settled in that case
         // either: an unreadable source is not evidence that a saved pick is
         // wrong, and clearing it would lose it.
-        if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) {
-            let tracks = remix_menu::remix_track_choices(&catalogue);
+        if let Some(tracks) = self.remix_track_options() {
             remix_menu::settle(&mut self.settings.remix.track, &tracks);
             model.supply(menu::ValueSource::RemixTracks, &tracks);
         }
