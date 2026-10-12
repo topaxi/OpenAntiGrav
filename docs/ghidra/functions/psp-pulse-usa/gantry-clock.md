@@ -160,9 +160,69 @@ only at branch level.
   contain.
 
 The `Board` (between laps), `FINAL LAP` (the lap before the last) and the
-chequered state (the last lap) were **not** watched on the original; they are
-what the asset authors at those times (`Final_Lap` at 9.333 s, chequered at
-12.333 s), selected by the law above.
+chequered state (the last lap) were not watched on the original when this
+section was written; section 4b below does, with a forced crossing count.
+
+### 4b. Read live on PPSSPP (2026-10-12, `pulse-race-start`): the law goes from 85 to 90
+
+`scripts/psp-gantry-clock.py` breaks on the `lwc1 f0, 0x40(s0)` at `0x089128fc`
+inside `Model_GetAnimTime` (`s0` is the `Mesh` node, the field is not loaded
+yet, so `node+0x40` is exactly what `RaceManager_Update` compares) and logs
+one row per race-manager call: the node (`0x09839ec0`, the same on every
+call), the caller (`ra` saved at `sp+0x48` = `0x08829a04`, the return into
+`RaceManager_Update`), `mesh+0x40`, and the player's `craft+0xac8`. The
+manager is the caller's `s0` saved at `sp+0x40`; its `+0x2c0` is the player,
+which is **not** the craft the first `Ship_UpdateCraft` hit names in a Time
+Trial (`0x09a0c030` against `0x09a0cff0`), so a write to the wrong one reads
+as "the law is refuted" - it nearly did. Time Trial, Talon's Junction, VENOM,
+craft not driven, `pulse-psp-usa.chd`, PPSSPP v1.20.4.
+
+Natural run, `n == 0`, 300 consecutive manager calls: `3.0` on the first call
+(the release's write), `3.2` on the second, then `3.2168`, `3.2335`, ... in
+steps of `0.01668` s (the emulator's 59.94 Hz frame), and the reset to `3.2`
+on calls 140 and 279, **139 calls apart**. That is the predicted
+`[3.2, 5.5)` loop; its period is 139 manager calls, one more than the 138
+ticks `ReleaseWindow::period` counts, because a reset reads `3.2` twice
+(the call that resets, then the next call, before the first advance). Whether
+that extra read is a drawn frame depends on whether the board is drawn before
+or after the manager's call in a frame, which was not read: it is the one tick
+of phase uncertainty `clock.rs` already carries, not a new difference.
+
+Forced crossing count: the craft was not flown across a lap line. The
+player's `craft+0xac8` is recomputed every tick (a single write holds for one
+manager call), so the script rewrites it before every manager call in a
+phase, with the CPU stopped at the breakpoint. Every phase jumps on its first
+call to the predicted window start and then loops inside the predicted window:
+
+| Forced `n` | Window start the first call writes | Loop period (manager calls) | Predicted window |
+| --- | --- | ---: | --- |
+| 1 | `6.0` (from a read of 3.55) | 181 | `[6.0, 9.0)`, 3.0 s |
+| `laps - 1` = 2 | `9.5` (from 7.97) | 151 | `[9.5, 12.0)`, 2.5 s |
+| `laps` = 3 | `12.4` (from 11.97) | 55 | `[12.4, 13.3)`, 0.9 s |
+| `laps + 1` = 4 | `6.0` (from 12.80) | 181 | the `else` window: **no finish clause** |
+
+The `laps + 1` row is the one a copy of HD's selection would get wrong (HD
+takes the finish to the last window): the original shows the between-laps
+`Board` again past the finish. `laps` read `3` (`*0x08b30f9c`) on this Time
+Trial.
+
+Matched frames (`import -window root` of the emulator while stopped, one per
+phase, 60 calls in): `n == 0` the green `GO` board, `n == 1` the teal `Board`
+with the swirl logo and its clipped caption, `n == laps` the grey `FINAL LAP`
+board, `n == laps + 1` the chequered board. The same four boards render from
+`321Go_StartFinish.vex` with `oag-view --mesh 'Data\Environments\321_Go\321Go_StartFinish.vex'
+--anim-seconds 4.0/7.0/10.5/12.6 --yaw 1.5708 --pitch 0 --screenshot`: the
+asset's content at those times is the original's. That compares the asset,
+not our in-race frame: the standalone viewer draws every panel at once where
+the race hides the others with `PanelCull`, and no headless route forces a
+race to the second and third crossings, so an in-race pair is still open.
+
+**Confidence 90** for the window selection and bounds (live, forced `n`);
+the natural lap crossing itself was not flown, so the events that move `n`
+rest on [race-progress.md](race-progress.md). PS2 Pulse: checked, applies
+(same windows inherited), unread on `SCES_547.48`. HD: its own numbers, read
+independently ([ps3-hdfury-eu/gantry-clock.md](../ps3-hdfury-eu/gantry-clock.md));
+not re-measured here.
 
 ### 5. The cockpit countdown widget rides the same writes
 
