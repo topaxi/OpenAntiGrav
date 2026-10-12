@@ -327,14 +327,25 @@ pub fn slideshow(
         read(archives, "screen.xml", "Info")
     }
     .with_context(|| format!(r"{location}\screen.xml: no slideshow chain to read"))?;
+    let blobs = read_stills(archives, show.sources(), report);
+    Ok((show, blobs))
+}
+
+/// Reads each of `sources` off the disc, in order. One that will not read is
+/// reported and left out: its card draws nothing.
+pub fn read_stills(
+    archives: &mut oag_assets::Archives,
+    sources: Vec<String>,
+    report: &mut Vec<String>,
+) -> Vec<Still> {
     let mut blobs = Vec::new();
-    for src in show.sources() {
+    for src in sources {
         match oag_pulse::read_image(archives, &src) {
             Ok(blob) => blobs.push((src, blob)),
             Err(error) => report.push(format!("{src}: {error} - that card draws nothing")),
         }
     }
-    Ok((show, blobs))
+    blobs
 }
 
 /// Seconds the hexagonal window's own stills take to fade in on a fresh

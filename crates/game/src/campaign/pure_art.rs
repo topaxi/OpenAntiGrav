@@ -98,13 +98,7 @@ pub fn load(
                 })?;
             let images: Vec<_> = screen.images.iter().chain(&watch.images).cloned().collect();
             let show = Slideshow::still(images);
-            let mut stills = Vec::new();
-            for src in show.sources() {
-                match oag_pulse::read_image(archives, &src) {
-                    Ok(blob) => stills.push((src, blob)),
-                    Err(error) => report.push(format!("{src}: {error} - that image draws nothing")),
-                }
-            }
+            let stills = crate::preview::read_stills(archives, show.sources(), report);
             Ok(Art { show, stills })
         }
     }
