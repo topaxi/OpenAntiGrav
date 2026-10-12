@@ -17,7 +17,7 @@ pub(crate) const SURFACE_RADIUS: f32 = 60.0;
 ///
 /// The amplitude is the Pulse ripple's own - `+0x380`, read live every 10 ms
 /// off a fired HD Quake, is `oag_render::ripple::amplitude` of the wave's age
-/// to the third decimal (12 units at 0.3 s, none at 5 s).
+/// to within 0.005 (12 units at 0.3 s, none at 5 s).
 fn surface_wave(left: Vec3, right: Vec3, up: Vec3, age: f32) -> oag_mesh::mesh_render::QuakeWave {
     let across = right - left;
     let point = |p: Vec3, w: f32| [p.x, p.y, p.z, w];
@@ -56,9 +56,11 @@ impl Race {
     /// spread their fire edge to edge while each fireball keeps its authored
     /// size - see `oag_fx::psys::spawn`. Until then this fed the value
     /// in as severity, which made every fireball `width / 50` too big and
-    /// stacked all of them on the midpoint. **Pulse on the PSP only**: every
-    /// other source still feeds it in as severity, by choice, until its own
-    /// executable is read (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
+    /// stacked all of them on the midpoint. **Pulse on the PSP, and HD's
+    /// `WO_QUAKE`** (`oag_title::Effects::extents`, matched to a film of the
+    /// original, not read): every other source still feeds it in as severity,
+    /// by choice, until its own executable is read
+    /// (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
     /// `normalize(B - A)`; its `Y` is the track's own up at the midpoint,
     /// read 2026-10-06 (see the `orient` call below).
     ///
