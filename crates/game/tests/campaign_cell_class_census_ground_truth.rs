@@ -39,7 +39,7 @@ fn assert_known(label: &str, found: &BTreeSet<String>) {
     assert!(!found.is_empty(), "{label}: no cells read");
     for class in found {
         assert!(
-            SpeedClass::from_name(class).is_some()
+            SpeedClass::census(class).is_some()
                 || class.eq_ignore_ascii_case("Zone")
                 || (matches!(label, "hdfury" | "omega") && class == "NitroBattle"),
             "{label}: a cell authors class {class:?}, which is neither a speed class nor Zone - \
