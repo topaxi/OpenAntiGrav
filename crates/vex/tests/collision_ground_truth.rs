@@ -26,10 +26,11 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use oag_disc::DiscImage;
-use oag_formats::wad::{self, Compression, Directory};
 use oag_vex::collision::{self, CollisionNode, PAYLOAD_ALIGN, SurfaceKind};
 use oag_vex::vex;
 use oag_vex::vex::classes::V6;
+
+mod wad_walk;
 
 /// Collision nodes in the PSP disc's `Data.wad`: 40 floor, 40 wall, 26 reset,
 /// 24 mag floor, and no cages.
@@ -111,37 +112,7 @@ impl Survey {
 
 /// Decodes every `.vex` file in one archive and checks every collision node in it.
 fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
-    let archive = disc
-        .entries()
-        .expect("entries")
-        .iter()
-        .find(|e| e.path == archive_path)
-        .unwrap_or_else(|| panic!("{archive_path} present"))
-        .clone();
-
-    let header = disc
-        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
-        .expect("header");
-    let count = Directory::peek_entry_count(&header).expect("entry count");
-    let dir_bytes = disc
-        .read_entry_range(&archive, 0, Directory::directory_len(count))
-        .expect("directory");
-    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
-
-    for (index, entry) in dir.entries.iter().enumerate() {
-        if entry.size == 0 {
-            continue;
-        }
-        let raw = disc
-            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
-            .expect("blob");
-        let model = match entry.compression {
-            Compression::None => raw,
-            Compression::Lzss => {
-                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
-            }
-            Compression::Zlib => panic!("{archive_path} entry {index}: unexpected zlib entry"),
-        };
+    for (index, model) in wad_walk::blobs(disc, archive_path, wad_walk::VEX_HEAD, vex::has_magic) {
         if !vex::has_magic(&model) {
             continue;
         }
@@ -464,40 +435,10 @@ fn collision_shaped(
     disc: &mut DiscImage,
     archive_path: &str,
 ) -> (BTreeMap<u32, usize>, BTreeMap<u32, usize>) {
-    let archive = disc
-        .entries()
-        .expect("entries")
-        .iter()
-        .find(|e| e.path == archive_path)
-        .unwrap_or_else(|| panic!("{archive_path} present"))
-        .clone();
-
-    let header = disc
-        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
-        .expect("header");
-    let count = Directory::peek_entry_count(&header).expect("entry count");
-    let dir_bytes = disc
-        .read_entry_range(&archive, 0, Directory::directory_len(count))
-        .expect("directory");
-    let dir = Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
-
     let mut census: BTreeMap<u32, usize> = BTreeMap::new();
     let mut candidates: BTreeMap<u32, usize> = BTreeMap::new();
 
-    for entry in &dir.entries {
-        if entry.size == 0 {
-            continue;
-        }
-        let raw = disc
-            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
-            .expect("blob");
-        let model = match entry.compression {
-            Compression::None => raw,
-            Compression::Lzss => {
-                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
-            }
-            Compression::Zlib => continue,
-        };
+    for (_, model) in wad_walk::blobs(disc, archive_path, wad_walk::VEX_HEAD, vex::has_magic) {
         if !vex::has_magic(&model) {
             continue;
         }
