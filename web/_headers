@@ -17,8 +17,9 @@
 
 # The project's TOML Schemas (scripts/stage-schemas.sh). Editors and validators
 # fetch them from other origins, and a schema may change within its major, so the
-# lifetime is short.
-/mods/schemas/*
+# lifetime is short. The index page and index.json beside them
+# (scripts/gen-schema-index.py) keep their own types.
+/mods/schemas/:major/*
   Content-Type: application/toml
   Access-Control-Allow-Origin: *
   Cache-Control: public, max-age=3600

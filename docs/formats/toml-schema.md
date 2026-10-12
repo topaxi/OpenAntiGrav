@@ -49,7 +49,10 @@ compatible addition goes into the same `v1` schema, a breaking change gets `v2/`
 | `music-state` | `$XDG_CONFIG_HOME/oag/music.toml` ([race music resume](../architecture/race-music-resume.md)) | `oag_game::music_state` | [`music-state.tosd`](../../schemas/v1/music-state.tosd) |
 | `track` | `<name>.track.toml` ([track file](track-file.md)) | `oag_trackfile::read` | [`track.tosd`](../../schemas/v1/track.tosd) |
 
-Mod and craft files get theirs when those formats land.
+| `mod` | `oag-mod.toml` at the root of a mod ([mods](../tools/mods.md)) | `oag_mod` manifest reader | [`mod.tosd`](../../schemas/v1/mod.tosd) |
+| `mod-menu` | a mod's `menu.toml` ([mods](../tools/mods.md)) | `oag_ui::menu` mod rows | [`mod-menu.tosd`](../../schemas/v1/mod-menu.tosd) |
+
+Craft files get theirs when that format lands.
 
 ## Checking a file by hand
 
@@ -74,4 +77,8 @@ as unread, where the closed schema refuses it.
 accepted and rejected examples get the same verdict from the schema and from the loader
 (`pilot_schema`, `menu_schema`, `schema` test binaries), and `scripts/stage-schemas.sh`
 puts the schemas at `dist/mods/schemas/v1/` where `scripts/build-web.sh` deploys them to
-Cloudflare Pages.
+Cloudflare Pages, and `scripts/gen-schema-index.py` (run by it) writes the index page and
+`index.json` at `https://oag.topaxi.com/mods/schemas/` from `schemas/` alone: kind and version
+from the path, the description from the schema's own leading comment. The gate fails if a
+`schemas/v*/*.tosd` is missing from the generated index or the index names one that does not
+exist. The player-facing guide to these files is [modding](../tools/modding.md).

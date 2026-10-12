@@ -7,6 +7,7 @@
 | `oag-convert` | M1 | Convert assets to standard formats |
 | [`oag-trace`](oag-trace.md) | **working** | Compare a simulation run against a trace from the original |
 | [`oag-game`](oag-game.md) | **working** | The engine itself: the front end, and the race its `Launch Game` starts |
+| [Modding guide](modding.md) | **working** | For a player: where mod, track and pilot files go on each OS, and one short task each (Workshop track, own track, AI pilot, menu-row mod, packaging) |
 | [mods](mods.md) | **working** | A mod is a folder, `.zip` or `.oagmod` of menu rows (and later tracks, craft, pilots): the manifest, `parent`, packaging, `just pack-mod` |
 | [Blender add-on](blender.md) | **working** | Author a custom track in Blender and export this project's track file; headless round trip |
 | [autopilot planning](autopilot-planning.md) | **working** | Plan an input script that drives to a point on the track, offline in our simulation or live in the emulator |
