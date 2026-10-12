@@ -46,11 +46,12 @@
 //! [`Layer::extend_vertices`] reads the roll with [`crate::mist::camera_roll`],
 //! the same law the mist uses.
 //!
-//! # What this module does not reproduce
+//! # Which groups draw
 //!
-//! The original skips a group's draw when the camera is far from it (live: the
-//! phases froze at the start line). The test is not read, so every group draws
-//! every frame here, and every phase advances every tick.
+//! The original skips a group's draw, and so its phase advance, when its
+//! parent section is outside the view section's PVS row (live: the phases froze
+//! at the start line); [`Layer`] takes that row as a mask. See `clouds.md`,
+//! "What gates a group".
 //!
 //! # Two halves, deliberately
 //!
