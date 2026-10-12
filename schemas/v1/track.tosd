@@ -1,0 +1,124 @@
+# The track manifest beside a .glb: names and integer structure, see
+# crates/trackfile/src/manifest.rs and docs/formats/track-file.md. Every
+# float the race reads lives in the glb, never here. What this cannot say and
+# stays the reader's: that a path or junction index is in range, and that the
+# counts match what the glb holds.
+#
+# The schema is closed. A reader of this major tolerates a key it does not
+# know and names it as unread (a file written against a later revision of this
+# same v1 schema); the schema itself refuses it.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/track[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.track]
+type = "table"
+
+[types.track.id]
+type = "string"
+minlength = 1
+
+[types.track.title]
+type = "string"
+
+[types.track.glb]
+type = "string"
+
+[types.track.notes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.path]
+type = "table"
+
+[types.path.points]
+type = "integer"
+min = 0
+
+[types.path.entry]
+type = "integer"
+min = -1
+
+[types.path.exit]
+type = "integer"
+min = -1
+
+[types.path.max_spacing_bits]
+type = "integer"
+min = 0
+max = 4294967295
+
+# Path indices, -1 for none: primary then alternate.
+[types.index-pair]
+type = "array"
+itemtype = "integer"
+minlength = 2
+maxlength = 2
+
+[types.junction]
+type = "table"
+
+[types.junction.prev]
+type = "types.index-pair"
+
+[types.junction.next]
+type = "types.index-pair"
+
+[types.spline]
+type = "table"
+
+[types.spline.point_version]
+type = "integer"
+min = 0
+max = 4294967295
+
+[types.spline.path]
+type = "array"
+itemtype = "types.path"
+optional = true
+
+[types.spline.junction]
+type = "array"
+itemtype = "types.junction"
+optional = true
+
+[types.counts]
+type = "table"
+
+[types.counts.collision_nodes]
+type = "integer"
+min = 0
+
+[types.counts.speedup_pads]
+type = "integer"
+min = 0
+
+[types.counts.weapon_pads]
+type = "integer"
+min = 0
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.track]
+type = "types.track"
+
+[elements.spline]
+type = "types.spline"
+
+[elements.counts]
+type = "types.counts"

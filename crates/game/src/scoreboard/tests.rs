@@ -428,7 +428,7 @@ mod records_table_tests {
     /// `pilots::tests::fixture_menu_on_axis` uses for the AI PILOTS page.
     fn fixture_menu(page_id: &str) -> menu::Menu {
         let text = format!(
-            "version = 1\n\
+            "toml-schema = {{ location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }}\n\
              root = \"{page_id}\"\n\
              [[page]]\n\
              id = \"{page_id}\"\n\

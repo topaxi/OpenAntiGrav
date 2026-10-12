@@ -190,29 +190,67 @@ pub fn delete_pilot(dir: &Path, name: &str) -> Result<()> {
     std::fs::remove_file(&path).with_context(|| format!("deleting {}", path.display()))
 }
 
+/// The schema kind a pilot file declares in its `[toml-schema]` header.
+pub const SCHEMA_KIND: &str = "pilot";
+/// The one schema major this build reads.
+pub const SCHEMA_MAJOR: u32 = 1;
+
 /// One pilot as a file spells it, before any of it has been checked.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PilotFile {
+    #[serde(rename = "toml-schema")]
+    toml_schema: Option<oag_schema::Header>,
+    #[serde(default, deserialize_with = "pair")]
     line_bias: Option<[f32; 2]>,
     lean: Option<String>,
+    #[serde(default, deserialize_with = "pair")]
     wander: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     wander_period: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     look: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     commitment: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     patience: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     trail: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     width: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     inside: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     courtesy: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     defence: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     caution: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     ram: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     provocation_ticks: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     trigger: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     roll_chance: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     roll_floor: Option<[f32; 2]>,
+    #[serde(default, deserialize_with = "pair")]
     roll_airtime: Option<[f32; 2]>,
+}
+
+/// An axis as `[low, high]`: exactly two numbers. A fixed-size array alone would
+/// read the first two of a longer one and drop the rest unseen.
+fn pair<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<[f32; 2]>, D::Error> {
+    let given: Option<Vec<f32>> = Deserialize::deserialize(d)?;
+    given
+        .map(|v| {
+            <[f32; 2]>::try_from(v).map_err(|v| {
+                serde::de::Error::invalid_length(v.len(), &"an array of exactly two numbers")
+            })
+        })
+        .transpose()
 }
 
 /// The hard limits every axis is checked against, whatever a file asks for.
@@ -523,6 +561,12 @@ pub fn set_axis(text: &str, axis: &str, low: f32, high: f32) -> Result<String> {
         }
     }
 
+    if !doc.contains_key(oag_schema::TABLE) {
+        let header: toml_edit::DocumentMut = oag_schema::inline(SCHEMA_KIND, SCHEMA_MAJOR)
+            .parse()
+            .expect("the header is TOML");
+        doc[oag_schema::TABLE] = header[oag_schema::TABLE].clone();
+    }
     Ok(doc.to_string())
 }
 
@@ -551,6 +595,8 @@ pub fn template(pilot: &Pilot) -> String {
         Lean::Left => "left",
         Lean::Right => "right",
     };
+    out.push_str(&oag_schema::inline(SCHEMA_KIND, SCHEMA_MAJOR));
+    out.push('\n');
     out.push_str(&format!("lean = {lean:?}\n"));
     for (name, accessor) in AXES {
         let span = accessor(pilot);
@@ -642,6 +688,14 @@ pub fn digest(pilot: &Pilot) -> u32 {
 /// only.
 pub fn parse(name: &str, text: &str) -> Result<Entry> {
     let file: PilotFile = toml::from_str(text).with_context(|| format!("parsing pilot {name}"))?;
+    match oag_schema::check(file.toml_schema.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR) {
+        Ok(()) => {}
+        // Pilots written before the header existed keep loading.
+        Err(missing @ oag_schema::Error::Missing { .. }) => {
+            log::warn!("pilot {name}: {missing}");
+        }
+        Err(refused) => return Err(refused).with_context(|| format!("pilot {name}")),
+    }
     let base = Pilot::BALANCED;
 
     let lean = match file.lean.as_deref() {

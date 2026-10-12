@@ -1,0 +1,546 @@
+"""Reads and writes the track file (docs/formats/track-file.md) with no Blender.
+
+The glb is built here, byte by byte, rather than through Blender's glTF
+exporter: that exporter re-splits vertices, converts attribute types and cannot
+emit the `u8` VEC4 or `MAT4` accessors the format needs. Every number goes out
+as a little-endian binary accessor, so an `f32` held in the model reaches the
+file bit for bit.
+
+Coordinates here are the format's: right-handed, Y up. The Blender side
+(`scene.py`) does the axis change.
+"""
+
+import json
+import os
+import struct
+import tomllib
+
+from . import f32
+from .model import (
+    COLLISION_KINDS,
+    HEADER_WORD,
+    CollisionMesh,
+    CollisionNode,
+    Junction,
+    Pad,
+    Path,
+    SplinePoint,
+    Start,
+    Track,
+)
+
+SCHEMA_LOCATION = "https://oag.topaxi.com/mods/schemas/v1/track.tosd"
+SCHEMA_VERSION = "1.0.0"
+
+FLOAT, UBYTE, USHORT = 5126, 5121, 5123
+ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
+POINTS, TRIANGLES = 0, 4
+MAX_VERTICES = 65535
+
+START = "oag/start"
+SPEEDUP = "oag/pads/speedup"
+WEAPON = "oag/pads/weapon"
+SPLINE = "oag/spline/"
+
+_WIDTH = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
+_COMPONENT = {FLOAT: ("f", 4), UBYTE: ("B", 1), USHORT: ("H", 2)}
+
+
+class TrackFileError(Exception):
+    """A track the format cannot hold, or a file this reader refuses."""
+
+
+def _flat(rows):
+    for row in rows:
+        yield from (row if isinstance(row, (tuple, list)) else (row,))
+
+
+class _Bin:
+    def __init__(self):
+        self.data = bytearray()
+        self.views = []
+        self.accessors = []
+
+    def add(self, payload, component, ty, count, target, minmax=None):
+        while len(self.data) % 4:
+            self.data.append(0)
+        self.views.append(
+            {
+                "buffer": 0,
+                "byteOffset": len(self.data),
+                "byteLength": len(payload),
+                "target": target,
+            }
+        )
+        self.data += payload
+        acc = {
+            "bufferView": len(self.views) - 1,
+            "componentType": component,
+            "count": count,
+            "type": ty,
+        }
+        if minmax:
+            acc["min"], acc["max"] = minmax
+        self.accessors.append(acc)
+        return len(self.accessors) - 1
+
+    def floats(self, rows, ty):
+        flat = list(_flat(rows))
+        return self.add(
+            struct.pack(f"<{len(flat)}f", *flat), FLOAT, ty, len(rows), ARRAY_BUFFER
+        )
+
+    def positions(self, rows):
+        lo = [min(r[i] for r in rows) for i in range(3)]
+        hi = [max(r[i] for r in rows) for i in range(3)]
+        flat = list(_flat(rows))
+        return self.add(
+            struct.pack(f"<{len(flat)}f", *flat),
+            FLOAT,
+            "VEC3",
+            len(rows),
+            ARRAY_BUFFER,
+            (lo, hi),
+        )
+
+    def bytes4(self, rows):
+        flat = list(_flat(rows))
+        return self.add(
+            struct.pack(f"<{len(flat)}B", *flat), UBYTE, "VEC4", len(rows), ARRAY_BUFFER
+        )
+
+
+def _finite(record, values):
+    for v in values:
+        if v != v or v in (float("inf"), float("-inf")):
+            raise TrackFileError(f"{record}: a non-finite number")
+
+
+def _byte(record, field, v):
+    if not (isinstance(v, int) and 0 <= v <= 255):
+        raise TrackFileError(f"{record}: {field} {v!r} is not a byte")
+
+
+def write_glb(track):
+    """The glb bytes for `track`, in the node order `oag_trackfile` writes."""
+    b = _Bin()
+    nodes, meshes = [], []
+
+    def push(name, prims, extras=None):
+        node = {"name": name}
+        if prims:
+            meshes.append({"name": name, "primitives": prims})
+            node["mesh"] = len(meshes) - 1
+        if extras is not None:
+            node["extras"] = extras
+        nodes.append(node)
+
+    s = track.start
+    _finite(START, [*s.position, *s.left, *s.up, *s.forward])
+    push(
+        START,
+        [
+            {
+                "attributes": {
+                    "POSITION": b.positions([s.position]),
+                    "_OAG_LEFT": b.floats([s.left], "VEC3"),
+                    "_OAG_UP": b.floats([s.up], "VEC3"),
+                    "_OAG_FORWARD": b.floats([s.forward], "VEC3"),
+                },
+                "mode": POINTS,
+            }
+        ],
+    )
+
+    for i, path in enumerate(track.paths):
+        if not path.points:
+            continue
+        name = f"{SPLINE}{i}"
+        p = path.points
+        for q in p:
+            _finite(
+                name,
+                [
+                    *q.pos,
+                    *q.tangent,
+                    *q.down,
+                    *q.lateral,
+                    q.progress,
+                    q.half_width_left,
+                    q.half_width_right,
+                    q.ai_bound_left,
+                    q.ai_bound_right,
+                    q.racing_line,
+                ],
+            )
+            _byte(name, "section", q.section_id)
+            _byte(name, "flags", q.flags)
+            for v in q.light_scale:
+                _byte(name, "light scale", v)
+        attrs = {
+            "POSITION": b.positions([q.pos for q in p]),
+            "_OAG_TANGENT": b.floats([q.tangent for q in p], "VEC3"),
+            "_OAG_DOWN": b.floats([q.down for q in p], "VEC3"),
+            "_OAG_LATERAL": b.floats([q.lateral for q in p], "VEC3"),
+            "_OAG_PROGRESS": b.floats([(q.progress,) for q in p], "SCALAR"),
+            "_OAG_HALF_WIDTH": b.floats(
+                [(q.half_width_left, q.half_width_right) for q in p], "VEC2"
+            ),
+            "_OAG_AI_BOUND": b.floats(
+                [(q.ai_bound_left, q.ai_bound_right) for q in p], "VEC2"
+            ),
+            "_OAG_RACING_LINE": b.floats([(q.racing_line,) for q in p], "SCALAR"),
+            "_OAG_SECTION_FLAGS": b.bytes4([(q.section_id, q.flags, 0, 0) for q in p]),
+            "_OAG_LIGHT_SCALE": b.bytes4([q.light_scale for q in p]),
+        }
+        if any(q.ai_bytes is not None for q in p):
+            rows = []
+            for q in p:
+                if q.ai_bytes is None:
+                    rows.append((0, 0, 0, 0))
+                else:
+                    for v in q.ai_bytes:
+                        _byte(name, "AI byte", v)
+                    rows.append((*q.ai_bytes, 1))
+            attrs["_OAG_AI_BYTES"] = b.bytes4(rows)
+        push(name, [{"attributes": attrs, "mode": POINTS}])
+
+    for name, pads in ((SPEEDUP, track.speedup_pads), (WEAPON, track.weapon_pads)):
+        if not pads:
+            continue
+        for pad in pads:
+            _finite(name, [*pad.to_world, *pad.min, *pad.max, pad.disabled])
+        centre = [(q.to_world[12], q.to_world[13], q.to_world[14]) for q in pads]
+        attrs = {
+            "POSITION": b.positions(centre),
+            "_OAG_TO_WORLD": b.floats([q.to_world for q in pads], "MAT4"),
+            "_OAG_MIN": b.floats([q.min for q in pads], "VEC3"),
+            "_OAG_MAX": b.floats([q.max for q in pads], "VEC3"),
+            "_OAG_DISABLED": b.floats([(q.disabled,) for q in pads], "SCALAR"),
+        }
+        push(name, [{"attributes": attrs, "mode": POINTS}])
+
+    for n, node in enumerate(track.nodes):
+        name = f"oag/collision/{n}"
+        if node.kind not in COLLISION_KINDS:
+            raise TrackFileError(f"{name}: unknown oag_kind {node.kind!r}")
+        prims = []
+        for m, mesh in enumerate(node.meshes):
+            what = f"{name} mesh {m}"
+            if not mesh.triangles or not mesh.vertices:
+                raise TrackFileError(f"{what} is empty")
+            if len(mesh.vertices) > MAX_VERTICES:
+                raise TrackFileError(f"{what}: more than {MAX_VERTICES} vertices")
+            if len(mesh.scalars) != len(mesh.vertices):
+                raise TrackFileError(f"{what}: one scalar per vertex is required")
+            if any(i >= len(mesh.vertices) for t in mesh.triangles for i in t):
+                raise TrackFileError(f"{what}: a triangle index is out of range")
+            _finite(what, [*_flat(mesh.vertices), *mesh.scalars])
+            idx = list(_flat(mesh.triangles))
+            attrs = {
+                "POSITION": b.positions(mesh.vertices),
+                "_OAG_SCALAR": b.floats([(v,) for v in mesh.scalars], "SCALAR"),
+            }
+            indices = b.add(
+                struct.pack(f"<{len(idx)}H", *idx),
+                USHORT,
+                "SCALAR",
+                len(idx),
+                ELEMENT_ARRAY_BUFFER,
+            )
+            prims.append({"attributes": attrs, "indices": indices, "mode": TRIANGLES})
+        extras = {"oag_kind": node.kind, "oag_version": node.version}
+        if node.name is not None:
+            extras["oag_name"] = node.name
+        push(name, prims, extras)
+
+    while len(b.data) % 4:
+        b.data.append(0)
+    doc = {
+        "asset": {"version": "2.0", "generator": "oag-track blender add-on 1.0"},
+        "scene": 0,
+        "scenes": [{"nodes": list(range(len(nodes)))}],
+        "nodes": nodes,
+        "meshes": meshes,
+        "buffers": [{"byteLength": len(b.data)}],
+        "bufferViews": b.views,
+        "accessors": b.accessors,
+    }
+    text = json.dumps(doc, separators=(",", ":")).encode()
+    text += b" " * (-len(text) % 4)
+    total = 12 + 8 + len(text) + 8 + len(b.data)
+    return (
+        b"glTF"
+        + struct.pack("<II", 2, total)
+        + struct.pack("<I", len(text))
+        + b"JSON"
+        + text
+        + struct.pack("<I", len(b.data))
+        + b"BIN\0"
+        + bytes(b.data)
+    )
+
+
+def _code(v):
+    return -1 if v is None else v
+
+
+def _quote(s):
+    return json.dumps(s, ensure_ascii=False)
+
+
+def write_manifest(track, glb_name):
+    """The `.track.toml` text. Integers and strings only: no float is written."""
+    if not track.id:
+        raise TrackFileError("the track has no id")
+    lines = [
+        "[toml-schema]",
+        f"location = {_quote(SCHEMA_LOCATION)}",
+        f"version = {_quote(SCHEMA_VERSION)}",
+        "",
+        "[track]",
+        f"id = {_quote(track.id)}",
+        f"title = {_quote(track.title)}",
+        f"glb = {_quote(glb_name)}",
+    ]
+    if track.notes:
+        lines.append("notes = [" + ", ".join(_quote(n) for n in track.notes) + "]")
+    lines += ["", "[spline]", f"point_version = {track.point_version}"]
+    for p in track.paths:
+        lines += [
+            "",
+            "[[spline.path]]",
+            f"points = {len(p.points)}",
+            f"entry = {_code(p.entry)}",
+            f"exit = {_code(p.exit)}",
+            f"max_spacing_bits = {f32.bits(p.max_spacing)}",
+        ]
+    for j in track.junctions:
+        lines += [
+            "",
+            "[[spline.junction]]",
+            f"prev = [{_code(j.prev[0])}, {_code(j.prev[1])}]",
+            f"next = [{_code(j.next[0])}, {_code(j.next[1])}]",
+        ]
+    lines += [
+        "",
+        "[counts]",
+        f"collision_nodes = {len(track.nodes)}",
+        f"speedup_pads = {len(track.speedup_pads)}",
+        f"weapon_pads = {len(track.weapon_pads)}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def write(track, manifest_path):
+    """Writes `<stem>.track.toml` and `<stem>.glb` beside it; returns the glb path."""
+    manifest_path = os.fspath(manifest_path)
+    if not manifest_path.endswith(".track.toml"):
+        raise TrackFileError("the manifest name must end in .track.toml")
+    glb_path = manifest_path[: -len(".track.toml")] + ".glb"
+    glb = write_glb(track)
+    text = write_manifest(track, os.path.basename(glb_path))
+    with open(glb_path, "wb") as fh:
+        fh.write(glb)
+    with open(manifest_path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return glb_path
+
+
+class _Glb:
+    def __init__(self, data):
+        if data[:4] != b"glTF":
+            raise TrackFileError("not a glb")
+        pos, self.doc, self.blob = 12, None, b""
+        while pos + 8 <= len(data):
+            size, kind = struct.unpack_from("<I4s", data, pos)
+            body = data[pos + 8 : pos + 8 + size]
+            if kind == b"JSON":
+                self.doc = json.loads(body)
+            elif kind == b"BIN\0":
+                self.blob = body
+            pos += 8 + size
+        if self.doc is None:
+            raise TrackFileError("no JSON chunk")
+
+    def accessor(self, index, expect_component, expect_type):
+        a = self.doc["accessors"][index]
+        if a["componentType"] != expect_component or a["type"] != expect_type:
+            raise TrackFileError(f"accessor {index} is not {expect_type}")
+        view = self.doc["bufferViews"][a["bufferView"]]
+        if view.get("byteStride"):
+            raise TrackFileError(f"accessor {index} is strided")
+        fmt, _ = _COMPONENT[a["componentType"]]
+        width = _WIDTH[a["type"]]
+        count = a["count"]
+        start = view.get("byteOffset", 0) + a.get("byteOffset", 0)
+        flat = struct.unpack_from(f"<{count * width}{fmt}", self.blob, start)
+        if width == 1:
+            return list(flat)
+        return [tuple(flat[i * width : (i + 1) * width]) for i in range(count)]
+
+    def prim(self, node, record):
+        prims = self.doc["meshes"][node["mesh"]]["primitives"]
+        if len(prims) != 1:
+            raise TrackFileError(f"{record}: expected exactly one primitive")
+        return prims[0]
+
+
+def _read_start(g, node):
+    a = g.prim(node, START)["attributes"]
+
+    def one(key):
+        return g.accessor(a[key], FLOAT, "VEC3")[0]
+
+    return Start(
+        one("POSITION"), one("_OAG_LEFT"), one("_OAG_UP"), one("_OAG_FORWARD")
+    )
+
+
+def _read_spline(g, node, name):
+    a = g.prim(node, name)["attributes"]
+
+    def v3(k):
+        return g.accessor(a[k], FLOAT, "VEC3")
+
+    def v2(k):
+        return g.accessor(a[k], FLOAT, "VEC2")
+
+    def s1(k):
+        return g.accessor(a[k], FLOAT, "SCALAR")
+
+    def b4(k):
+        return g.accessor(a[k], UBYTE, "VEC4")
+
+    pos, tangent, down, lateral = (
+        v3("POSITION"),
+        v3("_OAG_TANGENT"),
+        v3("_OAG_DOWN"),
+        v3("_OAG_LATERAL"),
+    )
+    progress, line = s1("_OAG_PROGRESS"), s1("_OAG_RACING_LINE")
+    half, bound = v2("_OAG_HALF_WIDTH"), v2("_OAG_AI_BOUND")
+    sf, light = b4("_OAG_SECTION_FLAGS"), b4("_OAG_LIGHT_SCALE")
+    ai = b4("_OAG_AI_BYTES") if "_OAG_AI_BYTES" in a else None
+    out = []
+    for i in range(len(pos)):
+        ai_bytes = tuple(ai[i][:3]) if ai is not None and ai[i][3] == 1 else None
+        out.append(
+            SplinePoint(
+                pos[i],
+                tangent[i],
+                down[i],
+                lateral[i],
+                progress[i],
+                half[i][0],
+                half[i][1],
+                bound[i][0],
+                bound[i][1],
+                line[i],
+                sf[i][0],
+                sf[i][1],
+                tuple(light[i]),
+                ai_bytes,
+            )
+        )
+    return out
+
+
+def _read_pads(g, node, name):
+    a = g.prim(node, name)["attributes"]
+    matrix = g.accessor(a["_OAG_TO_WORLD"], FLOAT, "MAT4")
+    lo = g.accessor(a["_OAG_MIN"], FLOAT, "VEC3")
+    hi = g.accessor(a["_OAG_MAX"], FLOAT, "VEC3")
+    off = g.accessor(a["_OAG_DISABLED"], FLOAT, "SCALAR")
+    return [Pad(matrix[i], lo[i], hi[i], off[i]) for i in range(len(matrix))]
+
+
+def _read_collision(g, node, kind, extras):
+    meshes = []
+    prims = g.doc["meshes"][node["mesh"]]["primitives"] if "mesh" in node else []
+    for prim in prims:
+        a = prim["attributes"]
+        verts = g.accessor(a["POSITION"], FLOAT, "VEC3")
+        scalars = (
+            g.accessor(a["_OAG_SCALAR"], FLOAT, "SCALAR")
+            if "_OAG_SCALAR" in a
+            else [1.0] * len(verts)
+        )
+        idx = g.accessor(prim["indices"], USHORT, "SCALAR")
+        tris = [tuple(idx[i : i + 3]) for i in range(0, len(idx), 3)]
+        meshes.append(CollisionMesh(verts, tris, scalars))
+    return CollisionNode(
+        kind, meshes, extras.get("oag_name"), extras.get("oag_version", HEADER_WORD)
+    )
+
+
+def _index(v):
+    return None if v < 0 else v
+
+
+def read(manifest_path):
+    """Reads `<manifest>` and the glb it names into a `Track`."""
+    manifest_path = os.fspath(manifest_path)
+    with open(manifest_path, "rb") as fh:
+        m = tomllib.load(fh)
+    loc = (m.get("toml-schema") or {}).get("location", "")
+    if not loc.endswith("/v1/track.tosd"):
+        raise TrackFileError(f"not a v1 track manifest: location {loc!r}")
+    glb_path = os.path.join(os.path.dirname(manifest_path), m["track"]["glb"])
+    with open(glb_path, "rb") as fh:
+        g = _Glb(fh.read())
+    rows = m.get("spline", {}).get("path", [])
+    splines = [None] * len(rows)
+    start, speedup, weapon, nodes = None, [], [], []
+    for node in g.doc["nodes"]:
+        name = node.get("name", "")
+        extras = node.get("extras") or {}
+        if "oag_kind" in extras:
+            kind = extras["oag_kind"]
+            if kind not in COLLISION_KINDS:
+                raise TrackFileError(f"unknown oag_kind {kind!r}")
+            nodes.append(_read_collision(g, node, kind, extras))
+        elif name == START:
+            start = _read_start(g, node)
+        elif name.startswith(SPLINE):
+            splines[int(name[len(SPLINE) :])] = _read_spline(g, node, name)
+        elif name == SPEEDUP:
+            speedup = _read_pads(g, node, name)
+        elif name == WEAPON:
+            weapon = _read_pads(g, node, name)
+    if start is None:
+        raise TrackFileError(f"no {START} node")
+    paths = []
+    for row, points in zip(rows, splines):
+        points = points or []
+        if len(points) != row["points"]:
+            raise TrackFileError("a spline's point count disagrees with the manifest")
+        paths.append(
+            Path(
+                points,
+                f32.from_bits(row["max_spacing_bits"]),
+                _index(row["entry"]),
+                _index(row["exit"]),
+            )
+        )
+    junctions = [
+        Junction(
+            (_index(j["prev"][0]), _index(j["prev"][1])),
+            (_index(j["next"][0]), _index(j["next"][1])),
+        )
+        for j in m.get("spline", {}).get("junction", [])
+    ]
+    t = m["track"]
+    return Track(
+        t["id"],
+        t["title"],
+        m["spline"]["point_version"],
+        paths,
+        junctions,
+        start,
+        nodes,
+        speedup,
+        weapon,
+        list(t.get("notes", [])),
+    )

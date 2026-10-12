@@ -560,7 +560,6 @@ pub(crate) fn read(m: Parsed, bytes: &[u8]) -> Result<Loaded, Error> {
             weapon_pads: weapon,
             notes,
         },
-        version: m.version,
         unread,
     })
 }

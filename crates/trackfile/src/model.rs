@@ -50,9 +50,7 @@ pub struct Track {
 pub struct Loaded {
     /// The track.
     pub track: Track,
-    /// The format version the file declared, `major.minor`.
-    pub version: (u32, u32),
-    /// Manifest keys this reader does not know (a newer minor), and glb nodes
+    /// Manifest keys this reader does not know (added to the schema since), and glb nodes
     /// it did not read, each named.
     pub unread: Vec<String>,
 }

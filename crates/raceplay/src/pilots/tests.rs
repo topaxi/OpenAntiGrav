@@ -206,7 +206,7 @@ fn every_axis_has_a_preview() {
 /// same page.
 fn fixture_menu_on_axis(axis: &str) -> menu::Menu {
     let text = "\
-version = 1
+toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }
 root = \"pilots\"
 [[page]]
 id = \"pilots\"
@@ -258,7 +258,7 @@ fn axis_preview_prefers_a_translation_over_the_english_fallback() {
 #[test]
 fn axis_preview_is_absent_off_a_page_with_no_axis_row() {
     let text = "\
-version = 1
+toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }
 root = \"root\"
 [[page]]
 id = \"root\"

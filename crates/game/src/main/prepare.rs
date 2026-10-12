@@ -285,7 +285,7 @@ impl Pending {
         // Pure) - see `menu::Definition::rename_campaign_row`.
         definition.rename_campaign_row(title, &boot_shell.strings);
         // A phone app is left, not quit - see `menu::Definition::drop_quit`.
-        if cfg!(target_os = "android") {
+        if oag_mobile::MOBILE {
             definition.drop_quit();
         }
         // A page has no monitor to pick and one present mode, and a desktop

@@ -284,17 +284,15 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
     std::fs::remove_dir_all(dir).ok();
 }
 
-/// The committed fixture, authored by this project, on Pulse's physics: it loads,
-/// the report says what the format carries nothing for, and a lone AI craft
-/// gets round it.
-#[test]
-#[ignore = "needs a Pulse image"]
-fn a_lone_craft_gets_round_the_committed_fixture() {
+/// A committed track file on Pulse's physics: it loads, the report says what the
+/// format carries nothing for, and a lone AI craft gets round it.
+fn lone_craft_gets_round(file: &str, id: &str, title: &str) {
     let Some(image) = oag_testdata::image(IMAGES[1]) else {
         return;
     };
     let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../trackfile/tests/fixtures/oval.track.toml");
+        .join("../trackfile/tests/fixtures")
+        .join(file);
     let o = race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
@@ -305,18 +303,13 @@ fn a_lone_craft_gets_round_the_committed_fixture() {
     };
     let loaded = race::load(&o).expect("loads");
     let report = loaded.report.join("\n");
-    for needle in [
-        "Fixture Octagon",
-        "format 1.1",
-        "not authored by format 1.x",
-        "sky, fog",
-    ] {
+    for needle in [title, "schema v1", "not authored by schema v1", "sky, fog"] {
         assert!(
             report.contains(needle),
             "report lacks {needle:?}:\n{report}"
         );
     }
-    assert_eq!(loaded.setup.foreign.as_deref(), Some("fixture-octagon"));
+    assert_eq!(loaded.setup.foreign.as_deref(), Some(id));
     let mut race = race::Race::start(loaded.setup);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -328,10 +321,35 @@ fn a_lone_craft_gets_round_the_committed_fixture() {
     }
     let lap = race.sim.world.ships[1].standing.lap;
     println!(
-        "fixture: lap {lap} after 7200 ticks, respawns {}",
+        "{file}: lap {lap} after 7200 ticks, respawns {}",
         race.respawns_of(1)
     );
     assert!(lap >= 2, "got round at all: lap {lap}");
+}
+
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_lone_craft_gets_round_the_committed_fixture() {
+    lone_craft_gets_round("oval.track.toml", "fixture-octagon", "Fixture Octagon");
+}
+
+/// The add-on's own output (`scripts/blender/oag_track`, `just blender-fixtures`):
+/// a loop authored in Blender from eight control points, raced as the committed
+/// file. Drop the add-on's spline, start or ribbon and this craft does not get round.
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_lone_craft_gets_round_a_loop_authored_in_blender() {
+    lone_craft_gets_round("blender_loop.track.toml", "blender-loop", "Blender Loop");
+}
+
+#[test]
+#[ignore = "needs a Pulse image"]
+fn a_lone_craft_gets_round_the_oval_re_exported_from_blender() {
+    lone_craft_gets_round(
+        "oval.reexport.track.toml",
+        "fixture-octagon",
+        "Fixture Octagon",
+    );
 }
 
 /// The other titles' default circuits through the same exporter: Pure, HD,

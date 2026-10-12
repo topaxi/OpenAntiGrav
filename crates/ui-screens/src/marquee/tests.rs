@@ -14,7 +14,7 @@ fn fixture(value: &str) -> Menu {
     let definition = oag_ui::menu::Definition::parse(
         &format!(
             r#"
-        version = 1
+        toml-schema = {{ location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }}
         root = "main"
         [[page]]
         id = "main"
@@ -47,7 +47,7 @@ fn unfocused_fixture(value: &str) -> Menu {
     let definition = oag_ui::menu::Definition::parse(
         &format!(
             r#"
-        version = 1
+        toml-schema = {{ location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }}
         root = "main"
         [[page]]
         id = "main"

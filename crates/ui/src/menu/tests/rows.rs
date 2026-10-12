@@ -102,7 +102,7 @@ fn seeding_a_value_the_row_does_not_offer_changes_nothing() {
 fn supplying_a_list_keeps_the_value_the_row_was_already_on() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -153,7 +153,7 @@ fn supplying_a_list_keeps_the_value_the_row_was_already_on() {
 fn a_supplied_row_shows_its_label_and_reports_its_value() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -197,7 +197,7 @@ fn a_supplied_row_shows_its_label_and_reports_its_value() {
 fn a_row_with_nothing_supplied_is_inert() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -222,7 +222,7 @@ fn a_row_with_nothing_supplied_is_inert() {
 fn a_choice_cannot_declare_both_a_list_and_a_source() {
     let error = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -302,7 +302,7 @@ fn the_campaign_row_is_worded_by_the_title_and_keeps_its_place() {
 fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"

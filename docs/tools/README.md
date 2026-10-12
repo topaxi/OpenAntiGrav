@@ -7,6 +7,7 @@
 | `oag-convert` | M1 | Convert assets to standard formats |
 | [`oag-trace`](oag-trace.md) | **working** | Compare a simulation run against a trace from the original |
 | [`oag-game`](oag-game.md) | **working** | The engine itself: the front end, and the race its `Launch Game` starts |
+| [Blender add-on](blender.md) | **working** | Author a custom track in Blender and export this project's track file; headless round trip |
 | [autopilot planning](autopilot-planning.md) | **working** | Plan an input script that drives to a point on the track, offline in our simulation or live in the emulator |
 | [frame comparison](frame-compare.md) | **working** | One frame of the original and one of ours from the same captured state: teleport, capture, render, diff |
 | [RPCS3 harness](../reverse-engineering/rpcs3-debugger.md) | **working** | Boot, drive and observe a PS3 title under RPCS3: headless boot, `TTY.log`, the GDB stub, and the two input gates that fail silently |
@@ -19,6 +20,8 @@ build finds the player's own disc image, and the gamepad mapping.
 [Android](android.md) covers `just apk`: a NativeActivity build of `oag-game` for
 arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
+
+[iOS](ios.md) covers `just ios-app`: the unsigned `.app`/`.ipa` the release workflow builds, how a player signs and installs it, and where the disc images go.
 
 [macOS](macos.md) covers `just mac-app`: the `OpenAntiGrav.app` bundle the nightly
 builds on a GitHub runner, its unsigned first launch and the signing hook.

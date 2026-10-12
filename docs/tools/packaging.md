@@ -638,6 +638,10 @@ A rolling pre-release, rebuilt from `main` once a day by
 - **The macOS app is included** (2026-10-12): `OpenAntiGrav-nightly-...-macos-arm64.zip`,
   an ad-hoc signed `OpenAntiGrav.app` that is not notarized. The release notes say how
   to open it; [macos.md](macos.md) has the rest, and the disabled signing hook.
+- **The iOS build is not published** (2026-10-12): `release.yml`'s `ios` job builds an
+  `.ipa` as a workflow artifact only. It is `continue-on-error`, outside `release`'s
+  `needs` and outside both download patterns, so a failure cannot hold the nightly
+  back and a success is not attached to it. See [ios.md](ios.md).
 - **The Android APK is included** (2026-10-07), signed with the repository's stored
   sideload key (secrets `OAG_APK_KEYSTORE_B64` and `OAG_APK_KEYSTORE_PASS`; today the
   maintainer's local `~/.android/oag-debug.keystore`), so it installs over a local
