@@ -341,8 +341,8 @@ never-looped `Read`.
    invalid-mode BC7 blocks across the 4,096 sampled, and this project's own,
    completely unmodified `oag_texture::gnf::Texture::decode` turns the
    result into a fully legible ship-livery texture.
-   The file as extracted before 2026-09-29 (`data/extracted/ps4.bak/omega-eu`) still
-   correctly raises `Error::CorruptBlocks { count: 49899 }` on the same
+   The file as extracted before 2026-09-29 (`data/extracted/ps4.bak/omega-eu`, deleted 2026-10-12)
+   correctly raised `Error::CorruptBlocks { count: 49899 }` on the same
    entry - the refusal this project's reader is supposed to make on
    genuinely missing content, working exactly as designed against a
    genuinely broken extraction.
