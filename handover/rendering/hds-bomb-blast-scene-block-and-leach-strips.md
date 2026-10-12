@@ -110,6 +110,18 @@ in the body frame, same paused frame (the near end carries the brightness; on/of
 side arcs are `hd_waketrail` draws (a wake lane), and `hd_leach_strip_ground_truth` still uses the
 4-sample staging. See leach-beam-strips.md, "hd-leach-bright".
 
+## 2026-10-12 (`hd-leach-render`): the anchor measured in the body frame
+
+The anchor's place on the hull was right; the push was not: the world matrix rows carry the 0.75
+craft scale and the original does not normalise, so the push is 1.275 (fixed). The eye-distance gap
+is the chase camera, not the anchor (the original's eye-to-body was never read; HD's eye is
+`0.75 * authored`). See leach-beam-strips.md, "hd-leach-render".
+Open: (1) the original's chase eye distance on HD against ours (the near-end tail blob lives there);
+(2) a matched-geometry pair: the grid puts the player 8th with no rival in the lock window, so a pair
+needs the placement behind a rival of `hd-leach-draw`; (3) the held duration and the wobble's phase
+reset; (4) `hd_leach_strip_ground_truth` still on the 4-sample staging: a dense staging needs a metric
+that isolates the strip (on/off frames diverge in sim state, trails are near-white in both).
+
 ## Next Steps
 
 1. ~~Build the strip~~ - done 2026-10-08, see the section above.

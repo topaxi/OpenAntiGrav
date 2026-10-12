@@ -158,7 +158,10 @@ impl AnchorTrail {
 }
 
 /// The anchor a craft's `arc_anchor_point` node gives: the node's position
-/// pushed [`ANCHOR_OFFSET`] along its row 1.
+/// pushed [`ANCHOR_OFFSET`] along its row 1, **as the world matrix holds it**.
+/// The original does not normalise the row, and the craft's world matrix
+/// carries the 0.75 craft scale, so the push is 1.275 units, not 1.7 (read live,
+/// row 1 length 0.7496 on a grid craft).
 #[must_use]
 pub fn anchor_point(node_position: Vec3, node_row1: Vec3) -> Vec3 {
     node_position + node_row1 * ANCHOR_OFFSET

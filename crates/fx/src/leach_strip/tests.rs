@@ -44,6 +44,18 @@ fn the_anchor_is_pushed_along_row_one_by_minus_one_point_seven() {
     assert!((a - Vec3::new(1.0, 0.3, 3.0)).length() < 1e-5);
 }
 
+/// The grid craft of slot 0 on RPCS3, one paused countdown frame: its
+/// `arc_anchor_point` node's world matrix (row 1 and position) as the engine
+/// held it, rows carrying the 0.75 craft scale. The push is the raw row.
+#[test]
+fn the_push_uses_the_scaled_row_the_world_matrix_holds() {
+    let row1 = Vec3::new(-0.0102, 0.7496, -0.0207);
+    let position = Vec3::new(3.9921, -52.8367, -195.8279);
+    let a = anchor_point(position, row1);
+    assert!((a - position).length() > 1.27 && (a - position).length() < 1.28);
+    assert!((a.y - (position.y - 1.7 * 0.7496)).abs() < 1e-4);
+}
+
 #[test]
 fn the_walk_runs_back_to_the_shooters_progress_and_ends_interpolated() {
     let mut target = AnchorTrail::new();

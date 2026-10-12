@@ -342,3 +342,54 @@ mid-reveal; ours follows the static law (`frac <= lo` white), the same direction
 **Regression gate:** the Pulse frame of `hd-leach-draw` (`--force-leach-lock 276:1`, tick 330, 960x544) renders
 sha `9d510ab01c91fcc2...` with this tree and with the tree before it, the same sha as that lane's reference.
 **Omega:** checked, differs (PS4 shaders); **2048:** no such strip.
+
+## 2026-10-12 (`hd-leach-render`): the anchor is measured in the body frame; the push is 1.275, not 1.7
+
+One RPCS3 boot, a **paused countdown frame** (the anchor is recorded every tick for every
+craft, so no beam is needed; reproducer `scripts/rpcs3-hd-anchor.py`). For all eight craft:
+the rigid body (`+0x1d0..+0x200`) and a walk of the craft's scene-graph children (`+0x14` child,
+`+0x10` sibling, `*(node+0xc8)+0x10` the name), each node's first 0x100 bytes. Slots 0, 1, 2 were
+`mirage_c1`, `ag_systems_c1`, `triakis_c1`.
+
+**Node layout (conf 90, three craft agree).** The `arc_anchor_point` node carries its **local**
+matrix at `+0x80..+0xb0` (identity rotation, translation = the `Locators.vex` row: slot 0
+`(0, -1.2787, -2.7780)`, slot 1 `(0, -0.6947, -0.2228)`, slot 2 `(0, -0.8533, 0.1349)`, each equal
+to the disc census row of its hull to four decimals) and its **world** matrix at `+0x40..+0x70`
+(rows 0-2 then position, row-vector). The page's "`+0x30` position, `+0x10` row 1" are
+offsets from a matrix base at node `+0x40`.
+
+**The world rows are scaled by 0.75.** Slot 0: rows `(-0.0044, -0.0207, -0.7497)`,
+`(-0.0102, 0.7496, -0.0207)`, `(0.7499, 0.01, -0.0047)`; position `(3.9921, -52.8367, -195.8279)`
+against body position `(6.097, -51.903, -195.925)` and body rows of unit length. The position is
+exactly body + 0.75 * (body basis * locator translation), so the locator sits where the model
+puts it: **the anchor's place on the hull was already right** (rear engine cluster, 2.1 behind
+and 0.96 below the body origin on the Mirage). The Airbrake nodes scale the same way
+(local `(0.862, -1.15, -3.85)`, world offset 0.75 times that).
+
+**What was wrong.** `0x001169f8` multiplies the raw world row 1 by -1.7 (see the disassembly:
+no normalise), so the push is `1.7 * 0.75 = 1.275`. Ours normalised the row and pushed 1.7.
+Fixed (`Race::leach_anchor`): the push uses the model matrix's own scaled row. The no-locator
+fallback uses the body's `+0x1e0`, unit length, so it keeps 1.7 (tests
+`oag_raceplay::leach_strip::tests`, `oag_fx::leach_strip::tests`). The shift is 0.425 units,
+along the hull's up axis, at the near end of every beam.
+
+**What this does not explain: the eye distance.** The earlier 13.8-15.3 (original) against 7.7
+(ours) is eye to anchor, and the original's eye-to-body distance was never measured, so it mixes
+the anchor with the chase camera. The anchor offset above moves ours by 0.425, not by 6. HD's
+chase eye is `0.75 * authored` ([camera.md](camera.md)); whether our HD chase distance matches
+the original's is a camera question, open, and is the likely home of the "tail blob" read.
+
+**Not obtained: a matched-geometry pair and the held duration.** Two further boots fired state 10
+at the grid (`rpcs3-hd-weapon.py --state 10`, countdown 24 s and 60 s, filmed 14 s): the player
+is 8th and the rivals are out of the lock window, so no beam formed in either film. The previous
+lane's placement behind a rival (and the beam clock rewrite) is not reproduced by that script.
+**Dense-trail ground truth not moved:** at a dense staging (`--autopilot --force-leach-lock
+800:3`, ticks 830-870) the on/off frames are not at identical sim state (the lock throttles the
+victim and the particle effects diverge: 1.9k-3.6k pixels differ by more than 60 in the floor
+channel before the strip reveals), the engine trails and turbo streaks are near-white in both,
+and the fixed-camera frames at the player's pose (473.9, -7.9, 252.9) still read as trails. The box-white
+metric of `hd_leach_strip_ground_truth` cannot separate the strip there; a metric needs the strip alone
+(a debug draw-mask, not added).
+
+**Omega:** checked, differs (PS4 shaders; the `Locators.vex` rows are identical to HD's, so the
+anchor placement carries, but the draw is unmeasured). **2048:** no such strip.
