@@ -85,6 +85,40 @@ either: those are Pulse's additions, not Pure's omissions. Ten weapons agrees
 with `oag_pure::hud`'s ten icons and with the ten `absorb` values the table
 authors.
 
+### Pure ships no LeachBeam (checked 2026-10-12, lane pure-leach-quake, confidence 90)
+
+The parser list above is not the only evidence. Every one of these was run on both
+pressings (USA `BOOT.BIN` and EU `BOOT.BIN`, `strings -a`, `oag-wad hash` against
+`Data.wad`):
+
+- **The executable.** No string matching `leach`, `leech`, `drain`, `beam`, `cannon`,
+  `repuls` or `shuriken` in either `BOOT.BIN`. The source-file paths it carries under
+  `Backend/Weapons/` are `Bomb`, `Disruptor`, `DisruptorFx`, `Mine`, `Missile`, `Plasma`,
+  `Rocket`, `Shield` and the managers; none is a LeachBeam, Cannon, Repulser or Shuriken file.
+- **The disc.** None of Pulse's six LeachBeam names is in Pure's `Data.wad` by hash
+  (`Data\HUD\leachbeam_sight.vex`, `Data\Tex\Weapons\leachbeam_surface.mip`,
+  `Data\Psys\WO_LEACHBEAM_ENERGY.POB`, `_CHARGING.POB`, `_ABSORB.POB`,
+  `WO_SHIP_SPARK_DAMAGE_LEACHBEAM.POB`), while Pure's own `absorb_surface.mip`,
+  `WO_WEAPON_ABSORB.POB` and the three `WO_QUAKE*.POB` are. Its `weaponstats.xml`
+  (7,481 bytes, USA) authors `Global`, `Rocket`, `Missile`, `Quake`, `Disruptor`, `Turbo`,
+  `Shield`, `Autopilot`, `Plasma`, `Bomb` and `Mine`; no LeachBeam block, and each of its five
+  `<Pickupodds>` blocks lists the same ten weapons and none for a beam. `Steal Weapon` is a Disruptor effect
+  here, not a beam.
+- **Ours.** `crates/tables/tests/pure_weapons_ground_truth.rs` already asserts the table
+  authors none. A pickup draw is restricted to authored odds, so a Pure pad never hands a
+  LeachBeam out, and the fire path returns when `WeaponStats::leach_beam()` is `None`
+  (`--give leachbeam` holds one in the slot and fires nothing). What was wrong: Pure's
+  `oag_title::Effects` table inherited Pulse's engine names, so a Pure race load reported
+  `WO_LEACHBEAM_ENERGY`, `_CHARGING`, `_ABSORB` and `pulse_leechbeam1_ADD.mip` as absent
+  entries. `oag_pure::effects::EFFECTS` now names none of them and
+  `assets::leach_beam_texture` is not asked for the ribbon texture when the weapon table
+  authors no LeachBeam; the load report says so in one line. Test:
+  `pure_race_ground_truth::a_pure_race_neither_loads_nor_misses_a_leachbeam`.
+- **Cross-title.** HD authors its own LeachBeam table and keeps its path; the texture gate
+  follows each title's own weapon table, so 2048 and Omega are unchanged wherever theirs
+  authors a LeachBeam (not re-run in this lane): checked, differs for HD, not checkable
+  here for 2048 and Omega beyond that.
+
 `<Pickupodds class=...>` is matched against **`Vector`, `Venom`, `Flash`,
 `Rapier`, `Phantom`** and stores 0..4 in `table+0x470`; every odds array is
 five slots deep and the totals loop runs `while (i < 5)`. That is the

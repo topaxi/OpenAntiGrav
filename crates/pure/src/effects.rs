@@ -25,10 +25,17 @@ pub const ABSORB_BURST: Burst = Burst::Sequential {
 /// and Pure's Cannon throws no weapon spark of its own that has been read. The
 /// engine's own names are Pulse's, taken by inheritance: Pure's loader tries
 /// each and a disc without it costs one report line.
-pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pulse")).with(
-    Trigger::ShieldAbsorb,
-    EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
-);
+pub const EFFECTS: &Effects = &Effects::engine(Origin::InheritedFrom("Wipeout Pulse"))
+    .with(
+        Trigger::ShieldAbsorb,
+        EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured).with_burst(ABSORB_BURST),
+    )
+    // Pure ships no LeachBeam: its `weaponstats.xml` authors none, neither
+    // pressing's executable names one and none of Pulse's six LeachBeam entries
+    // is in its `Data.wad` (`docs/ghidra/functions/psp-pure-usa/weapons.md`).
+    .without(Trigger::LeachbeamEnergy)
+    .without(Trigger::LeachbeamCharging)
+    .without(Trigger::LeachbeamAbsorb);
 
 /// Pure's race looks: none read. The shield tint is Pulse's, as it has always
 /// been for a title with no palette of its own - the project's rule that an
@@ -55,3 +62,22 @@ pub const LOOKS: &Looks = &Looks {
         origin: Origin::InheritedFrom("Wipeout Pulse"),
     })
 };
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Pure has no LeachBeam, so its table names none of the beam's effects:
+    /// dropping a `.without` above brings an inherited Pulse name back, and a
+    /// load report line for an entry no Pure disc carries.
+    #[test]
+    fn pure_names_no_leachbeam_effect() {
+        for trigger in [
+            Trigger::LeachbeamEnergy,
+            Trigger::LeachbeamCharging,
+            Trigger::LeachbeamAbsorb,
+        ] {
+            assert!(EFFECTS.on(trigger).is_none(), "{trigger:?}");
+        }
+    }
+}
