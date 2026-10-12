@@ -50,7 +50,7 @@ fn style_globals(archives: &mut oag_assets::Archives) -> Vec<(String, String)> {
     ] {
         let blob = archives.read_name(entry).expect(entry);
         let text = oag_tables::fexml::text(&blob).expect(entry);
-        out.extend(oag_ui::screen::Screens::from_xml(&text).globals.into_iter());
+        out.extend(oag_ui::screen::Screens::from_xml(&text).globals);
     }
     out
 }
@@ -232,12 +232,10 @@ fn every_circuit_draws_its_map_and_its_panel_with_a_fresh_profiles_values() {
             let draws = drawn(&disc, &key, &fills);
             assert!(!sprites(&draws).is_empty(), "{image} {key:?}: the map");
             let said = texts(&draws);
-            for placeholder in ["00' 00' 00"] {
-                assert!(
-                    !said.iter().any(|t| t == placeholder),
-                    "{image} {key:?}: the authored placeholder {placeholder:?} is on screen: {said:?}"
-                );
-            }
+            assert!(
+                !said.iter().any(|t| t == "00' 00' 00"),
+                "{image} {key:?}: the authored placeholder is on screen: {said:?}"
+            );
             let records = said.iter().filter(|t| t.as_str() == "0.00.00").count();
             assert_eq!(records, 2, "{image} {key:?}: race and lap record: {said:?}");
         }

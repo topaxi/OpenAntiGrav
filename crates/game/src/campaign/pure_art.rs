@@ -200,7 +200,10 @@ pub struct Player {
     strings: StringTable,
     selection: (String, String),
     fills: Fills,
-    shown: Option<(Key, Slideshow)>,
+    /// The key last asked for, whether or not its art read: a key that failed
+    /// is not read again every tick.
+    asked: Option<Key>,
+    shown: Option<Slideshow>,
     sheet: Option<oag_hud::sprite::Sheet>,
     uploaded: bool,
     since: f32,
@@ -224,6 +227,7 @@ impl Player {
             strings,
             selection,
             fills,
+            asked: None,
             shown: None,
             sheet: None,
             uploaded: false,
@@ -235,11 +239,12 @@ impl Player {
     /// already shown; otherwise reads it (once the first time) and restarts its
     /// arrival. A key whose art will not read draws nothing and says why.
     pub fn show(&mut self, key: Option<Key>) {
-        if self.shown.as_ref().map(|(shown, _)| shown) == key.as_ref() {
+        if self.asked == key {
             return;
         }
         self.since = 0.0;
         self.shown = None;
+        self.asked.clone_from(&key);
         let Some(key) = key else {
             return;
         };
@@ -278,7 +283,7 @@ impl Player {
                         log::debug!("SINGLE PLAYER art: {line}");
                     }
                 }
-                self.shown = Some((key, art.show));
+                self.shown = Some(art.show);
             }
             Err(error) => {
                 log::warn!("SINGLE PLAYER art for {key:?}: {error:#} - nothing is drawn there")
@@ -300,11 +305,6 @@ impl Player {
         self.sheet.as_ref()
     }
 
-    /// Asks for the sheet again: the renderer was handed another meanwhile.
-    pub fn invalidate(&mut self) {
-        self.uploaded = false;
-    }
-
     fn placed(&self, src: &str) -> Option<oag_ui::frontend::Placed> {
         self.sheet.as_ref().unwrap_or(&self.base).get(src)
     }
@@ -313,7 +313,7 @@ impl Player {
     /// (the longest one its images carry), else [`FADE_SECONDS`].
     #[must_use]
     pub fn draws(&self) -> Vec<oag_ui::frontend::Draw> {
-        let Some((_, show)) = &self.shown else {
+        let Some(show) = &self.shown else {
             return Vec::new();
         };
         let authored = show
