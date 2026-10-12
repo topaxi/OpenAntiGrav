@@ -264,3 +264,87 @@ fn mag_floor_is_hoverable_and_wall_is_not() {
     assert!(!Surface::Wall.is_hoverable());
     assert!(!Surface::Reset.is_hoverable());
 }
+
+/// The linear scan the broadphase replaced, kept as the definition of the answer: every
+/// triangle in index order, the per-triangle box reject, then the narrowphase.
+fn scan(soup: &TriangleSoup, ray: Ray) -> Vec<(usize, RaycastHit)> {
+    let (p0, p1) = (ray.origin, ray.end());
+    let segment = Aabb::from_segment(p0, p1);
+    let mut hits = Vec::new();
+    for index in 0..soup.triangle_count() {
+        let [a, b, c] = soup.triangle(index).expect("in range");
+        let mut tri_box = Aabb::EMPTY;
+        for corner in [a, b, c] {
+            tri_box.expand(corner);
+        }
+        if !segment.overlaps(&tri_box) {
+            continue;
+        }
+        if let Some(hit) = segment_triangle(p0, p1, a, b, c) {
+            hits.push((
+                index,
+                RaycastHit {
+                    point: p0 + (p1 - p0) * hit.t,
+                    normal: hit.normal.normalize_or_zero(),
+                    distance: hit.t * ray.length,
+                    surface: soup.surface(),
+                    vertex_scalar: soup.triangle_scalar(soup.triangles[index]),
+                    collider: soup.collider(),
+                    triangle: Some([a, b, c]),
+                },
+            ));
+        }
+    }
+    hits
+}
+
+/// The broadphase changes which triangles are visited and nothing about what is reported:
+/// nearest hit, the ascending-index list, and the cut-off when the output is short, all
+/// bit-equal to the linear scan on a soup with coplanar overlaps and shared edges.
+#[test]
+fn the_broadphase_answers_exactly_as_the_linear_scan_does() {
+    let mut rng = oag_core::rng::Rng::new(7);
+    let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
+    let mut vertices = Vec::new();
+    let mut triangles = Vec::new();
+    for cell in 0..300u32 {
+        let base = [at(60.0), at(8.0), at(60.0)];
+        for _ in 0..3 {
+            vertices.push([base[0] + at(6.0), base[1] + at(1.0), base[2] + at(6.0)]);
+        }
+        triangles.push([cell * 3, cell * 3 + 1, cell * 3 + 2]);
+        // The same triangle again: two coplanar hits report twice.
+        if cell % 17 == 0 {
+            triangles.push([cell * 3, cell * 3 + 1, cell * 3 + 2]);
+        }
+    }
+    let soup = TriangleSoup::new(vertices, triangles, vec![0.5; 900], Surface::Wall, 3);
+
+    let mut compared = 0;
+    for _ in 0..2000 {
+        let origin = Vec3::new(at(60.0), at(10.0) + 4.0, at(60.0));
+        let direction = Vec3::new(at(2.0), at(2.0) - 1.0, at(2.0)).normalize_or_zero();
+        let ray = Ray::new(origin, direction, 3.0 + at(2.0).abs() * 10.0);
+        let expected = scan(&soup, ray);
+
+        let nearest = soup.raycast(ray, None, false);
+        let first = expected
+            .iter()
+            .fold(None, |best: Option<&RaycastHit>, (_, hit)| match best {
+                Some(b) if hit.distance >= b.distance => best,
+                _ => Some(hit),
+            });
+        assert_eq!(nearest.as_ref(), first);
+
+        for room in [1, 2, 8] {
+            let mut out = vec![None; room];
+            let found = soup.raycast_all(ray, None, false, &mut out);
+            assert_eq!(found, expected.len().min(room));
+            for (got, (_, want)) in out.iter().zip(&expected).take(found) {
+                assert_eq!(got.as_ref(), Some(want));
+            }
+        }
+        compared += usize::from(!expected.is_empty());
+    }
+    assert!(compared > 100, "only {compared} rays hit anything");
+}
