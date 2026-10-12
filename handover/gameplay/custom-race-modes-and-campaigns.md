@@ -139,6 +139,15 @@ and its HUD indicator (data plus the fallback assets) together. Cost: the simula
 (the observation struct, the return, the replay record), a deterministic `wasmtime` host behind a
 cargo feature that the simulation may depend on.
 
+**Engine choice (open, for the ADR; from memory, not re-verified 2026-10-12):** wasmtime's
+Cranelift is a JIT, which iOS forbids for ordinary apps and which cannot run inside our wasm32
+browser build. Candidates: **wasmi** (a pure-Rust interpreter built for deterministic execution;
+runs on iOS and compiles to wasm32 - one engine everywhere, so cross-platform determinism is one
+thing to prove, not two), or wasmtime's **Pulley** interpreter (no JIT, same API, less proven on
+iOS, not for wasm32). Recommended: wasmi everywhere behind a host trait; a JIT engine on desktop
+only later, and only if it matches bit for bit. The lane confirms crate status on iOS and wasm32
+before the ADR.
+
 ## Next Steps
 
 1. Refactor the lap modes into race rules as data, every existing hash unchanged.
