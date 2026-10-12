@@ -10,7 +10,7 @@
 //! campaign only, chosen by the game mode and never by a player setting.
 //!
 //! It writes the same controls a player's pad does and flies the same physics.
-//! The one exception is the rail ([`rail`]): a deterministic write to the
+//! The one exception is the rail ([`Rail`]): a deterministic write to the
 //! body's position and velocity, which the original makes every tick.
 //!
 //! Every tuning value is read from the disc at runtime ([`ClassRace`],

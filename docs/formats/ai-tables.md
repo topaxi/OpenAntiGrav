@@ -71,10 +71,10 @@ tests compare the typed records), with `SplitScreenMultiplier` and 2048's
 
 | Title | Verdict |
 | --- | --- |
-| Pulse (PSP USA/EU, PS2) | **ported**: both readers, ground truth on all three. |
-| HD / Fury | **checked, applies, not wired**: the readers parse the disc and PSN files to Pulse's own records (plus `SplitScreenMultiplier`, which HD reads with more than one local player). HD's thrust law differs from Pulse's in four places (the lane's thread); no HD consumer exists. |
-| 2048 | **checked, applies, not wired**: same, plus `SuperPhantomStats`. |
-| Omega | **checked, applies, not wired**: `data00` carries 2048's set unchanged; no Omega driver reads it. |
+| Pulse (PSP USA/EU, PS2) | **ported**: both readers, ground truth on all three. Read whole for the campaign's original opponent (`oag_ai::original`, 2026-10-12), which `oag_title::RaceDefaults::original_opponent` turns on for Pulse only; `original_ai_ground_truth.rs` holds it to the live capture. |
+| HD / Fury | **checked, applies, not wired**: the readers parse the disc and PSN files to Pulse's own records (plus `SplitScreenMultiplier`, which HD reads with more than one local player). HD's thrust law differs from Pulse's in four places (the lane's thread); no HD consumer exists. `oag_ai::original::Field` would run on HD's `ClassRace` unchanged, but HD's planner, steering and rail are unread, so `RaceDefaults::original_opponent` is `false` and a ground truth keeps HD's campaign on this project's driver. |
+| 2048 | **checked, applies, not wired**: same, plus `SuperPhantomStats`. The original driver could run on these tables as they read; 2048's own driver is unread, so `original_opponent` is `false`. |
+| Omega | **checked, applies, not wired**: `data00` carries 2048's set unchanged; no Omega driver reads it, and `original_opponent` is `false` (2048's verdict carries over). |
 | Pure | **checked, differs**: Pure's two files are the `_kart` family (`ControllerPO`, no `RaceBalancing`, `GridSpread`/`ZoningStats`/`FatigueStats`), a different schema these readers refuse by name. Reading it is a separate reader, [gameplay/ai.md](../gameplay/ai.md). |
 
 The combined `airacestats.xml` (HD `DATA02`, 2048, Omega: `ShipSpacingVariation`
