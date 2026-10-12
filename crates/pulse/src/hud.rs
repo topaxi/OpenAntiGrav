@@ -102,6 +102,23 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: true,
     kill_column: true,
     message_slots: true,
+    // Measured: `Hud_UpdateMessages` (`0x0881f148`), `Craft_UpdateLapProgress`
+    // (`0x08842a18`) and `Hud_UpdateTimeDiff` (`0x0881f890`), read 2026-10-12 -
+    // `docs/ghidra/functions/psp-pulse-usa/hud-message-triggers.md`.
+    lap_hud: Some(oag_title::lap_hud::LapHud {
+        perfect_lap: "IG_HUD_PLAP",
+        new_lap_record: "IG_HUD_NEWLAP_REC",
+        final_lap: "IG_HUD_FIN_LAP",
+        record_line_in_time_trial: true,
+        tint: oag_title::lap_hud::MessageTint::GoodBad,
+        gap: oag_title::lap_hud::SplitGapRule {
+            text: oag_title::lap_hud::GapText::Signed,
+            green_hold_needs_first_place: true,
+            count_up_alone_in_timed_modes: false,
+            splits_per_lap: 1,
+            table_crossings: 21,
+        },
+    }),
     runtime: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout

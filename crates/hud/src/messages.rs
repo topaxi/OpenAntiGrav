@@ -27,7 +27,8 @@
 //!   full in the first half second, then a long slow fade. The border follows.
 //! - Green (`0x30ff30`) for a good message, red (`0xff3030`) for a bad one -
 //!   `FUN_0881b52c`'s third argument, `1` for everything but `IG_HUD_CONT_ELIM`'s
-//!   second use.
+//!   second use. HD's `0x91d20` is the same; **Pure's drain has no such argument
+//!   and draws every line white** ([`MessageTint`], set per title).
 //! - The original also plays the `MESSAGE` cue as it shows. **Not played here**:
 //!   nothing in this crate reaches a mixer, and [`MessageBoard::advance`]
 //!   reports a show through [`MessageBoard::just_shown`] so the host can.
@@ -35,6 +36,7 @@
 //! Which tick a message is raised on is the host's business, and the one trigger
 //! this build raises - a medal earned mid-race - is **chosen, not measured**.
 
+use oag_title::lap_hud::MessageTint;
 use oag_ui::screen::argb_to_rgba;
 
 /// How many lines the HUD holds at once: `Info1` to `Info4`.
@@ -71,8 +73,11 @@ pub(super) fn colour(readout: &super::Readout, name: &str) -> Option<[f32; 4]> {
 /// (`FUN_088cd3a4`); every other widget keeps `border` as it was.
 #[must_use]
 pub(super) fn fade_border(readout: &super::Readout, name: &str, border: [f32; 4]) -> [f32; 4] {
-    match colour(readout, name) {
-        Some(color) => [border[0], border[1], border[2], border[3] * color[3]],
+    let line = slot_of(name)
+        .and_then(|slot| readout.messages[slot].as_ref())
+        .filter(|line| !line.authored && line.fades_border);
+    match line {
+        Some(line) => [border[0], border[1], border[2], border[3] * line.color[3]],
         None => border,
     }
 }
@@ -94,6 +99,10 @@ pub struct MessageLine {
     /// [`Self::color`] - the standing line, which says its tier in words and
     /// needs no colour of its own.
     pub authored: bool,
+    /// Whether the outline's alpha follows the text's. Pulse and HD do
+    /// (`FUN_088cd3a4`); Pure's drain writes the text colour alone, so the
+    /// outline stays as the layout authors it.
+    pub fades_border: bool,
 }
 
 /// What the HUD shows of the board this frame: one entry per slot.
@@ -114,6 +123,7 @@ pub struct MessageBoard {
     gate: f32,
     shown: bool,
     standing: Option<Standing>,
+    tint: MessageTint,
 }
 
 /// A line that stays for the rest of the race, in the last slot.
@@ -137,6 +147,7 @@ impl Default for MessageBoard {
             gate: -1.0,
             shown: false,
             standing: None,
+            tint: MessageTint::GoodBad,
         }
     }
 }
@@ -166,6 +177,12 @@ impl MessageBoard {
     /// colour for the widget, not the green of a banner.
     pub fn set_standing(&mut self, id: impl Into<String>) {
         self.standing = Some(Standing { text: id.into() });
+    }
+
+    /// How this title tints a line: Pulse and HD green or red, Pure white. See
+    /// [`MessageTint`].
+    pub fn set_tint(&mut self, tint: MessageTint) {
+        self.tint = tint;
     }
 
     /// Whether a message started showing on the last [`Self::advance`] - the
@@ -211,12 +228,16 @@ impl MessageBoard {
             let ratio = (left / LIFE_SECONDS).clamp(0.0, 1.0);
             let ramp = (1.0 - ratio.powi(6)).max(0.0);
             let alpha = (ramp * std::f32::consts::PI).sin().max(0.0);
-            let mut color = argb_to_rgba(if held.good { GOOD } else { BAD });
+            let mut color = match self.tint {
+                MessageTint::GoodBad => argb_to_rgba(if held.good { GOOD } else { BAD }),
+                MessageTint::White => [1.0; 4],
+            };
             color[3] = alpha;
             *line = Some(MessageLine {
                 text: held.text.clone(),
                 color,
                 authored: false,
+                fades_border: self.tint == MessageTint::GoodBad,
             });
         }
         // Not while the same words are already up as a banner: the line would
@@ -229,6 +250,7 @@ impl MessageBoard {
                 text: standing.text.clone(),
                 color: [1.0; 4],
                 authored: true,
+                fades_border: false,
             });
         }
         out

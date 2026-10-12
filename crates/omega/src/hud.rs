@@ -95,6 +95,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: true,
+    lap_hud: None,
     runtime: Some(RUNTIME),
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,

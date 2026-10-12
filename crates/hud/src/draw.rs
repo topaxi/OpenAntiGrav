@@ -283,7 +283,10 @@ pub(super) fn text_for(
             .and_then(|line| strings.get(&line.text).map(str::to_string)),
 
         // The lap-line time gap - see [`super::time_gap`].
-        "TimeDiffText" => readout.time_gap.as_ref().map(|line| line.text.clone()),
+        "TimeDiffText" => readout
+            .time_gap
+            .as_ref()
+            .and_then(|line| line.text(strings)),
 
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {

@@ -201,6 +201,7 @@ static HD_ART: oag_title::HudArt = oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: false,
+    lap_hud: None,
     runtime: None,
     assist: None,
 };
@@ -272,6 +273,7 @@ static HD_LEACH_ART: oag_title::HudArt = oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: false,
+    lap_hud: None,
     runtime: None,
     assist: None,
 };
@@ -977,6 +979,7 @@ fn an_unread_sight_dialect_draws_nothing() {
         total_time_timed_modes_only: false,
         kill_column: false,
         message_slots: false,
+        lap_hud: None,
         runtime: None,
         assist: None,
     };

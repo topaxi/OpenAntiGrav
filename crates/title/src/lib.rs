@@ -47,6 +47,7 @@ pub mod flare;
 pub mod hover_rig;
 pub mod hud;
 pub mod language;
+pub mod lap_hud;
 pub mod launch_hover;
 pub mod loading;
 pub mod main_menu;

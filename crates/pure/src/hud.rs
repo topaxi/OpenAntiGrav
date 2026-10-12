@@ -168,6 +168,28 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: true,
+    // Measured: `FUN_0881f2ec` (`0x0881f2ec`, the message drain), the lap writers
+    // at `0x08927bf4`/`0x08927c50`/`0x08927d68` and `FUN_0881f780` (the gap),
+    // read 2026-10-12 - `docs/ghidra/functions/psp-pure-usa/hud-message-triggers.md`.
+    // Pure keys its phrases `HUD_<English>`, draws every line white, words the
+    // gap as a sentence, and its split table holds six crossings.
+    lap_hud: Some(oag_title::lap_hud::LapHud {
+        perfect_lap: "HUD_Perfect Lap!",
+        new_lap_record: "HUD_New Lap Record",
+        final_lap: "HUD_Final Lap!",
+        record_line_in_time_trial: true,
+        tint: oag_title::lap_hud::MessageTint::White,
+        gap: oag_title::lap_hud::SplitGapRule {
+            text: oag_title::lap_hud::GapText::Phrases {
+                ahead: "HUD_You are %.1f secs ahead",
+                behind: "HUD_You are %.1f secs behind",
+            },
+            green_hold_needs_first_place: false,
+            count_up_alone_in_timed_modes: false,
+            splits_per_lap: 1,
+            table_crossings: 6,
+        },
+    }),
     runtime: None,
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout

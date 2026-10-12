@@ -170,6 +170,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: false,
+    lap_hud: None,
     runtime: None,
     assist: None,
 };
