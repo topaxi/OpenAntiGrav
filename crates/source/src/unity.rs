@@ -203,7 +203,7 @@ mod tests {
         std::fs::write(base.join("tracks/mine.track.toml"), b"x").unwrap();
         std::fs::write(base.join("tracks/mine.glb"), b"x").unwrap();
         std::fs::write(base.join("deep/er/still/too_deep.wtrk"), b"x").unwrap();
-        let found = tracks_in(&[base.clone()]);
+        let found = tracks_in(std::slice::from_ref(&base));
         assert_eq!(
             found,
             [
@@ -212,7 +212,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            resolve_in(&[base.clone()], "MINE"),
+            resolve_in(std::slice::from_ref(&base), "MINE"),
             Some(base.join("tracks/mine.track.toml"))
         );
         // The base is the content directory itself: one level down.
