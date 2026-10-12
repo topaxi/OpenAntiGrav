@@ -23,20 +23,17 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **Floors still in use** (plans holding a ceiling at or under 20 u/s): Pulse
   `07_Track` VENOM (2141, 2144-2145, 2375), HD `04_Track` PHANTOM (2307), Pure
   Citta Nuova VENOM (1493). The trough plan does not win there.
-- **Pulse `06_Track` RAPIER: tried 2026-10-12 (lane `ai-rapier`), not
-  adopted.** Cause measured: the 0.968 Ace takes speed pad 4 at sample 729,
-  which the plan lap misses, and reaches the corner at 779 at 171 against 155
-  u/s. Hardening the trough plan at a 0.96 share fixes the row (1728 ticks, 0
-  contact, everything else on Pulse, HD and Pure bit-identical), but flips 2048
-  `cathedral` PHANTOM onto a plan where the Ace's barrel-roll payout sends it
-  into a wall at sample 223 and it is destroyed. Numbers and the driver-side
-  attempts are on ai.md, "Where only the trough plan verifies". The code is on
-  local branch `ai-rapier-harden-attempt` (`adb9bab82`). Ways forward, each the
-  maintainer's call:
-  - Ship it anyway, taking the `cathedral` PHANTOM loss (and Omega's, which
-    re-ships it; not measured).
-  - Make a roll plan-aware first, for example no roll on a flight whose
-    landing the plan lap took far slower, then re-run the 2048 matrix.
+- **2048 `cathedral` PHANTOM (forward): destroyed on the hardened trough
+  plan, accepted.** Pulse `06_Track` RAPIER is closed: the hardened trough plan
+  was adopted on the maintainer's decision of 2026-10-12 (lone Ace 38.35 to
+  28.80 s, 65 to 0 contact; Pulse, Pure and HD otherwise byte-identical). The
+  same change flips `cathedral` PHANTOM onto a plan where the Ace's barrel-roll
+  payout sends it into the wall at sample 223: lone Ace 4 laps at 51.80 s to 0
+  laps, destroyed; field of seven destroyed 3 to 5. Omega's `cathedral` is
+  unaffected (its whole-window plan verifies). Numbers on ai.md, "Where only
+  the trough plan verifies". Ways to win it back:
+  - Make a roll plan-aware, for example no roll on a flight whose landing the
+    plan lap took far slower, then re-run the 2048 matrix.
   - Fix the rescue gap below, then re-measure `cathedral`.
 - **No rescue for a craft grinding a wall at about 1 unit/s.** On the hardened
   `cathedral` PHANTOM plan the lone Ace sat against the wall at sample 223 for
@@ -52,8 +49,10 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
 - **Pulse `07_Track` VENOM**: a pad at the hairpin exit (around 2180) throws
   the craft from 40 to 90 u/s into the wall at 2185. It keeps the old plan
   with its 16 u/s floors.
-- **Omega**: not measured. A lone slice did not load Omega's layouts inside
-  500 s. It re-ships 2048's circuits, so `sol` is the first thing to check
+- **Omega**: loads now (2026-10-12: `OAG_SWEEP_TITLE=omega
+  OAG_SWEEP_ONLY=cathedral`, about 15 s a slice), but its pace was not
+  measured against gold. A full forward lone slice runs 10-17 minutes under
+  load. It re-ships 2048's circuits, so `sol` is the first thing to check
   there.
 - **Elite (the default)** costs 7.5 % of the Ace's lone lap on `07_Track` and
   `23_Track`, against 1-2 % elsewhere. A design question, not a defect.
@@ -66,7 +65,5 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
    place a craft in front of a reset volume it cannot clear from standstill.
    About 2 hours.
 2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
-3. `06_Track` RAPIER: **decided 2026-10-12 (maintainer): adopt the hardened trough plan**
-   (`ai-rapier-harden-attempt`, `adb9bab82`), taking the 2048 `cathedral` PHANTOM loss. Rebase
-   it onto current `main`, re-measure, and record the `cathedral` (and Omega) result as the
-   accepted behaviour change.
+3. `cathedral` PHANTOM: a plan-aware roll or the rescue gap, then re-run
+   the 2048 lone and field PHANTOM slices. About 2 hours.
