@@ -126,3 +126,16 @@ that isolates the strip (on/off frames diverge in sim state, trails are near-whi
 
 1. ~~Build the strip~~ - done 2026-10-08, see the section above.
 2. Add the ghost-static axis to `Title` so HD stops asking.
+3. **Get a held LeachBeam on RPCS3 with a rival in range** (maintainer's idea, 2026-10-12; not queued as a
+   lane). `hd-leach-render` fired state 10 twice from the grid but started 8th with no rival in lock range,
+   so no beam formed. Two ways, in this order:
+   - **Single player plus a teleport (preferred, for pictures):** grant the LeachBeam
+     (`scripts/rpcs3-hd-weapon.py`), write the player's position into memory right behind an AI craft, fire.
+     The viewport and chase camera stay the race's own, so the matched frame pair (open item 2 of
+     `hd-leach-render`) and the chase-camera eye distance (13.8-15.3 against ours 7.7) can be read from it.
+     Whether a placement helper exists for HD was not checked.
+   - **Split screen (fallback, for logic only):** both craft are the maintainer's to place, so player 2
+     parks in lock range ahead of player 1. Read world-space data only - the strip's 300 samples, state 10
+     and its timer, the held duration (about 2.6 s, then state 6) and the wobble's phase reset. Do **not**
+     compare pixels off it: each half has its own aspect and field of view, HD may move the chase camera or
+     cut effects in split screen, and this port has no split screen to match.
