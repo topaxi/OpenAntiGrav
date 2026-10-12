@@ -130,7 +130,15 @@ events as **campaign cells** through one path, record medals in `[[campaign]]` a
 state: HUD widgets (first candidate: a mini-map or a lap-delta graph, computed from values the race
 already publishes). No cross-engine determinism, NaN rule or conformance test is needed yet, a mod
 cannot change a race's outcome, and the host trait and the three engines (below) are proven on
-low-stakes code. **Phase 2: the simulation hook**, proven with Pilot Assist as below.
+low-stakes code. **Phase 2: the simulation hook**, proven with Pilot Assist as below, **with a second restriction**
+(maintainer, 2026-10-12): a mod that touches the simulation (its manifest declares
+`simulation = true`; loading a simulation-hook module without it is refused) marks the session
+**modded** - no multiplayer (host or join refused, naming the mod), no ghosts or replays recorded
+or played back, records kept in a separate modded table, and the HUD/MODS page show MODDED. The
+Pilot Assist proof is unaffected (its bit-identical hashes are ground-truth tests, not player
+recordings). **Phase 3 (later) lifts that**: each simulation mod's id, version and module hash go
+into the replay header and the multiplayer lobby, so a replay plays back only with the identical
+module and a lobby admits only identical modules - once the cross-engine conformance test holds.
 
 ## Phase 2's first candidate: Pilot Assist on Pulse and Pure (2026-10-12)
 
