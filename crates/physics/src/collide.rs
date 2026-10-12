@@ -6,6 +6,9 @@
 //! segment hit": in tests a hand-written triangle, in a race the track's collision soup.
 //! Evidence: `docs/ghidra/functions/psp-pulse-usa/collision.md`.
 
+mod bvh;
+
+use bvh::Bvh;
 use oag_core::math::Vec3;
 
 /// What kind of surface a collider is.
@@ -311,11 +314,15 @@ pub fn segment_triangle(
 /// arrives as plain `Vec`s because the decoder lives in `oag-formats`, which this crate must
 /// not depend on; conversion is the integration layer's job.
 ///
-/// # No broadphase yet
+/// # Broadphase
 ///
-/// [`Raycaster::raycast`] does a box reject then a **linear scan over every triangle**:
-/// correct, and not the bottleneck. A hard limit inherited from the data, worth knowing before
-/// anyone implements it: both levels of the original's sweep and prune pack an endpoint into
+/// [`Raycaster::raycast`] rejects on the collider's box, then walks a bounding-volume
+/// hierarchy ([`bvh`]) to the triangles whose own box the segment's box overlaps, and runs the
+/// narrowphase on those in ascending triangle index. That is the linear scan's answer
+/// exactly: the same candidates in the same order, only without visiting the rest. (The
+/// scan was the whole cost of a race's tick once the field grew to eight craft.) A hard limit
+/// inherited from the data, worth knowing before anyone mirrors the original's own sweep and
+/// prune: both levels pack an endpoint into
 /// 22 bits (`bits[0:11] = ((int)coord + 0x400) * 2`, `bits[12:21] = objectId`), which
 /// **quantises coordinates to 1 unit over roughly +/-1024 and caps ids at 1024 per list**,
 /// though the format's `u16` triangle count permits more.
@@ -327,6 +334,7 @@ pub struct TriangleSoup {
     surface: Surface,
     collider: u32,
     bounds: Aabb,
+    broadphase: Bvh,
 }
 
 impl TriangleSoup {
@@ -357,6 +365,17 @@ impl TriangleSoup {
             bounds.expand(*vertex);
         }
 
+        let boxes = triangles
+            .iter()
+            .map(|tri| {
+                let mut b = Aabb::EMPTY;
+                for corner in tri {
+                    b.expand(vertices[*corner as usize]);
+                }
+                b
+            })
+            .collect();
+
         Self {
             vertices,
             triangles,
@@ -364,6 +383,7 @@ impl TriangleSoup {
             surface,
             collider,
             bounds,
+            broadphase: Bvh::build(boxes),
         }
     }
 
@@ -405,6 +425,16 @@ impl TriangleSoup {
         self.bounds
     }
 
+    /// One triangle's corners by index into `triangles`, which the broadphase hands out.
+    fn corners(&self, index: u32) -> [Vec3; 3] {
+        let [a, b, c] = self.triangles[index as usize];
+        [
+            self.vertices[a as usize],
+            self.vertices[b as usize],
+            self.vertices[c as usize],
+        ]
+    }
+
     /// Mean of a triangle's three per-vertex scalars, `1.0` when the mesh carries no chunk 3
     /// (as the original). Summed left to right and divided once, so the operation order is
     /// fixed.
@@ -441,50 +471,36 @@ impl Raycaster for TriangleSoup {
             return None;
         }
 
-        let mut nearest: Option<(f32, RaycastHit)> = None;
-
-        for tri in &self.triangles {
-            let a = self.vertices[tri[0] as usize];
-            let b = self.vertices[tri[1] as usize];
-            let c = self.vertices[tri[2] as usize];
-
-            // The same box reject per triangle. The original reaches this through two slab
-            // rejects and a per-mesh sweep and prune; both are acceleration only.
-            let mut box_of_tri = Aabb::EMPTY;
-            box_of_tri.expand(a);
-            box_of_tri.expand(b);
-            box_of_tri.expand(c);
-            if !segment.overlaps(&box_of_tri) {
-                continue;
-            }
-
+        // The scan's rule is "first strictly nearer in ascending index", which is the lowest
+        // index among the equally near; the BVH visits in tree order, so say that outright.
+        let mut nearest: Option<(f32, u32)> = None;
+        self.broadphase.visit(&segment, |index| {
+            let [a, b, c] = self.corners(index);
             let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
-                continue;
+                return;
             };
-
             let nearer = match nearest {
-                Some((t, _)) => hit.t < t,
+                Some((t, at)) => hit.t < t || (hit.t == t && index < at),
                 None => true,
             };
-            if !nearer {
-                continue;
+            if nearer {
+                nearest = Some((hit.t, index));
             }
+        });
 
-            nearest = Some((
-                hit.t,
-                RaycastHit {
-                    point: p0 + (p1 - p0) * hit.t,
-                    normal: hit.normal.normalize_or_zero(),
-                    distance: hit.t * ray.length,
-                    surface: self.surface,
-                    vertex_scalar: self.triangle_scalar(*tri),
-                    collider: self.collider,
-                    triangle: Some([a, b, c]),
-                },
-            ));
-        }
-
-        nearest.map(|(_, hit)| hit)
+        nearest.map(|(_, index)| {
+            let [a, b, c] = self.corners(index);
+            let hit = segment_triangle(p0, p1, a, b, c).expect("it hit a moment ago");
+            RaycastHit {
+                point: p0 + (p1 - p0) * hit.t,
+                normal: hit.normal.normalize_or_zero(),
+                distance: hit.t * ray.length,
+                surface: self.surface,
+                vertex_scalar: self.triangle_scalar(self.triangles[index as usize]),
+                collider: self.collider,
+                triangle: Some([a, b, c]),
+            }
+        })
     }
 
     /// Every triangle the segment crosses, in **ascending triangle index**: the order
@@ -513,24 +529,16 @@ impl Raycaster for TriangleSoup {
             return 0;
         }
 
+        let mut candidates = Vec::new();
+        self.broadphase.visit(&segment, |index| candidates.push(index));
+        candidates.sort_unstable();
+
         let mut found = 0;
-        for tri in &self.triangles {
+        for index in candidates {
             if found == out.len() {
                 break;
             }
-
-            let a = self.vertices[tri[0] as usize];
-            let b = self.vertices[tri[1] as usize];
-            let c = self.vertices[tri[2] as usize];
-
-            let mut box_of_tri = Aabb::EMPTY;
-            box_of_tri.expand(a);
-            box_of_tri.expand(b);
-            box_of_tri.expand(c);
-            if !segment.overlaps(&box_of_tri) {
-                continue;
-            }
-
+            let [a, b, c] = self.corners(index);
             let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
                 continue;
             };
@@ -540,7 +548,7 @@ impl Raycaster for TriangleSoup {
                 normal: hit.normal.normalize_or_zero(),
                 distance: hit.t * ray.length,
                 surface: self.surface,
-                vertex_scalar: self.triangle_scalar(*tri),
+                vertex_scalar: self.triangle_scalar(self.triangles[index as usize]),
                 collider: self.collider,
                 triangle: Some([a, b, c]),
             });
