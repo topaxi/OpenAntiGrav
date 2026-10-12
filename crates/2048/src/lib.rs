@@ -166,6 +166,7 @@ pub const TITLE: &Title = &Title {
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,
+        list_entry: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
         // Not wired, not measured absent: 2048's unlock rows are unread here.
