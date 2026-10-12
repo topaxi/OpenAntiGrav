@@ -227,7 +227,8 @@ pub struct Report {
     pub light_cone_bound: usize,
     /// HD holographic billboards whose three textures were bound, and the
     /// materials of the family left on the generic emissive reading: one whose
-    /// program is the parameter-driven shape, or whose texture did not decode.
+    /// program is another one (`scanlinebillboard*`), or whose texture did not
+    /// decode.
     /// See `super::holo_billboard`.
     pub holo_billboard_bound: usize,
     /// See [`Self::holo_billboard_bound`].
@@ -385,7 +386,7 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} holographic billboard material(s) left on the generic emissive reading \
-                 (parameter-driven program or an unreadable texture)"
+                 (another program, such as `scanlinebillboard`, or an unreadable texture)"
             ),
         } + &match self.light_cone_bound {
             0 => String::new(),

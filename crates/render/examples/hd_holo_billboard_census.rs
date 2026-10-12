@@ -93,13 +93,24 @@ fn main() -> anyhow::Result<()> {
                         .find(|(h, _)| *h == hash)
                         .and_then(|(_, p)| p.clone())
                 };
+                let params: Vec<String> = [0x088b_2c6a_u32, 0x4f2a_ef81, 0xef6e_4697]
+                    .iter()
+                    .map(|h| {
+                        material
+                            .parameters
+                            .iter()
+                            .find(|p| p.hash == *h)
+                            .map_or("-".to_string(), |p| format!("{}", p.value[0]))
+                    })
+                    .collect();
                 println!(
-                    "{path} slot {slot} {} frag@{:#x} n={} interp={:#x} lit [{}] advert {:?} scan {:?} second {:?} bound-albedo {:?}",
+                    "{path} slot {slot} {} frag@{:#x} n={} interp={:#x} lit [{}] params [{}] advert {:?} scan {:?} second {:?} bound-albedo {:?}",
                     material.name.rsplit('/').next().unwrap_or(""),
                     variant.fragment.offset,
                     program.instructions.len(),
                     program.interpolators(),
                     literals.join(" "),
+                    params.join(" "),
                     path_of(ADVERT),
                     path_of(SCANLINES),
                     path_of(SECOND),

@@ -558,7 +558,13 @@ def fp_code(raw: bytes, start: int, code_len: int, patches: dict) -> None:
             tail = f" [const@slot {slot + 1:#x}{named}]"
         end = " END" if d0 & 1 else ""
         cond = fp_cond(d1)
-        print(f"@{slot:#04x}  {name}{sat}{scale} {half}{out_reg}{wm}, {ops}{unit}{tail}{cond}{end}")
+        # Dword 0 bit 8: the instruction updates the condition register (the
+        # one a later `[NE(xyzx)]` tests). Which instruction wrote it is what
+        # tells a predicate's source: on `02_track`'s holographic billboard it
+        # is the unit-2 `TEX`, not the `FENCT`. Confidence 65 for a `TEX`,
+        # where the upper bits are unverified (see `fp_cond`).
+        writes_cc = " [writes cc]" if d0 & (1 << 8) else ""
+        print(f"@{slot:#04x}  {name}{sat}{scale} {half}{out_reg}{wm}, {ops}{unit}{tail}{writes_cc}{cond}{end}")
         pos += 32 if const is not None else 16
         if d0 & 1:
             break

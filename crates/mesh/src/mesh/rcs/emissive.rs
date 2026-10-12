@@ -296,9 +296,8 @@ pub(super) fn emissive(
         //   is per material and this replays it;
         // - it declares `time` but authors neither
         //   (`scanlinebillboard`, `scroller_glow_v3`, `pipefx_v2`; and
-        //   `nr_billboardholographicscanlines` off Amphiseum's file - Modesto
-        //   Heights' shape keeps its rates in material parameters this key does
-        //   not name) - its
+        //   `nr_`/`wes_billboardholographicscanlines`, whose three shapes
+        //   `holo_billboard` takes before this runs) - its
         //   coordinate constants are the shader's own **inline literals**,
         //   which live in the code rather than in the material record and
         //   which this reading has not recovered;

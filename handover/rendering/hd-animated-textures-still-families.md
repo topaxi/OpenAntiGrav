@@ -20,8 +20,8 @@ coordinate". `crates/render/examples/hd_anim_family_census.rs` lists every famil
   `mr_uvanim_em_*`, `cf_waterfall`, `dc_hologramwithstatic2`); shader-literal
   rates (`nr_twinblend`, `reflectplane_dc_seawater`, `cf_chenghou_sign`,
   `sign_emissive_glow2uv`) - readable from the microcode, not read; fragment-only
-  `time` (`nr_crowd_bustle` 33, `nr_billboardholographicscanlines` 35 - Amphiseum's inline-literal shape is read and wired, 2026-10-12, the parameter-driven one is not,
-  `scanlinebillboard*`, `uvdistortion_*`, `water`).
+  `time` (`nr_crowd_bustle` 33, `nr_billboardholographicscanlines` 35 - all three shapes of `nr_`/`wes_` are read and wired, 2026-10-12; `scanlinebillboard*` is another program (extra parameters, a tint), still unread,
+  `uvdistortion_*`, `water`).
 - The admitted set is a rate-hash table read off the vertex microcode by
   `scripts/ps3-microcode.py`, not a Rust microcode decode. A Rust read of
   `o[TCn] = MAD(time, rate, v[2])` in `oag_rcs::rcsmaterial::vertex` would admit
