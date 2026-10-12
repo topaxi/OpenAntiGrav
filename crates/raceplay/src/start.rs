@@ -447,6 +447,7 @@ impl Race {
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
+                plan_reference: None,
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.

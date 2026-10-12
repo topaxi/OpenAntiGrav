@@ -32,6 +32,22 @@ impl Race {
         })
     }
 
+    /// The plan for the **player's** craft, driven from slot 1's grid pose: the
+    /// first candidate [`Self::field_speed_plan`] learns on, and what the speed
+    /// plan ground truth asks of every layout.
+    #[must_use]
+    pub fn build_player_speed_plan(&self) -> (oag_ai::SpeedPlan, oag_ai::plan::Report) {
+        let player = self.sim.world.ships[0].handling;
+        self.with_plan_course_on(
+            &self.sim.racing_line,
+            &self.sim.ai_order,
+            1,
+            None,
+            Some(player),
+            |course, craft| oag_ai::SpeedPlan::build(course, craft, &oag_ai::Tuning::default()),
+        )
+    }
+
     /// Drives slot `slot`'s craft from the grid at a speed held to `speed`,
     /// with the plan's own steering, logging every tick. A diagnostic: see
     /// `oag_ai::plan::probe`.
@@ -53,7 +69,14 @@ impl Race {
         slot: usize,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
-        self.with_plan_course_on(&self.sim.racing_line, &self.sim.ai_order, slot, None, f)
+        self.with_plan_course_on(
+            &self.sim.racing_line,
+            &self.sim.ai_order,
+            slot,
+            None,
+            None,
+            f,
+        )
     }
 
     /// The same on any line and its sample order - the ring's or a route's
@@ -66,6 +89,7 @@ impl Race {
         order: &[u32],
         slot: usize,
         start: Option<usize>,
+        flown_by: Option<oag_physics::Handling>,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
         let sample_at = |index: usize| {
@@ -76,7 +100,11 @@ impl Race {
         let samples: Vec<Option<oag_physics::TrackSample>> = (0..line.len())
             .map(|index| sample_at(index).map(Spline::track_sample))
             .collect();
-        let ship = &self.sim.world.ships[slot];
+        let mut flown = self.sim.world.ships[slot];
+        if let Some(handling) = flown_by {
+            flown.handling = handling;
+        }
+        let ship = &flown;
         // The race's own rescue pose: the racing line at spawn height, the
         // whole physics state reset. See `Race::respawn`.
         let respawn = |index: usize| {
@@ -149,35 +177,76 @@ impl Race {
 
     /// The plan the field drives, or `None`.
     ///
-    /// Built from slot 1, the first opponent: every opponent flies the same
-    /// handling (`Race::start` seats them all with it), so one plan serves the
-    /// grid. **Only a plan that verified clean is used** - two laps from the
-    /// grid with no wall touched and no rescue - so a layout the search could
-    /// not solve keeps the corner model it drove before, rather than a plan
-    /// known to put the craft into a wall. `05_Track` is the standing case;
-    /// `speed_plan_ground_truth.rs` names all of them.
-    pub(super) fn field_speed_plan(&self) -> Option<oag_ai::SpeedPlan> {
+    /// **Learned on one craft and followed by all.** The reference is the
+    /// player's craft where its plan verifies clean (two laps from the grid with
+    /// no wall touched and no rescue), else the AI slot with the most agile hull
+    /// (`oag_ai::hull_yaw_ceiling`, highest first, slot order breaking a tie)
+    /// whose plan does; a layout none of them solves keeps the corner model it
+    /// drove before, rather than a plan known to put the craft into a wall.
+    /// `05_Track` is the standing case; `speed_plan_ground_truth.rs` names all
+    /// of them. Every opponent flies its own team's handling, and a hull that
+    /// turns slower than the reference follows the plan at the ratio of the two
+    /// yaw ceilings ([`oag_ai::Driver::plan_deficit`]); one that turns as well or
+    /// better follows it as learned. A plan learned per craft was tried and left
+    /// the slowest-turning hulls unverifiable on jumps. **Chosen, not measured.**
+    pub(super) fn field_speed_plan(&mut self) -> Option<oag_ai::SpeedPlan> {
         if self.sim.world.ship_count < 2 || self.sim.racing_line.len() < 3 {
             return None;
         }
-        let (plan, report) = self.build_speed_plan(1);
-        let clean = report.verify_failures == 0 && report.verify_respawns == 0;
-        info!(
-            "ai speed plan: {} steps, lap {:?} ticks, {} unresolved, {} of {} samples tight, \
-             verification {} - {}",
-            report.steps,
-            report.verify_lap_ticks,
-            report.unresolved.len(),
-            plan.tight_samples(),
-            plan.len(),
-            if clean { "clean" } else { "not clean" },
-            if clean {
-                "followed"
-            } else {
-                "not used, corner model instead"
+        let yaw = |race: &Self, slot: usize| {
+            let ship = &race.sim.world.ships[slot];
+            oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)
+        };
+        let mut candidates: Vec<usize> = vec![0];
+        let mut opponents: Vec<usize> = (1..usize::from(self.sim.world.ship_count))
+            .filter(|&slot| self.sim.world.ships[slot].active)
+            .collect();
+        opponents.sort_by(|&a, &b| yaw(self, b).total_cmp(&yaw(self, a)).then(a.cmp(&b)));
+        candidates.extend(opponents);
+        let mut tried: Vec<oag_physics::Handling> = Vec::new();
+        for slot in candidates {
+            let reference = self.sim.world.ships[slot].handling;
+            if tried.contains(&reference) {
+                continue;
             }
-        );
-        clean.then_some(plan)
+            tried.push(reference);
+            let (plan, report) = self.with_plan_course_on(
+                &self.sim.racing_line,
+                &self.sim.ai_order,
+                1,
+                None,
+                Some(reference),
+                |course, craft| oag_ai::SpeedPlan::build(course, craft, &oag_ai::Tuning::default()),
+            );
+            let clean = report.verify_failures == 0 && report.verify_respawns == 0;
+            info!(
+                "ai speed plan (learned on slot {slot}): {} steps, lap {:?} ticks, {} unresolved, \
+                 {} of {} samples tight, verification {} - {}",
+                report.steps,
+                report.verify_lap_ticks,
+                report.unresolved.len(),
+                plan.tight_samples(),
+                plan.len(),
+                if clean { "clean" } else { "not clean" },
+                if clean {
+                    "followed"
+                } else {
+                    "not used, next candidate"
+                }
+            );
+            if !clean {
+                continue;
+            }
+            self.sim.plan_reference = Some(reference);
+            let reference_yaw = yaw(self, slot);
+            for opponent in 1..usize::from(self.sim.world.ship_count) {
+                let ratio = (yaw(self, opponent) / reference_yaw).min(1.0);
+                let deficit = ((1.0 - ratio) * 1000.0).round().clamp(0.0, 1000.0);
+                self.sim.world.ships[opponent].driver.plan_deficit = deficit as u16;
+            }
+            return Some(plan);
+        }
+        None
     }
 
     /// One plan per route (`crate::routes`), built and verified the way the
@@ -209,6 +278,7 @@ impl Race {
                     &route.order,
                     1,
                     Some(start),
+                    self.sim.plan_reference,
                     |c, craft| {
                         oag_ai::SpeedPlan::build_within(
                             c,

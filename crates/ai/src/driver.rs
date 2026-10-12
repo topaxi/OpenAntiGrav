@@ -148,6 +148,12 @@ pub struct Driver {
     pub roll_decided: bool,
     /// Which line it is on and what it decided at the last fork: [`crate::branch`].
     pub branching: crate::branch::Branching,
+    /// How much slower than the speed plan this craft's hull must drive it, in
+    /// thousandths: the plan is learned on one craft and the rest of the grid
+    /// follows it at `1 - plan_deficit / 1000` of its speed. Zero is the plan
+    /// as learned. Integer for [`Self::provocation`]'s reason, and derived from
+    /// the handling like it, so not hashed. **Chosen, not measured.**
+    pub plan_deficit: u16,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -305,14 +311,16 @@ impl Driver {
         // less grip.
         let followed = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match followed {
-            Some(plan) => planned::target(
-                plan,
-                index,
-                speed,
-                tuning,
-                &personality,
-                line.takeoff_within(index, planned::RUN_UP_REACH),
-            ),
+            Some(plan) => {
+                planned::target(
+                    plan,
+                    index,
+                    speed,
+                    tuning,
+                    &personality,
+                    line.takeoff_within(index, planned::RUN_UP_REACH),
+                ) * (1.0 - f32::from(self.plan_deficit) / 1000.0)
+            }
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.
