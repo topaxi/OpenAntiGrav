@@ -20,6 +20,16 @@ resolved with `scripts/ps3-toc.py resolve <function> -0x<disp>` and reads
 | `0x000e7760` | `Ship_ApplyDamage_q` | (existing) | Raises `CONT_ELIM`'s two bits. Not renamed here. |
 | `0x001e25c0` | (HD's `Cell_EvaluateMedal`) | (existing) | See [race-campaign.md](race-campaign.md). Called from the Speed Lap medal block below. |
 
+## Which modes: ids 5 and 10
+
+`GameState+0xe0` is the mode ([mode-manager.md](mode-manager.md#the-mode-enum-22-ids-eleven-of-them-named)).
+Ids `5` and `10` both construct `SPTimeTrial` there, and the campaign cell's own
+ordinals (`cell+0x110`, [race-campaign.md](race-campaign.md)) number `Zone` as `6`,
+the lineage's numbering that Pulse's `g_game_mode` uses (Time Trial `5`, Speed Lap
+`10`, Zone `6`). So `5` is Time Trial and `10` Speed Lap here too (80): two ids on
+one manager is exactly Speed Lap riding the Time Trial class. Every rule below keyed
+on `5` or `10` rests on that.
+
 ## The flag word's bits: HD numbers them differently from Pulse
 
 `Hud_UpdateMessages` reads `uVar6 = *(*(hud+0x40)+0xf4)` and clears it. The
@@ -215,7 +225,10 @@ just before: a split-screen rule, not read further (50).
 `record_line_in_time_trial: false`, `count_up_alone_in_timed_modes: true`,
 `stamps_need_two_live: true`, `green_hold_needs_first_place: false`,
 `splits_per_lap: 3`, `table_crossings: 100`. `oag_raceplay::split_gap` stamps a craft at
-`crossings * 3 + floor(3 * progress / length)`. Disc-backed:
+`crossings * 3 + floor(3 * progress / length)` (**chosen, not measured**: the
+original's thresholds are fractions of its normalized spline progress, ours is the
+course's arc length over its length; the two differ slightly where the spline is
+unevenly parameterised). Disc-backed:
 `crates/game/tests/lap_messages_ground_truth.rs`
 (`hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing`).
 

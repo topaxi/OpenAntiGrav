@@ -65,7 +65,9 @@ differences:
 2. **The outline does not follow the alpha.** Pulse's drain follows the colour call
    with `FUN_088cd3a4`, which scales the border's alpha with the text's. Pure's
    has no second call, so the layout's `BorderColor` stays as authored while the
-   text fades. 70: the absence of a call is read off one decompile, not seen live.
+   text fades. The setter it does call, `FUN_088d2264`, was decompiled: it stores the
+   colour word at `text+0x1e8` and sets a dirty bit, and writes no border field.
+   70: read off the decompiles, not seen live.
 3. **No `Cont_Elim` good/bad pair**: one bit, one key.
 4. **Life is always 4.0**: no 8.0 branch for a later mode.
 
