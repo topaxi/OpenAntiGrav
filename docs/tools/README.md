@@ -20,6 +20,9 @@ build finds the player's own disc image, and the gamepad mapping.
 arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
 
+[macOS](macos.md) covers `just mac-app`: the `OpenAntiGrav.app` bundle the nightly
+builds on a GitHub runner, its unsigned first launch and the signing hook.
+
 [The web build](web.md) covers `just web`: `oag-game` for the browser on
 WebAssembly and WebGPU, the page that reads the player's own image in the tab a
 slice at a time, the race load on a Web Worker over shared memory, the

@@ -613,6 +613,12 @@ test-wasm:
 apk *ARGS:
     ./scripts/build-apk.sh {{ARGS}}
 
+# OpenAntiGrav.app zipped, from a dist build of oag-game (macOS only for a bundle
+# that launches; the layout assembles anywhere). See docs/tools/macos.md.
+mac-app *ARGS:
+    cargo build --profile dist -p oag-game
+    ./scripts/build-mac-app.sh {{ARGS}}
+
 # The same package built in Debian bookworm, which is what a Steam Deck needs: a
 # native build links libm symbols an older glibc does not have and refuses to
 # start there. Needs podman or docker; the image is built once from

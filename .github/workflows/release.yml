@@ -9,7 +9,7 @@ name: Release
 # `release` job at the bottom runs for a tag only.
 #
 # nightly.yml calls this workflow with `nightly: true`: the same Linux, Deck and
-# Windows jobs plus the Android APK, a `nightly-<date>-<sha7>` version, and
+# Windows jobs plus the Android APK and the macOS app, a `nightly-<date>-<sha7>` version, and
 # `-nightly` in `oag-game --version`.
 
 on:
@@ -223,6 +223,71 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The macOS app: oag-game built natively on an Apple Silicon runner and
+  # wrapped by scripts/build-mac-app.sh (the same script `just mac-app` runs)
+  # into OpenAntiGrav.app, ad-hoc signed and zipped with ditto. Unsigned for
+  # Gatekeeper's purposes: the first launch needs the steps in
+  # docs/tools/macos.md. This job cannot run under `act`; nothing here has run
+  # on a Mac yet. arm64 only: a universal binary is a second fat-LTO build.
+  macos:
+    name: macos (arm64)
+    needs: version
+    runs-on: macos-latest
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
+      # Must match LSMinimumSystemVersion in scripts/build-mac-app.sh.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+      # Opt-in Developer ID signing and notarization. Off unless the repository
+      # variable OAG_MAC_SIGN is "true" AND every secret below is set; see the
+      # "Developer ID" step and docs/tools/macos.md. No secret is required.
+      SIGN: ${{ vars.OAG_MAC_SIGN }}
+      APPLE_CERT_P12_B64: ${{ secrets.OAG_APPLE_CERT_P12_B64 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.OAG_APPLE_CERT_PASSWORD }}
+      APPLE_API_KEY_JSON_B64: ${{ secrets.OAG_APPLE_API_KEY_JSON_B64 }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: cargo build --profile dist -p oag-game
+      - name: Bundle OpenAntiGrav.app
+        run: |
+          mkdir -p dist
+          scripts/build-mac-app.sh --version "$VERSION" \
+            --out "dist/OpenAntiGrav-${VERSION}-macos-arm64.zip"
+      # DISABLED BY DEFAULT. Re-signs the bundle with a Developer ID
+      # certificate through rcodesign (apple-codesign), submits it to Apple's
+      # notary service, staples the ticket and re-zips.
+      - name: Developer ID signing and notarization (opt-in)
+        if: env.SIGN == 'true' && env.APPLE_CERT_P12_B64 != '' && env.APPLE_API_KEY_JSON_B64 != ''
+        run: |
+          cargo install apple-codesign --locked
+          echo "$APPLE_CERT_P12_B64" | base64 -d > "$RUNNER_TEMP/cert.p12"
+          echo "$APPLE_API_KEY_JSON_B64" | base64 -d > "$RUNNER_TEMP/api-key.json"
+          rm -rf signing && mkdir signing
+          ditto -x -k dist/*.zip signing
+          rcodesign sign --p12-file "$RUNNER_TEMP/cert.p12" \
+            --p12-password "$APPLE_CERT_PASSWORD" \
+            --code-signature-flags runtime signing/OpenAntiGrav.app
+          rcodesign notary-submit --api-key-file "$RUNNER_TEMP/api-key.json" \
+            --staple signing/OpenAntiGrav.app
+          rm dist/*.zip
+          ditto -c -k --keepParent signing/OpenAntiGrav.app "dist/OpenAntiGrav-${VERSION}-macos-arm64.zip"
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/api-key.json"
+      - name: No game content in the artifact
+        run: |
+          mkdir unpacked
+          ditto -x -k dist/*.zip unpacked
+          python3 scripts/check-leakage.py --dir unpacked/OpenAntiGrav.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*
+          if-no-files-found: error
+
   # A Release is only ever created from a pushed tag, and as a draft: the
   # maintainer reads the notes and artifacts, then publishes by hand.
   # Later artifacts (anything an AUR `-bin` package consumes) are another `needs:` entry and another artifact directory; the
@@ -230,7 +295,7 @@ jobs:
   release:
     name: draft GitHub Release
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    needs: [version, linux, windows, android]
+    needs: [version, linux, windows, android, macos]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

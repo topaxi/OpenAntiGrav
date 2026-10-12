@@ -18,8 +18,8 @@ disc keys or licences. See [legal](legal.md).
 - **Windows**: the folders come from the code and the Windows folder lookup
   library's source. The program itself ran under Wine
   ([Wine and Proton](../tools/wine.md)), **not on a real Windows PC**.
-- **macOS**: there is **no download** for it. It builds from source on paper
-  only; nobody has run it. The folder is read from the same library.
+- **macOS**: the nightly carries an Apple Silicon `.app`, built on a GitHub
+  runner and **never run on a Mac**. The folder is read from the same library.
 - **Steam Deck** and **Android**: the Deck steps use the Linux program; the
   Android steps are from [Android](../tools/android.md), tried on an emulator
   (Waydroid) and not on a phone yet.
@@ -32,7 +32,7 @@ disc keys or licences. See [legal](legal.md).
 | **Linux PC** | `OpenAntiGrav-<version>-linux-x86_64.AppImage` | Make it runnable: right-click, Properties, tick "Is executable" (or `chmod +x` the file). Needs a Vulkan graphics driver. No FUSE? Use the `.tar.gz` of the same name. |
 | **Steam Deck** | `OpenAntiGrav-<version>-steamdeck-x86_64.AppImage` | Switch to Desktop Mode, save it in a folder, make it runnable as above. |
 | **Android phone** (64-bit, Android 8 or newer) | `OpenAntiGrav-<version>-android-arm64.apk` | Copy it to the phone and open it (allow "install unknown apps" for your file manager), or `adb install -r` it. |
-| **Mac** | nothing yet | There is no Mac download. A source build is possible ("Build it yourself" below) but has never been run. |
+| **Mac** (Apple Silicon, macOS 11 or newer) | `OpenAntiGrav-<version>-macos-arm64.zip` (nightly) | Unzip, move `OpenAntiGrav.app` to Applications. It is not notarized: the first launch needs Open Anyway in System Settings, Privacy & Security (macOS 15) or right-click, Open (older). Never run on a Mac yet; see [macOS](../tools/macos.md). |
 | **Arch Linux** | the AUR packages `openantigrav-bin` or `openantigrav-git` | Install like any AUR package, once they are published. |
 
 **As of 2026-10-07 only a "nightly" pre-release is published** (a build made every
@@ -83,12 +83,12 @@ folder, if a game needs one, is `%APPDATA%\oag\keys`.
 
 ### macOS
 
-No download exists, so a Mac player must build from source ("Build it
-yourself" in the curious part). If you do: the folder is
+The nightly's `.app` (or a source build, "Build it yourself" in the curious
+part) reads the folder
 `~/Library/Application Support/oag/images`. In Finder choose Go, then "Go to
-Folder...", paste that path, and make the folders if they are missing. A folder
-called `images` next to the program also works. **None of this has been run on a
-Mac.**
+Folder...", paste that path, and make the folders if they are missing. Use that
+folder for the `.app`: the "next to the program" folder is inside the bundle,
+where files should not go. **None of this has been run on a Mac.**
 
 ### Linux
 

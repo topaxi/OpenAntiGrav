@@ -105,7 +105,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-          pattern: "{linux,steamdeck,windows,android}"
+          pattern: "{linux,steamdeck,windows,android,macos}"
       - name: Checksums
         working-directory: artifacts
         run: sha256sum OpenAntiGrav-* > SHA256SUMS
@@ -124,6 +124,8 @@ jobs:
             echo "Built automatically from \`main\` at ${GITHUB_SHA::7} on $(date -u +%Y-%m-%d)."
             echo
             echo "**Unstable and unsigned.** A nightly can be broken; for a tested build use the latest release. It contains no game content: bring your own disc image."
+            echo
+            echo "macOS: the zip holds an app that is not notarized and has not yet run on a real Mac. Unzip it, then open it with right-click > Open (macOS 14 and older) or System Settings > Privacy & Security > Open Anyway (macOS 15 and newer), or run \`xattr -dr com.apple.quarantine OpenAntiGrav.app\`. Details: docs/tools/macos.md."
             echo
             echo "Commit: https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
             if [[ -n "$PREVIOUS" && "$PREVIOUS" != "$GITHUB_SHA" ]]; then
