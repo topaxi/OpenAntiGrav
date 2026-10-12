@@ -137,7 +137,7 @@ fn per_class(
     class: &str,
     laws: oag_ai::original::Laws,
 ) -> Result<OriginalTables, String> {
-    let class = SpeedClass::from_name(class)
+    let class = SpeedClass::named(class)
         .ok_or_else(|| format!("class {class:?} has no AIRaceStats file"))?;
     let entry = ai_race_stats::entry_name(class);
     let race = archives
