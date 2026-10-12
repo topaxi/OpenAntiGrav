@@ -484,7 +484,7 @@ One byte a texel on the CPU and on the GPU where the decoded picture is four,
 with the disc's chain in place of a synthesised one.
 
 **The one pixel difference this makes**, measured rather than assumed:
-`crates/texture/tests/omega_gnf_mips_ground_truth.rs` (`#[ignore]`d) decodes
+`crates/texture/tests/omega_gnf_ground_truth.rs` (`#[ignore]`d) decodes
 level 1 of every chain and compares it with a 2x2 box filter of the decoded
 base - what the renderer used to synthesise. Mean absolute difference per
 channel, in 8-bit units, over the archives: 1.04 (`data08`) to 2.75
@@ -504,14 +504,15 @@ unconditionally, and a `Thin_1DThin` (`TileMode(13)`) BC7 surface whenever
 its base level carries no block with an invalid mode byte - see "Tiling"
 above for the evidence and the refusal's own reasoning.
 `crates/texture/tests/omega_gnf_ground_truth.rs` (`#[ignore]`d, needs
-`data/extracted/ps4/omega-eu/uroot/`) parses every real `.gnf` across all
-five base archives without a panic, and pins the worked example above to its
-exact decoded fields. `crates/texture/tests/omega_gnf_pixels_ground_truth.rs`
-(`#[ignore]`d, needs the patch archives too) runs `decode` over the whole
-corpus - all nine archives, `data08`'s `Data/fe/` subtree swept in full -
-asserting it never panics, that `data08`'s own `Data/fe/` subtree decodes at
-least one real image, and that a still-refused `Error::Tiled` names the
-exact `tile_mode` the descriptor declares.
+`data/extracted/ps4/omega-eu/uroot/` and the patch archives) reads every real
+`.gnf` across all nine archives once and holds it to `parse`, `decode` and
+`block_levels` together: every base-archive entry parses or is refused as
+`BadMagic`/`TooShort`, `decode` never panics and a still-refused
+`Error::Tiled` names the exact `tile_mode` the descriptor declares,
+`data08`'s own `Data/fe/` subtree decodes at least one real image, the mip
+chain checks above hold, and the worked example above is pinned to its exact
+decoded fields. It was three binaries (parse, `_pixels`, `_mips`) reading the
+same entries three times until 2026-10-12.
 `crates/texture/src/gnf/micro_tile_tests.rs` and `search_tests.rs`
 (`#[ignore]`d) hold the tiling-configuration searches this page's "Tiling"
 section reports: the superseded macro-tile one, and the micro-tile probe

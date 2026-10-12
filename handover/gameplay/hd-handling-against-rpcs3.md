@@ -52,7 +52,8 @@ HD `-11.3` at 0.5 s, steering `-46.28` against `-46.2` at 0.8 s, yaw rate within
 
 1. HD's AI field on Talon's Junction: traffic near a tight sample. A traffic share that keeps the
    sticking ratchet (1,819 with the level term only, 2,002 with traffic zeroed too) and brings
-   the field to 642 or under; `hd_ai_craft_laws_ground_truth::field_on_talons_junction`. 1-2
+   the field to 642 or under; `hd_ai_craft_laws_ground_truth::field_on_talons_junction`, run with
+   `OAG_SWEEP=1` (print-only, so gated out of `just test-data` since 2026-10-12). 1-2
    hours.
 2. Omega: reach the craft update through `Craft_UpdateSurfaceProbes`'s vtable slot, then read its
    steering ramp and its `Body_SetBoxInertia` call's mass. 1-2 hours.

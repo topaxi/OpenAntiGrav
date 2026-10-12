@@ -82,6 +82,23 @@ The history this exists for: the suite went from 3:17 to 9:47 between 2026-08-17
 525 s of a 587 s wall clock on its own. See `docs/architecture/workspace-layout.md` for
 the measurements.
 
+**Before adding a disc-backed test, find what already walks that data.** `cargo nextest`
+runs every test in its own process, so nothing is shared between tests: a second test over
+the same archive pays the whole read and decode again. Redundancy, not one slow test, was
+most of the 2026-10-12 trim (`docs/architecture/workspace-layout.md`): three binaries read
+and BC7-decoded every Omega `.gnf`, two copies of one helper LZSS-decompressed all of
+`WADS2.WAD` to find its banks, four `gxp` tests walked the same packages, and
+`Archive::peek` decompressed whole entries to return four bytes. So:
+
+1. `rg` the archive or file family in `crates/*/tests/` first. If a test already walks it,
+   add your claim to that walk, as a named check function over the one pass
+   (`crates/rcs/tests/gxp_ground_truth.rs`), not as a new walk.
+2. Sniff before you read: decide on a header (`Archive::peek`, a few decompressed bytes)
+   and read in full only what can match (`crates/formats/tests/sblk_banks/`).
+3. A test that only prints is a scratch sweep: `#[ignore]` with a sweep reason and an early
+   return unless `OAG_SWEEP` is set. It never runs in `just test-data`.
+4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
+
 **Wall clock here is contended, so measure it on an idle machine or not at all.** The
 same tree measured 456 s, 402 s and 415 s at load averages of 21, 17 and 2, with four,
 two and one tests over the per-test ceiling and a *different* test each time. Two agents
