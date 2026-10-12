@@ -89,7 +89,8 @@ it yields is plain `Handling` data.
 
 - Per-class handling in full, or one set the classes scale? Pulse authors four
   tables per team; a modder may only want one.
-- May opponents fly custom craft (race box, remix), or only the player?
+- ~~May opponents fly custom craft?~~ **Decided 2026-10-12 (maintainer): yes**, outside the
+  original campaigns.
 - Engine sound: borrow the host title's, or ship an audio file in the craft?
 - ~~Whether a custom craft is offered in the campaign~~ **Decided 2026-10-12 (maintainer):
   the original campaigns stay vanilla** (their own craft, tracks and the original AI).
