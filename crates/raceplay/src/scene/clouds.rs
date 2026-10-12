@@ -56,6 +56,7 @@ impl Clouds {
         view_projection: &[[f32; 4]; 4],
         tick: u64,
         camera: &oag_fx::psys::field::Frame,
+        visible: u64,
     ) {
         let Some((layer, pipeline)) = self.state.as_mut() else {
             return;
@@ -64,10 +65,10 @@ impl Clouds {
         // so the layer stays at the phase it was built with.
         let previous = self.tick.replace(tick);
         if previous.is_some() && previous != Some(tick) {
-            layer.advance();
+            layer.advance(visible);
         }
         let mut vertices = Vec::new();
-        layer.extend_vertices(&mut vertices, camera);
+        layer.extend_vertices(&mut vertices, camera, visible);
         pipeline.upload(queue, view_projection, &vertices);
     }
 

@@ -372,9 +372,93 @@ Not 95: one binary.
 
 **Where the camera is far from the clouds, the draw does not run.** At the
 start line (section 16) and section 29, the phases did not move across 20
-pauses and the vertex buffer held uninitialised words. This was never traced
-to a visibility test; the next address to read is whatever calls the `draw`
-slot (`0x08ad2a68`) for a `cloudGroup` node.
+pauses and the vertex buffer held uninitialised words. Why is
+[What gates a group](#what-gates-a-group-2026-10-12), below: a section's PVS
+row, not a distance.
+
+## What gates a group (2026-10-12)
+
+**Confidence 85** for the gate as a whole; 90 for who calls what; the frustum
+half is `section-view-cull.md`'s, not re-measured here. `pulse-clouds`,
+headless Ghidra plus PPSSPP v1.20.4 (software renderer) on `pulse-psp-usa.chd`,
+de Konstruct Black (`05_Track` forward).
+
+The `draw` slot (`0x08ad2a68`, holding `CloudGroup_Draw`) has no direct caller.
+`Gfx_FlushRenderManager` (`0x0891e3c0`) runs it for every entry the frame
+queued: its loop calls `(*(node+0x38))->draw` on each `Gfx_Enqueue`d node, with
+no test of its own. A group is queued only by its `submit` slot,
+`FUN_089326d4`, which always enqueues and returns 1 (the depth only picks the
+sort key). So neither slot is the gate; what decides is whether the node walk
+**calls `submit` at all**.
+
+```text
+SceneNode_SubmitTree (0x08944160), the generic node-tree walk:
+  if node.flags(+0x2c) & 8: return 0
+  ok = (*(node+0x38) + 0x30)->submit(node)          ; vtable slot +0x34, jalr at 0x089441a8
+  if ok == 0: return                                ; children are NOT visited
+  for child in node.+0x20, then each child.+0x24:   ; recurse when child.flags & 4
+      SceneNode_SubmitTree(child)
+  ... then the node's +0x38 slot (post-submit)
+```
+
+A `cloudGroup` hangs off a `Section_NN` branch node, and that branch's submit
+is `Node_TestSectionVisible` (`0x0892b638`,
+[section-view-cull.md](section-view-cull.md)): it returns 0, so the walk never
+reaches the group, when `(1 << id) & row == 0`, where `id` is the byte at
+`*(*(branch+0x54) + 0x58)` (the `section` node's index) and `row` is
+`Gfx_GetVisibleSectionMask` (`0x0891e908`): the 64-bit word at
+`g_display + 0x5bb8 + 8 * view_section`, `view_section` being `0x08ab10a0`.
+A group that is not submitted is not queued, so it is not drawn, and
+`phase += rate` lives in the draw, so it does not advance either: **one test
+gates both**.
+
+Measured:
+
+- **Caller, live.** With the craft in section 35, a breakpoint on
+  `FUN_089326d4` hit with `ra = 0x089441b0` (the instruction after the walk's
+  `jalr`), `a0 = 0x097a1850` (the outer group). Breaking on `0x08944160` with
+  `a0 == node` and following `s0` up (eight levels, every `ra = 0x08944200`
+  until the root, `ra = 0x08804b3c`) gave the chain group, branch `0x08fe01b0`
+  (class `0x08ad22f4`, submit `0x0892b638`), then seven more ancestors.
+- **The gate, live.** The branch's section object (`0x08fe0260`) gives id 39
+  (`Section_24` in its box's name field). The outer group and the group nested
+  in it both sit under it; the third group sits under id 50 (`Section_35`).
+  Row of section 35 is `020803ff00000062`: bit 39 set, bit 50 clear. Row of
+  section 16 (the start line) is `00800600000f0000` and of section 29
+  `02090033f000801a`: bit 39 clear in both. With the craft placed back at
+  section 35 the breakpoint on the group's submit hit; at the start line it
+  never did in 8 s. That matches the 20 still pauses recorded above.
+- **The rows are the file's own.** All 61 rows read from `g_display + 0x5bb8`
+  equal `oag_vex::pvs::TrackPvs::visible_from` for `05_Track`, except ids 46
+  and 56, which no `section` node declares: the original's row holds only its
+  own bit (`FUN_08922974` ORs `1 << id` into the section data's mask), ours
+  answers all-visible by the project's undeclared-id rule.
+- **`FUN_08922974`** (`Section_BindVisibilityRow`, 78, no direct caller: a
+  method of the section class) is the writer of those rows.
+
+`oag_fx::cloud::Layer` now holds each group's governing section
+(`oag_vex::pvs::governing_sections` of the group's node) and takes the frame's
+section mask: a group whose bit is clear is neither advanced nor drawn. The
+raceplay seam passes `VisibleSet::mask()`, which already folds the box-in-view
+tier in (`section-view-cull.md`), and all-visible where the view's section is
+unknown or culling is off. **Differences kept, not resolved:** our set is the
+craft and camera rows with adjacency padding, the original's is the one row of
+`view_section` (`Camera_UpdateSpectatorView` publishes the craft's section
+there); and the original advances per rendered frame, ours per simulation tick.
+Tests: `crates/fx/src/cloud/tests.rs` (a gated group neither draws nor
+advances; an ungated one always does) and
+`crates/fx/tests/cloud_field_ground_truth.rs`
+(`the_forward_layout_gates_its_groups_by_section`: sections 39, 39 and 50).
+
+Names: `SceneNode_SubmitTree` (`0x08944160`, 85),
+`Gfx_GetVisibleSectionMask` (`0x0891e908`, 80), `Section_BindVisibilityRow`
+(`0x08922974`, 78). `Node_TestSectionVisible` keeps its 80: this page's
+measurement exercises its mask half live (the half that page scored 70), and
+the score there is that page's to move.
+
+Cross-title check: **not checked.** This lane read Pulse PSP's walk only. Pure and PS2 parity
+stays open below; no 2048 or Omega cloud node was looked for, and neither
+title's walk was read.
 
 ## `CloudGroup_ApplyDrawState` (`0x08932ab4`) and `CloudGroup_RestoreDrawState` (`0x08932b78`)
 
@@ -525,12 +609,6 @@ packed with red in the low byte (`A << 24 | B << 16 | G << 8 | R`), the GE's
 
 ## Open
 
-- **The far-camera draw skip is not read.** Live, with the camera far from
-  the clouds (the start line, section 29), the phases did not advance and the
-  vertex buffer held uninitialised words. The test that skips the draw was not
-  traced. The next address is whatever calls a `cloudGroup` node's `draw`
-  slot (`0x08ad2a68`). `oag_fx::cloud` draws and advances every group
-  every frame.
 - **No live A/B picture.** The field's values are reproduced from RAM. A
   matched frame against PPSSPP's software renderer was not captured: placing
   the craft near the clouds (track index about 3000) with
