@@ -7303,6 +7303,70 @@ Two more Assegai boots (`assg2`, `assg3`) never reached a pad with the player's 
 
 **2048 / Omega:** checked, applies, not wired: the same `.rcsmodel` chunk byte and `EdgeGeom`-style compressed chunks are 2048's lineage, but no live capture path for either exists here; not checkable beyond the shared format note.
 
+### The hull's `EdgeGeom` light runs in world space and matches ours; the injected light reaches the same panels with the same response on both sides (2026-10-12, `hd-hull-wash`, confidence 85 for the space and the per-vertex law, the `Distance 0.0` boost gap still open)
+
+**The 2026-10-07 "node-local" reading (60) is falsified.** On a kind-2 chunk `RenderOps_BuildEdgeGeomJob` (`0x005d7b70`) does three things the earlier read missed (`r21` is the same `(nibble == 2)` bit that sets the job's flag bit 1):
+
+- `0x005d8414`-`0x005d84a8`: it allocates `chunks * 0x100 + 0x40` and copies 64 bytes (`lvx`/`stvx` x4) from `*( *(ctx+0xd8) + *(ctx+0xb8) * 32 + 0x18 )` into the first `0x40`.
+- `0x005d8150`-`0x005d8160`: it emits gather-list entry 7 (record `+0x38`) as `(0x40 << 32) | matrix_EA`. The world-baked path (`0x005d7da8`) leaves that word zero.
+- Entries 0-6 are, in order: `(desc+0x14, desc+0x10)`, `(desc+0x16, desc+0x10+desc+0x14)`, `(desc+0x20, desc+0x18)`, `(desc+0x22, ...)`, `(desc+0x24, ...)`, `(0x80, ctx+0x140)` and `(0x10, chunk desc)`.
+
+On the SPU side `$18 = (w >> 16) * 4 + payload[+0x08] + payload[+0x0c]` (`0x2774`-`0x2794`). The two payload words are exactly the sizes of entries 0-1 and 2-4 (record `+0x88`/`+0x8c`, written at `0x005d80c8`/`0x005d80d0`), so `$18` is entry 5, `$18+0x80` is entry 6 (the non-bit-1 path reads its chunk descriptor there, `lqd $27,0($17)` at `0x27a4`), and **`$18+0x90` is entry 7, the matrix**. That is the quad run the bit-1 branch at `0x2fa8`/`0x3030` reads.
+
+**What the SPU does with it, read off the shuffles** (constants at `0xf700` `00010203 10111213 04050607 14151617` and `0xf710` `08090a0b ...1c1d1e1f`, `0xf750` `(0,0,0,1.0)`):
+
+- `sp+0x100` holds the transpose of `M` with row 3 forced to `w = 1`, and `0xf2b8` (a generic unrolled 4x4 transform) takes positions through it into a new buffer. That buffer replaces the position stream before `0x3650` bounds, `0x3510` cull and `0x33a8` light loop. So positions become `v * M`, row-vector convention.
+- `sp+0x140` holds the 3x3 of `M` laid out for the same `0xf2b8` with `-(t . col)` in the fourth row, and normals go through it in place, then `0x4808`. So normals become `n * M3`, the same rotation, renormalised.
+
+So the light loop compares a world-space light with world-space vertices and world-space normals, which is what `crates/mesh/shaders/spu_light.wesl` already does.
+
+**Where `ctx+0xd8`/`ctx+0xb8` come from (compiled-ops handlers, decompiled):**
+
+| opcode | handler | effect |
+| --- | --- | --- |
+| `0x14` | `0x005d6500` | `ctx+0xd8` = table base, `ctx+0xdc` = count, dirty `0x1c0000` |
+| `0x17` | `0x005d6408` | `table[a].+0x18 = b`, `table[a].+0x1c = c` (32-byte entries), dirty `0x40000` |
+| `0x20` | `0x005d6250` | `ctx+0xb8 = a` |
+
+The table is the draw's shader-parameter table, keyed by the name hash in each entry's first word. Read live, entry 10 is `0x81db67ea` (`ambient`), and the entry the job read (index 3) is **`0xc588eebc`**. That hash is the hull vertex program's own `float4 x4` parameter at `c256` (`diffuse_vcol.rcsmaterial` vertex block #22, the `RigidBody` `HalfBrightAmbientSunSpot0SVC1` variant), the matrix it transforms positions with. So the SPU's matrix is the same world matrix the RSX draw uses. That is a static reading independent of the live one below.
+
+**Live, RPCS3** (interpreter, `hd-timetrial-talons-venom-start` state, player read from memory as `Data\Ships\Feisar_c1`, `Distance -0.4`, `Radius 1.0`). Method: break at `0x003eb368` with `r19` equal to the player's hull record, then at `0x005d8488` on the same thread, and read the 64 bytes at `r11`.
+
+- The first chunk's matrix is `Airbrake_L`'s node. Its 3x3, divided by the 0.75 scale, carries the `.vex` node's authored 34° rotation (`-0.820 0.565 ...`), and its translation sits 1.4 units right of and 4.5 behind the body. The `Ship.vex` nodes `Airbrake_L`/`Airbrake_R` at `(+-1.935, -0.187, -5.227)` are the only non-identity mesh nodes.
+- The chunks of every identity-node shape (`ShipShape`, `EngineShape`, ...) share one matrix. Its translation is the body position to within 0.08 units, its rows are the body's basis times 0.75, and it was the same on 10 of 10 frames. That is the instance world matrix.
+- **No lag at speed.** At 425-428 km/h (`hd-racebox-talons-venom-midrace-absorb`, throttle held), the player's staged light mapped through the inverse of that same-frame matrix lands at model `(-0.04..0.04, 0.12..0.26, -5.35..-5.58)`, as it does at rest. Light and hull are not a frame apart.
+- **The anchor law holds in model space.** `EngineFlare_SubmitSpuLight` reads the flare node's world matrix from `*(this+0x38)` (row 3 at `+0x30`, row 2 at `+0x20`) and `Distance` from `*(this+0x134)+0xfc`. Live, that node mapped into model space is row 3 `(0.000, 0.159, -5.863)` and row 2 `(0, 0, 1)` with unit length. This project's loader reads `Feisar_c1`'s `Engine Flare` locator as `(0.0, 0.1588, -5.8628)`, axis `(0, 0, 1)`, `Distance -0.4`: the same numbers. The light itself sat at model z `-5.40..-5.54` against the law's `-5.463`, with the spread being frame timing (the jitter is x/y only).
+
+**The injection A/B, the measurement that names what is and is not different.** For 6 consecutive frames, the player's record in the staged list was overwritten at `0x003eb368` (`r3` = list, `r31` = count) with a chosen colour and `D` at the light's own position. The screenshot was taken while stopped, so the presented frame carries the injection. This works, unlike the 2026-10-07 single-frame try. Pixels are 3x3 means on the rear vents of the original's `Feisar_c1`:
+
+| injected light | original's vents |
+| --- | --- |
+| none (its own `(40,10,4)`, `D 1`) | copper tint, `(114,72,56)` |
+| `(4,10,40)`, `D 1` | blue tint, `(20,29,52)` / `(41,59,99)` |
+| `(36,90,360)`, `D 1` | blue-white, `(176,254,255)` on the vent face |
+| `(360,90,36)`, `D 1` | white-copper, `(255,255,185)` |
+| `(360,0,0)`, `D 1` / `D 3` | saturated red on the housings, spreading to the whole rear deck at `D 3` |
+
+So **the original's hull does take a boosted light near the nozzle and does go white on the faces nearest it.** The term is not suppressed, clamped or zero on the hull.
+
+Ours, with the same colours and `D` injected at the same model-space point `(0, 0.23, -5.38)` on `feisar_c1`, posed with `--pose-from` at the original's body pose, **lights the same panels with the same colour response**: copper, blue, blue-white, white-copper, red on the housings. The camera differs (ours sits closer), so this is a read by eye of matched crops, not a pixel diff. Together with the hull fragment program read below, the per-vertex law, its space and its combine are the original's. There is nothing to port in `spu_light.wesl` or `shade.wesl`.
+
+**The hull's `SVC1` programs, read for a clamp, and there is none.** Vertex block #22 decodes into `o[TC1]` (`MAD R0.w, v[4].w, 255, -128; EX2; MUL o[TC1].xyz, v[4].xyz, R0.w`), a texcoord output. Fragment block #14 (`0x7c90`) is `H2 = f[TC0] * (f[TC1] + ambient + sun * sat(N.L))` with `f[TC0]` the `VertexColour1` factor, then `* albedo`, fog, `/2`, in half precision with no `_SAT` and no `MIN` on the sum. This agrees with `hd-hull-bright`'s combine. Candidate 3 (a clamp) is closed.
+
+**What this leaves.** The two `Distance 0.0` boots (`Assegai`, `Harimau`) still read clean in the original at a `(36,90,360)` light on a pad, while ours washes `harimau`'s inner rear panels yellow-white and puts a white rim on `assegai`'s housing at a fired Turbo. That gap re-measured on this session's `main` with the term on versus off, after `hd-hull-bright`. Feisar_c1 (`Distance -0.4`) shows nothing different, so the remaining gap is specific to those hulls or those frames, not to the law. The next read is the same three measurements on `Assegai` at rest:
+
+1. The flare node in model space against our locator.
+2. The injection set.
+3. A `--pose-from` pair.
+
+A Racebox walk reaches it (Main Menu, Racebox, Time Trial, Talon's Junction, Team Selection seven rights reads `Assegai Developments`). This session's run stopped there: RPCS3 hung joining its GDB thread during the race load, so it is not measured.
+
+**Names this section lands:** `0x005d6500` `RenderOps_OpSetParamTable` 80, `0x005d6408` `RenderOps_OpSetParamEntry` 80, `0x005d6250` `RenderOps_OpSetNodeMatrixParam` 75. Each is a direct decompile; the 80s are corroborated by the live table read (hash keys, matrix pointer at `+0x18`), and the 75 by the job builder's own read of `ctx+0xb8` and the `c256` hash match.
+
+**2048 / Omega: not checkable.** The mechanism is the PS3's SPU `EdgeGeom` job, which neither the Vita nor the PS4 build has. Whether Omega's PS4 shaders carry an equivalent per-vertex light was not read, and no capture path for Omega's executable exists here.
+
+No code changed.
+
 ## HD's lightmap is read raw: the extra `pow(_, 2.2)` was the frame-wide darkness (2026-10-05, `hd-darkness`)
 
 **Cause, confidence 85.** `mesh.wgsl`'s authored branch ran the lightmap through

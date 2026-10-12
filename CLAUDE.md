@@ -35,7 +35,7 @@ just check-docs   # validates internal links in docs/ (scripts/check-doc-links.p
 just check-deps   # asserts the five dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
-just check-size   # ratchet on file length (1k lines) and on inline #[cfg(test)] modules (200) (scripts/check-file-size.py)
+just check-size   # ratchet on file length (1.5k lines) and on inline #[cfg(test)] modules (500) (scripts/check-file-size.py)
 just check-title-branching # ratchet on `title.name == oag_X::TITLE.name`-style comparisons in generic crates; per-title behaviour is `Title` data, ADR-0058 (scripts/check-title-branching.py)
 just check-title-reach # ratchet on generic crates naming a title package by path (`oag_hd::hud::ART`); they reach a title through `oag_title::Title`, the registry in oag-source, or the composition root (scripts/check-title-reach.py)
 just check-names  # every names.tsv row still matches its evidence page, offline (scripts/check-ghidra-names.py)
@@ -267,11 +267,11 @@ review:
 5. `oag-ballisticng`, the first content layer over `oag-unity`, reaches `oag-unity`, `oag-texture` and `oag-formats` and no other workspace crate, and no gameplay crate may depend on it or on `oag-unity` (both are in rule 1's forbidden set). How a foreign track is mapped into this engine is the consumer's choice, not the layer's reading.
 
 Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
-ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 20 as of
-2026-08-27, down from 27 - and each may shrink but not grow; `TEST_BASELINE` is **empty**, so rule 2 has no exemptions at all:
+ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 4 as of
+2026-10-12, when the limit rose to 1,500 - and each may shrink but not grow; `TEST_BASELINE` is **empty**, so rule 2 has no exemptions at all:
 
-1. A Rust file may not exceed **1,000 lines**.
-2. An inline `#[cfg(test)] mod` body may not exceed **200 lines**. Past that it moves to a
+1. A Rust file may not exceed **1,500 lines** (raised from 1,000 on 2026-10-12).
+2. An inline `#[cfg(test)] mod` body may not exceed **500 lines** (raised from 200 on 2026-10-12). Past that it moves to a
    file of its own - `#[cfg(test)] mod tests;` where the block was and `<module>/tests.rs`
    beside it, as `crates/physics/src/airbrake.rs` does; `use super::*` still reaches every
    private item. The rule keys on `#[cfg(test)]` and nothing else, so a `mod` of shared

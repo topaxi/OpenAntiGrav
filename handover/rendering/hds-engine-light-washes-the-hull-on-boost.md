@@ -123,38 +123,41 @@ the light than ours.
   boost snap" (confidence 75, one verified boot per ship). The paired frame of
   ours is **not** at the same stretch of track (sunlit, a pale spine already at
   rest), so the evidence of our wash is a same-place on/off A/B of the craft's light term, now on the classic `assegai` (tick 295: spine and wing go flat white, tick 220 mild) as well as `assegai_n1`.
-- **Candidate 3's clamp reading, not measured.** The `SVC1` vertex program
-  decodes into `o[TC0]`, a texcoord output, not `o[COL0]`/`o[COL1]` - RSX
-  colour-output clamping would not apply there, consistent with
-  `mesh.wgsl`'s own unclamped `spu_light` varying, but this is a read of
-  which register the microcode targets, not a tested hardware behaviour.
+- **~~Candidate 3's clamp reading~~ closed 2026-10-12: no clamp.** The hull `SVC1` programs have none (renderer.md 2026-10-12); the original goes white on the vents at a `(36,90,360)` injected light. The rest of this item is history.
 - **The white wing rims on the `_n1` skins** are not the SPU term. Whether
   the original shows them is unread.
 
 ## Next Steps
 
-1. Read the per-vertex weight in `EdgeGeom` (`0x007f6d80`,
-   `data/extracted/ps3/spu-jobs/edgegeom-0x007f6d80.dis`) for what it does with
-   a hull chunk: the space `|d|` is taken in against `D`, where the normal for
-   `N.L` comes from, and which lights the hull's stream is built from. Each is
-   a candidate for why the original's panels beside the nozzle get weight zero
-   at a `360` light; none is measured.
-2. Identify the record every `0x003eb368` stop carried (`0xca6e90` on one boot)
-   as the player's hull or not: the model-pointer read in the drive script's
-   `snapshot` (`model + 0x204c`) failed on this binary, so it was not read.
-3. A same-place original/ours pair: drive our craft onto the Talon's Junction
-   pad (the original's player light at `(-237, -74, 55)` on the pad; our trace
-   frame did not line up with the light list's, so the pad location in our
-   coordinates is still to find) so the paired frame stops being confounded by
-   lighting. The on/off A/B on our side exists; this is the other half.
-4. Second verified boots for `Assegai` and `Harimau` (the extra attempts missed
-   the pad; the player's boost depends on the line taken).
-
-What would falsify "the original's hull has weight zero here": a frame of the
-original, player's own light at `360`, with the rear panels flat white. What
-would name the law: the `EdgeGeom` read in step 1 reproducing the clean hull
-from the captured light record and the hull's own vertices.
+1. **`Assegai` at rest in the original, the same three reads `Feisar_c1` got on
+   2026-10-12.** First, the flare node in model space: break at `0x0029ff8c`,
+   take `r11`, and map it through the main-hull chunk matrix from `0x005d8488`.
+   Second, the injection set at `0x003eb368`. Third, a `--pose-from` pair of
+   ours. Route: Racebox, Time Trial, Talon's Junction, Team Selection seven
+   rights. Interpreter decoder. Expect a race load of a minute or more; on
+   2026-10-12 RPCS3 hung joining its GDB thread during that load. If the node
+   matches our locator and the injected boost washes the original's Assegai
+   panels too, the gap is in the pad frames themselves (camera, exposure, which
+   tick), not the hull lighting. If it does not, read that hull's chunk set and
+   normals.
+2. Identify the record every `0x003eb368` stop carried as the player's hull or
+   not (largely answered: `r19` against `*0x008b7da0 + idx(+0x204c) * 0x1b0`
+   picks the player's own stop reliably, see renderer.md 2026-10-12).
+3. Second verified boot for `Harimau`.
 
 ## 2026-10-07 hd-hull-wash (partial)
 
 Second boot of the original on Assegai at the pad, player light `(36,90,360)`, hull clean (renderer.md, "The hull reaches `EdgeGeom` as a node-local chunk"). Every hull chunk is flag bit 1 (kind 2, node-local), so `EdgeGeom` takes the `0x3030` branch; whether its rows are a world matrix or the decode quads is unresolved. Next: identify the DMA piece at `$18`, then inject into the list the job really reads. Steps 1 and 3-4 above are partly done; Harimau and Piranha not re-booted.
+
+## 2026-10-12 hd-hull-wash (second pass, docs only)
+
+The `EdgeGeom` space question is closed: hull chunks are lit in world space with
+the draw's own world matrix (gather entry 7, hash `0xc588eebc` = the hull vertex
+program's `c256`), and normals are rotated by the same 3x3. The node-local
+reading is falsified. There is no frame lag at 427 km/h, and the anchor law
+matches in model space on `Feisar_c1`. Injecting the same lights on the original
+and on ours lights the same panels with the same response, white on the vents at
+`(36,90,360)` on both. So the per-vertex law is the original's and nothing was
+ported. No clamp exists in the hull `SVC1` programs. Full read: renderer.md,
+"The hull's `EdgeGeom` light runs in world space and matches ours". The
+`Distance 0.0` boost gap is still open: step 1 above.
