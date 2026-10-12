@@ -8,7 +8,7 @@
 //! key file beside the image does not exist there; see docs/tools/web.md.
 
 /// Whether this build can read a clipboard.
-pub(crate) const AVAILABLE: bool = cfg!(not(any(target_os = "android", target_arch = "wasm32")));
+pub(crate) const AVAILABLE: bool = cfg!(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")));
 
 static CTRL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -23,13 +23,13 @@ pub(crate) fn ctrl_held() -> bool {
 }
 
 /// The clipboard's text, or `None` when it holds none or cannot be read.
-#[cfg(not(any(target_os = "android", target_arch = "wasm32")))]
+#[cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))]
 pub(crate) fn read() -> Option<String> {
     arboard::Clipboard::new().ok()?.get_text().ok()
 }
 
 /// See the module doc.
-#[cfg(any(target_os = "android", target_arch = "wasm32"))]
+#[cfg(any(target_os = "android", target_os = "ios", target_arch = "wasm32"))]
 pub(crate) fn read() -> Option<String> {
     None
 }

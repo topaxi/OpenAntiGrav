@@ -288,6 +288,51 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The iOS app: oag-game built for aarch64-apple-ios on a macOS runner and
+  # wrapped by scripts/build-ios-app.sh (the same script `just ios-app` runs)
+  # into an ad-hoc signed OpenAntiGrav.app inside an .ipa. Not installable on a
+  # stock iPhone as it stands: the player re-signs it (AltStore, SideStore,
+  # Xcode) - docs/tools/ios.md. **Experimental: nothing here has run on a Mac.**
+  # `continue-on-error` keeps a failure here from failing the nightly's `build`
+  # job (which `publish` needs), and the job is deliberately not in `release`'s
+  # `needs` nor in nightly.yml's download pattern: it publishes nothing yet.
+  ios:
+    name: ios (arm64, unsigned)
+    needs: version
+    runs-on: macos-latest
+    continue-on-error: true
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      OAG_VERSION_SUFFIX: ${{ needs.version.outputs.suffix }}
+      IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: cargo build --profile dist --target aarch64-apple-ios -p oag-game
+      # The icons come from a host build: the iOS binary cannot run here.
+      - run: cargo build -p oag-game
+      - name: Bundle OpenAntiGrav.app into an .ipa
+        run: |
+          mkdir -p dist
+          scripts/build-ios-app.sh --version "$VERSION" \
+            --out "dist/OpenAntiGrav-${VERSION}-ios-arm64.ipa"
+      - name: No game content in the artifact
+        run: |
+          mkdir unpacked
+          ditto -x -k dist/*.ipa unpacked
+          python3 scripts/check-leakage.py --dir unpacked/Payload/OpenAntiGrav.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ios
+          path: dist/*
+          if-no-files-found: error
+
   # A Release is only ever created from a pushed tag, and as a draft: the
   # maintainer reads the notes and artifacts, then publishes by hand.
   # Later artifacts (anything an AUR `-bin` package consumes) are another `needs:` entry and another artifact directory; the
@@ -304,6 +349,8 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+          # Not `ios`: experimental, nothing publishes it yet.
+          pattern: "{linux,steamdeck,windows,android,macos}"
       - name: Checksums
         working-directory: artifacts
         run: sha256sum OpenAntiGrav-* > SHA256SUMS

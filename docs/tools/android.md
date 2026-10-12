@@ -93,7 +93,11 @@ question.
 
 ## How it is wired
 
-- **Entry.** `crates/game/src/main_body.rs` carries `android_main`. Two crate roots
+- **Entry.** `crates/game/src/main_body.rs` carries `android_main`, which hands the
+  activity to `oag_mobile::android::prepare` (the storage setup below, and the
+  `AndroidApp` kept for `oag_mobile::android::event_loop`); the glue moved to
+  `crates/mobile` on 2026-10-12 ([ADR-0065](../architecture/adr/0065-one-mobile-crate-for-every-phone-os.md))
+  and the entry could not follow it, for the reason in the next sentence. Two crate roots
   `include!` it: `main.rs` (the desktop binary, which also keeps the crate's rustdoc
   header - an included file may not carry inner attributes) and `android.rs`, the
   `oag_android` example with `crate-type = ["cdylib"]` and
@@ -110,8 +114,8 @@ question.
   `apksigner` alone. GameActivity wants the AndroidX games-activity AAR, Gradle and a
   Java class, which buys better IME (the on-screen keyboard) and input; it matters
   once text entry on the phone does, not for a first pass. winit's
-  `android-native-activity` feature selects the backend.
-- **No command line, no working directory.** `android_main` points `HOME` and the
+  `android-native-activity` feature (enabled by `oag-mobile`) selects the backend.
+- **No command line, no working directory.** `oag_mobile::android::prepare` points `HOME` and the
   `XDG_*` roots at subdirectories of the app's external files directory and makes that
   directory the current one, so `data/images`, `data/cache`, `data/dlc`, settings,
   records, ghosts and the log all land under
@@ -219,7 +223,7 @@ process stayed alive, and in a race it opened the root menu over the parked race
 There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
 the system's home or app switcher, not quit from inside, and the app is suspended
 (race paused) rather than ended. `menu::Definition::drop_quit` removes the row at
-boot (`main/prepare.rs`, `cfg!(target_os = "android")`); desktop keeps it.
+boot (`main/prepare.rs`, `oag_mobile::MOBILE`); desktop keeps it.
 
 ### On-screen racing controls
 
