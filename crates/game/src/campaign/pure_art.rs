@@ -110,6 +110,14 @@ pub fn load(
     }
 }
 
+/// The `Key::track` a race on the circuit at `location` records under: the
+/// archive entry the launch races (`plan_cell_for`'s `leg_entries`), lower-cased
+/// as the store keeps it. A disc-backed test holds it to the launch's own.
+#[must_use]
+pub fn record_entry(location: &str) -> String {
+    format!(r"{location}\track.vex").to_ascii_lowercase()
+}
+
 /// What a screen's own code writes into the circuit panel's placeholders, by
 /// `PI_Track` name: pairs of widget name and text.
 ///
@@ -141,7 +149,7 @@ impl Fills {
         let title = title.to_ascii_lowercase();
         let mut out = std::collections::BTreeMap::new();
         for track in &campaign.definition.tracks {
-            let entry = format!(r"{}\track.vex", track.location).to_ascii_lowercase();
+            let entry = record_entry(&track.location);
             let mine: Vec<_> = rows
                 .iter()
                 .filter(|row| row.title == title && row.track == entry)

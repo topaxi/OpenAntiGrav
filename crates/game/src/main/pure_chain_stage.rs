@@ -20,6 +20,9 @@ pub(crate) struct PureChainStage {
     strings: StringTable,
     title: &'static oag_title::Title,
     art: Player,
+    /// The screen and row the art was last asked for, so a tick that moved
+    /// nothing does not rebuild the event lists to find the same key.
+    art_for: Option<(Step, usize)>,
 }
 
 impl PureChainStage {
@@ -38,19 +41,22 @@ impl PureChainStage {
             strings,
             title,
             art,
+            art_for: None,
         };
         open.follow_art();
         open
     }
 
-    /// Puts the art of the row under the cursor on the right-hand side, and
-    /// moves its arrival on by `seconds`.
+    /// Puts the art of the row under the cursor on the right-hand side, when the
+    /// screen or the row changed since the last call.
     pub(crate) fn follow_art(&mut self) {
-        let key = self
-            .choice
-            .selected_row()
-            .and_then(|row| self.chain.art_key(row.tag));
-        self.art.show(key);
+        let tag = self.choice.selected_row().map(|row| row.tag);
+        let at = tag.map(|tag| (self.chain.at(), tag));
+        if at.is_some() && at == self.art_for {
+            return;
+        }
+        self.art_for = at;
+        self.art.show(tag.and_then(|tag| self.chain.art_key(tag)));
     }
 
     pub(crate) fn art(&self) -> &Player {
@@ -66,6 +72,7 @@ impl PureChainStage {
     /// not.
     pub(crate) fn refresh(&mut self, records: &Store, same: bool) {
         let view = pure_chain::present(&self.chain, &self.strings, self.title, records);
+        self.art_for = None;
         if same {
             self.choice.replace(view.rows);
             self.follow_art();

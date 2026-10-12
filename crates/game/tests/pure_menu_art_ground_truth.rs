@@ -7,7 +7,8 @@
 //! no `Chain::art_key`, no entry `screen.xml` read, no placeholder fill - and
 //! the draw list it checks goes empty or keeps the wrong text.
 
-use oag_game::campaign::pure_art::{self, Art, Fills, Key};
+use oag_game::campaign::launch::plan_cell_for;
+use oag_game::campaign::pure_art::{self, Art, Fills, Key, record_entry};
 use oag_game::campaign::pure_chain::{Chain, Chosen, choose};
 use oag_game::campaign::pure_list;
 use oag_game::records::{Record, Store};
@@ -261,7 +262,7 @@ fn a_stored_result_replaces_the_fresh_record_and_zone_shows_its_medal_counts() {
             .clone();
         let row = Record {
             title: "wipeout pure".into(),
-            track: format!(r"{location}\track.vex").to_ascii_lowercase(),
+            track: record_entry(&location),
             mode: "single_race".into(),
             class: "vector".into(),
             best_total_ticks: Some(60 * (60 + 23) + 45),
@@ -293,6 +294,29 @@ fn a_stored_result_replaces_the_fresh_record_and_zone_shows_its_medal_counts() {
         assert!(
             !said.iter().any(|t| t == "00" || t == "00' 00' 00"),
             "{image}: placeholders on screen: {said:?}"
+        );
+
+        let zone = disc
+            .chain
+            .campaign()
+            .definition
+            .tracks
+            .iter()
+            .find(|track| format!("{:?}", track.kind) == "Zone")
+            .expect("a Zone circuit");
+        let held = Record {
+            title: "wipeout pure".into(),
+            track: record_entry(&zone.location),
+            mode: "zone".into(),
+            class: "venom".into(),
+            best_total_ticks: Some(600),
+            ..Record::default()
+        };
+        let fills = Fills::of(disc.chain.campaign(), oag_pure::TITLE.name, &[held]);
+        let said = texts(&drawn(&disc, &key, &fills));
+        assert!(
+            !said.contains(&"0".to_string()),
+            "{image}: a stored Zone result is not shown as the fresh 0: {said:?}"
         );
     }
 }
@@ -327,5 +351,64 @@ fn art_follows_the_focused_row_and_single_player_has_none() {
         assert_eq!(focus(&choice), Some(Key::Class("Vector".into())));
         choice.select_tag(1);
         assert_eq!(focus(&choice), Some(Key::Class("Venom".into())));
+    }
+}
+
+#[test]
+#[ignore = "needs a disc image: just test-data"]
+fn the_record_key_is_the_entry_the_launch_races_for_race_classic_and_zone_events() {
+    use oag_tables::pure_campaign::EventKind;
+    let ladder: &[&str] = oag_pure::TITLE
+        .race
+        .speed_classes
+        .map_or(&[][..], |classes| classes.names);
+    for image in IMAGES {
+        let Some(disc) = disc(image) else {
+            continue;
+        };
+        let campaign = disc.chain.campaign();
+        let mut archives = oag_pure::open(&disc.source).expect("open as Pure");
+        let def = archives
+            .read_name(oag_pure::campaign::DEFINITION_ENTRY)
+            .expect("Definition.xml");
+        let def = oag_tables::fexml::text(&def).expect("text");
+        let zones = oag_raceplay::catalogue::tracks_of_kind(&def, "Zone");
+        let ordinary = oag_raceplay::catalogue::tracks(&def);
+        let mut kinds = std::collections::BTreeSet::new();
+        for event in campaign.events(PureClass::Vector) {
+            if event.kind == EventKind::Tournament {
+                continue;
+            }
+            let plan = plan_cell_for(&event.cell, "Venom", ladder, |mode, id| {
+                let list = if mode == oag_race::Mode::Zone {
+                    &zones
+                } else {
+                    &ordinary
+                };
+                list.iter()
+                    .find(|t| t.id == id)
+                    .map(oag_raceplay::catalogue::Track::entry_name)
+                    .or_else(|| campaign.track_entry(id))
+            })
+            .unwrap_or_else(|e| panic!("{image}: {} does not plan: {e}", event.name));
+            let track = campaign
+                .definition
+                .tracks
+                .iter()
+                .find(|track| track.name == event.subject)
+                .unwrap_or_else(|| panic!("{image}: no circuit {}", event.subject));
+            assert_eq!(
+                plan.leg_entries[0].to_ascii_lowercase(),
+                record_entry(&track.location),
+                "{image}: {} records under the entry it races",
+                event.name
+            );
+            kinds.insert(format!("{:?}", track.kind));
+        }
+        assert_eq!(
+            kinds.into_iter().collect::<Vec<_>>(),
+            ["Classic", "Race", "Zone"],
+            "{image}: every kind of circuit was checked"
+        );
     }
 }
