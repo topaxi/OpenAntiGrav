@@ -50,18 +50,31 @@ fn load() -> Option<race::Loaded> {
     Some(loaded)
 }
 
+/// Every claim below that needs the race loaded and not flown, over **one**
+/// load: they were seven tests loading the same single race seven times until
+/// 2026-10-12. Each claim is its own function, with its doc comment.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_loaded_race_holds_every_flare_and_trail_hit_claim() {
+    let Some(loaded) = load() else {
+        return;
+    };
+    every_craft_on_the_grid_carries_both_halves_of_its_flare(&loaded);
+    the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(&loaded);
+    the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(&loaded);
+    every_flare_carries_the_flames_own_shader_parameters(&loaded);
+    the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not(&loaded);
+    the_trail_hit_effects_are_on_the_disc_and_load(&loaded);
+    every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on(&loaded);
+}
+
 /// Every craft on the grid draws its own flame and its own plume.
 ///
 /// **Both halves, per craft.** One team's flare on another's hull would be the
 /// kind of wrong that renders plausibly, and the models genuinely differ - 350
 /// to 961 triangles for `EF_Main` across the eight, and 616 to 1,492 for
 /// `EF_Boost`.
-#[test]
-#[ignore = "needs a disc image"]
-fn every_craft_on_the_grid_carries_both_halves_of_its_flare() {
-    let Some(loaded) = load() else {
-        return;
-    };
+fn every_craft_on_the_grid_carries_both_halves_of_its_flare(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         let flame = livery
             .flare
@@ -115,12 +128,7 @@ fn every_craft_on_the_grid_carries_both_halves_of_its_flare() {
 /// the identity - so a flare that was *not* moved would sit in the middle of
 /// the fuselage, which is a picture that reads as "no flare" rather than as a
 /// misplaced one. Asserted against the locator the same report names.
-#[test]
-#[ignore = "needs a disc image"]
-fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin() {
-    let Some(loaded) = load() else {
-        return;
-    };
+fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         let (Some(flame), Some(nozzle)) = (livery.flare.as_ref(), livery.nozzle) else {
             panic!("{}: no flare or no nozzle", livery.team);
@@ -153,12 +161,7 @@ fn the_flame_sits_at_the_nozzle_rather_than_at_the_hulls_origin() {
 /// the circuit materials that reading was measured on. See
 /// `oag_livery::flare::alpha_ramp` and
 /// `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
-#[test]
-#[ignore = "needs a disc image"]
-fn the_flame_carries_an_opacity_ramp_in_its_vertex_alpha() {
-    let Some(loaded) = load() else {
-        return;
-    };
+fn the_flame_carries_an_opacity_ramp_in_its_vertex_alpha(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         // **Both halves.** The two groups share one buffer pair, so a ramp
         // asserted on the flame alone would be asserted on the plume's
@@ -204,12 +207,7 @@ fn the_flame_carries_an_opacity_ramp_in_its_vertex_alpha() {
 /// format side by
 /// `crates/formats/tests/rcsmodel_material_ground_truth.rs`; what this asserts
 /// is that they reach the model the renderer draws.
-#[test]
-#[ignore = "needs a disc image"]
-fn every_flare_carries_the_flames_own_shader_parameters() {
-    let Some(loaded) = load() else {
-        return;
-    };
+fn every_flare_carries_the_flames_own_shader_parameters(loaded: &race::Loaded) {
     for livery in &loaded.liveries {
         for (what, model) in [("flame", &livery.flare), ("plume", &livery.boost)] {
             let Some(model) = model.as_ref() else {
@@ -243,12 +241,7 @@ fn every_flare_carries_the_flames_own_shader_parameters() {
 ///
 /// The names agree, the sampler units agree, and HD's own fragment program
 /// agrees; see `docs/ghidra/functions/ps3-hdfury-eu/engine-flare.md`.
-#[test]
-#[ignore = "needs a disc image"]
-fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not() {
-    let Some(loaded) = load() else {
-        return;
-    };
+fn the_ribbons_noise_is_the_near_transparent_one_and_its_coverage_is_not(loaded: &race::Loaded) {
     let mean = |texture: &oag_fx::exhaust::FlareTexture| {
         let pixels = texture.rgba.as_chunks::<4>().0;
         let total: u64 = pixels.iter().map(|p| u64::from(p[3])).sum();
@@ -389,10 +382,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
 ///
 /// This is the half the unit tests cannot reach: they pin *when* the effect
 /// fires, and this pins that there is something to fire.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn the_trail_hit_effects_are_on_the_disc_and_load() {
-    let Some(loaded) = load() else { return };
+fn the_trail_hit_effects_are_on_the_disc_and_load(loaded: &race::Loaded) {
     for name in [
         oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
         oag_title::engine_effects::TRAIL_HITSHIP_RED_EFFECT,
@@ -417,10 +407,7 @@ fn the_trail_hit_effects_are_on_the_disc_and_load() {
 /// burst silently falls back to a derived point clear of the hull - the exact
 /// failure a player reported. So this asserts the data is there rather than
 /// trusting the fallback never to be reached.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on() {
-    let Some(loaded) = load() else { return };
+fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on(loaded: &race::Loaded) {
     assert!(
         !loaded.setup.spark_anchors.is_empty(),
         "no slots carry anchors at all"
