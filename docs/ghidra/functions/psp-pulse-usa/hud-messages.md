@@ -93,10 +93,11 @@ cell on a PPSSPP profile (or write the cell record) and watch `hud+0xe0` and
 the four slot busy bytes across the threshold; the prediction is that none
 moves.
 
-HD composes the same four `Info` widgets into its Zone, Speed Lap and Time
-Trial layouts (`InfoTextParent`), checked 2026-10-06. Pure authors them in all
-three layouts and ships
-`HUD_Perfect Zone!` and `HUD_New Zone Record` strings beside them, so its
-message system is the same shape. Its `speech_zone.bnk` carries
-`zone_bronze`/`silver`/`gold` voice lines, which Pulse's bank lacks; that is
-the one lead that a Pure Zone race *does* announce a medal, unread.
+HD composes the same four `Info` widgets into its Zone, Speed Lap and Time Trial
+layouts (`InfoTextParent`), checked 2026-10-06. Pure authors them in all three
+layouts and ships `HUD_Perfect Zone!` and `HUD_New Zone Record` strings beside them;
+**read 2026-10-12**: Pure's drain has eight bits and raises only the three lap
+ones, none of them a medal, so its Zone voice lines are the Zone announcer and not
+a message line. HD's own routine **does** carry the three medal bits (`ER_GMA`,
+`ER_SMA`, `ER_BMA`), raised in Speed Lap: see
+[../ps3-hdfury-eu/hud-message-triggers.md](../ps3-hdfury-eu/hud-message-triggers.md).

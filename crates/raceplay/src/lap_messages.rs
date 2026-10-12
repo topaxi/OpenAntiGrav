@@ -1,19 +1,18 @@
-//! The three message lines the original raises at a lap crossing:
-//! `IG_HUD_PLAP`, `IG_HUD_NEWLAP_REC` and `IG_HUD_FIN_LAP`.
+//! The three message lines the original raises at a lap crossing: a perfect
+//! lap, a new lap record and the final lap.
 //!
-//! The law is `Craft_UpdateLapProgress` (`0x08842a18`, psp-pulse-usa), which
-//! ORs one bit each into the flag word `Hud_UpdateMessages` drains; see
-//! `docs/ghidra/functions/psp-pulse-usa/hud-message-triggers.md`. All three are
-//! the *player's* craft only and none fires on the finishing crossing.
+//! The law is the lap code's ORing one bit each into the flag word the HUD's
+//! message drain reads: Pulse's `Craft_UpdateLapProgress` (`0x08842a18`) into
+//! `Hud_UpdateMessages`, Pure's `0x08927a00`-ish into `0x0881f2ec`, HD's
+//! `0x000e4a30` into `0x00091d20`; see each binary's `hud-message-triggers.md`
+//! under `docs/ghidra/functions/`. All three are the *player's* craft only and
+//! none fires on the finishing crossing. The ids are the title's own
+//! ([`oag_title::lap_hud::LapHud`]): Pulse and HD `IG_HUD_*`, Pure
+//! `HUD_<English>`.
 //!
 //! Render-side: nothing here is in the hashed world.
 
-/// The three ids, in the order `Hud_UpdateMessages` drains the bits (`1`, `2`, `4`).
-pub const IDS: [&str; 3] = [PERFECT_LAP, NEW_LAP_RECORD, FINAL_LAP];
-
-const PERFECT_LAP: &str = "IG_HUD_PLAP";
-const NEW_LAP_RECORD: &str = "IG_HUD_NEWLAP_REC";
-const FINAL_LAP: &str = "IG_HUD_FIN_LAP";
+use oag_title::lap_hud::LapHud;
 
 /// What a tick's lap update said, as far as these lines care.
 #[derive(Debug, Clone, Copy, Default)]
@@ -33,8 +32,10 @@ pub struct LapEdge {
 }
 
 /// The player's per-lap state for the three lines.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct LapWatch {
+    /// The title's ids and its one mode rule.
+    hud: LapHud,
     /// The stored best lap for this circuit, mode and class as it stood at
     /// load, in ticks. `None` is "no record yet", which never announces.
     stored_best_ticks: Option<u32>,
@@ -45,18 +46,21 @@ pub struct LapWatch {
 }
 
 impl LapWatch {
-    /// A watch comparing laps against `stored_best_ticks`.
+    /// A watch comparing laps against `stored_best_ticks`, raising the title's
+    /// own ids.
     #[must_use]
-    pub fn new(stored_best_ticks: Option<u32>) -> Self {
+    pub fn new(hud: LapHud, stored_best_ticks: Option<u32>) -> Self {
         Self {
+            hud,
             stored_best_ticks,
             dirty: false,
         }
     }
 
     /// One tick: `hit` is whether the craft scraped a wall that nothing
-    /// absorbed. Returns the ids to raise, in drain order.
-    pub fn observe(&mut self, hit: bool, edge: LapEdge) -> Vec<&'static str> {
+    /// absorbed and `time_trial` whether the mode is Time Trial. Returns the ids
+    /// to raise, in drain order.
+    pub fn observe(&mut self, hit: bool, time_trial: bool, edge: LapEdge) -> Vec<&'static str> {
         self.dirty |= hit;
         let mut out = Vec::new();
         if !edge.completed {
@@ -68,19 +72,20 @@ impl LapWatch {
             return out;
         }
         if perfect {
-            out.push(PERFECT_LAP);
+            out.push(self.hud.perfect_lap);
         }
         // `FUN_08808bec`: strictly under a stored, nonzero record, in
         // centiseconds, and the best lap of this race.
         if let (Some(ticks), Some(stored)) = (edge.lap_ticks, self.stored_best_ticks)
+            && (self.hud.record_line_in_time_trial || !time_trial)
             && centis(ticks) != 0
             && centis(ticks) < centis(stored)
             && edge.best_lap_ticks == Some(ticks)
         {
-            out.push(NEW_LAP_RECORD);
+            out.push(self.hud.new_lap_record);
         }
         if edge.laps_target == Some(edge.lap) {
-            out.push(FINAL_LAP);
+            out.push(self.hud.final_lap);
         }
         out
     }
@@ -107,7 +112,8 @@ impl super::Race {
             lap_ticks: outcome.lap_ticks,
             best_lap_ticks: state.best_lap_ticks,
         };
-        for id in watch.observe(hit, edge) {
+        let time_trial = self.sim.world.mode() == oag_race::Mode::TimeTrial;
+        for id in watch.observe(hit, time_trial, edge) {
             self.view.messages.push(id, true);
         }
     }

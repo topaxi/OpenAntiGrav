@@ -517,14 +517,18 @@ pub struct HudArt {
     /// them, so it stays off there rather than borrowing Pulse's answer.
     pub kill_column: bool,
     /// Whether the four `Info1`-`Info4` widgets are the HUD's message lines -
-    /// `oag_hud::messages`. **Measured on Pulse alone**: `Hud_UpdateMessages`
-    /// (`0x0881f148`) is Pulse's own executable. Pure and HD author the same four
-    /// widgets in every race layout (`InfoTextParent` on HD, the same `Info1`-`4`
-    /// at the same shape on Pure), and a title with no measured rule of its own
-    /// takes Pulse's, drawn with its own layout and strings - so both are on, and
-    /// neither's own message routine is read. 2048 and Omega are off: no
-    /// census of their layouts, and Omega's racing is out of scope.
+    /// `oag_hud::messages`. Pulse, Pure and HD author the same four widgets in
+    /// every race layout (`InfoTextParent` on HD) and each executable's message
+    /// routine drains a flag word into them; the slot law (a 0.8 s gate, four
+    /// seconds of life, `sin(pi * (1 - (t/life)^6))` alpha) reads the same on
+    /// all three. What differs per title is [`Self::lap_hud`]. 2048 and Omega
+    /// are off: their layouts are not censused.
     pub message_slots: bool,
+    /// What the lap-crossing code raises through those lines and the split gap,
+    /// read from this title's own executable. `None` where nobody has read it:
+    /// no lap line is raised and no gap runs, rather than Pulse's answer being
+    /// borrowed. See [`crate::lap_hud`].
+    pub lap_hud: Option<crate::lap_hud::LapHud>,
     /// What this title's per-tick HUD update writes over its layout: the
     /// shield readout's runtime colours and fill, and which segments of the
     /// lap and place arcs are up. See [`RuntimeHud`].

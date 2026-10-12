@@ -183,3 +183,7 @@
 # 2026-10-12 (wreck-faithful): the collider enable byte, static only. See wreck-collision.md.
 0x08824fbc	function	Collision_BoxAgainstBox	80	wreck-collision.md
 0x08928824	function	Ship_SetState	75	wreck-collision.md
+0x0881f2ec	function	Hud_UpdateMessages	85	hud-message-triggers.md
+0x0881f780	function	Hud_UpdateTimeDiff	85	hud-message-triggers.md
+0x0881e2a4	function	Hud_Construct	80	hud-message-triggers.md
+0x0892767c	function	Craft_UpdateLapProgress	85	hud-message-triggers.md

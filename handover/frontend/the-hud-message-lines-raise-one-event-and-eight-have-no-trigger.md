@@ -1,65 +1,64 @@
-# The HUD's message lines raise one chosen event; the original's eight have no trigger
+# The HUD's message lines: lap lines and the split gap run on five titles; the rest is open
 
-2026-10-06, branch `hud-medal`. Evidence:
-[hud-messages.md](../../docs/ghidra/functions/psp-pulse-usa/hud-messages.md),
+2026-10-06 `hud-medal`, 2026-10-12 `pulse-hud-messages` and `hud-messages-port`.
+Evidence, one page per executable:
+[Pulse](../../docs/ghidra/functions/psp-pulse-usa/hud-message-triggers.md),
+[Pure](../../docs/ghidra/functions/psp-pure-usa/hud-message-triggers.md),
+[HD](../../docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md),
+[2048](../../docs/ghidra/functions/vita-2048-eu-v104/hud-message-triggers.md),
+[Omega](../../docs/ghidra/functions/ps4-omega-eu/hud-message-triggers.md);
+the slot law is [hud-messages.md](../../docs/ghidra/functions/psp-pulse-usa/hud-messages.md),
 [hud.md "Medal messages"](../../docs/ui/hud.md#medal-messages-2026-10-06).
 
-**State.** Pulse's four message lines (`Info1`-`Info4`, `oag_hud::messages`) are
-drawn with the original's decompiled slot law; a campaign Zone or Speed Lap
-raises "<Tier> medal awarded" through them the first time a tier is reached
-(chosen, not measured - the original shows no mid-race medal).
+**State.** Every title's lap-crossing lines (a perfect lap, a new lap record, the
+final lap) and the time gap are **data**: `oag_title::lap_hud::LapHud` on
+`HudArt::lap_hud`, each field read in that title's own executable.
+`oag_raceplay::{lap_messages, split_gap}` and `oag_hud::{messages, time_gap}` run
+the machine; a title with no `lap_hud` raises nothing. What differs: Pulse and HD
+`IG_HUD_*` ids green or red, **Pure `HUD_<English>` keys drawn white** with a gap
+worded as a sentence and a six-crossing table, **HD a backing frame per line, no
+record line in Time Trial, the count-up alone in Time Trial and Speed Lap, no place
+stop and three gaps a lap**, 2048 and Omega HD's with one split a lap (chosen). The
+gap is to the **first craft over the split**, not the craft directly ahead or
+behind, on every title read. The chosen medal line (`oag_game::medal_watch`) stays
+for Zone and Speed Lap.
 
 ## Open
 
-- **A live frame of the slot law.** The four-second fade, the 0.8 s gate and the
-  colours are decompiled only. Capture any `IG_HUD_PLAP` / `NEWLAP_REC` /
-  `FIN_LAP` line (a Speed Lap lap, a personal-best lap) on PPSSPP and compare.
-- **The negative is static.** No live frame of a campaign Zone or Speed Lap
-  crossing a medal threshold: a fresh profile has those cells locked. Unlock one
-  (write the cell record) and watch `hud+0xe0` and the slot busy bytes.
-- ~~The `MESSAGE` cue~~ **wired 2026-10-06** (`Cue::Message`, raised off
-  `just_shown`; WAV-diff checked). Still open: the `gold_med`/`silver_med`/
-  `bronze_med` jingles have no recovered trigger and are unplayed even on the
-  end-of-race screen.
-- ~~A persistent earned-medal readout~~ **done 2026-10-06**: `Info4` holds the
-  best medal for the rest of the race (`oag_game::medal_watch`, one function
-  for the window and the headless capture; `--campaign-cell` reproduces it).
-  Open: a live PPSSPP frame to confirm or kill the "no mid-race medal" reading.
-- ~~**The eight events with no trigger**~~ **read 2026-10-12**
-  ([hud-message-triggers.md](../../docs/ghidra/functions/psp-pulse-usa/hud-message-triggers.md)):
-  `IG_HUD_PLAP`, `NEWLAP_REC` and `FIN_LAP` are raised by `Craft_UpdateLapProgress`
-  and are **wired** (`oag_raceplay::lap_messages`). Still open: `CONT_ELIM`'s
-  writer is `Ship_Damage` (Elimination, weapon kill) but the attacker byte
-  `+0x48` that picks green or red is read at 60 - wire it once that is
-  settled; `PERF_ZONE`, `PERF_BOOST`, `NEW_ZONE_RECORD`, `NEW_SCORE_RECORD`
-  and the `0x200` queue have **no setter in Pulse's race path** (a census, 75),
-  the queue being the multiplayer kill feed.
-- **A live PPSSPP frame of the lap lines and the gap.** The law is static (slot
-  law, gap flash phases and colours, the whole-second leader stamp); a capture of
-  a lap crossing with opponents about would confirm the 5 Hz flash and the 3.5 s
-  hold. The gap's `+0x10 == 1` stop rule reads `PLAYER_HUD+0x10` as the place.
-- **HD's own lap-line routine** is unread (wired by inheritance); Pure keeps
-  its strings under other keys, so its three lines are off and only the gap runs.
-- **Pure's phrase.** Pure authors the same four widgets and ships `HUD_Perfect
-  Zone!`/`HUD_New Zone Record` and `zone_bronze/silver/gold` voice lines: the
-  one lead that Pure announces a medal in Zone. `message_slots` is on (Pulse's
-  law) but Pure's table has no `ER_GMA`, so nothing draws; find Pure's own phrase
-  and its executable's routine. Whether Pure launches a campaign cell at all was
-  not checked.
-- **HD** composes the same slots in every race layout and draws the phrase from
-  its own table; the trigger now runs end to end on HD Zone (`grid0_4_2`, bronze
-  at zone 14, headless). Its text style is authored white with a faint border
-  and no backing, so a bright backdrop washes it - HD's own, left alone. HD's
-  own message colour (the banner is Pulse's green) is unread.
-- **2048** earns `Pass`/`Elite` not gold/silver/bronze, has no `Info1`-`Info4`
-  and never showed `RaceMedal`: checked, applies, not wired (needs its own phrase
-  and widget). Omega (racing out of scope): not checkable.
+- **A live frame of the slot law and of a lap line** on PPSSPP (Pulse, Pure) and
+  RPCS3 (HD): the flash phases, the 3.5 s hold, the 0.8 s gate, Pure's outline
+  staying at full alpha while the text fades (read off one decompile, 70).
+- **HD's Speed Lap medal** (measured, `Craft_UpdateLapProgress` `0x000e553c`): the
+  line is raised on every lap that is a new race-best and inside a tier, with a 3D
+  trophy (`SpeedLapGoldMedal`/`Silver`/`Bronze` `<ImageModel>`s, `hd_gold.vex`,
+  208 x 150 at (1600, 200)) and the voice `gold_med_shrt`. `medal_watch` raises on a
+  tier improvement and draws no trophy; the HUD crate has no `<ImageModel>`.
+- **Announcer cues** the original plays with the lines: `PERFECT_LAP`,
+  `NEW_LAP_REC` (HD `0x91d20`; 2048 `RACE_Perfect_lap`/`RACE_New_lap_record`;
+  Omega `RACE_Perfect_lap`) and `cont_elim` on a kill. `Cue::ContElim` exists for a
+  wrecked opponent; the other two have no `Cue`.
+- **`CONT_ELIM`**: Pulse `Ship_Damage` (`0x088439ac`, attacker byte `+0x48` read at
+  60), HD `Ship_ApplyDamage_q` (`0x000e84d0`/`0x000e8488`), 2048 unread. Wire it in
+  Elimination once the attacker byte is settled.
+- **HD**: the cap widening of a line wider than 240 px and the retro skin's halved
+  alpha (`hud+0x6a0`); what `hud+0x44 & 0x20` is (voice-only) and what the profile
+  byte `0x009384e1` is (its clear state is the ordinary race); the writers of
+  `IG_HUD_INVALID_LAP` (`0x1000`, `0x00070178`), the queue (`0x2000`,
+  `0x00368a88`) and `IG_HUD_TARGET_ATTAINABLE` (`0x4000`, `0x0003f6d8`,
+  `0x0006d958`), three lines Pulse does not have.
+- **2048 and Omega**: 2048's gap routine and both titles' split tables (are the
+  laps split in thirds as on HD?); 2048's `MSC_RACE_ENDS` notice and
+  `HUD_Message_Ship_Destroyed`; their lap-function writers are assumed HD's.
+- **Unraised bits** (`PERF_ZONE`, `PERF_BOOST`, `NEW_ZONE_RECORD`,
+  `NEW_SCORE_RECORD`): no setter on Pulse, Pure or HD (a census, 75). Pure's
+  `HUD_Perfect Zone!` and `HUD_New Zone Record` are strings it ships and never
+  raises.
 - **Elimination** (kills against gold) would raise through the same hook.
 
 ## Next Steps
 
-1. Read `Ship_Damage`'s attacker byte `+0x48` and wire `CONT_ELIM` in Elimination.
-2. ~~Find the writers of `*(hud+0x3c)+0xe0` and wire `PLAP`/`NEWLAP_REC`/`FIN_LAP`.~~ Done 2026-10-12.
-3. ~~Route `just_shown` to the `MESSAGE` cue.~~ Done.
-4. Read Pure's HUD message routine and turn `message_slots` on there.
-5. A live PPSSPP frame of a lap crossing.
+1. Capture a lap line on PPSSPP (Pulse and Pure) and RPCS3 (HD) and compare.
+2. Read 2048's gap routine and the split tables of 2048 and Omega.
+3. Wire the HD Speed Lap medal as measured (per-lap trigger), then the trophy model.
+4. Read `Ship_ApplyDamage_q`'s attacker byte and wire `CONT_ELIM` in Elimination.
+5. Add the `PERFECT_LAP`/`NEW_LAP_REC` announcer cues through the `Cue` table.

@@ -177,6 +177,7 @@ const TITLE: &Title = &Title {
         total_time_timed_modes_only: false,
         kill_column: false,
         message_slots: false,
+        lap_hud: None,
         runtime: None,
         assist: None,
     },

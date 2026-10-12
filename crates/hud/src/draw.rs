@@ -283,7 +283,10 @@ pub(super) fn text_for(
             .and_then(|line| strings.get(&line.text).map(str::to_string)),
 
         // The lap-line time gap - see [`super::time_gap`].
-        "TimeDiffText" => readout.time_gap.as_ref().map(|line| line.text.clone()),
+        "TimeDiffText" => readout
+            .time_gap
+            .as_ref()
+            .and_then(|line| line.text(strings)),
 
         // Conditional.
         "WrongWay" => readout.wrong_way.then(|| {
@@ -795,6 +798,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         tinted.color = line.color;
         frame.sprites.extend(sprite_draw(&tinted, cx.sheet));
     }
+
+    // What a message line and the time gap are drawn over, where the layout authors it.
+    frame.sprites.extend(super::messages::backing(cx, readout));
 
     // Decided once for the frame rather than per widget: it is a fact about the
     // layout, the readout and the title together, and two widgets have to agree.

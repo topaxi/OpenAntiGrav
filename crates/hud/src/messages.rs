@@ -10,7 +10,7 @@
 //! `Info1`..`Info4` bound by `Hud_BindWidgets`). The bits it names are
 //! `IG_HUD_PLAP`, `IG_HUD_NEWLAP_REC`, `IG_HUD_FIN_LAP`, `IG_HUD_CONT_ELIM`,
 //! `IG_HUD_PERF_ZONE`, `IG_HUD_PERF_BOOST`, `IG_HUD_NEW_ZONE_RECORD` and
-//! `IG_HUD_NEW_SCORE_RECORD`. **None of them is a medal**, and nothing on the
+//! `IG_HUD_NEW_SCORE_RECORD`. **None of Pulse's is a medal** (HD's own routine has three), and nothing on the
 //! disc that evaluates a medal (`Cell_EvaluateMedal`, `0x088bf620`) is called
 //! from the race HUD - see `docs/ui/hud.md`'s "Medal messages".
 //!
@@ -27,7 +27,8 @@
 //!   full in the first half second, then a long slow fade. The border follows.
 //! - Green (`0x30ff30`) for a good message, red (`0xff3030`) for a bad one -
 //!   `FUN_0881b52c`'s third argument, `1` for everything but `IG_HUD_CONT_ELIM`'s
-//!   second use.
+//!   second use. HD's `0x91d20` is the same; **Pure's drain has no such argument
+//!   and draws every line white** ([`MessageTint`], set per title).
 //! - The original also plays the `MESSAGE` cue as it shows. **Not played here**:
 //!   nothing in this crate reaches a mixer, and [`MessageBoard::advance`]
 //!   reports a show through [`MessageBoard::just_shown`] so the host can.
@@ -35,6 +36,7 @@
 //! Which tick a message is raised on is the host's business, and the one trigger
 //! this build raises - a medal earned mid-race - is **chosen, not measured**.
 
+use oag_title::lap_hud::MessageTint;
 use oag_ui::screen::argb_to_rgba;
 
 /// How many lines the HUD holds at once: `Info1` to `Info4`.
@@ -71,10 +73,59 @@ pub(super) fn colour(readout: &super::Readout, name: &str) -> Option<[f32; 4]> {
 /// (`FUN_088cd3a4`); every other widget keeps `border` as it was.
 #[must_use]
 pub(super) fn fade_border(readout: &super::Readout, name: &str, border: [f32; 4]) -> [f32; 4] {
-    match colour(readout, name) {
-        Some(color) => [border[0], border[1], border[2], border[3] * color[3]],
+    let line = slot_of(name)
+        .and_then(|slot| readout.messages[slot].as_ref())
+        .filter(|line| !line.authored && line.fades_border);
+    match line {
+        Some(line) => [border[0], border[1], border[2], border[3] * line.color[3]],
         None => border,
     }
+}
+
+/// The backing a layout authors behind a message line or the time gap: three
+/// `<Image>` children of the text widget (`FrameMiddle`, `FrameLeft`,
+/// `FrameRight`, numbered per slot on `Info1`-`Info4`), which the original
+/// shows with their parent and, on a message line, fades with the line's own
+/// alpha (HD's `0x91d20` writes the three frames' vertex colours with the same
+/// alpha byte as the text). Pulse and Pure author none, and neither do 2048's
+/// composed layouts (its drain names the frames, its layouts have none), so for
+/// them this draws nothing; HD authors all of them. Omega's layouts were not
+/// checked.
+///
+/// **Not done**: HD widens the left and right caps with the text when it is
+/// wider than the 240 px middle (`FrameLeft`/`FrameRight` move to `+/-` half the
+/// text width); they are drawn here where the layout puts them, which is where
+/// the original leaves them for every line short enough to fit.
+pub(super) fn backing(
+    cx: &super::draw::Context<'_>,
+    readout: &super::Readout,
+) -> Vec<oag_ui::frontend::Draw> {
+    let mut out = Vec::new();
+    let mut frames = |suffix: &str, alpha: f32| {
+        for part in ["FrameMiddle", "FrameLeft", "FrameRight"] {
+            if let Some(sprite) = cx.layout.sprite(&format!("{part}{suffix}")) {
+                let mut tinted = sprite.clone();
+                tinted.color[3] *= alpha;
+                out.extend(super::draw::sprite_draw(&tinted, cx.sheet));
+            }
+        }
+    };
+    for (slot, line) in readout.messages.iter().enumerate() {
+        let Some(line) = line.as_ref().filter(|line| !line.authored) else {
+            continue;
+        };
+        if cx.strings.get(&line.text).is_some() {
+            frames(&(slot + 1).to_string(), line.color[3]);
+        }
+    }
+    if readout
+        .time_gap
+        .as_ref()
+        .is_some_and(|gap| gap.text(cx.strings).is_some())
+    {
+        frames("", 1.0);
+    }
+    out
 }
 
 /// A good message's colour, `0x30ff30` - before the alpha is applied.
@@ -94,6 +145,10 @@ pub struct MessageLine {
     /// [`Self::color`] - the standing line, which says its tier in words and
     /// needs no colour of its own.
     pub authored: bool,
+    /// Whether the outline's alpha follows the text's. Pulse and HD do
+    /// (`FUN_088cd3a4`); Pure's drain writes the text colour alone, so the
+    /// outline stays as the layout authors it.
+    pub fades_border: bool,
 }
 
 /// What the HUD shows of the board this frame: one entry per slot.
@@ -114,6 +169,7 @@ pub struct MessageBoard {
     gate: f32,
     shown: bool,
     standing: Option<Standing>,
+    tint: MessageTint,
 }
 
 /// A line that stays for the rest of the race, in the last slot.
@@ -137,6 +193,7 @@ impl Default for MessageBoard {
             gate: -1.0,
             shown: false,
             standing: None,
+            tint: MessageTint::GoodBad,
         }
     }
 }
@@ -166,6 +223,12 @@ impl MessageBoard {
     /// colour for the widget, not the green of a banner.
     pub fn set_standing(&mut self, id: impl Into<String>) {
         self.standing = Some(Standing { text: id.into() });
+    }
+
+    /// How this title tints a line: Pulse and HD green or red, Pure white. See
+    /// [`MessageTint`].
+    pub fn set_tint(&mut self, tint: MessageTint) {
+        self.tint = tint;
     }
 
     /// Whether a message started showing on the last [`Self::advance`] - the
@@ -211,12 +274,16 @@ impl MessageBoard {
             let ratio = (left / LIFE_SECONDS).clamp(0.0, 1.0);
             let ramp = (1.0 - ratio.powi(6)).max(0.0);
             let alpha = (ramp * std::f32::consts::PI).sin().max(0.0);
-            let mut color = argb_to_rgba(if held.good { GOOD } else { BAD });
+            let mut color = match self.tint {
+                MessageTint::GoodBad => argb_to_rgba(if held.good { GOOD } else { BAD }),
+                MessageTint::White => [1.0; 4],
+            };
             color[3] = alpha;
             *line = Some(MessageLine {
                 text: held.text.clone(),
                 color,
                 authored: false,
+                fades_border: self.tint == MessageTint::GoodBad,
             });
         }
         // Not while the same words are already up as a banner: the line would
@@ -229,6 +296,7 @@ impl MessageBoard {
                 text: standing.text.clone(),
                 color: [1.0; 4],
                 authored: true,
+                fades_border: false,
             });
         }
         out

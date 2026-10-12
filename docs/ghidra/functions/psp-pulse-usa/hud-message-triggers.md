@@ -88,13 +88,21 @@ Disc-backed: `crates/game/tests/lap_messages_ground_truth.rs`.
 
 ## Other titles
 
-- **Pure**: checked, differs. The table has none of the three ids (Pure keeps
-  its strings under `HUD_`-prefixed keys), so the lines stay off there rather
-  than raise a `MESSAGE` cue for words nothing draws; the gap runs under
-  Pulse's law (Pure's own routine unread, the rule inherited as for every
-  unmeasured title) and draws the text without the icon, which its layout does
-  not author.
-- **HD**: checked, applies, wired by inheritance. Its table carries
-  `IG_HUD_PLAP`/`NEWLAP_REC`/`FIN_LAP`, so they raise under Pulse's law; its own
-  routine is unread. 2048 has no message slots: not wired. Omega: not
-  checkable (racing out of scope).
+Each is now read in its own executable and wired as data
+(`oag_title::lap_hud::LapHud`, 2026-10-12, `hud-messages-port` lane):
+
+- **Pure**: [../psp-pure-usa/hud-message-triggers.md](../psp-pure-usa/hud-message-triggers.md).
+  Checked, differs: `HUD_<English>` keys (the earlier "its table lacks the ids" was
+  a spelling), white text, the gap as a sentence, no icon, no place stop, six
+  crossings. Its lines are on.
+- **HD**: [../ps3-hdfury-eu/hud-message-triggers.md](../ps3-hdfury-eu/hud-message-triggers.md).
+  Checked, differs: its own bit numbering with medal bits, a backing frame per line,
+  the new-lap-record line off in Time Trial, the count-up alone in Time Trial and
+  Speed Lap, no place stop, **three gaps a lap**.
+- **2048** and **Omega**: [../vita-2048-eu-v104/hud-message-triggers.md](../vita-2048-eu-v104/hud-message-triggers.md),
+  [../ps4-omega-eu/hud-message-triggers.md](../ps4-omega-eu/hud-message-triggers.md).
+  Their drains read as HD's: ported, with the gap routine (Omega read, 2048 unread)
+  and the split table (both unread) chosen from HD at one split a lap.
+
+What the maintainer described as a gap "to the racer directly ahead or behind" is,
+on every title read, the gap to the **first craft over that split**.

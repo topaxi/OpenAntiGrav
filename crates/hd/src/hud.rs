@@ -153,6 +153,26 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: true,
+    // Measured: `0x00091d20` (the message drain), `0x000e4a30` (the lap writers),
+    // `0x000d06e0` (the split table) and `0x000907b0` (the gap), read 2026-10-12 -
+    // `docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`. HD splits a
+    // lap into thirds, holds a won gap the full 3.5 s, runs the count-up alone in
+    // Time Trial and Speed Lap, and skips the new-lap-record line in Time Trial.
+    lap_hud: Some(oag_title::lap_hud::LapHud {
+        perfect_lap: "IG_HUD_PLAP",
+        new_lap_record: "IG_HUD_NEWLAP_REC",
+        final_lap: "IG_HUD_FIN_LAP",
+        record_line_in_time_trial: false,
+        tint: oag_title::lap_hud::MessageTint::GoodBad,
+        gap: oag_title::lap_hud::SplitGapRule {
+            text: oag_title::lap_hud::GapText::Signed,
+            green_hold_needs_first_place: false,
+            count_up_alone_in_timed_modes: true,
+            stamps_need_two_live: true,
+            splits_per_lap: 3,
+            table_crossings: 100,
+        },
+    }),
     runtime: Some(RUNTIME),
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`

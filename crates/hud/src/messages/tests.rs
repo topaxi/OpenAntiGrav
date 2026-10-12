@@ -237,3 +237,80 @@ fn banners_leave_the_last_slot_to_the_standing_line() {
         "the banner and the standing line are the same words"
     );
 }
+
+fn framed_layout() -> crate::Layout {
+    crate::Layout::from_xml(
+        r#"<Screen><Screen name="HUD">
+<Text name="Info1" OffsetX="600" OffsetY="225"><Values font="HUD" scale="0.6" align="centre" vertalign="middle" x="0" y="15"/>
+<Image name="FrameMiddle1"><Values centred="true" x="0" y="20" width="240" height="95" U="114" V="497" TxtrWidth="240" TxtrHeight="95" src="Data\HUD\Textures\PulseHUD.mip"/></Image>
+<Image name="FrameLeft1"><Values centred="true" x="-160" y="20" width="78" height="80" U="540" V="661" TxtrWidth="-78" TxtrHeight="80" src="Data\HUD\Textures\PulseHUD.mip"/></Image>
+<Image name="FrameRight1"><Values centred="true" x="160" y="20" width="78" height="80" U="462" V="661" TxtrWidth="78" TxtrHeight="80" src="Data\HUD\Textures\PulseHUD.mip"/></Image>
+</Text>
+<Text name="TimeDiffText" OffsetX="600" OffsetY="140"><Values font="HUD" scale="0.6" align="left" vertalign="middle" x="-13" y="20"/>
+<Image name="FrameMiddle"><Values centred="true" x="0" y="20" width="240" height="95" U="114" V="497" TxtrWidth="240" TxtrHeight="95" src="Data\HUD\Textures\PulseHUD.mip"/></Image>
+</Text>
+</Screen></Screen>"#,
+    )
+}
+
+fn sprites_of(layout: &crate::Layout, readout: &crate::Readout) -> Vec<f32> {
+    use crate::Draw;
+    let strings = table();
+    let cx = crate::tests::context(layout, &strings);
+    crate::draw_list(&cx, readout)
+        .sprites
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { color, .. } => Some(color[3]),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A layout that authors `FrameMiddle1`/`FrameLeft1`/`FrameRight1` under `Info1`
+/// (HD, 2048 and Omega do) gets them behind the line, fading with it; one that
+/// authors none (Pulse, Pure) gets nothing.
+#[test]
+fn a_message_line_draws_the_backing_its_layout_authors_and_fades_it_with_the_line() {
+    let layout = framed_layout();
+    let mut board = MessageBoard::default();
+    board.push("ER_GMA", true);
+    board.advance();
+    run(&mut board, 5);
+    let readout = crate::Readout {
+        messages: board.lines(),
+        ..crate::Readout::blank()
+    };
+    let alphas = sprites_of(&layout, &readout);
+    assert_eq!(alphas.len(), 3, "middle, left and right: {alphas:?}");
+    let line = readout.messages[0].as_ref().expect("a line");
+    for alpha in alphas {
+        assert!((alpha - line.color[3]).abs() < 1e-4, "{alpha} vs the line");
+    }
+
+    let bare = crate::Layout::from_xml(
+        r#"<Screen><Screen name="HUD">
+<Text name="Info1"><Values font="HUD" scale="0.6" x="240" y="80"/></Text>
+</Screen></Screen>"#,
+    );
+    assert!(sprites_of(&bare, &readout).is_empty(), "no frames authored");
+    let none = crate::Readout::blank();
+    assert!(sprites_of(&layout, &none).is_empty(), "no line, no backing");
+}
+
+/// The time gap's `FrameMiddle` is up with the gap and only then.
+#[test]
+fn the_time_gap_draws_its_own_backing() {
+    let layout = framed_layout();
+    let mut gap = crate::time_gap::TimeGap::new(oag_pulse::hud::ART.lap_hud.expect("read").gap);
+    let held = crate::time_gap::GapEvents {
+        led_at: None,
+        gap: Some((2.4, false)),
+    };
+    gap.advance(1.0 / 60.0, 30.0, held, 8, 4, false);
+    let readout = crate::Readout {
+        time_gap: gap.line().cloned(),
+        ..crate::Readout::blank()
+    };
+    assert_eq!(sprites_of(&layout, &readout), [1.0]);
+}
