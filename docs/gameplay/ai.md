@@ -632,9 +632,10 @@ and every 2048 campaign event is a mode of 2048's own lineage:
 
 The thrust law reproduced on **528 of 528 Vita3K samples** at skill `1.0` (the
 event's own) and `3.0` (written into the running event), worst residual
-`0.00049`, once two things are known: the opponents read the race time one 30 fps
-frame late, and drivers updated before the reference racer read its spread from the
-tick before. Ported as `oag_ai::original::Laws` fields (`every_tick`,
+`0.00049`, once two things are known: the samples need the race time one 30 fps
+frame back (why is not settled: a lagged clock, or every stop landing between the
+clock's increment and the AI update), and drivers updated before the reference racer
+read its spread from the tick before. Ported as `oag_ai::original::Laws` fields (`every_tick`,
 `event_ring_rate`, `coin_ordered_search`, `preferred_follows_choice`) carried by
 `oag_2048::race::ORIGINAL_DRIVER`, with `oag_2048::race::EventAi` resolving an
 event's values; **2048's campaign flies it**. On the disc
@@ -642,7 +643,10 @@ event's values; **2048's campaign flies it**. On the disc
 the capture's `63.0` and `74.0`, and the field finishes a race on nine of the ten
 circuits with the player parked (Arena with up to three respawns a craft). Sol loops
 every craft through respawns under this project's driver too; Super Phantom events
-keep this project's driver (no fifth `SpeedClass`). Omega's executable carries 2048's
+(no fifth `SpeedClass`) and Elimination events (2048's own Eliminator thrust law,
+`0x81199800`, is unread) keep this project's driver. 2048 ticks at 30 fps and this
+engine at 60 Hz, so the planner's per-call terms run twice as often a second: chosen,
+not measured. Omega's executable carries 2048's
 `Ai_Construct` and event tuning (static); not wired.
 
 So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model

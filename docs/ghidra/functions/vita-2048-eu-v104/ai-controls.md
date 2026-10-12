@@ -237,11 +237,14 @@ The thrust law, predicted in `float32` in the executable's operation order
 | `unity-park` | `1.0` (the event's own) | 264 | **264** | `0.00049` |
 | `unity-skill3` | `3.0` (written into `m_skillScale` at the intro) | 264 | **264** | `0.00049` |
 
-Two things the prediction has to know, both now part of the law's recorded behaviour:
+Two things the prediction has to know:
 
-- **The opponents read the race time one 30 fps frame behind `RM+0x10e3c`.** Before
+- **The samples need the race time one 30 fps frame behind `RM+0x10e3c`.** Before
   `20` s the step gain reads the time; with `t - 1/30` every sample is exact, with `t`
-  eighteen were off by `0.08/30` times their gap.
+  eighteen were off by `0.08/30` times their gap. The cause is not settled: either the
+  law reads a lagged clock, or every stop landed after the clock's increment and before
+  that frame's AI update, so the stored throttle is the previous frame's. HD's
+  breakpoint capture needed no lag. Nothing in the port carries a lag.
 - **The drivers listed before the reference racer read its spread from the tick
   before**, because the reference's own update refreshes it later in the same tick. One
   such driver per sample gives that value back from its logged gap and is not counted
@@ -279,11 +282,22 @@ holds: the event's AI as read live, the reference racer's `63.0` and `74.0`, mor
 one throttle moving per tick, the `*2048.xml` set equal to the base set (all five
 classes; Super Phantom differs only in whitespace), and the field finishing one race
 event on each of nine circuits with the player parked (Arena with up to three respawns
-a craft; this project's own driver respawns there four times and leaves one craft on
-lap 1). **Sol** is not flown in the test: every craft respawns in a loop on lap 1
+a craft), and an Elimination event keeping this project's driver. **Sol** is not flown in the test: every craft respawns in a loop on lap 1
 under this project's own driver as much as under the original's, a rescue fault the
-driver does not cause. **Super Phantom** events (20) keep this project's driver:
-`oag_tables::handling::SpeedClass` has four classes.
+driver does not cause. Arena's respawns were not compared with this project's driver:
+that run had weapons destroying craft, the original field's did not. **Super Phantom**
+events (20) keep this project's driver: `oag_tables::handling::SpeedClass` has four
+classes. **Elimination** events (26) keep it too: `AI_ComputeOpponentThrust` hands a
+2048-lineage Eliminator-family mode to `0x81199800`, which is unread, and flying HD's
+Eliminator branch in its place would be a substitute. `GameMode_IsEliminatorFamily`'s
+game-mode flags `1` and `4` may cover event kinds beyond Elimination; which is unread.
+
+**Chosen, not measured: the rate.** 2048 runs a race at 30 fps and this engine at
+60 Hz. With `every_tick`, each per-call term of the planner (the `0.9`/`0.1` score
+smoothing, the `rand() % 400` and `rand() % 200` draws, the `0.95` push decay) runs
+twice as often a second as it does on the Vita. The thrust law keeps no state between
+calls, the ring fill is per slot of distance and the authority ramp per second, so
+those three are unaffected.
 
 ## Omega: checked, applies, not wired
 

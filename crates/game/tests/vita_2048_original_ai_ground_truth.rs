@@ -46,8 +46,8 @@ fn race(event: &str, skill: Option<f32>) -> Option<oag_raceplay::Race> {
     let ai = loaded
         .campaign_2048_event
         .as_ref()
-        .expect("a campaign event")
-        .ai;
+        .and_then(|event| event.ai)
+        .expect("a race event with the original's AI");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert!(
         race.use_original_ai(Some(skill.unwrap_or(ai.skill_scale)), ai.level),
@@ -97,12 +97,12 @@ fn event_4_reads_the_ai_vita3k_read() {
     let ai = loaded.campaign_2048_event.expect("a campaign event").ai;
     assert_eq!(
         ai,
-        oag_2048::race::EventAi {
+        Some(oag_2048::race::EventAi {
             skill_scale: 1.0,
             pad_tracking: 1.0,
             weapon_avoidance: 1.0,
             level: 1,
-        }
+        })
     );
     let race = race("2048 - Event 4", None).expect("loaded above");
     let field = race.original_ai_field().expect("the field is on");
@@ -110,6 +110,21 @@ fn event_4_reads_the_ai_vita3k_read() {
     for driver in &field.drivers {
         assert_eq!(f64::from(driver.planner.rate), 0.001_649_999_991_059_303_3);
     }
+}
+
+/// An Elimination event keeps this project's driver: 2048 hands its
+/// opponents' throttle to a law of its own (`0x81199800`) that is unread.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn an_elimination_event_keeps_this_projects_driver() {
+    let Some(loaded) = loaded("2048 - Event 5-1") else {
+        return;
+    };
+    assert_eq!(loaded.setup.mode, oag_race::Mode::Eliminator);
+    assert_eq!(
+        loaded.campaign_2048_event.expect("a campaign event").ai,
+        None
+    );
 }
 
 /// The racer one place ahead of the parked player is its own formation
@@ -265,8 +280,7 @@ circuit!(the_field_finishes_mall, "2048 - Event 2", 0);
 circuit!(the_field_finishes_bridge, "2048 - Event 2-1", 0);
 circuit!(the_field_finishes_square, "2048 - Event 4", 0);
 circuit!(the_field_finishes_park, "2048 - Event 4-1", 0);
-// Arena puts most of the field back on the track one to three times; this
-// project's own driver four times, and leaves one craft on lap 1.
+// Arena puts most of the field back on the track one to three times a craft.
 circuit!(the_field_finishes_arena, "2049 - Event 6", 3);
 circuit!(the_field_finishes_cathedral, "2049 - Event 2", 0);
 circuit!(the_field_finishes_subway, "2049 - Event 4", 0);

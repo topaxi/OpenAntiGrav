@@ -602,14 +602,17 @@ impl Session {
                         race_stage.campaign_ai_skill_scale,
                         race_stage.campaign_difficulty.map_or(1, rung_level),
                     );
-                } else if let Some(event) = race_stage.campaign_2048_event.as_ref()
+                } else if let Some(ai) = race_stage
+                    .campaign_2048_event
+                    .as_ref()
+                    .and_then(|event| event.ai)
                     && original_opponent
                 {
                     // A 2048 campaign event: its own `m_skillScale` and level
                     // (`oag_2048::race::EventAi`), then the two AI skills the
                     // ring rate follows. A Speed Lap or Zone event has no
-                    // opponents and nothing here changes.
-                    let ai = event.ai;
+                    // opponents and nothing here changes; an Elimination
+                    // event carries no `ai` and keeps this project's driver.
                     if race_stage
                         .race
                         .use_original_ai(Some(ai.skill_scale), ai.level)

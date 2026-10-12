@@ -606,7 +606,11 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         // `05_Track`/`20_Track`, which a 2048 circuit's path never equals.
         halved_lookahead: &[],
         // `driver+0x98` is `GameMode_IsHdLineage()`, clear in every 2048
-        // event: `AI_UpdateCraft` flags the racer every tick.
+        // event: `AI_UpdateCraft` flags the racer every tick. 2048 ticks at
+        // 30 fps and this engine at 60 Hz, so the per-call terms (the score
+        // smoothing, the `1/400` and `1/200` draws, the push decay) run at
+        // twice the original's rate a second: that mapping is chosen, not
+        // measured. The thrust law keeps no state between calls.
         every_tick: oag_title::pre_race::Sourced::measured(true),
         // `FUN_8119853c`: the ring rate from `m_aiPadTrackingSkill` and
         // `m_aiWeaponAvoidanceSkill`; `0.00165` read live.
