@@ -78,7 +78,6 @@ impl Menu {
             .map(|row| self.focus_target(page, row))
             .collect();
         for (focus, target) in self.focus[page].iter_mut().zip(targets) {
-            let target = target;
             *focus += (target - *focus) * ease;
             if (target - *focus).abs() < 1e-3 {
                 *focus = target;

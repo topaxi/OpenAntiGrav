@@ -57,7 +57,7 @@ pub(crate) struct Pending {
 /// Where a run's menu tree comes from.
 pub(crate) enum MenuSource {
     /// The project's tree with mods: built for the title once it is known.
-    Mods(oag_game::mods::Mods),
+    Mods(Box<oag_game::mods::Mods>),
     /// A `--menu` file, taken whole: no title trimming, no mods.
     Custom,
 }
@@ -413,7 +413,7 @@ pub(crate) fn definition(
             let built = mods
                 .build(menu::BUILT_IN, language, None)
                 .context("building the menu definition")?;
-            Ok((built.definition, MenuSource::Mods(mods)))
+            Ok((built.definition, MenuSource::Mods(Box::new(mods))))
         }
     }
 }

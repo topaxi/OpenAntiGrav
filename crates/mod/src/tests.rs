@@ -178,7 +178,8 @@ fn the_built_in_extras_open_and_carry_the_projects_own_license() {
     assert_eq!(extras.origin(), Origin::Builtin);
     assert_eq!(
         extras.manifest.license,
-        License::File("LICENSE".to_string())
+        License::Spdx(env!("CARGO_PKG_LICENSE").to_string()),
+        "the workspace's own licence, so the two cannot drift"
     );
     assert!(extras.menu().unwrap().is_some());
 }
