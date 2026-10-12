@@ -141,32 +141,48 @@ pub(super) fn map_events(
     out
 }
 
-/// This build's own two tiles, labelled through the project's own string
-/// table - the ids `assets/ui/menu.toml` labels the same pages with.
+/// This build's own two tiles: the rows of the menu tree built for 2048 that open
+/// the race box and RACE REMIX, labelled as that tree labels them (so a mod that
+/// words them differently, or the language, reaches the tile too).
 ///
-/// A language with no project file of its own - German, today - falls back
-/// to the English text, the way `menu.toml`'s rows fall back to their
-/// literal `label`, rather than putting the bare id on a tile.
+/// 2048's grid is the disc's own touch front end and not a page of this tree, so
+/// the tree supplies only the words and the two destinations
+/// ([`oag_ui::frontend::Launch`]); the positions are chosen
+/// (`oag_ui::frontend::EXTRA_TILES`). A language with no project file of its own
+/// falls back to the English text, as every row does.
 pub(super) fn extra_tiles(language: Option<&str>) -> Vec<ExtraTile> {
-    let strings = oag_ui::strings::project_table(language);
-    let english = oag_ui::strings::project_table(None);
-    let label = |id: &str| {
-        strings
-            .get(id)
-            .or_else(|| english.get(id))
-            .unwrap_or(id)
-            .to_string()
+    let built = crate::mods::Mods::load().and_then(|mods| {
+        mods.build(
+            oag_ui::menu::BUILT_IN,
+            language,
+            Some(oag_ui::menu::For {
+                title: oag_2048::TITLE,
+                updated: false,
+            }),
+        )
+    });
+    let built = match built {
+        Ok(built) => built,
+        Err(error) => {
+            log::warn!("2048's own tiles: {error:#}");
+            return Vec::new();
+        }
     };
-    vec![
-        ExtraTile {
-            label: label("OAG_MENU_RACEBOX"),
-            launch: Launch::RaceBox,
-        },
-        ExtraTile {
-            label: label("OAG_MENU_REMIX"),
-            launch: Launch::Remix,
-        },
-    ]
+    let page = &built.definition.pages[built.definition.root];
+    ["racebox", "remix"]
+        .into_iter()
+        .filter_map(|id| {
+            let row = page.row_with_id(id)?;
+            Some(ExtraTile {
+                label: page.entries[row].label().to_string(),
+                launch: if id == "racebox" {
+                    Launch::RaceBox
+                } else {
+                    Launch::Remix
+                },
+            })
+        })
+        .collect()
 }
 
 /// The ten circuits `FUN_81060744` (`0x810f1196`'s photo call) and

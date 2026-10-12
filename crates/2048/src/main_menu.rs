@@ -3,8 +3,9 @@
 use oag_title::{Attached, MainMenu, Origin, main_menu::original};
 
 /// `NEWGUI/Definition.xml`'s `GameModeChoice`: the base package authors four
-/// `<TouchButton>`s, the v1.04 update's copy six (`FE_RC_HD` and `FE_RC_FURY` between the
-/// first and the multiplayer tile). The grid is the disc's own touch front end
+/// `<TouchButton>`s, the v1.04 update's `data2.psarc` six (`FE_RC_HD` and `FE_RC_FURY`
+/// between the first and the multiplayer tile). `data1.psarc`, the earlier patch, authors the
+/// four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it when both mount. The grid is the disc's own touch front end
 /// (`oag_ui::frontend`), not a `menu.toml` row, so no entry builds one; this build's own
 /// tiles come from the extras (`docs/architecture/menus.md`). The update is a patch, not
 /// DLC: the two DLC flags (`g_bDlc1Mounted`, `g_bDlc2Mounted`) gate hotspots on the

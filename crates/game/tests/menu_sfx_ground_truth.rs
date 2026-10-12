@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use oag_gameplay::input::{Button, Input};
 use oag_sound::sfx::{Cue, MenuSfx};
-use oag_ui::menu::{BUILT_IN, Definition, Menu};
+use oag_ui::menu::{Definition, Menu};
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(&format!("data/images/{name}"))
