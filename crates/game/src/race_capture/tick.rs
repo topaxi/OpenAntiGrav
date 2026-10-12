@@ -106,6 +106,12 @@ pub(super) fn advance_one_tick(
             "--force-leach-lock: slot {target} is not racing (pass --opponents), or the title authors no LeachBeam"
         );
     }
+    if let (Some((at, _)), Some(path)) = (options.force_leach_lock, &options.leach_path)
+        && at == tick
+        && !race.force_leach_path(path.clone())
+    {
+        log::warn!("--leach-path: this title draws no LeachBeam strip");
+    }
     // The race's own voices, on the tick that raised them - the same call
     // the windowed loop makes immediately after `Race::tick` in
     // `main::session::frame`. Without it a `--dump-audio` capture of a race

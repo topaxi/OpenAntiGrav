@@ -393,3 +393,88 @@ metric of `hd_leach_strip_ground_truth` cannot separate the strip there; a metri
 
 **Omega:** checked, differs (PS4 shaders; the `Locators.vex` rows are identical to HD's, so the
 anchor placement carries, but the draw is unmeasured). **2048:** no such strip.
+
+## 2026-10-12 (`hd-leach-2`): a held beam behind a rival, the camera question settled, matched pairs
+
+Six RPCS3 boots (own config, Racebox Single Race, Talon's Junction, Venom, the default
+Feisar), reproducer `scripts/rpcs3-hd-whiteout.py --leach` (above its docstring): the
+player is put 40 units behind the nearest rival at its speed, waits 3-4 s, holds TRIANGLE,
+and the target is paused 0.3 s into state 4. Everything below is read in that one pause,
+after the frame dump, so body poses, the strip and the frame belong together (to the about
+two-tick lag between the CPU and the drawn frame, see "Pausing on an effect" on
+[rpcs3-capture.md](../../../reverse-engineering/rpcs3-capture.md)). Frames and pairs:
+`data/reference/hd-capture/leach-pairs/` (not tracked).
+
+**Getting a held beam.** Three things decide it (conf 70, 4 held beams out of 21 shots):
+fire is **held**, not tapped (every held beam had TRIANGLE down from fire to the end); a shot
+fired at once after the teleport ends in state 6 on the next update (eight of eight), the
+held ones all came after a few seconds behind the rival; and some places on the circuit end
+every shot at once (twice each at about `(-580, -22, -385)` and `(-247, -51, -728)`), which
+`BeamPath_CheckLineOfSight_q` would explain and was not checked. `slot + 0x1ac` is **not**
+the lock: three of the four held beams had it at -1.
+
+**The chase-camera eye (closes the 13.8-15.3 against 7.7 question; conf 85).** The RPCS3
+profile every member's tree copies (`dev_hdd0/.../BCES00664-AUTO-/DATA.BIN`) carries
+`CameraP1 = OPT_FAR`, while HD's own `additional_definition.xml` (DATA06) declares
+`default="OPT_CLOSE"`, as ours defaults. Feisar authors `ExternalCameraFar pos_height="4.0"
+pos_length="-15.0"` and `ExternalCameraClose pos_height="3.7" pos_length="-11.0"`; at the
+0.75 craft scale, Far is (0, 3.0, -11.25) and Close (0, 2.78, -8.25) in the body frame. A
+frame at rest (7 u/s) solved from its view-projection reads the eye at **(-0.02, 3.0,
+-11.5)**, vertical fov 60.5: the Far block. The profile's value on earlier dates was not
+read (the file was last written 2026-10-12), but the 2026-10-07 bomb match had already
+pinned the Far rig against an original frame, so earlier pairs from the same profile
+(`hd-leach-bright`'s 13.8-15.3 among them) very likely show the Far view too. Our HD chase
+rig is not wrong: ours rendered with `--camera-view far` at the same pose frames the hull at the same
+size (`rest_pair.png`: original, ours Far, ours Close). Frames taken in motion read the eye
+11.2-18.1 back; those mix a frame-time eye with a CPU-time body and are not a measurement.
+**Not measured: HD's Close view on the original** (SELECT did not cycle it in race; the
+Options page was not walked). The speed widen agrees too: 68.6 degrees at 114.8 u/s read off
+the matrix, `60 + 0.075 * 114.8` = 68.6.
+
+**Matched pairs with the path pinned (`--leach-path`).** The dumped strip samples (already
+walked, bent and wobbled) are drawn by our renderer along the same path, with our camera at
+the frame's own eye, forward, up and fov (`--camera-pose`, `--camera-fov`); both craft stay
+on the grid so nothing else of ours is in frame. Four frames (`pairpath_leach1_0`, `1_1`,
+`1_2`, `3_0`; strips of 9, 8, 8 and 33 samples, 33-149 units long; index counts 144, 126,
+144, 576 = segments x 18, so the dumped draw is the strip). Landmarks register; our strip
+lies exactly on the projected samples. Read at player size:
+
+- **Near the shooter both are bright** (saturated within about 20 units of the anchor in both).
+- **Further out the original stays a saturated band and ours fades.** Luminance on the path
+  in `leach3_0` (149 units): the original reads 255 at every node to the far end against
+  side backgrounds of 97-184 a beam's width beside it; ours reads 147-223 where our
+  strip-off frame reads 86-194 at the same pixels, so our strip adds about 15-70 there.
+  `leach1_2` the same way: original 229-243 on the far half, ours 150-192 over 125.
+- **Ruled out as the cause:** the path (pinned), the camera and fov (pinned, measured), the
+  width (half-width 1.0 in both, the far line is about 10 px wide in both), and the
+  `saturate(0.75 * window_z)` term (our depth range is 0..1 with the near plane at 1, so the
+  term is 0.70-0.75 at every distance, the same as a 0..1 window z on the PS3), and the
+  facing eye (`race.view()` returns the `--camera-pose` override). The target's own engine
+  trails were checked by eye only: on a beam-free frame with rivals ahead they are short
+  red-orange streaks, not a white band, but they were not separated per pixel. The facing
+  term `|n . v|` summed over the three fins falls from 1.8 at the anchor to 0.2-0.4 beyond
+  30 units on the dumped geometry (`leach3_0`: 1.78 at 12 units, 0.29-0.42 from 40 to 159),
+  and it is the original's own program, so by the static reading the original's far part
+  should fade as ours does. It does not. **Open**, candidates in order: what the post chain
+  does to a thin additive line (HD's bloom and the frame's brighter grade, the
+  `hd-dark-ref` gap), the texture's mip chain with its -1.5 bias, and the `n`/`v` the
+  original's vertex program actually feeds the facing term (the draw's vertex constants and
+  vertices; a vertex dump with `HOOK_LEACH=1` caught a different frame on its only try).
+
+**The wobble's phases carry over (conf 75, live).** Logged at every state change with
+`--leach`: on a fresh race the phase starts at 0.0; each beam that ends at once adds one or
+two steps of 1/60 and keeps them (0.033, 0.067, 0.1 ...); a held beam goes on from where the
+last one stopped (0.133 at fire, 0.15 in state 2, 0.583 in 3, 0.917 in 4, 2.667 at clock 1.78,
+3.917 at the end) and the phase stands still while the beam is idle. **Wired**: our phases no
+longer reset per beam (`oag_raceplay::leach_strip::tests::the_wobble_phases_carry_over_between_beams`).
+Ours still advances only while a beam is live (the original also steps through a beam that
+ends at once, state 6, which ours does not have).
+
+**Held duration, not changed.** HD authors `active_time="3"` (`weaponstats_race.xml`, DATA00).
+The earlier live poll held state 4 to a beam clock of 2.6 after a 0.4 s ball and a 0.3 s
+reveal (about 3.3 s from the fire); this lane's held beams were still in state 4 at clock 2.2
+and 1.78 and ended around 2.9 by the phase rate, which agrees loosely. Ours lets go at a total
+age of 3.0. A 0.3 s question in the simulation, not changed here.
+
+**Omega:** checked, differs (PS4 shaders; the profile trap is RPCS3's only). **2048:** no
+such strip.

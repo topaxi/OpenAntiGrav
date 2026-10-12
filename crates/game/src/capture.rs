@@ -455,6 +455,7 @@ pub fn run(
                 force_wreck: None,
                 force_hit: None,
                 force_leach_lock: None,
+                leach_path: None,
                 force_bomb_trip: None,
                 force_missile_hit: None,
                 no_weapon_lights: false,

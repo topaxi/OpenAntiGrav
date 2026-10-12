@@ -588,6 +588,7 @@ pub(crate) fn run_race(
                     cli.wreck.force_leach_lock.as_deref(),
                     "LeachBeam lock",
                 )?,
+                leach_path: crate::args::leach_path(cli.wreck.leach_path.as_deref())?,
                 force_bomb_trip: crate::args::force_at_slot(
                     cli.wreck.force_bomb_trip.as_deref(),
                     "Bomb trip",

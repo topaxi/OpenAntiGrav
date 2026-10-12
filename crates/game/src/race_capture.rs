@@ -57,6 +57,8 @@ pub struct CaptureOptions {
     pub force_hit: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
+    /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].
+    pub leach_path: Option<Vec<oag_core::math::Vec3>>,
     /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
