@@ -12,9 +12,8 @@
 //! executable (`docs/ghidra/functions/<binary>/hud-message-triggers.md`), so
 //! the engine asks the title instead of branching on its name.
 //!
-//! A title with no value here (2048, Omega: nobody has read their routines)
-//! raises no lap line and runs no gap. That is an honest absence, not Pulse's
-//! answer borrowed.
+//! A title with no value here raises no lap line and runs no gap. That is an
+//! honest absence, not Pulse's answer borrowed.
 
 /// How a message line is tinted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
