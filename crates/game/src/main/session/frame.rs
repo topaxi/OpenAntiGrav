@@ -144,9 +144,14 @@ impl Session {
                 Stage::Frontend(stage) => stage.frontend.launch().cloned(),
                 _ => None,
             };
+            let opening = web_time::Instant::now();
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
+                info!(
+                    "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
+                    opening.elapsed().as_secs_f32() * 1000.0
+                );
                 println!("\n{}", hints::shell_keys(&hint_strings));
                 self.follow_launch(launch);
             }

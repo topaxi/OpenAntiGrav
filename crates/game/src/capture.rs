@@ -294,7 +294,7 @@ pub fn run(
     while options.screen.is_none() && options.menu_page.is_none() {
         // `Launch Game` ends the front end's leg whatever `until` and `ticks` say,
         // so the ticks they asked for are spent on the race rather than on a state
-        // whose whole content is the word LAUNCH GAME.
+        // that draws only the held backdrop.
         if options.race.is_some() && frontend.is_finished() {
             break;
         }

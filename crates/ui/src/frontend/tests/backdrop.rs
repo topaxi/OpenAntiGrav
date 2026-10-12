@@ -130,7 +130,8 @@ fn the_backdrops_draw_carries_a_position_that_outgrows_its_own_loop() {
 /// milliseconds of black between `Show Logo` and the menus - the flicker on
 /// the START press, and the half of it no amount of feed bookkeeping could
 /// have fixed, because a screen that emits no video draw has nothing to
-/// take a frame for.
+/// take a frame for. It draws the backdrop and no words; see
+/// `launch_game_is_drawn_without_any_text`.
 #[test]
 fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
     for state in [
@@ -177,6 +178,32 @@ fn the_screens_after_the_intro_all_sit_on_the_backdrop() {
                 }
             ),
             "{state} must draw the backdrop under its own widgets: {draws:?}"
+        );
+    }
+}
+
+/// `Launch Game` draws no words. It is held on screen while the menus are built,
+/// a few hundred milliseconds that a player read as a text card flashing past;
+/// the held backdrop (or black, where a title has none) is the whole picture. A
+/// wait long enough to need words is the loading screen's, not this state's.
+#[test]
+fn launch_game_is_drawn_without_any_text() {
+    for backdrop in [true, false] {
+        let mut frontend = frontend(300);
+        if backdrop {
+            frontend.set_backdrop(270, crate::frontend::FRAME_RATE, (480, 272));
+        }
+        let mut input = Input::new();
+        pick_a_language(&mut frontend, &mut input);
+        input.begin_frame(0);
+        input.begin_frame(Button::Start.bit());
+        frontend.update(FRAME, &mut input, None);
+        assert!(frontend.machine().is(states::LAUNCH_GAME));
+
+        let draws = frontend.draw_list();
+        assert!(
+            !draws.iter().any(|draw| matches!(draw, Draw::Text { .. })),
+            "Launch Game (backdrop {backdrop}) must not draw text: {draws:?}"
         );
     }
 }
