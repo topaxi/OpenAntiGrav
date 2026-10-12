@@ -86,16 +86,24 @@ impl Race {
     }
 
     /// The craft's anchor this tick: its `arc_anchor_point` node's position
-    /// pushed [`law::ANCHOR_OFFSET`] along the node's row 1. A hull with no
+    /// pushed [`law::ANCHOR_OFFSET`] along the node's row 1, unnormalised: the
+    /// model matrix carries the craft scale, as the original's world matrix
+    /// does (row length 0.75, read live). A hull with no
     /// locator takes the body the same way, as the original's own fallback
     /// does (`0x001169f8`).
     fn leach_anchor(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> Vec3 {
         let model = self.ship_model_matrix_of(slot);
-        let node = anchors[slot].map_or(model, |anchor| model * anchor);
-        law::anchor_point(
-            node.w_axis.truncate(),
-            node.y_axis.truncate().normalize_or_zero(),
-        )
+        match anchors[slot] {
+            Some(anchor) => {
+                let node = model * anchor;
+                law::anchor_point(node.w_axis.truncate(), node.y_axis.truncate())
+            }
+            // The body's own rows are unit length, unlike a node's scaled ones.
+            None => law::anchor_point(
+                model.w_axis.truncate(),
+                model.y_axis.truncate().normalize_or_zero(),
+            ),
+        }
     }
 
     /// The craft's progress along the course, unwrapped across laps: **this
@@ -197,3 +205,6 @@ impl Race {
         out
     }
 }
+
+#[cfg(test)]
+mod tests;
