@@ -61,7 +61,9 @@ fn front_end_xml(image: &str, title: &'static oag_title::Title) -> Vec<(String, 
             // `fexml::text` wants the whole blob to be UTF-8, so a head that is
             // not (a cut character at its end aside) rules the entry out
             // before it is read and decompressed whole.
-            let Ok(head) = wad.peek(index, 64) else { continue };
+            let Ok(head) = wad.peek(index, 64) else {
+                continue;
+            };
             if std::str::from_utf8(&head).is_err_and(|e| e.error_len().is_some()) {
                 continue;
             }
