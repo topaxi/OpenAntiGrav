@@ -170,10 +170,16 @@ fn a_vector_event_races_in_vector_and_a_zone_event_keeps_the_fallback() {
             .unwrap()
     };
     let race = by(PureClass::Vector, "race/Vineta K/Vector");
-    let plan = plan_cell(&race.cell, "Phantom", |_, id| entry(id)).unwrap();
+    let plan = plan_cell_for(&race.cell, "Phantom", ladder, |_, id| entry(id)).unwrap();
     assert_eq!(
         (plan.class.as_str(), plan.class_is_fallback),
         ("Vector", false)
+    );
+    let plan = plan_cell(&race.cell, "Phantom", |_, id| entry(id)).unwrap();
+    assert_eq!(
+        (plan.class.as_str(), plan.class_is_fallback),
+        ("Phantom", true),
+        "a title with the four-rung ladder falls back, as it always did"
     );
     let zone = by(PureClass::Vector, "zone/Zone 1");
     let plan = plan_cell_for(&zone.cell, "Phantom", ladder, |_, id| entry(id)).unwrap();
