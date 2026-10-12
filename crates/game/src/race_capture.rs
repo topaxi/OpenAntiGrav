@@ -887,7 +887,7 @@ pub fn capture(
                             &queue,
                             &mut encoder,
                             &hud_view,
-                            race.sim.world.tick as f32 / 60.0,
+                            crate::hud_countdown::widget_seconds(race.sim.world.tick),
                             hud_viewport,
                             (width, height),
                         ),

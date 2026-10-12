@@ -233,7 +233,11 @@ gantry at `ready`, to 3.0 on the release, and to 3.2 in the `n == 0` window
 only, so the overlay's `Cockpit_321GO.vex` clock is the gantry's own until the
 first crossing and then runs free. 75: the widget pointer is read, the `+0x94`
 child is not identified. This answers the overlay's open timing question; the
-overlay is drawn only where a circuit has no gantry, and is not rewired here.
+overlay is drawn only where a circuit has no gantry. **Rewired 2026-10-12**
+(`pulse-race-start`): `oag_game::hud_countdown::widget_seconds` runs its clock from
+the gantry's start tick (92) so `GO` lands on the release, where it had run off tick 0
+and shown `GO` 92 ticks (1.5 s) early. The widget's own time was not watched live,
+so the rewiring rests on the writes above (75), not on a capture.
 
 ## The free Turbo: granted on the line crossing, not on the release
 
