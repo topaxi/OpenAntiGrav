@@ -50,9 +50,14 @@ impl Menu {
         true
     }
 
-    /// Whether this page is drawn as a strip that reveals attached rows.
+    /// Whether this page is drawn as a strip that reveals attached rows: a title
+    /// that does, a navigation page, and at least one row attached to another. Any
+    /// other strip page steps and draws as it always did.
     pub(super) fn reveals(&self) -> bool {
-        self.reveal && super::strip::suits(self.page())
+        let page = self.page();
+        self.reveal
+            && super::strip::suits(page)
+            && page.meta.iter().any(|meta| meta.parent.is_some())
     }
 
     /// The tabs to draw, in order: the top level, with the focused family's
@@ -114,6 +119,11 @@ impl Menu {
                 .family(definition.family_of(self.cursor[page]))
                 .collect()
         };
+        // A row with nothing attached has nothing to step into: up and down keep
+        // working as they do on any strip, along the top level.
+        if family.len() == 1 {
+            return self.step_family(delta);
+        }
         let Some(at) = family.iter().position(|&row| row == self.cursor[page]) else {
             return false;
         };

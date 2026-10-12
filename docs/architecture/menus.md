@@ -940,10 +940,13 @@ the disc's, and the report can say what is missing. Nothing is drawn as an inert
 stand-in.
 
 **Does the menu change with DLC?** Pulse: no (the four packs are mounted and none carries
-the file; `no_pulse_dlc_pack_carries_a_main_menu`). 2048: no tile (the two DLC archives hold a
-tracks plugin and no front-end file; the flags `g_bDlc1Mounted`/`g_bDlc2Mounted` gate hotspots
-on the campaign map, `docs/formats/2048-frontend.md`); what changes the grid is the patch,
-read from whether the update archives are mounted (`MainMenu::rows_for`). HD: the five copies are
+the file; `no_pulse_dlc_pack_carries_a_main_menu`). 2048: **not read, and the brief's premise is not
+confirmed.** The two DLC archives hold a tracks plugin and no front-end file, so no file
+redefines the grid; what the executable does with `g_bDlc1Mounted`/`g_bDlc2Mounted` (read at dozens
+of sites, `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`) is open, in particular
+whether the HD and Fury tiles hide without them (`docs/formats/2048-frontend.md` says so too). What
+changes the grid on disc is the patch, read from whether the update archives are mounted
+(`MainMenu::rows_for`); the base list is kept otherwise. HD: the five copies are
 identical and no HD pack is on this machine (not checkable beyond that). Pure's packs are
 encrypted and no key table is in the checkout (not checkable). Where a DLC menu cannot be
 read, the base list is kept.

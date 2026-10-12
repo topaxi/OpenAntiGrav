@@ -8,8 +8,10 @@ use oag_title::{Attached, MainMenu, Origin, main_menu::original};
 /// four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it when both mount. The grid is the disc's own touch front end
 /// (`oag_ui::frontend`), not a `menu.toml` row, so no entry builds one; this build's own
 /// tiles come from the extras (`docs/architecture/menus.md`). The update is a patch, not
-/// DLC: the two DLC flags (`g_bDlc1Mounted`, `g_bDlc2Mounted`) gate hotspots on the
-/// campaign map, not tiles of this grid.
+/// DLC. Whether the executable hides `FE_RC_HD` and `FE_RC_FURY` without the two DLC
+/// packages is **not read** (`g_bDlc1Mounted` and `g_bDlc2Mounted` are read at dozens of
+/// sites across the front end, `docs/ghidra/functions/vita-2048-eu-v104/frontend-campaign-map.md`;
+/// the DLC archives themselves carry no front-end file), so the list follows the patch alone.
 pub const MAIN_MENU: &MainMenu = &MainMenu {
     rows: &[
         original("FE_SP_CAMPAIGN", None),

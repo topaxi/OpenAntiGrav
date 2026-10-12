@@ -23,9 +23,10 @@
 //! [`draw_list`] picks between.
 //!
 //! So the shape is ours and it is written down in [`assets/ui/menu.toml`],
-//! which ships with the source rather than coming off a disc. What the disc's
-//! XML says the original's menus were is a separate, still-open question, and
-//! belongs in `docs/` when someone reads it - not in here.
+//! which ships with the source rather than coming off a disc. **The main page
+//! is the exception**: each title shows the top level its own disc authors
+//! (`oag_title::Title::main_menu`) with our rows attached as a mod
+//! ([`Definition::build`], ADR-0066); every other page is ours.
 //!
 //! [`assets/ui/menu.toml`]: https://github.com/topaxi/OpenAntiGrav/blob/main/assets/ui/menu.toml
 //!

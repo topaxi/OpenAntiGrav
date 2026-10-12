@@ -221,7 +221,8 @@ fn omegas_main_menu_is_hds_five_rows_in_every_archive_that_has_one() {
 
 /// 2048's `GameModeChoice`: four tiles in the base package, six once the v1.04 patch
 /// is mounted. Which list a run uses follows whether the patch is mounted
-/// (`MainMenu::rows_for`); the DLC flags gate hotspots on the campaign map and no tile.
+/// (`MainMenu::rows_for`). Whether the DLC packages hide the two HD and Fury tiles is not
+/// read; nothing here depends on it.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
 fn wipeout_2048s_game_mode_grid_is_four_tiles_in_the_base_and_six_with_the_patch() {
@@ -319,9 +320,10 @@ fn no_pulse_dlc_pack_carries_a_main_menu() {
     );
 }
 
-/// 2048's two DLC archives carry a tracks plugin and no front-end definition at all:
-/// `g_bDlc1Mounted` and `g_bDlc2Mounted` gate hotspots on the campaign map, not the
-/// `GameModeChoice` grid, and nothing on disc changes it.
+/// 2048's two DLC archives carry a tracks plugin and no front-end definition at all, so
+/// no file on the disc side redefines `GameModeChoice`. That does not say what the
+/// executable does with `g_bDlc1Mounted` and `g_bDlc2Mounted` (read at dozens of sites):
+/// whether it hides the HD and Fury tiles without them is not read.
 #[test]
 #[ignore = "needs the extracted Vita package in data/extracted/vita/"]
 fn wipeout_2048s_dlc_archives_carry_no_front_end_definition() {

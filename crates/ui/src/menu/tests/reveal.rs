@@ -88,6 +88,44 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
 }
 
 #[test]
+fn up_and_down_still_step_a_row_with_nothing_attached() {
+    let mut menu = revealing();
+    assert_eq!(id(&menu), "campaign");
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "racebox", "down from RACE CAMPAIGN steps on");
+    // RACEBOX has REMIX under it: up from the head is the family's start and stays.
+    press(&mut menu, &[Button::Up]);
+    assert_eq!(id(&menu), "racebox");
+    press(&mut menu, &[Button::Left]);
+    assert_eq!(id(&menu), "campaign");
+    press(&mut menu, &[Button::Up]);
+    assert_eq!(id(&menu), "records", "and wraps, as a strip always has");
+    // RECORDS has nothing attached either.
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "campaign");
+}
+
+#[test]
+fn a_strip_page_with_no_attached_row_behaves_as_it_always_did_with_reveal_on() {
+    let text = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }\n\
+        root = \"main\"\n[[page]]\nid = \"main\"\n\
+        [[page.entry]]\nkind = \"action\"\nlabel = \"A\"\naction = \"quit\"\n\
+        [[page.entry]]\nkind = \"action\"\nlabel = \"B\"\naction = \"quit\"\n\
+        [[page.entry]]\nkind = \"action\"\nlabel = \"C\"\naction = \"quit\"\n";
+    let definition = Definition::parse(text, &crate::language::StringTable::default()).unwrap();
+    let mut menu = Menu::new(definition);
+    menu.set_strip_layout(true);
+    menu.set_reveal_attached(true);
+    assert!(menu.tabs().iter().all(|tab| tab.depth == 0));
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(menu.selected(), 1);
+    press(&mut menu, &[Button::Right]);
+    assert_eq!(menu.selected(), 2);
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(menu.selected(), 0, "wraps");
+}
+
+#[test]
 fn confirm_on_a_revealed_row_opens_it() {
     let mut menu = revealing();
     press(&mut menu, &[Button::Right]);

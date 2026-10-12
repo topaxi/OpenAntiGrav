@@ -19,10 +19,6 @@ static FILES: &[(&str, &[u8])] = &[
         "menu.toml",
         include_bytes!("../../../assets/mods/oag-extras/menu.toml"),
     ),
-    (
-        "LICENSE",
-        include_bytes!("../../../assets/mods/oag-extras/LICENSE"),
-    ),
 ];
 
 /// The built-in mod.

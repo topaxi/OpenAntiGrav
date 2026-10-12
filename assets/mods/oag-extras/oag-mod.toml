@@ -9,6 +9,6 @@ id = "oag.extras"
 name = "OpenAntiGrav extras"
 version = "1.0.0"
 authors = ["The OpenAntiGrav contributors"]
-license-file = "LICENSE"
+license = "MIT OR Apache-2.0"
 description = "The rows this project adds around each title's own main menu: REMIX, RECORDS, QUIT, and RACEBOX and OPTIONS where a title's original menu has none."
 repository = "https://github.com/topaxi/OpenAntiGrav"

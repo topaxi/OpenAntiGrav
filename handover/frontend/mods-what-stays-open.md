@@ -28,6 +28,9 @@
 - **The revealed-row keys and placement are chosen, not measured.** No disc authors a second level on the
   main menu. Hardware check on a touchscreen and a real pad: left/right and up/down were walked in
   headless tests only, the pointer through region tests, and the frames are stills.
+- **Does 2048's DLC hide the HD and Fury tiles?** Not read. The patch is what grows the grid (four tiles to six);
+  `g_bDlc1Mounted`/`g_bDlc2Mounted` are read at dozens of front-end sites and none was traced to
+  `GameModeChoice`. A Ghidra `get_xrefs_to` on the two globals, then the tile builders among the readers.
 - **HD packs and Pure's packs were not read for a menu**: no HD pack is on this machine and Pure's are
   encrypted with no key table in the checkout. The five HD archives agree, and Pulse's and 2048's packs
   carry no menu.

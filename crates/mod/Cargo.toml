@@ -23,8 +23,5 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 zip = { version = "8", default-features = false, features = ["deflate", "zstd"] }
 
-[dev-dependencies]
-oag-schema = { workspace = true, features = ["validate"] }
-
 [lints]
 workspace = true
