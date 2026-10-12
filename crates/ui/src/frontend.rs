@@ -74,7 +74,7 @@
 //! And [`states::LAUNCH_GAME`] goes straight into a race. The original has a main
 //! menu in between - the root XML's `LoadXML` list pulls in
 //! `MainMenu_Definition.xml` - and none of it is built, so a state whose whole
-//! content was the words LAUNCH GAME is used as the way in instead. This module
+//! content is the held backdrop (no words) is used as the way in instead. This module
 //! does not know that: it fires the transition the original's own literal names
 //! and stops, and what happens next is the composition root's business.
 

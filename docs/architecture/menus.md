@@ -1378,8 +1378,14 @@ whether the video draw survived:
    feed bookkeeping could have covered them. `Launch Game` is the one that
    matters: `Session::frame` draws it **once and then stalls** building the
    menus, so it is on screen for the whole of that load - a few hundred
-   milliseconds of black with `LAUNCH GAME` written across it, which is most of
-   what the START press looked like.
+   milliseconds of black, which is most of what the START press looked like.
+   (It once also wrote `LAUNCH GAME` across that wait; the maintainer read it as a
+   text card flashing past and it was removed 2026-10-12. The state now draws the
+   held backdrop and no words, so a title with no loop shows plain black. The wait
+   itself is a synchronous main-thread stall of about 190-240 ms measured in a
+   debug build on llvmpipe, warm cache; no cold path was found, so it has no
+   loading-screen branch. A threshold between the two would be **chosen, not
+   measured**, and is not built.)
 
 The fixes mirror the causes. `FrontendStage` keeps the newest backdrop picture it
 took (`held_backdrop`) instead of dropping it, uploads it on the first frame the

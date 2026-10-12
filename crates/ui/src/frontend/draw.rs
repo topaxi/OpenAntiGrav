@@ -444,25 +444,14 @@ impl Frontend {
         }
 
         if self.machine.is(states::LAUNCH_GAME) {
-            // The same loop, for the same reason, and this one is the frame a
-            // player actually stares at: the composition root draws
-            // `Launch Game` **once and then stalls** building the menus (see
-            // `Session::frame`), so this is on screen for the whole of that
-            // load rather than for a frame. Without the backdrop under it the
-            // START press read as `Show Logo` -> a few hundred milliseconds of
-            // black -> the menus, which is most of the flicker the transition
-            // was reported for.
+            // Drawn once and then held while the composition root builds the
+            // menus (see `Session::frame`), so this is on screen for the whole of
+            // that load, not for a frame. The held backdrop is the whole of it:
+            // a title with no loop shows black. **No text** - a word on screen
+            // for a few hundred milliseconds is read as a flash, not as a
+            // message. A wait long enough to need words is the loading screen's
+            // job, not this state's.
             self.insert_backdrop(&mut out);
-            out.push(Draw::Text {
-                x: width / 2.0,
-                y: height / 2.0 - 4.0,
-                scale: 2.0,
-                color: [1.0, 1.0, 1.0, 1.0],
-                border: None,
-                align: Align::Centre,
-                text: states::LAUNCH_GAME.to_ascii_uppercase(),
-                wrap_width: None,
-            });
         }
         out
     }
