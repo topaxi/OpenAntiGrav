@@ -103,8 +103,8 @@ fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
         .collect();
     assert_eq!(
         rows.len(),
-        6,
-        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
+        7,
+        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS, MODS and QUIT: {rows:?}"
     );
     let (pen_x, pen_y) = first_pen(&skin);
     for (_, y, _, text) in &rows {
@@ -204,8 +204,8 @@ fn every_entry_is_the_same_text_colour_selected_or_not() {
         .collect();
     assert_eq!(
         rows.len(),
-        6,
-        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS and QUIT: {rows:?}"
+        7,
+        "RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS, MODS and QUIT: {rows:?}"
     );
     for (_, _, color, text) in &rows {
         assert_eq!(*color, skin.normal(), "{text} should be skin.normal()");
@@ -232,13 +232,13 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
     let frame = frame_with_fills();
     let list = draw_list(&menu, &skin, &no_bindings, &measure, None, &frame, false).flatten();
 
-    // Six entries, two fills each (the cut band and the rest of the tab -
+    // Seven entries, two fills each (the cut band and the rest of the tab -
     // see `strip::draw`), plus one underline.
     let tabs = fills(&list);
     assert_eq!(
         tabs.len(),
-        13,
-        "six tabs of two fills, one underline: {tabs:?}"
+        15,
+        "seven tabs of two fills, one underline: {tabs:?}"
     );
     let accents = tabs
         .iter()
@@ -249,10 +249,10 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
         .filter(|(_, color)| *color == frame.ink.unwrap())
         .count();
     // The underline is drawn in `skin.normal()`, not either fill colour, so
-    // it counts toward neither bucket and the two sum to twelve rather than
-    // thirteen.
+    // it counts toward neither bucket and the two sum to fourteen rather than
+    // fifteen.
     assert_eq!(accents, 2, "one selected tab, two bands: {tabs:?}");
-    assert_eq!(inks, 10, "five unselected tabs, two bands each: {tabs:?}");
+    assert_eq!(inks, 12, "six unselected tabs, two bands each: {tabs:?}");
 }
 
 /// The tab's corner is a 45-degree cut with a flat landing after it, and the
@@ -376,7 +376,7 @@ fn a_tab_narrower_than_the_landing_collapses_its_band_rather_than_inverting_it()
             _ => None,
         })
         .collect();
-    assert_eq!(bands.len(), 6, "one band per entry: {bands:?}");
+    assert_eq!(bands.len(), 7, "one band per entry: {bands:?}");
     for band in &bands {
         assert!(
             band[2] >= 0.0,
@@ -418,7 +418,7 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
         .into_iter()
         .filter(|(_, y, _, _)| (y - first_pen(&skin).1).abs() < 0.001)
         .collect();
-    assert_eq!(rows.len(), 6, "the text draws regardless: {rows:?}");
+    assert_eq!(rows.len(), 7, "the text draws regardless: {rows:?}");
 }
 
 /// A page with a value column stays a column, on a strip title too.
@@ -477,7 +477,7 @@ fn a_title_that_authors_no_strip_draws_a_column() {
         .into_iter()
         .filter(|(_, _, _, text)| *text != menu.page().title && Some(text) != subtitle.as_ref())
         .collect();
-    assert_eq!(rows.len(), 6, "{rows:?}");
+    assert_eq!(rows.len(), 7, "{rows:?}");
     for pair in rows.windows(2) {
         assert!(pair[1].1 > pair[0].1, "the rows step down: {rows:?}");
     }
@@ -494,7 +494,7 @@ fn right_and_left_step_a_strip() {
     press(&mut menu, &[Button::Left]);
     assert_eq!(menu.selected(), 0, "and left moves back");
     press(&mut menu, &[Button::Left]);
-    assert_eq!(menu.selected(), 5, "wrapping the way up and down do");
+    assert_eq!(menu.selected(), 6, "wrapping the way up and down do");
 }
 
 /// Right and left are left to the values on a column, which is every page a
