@@ -207,7 +207,7 @@ transferred to EU, so EU's count includes names that add no page.
 | [psp-pulse-usa](../ghidra/functions/psp-pulse-usa/) | 1323 (1190 fn, 133 data) | 31 (2%) | 85 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+36 measurement scripts) | 2026-10-12, [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) |
 | [psp-pure-eu](../ghidra/functions/psp-pure-eu/) | 75 (74 fn, 1 data) | 3 (4%) | 8 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+36 measurement scripts) | 2026-09-28, [title-screen.md](../ghidra/functions/psp-pure-eu/title-screen.md) |
 | [psp-pure-usa](../ghidra/functions/psp-pure-usa/) | 111 (109 fn, 2 data) | 2 (1%) | 13 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+36 measurement scripts) | 2026-10-12, [ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md) |
-| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 117 (107 fn, 10 data) | 7 (5%) | 25 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-10, [pilot-assist.md](../ghidra/functions/vita-2048-eu-v104/pilot-assist.md) |
+| [vita-2048-eu-v104](../ghidra/functions/vita-2048-eu-v104/) | 138 (127 fn, 11 data) | 10 (7%) | 26 | `vita-gxp.py`, `vita-self-decrypt.py` | 2026-10-12, [ai-controls.md](../ghidra/functions/vita-2048-eu-v104/ai-controls.md) |
 
 <!-- re-coverage:end -->
 

@@ -152,16 +152,42 @@ impl Field {
         grid: [u8; SLOTS],
         seed: u64,
     ) -> Self {
+        let mut rng = Rng::new(seed ^ 0x6f72_6967_696e_616c);
+        let drivers = std::array::from_fn(|slot| {
+            let mut driver = OriginalDriver::new(grid[slot]);
+            // 2048's `Ai_Construct` draws the coin once (`rand() % 2`,
+            // `driver+0xc8`); the order the slots draw in is chosen.
+            if laws.coin_ordered_search {
+                driver.planner.coin = Some(rng.below(2) == 1);
+            }
+            driver.planner.preferred_follows_choice = laws.preferred_follows_choice;
+            driver
+        });
         Self {
             table,
             controller,
             laws,
             skill,
             level: level.min(2),
-            rng: Rng::new(seed ^ 0x6f72_6967_696e_616c),
+            rng,
             counter: usize::from(laws.round_robin_pre_increment),
             shuffled: false,
-            drivers: std::array::from_fn(|slot| OriginalDriver::new(grid[slot])),
+            drivers,
+        }
+    }
+
+    /// A 2048 event's two AI skills (`m_aiPadTrackingSkill`,
+    /// `m_aiWeaponAvoidanceSkill`): under [`Laws::event_ring_rate`] they set
+    /// every driver's ring rate ([`super::event_ring_rate`]); otherwise this
+    /// does nothing. What else they drive, the pad tracking and the weapon
+    /// avoidance, is not carried.
+    pub fn set_event_ai_skills(&mut self, pad_tracking: f32, weapon_avoidance: f32) {
+        if !self.laws.event_ring_rate {
+            return;
+        }
+        let rate = super::event_ring_rate(pad_tracking, weapon_avoidance);
+        for driver in &mut self.drivers {
+            driver.planner.rate = rate;
         }
     }
 
@@ -204,6 +230,8 @@ impl Field {
         dt: f32,
         mut ahead: impl FnMut(f32) -> Option<TrackPoint>,
     ) -> Output {
+        // 2048 flags every racer every tick (`Laws::every_tick`).
+        let lane_tick = lane_tick || self.laws.every_tick;
         let controller = self.controller;
         let pose = &tick.pose;
         let speed = pose.velocity.length();

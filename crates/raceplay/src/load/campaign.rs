@@ -223,9 +223,33 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     // than re-opened later at grading time - see `Loaded::campaign_2048_event`'s
     // own doc for why this rides on `Loaded` instead of through `Session` the
     // way Pulse/HD's own `campaign_cell` does.
+    // An Elimination event's throttle is a law of 2048's own (`0x81199800`,
+    // unread), so its opponents keep this project's driver; see
+    // `docs/ghidra/functions/vita-2048-eu-v104/ai-controls.md`.
+    let defaults = loaded
+        .title
+        .race
+        .original_driver
+        .and_then(|driver| driver.event_ai);
+    let ai = if event.kind == oag_tables::mjolnir::campaign::EventKind::Elimination {
+        loaded.report.push(format!(
+            "{event_name:?} is an Elimination event: its opponents keep this project's driver \
+             (2048's own Eliminator thrust law is unread)"
+        ));
+        None
+    } else {
+        defaults.map(|ai| {
+            ai.with_authored(
+                event.skill_scale,
+                event.ai_pad_tracking_skill,
+                event.ai_weapon_avoidance_skill,
+            )
+        })
+    };
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
         objectives: oag_2048::campaign::event_objectives(&doc, &event),
+        ai,
     });
     Ok(loaded)
 }

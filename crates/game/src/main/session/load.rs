@@ -532,6 +532,10 @@ impl Session {
         // both take `&self` as a whole.
         let pvs_culling = self.pvs_culling();
         let render_profile = self.render_profile();
+        let original_opponent = self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.title.race.original_opponent);
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -598,6 +602,25 @@ impl Session {
                         race_stage.campaign_ai_skill_scale,
                         race_stage.campaign_difficulty.map_or(1, rung_level),
                     );
+                } else if let Some(ai) = race_stage
+                    .campaign_2048_event
+                    .as_ref()
+                    .and_then(|event| event.ai)
+                    && original_opponent
+                {
+                    // A 2048 campaign event: its own `m_skillScale` and level
+                    // (`oag_title::original_driver::EventAi`), then the two AI skills the
+                    // ring rate follows. A Speed Lap or Zone event has no
+                    // opponents and nothing here changes; an Elimination
+                    // event carries no `ai` and keeps this project's driver.
+                    if race_stage
+                        .race
+                        .use_original_ai(Some(ai.skill_scale), ai.level)
+                    {
+                        race_stage
+                            .race
+                            .set_original_event_ai_skills(ai.pad_tracking, ai.weapon_avoidance);
+                    }
                 }
             }
             if let Some(probe) = self.load_probe.as_mut() {

@@ -164,6 +164,17 @@ pub struct Planner {
     band_side: u8,
     /// `+0x44`: the lane target.
     pub target: f32,
+    /// The ring's lateral rate, lane units a slot per slot: Pulse's `0.001`
+    /// ([`super::RING_RATE`]), or a 2048 event's ([`super::event_ring_rate`],
+    /// 2048 `driver+0xc4`).
+    pub rate: f32,
+    /// 2048's search coin (`driver+0xc8`), `None` on a title whose search
+    /// has none: set, the choice searches up first; clear, down first.
+    pub coin: Option<bool>,
+    /// 2048 (`0x8119dcc4`): when the chosen candidate's smoothed score is
+    /// above `0.5`, the preferred lane becomes `1 - chosen^2` on the chosen
+    /// lane's side.
+    pub preferred_follows_choice: bool,
 }
 
 impl Default for Planner {
@@ -178,6 +189,9 @@ impl Default for Planner {
             chosen: 0.0,
             band_side: 0,
             target: 0.0,
+            rate: super::RING_RATE,
+            coin: None,
+            preferred_follows_choice: false,
         }
     }
 }
@@ -210,11 +224,25 @@ impl Planner {
             for (smoothed, new) in self.scores.iter_mut().zip(fresh) {
                 *smoothed = *smoothed * 0.9 + new * 0.1;
             }
-            self.chosen = self.local_best(input.own_lane) as f32 * 0.25 - 1.0;
+            let best = match self.coin {
+                None => self.local_best(input.own_lane),
+                Some(up_first) => self.coin_ordered_best(input.own_lane, up_first),
+            };
+            self.chosen = best as f32 * 0.25 - 1.0;
+            if self.preferred_follows_choice && self.scores[best] > 0.5 {
+                let p = 1.0 - self.chosen * self.chosen;
+                self.preferred = if self.chosen < 0.0 { -p } else { p };
+            }
         }
         if rng.below(400) == 125 {
             let u = rand_unit(rng) * 2.0 - 1.0;
             self.preferred = if u < 0.0 { u * u - 1.0 } else { 1.0 - u * u };
+        }
+        // 2048 (`0x8119d8f0`): one call in 200 redraws the search coin.
+        if let Some(coin) = self.coin.as_mut()
+            && rng.below(200) == 1
+        {
+            *coin = rng.below(2) == 1;
         }
         self.push = self.push.clamp(-2.0, 2.0);
         let sum = self.chosen + self.push;
@@ -252,6 +280,37 @@ impl Planner {
         best
     }
 
+    /// 2048's search (`0x8119d534..0x8119d632`): from the candidate nearest
+    /// the craft's own lane, with `-1` as the score to beat, two passes in the
+    /// coin's order, up through candidate `8` and down through `0`; a strictly
+    /// higher score wins, so a tie keeps the earlier visit, and the best
+    /// carries from the first pass into the second. A score at or below `-1`
+    /// ends a pass, which none reaches here (only the weapon avoidance this
+    /// port does not carry writes one).
+    fn coin_ordered_best(&self, own_lane: f32, up_first: bool) -> usize {
+        let start = (((own_lane + 1.0) * 0.5 * 8.0) as i32).clamp(0, 8) as usize;
+        let mut best = start;
+        let mut best_score = -1.0_f32;
+        let visit = |i: usize, best: &mut usize, best_score: &mut f32| {
+            if self.scores[i] > *best_score {
+                *best = i;
+                *best_score = self.scores[i];
+            }
+        };
+        for up in [up_first, !up_first] {
+            if up {
+                for i in start..9 {
+                    visit(i, &mut best, &mut best_score);
+                }
+            } else {
+                for i in (0..=start).rev() {
+                    visit(i, &mut best, &mut best_score);
+                }
+            }
+        }
+        best
+    }
+
     /// The authored band (`0x0885568c..0x0885574c`): with `lo < hi` the
     /// target is kept **out of** `[lo, hi]`, on the side it was first seen
     /// on: below `lo` if it started under the band's middle, above `hi`
@@ -281,12 +340,12 @@ impl Planner {
     }
 
     /// The ring fill at `Ai_PlanLane`'s tail (`0x08855758..0x088558bc`), in
-    /// the instruction order: one rate `a = 0.001` that every step is built
-    /// from at runtime (`a * 0.9` to speed up, `1.1 * a` to reverse, `a` to
+    /// the instruction order: one rate `a` ([`Self::rate`], Pulse's `0.001`)
+    /// that every step is built from at runtime (`a * 0.9` to speed up, `1.1 * a` to reverse, `a` to
     /// brake once `v^2 * (0.5 / a)` reaches the distance left, `a * 15` the
     /// clamp).
     fn fill(&mut self) {
-        let a = 0.001_f32;
+        let a = self.rate;
         let mut last = self.ring.last();
         while !self.ring.is_full() {
             let v = self.lane_velocity;

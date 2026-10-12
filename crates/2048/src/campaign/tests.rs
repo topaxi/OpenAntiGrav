@@ -43,6 +43,9 @@ fn race_event(kind: EventKind, typedef_id: i64, laps: Option<u32>) -> Event {
         rank_required: None,
         force_always_unlocked: None,
         has_ghost_capacity: false,
+        skill_scale: None,
+        ai_pad_tracking_skill: None,
+        ai_weapon_avoidance_skill: None,
     }
 }
 

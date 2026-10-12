@@ -36,7 +36,7 @@ pub use cruise::{
 };
 pub use field::{Field, OriginalDriver, Output, SLOTS, Standings, Tick};
 pub use lane::{PlanInput, Planner, Ring};
-pub use laws::Laws;
+pub use laws::{Laws, RING_RATE, event_ring_rate};
 pub use pack::{Wander, race_fraction, shuffle};
 pub use rail::{Rail, RailCorrection};
 pub use steer::{Controller, Steering, airborne, lookahead_distance, pitch, steer};
