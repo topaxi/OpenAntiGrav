@@ -197,7 +197,7 @@ about a second, decompression-shaped problem on top of it.
   (`omega-status.md`, "An extraction-tool bug"); the corrected copy has 60,151 of
   `tech_de_ra\track.vex`'s 133,888 bytes different from the short-read one's.
   **Promoted 2026-09-29**: `data/extracted/ps4` is the corrected extraction (the
-  short-read one is `data/extracted/ps4.bak`), `omega_psarc_ground_truth` was
+  short-read one was `data/extracted/ps4.bak`, deleted 2026-10-12), `omega_psarc_ground_truth` was
   re-measured on it (`psarc.md`, "Block data location and the short-read
   extraction"), and `crates/game/tests/omega_race_ground_truth.rs` skips only
   on a short-read copy, `OAG_OMEGA_SOURCE=<dir>` overriding the directory.

@@ -265,7 +265,7 @@ below and both `pkg_extract` invocations on this page recover real content
 that the unpatched tool silently zeroed - re-extraction with the fix landed
 2026-09-27 under a scratch directory, not kept and
 became `data/extracted/ps4/{omega-eu,omega-eu-patch}` 2026-09-29 (the short-read
-copy is `data/extracted/ps4.bak`; the old scratch paths are symlinks now); see
+copy, `data/extracted/ps4.bak`, was deleted 2026-10-12; the old scratch paths are symlinks now); see
 `omega-psarc.md` for the before/after numbers.
 
 **`omega-ps4-eu-patch.pkg` extracts separately and adds content, rather than

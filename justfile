@@ -395,11 +395,11 @@ hash-images:
 # **A race starts**, on a whole extraction only (2026-09-29, `omega-race`):
 # real spline, collision, hull and textured circuit geometry, see
 # docs/formats/omega-status.md. `data/extracted/ps4` is the whole extraction
-# since 2026-09-29; a short-read copy (the old one is `data/extracted/ps4.bak`)
+# since 2026-09-29; a short-read copy (the old one was deleted 2026-10-12)
 # fails a race on `tech_de_ra\track.vex` having no `WO Track` node. To read a
 # different pair of directories, set `OAG_OMEGA_SRC`:
 #
-#     OAG_OMEGA_SRC=data/extracted/ps4.bak \
+#     OAG_OMEGA_SRC=<dir> \
 #         just play omega --race --no-audio --screenshot out.png
 #
 # A debug build spends about three minutes decoding the circuit's ~460 textures.
