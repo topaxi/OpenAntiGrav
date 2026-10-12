@@ -1356,3 +1356,6 @@
 0x08852afc	function	AiTrack_SampleAtProgress	80	ai-controls.md
 0x088542e4	function	Ai_SnapToLane	90	ai-controls.md
 0x08853148	function	Ai_ComputePitch	75	ai-controls.md
+0x08944160	function	SceneNode_SubmitTree	85	clouds.md
+0x0891e908	function	Gfx_GetVisibleSectionMask	80	clouds.md
+0x08922974	function	Section_BindVisibilityRow	78	clouds.md
