@@ -624,8 +624,8 @@ A rolling pre-release, rebuilt from `main` once a day by
   audit of each artifact), then moves the `nightly` tag to the commit, creates or
   updates a **pre-release** (not a draft, never "latest"), uploads the new files
   and only then deletes the old ones, so a failed upload leaves yesterday's files.
-  The publish job downloads only the four release artifacts (`linux`, `steamdeck`,
-  `windows`, `android`). The `web-dist` artifact of the same run is the Pages
+  The publish job downloads only the five release artifacts (`linux`, `steamdeck`,
+  `windows`, `android`, `macos`). The `web-dist` artifact of the same run is the Pages
   deploy's input and never becomes a release asset.
 - **Names and version.** `OpenAntiGrav-nightly-<yyyymmdd>-<sha7>-<platform>.<ext>`
   plus `SHA256SUMS`. The binary reports `0.1.0-nightly (<sha7>)` in `--version`
@@ -635,6 +635,9 @@ A rolling pre-release, rebuilt from `main` once a day by
   leaves it unset.
 - **Unsigned and unstable.** Built from whatever `main` holds, with no manual
   testing. Use a tagged release for anything that matters.
+- **The macOS app is included** (2026-10-12): `OpenAntiGrav-nightly-...-macos-arm64.zip`,
+  an ad-hoc signed `OpenAntiGrav.app` that is not notarized. The release notes say how
+  to open it; [macos.md](macos.md) has the rest, and the disabled signing hook.
 - **The Android APK is included** (2026-10-07), signed with the repository's stored
   sideload key (secrets `OAG_APK_KEYSTORE_B64` and `OAG_APK_KEYSTORE_PASS`; today the
   maintainer's local `~/.android/oag-debug.keystore`), so it installs over a local
