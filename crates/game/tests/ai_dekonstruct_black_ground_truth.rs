@@ -154,8 +154,12 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// way), its wall-contact clusters are the same (2850 at 973 -> 978 ticks, 2400
 /// at 992 -> 973), and its deaths stay in the region they were in (samples
 /// 2700-2970: 11 -> 15; the rest scattered).
+/// **Two cells raised 2026-10-12 for per-team opponent handling** (lane
+/// `hd-opponent-variant`): VENOM and PHANTOM seed 1 forward 0 -> 1, one of
+/// seven destroyed each. The wide, slow-turning hulls follow a plan learned on
+/// another hull; a per-hull plan is the open thread. Every other cell held.
 const BOUND: &[(&str, u64, u32, u32)] = &[
-    ("VENOM", 1, 0, 0),
+    ("VENOM", 1, 1, 0),
     ("VENOM", 2, 2, 1),
     ("VENOM", 3, 0, 0),
     ("FLASH", 1, 2, 1),
@@ -164,7 +168,7 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("RAPIER", 1, 1, 1),
     ("RAPIER", 2, 1, 2),
     ("RAPIER", 3, 3, 3),
-    ("PHANTOM", 1, 0, 2),
+    ("PHANTOM", 1, 1, 2),
     ("PHANTOM", 2, 3, 3),
     ("PHANTOM", 3, 3, 2),
 ];
