@@ -60,13 +60,6 @@ use oag_core::buttons::{Button, Input};
 /// [`Definition::parse`] available for an override path - see `--menu`.
 pub const BUILT_IN: &str = include_str!("../../../assets/ui/menu.toml");
 
-/// Definition-format version this build understands.
-///
-/// Refused rather than best-effort parsed: a definition written against a
-/// different entry vocabulary would otherwise load with entries silently
-/// missing, which is the failure mode this whole module is arranged to avoid.
-pub const FORMAT_VERSION: u32 = 1;
-
 mod vocabulary;
 pub use vocabulary::{Action, ValueSource};
 

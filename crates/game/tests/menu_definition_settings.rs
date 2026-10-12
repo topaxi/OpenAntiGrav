@@ -49,7 +49,7 @@ fn the_shipped_definition_is_internally_consistent() {
 #[test]
 fn a_string_id_is_resolved_against_the_table_parse_is_given() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -80,7 +80,7 @@ string_id = "MENU_BACK"
 #[test]
 fn a_title_string_id_is_resolved_against_the_table_parse_is_given() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
