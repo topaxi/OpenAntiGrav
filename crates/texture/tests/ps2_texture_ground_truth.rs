@@ -73,10 +73,11 @@ struct Survey {
 }
 
 /// Blobs whose leading texture header passes every check but the total size:
-/// `(archive, entry, size the header implies, blob size)`. Both carry the same
-/// 66,829-byte texture header and are about 8.4 and 16.8 times longer, which
-/// reads like a strip of frames behind one header; what follows it is not
-/// decoded, so they stay out of the census below.
+/// `(archive, entry, size the header implies, blob size)`. They are the "two
+/// outliers" in `docs/formats/ps2-texture.md`'s "Not determined" (hashes
+/// `0xb077d3bd` and `0x8d17fa0d`): a valid 256x256 texture packet followed by
+/// more GIF packets, a multi-part resource refused rather than half-decoded,
+/// so they stay out of the census below.
 const KNOWN_LONGER: &[(&str, usize, usize, usize)] = &[
     ("54748/WADS2.WAD", 4835, 66_829, 561_667),
     ("54748/WADS2.WAD", 4836, 66_829, 1_123_333),
