@@ -202,3 +202,23 @@ GHIDRA_INSTALL_DIR=/opt/ghidra /opt/ghidra/support/analyzeHeadless \
 `PadImporterDecompile.java` (batch-decompiles every differing slot for both
 classes) are the other three read-only scripts this page's findings come
 from, all under `scripts/ghidra/`.
+
+## The consumer of `this+0x1b0`, searched 2026-10-12 (`hd-pad-leftovers`): not found
+
+Still unread: the code that carries `this+0x1b0` into the pad program's constant. Static
+search, all negative, recorded so nobody repeats it:
+
+- `search_instructions` over the whole image: `addi rX, rY, 0x1b0` at 193 sites and
+  `li rX, 0x1b0` at 225, none of them in a function this page names beyond the writer
+  (`WeaponPad_UpdateRefreshTimer`, `li r9, 0x1b0` at `0x002e02fc` and `0x002e0428`) and
+  the two constructors (`0x002e01bc`, `0x002e0264`). The nearby `0x002e81f0` (`this+0x1b0`
+  as the base of a keyframed colour curve) and `0x002bca54` (an unnamed block that adds
+  `0x1b0`..`0x330` in `0x30` steps) belong to other object kinds.
+- The base importer's vtable slots 4, 6 and 10 (`0x00327040`, `0x00327228`,
+  `0x003237e8`) set bit `0x8000`/`0x4000` of `this+0x34` and return; the pad
+  constructors store `0x00873ca8` at `this+8`, a table of OPD entries each `lwz r3, x(r2);
+  blr` (a class-name accessor family, not a draw hook).
+- So the copy is not a pad virtual and not a base virtual: it is a renderer-side reader
+  that finds the pad object by some other route. A read watchpoint on `pad+0x1b0` is the
+  way (`just build-rpcs3-watchpoints`; its read side is not end-to-end verified), not
+  further static search. The wiring still rests on the numbers fitting, as before.

@@ -89,11 +89,27 @@ carries the cycle as HD Title data (every other title: `Authored`, unchanged);
 **Chosen, not measured:** a pad's starting key. The original seeds it from the
 pad object's heap address modulo six (the constructor, `0x002e01dc`); ours is the
 pad's index modulo six. Phase is a render-side accumulation of ready time, not
-simulation state. **Not measured:** a ready pad on `12_sol_2`, a cooling pad on
-`01_vineta_k` (the one cooling constant seen is the Sol 2 one), the original's
+simulation state. **Not measured** (updated 2026-10-12): a cooling pad on
+`01_vineta_k` (the one cooling constant seen is the Sol 2 one; three more boots did not catch one, see "Cooldown capture, 2026-10-12" below), the original's
 frame-to-frame advance (the 3 keys/s is read from the function, not timed on
 video), and the code that copies the pad's cycle vector into the program's
 constant (found by the numbers, not by a traced store).
+
+**Cooldown capture, 2026-10-12 (`hd-pad-leftovers`).** A ready pad on a second circuit
+is now seen: `12_sol_2`, the isolated weapon pad `#0` at `(409.5, 3.8, 6.1)`, pose
+`396.0,4.5,6.1`, three photographs 3 s apart (`rpcs3-drive.py place`, 7 `right`
+presses to Sol 2): the bars read bright orange-red, the plate and the red outline as
+ours, and ours at the same pose reads dark red at tick 90 and bright red at tick 130,
+the same colour class (the cycle phase is not controlled on either side, and the
+original's heap-seeded start is unknown). Kept in
+`data/reference/hd-capture/sol2-ready-weapon-pad/` (`original.png`, `ours_tick*.png`).
+**A cooling pad on Vineta K was not caught in three boots**: (1) a craft placed at rest
+on pad `#1` (`-797.9,-146.4,271.0`) does not collect (the weapon slot stays empty, the
+pad bars stay lit in the next photograph); (2) with `--speed 40` the craft collects
+(the weapon slot shows a chevron icon) but `place`'s `--speed` is global, so every later
+pose keeps the speed and the photograph lands 30 to 100 units past the pad. What would
+work: a per-pose speed in `place` (a collecting pass, then a rest pose 10 units short of
+the pad, within the refresh time, which is unread here).
 
 **Speed pads: checked, nothing moves.** Their constant on the same frame is the
 authored cyan and `SpeedupPad_Importer`'s slot 3 has no colour logic; ours already
@@ -899,7 +915,41 @@ Everything in it except the normal and the `_ne.a * W` term is what `mesh.wgsl`'
 Pictures (a scratch directory, not kept, 1920x1080 `oag-game --race --mode single_race`): `ta_pair.png` and `tb_pair.png` (`talons_junction`, red), `sa_pair.png` and `sb_pair.png` (`12_sol_2`, cyan); top is before, bottom after. Pulse PSP's `16_Track` pads (`pulse_pw_*.png`, `pulse_ps_*.png`) are byte-identical before and after. Guards: `tests/hd_pad_ne_lit_path.rs` (authored rig; fails if the lightmap, the normal decode or the glow is dropped) and `tests/hd_pad_ne_ground_truth.rs` (disc-backed).
 
 ### Wired, 2026-10-05, the four original circuits' speed pads
-`build_scene` now calls `pad_ne` for the pad materials (`weapon_pads`, `speedup_material`) that its unreferenced-chunk pass uses, so the 18, 16, 17 and 15 speed-pad chunks of `talons_junction`, `amphiseum`, `modesto_heights` and `tech_de_ra` bind their `_ne` mask and glow cyan (7,488, 6,656, 7,072 and 6,240 scene vertices, one colour each). Routing is by material, not node, because the nodes' hash names no chunk; **which node owns which chunk is still unknown** (not needed: a speed pad has no cooldown state). The filter matters: an unfiltered call also binds `ds_rail`, `ds_sf` and `ds_sfline_trench` (`diffuse_normal_specular_emmissive`, a different program) and put 5,296 red and 26,536 mixed glow vertices on `12_sol_2` and `01_vineta_k`. **Superseded 2026-10-07 (`vineta-k-fidelity`):** the "red and mixed glow" was judged wrong with no reference frame; RPCS3 frames of Vineta K's start line (azure panels) and Sol 2's start strip (a red line) show it is right, so the family is now bound too, each slot in its own authored colour (rcsmaterial.md, "Vineta K against a draw capture"). The test's expectation became "no pad cyan" off the four pad circuits. Guard: `tests/hd_original_speed_pad_ground_truth.rs`. Pictures: `<circuit>_{before,after}.png`. No RPCS3 reference frame was taken. Pulse is untouched: the change is under `mesh/rcs`, the PS3 builder, and no PSP path calls it.
+`build_scene` now calls `pad_ne` for the pad materials (`weapon_pads`, `speedup_material`) that its unreferenced-chunk pass uses, so the 18, 16, 17 and 15 speed-pad chunks of `talons_junction`, `amphiseum`, `modesto_heights` and `tech_de_ra` bind their `_ne` mask and glow cyan (7,488, 6,656, 7,072 and 6,240 scene vertices, one colour each). Routing is by material, not node, because the nodes' hash names no chunk; **which node owns which chunk was measured 2026-10-12, by position, see below** (not needed for drawing: a speed pad has no cooldown state). The filter matters: an unfiltered call also binds `ds_rail`, `ds_sf` and `ds_sfline_trench` (`diffuse_normal_specular_emmissive`, a different program) and put 5,296 red and 26,536 mixed glow vertices on `12_sol_2` and `01_vineta_k`. **Superseded 2026-10-07 (`vineta-k-fidelity`):** the "red and mixed glow" was judged wrong with no reference frame; RPCS3 frames of Vineta K's start line (azure panels) and Sol 2's start strip (a red line) show it is right, so the family is now bound too, each slot in its own authored colour (rcsmaterial.md, "Vineta K against a draw capture"). The test's expectation became "no pad cyan" off the four pad circuits. Guard: `tests/hd_original_speed_pad_ground_truth.rs`. Pictures: `<circuit>_{before,after}.png`. No RPCS3 reference frame was taken. Pulse is untouched: the change is under `mesh/rcs`, the PS3 builder, and no PSP path calls it.
+
+### Which node owns which speed-pad chunk, 2026-10-12 (`hd-pad-leftovers`)
+
+**Measured by position, not read from the engine's rule.** On `talons_junction`,
+`amphiseum`, `modesto_heights` and `tech_de_ra` no `Speedup Pad` node's `+0x30` hash
+names a chunk (0 of 18, 16, 17, 15). The chunks on `weapon_pads` or
+`speedup_material` that no pad node of either class names are exactly as many as the
+speed-pad nodes (18, 16, 17, 15; the weapon pads on the same circuits all resolve),
+and each node's world volume (`oag_vex::pads::volumes`) holds the vertex centroid of
+exactly one of them, within 0.46 world units at worst, the runner-up being 7.8 or
+more away. The pairing is one to one on all four circuits. It is not one rule of file order
+either: Talon's Junction's nodes `Shape2`..`Shape19` own chunks `#810`..`#827` in node
+order, but `amphiseum`'s last node owns the first such chunk (`#1100`). Reproduce: `cargo run -p oag-render --example
+hd_speed_pad_owner -- <circuit> [archive] [weapon]`; pinned by
+`crates/render/tests/hd_speed_pad_owner_ground_truth.rs` (a disc-backed ground truth,
+four tests).
+
+**The engine's own rule stays unrecovered.** The hash is not a name hash
+(`rcsmodel.md`, "The pads are second-pass geometry"), the pad constructors
+(`WeaponPad_Importer` `0x002e0168`, `0x002e0210`) call `MeshImporter_Construct` and
+store no mesh reference, the base importer's vtable slots 4, 6 and 10 are two flag
+setters and a no-op, and the importer's second table (`0x00873ca8`) holds `lwz r3,
+x(r2); blr` accessors. Where a mesh node's hash is looked up is the shared
+`Mesh_Importer` load path, the disc-wide "unresolved node" question of `rcsmodel.md`,
+not a pad question.
+
+**What this changes in the renderer: nothing.** The material routing in
+`build_scene` (`bind_scene_pad_masks`) draws and binds the same 18, 16, 17 and 15
+chunks, and a speed pad has no per-node state to key (`SpeedupPad_Importer` slot 3
+carries no colour logic). Replacing it by the position match would add a
+position-dependent rule the original does not state for a result that cannot differ;
+it is left as it is. **2048/Omega: checked, not run.** The probe reads HD's `.vex`
+pad classes and their `.rcsmodel`; neither title's pad objects have been decompiled
+(`docs/formats/omega-status.md`), so whether their pad nodes resolve is unmeasured.
 
 ## The load report said the speed pads were undrawn; they were not - 2026-10-06
 
