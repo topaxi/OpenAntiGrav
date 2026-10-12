@@ -120,15 +120,30 @@ pub fn sibling_geometry(spec: &str, name: &str, data: &[u8]) -> Option<Vec<u8>> 
 /// source does is unchanged, because [`sibling_geometry`] answers `None` for
 /// them and the caller keeps its existing path.
 ///
+/// The archive is opened once for the sibling and every texture it binds: a
+/// [`super::read_blob`] per texture reopened the disc image and reparsed the
+/// archive's table of contents each time, which was most of the cost of a
+/// circuit here (about 25 s for HD's Amphiseum against 1.5 s through an archive
+/// already held). A failure to open or read is the same `None` either way.
+///
 /// # Errors
 ///
 /// As [`build_scene`].
 pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, Report)>> {
-    let Some(geometry) = sibling_geometry(spec, name, data) else {
+    if !super::geometry_is_external(data) {
+        return Ok(None);
+    }
+    let Some(sibling) = sibling_name(name) else {
+        return Ok(None);
+    };
+    let Ok(mut archive) = oag_assets::Container::open(spec) else {
+        return Ok(None);
+    };
+    let Ok(geometry) = archive.read_entry(&sibling) else {
         return Ok(None);
     };
     let (model, report) = build_scene(name, data, &geometry, &mut |path| {
-        super::read_blob(spec, path).ok()
+        archive.read_entry(path).ok()
     })?;
     Ok(Some((model, report)))
 }

@@ -101,10 +101,27 @@ fn check(expected: &Expected) {
     let mut unexpected_errors = Vec::new();
     let mut wrong_magic = Vec::new();
     let mut big_endian_vex = 0;
+    let file = std::fs::File::open(archive_path(expected.archive).expect("opened above"))
+        .expect("the archive file opens");
     for path in archive.paths().to_vec() {
         let index = archive
             .index_of_path(&path)
             .expect("a listed path resolves");
+        let extension = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+        // A `.gnf` is read whole by `crates/texture/tests/omega_gnf_ground_truth.rs`,
+        // which reads every `.gnf` in these five archives through this same
+        // reader and fails on a read error, so claim 2 holds for them there;
+        // here only its magic is wanted. When its first block is stored raw and
+        // full (block length 0) its first bytes are the entry's own, read in
+        // place; any other first block reads the entry whole as before.
+        if extension == "gnf"
+            && let Some(head) = raw_head(&archive, &file, index)
+        {
+            if head != *b"GNF " {
+                wrong_magic.push(format!("{index} {path}"));
+            }
+            continue;
+        }
         let bytes = match archive.read(index) {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -112,7 +129,6 @@ fn check(expected: &Expected) {
                 continue;
             }
         };
-        let extension = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
         let Some((at, magic)) = magic_of(&extension) else {
             continue;
         };
@@ -141,6 +157,23 @@ fn check(expected: &Expected) {
         "{}: big-endian .vex entries",
         expected.archive
     );
+}
+
+/// An entry's first four bytes read straight from the archive file, when its
+/// first block is stored raw and full-size (a stored length of zero), so the
+/// bytes on disk are the entry's own; `None` for anything else.
+fn raw_head(archive: &Archive, file: &std::fs::File, index: usize) -> Option<[u8; 4]> {
+    use std::io::{Read, Seek, SeekFrom};
+    let directory = archive.directory();
+    if directory.entry_blocks(index).ok()?.first() != Some(&0) {
+        return None;
+    }
+    let (offset, _) = directory.entry_range(index).ok()?;
+    let mut file = file;
+    file.seek(SeekFrom::Start(offset)).ok()?;
+    let mut head = [0u8; 4];
+    file.read_exact(&mut head).ok()?;
+    Some(head)
 }
 
 /// A path known to decode on its own magic, for the positive control - see

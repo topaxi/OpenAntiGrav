@@ -191,34 +191,12 @@ fn expand(value: u32, bits: u32) -> u8 {
     (shifted | (shifted >> bits)) as u8
 }
 
-/// Subset index (0, 1 or 2) of texel `t` (raster order, `x + y * 4`).
-fn subset_of(subsets: u32, partition: usize, t: usize) -> usize {
-    match subsets {
-        1 => 0,
-        2 => tables::P2[partition][t] as usize,
-        _ => tables::P3[partition][t] as usize,
-    }
-}
-
-/// The anchor texel (the one whose top index bit is not stored) for
-/// `subset` under this partition.
-fn anchor_of(subsets: u32, partition: usize, subset: usize) -> usize {
-    match (subsets, subset) {
-        (_, 0) => 0,
-        (2, 1) => tables::A2[partition] as usize,
-        (3, 1) => tables::A3A[partition] as usize,
-        (3, 2) => tables::A3B[partition] as usize,
-        _ => 0,
-    }
-}
-
-/// The six-bit interpolation weight for index `index` out of `bits` bits.
-fn weight(bits: u32, index: u32) -> u32 {
+/// The six-bit interpolation weights for a `bits`-wide index (2, 3 or 4).
+fn weights(bits: u32) -> &'static [u32] {
     match bits {
-        2 => tables::WEIGHTS2[index as usize],
-        3 => tables::WEIGHTS3[index as usize],
-        4 => tables::WEIGHTS4[index as usize],
-        _ => 0,
+        2 => &tables::WEIGHTS2,
+        3 => &tables::WEIGHTS3,
+        _ => &tables::WEIGHTS4,
     }
 }
 
@@ -228,18 +206,54 @@ fn lerp(e0: u8, e1: u8, w: u32) -> u8 {
     (((64 - w) * u32::from(e0) + w * u32::from(e1) + 32) >> 6) as u8
 }
 
+/// Reads one index per texel, the anchor texel of each subset one bit
+/// narrower (its top bit is known to be zero).
+///
+/// Out of one 64-bit window rather than a `u128` shift per index: no mode's
+/// index field is wider than 63 bits (mode 6's primary, `16 * 4 - 1`).
+fn read_indices(
+    bits: &mut BitStream,
+    width: u32,
+    subset_of: &[u8; 16],
+    anchors: [usize; 3],
+) -> [u32; 16] {
+    let mut window = (bits.bits >> bits.pos) as u64;
+    let mut used = 0;
+    let mut out = [0u32; 16];
+    for (t, slot) in out.iter_mut().enumerate() {
+        let n = width - u32::from(t == anchors[subset_of[t] as usize]);
+        *slot = (window & ((1u64 << n) - 1)) as u32;
+        window >>= n;
+        used += n;
+    }
+    bits.pos += used;
+    out
+}
+
+/// No partition: every texel is subset 0.
+const ONE_SUBSET: [u8; 16] = [0; 16];
+
 /// Decodes one 16-byte BC7 block to 16 RGBA8 texels, raster order.
 ///
 /// A block whose low byte is zero is the spec's reserved encoding ("should not
 /// be used when encoding a BPTC texture"); it returns opaque black rather than
 /// panicking, so one malformed block cannot take down an image.
+///
+/// Everything that depends only on the mode and partition (the subset of each
+/// texel, the anchors, which index drives colour and which alpha, the weight
+/// tables) is chosen once per block, not per texel, which made a block about a
+/// quarter faster than the plain spec-order decoder (measured 2026-10-12).
+/// `tests.rs` keeps that decoder and holds the two equal.
 pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
-    let mut bits = BitStream::new(block);
-
-    let Some(mode_number) = (0..8).find(|_| bits.read(1) == 1) else {
+    // The mode is unary from bit 0: its number is the count of zero bits before
+    // the first one.
+    if block[0] == 0 {
         return [[0, 0, 0, 255]; 16];
-    };
+    }
+    let mode_number = block[0].trailing_zeros();
     let mode = &MODES[mode_number as usize];
+    let mut bits = BitStream::new(block);
+    bits.pos = mode_number + 1;
 
     let partition = bits.read(mode.partition_bits) as usize;
     let rotation = bits.read(mode.rotation_bits);
@@ -298,72 +312,49 @@ pub(crate) fn bc7(block: &[u8; 16]) -> [[u8; 4]; 16] {
         };
     }
 
-    let mut primary_index = [0u32; 16];
-    for (t, slot) in primary_index.iter_mut().enumerate() {
-        let subset = subset_of(mode.subsets, partition, t);
-        let anchor = anchor_of(mode.subsets, partition, subset);
-        let width = if t == anchor {
-            mode.index_bits - 1
-        } else {
-            mode.index_bits
-        };
-        *slot = bits.read(width);
-    }
+    let (subset_of, anchors): (&[u8; 16], [usize; 3]) = match mode.subsets {
+        1 => (&ONE_SUBSET, [0, 0, 0]),
+        2 => (
+            &tables::P2[partition],
+            [0, tables::A2[partition] as usize, 0],
+        ),
+        _ => (
+            &tables::P3[partition],
+            [
+                0,
+                tables::A3A[partition] as usize,
+                tables::A3B[partition] as usize,
+            ],
+        ),
+    };
 
-    let mut secondary_index = [0u32; 16];
-    if mode.index_bits2 > 0 {
-        for (t, slot) in secondary_index.iter_mut().enumerate() {
-            let subset = subset_of(mode.subsets, partition, t);
-            let anchor = anchor_of(mode.subsets, partition, subset);
-            let width = if t == anchor {
-                mode.index_bits2 - 1
-            } else {
-                mode.index_bits2
-            };
-            *slot = bits.read(width);
-        }
-    }
+    let primary = read_indices(&mut bits, mode.index_bits, subset_of, anchors);
+    let secondary = if mode.index_bits2 > 0 {
+        read_indices(&mut bits, mode.index_bits2, subset_of, anchors)
+    } else {
+        [0u32; 16]
+    };
+
+    // Which index drives colour and which alpha: the primary for both without a
+    // secondary; with one, the index-selection bit swaps them where the mode
+    // has that bit.
+    let (color_index, color_bits, alpha_index, alpha_bits) = if mode.index_bits2 == 0 {
+        (&primary, mode.index_bits, &primary, mode.index_bits)
+    } else if mode.index_selection_bits > 0 && index_selection {
+        (&secondary, mode.index_bits2, &primary, mode.index_bits)
+    } else {
+        (&primary, mode.index_bits, &secondary, mode.index_bits2)
+    };
+    let color_weights = weights(color_bits);
+    let alpha_weights = weights(alpha_bits);
 
     let mut out = [[0u8; 4]; 16];
     for t in 0..16 {
-        let subset = subset_of(mode.subsets, partition, t);
+        let subset = subset_of[t] as usize;
         let e0 = endpoint_rgba[2 * subset];
         let e1 = endpoint_rgba[2 * subset + 1];
-
-        let (color_bits, color_index, alpha_bits, alpha_index) = if mode.index_bits2 == 0 {
-            (
-                mode.index_bits,
-                primary_index[t],
-                mode.index_bits,
-                primary_index[t],
-            )
-        } else if mode.index_selection_bits > 0 {
-            if index_selection {
-                (
-                    mode.index_bits2,
-                    secondary_index[t],
-                    mode.index_bits,
-                    primary_index[t],
-                )
-            } else {
-                (
-                    mode.index_bits,
-                    primary_index[t],
-                    mode.index_bits2,
-                    secondary_index[t],
-                )
-            }
-        } else {
-            (
-                mode.index_bits,
-                primary_index[t],
-                mode.index_bits2,
-                secondary_index[t],
-            )
-        };
-
-        let cw = weight(color_bits, color_index);
-        let aw = weight(alpha_bits, alpha_index);
+        let cw = color_weights[color_index[t] as usize];
+        let aw = alpha_weights[alpha_index[t] as usize];
         let r = lerp(e0[0], e1[0], cw);
         let g = lerp(e0[1], e1[1], cw);
         let b = lerp(e0[2], e1[2], cw);

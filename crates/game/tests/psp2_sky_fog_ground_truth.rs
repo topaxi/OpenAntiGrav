@@ -76,11 +76,18 @@ fn circuit(package: &Path, name: &str) -> (race::Loaded, EnvSettings, Vec<[f32; 
     (loaded, env, unturned)
 }
 
-fn dome_turns(name: &str) {
+/// One load of the circuit for both claims below: each used to load it, read its
+/// `EnvSettings` and rebuild its dome on its own, as two tests (until 2026-10-12).
+fn sky_and_fog(name: &str) {
     let Some(package) = package() else {
         return;
     };
     let (loaded, env, unturned) = circuit(&package, name);
+    dome_turns(name, &loaded, &env, &unturned);
+    fog_is_authored(name, &loaded, &env);
+}
+
+fn dome_turns(name: &str, loaded: &race::Loaded, env: &EnvSettings, unturned: &[[f32; 3]]) {
     let degrees = env
         .scalar(SKY_ROTATION)
         .unwrap_or_else(|| panic!("{name}: no Sky rotation"));
@@ -89,7 +96,7 @@ fn dome_turns(name: &str) {
         .as_ref()
         .unwrap_or_else(|| panic!("{name}: no sky"));
     assert_eq!(sky.vertices.len(), unturned.len(), "{name}");
-    for (v, u) in sky.vertices.iter().zip(&unturned) {
+    for (v, u) in sky.vertices.iter().zip(unturned) {
         let p = v.position;
         assert!((p[1] - u[1]).abs() < 1e-2, "{name}: height moved");
         let (r, ur) = (p[0].hypot(p[2]), u[0].hypot(u[2]));
@@ -104,11 +111,7 @@ fn dome_turns(name: &str) {
     }
 }
 
-fn fog_is_authored(name: &str) {
-    let Some(package) = package() else {
-        return;
-    };
-    let (loaded, env, _) = circuit(&package, name);
+fn fog_is_authored(name: &str, loaded: &race::Loaded, env: &EnvSettings) {
     let [r, g, b, density] = env
         .vec4(PSP2_FOG_COLOUR)
         .unwrap_or_else(|| panic!("{name}: no Fog colour"));
@@ -132,14 +135,8 @@ macro_rules! circuits {
         mod $name {
             #[test]
             #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-            fn turns_its_dome_by_its_own_sky_rotation() {
-                super::dome_turns(stringify!($name));
-            }
-
-            #[test]
-            #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-            fn carries_its_authored_fog_labelled_inherited() {
-                super::fog_is_authored(stringify!($name));
+            fn turns_its_dome_and_carries_its_authored_fog() {
+                super::sky_and_fog(stringify!($name));
             }
         }
     )*};

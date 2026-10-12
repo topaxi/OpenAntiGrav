@@ -72,6 +72,17 @@ struct Survey {
     smoother: BTreeMap<&'static str, usize>,
 }
 
+/// Blobs whose leading texture header passes every check but the total size:
+/// `(archive, entry, size the header implies, blob size)`. They are the "two
+/// outliers" in `docs/formats/ps2-texture.md`'s "Not determined" (hashes
+/// `0xb077d3bd` and `0x8d17fa0d`): a valid 256x256 texture packet followed by
+/// more GIF packets, a multi-part resource refused rather than half-decoded,
+/// so they stay out of the census below.
+const KNOWN_LONGER: &[(&str, usize, usize, usize)] = &[
+    ("54748/WADS2.WAD", 4835, 66_829, 561_667),
+    ("54748/WADS2.WAD", 4836, 66_829, 1_123_333),
+];
+
 fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
     let archive = disc
         .entries()
@@ -106,8 +117,21 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
         };
         into.blobs += 1;
 
-        let Ok(head) = ps2_texture::header(&blob) else {
-            continue;
+        // `header` is a classifier, so most of its refusals mean "not a texture".
+        // Not `SizeMismatch`: it is checked only after the depth, the dimensions
+        // and the texel `GIFtag` all agreed, so a blob refused for it is a texture
+        // whose declared size does not close. Those were dropped here unseen
+        // until 2026-10-12; they are now named, and any other one fails.
+        let head = match ps2_texture::header(&blob) {
+            Ok(head) => head,
+            Err(ps2_texture::Error::SizeMismatch { expected, got }) => {
+                assert!(
+                    KNOWN_LONGER.contains(&(archive_path, index, expected, got)),
+                    "{archive_path} entry {index}: header implies {expected} bytes, blob is {got}"
+                );
+                continue;
+            }
+            Err(_) => continue,
         };
         into.textures += 1;
         *into.layouts.entry(layout_name(head.layout)).or_default() += 1;
@@ -116,14 +140,6 @@ fn survey(disc: &mut DiscImage, archive_path: &str, into: &mut Survey) {
             .entry((head.width, head.height, head.bits_per_pixel))
             .or_default() += 1;
         *into.flags.entry(head.flags).or_default() += 1;
-
-        assert_eq!(
-            head.total_bytes,
-            blob.len(),
-            "{archive_path} entry {index}: header implies {} bytes, blob is {}",
-            head.total_bytes,
-            blob.len()
-        );
 
         let texture = match ps2_texture::parse(&blob) {
             Ok(texture) => texture,

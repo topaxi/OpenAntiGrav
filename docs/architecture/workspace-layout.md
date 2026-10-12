@@ -756,6 +756,50 @@ The `rcsmodel_decl`, `rcsmodel_material` and `psp2_rcsmodel` repeats are about
 in `vex_class` and `lane_band_census` bought nothing (their archives are stored
 uncompressed) and was not kept.
 
+## Trimming redundant walks, second pass (2026-10-12)
+
+The first pass's leftover list, worked in order, and two library speedups the
+first pass pointed at. Measured the same way: the affected binaries alone,
+before (`main` at `8ade56390`) and after, back to back under the gate lock,
+load 7-20 before and 15-17 after (contended, so read the ratio).
+
+| | tests | summed | wall |
+| --- | ---: | ---: | ---: |
+| before | 160 | 2,809 s | 197 s |
+| after | 135 | 1,823 s | 129 s |
+
+| binary | before | after | what changed |
+| --- | ---: | ---: | --- |
+| `omega_gnf_ground_truth` | 1,164 s | 781 s | the BC7 decoder: mode, subset row, anchors, index roles and weight tables chosen once per block, indices from one 64-bit window; about a quarter faster per block, bit-exact |
+| `hd_trackwall` + `spawn_heading` | 655 s | 458 s | `hd_trackwall`'s grid claim runs on the race `spawn_heading`'s HD sweep already loads, the same 28 circuits with the same options |
+| `omega_psarc` | 136 s | 16 s | a `.gnf`'s magic read from its first block when that block is stored raw; the whole entry is read by the GNF sweep |
+| `hd_ambient_role_census`, `hd_amphiseum_wall_material` | 49 s | 4 s | `oag_mesh::mesh::rcs::scene_from` opens the archive once, not once per texture |
+| `psp2_sky_fog` | 106 s | 45 s | one load per circuit for the dome and the fog claim |
+| `hd_engine_flare` | 85 s | 39 s | seven load-only claims share one load |
+| `hd_original_ai` | 112 s | 47 s | the three Easy readings share one run |
+| `gxt` + `gxt_coverage` | 123 s | 93 s | the coverage claim rides on the sweep's walk |
+
+**The two library changes are bit-exact, proved on everything the ground truths
+read.** BC7: a digest of every texel `decode()` and `decode_bc7_level()` produce
+for all 15,677 Omega `.gnf` entries (every mip level, nine archives) is
+identical, and the replaced decoder stays in `crates/texture/src/bcn/bc7/tests.rs`
+as an oracle held equal on 1.6 million generated blocks. PSARC: one reused
+decompressor per entry, inflating into the entry's own buffer, with the old call
+as the fallback for any other outcome; a digest of all 130,546 entries of the 40
+PSARCs this project reads (HD through both ISOs and the extracted copy, the HD
+PSN download, every 2048 package, Omega) is identical. HD archives read 15-25%
+faster, hashing included; 2048's barely deflated packages are unchanged.
+
+**A fix the sweep turned up.** `ps2_texture_ground_truth` skipped every blob
+`ps2_texture::header` refused, then asserted a total size `header` had already
+guaranteed, so a texture whose size does not close vanished unseen. Two exist,
+the "two outliers" `docs/formats/ps2-texture.md` already records; they are now
+named in the test and any other one fails.
+
+Not changed, with why, is in the open thread for the next pass:
+`replay_ground_truth`, the `rcsmodel_*` repeats and the `ai_roll` grids are
+the maintainer's call.
+
 ## Dependency graph clean-up (2026-10-05)
 
 `cargo shear` found 29 unused or misplaced dependencies; they were removed and

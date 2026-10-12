@@ -67,6 +67,9 @@
 
 use std::fmt;
 
+use miniz_oxide::inflate::TINFLStatus;
+use miniz_oxide::inflate::core::{DecompressorOxide, decompress, inflate_flags};
+
 mod md5;
 
 pub use md5::digest as md5_digest;
@@ -433,6 +436,7 @@ impl Directory {
         let blocks = self.entry_blocks(index)?;
 
         let mut out = Vec::with_capacity(size);
+        let mut inflater: Option<Box<DecompressorOxide>> = None;
         let mut at = 0usize;
         for (n, stored_len) in blocks.into_iter().enumerate() {
             let block = entry.first_block + u32::try_from(n).unwrap_or(u32::MAX);
@@ -468,26 +472,67 @@ impl Directory {
             // over one coincidental byte. A real zlib stream inflates or the
             // bytes never were one, so a failed inflate is conclusive and falls
             // back to the raw block.
-            let plain = if stored_len != 0 && chunk.first() == Some(&ZLIB_CMF) {
-                miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
-                    .unwrap_or_else(|_| chunk.to_vec())
+            let start = out.len();
+            if stored_len != 0 && chunk.first() == Some(&ZLIB_CMF) {
+                // Capped at what the entry has left, so its last block never grows
+                // `out` past the `size` it was allocated with.
+                let room = block_size.min(size.saturating_sub(start));
+                if !inflate_block_into(&mut inflater, chunk, &mut out, room) {
+                    out.extend_from_slice(
+                        &miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
+                            .unwrap_or_else(|_| chunk.to_vec()),
+                    );
+                }
             } else {
-                chunk.to_vec()
-            };
-            let last = out.len() + plain.len() >= size;
-            if plain.len() != block_size && !last {
+                out.extend_from_slice(chunk);
+            }
+            let got = out.len() - start;
+            let last = out.len() >= size;
+            if got != block_size && !last {
                 return Err(Error::ShortBlock {
                     index,
                     block,
-                    got: plain.len(),
+                    got,
                     want: self.header.block_size,
                 });
             }
-            out.extend_from_slice(&plain);
         }
 
         out.truncate(size);
         Ok(out)
+    }
+}
+
+/// Inflates one zlib-wrapped block straight onto the end of `out`, with one
+/// decompressor reused across an entry's blocks, and says whether it did.
+///
+/// The same inflate and flags as `miniz_oxide::inflate::decompress_to_vec_zlib`,
+/// minus what that call costs per block: a fresh decompressor (about 11 KiB to
+/// set up) and an output buffer started at twice the input and doubled until the
+/// block fits, then copied once more onto `out`. Only a stream that finishes
+/// within `room` bytes (a block, or what the entry has left) is taken; anything
+/// else (an error, or more output than `room` holds) leaves `out` as it was and
+/// returns `false`, and the caller runs `decompress_to_vec_zlib` itself, so
+/// every outcome is the one it always produced.
+fn inflate_block_into(
+    inflater: &mut Option<Box<DecompressorOxide>>,
+    chunk: &[u8],
+    out: &mut Vec<u8>,
+    room: usize,
+) -> bool {
+    let inflater = inflater.get_or_insert_with(Box::default);
+    inflater.init();
+    let start = out.len();
+    out.resize(start + room, 0);
+    let flags = inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
+        | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+    let (status, _, written) = decompress(inflater, chunk, &mut out[start..], 0, flags);
+    if status == TINFLStatus::Done {
+        out.truncate(start + written);
+        true
+    } else {
+        out.truncate(start);
+        false
     }
 }
 

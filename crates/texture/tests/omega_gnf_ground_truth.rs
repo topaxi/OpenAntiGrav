@@ -18,6 +18,10 @@
 //! each opening the same archives and reading, parsing and decoding the same
 //! entries; one pass now carries every claim the three made.
 //!
+//! **`crates/assets/tests/omega_psarc_ground_truth.rs` leans on this reading
+//! every `.gnf` of `data00`-`data04` whole**: it checks only their magic, and
+//! leaves "every entry reads without error" for them to the `read_path` here.
+//!
 //! # What this asserts, and what it deliberately does not
 //!
 //! Not a "real content" rate: `docs/formats/psarc.md`'s "Block data location"

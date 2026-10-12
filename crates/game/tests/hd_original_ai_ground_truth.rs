@@ -67,15 +67,23 @@ fn easy() -> Option<Vec<(u8, f32)>> {
     held(0, -0.07, 8.0, 40.0)
 }
 
-/// `fury-park-1` logged the racer one place ahead of the parked player at
-/// `54.51` on every one of its turns: `AIThrust` at eighth place,
-/// `WhenBehind` at its clamp, the skill curve extrapolated below Point1.
+/// The three readings `fury-park-1` logged, off **one** Easy run: they were
+/// three tests flying the same deterministic race until 2026-10-12.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn at_easy_the_reference_racer_reads_what_hd_logged() {
+fn at_easy_the_reference_racer_and_both_stops_read_what_hd_logged() {
     let Some(samples) = easy() else {
         return;
     };
+    the_reference_racer_reads_what_hd_logged(&samples);
+    the_upper_stop_reads_what_hd_logged(&samples);
+    the_lower_stop_reads_what_hd_logged(&samples);
+}
+
+/// `fury-park-1` logged the racer one place ahead of the parked player at
+/// `54.51` on every one of its turns: `AIThrust` at eighth place,
+/// `WhenBehind` at its clamp, the skill curve extrapolated below Point1.
+fn the_reference_racer_reads_what_hd_logged(samples: &[(u8, f32)]) {
     let reference: Vec<f32> = samples
         .iter()
         .filter(|(place, _)| *place == 7)
@@ -89,12 +97,7 @@ fn at_easy_the_reference_racer_reads_what_hd_logged() {
 }
 
 /// The same run's `+30 %` stop: `81.21`.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn at_easy_the_upper_stop_reads_what_hd_logged() {
-    let Some(samples) = easy() else {
-        return;
-    };
+fn the_upper_stop_reads_what_hd_logged(samples: &[(u8, f32)]) {
     assert!(
         samples.iter().any(|&(_, t)| close(t, 81.21)),
         "nobody on the upper stop"
@@ -102,12 +105,7 @@ fn at_easy_the_upper_stop_reads_what_hd_logged() {
 }
 
 /// The same run's `-30 %` stop: `27.81`.
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn at_easy_the_lower_stop_reads_what_hd_logged() {
-    let Some(samples) = easy() else {
-        return;
-    };
+fn the_lower_stop_reads_what_hd_logged(samples: &[(u8, f32)]) {
     assert!(
         samples.iter().any(|&(_, t)| close(t, 27.81)),
         "nobody on the lower stop"
