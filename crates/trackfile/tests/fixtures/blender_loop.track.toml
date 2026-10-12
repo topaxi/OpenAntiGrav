@@ -1,0 +1,27 @@
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/track.tosd"
+version = "1.0.0"
+
+[track]
+id = "blender-loop"
+title = "Blender Loop"
+glb = "blender_loop.glb"
+notes = ["authored headless in Blender with the OAG add-on: 8 control points (chosen, not measured)"]
+
+[spline]
+point_version = 263
+
+[[spline.path]]
+points = 64
+entry = 0
+exit = 0
+max_spacing_bits = 1117777394
+
+[[spline.junction]]
+prev = [0, -1]
+next = [0, -1]
+
+[counts]
+collision_nodes = 2
+speedup_pads = 1
+weapon_pads = 1

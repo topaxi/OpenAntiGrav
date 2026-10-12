@@ -103,3 +103,15 @@ fn the_committed_fixture_is_valid_and_reads() {
     let glb = std::fs::read(format!("{dir}/oval.glb")).unwrap();
     from_parts(&text, &glb).expect("reader");
 }
+
+#[test]
+fn what_the_blender_add_on_writes_is_valid_and_reads() {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
+    for name in ["blender_loop", "oval.reexport"] {
+        let text = std::fs::read_to_string(format!("{dir}/{name}.track.toml")).unwrap();
+        oag_schema::validate::accepts("track", 1, &text)
+            .unwrap_or_else(|e| panic!("{name}: {e:?}"));
+        let glb = std::fs::read(format!("{dir}/{name}.glb")).unwrap();
+        from_parts(&text, &glb).unwrap_or_else(|e| panic!("{name}: {e}"));
+    }
+}
