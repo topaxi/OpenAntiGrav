@@ -458,6 +458,7 @@ struct Row {
 /// - `01_Track` and `06_Track` RAPIER no longer lap clean (`06` scrapes 1497
 ///   ticks): the same hull-size cause;
 /// - `14_Track` PHANTOM stays `Eliminated`, slower and with more contacts.
+///
 /// The open thread is a speed plan per hull, not one shared plan.
 ///
 /// The frozen board: 12 circuits x 4 classes, generated the way this file's
