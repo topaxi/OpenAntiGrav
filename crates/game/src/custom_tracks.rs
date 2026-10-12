@@ -1,7 +1,7 @@
 //! RACE REMIX's CUSTOM track title: the tracks a player has put in the
 //! directories `--ballisticng-track` searches, offered on the TRACK row.
 //!
-//! The list is the one [`oag_source::ballisticng::tracks_in`] gives the command line,
+//! The list is the one [`oag_source::tracks::all_in`] gives the command line,
 //! so a name that works for `--ballisticng-track` is a row here and the reverse. Each
 //! file is read the way a race reads it ([`oag_raceplay::foreign::survey`]), on a
 //! thread of its own: 32 Workshop tracks take about 20 s to read in a debug build,
@@ -31,10 +31,18 @@ pub struct Scan {
 }
 
 impl Scan {
-    /// Lists the files under `bases` now (directory reads only) and starts
-    /// reading them.
-    pub fn start(bases: &[PathBuf]) -> Self {
-        let files = oag_source::ballisticng::tracks_in(bases);
+    /// [`Scan::start`] over the default search paths of both sources.
+    pub fn discover() -> Self {
+        Self::start(
+            &oag_source::tracks::search_path(),
+            &oag_source::ballisticng::search_path(),
+        )
+    }
+
+    /// Lists the files now (directory reads only) and starts reading them: the
+    /// own-format tracks in `own`, then BallisticNG's under `bases`.
+    pub fn start(own: &[PathBuf], bases: &[PathBuf]) -> Self {
+        let files = oag_source::tracks::all_in(own, bases);
         let task = (!files.is_empty()).then(|| {
             let files = files.clone();
             Task::spawn("oag-custom-tracks", move || survey::survey(&files))

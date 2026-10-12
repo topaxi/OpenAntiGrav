@@ -77,8 +77,8 @@ physics; HD, 2048 and Omega as hosts are not exercised (a Pulse image hosted eve
 
 ## How to race one
 
-Put the `*.track.toml` and its `.glb` in `tracks/` under a base `--ballisticng-track` searches
-(`$OAG_BALLISTICNG`, `data/ballisticng`, beside the program, `<data dir>/oag/ballisticng`), then RACE REMIX, TRACK TITLE
+Put the `*.track.toml` and its `.glb` in a track directory (`$OAG_TRACKS`, `data/tracks`, `tracks/` beside the program,
+`<data dir>/oag/tracks`; one level of subdirectory is read too), then RACE REMIX, TRACK TITLE
 `CUSTOM`, TRACK `<title> (TRACK FILE)` (the manifest's own title), START
 ([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or `oag-game --track-file <manifest>`.
 A manifest or glb that will not read is listed dimmed with the reader's reason. The format carries no

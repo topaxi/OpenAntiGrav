@@ -392,15 +392,16 @@ fn run(cli: Cli) -> Result<()> {
         .ballisticng_track
         .as_deref()
         .map(|name| {
-            let bases = oag_source::ballisticng::search_path();
-            oag_source::ballisticng::resolve_in(&bases, name).ok_or_else(|| {
-                let found: Vec<String> = oag_source::ballisticng::tracks_in(&bases)
+            oag_source::tracks::resolve(name).ok_or_else(|| {
+                let found: Vec<String> = oag_source::tracks::all()
                     .iter()
                     .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().into_owned()))
                     .collect();
                 anyhow::anyhow!(
                     "--ballisticng-track {name}: no .wtrk at that path and no unique name match; \
-                     searched {bases:?}, found {found:?}"
+                     searched {:?} and {:?}, found {found:?}",
+                    oag_source::tracks::search_path(),
+                    oag_source::ballisticng::search_path()
                 )
             })
         })

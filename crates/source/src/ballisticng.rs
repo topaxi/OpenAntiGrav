@@ -4,9 +4,8 @@
 //! title's archives and not an asset-override layer (ADR-0062, decision 4). It is
 //! looked for the way the override layer is: a directory per base, searched in
 //! `data/ballisticng` (a checkout), beside the program, and `<data dir>/oag/ballisticng`, or
-//! the path list in `$OAG_BALLISTICNG`. Under a base, tracks are `tracks/*.wtrk` and
-//! `tracks/*.track.toml` (or the same one or two directories down, the shape of a
-//! Steam Workshop download) and ships `ships/*.csf`. Nothing here opens a file: reading belongs to the content
+//! the path list in `$OAG_BALLISTICNG`. Under a base, tracks are `tracks/*.wtrk` (or
+//! the same one or two directories down, the shape of a Steam Workshop download) and ships `ships/*.csf`. Nothing here opens a file: reading belongs to the content
 //! layer, and a missing directory is the ordinary state of a copy of the game.
 
 use std::path::{Path, PathBuf};
@@ -50,21 +49,17 @@ fn listed(bases: &[PathBuf], sub: &str, extension: &str) -> Vec<PathBuf> {
     out
 }
 
-fn is_file_with(path: &Path, extension: &str) -> bool {
+pub(crate) fn is_file_with(path: &Path, extension: &str) -> bool {
     path.is_file()
         && path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case(extension))
 }
 
-/// Whether `path` is a track a player can race: a Workshop `.wtrk`, or this
-/// project's own `*.track.toml` manifest (its `.glb` sits beside it).
+/// Whether `path` is a Workshop `.wtrk`. This project's own `*.track.toml`
+/// files live in [`crate::tracks`], not here.
 fn is_track(path: &Path) -> bool {
     is_file_with(path, "wtrk")
-        || (path.is_file()
-            && path
-                .file_name()
-                .is_some_and(|n| n.to_string_lossy().to_lowercase().ends_with(".track.toml")))
 }
 
 /// Every track under `bases`, base by base: `tracks/` first, then the
@@ -103,7 +98,7 @@ pub fn tracks_in(bases: &[PathBuf]) -> Vec<PathBuf> {
     out
 }
 
-fn subdirectories(dir: &Path) -> Vec<PathBuf> {
+pub(crate) fn subdirectories(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -126,12 +121,18 @@ pub fn ships_in(bases: &[PathBuf]) -> Vec<PathBuf> {
 /// by substring. `None` when nothing matches or a substring matches several.
 #[must_use]
 pub fn resolve_in(bases: &[PathBuf], name: &str) -> Option<PathBuf> {
+    resolve_among(&tracks_in(bases), name)
+}
+
+/// [`resolve_in`] over a list already made, so a list joining several sources
+/// ([`crate::tracks::all_in`]) resolves a name the way one source does.
+#[must_use]
+pub fn resolve_among(all: &[PathBuf], name: &str) -> Option<PathBuf> {
     let direct = Path::new(name);
     if direct.is_file() {
         return Some(direct.to_path_buf());
     }
     let wanted = name.to_lowercase();
-    let all = tracks_in(bases);
     let stem = |p: &PathBuf| {
         let name = p
             .file_name()
@@ -193,7 +194,7 @@ mod tests {
     }
 
     #[test]
-    fn a_workshop_download_and_an_own_format_track_are_found_too() {
+    fn a_workshop_download_is_found_and_an_own_format_track_is_not() {
         let base =
             std::env::temp_dir().join(format!("oag-ballisticng-layout-{}", std::process::id()));
         // `<base>/<content id>/<item>/<name>.wtrk`, as Steam lays it out.
@@ -203,20 +204,14 @@ mod tests {
         std::fs::write(base.join("473770/111/lion.wtrk"), b"x").unwrap();
         std::fs::write(base.join("473770/111/lion.csf"), b"x").unwrap();
         std::fs::write(base.join("tracks/mine.track.toml"), b"x").unwrap();
-        std::fs::write(base.join("tracks/mine.glb"), b"x").unwrap();
         std::fs::write(base.join("deep/er/still/too_deep.wtrk"), b"x").unwrap();
         let found = tracks_in(std::slice::from_ref(&base));
         assert_eq!(
             found,
-            [
-                base.join("tracks/mine.track.toml"),
-                base.join("473770/111/lion.wtrk")
-            ]
+            [base.join("473770/111/lion.wtrk")],
+            "an own-format track is not BallisticNG content"
         );
-        assert_eq!(
-            resolve_in(std::slice::from_ref(&base), "MINE"),
-            Some(base.join("tracks/mine.track.toml"))
-        );
+        assert_eq!(resolve_in(std::slice::from_ref(&base), "MINE"), None);
         // The base is the content directory itself: one level down.
         let content = base.join("473770");
         assert_eq!(tracks_in(&[content]), [base.join("473770/111/lion.wtrk")]);

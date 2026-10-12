@@ -103,7 +103,7 @@ mod disc {
     }
 
     fn scan_all(root: PathBuf) -> Scan {
-        let mut scan = Scan::start(&[root]);
+        let mut scan = Scan::start(&[], &[root]);
         while !scan.poll() && scan.task.is_some() {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }

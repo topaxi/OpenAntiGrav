@@ -22,14 +22,14 @@ folders, which the game finds the same way for everything it saves.
 | What | Folder | Section |
 | --- | --- | --- |
 | Mods (folder, `.zip`, `.oagmod`) | `<data dir>/oag/mods/` | [Mod that adds a menu row](#a-mod-that-adds-a-menu-row) |
-| Custom tracks (own format) | `<data dir>/oag/ballisticng/tracks/` | [Build and race your own track](#build-and-race-your-own-track-with-blender) |
+| Custom tracks (own format) | `<data dir>/oag/tracks/` | [Build and race your own track](#build-and-race-your-own-track-with-blender) |
 | AI pilots | `<config dir>/oag/pilots/` | [Write an AI pilot](#write-an-ai-pilot) |
 
-Create a folder that is missing (`mods/` and `ballisticng/` are not made for you).
+Create a folder that is missing (`mods/` and `tracks/` are not made for you).
 Two more places are searched for mods and tracks: **beside the program** (`mods/` or
-`ballisticng/` next to `oag-game`, or next to the AppImage, which is the easy choice on a Steam
-Deck) and, from a checkout, `data/mods/` and `data/ballisticng/`. Setting `OAG_MODS` or
-`OAG_BALLISTICNG` (a path list, `:` on Linux and macOS, `;` on Windows) replaces the whole
+`tracks/` next to `oag-game`, or next to the AppImage, which is the easy choice on a Steam
+Deck) and, from a checkout, `data/mods/` and `data/tracks/`. Setting `OAG_MODS` or
+`OAG_TRACKS` (a path list, `:` on Linux and macOS, `;` on Windows) replaces the whole
 list. On Android the files are reached with `adb push` or a file manager that can open
 `Android/data`; iOS and a real Windows PC and Mac are described from the code and have
 not been run by the maintainers ([installing](../overview/installing.md#2-make-the-images-folder-and-put-your-files-in-it)
@@ -42,7 +42,7 @@ says what was tried).
 2. In the 3D view sidebar (N), tab **OAG**: draw a closed Curve and tag it `spline`, then
    *Build Floor and Walls*, *Add Start*, and optionally pads.
 3. *Export OAG Track* writes `name.track.toml` and `name.glb`. Keep the two together.
-4. Copy both into `<data dir>/oag/ballisticng/tracks/`, then RACE REMIX, TRACK TITLE `CUSTOM`,
+4. Copy both into `<data dir>/oag/tracks/`, then RACE REMIX, TRACK TITLE `CUSTOM`,
    track `<title> (TRACK FILE)`, START. Or `oag-game --track-file name.track.toml`.
 
 What a track file can carry is a closed list: the racing line, collision floor and walls,
@@ -147,7 +147,7 @@ Give the mod a licence. A mod with none loads, and the list prints `no license s
 
 - **Custom craft.** The `craft/` folder in a mod is reserved and nothing reads it.
 - **Tracks and pilots inside a mod.** `tracks/` and `pilots/` in a mod are reserved; put
-  them in `ballisticng/tracks/` and `pilots/` as above for now.
+  them in `tracks/` and `pilots/` as above for now.
 - **A MODS page in the game.** There is no list, switch or licence screen; use `just mods-list`
   and the load report. Queued.
 - **Anything beyond menu rows in a mod**: no new pages, settings, modes, actions or art.

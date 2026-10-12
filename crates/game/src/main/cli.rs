@@ -447,7 +447,7 @@ pub(crate) struct Cli {
 
     /// Race a Unity track the player already has instead of a circuit of the
     /// source: a path to a `.wtrk`, or a name matched against the files under
-    /// the foreign-track directories (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the
+    /// the own-format track directories (`$OAG_TRACKS`, `data/tracks`, `<data dir>/oag/tracks`) and the BallisticNG ones (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the
     /// program, `<data dir>/oag/ballisticng`; `tracks/*.wtrk` in each). The source
     /// still supplies the ship, rules and physics. See `oag_raceplay::foreign`.
     #[arg(long)]
