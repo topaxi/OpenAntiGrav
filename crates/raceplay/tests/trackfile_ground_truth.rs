@@ -307,7 +307,7 @@ fn a_lone_craft_gets_round_the_committed_fixture() {
     let report = loaded.report.join("\n");
     for needle in [
         "Fixture Octagon",
-        "format 1.0",
+        "format 1.1",
         "not authored by format 1.x",
         "sky, fog",
     ] {

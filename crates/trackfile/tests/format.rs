@@ -1,7 +1,7 @@
 //! The track-file format, with no disc and no Workshop item: a project-authored
 //! track, its committed fixture, and every way a file is refused by name.
 
-use oag_trackfile::{Error, Parts, Track, fixture, from_parts, to_parts};
+use oag_trackfile::{Error, FORMAT_MINOR, Parts, Track, fixture, from_parts, to_parts};
 
 fn fixture_dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -17,7 +17,7 @@ fn a_written_track_reads_back_identical() {
     let p = parts();
     let loaded = from_parts(&p.manifest, &p.glb).expect("reads");
     assert_eq!(loaded.track, track);
-    assert_eq!(loaded.version, (1, 0));
+    assert_eq!(loaded.version, (1, FORMAT_MINOR));
     assert!(loaded.unread.is_empty(), "{:?}", loaded.unread);
 }
 
@@ -66,7 +66,7 @@ fn the_committed_fixture_is_what_the_generator_writes() {
 #[test]
 fn an_unknown_major_is_refused_by_name() {
     let p = parts();
-    let bad = p.manifest.replace("version = \"1.0\"", "version = \"2.0\"");
+    let bad = p.manifest.replace("version = \"1.1\"", "version = \"2.0\"");
     let err = from_parts(&bad, &p.glb).unwrap_err();
     assert!(matches!(err, Error::UnknownMajor { major: 2, .. }), "{err}");
 }
@@ -76,7 +76,7 @@ fn a_newer_minor_reads_and_names_the_keys_it_skipped() {
     let p = parts();
     let newer = p
         .manifest
-        .replace("version = \"1.0\"", "version = \"1.7\"")
+        .replace("version = \"1.1\"", "version = \"1.7\"")
         .replace("[spline]", "future_key = 3\n\n[spline]");
     let loaded = from_parts(&newer, &p.glb).unwrap();
     assert_eq!(loaded.version, (1, 7));
@@ -97,7 +97,7 @@ fn another_format_and_a_bad_version_string_are_refused() {
         from_parts(&other, &p.glb),
         Err(Error::NotThisFormat(_))
     ));
-    let odd = p.manifest.replace("version = \"1.0\"", "version = \"one\"");
+    let odd = p.manifest.replace("version = \"1.1\"", "version = \"one\"");
     assert!(matches!(
         from_parts(&odd, &p.glb),
         Err(Error::BadVersion(_))
@@ -209,4 +209,26 @@ fn an_unwritable_track_is_refused_before_a_file_exists() {
     let mut t = fixture::oval();
     t.id.clear();
     assert!(matches!(to_parts(&t, "x.glb"), Err(Error::Unwritable(_))));
+}
+
+#[test]
+fn the_original_ai_bytes_round_trip_when_a_point_carries_them() {
+    let mut track = fixture::oval();
+    let points = &mut track.ai.paths[0].points;
+    points[3].unk_0x5c = Some(40);
+    points[3].unk_0x5d = Some(200);
+    points[3].unk_0x66 = Some(0);
+    let p = to_parts(&track, "oval.glb").expect("writable");
+    let loaded = from_parts(&p.manifest, &p.glb).expect("reads");
+    assert_eq!(loaded.track, track);
+}
+
+#[test]
+fn a_1_0_file_without_the_ai_bytes_still_reads() {
+    let p = parts();
+    let old = p.manifest.replace("version = \"1.1\"", "version = \"1.0\"");
+    assert_ne!(old, p.manifest);
+    let loaded = from_parts(&old, &p.glb).expect("1.0 reads");
+    assert_eq!(loaded.version, (1, 0));
+    assert_eq!(loaded.track, fixture::oval());
 }

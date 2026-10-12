@@ -208,7 +208,7 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
             )?;
         }
         let col3 = |f: fn(&SplinePoint) -> [f32; 3]| p.iter().map(f).collect::<Vec<_>>();
-        let attrs = json!({
+        let mut attrs = json!({
             "POSITION": bin.positions(&col3(|q| q.pos)),
             "_OAG_TANGENT": bin.floats(&col3(|q| q.tangent), "VEC3"),
             "_OAG_DOWN": bin.floats(&col3(|q| q.down), "VEC3"),
@@ -223,6 +223,17 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
                 &p.iter().map(|q| [q.section_id, q.flags, 0, 0]).collect::<Vec<_>>()),
             "_OAG_LIGHT_SCALE": bin.bytes4(&p.iter().map(|q| q.light_scale).collect::<Vec<_>>()),
         });
+        // Optional: written only when a point carries the original's AI bytes.
+        if p.iter().any(|q| q.unk_0x5c.is_some()) {
+            let bytes = p
+                .iter()
+                .map(|q| match (q.unk_0x5c, q.unk_0x5d, q.unk_0x66) {
+                    (Some(lo), Some(hi), Some(floor)) => [lo, hi, floor, 1],
+                    _ => [0; 4],
+                })
+                .collect::<Vec<_>>();
+            attrs["_OAG_AI_BYTES"] = json!(bin.bytes4(&bytes));
+        }
         push(
             &name,
             vec![json!({ "attributes": attrs, "mode": POINTS })],
@@ -346,6 +357,10 @@ pub(crate) fn write(track: &Track) -> Result<Vec<u8>, Error> {
     out.extend_from_slice(b"BIN\0");
     out.extend_from_slice(&bin.data);
     Ok(out)
+}
+
+fn ai_present(bytes: &Option<Vec<[u8; 4]>>, i: usize) -> Option<[u8; 4]> {
+    bytes.as_ref().map(|b| b[i]).filter(|b| b[3] == 1)
 }
 
 fn items<T: Item>(
@@ -611,6 +626,14 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
     let (progress, line) = (s1("_OAG_PROGRESS")?, s1("_OAG_RACING_LINE")?);
     let (half, bound) = (v2("_OAG_HALF_WIDTH")?, v2("_OAG_AI_BOUND")?);
     let (sf, light) = (b4("_OAG_SECTION_FLAGS")?, b4("_OAG_LIGHT_SCALE")?);
+    let ai_bytes = if prim
+        .get(&Semantic::Extras("OAG_AI_BYTES".to_string()))
+        .is_some()
+    {
+        Some(b4("_OAG_AI_BYTES")?)
+    } else {
+        None
+    };
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
         if sf[i][2] != 0 || sf[i][3] != 0 {
@@ -634,6 +657,9 @@ fn read_spline(name: &str, node: &gltf::Node<'_>, blob: &[u8]) -> Result<Vec<Spl
             section_id: sf[i][0],
             flags: sf[i][1],
             light_scale: light[i],
+            unk_0x5c: ai_present(&ai_bytes, i).map(|b| b[0]),
+            unk_0x5d: ai_present(&ai_bytes, i).map(|b| b[1]),
+            unk_0x66: ai_present(&ai_bytes, i).map(|b| b[2]),
         };
         finite(
             name,

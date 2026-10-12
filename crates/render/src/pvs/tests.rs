@@ -227,6 +227,9 @@ fn padding_draws_the_neighbours_but_not_what_they_see() {
         section_id,
         flags: 0,
         light_scale: [0xff; 4],
+        unk_0x5c: None,
+        unk_0x5d: None,
+        unk_0x66: None,
     };
     let track = AiTrack {
         version: 0x105,

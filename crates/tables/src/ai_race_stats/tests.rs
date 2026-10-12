@@ -121,3 +121,102 @@ fn the_entry_name_is_the_lower_case_class() {
         r"Data\XML\AIRaceStats_phantom.xml"
     );
 }
+
+const FULL: &str = r#"
+<AIStats>
+<VenomStats>
+<RaceBalancing>
+<PosBalancing>
+<PlayerInPos1 AIThrust="79.0" SpreadDist="101.0"/>
+<PlayerInPos2 AIThrust="78.0" SpreadDist="102.0"/>
+<PlayerInPos3 AIThrust="77.0" SpreadDist="103.0"/>
+<PlayerInPos4 AIThrust="76.0" SpreadDist="104.0"/>
+<PlayerInPos5 AIThrust="75.0" SpreadDist="105.0"/>
+<PlayerInPos6 AIThrust="74.0" SpreadDist="106.0"/>
+<PlayerInPos7 AIThrust="73.0" SpreadDist="107.0"/>
+<PlayerInPos8 AIThrust="72.0" SpreadDist="108.0"/>
+</PosBalancing>
+<RubberBanding>
+<WhenLeading SpeedMul="0.5" MinSpeedChangeDist="10" MaxSpeedChange="3"/>
+<WhenBehind SpeedMul="0.25" MinSpeedChangeDist="20" MaxSpeedChange="6"/>
+</RubberBanding>
+<StartStats>
+<GridPlace1 StartBoost="0.1" BaseStartThrust="71"/>
+<GridPlace2 StartBoost="0.2" BaseStartThrust="72"/>
+<GridPlace3 StartBoost="0.3" BaseStartThrust="73"/>
+<GridPlace4 StartBoost="0.4" BaseStartThrust="74"/>
+<GridPlace5 StartBoost="0.5" BaseStartThrust="75"/>
+<GridPlace6 StartBoost="0.6" BaseStartThrust="76"/>
+<GridPlace7 StartBoost="0.7" BaseStartThrust="77"/>
+<GridPlace8 StartBoost="0.8" BaseStartThrust="78"/>
+</StartStats>
+<SkillScale>
+<SkillScalePoint1 ThrustOffset="-1.0" ThrustMultiplier="1.0" SpreadMultiplier="0.5"/>
+<SkillScalePoint2 ThrustOffset="0.0" ThrustMultiplier="1.0" SpreadMultiplier="1.0"/>
+<SkillScalePoint3 ThrustOffset="1.0" ThrustMultiplier="1.0" SpreadMultiplier="1.5"/>
+<AIPackSwapping1 numAIPositionSwaps="2" numIntermediatePositions="1" intermediateOffsetSize="0.1"/>
+<AIPackSwapping2 numAIPositionSwaps="3" numIntermediatePositions="2" intermediateOffsetSize="0.2"/>
+<AIPackSwapping3 numAIPositionSwaps="4" numIntermediatePositions="3" intermediateOffsetSize="0.3"/>
+</SkillScale>
+SPLIT</RaceBalancing>
+</VenomStats>
+</AIStats>
+"#;
+
+fn full(extra: &str) -> String {
+    FULL.replace("SPLIT", extra)
+}
+
+#[test]
+fn the_full_reader_carries_every_field_the_thrust_view_drops() {
+    let race = parse_full(&full(""), SpeedClass::Venom).expect("parses");
+    assert_eq!(race.spread_dist[0], 101.0);
+    assert_eq!(race.spread_dist[7], 108.0);
+    assert_eq!(race.grid[2].base_start_thrust, 73.0);
+    assert_eq!(race.when_behind.max_speed_change, 6.0);
+    assert_eq!(race.spread_multiplier[2], 1.5);
+    assert_eq!(race.pack_swapping[1].num_intermediate_positions, 2.0);
+    assert_eq!(race.split_screen, None);
+    assert_eq!(race.thrust, parse(&full(""), SpeedClass::Venom).unwrap());
+}
+
+#[test]
+fn split_screen_is_read_when_authored() {
+    let extra = r#"<SplitScreenMultiplier Easy="0.9" Medium="0.8" Hard="0.7"/>"#;
+    let race = parse_full(&full(extra), SpeedClass::Venom).expect("parses");
+    assert_eq!(race.split_screen.map(|s| s.hard), Some(0.7));
+}
+
+#[test]
+fn an_element_it_does_not_know_is_refused_by_name() {
+    let extra = r#"<ShipSpacingVariation max="1" min="0"/>"#;
+    assert_eq!(
+        parse_full(&full(extra), SpeedClass::Venom),
+        Err(Error::UnknownElement {
+            element: "ShipSpacingVariation".to_string()
+        })
+    );
+}
+
+#[test]
+fn an_attribute_it_does_not_know_is_refused_by_name() {
+    let text = full("").replace(r#"MaxSpeedChange="3""#, r#"MaxSpeedChange="3" Extra="1""#);
+    assert!(matches!(
+        parse_full(&text, SpeedClass::Venom),
+        Err(Error::UnknownAttribute { attribute, .. }) if attribute == "Extra"
+    ));
+}
+
+#[test]
+fn a_ninth_grid_place_is_refused_by_name() {
+    let text = full("").replace(
+        "</StartStats>",
+        r#"<GridPlace9 StartBoost="1" BaseStartThrust="1"/></StartStats>"#,
+    );
+    assert_eq!(
+        parse_full(&text, SpeedClass::Venom),
+        Err(Error::UnknownElement {
+            element: "GridPlace9".to_string()
+        })
+    );
+}

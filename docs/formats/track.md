@@ -464,8 +464,35 @@ struct SplinePt {             // 0x70 bytes
 reads `unk_0x5c`/`unk_0x5d` as a lane band (`byte / 127.5 - 1`, applied only when
 the first is below the second, so the shipped `0xff`/`0x00` means "no band"), and
 `Ai_Update` reads `unk_0x66` as a per-point opponent speed floor when it is below
-`35`. Which circuits author either is not counted. See
+`35`. See
 [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#a-per-point-speed-floor).
+
+**Census (2026-10-12, measured, both PSP pressings, 40 tracks and 34,261 points
+on each; `oag-vex`'s `lane_band_census_ground_truth.rs`).** The three bytes are
+`SplinePoint::unk_0x5c`, `unk_0x5d` and `unk_0x66` (`None` on the short points of
+version `0x107`, whose `+0x5c`/`+0x5d` are the section and flags; where a 2048 band would live is unplaced, `+0x5a`/`+0x5b` (`0xff`/`0x00` on every 2048 point measured, the disabled default) being the candidate; `0x5c`/`0x5d`
+read as the forced `0xff`/`0x00` before version `0x105`). Every Pulse track is
+version `0x105`.
+
+- **Lane band: one circuit authors it.** `07_Track`, forward (161 points) and
+  reversed (150), on one path only (path 1, one of two 248-point routes), in two runs a path
+  (progress about 0.71-0.81 and 0.88-0.98 forward), each run contiguous. Inside
+  a run the low byte falls in about 35-133 and the high byte in about 125-218,
+  which decode (`byte / 127.5 - 1`) to a low end of about -0.7 to 0.0 and a high
+  end of about 0.0 to 0.7: a band around the centre line. Every other point of every track is the default `0xff`/`0x00`, which
+  disables it. That is the shape a lane band has, so the reading is consistent
+  with the data (confidence 75, up from the static 70) and unchecked live; the
+  fields keep their `unk_` names until a leg measures it.
+- **`+0x66`: only `06_Track` authors anything.** Every other circuit, zone
+  track and reversal holds one byte on all its points (the default, at or above
+  `35`, so no floor). `06_Track` holds five (forward) or six (reversed) values across all 713 (forward) and
+  819 (reversed) points; the ones below `35` are all `0`, on 63 forward points
+  (three runs: 17 and 32 points at the two ends of path 0 and 14 in path 1) and 17
+  reversed (one run in path 0), the rest at or above `128`. So a speed floor is
+  authored on exactly one circuit, as short stretches, and the other values on
+  that circuit are a use of the byte the static reading does not cover, so the
+  field stays `unk_0x66` and is not named a speed floor.
+- Both pressings give identical counts. The PS2 disc was not swept.
 
 Every point carries a **full orientation frame**, a track width, an explicit
 **racing line**, and an **AI corridor** around it. The frame is orthonormal:

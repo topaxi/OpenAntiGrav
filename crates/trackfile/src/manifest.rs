@@ -13,9 +13,10 @@ use crate::{Error, Track};
 pub const FORMAT_NAME: &str = "oag-track";
 /// The major this reader reads. A file of another major is refused by name.
 pub const FORMAT_MAJOR: u32 = 1;
-/// The minor this writer writes. Newer minors add optional keys, which a reader
+/// The minor this writer writes (1.1 added the optional `_OAG_AI_BYTES` point
+/// accessor; a 1.0 file reads with those bytes absent). Newer minors add optional keys, which a reader
 /// of this major reports as unread rather than refusing.
-pub const FORMAT_MINOR: u32 = 0;
+pub const FORMAT_MINOR: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Manifest {

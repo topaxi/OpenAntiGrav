@@ -432,14 +432,15 @@ carrying the recovered law, not something read off the original.
   player setting).
 - **Read from the disc, never transcribed** (ADR-0006): `AIControlStats.xml`
   (`SteerMul`, `SteerDamp`, `LookAheadSecs`, `xtrackMul`) and the whole of
-  `AIRaceStats_<class>.xml` (`oag_tables::ai_race_stats` reads only the thrust
-  half today; `SpreadDist`, the six `RubberBanding` floats and the three
-  `AIPackSwapping` rows join it). The skill scale is the existing
+  `AIRaceStats_<class>.xml` (`oag_tables::ai_race_stats::parse_class_race` reads
+  all of it, `oag_tables::ai_control_stats` the controller; both are
+  [formats/ai-tables.md](../formats/ai-tables.md)). The skill scale is the existing
   `AI_ResolveSkillScale` port; the shuffle also needs the integer difficulty,
   which in the campaign is the cell's browsed rung (`CellSelection_CommitSelection`
   writes it to the same `SkillLevel` global, `race-campaign.md`).
   Per track point it needs `unk_0x5c`, `unk_0x5d` and `unk_0x66`, which
-  `oag_vex::track::SplinePoint` does not carry yet. The executable constants
+  `oag_vex::track::SplinePoint` now carries (census in
+  [formats/track.md](../formats/track.md)). The executable constants
   (`950`, `80`, `10`, `0.0676`, `-0.0206`, `0.7/0.3`, `1.5`, `15`, the `0.08`
   gain decay, `350`, `1000`) are code, cited to `ai-controls.md`.
 - **Field state.** The round-robin index (`0..7`), the shuffle-done flag, the

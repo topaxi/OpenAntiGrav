@@ -19,6 +19,9 @@ fn point(section_id: u8) -> SplinePoint {
         section_id,
         flags: 0,
         light_scale: [0xff; 4],
+        unk_0x5c: None,
+        unk_0x5d: None,
+        unk_0x66: None,
     }
 }
 

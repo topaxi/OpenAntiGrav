@@ -215,7 +215,27 @@ pub struct SplinePoint {
     /// forces, and on the short points of [`SHORT_POINT_VERSION`] onwards, whose
     /// layout moves these bytes unread. See `docs/formats/track.md`.
     pub light_scale: [u8; 4],
+    /// `+0x5c`, the low end of the AI lane band (`byte / 127.5 - 1`) the
+    /// original's lane planner reads, **as the original sees it**: `0xff` on
+    /// every point of a track older than [`LANE_BAND_VERSION`], which the loader
+    /// forces. `None` on the short points of [`SHORT_POINT_VERSION`] onwards,
+    /// where `+0x5c` is [`Self::section_id`] (whether the short record
+    /// relocated a band is unplaced: its `+0x5a`/`+0x5b` read `0xff`/`0x00`, the
+    /// disabled default, and are the candidate). `0xff` with a `0x00` high end
+    /// disables the band. Unnamed pending the census in `docs/formats/track.md`.
+    pub unk_0x5c: Option<u8>,
+    /// `+0x5d`, the high end of the lane band; `0x00` before
+    /// [`LANE_BAND_VERSION`], `None` on the short points. See [`Self::unk_0x5c`].
+    pub unk_0x5d: Option<u8>,
+    /// `+0x66`, read by the original's `Ai_Update` as a per-point opponent
+    /// speed floor when below `35`. Raw: no default is applied. `None` on the
+    /// short points, which end at `+0x60`.
+    pub unk_0x66: Option<u8>,
 }
+
+/// The first spline version whose authored `+0x5c`/`+0x5d` the original
+/// reads; older points are forced to `0xff`/`0x00`.
+pub const LANE_BAND_VERSION: u32 = 0x105;
 
 impl SplinePoint {
     /// The control point as the running game sees it, lifted to hover height.
@@ -685,11 +705,8 @@ fn index_at(
 }
 
 fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> SplinePoint {
-    let section_at = if version >= SHORT_POINT_VERSION {
-        0x5c
-    } else {
-        0x60
-    };
+    let short = version >= SHORT_POINT_VERSION;
+    let section_at = if short { 0x5c } else { 0x60 };
     SplinePoint {
         pos: vec3_at(order, payload, at),
         tangent: vec3_at(order, payload, at + 0x10),
@@ -713,6 +730,21 @@ fn point_at(order: ByteOrder, payload: &[u8], at: usize, version: u32) -> Spline
         } else {
             [0xff; 4]
         },
+        unk_0x5c: (!short).then(|| {
+            if version >= LANE_BAND_VERSION {
+                payload[at + 0x5c]
+            } else {
+                0xff
+            }
+        }),
+        unk_0x5d: (!short).then(|| {
+            if version >= LANE_BAND_VERSION {
+                payload[at + 0x5d]
+            } else {
+                0x00
+            }
+        }),
+        unk_0x66: (!short).then(|| payload[at + 0x66]),
     }
 }
 

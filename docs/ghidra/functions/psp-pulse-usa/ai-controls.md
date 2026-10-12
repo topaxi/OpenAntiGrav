@@ -227,8 +227,9 @@ Runs every tick, but its lane choice only on the `+0x360` tick.
   `0.001` (brake, when `v^2 * 500` reaches the remaining distance) or `0.0011`
   (reverse), and is clamped to `+/-0.015` lane units per slot.
 
-Confidence 80: read whole; the authored band's census across the shipped tracks
-is open.
+Confidence 80: read whole. Census (2026-10-12, [track.md](../../../formats/track.md)):
+only `07_Track` authors a band, on 311 points over both directions; the data has
+the shape of a band (confidence 75 for that reading of the bytes, no live leg).
 
 ## `Ai_ComputeControls` (`0x08855dc4`): steer and airbrakes
 
@@ -433,8 +434,10 @@ Confidence 75.
 per-point byte. On an opponent's `+0x360` tick, when it is below `35`, the
 opponent's thrust is forced to `100` if it is slower than
 `-0.002715 x^2 - 0.869027 x + 95.11588` (about `95` at `x = 0`, `62` at `x = 34`).
-Read only; the census of which tracks author a value below `35`, and what the
-byte means otherwise, is open. Confidence 70 on the reading of `+0x254`.
+Read only. Census (2026-10-12, [track.md](../../../formats/track.md)): only
+`06_Track` authors a value below `35` (all zeros, 80 points over both
+directions), and that circuit's other values (at or above `128`) are a use of the
+byte this reading does not cover. Confidence 70 on the reading of `+0x254`.
 
 ## Measured (2026-10-11)
 
