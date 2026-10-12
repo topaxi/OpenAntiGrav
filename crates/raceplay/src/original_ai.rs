@@ -87,6 +87,7 @@ impl Race {
             field: Field::new(
                 tables.race,
                 tables.controller,
+                tables.laws,
                 skill,
                 level.min(2),
                 grid,
@@ -236,6 +237,8 @@ impl Race {
         });
         let ship = &self.sim.world.ships[slot];
         let progress = (ship.standing.progress.unwrap_or(0.0) / lap_length).rem_euclid(1.0);
+        // HD's `racer+0x90`, measured: the distance into the current lap.
+        let lap_distance = ship.standing.progress.unwrap_or(0.0).rem_euclid(lap_length);
         let race_fraction = oag_ai::original::race_fraction(
             ship.standing.distance(course),
             self.sim.world.laps_target().unwrap_or(0),
@@ -276,6 +279,7 @@ impl Race {
             touching,
             finished,
             race_fraction,
+            lap_distance,
         };
         let dt = self.sim.dt;
         let standings = Standings {
@@ -283,6 +287,7 @@ impl Race {
             player,
             player_rubber_band_off,
             race_time,
+            eliminator: self.sim.world.mode() == oag_race::Mode::Eliminator,
         };
         // Out of the sim for the call, so the lookahead can read the track
         // while the field is driven.

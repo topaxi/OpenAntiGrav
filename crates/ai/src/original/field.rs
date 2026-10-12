@@ -4,12 +4,13 @@
 //!
 //! **Chosen, not measured**: the racer-table order is the grid's slot order,
 //! the round-robin counter starts at slot `0` on the first tick the field is
-//! driven, and the field draws from one generator of its own, seeded from the
+//! driven (`1` under [`Laws::round_robin_pre_increment`], HD's order), and the field draws from one generator of its own, seeded from the
 //! race seed, in a fixed order (the shuffle once, then per driver per tick the
 //! preferred-lane draw before the wander's). The original's `rand()` stream is
 //! not reproduced; its draws feed nothing a live sample can check.
 
 use super::lane::{PlanInput, Planner};
+use super::laws::Laws;
 use super::pack::{Wander, shuffle};
 use super::rail::{Rail, RailCorrection};
 use super::steer::{self, Controller, SteerInput};
@@ -88,6 +89,9 @@ pub struct Tick {
     pub finished: bool,
     /// [`super::race_fraction`] for this craft.
     pub race_fraction: f32,
+    /// How far into its current lap the craft is, in lap-length units
+    /// (HD's `racer+0x90`, measured): what [`Laws::halved_lookahead`] reads.
+    pub lap_distance: f32,
 }
 
 /// What the race reads of the whole field this tick.
@@ -102,6 +106,8 @@ pub struct Standings<'a> {
     pub player_rubber_band_off: bool,
     /// Race time in seconds.
     pub race_time: f32,
+    /// The race is an Eliminator, which [`Laws::eliminator_drops_when_behind`] reads.
+    pub eliminator: bool,
 }
 
 /// One driver's output.
@@ -119,6 +125,7 @@ pub struct Output {
 pub struct Field {
     table: ClassRace,
     controller: Controller,
+    laws: Laws,
     skill: f32,
     level: usize,
     rng: Rng,
@@ -134,10 +141,12 @@ impl Field {
     /// `level` the integer difficulty the shuffle reads (`0..=2`), `grid`
     /// each slot's grid position, `1` the front (the live capture's racer
     /// table puts the player last, at `8`, with a formation slot of `0`).
+    /// `laws` is the title's variant of the driver, [`Laws::PULSE`] for Pulse.
     #[must_use]
     pub fn new(
         table: ClassRace,
         controller: Controller,
+        laws: Laws,
         skill: f32,
         level: usize,
         grid: [u8; SLOTS],
@@ -146,13 +155,20 @@ impl Field {
         Self {
             table,
             controller,
+            laws,
             skill,
             level: level.min(2),
             rng: Rng::new(seed ^ 0x6f72_6967_696e_616c),
-            counter: 0,
+            counter: usize::from(laws.round_robin_pre_increment),
             shuffled: false,
             drivers: std::array::from_fn(|slot| OriginalDriver::new(grid[slot])),
         }
+    }
+
+    /// The title's variant of the driver this field flies.
+    #[must_use]
+    pub fn laws(&self) -> &Laws {
+        &self.laws
     }
 
     /// `AiManager_Update`'s head, once a tick before any driver: the shuffle
@@ -214,8 +230,11 @@ impl Field {
 
         let own_lane = driver.planner.ring.at(tick.own.progress);
         let air = steer::airborne(pose, &tick.own);
-        let distance =
-            steer::lookahead_distance(driver.smoothed_speed, controller.look_ahead_secs + air);
+        let mut look = controller.look_ahead_secs + air;
+        if self.laws.halves_lookahead(tick.lap_distance) {
+            look *= 0.5;
+        }
+        let distance = steer::lookahead_distance(driver.smoothed_speed, look);
         let steering = ahead(distance).map(|point| {
             steer::steer(
                 pose,
@@ -232,7 +251,12 @@ impl Field {
         });
         let mut thrust = 100.0;
         if lane_tick && steering.is_some() {
-            driver.spread = driver.wander.update(tick.race_fraction, &mut self.rng);
+            driver.spread = if self.laws.finished_wander_to_place && tick.finished {
+                let place = standings.racers.get(slot).map_or(SLOTS as u8, |r| r.1);
+                driver.wander.finish(place)
+            } else {
+                driver.wander.update(tick.race_fraction, &mut self.rng)
+            };
             let count = standings.racers.len().min(SLOTS);
             let racers: [Racer; SLOTS] = std::array::from_fn(|k| {
                 let (progress, place) = standings.racers.get(k).copied().unwrap_or((0.0, 0));
@@ -249,6 +273,9 @@ impl Field {
                     own: slot,
                     player: standings.player,
                     finished: tick.finished,
+                    finished_spread: self.laws.finished_spread,
+                    drop_when_behind: standings.eliminator
+                        && self.laws.eliminator_drops_when_behind,
                     rubber_band_off: standings.player_rubber_band_off,
                     race_time: standings.race_time,
                     skill: self.skill,

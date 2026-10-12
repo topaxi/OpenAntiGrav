@@ -693,3 +693,13 @@
 0x0022e3d0	function	EndRaceResults_OnEnter	78	endrace-voices.md
 0x0021ea10	function	EndRacePhoto_ShowMedal	80	endrace-voices.md
 0x0021ec60	function	EndRacePhoto_OnEnter	72	endrace-voices.md
+
+# 2026-10-12 orig-ai-hd: Pulse's opponent driver found piece by piece on HD (ai-controls.md)
+0x000fee30	function	Ai_Construct	85	ai-controls.md
+0x000ba9e0	function	AiManager_AddDriver	80	ai-controls.md
+0x000ba750	function	AiManager_SnapshotRacers	80	ai-controls.md
+0x000fe688	function	Ai_SampleLookahead	85	ai-controls.md
+0x000ff850	function	Ai_LanePointOnRing	85	ai-controls.md
+0x000ff9b0	function	Ai_SnapToLane	88	ai-controls.md
+0x000fe510	function	Ai_ComputePitch	80	ai-controls.md
+0x00101b50	function	Ai_PlanLane	78	ai-controls.md

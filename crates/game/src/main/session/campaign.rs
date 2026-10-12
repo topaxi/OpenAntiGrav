@@ -378,9 +378,12 @@ impl Session {
         // re-run AI setup between legs today, so a multi-track cell races
         // every leg at the position its first track's own curve gives -
         // chosen, not measured, on the multi-leg case only.
+        // `race_options` is out of `self` until just below, so the source is
+        // handed over rather than read back off `self` (which read `None`
+        // here and so never resolved a cell's skill, until 2026-10-12).
         let ai_skill_scale = difficulty.and_then(|rung| {
             let location = shell.track(mode, &first_track)?.location.clone();
-            self.resolve_campaign_ai_skill_scale(&cell, rung, &location)
+            self.resolve_campaign_ai_skill_scale(&cell, rung, &location, &race_options.source)
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
@@ -425,10 +428,10 @@ impl Session {
     /// track carries a `stats.xml` in `FEData.wad` reads as, at `rung`.
     ///
     /// `None` on any failure to open or read that file - a title with no
-    /// `FEData.wad` at this path (only PSP Pulse is wired; PS2 Pulse ships
-    /// the same per-track data under a different archive root this project
-    /// has not measured, and HD/Fury does not use this mechanism at all,
-    /// see `docs/gameplay/ai.md`'s campaign section), a track missing its
+    /// `FEData.wad` at this path (PSP Pulse reads it there; HD/Fury reads the
+    /// same file out of its own archives, below; PS2 Pulse ships the same
+    /// per-track data under a different archive root this project has not
+    /// measured), a track missing its
     /// own record, or `cell` carrying no [`oag_tables::race_campaign::Cell::skill`]
     /// at all (a solo-mode cell has no AI to scale). Every one of those
     /// falls back to [`oag_tables::track_stats::resolve_skill_scale`]'s own
@@ -440,15 +443,30 @@ impl Session {
         cell: &oag_tables::race_campaign::Cell,
         rung: oag_tables::race_campaign::Difficulty,
         location: &str,
+        source: &str,
     ) -> Option<f32> {
-        let options = self.race_options.as_ref()?;
-        let spec = format!("{}:{}", options.source, oag_pulse::archives::FEDATA);
-        let mut archive = oag_assets::Archive::open(&spec).ok()?;
         let entry = format!(r"{location}\stats.xml");
-        let stats = archive
-            .read_name(&entry)
-            .ok()
-            .and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
+        let spec = format!("{source}:{}", oag_pulse::archives::FEDATA);
+        let blob = match oag_assets::Archive::open(&spec) {
+            Ok(mut archive) => archive.read_name(&entry).ok(),
+            // HD keeps each circuit's `stats.xml` in its own archives
+            // (`/data/environments/<dir>/stats.xml`, seventeen of them) and
+            // reads it through the same `%s\stats.xml` format string; its
+            // cell branch is Pulse's (`AI_ResolveSkillScale`, `0x000babf8`),
+            // measured on RPCS3: the Fury cell `grid8_3_1` gave `-0.07` at
+            // Easy and `3.48` at Hard, which this reproduces
+            // (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`). Read
+            // there only for a title whose campaign flies the original's own
+            // opponent, so no other title's campaign tuning moves.
+            Err(_) if self.shell.as_ref()?.title.race.original_opponent => {
+                oag_assets::Archives::open(source, self.shell.as_ref()?.title)
+                    .ok()?
+                    .read_name(&entry)
+                    .ok()
+            }
+            Err(_) => return None,
+        };
+        let stats = blob.and_then(|blob| oag_tables::track_stats::from_blob(&blob).ok());
         oag_tables::track_stats::resolve_skill_scale(cell, rung, stats.as_ref())
     }
 }

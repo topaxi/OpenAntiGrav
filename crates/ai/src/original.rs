@@ -22,6 +22,7 @@
 
 mod field;
 mod lane;
+mod laws;
 mod pack;
 mod rail;
 mod steer;
@@ -30,6 +31,7 @@ mod track;
 
 pub use field::{Field, OriginalDriver, Output, SLOTS, Standings, Tick};
 pub use lane::{PlanInput, Planner, Ring};
+pub use laws::Laws;
 pub use pack::{Wander, race_fraction, shuffle};
 pub use rail::{Rail, RailCorrection};
 pub use steer::{Controller, Steering, airborne, lookahead_distance, pitch, steer};

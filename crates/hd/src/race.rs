@@ -55,7 +55,11 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
     craft_laws: Some(&CRAFT_LAWS),
-    original_opponent: false,
+    // HD's own driver, Pulse's with five gated branches, flown in the
+    // campaign: read off the executable and its thrust law reproduced on 83
+    // live samples, `docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`.
+    original_opponent: true,
+    original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary
@@ -766,6 +770,41 @@ pub const HOVER_RIG: oag_title::hover_rig::HoverRig = oag_title::hover_rig::Hove
 ///   `0x000edb9c`-`0x000edba4`); `craft+0x314` parks at 100 live where Pulse's cycles. Confidence 90.
 ///
 /// Evidence: `docs/ghidra/functions/ps3-hdfury-eu/craft-inertia.md`.
+/// Where HD's original opponent differs from Pulse's, each read off
+/// `EBOOT.elf` (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`).
+///
+/// The thrust law these feed was reproduced live on 83 samples at two
+/// difficulty levels; the finished, Eliminator and halved-lookahead branches
+/// were not exercised by those samples and rest on the instructions.
+pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
+    oag_title::original_driver::OriginalDriver {
+        // `75.0` at `0x8a95c8`, the `racer+0x82` branch of `0x000fdf00`.
+        finished_spread: oag_title::pre_race::Sourced::measured(75.0),
+        // `AI_UpdateSpreadWander`'s first block, `0x000fdd40..0x000fdd98`.
+        finished_wander_to_place: oag_title::pre_race::Sourced::measured(true),
+        // Modes `8`/`0x14` skip the `WhenBehind` subtraction, `0x000fe384`.
+        eliminator_drops_when_behind: oag_title::pre_race::Sourced::measured(true),
+        // `AIManager_Update` increments `mgr+0xac`, then flags that racer.
+        round_robin_pre_increment: oag_title::pre_race::Sourced::measured(true),
+        halved_lookahead: &HALVED_LOOKAHEAD,
+    };
+
+/// `Ai_Construct`'s two circuit flags and `AI_UpdateCraft`'s windows
+/// (`0x000fee30`, `0x001030b4..0x00103554`); the window is lap distance,
+/// measured as `racer+0x90` on RPCS3.
+const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
+    oag_title::original_driver::HalvedLookahead {
+        track: "05_Track",
+        class: Some("Phantom"),
+        window: (250.0, 4600.0),
+    },
+    oag_title::original_driver::HalvedLookahead {
+        track: "20_Track",
+        class: None,
+        window: (400.0, 5400.0),
+    },
+];
+
 pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::CraftLaws {
     inertia_mass: oag_title::pre_race::Sourced::measured(1.0),
     steer_ramp_clamped: oag_title::pre_race::Sourced::measured(true),

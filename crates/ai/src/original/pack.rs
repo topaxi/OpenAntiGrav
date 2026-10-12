@@ -46,6 +46,16 @@ impl Wander {
         }
     }
 
+    /// HD's finished branch of `Ai_UpdateSpreadWander` (`0x000fdd40`): the
+    /// slot, its start and its end all become `8 - place`, and the wander
+    /// stops. Returns the slot.
+    pub fn finish(&mut self, place: u8) -> f32 {
+        let slot = 8.0 - f32::from(place);
+        self.start = slot;
+        self.end = slot;
+        slot
+    }
+
     /// `Ai_UpdateSpreadWander`: advances the wander to race fraction `f` and
     /// returns the formation slot (`driver+0x74`).
     ///

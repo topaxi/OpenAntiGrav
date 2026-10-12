@@ -494,7 +494,8 @@ follows it; where it departs, [built](#built-2026-10-12-oag_aioriginal) says so.
 | `Ai_ComputeControls` (steer, airbrakes), `Ai_ComputePitch` | `original::steer`, `original::pitch` | As recovered; `last_forward` refreshes only while airborne (decompile). The yaw prediction uses `oag_core::math::sin_cos` |
 | `Ai_SnapToLane` | `original::Rail` and `oag_physics::rail::apply` | Velocity and position only. Applied between the opponent's controls and its physics step |
 | `AiManager_Update` | `original::Field` | Round robin of period eight over the slots, the shuffle on the first tick, one seeded generator of the field's own |
-| Campaign only | `oag_raceplay::Race::use_original_ai`, called from the campaign launch | Keyed on the campaign cell, at the cell's resolved skill scale or the race's ambient one; a title opts in through `oag_title::RaceDefaults::original_opponent` (Pulse only) |
+| Campaign only | `oag_raceplay::Race::use_original_ai`, called from the campaign launch | Keyed on the campaign cell, at the cell's resolved skill scale or the race's ambient one; a title opts in through `oag_title::RaceDefaults::original_opponent` (Pulse and HD) |
+| A title's variant | `original::Laws`, from `oag_title::RaceDefaults::original_driver` | `Laws::PULSE` is Pulse; HD's five branches as data, [below](#hd-the-same-driver-five-gated-branches-2026-10-12) |
 
 **Where the rail sits, measured.** `AiManager_Update` (vtable `0x08ac9f20`, slot 4)
 and the world step `FUN_0884e5bc` (vtable `0x08aca218`, slot 4, which calls
@@ -545,6 +546,35 @@ opponents fly the original driver, skill 2.90, level 1`, and it was that walk
 that found the first version keyed on a resolved skill, which Grid 1's cell
 does not author.
 
+### HD: the same driver, five gated branches (2026-10-12)
+
+HD's opponent is Pulse's: every function above has an HD counterpart with
+Pulse's constants bit for bit and its driver fields `0x30` further in
+([ps3-hdfury-eu/ai-controls.md](../ghidra/functions/ps3-hdfury-eu/ai-controls.md)).
+Its thrust law was reproduced on **83 RPCS3 samples at two levels** (a Fury
+campaign cell, the player parked; worst residual `0`), and the rail fires on
+every opponent. What HD adds, each carried as data in
+`oag_hd::race::ORIGINAL_DRIVER` and read by `original::Laws`:
+
+| Branch | HD | Pulse | Live |
+| --- | --- | --- | --- |
+| A finished racer's formation spacing | `75` | `50` | read |
+| A finished racer's slot, start and end | `8 - place` | wander continues | read |
+| `WhenBehind` in an Eliminator | left out | subtracted | read |
+| The round robin's first racer | `1` | `0` | read |
+| The lookahead time, near the line | halved on Ubermall forward (Phantom) outside lap distance `[250, 4600]` and on Amphiseum reversed outside `[400, 5400]` | never | the lap distance is measured; the gate read |
+
+Not ported, named: the Eliminator spin block, the Duel override and rail gap,
+the split-screen multiplier, several humans' reference craft. HD's campaign
+skill comes off the circuit's own `stats.xml` in HD's archives, as the
+executable's `AI_ResolveSkillScale` reads it: the Fury cell `grid8_3_1` gives
+`-0.07` at Easy and `3.48` at Hard, the values the capture logged. On the
+disc (`crates/game/tests/hd_original_ai_ground_truth.rs`) the law reads the
+capture's `54.51` (the reference racer), `81.21` and `27.81` (the stops at
+Easy) and `104.58` (the upper stop at Hard), and the field laps Talon's
+Junction with no respawn and no wall contact. Omega's executable inlines the
+same driver (static census); it is not wired.
+
 ### Still open, with the next address
 
 - **Why our field closes into formation slower** than the original's, above:
@@ -566,12 +596,10 @@ does not author.
   neither has opponents, so no recording holds the original driver. Recording
   opponent races will need `(skill, level)` in `Header::options`, as the
   campaign tuning will.
-- **The other titles.** HD's thrust law is Pulse's with four changes
-  ([ps3-hdfury-eu/ai-stats.md](../ghidra/functions/ps3-hdfury-eu/ai-stats.md));
-  its steering, lane planner and rail are not read. 2048 and Omega ship the
+- **The other titles.** HD flies it, [above](#hd-the-same-driver-five-gated-branches-2026-10-12). 2048 and Omega ship the
   same tables (checked, applies, not wired: `ClassRace` reads them with no
-  title branch, and `original::Field` would run on them unchanged, but their
-  driver is unread); Pure's tables are another schema. Each opts in through
+  title branch, and `original::Field` would run on them unchanged; 2048's
+  driver is unread, Omega's executable inlines HD's, static only); Pure's tables are another schema. Each opts in through
   `RaceDefaults::original_opponent` once its own lane has read its driver.
 
 ## What we build instead

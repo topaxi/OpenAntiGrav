@@ -50,6 +50,7 @@ pub mod language;
 pub mod launch_hover;
 pub mod loading;
 pub mod menu;
+pub mod original_driver;
 pub mod pre_race;
 pub mod pressing;
 pub mod prompts;

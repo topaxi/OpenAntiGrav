@@ -184,25 +184,3 @@ fn a_race_that_does_not_ask_keeps_this_projects_driver() {
     assert!(!race.original_ai_active());
     assert!(race.original_ai_field().is_none());
 }
-
-/// HD/Fury ships the same tables, but its driver differs (four changes to the
-/// thrust law, the rest unread): its campaign keeps this project's driver
-/// until a lane of its own wires it (`oag_title::RaceDefaults::original_opponent`).
-#[test]
-#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
-fn hd_keeps_this_projects_driver() {
-    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
-        return;
-    };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
-        source: image.display().to_string(),
-        class: "VENOM".to_string(),
-        mode: oag_race::Mode::SingleRace,
-        track: Some(oag_hd::race::DEFAULT_TRACK.to_string()),
-        ..oag_raceplay::Options::default()
-    })
-    .expect("loading HD's default circuit");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
-    assert!(!race.use_original_ai(Some(1.0), 1));
-    assert!(!race.original_ai_active());
-}

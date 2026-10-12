@@ -32,9 +32,14 @@ pub struct ThrustInput<'a> {
     pub own: usize,
     /// Which entry is the player's craft.
     pub player: usize,
-    /// The driven racer has finished (`racer+0x82`). Only ever true for the
-    /// player's own driver past the line; an opponent is still racing.
+    /// The driven racer has finished (`racer+0x82`): an opponent past the
+    /// line, or the player's own driver once it has.
     pub finished: bool,
+    /// The spacing a finished racer steers by ([`super::Laws::finished_spread`]).
+    pub finished_spread: f32,
+    /// Leave the `WhenBehind` term out: an Eliminator race on a title whose
+    /// law does ([`super::Laws::eliminator_drops_when_behind`]).
+    pub drop_when_behind: bool,
     /// The player's craft is in ship state `4..=6`, which turns the rubber band
     /// off. Never seen live; static reading.
     pub rubber_band_off: bool,
@@ -85,7 +90,7 @@ pub fn opponent_thrust(table: &ClassRace, input: &ThrustInput<'_>) -> Thrust {
     let r = player.place;
     let base_thrust = a[row(r)];
     let spread_dist = if input.finished {
-        50.0
+        input.finished_spread
     } else {
         table.spread_dist[row(r)] * spread_mul
     };
@@ -115,7 +120,9 @@ pub fn opponent_thrust(table: &ClassRace, input: &ThrustInput<'_>) -> Thrust {
     let mut x = base_thrust + step;
     if !input.rubber_band_off {
         x += (lead * table.when_leading.speed_mul).min(table.when_leading.max_speed_change);
-        x -= (trail * table.when_behind.speed_mul).min(table.when_behind.max_speed_change);
+        if !input.drop_when_behind {
+            x -= (trail * table.when_behind.speed_mul).min(table.when_behind.max_speed_change);
+        }
     }
     let throttle = offset + (x - a[0]) * multiplier + a[0];
     let cap = if time > 20.0 && (me.progress - player.progress).abs() < 350.0 {

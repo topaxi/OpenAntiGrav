@@ -46,7 +46,7 @@ fn parses_the_flat_class_rows() {
     assert_eq!(stats.lap_times, [50.0, 45.0, 40.0, 35.0]);
     assert_eq!(stats.elimination_target, Some(12));
     assert_eq!(stats.zone_target, Some(30));
-    assert_eq!(stats.length, Some(4321));
+    assert_eq!(stats.length, Some(4321.0));
 }
 
 #[test]
