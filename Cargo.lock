@@ -2433,6 +2433,7 @@ dependencies = [
  "oag-livery",
  "oag-log",
  "oag-mesh",
+ "oag-mobile",
  "oag-music",
  "oag-omega",
  "oag-physics",
@@ -2588,6 +2589,14 @@ dependencies = [
  "pollster",
  "serde",
  "wgpu",
+]
+
+[[package]]
+name = "oag-mobile"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "winit",
 ]
 
 [[package]]

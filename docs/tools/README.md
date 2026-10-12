@@ -20,6 +20,8 @@ build finds the player's own disc image, and the gamepad mapping.
 arm64 phones, how to install it, where the disc images go, and what a first pass
 does not do yet.
 
+[iOS](ios.md) covers `just ios-app`: the unsigned `.app`/`.ipa` the release workflow builds, how a player signs and installs it, and where the disc images go.
+
 [macOS](macos.md) covers `just mac-app`: the `OpenAntiGrav.app` bundle the nightly
 builds on a GitHub runner, its unsigned first launch and the signing hook.
 
