@@ -44,19 +44,29 @@ fn contact_summary(wall: &oag_physics::WallResponse, right: Vec3) -> (i32, bool)
 impl Race {
     /// Flies every opponent with the original's own driver for the rest of
     /// this race: the campaign's AI mode. `skill` is `AI_ResolveSkillScale`'s
-    /// value (`Session::resolve_campaign_ai_skill_scale`), `level` the cell's
-    /// integer rung, `0` Easy to `2` Hard, which the pack shuffle reads.
+    /// campaign value (`Session::resolve_campaign_ai_skill_scale`), `None`
+    /// for a cell that authors none, which reads the race's ambient value
+    /// the load resolved; `level` the cell's integer rung, `0` Easy to `2`
+    /// Hard, which the pack shuffle reads.
     ///
     /// `false`, with the reason logged, when the class's AI tables did not
     /// read or the track has no closed lap: the race keeps this project's
     /// driver, which is an honest fallback rather than a guessed table.
-    pub fn use_original_ai(&mut self, skill: f32, level: usize) -> bool {
-        let Some(tables) = self.sim.finished_thrust.and_then(|thrust| thrust.original) else {
+    pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
+        let Some(thrust) = self.sim.finished_thrust else {
             log::warn!(
                 "original AI: no AI tables for this class; opponents keep this project's driver"
             );
             return false;
         };
+        let Some(tables) = thrust.original else {
+            log::warn!(
+                "original AI: the class's whole AI tables did not read; opponents keep this \
+                 project's driver"
+            );
+            return false;
+        };
+        let skill = skill.unwrap_or(thrust.skill);
         if self.sim.course.is_none() {
             log::warn!(
                 "original AI: the track has no closed lap; opponents keep this project's driver"

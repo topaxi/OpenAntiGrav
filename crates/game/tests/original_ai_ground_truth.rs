@@ -25,7 +25,10 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     })
     .expect("loading 16_Track");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    assert!(race.use_original_ai(skill, level), "VENOM's AI tables read");
+    assert!(
+        race.use_original_ai(Some(skill), level),
+        "VENOM's AI tables read"
+    );
     Some(race)
 }
 
