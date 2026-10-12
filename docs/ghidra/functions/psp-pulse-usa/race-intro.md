@@ -181,3 +181,48 @@ The field of view's source (`FUN_08901954`'s tail `FUN_08908f98` binds the paylo
 `+0x50` was found); `mode+0x40`; what the ScreenFlash kind 10 looks like; the music calls; the
 body of `FUN_08882cbc` beyond the pose copy (it has a second branch keyed on `tripod+0xc0` that
 looks up `"start position 1"` in the named registry, never taken in these captures).
+
+## Every mode runs this countdown: the per-mode vtables only wrap it (2026-10-12, `pulse-race-start`)
+
+Static, raw disassembly on the GUI bridge (`/pulse/BOOT-psp-pulse-usa.BIN`), **confidence 88**:
+the same two functions are every circuit mode's countdown, so a circuit race's countdown
+is not "like Zone's", it **is** Zone's. [`zone-mode.md`](zone-mode.md) read Zone's state-0 body
+as "a separate implementation" and left the circuit-race comparison open; this closes it.
+
+`Race_CreateModeObject` (`0x0882112c`) switches on `(g_game_mode - 1)` with `sltiu a1,a1,0x12`
+at `0x088212e0` and the table at `0x08a7a1e8` (`lui at,0x8a8; lw at,-0x5e18(at)` at
+`0x088212f0`); read through `read_memory`, its 18 entries are the case labels inside the
+function. The table is **not** dead: an earlier read of it (`zone-mode.md`) landed on `0x0881d458`
+because `decompile_function` was run on the case labels (mid-function jump targets), not on
+the constructors the cases call.
+
+All 18 entries read from the raw table agree with [`state-machine.md`](state-machine.md#the-game-mode-enum-g_game_mode-0x08b31048)'s
+mode-to-constructor table (modes 9, 12 share Arcade's case, 10 Time Trial's, 11 and 13 have no
+object), so the dispatch is settled and that page is where the mapping lives.
+
+Each constructor stores a vtable at `obj+0x38`. The vtable's mode-specific word is the
+update: `ArcadeRace_Construct` stores `0x08ac9890` (update `0x0882c48c`, `ArcadeRace_Update`),
+`TimeTrial_Construct` `0x08ac9ad8` (`0x0882dc60`, `TimeTrial_Update`), `Zone_Create`
+`0x08ac9c38` (`0x0882f214`, `Zone_UpdateState`); the other four words of those vtables are
+identical across modes (`0x089444d0`, `0x0894479c`, `0x089447a4`, `0x089447f4`). Every one of
+the three updates opens the same way (`RaceManager_Update`, the 1 s tick of `+0x7b0`) and
+then dispatches `obj+0x7c8`:
+
+| `obj+0x7c8` | `ArcadeRace_Update` | `TimeTrial_Update` | `Zone_UpdateState` |
+| ---: | --- | --- | --- |
+| 0 | `0x0882c58c` -> `jal 0x08829e6c` | `0x0882dd94` -> `jal 0x08829e6c` | `0x0882f31c` -> `jal 0x08829e6c` |
+| 1 | `0x0882c5a8` -> `jal 0x088274b4` | `0x0882ddb0` (watched live, [countdown-voice.md](countdown-voice.md)) | `0x0882f338` -> `jal 0x088274b4`, then resets `+0x1a28`, `+0x2b8`, `+0x1a24` |
+| 2 | `ArcadeRace_UpdateRacing` | `TimeTrial_UpdateRacing` | `Zone_UpdateRacing` |
+
+So `RaceMode_UpdateIntro` (the flyby, the 60-tick lock, the `0.5` s and `1.0` s waits) and
+`RaceMode_UpdateCountdown` (`ready`, the 180 ticks, the release) are one code path for a
+circuit race, a Time Trial and Zone; the only mode-specific code around them is Zone's reset
+after the release. A state-0 body that differs by mode would have shown as a function that is
+not the wrapper above: none of the three is. **The `fVar17` gate `zone-mode.md` left open is
+the exit test above** (`Camera_IntroProgress >= 1.0` or a held Cross), already resolved on this
+page, so there is nothing left of that item. Nothing here differs in timing from the 272-tick
+countdown this project's simulation already runs ([`oag_race::COUNTDOWN_TICKS`]).
+
+Cross-title: PS2 Pulse runs the same `Race_CreateModeObject` shape (not re-read); HD's mode
+table is [`ps3-hdfury-eu/gantry-clock.md`](../ps3-hdfury-eu/gantry-clock.md)'s own and was not
+read for a shared state 0 - checked, not applicable to this claim.
