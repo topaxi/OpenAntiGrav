@@ -24,6 +24,25 @@ the measurements are in
   neither container). **Not measured at runtime**: which shipped archive the
   music listing peeks LZSS entries in, if any, is unchecked.
 
+- **The BC7 decoder is a quarter faster per block** (2026-10-12, second
+  trim pass), bit-exact on every Omega `.gnf` texel and mip level. Runtime
+  reach: `oag_render::ModelTexture::from_gnf` keeps a mip chain on a
+  block-aligned base as GPU blocks, but **CPU-decodes every single-level or
+  off-grid BC7 texture on every device** (`docs/formats/gnf.md`, "What a
+  renderer does with it"), and `decode_bc7_level` is the path for a GPU with no
+  block compression. **Not measured in a race load**: how many of an Omega
+  race's textures take the CPU path is unchecked.
+- **PSARC entries inflate with one reused decompressor** (2026-10-12),
+  straight into the entry's buffer, bit-exact on all 130,546 entries of the 40
+  PSARCs this project reads. HD's archives read 15-25% faster in a test that
+  also hashes every byte, so the inflate itself gained more; Omega and 2048 are
+  barely deflated and unchanged. Every HD and HD-PSN race and front-end load
+  reads through this path. **Not measured in a race load.**
+- **`oag_mesh::mesh::rcs::scene_from` opens its archive once** (2026-10-12),
+  not once per texture: HD's Amphiseum went from about 25 s to a few seconds
+  through it. Runtime reach: `oag-view`'s PS3 model path (`crates/view`); the
+  game's own loader holds its archives already.
+
 ## Open
 
 - **Race setup is a linear raycast.** `TriangleSoup::raycast_all` and `raycast`
@@ -45,6 +64,8 @@ the measurements are in
 ## Next Steps
 
 1. Measure the music listing on a PS2 image with `Archive::peek` before and
-   after (the commit "Archive::peek decodes only the head of an LZSS entry"), and record it under "Done". 30 minutes.
+   after (the commit "Archive::peek decodes only the head of an LZSS entry"),
+   and an HD and an Omega race load before and after the BC7 and PSARC changes
+   (their commits name them), and record each under "Done". An hour.
 2. The spatial index for `TriangleSoup`, as its own physics lane. 1-2 days.
 3. Port the sniff into `oag-wad sounds`. 15 minutes.
