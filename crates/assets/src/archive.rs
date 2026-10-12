@@ -220,23 +220,40 @@ impl Archive {
         self.read_range(index, offset, len)
     }
 
-    /// Reads the first `len` bytes of an entry, without decompressing.
+    /// Reads the first `len` bytes of an entry, decompressed.
     ///
     /// The point of this is headers. A `.PMF`'s parameters live in its first
     /// 2048 bytes and the file is megabytes long, so peeking is worth a
-    /// dedicated call. Only valid for entries stored uncompressed, which every
-    /// blob in every shipped Pulse archive is.
+    /// dedicated call. A stored entry reads only those bytes, and an LZSS one
+    /// (every blob in the PS2's archives) decodes only as much of its stream as
+    /// they take: a literal costs nine bits and a match at least six a byte, so
+    /// `len` bytes never need more than `ceil(9 * len / 8) + 1` of it. A zlib
+    /// entry is read whole. A corrupt stream past the bytes asked for is not
+    /// seen here; [`Archive::read`] still refuses it.
     pub fn peek(&mut self, index: usize, len: u64) -> Result<Vec<u8>> {
         let entry = *self.entry(index)?;
-        if entry.compression != Compression::None {
-            // Falling back to a full read keeps the caller honest: it still
-            // gets the bytes it asked for, just not cheaply.
-            let all = self.read(index)?;
-            let take = (len as usize).min(all.len());
-            return Ok(all[..take].to_vec());
+        match entry.compression {
+            Compression::None => self
+                .source
+                .read(u64::from(entry.offset), len.min(u64::from(entry.size))),
+            Compression::Lzss => {
+                let want = len.min(u64::from(entry.size_uncompressed));
+                let need = (want * 9).div_ceil(8) + 1;
+                let raw = self
+                    .source
+                    .read(u64::from(entry.offset), need.min(u64::from(entry.size)))?;
+                oag_formats::lzss::decompress(&raw, want as usize).map_err(|e| Error::BadBlob {
+                    archive: self.label.clone(),
+                    index,
+                    message: e.to_string(),
+                })
+            }
+            Compression::Zlib => {
+                let all = self.read(index)?;
+                let take = (len as usize).min(all.len());
+                Ok(all[..take].to_vec())
+            }
         }
-        self.source
-            .read(u64::from(entry.offset), len.min(u64::from(entry.size)))
     }
 
     /// Uncompressed length of an entry, from the directory.
