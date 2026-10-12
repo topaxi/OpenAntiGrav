@@ -66,13 +66,15 @@ pub fn read_any(path: &Path) -> anyhow::Result<(Track, Vec<String>)> {
     let loaded =
         oag_trackfile::read(path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
     let mut report = vec![format!(
-        "track file {:?} ({}), format {}.{}",
-        loaded.track.title, loaded.track.id, loaded.version.0, loaded.version.1
+        "track file {:?} ({}), schema v{}",
+        loaded.track.title,
+        loaded.track.id,
+        oag_trackfile::FORMAT_MAJOR
     )];
     report.extend(loaded.track.notes.iter().cloned());
     report.push(format!(
-        "not authored by format {}.x, so drawn as nothing and not borrowed from the host: {}",
-        loaded.version.0,
+        "not authored by schema v{}, so drawn as nothing and not borrowed from the host: {}",
+        oag_trackfile::FORMAT_MAJOR,
         oag_trackfile::ABSENT.join(", ")
     ));
     report.extend(loaded.unread.iter().map(|u| format!("not read: {u}")));

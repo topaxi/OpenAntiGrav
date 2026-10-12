@@ -1,6 +1,8 @@
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/track.tosd"
+version = "1.0.0"
+
 [track]
-format = "oag-track"
-version = "1.1"
 id = "fixture-octagon"
 title = "Fixture Octagon"
 glb = "oval.glb"

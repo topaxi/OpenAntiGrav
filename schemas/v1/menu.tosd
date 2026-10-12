@@ -1,0 +1,161 @@
+# The menu tree: pages of rows, see assets/ui/menu.toml and
+# crates/ui/src/menu/definition.rs. What cannot be said here and stays the
+# loader's: that every `target` and `root` names a page, that an `action` or a
+# `button` is a known name, that a row has the fields its `kind` needs, and that
+# every page is reachable from the root.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/menu[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.condition]
+type = "table"
+
+[types.condition.setting]
+type = "string"
+
+[types.condition.value]
+type = "any"
+optional = true
+
+[types.condition.values]
+type = "array"
+itemtype = "any"
+optional = true
+
+[types.pinned]
+type = "table"
+
+[types.pinned.setting]
+type = "string"
+
+[types.pinned.value]
+type = "any"
+optional = true
+
+[types.pinned.values]
+type = "array"
+itemtype = "any"
+optional = true
+
+[types.pinned.shows]
+type = "string"
+
+[types.warning]
+type = "table"
+
+[types.warning.message]
+type = "string"
+
+# A warning about one setting alone describes a row that should not exist.
+[types.warning.all]
+type = "array"
+itemtype = "types.condition"
+minlength = 2
+
+[types.entry]
+type = "table"
+
+[types.entry.kind]
+type = "string"
+
+[types.entry.label]
+type = "string"
+optional = true
+
+[types.entry.target]
+type = "string"
+optional = true
+
+[types.entry.action]
+type = "string"
+optional = true
+
+[types.entry.setting]
+type = "string"
+optional = true
+
+[types.entry.values]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.entry.values_from]
+type = "string"
+optional = true
+
+[types.entry.button]
+type = "string"
+optional = true
+
+[types.entry.disabled_by]
+type = "types.condition"
+optional = true
+
+[types.entry.pinned]
+type = "array"
+itemtype = "types.pinned"
+optional = true
+
+[types.entry.warn_when]
+type = "array"
+itemtype = "types.warning"
+optional = true
+
+[types.entry.restart_required]
+type = "string"
+optional = true
+
+[types.entry.string_id]
+type = "string"
+optional = true
+
+[types.entry.subtitle]
+type = "string"
+optional = true
+
+[types.entry.subtitle_string_id]
+type = "string"
+optional = true
+
+[types.page]
+type = "table"
+
+[types.page.id]
+type = "string"
+
+[types.page.title]
+type = "string"
+optional = true
+
+[types.page.title_string_id]
+type = "string"
+optional = true
+
+[types.page.entry]
+type = "array"
+itemtype = "types.entry"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.root]
+type = "string"
+
+[elements.page]
+type = "array"
+itemtype = "types.page"
+optional = true

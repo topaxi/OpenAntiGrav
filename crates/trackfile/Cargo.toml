@@ -9,6 +9,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+oag-schema.workspace = true
 oag-vex.workspace = true
 gltf = { version = "1.4", default-features = false, features = ["extras", "names", "utils"] }
 serde.workspace = true
@@ -18,3 +19,6 @@ thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+oag-schema = { workspace = true, features = ["validate"] }

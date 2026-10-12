@@ -4,7 +4,7 @@ use super::*;
 /// exercise the free functions above without a real window, GPU or disc.
 fn fixture_menu() -> menu::Menu {
     let text = "\
-version = 1
+toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }
 root = \"pilots\"
 [[page]]
 id = \"pilots\"

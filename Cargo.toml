@@ -31,6 +31,7 @@ members = [
   "crates/raceplay",
   "crates/rcs",
   "crates/render",
+  "crates/schema",
   "crates/replay",
   "crates/shader-check",
   "crates/sound",
@@ -101,6 +102,7 @@ oag-unity = { path = "crates/unity" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 oag-trackfile = { path = "crates/trackfile" }
+oag-schema = { path = "crates/schema" }
 oag-ui = { path = "crates/ui" }
 oag-ui-screens = { path = "crates/ui-screens" }
 oag-vex = { path = "crates/vex" }

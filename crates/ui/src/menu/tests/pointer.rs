@@ -345,7 +345,7 @@ fn a_click_off_every_row_does_nothing() {
 fn a_disabled_row_is_selectable_and_inert_under_a_click() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
