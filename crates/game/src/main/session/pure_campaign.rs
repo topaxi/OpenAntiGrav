@@ -47,6 +47,31 @@ impl Session {
         }
     }
 
+    /// The ship directories `Team Selection` must not offer yet: the teams
+    /// the disc gates (`PI_Team`'s `<Unlock>` rows) that the profile has not
+    /// opened. Empty on a title with no list campaign, and under `--unlock-all`.
+    pub(crate) fn pure_locked_teams(&self) -> Vec<String> {
+        let Some(shell) = self.shell.as_ref() else {
+            return Vec::new();
+        };
+        if shell.title.campaign.list_entry.is_none() || oag_game::unlock::unlock_all() {
+            return Vec::new();
+        }
+        let Some(mut archives) = self.open_title_archives("Team Selection") else {
+            return Vec::new();
+        };
+        match pure_list::load(&mut archives, shell.title) {
+            Ok(campaign) => {
+                let medal_of = oag_game::unlock::campaign_medal_of(&self.records, shell.title.name);
+                pure_list::locked_teams(&campaign, &medal_of, "")
+            }
+            Err(error) => {
+                warn!("{error:#} - no team is gated");
+                Vec::new()
+            }
+        }
+    }
+
     /// Opens the list again with the cursor on the event named `name`: the
     /// race it was launched from has ended or been left.
     pub(crate) fn reopen_pure_campaign(&mut self, name: &str) {

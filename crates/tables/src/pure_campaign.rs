@@ -209,6 +209,8 @@ pub struct Series {
 pub struct Team {
     /// The `name` attribute.
     pub name: String,
+    /// `location`, the ship's directory: the leaf is the id a race stores.
+    pub location: String,
     /// Its `<Unlock>` rows; empty for an open team.
     pub unlocks: Vec<Unlock>,
 }
@@ -316,6 +318,12 @@ pub fn parse(text: &str) -> Result<Definition> {
             "PI_Tournament" => out.tournaments.push(read_series(node)?),
             "PI_Team" => out.teams.push(Team {
                 name: attr(node, "name")?.to_string(),
+                location: node
+                    .children_named("Values")
+                    .next()
+                    .and_then(|values| values.attr("location"))
+                    .unwrap_or_default()
+                    .to_string(),
                 unlocks: unlocks_of(node)?,
             }),
             _ => {}

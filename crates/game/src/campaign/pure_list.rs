@@ -233,6 +233,29 @@ pub fn rows(
     (rows, events)
 }
 
+/// The ids (the leaf of each ship directory) of the teams the profile has not
+/// opened yet. Teams, like events, are gated by the disc's own `<Unlock>` rows
+/// (`Zone` on a gold in each Zone circuit, `Medievil` on a medal total).
+#[must_use]
+pub fn locked_teams(
+    campaign: &PureCampaign,
+    medal_of: &dyn Fn(&str) -> Option<Medal>,
+    class: &str,
+) -> Vec<String> {
+    let progress = Progress {
+        class,
+        medal_count: campaign.medal_count(medal_of),
+        medal_of,
+    };
+    campaign
+        .definition
+        .teams
+        .iter()
+        .filter(|team| !pure_campaign::all_met(&team.unlocks, &progress))
+        .filter_map(|team| team.location.rsplit('\\').next().map(str::to_string))
+        .collect()
+}
+
 /// Our own wording, each with the id `assets/ui/strings/english.toml` holds it
 /// under and the literal it falls back to.
 const WORDS: [(&str, &str); 9] = [

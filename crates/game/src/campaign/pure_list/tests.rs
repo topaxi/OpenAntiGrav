@@ -151,3 +151,61 @@ fn classic_circuits_resolve_through_the_campaigns_own_locations() {
         "Zone circuits go the Zone way"
     );
 }
+
+#[test]
+fn a_vector_event_races_in_vector_and_a_zone_event_keeps_the_fallback() {
+    use crate::campaign::launch::plan_cell;
+    let campaign = campaign();
+    let entry = |id: &str| {
+        campaign
+            .track_entry(id)
+            .or_else(|| Some(format!("zone {id}")))
+    };
+    let by = |class: PureClass, name: &str| {
+        campaign
+            .events(class)
+            .into_iter()
+            .find(|e| e.name == name)
+            .unwrap()
+    };
+    let race = by(PureClass::Vector, "race/Vineta K/Vector");
+    let plan = plan_cell(&race.cell, "Phantom", |_, id| entry(id)).unwrap();
+    assert_eq!(
+        (plan.class.as_str(), plan.class_is_fallback),
+        ("Vector", false)
+    );
+    let zone = by(PureClass::Vector, "zone/Zone 1");
+    let plan = plan_cell(&zone.cell, "Phantom", |_, id| entry(id)).unwrap();
+    assert_eq!(
+        (plan.class.as_str(), plan.class_is_fallback),
+        ("Phantom", true)
+    );
+    let tournament = by(PureClass::Flash, "tournament/Alpha/Flash");
+    let plan = plan_cell(&tournament.cell, "Phantom", |_, id| entry(id)).unwrap();
+    assert_eq!(plan.class, "Flash");
+}
+
+#[test]
+fn a_gated_team_is_locked_until_the_disc_says_otherwise() {
+    let xml = DEFINITION.replace(
+        "<PI_League name=\"Alpha\">",
+        r#"<PI_Team name="Zone"><Values location="Data\Ships\Zone"></Values>
+<Unlock Track="Zone 1" medal="Gold"></Unlock></PI_Team>
+<PI_Team name="Feisar"><Values location="Data\Ships\Feisar"></Values></PI_Team>
+<PI_League name="Alpha">"#,
+    );
+    let campaign = PureCampaign {
+        definition: pure_campaign::parse(&xml).unwrap(),
+        stats: BTreeMap::new(),
+    };
+    let none = |_: &str| None;
+    assert_eq!(locked_teams(&campaign, &none, "Venom"), ["Zone"]);
+    let bronze = |name: &str| (name == "zone/Zone 1").then_some(Medal::Bronze);
+    assert_eq!(
+        locked_teams(&campaign, &bronze, "Venom"),
+        ["Zone"],
+        "bronze is not gold"
+    );
+    let gold = |name: &str| (name == "zone/Zone 1").then_some(Medal::Gold);
+    assert!(locked_teams(&campaign, &gold, "Venom").is_empty());
+}

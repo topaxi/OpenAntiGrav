@@ -37,6 +37,12 @@ pub struct CellPlan {
     pub ai_count: Option<u32>,
 }
 
+/// The `class` a Zone cell authors: not a speed class, so the race flies the
+/// fallback.
+fn is_zone_literal(class: &str) -> bool {
+    class.eq_ignore_ascii_case("Zone")
+}
+
 /// Why a cell cannot launch. `Display` is the line the session logs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
@@ -97,9 +103,15 @@ pub fn plan_cell(
         .iter()
         .map(|id| track_entry(mode, id).ok_or_else(|| Refusal::MissingTrack((*id).clone())))
         .collect::<Result<Vec<_>, _>>()?;
-    let (class, class_is_fallback) = match cell.speed_class() {
-        Some(_) => (cell.class.clone(), false),
-        None => (fallback_class.to_string(), true),
+    // The cell's own class is a class the title names (Pure's `Vector` is not
+    // among `SpeedClass`'s four) unless it is the literal a Zone cell carries,
+    // which names none.
+    let (class, class_is_fallback) = if cell.speed_class().is_some()
+        || !cell.class.trim().is_empty() && !is_zone_literal(&cell.class)
+    {
+        (cell.class.clone(), false)
+    } else {
+        (fallback_class.to_string(), true)
     };
     let laps_override = matches!(
         mode,

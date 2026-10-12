@@ -21,26 +21,8 @@ impl Session {
     /// own doc. A source with no campaign at all logs why and leaves the
     /// menus exactly as they were.
     pub(crate) fn open_campaign(&mut self) {
-        let Some(options) = self.race_options.as_ref() else {
+        let Some(mut archives) = self.open_title_archives("RACE CAMPAIGN") else {
             return;
-        };
-        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
-            &options.dlc,
-            &oag_source::cache::default_dlc_cache_dir(),
-        );
-        for problem in problems {
-            warn!("{problem}");
-        }
-        let mut archives = match oag_source::title::open_source(&options.source, packs, pure_packs)
-        {
-            Ok(opened) => opened.archives,
-            Err(error) => {
-                warn!(
-                    "cannot open {} for RACE CAMPAIGN: {error:#}",
-                    options.source
-                );
-                return;
-            }
         };
         if self
             .shell
@@ -142,6 +124,28 @@ impl Session {
                 }
             }
             Err(error) => warn!("{error:#} - RACE CAMPAIGN has nothing to show"),
+        }
+    }
+
+    /// The booted source's archives, opened fresh with its DLC packs, for a
+    /// screen that reads the disc on every opening rather than keeping it from
+    /// boot - see [`Self::open_campaign`]. `None` (logged, as `what` could not
+    /// be shown) with no source chosen yet or one that will not open.
+    pub(crate) fn open_title_archives(&self, what: &str) -> Option<oag_assets::Archives> {
+        let options = self.race_options.as_ref()?;
+        let (packs, pure_packs, problems) = oag_source::dlc::packs_from_defaults(
+            &options.dlc,
+            &oag_source::cache::default_dlc_cache_dir(),
+        );
+        for problem in problems {
+            warn!("{problem}");
+        }
+        match oag_source::title::open_source(&options.source, packs, pure_packs) {
+            Ok(opened) => Some(opened.archives),
+            Err(error) => {
+                warn!("cannot open {} for {what}: {error:#}", options.source);
+                None
+            }
         }
     }
 
