@@ -52,6 +52,15 @@ pub struct SpeedClasses {
     /// case; it is kept so a reviewer can compare a row against the file it
     /// came from without transforming it.
     pub names: &'static [&'static str],
+    /// The names among [`Self::names`] only RACE REMIX offers; the ordinary
+    /// per-title RACE page draws the rest.
+    ///
+    /// **Chosen, not measured**, per rung: the maintainer settled it for
+    /// `VECTOR` on 2026-09-05 ("the ordinary page offers four on every
+    /// title") and the same shape holds for 2048's `SUPERPHANTOM`, which no
+    /// ordinary page of that title offers either (it has no race box). Data on
+    /// the ladder so a rung is added or confined without a name check in code.
+    pub remix_only: &'static [&'static str],
 }
 
 impl SpeedClasses {
@@ -106,6 +115,22 @@ impl SpeedClasses {
     /// title whose ladder was never read cannot silently inherit one that was.
     pub const PULSE_LADDER: &'static [&'static str] = &["VENOM", "FLASH", "RAPIER", "PHANTOM"];
 
+    /// Wipeout Pure's five rungs, `VECTOR` under Pulse's four.
+    pub const PURE_LADDER: &'static [&'static str] =
+        &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+
+    /// The rung 2048 authors above Phantom, spelled as its files spell it.
+    pub const SUPER_PHANTOM: &'static str = "SUPERPHANTOM";
+
+    /// Wipeout 2048's native roster: Pulse's four with `SUPERPHANTOM` above.
+    ///
+    /// Read off the five native teams' `handlingstats.xml` (20 files per
+    /// region, both regions: `VENOM, FLASH, RAPIER, PHANTOM, SUPERPHANTOM` in
+    /// that order, `oag-tables`' `speed_ladder_ground_truth`). The twelve HD
+    /// teams 2048 reships author the four only - see [`crate::GuestRoster`].
+    pub const WIPEOUT_2048_LADDER: &'static [&'static str] =
+        &["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERPHANTOM"];
+
     /// Every rung any measured ladder names, slowest first.
     ///
     /// **A spell-checking vocabulary, not a table to index.** It exists for one
@@ -115,11 +140,17 @@ impl SpeedClasses {
     /// rung is resolved against the file that authored it, and a name that is
     /// on this list but not in *that* file is still an honest load failure.
     ///
-    /// It is the union of [`Self::PULSE_LADDER`] and Wipeout Pure's, which is
-    /// every ladder read so far. Wipeout 2048's is unread, so a 2048 rung this
-    /// does not name is a gap in the measurement rather than in the list.
-    pub const MEASURED: &'static [&'static str] =
-        &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+    /// It is the union of [`Self::PULSE_LADDER`], [`Self::PURE_LADDER`] and
+    /// [`Self::WIPEOUT_2048_LADDER`], which is every ladder read so far. HD's
+    /// is Pulse's four; Omega's is unmeasured.
+    pub const MEASURED: &'static [&'static str] = &[
+        "VECTOR",
+        "VENOM",
+        "FLASH",
+        "RAPIER",
+        "PHANTOM",
+        "SUPERPHANTOM",
+    ];
 
     /// Whether `name` is a rung some measured ladder carries.
     ///
@@ -176,26 +207,33 @@ impl SpeedClasses {
     }
 
     /// Whether `name` belongs on the ordinary per-title RACE page, as opposed
-    /// to only RACE REMIX.
+    /// to only RACE REMIX: it is on this ladder and not in [`Self::remix_only`].
     ///
     /// **`VECTOR` is confined to RACE REMIX, by a 2026-09-05 maintainer
-    /// decision.** Making the rung selectable at all made a Pure boot's
+    /// decision**, and 2048's `SUPERPHANTOM` follows it (2026-10-12, chosen,
+    /// not measured). Making a rung selectable at all made a Pure boot's
     /// ordinary RACE page offer five classes too, which is wider than what
-    /// was asked for - see `docs/architecture/menus.md`'s "Wipeout Pure
-    /// authors five, this build offers four outside remix" section for the
-    /// reasoning and for why this is written down as a deliberate divergence
-    /// rather than left to be found.
+    /// was asked for - see `docs/architecture/menus.md`'s "SPEED CLASS:
+    /// `VECTOR` is confined to RACE REMIX" section for the reasoning and for
+    /// why this is written down as a deliberate divergence.
     ///
     /// This is a **menu-page** rule layered on top of [`Self::is_selectable`],
-    /// not a narrower version of it. Everything below stays exactly as it
-    /// was: `is_selectable` still answers "can this build put a ship on
-    /// `name`" for `true` on every measured rung, RACE REMIX's union still
-    /// unions and still offers `VECTOR` when Pure's data is available, and
-    /// `oag-trace`'s `--class` still spell-checks and resolves it. Only the
-    /// ordinary RACE page's own row stops listing it.
+    /// not a narrower version of it: `is_selectable` still answers "can this
+    /// build put a ship on `name`" and RACE REMIX's union still offers the
+    /// rung. Only the ordinary RACE page's own row stops listing it.
     #[must_use]
-    pub fn is_offered_outside_remix(name: &str) -> bool {
-        Self::is_selectable(name) && !name.eq_ignore_ascii_case(Self::VECTOR)
+    pub fn is_offered_outside_remix(&self, name: &str) -> bool {
+        Self::is_selectable(name)
+            && self.names.iter().any(|n| n.eq_ignore_ascii_case(name))
+            && !self.remix_only.iter().any(|n| n.eq_ignore_ascii_case(name))
+    }
+
+    /// The rungs of this ladder the ordinary RACE page draws, slowest first.
+    pub fn race_page(&self) -> impl Iterator<Item = &'static str> + use<'_> {
+        self.names
+            .iter()
+            .copied()
+            .filter(|name| self.is_offered_outside_remix(name))
     }
 
     /// Every class any of `ladders` authors, as one ladder, slowest first.

@@ -403,7 +403,11 @@ pub fn ambient_skill_scale(
     difficulty: Difficulty,
     mode: ModeTerm,
 ) -> f32 {
-    let Some(stats) = stats else {
+    // A class outside the four the track table is keyed by (Pure's VECTOR,
+    // 2048's SUPERPHANTOM) has no row in it: the same absent-table value the
+    // original substitutes when the table did not load. Chosen, not measured -
+    // no capture shows what a track table does for those rungs.
+    let (Some(stats), true) = (stats, class.slot().is_some()) else {
         return 2.0;
     };
     let base = stats.skill_curve(class)[difficulty as usize];

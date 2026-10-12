@@ -165,7 +165,7 @@ pub(super) struct RaceTerms<'a> {
 
 /// The class's `AIRaceStats` off `archives`, and the race's skill scale.
 ///
-/// `None`, said so in `report`, when the class is not one of the four or
+/// `None`, said so in `report`, when the class is not one the disc names or
 /// the file is absent or does not parse - Pulse ships one per class (PSP and
 /// PS2 alike), Pure one file of another shape. HD/Fury, 2048 and Omega ship
 /// Pulse's own four, value for value
@@ -184,7 +184,7 @@ pub(super) fn read(
     terms: &RaceTerms,
     report: &mut Vec<String>,
 ) -> Option<FinishedThrust> {
-    let Some(class) = SpeedClass::census(terms.class) else {
+    let Some(class) = SpeedClass::named(terms.class) else {
         report.push(format!(
             "finished thrust: class {:?} has no AIRaceStats file; the finished craft keeps \
              its driver's own thrust",

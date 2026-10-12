@@ -295,7 +295,7 @@ fn run(cli: Cli) -> Result<()> {
     // hand off to a race, so a misspelled class must not be discovered eight
     // seconds of intro later.
     // Checked against the union of every ladder read so far rather than
-    // against `oag_physics::SpeedClass`'s four, so `--class vector` reaches a
+    // against the four Pulse authors, so `--class vector` reaches a
     // Wipeout Pure race. This is spell-checking only: whether *this* disc's
     // files author the rung is settled by `race::load`, which names what the
     // file does carry when they do not.

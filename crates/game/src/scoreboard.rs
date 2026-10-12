@@ -197,10 +197,7 @@ pub fn class_table(
 #[must_use]
 pub fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
     let named: Vec<&'static str> = match title.race.speed_classes {
-        Some(ladder) => ladder
-            .selectable()
-            .filter(|name| oag_title::SpeedClasses::is_offered_outside_remix(name))
-            .collect(),
+        Some(ladder) => ladder.race_page().collect(),
         None => oag_tables::handling::SpeedClass::ALL
             .iter()
             .map(|class| class.as_str())
