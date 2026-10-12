@@ -136,6 +136,7 @@ pub(super) fn menu_page(
     // a captured RACE page has the rows a player's has.
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
+    definition.rename_campaign_row(title, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",
@@ -612,33 +613,54 @@ fn prompt_draws(
                 "PRESS A KEY FOR %s - ESCAPE CANCELS",
             ),
         )),
-        // Wipeout Pure's campaign list on the class `pure-campaign:N` names
-        // (an index into `PureClass::ALL`, default the first), read against
-        // whatever `records.toml` holds - the same `pure_list::present` the
-        // live list builds its rows with.
-        other if other.starts_with("pure-campaign") => {
-            let source = source.context("pure-campaign needs a --race source open")?;
+        // Wipeout Pure's SINGLE PLAYER chain, `pure-chain[:MODE[:CLASS[:LEAGUE]]]`:
+        // the screen reached by answering each screen in turn, MODE by name
+        // (`arcade`, `tournament`, `time-trial`, `zone`, `free-play`), the rest by
+        // row number. Read against whatever `records.toml` holds - the same
+        // `pure_chain::present` the live screen builds its rows with.
+        other if other.starts_with("pure-chain") => {
+            use crate::campaign::pure_chain::{Chain, Chosen, choose, present};
+            let source = source.context("pure-chain needs a --race source open")?;
             let mut archives = oag_assets::Archives::open(source, title)
                 .with_context(|| format!("opening {source}"))?;
             let campaign = crate::campaign::pure_list::load(&mut archives, title)?;
-            let class = other
-                .strip_prefix("pure-campaign:")
-                .and_then(|n| n.parse::<usize>().ok())
-                .unwrap_or(0)
-                .min(oag_tables::pure_ai_stats::PureClass::ALL.len() - 1);
-            let (rows, _, class_name) = crate::campaign::pure_list::present(
-                &campaign,
-                strings,
-                title.name,
-                oag_tables::pure_ai_stats::PureClass::ALL[class],
-                &crate::records::load(),
-            );
-            let (labels, _) = crate::campaign::pure_list::wording(strings);
-            Ok(oag_ui_screens::pure_campaign::List::new(labels, class_name, rows).draw(skin))
+            let flow = crate::campaign::pure_list::load_flow(&mut archives, title)?;
+            let records = crate::records::load();
+            let mut chain =
+                Chain::new(campaign, flow, oag_tables::pure_ai_stats::PureClass::Vector);
+            let plain = |text: &str| {
+                text.chars()
+                    .filter(char::is_ascii_alphanumeric)
+                    .collect::<String>()
+                    .to_ascii_lowercase()
+            };
+            for (index, answer) in other.split(':').skip(1).enumerate() {
+                let tag = if index == 0 {
+                    chain
+                        .modes()
+                        .iter()
+                        .position(|mode| plain(mode) == plain(answer))
+                        .with_context(|| format!("no mode named {answer:?}"))?
+                } else {
+                    answer
+                        .parse::<usize>()
+                        .with_context(|| format!("{answer:?} is not a row number"))?
+                };
+                anyhow::ensure!(
+                    choose(&mut chain, tag, title, &records) == Chosen::Advanced,
+                    "{answer:?} does not lead on from {:?}",
+                    chain.at().screen()
+                );
+            }
+            let view = present(&chain, strings, title, &records);
+            Ok(
+                oag_ui_screens::pure_chain::Choice::new(view.title, view.context, view.rows)
+                    .draw(skin),
+            )
         }
         other => anyhow::bail!(
             "no prompt named {other:?}; this build has rename, rename-note, delete, \
-             delete-built-in, binding, pure-campaign[:CLASS]"
+             delete-built-in, binding, pure-chain[:MODE[:CLASS[:LEAGUE]]]"
         ),
     }
 }

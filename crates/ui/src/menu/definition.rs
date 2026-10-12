@@ -449,6 +449,45 @@ impl Definition {
         }
     }
 
+    /// Words the row that fires `action` as `label`, with `subtitle` under it
+    /// while it is selected, for a title whose original names that row
+    /// differently (Wipeout Pure's `SINGLE PLAYER` where this project's tree
+    /// says `RACE CAMPAIGN`). The row keeps its place and its action. Same
+    /// once-before-read timing as [`Self::drop_quit`].
+    pub fn relabel_action(&mut self, action: Action, label: &str, subtitle: Option<&str>) {
+        for page in &mut self.pages {
+            for (entry, line) in page.entries.iter_mut().zip(&mut page.subtitles) {
+                if let Entry::Run {
+                    action: found,
+                    label: shown,
+                } = entry
+                    && *found == action
+                {
+                    *shown = label.to_string();
+                    *line = subtitle.map(str::to_string);
+                }
+            }
+        }
+    }
+
+    /// Words the campaign row as the title's original does
+    /// ([`oag_title::Campaign::main_row`]); a title that names none keeps
+    /// `RACE CAMPAIGN`. The words are the project's own, looked up in `strings`
+    /// and falling back to the English the title carries.
+    pub fn rename_campaign_row(&mut self, title: &oag_title::Title, strings: &StringTable) {
+        let Some(row) = title.campaign.main_row else {
+            return;
+        };
+        let say = |wording: oag_title::Wording| {
+            strings.get(wording.id).unwrap_or(wording.text).to_string()
+        };
+        self.relabel_action(
+            Action::OpenCampaign,
+            &say(row.label),
+            Some(&say(row.subtitle)),
+        );
+    }
+
     /// Drops every row that edits one of `settings`, for a platform that has
     /// no such thing (the web build has no monitor to pick and one present
     /// mode). Same once-before-read timing as [`Self::drop_quit`].

@@ -1,23 +1,25 @@
-//! Wipeout Pure's campaign walked end to end on the real simulation: an event
-//! from the list, flown to the line by the autopilot, judged by its own cell,
-//! recorded in the profile's `[[campaign]]` table, and the list read again.
+//! Wipeout Pure's campaign walked end to end on the real simulation: SINGLE
+//! PLAYER answered screen by screen down to an event, flown to the line by the
+//! autopilot, judged by its own cell, recorded in the profile's `[[campaign]]`
+//! table, and the chain read again.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs a disc image. `just test-data`.
 //!
 //! What is *not* here is the window: the screens, the team picker and the launch
-//! are the session's (`crates/game/src/main/session/pure_campaign.rs`), and a
+//! are the session's (`crates/game/src/main/session/pure_chain.rs`), and a
 //! windowed walk covers them. What is here is every part below the window -
-//! the cell the list hands the race, the race it asks for, the medal law over
-//! the real race clock and the real field, the store, and the gates the new
-//! medals open.
+//! the chain's own screens and their answers, the cell it hands the race, the
+//! race it asks for, the medal law over the real race clock and the real field,
+//! the store, and the gates the new medals open.
 
 use oag_game::campaign::launch::plan_cell_for;
+use oag_game::campaign::pure_chain::{Chain, Chosen, Start, choose, present};
 use oag_game::campaign::pure_list::{self, PureCampaign};
 use oag_game::records::{Medal, Store};
 use oag_raceplay as race;
 use oag_tables::pure_ai_stats::PureClass;
 use oag_tables::pure_campaign::{Event, EventKind};
-use oag_ui_screens::pure_campaign::Status;
+use oag_ui_screens::pure_chain::Status;
 
 const TITLE: &str = "Wipeout Pure";
 
@@ -35,7 +37,47 @@ fn campaign(image: &str) -> Option<(String, PureCampaign)> {
     Some((source, campaign))
 }
 
-fn event(campaign: &PureCampaign, class: PureClass, name: &str) -> Event {
+/// The chain as the session opens it, on the disc's own screens.
+fn chain_of(source: &str) -> Chain {
+    let mut archives = oag_pure::open(source).expect("open as Pure");
+    let campaign = pure_list::load(&mut archives, oag_pure::TITLE).expect("the campaign");
+    let flow = pure_list::load_flow(&mut archives, oag_pure::TITLE).expect("the flow");
+    Chain::new(campaign, flow, PureClass::Vector)
+}
+
+/// Answers `Single Player` and each screen after it with `answers` (the mode
+/// by name, the rest by row number) and returns what the last one started.
+fn answer(chain: &mut Chain, store: &Store, mode: &str, rest: &[usize]) -> Chosen {
+    let tag = chain
+        .modes()
+        .iter()
+        .position(|m| m == mode)
+        .unwrap_or_else(|| panic!("no mode {mode}"));
+    let mut chosen = choose(chain, tag, oag_pure::TITLE, store);
+    for &tag in rest {
+        assert_eq!(chosen, Chosen::Advanced, "{:?}", chain.at());
+        chosen = choose(chain, tag, oag_pure::TITLE, store);
+    }
+    chosen
+}
+
+/// The status of the row for event `name` on the screen the chain is on.
+fn status_on(chain: &Chain, store: &Store, event: &Event) -> Status {
+    let view = present(
+        chain,
+        &oag_ui::language::StringTable::default(),
+        oag_pure::TITLE,
+        store,
+    );
+    let tag = chain.tag_of(event).expect("the event is on this screen");
+    view.rows
+        .iter()
+        .find(|r| r.tag == tag)
+        .expect("its row")
+        .status
+}
+
+fn event_of(campaign: &PureCampaign, class: PureClass, name: &str) -> Event {
     campaign
         .events(class)
         .into_iter()
@@ -99,7 +141,13 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
     let Some((source, campaign)) = campaign("data/images/pure-psp-eu.chd") else {
         return;
     };
-    let event = event(&campaign, PureClass::Venom, "timetrial/Vineta K/Venom");
+    let mut chain = chain_of(&source);
+    let mut store = Store::default();
+    let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, "Time Trial", &[1, 0, 0])
+    else {
+        panic!("SINGLE PLAYER, Time Trial, Venom, the first league and circuit start an event");
+    };
+    assert_eq!(event.name, "timetrial/Vineta K/Venom");
     assert_eq!(event.kind, EventKind::TimeTrial);
     let entry = names(&campaign);
     let mut race = load_leg(&source, &campaign, &event, 0, &entry);
@@ -121,28 +169,18 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         event.cell.silver,
         event.cell.bronze
     );
-    let mut store = Store::default();
     store.record_campaign(TITLE, &event.name, medal.map(convert), None);
     let held = oag_game::unlock::campaign_medal_of(&store, TITLE);
-    let (rows, events, _) = pure_list::present(
-        &campaign,
-        &oag_ui::language::StringTable::default(),
-        TITLE,
-        PureClass::Venom,
-        &store,
-    );
-    let tag = events.iter().position(|e| e.name == event.name).unwrap();
-    let row = rows.iter().find(|r| !r.header && r.tag == tag).unwrap();
+    // The race ended: the chain comes back on the screen that picked it.
+    let mut chain = chain_of(&source);
+    chain.return_to(&event);
+    let status = status_on(&chain, &store, &event);
     match medal {
         Some(medal) => {
-            assert_eq!(row.status, Status::Medal(medal), "the row shows the medal");
+            assert_eq!(status, Status::Medal(medal), "the row shows the medal");
             assert_eq!(held(&event.name), Some(medal));
         }
-        None => assert_eq!(
-            row.status,
-            Status::Open,
-            "no medal, and the event stays open"
-        ),
+        None => assert_eq!(status, Status::Open, "no medal, and the event stays open"),
     }
 }
 
@@ -152,7 +190,13 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
     let Some((source, campaign)) = campaign("data/images/pure-psp-eu.chd") else {
         return;
     };
-    let event = event(&campaign, PureClass::Venom, "tournament/Alpha/Venom");
+    let mut chain = chain_of(&source);
+    let mut store = Store::default();
+    let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, "Tournament", &[1, 0])
+    else {
+        panic!("SINGLE PLAYER, Tournament, Venom, Alpha start an event");
+    };
+    assert_eq!(event.name, "tournament/Alpha/Venom");
     assert_eq!(event.cell.tournament_tracks.len(), 4);
     let entry = names(&campaign);
     let plan = plan_cell_for(&event.cell, "Venom", LADDER, |_, id| entry(id)).expect("it plans");
@@ -175,16 +219,12 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
     let rank = i64::from(progress.rank(0));
     let medal = event.cell.evaluate_medal(rank);
     println!("tournament Alpha Venom: rank {rank} -> {medal:?}");
-    let mut store = Store::default();
     store.record_campaign(TITLE, &event.name, medal.map(convert), None);
-    let strings = oag_ui::language::StringTable::default();
     let status_of = |class: PureClass, name: &str| {
-        let (rows, events, _) = pure_list::present(&campaign, &strings, TITLE, class, &store);
-        let tag = events.iter().position(|e| e.name == name).unwrap();
-        rows.iter()
-            .find(|r| !r.header && r.tag == tag)
-            .unwrap()
-            .status
+        let event = event_of(&campaign, class, name);
+        let mut chain = chain_of(&source);
+        chain.return_to(&event);
+        status_on(&chain, &store, &event)
     };
     assert_eq!(
         status_of(PureClass::Venom, "tournament/Beta/Venom") != Status::Locked,
@@ -196,6 +236,63 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
         Status::Locked,
         "a Venom medal opens nothing for Flash"
     );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_fresh_profile_walks_every_mode_to_an_event_and_is_offered_two_classes() {
+    for image in [
+        "data/images/pure-psp-usa.chd",
+        "data/images/pure-psp-eu.chd",
+    ] {
+        let Some((source, _)) = campaign(image) else {
+            continue;
+        };
+        let store = Store::default();
+        let view_of = |chain: &Chain| {
+            present(
+                chain,
+                &oag_ui::language::StringTable::default(),
+                oag_pure::TITLE,
+                &store,
+            )
+        };
+        let mut chain = chain_of(&source);
+        assert_eq!(view_of(&chain).rows.len(), 5, "{image}: five modes");
+        assert_eq!(
+            choose(&mut chain, 0, oag_pure::TITLE, &store),
+            Chosen::Advanced
+        );
+        let classes: Vec<String> = view_of(&chain).rows.into_iter().map(|r| r.label).collect();
+        assert_eq!(
+            classes,
+            ["VECTOR", "VENOM"],
+            "{image}: a fresh profile's Class Selection"
+        );
+        for (mode, rest, kind) in [
+            ("Arcade", &[0usize, 0, 0][..], EventKind::Race),
+            ("Time Trial", &[0, 0, 0][..], EventKind::TimeTrial),
+            ("Tournament", &[0, 0][..], EventKind::Tournament),
+            ("Zone", &[0][..], EventKind::Zone),
+        ] {
+            let mut chain = chain_of(&source);
+            let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, mode, rest) else {
+                panic!("{image}: {mode} did not start an event");
+            };
+            assert_eq!(event.kind, kind, "{image}: {mode}");
+        }
+        let mut chain = chain_of(&source);
+        assert!(
+            matches!(
+                answer(&mut chain, &store, "Free Play", &[0, 0, 0]),
+                Chosen::Start(Start::FreePlay {
+                    class: PureClass::Vector,
+                    ..
+                })
+            ),
+            "{image}: Free Play starts a plain race"
+        );
+    }
 }
 
 #[test]

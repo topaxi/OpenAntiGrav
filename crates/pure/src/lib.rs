@@ -145,6 +145,12 @@ pub const TITLE: &Title = &Title {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
         list_entry: Some(campaign::DEFINITION_ENTRY),
+        flow: Some(oag_title::FlowFiles {
+            skin: names::FRONTEND_ROOT,
+            selection: names::RACE_BOX_DEFINITION,
+        }),
+        classes_at_start: Some(campaign::CLASSES_AT_START),
+        main_row: Some(campaign::MAIN_ROW),
         circuit_unlocks: false,
         loyalty_unlocks: false,
         // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are

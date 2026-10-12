@@ -29,7 +29,7 @@ impl Session {
             .as_ref()
             .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
-            self.open_pure_campaign(&mut archives);
+            self.open_pure_chain(&mut archives);
             return;
         }
         let Some(shell) = self.shell.as_ref() else {
@@ -418,7 +418,7 @@ impl Session {
         self.tournament =
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
         if let Stage::Menu(stage) = &mut self.stage {
-            stage.pure_campaign = None;
+            stage.pure_chain = None;
             if let Some(campaign) = stage.campaign.take() {
                 self.campaign_cursor = campaign.cursor_on_close();
             }

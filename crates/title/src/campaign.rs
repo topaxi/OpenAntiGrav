@@ -57,6 +57,37 @@ impl CampaignDialect {
     }
 }
 
+/// The two front-end files a title's SINGLE PLAYER chain is read from
+/// (`oag_tables::pure_flow`): the skin holding `Main Menu` and `Single Player`,
+/// and the definition holding the selection screens.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FlowFiles {
+    /// The skin, by entry name.
+    pub skin: &'static str,
+    /// The selection screens' definition, by entry name.
+    pub selection: &'static str,
+}
+
+/// A string this project owns: its id in `assets/ui/strings/english.toml` and
+/// the English text it falls back to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Wording {
+    /// The id.
+    pub id: &'static str,
+    /// The English text.
+    pub text: &'static str,
+}
+
+/// How the main menu's campaign row reads on a title whose original names it
+/// differently from this project's `RACE CAMPAIGN`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MainRow {
+    /// The row's label.
+    pub label: Wording,
+    /// The line under it while selected.
+    pub subtitle: Wording,
+}
+
 /// What a title's campaign is, with where each answer came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Campaign {
@@ -72,6 +103,18 @@ pub struct Campaign {
     /// tournaments with their `<Unlock>` rows are the whole of its campaign.
     /// `None` on a title whose campaign is a grid.
     pub list_entry: Option<&'static str>,
+    /// Where a **chain-shaped** campaign's screens are read from: Wipeout Pure's
+    /// `Single Player` -> `Class Selection` -> ... walk. `None` on a title whose
+    /// campaign is a grid.
+    pub flow: Option<FlowFiles>,
+    /// The speed classes a fresh profile offers, by the name the class menu
+    /// authors; `None` offers every class from the start. Pure's
+    /// `Class Selection` lists Vector and Venom on a fresh profile (PPSSPP
+    /// capture, 2026-09-10). Which later class opens when is not read.
+    pub classes_at_start: Option<&'static [&'static str]>,
+    /// The main menu's campaign row where the title's original names it
+    /// differently (`SINGLE PLAYER` on Pure); `None` keeps `RACE CAMPAIGN`.
+    pub main_row: Option<MainRow>,
     /// Whether circuits carry an `<Unlock Grid="...">` this build reads, and
     /// the Track Select list is cut to the ones the profile has opened.
     pub circuit_unlocks: bool,

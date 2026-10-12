@@ -58,8 +58,8 @@ mod picker;
 // the same reason `remix_menu` below is not called `remix`.
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
-#[path = "session/pure_campaign.rs"]
-mod pure_campaign;
+#[path = "session/pure_chain.rs"]
+mod pure_chain;
 #[path = "session/placeholder.rs"]
 mod placeholder;
 #[path = "session/pointer.rs"]
@@ -547,7 +547,7 @@ pub(crate) struct Session {
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
     /// Wipeout Pure's campaign list: the class it was left on, as an index into
     /// `PureClass::ALL`, so reopening it lands where the player was.
-    pub(crate) pure_campaign_class: usize,
+    pub(crate) pure_chain_class: usize,
     /// Where the `Classic` circuits a Pure campaign event races are, by
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.

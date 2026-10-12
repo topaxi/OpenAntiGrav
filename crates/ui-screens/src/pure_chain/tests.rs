@@ -31,15 +31,8 @@ fn rows(events: usize) -> Vec<Row> {
     rows
 }
 
-fn list(events: usize) -> List {
-    List::new(
-        Labels {
-            title: "CAMPAIGN".into(),
-            class: "CLASS".into(),
-        },
-        "VENOM".into(),
-        rows(events),
-    )
+fn list(events: usize) -> Choice {
+    Choice::new("CLASS".into(), "VENOM".into(), rows(events))
 }
 
 #[test]
@@ -69,10 +62,7 @@ fn confirm_hands_back_the_rows_tag_and_a_locked_row_confirms_too() {
     let mut list = list(2);
     let events = list.update(&mut tick(&[Button::Cross]));
     assert_eq!(events, [Event::Confirmed(0)]);
-    list.replace(
-        "VENOM".into(),
-        vec![Row::event("A", 7, Status::Locked, "LOCKED".into())],
-    );
+    list.replace(vec![Row::event("A", 7, Status::Locked, "LOCKED".into())]);
     assert_eq!(
         list.update(&mut tick(&[Button::Start])),
         [Event::Confirmed(7)]
@@ -80,16 +70,10 @@ fn confirm_hands_back_the_rows_tag_and_a_locked_row_confirms_too() {
 }
 
 #[test]
-fn left_and_right_step_the_class_and_circle_backs_out() {
+fn circle_backs_out_and_left_and_right_do_nothing() {
     let mut list = list(1);
-    assert_eq!(
-        list.update(&mut tick(&[Button::Right])),
-        [Event::ClassStep(1)]
-    );
-    assert_eq!(
-        list.update(&mut tick(&[Button::Left])),
-        [Event::ClassStep(-1)]
-    );
+    assert!(list.update(&mut tick(&[Button::Right])).is_empty());
+    assert!(list.update(&mut tick(&[Button::Left])).is_empty());
     assert_eq!(list.update(&mut tick(&[Button::Circle])), [Event::Back]);
 }
 
@@ -99,13 +83,13 @@ fn replacing_the_rows_keeps_the_cursor_on_the_same_event() {
     list.update(&mut tick(&[Button::Down]));
     list.update(&mut tick(&[Button::Down]));
     assert_eq!(list.selected_row().unwrap().tag, 2);
-    list.replace("FLASH".into(), rows(4));
-    assert_eq!(list.class_name(), "FLASH");
+    list.replace(rows(4));
+    assert_eq!(list.context(), "VENOM");
     assert_eq!(list.selected_row().unwrap().tag, 2);
 }
 
 #[test]
-fn a_click_on_a_row_selects_and_confirms_it_and_the_class_line_steps_the_class() {
+fn a_click_on_a_row_selects_and_confirms_it_and_a_heading_is_not_a_target() {
     let skin = skin();
     let mut list = list(3);
     let layout = Layout::new(&skin);
@@ -118,15 +102,6 @@ fn a_click_on_a_row_selects_and_confirms_it_and_the_class_line_steps_the_class()
     };
     let events = list.pointer(&click(row[0] + 20.0, row[1] + row[3] * 0.5), &skin);
     assert_eq!(events, [Event::Moved, Event::Confirmed(1)]);
-    let class = layout.class_rect();
-    assert_eq!(
-        list.pointer(&click(class[0] + 5.0, class[1] + 2.0), &skin),
-        [Event::ClassStep(-1)]
-    );
-    assert_eq!(
-        list.pointer(&click(class[0] + class[2] - 5.0, class[1] + 2.0), &skin),
-        [Event::ClassStep(1)]
-    );
     let heading = layout.row_rect(0);
     assert!(
         list.pointer(&click(heading[0] + 20.0, heading[1] + 3.0), &skin)
@@ -178,7 +153,7 @@ fn a_locked_selected_row_says_what_opens_it_and_a_medal_is_inked() {
     let mut locked = Row::event("KARBONIS", 0, Status::Locked, "LOCKED".into());
     locked.requires = "NEEDS 10 MEDALS".into();
     let gold = Row::event("VINETA K", 1, Status::Medal(Medal::Gold), "GOLD".into());
-    let list = List::new(Labels::default(), "VENOM".into(), vec![locked, gold]);
+    let list = Choice::new(String::new(), "VENOM".into(), vec![locked, gold]);
     let draws = list.draw(&skin);
     assert!(
         draws

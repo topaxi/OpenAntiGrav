@@ -497,8 +497,8 @@ impl Session {
                         continue;
                     }
                     // Wipeout Pure's campaign list, same shape.
-                    if stage.pure_campaign.is_some() {
-                        self.tick_pure_campaign(&grid);
+                    if stage.pure_chain.is_some() {
+                        self.tick_pure_chain(&grid);
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the

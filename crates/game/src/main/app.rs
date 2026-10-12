@@ -465,7 +465,7 @@ impl App {
             suspended_race: None,
             campaign_cell: None,
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
-            pure_campaign_class: 0,
+            pure_chain_class: 0,
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,

@@ -1,28 +1,24 @@
-//! Wipeout Pure's campaign screen: one scrolling list of events for the class
-//! being played.
+//! One screen of Wipeout Pure's SINGLE PLAYER chain: a title, a context line and
+//! a list of one-choice rows.
 //!
-//! **The shape is the disc's, the screen is ours.** Pure has no grid. Its front
-//! end walks a chain of one-choice screens (class, then league or tournament,
-//! then circuit, then team) and what it authors of the campaign is a list of
-//! circuits per league, a list of tournaments, and the gates on them
-//! (`oag_tables::pure_campaign`). A list that shows those at once, with the medal each
-//! holds, is this project's own: no capture of it exists to match.
+//! **The chain is the disc's, the drawing is ours.** Pure walks `Single Player`
+//! (mode), `Class Selection`, `League Selection` or `Tournament Selection`,
+//! `Track Selection` or `Zone Track Selection`, then `Team Selection`
+//! (`oag_tables::pure_flow` reads the order off the screens' own redirects).
+//! Each of the screens before the team is a title and a menu of names the code
+//! fills; this is that, with the medal and lock a row holds beside it. The
+//! original's own row look on those screens was not captured, so the panel, the
+//! cursor and the medal inks are chosen, not measured.
 //!
 //! The model knows nothing of tables, medals' meaning or races. It is rows in,
 //! [`Event`]s out, the same shape [`crate::prompt::Confirm`] is, and the
-//! composition root owns what a confirmed row launches.
-//!
-//! # Chosen, not measured
-//!
-//! Everything on screen that is not a string off the disc: the panel and cursor
-//! colours, the medal inks (gold, silver and bronze), the row pitch and the
-//! class selector's arrows.
+//! composition root owns what a confirmed row does.
 
 use oag_gameplay::input::{Button, Input};
 use oag_tables::race_campaign::Medal;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::menu::Skin;
-use oag_ui::pointer::{Pointer, contains, row_at};
+use oag_ui::pointer::{Pointer, row_at};
 
 /// What a row holds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,26 +90,15 @@ pub enum Event {
     /// Confirm on the row whose [`Row::tag`] this is. A locked row confirms too:
     /// refusing it is the caller's, so a pad and a pointer cannot disagree.
     Confirmed(usize),
-    /// The class selector stepped, by `+1` or `-1`.
-    ClassStep(i32),
     /// Back out of the screen.
     Back,
 }
 
-/// The screen's text, already resolved.
-#[derive(Debug, Clone, Default)]
-pub struct Labels {
-    /// The heading.
-    pub title: String,
-    /// The word before the class name.
-    pub class: String,
-}
-
-/// The list, and where its cursor and window are.
+/// The screen, and where its cursor and window are.
 #[derive(Debug, Clone)]
-pub struct List {
-    labels: Labels,
-    class_name: String,
+pub struct Choice {
+    title: String,
+    context: String,
     rows: Vec<Row>,
     selected: usize,
     scroll: usize,
@@ -153,8 +138,8 @@ struct Layout {
     head_scale: f32,
     line: f32,
     scale: f32,
-    /// The class selector's line.
-    class_y: f32,
+    /// The context line: the class, league or mode already chosen.
+    context_y: f32,
     /// The first row.
     rows_y: f32,
     /// How many rows fit.
@@ -176,8 +161,8 @@ impl Layout {
         ];
         let text_x = panel[0] + screen_w * 0.03;
         let right_x = panel[0] + panel[2] - screen_w * 0.03;
-        let class_y = panel[1] + head * 1.25;
-        let rows_y = class_y + line * 1.5;
+        let context_y = panel[1] + head * 1.25;
+        let rows_y = context_y + line * 1.5;
         let footer_y = panel[1] + panel[3] - line * 1.4;
         let room = (footer_y - rows_y).max(line);
         Self {
@@ -188,7 +173,7 @@ impl Layout {
             head_scale: skin.row_scale(),
             line,
             scale: skin.row_scale() * ROW,
-            class_y,
+            context_y,
             rows_y,
             visible: ((room / line).floor() as usize).max(1),
             footer_y,
@@ -203,24 +188,15 @@ impl Layout {
             self.line,
         ]
     }
-
-    fn class_rect(&self) -> [f32; 4] {
-        [
-            self.panel[0] + 2.0,
-            self.class_y,
-            self.panel[2] - 4.0,
-            self.line,
-        ]
-    }
 }
 
-impl List {
-    /// A list on `rows`, with the cursor on the first selectable one.
+impl Choice {
+    /// A screen on `rows`, with the cursor on the first selectable one.
     #[must_use]
-    pub fn new(labels: Labels, class_name: String, rows: Vec<Row>) -> Self {
+    pub fn new(title: String, context: String, rows: Vec<Row>) -> Self {
         let mut list = Self {
-            labels,
-            class_name,
+            title,
+            context,
             rows,
             selected: 0,
             scroll: 0,
@@ -230,11 +206,10 @@ impl List {
         list
     }
 
-    /// The same list for another class, or after a medal changed a gate. The
+    /// The same screen with other rows, or after a medal changed a gate. The
     /// cursor stays on the row with the same tag when there still is one.
-    pub fn replace(&mut self, class_name: String, rows: Vec<Row>) {
+    pub fn replace(&mut self, rows: Vec<Row>) {
         let tag = self.selected_row().map(|row| row.tag);
-        self.class_name = class_name;
         self.rows = rows;
         self.selected = tag
             .and_then(|tag| self.rows.iter().position(|r| !r.header && r.tag == tag))
@@ -261,10 +236,10 @@ impl List {
         &self.rows
     }
 
-    /// The class name being shown.
+    /// The context line.
     #[must_use]
-    pub fn class_name(&self) -> &str {
-        &self.class_name
+    pub fn context(&self) -> &str {
+        &self.context
     }
 
     /// A line drawn in the footer until the next input, or `None`.
@@ -307,12 +282,6 @@ impl List {
         if input.take(Button::Up) && self.move_by(-1) {
             out.push(Event::Moved);
         }
-        if input.take(Button::Right) {
-            out.push(Event::ClassStep(1));
-        }
-        if input.take(Button::Left) {
-            out.push(Event::ClassStep(-1));
-        }
         if input.take(Button::Circle) {
             out.push(Event::Back);
         }
@@ -328,9 +297,8 @@ impl List {
     }
 
     /// Consumes a tick of pointer input: hover moves the cursor, a click on a
-    /// row is a confirm of it, a click on the class line steps the class (the
-    /// left third back, the rest forward), the wheel scrolls the cursor and the
-    /// secondary button backs out. Targets are where [`Self::draw`] puts them.
+    /// row is a confirm of it, the wheel scrolls the cursor and the secondary
+    /// button backs out. Targets are where [`Self::draw`] puts them.
     pub fn pointer(&mut self, pointer: &Pointer, skin: &Skin) -> Vec<Event> {
         let mut out = Vec::new();
         if pointer.is_idle() {
@@ -348,15 +316,6 @@ impl List {
             return out;
         };
         let layout = Layout::new(skin);
-        if pointer.clicked && contains(layout.class_rect(), at) {
-            let rect = layout.class_rect();
-            out.push(Event::ClassStep(if at.0 < rect[0] + rect[2] / 3.0 {
-                -1
-            } else {
-                1
-            }));
-            return out;
-        }
         let first = self.window_start(&layout);
         let over = row_at(
             at,
@@ -432,15 +391,15 @@ impl List {
                 color: [1.0, 1.0, 1.0, 1.0],
                 border: None,
                 align: Align::Left,
-                text: self.labels.title.clone(),
+                text: self.title.clone(),
                 wrap_width: None,
             },
             text(
                 layout.text_x,
-                layout.class_y,
+                layout.context_y,
                 skin.normal(),
                 Align::Left,
-                format!("{}: {}", self.labels.class, self.class_name),
+                self.context.clone(),
             ),
         ];
         let first = self.window_start(&layout);

@@ -506,7 +506,7 @@ impl Session {
             .as_ref()
             .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
-            self.reopen_pure_campaign(cell);
+            self.reopen_pure_chain(cell);
             return;
         }
         self.open_campaign();

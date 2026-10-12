@@ -48,7 +48,7 @@ at Venom in 111.78 s. The disc's figures there are gold 105, silver +3, bronze +
 111.78 s sits just past the 111 s bronze limit, which only holds if the unit is a
 whole race of the title's default three laps in seconds. Had it been one lap, or
 hundredths misread, the number would be off by a factor, not by seconds
-(`pure_campaign_walk_ground_truth`).
+(`pure_chain_walk_ground_truth`).
 
 ## Tournament points
 

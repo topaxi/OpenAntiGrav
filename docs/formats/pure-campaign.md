@@ -29,7 +29,7 @@ table names Ascension), twelve **single races** (the three leagues' circuits), t
 **time trials** (the same circuits) and four **Zone** circuits. Zone has no class, so
 its four events repeat in every class's list and are one event each in the store. 160
 events across the five classes, every one of which plans a race and names a circuit
-that is on the disc (`pure_campaign_walk_ground_truth`).
+that is on the disc (`pure_chain_walk_ground_truth`).
 
 Each is an `oag_tables::race_campaign::Cell`, the type Pulse's grids are made of, so
 the launch, the medal evaluation and the record are the campaign's own. The cell's
