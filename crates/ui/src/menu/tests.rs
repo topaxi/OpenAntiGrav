@@ -14,6 +14,7 @@ mod frame;
 mod nav;
 mod navigation;
 mod pointer;
+mod reveal;
 mod rows;
 mod settings;
 mod strip;

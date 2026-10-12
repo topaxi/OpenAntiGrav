@@ -160,6 +160,7 @@ oag-ballisticng.workspace = true
 oag-testdata.workspace = true
 oag-fx.workspace = true
 oag-pob.workspace = true
+zip = { version = "8", default-features = false, features = ["deflate"] }
 oag-schema.workspace = true
 oag-weapons.workspace = true
 

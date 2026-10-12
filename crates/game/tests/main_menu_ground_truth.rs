@@ -283,3 +283,61 @@ fn wipeout_2048s_game_mode_grid_is_four_tiles_in_the_base_and_six_with_the_patch
         "data1"
     );
 }
+
+/// Pulse's four DLC packs carry team data and front-end art, and no main menu: the
+/// menu does not change once they are mounted.
+#[test]
+#[ignore = "needs a disc image in data/images/ and DLC packs in data/dlc/"]
+fn no_pulse_dlc_pack_carries_a_main_menu() {
+    let Some(image) = image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/dlc");
+    if !root.is_dir() {
+        return;
+    }
+    let cache = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/cache/dlc");
+    let (packs, _) = oag_source::dlc::packs(&[root], &cache, &[]);
+    assert!(!packs.is_empty(), "the Pulse packs are found");
+    let count = packs.len();
+    let mut archives = oag_pulse::open_with_packs(&image.display().to_string(), packs)
+        .expect("mounting the packs");
+    // Four packs, each four `.edat` archives.
+    assert!(
+        archives.packs.len() >= count,
+        "{} containers",
+        archives.packs.len()
+    );
+    for pack in &archives.packs {
+        assert!(!pack.contains(PULSE_MAIN), "{}", pack.label());
+    }
+    let root = read(&mut archives, PULSE_MAIN);
+    check(
+        oag_pulse::TITLE.main_menu,
+        &entries(&root, "Main Menu", "Mode"),
+        "with the packs mounted",
+    );
+}
+
+/// 2048's two DLC archives carry a tracks plugin and no front-end definition at all:
+/// `g_bDlc1Mounted` and `g_bDlc2Mounted` gate hotspots on the campaign map, not the
+/// `GameModeChoice` grid, and nothing on disc changes it.
+#[test]
+#[ignore = "needs the extracted Vita package in data/extracted/vita/"]
+fn wipeout_2048s_dlc_archives_carry_no_front_end_definition() {
+    let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/vita/PCSF00007");
+    for dlc in ["dlc1/PSP2/dlc1.psarc", "dlc2/PSP2/dlc2.psarc"] {
+        let path = base.join(dlc);
+        if !path.exists() {
+            return;
+        }
+        let archive = oag_assets::psarc::Archive::open(&path.display().to_string()).expect(dlc);
+        let found: Vec<String> = archive
+            .paths()
+            .iter()
+            .map(|p| p.to_lowercase())
+            .filter(|p| p.contains("newgui") || p.contains("mainmenu") || p.contains("skin.xml"))
+            .collect();
+        assert!(found.is_empty(), "{dlc}: {found:?}");
+    }
+}

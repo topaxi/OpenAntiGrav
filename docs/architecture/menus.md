@@ -902,18 +902,96 @@ Which campaign a title opens is
 files, the classes a fresh profile offers and the row's wording are fields beside it
 (`flow`, `classes_at_start`, `main_row`): data, not a branch on the title's name.
 
-**For the `menu-mods` lane, which copies each title's original main menu with stable
-ids.** The tree in `assets/ui/menu.toml` is unchanged: Pure's SINGLE PLAYER row **is**
-the existing `open_campaign` action row, reworded in place by
-`Definition::rename_campaign_row` from `Campaign::main_row` (project ids
-`OAG_MENU_SINGLE_PLAYER` and its subtitle, English in `english.toml`, translated in the
-other three). So the row keeps its action, its place (first) and its stable position, and
-only its label and subtitle are per-title; a title with no `main_row` keeps RACE CAMPAIGN.
-Pure's main page still shows our RACEBOX, REMIX, RECORDS, OPTIONS and QUIT after it; the
-original's `Multiplayer`, `Profile`, `On Line` and `Teasers` rows have nothing here to go
-to. `--menu-page pure-chain[:MODE[:CLASS[:LEAGUE]]]` draws each screen of the chain headless
-(`MODE` by name, the rest by row number): `pure-chain`, `pure-chain:arcade`,
-`pure-chain:arcade:1`, `pure-chain:arcade:1:0`, `pure-chain:tournament:1`, `pure-chain:zone`.
+Pure's main page reads SINGLE PLAYER as one of the title's own rows: see
+[the main menu is the disc's, plus mods](#the-main-menu-is-the-discs-plus-mods). The
+wording stays `Campaign::main_row`'s (project ids `OAG_MENU_SINGLE_PLAYER`
+below, English in `english.toml`, translated in the other three), applied to the one row
+whose action is `open_campaign`. `--menu-page pure-chain[:MODE[:CLASS[:LEAGUE]]]` draws
+each screen of the chain headless (`MODE` by name, the rest by row number): `pure-chain`,
+`pure-chain:arcade`, `pure-chain:arcade:1`, `pure-chain:arcade:1:0`,
+`pure-chain:tournament:1`, `pure-chain:zone`.
+
+## The main menu is the disc's, plus mods
+
+**2026-10-12, `menu-mods`. The decision is [ADR-0066](adr/0066-the-menu-is-the-disc-plus-mods.md); the
+mod format is [mods](../tools/mods.md).** What changed is the main page only; every other
+page of `assets/ui/menu.toml` is as it was.
+
+### The vanilla top level is each title's own
+
+`oag_title::Title::main_menu` lists the rows the disc authors, by `idstring`, in the
+disc's order, and the `menu.toml` row each opens. `crates/game/tests/main_menu_ground_truth.rs`
+reads the file back on every pressing and every archive that carries it and compares the
+whole list (read 2026-10-12, all passing):
+
+| Title | Where | Rows (`builds` the row, else "nothing here") |
+| --- | --- | --- |
+| Pulse PSP, EU and USA | `MainMenu_Definition.xml` `Main Menu` | `FE_RACE_CAM` (campaign), `FE_RACEBOX` (racebox), `FE_MP`, `FE_WIPEOUT_DOT_COM`, `FE_PROFILE`, `FE_OPT_PLUS` (options), `FE_EXTRAS` |
+| Pulse PS2 (checked, differs) | same file | `FE_RACE_CAM`, `FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, `FE_RACEBOX`, `FE_PROFILE`, `FE_OPT_PLUS`, `FE_EXTRAS`: two split-screen variants of the first row, no multiplayer or website row. The built rows keep their order. |
+| Pure EU | `Skin.xml` `Main Menu` | `Single Player` (campaign), `Multiplayer`, `Profile`, `On Line`, `Teasers` |
+| Pure USA (checked, differs) | same | the same without `Teasers` |
+| HD / Fury | `<HorizMenu name="Mode">`, all five archives agree | `FE_RC` (campaign), `FE_RACEBOX` (racebox), `FE_ONLINE`, `FE_OPT_PLUS` (options), `FE_RECORDS` (records) |
+| Omega | the same file in its base package and `data09.psarc` | HD's five, in HD's order (checked, applies) |
+| 2048 | `NEWGUI/Definition.xml` `GameModeChoice` | base: `FE_SP_CAMPAIGN`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`; with `data2.psarc` (v1.04): `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`. `data1.psarc` (the earlier patch) authors the four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it. The grid is the touch front end's own, so no row is built from a tile. |
+
+A row this build has nothing behind (multiplayer, a website, profile, extras, online,
+teasers, the 2048 network tiles) is **not drawn**: it stays in the list so the list is
+the disc's, and the report can say what is missing. Nothing is drawn as an inert
+stand-in.
+
+**Does the menu change with DLC?** Pulse: no (the four packs are mounted and none carries
+the file; `no_pulse_dlc_pack_carries_a_main_menu`). 2048: no tile (the two DLC archives hold a
+tracks plugin and no front-end file; the flags `g_bDlc1Mounted`/`g_bDlc2Mounted` gate hotspots
+on the campaign map, `docs/formats/2048-frontend.md`); what changes the grid is the patch,
+read from whether the update archives are mounted (`MainMenu::rows_for`). HD: the five copies are
+identical and no HD pack is on this machine (not checkable beyond that). Pure's packs are
+encrypted and no key table is in the checkout (not checkable). Where a DLC menu cannot be
+read, the base list is kept.
+
+### Our rows are a mod
+
+`assets/ui/menu.toml`'s `main` page holds the rows an original menu can have, each with an
+`id`: `campaign`, `racebox`, `options`, `records`. The rest come from the built-in mod
+`oag-extras` (`assets/mods/oag-extras/`), attached with `parent`/`after`:
+
+| Row | `parent` | Where it lands |
+| --- | --- | --- |
+| RACEBOX, OPTIONS | `top` (only if missing) | their own rows on Pulse, HD, Omega; added on Pure and 2048 |
+| REMIX | `racebox` | after RACEBOX |
+| RECORDS | `options` (only if missing) | under OPTIONS on Pulse, Pure and 2048; HD and Omega author `FE_RECORDS`, so it is theirs |
+| QUIT | `options` | after OPTIONS' other attached rows |
+
+**RECORDS is under OPTIONS** on the titles whose original menu has no natural parent for
+it. Pulse's `FE_PROFILE` (help text "stats, records and profile management") would be one and
+nothing is built behind it. Chosen, not measured.
+
+The resulting main page:
+
+| Title | Top level | Attached |
+| --- | --- | --- |
+| Pulse, Pure | RACE CAMPAIGN (SINGLE PLAYER on Pure), RACEBOX, OPTIONS | REMIX after RACEBOX; RECORDS, QUIT after OPTIONS - drawn inline: SINGLE PLAYER, RACEBOX, REMIX, OPTIONS, RECORDS, QUIT |
+| HD, Omega | RACE CAMPAIGN, RACEBOX, OPTIONS, RECORDS | REMIX under RACEBOX, QUIT under OPTIONS, **revealed** |
+| 2048 | the disc's touch grid, plus this build's RACEBOX and REMIX tiles | the tiles take their words from the built tree's `racebox` and `remix` rows |
+
+`Definition::build` does the merge (`crates/ui/src/menu/definition/build.rs`): the vanilla file,
+trimmed to the title's own rows in the disc's order, then each mod in turn. `Definition::parse` on
+the shipped file alone reports the `remix` and `records` pages unreachable, because only
+the extras' rows open them; every caller builds (`oag_game::mods::Mods::build`, the same
+call the live menu and `--menu-page` make, so a captured page shows what a player sees).
+
+### Revealed rows on HD and Omega
+
+A horizontal strip has no room for more tabs, so an attached row is **revealed below its
+parent while the parent or one of its attached rows has focus**
+(`oag_title::Attached::Revealed`, `crates/ui/src/menu/reveal.rs`). Left and right step the
+top level and land on a head; up and down step inside the focused family and stop at its
+ends; confirm opens the focused row. The head stays drawn as selected while its family is
+focused. The pointer has a region for each drawn tab, so a hidden row cannot be hit, and
+tapping a revealed row opens it. Placement (one tab-height and the strip's gap below,
+under the same tab) and the keys are **chosen, not measured**: no disc authors a second
+level. `--menu-page main:remix` puts the cursor on a row by id for a still.
+
+Pulse, Pure and 2048 draw an attached row inline after its parent, and need none of this.
 
 ## What is not built
 
@@ -1017,8 +1095,9 @@ here. What it has no counterpart for is the race box and RACE REMIX - the
 disc ships neither, and every other title reaches both from this tree's
 root. So, at the user's request, two tiles that **are this build's own and
 not on the disc** sit on 2048's `GameModeChoice` after the four the file
-authors: `RACEBOX` and `REMIX`, labelled with the same `OAG_MENU_RACEBOX`/
-`OAG_MENU_REMIX` ids the root page's rows are, drawn in the 122x96 text-box
+authors: `RACEBOX` and `REMIX`, labelled as the built tree's `racebox` and `remix` rows are (the
+`OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` ids, through `oag_game::mods::Mods::build` for
+2048, so a mod's wording reaches them), drawn in the 122x96 text-box
 shape the disc's own game-list screen authors, at positions **chosen, not
 measured** (`oag_ui::frontend::touch::EXTRA_TILES`). A tap opens these
 menus and walks straight into the `race` or `remix` page

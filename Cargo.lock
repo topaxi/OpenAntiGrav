@@ -2604,6 +2604,7 @@ dependencies = [
  "web-time",
  "wgpu",
  "winit",
+ "zip",
 ]
 
 [[package]]
@@ -3081,9 +3082,11 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-hd",
+ "oag-mod",
  "oag-pulse",
  "oag-tables",
  "oag-texture",
+ "semver",
 ]
 
 [[package]]
