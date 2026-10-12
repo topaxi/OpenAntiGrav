@@ -1,0 +1,85 @@
+# Race music resumes where it left off
+
+**Status: built (2026-10-12).** Maintainer request: "persist the music track playlist
+state across restarts, so that in a race we resume where we left off, one second
+resolution accuracy is enough". **Chosen, not measured**: the original's race music is
+not recovered (`docs/formats/ps2-audio.md`), so what resumes is this engine's own
+playlist. No confidence score applies.
+
+## What the playlist is
+
+One playlist per title, not per circuit or per mode. It is a plain cycle through the
+**booted disc's** soundtrack in its own order (`next_race_index` is `(index + 1) % len`).
+There is no shuffle, so the order is the index and nothing else is saved. The
+`MUSIC SOURCE` setting (PSP or PS2 release of Pulse) only changes which recording plays;
+the index is always in the booted order, so the saved state is independent of it.
+
+Within a run the playlist already survived a trip to the menus
+(`Audio::pause_race_music` keeps `race_index` and the position). This change carries the
+same two numbers across a process.
+
+## What is saved
+
+`oag_sound::RaceMusicState`: track index, whole second (rounded to nearest), the track
+count the soundtrack listed, and the track's length. Per title, in `music.toml` beside
+`settings.toml` and `records.toml` (`$XDG_CONFIG_HOME/oag/music.toml`; the browser's
+`localStorage` on the web, through `oag_game::profile`).
+
+A file of its own rather than a section of `records.toml`: the periodic save would
+rewrite every best lap each time. It declares `schemas/v1/music-state.tosd`
+([ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md),
+[TOML Schema](../formats/toml-schema.md)); a file without the header or with another
+kind is ignored by name in the log and rewritten at the next save. A write goes to a
+temporary file and is renamed over the old one.
+
+## When it is written
+
+| When | Where |
+| --- | --- |
+| Leaving a race for the menus | `session/escape.rs`, after `pause_race_music` |
+| A finished race left for the menus | `session/endrace.rs`, after `pause_race_music` |
+| Any quit | `ApplicationHandler::exiting`: window close, a menu's quit, a quit from the race |
+| While racing | every `SAVE_EVERY_SECONDS` = 10 s of ticks (**chosen, not measured**) |
+
+A write happens only when the whole-second state moved since the last one (`Saver`), so
+the menus do not rewrite the file. Headless captures and the `--race` developer route
+(no front-end shell, so no title key) neither restore nor save, as they never call
+`records::save`.
+
+## When it is read
+
+Once per run, in `Session::launch_race` before `reserve_race_music_index` (which only
+fills an empty index, so a later restore would silently do nothing).
+`Audio::restore_race_music` re-lists the booted soundtrack and refuses the saved state,
+leaving the playlist at its normal start with a `warn` line
+(`audio: not resuming the saved race music (...)`), when:
+
+- the soundtrack cannot be listed;
+- the track count differs (DLC added or removed, another release);
+- the saved index is past the end;
+- that track's length differs by more than 0.5 s (a swapped track; the decoded length
+  and the listing's differ by decoder padding, 83 ms measured on Pulse PSP track 0);
+- the saved second is not inside the track.
+
+## Seeking, per title
+
+`Sound` is whole decoded PCM, so `Mixer::seek` works wherever the track reaches the race
+voice. Ground truth (`crates/game/tests/music_resume_ground_truth.rs`, `just test-data`)
+plays 20 s on a null output, saves, opens a second `Audio`, resumes and asserts the same
+track within 1 s, then repeats on track 1 at 7 s:
+
+| Title / release | Result |
+| --- | --- |
+| Pulse PSP (EU) | resumes; track 1 asserted |
+| Pulse PS2 (EU) | resumes; track 1 not asserted (the PS2 listing is not an archived listing) |
+| Pure PSP (EU) | resumes; track 1 asserted |
+| HD / Fury (PS3) | resumes; track 1 asserted |
+| 2048 (Vita) | resumes; track 1 asserted |
+| Omega (PS4) | resumes; track 1 asserted |
+
+Nothing falls back to the track start for lack of a seek.
+
+## Omega / 2048 check
+
+Same playlist code and the same ground truth on both: **ported** (each has its own
+test above).
