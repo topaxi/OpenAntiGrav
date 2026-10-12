@@ -206,13 +206,12 @@ pub fn from_blob(data: &[u8], class: SpeedClass) -> Result<AiRaceStats> {
     parse(&fexml::text(data)?, class)
 }
 
-pub(crate) fn class_title(class: SpeedClass) -> &'static str {
-    match class {
-        SpeedClass::Venom => "Venom",
-        SpeedClass::Flash => "Flash",
-        SpeedClass::Rapier => "Rapier",
-        SpeedClass::Phantom => "Phantom",
-    }
+/// The class's name in the document's title case (`Venom`); element names are
+/// matched case-insensitively, so this is spelling for the reader.
+pub(crate) fn class_title(class: SpeedClass) -> String {
+    let name = class.as_str();
+    let (head, tail) = name.split_at(1);
+    format!("{head}{}", tail.to_ascii_lowercase())
 }
 
 pub(crate) fn child<'a>(node: &'a Node, name: &str) -> Result<&'a Node> {

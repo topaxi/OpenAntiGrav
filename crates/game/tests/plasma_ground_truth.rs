@@ -246,7 +246,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
          {speed:.1} units/s"
     );
     let authored =
-        (plasma.speed_for(oag_tables::handling::SpeedClass::Venom) + plasma.launch_speed) / 3.6;
+        (plasma.speed_for(oag_tables::handling::SpeedClass::VENOM) + plasma.launch_speed) / 3.6;
     assert!(
         (bolt_speed - authored).abs() < 1.0,
         "the bolt is doing {bolt_speed:.1} units/s where the disc's own Venom \
@@ -354,7 +354,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     // The ramp itself: strictly between the release speed and the class speed
     // partway through, at the class speed once it is over - the class speed
     // read off the disc's own table, never hardcoded, per ADR-0006.
-    let class_kmh = plasma.speed_for(oag_tables::handling::SpeedClass::Venom);
+    let class_kmh = plasma.speed_for(oag_tables::handling::SpeedClass::VENOM);
     if let (Some((_, _, launch_kmh)), Some(mid)) = (release, mid_speed) {
         let low = launch_kmh.min(class_kmh);
         let high = launch_kmh.max(class_kmh);

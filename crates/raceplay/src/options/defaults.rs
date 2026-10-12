@@ -34,7 +34,7 @@ impl Default for Options {
             // The rung every measured title shares, named rather than
             // defaulted from an enum: a title whose ladder was never read must
             // not silently inherit one that was.
-            class: SpeedClass::Venom.as_str().to_string(),
+            class: SpeedClass::VENOM.as_str().to_string(),
             mode: Mode::default(),
             language: None,
             eliminator_kill_target: None,

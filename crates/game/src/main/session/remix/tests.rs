@@ -371,7 +371,7 @@ fn vector_is_offered_with_pure_present_and_not_without_it() {
     }
 }
 
-/// `oag_physics::SpeedClass` **still names four**, and that is the load-bearing
+/// `oag_tables::handling::SpeedClass` **still names four**, and that is the load-bearing
 /// half of how the fifth rung was added.
 ///
 /// The alternative - a fifth variant - would have widened the fixed tables its
@@ -381,13 +381,13 @@ fn vector_is_offered_with_pure_present_and_not_without_it() {
 /// somebody widens the enum, which is the change this design exists to avoid.
 #[test]
 fn the_physics_enum_still_names_exactly_the_four_every_title_shares() {
-    assert_eq!(oag_physics::SpeedClass::ALL.len(), 4);
+    assert_eq!(oag_tables::handling::SpeedClass::ALL.len(), 4);
     assert!(
-        oag_physics::SpeedClass::from_name("VECTOR").is_none(),
+        oag_tables::handling::SpeedClass::census("VECTOR").is_none(),
         "the fifth rung is carried as a name, never as a variant"
     );
     for name in oag_title::SpeedClasses::PULSE_LADDER {
-        assert!(oag_physics::SpeedClass::from_name(name).is_some());
+        assert!(oag_tables::handling::SpeedClass::census(name).is_some());
     }
 }
 

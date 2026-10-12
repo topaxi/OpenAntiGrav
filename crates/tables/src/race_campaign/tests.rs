@@ -61,7 +61,7 @@ fn a_race_cell_carries_track_class_and_skill() {
     assert_eq!(race.mode, Mode::Race);
     assert_eq!(race.mode.ordinal(), Some(3));
     assert_eq!(race.class, "Venom");
-    assert_eq!(race.speed_class(), Some(SpeedClass::Venom));
+    assert_eq!(race.speed_class(), Some(SpeedClass::VENOM));
     assert!(race.weapons);
     assert!(race.damage);
     assert_eq!(race.ai_count, Some(7));

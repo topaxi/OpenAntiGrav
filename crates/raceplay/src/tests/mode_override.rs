@@ -45,7 +45,7 @@ fn no_override_leaves_the_per_class_table_in_charge() {
     let race = Race::start(setup);
     assert_eq!(
         race.sim.world.laps_target(),
-        Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::Venom as usize])
+        Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::VENOM.index()])
     );
 }
 

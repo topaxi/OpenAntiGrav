@@ -13,11 +13,11 @@ fn eclass_ordinals_round_trip() {
 fn only_superphantom_has_no_four_wide_speed_class() {
     assert_eq!(
         EClass::Venom.speed_class(),
-        Some(oag_tables::handling::SpeedClass::Venom)
+        Some(oag_tables::handling::SpeedClass::VENOM)
     );
     assert_eq!(
         EClass::Phantom.speed_class(),
-        Some(oag_tables::handling::SpeedClass::Phantom)
+        Some(oag_tables::handling::SpeedClass::PHANTOM)
     );
     assert_eq!(EClass::SuperPhantom.speed_class(), None);
 }

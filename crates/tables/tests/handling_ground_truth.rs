@@ -404,7 +404,7 @@ fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
         // without anything noticing.
         let all_same = SpeedClass::ALL
             .into_iter()
-            .all(|c| global.speedup_pads(c) == global.speedup_pads(SpeedClass::Venom));
+            .all(|c| global.speedup_pads(c) == global.speedup_pads(SpeedClass::VENOM));
         assert!(
             !all_same,
             "{image_name}: every class got the same tunables, so the index is suspect"
@@ -424,7 +424,7 @@ fn the_global_file_carries_a_complete_set_of_speed_pad_tunables() {
         // the table as `1.0` for every class. It is not.
         let gravity_all_same = SpeedClass::ALL
             .into_iter()
-            .all(|c| global.gravity_mul(c) == global.gravity_mul(SpeedClass::Venom));
+            .all(|c| global.gravity_mul(c) == global.gravity_mul(SpeedClass::VENOM));
         assert!(
             !gravity_all_same,
             "{image_name}: every class got the same gravity scale, which is what \
@@ -556,7 +556,7 @@ fn the_global_file_authors_a_fifth_class_and_authors_it_first() {
             "{image_name}: expected the four speed classes plus one more"
         );
         assert!(
-            SpeedClass::from_name(&names[0]).is_none(),
+            SpeedClass::census(&names[0]).is_none(),
             "{image_name}: the first block is a speed class, so the skip is no longer harmless"
         );
         for class in SpeedClass::ALL {

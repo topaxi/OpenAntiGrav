@@ -101,10 +101,10 @@ fn the_rocket_reads_the_five_things_a_projectile_needs() {
 fn each_speed_class_reads_its_own_projectile_speed() {
     use crate::handling::SpeedClass;
     let rocket = parse(FIXTURE).expect("parses").rocket().expect("a Rocket");
-    assert_eq!(rocket.speed_for(SpeedClass::Venom), 100.0);
-    assert_eq!(rocket.speed_for(SpeedClass::Flash), 200.0);
-    assert_eq!(rocket.speed_for(SpeedClass::Rapier), 300.0);
-    assert_eq!(rocket.speed_for(SpeedClass::Phantom), 400.0);
+    assert_eq!(rocket.speed_for(SpeedClass::VENOM), 100.0);
+    assert_eq!(rocket.speed_for(SpeedClass::FLASH), 200.0);
+    assert_eq!(rocket.speed_for(SpeedClass::RAPIER), 300.0);
+    assert_eq!(rocket.speed_for(SpeedClass::PHANTOM), 400.0);
 }
 
 /// A file with no Rocket is not an error: the two shipped tables need not carry
@@ -157,10 +157,10 @@ fn each_speed_class_reads_its_own_missile_speed() {
         .expect("parses")
         .missile()
         .expect("a Missile");
-    assert_eq!(missile.speed_for(SpeedClass::Venom), 500.0);
-    assert_eq!(missile.speed_for(SpeedClass::Flash), 600.0);
-    assert_eq!(missile.speed_for(SpeedClass::Rapier), 700.0);
-    assert_eq!(missile.speed_for(SpeedClass::Phantom), 800.0);
+    assert_eq!(missile.speed_for(SpeedClass::VENOM), 500.0);
+    assert_eq!(missile.speed_for(SpeedClass::FLASH), 600.0);
+    assert_eq!(missile.speed_for(SpeedClass::RAPIER), 700.0);
+    assert_eq!(missile.speed_for(SpeedClass::PHANTOM), 800.0);
 }
 
 /// The lock distances make a Missile a Missile; losing one must fail loudly.
@@ -317,8 +317,8 @@ fn the_missile_and_the_rocket_do_not_share_a_schema() {
     // Distinct blocks, not one block read twice.
     assert_ne!(rocket.absorb, missile.absorb);
     assert_ne!(
-        rocket.speed_for(crate::handling::SpeedClass::Venom),
-        missile.speed_for(crate::handling::SpeedClass::Venom)
+        rocket.speed_for(crate::handling::SpeedClass::VENOM),
+        missile.speed_for(crate::handling::SpeedClass::VENOM)
     );
     // A missile whose lock window is empty or inverted could never lock anything.
     assert!(missile.lock_min_dist < missile.lock_max_dist);
@@ -473,8 +473,8 @@ fn the_plasma_and_the_rocket_read_their_own_blocks() {
     assert_ne!(plasma.damage, rocket.damage);
     assert_ne!(plasma.blastradius, rocket.blastradius);
     assert_ne!(
-        plasma.speed_for(crate::handling::SpeedClass::Venom),
-        rocket.speed_for(crate::handling::SpeedClass::Venom)
+        plasma.speed_for(crate::handling::SpeedClass::VENOM),
+        rocket.speed_for(crate::handling::SpeedClass::VENOM)
     );
 }
 

@@ -68,17 +68,17 @@ fn the_default_is_the_time_trial() {
 
 #[test]
 fn only_the_two_unlimited_modes_never_end_on_laps() {
-    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
-    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
+    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::VENOM), Some(3));
+    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::VENOM), Some(3));
     // Speed Lap's HUD does show a lap count (`7`, live-confirmed on
     // Venom) - it just never turns into an ending. See `laps_target`'s
     // own docs for the pause-menu evidence.
-    assert_eq!(Mode::SpeedLap.laps_target(SpeedClass::Venom), None);
-    assert_eq!(Mode::Zone.laps_target(SpeedClass::Venom), None);
+    assert_eq!(Mode::SpeedLap.laps_target(SpeedClass::VENOM), None);
+    assert_eq!(Mode::Zone.laps_target(SpeedClass::VENOM), None);
     // Eliminator has no lap target either, and for a different reason
     // from Speed Lap's or Zone's: it has one, a kill count, that this
     // method does not report. See `Mode::ELIMINATOR_KILL_TARGET_DEFAULT`.
-    assert_eq!(Mode::Eliminator.laps_target(SpeedClass::Venom), None);
+    assert_eq!(Mode::Eliminator.laps_target(SpeedClass::VENOM), None);
 }
 
 /// The census, reproduced as an assertion: 3 Venom, 4 Flash, 4 Rapier, 5
@@ -86,10 +86,10 @@ fn only_the_two_unlimited_modes_never_end_on_laps() {
 /// the change that introduced it is that three of these four are *not* 3.
 #[test]
 fn a_single_race_runs_the_campaigns_own_per_class_lap_count() {
-    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Venom), Some(3));
-    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Flash), Some(4));
-    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Rapier), Some(4));
-    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::Phantom), Some(5));
+    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::VENOM), Some(3));
+    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::FLASH), Some(4));
+    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::RAPIER), Some(4));
+    assert_eq!(Mode::SingleRace.laps_target(SpeedClass::PHANTOM), Some(5));
 }
 
 /// The same table, live-confirmed rather than census-only: one Custom
@@ -97,10 +97,10 @@ fn a_single_race_runs_the_campaigns_own_per_class_lap_count() {
 /// 2026-09-09, `pulse-psp-usa.chd`, Talon's Junction White.
 #[test]
 fn a_time_trial_runs_the_same_per_class_lap_count() {
-    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Venom), Some(3));
-    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Flash), Some(4));
-    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Rapier), Some(4));
-    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::Phantom), Some(5));
+    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::VENOM), Some(3));
+    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::FLASH), Some(4));
+    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::RAPIER), Some(4));
+    assert_eq!(Mode::TimeTrial.laps_target(SpeedClass::PHANTOM), Some(5));
 }
 
 /// Every rung the enum has must have a row, in both tables, or a class
@@ -109,7 +109,7 @@ fn a_time_trial_runs_the_same_per_class_lap_count() {
 #[test]
 fn every_speed_class_has_a_lap_count() {
     for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
-        assert_eq!(index, class as usize, "{class} is not at its own index");
+        assert_eq!(index, class.index(), "{class} is not at its own index");
         assert_eq!(
             Mode::SingleRace.laps_target(class),
             Some(Mode::SINGLE_RACE_LAPS_BY_CLASS[index]),

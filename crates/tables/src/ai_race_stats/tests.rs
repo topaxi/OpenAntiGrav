@@ -29,7 +29,7 @@ const FIXTURE: &str = r#"
 "#;
 
 fn stats() -> AiRaceStats {
-    parse(FIXTURE, SpeedClass::Flash).expect("fixture parses")
+    parse(FIXTURE, SpeedClass::FLASH).expect("fixture parses")
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn reads_the_eight_places_and_three_skill_points() {
 #[test]
 fn another_class_is_not_this_one() {
     assert!(matches!(
-        parse(FIXTURE, SpeedClass::Venom),
+        parse(FIXTURE, SpeedClass::VENOM),
         Err(Error::MissingElement { .. })
     ));
 }
@@ -117,7 +117,7 @@ fn a_place_out_of_range_reads_as_the_nearest() {
 #[test]
 fn the_entry_name_is_the_lower_case_class() {
     assert_eq!(
-        entry_name(SpeedClass::Phantom),
+        entry_name(SpeedClass::PHANTOM),
         r"Data\XML\AIRaceStats_phantom.xml"
     );
 }
@@ -169,7 +169,7 @@ fn full(extra: &str) -> String {
 
 #[test]
 fn the_full_reader_carries_every_field_the_thrust_view_drops() {
-    let race = parse_full(&full(""), SpeedClass::Venom).expect("parses");
+    let race = parse_full(&full(""), SpeedClass::VENOM).expect("parses");
     assert_eq!(race.spread_dist[0], 101.0);
     assert_eq!(race.spread_dist[7], 108.0);
     assert_eq!(race.grid[2].base_start_thrust, 73.0);
@@ -177,13 +177,13 @@ fn the_full_reader_carries_every_field_the_thrust_view_drops() {
     assert_eq!(race.spread_multiplier[2], 1.5);
     assert_eq!(race.pack_swapping[1].num_intermediate_positions, 2.0);
     assert_eq!(race.split_screen, None);
-    assert_eq!(race.thrust, parse(&full(""), SpeedClass::Venom).unwrap());
+    assert_eq!(race.thrust, parse(&full(""), SpeedClass::VENOM).unwrap());
 }
 
 #[test]
 fn split_screen_is_read_when_authored() {
     let extra = r#"<SplitScreenMultiplier Easy="0.9" Medium="0.8" Hard="0.7"/>"#;
-    let race = parse_full(&full(extra), SpeedClass::Venom).expect("parses");
+    let race = parse_full(&full(extra), SpeedClass::VENOM).expect("parses");
     assert_eq!(race.split_screen.map(|s| s.hard), Some(0.7));
 }
 
@@ -191,7 +191,7 @@ fn split_screen_is_read_when_authored() {
 fn an_element_it_does_not_know_is_refused_by_name() {
     let extra = r#"<ShipSpacingVariation max="1" min="0"/>"#;
     assert_eq!(
-        parse_full(&full(extra), SpeedClass::Venom),
+        parse_full(&full(extra), SpeedClass::VENOM),
         Err(Error::UnknownElement {
             element: "ShipSpacingVariation".to_string()
         })
@@ -202,7 +202,7 @@ fn an_element_it_does_not_know_is_refused_by_name() {
 fn an_attribute_it_does_not_know_is_refused_by_name() {
     let text = full("").replace(r#"MaxSpeedChange="3""#, r#"MaxSpeedChange="3" Extra="1""#);
     assert!(matches!(
-        parse_full(&text, SpeedClass::Venom),
+        parse_full(&text, SpeedClass::VENOM),
         Err(Error::UnknownAttribute { attribute, .. }) if attribute == "Extra"
     ));
 }
@@ -214,7 +214,7 @@ fn a_ninth_grid_place_is_refused_by_name() {
         r#"<GridPlace9 StartBoost="1" BaseStartThrust="1"/></StartStats>"#,
     );
     assert_eq!(
-        parse_full(&text, SpeedClass::Venom),
+        parse_full(&text, SpeedClass::VENOM),
         Err(Error::UnknownElement {
             element: "GridPlace9".to_string()
         })

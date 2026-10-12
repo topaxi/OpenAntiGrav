@@ -346,7 +346,7 @@ impl Mode {
     #[must_use]
     pub const fn laps_target(self, class: SpeedClass) -> Option<u32> {
         match self {
-            Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS_BY_CLASS[class as usize]),
+            Self::TimeTrial => Some(Self::TIME_TRIAL_LAPS_BY_CLASS[class.index()]),
             // A tournament leg races the same table `Single Race` does - see
             // `Self::Tournament`'s own doc. The census `race-setup.md` reads
             // (3/4/4/5, no exception across all 236 `PI_Cell` records) covers
@@ -356,7 +356,7 @@ impl Mode {
             // usual "chosen, not measured" footing for an unauthored
             // combination.
             Self::SingleRace | Self::Tournament | Self::Head2Head => {
-                Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class as usize])
+                Some(Self::SINGLE_RACE_LAPS_BY_CLASS[class.index()])
             }
             Self::SpeedLap | Self::Zone | Self::Eliminator => None,
         }

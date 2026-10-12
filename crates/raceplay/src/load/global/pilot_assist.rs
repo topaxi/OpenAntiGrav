@@ -140,7 +140,7 @@ pub(super) fn resolve(
         report.push("Pilot Assist: no <Global> block, so no Pilot Assist this run".to_string());
         return Laws::default();
     };
-    let rung_class = handling::SpeedClass::from_name(class);
+    let rung_class = handling::SpeedClass::census(class);
     let authored_extreme = rung_class.and_then(|c| global.pilot_assist(c));
     let title_authors_extreme = global.pilot_assist.iter().any(Option::is_some);
     let extreme = match authored_extreme {

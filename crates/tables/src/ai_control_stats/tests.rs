@@ -19,7 +19,7 @@ const FIXTURE: &str = r#"
 
 #[test]
 fn absent_attributes_stay_absent() {
-    let c = parse(FIXTURE, SpeedClass::Venom).expect("parses");
+    let c = parse(FIXTURE, SpeedClass::VENOM).expect("parses");
     assert_eq!(c.steer_mul, Some(1.5));
     assert_eq!(c.look_ahead_secs, Some(0.25));
     assert_eq!(c.xtrack_max, None);
@@ -29,7 +29,7 @@ fn absent_attributes_stay_absent() {
 #[test]
 fn another_controller_family_is_refused_by_name() {
     assert_eq!(
-        parse(FIXTURE, SpeedClass::Flash),
+        parse(FIXTURE, SpeedClass::FLASH),
         Err(Error::UnknownElement {
             element: "ControllerPO".to_string()
         })
@@ -39,7 +39,7 @@ fn another_controller_family_is_refused_by_name() {
 #[test]
 fn an_unknown_attribute_is_refused_by_name() {
     assert!(matches!(
-        parse(FIXTURE, SpeedClass::Rapier),
+        parse(FIXTURE, SpeedClass::RAPIER),
         Err(Error::UnknownAttribute { attribute, .. }) if attribute == "Bogus"
     ));
 }

@@ -184,7 +184,7 @@ pub(super) fn read(
     terms: &RaceTerms,
     report: &mut Vec<String>,
 ) -> Option<FinishedThrust> {
-    let Some(class) = SpeedClass::from_name(terms.class) else {
+    let Some(class) = SpeedClass::census(terms.class) else {
         report.push(format!(
             "finished thrust: class {:?} has no AIRaceStats file; the finished craft keeps \
              its driver's own thrust",

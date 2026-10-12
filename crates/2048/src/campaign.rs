@@ -135,10 +135,10 @@ impl EClass {
     #[must_use]
     pub fn speed_class(self) -> Option<oag_tables::handling::SpeedClass> {
         match self {
-            Self::Venom => Some(oag_tables::handling::SpeedClass::Venom),
-            Self::Flash => Some(oag_tables::handling::SpeedClass::Flash),
-            Self::Rapier => Some(oag_tables::handling::SpeedClass::Rapier),
-            Self::Phantom => Some(oag_tables::handling::SpeedClass::Phantom),
+            Self::Venom => Some(oag_tables::handling::SpeedClass::VENOM),
+            Self::Flash => Some(oag_tables::handling::SpeedClass::FLASH),
+            Self::Rapier => Some(oag_tables::handling::SpeedClass::RAPIER),
+            Self::Phantom => Some(oag_tables::handling::SpeedClass::PHANTOM),
             Self::SuperPhantom => None,
         }
     }

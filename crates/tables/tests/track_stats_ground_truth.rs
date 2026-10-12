@@ -59,7 +59,7 @@ fn sixteen_track_stats_match_the_live_capture() {
         "docs/formats/race-setup.md's own PPSSPP capture measured this exactly"
     );
     assert_eq!(
-        stats.skill_curve(SpeedClass::Venom)[0],
+        stats.skill_curve(SpeedClass::VENOM)[0],
         0.9,
         "Easy/Venom SkillScaleValue, docs/formats/race-setup.md's own example"
     );
@@ -67,7 +67,7 @@ fn sixteen_track_stats_match_the_live_capture() {
     println!(
         "16_Track: length {:?}, Venom skill curve {:?}",
         stats.length,
-        stats.skill_curve(SpeedClass::Venom)
+        stats.skill_curve(SpeedClass::VENOM)
     );
 }
 

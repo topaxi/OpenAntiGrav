@@ -244,7 +244,7 @@ impl Default for RaceState {
     /// class, and so what keeps a default-path state hash unchanged across
     /// [`Self::new`] growing a second argument.
     fn default() -> Self {
-        Self::new(Mode::TimeTrial, SpeedClass::Venom)
+        Self::new(Mode::TimeTrial, SpeedClass::VENOM)
     }
 }
 
@@ -606,7 +606,7 @@ mod elimination_tests {
     /// The edge, which is what a caller hangs a sound or an end screen on.
     #[test]
     fn eliminating_a_craft_ends_the_race_once() {
-        let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
+        let mut state = RaceState::new(Mode::Zone, SpeedClass::VENOM);
         assert!(!state.finished);
         assert!(state.eliminate(), "the first call should end the race");
         assert!(state.finished);
@@ -619,7 +619,7 @@ mod elimination_tests {
     /// A race already over for another reason is not ended twice.
     #[test]
     fn a_finished_race_is_not_eliminated_again() {
-        let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+        let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
         state.finished = true;
         assert!(!state.eliminate());
     }
@@ -627,7 +627,7 @@ mod elimination_tests {
     #[test]
     fn eliminator_ends_when_a_craft_reaches_the_given_target() {
         let target = 7; // one of the real, non-flat cell values - see `Mode`.
-        let mut state = RaceState::new(Mode::Eliminator, SpeedClass::Venom);
+        let mut state = RaceState::new(Mode::Eliminator, SpeedClass::VENOM);
         assert!(!state.eliminator_finished(target, target - 1));
         assert!(!state.finished);
         assert!(state.eliminator_finished(target, target));
@@ -643,7 +643,7 @@ mod elimination_tests {
     /// a future caller cannot end the wrong mode by passing a stray number.
     #[test]
     fn a_kill_count_does_not_end_a_different_mode() {
-        let mut state = RaceState::new(Mode::SingleRace, SpeedClass::Venom);
+        let mut state = RaceState::new(Mode::SingleRace, SpeedClass::VENOM);
         assert!(!state.eliminator_finished(10, 10));
         assert!(!state.finished);
     }

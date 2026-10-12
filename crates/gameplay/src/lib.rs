@@ -25,7 +25,7 @@ pub mod world;
 
 pub use collision::collision_world;
 pub use controls::{ControlScheme, ship_controls};
-pub use handling::{AirbrakeGraphics, airbrake_graphics_for, handling_for, to_format_class};
+pub use handling::{AirbrakeGraphics, airbrake_graphics_for, handling_for};
 pub use hash::hash_world;
 pub use input::{InputSnapshot, PlayerInputs};
 pub use spawn::{

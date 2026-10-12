@@ -67,10 +67,9 @@
 //! [ADR-0022]: ../../../docs/architecture/adr/0022-title-packages.md
 
 use oag_physics::params::{
-    Airbrake, Antigrav, Brakes, Dimensions, Engine, Handling, Physical, Pitch, SpeedClass,
-    SpeedupPads, Turning,
+    Airbrake, Antigrav, Brakes, Dimensions, Engine, Handling, Physical, Pitch, SpeedupPads, Turning,
 };
-use oag_tables::handling::{self as fmt, SpeedClass as FmtClass};
+use oag_tables::handling as fmt;
 
 /// Load-time factor applied to `<Engine amount>`.
 ///
@@ -326,32 +325,6 @@ pub fn handling_for(
             weight_distribution: stats.misc.weight_distribution.unwrap_or(0.0),
         },
     })
-}
-
-/// The document's speed class for a physics one.
-///
-/// Two enums for the same four classes, for the same layering reason as the two
-/// parameter sets. Exhaustive on both sides so adding a class to either is a
-/// compile error rather than a silent fallthrough.
-#[must_use]
-pub fn to_format_class(class: SpeedClass) -> FmtClass {
-    match class {
-        SpeedClass::Venom => FmtClass::Venom,
-        SpeedClass::Flash => FmtClass::Flash,
-        SpeedClass::Rapier => FmtClass::Rapier,
-        SpeedClass::Phantom => FmtClass::Phantom,
-    }
-}
-
-/// The physics speed class for a document one.
-#[must_use]
-pub fn from_format_class(class: FmtClass) -> SpeedClass {
-    match class {
-        FmtClass::Venom => SpeedClass::Venom,
-        FmtClass::Flash => SpeedClass::Flash,
-        FmtClass::Rapier => SpeedClass::Rapier,
-        FmtClass::Phantom => SpeedClass::Phantom,
-    }
 }
 
 #[cfg(test)]

@@ -128,13 +128,13 @@ impl Race {
         // - a silent Venom is how three of four classes raced short in the
         // first place.
         let destroy_focus_rate = super::destroy_camera::focus_rate(&class);
-        let lap_class = oag_race::SpeedClass::from_name(&class).unwrap_or_else(|| {
+        let lap_class = oag_race::SpeedClass::census(&class).unwrap_or_else(|| {
             warn!(
                 "speed class {class:?} is not one of the four the lap census covers - \
                  lap count falls back to {venom}'s, which is chosen, not measured",
-                venom = oag_race::SpeedClass::Venom,
+                venom = oag_race::SpeedClass::VENOM,
             );
-            oag_race::SpeedClass::Venom
+            oag_race::SpeedClass::VENOM
         });
         // **Every slot, not slot 0's alone.** A `RaceState` is a racer's clock
         // now, and the mode and speed class it is built from are the *event's*

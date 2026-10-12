@@ -98,7 +98,7 @@ fn every_class_block_is_read_and_indexed_by_its_own_name() {
         assert_eq!(stats.classes[index].name, Some(class), "slot {index}");
         assert_eq!(stats.class(class).expect("four rungs").name, Some(class));
     }
-    let phantom = stats.class(SpeedClass::Phantom).expect("four rungs");
+    let phantom = stats.class(SpeedClass::PHANTOM).expect("four rungs");
     assert_eq!(phantom.engine.turbo, 5.0);
     assert_eq!(phantom.brakes.gain, 8.0);
     assert_eq!(phantom.turning.falloff, 10.0);
@@ -274,19 +274,19 @@ fn a_partly_present_pulse_ladder_is_an_error() {
     assert_eq!(
         parse(&document(&["VENOM", "FLASH", "RAPIER"])),
         Err(Error::MissingClass {
-            class: SpeedClass::Phantom
+            class: SpeedClass::PHANTOM
         })
     );
     assert_eq!(
         parse(&document(&["FLASH", "RAPIER", "PHANTOM"])),
         Err(Error::MissingClass {
-            class: SpeedClass::Venom
+            class: SpeedClass::VENOM
         })
     );
     assert_eq!(
         parse(&document(&["VENOM"])),
         Err(Error::MissingClass {
-            class: SpeedClass::Flash
+            class: SpeedClass::FLASH
         })
     );
 }
@@ -311,7 +311,7 @@ fn the_three_pulse_era_attributes_are_absent_rather_than_missing() {
             "weight_distribution" => stats.misc.weight_distribution,
             _ => {
                 stats
-                    .class(SpeedClass::Venom)
+                    .class(SpeedClass::VENOM)
                     .expect("four rungs")
                     .airbrake
                     .sideshift
@@ -361,7 +361,7 @@ fn a_ladder_with_no_pulse_rung_at_all_is_kept_whole() {
     let stats = parse(&doc).expect("a wholly different ladder still parses");
     assert_eq!(stats.classes.len(), 2);
     assert!(!stats.has_pulse_class_ladder());
-    assert_eq!(stats.class(SpeedClass::Venom), None);
+    assert_eq!(stats.class(SpeedClass::VENOM), None);
 }
 
 #[test]
@@ -370,7 +370,7 @@ fn a_duplicated_class_is_an_error() {
     assert_eq!(
         parse(&doc),
         Err(Error::DuplicateClass {
-            class: SpeedClass::Flash
+            class: SpeedClass::FLASH
         })
     );
 }
@@ -412,7 +412,7 @@ fn attributes_may_arrive_on_a_values_carrier() {
     let stats = parse(&doc).expect("a carrier is equivalent");
     assert_eq!(
         stats
-            .class(SpeedClass::Venom)
+            .class(SpeedClass::VENOM)
             .expect("four rungs")
             .brakes
             .amount,
@@ -476,11 +476,11 @@ fn a_document_with_no_handling_element_is_an_error() {
 #[test]
 fn speed_class_names_round_trip_and_index_their_own_slot() {
     for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
-        assert_eq!(SpeedClass::from_name(class.as_str()), Some(class));
-        assert_eq!(class as usize, index, "{class} is not in slot {index}");
+        assert_eq!(SpeedClass::census(class.as_str()), Some(class));
+        assert_eq!(class.index(), index, "{class} is not in slot {index}");
     }
-    assert_eq!(SpeedClass::from_name("venom"), Some(SpeedClass::Venom));
-    assert_eq!(SpeedClass::from_name("SUPERSONIC"), None);
+    assert_eq!(SpeedClass::census("venom"), Some(SpeedClass::VENOM));
+    assert_eq!(SpeedClass::census("SUPERSONIC"), None);
 }
 
 #[test]
@@ -616,7 +616,7 @@ fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
         .expect("parses")
         .expect("has a <Global>");
     assert_eq!(
-        global.weapon_pads(SpeedClass::Venom),
+        global.weapon_pads(SpeedClass::VENOM),
         WeaponPad {
             refresh_time: 1000.0,
             elimination_refresh_time: None,
@@ -625,7 +625,7 @@ fn a_weapon_pad_without_an_elimination_time_parses_as_absent_not_zero() {
     // The other three still carry theirs: this is about the attribute, not the element.
     assert_eq!(
         global
-            .weapon_pads(SpeedClass::Flash)
+            .weapon_pads(SpeedClass::FLASH)
             .elimination_refresh_time,
         Some(20000.0)
     );
@@ -640,15 +640,15 @@ fn an_unrecognised_global_class_is_skipped_without_shifting_the_others() {
     let shifted = parse_global(&global_document(&with_vector))
         .expect("parses")
         .expect("has a <Global>");
-    assert_eq!(shifted.speedup_pads(SpeedClass::Venom).amount, 2.0);
-    assert_eq!(shifted.speedup_pads(SpeedClass::Phantom).amount, 5.0);
+    assert_eq!(shifted.speedup_pads(SpeedClass::VENOM).amount, 2.0);
+    assert_eq!(shifted.speedup_pads(SpeedClass::PHANTOM).amount, 5.0);
 
     // The same four names without it keep the same *relative* order.
     let without = parse_global(&global_document(&FOUR))
         .expect("parses")
         .expect("has a <Global>");
-    assert_eq!(without.speedup_pads(SpeedClass::Venom).amount, 1.0);
-    assert_eq!(without.speedup_pads(SpeedClass::Phantom).amount, 4.0);
+    assert_eq!(without.speedup_pads(SpeedClass::VENOM).amount, 1.0);
+    assert_eq!(without.speedup_pads(SpeedClass::PHANTOM).amount, 4.0);
 }
 
 #[test]
@@ -656,7 +656,7 @@ fn a_global_block_missing_a_speed_class_is_an_error() {
     assert_eq!(
         parse_global(&global_document(&["VENOM", "FLASH", "RAPIER"])),
         Err(Error::MissingGlobalClass {
-            class: SpeedClass::Phantom
+            class: SpeedClass::PHANTOM
         })
     );
     assert_eq!(
@@ -664,7 +664,7 @@ fn a_global_block_missing_a_speed_class_is_an_error() {
             "VENOM", "VENOM", "FLASH", "RAPIER", "PHANTOM"
         ])),
         Err(Error::DuplicateGlobalClass {
-            class: SpeedClass::Venom
+            class: SpeedClass::VENOM
         })
     );
 }
@@ -712,4 +712,30 @@ fn a_global_block_missing_its_zone_or_its_pads_is_an_error() {
             element: "WeaponPad"
         })
     );
+}
+
+#[test]
+fn a_speed_class_is_its_authored_name_and_orders_slowest_first() {
+    for class in SpeedClass::KNOWN {
+        assert_eq!(SpeedClass::named(class.as_str()), Some(class));
+        assert_eq!(
+            SpeedClass::named(&class.as_str().to_lowercase()),
+            Some(class)
+        );
+    }
+    assert!(SpeedClass::KNOWN.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(SpeedClass::named("nonsense"), None);
+}
+
+#[test]
+fn the_census_four_keep_their_slots_and_the_rungs_around_them_have_none() {
+    for (index, class) in SpeedClass::ALL.into_iter().enumerate() {
+        assert_eq!(class.slot(), Some(index));
+        assert_eq!(SpeedClass::census(class.as_str()), Some(class));
+    }
+    for outside in [SpeedClass::VECTOR, SpeedClass::SUPER_PHANTOM] {
+        assert_eq!(outside.slot(), None);
+        assert_eq!(SpeedClass::census(outside.as_str()), None);
+        assert!(SpeedClass::named(outside.as_str()).is_some());
+    }
 }
