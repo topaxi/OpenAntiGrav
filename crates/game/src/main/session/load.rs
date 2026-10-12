@@ -428,7 +428,11 @@ impl Session {
         // See `race::Options::language`'s own doc.
         options.language = self.settings.language.clone();
         // The same refresh, for the BOOST ZOOM row: a race reads it when it loads.
-        options.boost_zoom = self.settings.graphics.boost_zoom;
+        options.boost_zoom = self
+            .settings
+            .graphics
+            .boost_zoom
+            .then(oag_source::title::borrowed_zoom_ring);
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered

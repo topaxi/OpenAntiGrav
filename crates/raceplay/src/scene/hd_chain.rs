@@ -105,7 +105,50 @@ impl Scene {
     }
 }
 
+/// The borrowed zoom-streak ring (`graphics.boost_zoom`): built at the first frame that
+/// asks for it, in the caller's frame format, so a race that borrows nothing builds
+/// nothing. See [`oag_post::hd_zoom::Host`].
+#[derive(Debug)]
+pub(super) struct BoostZoom {
+    host: std::cell::RefCell<Option<oag_post::hd_zoom::Host>>,
+    format: wgpu::TextureFormat,
+}
+
+impl BoostZoom {
+    pub(super) fn new(format: wgpu::TextureFormat) -> Self {
+        Self {
+            host: std::cell::RefCell::new(None),
+            format,
+        }
+    }
+}
+
 impl Scene {
+    /// Wipeout HD's chain over this frame, with the zoom-streak ring's pulses (stepped
+    /// once a tick; `None` draws none).
+    pub(super) fn run_hd(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        race: &Race,
+        timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
+    ) {
+        let Some(hd) = &self.hd else {
+            return;
+        };
+        hd.set_zoom_frame(race.hd_zoom_frame());
+        hd.run(
+            queue,
+            encoder,
+            view,
+            (viewport.0, viewport.1),
+            (viewport.2 as u32, viewport.3 as u32),
+            timestamps,
+        );
+    }
+
     /// Runs the borrowed zoom-streak ring over `view`, building its host at the first
     /// frame that has a pulse to draw. Nothing is built, bound or encoded for a race
     /// that borrows no ring, which is every race with `graphics.boost_zoom` off.
@@ -124,9 +167,9 @@ impl Scene {
         let Some(frame) = race.hd_zoom_frame() else {
             return;
         };
-        let mut host = self.boost_zoom.borrow_mut();
-        let host =
-            host.get_or_insert_with(|| oag_post::hd_zoom::Host::new(tuning, self.caller_format));
+        let mut host = self.boost_zoom.host.borrow_mut();
+        let host = host
+            .get_or_insert_with(|| oag_post::hd_zoom::Host::new(tuning, self.boost_zoom.format));
         let size = self.depth.size();
         host.run(
             device,

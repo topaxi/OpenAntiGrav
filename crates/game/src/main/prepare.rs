@@ -116,7 +116,11 @@ impl Pending {
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
             track: self.cli.track.clone(),
-            boost_zoom: self.settings.graphics.boost_zoom,
+            boost_zoom: self
+                .settings
+                .graphics
+                .boost_zoom
+                .then(oag_source::title::borrowed_zoom_ring),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

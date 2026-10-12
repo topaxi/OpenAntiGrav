@@ -297,23 +297,17 @@ pub struct Scene {
     /// writer: it blooms the glow mask, and any surface that opts into the mask
     /// is handled by the same three passes. See `oag_post::bloom`.
     bloom: Option<oag_post::bloom::Bloom>,
-    /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's
-    /// glow mask. See `oag_post::ps2_bloom`.
+    /// Pulse PS2's own bloom, in place of [`Self::bloom`] over a PS2 race's glow mask.
     ps2_bloom: Option<oag_post::ps2_bloom::Ps2Bloom>,
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
-    /// The borrowed zoom-streak ring (`graphics.boost_zoom`), built at the first frame
-    /// that asks for it, in the caller's frame format. `None` until then and on every
-    /// race that borrows nothing. See [`oag_post::hd_zoom::Host`].
-    boost_zoom: std::cell::RefCell<Option<oag_post::hd_zoom::Host>>,
-    /// The caller's frame format, the borrowed ring's target.
-    caller_format: wgpu::TextureFormat,
+    boost_zoom: hd_chain::BoostZoom,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
-    /// scene draws straight into the caller's target as it always has. See
-    /// `oag_post::hd_bloom` and [`Scene::render`].
+    /// scene draws straight into the caller's target. See `oag_post::hd_bloom`
+    /// and [`Scene::render`].
     hd: Option<oag_post::hd_bloom::Chain>,
     /// Omega's tone map: the same linear float scene target, then the
     /// executable's adaptive exposure and cubic curve, and the encode. `None`
@@ -937,8 +931,7 @@ impl Scene {
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
-            boost_zoom: std::cell::RefCell::new(None),
-            caller_format,
+            boost_zoom: hd_chain::BoostZoom::new(caller_format),
             hd,
             omega,
             motion_blur,

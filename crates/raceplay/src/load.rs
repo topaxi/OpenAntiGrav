@@ -344,8 +344,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // HD's zoom-streak ring on a title that draws none of its own: the player's
     // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not
     // measured - see `crate::zoom`.
-    let borrowed_zoom =
-        (options.boost_zoom && title.race.borrows_zoom_ring).then_some(&oag_hd::race::ZOOM_RING);
+    let borrowed_zoom = options.boost_zoom.filter(|_| title.race.borrows_zoom_ring);
     // The circuit's staging, all four readers at once: its light rig, its
     // distance fog, its bloom block and the Zone stage grade laid over the
     // first two. Every one of them reports what it found and substitutes
