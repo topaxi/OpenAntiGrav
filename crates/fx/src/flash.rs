@@ -272,6 +272,15 @@ impl ScreenFlash {
         }
     }
 
+    /// Whether this flash answers every kind, as Pulse's PSP node does, rather
+    /// than one ([`Self::only`]). The renderer also reads a flash that answers
+    /// every kind as "this is Pulse's PSP source" for the GE guard band, which
+    /// a Quake-only flash on another title must not switch on.
+    #[must_use]
+    pub fn answers_every_kind(&self) -> bool {
+        self.only.is_none()
+    }
+
     /// `ScreenFlash_Start`: a flash of `kind` at world position `at`. The
     /// last call before [`Self::advance`] wins, as the pending block is
     /// simply overwritten.

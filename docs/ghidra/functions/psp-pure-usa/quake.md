@@ -93,6 +93,9 @@ wash. Now, through `oag_title::Effects`:
 - **The wash** is `oag_fx::flash::QUAKE` through a `ScreenFlash::only(QUAKE)`: a Pure race
   draws no other flash (its Rocket, Bomb and Mine kinds are unread), so the flash node
   accepts the Quake's kind alone. Pulse PSP keeps its all-kinds node.
+- **The guard band stays Pulse's.** `Race::extend_stage_vertices` took "this race holds a
+  `ScreenFlash`" as "this is Pulse's PSP source" and switched the GE guard band on for it;
+  Pure now holds a Quake-only flash, so the test is `ScreenFlash::answers_every_kind`.
 - **Leaving as it was:** Pulse (PSP and PS2) and HD. Re-rendered at ticks 410, 440, 480 and
   560 of an identical `--give quake` run, every frame is **pixel-identical** to the
   build before this change (ImageMagick `compare -metric AE`, `0` on all twelve;
@@ -125,8 +128,8 @@ orange-pink** for about 0.7 s (strongest first, fading as the wave recedes); a *
 spreads across the road at the wave's position**, edge to edge, with a bright core; **dark
 grey-brown chunks** (the `bobs` emitter, alpha-over) fly up out of it and tumble; the wave
 races away down the road faster than the craft and is a small spark far ahead by 1.1 s.
-Our frames after the change show the same four things. Frame pairs (kept in the lane's
-scratch, not tracked): the 0.3 s pair is the cleaner one, both craft at the start line.
+Our frames after the change show the same four things. Frame pairs are kept in `data/reference/pure-quake/` (gitignored, game-derived; its
+`README.txt` says how each was made): the 0.3 s pair is the cleaner one, both craft at the start line.
 
 **The pairs are time-matched, not state-matched.** Pure's physics is not implemented
 (`pure-status.md`): at the same race time ours is further along the track and faster, so the

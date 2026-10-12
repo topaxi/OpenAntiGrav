@@ -148,4 +148,6 @@ fn a_flash_that_answers_one_kind_ignores_the_rest() {
     flash.start(QUAKE, Vec3::ZERO);
     flash.advance(DT, Vec3::ZERO);
     assert!(flash.colour().is_some(), "the Quake's own kind did not");
+    assert!(!flash.answers_every_kind());
+    assert!(ScreenFlash::default().answers_every_kind());
 }
