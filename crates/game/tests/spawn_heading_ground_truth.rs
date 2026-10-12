@@ -116,6 +116,12 @@ fn image(name: &str) -> Option<PathBuf> {
 /// spawn, so the census below measures the *disc* and the assertion above
 /// measures the *fix*, and neither can quietly become the other.
 fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
+    agreement_and_grid(source, track, false)
+}
+
+/// [`agreement`], and with `grid` also [`the_grid_lands_on_the_track`] on the
+/// same started race: one load serving both claims.
+fn agreement_and_grid(source: &Path, track: &str, grid: bool) -> (Vec<f32>, f32) {
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
@@ -127,7 +133,12 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
 
     let slot = loaded.setup.start_position;
     let spline = loaded.setup.spline.clone();
+    let colliders = grid.then(|| loaded.setup.collision.clone());
+    let bound = loaded.setup.spline.max_half_width() * 2.0;
     let race = race::Race::start(loaded.setup);
+    if let Some(colliders) = &colliders {
+        the_grid_lands_on_the_track(track, &race, colliders, bound);
+    }
 
     let tangent_at = |position: Vec3| {
         spline
@@ -189,6 +200,77 @@ fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
     (craft, authored)
 }
 
+/// The bug this pins: every HD circuit's grid, forward and reversed, landing on
+/// the track rather than over a gap or off the collision mesh.
+///
+/// **Found by exactly this sweep, before `oag_raceplay::spawn::grid_poses`
+/// walked the spline instead of extrapolating a straight line from the anchor.**
+/// With the straight-line formula, 9 of these 12 *reversed* grids put one or
+/// more of the eight slots off the collision mesh entirely - up to 145 units
+/// from the driveable line on `tech_de_ra`'s reversed grid - against one
+/// forward grid over its envelope by a single slot. Reversed grids sit on
+/// whatever piece of track their own `Start Position` node landed on, which is
+/// far more often a curve than the authored front straight forward grids sit
+/// on, and a straight line extrapolated from one end runs off a curve over the
+/// grid's 138-unit span. See `grid_poses`'s own doc comment for the fix.
+///
+/// **`KNOWN_SHORT` is empty, and it did not start that way.** It carried one
+/// slot - `modesto_heights` reversed, one of eight coming up with no collision
+/// under it at 21.42 units from the driveable line - recorded as a probe
+/// missing the surface at one spot rather than a slot off the track, and not
+/// chased further. It was neither: `modesto_heights` reversed is one of the
+/// nine HD circuits whose authored `Start Position` heading was never
+/// re-authored for the direction its spline runs, so the whole field was being
+/// laid out along the track the wrong way from the base slot. Correcting the
+/// heading closes it with nothing here changed but this constant. See
+/// `oag_raceplay::spawn` and the heading claim above.
+///
+/// So a row added back here is now a real regression rather than a known
+/// wrinkle, and is worth reading before waving through.
+///
+/// It ran as its own sweep in `hd_trackwall_ground_truth.rs`, loading the same
+/// 28 circuits with the same options, until 2026-10-12; it now rides on the
+/// load [`hd_craft_spawn_facing_their_circuit`] already makes.
+fn the_grid_lands_on_the_track(
+    track: &str,
+    race: &race::Race,
+    colliders: &oag_physics::CollisionWorld,
+    bound: f32,
+) {
+    /// `(track file, allowed slots with no collision under them)`.
+    const KNOWN_SHORT: &[(&str, usize)] = &[];
+
+    let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
+    assert_eq!(ships.len(), 8, "{track} should field a full grid");
+    let allowed_short = KNOWN_SHORT
+        .iter()
+        .find(|(t, _)| *t == track)
+        .map_or(0, |(_, n)| *n);
+    let mut missing_collision = 0;
+    for (index, ship) in ships.iter().enumerate() {
+        let position = ship.physics.body.position;
+        let distance = race
+            .spline()
+            .distance_to(position)
+            .expect("the track has samples");
+        assert!(
+            distance < bound,
+            "{track}: slot {index} is {distance:.2} from the driveable line, \
+             outside the {bound:.2} envelope"
+        );
+        let origin = position + Vec3::Y * 20.0;
+        let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, 80.0);
+        if oag_physics::Raycaster::raycast(colliders, ray, None, false).is_none() {
+            missing_collision += 1;
+        }
+    }
+    assert!(
+        missing_collision <= allowed_short,
+        "{track}: {missing_collision} slot(s) have no collision surface under \
+         them, {allowed_short} allowed"
+    );
+}
+
 /// Claim 1 on HD, and claim 2: every craft faces the right way, and exactly the
 /// known files needed help to get there - over the circuit files of one
 /// direction.
@@ -233,7 +315,7 @@ fn hd_craft_spawn_facing_their_circuit(file_kind: &str, slice: usize) {
     for (circuit, file) in &mine {
         seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
-        let (craft, authored) = agreement(&image, &track);
+        let (craft, authored) = agreement_and_grid(&image, &track, true);
         assert_eq!(craft.len(), 8, "{circuit}/{file} should field a full grid");
         for (slot, dot) in craft.iter().enumerate() {
             assert!(
