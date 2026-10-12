@@ -134,6 +134,12 @@ use oag_physics::{CraftState, Environment, ShipState, step};
 ///   it ran 100x weak. Found by a one-tick pose walk of `talons-junction-clean-lap.csv`
 ///   (`lap_window_ground_truth.rs` in `oag-trace`). The 600-tick row did not move: the term needs
 ///   an airbrake imbalance and a steering deflection at once.
+/// - **2026-10-12, behaviour (the two 3,600-tick trajectories; the finals and the 600-tick row did
+///   not move).** An `Eliminated` craft now counts `state_timer` down from `1.5` s
+///   (`damage::ELIMINATED_SOLID_DURATION`: state 5's dwell, after which the craft stops resolving
+///   contact with other craft, `Ship_SetState` cases 6 and 7 clearing the collider byte). The
+///   scripts wreck the craft on the circuit's walls, so the hashed timer is non-zero for 90 ticks
+///   after the explosion where it used to sit at zero. No field added.
 const REFERENCE: &[(u32, Script, u64, u64)] = &[
     (
         600,
@@ -145,13 +151,13 @@ const REFERENCE: &[(u32, Script, u64, u64)] = &[
         3_600,
         Script::Corridor,
         0x0475_b934_4503_366e,
-        0xe5a7_709d_5dbd_3343,
+        0x3812_e781_243b_a589,
     ),
     (
         3_600,
         Script::Aerobatic,
         0xccf3_51b3_110c_e688,
-        0x4f50_920e_9828_3d82,
+        0xb42a_a3ee_ed86_25b4,
     ),
 ];
 
