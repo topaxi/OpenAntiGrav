@@ -1068,3 +1068,106 @@ executable were not compared). The names above are scored below it, on what each
 python3 scripts/psp-drive.py --port 45491 menu --single-race --track-down 2     # Metropia
 python3 scripts/psp-grid-walk.py --port 45491 --out data/scratch/<lane>/walk.json
 ```
+
+## Each craft flies its own team's handling, measured (2026-10-12)
+
+**Answer: an AI opponent races on its own team's `handlingstats.xml`, never on
+the player's.** Confidence **92**: static read of the one constructor every
+craft goes through, plus two live launches in which all eight crafts' handling
+blocks matched their own teams' files on four fields each. Not 95: the second
+binary (EU, below) agrees by instruction diff, not by a second runtime trace.
+
+### The static read
+
+Every craft, player and AI, is built by `Craft_Construct` (`0x08840c74`, named
+on [camera.md](camera.md)) with the team-name string its spawner passes as the
+fifth argument. The spawners pass a per-slot string: `Race_CreateAiRacer`
+(`0x088285e0`) gets `g_race_session->team[i]` (`+0x3c + 4*i`) and
+`Race_CreatePlayer` (`0x0882821c`) gets `+0x58`, filled by
+`RaceSession_DrawAiRoster` (see "Which team flies which slot, recovered"
+above). Inside `Craft_Construct`, in order:
+
+```c
+team = Team_FindByName(name, 0);                 // 0x08889488
+craft->team /* +0x370 */ = team;
+if (!team) { name = "Feisar"; team = Team_FindByName("Feisar", 1); craft->team = team; }
+Ship_LoadHandlingStats(team);                    // 0x088c291c: <team+0x94>\handlingstats.xml, once per team
+engine = new ShipEngine; Ship_InitCraft(engine); // 0x08849354
+craft->engine /* +0x94 */ = engine;
+sprintf(key, "%s HANDLING STATS", name);         // 0x08a7b9a0
+engine->stats /* +0x6c */ = Registry_Lookup(&g_named_registry, key);
+...
+Ship_LoadModel(craft, name);                     // the hull, from the same string
+```
+
+So the handling key and the hull are built from the **same** string, per
+craft, and nothing in the constructor reads the player's team or
+`g_player_team_definition`. A failed lookup falls back to **Feisar**, not to
+the player's team. `Ship_InitCraft` then caches
+`engine+0x70 = stats + class * 0x80 + 0x94`, with `class` the one global
+`DAT_08b31040`: **every craft shares the race's speed class, and only the
+class.** Sharing the class is not sharing the player's stats; each craft reads
+its class block out of its own team's file.
+
+### The live check
+
+PPSSPP, `pulse-psp-usa.chd`, fresh boot, `psp-drive.py menu --single-race`
+(Talon's Junction, Venom, `g_game_mode` 3). With the race on the countdown, the
+CPU stopped once and each of the eight crafts read through `g_race_manager`
+(`0x08b317b4`) `+0x78 + 4*i`: `+0x368` role, `+0x370 -> +0x74` team name,
+`+0x94 -> +0x6c` stats pointer, and the class-0 block at
+`stats + 0x94` (layout from [engine.md](engine.md#the-parameter-block-read-from-the-loader)).
+`engine+0x70 == stats + 0 * 0x80 + 0x94` held on all eight.
+
+Launch 1, player Assegai (role `0`):
+
+| Craft | Role | Team | Stats | `accelcap` | engine `amount` | turn `amount` | turn `falloff` |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: |
+| 0 | 2 | Qirex | `0x08f4dd24` | 14.5 | 0.418 | 1.55 | 850 |
+| 1 | 2 | EGX | `0x08f51e04` | 21.0 | 0.418 | 1.42 | 775 |
+| 2 | 2 | Feisar | `0x08f4f2c4` | 18.5 | 0.412 | 1.80 | 1000 |
+| 3 | 2 | AG_Systems | `0x08f50864` | 24.5 | 0.412 | 1.68 | 925 |
+| 4 | 2 | Piranha | `0x08f55ed4` | 11.0 | 0.428 | 1.30 | 700 |
+| 5 | 2 | Triakis | `0x08f54934` | 11.5 | 0.423 | 1.30 | 700 |
+| 6 | 2 | Goteki | `0x08f53394` | 38.0 | 0.412 | 1.42 | 775 |
+| 7 | 0 | Assegai | `0x08f4c784` | 17.0 | 0.418 | 1.68 | 925 |
+
+Each team's `Data\Ships\<Team>\handlingstats.xml` (`Data.wad`, `oag-wad cat`),
+`VENOM` block: `<Engine accelcap a>` and `<Turning a c>` read
+Qirex `14.5 418 / 1.55 850`, EGX `21 418 / 1.42 775`, Feisar `18.5 412 / 1.8 1000`,
+AG_Systems `24.5 412 / 1.68 925`, Piranha `11 428 / 1.3 700`, Triakis
+`11.5 423 / 1.3 700`, Goteki `38 412 / 1.42 775`, Assegai `17 418 / 1.68 925`.
+**Eight of eight crafts match their own team on all four fields** (the engine
+amount is stored divided by 1000). The player's Assegai `accelcap` 17.0 appears
+on no AI craft.
+
+Launch 2, a fresh boot with `--ship-down 2`: the player flew **Feisar** (18.5,
+1.80) and **Assegai was an AI** (role `2`) carrying Assegai's own block (17.0,
+1.68) at the same stats address as in launch 1. The seven AI were again the
+seven non-player teams, each matching its own file. Each team's stats object
+sits at one address across both boots, which is the "one parse per team" of
+`Ship_LoadHandlingStats`.
+
+**What would have falsified it:** any AI craft's `+0x6c` equal to the
+player's, or an AI class block carrying the player's `accelcap`/turning
+values. Neither happened on 14 AI crafts over two launches.
+
+### Pressings and titles
+
+- **Pulse EU** (`/pulse/BOOT-psp-pulse-eu.BIN`): the same constructor at
+  `0x08840b24`, see
+  [the EU page](../psp-pulse-eu/opponent-handling.md). Static only.
+- **HD/Fury**: same shape, static only, see
+  [the HD page](../ps3-hdfury-eu/opponent-handling.md).
+- **Pure, Pulse PS2**: not checked.
+
+### Reproducing
+
+```sh
+scripts/ppsspp-start.sh <lane> 9N <port> $PWD/data/images/pulse-psp-usa.chd
+uv run --with websocket-client python3 scripts/psp-drive.py --port <port> menu --single-race --any-track
+# then, CPU stopped: for i in 0..7, craft = [0x08b317b4]+0x78+4i;
+#   team name = [[craft+0x370]+0x74], stats = [[craft+0x94]+0x6c],
+#   block = stats + [0x08b31040]*0x80 + 0x94 (32 floats, engine.md's order)
+cargo run -p oag-tools --bin oag-wad -- cat "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" 'Data\Ships\Feisar\handlingstats.xml'
+```

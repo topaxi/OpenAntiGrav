@@ -498,3 +498,6 @@
 0x08864c20	function	Cannon_BuildMuzzleFlashList	80	../psp-pulse-usa/cannon-quake-leachbeam.md
 0x088673f8	function	WeaponPickup_ArmMine	87	../psp-pulse-usa/mine.md
 0x08863714	function	BombPool_Update	80	../psp-pulse-usa/mine.md
+# 2026-10-12 ai-handling-verify: whose handling an opponent flies (opponent-handling.md)
+0x08840b24	function	Craft_Construct	85	opponent-handling.md
+0x088892e4	function	Team_FindByName	85	opponent-handling.md
