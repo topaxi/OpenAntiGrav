@@ -235,8 +235,8 @@ impl Session {
     /// Wipeout Pure authors a fifth rung, `VECTOR`, in every one of its race
     /// teams' `handlingstats.xml` files, and this build can put a ship on it -
     /// a race carries the rung as the name the disc spells and resolves it
-    /// against the file that authored it, so `oag_physics::SpeedClass` never
-    /// had to grow a fifth variant. `is_selectable` says `true` for it and
+    /// against the file that authored it, so no four-wide table
+    /// had to grow a fifth entry. `is_selectable` says `true` for it and
     /// filters nothing here: with a Pure image present the *union* genuinely
     /// contains five names and this row offers all five.
     ///

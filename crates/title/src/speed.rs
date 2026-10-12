@@ -14,7 +14,7 @@
 /// Pure or silently reused as if measured - the exact trap
 /// [`crate::MenuStrip`] was created to close for the layout numbers.
 ///
-/// # Names, not `oag_physics::SpeedClass` values
+/// # Names, not `SpeedClass` values
 ///
 /// Three reasons, in order of weight:
 ///
@@ -24,7 +24,7 @@
 ///    rather than the file. [`crate::MenuStrip::selected_fill`] is the same
 ///    call made the same way - "a name, not a colour".
 /// 2. **`oag-title` is deliberately thin**, and depends on `oag-disc` alone.
-///    Carrying `SpeedClass` would drag `oag-physics` into a crate whose whole
+///    Carrying `oag_tables::handling::SpeedClass` would drag `oag-tables` into a crate whose whole
 ///    job is to hold vocabulary rather than mechanism.
 /// 3. **A name can outrun the engine, and here it does.** Pure authors a rung
 ///    this build cannot yet *select* - see [`Self::VECTOR`] - and a name
@@ -80,12 +80,11 @@ impl SpeedClasses {
     ///
     /// # It is selectable, and what had to change first
     ///
-    /// It used to be filtered out of every menu, because `oag_physics::SpeedClass`
-    /// has four variants and nothing downstream could *name* a fifth rung. The
-    /// fix was not to grow that enum: its discriminants index fixed four-wide
-    /// tables, and a five-wide table would have had to invent a fifth entry for
-    /// Pulse and HD, which author four. That is the stand-in this project
-    /// forbids.
+    /// It used to be filtered out of every menu, because the class type was a
+    /// four-variant enum and nothing downstream could *name* a fifth rung.
+    /// `oag_tables::handling::SpeedClass` is now a name on one ladder; the
+    /// four-wide census tables stay four wide (`SpeedClass::slot`) so Pulse and
+    /// HD, which author four, are not given an invented fifth entry.
     ///
     /// Instead a race carries the rung's **name** and resolves it against the
     /// file that authored it -
@@ -93,9 +92,8 @@ impl SpeedClasses {
     /// `oag_tables::handling::Global::class_named` and
     /// `oag_weapons::pickup::table_for`. A title that authors four is asked
     /// for four and grows nothing; Pure is asked for five and answers with
-    /// five. `oag_physics::SpeedClass` still has exactly four variants and its
-    /// `ALL` still means "the rungs every measured title has", which is what
-    /// keeps `has_pulse_class_ladder` meaningful.
+    /// five. `SpeedClass::ALL` still means "the rungs every measured title has",
+    /// which is what keeps `has_pulse_class_ladder` meaningful.
     ///
     /// **Pulse authors a `<GlobalClass name="VECTOR">` too and still offers
     /// four**, because its per-team files author no such `<Class>` and its

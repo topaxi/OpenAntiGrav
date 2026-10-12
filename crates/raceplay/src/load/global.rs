@@ -4,7 +4,7 @@
 //! Split out of [`super`] under the 1,000-line rule in
 //! `scripts/check-file-size.py`. A move, with one behaviour change carried in
 //! with it: the per-class lookup is keyed on the **name** the disc spells rather
-//! than on `oag_physics::SpeedClass`'s discriminant, so a title whose ladder is
+//! than on a position in the four-wide census, so a title whose ladder is
 //! not Pulse's reaches its own block. See [`resolve`].
 
 use super::*;
