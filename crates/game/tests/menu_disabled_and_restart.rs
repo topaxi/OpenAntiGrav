@@ -218,7 +218,7 @@ fn a_disabled_row_is_drawn_dimmed_even_when_it_is_selected() {
 #[test]
 fn a_condition_on_a_setting_nothing_edits_is_refused() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -241,7 +241,7 @@ values = ["1", "2"]
 #[test]
 fn a_condition_on_a_value_no_row_can_hold_is_refused() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -269,7 +269,7 @@ values = ["1", "2"]
 #[test]
 fn a_condition_value_that_is_not_text_or_a_flag_is_refused() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -290,7 +290,7 @@ values = ["1", "2"]
 #[test]
 fn only_an_adjustable_row_may_be_disabled() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -560,7 +560,7 @@ fn telling_a_setting_no_row_defers_reports_it() {
 #[test]
 fn a_restart_required_with_no_message_is_refused() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -582,7 +582,7 @@ restart_required = ""
 #[test]
 fn only_an_adjustable_row_may_need_a_restart() {
     let text = r#"
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 [[page]]
 id = "main"
@@ -597,20 +597,30 @@ restart_required = "RESTART THE GAME"
 }
 
 #[test]
-fn a_version_this_build_does_not_know_is_refused() {
+fn a_schema_major_this_build_does_not_know_is_refused() {
     let error = Definition::parse(
-        "version = 99\nroot = \"main\"",
+        "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v9/menu.tosd\", version = \"1.0.0\" }\nroot = \"main\"",
         &oag_ui::language::StringTable::default(),
     )
     .expect_err("refused");
-    assert!(matches!(error, Error::Version { found: 99 }), "{error}");
+    assert!(
+        matches!(
+            error,
+            Error::Schema(oag_schema::Error::UnknownMajor {
+                found: 9,
+                supported: 1,
+                ..
+            })
+        ),
+        "{error}"
+    );
 }
 
 #[test]
 fn a_dangling_target_is_refused() {
     let error = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -629,7 +639,7 @@ fn a_dangling_target_is_refused() {
 fn an_unknown_action_is_refused_and_says_what_is_known() {
     let error = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"
@@ -652,7 +662,7 @@ fn an_unknown_action_is_refused_and_says_what_is_known() {
 fn a_page_nothing_links_to_is_refused() {
     let error = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"

@@ -158,6 +158,7 @@ oag-ballisticng.workspace = true
 oag-testdata.workspace = true
 oag-fx.workspace = true
 oag-pob.workspace = true
+oag-schema.workspace = true
 oag-weapons.workspace = true
 
 # The Android entry point: the binary's own body again (`src/android.rs`

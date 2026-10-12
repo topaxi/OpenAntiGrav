@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -151,7 +151,7 @@ test-data:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status
+gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1150,6 +1150,12 @@ check-names:
 # the evidence pages; a row that lands without regenerating it fails here
 check-status:
     python3 scripts/gen-re-coverage.py --check
+
+# Every shipped TOML validates against the TOML Schema it names (schemas/v1/), the
+# schema and its loader give the same verdict on each example, and the schemas
+# stage to the path the Pages site serves them at. docs/formats/toml-schema.md
+check-schemas:
+    scripts/check-schemas.sh
 
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:

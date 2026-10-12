@@ -100,7 +100,7 @@ fn values_are_right_aligned_on_one_edge() {
 fn an_unbound_button_draws_the_word_rather_than_nothing() {
     let definition = Definition::parse(
         r#"
-        version = 1
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
         root = "main"
         [[page]]
         id = "main"

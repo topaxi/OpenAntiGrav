@@ -22,7 +22,9 @@ fn the_cursor_wraps_both_ways() {
 /// shipped definition so the scrolling tests below say what they mean even
 /// after someone adds or removes a graphics setting.
 fn long_page(rows: usize) -> Definition {
-    let mut text = String::from("version = 1\nroot = \"main\"\n[[page]]\nid = \"main\"\n");
+    let mut text = String::from(
+        "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }\nroot = \"main\"\n[[page]]\nid = \"main\"\n",
+    );
     for row in 0..rows {
         text.push_str(&format!(
             "[[page.entry]]\nkind = \"action\"\nlabel = \"ROW{row}\"\naction = \"quit\"\n"

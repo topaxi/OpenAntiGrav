@@ -9,17 +9,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Error, Track};
 
-/// The format's name in `track.format`.
-pub const FORMAT_NAME: &str = "oag-track";
-/// The major this reader reads. A file of another major is refused by name.
+/// The schema kind a manifest declares in its `[toml-schema]` header.
+pub const SCHEMA_KIND: &str = "track";
+/// The one schema major this reader reads. A file of another major is refused
+/// by name. There is no minor: a compatible addition goes into the same `v1`
+/// schema, and a reader of this major reports a key it does not know as unread.
 pub const FORMAT_MAJOR: u32 = 1;
-/// The minor this writer writes (1.1 added the optional `_OAG_AI_BYTES` point
-/// accessor; a 1.0 file reads with those bytes absent). Newer minors add optional keys, which a reader
-/// of this major reports as unread rather than refusing.
-pub const FORMAT_MINOR: u32 = 1;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct Manifest {
+    #[serde(rename = "toml-schema")]
+    pub toml_schema: Option<oag_schema::Header>,
     pub track: TrackTable,
     pub spline: Spline,
     pub counts: Counts,
@@ -29,8 +29,6 @@ pub(crate) struct Manifest {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct TrackTable {
-    pub format: String,
-    pub version: String,
     pub id: String,
     pub title: String,
     pub glb: String,
@@ -62,8 +60,18 @@ pub(crate) struct PathRow {
 /// Path indices, `-1` for none: primary then alternate.
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct JunctionRow {
+    #[serde(deserialize_with = "pair")]
     pub prev: [i64; 2],
+    #[serde(deserialize_with = "pair")]
     pub next: [i64; 2],
+}
+
+/// Exactly two integers: a fixed-size array alone would read the first two of a
+/// longer one and drop the rest unseen.
+fn pair<'de, D: serde::Deserializer<'de>>(d: D) -> Result<[i64; 2], D::Error> {
+    let given: Vec<i64> = Deserialize::deserialize(d)?;
+    <[i64; 2]>::try_from(given)
+        .map_err(|v| serde::de::Error::invalid_length(v.len(), &"an array of exactly two integers"))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -77,7 +85,6 @@ pub(crate) struct Counts {
 #[derive(Debug)]
 pub(crate) struct Parsed {
     pub glb: String,
-    pub version: (u32, u32),
     pub id: String,
     pub title: String,
     pub notes: Vec<String>,
@@ -101,9 +108,11 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
         return Err(Error::Unwritable("the track has no id".into()));
     }
     let manifest = Manifest {
+        toml_schema: Some(oag_schema::Header {
+            location: oag_schema::location(SCHEMA_KIND, FORMAT_MAJOR),
+            version: oag_schema::LANGUAGE_VERSION.to_owned(),
+        }),
         track: TrackTable {
-            format: FORMAT_NAME.to_string(),
-            version: format!("{FORMAT_MAJOR}.{FORMAT_MINOR}"),
             id: track.id.clone(),
             title: track.title.clone(),
             glb: glb_name.to_string(),
@@ -145,17 +154,7 @@ pub(crate) fn write(track: &Track, glb_name: &str) -> Result<String, Error> {
 
 pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
     let m: Manifest = toml::from_str(text).map_err(|e| Error::Manifest(e.to_string()))?;
-    if m.track.format != FORMAT_NAME {
-        return Err(Error::NotThisFormat(m.track.format));
-    }
-    let version = parse_version(&m.track.version)?;
-    if version.0 != FORMAT_MAJOR {
-        return Err(Error::UnknownMajor {
-            found: m.track.version,
-            major: version.0,
-            supported: FORMAT_MAJOR,
-        });
-    }
+    oag_schema::check(m.toml_schema.as_ref(), SCHEMA_KIND, FORMAT_MAJOR)?;
     if m.track.id.is_empty() {
         return Err(Error::Manifest("track.id is empty".into()));
     }
@@ -215,7 +214,6 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         .collect::<Result<Vec<_>, Error>>()?;
     Ok(Parsed {
         glb: m.track.glb,
-        version,
         id: m.track.id,
         title: m.track.title,
         notes: m.track.notes,
@@ -225,10 +223,4 @@ pub(crate) fn read(text: &str) -> Result<Parsed, Error> {
         counts: m.counts,
         unread,
     })
-}
-
-fn parse_version(s: &str) -> Result<(u32, u32), Error> {
-    let bad = || Error::BadVersion(s.to_string());
-    let (a, b) = s.split_once('.').ok_or_else(bad)?;
-    Ok((a.parse().map_err(|_| bad())?, b.parse().map_err(|_| bad())?))
 }
