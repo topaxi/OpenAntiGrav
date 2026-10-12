@@ -2,8 +2,8 @@
 //! session supplies in `Session::open_menus`, for the one title a capture has open.
 //!
 //! A capture holds a single source, so TRACK TITLE and CRAFT TITLE offer that
-//! title (plus CUSTOM when the directories hold tracks) and TRACK is its circuits
-//! - or the scan's tracks when the settings name CUSTOM, which is the page a player
+//! title (plus CUSTOM when the directories hold tracks), and TRACK is its circuits,
+//! or the scan's tracks when the settings name CUSTOM, which is the page a player
 //! with Workshop tracks sees.
 
 use oag_ui::menu::{Choice, Menu, ValueSource};
