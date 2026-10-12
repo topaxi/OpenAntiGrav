@@ -365,7 +365,8 @@ toolchain). It carries HD's driver:
   the ring fill's `a * 15` clamp, the Eliminator branch on modes `8`/`0x14` and the
   Duel branch on mode `0xd`, which Omega extends to mode `0x15`.
 
-**Verdict: checked, applies, not wired.** Omega's opponent is HD's; wiring it is
-`RaceDefaults::original_opponent` plus the same table data on `oag_omega`, left open
-because Omega's campaign and race are incomplete
-([formats/omega-status.md](../../../formats/omega-status.md)).
+**Verdict (updated 2026-10-12): checked, differs, ported.** Read whole on
+[ps4-omega-eu/ai-controls.md](../ps4-omega-eu/ai-controls.md): in an HD-lineage mode
+Omega's opponent runs HD's laws, plus a lane-search coin HD's `Ai_Construct`
+(`0x000fee30`, no `rand() % 2`) and `Ai_PlanLane` (`0x00101b50`, no `% 200` draw) do not
+have. `oag_omega::race::ORIGINAL_DRIVER` carries it and Omega's campaign flies it.

@@ -43,8 +43,13 @@ pub(super) fn resolve(
     let halved_lookahead = if driver.halved_lookahead.is_empty() {
         None
     } else {
+        // `PI_Track` sits in its own file on a title that splits its
+        // definitions (Omega, 2048), in the one definition otherwise (HD).
+        let definition = title
+            .track_plugin_definition
+            .unwrap_or(title.plugin_definition);
         let tracks = archives
-            .read_name(title.plugin_definition)
+            .read_name(definition)
             .ok()
             .and_then(|blob| oag_tables::fexml::text(&blob).ok())
             .map(|xml| crate::catalogue::tracks(&xml))
@@ -53,8 +58,8 @@ pub(super) fn resolve(
             Some(id) => driver.halved_lookahead_for(&id, class),
             None => {
                 report.push(format!(
-                    "original AI: no PI_Track in {} matches {track}; its full lookahead is kept",
-                    title.plugin_definition
+                    "original AI: no PI_Track in {definition} matches {track}; its full \
+                     lookahead is kept"
                 ));
                 None
             }

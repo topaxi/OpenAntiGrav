@@ -96,8 +96,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
-    original_opponent: false,
-    original_driver: None,
+    original_opponent: true,
+    original_driver: Some(&ORIGINAL_DRIVER),
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,
@@ -207,6 +207,66 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     },
     crossfade: None,
 };
+
+/// Where Omega's original opponent differs from Pulse's, read off the base
+/// package's `eboot.bin` with no capture behind it (no PS4 emulator in this
+/// toolchain): `docs/ghidra/functions/ps4-omega-eu/ai-controls.md`.
+///
+/// These are the laws of an **HD-lineage** mode, the only one this project's
+/// Omega campaign launches: a `CellMode_Definition.xml` grid cell's `Mode`
+/// maps through the table at `0x019267c0` to a named id below `0x17` (`Race`
+/// is `3`, `Elimination` `8`), and `AiManager_AddDriver` (`0x012c80c0`) stores
+/// `mode < 0x17` as the driver's lineage byte. HD's driver with HD's four
+/// branches and windows, duplicated from `oag_hd::race::ORIGINAL_DRIVER`
+/// rather than borrowed (a title package depends on no other), plus one law of
+/// Omega's own: the lane search's coin, which Omega draws and reads whatever
+/// the lineage and HD has no trace of. 2048's three lineage-gated laws are off
+/// here; a 2048-lineage event would turn them on, and none launches.
+pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
+    oag_title::original_driver::OriginalDriver {
+        // `75.0` on the finished branch of `AI_ComputeOpponentThrust` (`0x012c5650`).
+        finished_spread: oag_title::pre_race::Sourced::measured(75.0),
+        // The thrust law's inlined wander: a finished racer's slot, start and
+        // end become `8 - place` (`racer+0x988`).
+        finished_wander_to_place: oag_title::pre_race::Sourced::measured(true),
+        // Modes `8`/`0x14` skip the `WhenBehind` subtraction.
+        eliminator_drops_when_behind: oag_title::pre_race::Sourced::measured(true),
+        // `AIManager_Update` (`0x012c6570`) increments `mgr+0x148`, wraps it
+        // after `7`, then flags that racer.
+        round_robin_pre_increment: oag_title::pre_race::Sourced::measured(true),
+        halved_lookahead: &HALVED_LOOKAHEAD,
+        // `AI_UpdateCraft` (`0x012c0480`) sets the turn flag every tick only
+        // when the lineage byte is clear.
+        every_tick: oag_title::pre_race::Sourced::measured(false),
+        // `AiManager_AddDriver` stores the ring rate `0.001` under an HD-lineage mode.
+        event_ring_rate: oag_title::pre_race::Sourced::measured(false),
+        // `AiManager_AddDriver` draws the coin (`rand() % 2`, `driver+0xd0`)
+        // and `AI_UpdateCraft` reads it in the search and redraws it one call
+        // in 200, neither under the lineage byte.
+        coin_ordered_search: oag_title::pre_race::Sourced::measured(true),
+        // Gated on the lineage byte clear (`AI_UpdateCraft`, after the search).
+        preferred_follows_choice: oag_title::pre_race::Sourced::measured(false),
+        // An HD campaign cell reads its skill off the circuit's `stats.xml`.
+        event_ai: None,
+    };
+
+/// `AiManager_AddDriver`'s two circuit flags (`strcmp` with `05_Track`, class
+/// `3` Phantom by the class table at `0x01926620`; `20_Track`) and
+/// `AI_UpdateCraft`'s windows on the lap distance `racer+0x90`, HD's numbers.
+/// Omega's `Data\Plugins\tracks\Definition.xml` makes `05_Track` Ubermall
+/// forward and `20_Track` Amphiseum reversed, as HD's does.
+const HALVED_LOOKAHEAD: [oag_title::original_driver::HalvedLookahead; 2] = [
+    oag_title::original_driver::HalvedLookahead {
+        track: "05_Track",
+        class: Some("Phantom"),
+        window: (250.0, 4600.0),
+    },
+    oag_title::original_driver::HalvedLookahead {
+        track: "20_Track",
+        class: None,
+        window: (400.0, 5400.0),
+    },
+];
 
 #[cfg(test)]
 mod effect_dir_tests {

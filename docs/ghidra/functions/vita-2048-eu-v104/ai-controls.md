@@ -310,7 +310,9 @@ mode's `+0x2ac`/`+0x2b0`: `(1 - (1 - c)^2) * 0.00065 + 0.001` (the only reader o
 `0.3 + 0.55 a`, `300 + 525 b`, `0.5 + 0.5 b`. Its strings carry `AIControlStats2048.xml`,
 `AIRaceStats_<class>2048.xml`, `m_aiPadTrackingSkill` and `m_aiWeaponAvoidanceSkill`.
 So Omega's opponent is 2048's in a 2048-lineage mode and HD's in an HD-lineage one.
-**Verdict: checked, applies, not wired**: `oag_omega`'s `original_opponent` stays
-`false` until its race is complete enough to fly it
-([formats/omega-status.md](../../../formats/omega-status.md)); not measured (no PS4
-emulator).
+**Verdict (updated 2026-10-12): checked, applies, not wired** for the 2048 lineage:
+[ps4-omega-eu/ai-controls.md](../ps4-omega-eu/ai-controls.md) reads the four laws under
+the same byte, and this project's Omega campaign launches only HD-lineage modes, whose
+laws (HD's plus 2048's coin search, ungated on Omega) Omega now flies. One difference:
+Omega's `AI_ResolveSkillScale` (`0x012c9650`) adds `1.9` under a game-mode `+0x21c` of
+`2`, which `0x8119fb5e` does not. Not measured (no PS4 emulator).

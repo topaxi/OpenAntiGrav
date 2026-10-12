@@ -117,3 +117,13 @@
 0x012e8fb0	function	PlayerInput_Update	78	player-input.md
 0x01747c90	function	Pad_UpdateState	75	player-input.md
 0x017499b0	function	Pad_Open	70	player-input.md
+# 2026-10-12, orig-ai-omega: the original opponent, static (ai-controls.md)
+0x012c80c0	function	AiManager_AddDriver	80	ai-controls.md
+0x012c6570	function	AIManager_Update	80	ai-controls.md
+0x012c0480	function	AI_UpdateCraft	78	ai-controls.md
+0x012c5650	function	AI_ComputeOpponentThrust	82	ai-controls.md
+0x012c9650	function	AI_ResolveSkillScale	80	ai-controls.md
+0x012c99b0	function	AiStats_Load	84	ai-controls.md
+0x0147e8e0	function	CampaignCell_ParseValues	72	ai-controls.md
+0x015a0f90	function	GameMode_SetCurrent	70	ai-controls.md
+0x01926700	data	g_GameModeNames	84	ai-controls.md

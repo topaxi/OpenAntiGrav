@@ -322,3 +322,36 @@ fn a_2048_field_draws_each_drivers_coin_and_the_planner_rule() {
     );
     assert!(field().drivers.iter().all(|d| d.planner.coin.is_none()));
 }
+
+/// Omega's HD-lineage driver: the coin search on its own, with 2048's three
+/// lineage-gated laws off. The coin is drawn from `coin_ordered_search`
+/// alone, the planner keeps its preferred lane, and the lane choice stays on
+/// the round robin.
+#[test]
+fn the_coin_search_stands_without_the_2048_lineage_laws() {
+    let omega = Field::new(
+        tests_table(),
+        field().controller,
+        Laws {
+            coin_ordered_search: true,
+            ..Laws::PULSE
+        },
+        1.0,
+        1,
+        [8, 1, 2, 3, 4, 5, 6, 7],
+        42,
+    );
+    assert!(omega.drivers.iter().all(|d| d.planner.coin.is_some()));
+    assert!(
+        omega
+            .drivers
+            .iter()
+            .all(|d| !d.planner.preferred_follows_choice)
+    );
+    assert!(
+        omega
+            .drivers
+            .iter()
+            .all(|d| d.planner.rate == crate::original::RING_RATE)
+    );
+}
