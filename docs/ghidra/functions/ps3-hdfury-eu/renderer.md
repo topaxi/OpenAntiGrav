@@ -5024,8 +5024,8 @@ that specific value keeps reading as `SpecularPower` patched at draw time
 > and `EX2` by register, not lane, and 1,449 of those 13,948 chains (10.4 %)
 > have the `MUL` reading a lane the `LG2` did not write. Some of the 10,087
 > resolved exponents may therefore be a different quantity's multiply; the
-> `32` bucket (the pad's `N.H` power is one) was read by hand and is sound,
-> the others were not re-read. Fixing the matcher moves every population
+> one `32` program read by hand (the pad's `N.H` power) is sound; no other
+> program in the 5,134-block `32` bucket, or in any other bucket, was re-read. Fixing the matcher moves every population
 > number on this page, so it is a thread item, not a drive-by.
 
 **`200`/`250`/`260`/`35` traced 2026-09-03, over four drafts before the

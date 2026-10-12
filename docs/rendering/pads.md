@@ -89,27 +89,32 @@ carries the cycle as HD Title data (every other title: `Authored`, unchanged);
 **Chosen, not measured:** a pad's starting key. The original seeds it from the
 pad object's heap address modulo six (the constructor, `0x002e01dc`); ours is the
 pad's index modulo six. Phase is a render-side accumulation of ready time, not
-simulation state. **Not measured** (updated 2026-10-12): a cooling pad on
-`01_vineta_k` (the one cooling constant seen is the Sol 2 one; three more boots did not catch one, see "Cooldown capture, 2026-10-12" below), the original's
+simulation state. **Not measured** (updated 2026-10-12): the cooling constant on `01_vineta_k` (the cooling pad there is seen, below, but only by eye), the original's
 frame-to-frame advance (the 3 keys/s is read from the function, not timed on
 video), and the code that copies the pad's cycle vector into the program's
 constant (found by the numbers, not by a traced store).
 
-**Cooldown capture, 2026-10-12 (`hd-pad-leftovers`).** A ready pad on a second circuit
-is now seen: `12_sol_2`, the isolated weapon pad `#0` at `(409.5, 3.8, 6.1)`, pose
-`396.0,4.5,6.1`, three photographs 3 s apart (`rpcs3-drive.py place`, 7 `right`
-presses to Sol 2): the bars read bright orange-red, the plate and the red outline as
-ours, and ours at the same pose reads dark red at tick 90 and bright red at tick 130,
-the same colour class (the cycle phase is not controlled on either side, and the
-original's heap-seeded start is unknown). Kept in
-`data/reference/hd-capture/sol2-ready-weapon-pad/` (`original.png`, `ours_tick*.png`).
-**A cooling pad on Vineta K was not caught in three boots**: (1) a craft placed at rest
-on pad `#1` (`-797.9,-146.4,271.0`) does not collect (the weapon slot stays empty, the
-pad bars stay lit in the next photograph); (2) with `--speed 40` the craft collects
-(the weapon slot shows a chevron icon) but `place`'s `--speed` is global, so every later
-pose keeps the speed and the photograph lands 30 to 100 units past the pad. What would
-work: a per-pose speed in `place` (a collecting pass, then a rest pose 10 units short of
-the pad, within the refresh time, which is unread here).
+**Cooldown capture, 2026-10-12 (`hd-pad-leftovers`): a ready pad on Sol 2 and a cooling pad on Vineta K, both seen.**
+`rpcs3-drive.py place`, `--speed 0`, ours at the same pose from `oag-game --mode single_race --pose`.
+Kept in `data/reference/hd-capture/{sol2-ready-weapon-pad,vineta-k-cooling-weapon-pad}/` (the config
+lines are Write Color Buffers off, resolution scale 150, so brightness is not comparable with the
+`-wcb-on-` references; colours and order are).
+
+- **Ready, `12_sol_2`**, isolated weapon pad `#0` (`409.5, 3.8, 6.1`), pose `396.0,4.5,6.1`: the
+  original's bars read bright orange-red, ours dark red at tick 90 and bright red at tick 130; same
+  plate, outline and layout. The cycle phase is uncontrolled on both sides (the original's start key is
+  heap-seeded, ours is chosen).
+- **Cooling, `01_vineta_k`**, pad `#1` (`-797.9, -146.4, 271.0`), the craft placed on it with
+  `--settle 0.25 --recheck 0.1`, four photographs: **two read dull maroon bars (the cooling vector
+  `(0.025, 0, 0.01)`) and two read lit orange-red**, the plate unchanged. Ours at the same pose reads
+  the same maroon at ticks 4 and 20 and lit red at tick 60. So a collected pad's bars go dull then relight
+  on both sides, which is the order and the colour class the law predicts. The first attempts missed it
+  for a reason worth keeping: **the refresh time is short** (Pulse's `refresh_time` is 0.55 s; HD's
+  was not read here), and `place`'s defaults (`--settle 8`, `--recheck 3`) photograph a pad seconds after
+  it relit. A craft at rest on a pad **does** collect (the weapon readouts show it in every frame).
+- **Not measured**: the original's cooldown length against ours (both are short; the frames cannot
+  separate 0.55 s from ours), and the dull colour's value (read by eye, the constant itself was not
+  dumped on these frames).
 
 **Speed pads: checked, nothing moves.** Their constant on the same frame is the
 authored cyan and `SpeedupPad_Importer`'s slot 3 has no colour logic; ours already
@@ -947,7 +952,7 @@ not a pad question.
 chunks, and a speed pad has no per-node state to key (`SpeedupPad_Importer` slot 3
 carries no colour logic). Replacing it by the position match would add a
 position-dependent rule the original does not state for a result that cannot differ;
-it is left as it is. **2048/Omega: checked, not run.** The probe reads HD's `.vex`
+it is left as it is. **2048/Omega: not checkable here.** The probe reads HD's `.vex`
 pad classes and their `.rcsmodel`; neither title's pad objects have been decompiled
 (`docs/formats/omega-status.md`), so whether their pad nodes resolve is unmeasured.
 

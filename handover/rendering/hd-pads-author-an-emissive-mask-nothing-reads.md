@@ -459,10 +459,10 @@ pad-object state the engine copies into the fragment program's constant.
 
 Open, in order (updated 2026-10-12, `hd-pad-leftovers`):
 
-1. **A cooling pad on Vineta K.** A ready pad on `12_sol_2` is seen now (`docs/rendering/pads.md`,
-   "Cooldown capture, 2026-10-12"). The cooling pad needs a collecting pass then a rest pose
-   short of the pad: `place --speed` is global, so add a per-pose speed first (a craft at rest on
-   a pad does not collect; at `--speed 40` it does, 3 boots).
+1. **Closed 2026-10-12: a ready pad on Sol 2 and a cooling pad on Vineta K are seen** and match
+   ours in order and colour class (`docs/rendering/pads.md`, "Cooldown capture"). Left: the
+   cooling constant's value and the cooldown length against video (dump the constant on a
+   `place --settle 0.25 --recheck 0.1` frame; HD's `refresh_time` was not read here).
 2. **The code that carries `pad+0x1b0` into the constant** (`W_Cycle`, `0xce5c4410`): searched
    statically again, negative (`ghidra/functions/ps3-hdfury-eu/pads.md`, 2026-10-12): not a pad
    virtual, not a base virtual. Needs a read watchpoint on `pad+0x1b0`.
