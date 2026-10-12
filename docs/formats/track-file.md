@@ -76,10 +76,17 @@ The model is the loader's, which every title reaches through the same `track_inp
 collision source, 2048's through `track_col.col`). Reading a file back races on a host title's
 physics; HD, 2048 and Omega as hosts are not exercised (a Pulse image hosted every race).
 
+## How to race one
+
+Put the `*.track.toml` and its `.glb` in `tracks/` under a base `--unity-track` searches
+(`$OAG_UNITY`, `data/unity`, beside the program, `<data dir>/oag/unity`), then RACE REMIX, TRACK TITLE
+`CUSTOM`, TRACK `<title> (TRACK FILE)` (the manifest's own title), START
+([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or `oag-game --track-file <manifest>`.
+A manifest or glb that will not read is listed dimmed with the reader's reason. The format carries no
+author field, so none is shown.
+
 ## Open
 
 - No authoring tool: a Blender add-on that writes this form (and bakes transforms) is the
   next piece. The glb opens in Blender as plain points and triangles today.
 - Visual meshes, materials and the absent list above, as optional records in a minor version.
-- Foreign and track-file tracks have no menu row (`oag_source::unity::tracks()` is not
-  scanned for `*.track.toml`).
