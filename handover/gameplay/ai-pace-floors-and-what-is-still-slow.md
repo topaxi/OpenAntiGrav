@@ -66,4 +66,7 @@ scenario, a per-section profile, the campaign's Speed Lap gold, and
    place a craft in front of a reset volume it cannot clear from standstill.
    About 2 hours.
 2. `06_Track` VENOM: aim the run-up at the landing sample. About 2 hours.
-3. `06_Track` RAPIER: pick one of the three ways forward above.
+3. `06_Track` RAPIER: **decided 2026-10-12 (maintainer): adopt the hardened trough plan**
+   (`ai-rapier-harden-attempt`, `adb9bab82`), taking the 2048 `cathedral` PHANTOM loss. Rebase
+   it onto current `main`, re-measure, and record the `cathedral` (and Omega) result as the
+   accepted behaviour change.
