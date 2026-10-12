@@ -324,10 +324,10 @@ some other trigger is unmeasured.
 
 > **Superseded in part, 2026-10-07 (`title-patches` lane), confidence 90.** The
 > four-button reading was of the **base** package's `Definition.xml`. The v1.04
-> patch's `data2.psarc` (v1.04) authors **six** `GameModeChoice` `<TouchButton>`s (`data1.psarc`, the earlier patch, authors five: the base four plus an HD tile that reuses `FE_SP_CAMPAIGN`; `data2` shadows it - read 2026-10-12, `crates/game/tests/main_menu_ground_truth.rs`)
+> patch's `data2.psarc` (v1.04) authors **six** `GameModeChoice` `<TouchButton>`s
 > itself - `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY` at `x` 228/410/592, `y` 110,
 > then `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY` at `y` 320, 135x135 - which is
-> the Vita3K capture's grid exactly. With the patch mounted this build draws it. The hotspot mechanism below is a
+> the Vita3K capture's grid exactly (`data1.psarc`, the earlier patch, authors five: the base four plus an HD tile that reuses `FE_SP_CAMPAIGN`; `data2` shadows it - read 2026-10-12, `crates/game/tests/main_menu_ground_truth.rs`). With the patch mounted this build draws it. The hotspot mechanism below is a
 > separate, DLC-gated map object and is not retracted; whether the original
 > hides these two tiles without the DLC is not read. Choosing HD or Fury leaves
 > a note ("another title's campaign") and stays. This build's RACEBOX and REMIX
