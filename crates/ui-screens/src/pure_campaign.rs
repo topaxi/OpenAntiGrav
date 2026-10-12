@@ -129,6 +129,10 @@ const SILVER: [f32; 4] = [0.82, 0.84, 0.88, 1.0];
 const BRONZE: [f32; 4] = [0.80, 0.50, 0.25, 1.0];
 const NOTICE: [f32; 4] = [1.0, 0.76, 0.25, 1.0];
 
+/// How much smaller than a menu row the list's rows are drawn: a list of 36
+/// events at a menu row's pitch shows six at once.
+const ROW: f32 = 0.6;
+
 /// The ink a medal word is drawn in.
 #[must_use]
 pub fn medal_ink(medal: Medal) -> [f32; 4] {
@@ -144,6 +148,9 @@ struct Layout {
     panel: [f32; 4],
     text_x: f32,
     right_x: f32,
+    /// The heading's own pitch and scale, a menu row's.
+    head: f32,
+    head_scale: f32,
     line: f32,
     scale: f32,
     /// The class selector's line.
@@ -159,7 +166,8 @@ struct Layout {
 impl Layout {
     fn new(skin: &Skin) -> Self {
         let (screen_w, screen_h) = skin.space().size;
-        let line = skin.row_pitch();
+        let head = skin.row_pitch();
+        let line = head * ROW;
         let panel = [
             screen_w * 0.06,
             screen_h * 0.045,
@@ -168,16 +176,18 @@ impl Layout {
         ];
         let text_x = panel[0] + screen_w * 0.03;
         let right_x = panel[0] + panel[2] - screen_w * 0.03;
-        let class_y = panel[1] + line * 1.35;
-        let rows_y = class_y + line * 1.25;
-        let footer_y = panel[1] + panel[3] - line * 1.35;
+        let class_y = panel[1] + head * 1.25;
+        let rows_y = class_y + line * 1.5;
+        let footer_y = panel[1] + panel[3] - line * 1.4;
         let room = (footer_y - rows_y).max(line);
         Self {
             panel,
             text_x,
             right_x,
+            head,
+            head_scale: skin.row_scale(),
             line,
-            scale: skin.row_scale(),
+            scale: skin.row_scale() * ROW,
             class_y,
             rows_y,
             visible: ((room / line).floor() as usize).max(1),
@@ -230,6 +240,13 @@ impl List {
             .and_then(|tag| self.rows.iter().position(|r| !r.header && r.tag == tag))
             .or_else(|| self.step(0, 1))
             .unwrap_or(0);
+    }
+
+    /// Puts the cursor on the event row with this tag, if there is one.
+    pub fn select_tag(&mut self, tag: usize) {
+        if let Some(index) = self.rows.iter().position(|r| !r.header && r.tag == tag) {
+            self.selected = index;
+        }
     }
 
     /// The row under the cursor.
@@ -408,19 +425,22 @@ impl List {
                 rect: layout.panel,
                 color: PANEL,
             },
-            text(
-                layout.text_x,
-                layout.panel[1] + layout.line * 0.25,
-                [1.0, 1.0, 1.0, 1.0],
-                Align::Left,
-                self.labels.title.clone(),
-            ),
+            Draw::Text {
+                x: layout.text_x,
+                y: layout.panel[1] + layout.head * 0.25,
+                scale: layout.head_scale,
+                color: [1.0, 1.0, 1.0, 1.0],
+                border: None,
+                align: Align::Left,
+                text: self.labels.title.clone(),
+                wrap_width: None,
+            },
             text(
                 layout.text_x,
                 layout.class_y,
                 skin.normal(),
                 Align::Left,
-                format!("{}  <  {}  >", self.labels.class, self.class_name),
+                format!("{}: {}", self.labels.class, self.class_name),
             ),
         ];
         let first = self.window_start(&layout);

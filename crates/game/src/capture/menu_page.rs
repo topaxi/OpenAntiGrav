@@ -611,9 +611,32 @@ fn prompt_draws(
                 "PRESS A KEY FOR %s - ESCAPE CANCELS",
             ),
         )),
+        // Wipeout Pure's campaign list on the class `pure-campaign:N` names
+        // (an index into `PureClass::ALL`, default the first), read against
+        // whatever `records.toml` holds - the same `pure_list::present` the
+        // live list builds its rows with.
+        other if other.starts_with("pure-campaign") => {
+            let source = source.context("pure-campaign needs a --race source open")?;
+            let mut archives = oag_pure::open(source).context("this source is not Pure's own")?;
+            let campaign = crate::campaign::pure_list::load(&mut archives, oag_pure::TITLE)?;
+            let class = other
+                .strip_prefix("pure-campaign:")
+                .and_then(|n| n.parse::<usize>().ok())
+                .unwrap_or(0)
+                .min(oag_tables::pure_ai_stats::PureClass::ALL.len() - 1);
+            let (rows, _, class_name) = crate::campaign::pure_list::present(
+                &campaign,
+                strings,
+                oag_pure::TITLE.name,
+                oag_tables::pure_ai_stats::PureClass::ALL[class],
+                &crate::records::load(),
+            );
+            let (labels, _) = crate::campaign::pure_list::wording(strings);
+            Ok(oag_ui_screens::pure_campaign::List::new(labels, class_name, rows).draw(skin))
+        }
         other => anyhow::bail!(
             "no prompt named {other:?}; this build has rename, rename-note, delete, \
-             delete-built-in, binding"
+             delete-built-in, binding, pure-campaign[:CLASS]"
         ),
     }
 }

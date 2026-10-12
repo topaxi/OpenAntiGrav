@@ -319,3 +319,15 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 # looking dead. `crates/game/src/main/campaign_stage.rs`.
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
+
+# Wipeout Pure's campaign list: our own wording around the disc's circuit,
+# tournament, class and mode names. `crates/game/src/main/pure_campaign_stage.rs`.
+OAG_PURE_CAMPAIGN_TITLE = { text = "CAMPAIGN", human = false }
+OAG_PURE_CAMPAIGN_CLASS = { text = "CLASS", human = false }
+OAG_PURE_CAMPAIGN_LOCKED = { text = "LOCKED", human = false }
+OAG_PURE_CAMPAIGN_NEEDS = { text = "NEEDS", human = false }
+OAG_PURE_CAMPAIGN_MEDALS = { text = "MEDALS", human = false }
+OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "ANY MEDAL", human = false }
+OAG_MEDAL_GOLD = { text = "GOLD", human = false }
+OAG_MEDAL_SILVER = { text = "SILVER", human = false }
+OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }

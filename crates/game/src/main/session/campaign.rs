@@ -42,6 +42,14 @@ impl Session {
                 return;
             }
         };
+        if self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
+        {
+            self.open_pure_campaign(&mut archives);
+            return;
+        }
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
@@ -299,7 +307,7 @@ impl Session {
     /// anything launches: a tournament that started on a shorter leg list
     /// than the cell authors, because a later leg's own track turned out
     /// missing, would be a silent truncation rather than an honest refusal.
-    fn launch_campaign_cell(
+    pub(super) fn launch_campaign_cell(
         &mut self,
         cell: oag_tables::race_campaign::Cell,
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
@@ -321,6 +329,9 @@ impl Session {
                 shell
                     .track(mode, id)
                     .map(oag_raceplay::catalogue::Track::entry_name)
+                    // A Pure campaign's Classic circuits are not in the
+                    // shell's catalogue, which lists the ordinary ones.
+                    .or_else(|| self.pure_classic_entries.get(id).cloned())
             },
         ) {
             Ok(plan) => plan,
@@ -395,12 +406,23 @@ impl Session {
         // on this path.
         self.tournament =
             is_tournament.then(|| oag_raceplay::tournament::Progress::new(leg_entries));
-        if let Stage::Menu(stage) = &mut self.stage
-            && let Some(campaign) = stage.campaign.take()
-        {
-            self.campaign_cursor = campaign.cursor_on_close();
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.pure_campaign = None;
+            if let Some(campaign) = stage.campaign.take() {
+                self.campaign_cursor = campaign.cursor_on_close();
+            }
         }
-        if !self.open_ship_picker() {
+        // A title that flies Zone in its own craft has no team to pick for it,
+        // as the RACE page's own launch skips the screen
+        // (`Session::handle_picker`).
+        let own_zone_craft = mode == oag_race::Mode::Zone
+            && self.shell.as_ref().is_some_and(|shell| {
+                matches!(
+                    shell.title.race.zone_craft,
+                    oag_title::ZoneCraft::OwnShip(_)
+                )
+            });
+        if own_zone_craft || !self.open_ship_picker() {
             self.launch_campaign_race();
         }
     }

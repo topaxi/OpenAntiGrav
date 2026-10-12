@@ -25,7 +25,10 @@ use oag_tables::pure_campaign::{
     self, ClassRef, Definition, Event, EventKind, MedalWanted, Progress, Stats, TrackKind, Unlock,
 };
 use oag_tables::race_campaign::Medal;
-use oag_ui_screens::pure_campaign::{Row, Status};
+use oag_ui::language::StringTable;
+use oag_ui_screens::pure_campaign::{Labels, Row, Status};
+
+use crate::records::Store;
 
 /// The disc's campaign data for one title, read once.
 #[derive(Debug, Clone)]
@@ -136,6 +139,10 @@ impl Words {
 
 /// What the list needs to say a name: the disc's own text for a circuit,
 /// tournament, class or mode, falling back to the name itself.
+#[expect(
+    missing_debug_implementations,
+    reason = "holds lookup closures, which have no Debug"
+)]
 pub struct Names<'a> {
     /// A `PI_Track`, `PI_Tournament` or class name to the player's language.
     pub name_of: &'a dyn Fn(&str) -> String,
@@ -224,6 +231,83 @@ pub fn rows(
         rows.push(row);
     }
     (rows, events)
+}
+
+/// Our own wording, each with the id `assets/ui/strings/english.toml` holds it
+/// under and the literal it falls back to.
+const WORDS: [(&str, &str); 9] = [
+    ("OAG_PURE_CAMPAIGN_TITLE", "CAMPAIGN"),
+    ("OAG_PURE_CAMPAIGN_CLASS", "CLASS"),
+    ("OAG_PURE_CAMPAIGN_LOCKED", "LOCKED"),
+    ("OAG_PURE_CAMPAIGN_NEEDS", "NEEDS"),
+    ("OAG_PURE_CAMPAIGN_MEDALS", "MEDALS"),
+    ("OAG_PURE_CAMPAIGN_ANY_MEDAL", "ANY MEDAL"),
+    ("OAG_MEDAL_GOLD", "GOLD"),
+    ("OAG_MEDAL_SILVER", "SILVER"),
+    ("OAG_MEDAL_BRONZE", "BRONZE"),
+];
+
+/// The screen's own text and the words its rows say, off `strings` (the disc's
+/// table with the project's overlaid), so the live list and its still draw the
+/// same words.
+#[must_use]
+pub fn wording(strings: &StringTable) -> (Labels, Words) {
+    let say = |index: usize| {
+        let (id, fallback) = WORDS[index];
+        strings.get(id).unwrap_or(fallback).to_string()
+    };
+    (
+        Labels {
+            title: say(0),
+            class: say(1),
+        },
+        Words {
+            locked: say(2),
+            needs: say(3),
+            medals: say(4),
+            any_medal: say(5),
+            gold: say(6),
+            silver: say(7),
+            bronze: say(8),
+        },
+    )
+}
+
+/// The list for `class` as the player sees it: the rows, the events behind
+/// them and the class's own name, with the disc's circuit, tournament, class and
+/// mode names upper-cased as the menus' own rows are, and the profile's medals
+/// read from `records`.
+#[must_use]
+pub fn present(
+    campaign: &PureCampaign,
+    strings: &StringTable,
+    title_name: &str,
+    class: PureClass,
+    records: &Store,
+) -> (Vec<Row>, Vec<Event>, String) {
+    let say = |name: &str| strings.get(name).unwrap_or(name).to_uppercase();
+    let (_, words) = wording(strings);
+    let medal_of = crate::unlock::campaign_medal_of(records, title_name);
+    let heading = |kind: EventKind| {
+        say(match kind {
+            EventKind::Tournament => "Tournament",
+            EventKind::Race => "Single Race",
+            EventKind::TimeTrial => "Time Trial",
+            EventKind::Zone => "Zone",
+        })
+    };
+    let (rows, events) = rows(
+        campaign,
+        class,
+        &medal_of,
+        crate::unlock::unlock_all(),
+        &Names {
+            name_of: &say,
+            heading: &heading,
+            words: &words,
+        },
+    );
+    (rows, events, say(class.title()))
 }
 
 #[cfg(test)]

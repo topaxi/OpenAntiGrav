@@ -154,3 +154,12 @@ OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} bereits im Cache", human
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} fehlgeschlagen", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "DER MODUS DIESES EVENTS KANN IN DIESER VERSION NOCH NICHT GEFAHREN WERDEN", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "DIE STRECKE DIESES EVENTS IST NICHT AUF DIESER DISC", human = false }
+OAG_PURE_CAMPAIGN_TITLE = { text = "KAMPAGNE", human = false }
+OAG_PURE_CAMPAIGN_CLASS = { text = "KLASSE", human = false }
+OAG_PURE_CAMPAIGN_LOCKED = { text = "GESPERRT", human = false }
+OAG_PURE_CAMPAIGN_NEEDS = { text = "BENÖTIGT", human = false }
+OAG_PURE_CAMPAIGN_MEDALS = { text = "MEDAILLEN", human = false }
+OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "JEDE MEDAILLE", human = false }
+OAG_MEDAL_GOLD = { text = "GOLD", human = false }
+OAG_MEDAL_SILVER = { text = "SILBER", human = false }
+OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }

@@ -489,6 +489,11 @@ impl Session {
                         self.tick_campaign(&grid);
                         continue;
                     }
+                    // Wipeout Pure's campaign list, same shape.
+                    if stage.pure_campaign.is_some() {
+                        self.tick_pure_campaign(&grid);
+                        continue;
+                    }
                     // Snapshotted *before* the input is consumed, because the
                     // page being left stops existing the moment the model
                     // moves. Compared by page id rather than by stack depth:
