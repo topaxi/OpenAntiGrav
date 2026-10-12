@@ -706,3 +706,8 @@
 0x005d6500	function	RenderOps_OpSetParamTable	80	renderer.md
 0x005d6408	function	RenderOps_OpSetParamEntry	80	renderer.md
 0x005d6250	function	RenderOps_OpSetNodeMatrixParam	75	renderer.md
+# 2026-10-12 ai-handling-verify: whose handling an opponent flies (opponent-handling.md)
+0x0015de70	function	Team_FindByName	80	opponent-handling.md
+0x001e6ff8	function	Team_LoadHandlingStats	80	opponent-handling.md
+0x00058e38	function	Race_CreateAiRacer	75	opponent-handling.md
+0x00061770	function	SPArcadeRaceManager_Construct	78	opponent-handling.md
