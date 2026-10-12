@@ -16,20 +16,11 @@ use crate::gpu::Gpu;
 /// The footer's `Confirm`/`Back` legend and tip ticker - split out under the 1,000-line rule.
 #[path = "menu_stage/footer.rs"]
 mod footer;
-
-/// The pause overlay's tint, over a parked race's picture.
-///
-/// **Chosen, not authored.** Neither PSP title's own front-end XML defines a
-/// pause screen to read one off: `Skin.xml`'s own `LoadXML` list is
-/// exhaustively 22 files - see
-/// [fe-menu-definitions.md](../../../../docs/formats/fe-menu-definitions.md) -
-/// and none of them is a `Pause` definition. The one HUD string that names
-/// pausing, `IG_PAUSE_QUIT`, is drawn by nothing:
-/// [hud.md](../../../../docs/ui/hud.md) records "There is no pause" against
-/// it, because leaving a race used to drop the `World` outright. So there is
-/// no colour or alpha on the disc for this to recover, and this one is
-/// this project's own rather than a reading of one.
-const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+/// What is drawn over the menus rather than as one of their pages: the pause tint
+/// and Wipeout Pure's SINGLE PLAYER screens.
+#[path = "menu_stage/screens.rs"]
+mod screens;
+use screens::PAUSE_OVERLAY;
 
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
@@ -526,33 +517,8 @@ impl MenuStage {
             );
             return Ok(());
         }
-        // Wipeout Pure's SINGLE PLAYER screens: drawn as the title's own menu
-        // pages are, on the frame the page behind would carry, with the rows
-        // of the page replaced by the screen's.
-        if let Some(open) = self.pure_chain.as_ref() {
-            let layers = oag_ui_screens::pure_chain::draw_list(
-                open.choice(),
-                &self.skin,
-                &self.frame,
-                if frozen_race { None } else { shown },
-                frozen_race,
-            );
-            let footer = self
-                .ticker
-                .is_some()
-                .then(|| self.footer_overlay(Vec::new(), ticker_tips));
-            let (list, ticker_clip) = footer::append(layers.flatten(), footer);
-            self.renderer.render_with(
-                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                &gpu.device,
-                &gpu.queue,
-                encoder,
-                view,
-                &list,
-                viewport,
-                footer::resolve_clip(None, ticker_clip, frozen_race),
-            );
-            return Ok(());
+        if self.pure_chain.is_some() {
+            return self.render_pure_chain(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
         }
         // The Race Campaign's own screens - no preview mesh, no slideshow:
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the

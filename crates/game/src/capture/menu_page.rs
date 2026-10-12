@@ -10,7 +10,7 @@ use oag_mesh::mesh_render::Anisotropy;
 /// screen space - what [`menu_page`] returns for the footer ticker and
 /// `capture::run`'s own call site hands `Renderer::render` unchanged. Named
 /// so the return type below reads rather than counting parentheses.
-type TickerClip = Option<(usize, f32, f32)>;
+pub(super) type TickerClip = Option<(usize, f32, f32)>;
 
 /// A Pulse picker's footer under `list`: the `Confirm`/`Back` legend and the
 /// ticker frozen at `elapsed = 0.0`, as `MenuStage::picker_footer` draws them
@@ -621,70 +621,6 @@ fn prompt_draws(
              delete-built-in, binding"
         ),
     }
-}
-
-/// What follows `pure-chain` in a `--menu-page` name: the answers that walk
-/// Wipeout Pure's SINGLE PLAYER chain to the screen to draw, `:`-separated, `""`
-/// for the first screen. `None` for any other page.
-#[must_use]
-pub(super) fn pure_chain_answers(page: &str) -> Option<&str> {
-    let rest = page.strip_prefix("pure-chain")?;
-    (rest.is_empty() || rest.starts_with(':')).then_some(rest)
-}
-
-/// Draws a screen of Wipeout Pure's SINGLE PLAYER chain, `pure-chain[:MODE
-/// [:CLASS[:LEAGUE]]]`: the screen reached by answering each screen in turn, MODE
-/// by name (`arcade`, `tournament`, `time-trial`, `zone`, `free-play`), the rest by
-/// row number. Read against whatever `records.toml` holds, through the same
-/// `pure_chain::present` the live screen builds its rows with, and drawn on the
-/// same frame (`oag_ui_screens::pure_chain::draw_list`).
-///
-/// # Errors
-///
-/// An answer that names no mode, is not a row number, or does not lead on from the
-/// screen it answers.
-pub(super) fn pure_chain_page(
-    answers: &str,
-    archives: &mut oag_assets::Archives,
-    title: &oag_title::Title,
-    strings: &oag_ui::language::StringTable,
-    backdrop: Option<oag_ui::menu::Picture>,
-    skin: &oag_ui::menu::Skin,
-    frame: &oag_ui::menu::Frame,
-) -> Result<Vec<oag_ui::frontend::Draw>> {
-    use crate::campaign::pure_chain::{Chain, Chosen, choose, present};
-    let campaign = crate::campaign::pure_list::load(archives, title)?;
-    let flow = crate::campaign::pure_list::load_flow(archives, title)?;
-    let records = crate::records::load();
-    let mut chain = Chain::new(campaign, flow, oag_tables::pure_ai_stats::PureClass::Vector);
-    let plain = |text: &str| {
-        text.chars()
-            .filter(char::is_ascii_alphanumeric)
-            .collect::<String>()
-            .to_ascii_lowercase()
-    };
-    for (index, answer) in answers.split(':').skip(1).enumerate() {
-        let tag = if index == 0 {
-            chain
-                .modes()
-                .iter()
-                .position(|mode| plain(mode) == plain(answer))
-                .with_context(|| format!("no mode named {answer:?}"))?
-        } else {
-            answer
-                .parse::<usize>()
-                .with_context(|| format!("{answer:?} is not a row number"))?
-        };
-        anyhow::ensure!(
-            choose(&mut chain, tag, title, &records) == Chosen::Advanced,
-            "{answer:?} does not lead on from {:?}",
-            chain.at().screen()
-        );
-    }
-    let view = present(&chain, strings, title, &records);
-    let choice =
-        oag_ui_screens::pure_chain::Choice::new(view.title, view.context, view.pitch, view.rows);
-    Ok(oag_ui_screens::pure_chain::draw_list(&choice, skin, frame, backdrop, false).flatten())
 }
 
 /// Which selection screen a `--menu-page` name asks for, if either.
