@@ -150,15 +150,16 @@ pub(super) fn map_events(
 /// ([`oag_ui::frontend::Launch`]); the positions are chosen
 /// (`oag_ui::frontend::EXTRA_TILES`). A language with no project file of its own
 /// falls back to the English text, as every row does.
-pub(super) fn extra_tiles(language: Option<&str>) -> Vec<ExtraTile> {
+pub(super) fn extra_tiles(
+    language: Option<&str>,
+    title: &oag_title::Title,
+    updated: bool,
+) -> Vec<ExtraTile> {
     let built = crate::mods::Mods::load().and_then(|mods| {
         mods.build(
             oag_ui::menu::BUILT_IN,
             language,
-            Some(oag_ui::menu::For {
-                title: oag_2048::TITLE,
-                updated: false,
-            }),
+            Some(oag_ui::menu::For { title, updated }),
         )
     });
     let built = match built {
