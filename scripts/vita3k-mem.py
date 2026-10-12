@@ -12,7 +12,9 @@ address - `0x400000000`, a pause is `SIGSTOP`/`SIGCONT`.
     python3 scripts/vita3k-mem.py read 0x8153fd24 4      # hex bytes
     python3 scripts/vita3k-mem.py u32 0x8153fd24
     python3 scripts/vita3k-mem.py ai-sample --out s.json  # 2048 opponents, paused
+    python3 scripts/vita3k-mem.py skill 3.0               # write the event's m_skillScale
     python3 scripts/vita3k-mem.py quit                    # stops Vita3K too
+    uv run --python 3.12 --with numpy python3 scripts/vita3k-mem.py predict s.json --skill 1.0
 
 Menus are driven with `scripts/vita3k-drive.py tap/key/hold/shot` against the
 same `OAG_VITA3K_CACHE` and `--display`. Vita3K's audio is whatever the config
@@ -235,6 +237,93 @@ def ai_sample():
     return sample
 
 
+def predict_one(sample, own, record, skill, ref_spread=None):
+    """2048's `AI_ComputeOpponentThrust` (`0x81199dc8`) in float32, in its own
+    operation order: HD's law at 2048's offsets. `ref_spread` replaces the
+    reference racer's sampled spread (see `predict`)."""
+    import numpy as np
+
+    F = np.float32
+    rf = lambda o: F(struct.unpack_from("<f", record, o)[0])
+    a = [rf(0x68 + 4 * i) for i in range(8)]
+    spread_dist = [rf(0x88 + 4 * i) for i in range(8)]
+    points = [[rf(0xD0 + 0x18 * n + 4 * k) for k in range(3)] for n in range(3)]
+    s = F(skill)
+    p, q, t = (points[0], points[1], F(s - F(1.0))) if s < F(2.0) else (points[1], points[2], F(s - F(2.0)))
+    u = F(F(1.0) - t)
+    off, mul, smul = (F(F(p[k] * u) + F(t * q[k])) for k in range(3))
+    racers = sample["racers"]
+    player = next(r for r in racers if r["addr"] == sample["player_racer"])
+    finished = bool(own["finished"])
+    place = player["place"]
+    base = a[place - 1]
+    sd = F(75.0) if finished else F(smul * spread_dist[place - 1])
+    ref_place = place - 1 if place > 1 else 2
+    lead = trail = F(100000.0)
+    ref = own
+    for r in racers:
+        if r["place"] == ref_place:
+            ref = r
+        if finished or r["addr"] != sample["player_racer"]:
+            d = F(F(player["progress"]) - F(r["progress"]))
+            lead, trail = min(lead, d), min(trail, F(-d))
+    lead = max(F(lead - rf(0xAC)), F(0.0))
+    trail = max(F(trail - rf(0xB8)), F(0.0))
+    rs = F(ref["driver_state"]["spread"] if ref_spread is None else ref_spread)
+    gap = F(F(F(ref["progress"]) + F(F(F(own["driver_state"]["spread"]) - rs) * sd)) - F(own["progress"]))
+    # The opponents read the race time one 30 fps frame behind `RM+0x10e3c`.
+    time_s = F(F(sample["race_time"]) - F(1.0 / 30.0))
+    gain = max(F(F(time_s * F(-0.08)) + F(2.0)), F(0.5))
+    limit = F(base * F(0.3))
+    x = F(base + min(max(F(gap * gain), -limit), limit))
+    x = F(x + min(F(lead * rf(0xA8)), rf(0xB0)))
+    x = F(x - min(F(trail * rf(0xB4)), rf(0xBC)))
+    near = abs(F(own["progress"]) - F(player["progress"])) < F(350.0)
+    cap = F(100.0) if time_s > F(20.0) and near else F(1000.0)
+    thrust = F(F(mul * F(x - a[0])) + F(off + a[0]))
+    return float(max(min(thrust, cap), F(1.0))), float(gap), float(sd)
+
+
+def predict(path, skill):
+    """Every opponent's logged throttle against the law. The drivers listed
+    before the reference racer read its spread from the tick before; one of
+    them per sample gives that value back (from its logged gap) and is not
+    counted, the rest are predicted with it."""
+    exact = total = fitted = 0
+    worst = 0.0
+    for sample in json.loads(Path(path).read_text()):
+        if sample.get("race_time", 0) <= 0:
+            continue
+        record = bytes.fromhex(sample["class_record"]["hex"])
+        racers = sample["racers"]
+        player = next(r for r in racers if r["addr"] == sample["player_racer"])
+        ref_place = player["place"] - 1 if player["place"] > 1 else 2
+        ref_i = next((i for i, r in enumerate(racers) if r["place"] == ref_place), None)
+        previous = None
+        for i, racer in enumerate(racers):
+            if racer["addr"] == sample["player_racer"] or not racer.get("driver_state"):
+                continue
+            state = racer["driver_state"]
+            before = ref_i is not None and i < ref_i
+            if before and previous is None:
+                _, _, sd = predict_one(sample, racer, record, skill)
+                implied = (state["gap"] + racer["progress"] - racers[ref_i]["progress"]) / sd
+                previous = state["spread"] - implied
+                fitted += 1
+                continue
+            thrust, _, _ = predict_one(sample, racer, record, skill, previous if before else None)
+            residual = abs(thrust - state["thrust"])
+            worst = max(worst, residual)
+            exact += residual < 1e-3
+            total += 1
+            if residual >= 1e-3:
+                print("t=%7.2f place %d logged %8.3f predicted %8.3f"
+                      % (sample["race_time"], racer["place"], state["thrust"], thrust))
+    print("%d of %d predicted exactly (1e-3), worst residual %.5f; %d used to recover "
+          "the reference's previous spread" % (exact, total, worst, fitted))
+    return 0 if exact == total else 2
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -256,12 +345,17 @@ def main():
     p.add_argument("--out")
     p.add_argument("--count", type=int, default=1)
     p.add_argument("--gap", type=float, default=1.0)
+    p = sub.add_parser("predict", help="2048: check ai-sample logs against the thrust law (needs numpy)")
+    p.add_argument("log")
+    p.add_argument("--skill", type=float, required=True)
     sub.add_parser("stop")
     sub.add_parser("cont")
     sub.add_parser("quit")
     args = parser.parse_args()
     if args.command == "serve":
         serve(args)
+    elif args.command == "predict":
+        sys.exit(predict(args.log, args.skill))
     elif args.command == "read":
         print(read(int(args.addr, 0), int(args.length, 0)).hex())
     elif args.command == "u32":

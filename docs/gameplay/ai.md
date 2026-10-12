@@ -611,6 +611,40 @@ by `pure_original_ai_ground_truth.rs`. **Not flown**: this project has no Pure
 campaign, so `RaceDefaults::original_opponent` stays `false`; the planner, the rail
 variant and the every-frame update are named on the evidence page and unbuilt.
 
+### 2048: HD's driver, four laws of its own, flown (2026-10-12)
+
+2048's opponent is HD's, function for function and constant for constant
+([vita-2048-eu-v104/ai-controls.md](../ghidra/functions/vita-2048-eu-v104/ai-controls.md)),
+with HD's four thrust and wander branches. What 2048 adds is keyed on the game
+mode's lineage (`Ai_Construct` stores `GameMode_IsHdLineage()` at `driver+0x98`),
+and every 2048 campaign event is a mode of 2048's own lineage:
+
+| Piece | A 2048 event | HD (and 2048 in an HD-lineage mode) | Live |
+| --- | --- | --- | --- |
+| When the thrust law, speed floor and lane choice run | every opponent, every tick | one racer a tick, the round robin | measured, 308 of 308 flagged |
+| Class tables | `AIRaceStats_<class>2048.xml`, `AIControlStats2048.xml` (equal to the base set) | the base set | measured (record address) |
+| Skill | the event's `M_SKILLSCALE`, `2.0` when empty | the circuit's `stats.xml` | measured, `1.0` on "2048 - Event 4" |
+| AI level (pack shuffle) | `1`, every event | the cell's rung | measured |
+| Ring rate | `0.001 + 0.00065 (1 - (1 - c)^2)`, `c` the larger of the event's two AI skills, `0.00165` at their default `1.0` | `0.001` | measured |
+| Lane search | two passes ordered by a per-driver coin, redrawn on `rand() % 200 == 1`; up through candidate `8` | up, then down | read |
+| Preferred lane | also `1 - chosen^2` on the chosen side when the choice scores above `0.5` | the `rand() % 400` draw only | read |
+| Weapon-pad tracking and weapon avoidance in the planner | yes, tuned by the same two skills | none | read, **not ported** |
+
+The thrust law reproduced on **528 of 528 Vita3K samples** at skill `1.0` (the
+event's own) and `3.0` (written into the running event), worst residual
+`0.00049`, once two things are known: the opponents read the race time one 30 fps
+frame late, and drivers updated before the reference racer read its spread from the
+tick before. Ported as `oag_ai::original::Laws` fields (`every_tick`,
+`event_ring_rate`, `coin_ordered_search`, `preferred_follows_choice`) carried by
+`oag_2048::race::ORIGINAL_DRIVER`, with `oag_2048::race::EventAi` resolving an
+event's values; **2048's campaign flies it**. On the disc
+(`crates/game/tests/vita_2048_original_ai_ground_truth.rs`) the reference racer reads
+the capture's `63.0` and `74.0`, and the field finishes a race on nine of the ten
+circuits with the player parked (Arena with up to three respawns a craft). Sol loops
+every craft through respawns under this project's driver too; Super Phantom events
+keep this project's driver (no fifth `SpeedClass`). Omega's executable carries 2048's
+`Ai_Construct` and event tuning (static); not wired.
+
 So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model
 (`PosBalancing`'s steep gradient, `TailZone`, `ShipSpacingVariation`) are the
 `<NewStats>` half the shipped executable never selects, `<NewStats>`' fatigue rows

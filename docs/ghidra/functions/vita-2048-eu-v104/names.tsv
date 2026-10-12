@@ -140,3 +140,25 @@
 0x811a5df6	function	PilotAssist_UpdateNormal	65	pilot-assist.md
 0x811a5b38	function	PilotAssist_SetStrength	70	pilot-assist.md
 0x81152488	function	Hud_UpdateAssistIndicator	72	pilot-assist.md
+# The original opponent driver, mapped against HD's and measured on Vita3K (2026-10-12, orig-ai-2048 lane).
+0x8119853c	function	Ai_SetEventTuning	90	ai-controls.md
+0x8119fa02	function	AIManager_Update	85	ai-controls.md
+0x8119f0dc	function	AIManager_ShufflePack	85	ai-controls.md
+0x8119dda4	function	AI_UpdateCraft	88	ai-controls.md
+0x8119a36a	function	AI_ComputeControls	82	ai-controls.md
+0x81199dc8	function	AI_ComputeOpponentThrust	94	ai-controls.md
+0x811995cc	function	AI_UpdateSpreadWander	82	ai-controls.md
+0x8119fb5e	function	AI_ResolveSkillScale	90	ai-controls.md
+0x8119c700	function	Ai_PlanLane	72	ai-controls.md
+0x8119c0e0	function	Ai_TrackWeaponPads	65	ai-controls.md
+0x81198d9c	function	Ai_LanePointOnRing	75	ai-controls.md
+0x81199172	function	Ai_SnapToLane	85	ai-controls.md
+0x81198c1c	function	Ai_ComputePitch	80	ai-controls.md
+0x811a0b18	function	AiStats_Load	88	ai-controls.md
+0x8117053c	function	RaceManager_Construct	80	ai-controls.md
+0x8100193c	function	GameMode_IsEliminatorFamily	65	ai-controls.md
+0x812b5890	function	GameMode_Current	85	ai-controls.md
+0x812afd9e	function	GameModeBase_Construct	75	ai-controls.md
+0x812b40de	function	GameModeBase_PostLoad	60	ai-controls.md
+0x812b0d52	function	GameModeBase_Apply	80	ai-controls.md
+0x81965b58	data	g_CurrentGameMode	85	ai-controls.md
