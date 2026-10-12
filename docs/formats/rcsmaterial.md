@@ -1670,7 +1670,7 @@ as `mesh::AnimTrack::Scroll`, the track 2048's plain scroll already is, through
   by the vertex block but never added to a coordinate by a multiply-add this
   sweep matched (colour or intensity drive).
 - Fragment-only `time`: `nr_crowd_bustle` (33), `nr_billboardholographicscanlines`
-  (35), `scanlinebillboard*`, `uvdistortion_*`, `water`, `pipefx_v2`, the
+  (35; read and wired for Amphiseum's inline-literal shape, renderer.md "Amphiseum's holographic billboards are drawn by their own combine"), `scanlinebillboard*`, `uvdistortion_*`, `water`, `pipefx_v2`, the
   holograms: unread laws.
 - `weapon_pads` `W_Cycle` (231) is the pads' own thing; `scrollingalpha`
   `V_Offset` is on no circuit material (weapons and muzzle flash only).

@@ -80,8 +80,11 @@ the work in isolated worktrees.
     selection is `FULL` (see "Who runs which gate")
   - docs/handover only -> `just check-docs`, `check-names` if `names.tsv` moved,
     `check-handover`, `check-captures` if captures moved
-- **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`.
-  Only after the work is merged.
+- **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`,
+  then stop the member itself with `TaskStop` (its name as `task_id`) and check
+  `ListAgents` no longer shows it. Only after the work is merged. A member left
+  idle after its report still sits in the roster; the maintainer asked for a
+  full teardown (2026-10-12).
 - **Never reap a worktree whose agent may still resume.** A `completed`
   notification is not terminal - the same agent can be resumed and will find its
   Bash unusable. Merge first, then reap. **`ListAgents` cannot tell you this** -
