@@ -81,7 +81,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
-    original_opponent: false,
+    // The campaign's opponents fly Pure's own sibling driver
+    // ([`ORIGINAL_DRIVER`]); every other mode keeps this project's.
+    original_opponent: true,
     original_driver: Some(&ORIGINAL_DRIVER),
     // Pure's own `speech_zone.bnk` was listed alongside Pulse's and HD's -
     // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped

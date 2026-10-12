@@ -17,12 +17,18 @@
 //!   legacy `GridSpread` (which the `<NewStats>` half would have changed).
 //!
 //! One test a class, so the matrix is the test axis.
+//!
+//! Then the field: the sibling driver (`oag_ai::original`'s cruise throttle and
+//! ringless planner, `oag_pure::race::ORIGINAL_DRIVER`) flown by a race the way
+//! a Pure campaign event flies it, on two circuits, one test each.
 
 use oag_ai::original::{CruiseDraws, CruiseState, cruise_thrust, zone_multiplier};
 use oag_core::Rng;
+use oag_gameplay::PlayerInputs;
 use oag_tables::pure_ai_stats::{self, PureClass, PureClassRace};
 
 const VINETA_STATS: &str = r"Data\Environments\01_Vineta_K\stats.xml";
+const VINETA_TRACK: &str = r"Data\Environments\01_Vineta_K\track.vex";
 
 struct Tables {
     race: PureClassRace,
@@ -203,4 +209,101 @@ fn the_tables_read_what_the_live_race_held() {
             );
         }
     }
+}
+
+fn seconds(race: &oag_raceplay::Race) -> f32 {
+    race.sim
+        .world
+        .tick
+        .saturating_sub(oag_race::COUNTDOWN_TICKS) as f32
+        / 60.0
+}
+
+/// A full Pure grid with the player parked, its opponents on the original
+/// driver as a campaign event switches it on: from the green light every
+/// opponent holds its grid slot's `StartSpeed` (the launch blend, which only
+/// the cruise throttle has), and every opponent finishes inside 300 s with no
+/// respawn. Shield is read at each opponent's lap crossings (per lap) and at
+/// the end, reported apart.
+fn fly(track: &str, class: &str, start: PureClass) {
+    let Some(image) = oag_testdata::image("pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: class.to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(track.to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading the circuit");
+    let race_table = tables(start).expect("the same disc").race;
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(
+        race.use_original_ai(None, 1),
+        "Pure flies its original driver"
+    );
+    let mut lap = [1u32; 8];
+    let mut per_lap: [Vec<f32>; 8] = Default::default();
+    let mut launch_checked = false;
+    while seconds(&race) <= 300.0 && !(1..8).all(|s| race.sim.world.ships[s].standing.finished()) {
+        race.tick(&PlayerInputs::none());
+        if !launch_checked && seconds(&race) > 0.1 {
+            launch_checked = true;
+            let field = race.original_ai_field().expect("the field is on");
+            for slot in 1..8 {
+                let driver = &field.drivers[slot];
+                assert_eq!(
+                    driver.held_thrust,
+                    race_table.start_speed[usize::from(driver.grid) - 1],
+                    "{track}: slot {slot} (grid {}) launches at its StartSpeed",
+                    driver.grid
+                );
+            }
+        }
+        for slot in 1..8 {
+            let ship = &race.sim.world.ships[slot];
+            if ship.standing.lap != lap[slot] {
+                lap[slot] = ship.standing.lap;
+                per_lap[slot].push(ship.physics.shield);
+            }
+        }
+    }
+    assert!(launch_checked);
+    println!("{track} {class}: {:.1} s", seconds(&race));
+    for (slot, shields) in per_lap.iter().enumerate().skip(1) {
+        let ship = &race.sim.world.ships[slot];
+        println!(
+            "  slot {slot}: finished {} lap {} respawns {} per-lap shield {shields:?}, \
+             end-of-run shield {:.1}",
+            ship.standing.finished(),
+            ship.standing.lap,
+            race.respawns_of(slot),
+            ship.physics.shield
+        );
+    }
+    for slot in 1..8 {
+        assert!(
+            race.sim.world.ships[slot].standing.finished(),
+            "{track}: slot {slot} did not finish"
+        );
+        assert_eq!(race.respawns_of(slot), 0, "{track}: slot {slot} respawned");
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_field_finishes_vineta_k() {
+    fly(VINETA_TRACK, "Venom", PureClass::Venom);
+}
+
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_field_finishes_chenghou_project() {
+    fly(
+        r"Data\Environments\04_Chenghou_Project\track.vex",
+        "Venom",
+        PureClass::Venom,
+    );
 }
