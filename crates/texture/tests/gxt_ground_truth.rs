@@ -25,7 +25,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use oag_texture::gxt::{Format, Gxt};
+use oag_texture::gxt::{self, Format, Gxt};
 
 fn package() -> Option<PathBuf> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -115,7 +115,14 @@ fn survey(check: &mut impl FnMut(&str, &Gxt, &[u8])) -> Survey {
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn every_shipped_gxt_parses_and_every_known_format_decodes() {
     let mut checked = 0usize;
+    let (mut covered, mut total, mut claimed) = (0usize, 0u64, 0u64);
     let found = survey(&mut |name, parsed, blob| {
+        let seen = gxt::coverage(blob);
+        if !seen.is_empty() {
+            covered += 1;
+            total += seen.len() as u64;
+            claimed += seen.claimed() as u64;
+        }
         for texture in &parsed.textures {
             if texture.format().is_none() {
                 continue;
@@ -160,6 +167,20 @@ fn every_shipped_gxt_parses_and_every_known_format_decodes() {
         checked,
         found.decoded + found.ubc1 + found.ubc3 + found.pvrtc + found.argb8888 + found.rgb888
     );
+
+    // **Byte coverage closes exactly.** `Gxt::parse` already checks
+    // `header_offset == descriptors_end` and `header_offset + header_size ==
+    // data.len()` before it accepts a file, so a `.gxt` it parses has no room for
+    // a gap between the header, the descriptor table and the declared texel span;
+    // `oag_texture::gxt::coverage` makes that checkable from the sweep rather than
+    // only from `Gxt::parse`'s own checks, the role `oag_rcs::rcsmodel::coverage`
+    // plays for a format not closed this tightly. It was its own binary
+    // (`gxt_coverage_ground_truth.rs`) walking the same 9,910 files until
+    // 2026-10-12.
+    let pct = 100.0 * claimed as f64 / total.max(1) as f64;
+    println!("gxt coverage: {covered} file(s), {claimed} of {total} byte(s) ({pct:.2}%)");
+    assert_eq!(covered, 9910, "every shipped .gxt has bytes to cover");
+    assert_eq!(claimed, total, "expected to close exactly");
 }
 
 /// Decodes a named entry to a checkerboard-composited PNG so a human can check
