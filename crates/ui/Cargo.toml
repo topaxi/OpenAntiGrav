@@ -54,5 +54,6 @@ workspace = true
 
 [dev-dependencies]
 # `tests/menu_layout_ground_truth.rs` reads a real archive off a disc image.
+oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true

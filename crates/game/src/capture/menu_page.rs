@@ -130,6 +130,13 @@ pub(super) fn menu_page(
     // `crate::records::ticker_tips`'s own doc.
     ticker_tips: &[String],
 ) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
+    // `page:ROW` puts the cursor on the row with that id once the page is open
+    // (`--menu-page main:remix`), which is how a revealing strip is looked at with
+    // each of its rows in focus.
+    let (page, focus) = match page.split_once(':') {
+        Some((page, row)) => (page, Some(row)),
+        None => (page, None),
+    };
     let mut definition = crate::mods::Mods::load()?
         .build_with_strings(
             oag_ui::menu::BUILT_IN,
@@ -301,6 +308,12 @@ pub(super) fn menu_page(
         );
     }
     model.open(page);
+    model.set_reveal_attached(title.main_menu.attached == oag_title::Attached::Revealed);
+    if let Some(row) = focus
+        && !model.focus_row(row)
+    {
+        anyhow::bail!("page {page:?} has no row with id {row:?}");
+    }
     // A still shows the page at rest, not the tick it arrived on - see
     // `Menu::settle` for what the arrival tick would otherwise draw.
     model.settle();

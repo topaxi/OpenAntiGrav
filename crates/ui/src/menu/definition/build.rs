@@ -383,6 +383,9 @@ impl Definition {
 }
 
 /// Keeps `rows[i]` for each `i` in `order`, in that order, and drops the rest.
+#[cfg(test)]
+mod tests;
+
 fn reorder<T>(rows: &mut Vec<T>, order: &[usize]) {
     let mut taken: Vec<Option<T>> = rows.drain(..).map(Some).collect();
     rows.extend(order.iter().filter_map(|&i| taken.get_mut(i)?.take()));

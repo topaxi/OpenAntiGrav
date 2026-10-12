@@ -74,9 +74,11 @@ impl Menu {
             *ticks = ticks.saturating_add(1);
         }
         let page = self.current();
-        let selected = self.cursor[page];
-        for (row, focus) in self.focus[page].iter_mut().enumerate() {
-            let target = if row == selected { 1.0 } else { 0.0 };
+        let targets: Vec<f32> = (0..self.focus[page].len())
+            .map(|row| self.focus_target(page, row))
+            .collect();
+        for (focus, target) in self.focus[page].iter_mut().zip(targets) {
+            let target = target;
             *focus += (target - *focus) * ease;
             if (target - *focus).abs() < 1e-3 {
                 *focus = target;
@@ -89,7 +91,7 @@ impl Menu {
     pub(super) fn snap_focus(&mut self) {
         let page = self.current();
         let rows = self.definition.pages[page].entries.len();
-        self.focus[page] = snapped(rows, self.cursor[page]);
+        self.focus[page] = (0..rows).map(|row| self.focus_target(page, row)).collect();
         self.arrival = Some(0);
     }
 }

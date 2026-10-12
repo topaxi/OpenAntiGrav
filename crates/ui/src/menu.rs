@@ -523,6 +523,8 @@ pub struct Menu {
     /// Whether this title draws navigation pages as a strip. See
     /// [`Self::set_strip_layout`].
     strip_layout: bool,
+    /// Whether attached rows are revealed under their parent. See `reveal.rs`.
+    reveal: bool,
     /// How far each row's block has grown toward its selected width, per
     /// page and parallel to [`Self::cursor`]. See `focus.rs`.
     focus: Vec<Vec<f32>>,
@@ -566,6 +568,7 @@ impl Menu {
             // A column until a title says otherwise, which is what both PSP
             // discs measurably say.
             strip_layout: false,
+            reveal: false,
             focus,
             arrival: Some(0),
             scroller: pointer::Scroller::default(),
@@ -791,6 +794,9 @@ impl Menu {
     /// reason, and going through it here keeps one answer to "did the player
     /// press this" rather than two.
     pub fn update(&mut self, input: &mut Input) -> Vec<MenuEvent> {
+        if self.strip_layout && self.reveals() {
+            return self.update_revealed(input);
+        }
         let mut out = Vec::new();
         let rows = self.page().entries.len();
 
@@ -937,6 +943,7 @@ impl Menu {
 
 pub mod block;
 mod picture;
+mod reveal;
 pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;
