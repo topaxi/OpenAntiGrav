@@ -20,8 +20,10 @@ pixel contribution by rendering the same model with the bit cleared.
 first cut of this conflated them. Three populations: it authors its own `a`/`b`
 pair and scrolls; it declares `time` but keeps those constants as the shader's
 own **inline literals**, which live in the code rather than the material record
-and which this reading has not recovered (`nr_billboardholographicscanlines`,
-17 slots on one circuit); or it never reads the clock at all. Only the first
+(`nr_billboardholographicscanlines`: Amphiseum's shape has them read since
+2026-10-12, `mesh::rcs::holo_billboard`; Modesto Heights' slots take their
+rates from material parameters instead, and the `02_track` copy predicates its
+advert tap on a `FENCT` condition); or it never reads the clock at all. Only the first
 scrolls, and `Emissive::rate` is what carries that. Recovering the second
 population's rate means following the patch chain to an *unpatched* constant -
 `fragment::Instruction::constant` already holds it - and nobody has.

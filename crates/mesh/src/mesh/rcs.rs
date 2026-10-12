@@ -170,6 +170,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 }
 
 mod cutout;
+mod holo_billboard;
 mod isolate;
 mod light_cone;
 mod mag_wave;
@@ -849,7 +850,14 @@ fn build_with_options(
                         .or_else(|| {
                             rim_glow::inline_light(surface.roles, mesh, model_blob, submesh, stride)
                         });
-                let texcoords2 = ice::second_uv(surface.roles, mesh, model_blob, submesh, stride);
+                let (lightmap_texcoords, texcoords2) = holo_billboard::route(
+                    surface.roles,
+                    (mesh, model_blob, submesh, stride),
+                    (
+                        lightmap_texcoords,
+                        ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
+                    ),
+                );
                 report.authored_normals += normals.as_deref().map_or(0, authored);
                 emit(
                     &mut out,
