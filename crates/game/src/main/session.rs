@@ -58,6 +58,8 @@ mod picker;
 // the same reason `remix_menu` below is not called `remix`.
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
+#[path = "session/pure_campaign.rs"]
+mod pure_campaign;
 #[path = "session/placeholder.rs"]
 mod placeholder;
 #[path = "session/pointer.rs"]
@@ -543,6 +545,13 @@ pub(crate) struct Session {
     /// `Session::launch_remix`) so a cell abandoned by backing out of `Team
     /// Selection` cannot leak into the next unrelated race.
     pub(crate) campaign_cell: Option<oag_tables::race_campaign::Cell>,
+    /// Wipeout Pure's campaign list: the class it was left on, as an index into
+    /// `PureClass::ALL`, so reopening it lands where the player was.
+    pub(crate) pure_campaign_class: usize,
+    /// Where the `Classic` circuits a Pure campaign event races are, by
+    /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
+    /// Filled when the list opens, read by `launch_campaign_cell`.
+    pub(crate) pure_classic_entries: std::collections::BTreeMap<String, String>,
     pub(crate) campaign_cursor: crate::campaign_stage::CellCursor, // kept across campaign openings
     /// [`Self::campaign_cell`]'s own difficulty rung, draining into
     /// [`RaceStage::campaign_difficulty`] the identical way and at the

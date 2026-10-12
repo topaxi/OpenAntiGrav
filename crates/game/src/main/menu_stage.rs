@@ -122,6 +122,9 @@ pub(crate) struct MenuStage {
     /// shape [`Self::picker`] is. See `crate::campaign_stage` and
     /// `crate::session::campaign`.
     pub(crate) campaign: Option<crate::campaign_stage::CampaignStage>,
+    /// Wipeout Pure's campaign list, when open: it takes the tick whole and is
+    /// drawn over the page behind it. See `crate::pure_campaign_stage`.
+    pub(crate) pure_campaign: Option<crate::pure_campaign_stage::PureCampaignStage>,
 }
 
 /// A page change part-way through.
@@ -850,6 +853,11 @@ impl MenuStage {
         // through is a still picture of where the player will land back.
         let list: Vec<Draw> = match &self.prompt {
             Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
+            None => list,
+        };
+        // Wipeout Pure's campaign list, over the page it was opened from.
+        let list: Vec<Draw> = match &self.pure_campaign {
+            Some(open) => list.into_iter().chain(open.list().draw(&self.skin)).collect(),
             None => list,
         };
         // The key-capture prompt, last of all - even over a page mid-tween or

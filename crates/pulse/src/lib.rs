@@ -88,6 +88,7 @@ pub const TITLE: &Title = &Title {
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
+        list_entry: None,
         circuit_unlocks: true,
         loyalty_unlocks: true,
         unlocks_origin: oag_title::Origin::Measured,

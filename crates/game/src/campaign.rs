@@ -18,6 +18,7 @@ use oag_hud::sprite::Sheet;
 mod emblems;
 pub mod hit;
 pub mod launch;
+pub mod pure_list;
 
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` - the file Pulse's own
 /// `Grid Selection` and `Cell Selection` are authored in. See
@@ -260,6 +261,9 @@ pub fn load(
         }
         oag_title::CampaignDialect::Omega => {
             return load_omega(archives, strings, faces, grid, base, fallback_globals);
+        }
+        oag_title::CampaignDialect::Pure => {
+            anyhow::bail!("{} draws a list, not a grid", title.name)
         }
         oag_title::CampaignDialect::Pulse => {}
     }
