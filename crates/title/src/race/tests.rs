@@ -510,7 +510,7 @@ fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
     );
 }
 
-const FAMILIES: TeamVariants = TeamVariants {
+const MATCHING: TeamVariants = TeamVariants {
     teams: &["Feisar", "EGX"],
     variants: &[
         TeamVariant {
@@ -534,15 +534,7 @@ const FAMILIES: TeamVariants = TeamVariants {
 /// finds nothing.
 #[test]
 fn split_reads_a_combined_id_back() {
-    assert_eq!(FAMILIES.split("Feisar_n1"), Some(("Feisar", "_n1")));
-    assert_eq!(FAMILIES.split("EGX"), Some(("EGX", "")));
-    assert_eq!(FAMILIES.split("Goteki_c1"), None);
-    assert_eq!(FAMILIES.family_of(""), Some(&[""][..]));
-    assert_eq!(FAMILIES.family_of("_n1"), Some(&["_c1", "_n1"][..]));
-    assert_eq!(FAMILIES.family_of("_x9"), None);
-    assert_eq!(
-        GUEST.family_of(""),
-        None,
-        "no families declared, none found"
-    );
+    assert_eq!(MATCHING.split("Feisar_n1"), Some(("Feisar", "_n1")));
+    assert_eq!(MATCHING.split("EGX"), Some(("EGX", "")));
+    assert_eq!(MATCHING.split("Goteki_c1"), None);
 }

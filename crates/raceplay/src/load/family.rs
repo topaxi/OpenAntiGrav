@@ -42,7 +42,7 @@ pub(super) fn follow_player(
     report: &mut Vec<String>,
 ) {
     let Some(variants) = table(race) else { return };
-    let Some(&[ref player, ..]) = Some(&*slot_teams) else {
+    let Some(player) = slot_teams.first() else {
         return;
     };
     let Some((_, suffix)) = variants.split(player) else {
