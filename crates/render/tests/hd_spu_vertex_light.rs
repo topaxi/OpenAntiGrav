@@ -31,6 +31,7 @@ const COLOUR: [f32; 3] = [0.4, 0.1, 0.04];
 
 fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         // Facing the camera, which is what a light on `+Z` shines on.
         normal: [0.0, 0.0, 1.0],
@@ -95,6 +96,7 @@ fn model() -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),

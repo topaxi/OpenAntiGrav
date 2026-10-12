@@ -585,6 +585,7 @@ fn build_planned(
                 .copied()
                 .unwrap_or([0.0, 0.0]);
             model.vertices.push(GpuVertex {
+                quake: 0.0,
                 position,
                 normal,
                 colour,

@@ -36,6 +36,7 @@ const ZONE_EFFECT: [f32; 4] = [2.0, 1.0, 0.0, 0.0];
 
 fn vertex(position: [f32; 3], lit: f32) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],
@@ -91,6 +92,7 @@ fn model(albedo: Arc<ModelTexture>, lit: f32) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -366,6 +368,7 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
 /// display, and every other quad in this file faces the camera along `+Z`.
 fn up_facing_model(albedo: Arc<ModelTexture>) -> Model {
     let vertex = |position: [f32; 3]| GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 1.0, 0.0],
         colour: [1.0, 1.0, 1.0, 1.0],

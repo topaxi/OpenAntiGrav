@@ -185,6 +185,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
                 (major[2] + s_axis[2] * sc + t_axis[2] * tc) * HALF_EXTENT,
             ]);
             vertices.push(GpuVertex {
+                quake: 0.0,
                 position,
                 // Inward, and unread: `lit` 0.0 keeps the light rig off the
                 // sky, the same way Pulse's own sky meshes are authored
@@ -243,6 +244,7 @@ pub fn build(label: &str, blob: &[u8], rotation_degrees: f32, tint: [f32; 3]) ->
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),

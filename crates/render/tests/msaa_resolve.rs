@@ -34,6 +34,7 @@ const SIZE: u32 = 64;
 fn triangle_model() -> Model {
     let vertices = vec![
         GpuVertex {
+            quake: 0.0,
             position: [0.0, -1.0, -1.0],
             normal: [1.0, 0.0, 0.0],
             colour: [1.0, 1.0, 1.0, 1.0],
@@ -49,6 +50,7 @@ fn triangle_model() -> Model {
             texcoord2: [0.0, 0.0],
         },
         GpuVertex {
+            quake: 0.0,
             position: [0.0, 1.0, -1.0],
             normal: [1.0, 0.0, 0.0],
             colour: [1.0, 1.0, 1.0, 1.0],
@@ -64,6 +66,7 @@ fn triangle_model() -> Model {
             texcoord2: [0.0, 0.0],
         },
         GpuVertex {
+            quake: 0.0,
             position: [0.0, 0.0, 1.0],
             normal: [1.0, 0.0, 0.0],
             colour: [1.0, 1.0, 1.0, 1.0],
@@ -110,6 +113,7 @@ fn triangle_model() -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),

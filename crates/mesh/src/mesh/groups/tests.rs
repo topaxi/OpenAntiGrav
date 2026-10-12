@@ -55,6 +55,7 @@ fn model_with_nodes(nodes: &[u32]) -> Model {
     for (i, &n) in nodes.iter().enumerate() {
         let start = u32::try_from(i * 3).unwrap();
         model.vertices.extend((0..3).map(|k| GpuVertex {
+            quake: 0.0,
             position: [n as f32, k as f32, 0.0],
             normal: [0.0, 1.0, 0.0],
             colour: [1.0; 4],

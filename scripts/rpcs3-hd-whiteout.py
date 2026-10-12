@@ -84,7 +84,10 @@ def main():
     ap.add_argument("--attempts", type=int, default=10)
     ap.add_argument("--no-baseline", action="store_true")
     ap.add_argument("--no-draws", action="store_true", help="skip the pushbuffer dump, read targets only")
+    ap.add_argument("--no-targets", action="store_true", help="skip the render-target reads (11 MB over the stub, minutes): the command stream and its vertex-program constants only")
     ap.add_argument("--bomb", action="store_true", help="fire state 9 (Bomb) and pause --delay s after the press")
+    ap.add_argument("--start-wait", type=float, default=0.0, help="seconds after the load before the START RACE tap (the prompt ignores an earlier one; 12 worked)")
+    ap.add_argument("--quake", action="store_true", help="fire state 2 (Quake) and pause --delay s after the press")
     args = ap.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -98,6 +101,7 @@ def main():
         if session.walk_to_race() not in drive.RACE_ARRIVED:
             sys.exit("no race")
         session.wait_for_load(70)
+        time.sleep(args.start_wait)
         session.tap("cross", settle=22)
         gdb = Debugger(port=port)
         gdb.pause()
@@ -131,7 +135,7 @@ def main():
             t = time.time()
             used = None if args.no_draws else dump_frame(gdb, out, stem, hook, args.attempts)
             shot = drive.screenshot(out / ("%s.png" % stem), trim=True)
-            for off, size in TARGETS:
+            for off, size in ([] if args.no_targets else TARGETS):
                 try:
                     (out / ("%s-vram-%08x.bin" % (stem, off))).write_bytes(gdb.read(0xC0000000 + off, size))
                 except Exception as error:
@@ -149,30 +153,32 @@ def main():
 
         for n, delay in enumerate(args.delay):
             gdb.pause()
-            state = 9 if args.bomb else 1
+            state = 9 if args.bomb else 2 if args.quake else 1
+            by_press = args.bomb or args.quake
             gdb.write(slot + poll.STATE, struct.pack(">ii", state, state))
             gdb.resume()
             time.sleep(0.5)
-            if not args.bomb:
+            if not by_press:
                 poll.behind_rival(gdb, args.behind_rival)
             session.pad.set("triangle", True)
             time.sleep(0.12)
             session.pad.set("triangle", False)
             t0 = time.time()
             rose = None
-            while not args.bomb and time.time() - t0 < 12.0:
+            while not by_press and time.time() - t0 < 12.0:
                 if pool_count() > 0:
                     rose = time.time()
                     break
                 time.sleep(0.003)
-            if rose is None and not args.bomb:
+            if rose is None and not by_press:
                 print("shot %d: no hit within 12 s" % n, flush=True)
                 continue
             time.sleep(delay)
             gdb.pause()
-            capture(("bomb%d" if args.bomb else "hit%d") % n, "delay %.3f after %s" % (delay, "the press" if args.bomb else "pool rise"))
+            capture(("bomb%d" if args.bomb else "quake%d" if args.quake else "hit%d") % n,
+                    "delay %.3f after %s" % (delay, "the press" if by_press else "pool rise"))
             gdb.resume()
-            time.sleep(4.0)
+            time.sleep(8.0 if args.quake else 4.0)
     print("done", flush=True)
 
 

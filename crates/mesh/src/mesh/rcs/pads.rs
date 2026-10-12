@@ -455,6 +455,7 @@ pub(super) fn emit_chunk(
             &out.material_slots,
             &out.material_specular_exponent,
             &out.material_colour_factor,
+            &out.material_quake,
             &out.material_anim,
         );
         report.see_through += usize::from(surface.blend.is_some());

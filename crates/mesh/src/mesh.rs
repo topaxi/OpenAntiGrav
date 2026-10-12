@@ -100,6 +100,10 @@ pub struct Model {
     /// on the light rather than a baked light to add - see
     /// `mesh::rcs::skin::light_inputs`. Empty for every title but Wipeout HD.
     pub material_colour_factor: Vec<bool>,
+    /// Per material slot: whether the material ships a `StaticQuake` vertex
+    /// program, which is what makes its vertices carry
+    /// [`GpuVertex::quake`]. Empty for every title but Wipeout HD.
+    pub material_quake: Vec<bool>,
     /// Which shader variant each material slot resolves to, positionally
     /// beside [`Self::textures`], or `None` where the material could not be
     /// read or ships no row for the key.
@@ -258,6 +262,7 @@ impl Model {
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_colour_factor: Vec::new(),
+            material_quake: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),
@@ -694,6 +699,7 @@ fn build_class(
                         hi[k] = hi[k].max(position[k]);
                     }
                     vertices.push(GpuVertex {
+                        quake: 0.0,
                         position,
                         // A batch without normals is prelit, so face it at the
                         // camera rather than leaving it black.
@@ -854,6 +860,7 @@ fn build_class(
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
 

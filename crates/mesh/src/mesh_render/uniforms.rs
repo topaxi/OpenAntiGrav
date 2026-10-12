@@ -798,6 +798,49 @@ pub struct Scene {
     /// find where it reads that target (`mesh::rcs::refraction`). The
     /// identity for every draw that reads no target.
     pub refraction: [[f32; 4]; 4],
+    /// The Quake's travelling displacement, for the surfaces that carry
+    /// [`GpuVertex::quake`](crate::mesh::GpuVertex::quake). [`QuakeWave::off`]
+    /// everywhere no wave is in flight, and for every draw that is not a
+    /// race's own scene.
+    pub quake: QuakeWave,
+}
+
+/// One frame of the Quake wave, in the four registers Wipeout HD's `StaticQuake`
+/// vertex program reads - `quakePointA`, `quakePointB`, `quakeOffset` and
+/// `quakeTrackUpNormal`, in the executable's engine parameter table.
+///
+/// The program (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`, decoded from
+/// `track_surface.rcsmaterial`'s vertex block) lifts a world-space vertex `P`
+/// along `up` by
+///
+/// ```text
+/// amplitude * cos(min(|(A - P) x offset.xyz| / offset.w / radius, pi / 2))
+///           * sqrt(saturate(1 - |(A + B) / 2 - P| / radius))
+/// ```
+///
+/// and read live off RPCS3 the registers held `A` and `B` the two track-edge
+/// points at the wave, `offset.xyz = B - A` and `offset.w` its length, `up` the
+/// track's up at the wave, `B.w` the amplitude (the Pulse ripple's own
+/// 12-unit, 0.3 s rise and 5 s fall) and `A.w` a constant `60.0`.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct QuakeWave {
+    /// `quakePointB`: the wave's second track-edge point; `w` the amplitude.
+    pub point_b: [f32; 4],
+    /// `quakePointA`: its first track-edge point; `w` the radius of influence.
+    pub point_a: [f32; 4],
+    /// `quakeOffset`: `xyz = B - A`, `w = |B - A|`.
+    pub offset: [f32; 4],
+    /// `quakeTrackUpNormal`: the direction the surface rises along.
+    pub up: [f32; 4],
+}
+
+impl QuakeWave {
+    /// No wave: zero amplitude, which `quake.wesl` reads as the identity.
+    #[must_use]
+    pub fn off() -> Self {
+        bytemuck::Zeroable::zeroed()
+    }
 }
 
 impl Scene {
@@ -815,6 +858,7 @@ impl Scene {
             sun_occlusion: [Mat4::IDENTITY.to_cols_array_2d();
                 super::shadow_map::OCCLUSION_LAYERS as usize],
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
+            quake: QuakeWave::off(),
         }
     }
 }
@@ -846,6 +890,14 @@ const _: () = assert!(
 const _: () = assert!(
     std::mem::offset_of!(Scene, refraction).is_multiple_of(16),
     "and Scene.refraction, a mat4x4"
+);
+const _: () = assert!(
+    std::mem::size_of::<QuakeWave>() == 64,
+    "shaders/types.wesl's QuakeWave is four vec4s"
+);
+const _: () = assert!(
+    std::mem::offset_of!(Scene, quake).is_multiple_of(16),
+    "and Scene.quake, whose fields are vec4s"
 );
 const _: () = assert!(
     std::mem::size_of::<Scene>().is_multiple_of(16),

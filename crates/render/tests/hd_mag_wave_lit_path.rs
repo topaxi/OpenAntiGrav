@@ -24,6 +24,7 @@ const GLOW_SLOT: u32 = 1 << slots::MATERIAL_SHIFT;
 
 fn vertex(position: [f32; 3], wave: bool) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],
@@ -89,6 +90,7 @@ fn model(wave: bool) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),

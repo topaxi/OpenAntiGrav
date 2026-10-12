@@ -26,6 +26,10 @@ pub(super) struct MaterialSetup {
     pub(super) material_specular_exponent: Vec<f32>,
     pub(super) material_colour_factor: Vec<bool>,
     pub(super) material_variants: Vec<Option<oag_rcs::rcsmaterial::Variant>>,
+    /// Per material slot: whether the material ships a `StaticQuake` vertex
+    /// program, so the Quake's displacement reaches it - see
+    /// [`crate::mesh::GpuVertex::quake`].
+    pub(super) material_quake: Vec<bool>,
     pub(super) emissive: Vec<crate::mesh::Emissive>,
     pub(super) alpha_test_ref: Option<f32>,
     /// The magstrip emissive pictures and waves - see [`super::mag_wave`].
@@ -52,6 +56,7 @@ impl MaterialSetup {
             material_specular_exponent: model.material_specular_exponent.clone(),
             material_colour_factor: model.material_colour_factor.clone(),
             material_variants: model.material_variants.clone(),
+            material_quake: model.material_quake.clone(),
             emissive: model.emissive.clone(),
             alpha_test_ref: model.alpha_test_ref,
             mag_emissive: model.pad_masks.clone(),
@@ -72,7 +77,7 @@ pub(super) fn material_setup(
     // renderer's two bindings comes from is a property of the shader the
     // lit-race key resolves to, not of the entry's position - see
     // `skin::picks`.
-    let material_variants = variants(model, textures, report);
+    let (material_variants, material_quake) = variants(model, textures, report);
     let picks = picks(model, &material_variants, textures);
     let (mut skins, mut seconds) = skin(model, &picks, textures, report);
     // After the variants, because the roles are read off the resolved one.
@@ -208,6 +213,7 @@ pub(super) fn material_setup(
         material_specular_exponent,
         material_colour_factor,
         material_variants,
+        material_quake,
         emissive,
         alpha_test_ref,
         mag_emissive,

@@ -47,6 +47,7 @@ def main():
     ap.add_argument("--countdown", type=float, default=12.0, help="seconds from the START RACE tap to the shot")
     ap.add_argument("--watch", type=float, default=14.0, help="seconds filmed after the shot")
     ap.add_argument("--throttle", action="store_true", help="hold cross (throttle) from the shot on")
+    ap.add_argument("--ahead", type=float, default=0.0, help="units to move the craft forward along its own heading right after the shot, so the wave (270 u/s from 15 ahead) overtakes it")
     ap.add_argument("--button", default="triangle")
     args = ap.parse_args()
     out = Path(args.log_dir)
@@ -82,6 +83,13 @@ def main():
         time.sleep(0.12)
         session.pad.set(args.button, False)
         shot_t = time.time()
+        if args.ahead:
+            gdb.pause()
+            cur = place.read_pose(gdb, body)
+            fwd = cur["rows"][2]
+            pos = tuple(cur["pos"][i] + args.ahead * fwd[i] for i in range(3))
+            place.write_pose(gdb, body, pos, cur["rows"], 0.0)
+            gdb.resume()
         time.sleep(args.watch)
         drive.screenshot(out / "after-watch.png", trim=True)
         if args.throttle:

@@ -30,7 +30,7 @@ mod velocity;
 mod vertex_layout;
 pub use prepass::Prepass;
 pub use uniforms::{
-    DEPTH_FORMAT, Fog, Light, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
+    DEPTH_FORMAT, Fog, Light, QuakeWave, SCENE_SIZE, Scene, ShadowMap, ShadowMaps, ShadowReceiver,
     UNIFORMS_SIZE, Zone, ZoneSet, write_uniforms, write_uniforms_raw,
 };
 pub use velocity::Velocity;

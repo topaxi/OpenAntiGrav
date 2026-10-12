@@ -4,6 +4,31 @@
 
 use super::*;
 
+/// How far from the wave's midpoint the road still lifts, in world units:
+/// `quakePointA.w`, read live off Wipeout HD's `StaticQuake` registers at two
+/// moments of one wave and `60.0` both times (so it does not grow with the
+/// wave's age the way the Pulse ripple's half-width does). **Measured, one
+/// boot**, `scripts/hd-quake-uniforms.py`.
+pub(crate) const SURFACE_RADIUS: f32 = 60.0;
+
+/// One frame of the road's lift, in the registers `mesh.wesl`'s `quake_lifted`
+/// reads: `left` and `right` the two track-edge points at the wave, `up` the
+/// track's up there, and `age` the wave's.
+///
+/// The amplitude is the Pulse ripple's own - `+0x380`, read live every 10 ms
+/// off a fired HD Quake, is `oag_render::ripple::amplitude` of the wave's age
+/// to the third decimal (12 units at 0.3 s, none at 5 s).
+fn surface_wave(left: Vec3, right: Vec3, up: Vec3, age: f32) -> oag_mesh::mesh_render::QuakeWave {
+    let across = right - left;
+    let point = |p: Vec3, w: f32| [p.x, p.y, p.z, w];
+    oag_mesh::mesh_render::QuakeWave {
+        point_b: point(right, oag_render::ripple::amplitude(age)),
+        point_a: point(left, SURFACE_RADIUS),
+        offset: point(across, across.length()),
+        up: point(up, 0.0),
+    }
+}
+
 impl Race {
     /// Keeps [`Trigger::Quake`] and its own transform riding the travelling
     /// wave, one instance for the whole race.
@@ -45,6 +70,7 @@ impl Race {
     pub(crate) fn advance_quake_visual(&mut self) {
         let Some(wave) = self.sim.world.quake else {
             self.view.quake_point = None;
+            self.view.quake_surface = None;
             if let Some(playing) = self.view.quake_effect.take() {
                 self.view.stage.release(playing);
             }
@@ -68,6 +94,13 @@ impl Race {
         let right = centre + lateral * sample.half_width_right;
         let midpoint = (left + right) * 0.5;
         self.view.quake_point = Some(midpoint);
+        let track_up = (-Vec3::from_array(sample.down))
+            .try_normalize()
+            .unwrap_or(Vec3::Y);
+        // The road itself: lifted wherever a surface carries
+        // `GpuVertex::quake`, which is where the disc ships a `StaticQuake`
+        // program, so only Wipeout HD's (`Race::quake_wave`).
+        self.view.quake_surface = Some(surface_wave(left, right, track_up, wave.age));
         let scale = (right - left).length() / 50.0;
         // The frame's `X` runs edge to edge: `Quake_Update`'s basis starts
         // from `normalize(B - A)` as its first row (`0x0891da08`, read
@@ -104,8 +137,7 @@ impl Race {
         // was read.
         if let (true, Some(playing)) = (stretches, playing) {
             self.view.stage.stretch(playing, scale, across);
-            let up = (-Vec3::from_array(sample.down)).try_normalize();
-            self.view.stage.orient(playing, up.unwrap_or(Vec3::Y));
+            self.view.stage.orient(playing, track_up);
         }
         // Every frame the wave's instance lives, at the span's first edge
         // point - `left` here, the same reading `across` makes (chosen: which

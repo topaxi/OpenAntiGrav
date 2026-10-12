@@ -19,6 +19,7 @@ use oag_render::shadow::occlusion::{Maps, RADIUS, SIZE, Track};
 
 fn vertex(position: [f32; 3], lightmap_texcoord: [f32; 2], sun_mask: f32, slots: u32) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 1.0, 0.0],
         colour: [1.0, 1.0, 1.0, 1.0],

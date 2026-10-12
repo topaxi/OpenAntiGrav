@@ -105,6 +105,7 @@ fn model_of(draws: Vec<DrawCall>) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -283,6 +284,7 @@ fn swap_fixture() -> (TrackPvs, SwapConflicts) {
         draw_of_node(Some(3)),
     ]);
     let vertex = |x: f32| oag_mesh::mesh::GpuVertex {
+        quake: 0.0,
         position: [x, 0.0, 0.0],
         normal: [0.0, 1.0, 0.0],
         colour: [1.0; 4],

@@ -610,6 +610,7 @@ impl Race {
                 }),
                 leach_strip: leach_strip.map(crate::leach_strip::Strip::new),
                 quake_point: None,
+                quake_surface: None,
                 leach_beam_effect: None,
                 leach_charge_effect: [None; MAX_SHIPS],
                 leach_beam_ribbon: None,

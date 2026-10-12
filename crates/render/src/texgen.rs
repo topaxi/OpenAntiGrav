@@ -224,6 +224,7 @@ mod tests {
 
     fn vertex(normal: [f32; 3]) -> GpuVertex {
         GpuVertex {
+            quake: 0.0,
             position: [0.0; 3],
             normal,
             colour: [1.0; 4],

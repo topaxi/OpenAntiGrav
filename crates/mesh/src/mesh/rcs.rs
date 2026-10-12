@@ -245,6 +245,7 @@ fn surface(
     material_slots: &[u32],
     material_specular_exponent: &[f32],
     material_colour_factor: &[bool],
+    material_quake: &[bool],
     material_anim: &[u32],
 ) -> Surface {
     let slot = mesh.material as usize;
@@ -290,6 +291,7 @@ fn surface(
         roles,
         specular_exponent,
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
+        quake: material_quake.get(slot).copied().unwrap_or(false),
         anim,
     }
 }
@@ -377,6 +379,9 @@ struct Surface {
     /// light - see `skin::light_inputs`. Marks the chunk's vertices through
     /// `GpuVertex::sun_mask`.
     colour_factor: bool,
+    /// Whether the material ships a `StaticQuake` vertex program - see
+    /// `GpuVertex::quake`.
+    quake: bool,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -534,6 +539,7 @@ fn emit(
             },
             specular_exponent: surface.specular_exponent,
             glow: 0.0,
+            quake: f32::from(u8::from(surface.quake)),
             texcoord2: texcoords2
                 .and_then(|t| t.get(k))
                 .map_or([0.0, 0.0], |&[u, v]| [finite(u), finite(v)]),
@@ -694,6 +700,7 @@ fn build_with_options(
         material_specular_exponent,
         material_colour_factor,
         material_variants,
+        material_quake,
         emissive,
         alpha_test_ref,
         mag_emissive,
@@ -723,6 +730,7 @@ fn build_with_options(
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
     out.material_colour_factor = material_colour_factor;
+    out.material_quake = material_quake;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;
 
@@ -791,6 +799,7 @@ fn build_with_options(
                 &out.material_slots,
                 &out.material_specular_exponent,
                 &out.material_colour_factor,
+                &out.material_quake,
                 &out.material_anim,
             );
             report.see_through += usize::from(surface.blend.is_some());

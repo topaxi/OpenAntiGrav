@@ -335,6 +335,9 @@ pub struct RaceView {
     /// Where the travelling wave is, on the road, for `~QUAKETRAVEL`: the
     /// midpoint [`Self::quake_effect`] follows. `None` with no wave.
     pub(super) quake_point: Option<oag_core::math::Vec3>,
+    /// The road's lift under that wave, for the surfaces the title's
+    /// materials mark - see [`Race::quake_wave`]. `None` with no wave.
+    pub(super) quake_surface: Option<oag_mesh::mesh_render::QuakeWave>,
     /// The [`Trigger::LeachbeamEnergy`] instance riding the
     /// craft a beam is fastened to, or `None` when no link is connected.
     ///

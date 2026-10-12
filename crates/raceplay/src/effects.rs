@@ -867,6 +867,17 @@ impl Race {
         self.view.quake_point
     }
 
+    /// The road's lift under the Quake wave this frame, or
+    /// [`QuakeWave::off`](oag_mesh::mesh_render::QuakeWave::off) with none in flight:
+    /// what `Scene::quake` carries. It displaces only the surfaces whose vertex
+    /// carries `quake`, which no title but Wipeout HD marks.
+    #[must_use]
+    pub fn quake_wave(&self) -> oag_mesh::mesh_render::QuakeWave {
+        self.view
+            .quake_surface
+            .unwrap_or_else(oag_mesh::mesh_render::QuakeWave::off)
+    }
+
     /// The `+Y` of the Quake wave's effect frame, while one travels.
     #[must_use]
     pub fn quake_frame_up(&self) -> Option<oag_core::math::Vec3> {

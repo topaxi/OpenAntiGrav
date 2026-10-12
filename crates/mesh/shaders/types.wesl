@@ -184,6 +184,19 @@ struct Scene {
     // `refractProject`; read by the tunnel glass alone. See
     // `mesh_render::Scene::refraction`.
     refraction: mat4x4<f32>,
+    // The Quake's travelling displacement - `oag_mesh::mesh_render::QuakeWave`,
+    // read by `quake.wesl` for the surfaces whose vertex carries `quake`.
+    quake: QuakeWave,
+};
+
+// Wipeout HD's four `StaticQuake` registers. `point_b.w` is the amplitude
+// (zero when no wave is in flight, which makes the displacement the identity)
+// and `point_a.w` the radius of influence. See `quake.wesl`.
+struct QuakeWave {
+    point_b: vec4<f32>,
+    point_a: vec4<f32>,
+    offset: vec4<f32>,
+    up: vec4<f32>,
 };
 
 // The shadow map's projection and how hard it darkens. See
@@ -264,6 +277,9 @@ struct VertexInput {
     @location(11) glow: f32,
     // The second diffuse coordinate set - see `oag_mesh::mesh::GpuVertex::texcoord2`.
     @location(12) texcoord2: vec2<f32>,
+    // `1.0` for a surface the Quake's displacement reaches - see
+    // `oag_mesh::mesh::GpuVertex::quake` and `quake.wesl`.
+    @location(13) quake: f32,
 };
 
 struct VertexOutput {
