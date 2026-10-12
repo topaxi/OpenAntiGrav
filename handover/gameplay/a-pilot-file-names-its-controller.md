@@ -27,8 +27,9 @@ controller = "ours"        # default: this project's driver, every axis below ap
 
 - `"original"` on a title whose driver is not recovered (Pure today, any foreign
   track's host) is an error naming the title, not a silent fall back to ours.
-- The campaign keeps flying the original whatever a pilot file says (the 2026-10-11
-  decision stands for the campaign).
+- The original campaigns stay vanilla (maintainer, 2026-10-12): they fly the original
+  whatever a pilot file says. A **custom campaign** (this project's own, or a mod's) is
+  where a campaign may name any controller, craft or track.
 - A pilot that sets axes for a controller that ignores them is an error naming the
   key, as a misspelled key already is.
 
@@ -66,3 +67,12 @@ function of what it is given, and bit-identical on every machine.
 2. `controller = "ours" | "original"` in the pilot file and the AI PILOTS screen.
 3. An ADR for the mod ABI, then a `wasmtime` host behind a cargo feature, with one
    example module that reproduces `balanced` closely enough to race.
+
+## Custom campaigns (idea, 2026-10-12)
+
+The maintainer's framing: original campaigns stay vanilla; a custom campaign (an
+"original OAG" campaign this project authors, or a mod's) gets the freedom. That
+implies a campaign definition of this project's own (events, tracks including
+foreign and track-file ones, craft including craft files, each event's controller
+and pilots, medal targets, unlocks), read the way the titles' campaign tables are
+read and shown by the same list screen `pure-campaign` builds. Not designed yet.

@@ -91,8 +91,10 @@ it yields is plain `Handling` data.
   tables per team; a modder may only want one.
 - May opponents fly custom craft (race box, remix), or only the player?
 - Engine sound: borrow the host title's, or ship an audio file in the craft?
-- Whether a custom craft is offered in the campaign at all (likely not: campaign is
-  the original).
+- ~~Whether a custom craft is offered in the campaign~~ **Decided 2026-10-12 (maintainer):
+  the original campaigns stay vanilla** (their own craft, tracks and the original AI).
+  A custom campaign, this project's own or a mod's, is where custom craft, tracks and
+  controllers belong, with more freedom.
 
 ## Next Steps
 
