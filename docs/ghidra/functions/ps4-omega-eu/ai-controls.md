@@ -207,9 +207,13 @@ halved-lookahead rows resolved on the disc (and not for a Venom on Ubermall), th
 cell's skill (`grid0_3_1`, Vineta K, Venom: `0.0`, `1.225`, `3.68` at Easy, Medium, Hard off
 its circuit's curve), and the field finishing on four circuits with the player parked and
 no respawn: Vineta K and Talon's Junction (Venom), Ubermall (Phantom) and Amphiseum reversed
-(Flash). Measured 2026-10-12: all 28 opponents finished, shield 100 at every lap and at the
-end on Ubermall and Amphiseum; the seven tests take 54 s together, the longest 22 s
-(Amphiseum).
+(Flash), at the race's ambient skill (`2.0`, level 1). Flown 2026-10-12 in this engine, not
+on the original: all 28 opponents finished in 121.3 s, 140.3 s, 152.9 s and 184.4 s, shield
+`100` at every lap crossing and at the end of the run on all four. Vineta K at the first
+cell's own Easy (`0.0`, level 0) and Hard (`3.68`, level 2) finished in 133.1 s and 114.8 s,
+no respawn, shield `100` throughout (a one-off run, not held by a test). The seven tests take
+54 s together in isolation, the longest 22 s (Amphiseum). None of the 167 parsed campaign
+cells is Super Phantom, the class with no `SpeedClass`.
 
 **Chosen, not measured:**
 
