@@ -451,9 +451,20 @@ impl Session {
                 // so a second launch with nothing set here would lose the
                 // medal evaluation and `EndRace Rewards`' own `campaign`
                 // flag on the replay.
-                (self.campaign_cell, self.campaign_difficulty) = match &self.stage {
-                    Stage::Race(stage) => (stage.campaign_cell.clone(), stage.campaign_difficulty),
-                    _ => (None, None),
+                // The skill scale too: the original driver and the campaign
+                // tuning both read it, and a relaunch without it races the cell
+                // at the ambient scale instead.
+                (
+                    self.campaign_cell,
+                    self.campaign_difficulty,
+                    self.campaign_ai_skill_scale,
+                ) = match &self.stage {
+                    Stage::Race(stage) => (
+                        stage.campaign_cell.clone(),
+                        stage.campaign_difficulty,
+                        stage.campaign_ai_skill_scale,
+                    ),
+                    _ => (None, None, None),
                 };
                 self.finish_launch();
             }

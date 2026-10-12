@@ -530,7 +530,20 @@ fast the field closes into formation. In `hard-park` the medians fall from `95`
 overshoot their slots onto the lower stop); ours hold `75` to `102`, on or
 behind their slots, over the same window. At skill `0.9`, 64.6 to 70.6 s:
 original median `50.2`, ours `60.5`. Airbrakes are not the cause (on for 0.0 to
-0.1 % of samples). Open.
+0.1 % of samples), and the throttle reaches the engine unclamped (the engine
+state reads `101.7` on the upper stop, asserted). Open.
+
+**Relaunches keep it.** Race Again and a tournament's next leg re-arm the cell
+and its rung from the finished stage, and (since this build) its skill scale,
+which the campaign tuning had also been dropping on a relaunch. A multi-leg
+cell races every leg at its first track's scale (chosen, as before).
+
+**What no test sees.** The session hook (`session/load.rs`) needs a GPU-built
+race stage, so it has no automated coverage; a windowed walk through the front
+end (Grid 1, Moa Therma White, Medium) logged `original AI: the campaign's
+opponents fly the original driver, skill 2.90, level 1`, and it was that walk
+that found the first version keyed on a resolved skill, which Grid 1's cell
+does not author.
 
 ### Still open, with the next address
 
@@ -548,8 +561,11 @@ original median `50.2`, ours `60.5`. Airbrakes are not the cause (on for 0.0 to
 - **`StartStats`** (`StartBoost[8]`): read at the launch
   ([ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#startboost8-has-a-consumer-the-ais-grade-3)),
   not part of this pass.
-- **A tournament's later legs** keep this project's driver: the engine does
-  not re-run AI setup between legs (the campaign scale has the same gap).
+- **Replays do not record the mode.** ADR-0055 wants every input from outside
+  `Race::tick` in the header; today only Time Trial and Speed Lap record, and
+  neither has opponents, so no recording holds the original driver. Recording
+  opponent races will need `(skill, level)` in `Header::options`, as the
+  campaign tuning will.
 - **The other titles.** HD's thrust law is Pulse's with four changes
   ([ps3-hdfury-eu/ai-stats.md](../ghidra/functions/ps3-hdfury-eu/ai-stats.md));
   its steering, lane planner and rail are not read. 2048 and Omega ship the

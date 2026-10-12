@@ -30,7 +30,8 @@ respawn; our AI is untouched (lone-craft regression identical, twelve clean).
   same tables: in `hard-park` the original's medians fall to the `48` lower
   stop by 10 s (median gap `-25` to `-48`); ours hold `75` to `102` on or
   behind their slots. At skill `0.9` the median is `50.2` live against our
-  `60.5`. Airbrakes are not it (0.0-0.1 % of samples). Either the craft's
+  `60.5`. Airbrakes are not it (0.0-0.1 % of samples), and the throttle
+  reaches the engine unclamped (`101.7`, asserted). Either the craft's
   speed at a throttle or the line it holds differs; numbers in ai.md.
 - **No campaign cell was captured.** The comparison is the Single Race
   capture; `AI_ResolveSkillScale`'s campaign branch has no live leg.
@@ -40,8 +41,9 @@ respawn; our AI is untouched (lone-craft regression identical, twelve clean).
   header): own sample, lap progress, lookahead walk, contacts from the wall
   response only (no craft-to-craft), race time from the green light, grid
   order. A cell with no rung shuffles at level 1, chosen.
-- **A tournament's later legs** keep this project's driver: no AI setup
-  between legs, the same gap the campaign tuning has.
+- **The session hook has no automated test** (it needs a GPU-built stage);
+  a windowed front-end walk is its only evidence.
+- **Replays** do not record the mode; none records an opponent race yet.
 - **`StartBoost`** at the launch (`ai-stats.md`) is still unwired.
 - **Other titles.** HD's thrust law is Pulse's with four changes and its
   planner, steering and rail are unread; 2048 and Omega ship the same tables
@@ -59,4 +61,3 @@ respawn; our AI is untouched (lone-craft regression identical, twelve clean).
    lane point) and compare with `Race`'s own.
 3. Give the steering a live leg: log the lookahead sample and the lane ring at
    `Ai_ComputeControls`' entry and recompute the steer.
-4. Re-run AI setup per tournament leg so later legs keep the original driver.

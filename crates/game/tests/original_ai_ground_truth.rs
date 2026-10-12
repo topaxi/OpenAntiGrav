@@ -43,18 +43,22 @@ fn race_time(race: &oag_raceplay::Race) -> f32 {
 
 /// Every opponent's held throttle, with its place, on every tick of
 /// `from..=to` seconds.
-fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Vec<(u8, f32)>> {
+fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<(Vec<(u8, f32)>, Vec<f32>)> {
     let mut race = race(level, skill)?;
     let mut out = Vec::new();
+    let mut engine = Vec::new();
     while race_time(&race) <= to {
         race.tick(&PlayerInputs::none());
         if race_time(&race) >= from {
             let places = race.places();
             let field = race.original_ai_field().expect("the field is on");
             out.extend((1..8).map(|s| (places[s], field.drivers[s].held_thrust)));
+            // The throttle state the engine read this tick: above `100` it
+            // lifts the acceleration cap, so nothing on the way may clamp it.
+            engine.extend((1..8).map(|s| race.sim.world.ships[s].physics.thrust));
         }
     }
-    Some(out)
+    Some((out, engine))
 }
 
 fn close(a: f32, b: f32) -> bool {
@@ -68,7 +72,7 @@ fn close(a: f32, b: f32) -> bool {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn at_hard_the_reference_racer_and_the_upper_stop_read_what_the_original_logged() {
-    let Some(samples) = held(2, 3.0, 8.5, 9.3) else {
+    let Some((samples, engine)) = held(2, 3.0, 8.5, 9.3) else {
         return;
     };
     let reference: Vec<f32> = samples
@@ -92,7 +96,7 @@ fn at_hard_the_reference_racer_and_the_upper_stop_read_what_the_original_logged(
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn at_easy_the_lower_stop_reads_what_the_original_logged() {
-    let Some(samples) = held(0, 0.9, 64.6, 70.6) else {
+    let Some((samples, _)) = held(0, 0.9, 64.6, 70.6) else {
         return;
     };
     let lowest = samples
@@ -110,15 +114,28 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
     let Some(mut race) = race(0, 0.9) else {
         return;
     };
+    // Shield read at each opponent's lap crossings: a per-lap figure, not
+    // just the end of the run.
+    let mut lap = [1u32; 8];
+    let mut per_lap: [Vec<f32>; 8] = Default::default();
     for _ in 0..60 * 200 {
         race.tick(&PlayerInputs::none());
+        for slot in 1..8 {
+            let ship = &race.sim.world.ships[slot];
+            if ship.standing.lap != lap[slot] {
+                lap[slot] = ship.standing.lap;
+                per_lap[slot].push(ship.physics.shield);
+            }
+        }
     }
     for slot in 1..8 {
         let ship = &race.sim.world.ships[slot];
         println!(
-            "slot {slot}: lap {} respawns {} shield {:.1}",
+            "slot {slot}: lap {} respawns {} wall-contact ticks {} shield at each crossing {:?}, end {:.1}",
             ship.standing.lap,
             race.respawns_of(slot),
+            race.wall_contact_ticks_of(slot),
+            per_lap[slot],
             ship.physics.shield
         );
         assert!(
