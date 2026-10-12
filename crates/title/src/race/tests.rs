@@ -293,7 +293,7 @@ const NATIVE: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Subdirectory,
-    opponent_families: &[],
+    opponents_match_player_variant: false,
 };
 
 const GUEST: TeamVariants = TeamVariants {
@@ -309,7 +309,7 @@ const GUEST: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Suffix,
-    opponent_families: &[],
+    opponents_match_player_variant: false,
 };
 
 const GUEST_ROSTER: GuestRoster = GuestRoster {
@@ -527,14 +527,13 @@ const FAMILIES: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Suffix,
-    opponent_families: &[&[""], &["_c1", "_n1"]],
+    opponents_match_player_variant: true,
 };
 
-/// A combined id splits back into its base and suffix, and a suffix finds the
-/// family that holds it; an id off the table, or a suffix in no family, finds
-/// nothing.
+/// A combined id splits back into its base and suffix; an id off the table
+/// finds nothing.
 #[test]
-fn split_and_family_of_read_a_combined_id_back() {
+fn split_reads_a_combined_id_back() {
     assert_eq!(FAMILIES.split("Feisar_n1"), Some(("Feisar", "_n1")));
     assert_eq!(FAMILIES.split("EGX"), Some(("EGX", "")));
     assert_eq!(FAMILIES.split("Goteki_c1"), None);

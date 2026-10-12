@@ -164,7 +164,7 @@ pub const ERA_2048_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
         },
     ],
     join: oag_title::VariantJoin::Subdirectory,
-    opponent_families: &[],
+    opponents_match_player_variant: false,
 };
 
 /// [`oag_title::RaceDefaults::guest_roster`] for Omega: its five 2048-era

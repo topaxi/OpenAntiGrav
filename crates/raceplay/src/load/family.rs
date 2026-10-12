@@ -1,21 +1,16 @@
-//! An opponent flies the player's variant family, on its own variant's tuning.
+//! An opponent flies the player's exact variant, in its own team's file.
 //!
-//! The family is [`oag_title::TeamVariants::opponent_families`], title data:
-//! HD/Fury declares HD and Fury as two, so a player on an HD hull faces HD
-//! hulls and a player on `_c1`/`_n1` faces Fury ones. A title that declares
-//! none is untouched by everything here. **Chosen, not measured.**
+//! The rule is [`oag_title::TeamVariants::opponents_match_player_variant`],
+//! title data: HD/Fury's player on `_c1` faces `_c1` hulls, on `_n1` faces
+//! `_n1`, on the unsuffixed HD hull faces HD. Each slot's own handling loads on
+//! every title, whatever the rule.
 
 use super::handling;
-use oag_core::rng::Rng;
 
-/// Salt for the Concept-or-Nitro draw, so it never shares a stream with the
-/// roster shuffle.
-const FAMILY_SALT: u64 = 0x4641_4d49_4c59_5f31;
-
-/// The title's variant table when it declares families, else `None`.
+/// The title's variant table when it declares the rule, else `None`.
 fn table(race: &oag_title::RaceDefaults) -> Option<&'static oag_title::TeamVariants> {
     race.team_variants
-        .filter(|variants| !variants.opponent_families.is_empty())
+        .filter(|variants| variants.opponents_match_player_variant)
 }
 
 /// `available` without the player's own team in any of its variants, so a
@@ -39,35 +34,28 @@ pub(super) fn pool(
         .collect()
 }
 
-/// Moves every AI slot onto the player's family: its base team kept, its
-/// suffix drawn from the family (the one member, or Concept or Nitro off the
-/// race seed and the slot). A slot the table does not recognise is left alone.
+/// Moves every AI slot onto the player's exact variant: its base team kept, the
+/// player's suffix applied. A slot the table does not recognise is left alone.
 pub(super) fn follow_player(
     race: &oag_title::RaceDefaults,
     slot_teams: &mut [String],
-    seed: u64,
     report: &mut Vec<String>,
 ) {
     let Some(variants) = table(race) else { return };
-    let Some(player) = slot_teams.first() else {
+    let Some(&[ref player, ..]) = Some(&*slot_teams) else {
         return;
     };
     let Some((_, suffix)) = variants.split(player) else {
         return;
     };
-    let Some(family) = variants.family_of(suffix) else {
-        return;
-    };
-    for (slot, team) in slot_teams.iter_mut().enumerate().skip(1) {
-        let Some((base, _)) = variants.split(team) else {
-            continue;
-        };
-        let mut rng = Rng::new(seed ^ FAMILY_SALT ^ slot as u64);
-        let pick = family[rng.below(family.len() as u32) as usize];
-        *team = variants.join.combine(base, pick);
+    for team in slot_teams.iter_mut().skip(1) {
+        if let Some((base, _)) = variants.split(team) {
+            *team = variants.join.combine(base, suffix);
+        }
     }
     report.push(format!(
-        "opponents follow the player's variant family {family:?} (chosen, not measured): {}",
+        "opponents fly the player's variant {suffix:?} in their own team's directory \
+         (static read of the executable, confidence 55): {}",
         slot_teams.join(", ")
     ));
 }

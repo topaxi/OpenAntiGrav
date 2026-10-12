@@ -217,7 +217,7 @@ pub(super) fn grid(
     let pool = super::family::pool(craft_title.race, team, available);
     let mut slot_teams = oag_livery::teams_for_slots(team, &pool, oag_gameplay::MAX_SHIPS, seed);
     apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
-    super::family::follow_player(craft_title.race, &mut slot_teams, seed, report);
+    super::family::follow_player(craft_title.race, &mut slot_teams, report);
     let liveries = oag_livery::load(
         archives,
         &slot_teams,

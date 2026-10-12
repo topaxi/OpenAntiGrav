@@ -80,13 +80,14 @@ pub struct TeamVariants {
     /// How a variant's suffix combines with a team's own id. See
     /// [`VariantJoin`].
     pub join: VariantJoin,
-    /// The groups of [`TeamVariant::suffix`]es an opponent follows the
-    /// player's pick across: a player on any suffix of a group faces
-    /// opponents on suffixes of that same group only, each on **its own
-    /// variant's tuning**. HD/Fury is `[[""], ["_c1", "_n1"]]` - HD against
-    /// HD, Fury against Fury. Empty means the title makes no such rule and an
-    /// opponent keeps the id the roster drew (its own team's tuning still loads). **Chosen, not measured.**
-    pub opponent_families: &'static [&'static [&'static str]],
+    /// Whether every opponent flies the **player's exact variant** (its own
+    /// team's directory and handling file in that variant): player on `_c1`,
+    /// all opponents on `_c1`. `false` leaves the id the roster drew. HD/Fury
+    /// is `true`, from the executable read statically (`Ship_Construct`
+    /// `0x000ddd58`, the AI spawner `0x00058e38`: the AI flies the player's
+    /// variant class), confidence 55, a live RPCS3 check still open - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`.
+    pub opponents_match_player_variant: bool,
 }
 
 impl TeamVariants {
@@ -108,16 +109,6 @@ impl TeamVariants {
             }
         }
         best
-    }
-
-    /// The group of [`Self::opponent_families`] that holds `suffix`; `None`
-    /// where the title declares no families or none holds it.
-    #[must_use]
-    pub fn family_of(&self, suffix: &str) -> Option<&'static [&'static str]> {
-        self.opponent_families
-            .iter()
-            .copied()
-            .find(|family| family.contains(&suffix))
     }
 
     /// Whether `combined` is one of this table's own combined ids - some team

@@ -7,9 +7,10 @@
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_opponent_variant_ground_truth --run-ignored all
 //! ```
 //!
-//! The rule is the maintainer's and is **chosen, not measured**
-//! (`oag_hd::race::TEAM_VARIANTS`'s `opponent_families`): a player on an HD
-//! hull faces HD hulls, a player on `_c1` or `_n1` faces Fury ones.
+//! The rule is `oag_hd::race::TEAM_VARIANTS`'s `opponents_match_player_variant`
+//! (static read, confidence 55, `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`;
+//! a live RPCS3 check is open): every opponent flies the player's exact
+//! variant.
 
 use oag_raceplay as race;
 use oag_raceplay::Race;
@@ -58,19 +59,12 @@ fn the_opponents_variant_set_follows_the_players_pick() {
     let Some(image) = oag_testdata::image(IMAGE) else {
         return;
     };
-    for (player, family) in [
-        ("Feisar", &[""][..]),
-        ("Feisar_c1", &["_c1", "_n1"][..]),
-        ("Feisar_n1", &["_c1", "_n1"][..]),
-    ] {
+    for (player, family) in [("Feisar", ""), ("Feisar_c1", "_c1"), ("Feisar_n1", "_n1")] {
         let (_, teams) = started(&image, player);
         assert_eq!(teams.len(), 8, "{player}: {teams:?}");
         let base = player.trim_end_matches("_c1").trim_end_matches("_n1");
         for team in &teams[1..] {
-            assert!(
-                family.contains(&suffix(team)),
-                "{player} faces {team}: {teams:?}"
-            );
+            assert!(suffix(team) == family, "{player} faces {team}: {teams:?}");
             assert!(
                 !team.starts_with(&format!("{base}_")) && team != base,
                 "{player} faces its own team as {team}: {teams:?}"
