@@ -124,7 +124,7 @@ pub struct Controls {
 }
 
 fn default_pilot_assist() -> Level {
-    if cfg!(target_os = "android") {
+    if oag_mobile::MOBILE {
         Level::Extreme
     } else {
         Level::Off

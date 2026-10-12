@@ -12,7 +12,7 @@ import package::types::{VertexOutput};
 const SLOT_REFRACTION: u32 = 1048576u;
 
 // `slots::MATERIAL_SHIFT`.
-const MATERIAL_SHIFT: u32 = 23u;
+const MATERIAL_SHIFT: u32 = 24u;
 
 // An opaque surface's fogged colour from its lit texel: the glass's equation
 // where the material is one, the ordinary `fog(shadow(C))` everywhere else.

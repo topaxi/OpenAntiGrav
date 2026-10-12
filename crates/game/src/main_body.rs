@@ -52,8 +52,8 @@ mod pointer;
 mod pose;
 #[path = "main/prepare.rs"]
 mod prepare;
-#[path = "main/pure_campaign_stage.rs"]
-mod pure_campaign_stage;
+#[path = "main/pure_chain_stage.rs"]
+mod pure_chain_stage;
 #[path = "main/race_build.rs"]
 mod race_build;
 #[path = "main/race_stage.rs"]
@@ -169,28 +169,29 @@ static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
 
 #[cfg_attr(any(target_os = "android", target_arch = "wasm32"), allow(dead_code))]
 fn main() -> Result<()> {
+    // iOS has no command line (and Xcode passes its own flags) and starts in the
+    // read-only bundle: settle the working directory before anything reads it.
+    #[cfg(target_os = "ios")]
+    oag_mobile::ios::prepare();
     init_logging();
-    let result = run(Cli::parse());
+    #[cfg(target_os = "ios")]
+    let cli = Cli::parse_from(["oag-game"]);
+    #[cfg(not(target_os = "ios"))]
+    let cli = Cli::parse();
+    let result = run(cli);
     oag_log::flush();
     result
 }
 
-/// The NativeActivity entry point: `liboag_game.so` is this file built as a
-/// cdylib (`just apk`: `cargo rustc --bin oag-game -- --crate-type cdylib`). See `docs/tools/android.md`.
-///
-/// There is no command line and no working directory on Android, so the app's
-/// external files directory stands in for both: it becomes the current
-/// directory and the XDG roots, which puts `data/images`, `data/cache`, the
-/// settings, records, ghosts and the log under
-/// `/storage/emulated/0/Android/data/<package>/files/` without `oag-source`
-/// knowing about Android at all.
+/// The NativeActivity entry point: `liboag_android.so` is this file built as a
+/// cdylib (`just apk`, the `oag_android` example). See `docs/tools/android.md`;
+/// the storage setup and the event loop are `oag_mobile::android`.
 #[cfg(target_os = "android")]
 #[allow(unsafe_code)] // the C ABI symbol NativeActivity looks up by name
 #[unsafe(no_mangle)]
 fn android_main(app: winit::platform::android::activity::AndroidApp) {
-    android_env(&app);
+    oag_mobile::android::prepare(app);
     init_logging();
-    let _ = ANDROID_APP.set(app);
     let result = run(Cli::parse_from(["oag-game"]));
     oag_log::flush();
     if let Err(why) = result {
@@ -198,50 +199,11 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     }
 }
 
-#[cfg(target_os = "android")]
-static ANDROID_APP: std::sync::OnceLock<winit::platform::android::activity::AndroidApp> =
-    std::sync::OnceLock::new();
-
-/// Points the working directory and the XDG roots at the app's files directory.
-#[cfg(target_os = "android")]
-#[allow(unsafe_code)] // `set_var`, see below
-fn android_env(app: &winit::platform::android::activity::AndroidApp) {
-    let Some(files) = app
-        .external_data_path()
-        .or_else(|| app.internal_data_path())
-    else {
-        return;
-    };
-    for (name, sub) in [
-        ("HOME", "home"),
-        ("XDG_CONFIG_HOME", "config"),
-        ("XDG_DATA_HOME", "data"),
-        ("XDG_CACHE_HOME", "cache"),
-        ("XDG_STATE_HOME", "state"),
-    ] {
-        let dir = files.join(sub);
-        let _ = std::fs::create_dir_all(&dir);
-        // SAFETY: first thing `android_main` does, before any thread of ours
-        // exists to race a read of the environment.
-        unsafe { std::env::set_var(name, &dir) };
-    }
-    let _ = std::fs::create_dir_all(files.join("data").join("images"));
-    let _ = std::env::set_current_dir(&files);
-}
-
 /// The window system's event loop: winit's default everywhere but Android,
 /// where it has to be handed the activity.
 fn new_event_loop() -> Result<EventLoop<()>> {
     #[cfg(target_os = "android")]
-    {
-        use winit::event_loop::EventLoopBuilder;
-        use winit::platform::android::EventLoopBuilderExtAndroid;
-        let app = ANDROID_APP
-            .get()
-            .context("no AndroidApp: not started by android_main")?
-            .clone();
-        Ok(EventLoopBuilder::default().with_android_app(app).build()?)
-    }
+    return oag_mobile::android::event_loop().map_err(anyhow::Error::msg);
     #[cfg(not(target_os = "android"))]
     Ok(EventLoop::new()?)
 }
@@ -582,6 +544,17 @@ fn run(cli: Cli) -> Result<()> {
                 Some(launcher::Launcher::not_found(launcher::not_found_notice(
                     &images,
                 )))
+            } else if rows.is_empty() && cfg!(target_os = "ios") {
+                // The bundle is read-only and the container's path is a UUID:
+                // the screen names the folder as the Files app shows it.
+                #[cfg(target_os = "ios")]
+                let folder = oag_mobile::ios::IMAGES_IN_FILES;
+                #[cfg(not(target_os = "ios"))]
+                let folder = "";
+                log::error!("no disc image found; copy one to {folder}");
+                Some(launcher::Launcher::not_found(
+                    launcher::not_found_notice_desktop(folder),
+                ))
             } else if rows.is_empty() && chosen.is_none() {
                 // A double-click has no terminal for `resolve`'s message either,
                 // and its window would close before it could be read: the

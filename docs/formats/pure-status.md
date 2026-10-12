@@ -1544,11 +1544,12 @@ at `0.4`, both read off the running original. Evidence, captures and the open li
 
 Pure's campaign is a list of events per speed class, read off `Definition.xml` and each
 circuit's `stats.xml`, with every `<Unlock>` row read and evaluated and the medal law
-recovered from `BOOT.BIN`. Built as `RACE CAMPAIGN` on a Pure source; see
+recovered from `BOOT.BIN`. Built as the main menu's SINGLE PLAYER, the disc's own chain of screens, on a Pure source; see
 [`pure-campaign.md`](pure-campaign.md) and
 [the evidence page](../ghidra/functions/psp-pure-usa/campaign.md). The sentence above
-that Pure's 17 `<Unlock>` rows are "unread" is closed. Still open: the class gate (a
-fresh profile lists Vector and Venom only, in code), how the profile counts medals for
+that Pure's 17 `<Unlock>` rows are "unread" is closed. Still open: what opens the
+classes after Vector and Venom (a fresh profile lists those two only, in code; the later three
+are rewards, untraced), how the profile counts medals for
 `MedalCount`, and Pure's own campaign opponent
 ([`ai-controls.md`](../ghidra/functions/psp-pure-usa/ai-controls.md): planned, not flown
 there yet).

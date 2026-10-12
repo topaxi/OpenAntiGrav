@@ -65,6 +65,9 @@ ARTIFACT_ALLOWED = {
         f"res/mipmap-{density}-v4/ic_launcher.png"
         for density in ("mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi")
     ),
+    # And at the iOS home screen's sizes (`scripts/build-ios-app.sh`), at the
+    # root of `OpenAntiGrav.app`.
+    *(f"AppIcon-{size}.png" for size in (120, 152, 167, 180, 1024)),
 }
 
 ROOT = Path(__file__).resolve().parent.parent

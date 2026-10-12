@@ -835,6 +835,27 @@ impl Mesh {
         self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
     }
 
+    /// The coordinate pair declared under one attribute hash, for a program
+    /// that reads an attribute the declaration gives no name
+    /// (`mesh::rcs::holo_billboard`).
+    ///
+    /// # Errors
+    ///
+    /// [`Error::NoTexcoord`] and [`Error::OutOfBounds`], as [`Self::texcoords`].
+    pub fn texcoords_by_hash(
+        &self,
+        data: &[u8],
+        submesh: &SubMesh,
+        stride: usize,
+        name_hash: u32,
+    ) -> Result<Vec<[f32; 2]>> {
+        let decl = self.decl.as_ref().ok_or(Error::NoTexcoord)?;
+        let attribute = decl.attributes.iter().find(|a| a.name_hash == name_hash);
+        let attribute = attribute.ok_or(Error::NoTexcoord)?;
+        let format = TexcoordFormat::of(attribute).ok_or(Error::NoTexcoord)?;
+        self.coords_at(data, submesh, stride, usize::from(attribute.offset), format)
+    }
+
     /// The coordinates a **lightmap** is sampled through, one pair per vertex.
     ///
     /// The declaration names this attribute `lightmapUV` outright - see

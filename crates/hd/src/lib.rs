@@ -180,6 +180,9 @@ pub const TITLE: &Title = &Title {
         dialect: oag_title::CampaignDialect::Hd,
         definition_entry: Some(campaign::DEFINITION_ENTRY),
         list_entry: None,
+        flow: None,
+        classes_at_start: None,
+        main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
         // Not wired, not measured absent: HD's unlock rows are unread here.

@@ -20,6 +20,7 @@ mod menu_page;
 mod offscreen;
 mod presented;
 mod preview_pass;
+mod pure_chain_page;
 mod video;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
@@ -539,6 +540,13 @@ pub fn run(
     // a ticker at all. `None` everywhere else, which `renderer.render`'s own
     // `clip` parameter already treats as "nothing to clip".
     let mut ticker_clip: Option<(usize, f32, f32)> = None;
+    // The rows' skin, once for every screen this arm draws: the pitch comes off the
+    // menu face's line height, the one thing a still must not guess.
+    let skin = oag_ui::menu::Skin::new(
+        menu_skin,
+        space,
+        menu_font.as_ref().unwrap_or(&font).line_height,
+    );
     let (mut movie, video_format, list, space) = match (&options.menu_page, &options.screen) {
         (Some(page), _) => {
             let showing = backdrop.as_ref().filter(|movie| movie.frames.is_some());
@@ -573,11 +581,6 @@ pub fn run(
                     oag_ui_screens::picker::Kind::Ship => ship_select.as_ref(),
                 }
                 .with_context(|| format!("{} authors no {kind:?} selection screen", title.name))?;
-                let skin = oag_ui::menu::Skin::new(
-                    menu_skin,
-                    space,
-                    menu_font.as_ref().unwrap_or(&font).line_height,
-                );
                 // The selected circuit's lap, off the disc - the number the
                 // live screen's worker measures. One read; a capture with
                 // no source to open keeps the dash.
@@ -676,11 +679,6 @@ pub fn run(
                     ),
                     ..oag_ui_screens::picker::FaceScales::default()
                 };
-                let skin = oag_ui::menu::Skin::new(
-                    menu_skin,
-                    space,
-                    menu_font.as_ref().unwrap_or(&font).line_height,
-                );
                 let globals: Vec<(&str, &str)> = frontend
                     .screens()
                     .globals
@@ -732,6 +730,22 @@ pub fn run(
                     &records,
                 )?;
                 flyer_shot = shot;
+                (backdrop, video_format, list, space)
+            } else if let Some(answers) = pure_chain_page::answers(page) {
+                // Wipeout Pure's SINGLE PLAYER screens - see
+                // `crate::main::session::pure_chain` for the live flow.
+                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let (list, clip) = pure_chain_page::capture(
+                    answers,
+                    options.race.as_ref(),
+                    title,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    footer,
+                )?;
+                ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
                 // The EndRace screens, opened off the disc's own source - see
@@ -785,11 +799,7 @@ pub fn run(
                     // The face the rows are drawn in, not the front end's
                     // default: the pitch comes off its line height, so reading
                     // the wrong one spaces the rows for a font nothing draws.
-                    &oag_ui::menu::Skin::new(
-                        menu_skin,
-                        space,
-                        menu_font.as_ref().unwrap_or(&font).line_height,
-                    ),
+                    &skin,
                     &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
                     &menu_frame,
                     options.menu_anim_phase,
