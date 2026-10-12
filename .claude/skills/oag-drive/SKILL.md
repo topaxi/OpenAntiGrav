@@ -68,7 +68,10 @@ the work in isolated worktrees.
 - **Merge with `--no-ff`** and the project's attribution trailers.
 - **`cargo check --workspace --all-targets` and `cargo nextest run --workspace`
   (no disc data, about ten seconds once built) after every merge**, before the next
-  one and before telling members to merge main. On the same day `toml-schemas`
+  one. Members gate their branch as it is and do not merge `main` first; when a
+  merge conflicts, goes red or looks suspicious, send that member back to merge
+  `main` and resolve it themselves, then re-gate (maintainer, 2026-10-12: every
+  member re-merging on each move of `main` ran each gate several times). On the same day `toml-schemas`
   dropped menu.toml's `version = 1` while `track-picker` added a test fixture
   using it: it compiled, and only the test run caught it. Two branches that each gated green
   can conflict semantically with no textual conflict: on 2026-10-12 `speed-class`
