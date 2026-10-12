@@ -137,6 +137,7 @@ fn music_source_changed_while_a_race_is_live_moves_the_race_voice() {
         race_from: Some(Platform::Ps2),
         race_index: Some(0),
         race_position: 0.0,
+        race_tracks: 0,
         // The target platform is already decoded (as `held` for the menu row),
         // avoiding a disc read with no fixture. See `psp_boot_fixture`.
         race_cache: Some((Platform::Psp, 0, Arc::clone(&psp_track))),
@@ -196,6 +197,7 @@ fn a_source_with_no_decodable_race_music_still_resumes_menu_music_cleanly() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         // Nothing cached and the fake PSP path has no soundtrack, so
         // `start_race_music` decodes nothing: only the menu's loop remains.
         race_cache: None,
