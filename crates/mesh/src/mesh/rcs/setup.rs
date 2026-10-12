@@ -136,6 +136,18 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The holographic billboard writes an entry too, and binds its second
+    // layer third, beside the magstrips' and the pads' masks.
+    let holo_layers = super::holo_billboard::holo_billboard(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        (&mut skins, &mut seconds),
+        &mut emissive,
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, holo_layers);
     // A screen-grab refraction claims its slots last, for the same reason:
     // it writes an entry into the table.
     super::refraction::refraction(

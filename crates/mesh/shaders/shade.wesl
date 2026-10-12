@@ -3,6 +3,7 @@
 import package::absorb::{absorb_shading};
 import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, uniforms, wave_map};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
+import package::holo::{holo_billboard};
 import package::pad::{pad_normal};
 import oag_shaders::target::linear_out;
 import package::shading_modes::{colour_is_light, nova_prelit};
@@ -19,6 +20,9 @@ import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
 // varying, so it is told here.
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
+    if (in.slots & 8388608u) != 0u {
+        return holo_billboard(in);
+    }
     let n = normalize(in.normal);
     // **HD's pads** (`slots::PAD_NE`): the `_ne` texel replaces the vertex
     // normal in the program's own `N.L` and `N.H` below, and its alpha gates
@@ -271,7 +275,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
         // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
         // prelit term added (the vertex colour is the picture there).
-        if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 23u].y > 1.5 {
+        if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 24u].y > 1.5 {
             authored = ambient_term + sun_diffuse;
         }
     }
@@ -371,14 +375,14 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // consecutive glow-table entries. Chosen, not measured: `F` uses the
     // vertex normal, and the constants are display values decoded to the
     // domain the textures are sampled in.
-    if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 23u].y > 1.5 {
+    if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 24u].y > 1.5 {
         // **`water_test_2`** (`mesh::rcs::water`): the program's picture is the
         // vertex colour itself (`TC1 * (ambient + sun * sat(N.L))`), kept in
         // the gamma domain the branch below decodes. The light is set where
         // `authored` is built.
         picture = vec4<f32>(pow(max(in.colour.rgb, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.2)), picture.a);
     } else if (in.slots & 4194304u) != 0u {
-        let ice_slot = in.slots >> 23u;
+        let ice_slot = in.slots >> 24u;
         let deep = pow(emissives.tint_offset[ice_slot].rgb, vec3<f32>(2.2));
         let cyan = pow(emissives.tint_offset[ice_slot + 1u].rgb, vec3<f32>(2.2));
         let pale = pow(emissives.tint_offset[ice_slot + 2u].rgb, vec3<f32>(2.2));
@@ -422,7 +426,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // UV set feeding that interpolator is the one this renderer carries as
     // `texcoord` is unestablished. Only `v` moves, so a mismatch shows as a
     // glow tiled wrongly across the surface rather than as a missing one.
-    let glow_slot = in.slots >> 23u;
+    let glow_slot = in.slots >> 24u;
     let glow_tint_offset = emissives.tint_offset[glow_slot];
     let glow_scale = emissives.scale[glow_slot];
     let ramp_sun = scene.light.sun * ndl;

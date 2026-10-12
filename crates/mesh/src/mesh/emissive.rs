@@ -35,9 +35,11 @@ pub struct Emissive {
     ///
     /// **Not the same question as whether the program declares `time`.** A
     /// material can read the clock and still keep its coordinate constants as
-    /// the shader's own inline literals rather than in its record -
-    /// `nr_billboardholographicscanlines` does, on 17 slots of one circuit -
-    /// and this reading has not recovered those. Such a layer is drawn still,
-    /// which under-claims rather than sliding a texture at a rate nobody read.
+    /// the shader's own inline literals rather than in its record. Such a layer
+    /// is drawn still, which under-claims rather than sliding a texture at a
+    /// rate nobody read. (`nr_billboardholographicscanlines` is the example the
+    /// first cut named; Amphiseum's shape of it now has its own path with the
+    /// literals read, `mesh::rcs::holo_billboard`, and Modesto Heights' shape
+    /// takes its rates from material parameters this key does not name.)
     pub rate: f32,
 }

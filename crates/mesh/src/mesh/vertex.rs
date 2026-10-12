@@ -371,6 +371,15 @@ pub mod slots {
     /// starting at this material's index.
     pub const ICE: u32 = 1 << 22;
 
+    /// HD's `nr_billboardholographicscanlines` in its inline-literal shape
+    /// (`mesh::rcs::holo_billboard`): the advert (`albedo`, at `texcoord`)
+    /// times a second layer (third binding, at `lightmap_texcoord.xy`), put
+    /// through an overlay combine with a scrolling scanline texture
+    /// (`lightmap`, at `lightmap_texcoord.zw`). The two clock rates ride in
+    /// the glow-table entry's tint (`x` the scanline layer's, `y` the second
+    /// layer's `v` scroll).
+    pub const HOLO_BILLBOARD: u32 = 1 << 23;
+
     /// HD's Bomb fireball (`hd_bombfire_glow.rcsmaterial`, block `@0x1d90`):
     /// the LeachBall's rim-glow skeleton plus a dissolve and a brightness
     /// the blast drives - `AlphaAnim` (the model's own clock) and `ColourAnim`
@@ -411,14 +420,14 @@ pub mod slots {
     /// number.** Putting it here rather than in a tenth vertex attribute costs
     /// nothing: the word is already `u32`, already per material, and already
     /// `@interpolate(flat)`, and every shader read of the low half is a masked
-    /// bit test that an index above bit 15 cannot disturb. A circuit's
-    /// materials number in the hundreds against the 65,535 this allows.
+    /// bit test that an index above the role bits cannot disturb. The index
+    /// is into the glow table, which a model holds at most
+    /// [`EMISSIVE_LIMIT`](super::rcs::EMISSIVE_LIMIT) entries of.
     ///
-    /// Twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
+    /// Twenty-four since [`HOLO_BILLBOARD`] took bit 23 (the index keeps 255 values), twenty-three since [`ICE`] took bit 22, twenty-two since [`REFRACTION`] and a since-retired pass bit took bits 20 and 21, twenty since [`LIGHT_CONE`] took bit 19, nineteen before it, when
     /// [`MAG_WAVE`] and [`MAG_LOOP`] took bits 17 and 18; seventeen rather than sixteen since the two clock-scroll bits
-    /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16: the
-    /// index keeps 32,767 values, against the hundreds a circuit uses.
-    pub const MATERIAL_SHIFT: u32 = 23;
+    /// ([`CLOCK_SCROLL_RING`], [`CLOCK_SCROLL_HALO`]) took bits 15 and 16.
+    pub const MATERIAL_SHIFT: u32 = 24;
 
     /// The mask covering every role bit - the low half of the word, with
     /// [`MATERIAL_SHIFT`]'s index excluded.
