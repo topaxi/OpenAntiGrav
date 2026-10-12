@@ -949,6 +949,48 @@ PPSSPP-shaped - a websocket debugger, a breakpoint on `Ship_UpdateCraft`, a
 per-tick offset table - with no RPCS3 equivalent. That is a milestone, not a
 task.
 
+## Opponents follow the player's hull family - 2026-10-12
+
+**Chosen, not measured** (maintainer's rule, no confidence score): in a race the
+opponents fly the player's family. A player on an HD hull (unsuffixed team
+directory) faces HD hulls; a player on `_c1` (Fury Concept) or `_n1` (Fury Nitro)
+faces Fury hulls, Concept or Nitro drawn per slot off the race seed. The player's
+own team never appears on the grid in any of its three variants. The family is
+data, `oag_title::TeamVariants::opponent_families`
+(`oag_hd::race::TEAM_VARIANTS`), and the pool rewrite is
+`oag_raceplay::load::family`, with no title name in it.
+
+What the game did before: the roster draw took the 12 base ids from
+`Data\Plugins\frontend\definition.xml`, so every opponent was an HD hull whatever
+the player flew, and a player on `Feisar_c1` could face `Feisar`. Worse, and for
+every title: `start.rs` gave **every opponent the player's handling**
+(`opponent.handling = handling`), so no opponent ever flew its own team's
+numbers. Now a title that declares families loads each AI slot's own
+`handlingstats.xml` (its variant's directory) for the race's class; a title that
+declares none keeps the player's handling for all, bit for bit.
+
+Evidence of the difference (HD EU, `Feisar`, class VENOM): `accelcap` 18.5 (HD),
+21.0 (`_c1`), 21.0 (`_n1`); engine `amount` 412 vs 418. All 12 teams differ
+between HD and each Fury variant in all four classes. Pinned by
+`crates/game/tests/hd_opponent_variant_ground_truth.rs` (disc-backed): the
+opponent variant set per player pick, each opponent's `handling` equal to the one
+that team flies as the player, and HD against Fury differing.
+
+Grid for seed 1, Talons Junction: `Feisar` player -> EGX, Icaras, Harimau,
+Triakis, Assegai, Mirage, AG_Systems (all HD); `Feisar_c1` player -> EGX_c1,
+Icaras_n1, Harimau_c1, Triakis_c1, Assegai_n1, Mirage_c1, AG_Systems_n1.
+
+Not read: whether the original separates the families, and whether it mixes
+Concept and Nitro. A search of the executable's strings for `nitro` finds the
+model-name strings and the Nitro Battle mode, no roster selection was traced.
+Campaign grids (`grid_teams`) are mapped onto the player's family too, after the
+authored override.
+
+Cross-title check: 2048's HD-derived guest roster ships the same suffix scheme
+(`oag_2048::race::GUEST_TEAM_VARIANTS`) - **checked, applies, not wired**; Omega's
+and 2048's own rosters are numbered levels, a different shape - **checked,
+differs**, both declare no families so they are unchanged.
+
 ## Traps
 
 - **The byte-order pass is wide, not hard, and its failures are silent.** The

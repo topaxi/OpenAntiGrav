@@ -11,6 +11,7 @@ mod closing_report;
 mod countdown;
 mod engine_light;
 mod environment;
+mod family;
 mod gantry_visibility;
 mod geometry;
 mod global;
@@ -222,6 +223,17 @@ pub fn load(options: &Options) -> Result<Loaded> {
         hull_variant,
         &mut report,
     )?;
+    // Each AI slot's own tuning where the title's variant family says it flies a
+    // different team's file than the player's - see `family`.
+    let opponent_handling = family::opponent_handling(
+        craft_of(&mut craft, &mut archives),
+        craft_title.race,
+        &slot_teams,
+        &options.class,
+        pad_tunables,
+        special,
+        &mut report,
+    );
     let (shadows, shadow_hulls) = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
@@ -791,6 +803,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             leach_strip: magstrip_wake.leach_anchors,
             collision,
             handling,
+            opponent_handling,
             airbrake_graphics,
             chase,
             chase_close,

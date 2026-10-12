@@ -214,9 +214,10 @@ pub(super) fn grid(
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
-    let mut slot_teams =
-        oag_livery::teams_for_slots(team, available, oag_gameplay::MAX_SHIPS, seed);
+    let pool = super::family::pool(craft_title.race, team, available);
+    let mut slot_teams = oag_livery::teams_for_slots(team, &pool, oag_gameplay::MAX_SHIPS, seed);
     apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
+    super::family::follow_player(craft_title.race, &mut slot_teams, seed, report);
     let liveries = oag_livery::load(
         archives,
         &slot_teams,

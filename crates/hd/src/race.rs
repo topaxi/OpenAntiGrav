@@ -147,6 +147,10 @@ pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
         },
     ],
     join: oag_title::VariantJoin::Suffix,
+    // **Chosen, not measured**: the maintainer's rule that a player on an HD hull
+    // faces HD hulls and a player on a Fury hull faces Fury hulls. Whether the
+    // original separates the two is unread (`docs/formats/hd-status.md`).
+    opponent_families: &[&[""], &["_c1", "_n1"]],
 };
 
 /// The model row Ship Select opens on for a profile that has never chosen

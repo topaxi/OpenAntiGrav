@@ -293,6 +293,7 @@ const NATIVE: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Subdirectory,
+    opponent_families: &[],
 };
 
 const GUEST: TeamVariants = TeamVariants {
@@ -308,6 +309,7 @@ const GUEST: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Suffix,
+    opponent_families: &[],
 };
 
 const GUEST_ROSTER: GuestRoster = GuestRoster {
@@ -505,5 +507,43 @@ fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
         DEFAULTS.effect_dir_for("Data/environments2048/x/track.vex"),
         DEFAULTS.effect_dir,
         "a title with no table keeps its one directory"
+    );
+}
+
+const FAMILIES: TeamVariants = TeamVariants {
+    teams: &["Feisar", "EGX"],
+    variants: &[
+        TeamVariant {
+            suffix: "",
+            label: "HD",
+        },
+        TeamVariant {
+            suffix: "_c1",
+            label: "Fury Concept",
+        },
+        TeamVariant {
+            suffix: "_n1",
+            label: "Fury Nitro",
+        },
+    ],
+    join: VariantJoin::Suffix,
+    opponent_families: &[&[""], &["_c1", "_n1"]],
+};
+
+/// A combined id splits back into its base and suffix, and a suffix finds the
+/// family that holds it; an id off the table, or a suffix in no family, finds
+/// nothing.
+#[test]
+fn split_and_family_of_read_a_combined_id_back() {
+    assert_eq!(FAMILIES.split("Feisar_n1"), Some(("Feisar", "_n1")));
+    assert_eq!(FAMILIES.split("EGX"), Some(("EGX", "")));
+    assert_eq!(FAMILIES.split("Goteki_c1"), None);
+    assert_eq!(FAMILIES.family_of(""), Some(&[""][..]));
+    assert_eq!(FAMILIES.family_of("_n1"), Some(&["_c1", "_n1"][..]));
+    assert_eq!(FAMILIES.family_of("_x9"), None);
+    assert_eq!(
+        GUEST.family_of(""),
+        None,
+        "no families declared, none found"
     );
 }

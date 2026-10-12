@@ -340,6 +340,7 @@ pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
         },
     ],
     join: oag_title::VariantJoin::Subdirectory,
+    opponent_families: &[],
 };
 
 /// The twelve teams 2048 reships from Wipeout HD/Fury's own roster,
@@ -390,6 +391,7 @@ pub const GUEST_TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants
         },
     ],
     join: oag_title::VariantJoin::Suffix,
+    opponent_families: &[],
 };
 
 /// [`oag_title::RaceDefaults::guest_roster`] for this title: the twelve

@@ -38,6 +38,7 @@ impl Race {
             start_position,
             collision,
             handling,
+            opponent_handling,
             chase,
             chase_close,
             internal,
@@ -353,7 +354,15 @@ impl Race {
                 .take(GRID_SLOTS as usize - 1)
                 .skip(pose_start)
             {
-                let opponent = &mut world.ships[slot_index - pose_start + 1];
+                let ship_index = slot_index - pose_start + 1;
+                // Its own team's tuning where the title's variant family gave
+                // it one (`load::family`), the player's otherwise.
+                let handling = opponent_handling
+                    .get(ship_index)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(handling);
+                let opponent = &mut world.ships[ship_index];
                 opponent.active = true;
                 opponent.handling = handling;
                 opponent.physics.body.mass = handling.physical.mass;

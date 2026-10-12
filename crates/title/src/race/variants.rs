@@ -80,9 +80,47 @@ pub struct TeamVariants {
     /// How a variant's suffix combines with a team's own id. See
     /// [`VariantJoin`].
     pub join: VariantJoin,
+    /// The groups of [`TeamVariant::suffix`]es an opponent follows the
+    /// player's pick across: a player on any suffix of a group faces
+    /// opponents on suffixes of that same group only, each on **its own
+    /// variant's tuning**. HD/Fury is `[[""], ["_c1", "_n1"]]` - HD against
+    /// HD, Fury against Fury. Empty means the title makes no such rule and an
+    /// opponent keeps the id the roster drew and the player's tuning, as every
+    /// title did before this existed. **Chosen, not measured.**
+    pub opponent_families: &'static [&'static [&'static str]],
 }
 
 impl TeamVariants {
+    /// The base team and the variant suffix of a combined id, `None` when
+    /// `combined` is not one of this table's own ids.
+    ///
+    /// Reuses [`VariantJoin::combine`], like [`Self::recognizes`], and prefers
+    /// the longest suffix so an empty one only matches a bare team.
+    #[must_use]
+    pub fn split(&self, combined: &str) -> Option<(&'static str, &'static str)> {
+        let mut best: Option<(&'static str, &'static str)> = None;
+        for team in self.teams {
+            for variant in self.variants {
+                if self.join.combine(team, variant.suffix) == combined
+                    && best.is_none_or(|(_, s)| variant.suffix.len() > s.len())
+                {
+                    best = Some((team, variant.suffix));
+                }
+            }
+        }
+        best
+    }
+
+    /// The group of [`Self::opponent_families`] that holds `suffix`; `None`
+    /// where the title declares no families or none holds it.
+    #[must_use]
+    pub fn family_of(&self, suffix: &str) -> Option<&'static [&'static str]> {
+        self.opponent_families
+            .iter()
+            .copied()
+            .find(|family| family.contains(&suffix))
+    }
+
     /// Whether `combined` is one of this table's own combined ids - some team
     /// of [`Self::teams`] joined with one of [`Self::variants`]' own
     /// suffixes, [`Self::join`]'s rule.
