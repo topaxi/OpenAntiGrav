@@ -80,6 +80,15 @@ later lane can fly Pure's original opponent in it the way Pulse and HD do.
 `--menu-page main --menu-prompt pure-campaign[:N]` draws the list headless, `N`
 indexing the class.
 
+**After a race.** Pure ships no EndRace screens this build reads, so a finished race
+shows the built-in results table, and its Cross, Start or a click leaves it: a single
+event returns to the list with the cursor on it and its medal shown; a tournament with
+a leg to go starts that leg instead (the medal is judged after the last). Escape
+abandons a tournament. Walked on an Xvfb with `--autopilot`: a Vineta K Vector time
+trial flown to a bronze (2:09.53 against 2:04 gold), recorded as
+`timetrial/vineta k/vector`, shown on the reopened list; and a Vector Alpha
+tournament's first leg handing on to Modesto Heights.
+
 ## Chosen, not measured
 
 The screen, the colours and the row pitch; showing every class from the start (the

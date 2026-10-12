@@ -37,12 +37,6 @@ pub struct CellPlan {
     pub ai_count: Option<u32>,
 }
 
-/// The `class` a Zone cell authors: not a speed class, so the race flies the
-/// fallback.
-fn is_zone_literal(class: &str) -> bool {
-    class.eq_ignore_ascii_case("Zone")
-}
-
 /// Why a cell cannot launch. `Display` is the line the session logs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
@@ -89,6 +83,26 @@ pub fn plan_cell(
     fallback_class: &str,
     track_entry: impl Fn(oag_race::Mode, &str) -> Option<String>,
 ) -> Result<CellPlan, Refusal> {
+    plan_cell_for(cell, fallback_class, &[], track_entry)
+}
+
+/// [`plan_cell`] for a title whose own speed-class ladder is longer than
+/// [`oag_tables::handling::SpeedClass`]'s four: a cell naming a class in
+/// `ladder` (case-insensitively) races in it, where `plan_cell` would fall back.
+/// Wipeout Pure's `Vector` is the one case (`Title::race.speed_classes`); no
+/// other title's cells name a class outside the four but `Zone`, bar HD's
+/// `NitroBattle`, a mode name in the class slot that the mode refuses first
+/// (`campaign_cell_class_census_ground_truth`).
+///
+/// # Errors
+///
+/// As [`plan_cell`].
+pub fn plan_cell_for(
+    cell: &Cell,
+    fallback_class: &str,
+    ladder: &[&str],
+    track_entry: impl Fn(oag_race::Mode, &str) -> Option<String>,
+) -> Result<CellPlan, Refusal> {
     let mode = super::race_mode_for_cell(cell.mode.clone())
         .ok_or_else(|| Refusal::Mode(cell.mode.to_string()))?;
     let track_ids: Vec<&String> = if mode == oag_race::Mode::Tournament {
@@ -103,12 +117,11 @@ pub fn plan_cell(
         .iter()
         .map(|id| track_entry(mode, id).ok_or_else(|| Refusal::MissingTrack((*id).clone())))
         .collect::<Result<Vec<_>, _>>()?;
-    // The cell's own class is a class the title names (Pure's `Vector` is not
-    // among `SpeedClass`'s four) unless it is the literal a Zone cell carries,
-    // which names none.
-    let (class, class_is_fallback) = if cell.speed_class().is_some()
-        || !cell.class.trim().is_empty() && !is_zone_literal(&cell.class)
-    {
+    let own_class = cell.speed_class().is_some()
+        || ladder
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(&cell.class));
+    let (class, class_is_fallback) = if own_class {
         (cell.class.clone(), false)
     } else {
         (fallback_class.to_string(), true)

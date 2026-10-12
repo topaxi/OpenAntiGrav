@@ -154,7 +154,8 @@ fn classic_circuits_resolve_through_the_campaigns_own_locations() {
 
 #[test]
 fn a_vector_event_races_in_vector_and_a_zone_event_keeps_the_fallback() {
-    use crate::campaign::launch::plan_cell;
+    use crate::campaign::launch::{plan_cell, plan_cell_for};
+    let ladder = oag_pure::TITLE.race.speed_classes.unwrap().names;
     let campaign = campaign();
     let entry = |id: &str| {
         campaign
@@ -175,13 +176,13 @@ fn a_vector_event_races_in_vector_and_a_zone_event_keeps_the_fallback() {
         ("Vector", false)
     );
     let zone = by(PureClass::Vector, "zone/Zone 1");
-    let plan = plan_cell(&zone.cell, "Phantom", |_, id| entry(id)).unwrap();
+    let plan = plan_cell_for(&zone.cell, "Phantom", ladder, |_, id| entry(id)).unwrap();
     assert_eq!(
         (plan.class.as_str(), plan.class_is_fallback),
         ("Phantom", true)
     );
     let tournament = by(PureClass::Flash, "tournament/Alpha/Flash");
-    let plan = plan_cell(&tournament.cell, "Phantom", |_, id| entry(id)).unwrap();
+    let plan = plan_cell_for(&tournament.cell, "Phantom", ladder, |_, id| entry(id)).unwrap();
     assert_eq!(plan.class, "Flash");
 }
 

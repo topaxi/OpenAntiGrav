@@ -381,7 +381,14 @@ impl Session {
                 for press in [Button::Cross, Button::Start] {
                     self.controls.buttons_mut().consume_press(press);
                 }
-                self.escape();
+                // A tournament with a leg to go carries on to it: a title with no
+                // EndRace flow (Pure) has no `NEXT RACE` row to do it from, and
+                // `escape` here would abandon the series after its first race.
+                if self.tournament_has_next_leg() {
+                    self.advance_tournament_leg();
+                } else {
+                    self.escape();
+                }
                 // The remaining steps this frame owed belong to whatever is on
                 // screen now, and it has not been drawn once yet.
                 break;

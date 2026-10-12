@@ -11,7 +11,7 @@
 //! the real race clock and the real field, the store, and the gates the new
 //! medals open.
 
-use oag_game::campaign::launch::plan_cell;
+use oag_game::campaign::launch::plan_cell_for;
 use oag_game::campaign::pure_list::{self, PureCampaign};
 use oag_game::records::{Medal, Store};
 use oag_raceplay as race;
@@ -20,6 +20,12 @@ use oag_tables::pure_campaign::{Event, EventKind};
 use oag_ui_screens::pure_campaign::Status;
 
 const TITLE: &str = "Wipeout Pure";
+
+/// The ladder `Session::launch_campaign_cell` hands `plan_cell_for`.
+const LADDER: &[&str] = match oag_pure::TITLE.race.speed_classes {
+    Some(classes) => classes.names,
+    None => &[],
+};
 
 fn campaign(image: &str) -> Option<(String, PureCampaign)> {
     let path = oag_testdata::image(image)?;
@@ -53,7 +59,8 @@ fn load_leg(
     leg: usize,
     archives_entry: &dyn Fn(&str) -> Option<String>,
 ) -> race::Race {
-    let plan = plan_cell(&event.cell, "Venom", |_, id| archives_entry(id)).expect("it plans");
+    let plan =
+        plan_cell_for(&event.cell, "Venom", LADDER, |_, id| archives_entry(id)).expect("it plans");
     let loaded = race::load(&race::Options {
         source: source.to_string(),
         class: plan.class.clone(),
@@ -148,7 +155,7 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
     let event = event(&campaign, PureClass::Venom, "tournament/Alpha/Venom");
     assert_eq!(event.cell.tournament_tracks.len(), 4);
     let entry = names(&campaign);
-    let plan = plan_cell(&event.cell, "Venom", |_, id| entry(id)).expect("it plans");
+    let plan = plan_cell_for(&event.cell, "Venom", LADDER, |_, id| entry(id)).expect("it plans");
     let mut progress = race::tournament::Progress::new(plan.leg_entries.clone());
     for leg in 0..plan.leg_entries.len() {
         let mut race = load_leg(&source, &campaign, &event, leg, &entry);
@@ -211,7 +218,7 @@ fn every_event_plans_and_its_circuits_are_on_the_disc() {
         let mut planned = 0;
         for class in PureClass::ALL {
             for event in campaign.events(class) {
-                let plan = plan_cell(&event.cell, "Venom", |mode, id| {
+                let plan = plan_cell_for(&event.cell, "Venom", LADDER, |mode, id| {
                     let list = if mode == oag_race::Mode::Zone {
                         &zones
                     } else {

@@ -326,9 +326,15 @@ impl Session {
         // engine resolves a Zone handling block of its own yet, so it races at
         // whatever the RACE page last had selected - chosen, not measured,
         // and logged below so the substitution is never silent.
-        let plan = match oag_game::campaign::launch::plan_cell(
+        let ladder = shell
+            .title
+            .race
+            .speed_classes
+            .map_or(&[][..], |classes| classes.names);
+        let plan = match oag_game::campaign::launch::plan_cell_for(
             &cell,
             &self.settings.race.class,
+            ladder,
             |mode, id| {
                 shell
                     .track(mode, id)
