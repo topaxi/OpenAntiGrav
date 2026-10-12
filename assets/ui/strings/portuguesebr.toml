@@ -44,6 +44,8 @@ OAG_REMIX_PAGE_TITLE = { text = "REMIX DE CORRIDA", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TÍTULO DA PISTA", human = false }
 OAG_REMIX_NO_DRIVER = { text = "SEM OPONENTES: NENHUM PILOTO PARA ESTA CLASSE", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "TÍTULO DA NAVE", human = false }
+OAG_REMIX_CUSTOM = { text = "PERSONALIZADO", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "ainda verificando este arquivo", human = false }
 OAG_RECORDS_PAGE_TITLE = { text = "RECORDES DE CORRIDA", human = false }
 OAG_OPTIONS_PAGE_TITLE = { text = "OPÇÕES", human = false }
 OAG_OPTIONS_DISPLAY = { text = "TELA", human = false }

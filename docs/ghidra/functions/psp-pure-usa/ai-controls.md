@@ -26,8 +26,9 @@ things are different: **the thrust is a per-slot cruise speed drawn at load**, s
 by one field-wide multiplier read off the `ZoningStats` curves at the nearest
 opponent's gap to the player, by a fatigue factor, and blended toward a launch speed;
 **there is no lane ring** (one current lane with a bang-bang lateral velocity, steered
-toward by both the controls and the rail); **the planner scores the other craft and
-track objects**, which Pulse's does not; **the rail moves position only** (it computes
+toward by both the controls and the rail); **the planner carries code to score the other
+craft and track objects**, which Pulse's does not, and both scorers land nothing (dead,
+[below](#the-planner-no-ring)); **the rail moves position only** (it computes
 a velocity turn and never stores it); and **every opponent updates its thrust and lane every frame** (the round-robin byte is
 set on all racers by the snapshot), where Pulse's run one driver a frame. Of the two per-class blocks in `AIRaceStats.xml`, the engine parses
 both into disjoint halves of one record and reads **the legacy half**: the switch that
@@ -66,7 +67,7 @@ Confidence is per row. Static reading unless a row says measured.
 | `0x0891a73c` | `Ai_ComputeNewStatsThrust` | 70 | `AI_ComputeOpponentThrust` | the `<NewStats>` thrust (`AIThrust` by the player's place, a field-mean formation term, `BaseStartThrust` blend), called only behind the switch: dead on the shipped executable |
 | `0x08919b6c` | `Ai_PlanLane` | 75 | `Ai_PlanLane` | different design, [below](#the-planner-no-ring) |
 | `0x08918ed8` | `Ai_AddLaneBump` | 85 | `Ai_AddLaneBump` | the same trapezoid over the nine candidates (`i * 0.25 - 1`, the `0.95`/`0.05` shoulder, half width floored at `0.05`), accumulating into `driver+0x1e0` |
-| `0x08918570` | `Ai_ScoreOtherCraft` | 70 | - | a negative bump at each other racer `-15..100` units ahead, [below](#the-planner-no-ring) |
+| `0x08918570` | `Ai_ScoreOtherCraft` | 70 | - | asks for a negative bump at each other racer `-15..100` units ahead, which `Ai_AddLaneBump` refuses: **dead**, [below](#the-planner-no-ring) |
 | `0x08918888` | `Ai_SampleLookahead` | 85 | `Ai_SampleLookahead` | identical: `d = max(t * smoothed_speed, 15)`, `p = lap fraction + d / lap_length * 1.5`, wrapped past `1` |
 | `0x0891849c` | `Ai_LanePoint` | 85 | `Ai_LanePoint` | identical, racing line included |
 | `0x08917224` | `Ai_LanePointFromCentre` | 85 | `Ai_LanePointFromCentre` | identical, no racing-line term |
@@ -83,9 +84,14 @@ Confidence is per row. Static reading unless a row says measured.
 `FUN_0891a3d0` reads the `<NewStats>` spacing rows (`+0x124`, `+0x128`, `+0x12c`) and
 the `AIThrust` row and has no `jal` caller: an unused `<NewStats>` thrust variant.
 No name. `FUN_08918d30` adds a positive bump toward entries of a per-track object list
-(addend `0xaef00`, stride `0x30`, built by `FUN_0891bb74` from `"AI track data"`) that
-lie up to 3.5 s ahead; what the objects are (pads, by the shape) is not read, so no
-name. `FUN_08917870` returns `0` and `FUN_08918924` is empty; both are called by
+(addend `0xaef00`, stride `0x30`, count at addend `0xaeefc` = `0x08b72dac`) that lie up
+to 3.5 s ahead. `FUN_0891bb74` builds the list from the scene tree: `FUN_08a3f2b4`
+collects every node whose type word (`+4`) equals `0x22bdd8`, the tag `Pad_Importer`'s
+base constructor (`FUN_08a2fcd8`, header string `Pad_Importer.h`) writes. Both concrete
+pad importers overwrite it: `SpeedupPad_Importer` (class `0x36f`, `FUN_08a2fd1c`) with
+`0x22bde8` and the weapon pad's (class `0x370`, `FUN_08a31ac8`) with `0x22db48`. So no
+node matches, and the count read **`0`** live on Vineta K (11 weapon and 14 speedup pads
+on the circuit). The bumps are dead on the shipped game; no name. `FUN_08917870` returns `0` and `FUN_08918924` is empty; both are called by
 `Ai_Update`.
 
 ## Which of the two blocks is live
@@ -271,28 +277,42 @@ decays over 500 ticks to the cruise speed.
   (`driver+0x1c4`), target (`+0x1c8`) and the two copies at `+0x154`/`+0x158` to the
   craft's lane coordinate, the current lane clamped to `[-3, 3]` and the target to
   `[-1, 1]`; lane velocity `+0x1cc = 0`; `+0x14c` race time, `+0x150` that plus `13`.
-- **The choice, on the round-robin tick**: scores zeroed, then `Ai_AddLaneBump(0, 1.0,
-  0.05)` and `(preferred, 0.15, 0.5)` (Pulse's two), then `FUN_08918d30`'s object
-  bumps and `Ai_ScoreOtherCraft`'s (`-2 * w` at each other racer's lane, width
-  `6 / max(its corridor width, 0.5)`, `w` falling with distance past `100` units and
-  weighted by the bearing: `x 1.5` abeam, `x 0.5` behind). Smoothed `0.9 / 0.1` into
-  `+0x204`, best of nine as Pulse's, then the same local search from the craft's
-  current lane coordinate. No contact push.
+- **The choice, on the round-robin tick** (every frame, [above](#the-round-robin)):
+  scores zeroed, then `Ai_AddLaneBump(0, 1.0, 0.05)` and `(preferred, 0.15, 0.5)`
+  (Pulse's two), then `FUN_08918d30`'s object bumps and `Ai_ScoreOtherCraft`'s. **Both
+  of the last two land nothing.** The object list is empty ([the cast](#the-cast)).
+  `Ai_ScoreOtherCraft` builds `w` from the distance (`(d - 100) * -0.0125`, clamped,
+  squared) and an `atan2` bearing (`x 1.5` abeam, `x 0.5` behind), always `>= 0`, and
+  passes `-2 * w` as the weight (`0x0891881c..0x0891882c`, `f14`); `Ai_AddLaneBump`
+  returns at once for a weight `<= 0.001` (`0x08918ee4 c.le.s f14,f15`, `bc1t
+  0x0891901c`). Smoothed `0.9 / 0.1` into `+0x204`; a global best-of-nine pass whose
+  result the local search from the craft's own lane coordinate then overwrites, as
+  Pulse's. The local search stops a pass at a score `<= -1`, which no score reaches
+  (every bump that lands is positive). No contact push, no exclusion band.
 - **Preferred lane**: `rand() % 400 == 125`, `u = 2 * rand01 - 1`,
   `u >= 0 ? 1 - u^2 : u^2 - 1`, every tick (Pulse's law).
 - **The lane moves as a second-order bang-bang**: with `e = target - lane` and lane
-  velocity `v`, an acceleration of `+/-0.0008` (and `+/-0.0004` in the position
-  term) per frame, braking when `v` would overshoot, all times
-  `dt * 60 * s` where `s = 0.9 s + 0.1 clamp((|v_xz . fwd| - 10) * 0.02, 0, 1)`:
-  `v += a * k`, `lane += v * k + a/2 * k^2`. The result is `driver+0x44`, the lane the
-  controls and the rail steer to, and the planner's own `+0x1c4`.
+  velocity `v`, `a = +/-0.0008` and `b = +/-0.0004`:
+
+  ```text
+  e > 0:  v < 0 ? +a : (k = v / 0.0008 + 1;  e < v*k + k*0.0004*k  ? -a : +a)
+  e <= 0: v > 0 ? -a : (k = v / -0.0008 + 1; v*k + k*-0.0004*k < e ? +a : -a)
+  s    = 0.9 * s + 0.1 * clamp((|v.x * fwd.x + v.z * fwd.z| - 10) * 0.02, 0, 1)   // +0x1d8
+  k    = dt * 60 * s
+  lane = v_old * k + b * k * k + lane;   v = v_old + a * k
+  ```
+
+  The result is `driver+0x44`, the lane the controls and the rail steer to, and the
+  planner's own `+0x1c4`. `fwd` is the racer's `+0x30`, Pulse's forward axis.
+  Reproduced live on 209 of 209 calls ([measured](#measured-2026-10-12)).
 - When `driver+0x80` is set the lane wanders: `+0x15c += t * rand01 * 6.5` and
   `driver+0x44 += sin(...) * 0.6`, clamped to `[-1, 1]`.
 
 So Pure plans **one lane for the whole lookahead**: the steering's ahead target and the
 rail's target are the same `driver+0x44`, where Pulse reads an 80-slot ring at each
-point's own progress. Confidence 75: read whole, the bang-bang's branch structure read
-from the decompile only.
+point's own progress. Confidence **92** for the bang-bang, the speed scale and the
+choice's two bumps (runtime on one binary); 85 that the other two scorers are dead
+(static, both confirmed at instruction level, the object count read live).
 
 ## The steering controller
 
@@ -407,25 +427,52 @@ uv run --with websocket-client python3 scripts/psp-pure-ai-thrust.py --port <por
 python3 scripts/psp-pure-ai-thrust.py --predict data/scratch/<lane>/venom.json
 ```
 
-Not measured: the steering's output, the planner's choices (the lane and its
-bang-bang), the pitch fade, the fork hold, the speed floor and the `35` floor, the
-`x 0.7` flag, and the `LeadZone` branch.
+**The planner (2026-10-12, lane `pure-orig-driver`).** Same setup, Venom, Vineta K, the
+player parked. `scripts/psp-pure-ai-lane.py` stops before and after the `jal
+Ai_PlanLane` in `Ai_Update` (`0x089196f8`, `0x08919700`, `s0` the driver), one
+breakpoint at a time and visiting each driver in turn, and logs the lane, its target,
+velocity, speed scale, preferred lane, both score sets and the racer's velocity and
+forward. Over 240 calls on all eight drivers (209 opponents, 30 the player's autopilot,
+one opponent with the `driver+0x80` flag set, left out):
+
+- **209 of 209** opponent calls reproduce the lane, its velocity and the speed scale in
+  `float32` within `1e-6` (worst `6e-8`) from the "before" state and the chosen target;
+- **209 of 209** fresh score sets are exactly `Ai_AddLaneBump(0, 1, 0.05)` plus
+  `(preferred, 0.15, 0.5)`: no track-object and no other-craft bump ever landed;
+- the AI track-object count (`0x08b72dac`) read `0`;
+- `dt * 60` read `1.0112` on the sample in the unit test: Pure's timestep is variable.
+
+```sh
+uv run --with websocket-client python3 scripts/psp-pure-ai-lane.py --port <port> \
+    --out data/scratch/<lane>/lane.json --samples 240 --gap-seconds 0.5
+python3 scripts/psp-pure-ai-lane.py --predict data/scratch/<lane>/lane.json
+```
+
+Not measured: the steering's output, the pitch fade, the fork hold, the speed floor
+and the `35` floor, the `x 0.7` flag (one sample showed it set; its source,
+`craft+0xd0 -> +0x134`, is unread), and the `LeadZone` branch.
 
 ## What is built, and what is not
 
-Built (2026-10-12): `oag_tables::pure_ai_stats` reads the three files as the
-executable does, and `oag_ai::original::cruise` carries the measured throttle
-(`CruiseDraws`, `zone_multiplier`, `CruiseState`, `cruise_thrust`,
-`finish_thrust`), with a unit test that reproduces a live sample to the bit and
-`crates/game/tests/pure_original_ai_ground_truth.rs` on the disc. The two
-`rand()` draws (the tweak and the eight cruise speeds) are drawn from the seeded
-generator instead: **chosen, not measured** (the captures show they are redrawn every
-race: two Venom races drew different values in the same bands).
+Built: `oag_tables::pure_ai_stats` reads the three files as the executable does;
+`oag_ai::original` carries the throttle (`cruise`: `CruiseDraws`, `zone_multiplier`,
+`CruiseState`, `cruise_thrust`, `finish_thrust`) and, since 2026-10-12 (lane
+`pure-orig-driver`), the rest of the sibling driver (`sibling`): `SingleLane` (the
+ringless planner, a unit test reproducing a live call to the bit), `Field::cruising`
+and `Field::end_tick` (the zone multiplier and the launch flag, once a tick for the
+next), and Pure's `Ai_Update` order every frame. Title data selects it
+(`oag_pure::race::ORIGINAL_DRIVER`: `AiTables::LegacyBlock`, `rail_turns_velocity:
+false`, `pitch_fade: (1030, 1180)`, `every_tick: true`); `oag_raceplay`'s
+`original_tables` reads the legacy block, the controller and the circuit's tweak. Pure's
+`original_opponent` is `true`: a campaign event's launch switches it on and every other
+mode keeps this project's driver. `crates/game/tests/pure_original_ai_ground_truth.rs`
+flies a full field on Vineta K and Chenghou Project (Venom): every opponent launches at
+its slot's `StartSpeed` and finishes with no respawn.
 
-Not built, by name: the steering (Pulse's law, already in `oag_ai::original`), the
-ringless planner with its other-craft and track-object scoring (`FUN_08918d30`'s
-object list is unread), the position-only rail, the pitch fade, the 2 s fork hold,
-the every-frame update, and the field that would fly them. `original_opponent`
-stays `false` for Pure: this project has no Pure campaign, and the original's
-opponent is the campaign's. See
-[gameplay/ai.md](../../../gameplay/ai.md#pure-a-sibling-driver-2026-10-12).
+**Chosen, not measured**: the two `rand()` draws (the tweak and the eight cruise speeds)
+come from the seeded generator; the `driver+0x80` flag is never set (its craft state is
+unread), so neither the `x 0.7` thrust nor the lane wander runs; the speed scale starts
+at `0`; the zone multiplier is computed after this engine's step and read by the next
+tick. Not built: the 2 s fork hold (the original field on every title uses this
+project's own branch choice), and the two dead scorers, on purpose.
+See [gameplay/ai.md](../../../gameplay/ai.md#pure-a-sibling-driver-2026-10-12).

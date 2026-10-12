@@ -3,7 +3,9 @@
 //! `docs/ghidra/functions/psp-pulse-usa/ai-controls.md`, "the rail".
 //!
 //! The original writes the body's velocity and position and never its
-//! orientation. This returns the write as a [`RailCorrection`] for the
+//! orientation; Pure's writes the position alone ([`Laws::rail_turns_velocity`]).
+//!
+//! [`Laws::rail_turns_velocity`]: super::Laws::rail_turns_velocity This returns the write as a [`RailCorrection`] for the
 //! caller to apply with [`oag_physics::rail::apply`].
 
 use super::track::{Pose, TrackPoint};
@@ -12,8 +14,9 @@ use oag_core::math::Vec3;
 /// The body write the rail asks for.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RailCorrection {
-    /// The new linear velocity: the old one's speed, turned toward the track.
-    pub velocity: Vec3,
+    /// The new linear velocity: the old one's speed, turned toward the track;
+    /// `None` where the title's rail leaves the velocity alone.
+    pub velocity: Option<Vec3>,
     /// The new position.
     pub position: Vec3,
 }
@@ -30,7 +33,9 @@ pub struct Rail {
 impl Rail {
     /// One tick. `touching` is the body having any contact (`body+0x370`),
     /// which drops the rail at once for an opponent; `finished` is ship state
-    /// `2`, which blends it in at `1.5` a second instead of `0.6`.
+    /// `2`, which blends it in at `1.5` a second instead of `0.6`;
+    /// `turns_velocity` is [`super::Laws::rail_turns_velocity`].
+    #[allow(clippy::too_many_arguments)]
     pub fn snap(
         &mut self,
         pose: &Pose,
@@ -38,6 +43,7 @@ impl Rail {
         own_lane: f32,
         touching: bool,
         finished: bool,
+        turns_velocity: bool,
         dt: f32,
     ) -> Option<RailCorrection> {
         let lane = own.lane_point(own_lane);
@@ -58,9 +64,12 @@ impl Rail {
             return None;
         }
         let lateral = own.lateral;
-        let turned = pose.velocity - lateral * (pose.velocity.dot(lateral) * f * 0.25);
+        let velocity = turns_velocity.then(|| {
+            let turned = pose.velocity - lateral * (pose.velocity.dot(lateral) * f * 0.25);
+            turned.normalize_or_zero() * speed
+        });
         Some(RailCorrection {
-            velocity: turned.normalize_or_zero() * speed,
+            velocity,
             position: pose.position - lateral * (d.dot(lateral) * f),
         })
     }

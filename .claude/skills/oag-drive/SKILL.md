@@ -66,6 +66,11 @@ the work in isolated worktrees.
   with no doc file in the diff has happened twice; so has a member's findings
   living only in a scratch file outside git.
 - **Merge with `--no-ff`** and the project's attribution trailers.
+- **`cargo check --workspace --all-targets` after every merge**, before the next
+  one and before telling members to merge main. Two branches that each gated green
+  can conflict semantically with no textual conflict: on 2026-10-12 `speed-class`
+  removed `SpeedClass::from_name` while `pure-orig-driver` added a call to it, and
+  `main` did not compile until a member noticed.
 - **Run the right gate**, and run it *separately* from the merge - chaining a
   sub-second merge to a multi-minute gate makes the merge look hung and has
   caused the user to abort a healthy run:

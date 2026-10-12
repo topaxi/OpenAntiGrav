@@ -27,6 +27,7 @@ impl Session {
         // frame it times is all of this one. A no-op on every other run.
         self.probe_begin_frame();
         self.refresh_prompts();
+        self.poll_custom_tracks();
         // Whatever the audio callback could not render while this thread held
         // the mixer lock, said out loud from a thread that can afford to
         // allocate a sentence. Here rather than in the tick loop because a
@@ -144,9 +145,14 @@ impl Session {
                 Stage::Frontend(stage) => stage.frontend.launch().cloned(),
                 _ => None,
             };
+            let opening = web_time::Instant::now();
             if let Err(e) = self.open_menus() {
                 error!("cannot open the menus: {e:#}");
             } else {
+                info!(
+                    "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
+                    opening.elapsed().as_secs_f32() * 1000.0
+                );
                 println!("\n{}", hints::shell_keys(&hint_strings));
                 self.follow_launch(launch);
             }

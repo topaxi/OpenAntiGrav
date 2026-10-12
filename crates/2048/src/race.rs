@@ -626,6 +626,11 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         // `Ai_PlanLane`, `0x8119dcc4`.
         preferred_follows_choice: oag_title::pre_race::Sourced::measured(true),
         event_ai: Some(EVENT_AI_DEFAULTS),
+        tables: oag_title::original_driver::AiTables::PerClassFiles,
+        // 2048's driver is HD's here; Pulse's rail and
+        // pitch, as before: neither was compared for Pure's two differences.
+        rail_turns_velocity: oag_title::pre_race::Sourced::chosen(true),
+        pitch_fade: None,
     };
 
 /// What a 2048 event's opponents read where `SP.xml` leaves a field empty:

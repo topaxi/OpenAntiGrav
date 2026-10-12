@@ -63,6 +63,7 @@ fn standings() -> Standings<'static> {
         player_rubber_band_off: false,
         race_time: 30.0,
         eliminator: false,
+        lap_length: 5000.0,
     }
 }
 

@@ -46,6 +46,8 @@ OAG_REMIX_PAGE_TITLE = { text = "RENN-REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "STRECKENTITEL", human = false }
 OAG_REMIX_NO_DRIVER = { text = "KEINE GEGNER: KEIN FAHRER FÜR DIESE KLASSE", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "SCHIFFSTITEL", human = false }
+OAG_REMIX_CUSTOM = { text = "EIGENE", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "Datei wird noch geprüft", human = false }
 OAG_RECORDS_PAGE_TITLE = { text = "RENNREKORDE", human = false }
 OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONEN", human = false }
 OAG_OPTIONS_DISPLAY = { text = "ANZEIGE", human = false }

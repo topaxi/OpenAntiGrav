@@ -26,6 +26,7 @@ impl Race {
             weapons_override,
             difficulty,
             finished_thrust,
+            original_tables,
             opponents,
             no_opponents,
             trail_sparks,
@@ -443,6 +444,7 @@ impl Race {
                 ai_tuning: difficulty.tune(&oag_ai::Tuning::default()),
                 ai_pilots,
                 finished_thrust,
+                original_tables,
                 original_ai: None,
                 race_seed: seed,
                 // `--autopilot-skill` sets this after `Self::start` returns - see

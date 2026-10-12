@@ -183,6 +183,7 @@ mod missile_blast;
 mod models;
 mod options;
 mod original_ai;
+mod original_tables;
 mod pads;
 mod perfect_start;
 mod pilot_assist;

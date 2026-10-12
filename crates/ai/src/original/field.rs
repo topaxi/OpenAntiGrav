@@ -20,6 +20,7 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_physics::ShipControls;
 use oag_tables::ai_race_stats::ClassRace;
+use oag_tables::pure_ai_stats::PureClassRace;
 
 /// The racer table's size, and the round-robin period: the counter wraps at
 /// eight whatever the field size (measured, 92).
@@ -47,6 +48,14 @@ pub struct OriginalDriver {
     pub held_thrust: f32,
     /// `+0x190`: the forward axis the pitch controller last saw.
     pub last_forward: Vec3,
+    /// The grid position, `1` the front: Pure's `driver+0x60`, which picks
+    /// the slot's cruise speed and `StartSpeed`.
+    pub grid: u8,
+    /// Pure's ringless lane ([`super::SingleLane`]); idle on a ringed driver.
+    pub single_lane: super::SingleLane,
+    /// Pure's launch blend and fatigue ([`super::CruiseState`]); idle on a
+    /// ringed driver.
+    pub cruise: super::CruiseState,
 }
 
 impl OriginalDriver {
@@ -64,6 +73,9 @@ impl OriginalDriver {
             wander,
             held_thrust: 0.0,
             last_forward: Vec3::ZERO,
+            grid: position,
+            single_lane: super::SingleLane::default(),
+            cruise: super::CruiseState::default(),
         }
     }
 }
@@ -108,6 +120,9 @@ pub struct Standings<'a> {
     pub race_time: f32,
     /// The race is an Eliminator, which [`Laws::eliminator_drops_when_behind`] reads.
     pub eliminator: bool,
+    /// The lap's length in the units [`Self::racers`]' progress is in: the
+    /// wrap Pure's gaps along the track are taken over.
+    pub lap_length: f32,
 }
 
 /// One driver's output.
@@ -120,15 +135,34 @@ pub struct Output {
     pub rail: Option<RailCorrection>,
 }
 
+/// Which throttle the field's opponents fly, by the tables the title ships.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) enum Throttle {
+    /// Pulse's `AI_ComputeOpponentThrust`: the place-indexed table and the
+    /// formation around the player, over the ringed planner.
+    Formation(ClassRace),
+    /// Pure's sibling driver ([`super::sibling`]): the legacy block's cruise
+    /// law, its two per-race draws and the field-wide zone multiplier, over
+    /// the ringless planner.
+    Cruise {
+        table: PureClassRace,
+        draws: super::CruiseDraws,
+        /// `RM+0x134`, written once a tick for the next.
+        zone: f32,
+        /// `RM+0x1e34`, cleared once the field has strung out.
+        launch_phase: bool,
+    },
+}
+
 /// The field: `AiManager_Update`'s state and every driver.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
-    table: ClassRace,
-    controller: Controller,
-    laws: Laws,
+    pub(super) throttle: Throttle,
+    pub(super) controller: Controller,
+    pub(super) laws: Laws,
     skill: f32,
     level: usize,
-    rng: Rng,
+    pub(super) rng: Rng,
     counter: usize,
     shuffled: bool,
     /// The drivers, by slot. The player's slot holds one too, never driven:
@@ -152,7 +186,30 @@ impl Field {
         grid: [u8; SLOTS],
         seed: u64,
     ) -> Self {
+        Self::assemble(
+            |_| Throttle::Formation(table),
+            controller,
+            laws,
+            skill,
+            level,
+            grid,
+            seed,
+        )
+    }
+
+    /// [`Self::new`] with the throttle built from the field's own generator
+    /// before anything else draws from it.
+    pub(super) fn assemble(
+        throttle: impl FnOnce(&mut Rng) -> Throttle,
+        controller: Controller,
+        laws: Laws,
+        skill: f32,
+        level: usize,
+        grid: [u8; SLOTS],
+        seed: u64,
+    ) -> Self {
         let mut rng = Rng::new(seed ^ 0x6f72_6967_696e_616c);
+        let throttle = throttle(&mut rng);
         let drivers = std::array::from_fn(|slot| {
             let mut driver = OriginalDriver::new(grid[slot]);
             // 2048's `Ai_Construct` draws the coin once (`rand() % 2`,
@@ -164,7 +221,7 @@ impl Field {
             driver
         });
         Self {
-            table,
+            throttle,
             controller,
             laws,
             skill,
@@ -200,13 +257,15 @@ impl Field {
     /// `AiManager_Update`'s head, once a tick before any driver: the shuffle
     /// on the first call, then which slot runs its law this tick.
     pub fn begin_tick(&mut self, opponents: &[usize]) -> usize {
-        if !self.shuffled {
+        if let Throttle::Formation(table) = self.throttle
+            && !self.shuffled
+        {
             self.shuffled = true;
             let mut wanders: Vec<Wander> =
                 opponents.iter().map(|&s| self.drivers[s].wander).collect();
             shuffle(
                 &mut wanders,
-                &self.table.pack_swapping[self.level],
+                &table.pack_swapping[self.level],
                 &mut self.rng,
             );
             for (&slot, wander) in opponents.iter().zip(wanders) {
@@ -223,6 +282,26 @@ impl Field {
     /// progress.
     pub fn drive(
         &mut self,
+        slot: usize,
+        lane_tick: bool,
+        tick: &Tick,
+        standings: &Standings<'_>,
+        dt: f32,
+        ahead: impl FnMut(f32) -> Option<TrackPoint>,
+    ) -> Output {
+        match self.throttle {
+            Throttle::Formation(table) => {
+                self.drive_formation(&table, slot, lane_tick, tick, standings, dt, ahead)
+            }
+            Throttle::Cruise { .. } => self.drive_sibling(slot, tick, standings, dt, ahead),
+        }
+    }
+
+    /// Pulse's `Ai_Update`, and HD's, 2048's and Omega's through [`Laws`].
+    #[allow(clippy::too_many_arguments)]
+    fn drive_formation(
+        &mut self,
+        table: &ClassRace,
         slot: usize,
         lane_tick: bool,
         tick: &Tick,
@@ -295,7 +374,7 @@ impl Field {
                 }
             });
             thrust = opponent_thrust(
-                &self.table,
+                table,
                 &ThrustInput {
                     racers: &racers[..count],
                     own: slot,
@@ -323,10 +402,25 @@ impl Field {
                 }
             }
         }
-        let rail = driver
-            .rail
-            .snap(pose, &tick.own, own_lane, tick.touching, tick.finished, dt);
-        let pitch = steer::pitch(pose, &tick.own, tick.grounded, &mut driver.last_forward);
+        let rail = driver.rail.snap(
+            pose,
+            &tick.own,
+            own_lane,
+            tick.touching,
+            tick.finished,
+            self.laws.rail_turns_velocity,
+            dt,
+        );
+        let fade = self
+            .laws
+            .pitch_scale((pose.position - tick.own.position).length());
+        let pitch = steer::pitch(
+            pose,
+            &tick.own,
+            tick.grounded,
+            fade,
+            &mut driver.last_forward,
+        );
         Output {
             controls: ShipControls {
                 steer_x: steering.steer * a / 100.0,

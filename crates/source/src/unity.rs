@@ -5,7 +5,8 @@
 //! looked for the way the override layer is: a directory per base, searched in
 //! `data/unity` (a checkout), beside the program, and `<data dir>/oag/unity`, or
 //! the path list in `$OAG_UNITY`. Under a base, tracks are `tracks/*.wtrk` and
-//! ships `ships/*.csf`. Nothing here opens a file: reading belongs to the content
+//! `tracks/*.track.toml` (or the same one or two directories down, the shape of a
+//! Steam Workshop download) and ships `ships/*.csf`. Nothing here opens a file: reading belongs to the content
 //! layer, and a missing directory is the ordinary state of a copy of the game.
 
 use std::path::{Path, PathBuf};
@@ -56,10 +57,62 @@ fn is_file_with(path: &Path, extension: &str) -> bool {
             .is_some_and(|e| e.eq_ignore_ascii_case(extension))
 }
 
-/// Every `.wtrk` track under `bases`, base by base, each base sorted by path.
+/// Whether `path` is a track a player can race: a Workshop `.wtrk`, or this
+/// project's own `*.track.toml` manifest (its `.glb` sits beside it).
+fn is_track(path: &Path) -> bool {
+    is_file_with(path, "wtrk")
+        || (path.is_file()
+            && path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().to_lowercase().ends_with(".track.toml")))
+}
+
+/// Every track under `bases`, base by base: `tracks/` first, then the
+/// directories one and two levels down, each sorted by path.
+///
+/// The deeper levels are the shapes a Steam Workshop download takes:
+/// `workshop/content/473770/<item>/<name>.wtrk` is a base whose tracks sit one
+/// level down, and a base holding that `473770` directory (`data/unity`) has
+/// them two down. Only directory listings are read, never a file, so a game
+/// install living under a base costs a few `read_dir` calls and finds nothing.
 #[must_use]
 pub fn tracks_in(bases: &[PathBuf]) -> Vec<PathBuf> {
-    listed(bases, "tracks", "wtrk")
+    let mut out = Vec::new();
+    for base in bases {
+        let first = subdirectories(base);
+        let second: Vec<PathBuf> = first.iter().flat_map(|d| subdirectories(d)).collect();
+        let dirs = std::iter::once(base.join("tracks"))
+            .chain(first)
+            .chain(second);
+        for dir in dirs {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            let mut found: Vec<PathBuf> = entries
+                .filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| is_track(p))
+                .collect();
+            found.sort();
+            for path in found {
+                if !out.contains(&path) {
+                    out.push(path);
+                }
+            }
+        }
+    }
+    out
+}
+
+fn subdirectories(dir: &Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    found.sort();
+    found
 }
 
 /// Every `.csf` ship under `bases`, in the same order.
@@ -80,9 +133,14 @@ pub fn resolve_in(bases: &[PathBuf], name: &str) -> Option<PathBuf> {
     let wanted = name.to_lowercase();
     let all = tracks_in(bases);
     let stem = |p: &PathBuf| {
-        p.file_stem()
+        let name = p
+            .file_name()
             .map(|s| s.to_string_lossy().to_lowercase())
-            .unwrap_or_default()
+            .unwrap_or_default();
+        name.strip_suffix(".track.toml")
+            .or_else(|| name.rsplit_once('.').map(|(stem, _)| stem))
+            .unwrap_or(&name)
+            .to_string()
     };
     if let Some(exact) = all.iter().find(|p| stem(p) == wanted) {
         return Some(exact.clone());
@@ -130,6 +188,36 @@ mod tests {
             Some(base.join("tracks/lion one.wtrk"))
         );
         assert_eq!(resolve_in(&bases, "zzz"), None);
+        std::fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn a_workshop_download_and_an_own_format_track_are_found_too() {
+        let base = std::env::temp_dir().join(format!("oag-unity-layout-{}", std::process::id()));
+        // `<base>/<content id>/<item>/<name>.wtrk`, as Steam lays it out.
+        std::fs::create_dir_all(base.join("473770/111")).unwrap();
+        std::fs::create_dir_all(base.join("tracks")).unwrap();
+        std::fs::create_dir_all(base.join("deep/er/still")).unwrap();
+        std::fs::write(base.join("473770/111/lion.wtrk"), b"x").unwrap();
+        std::fs::write(base.join("473770/111/lion.csf"), b"x").unwrap();
+        std::fs::write(base.join("tracks/mine.track.toml"), b"x").unwrap();
+        std::fs::write(base.join("tracks/mine.glb"), b"x").unwrap();
+        std::fs::write(base.join("deep/er/still/too_deep.wtrk"), b"x").unwrap();
+        let found = tracks_in(std::slice::from_ref(&base));
+        assert_eq!(
+            found,
+            [
+                base.join("tracks/mine.track.toml"),
+                base.join("473770/111/lion.wtrk")
+            ]
+        );
+        assert_eq!(
+            resolve_in(std::slice::from_ref(&base), "MINE"),
+            Some(base.join("tracks/mine.track.toml"))
+        );
+        // The base is the content directory itself: one level down.
+        let content = base.join("473770");
+        assert_eq!(tracks_in(&[content]), [base.join("473770/111/lion.wtrk")]);
         std::fs::remove_dir_all(&base).unwrap();
     }
 }

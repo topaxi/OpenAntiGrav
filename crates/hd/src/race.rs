@@ -800,6 +800,11 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         preferred_follows_choice: oag_title::pre_race::Sourced::chosen(false),
         // HD's campaign reads a cell's `stats.xml`, not an event.
         event_ai: None,
+        tables: oag_title::original_driver::AiTables::PerClassFiles,
+        // `Ai_SnapToLane` (`0x000ff9b0`) is Pulse's, velocity write included;
+        // `Ai_ComputePitch` was read as Pulse's, no fade.
+        rail_turns_velocity: oag_title::pre_race::Sourced::measured(true),
+        pitch_fade: None,
     };
 
 /// `Ai_Construct`'s two circuit flags and `AI_UpdateCraft`'s windows
