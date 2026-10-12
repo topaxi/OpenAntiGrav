@@ -530,7 +530,8 @@ impl Raycaster for TriangleSoup {
         }
 
         let mut candidates = Vec::new();
-        self.broadphase.visit(&segment, |index| candidates.push(index));
+        self.broadphase
+            .visit(&segment, |index| candidates.push(index));
         candidates.sort_unstable();
 
         let mut found = 0;
