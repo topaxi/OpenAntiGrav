@@ -51,6 +51,10 @@ takes them to `Race::use_original_ai` and `Race::set_original_event_ai_skills`.
 
 ## Next Steps
 
+- **Decided 2026-10-12 (maintainer): keep `original_opponent` on for 2048**, despite Arena's
+  respawns and Sol's lap-1 respawn loop. Those are rescue-placement gaps to fix, not a reason
+  to fly this project's driver in the campaign.
+
 1. Read `0x81199800` (2048's Eliminator-family thrust) and fly Elimination events.
 2. Port the pad tracking: read `Ai_TrackWeaponPads` (`0x8119c0e0`) against this
    project's pad list, then the avoidance (`0x8119b7b6`) and its threat loop.
