@@ -22,6 +22,7 @@ use oag_vex::vex;
 /// that moves the quad *across* the frame rather than toward the lens.
 fn moving_quad(xform: u32) -> Model {
     let corner = |y: f32, z: f32| GpuVertex {
+        quake: 0.0,
         position: [0.0, y, z],
         normal: [1.0, 0.0, 0.0],
         colour: [1.0, 1.0, 1.0, 1.0],
@@ -89,6 +90,7 @@ fn moving_quad(xform: u32) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -236,6 +238,7 @@ fn the_texture_table_scrolls_a_surface() {
     );
     // A quad that samples only the black texel, until a `u` offset slides it.
     let corner = |y: f32, z: f32, u: f32| GpuVertex {
+        quake: 0.0,
         position: [0.0, y, z],
         normal: [1.0, 0.0, 0.0],
         colour: [1.0, 1.0, 1.0, 1.0],

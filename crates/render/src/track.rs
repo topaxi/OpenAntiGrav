@@ -171,6 +171,7 @@ pub fn build_model(label: &str, ai: &AiTrack) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -234,6 +235,7 @@ fn strip(
         // The surface faces the way the frame says is up, which is `-down`.
         let normal = [-s.down[0], -s.down[1], -s.down[2]];
         vertices.push(GpuVertex {
+            quake: 0.0,
             position: edges_of(s, left, lift),
             normal,
             colour,
@@ -249,6 +251,7 @@ fn strip(
             texcoord2: [0.0, 0.0],
         });
         vertices.push(GpuVertex {
+            quake: 0.0,
             position: edges_of(s, right, lift),
             normal,
             colour,

@@ -669,11 +669,18 @@ fn units(
 /// Nothing shades differently for this yet. It is carried so the shader step is
 /// a shader step, and counted so the loader report says how much of a circuit
 /// the reading actually reaches.
+///
+/// **Also returned, per slot: whether the material ships a `StaticQuake` row** -
+/// the vertex program the Quake's displacement is the only difference of. A draw
+/// can only be issued under that class if its material carries the row, so the
+/// surfaces the wave can reach are the materials that do, an authored set (381
+/// of the disc's 1,632 materials, 281 of Talon's Junction's 2,211 draws). See
+/// `GpuVertex::quake`.
 pub(super) fn variants(
     model: &rcsmodel::Model,
     textures: Textures<'_>,
     report: &mut Report,
-) -> Vec<Option<rcsmaterial::Variant>> {
+) -> (Vec<Option<rcsmaterial::Variant>>, Vec<bool>) {
     // One representative chunk per slot, which the invariant above licenses,
     // and how many chunks each slot serves - because the slot is not the
     // meaningful unit. Talon's Junction declares 442 materials and only 302 are
@@ -698,6 +705,7 @@ pub(super) fn variants(
     let mut cache: std::collections::HashMap<String, Option<rcsmaterial::RcsMaterial>> =
         Default::default();
     let mut out = Vec::with_capacity(model.materials.len());
+    let mut quake = Vec::with_capacity(model.materials.len());
     for (slot, material) in model.materials.iter().enumerate() {
         let ordinal = u32::try_from(slot).unwrap_or(u32::MAX);
         let chunks = chunks_of.get(&ordinal).copied().unwrap_or(0);
@@ -705,6 +713,7 @@ pub(super) fn variants(
             // Declared and never drawn: not a gap in this reading, so it is not
             // counted as one.
             out.push(None);
+            quake.push(false);
             continue;
         }
         // The material's own name is its path in the archive.
@@ -719,8 +728,15 @@ pub(super) fn variants(
         let Some(parsed) = parsed else {
             report.materials_unread += 1;
             out.push(None);
+            quake.push(false);
             continue;
         };
+        quake.push(
+            parsed
+                .variants
+                .iter()
+                .any(|v| v.class == Some(rcsmaterial::Class::StaticQuake)),
+        );
         let decl = decl_of.get(&ordinal).copied().flatten();
         // Numerically, not by union: bits 1-2 are a four-way field and
         // `Features::with` would leave both `Ambient` and `IleLightmap` set,
@@ -730,8 +746,8 @@ pub(super) fn variants(
         // `Static` first, since it is what every world chunk uses and what
         // most materials ship a row for. Falling through the rest of
         // `Class::ALL` - `StaticQuake` (`Static`'s own programs with the
-        // Quake weapon's displacement in front, nothing here fires that
-        // weapon), `RigidBody` (a moving body's own class, ships and
+        // Quake weapon's displacement in front, which `GpuVertex::quake`
+        // and `quake.wesl` carry instead), `RigidBody` (a moving body's own class, ships and
         // weapons) and `StaticUncompressed` - covers a material whose table
         // ships only one of those, such as
         // `data/materials/frontendscene/basic_vertexemissive.rcsmaterial`
@@ -774,7 +790,7 @@ pub(super) fn variants(
             }
         }
     }
-    out
+    (out, quake)
 }
 
 #[cfg(test)]

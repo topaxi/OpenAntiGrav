@@ -33,7 +33,7 @@ use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
-use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots, anim_node, slots};
+use super::{Bounds, DrawCall, GpuVertex, Model, TextureSlots, anim_node, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -238,15 +238,13 @@ fn declares_no_texcoord(mesh: &rcsmodel::Mesh) -> bool {
 /// blending it would put the white 1x1 through the transparent pass and paint
 /// the same sheet with depth write off - strictly worse than before. Such a
 /// chunk stays in the opaque pass and is counted in [`Report::untextured`].
-fn surface(
-    model: &rcsmodel::Model,
-    mesh: &rcsmodel::Mesh,
-    skin: &[Option<std::sync::Arc<ModelTexture>>],
-    material_slots: &[u32],
-    material_specular_exponent: &[f32],
-    material_colour_factor: &[bool],
-    material_anim: &[u32],
-) -> Surface {
+fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Surface {
+    let skin = &tables.textures;
+    let material_slots = &tables.material_slots;
+    let material_specular_exponent = &tables.material_specular_exponent;
+    let material_colour_factor = &tables.material_colour_factor;
+    let material_quake = &tables.material_quake;
+    let material_anim = &tables.material_anim;
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
     // Which of `Model::anim_tracks` this material's own curve (if any) drives
@@ -290,6 +288,7 @@ fn surface(
         roles,
         specular_exponent,
         colour_factor: material_colour_factor.get(slot).copied().unwrap_or(false),
+        quake: material_quake.get(slot).copied().unwrap_or(false),
         anim,
     }
 }
@@ -377,6 +376,9 @@ struct Surface {
     /// light - see `skin::light_inputs`. Marks the chunk's vertices through
     /// `GpuVertex::sun_mask`.
     colour_factor: bool,
+    /// Whether the material ships a `StaticQuake` vertex program - see
+    /// `GpuVertex::quake`.
+    quake: bool,
     /// The blend equation the material authors, or `None` for the opaque pass.
     ///
     /// The state itself rather than a `vex::BlendClass`, because a PS3 material
@@ -534,6 +536,7 @@ fn emit(
             },
             specular_exponent: surface.specular_exponent,
             glow: 0.0,
+            quake: f32::from(u8::from(surface.quake)),
             texcoord2: texcoords2
                 .and_then(|t| t.get(k))
                 .map_or([0.0, 0.0], |&[u, v]| [finite(u), finite(v)]),
@@ -694,6 +697,7 @@ fn build_with_options(
         material_specular_exponent,
         material_colour_factor,
         material_variants,
+        material_quake,
         emissive,
         alpha_test_ref,
         mag_emissive,
@@ -723,6 +727,7 @@ fn build_with_options(
     out.material_slots = material_slots;
     out.material_specular_exponent = material_specular_exponent;
     out.material_colour_factor = material_colour_factor;
+    out.material_quake = material_quake;
     out.material_anim = material_anim;
     out.anim_tracks = anim_tracks;
 
@@ -784,15 +789,7 @@ fn build_with_options(
                 continue;
             };
 
-            let surface = surface(
-                &model,
-                mesh,
-                &out.textures,
-                &out.material_slots,
-                &out.material_specular_exponent,
-                &out.material_colour_factor,
-                &out.material_anim,
-            );
+            let surface = surface(&model, mesh, &out);
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));

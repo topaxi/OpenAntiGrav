@@ -290,6 +290,7 @@ pub fn build_model(
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -382,6 +383,7 @@ fn face_normal(c: &[[f32; 3]; 3]) -> [f32; 3] {
 
 fn vertex(position: [f32; 3], normal: [f32; 3], colour: [f32; 4], lit: f32) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         normal,
         colour,

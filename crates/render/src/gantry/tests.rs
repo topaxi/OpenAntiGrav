@@ -102,6 +102,7 @@ fn two_draws(a: f32, b: f32) -> Model {
     use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex};
 
     let vertex = |x: f32| GpuVertex {
+        quake: 0.0,
         position: [x, 0.0, 0.0],
         normal: [0.0, 0.0, 1.0],
         colour: [1.0; 4],
@@ -206,6 +207,7 @@ fn textured_draws(placeholder_label: &str) -> Model {
     use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex, ModelTexture, Texels};
 
     let vertex = || GpuVertex {
+        quake: 0.0,
         position: [0.0; 3],
         normal: [0.0, 0.0, 1.0],
         colour: [1.0; 4],

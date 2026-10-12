@@ -40,6 +40,7 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
 
 fn vertex(position: [f32; 3], slots: u32) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [0.0, 0.0, 0.0, 1.0],

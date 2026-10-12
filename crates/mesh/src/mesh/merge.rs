@@ -41,6 +41,7 @@ pub fn merge(label: &str, models: Vec<Model>) -> Model {
         material_slots: Vec::new(),
         material_specular_exponent: Vec::new(),
         material_colour_factor: Vec::new(),
+        material_quake: Vec::new(),
         material_variants: Vec::new(),
         material_anim: Vec::new(),
         shine_draws: Vec::new(),
@@ -198,6 +199,7 @@ mod merge_tests {
             label: label.to_string(),
             vertices: (0..vertices)
                 .map(|k| GpuVertex {
+                    quake: 0.0,
                     position: [k as f32, 0.0, 0.0],
                     normal: [0.0, 1.0, 0.0],
                     colour: [1.0; 4],
@@ -239,6 +241,7 @@ mod merge_tests {
             material_slots: Vec::new(),
             material_specular_exponent: Vec::new(),
             material_colour_factor: Vec::new(),
+            material_quake: Vec::new(),
             material_variants: Vec::new(),
             material_anim: Vec::new(),
             shine_draws: Vec::new(),

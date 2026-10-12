@@ -354,3 +354,33 @@ burst".
 - Open: the blue bias (HD's `psys_lit` takes scene light? unread); HD's own frame-advance
   law and which cell of the 8x4 flipbook is frame 0; `WO_ROCKET_EXPLO` (craft hit, 12 emitters, all sprites decode) wants a matched
   capture before it is listed; the other HD effects likewise.
+
+## 2026-10-12 (`hd-quake-render`): the Quake draws HD's wave
+
+Held-weapon state 2 is the Quake (`rpcs3-capture.md`; the old "state 2 unresolved" row was this).
+The wave HD draws is a band of fire across the whole road and a road that lifts, and ours drew one
+offset blob of grey puffs. Now: `WO_QUAKE` plays under the emitter extent law with its own five
+`.gtf` sprites (`oag_title::Effects::extents`, HD lists the effect beside `sprites`), and the
+surfaces of materials that ship a `StaticQuake` vertex program are lifted by the decoded program
+(`GpuVertex::quake`, `Scene::quake`, `quake.wesl`, amplitude and radius read live). Evidence, the
+live `g_quake` block, the registers and the draw-class census: `docs/ghidra/functions/ps3-hdfury-eu/quake.md`.
+Pulse, Pure and the PS2 are pixel-identical to main with a Quake in flight. Omega and 2048:
+checked, applies, not wired (same page).
+
+Open, in order of what a player would notice:
+- **Which flagged chunks the original lifts** (the dump shows a selection this lane did not
+  recover; ours lifts every vertex of a flagged material within 60 of the wave and may over-lift),
+  and the **stationary-craft pair does not show the lift matching** (film walls straight at the
+  wave's first half second, ours bent): the lift's evidence is the decoded program, the live
+  registers and the overtaking film, not that pair.
+- **The launch white-out and the scene-wide yellow tint** (green pipes lime, the hull orange, the
+  HUD panels warm) are not drawn and have no producer found: none of `SpuLight_AddCandidate`'s
+  twelve callers is in the Quake module, `Quake_Update` calls no flash. A screen-space wash from
+  the near fire plus the bloom is the unproven reading (`hd-whiteout` found the Missile's the same).
+- **The pale flat plane** on a wall in the first ticks: `molten_debris_colliding`'s own sprite (the
+  film shows similar planes); whether a colliding particle lies flat is unread.
+- **The flipbooks**: every `WO_QUAKE` sprite draws frame 0.
+- **HD's own `ParticleSystem_EmitLine`** (the extent law is inherited from Pulse and matched by eye).
+- **Whether HD's CPU `Quake_UpdateSpan` also moves what the RSX draws**; the big-endian span table
+  `oag_vex::quake::spans` cannot read (every HD circuit authors the `Quake` node).
+- **A matched pair with the same ship**: the film is the Fury campaign's first event.

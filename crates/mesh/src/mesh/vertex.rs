@@ -133,6 +133,24 @@ pub struct GpuVertex {
     /// (`mesh::rcs::ice`) - and `[0, 0]` everywhere else. Last, for the reason
     /// [`Self::lightmap_texcoord`] gives.
     pub texcoord2: [f32; 2],
+    /// `1.0` where this surface's material ships a `StaticQuake` vertex
+    /// program, so the Quake's travelling displacement reaches it
+    /// (`mesh.wesl`'s `quake::lifted`), and `0.0` everywhere else, which is every
+    /// vertex of every other title.
+    ///
+    /// **Per material, read off the disc**: Wipeout HD builds a `Static` and a
+    /// `StaticQuake` permutation of the vertex program for the materials the
+    /// wave can deform (381 of the disc's 1,632), and the class a draw is issued
+    /// under is the only thing that differs between the two. **Which** of those
+    /// materials' chunks the original issues as `StaticQuake` is not
+    /// established: 50 distinct chunks of a frame's 596 scene draws with the
+    /// wave 190 units ahead, 8 with it 400 units away and none in a frame dumped
+    /// right after the shot, so it is not "every flagged chunk while a Quake is
+    /// up", and this marks every vertex of a flagged material, which lifts
+    /// everything of those materials inside the 60-unit radius. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/quake.md`, "Open".
+    /// Last, for the reason [`Self::lightmap_texcoord`] gives.
+    pub quake: f32,
 }
 
 /// [`GpuVertex::specular_exponent`]'s fallback - every title but Wipeout HD,

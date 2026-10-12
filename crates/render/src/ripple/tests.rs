@@ -34,6 +34,7 @@ fn a_wave_is_born_ahead_of_the_craft_in_its_own_direction() {
 
 fn vertex(y: f32) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position: [0.0, y, 0.0],
         normal: [0.0, 1.0, 0.0],
         colour: [1.0; 4],

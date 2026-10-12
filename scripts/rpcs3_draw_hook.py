@@ -5,6 +5,7 @@ reached), then the fragment programs and index ranges, the vertex ranges, the
 textures of normal-map programs, and the first bytes of every bound texture
 (`HOOK_LIGHT=1` skips the index and vertex stages). Returning `None` asks the
 driver to resume, wait and try again when the captured frame is incomplete.
+`HOOK_RING_ONLY=1` stops after the command stream (draw state and vertex-program constants only).
 `HOOK_TGT=cc0000,10000` limits the index and vertex stages to draws on those render
 targets (a few draws instead of all 700); `HOOK_NEED_SCREEN=1` also retries a frame whose
 bloom chain and the HUD after it are missing, which the 200-draw floor does not catch.
@@ -61,6 +62,11 @@ def regions(out, stem, rnd):
             # (the part measured) and the HUD missing
             print('hook: no complete post chain followed by a screen-buffer draw, retry',flush=True)
             return None
+        if os.environ.get('HOOK_RING_ONLY')=='1':
+            # the command stream alone (draw state and vertex-program constants): stops before the
+            # fragment programs, index and vertex ranges and texture heads, which cost minutes per frame
+            ST['stage']=9
+            return []
         ST['stage']=1
         res=[]
         for p in sorted(set(d[0x8e4]&0xfffffff0 for d in draws)):

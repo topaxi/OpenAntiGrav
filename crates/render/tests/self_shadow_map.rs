@@ -22,6 +22,7 @@ use oag_render::shadow::self_shadow::SIZE;
 
 fn vertex(position: Vec3) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position: position.to_array(),
         normal: [0.0, 1.0, 0.0],
         colour: [1.0, 1.0, 1.0, 1.0],

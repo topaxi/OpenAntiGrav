@@ -100,6 +100,7 @@ pub(super) fn particle_effect(
     dir: &str,
     name: &str,
     pulse_psp: bool,
+    extent_law: bool,
     gtf_sprites: bool,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
@@ -166,9 +167,13 @@ pub(super) fn particle_effect(
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
     // Pulse's PSP laws only - see `psys::Effect::without_extents` and
     // `without_pulse_psp_draw`. A listed HD effect draws every particle on its
-    // spawn frame: the flipbook's direction on HD is unread.
+    // spawn frame: the flipbook's direction on HD is unread. The extent law
+    // alone is also lifted per effect where a title lists one
+    // (`oag_title::Effects::extents`), against a matched capture.
     if !pulse_psp {
-        effect.without_extents();
+        if !extent_law {
+            effect.without_extents();
+        }
         effect.without_pulse_psp_draw();
     }
     let sprite_note = if ext.is_some() {

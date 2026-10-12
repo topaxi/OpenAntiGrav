@@ -10,6 +10,7 @@ import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissives, node_anims, scene, uniforms};
 import package::fog::{fogged};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
+import package::quake::{quake_lifted};
 import package::refraction::{opaque_colour};
 import package::shade::{lit_texel};
 import package::shadow::{shadowed};
@@ -27,7 +28,12 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // takes it back to the model's. See `oag_formats::vex::anim_anchors`.
     let node = node_anims.transform[in.xform];
     let placed = node * vec4<f32>(in.position, 1.0);
-    let world = uniforms.model * placed;
+    var world = uniforms.model * placed;
+    // The Quake wave lifts the surfaces whose material ships a `StaticQuake`
+    // vertex program (`GpuVertex::quake`); the identity with no wave in flight.
+    if in.quake > 0.5 {
+        world = vec4<f32>(quake_lifted(world.xyz), world.w);
+    }
     out.clip = uniforms.view_projection * world;
     // **The normal goes through the node matrix's inverse transpose**, not the
     // matrix itself: a per-axis scale skews a normal turned by the plain

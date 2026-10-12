@@ -217,6 +217,7 @@ impl Scene {
             spu_lights: mesh_render::SpuLights::from_slice(&race.hd_spu_lights()),
             sun_occlusion: self.sun_occlusion_matrices(),
             refraction: super::behind_glass::view_projection(section_view).to_cols_array_2d(),
+            quake: race.quake_wave(),
         };
         // The visualiser's own tint - the showing stage's `EQ colour tint`,
         // or `None` where the file authors none (every 2048 table, and any

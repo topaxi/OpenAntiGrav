@@ -38,6 +38,7 @@ fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
 fn one_triangle_model(label: &str) -> Model {
     let mut model = Model::none(label);
     let vertex = |position: [f32; 3]| GpuVertex {
+        quake: 0.0,
         position,
         normal: [0.0, 0.0, 1.0],
         colour: [1.0, 1.0, 1.0, 1.0],

@@ -5,6 +5,7 @@ use oag_mesh::mesh::{Bounds, DrawCall, slots};
 
 fn vertex(normal: [f32; 3]) -> GpuVertex {
     GpuVertex {
+        quake: 0.0,
         position: [0.0; 3],
         normal,
         colour: [0.3, 0.4, 0.5, 0.6],

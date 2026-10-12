@@ -716,3 +716,11 @@
 0x00093c48	function	Hud_UpdateWrongWay	85	hud-message-triggers.md
 0x000e4a30	function	Craft_UpdateLapProgress	78	hud-message-triggers.md
 0x000d06e0	function	Craft_RecordSplit	80	hud-message-triggers.md
+
+# 2026-10-12 hd-quake-render: the Quake's fire path and its wave (quake.md)
+0x00147d18	function	QuakeManager_Fire	85	quake.md
+0x001560b0	function	Quake_Init	80	quake.md
+0x002d2a78	function	Quake_Update	75	quake.md
+0x002d2630	function	Quake_SampleSpan	75	quake.md
+0x002d3760	function	Quake_UpdateSpan	70	quake.md
+0x00ae98c0	data	g_quake	85	quake.md
