@@ -3998,7 +3998,8 @@ not the original's AI, and HD's are the `DATA02` grids, equal to the hard rung.
   Elite is 7.5 % slower than an Ace on `07_Track`.
 - **A lone Ace is far off gold on a handful of layouts, and close on the
   rest.** Most rows are within 0-8 % of gold. The far rows are Pulse
-  `06_Track` (+43 % VENOM, +61 % RAPIER, both on the corner model), `07_Track`
+  `06_Track` (+43 % VENOM, +61 % RAPIER, both on the corner model; RAPIER
+  is +20 % since 2026-10-12, on the hardened trough plan), `07_Track`
   (+19 % VENOM, +29 % PHANTOM), `23_Track` (+20 % FLASH) and `13_Track`
   (+24 % RAPIER), and HD `04`, `06` and `07` (+17-51 %).
 - **On the plan-driven rows the crawl was the plan's own floor.** The plan
@@ -4035,7 +4036,8 @@ Pure, every class):
 - Pure Citta Nuova VENOM, 1493 (19.99 u/s).
 
 Pulse `06_Track` VENOM and RAPIER and HD `15_Track` PHANTOM have floors too,
-but they do not verify and drive the corner model. Pulse at VENOM forward is
+but they do not verify and drive the corner model (RAPIER takes a hardened
+trough plan since 2026-10-12, see "Where only the trough plan verifies"). Pulse at VENOM forward is
 unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
 
 **What it bought**, lone Ace, Pulse, HD and Pure, every class, 240 rows,
@@ -4072,10 +4074,13 @@ unchanged, so `race_ground_truth`'s twelve circuits read exactly as before.
   `ai_dekonstruct_black_ground_truth` cells and `02_Track` PHANTOM's
   zero-contact row went red, and it overturns "commitment stays the margin".
 
-**Where only the trough plan verifies (2026-10-12, maintainer's decision
-2026-10-11, not adopted).** The maintainer asked for Pulse `06_Track` RAPIER's
-trough plan *and* an Ace that holds a clean line on it. A fix exists for that
-row, and it breaks another, so nothing was adopted.
+**Where only the trough plan verifies (2026-10-12, adopted on the
+maintainer's decision of 2026-10-12).** The maintainer asked for Pulse
+`06_Track` RAPIER's trough plan *and* an Ace that holds a clean line on it. The
+fix below does that and breaks 2048 `cathedral` PHANTOM. It was first left
+unadopted for that reason; the maintainer then decided to adopt it and accept
+the `cathedral` loss. The code is `crates/ai/src/plan/harden.rs`
+(`SpeedPlan::choose`, `harden_or`, `harden`, `MARGIN` = 0.96).
 
 *Why the Ace hits the wall on 06 RAPIER, measured.* A balanced Ace at
 commitment 0.938 takes the plan at `sqrt(0.938)` = 0.968. Through samples
@@ -4114,6 +4119,45 @@ plan, forced, the same Ace laps clean (39.8 s, 0 contact), but that plan does
 not verify and does not harden either (site 4408 stays unresolved after
 109,000 steps). A roll is a random decision of the pilot, so no verification
 lap reproduces it. No rule was found that keeps 06 and excludes `cathedral`.
+
+*Re-measured on adoption (2026-10-12, lane `ai-rapier-adopt`)*, on `main` at
+`b6bb7ce41` (after the original drivers landed) against the same tree with the
+change, `ai_speed_plan_sweep` at Ace, 18,000 ticks:
+
+- Pulse, Pure and HD, every lone slice (every layout, both directions where
+  the title has them, every class): one row differs, Pulse `06_Track` RAPIER
+  forward, corner model to plan, 38.35 to 28.80 s best lap (Speed Lap gold
+  24.00, `campaign_reference_laps`, grid 11 cell `grid11_4_1`), 65 to 0
+  contact, shield lost per lap 4.01 to 0.00, end shield 78.94 to 95.00. Every
+  other row is byte-identical.
+- Pulse field of seven, `06_Track` RAPIER forward: mean lap 37.69 to 29.05 s,
+  summed contact 480 to 107, shield lost per lap 5.55 to 5.83 (mean), end
+  shield 76.4 to 70.3 (mean). All seven finish before and after.
+- 2048, every lone slice: one row differs, `cathedral` PHANTOM forward, corner
+  model to plan: 4 clean laps at 51.80 s best, 125 contact, finished, to 0
+  laps, 1702 contact, destroyed. Shield lost per lap 21.77 to 20.59 (the plan
+  run's figure is over its partial lap), end shield 24.14 to 0.
+- 2048 field of seven, `cathedral` PHANTOM forward: destroyed 3 to 5 of 7,
+  finished 4 to 2. The two that finish lap at 39.15 and 39.92 s mean against
+  45.59-55.66 s before. **This is the accepted loss.**
+- Omega: its `cathedral` PHANTOM already drives a verified whole-window plan
+  on `main` (lone 40.32 s, 4 contact), so the new path never fires there; lone
+  and field rows are byte-identical. Of Omega's eight lone slices, six were
+  compared (both RAPIER and PHANTOM directions, FLASH and VENOM reversed), all
+  byte-identical; FLASH and VENOM forward were stopped at a 10-minute time
+  box under load (the forward slices that finished took about 17 minutes) and
+  were not compared. Checked against 2048: **checked, differs** (the same
+  layout, but Omega's whole-window plan verifies there and 2048's does not;
+  why was not looked into).
+- `oag-ai`'s `PLAN_REFERENCE` (the probe circuit) did not move.
+- The plan build on 06 RAPIER takes 54,699 steps (`speed_plan_ground_truth`),
+  under the ring's 120,000 budget.
+- `race_ground_truth`'s twelve circuits (Pulse VENOM) read exactly as before,
+  every one a clean lap with 0 respawns.
+- The original drivers (`oag_ai::original`, campaign races) never read the
+  speed plan. A campaign load still builds it (`Race::field_speed_plan` does
+  not ask which driver flies), and every original-driver ground truth passes
+  unchanged, `vita_2048_original_ai::the_field_finishes_cathedral` included.
 
 *Tried on the driver first, and not kept*, all on the 48 gate rows against
 `main`:

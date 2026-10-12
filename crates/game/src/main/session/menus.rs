@@ -508,6 +508,7 @@ impl Session {
                 prompt: None,
                 picker: None,
                 campaign: None,
+                pure_campaign: None,
                 styled,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),

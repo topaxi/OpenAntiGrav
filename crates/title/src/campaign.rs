@@ -8,20 +8,21 @@
 //!
 //! | question | Pulse | Pure | HD | 2048 | Omega |
 //! | --- | --- | --- | --- | --- | --- |
-//! | reader/screen set ([`Campaign::dialect`]) | Pulse | Pulse | HD | Pulse | Omega |
+//! | reader/screen set ([`Campaign::dialect`]) | Pulse | Pure | HD | Pulse | Omega |
 //! | grids file `--campaign-cell` reads ([`Campaign::definition_entry`]) | yes | none | yes | none | none |
+//! | list campaign read from ([`Campaign::list_entry`]) | none | `Definition.xml` | none | none | none |
 //! | circuits gated by `<Unlock Grid>` ([`Campaign::circuit_unlocks`]) | yes | no | no | no | no |
 //! | variants gated by loyalty rows ([`Campaign::loyalty_unlocks`]) | yes | no | no | no | no |
 //! | `Campaign Selection` ids overlaid ([`Campaign::selection_strings`]) | no | no | yes | no | no |
 //! | archive the screen file is read from ([`Campaign::screen_archive`]) | precedence | precedence | `DATA06` | precedence | precedence |
 //! | archive the grid files are read from ([`Campaign::grid_archive`]) | precedence | precedence | `DATA06` | precedence | precedence |
 //!
-//! Pure and 2048 read through Pulse's reader today because nothing else
-//! exists to read them with; their [`Campaign::dialect`] is
-//! [`Origin::InheritedFrom`] Pulse, which says so instead of leaving the
-//! fall-through of an `else` to imply it. Neither draws a campaign screen (their
-//! front ends carry no campaign layout), so the dialect is read only by a path
-//! that then refuses.
+//! 2048 reads through Pulse's reader today because nothing else exists to read
+//! it with; its [`Campaign::dialect`] is [`Origin::InheritedFrom`] Pulse, which
+//! says so instead of leaving the fall-through of an `else` to imply it. It draws
+//! no campaign screen (its front end carries no campaign layout), so the dialect
+//! is read only by a path that then refuses. Pure's is its own: a list, not a
+//! grid (`oag_tables::pure_campaign`).
 //!
 //! [ADR-0058]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0058-per-title-behaviour-is-title-data-with-provenance.md
 
@@ -35,6 +36,10 @@ pub enum CampaignDialect {
     /// Wipeout HD/Fury's own copies of the same roles, with their own widget
     /// names (`Event`, `RC Laps`, `NextPoints`, `EPoints Title`).
     Hd,
+    /// Wipeout Pure's: no grid at all, a list of events per speed class read off
+    /// the plugin `Definition.xml` ([`Campaign::list_entry`]) and each circuit's
+    /// `stats.xml`.
+    Pure,
     /// Omega's: HD's `PI001` front-end plugin carried forward, read off its own
     /// nineteen grids.
     Omega,
@@ -62,6 +67,11 @@ pub struct Campaign {
     /// `None` on a title whose grids this build reads another way or not at
     /// all.
     pub definition_entry: Option<&'static str>,
+    /// The plugin definition a **list-shaped** campaign is read from, by entry
+    /// name: Wipeout Pure's `Definition.xml`, whose tracks, leagues and
+    /// tournaments with their `<Unlock>` rows are the whole of its campaign.
+    /// `None` on a title whose campaign is a grid.
+    pub list_entry: Option<&'static str>,
     /// Whether circuits carry an `<Unlock Grid="...">` this build reads, and
     /// the Track Select list is cut to the ones the profile has opened.
     pub circuit_unlocks: bool,

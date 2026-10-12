@@ -187,6 +187,8 @@ impl Session {
 
     /// Opens Ship Select over the menus, on the team `race.team` names.
     pub(crate) fn open_ship_picker(&mut self) -> bool {
+        // Read before `shell` is borrowed: it opens the disc.
+        let locked_teams = self.pure_locked_teams();
         let Some(shell) = self.shell.as_ref() else {
             return false;
         };
@@ -203,6 +205,8 @@ impl Session {
         let (entries, sources): (Vec<Entry>, Vec<PreviewSource>) = shell
             .teams
             .iter()
+            // The disc's own gates on a team (Pure's `Zone` and `Medievil`).
+            .filter(|choice| !locked_teams.contains(&choice.value))
             .map(|choice| {
                 let details = shell
                     .team_details

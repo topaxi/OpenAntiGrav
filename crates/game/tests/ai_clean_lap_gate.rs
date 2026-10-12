@@ -259,6 +259,14 @@
 //! laps slower: `10_Track` FLASH 2,050 to 2,160 ticks, with its contact 66 to
 //! 0 - the plan brakes where the corner model ground the wall.
 //!
+//! **Tightened 2026-10-12, lane `ai-rapier-adopt`**: `06_Track` RAPIER takes
+//! the hardened trough plan (`docs/gameplay/ai.md`, "Where only the trough plan
+//! verifies"), 2301 to 1728 ticks and contact 173 to 0. Only that row was
+//! rewritten. The other 47 were left as committed: `ai_speed_plan_sweep`'s lone
+//! slices are byte-identical on every other row with and without the change,
+//! though a generator run on this change's tree already differs from the table
+//! on many of them inside the tolerances.
+//!
 //! Before that, [`BASELINE`] was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
 //! 2026-09-12, and cross-checked field by field against a board printed
@@ -474,7 +482,7 @@ const BASELINE: &[Row] = &[
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1955), contact_ticks: 0 },
     Row { circuit: "01_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1462), contact_ticks: 0 },
     Row { circuit: "13_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2013), contact_ticks: 0 },
-    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2301), contact_ticks: 173 },
+    Row { circuit: "06_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1728), contact_ticks: 0 },
     Row { circuit: "07_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2378), contact_ticks: 0 },
     Row { circuit: "16_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1636), contact_ticks: 0 },
     Row { circuit: "03_Track", class: "PHANTOM", status: Status::CleanLap, lap_ticks: Some(1685), contact_ticks: 0 },

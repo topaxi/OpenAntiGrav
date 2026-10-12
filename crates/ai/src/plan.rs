@@ -34,6 +34,7 @@ use crate::{Context, Driver, Line, Tuning};
 
 mod brake;
 mod clearance;
+mod harden;
 mod lower;
 
 use lower::Lowering;
@@ -51,6 +52,8 @@ struct Pass {
     /// The build's step budget.
     budget: u64,
     lowering: Lowering,
+    /// The share of the plan the craft drives, one but in [`Self::harden`].
+    margin: f32,
 }
 pub mod probe;
 #[cfg(test)]
@@ -555,14 +558,17 @@ impl SpeedPlan {
     /// on, or the search runs out of tries.
     ///
     /// `tuning` steers; pass the top level's and handicap the plan at the
-    /// driver, so one plan serves every difficulty.
+    /// driver, so one plan serves every difficulty. Where only the trough
+    /// search verifies (`06_Track` RAPIER), its plan is taken once `harden`
+    /// also verifies it at a top level's share (`docs/gameplay/ai.md`, "Where
+    /// only the trough plan verifies"); [`Self::build_within`] never does.
     #[must_use]
     pub fn build<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
         craft: &Craft,
         tuning: &Tuning,
     ) -> (Self, Report) {
-        Self::build_within(course, craft, tuning, STEP_BUDGET)
+        Self::choose(course, craft, tuning, STEP_BUDGET, true)
     }
 
     /// [`Self::build`] with its own step budget, for a caller that would
@@ -573,11 +579,9 @@ impl SpeedPlan {
     /// hairpins. The trough plan is kept only where both verify clean and it
     /// laps its verification [`TROUGH_WIN`] faster; anywhere else the race
     /// gets exactly the plan it got before. The whole-window search alone
-    /// verifies `07_Track` VENOM and HD `04_Track` PHANTOM; the trough search
-    /// alone verifies `06_Track` RAPIER, which is left on the corner model on
-    /// purpose (see `docs/gameplay/ai.md`, "Floors in the speed plan"). The
-    /// trough search runs only after a clean whole-window one, and the report
-    /// counts both searches' steps. Chosen, not measured off the original.
+    /// verifies `07_Track` VENOM and HD `04_Track` PHANTOM. The trough search
+    /// runs only after a clean whole-window one, and the report counts both
+    /// searches' steps. Chosen, not measured off the original.
     #[must_use]
     pub fn build_within<R: Raycaster + ?Sized>(
         course: &Course<'_, R>,
@@ -585,31 +589,7 @@ impl SpeedPlan {
         tuning: &Tuning,
         budget: u64,
     ) -> (Self, Report) {
-        let clean = |r: &Report| r.verify_failures == 0 && r.verify_respawns == 0;
-        let (window, window_report) = Self::search(course, craft, tuning, budget, Lowering::Window);
-        // The trough plan only ever replaces a clean whole-window one, so a
-        // course that one does not verify on (2048 `sol` and its routes, 30,000
-        // to 330,000 steps each) is not searched twice.
-        if !clean(&window_report) {
-            return (window, window_report);
-        }
-        let (trough, trough_report) =
-            Self::search(course, craft, tuning, budget, Lowering::FromTrough);
-        let steps = window_report.steps + trough_report.steps;
-        let lap = |r: &Report| u64::from(r.verify_lap_ticks.unwrap_or(u32::MAX));
-        // A clear win only: the trough plan's verification lap at least
-        // [`TROUGH_WIN`] faster, so a layout within a hair of the old plan keeps
-        // it bit for bit.
-        let wins = clean(&window_report)
-            && clean(&trough_report)
-            && lap(&trough_report) * TROUGH_WIN.1 < lap(&window_report) * TROUGH_WIN.0;
-        let (plan, mut report) = if wins {
-            (trough, trough_report)
-        } else {
-            (window, window_report)
-        };
-        report.steps = steps;
-        (plan, report)
+        Self::choose(course, craft, tuning, budget, false)
     }
 
     /// One search with one way of lowering: calibration, learning passes and
@@ -640,9 +620,13 @@ impl SpeedPlan {
                 tuning,
                 yaw,
                 &mut report,
-                Pass { budget, lowering },
+                Pass {
+                    budget,
+                    lowering,
+                    margin: 1.0,
+                },
             );
-            let verify = plan.verify(course, craft, tuning, yaw, &mut report);
+            let verify = plan.verify(course, craft, tuning, yaw, &mut report, 1.0);
             if verify == 0 || report.steps >= budget {
                 break;
             }
@@ -673,6 +657,7 @@ impl SpeedPlan {
         tuning: &Tuning,
         yaw: f32,
         report: &mut Report,
+        margin: f32,
     ) -> u32 {
         let n = self.len() as i64;
         let mut run = Self::start_run(craft);
@@ -686,7 +671,7 @@ impl SpeedPlan {
         let limit = (4 * n as u64).max(4_000) as u32 * 2;
         while run.progress < 2 * n && run.tick < limit {
             let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
-                self.follow(run, course.dt)
+                self.follow(run, course.dt, margin)
             });
             report.steps += 1;
             contacts += u32::from(tick.contact);
@@ -745,14 +730,14 @@ impl SpeedPlan {
         failures
     }
 
-    fn follow(&self, run: &Run, dt: f32) -> (f32, f32) {
+    fn follow(&self, run: &Run, dt: f32, margin: f32) -> (f32, f32) {
         let speed = forward_speed(&run.state);
         if run.state.time_airborne > 0.0 {
             // No grip to brake against in the air; the same rule the driver
             // keeps. See `Driver::drive`.
             return (1.0, 0.0);
         }
-        let target = self.target_ahead(run.driver.index as usize, speed, LEAD_TICKS, dt);
+        let target = self.target_ahead(run.driver.index as usize, speed, LEAD_TICKS, dt) * margin;
         longitudinal(speed, target)
     }
 
@@ -777,7 +762,11 @@ impl SpeedPlan {
         report: &mut Report,
         pass: Pass,
     ) {
-        let Pass { budget, lowering } = pass;
+        let Pass {
+            budget,
+            lowering,
+            margin,
+        } = pass;
         let n = self.len();
         let goal = 2 * n as i64;
         let mut run = Self::start_run(craft);
@@ -794,7 +783,7 @@ impl SpeedPlan {
             // as `verify` does - and kept, so the trace knows what was asked.
             let asked = std::cell::Cell::new((1.0, 0.0));
             let tick = course.tick(&mut run, craft, tuning, yaw, |run, _| {
-                asked.set(self.follow(run, course.dt));
+                asked.set(self.follow(run, course.dt, margin));
                 asked.get()
             });
             let (thrust, brake) = asked.get();

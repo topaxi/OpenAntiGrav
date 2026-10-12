@@ -138,20 +138,23 @@ pub const TITLE: &Title = &Title {
     },
     effects: effects::EFFECTS,
     looks: effects::LOOKS,
-    // No campaign layout read (`docs/formats/pure-status.md`): the load path
-    // that reaches this falls through to Pulse's reader and refuses.
+    // Pure's campaign is a list, not a grid: `oag_tables::pure_campaign` reads
+    // its `Definition.xml` and each circuit's `stats.xml`
+    // (`docs/formats/pure-campaign.md`).
     campaign: &oag_title::Campaign {
-        dialect: oag_title::CampaignDialect::Pulse,
+        dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
+        list_entry: Some(campaign::DEFINITION_ENTRY),
         circuit_unlocks: false,
         loyalty_unlocks: false,
-        // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are another shape
-        // (`MedalCount`, `Track`+`medal`, `Tournament`), unread: `docs/formats/race-setup.md`.
+        // Pure authors no `Grid` or loyalty `<Unlock>`; its 17 rows are
+        // `MedalCount`, `Track` + `medal` and `Tournament` + `class` + `medal`,
+        // which the list campaign evaluates itself.
         unlocks_origin: oag_title::Origin::Measured,
         selection_strings: false,
         screen_archive: None,
         grid_archive: None,
-        origin: oag_title::Origin::InheritedFrom("Wipeout Pulse"),
+        origin: oag_title::Origin::Measured,
     },
     pressings: Some(frontend::PRESSINGS),
     pre_race: None,
@@ -264,6 +267,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: None,
 };
 
+pub mod campaign;
 pub mod effects;
 pub mod frontend;
 pub mod hud;

@@ -20,7 +20,7 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
         "delete-built-in",
         "binding",
     ] {
-        let list = prompt_draws(kind, "winston", &strings, &skin, None)
+        let list = prompt_draws(kind, "winston", &strings, &skin, None, oag_pulse::TITLE)
             .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
         assert!(!list.is_empty(), "{kind:?} drew nothing");
         // `name` reaches every one of them, which is the whole reason the
@@ -45,7 +45,7 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
             "{kind:?} left a %s unsubstituted"
         );
     }
-    let error = prompt_draws("qwerty", "winston", &strings, &skin, None)
+    let error = prompt_draws("qwerty", "winston", &strings, &skin, None, oag_pulse::TITLE)
         .expect_err("an unknown prompt has to be an error, not an empty picture");
     assert!(format!("{error:#}").contains("qwerty"));
 }
@@ -63,8 +63,15 @@ fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
         22.0,
     );
     let strings = oag_ui::language::StringTable::default();
-    let error = prompt_draws("tag-entry", "winston", &strings, &skin, None)
-        .expect_err("no --race source means nothing was read");
+    let error = prompt_draws(
+        "tag-entry",
+        "winston",
+        &strings,
+        &skin,
+        None,
+        oag_pulse::TITLE,
+    )
+    .expect_err("no --race source means nothing was read");
     assert!(format!("{error:#}").contains("source"));
 }
 

@@ -45,7 +45,7 @@ which is narrower than HD and closer to Pulse than the existing evidence got.
   with had never actually been checked against this exact path.
 - **No AI difficulty anywhere in the front-end XML.** Confidence 94. So the
   "base settings like speed class, AI difficulty" shape is half true here.
-- **No unlock machinery authored in the XML** - zero `<Unlock>`, zero `Grid=`,
+- **No unlock machinery authored in the *screen* XML** (the gates are in `Definition.xml`, read 2026-10-12: `docs/formats/pure-campaign.md`) - zero `<Unlock>`, zero `Grid=`,
   zero `GSDisableEntriesBitField` across all eleven files. `Show Unlocks`
   exists but is a post-race reward reveal, not a gate. **Gating still
   happens, in code**: a fresh profile's `Class Selection` visibly lists only

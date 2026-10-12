@@ -128,7 +128,7 @@ from the list rather than greyed (`TrackSelection_PopulateList` filters). The
 mechanism is `oag_game::unlock::Gate`; `--unlock-all` lifts it and is ours, a
 developer and capture escape. The original's mode-gated per-track byte
 (`+0x16e`) is not modelled and stays open. Every other title's race box still
-offers everything: Pure authors no `<Unlock>`, HD and Omega are not wired.
+offers everything: HD and Omega are not wired, and Pure's own gates (17 `<Unlock>` rows of other shapes) gate its campaign list and its team picker, not the race box ([Pure's campaign](#pures-campaign-is-a-list)).
 
 **Craft variants (Pulse): gated, since 2026-10-02.** Each `PI_ModelSkin` and
 `PI_TeamModel` carries an own-team and a `Team="any"` `Exclusive` loyalty row;
@@ -164,11 +164,12 @@ So the shipped game's answer to "what may I race" is two independent
 progression systems, not one flag - which is precisely why standing in for them
 with a flag would be worse than not gating at all.
 
-**Wipeout Pure already agrees with us**, and that is worth recording because it
-shows the ungated shape is not unheard of in the lineage: Pure authors **zero**
+**Wipeout Pure's front-end XML agrees with us**, and that is worth recording because
+it shows the ungated shape is not unheard of in the lineage: Pure authors **zero**
 `<Unlock>`, zero `Grid=` and zero `GSDisableEntriesBitField` across all eleven
-of its front-end definition files, and its `Show Unlocks` subtree is a
-post-race reward reveal rather than a gate. Confidence 94.
+of its front-end *screen* definition files, and its `Show Unlocks` subtree is a
+post-race reward reveal rather than a gate. Confidence 94. Its gates are in
+`Definition.xml` instead, 17 rows of a different shape, read since 2026-10-12.
 
 ## SPEED CLASS: `VECTOR` is confined to RACE REMIX
 
@@ -826,6 +827,20 @@ other five rows (`MULTIPLAYER & SHARING`, `WIPEOUT-GAME.COM`, `PROFILE`,
 are not a row-for-row match, and multiplayer, the web link and extras have
 nothing at all - so none of the five was added as a row that would go
 nowhere or only partway there.
+
+## Pure's campaign is a list
+
+On a Wipeout Pure source `RACE CAMPAIGN` opens a scrolling list of events for the
+class being played, not a grid (`oag_ui_screens::pure_campaign`, driven by
+`Session::open_pure_campaign`). It is a screen over the main page, the same
+"takes the tick whole" shape the race box's pickers have, and it answers the pad, the
+wheel and the pointer through one function (`handle_pure_campaign`), so a locked
+event refuses a click the way it refuses a button. The data, the medal law and the
+gates are [Pure's campaign](../formats/pure-campaign.md); the screen itself is
+ours (chosen, not measured): Pure's own front end walks a chain of one-choice
+screens and no capture of a list exists. Which screen a title opens is
+[`oag_title::Campaign::dialect`](../../crates/title/src/campaign.rs), data, not a
+branch on the title's name.
 
 ## What is not built
 

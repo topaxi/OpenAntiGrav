@@ -1539,3 +1539,17 @@ executable's own list (`Mine.vex`, `Bomb.vex`, `explosion_hemisphere.vex`, `Bomb
 the Disruptor and Missile effects are not. Both charges are laid at the craft's rear anchor, `4.875` behind the body (Feisar only), and the Bomb is drawn
 at `0.4`, both read off the running original. Evidence, captures and the open list:
 [`weapons-gfx.md`](../ghidra/functions/psp-pure-usa/weapons-gfx.md).
+
+## The campaign (2026-10-12)
+
+Pure's campaign is a list of events per speed class, read off `Definition.xml` and each
+circuit's `stats.xml`, with every `<Unlock>` row read and evaluated and the medal law
+recovered from `BOOT.BIN`. Built as `RACE CAMPAIGN` on a Pure source; see
+[`pure-campaign.md`](pure-campaign.md) and
+[the evidence page](../ghidra/functions/psp-pure-usa/campaign.md). The sentence above
+that Pure's 17 `<Unlock>` rows are "unread" is closed. Still open: the class gate (a
+fresh profile lists Vector and Venom only, in code), how the profile counts medals for
+`MedalCount`, and Pure's own campaign opponent
+([`ai-controls.md`](../ghidra/functions/psp-pure-usa/ai-controls.md): planned, not flown
+there yet).
+
