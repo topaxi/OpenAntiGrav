@@ -12,9 +12,10 @@
 - **Only menu rows are read from a mod.** `tracks/`, `craft/` and `pilots/` are reserved names; nothing
   reads them. A mod cannot add a page, a setting, a race mode, a choice row or an action: the closed
   vocabulary is deliberate, opened one kind of content at a time.
-- **No MODS page.** The load report and `just mods-list` show each mod, its version, its licence ("no
-  license stated" when it has none) and the rows it added; the game shows the player nothing. A page
-  would be a new screen with its own pointer support.
+- **2026-10-12 `mods-page`: landed.** OPTIONS, then MODS: a read-only page (one MOD row over the list,
+  detail lines for the mod it is on, a mod that did not load dimmed with its error). No enable or
+  disable. Write-up: `docs/tools/mods.md` ("The MODS page"). The list is rebuilt only when the
+  tree is, so a language switch leaves its words as booted (the thread's language item below).
 - **A language switch does not re-resolve labels.** The tree's labels are resolved once when it is built,
   as every row's always were, so a live LANGUAGE change leaves a mod row in the language it booted in.
   `Session::resupply_language` clones the built definition; rebuilding it through `Mods::build` is the fix.
@@ -37,7 +38,7 @@
 
 ## Next Steps
 
-1. A MODS page (list, licence, rows, enable and disable) with pointer support.
+1. Enable and disable on the MODS page (a stored per-mod switch, then the tree rebuilt without it).
 2. Read `tracks/`, `craft/` and `pilots/` from a mod, one kind at a time, through the layer the disc's
    own archives use (`docs/architecture/asset-layers.md`).
 3. Rebuild the tree on a live language switch.

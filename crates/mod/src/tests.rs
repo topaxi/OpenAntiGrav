@@ -165,10 +165,20 @@ fn a_search_finds_each_kind_skips_a_broken_one_and_names_a_duplicate() {
     std::fs::create_dir_all(dir.join("plain-folder")).unwrap();
 
     let loaded = load(std::slice::from_ref(&dir), &semver::Version::new(0, 1, 0));
-    assert_eq!(loaded.mods.len(), 1, "{:?}", loaded.problems);
-    assert_eq!(loaded.problems.len(), 2, "{:?}", loaded.problems);
-    assert!(loaded.problems.iter().any(|p| p.contains("broken.oagmod")));
-    assert!(loaded.problems.iter().any(|p| p.contains("already loaded")));
+    assert_eq!(loaded.mods.len(), 1, "{:?}", loaded.failed);
+    assert_eq!(loaded.failed.len(), 2, "{:?}", loaded.failed);
+    assert!(
+        loaded
+            .failed
+            .iter()
+            .any(|p| p.reason.contains("broken.oagmod") && p.id.is_none())
+    );
+    assert!(
+        loaded
+            .failed
+            .iter()
+            .any(|p| p.reason.contains("already loaded") && p.id.as_deref().is_some())
+    );
 }
 
 #[test]

@@ -161,3 +161,16 @@ OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, torneios, contra o relógio 
 OAG_MEDAL_GOLD = { text = "OURO", human = false }
 OAG_MEDAL_SILVER = { text = "PRATA", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
+OAG_MENU_MODS = { text = "MODS", human = false }
+OAG_MENU_MODS_SUBTITLE = { text = "Os mods carregados: quem os fez, a licença e as linhas que adicionam", human = false }
+OAG_MODS_PAGE_TITLE = { text = "MODS", human = false }
+OAG_MODS_ROW = { text = "MOD", human = false }
+OAG_MODS_ID = { text = "ID", human = false }
+OAG_MODS_VERSION = { text = "VERSÃO", human = false }
+OAG_MODS_AUTHORS = { text = "AUTORES", human = false }
+OAG_MODS_LICENSE = { text = "LICENÇA", human = false }
+OAG_MODS_ADDS = { text = "ADICIONA", human = false }
+OAG_MODS_NO_LICENSE = { text = "SEM LICENÇA INFORMADA", human = false }
+OAG_MODS_LICENSE_FILE = { text = "VEJA %s", human = false }
+OAG_MODS_NOTHING = { text = "NADA", human = false }
+OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }

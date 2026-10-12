@@ -60,7 +60,7 @@ fn main() -> Result<()> {
             for module in &loaded.mods {
                 println!("{}", module.describe());
             }
-            for problem in &loaded.problems {
+            for problem in &loaded.failed {
                 println!("left out: {problem}");
             }
             println!(

@@ -84,9 +84,9 @@ impl Pending {
         &self,
         title: &oag_title::Title,
         updated: bool,
-    ) -> Result<menu::Definition> {
+    ) -> Result<(menu::Definition, Vec<oag_game::mods::Listing>)> {
         let MenuSource::Mods(mods) = &self.menu_source else {
-            return Ok(self.definition.clone());
+            return Ok((self.definition.clone(), Vec::new()));
         };
         let built = mods.build(
             menu::BUILT_IN,
@@ -96,7 +96,7 @@ impl Pending {
         for line in &built.report {
             log::info!("{line}");
         }
-        Ok(built.definition)
+        Ok((built.definition, built.listing))
     }
 
     /// The boot sequence's own options for one source.
@@ -307,7 +307,7 @@ impl Pending {
         // settings file stores, and on a circuit or a team those are different
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
-        let mut definition = self.menu_for(title, updated)?;
+        let (mut definition, mods) = self.menu_for(title, updated)?;
         // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
         // race defaults declare no variant axis at all - see
         // `menu::Definition::drop_unavailable_race_variant`.
@@ -343,6 +343,7 @@ impl Pending {
         // (`Session::resupply_language`) read the same `boot::Shell` the
         // same way - see that function's own doc.
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
+        shell.mods = mods;
         shell.menu_sfx = Some(menu_sfx);
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));

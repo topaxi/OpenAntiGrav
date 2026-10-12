@@ -68,18 +68,54 @@ pub fn search(bases: &[PathBuf]) -> Vec<Found> {
     out
 }
 
+/// A candidate the search left out.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Failed {
+    /// The folder, `.zip` or `.oagmod`.
+    pub path: PathBuf,
+    /// The mod's id, when its manifest was read before the reason arose.
+    pub id: Option<String>,
+    /// Why it was left out.
+    pub reason: String,
+}
+
+impl Failed {
+    /// [`Self::reason`] without the leading `<path>: `, for a list that names the file already.
+    #[must_use]
+    pub fn cause(&self) -> &str {
+        self.reason
+            .strip_prefix(&format!("{}: ", self.path.display()))
+            .unwrap_or(&self.reason)
+    }
+
+    /// The path's last component, which is what a list names a mod that never opened by.
+    #[must_use]
+    pub fn file_name(&self) -> String {
+        self.path.file_name().map_or_else(
+            || self.path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        )
+    }
+}
+
+impl std::fmt::Display for Failed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.reason)
+    }
+}
+
 /// What a search loaded, and what it had to leave out.
 #[derive(Debug, Default)]
 pub struct Loaded {
     /// The mods that opened, in the order found.
     pub mods: Vec<Mod>,
-    /// One line for each candidate left out, naming it and why.
-    pub problems: Vec<String>,
+    /// Each candidate left out, with the reason; its `Display` is the load report's line.
+    pub failed: Vec<Failed>,
 }
 
 /// Opens every candidate under `bases`. A broken one, a second copy of an id
 /// already loaded, and one for another game version are left out and named in
-/// [`Loaded::problems`]: a bad mod never stops the game from starting.
+/// [`Loaded::failed`]: a bad mod never stops the game from starting.
 #[must_use]
 pub fn load(bases: &[PathBuf], game: &semver::Version) -> Loaded {
     let mut loaded = Loaded::default();
@@ -87,32 +123,44 @@ pub fn load(bases: &[PathBuf], game: &semver::Version) -> Loaded {
         match Mod::open(&found.path) {
             Ok(module) => {
                 if !module.manifest.works_with(game) {
-                    loaded.problems.push(format!(
-                        "{}: {} asks for oag {}, this is {game}",
-                        found.path.display(),
-                        module.manifest.id,
-                        module
-                            .manifest
-                            .oag
-                            .as_ref()
-                            .map_or_else(String::new, ToString::to_string),
-                    ));
+                    loaded.failed.push(Failed {
+                        reason: format!(
+                            "{}: {} asks for oag {}, this is {game}",
+                            found.path.display(),
+                            module.manifest.id,
+                            module
+                                .manifest
+                                .oag
+                                .as_ref()
+                                .map_or_else(String::new, ToString::to_string),
+                        ),
+                        id: Some(module.manifest.id.clone()),
+                        path: found.path,
+                    });
                 } else if let Some(first) = loaded
                     .mods
                     .iter()
                     .find(|have| have.manifest.id == module.manifest.id)
                 {
-                    loaded.problems.push(format!(
-                        "{}: id {:?} is already loaded from {}",
-                        found.path.display(),
-                        module.manifest.id,
-                        first.label()
-                    ));
+                    loaded.failed.push(Failed {
+                        reason: format!(
+                            "{}: id {:?} is already loaded from {}",
+                            found.path.display(),
+                            module.manifest.id,
+                            first.label()
+                        ),
+                        id: Some(module.manifest.id.clone()),
+                        path: found.path,
+                    });
                 } else {
                     loaded.mods.push(module);
                 }
             }
-            Err(error) => loaded.problems.push(error_line(&error)),
+            Err(error) => loaded.failed.push(Failed {
+                reason: error_line(&error),
+                id: None,
+                path: found.path,
+            }),
         }
     }
     loaded
