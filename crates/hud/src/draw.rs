@@ -799,6 +799,9 @@ pub fn draw_list(cx: &Context<'_>, readout: &Readout) -> Frame {
         frame.sprites.extend(sprite_draw(&tinted, cx.sheet));
     }
 
+    // What a message line and the time gap are drawn over, where the layout authors it.
+    frame.sprites.extend(super::messages::backing(cx, readout));
+
     // Decided once for the frame rather than per widget: it is a fact about the
     // layout, the readout and the title together, and two widgets have to agree.
     let place_shown = place_owns_the_anchor(cx.layout, readout)

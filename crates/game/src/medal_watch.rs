@@ -1,11 +1,15 @@
 //! The medal a Zone or Speed Lap race has earned so far, and what the HUD
 //! says about it.
 //!
-//! **Chosen, not measured.** The original evaluates a medal nowhere in its
-//! race HUD (`Cell_EvaluateMedal`'s callers are `Race_RecordResult` and two
-//! menus), so what a race shows mid-race here is this build's own, asked for
-//! by the maintainer: a Zone run or a Speed Lap goes on after gold and the
-//! player could not tell which medal was already safe. Two things come of it:
+//! **Chosen, not measured.** Pulse evaluates a medal nowhere in its race HUD
+//! (`Cell_EvaluateMedal`'s callers are `Race_RecordResult` and two menus), so
+//! what a race shows mid-race here is this build's own, asked for by the
+//! maintainer: a Zone run or a Speed Lap goes on after gold and the player could
+//! not tell which medal was already safe. **HD does raise one, in Speed Lap**: on
+//! every lap that is a new race-best and inside a tier, with a 3D trophy and a
+//! voice (`docs/ghidra/functions/ps3-hdfury-eu/hud-message-triggers.md`); this
+//! watch raises on a tier improvement, which differs only when a new best stays in
+//! its tier, and draws no trophy. Two things come of it:
 //!
 //! - the tick a tier is first reached (and again on each better tier), a
 //!   four-second line through the HUD's own message slots

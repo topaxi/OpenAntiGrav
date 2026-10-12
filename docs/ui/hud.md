@@ -1108,20 +1108,24 @@ four seconds, the `sin(pi * (1 - (t/4)^6))` fade, green for a good message, one
 line per 0.8 s when several are raised together. That law is itself decompiled
 and not yet checked against a live frame.
 
-**Ported to HD and Pure on Pulse's law** (`oag_title::HudArt::message_slots`; a
-title with no measured rule of its own takes Pulse's). HD's Zone, Speed Lap and
-Time Trial layouts all compose the same `Info1`-`Info4` through
-`InfoTextParent` - checked 2026-10-06 on the composed layouts, so the earlier
-reading of HD's `Info1` as an elimination-only text box was wrong - and HD's own
-English table carries `ER_GMA`/`ER_SMA`/`ER_BMA`: the line draws in HD's font at
-the place its layout authors (`medal_message_ground_truth`, and
-`hd-zone.png`; legibility on a bright backdrop is
-poor, HD authors no backing frame for it). **Pure's table has no `ER_GMA`**, so
-nothing draws there - an id a table lacks draws nothing, never the raw id; a
-Pure phrase (its `zone_gold`/`zone_silver`/`zone_bronze` voice lines suggest
-Pure does announce a Zone medal) is the open piece. 2048 (`RaceMedal` is never
-seen in any state reached) and Omega (racing out of scope): **checked, applies,
-not wired**.
+**HD, Pure, 2048 and Omega read, 2026-10-12** (`oag_title::HudArt::message_slots`
+and `lap_hud`; the evidence pages are each binary's `hud-message-triggers.md`).
+The slot law is the same machine on all of them; what differs is data:
+
+- **HD** composes `Info1`-`Info4` through `InfoTextParent`, and **its lines have a
+  backing frame** (`FrameMiddle1`/`FrameLeft1`/`FrameRight1`, the same alpha as the
+  text), drawn since 2026-10-12 (`oag_hud::messages::backing`; the earlier note that
+  HD authors no backing frame was wrong, and is why a bright backdrop washed the
+  text). HD announces a medal through these lines in Speed Lap (the measured
+  trigger: every best lap inside a tier), where the build's own line below raises on
+  a tier improvement.
+- **Pure** keys its eight phrases `HUD_<English>`, draws them **white** and words the
+  gap as a sentence ("You are 2.0 secs behind"); its `HUD_Perfect Zone!` and
+  `HUD_New Zone Record` are never raised in a race, so its lack of `ER_GMA` stays:
+  nothing draws there.
+- **2048** authors `Info1`-`Info4` in its composed layouts (the earlier note that
+  it has none was wrong) and drains the flag word as HD's routine does; Omega's
+  drain and gap read as HD's. **Ported**, with the split table of both chosen from HD.
 
 **A standing line, added the same day (chosen, not measured).** The banner is
 four seconds and then the player cannot tell which medal is already safe, so the

@@ -711,3 +711,8 @@
 0x001e6ff8	function	Team_LoadHandlingStats	80	opponent-handling.md
 0x00058e38	function	Race_CreateAiRacer	75	opponent-handling.md
 0x00061770	function	SPArcadeRaceManager_Construct	78	opponent-handling.md
+0x00091d20	function	Hud_UpdateMessages	85	hud-message-triggers.md
+0x000907b0	function	Hud_UpdateTimeDiff	85	hud-message-triggers.md
+0x00093c48	function	Hud_UpdateWrongWay	85	hud-message-triggers.md
+0x000e4a30	function	Craft_UpdateLapProgress	78	hud-message-triggers.md
+0x000d06e0	function	Craft_RecordSplit	80	hud-message-triggers.md

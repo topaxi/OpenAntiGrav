@@ -10,7 +10,7 @@
 //! `Info1`..`Info4` bound by `Hud_BindWidgets`). The bits it names are
 //! `IG_HUD_PLAP`, `IG_HUD_NEWLAP_REC`, `IG_HUD_FIN_LAP`, `IG_HUD_CONT_ELIM`,
 //! `IG_HUD_PERF_ZONE`, `IG_HUD_PERF_BOOST`, `IG_HUD_NEW_ZONE_RECORD` and
-//! `IG_HUD_NEW_SCORE_RECORD`. **None of them is a medal**, and nothing on the
+//! `IG_HUD_NEW_SCORE_RECORD`. **None of Pulse's is a medal** (HD's own routine has three), and nothing on the
 //! disc that evaluates a medal (`Cell_EvaluateMedal`, `0x088bf620`) is called
 //! from the race HUD - see `docs/ui/hud.md`'s "Medal messages".
 //!
@@ -80,6 +80,50 @@ pub(super) fn fade_border(readout: &super::Readout, name: &str, border: [f32; 4]
         Some(line) => [border[0], border[1], border[2], border[3] * line.color[3]],
         None => border,
     }
+}
+
+/// The backing a layout authors behind a message line or the time gap: three
+/// `<Image>` children of the text widget (`FrameMiddle`, `FrameLeft`,
+/// `FrameRight`, numbered per slot on `Info1`-`Info4`), which the original
+/// shows with their parent and, on a message line, fades with the line's own
+/// alpha (HD's `0x91d20` writes the three frames' vertex colours with the same
+/// alpha byte as the text). Pulse and Pure author none, so for them this draws
+/// nothing; HD, 2048 and Omega author all of them.
+///
+/// **Not done**: HD widens the left and right caps with the text when it is
+/// wider than the 240 px middle (`FrameLeft`/`FrameRight` move to `+/-` half the
+/// text width); they are drawn here where the layout puts them, which is where
+/// the original leaves them for every line short enough to fit.
+pub(super) fn backing(
+    cx: &super::draw::Context<'_>,
+    readout: &super::Readout,
+) -> Vec<oag_ui::frontend::Draw> {
+    let mut out = Vec::new();
+    let mut frames = |suffix: &str, alpha: f32| {
+        for part in ["FrameMiddle", "FrameLeft", "FrameRight"] {
+            if let Some(sprite) = cx.layout.sprite(&format!("{part}{suffix}")) {
+                let mut tinted = sprite.clone();
+                tinted.color[3] *= alpha;
+                out.extend(super::draw::sprite_draw(&tinted, cx.sheet));
+            }
+        }
+    };
+    for (slot, line) in readout.messages.iter().enumerate() {
+        let Some(line) = line.as_ref().filter(|line| !line.authored) else {
+            continue;
+        };
+        if cx.strings.get(&line.text).is_some() {
+            frames(&(slot + 1).to_string(), line.color[3]);
+        }
+    }
+    if readout
+        .time_gap
+        .as_ref()
+        .is_some_and(|gap| gap.text(cx.strings).is_some())
+    {
+        frames("", 1.0);
+    }
+    out
 }
 
 /// A good message's colour, `0x30ff30` - before the alpha is applied.

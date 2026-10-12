@@ -162,3 +162,4 @@
 0x812b40de	function	GameModeBase_PostLoad	60	ai-controls.md
 0x812b0d52	function	GameModeBase_Apply	80	ai-controls.md
 0x81965b58	data	g_CurrentGameMode	85	ai-controls.md
+0x81150730	function	Hud_UpdateMessages	85	hud-message-triggers.md
