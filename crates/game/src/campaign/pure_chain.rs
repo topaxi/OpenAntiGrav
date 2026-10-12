@@ -19,7 +19,7 @@ use oag_tables::pure_flow::{Flow, Step};
 use oag_tables::race_campaign::Medal;
 use oag_ui_screens::pure_chain::{Row, Status};
 
-use super::pure_list::{Names, PureCampaign, requirement};
+use super::pure_list::{Names, PureCampaign};
 
 /// What `Single Player`'s mode names do. Literal disc idstrings: the ground
 /// truth holds the five authored modes to this table.
@@ -83,6 +83,8 @@ pub struct View {
     pub title: String,
     /// What has been chosen so far, in the player's words.
     pub context: String,
+    /// The distance between two rows ([`oag_title::FlowFiles::row_pitch`]).
+    pub pitch: f32,
     /// The rows.
     pub rows: Vec<Row>,
 }
@@ -221,7 +223,9 @@ impl Chain {
             .collect()
     }
 
-    /// The row for an event, locked or open or medalled.
+    /// The row for an event the profile has opened, with its medal when
+    /// `show_medal`; `None` for one it has not, which the original does not list
+    /// (a fresh profile's `Tournament Selection` offers Alpha alone).
     fn event_row(
         &self,
         label: String,
@@ -230,24 +234,21 @@ impl Chain {
         profile: &Profile<'_>,
         names: &Names<'_>,
         show_medal: bool,
-    ) -> Row {
+    ) -> Option<Row> {
         let progress = self.progress(profile);
-        let open = profile.unlock_all || pure_campaign::all_met(&event.unlocks, &progress);
+        if !(profile.unlock_all || pure_campaign::all_met(&event.unlocks, &progress)) {
+            return None;
+        }
         let held = (profile.medal_of)(&event.name).filter(|_| show_medal);
-        match (open, held) {
-            (_, Some(medal)) => Row::event(
+        Some(match held {
+            Some(medal) => Row::event(
                 label,
                 tag,
                 Status::Medal(medal),
                 names.words.medal(medal).to_string(),
             ),
-            (true, None) => Row::event(label, tag, Status::Open, String::new()),
-            (false, None) => {
-                let mut row = Row::event(label, tag, Status::Locked, names.words.locked.clone());
-                row.requires = requirement(&event.unlocks, &progress, names);
-                row
-            }
-        }
+            None => Row::event(label, tag, Status::Open, String::new()),
+        })
     }
 
     /// The screen the player is on, as rows.
@@ -288,23 +289,11 @@ impl Chain {
                     .leagues
                     .iter()
                     .enumerate()
+                    .filter(|(_, league)| {
+                        profile.unlock_all || pure_campaign::all_met(&league.unlocks, &progress)
+                    })
                     .map(|(tag, league)| {
-                        let open = profile.unlock_all
-                            || pure_campaign::all_met(&league.unlocks, &progress);
-                        let mut row = Row::event(
-                            say(&league.name),
-                            tag,
-                            if open { Status::Open } else { Status::Locked },
-                            if open {
-                                String::new()
-                            } else {
-                                names.words.locked.clone()
-                            },
-                        );
-                        if !open {
-                            row.requires = requirement(&league.unlocks, &progress, names);
-                        }
-                        row
+                        Row::event(say(&league.name), tag, Status::Open, String::new())
                     })
                     .collect()
             }
@@ -313,7 +302,7 @@ impl Chain {
                 self.events_of(EventKind::Tournament)
                     .iter()
                     .enumerate()
-                    .map(|(tag, event)| {
+                    .filter_map(|(tag, event)| {
                         self.event_row(say(&event.subject), tag, event, profile, names, true)
                     })
                     .collect()
@@ -338,7 +327,7 @@ impl Chain {
                         // event only carries the circuit's gate.
                         let event = events.iter().find(|e| &e.subject == track)?;
                         let show = self.mode_kind() != Some(ModeKind::FreePlay);
-                        Some(self.event_row(say(track), tag, event, profile, names, show))
+                        self.event_row(say(track), tag, event, profile, names, show)
                     })
                     .collect()
             }
@@ -347,7 +336,7 @@ impl Chain {
                 pure_campaign::zone_events(&self.campaign.definition, &self.campaign.stats)
                     .iter()
                     .enumerate()
-                    .map(|(tag, event)| {
+                    .filter_map(|(tag, event)| {
                         self.event_row(say(&event.subject), tag, event, profile, names, true)
                     })
                     .collect()
@@ -357,6 +346,7 @@ impl Chain {
         View {
             title: say(self.at.screen()),
             context: context.join("  -  "),
+            pitch: 0.0,
             rows,
         }
     }
@@ -579,13 +569,18 @@ pub fn present(
         unlock_all: crate::unlock::unlock_all(),
         classes_at_start: title.campaign.classes_at_start,
     };
-    chain.view(
+    let mut view = chain.view(
         &profile,
         &Names {
             name_of: &say,
             words: &words,
         },
-    )
+    );
+    view.pitch = title
+        .campaign
+        .flow
+        .map_or(0.0, |flow| f32::from(flow.row_pitch));
+    view
 }
 
 #[cfg(test)]

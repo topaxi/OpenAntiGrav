@@ -30,7 +30,7 @@ impl PureChainStage {
     ) -> Self {
         let view = pure_chain::present(&chain, &strings, title, records);
         Self {
-            choice: Choice::new(view.title, view.context, view.rows),
+            choice: Choice::new(view.title, view.context, view.pitch, view.rows),
             chain,
             strings,
             title,
@@ -46,7 +46,7 @@ impl PureChainStage {
             self.choice.replace(view.rows);
             return;
         }
-        let mut choice = Choice::new(view.title, view.context, view.rows);
+        let mut choice = Choice::new(view.title, view.context, view.pitch, view.rows);
         if self.chain.at() == Step::Class
             && let Some(tag) = self
                 .chain

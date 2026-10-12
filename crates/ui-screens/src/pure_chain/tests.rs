@@ -9,11 +9,13 @@ fn tick(buttons: &[Button]) -> Input {
 
 fn skin() -> Skin {
     Skin::new(
-        oag_pulse::FRONT_END.menu.unwrap(),
+        oag_pure::FRONT_END.menu.unwrap(),
         oag_display::space::Space::PSP,
         22.0,
     )
 }
+
+const PITCH: f32 = 18.0;
 
 fn rows(events: usize) -> Vec<Row> {
     let mut rows = Vec::new();
@@ -29,7 +31,7 @@ fn rows(events: usize) -> Vec<Row> {
 }
 
 fn list(events: usize) -> Choice {
-    Choice::new("CLASS".into(), "VENOM".into(), rows(events))
+    Choice::new("CLASS".into(), "VENOM".into(), PITCH, rows(events))
 }
 
 #[test]
@@ -51,11 +53,11 @@ fn the_cursor_starts_on_the_first_row_and_wraps_at_both_ends() {
 }
 
 #[test]
-fn confirm_hands_back_the_rows_tag_and_a_locked_row_confirms_too() {
+fn confirm_hands_back_the_rows_tag() {
     let mut list = list(2);
     let events = list.update(&mut tick(&[Button::Cross]));
     assert_eq!(events, [Event::Confirmed(0)]);
-    list.replace(vec![Row::event("A", 7, Status::Locked, "LOCKED".into())]);
+    list.replace(vec![Row::event("A", 7, Status::Open, "LOCKED".into())]);
     assert_eq!(
         list.update(&mut tick(&[Button::Start])),
         [Event::Confirmed(7)]
@@ -85,20 +87,23 @@ fn replacing_the_rows_keeps_the_cursor_on_the_same_event() {
 fn a_click_on_a_row_selects_and_confirms_it_and_a_click_past_the_rows_does_nothing() {
     let skin = skin();
     let mut list = list(3);
-    let layout = Layout::new(&skin);
-    let row = layout.row_rect(1);
-    let click = |x: f32, y: f32| Pointer {
+    let layout = Layout::new(&skin, PITCH);
+    let at = |slot: usize| {
+        (
+            layout.text_x + 20.0,
+            layout.rows_y + (slot as f32 + 0.5) * layout.line,
+        )
+    };
+    let click = |(x, y): (f32, f32)| Pointer {
         at: Some((x, y)),
         moved: true,
         clicked: true,
         ..Pointer::default()
     };
-    let events = list.pointer(&click(row[0] + 20.0, row[1] + row[3] * 0.5), &skin);
+    let events = list.pointer(&click(at(1)), &skin);
     assert_eq!(events, [Event::Moved, Event::Confirmed(1)]);
-    let past = layout.row_rect(5);
     assert!(
-        list.pointer(&click(past[0] + 20.0, past[1] + 3.0), &skin)
-            .is_empty(),
+        list.pointer(&click(at(5)), &skin).is_empty(),
         "below the last row is not a target"
     );
     let back = Pointer {
@@ -121,7 +126,7 @@ fn the_wheel_moves_the_cursor_and_a_long_list_scrolls_to_keep_it_in_view() {
         list.follow(&skin);
     }
     let drawn: Vec<String> = list
-        .draw(&skin)
+        .body(&skin)
         .into_iter()
         .filter_map(|d| match d {
             Draw::Text { text, .. } => Some(text),
@@ -141,21 +146,52 @@ fn the_wheel_moves_the_cursor_and_a_long_list_scrolls_to_keep_it_in_view() {
 }
 
 #[test]
-fn a_locked_selected_row_says_what_opens_it_and_a_medal_is_inked() {
+fn a_medal_is_inked_and_the_screen_is_drawn_on_the_skins_own_background_and_title() {
     let skin = skin();
-    let mut locked = Row::event("KARBONIS", 0, Status::Locked, "LOCKED".into());
-    locked.requires = "NEEDS 10 MEDALS".into();
     let gold = Row::event("VINETA K", 1, Status::Medal(Medal::Gold), "GOLD".into());
-    let list = Choice::new(String::new(), "VENOM".into(), vec![locked, gold]);
-    let draws = list.draw(&skin);
-    assert!(
-        draws
-            .iter()
-            .any(|d| matches!(d, Draw::Text { text, .. } if text == "NEEDS 10 MEDALS"))
+    let plain = Row::event("KARBONIS", 0, Status::Open, String::new());
+    let list = Choice::new(
+        "TRACK SELECTION".into(),
+        "TIME TRIAL".into(),
+        PITCH,
+        vec![plain, gold],
     );
+    let layers = draw_list(&list, &skin, &Frame::default(), None, false);
+    let draws: Vec<Draw> = layers.flatten();
+    let text_at = |wanted: &str| {
+        draws.iter().find_map(|d| match d {
+            Draw::Text {
+                text, x, y, color, ..
+            }
+            | Draw::FacedText {
+                text, x, y, color, ..
+            } if text == wanted => Some((*x, *y, *color)),
+            _ => None,
+        })
+    };
     assert!(
-        draws.iter().any(
-            |d| matches!(d, Draw::Text { text, color, .. } if text == "GOLD" && *color == GOLD)
-        )
+        matches!(draws.first(), Some(Draw::Fill { .. })),
+        "the skin's background first"
+    );
+    let (title_x, title_y, _) = skin.title_at();
+    let title = text_at("TRACK SELECTION").unwrap();
+    assert_eq!(
+        (title.0, title.1),
+        (title_x, title_y),
+        "at the skin's title position"
+    );
+    assert_eq!(title.2, skin.title_color(None));
+    let first = text_at("KARBONIS").unwrap();
+    assert_eq!((first.0, first.1), (skin.menu_x(), skin.first_row_y()));
+    assert_eq!(
+        first.2,
+        skin.selected(),
+        "the cursor row in the skin's selected ink"
+    );
+    assert_eq!(text_at("VINETA K").unwrap().2, skin.normal());
+    assert_eq!(
+        text_at("GOLD").unwrap().2,
+        GOLD,
+        "the medal word in its ink"
     );
 }

@@ -122,8 +122,8 @@ pub(crate) struct MenuStage {
     /// shape [`Self::picker`] is. See `crate::campaign_stage` and
     /// `crate::session::campaign`.
     pub(crate) campaign: Option<crate::campaign_stage::CampaignStage>,
-    /// Wipeout Pure's campaign list, when open: it takes the tick whole and is
-    /// drawn over the page behind it. See `crate::pure_chain_stage`.
+    /// Wipeout Pure's SINGLE PLAYER chain, when open: it takes the tick whole and is
+    /// drawn on the frame the page behind it carries. See `crate::pure_chain_stage`.
     pub(crate) pure_chain: Option<crate::pure_chain_stage::PureChainStage>,
 }
 
@@ -526,6 +526,34 @@ impl MenuStage {
             );
             return Ok(());
         }
+        // Wipeout Pure's SINGLE PLAYER screens: drawn as the title's own menu
+        // pages are, on the frame the page behind would carry, with the rows
+        // of the page replaced by the screen's.
+        if let Some(open) = self.pure_chain.as_ref() {
+            let layers = oag_ui_screens::pure_chain::draw_list(
+                open.choice(),
+                &self.skin,
+                &self.frame,
+                if frozen_race { None } else { shown },
+                frozen_race,
+            );
+            let footer = self
+                .ticker
+                .is_some()
+                .then(|| self.footer_overlay(Vec::new(), ticker_tips));
+            let (list, ticker_clip) = footer::append(layers.flatten(), footer);
+            self.renderer.render_with(
+                wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                &gpu.device,
+                &gpu.queue,
+                encoder,
+                view,
+                &list,
+                viewport,
+                footer::resolve_clip(None, ticker_clip, frozen_race),
+            );
+            return Ok(());
+        }
         // The Race Campaign's own screens - no preview mesh, no slideshow:
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
         // same pass a picker's own body uses without the 3D tail.
@@ -854,11 +882,6 @@ impl MenuStage {
         // through is a still picture of where the player will land back.
         let list: Vec<Draw> = match &self.prompt {
             Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
-            None => list,
-        };
-        // Wipeout Pure's SINGLE PLAYER chain, over the page it was opened from.
-        let list: Vec<Draw> = match &self.pure_chain {
-            Some(open) => list.into_iter().chain(open.choice().draw(&self.skin)).collect(),
             None => list,
         };
         // The key-capture prompt, last of all - even over a page mid-tween or

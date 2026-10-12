@@ -888,11 +888,15 @@ one-choice screens: mode, class, league or tournament, circuit, then `Team Selec
 (`oag_ui_screens::pure_chain` for the screens, `oag_game::campaign::pure_chain` for the
 state machine, driven by `Session::open_pure_chain`). It is a screen over the main page,
 the same "takes the tick whole" shape the race box's pickers have, and it answers the
-pad, the wheel and the pointer through one function (`handle_pure_chain`), so a locked
-row refuses a click the way it refuses a button; Back steps to the screen before and
+pad, the wheel and the pointer through one function (`handle_pure_chain`), so both
+reach a choice the same way (a gated row is not listed, so there is nothing to click); Back steps to the screen before and
 closes from the first. The order of the screens is read off their redirects
 (`oag_tables::pure_flow`); the data, the medal law and the gates are
-[Pure's campaign](../formats/pure-campaign.md); the look is ours (chosen, not measured).
+[Pure's campaign](../formats/pure-campaign.md). The screens are drawn on the title's own frame
+(`oag_ui_screens::pure_chain::draw_list`, the same `Layers` the race box's pickers return, so
+the barcode, arrows and `Confirm` legend are the page's own), the rows 18 grid lines apart
+(`FlowFiles::row_pitch`, measured on PPSSPP); the medal word and the context line are ours
+(chosen, not measured).
 Which campaign a title opens is
 [`oag_title::Campaign::dialect`](../../crates/title/src/campaign.rs), and the chain's
 files, the classes a fresh profile offers and the row's wording are fields beside it
@@ -907,8 +911,9 @@ other three). So the row keeps its action, its place (first) and its stable posi
 only its label and subtitle are per-title; a title with no `main_row` keeps RACE CAMPAIGN.
 Pure's main page still shows our RACEBOX, REMIX, RECORDS, OPTIONS and QUIT after it; the
 original's `Multiplayer`, `Profile`, `On Line` and `Teasers` rows have nothing here to go
-to. `--menu-page main --menu-prompt pure-chain[:MODE[:CLASS[:LEAGUE]]]` draws each screen
-of the chain headless (`MODE` by name, the rest by row number).
+to. `--menu-page pure-chain[:MODE[:CLASS[:LEAGUE]]]` draws each screen of the chain headless
+(`MODE` by name, the rest by row number): `pure-chain`, `pure-chain:arcade`,
+`pure-chain:arcade:1`, `pure-chain:arcade:1:0`, `pure-chain:tournament:1`, `pure-chain:zone`.
 
 ## What is not built
 

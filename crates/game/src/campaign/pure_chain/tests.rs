@@ -70,10 +70,6 @@ fn chain() -> Chain {
 
 fn names() -> (Words, impl Fn(&str) -> String) {
     let words = Words {
-        locked: "LOCKED".into(),
-        needs: "NEEDS".into(),
-        medals: "MEDALS".into(),
-        any_medal: "ANY MEDAL".into(),
         gold: "GOLD".into(),
         silver: "SILVER".into(),
         bronze: "BRONZE".into(),
@@ -166,17 +162,43 @@ fn arcade_walks_class_league_circuit_and_starts_the_single_race_event() {
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Advanced);
     assert_eq!(chain.at(), Step::League);
     let leagues = view(&chain, &[], false);
-    assert_eq!(labels(&leagues), ["ALPHA", "CLASSIC"]);
+    assert_eq!(
+        labels(&leagues),
+        ["ALPHA"],
+        "the league that wants a medal is not offered, as on the original's fresh profile"
+    );
     assert_eq!(leagues.context, "ARCADE  -  VENOM");
-    assert_eq!(leagues.rows[1].status, Status::Locked);
-    assert_eq!(leagues.rows[1].requires, "NEEDS 1 MEDALS");
-    assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused, "a locked league");
+    assert_eq!(
+        pick(&mut chain, 1, &[]),
+        Chosen::Refused,
+        "nor chosen by number"
+    );
     assert_eq!(pick(&mut chain, 0, &[]), Chosen::Advanced);
     assert_eq!(chain.at(), Step::Track);
     let Chosen::Start(event) = pick(&mut chain, 0, &[]) else {
         panic!("the circuit starts the event");
     };
     assert_eq!(event.name, "race/Vineta K/Venom");
+}
+
+#[test]
+fn a_medal_opens_the_league_and_the_circuit_it_gates() {
+    let mut chain = chain();
+    pick(&mut chain, 0, &[]);
+    pick(&mut chain, 1, &[]);
+    let one = [("zone/Zone 1", Medal::Bronze)];
+    assert_eq!(labels(&view(&chain, &one, false)), ["ALPHA", "CLASSIC"]);
+    assert_eq!(pick(&mut chain, 1, &one), Chosen::Advanced);
+    assert_eq!(
+        labels(&view(&chain, &one, false)),
+        Vec::<&str>::new(),
+        "Karbonis wants two medals and one is held"
+    );
+    let two = [
+        ("zone/Zone 1", Medal::Bronze),
+        ("tournament/Alpha/Venom", Medal::Bronze),
+    ];
+    assert_eq!(labels(&view(&chain, &two, false)), ["KARBONIS"]);
 }
 
 #[test]
@@ -198,16 +220,17 @@ fn a_time_trial_circuit_starts_the_time_trial_and_shows_that_events_medal() {
 }
 
 #[test]
-fn a_tournament_skips_the_league_and_a_locked_one_refuses() {
+fn a_tournament_skips_the_league_and_lists_only_what_is_open() {
     let mut chain = chain();
     pick(&mut chain, 1, &[]);
     pick(&mut chain, 1, &[]);
     assert_eq!(chain.at(), Step::Tournament);
-    let tournaments = view(&chain, &[], false);
-    assert_eq!(tournaments.rows[1].status, Status::Locked);
-    assert_eq!(tournaments.rows[1].requires, "NEEDS ALPHA ANY MEDAL");
+    assert_eq!(labels(&view(&chain, &[], false)), ["ALPHA"]);
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused);
     let held = [("tournament/Alpha/Venom", Medal::Bronze)];
+    let tournaments = view(&chain, &held, false);
+    assert_eq!(labels(&tournaments), ["ALPHA", "BETA"]);
+    assert_eq!(tournaments.rows[0].status, Status::Medal(Medal::Bronze));
     let Chosen::Start(event) = pick(&mut chain, 1, &held) else {
         panic!("Beta opens on an Alpha medal in the class being played");
     };
@@ -215,14 +238,14 @@ fn a_tournament_skips_the_league_and_a_locked_one_refuses() {
 }
 
 #[test]
-fn zone_has_no_class_and_gates_its_circuits() {
+fn zone_has_no_class_and_lists_only_the_circuits_it_has_opened() {
     let mut chain = chain();
     assert_eq!(pick(&mut chain, 3, &[]), Chosen::Advanced);
     assert_eq!(chain.at(), Step::ZoneTrack);
-    let zones = view(&chain, &[], false);
-    assert_eq!(labels(&zones), ["ZONE 1", "ZONE 2"]);
-    assert_eq!(zones.rows[1].requires, "NEEDS ZONE 1 BRONZE");
+    assert_eq!(labels(&view(&chain, &[], false)), ["ZONE 1"]);
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused);
+    let bronze = [("zone/Zone 1", Medal::Bronze)];
+    assert_eq!(labels(&view(&chain, &bronze, false)), ["ZONE 1", "ZONE 2"]);
     let Chosen::Start(event) = pick(&mut chain, 0, &[]) else {
         panic!("started");
     };

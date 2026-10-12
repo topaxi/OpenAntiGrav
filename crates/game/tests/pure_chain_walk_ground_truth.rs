@@ -61,8 +61,10 @@ fn answer(chain: &mut Chain, store: &Store, mode: &str, rest: &[usize]) -> Chose
     chosen
 }
 
-/// The status of the row for event `name` on the screen the chain is on.
-fn status_on(chain: &Chain, store: &Store, event: &Event) -> Status {
+/// The status of the row for `event` on the screen the chain is on, or `None`
+/// when the screen does not list it (a fresh profile's does not list what it has
+/// not opened).
+fn status_on(chain: &Chain, store: &Store, event: &Event) -> Option<Status> {
     let view = present(
         chain,
         &oag_ui::language::StringTable::default(),
@@ -70,11 +72,7 @@ fn status_on(chain: &Chain, store: &Store, event: &Event) -> Status {
         store,
     );
     let tag = chain.tag_of(event).expect("the event is on this screen");
-    view.rows
-        .iter()
-        .find(|r| r.tag == tag)
-        .expect("its row")
-        .status
+    view.rows.iter().find(|r| r.tag == tag).map(|r| r.status)
 }
 
 fn event_of(campaign: &PureCampaign, class: PureClass, name: &str) -> Event {
@@ -176,10 +174,18 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
     let status = status_on(&chain, &store, &event);
     match medal {
         Some(medal) => {
-            assert_eq!(status, Status::Medal(medal), "the row shows the medal");
+            assert_eq!(
+                status,
+                Some(Status::Medal(medal)),
+                "the row shows the medal"
+            );
             assert_eq!(held(&event.name), Some(medal));
         }
-        None => assert_eq!(status, Status::Open, "no medal, and the event stays open"),
+        None => assert_eq!(
+            status,
+            Some(Status::Open),
+            "no medal, and the event stays open"
+        ),
     }
 }
 
@@ -225,13 +231,13 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
         status_on(&chain, &store, &event)
     };
     assert_eq!(
-        status_of(PureClass::Venom, "tournament/Beta/Venom") != Status::Locked,
+        status_of(PureClass::Venom, "tournament/Beta/Venom").is_some(),
         medal.is_some(),
         "Beta opens on any medal in Alpha at this class, and only then"
     );
     assert_eq!(
         status_of(PureClass::Flash, "tournament/Beta/Flash"),
-        Status::Locked,
+        None,
         "a Venom medal opens nothing for Flash"
     );
 }

@@ -29,3 +29,9 @@ pub const MAIN_ROW: oag_title::MainRow = oag_title::MainRow {
         text: "Arcade, tournaments, time trials and Zone, class by class",
     },
 };
+
+/// The distance between two rows of Pure's `Main Menu`, `Single Player`, `Class
+/// Selection` and the screens after them, in the PSP's 272-line grid: 36 px in a
+/// PPSSPP window drawn at 2x (a fresh profile, 2026-10-12). The screens' `<Menu>`
+/// widgets author a scale and a position and no pitch.
+pub const CHAIN_ROW_PITCH: u16 = 18;

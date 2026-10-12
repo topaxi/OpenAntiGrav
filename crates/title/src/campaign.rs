@@ -66,6 +66,12 @@ pub struct FlowFiles {
     pub skin: &'static str,
     /// The selection screens' definition, by entry name.
     pub selection: &'static str,
+    /// How far apart the chain's rows sit, in the PSP's 272-line grid. Not
+    /// authored (the screens' `<Menu>` widgets state no pitch): **measured** on a
+    /// PPSSPP capture, 2026-10-12, as rows 36 px apart in a window drawn at 2x,
+    /// the same on `Main Menu`, `Single Player`, `Class Selection` and the
+    /// screens after it.
+    pub row_pitch: u16,
 }
 
 /// A string this project owns: its id in `assets/ui/strings/english.toml` and

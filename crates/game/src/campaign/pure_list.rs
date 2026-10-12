@@ -21,9 +21,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 use oag_tables::pure_ai_stats::PureClass;
-use oag_tables::pure_campaign::{
-    self, ClassRef, Definition, Event, MedalWanted, Progress, Stats, TrackKind, Unlock,
-};
+use oag_tables::pure_campaign::{self, Definition, Event, Progress, Stats, TrackKind};
 use oag_tables::race_campaign::Medal;
 use oag_ui::language::StringTable;
 
@@ -146,14 +144,6 @@ impl PureCampaign {
 /// The words the list says that the disc's string table does not.
 #[derive(Debug, Clone, Default)]
 pub struct Words {
-    /// A gated event's right-hand word.
-    pub locked: String,
-    /// The footer's lead-in for what opens a gated event.
-    pub needs: String,
-    /// The unit of a medal count.
-    pub medals: String,
-    /// A requirement of a medal, any tier.
-    pub any_medal: String,
     /// The three tiers.
     pub gold: String,
     /// See [`Self::gold`].
@@ -185,39 +175,6 @@ pub struct Names<'a> {
     pub words: &'a Words,
 }
 
-pub(super) fn requirement(rows: &[Unlock], progress: &Progress<'_>, names: &Names<'_>) -> String {
-    let pieces: Vec<String> = rows
-        .iter()
-        .filter(|row| !row.met(progress))
-        .map(|row| {
-            let mut parts = Vec::new();
-            if let Some(count) = row.medal_count {
-                parts.push(format!("{count} {}", names.words.medals));
-            }
-            let wanted = |medal: Option<MedalWanted>| match medal {
-                Some(MedalWanted::AtLeast(tier)) => names.words.medal(tier).to_string(),
-                Some(MedalWanted::Any) | None => names.words.any_medal.clone(),
-            };
-            if let Some(track) = &row.track {
-                parts.push(format!("{} {}", (names.name_of)(track), wanted(row.medal)));
-            }
-            if let Some(tournament) = &row.tournament {
-                let class = match &row.class {
-                    Some(ClassRef::Named(name)) => format!(" {}", (names.name_of)(name)),
-                    Some(ClassRef::AsSelected) | None => String::new(),
-                };
-                parts.push(format!(
-                    "{}{class} {}",
-                    (names.name_of)(tournament),
-                    wanted(row.medal)
-                ));
-            }
-            parts.join(" + ")
-        })
-        .collect();
-    format!("{} {}", names.words.needs, pieces.join(", "))
-}
-
 /// The ids (the leaf of each ship directory) of the teams the profile has not
 /// opened yet. Teams, like events, are gated by the disc's own `<Unlock>` rows
 /// (`Zone` on a gold in each Zone circuit, `Medievil` on a medal total).
@@ -243,11 +200,7 @@ pub fn locked_teams(
 
 /// Our own wording, each with the id `assets/ui/strings/english.toml` holds it
 /// under and the literal it falls back to.
-const WORDS: [(&str, &str); 7] = [
-    ("OAG_PURE_CAMPAIGN_LOCKED", "LOCKED"),
-    ("OAG_PURE_CAMPAIGN_NEEDS", "NEEDS"),
-    ("OAG_PURE_CAMPAIGN_MEDALS", "MEDALS"),
-    ("OAG_PURE_CAMPAIGN_ANY_MEDAL", "ANY MEDAL"),
+const WORDS: [(&str, &str); 3] = [
     ("OAG_MEDAL_GOLD", "GOLD"),
     ("OAG_MEDAL_SILVER", "SILVER"),
     ("OAG_MEDAL_BRONZE", "BRONZE"),
@@ -263,13 +216,9 @@ pub fn wording(strings: &StringTable) -> Words {
         strings.get(id).unwrap_or(fallback).to_string()
     };
     Words {
-        locked: say(0),
-        needs: say(1),
-        medals: say(2),
-        any_medal: say(3),
-        gold: say(4),
-        silver: say(5),
-        bronze: say(6),
+        gold: say(0),
+        silver: say(1),
+        bronze: say(2),
     }
 }
 

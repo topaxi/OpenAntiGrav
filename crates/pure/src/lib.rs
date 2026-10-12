@@ -148,6 +148,7 @@ pub const TITLE: &Title = &Title {
         flow: Some(oag_title::FlowFiles {
             skin: names::FRONTEND_ROOT,
             selection: names::RACE_BOX_DEFINITION,
+            row_pitch: campaign::CHAIN_ROW_PITCH,
         }),
         classes_at_start: Some(campaign::CLASSES_AT_START),
         main_row: Some(campaign::MAIN_ROW),

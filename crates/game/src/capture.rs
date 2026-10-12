@@ -24,7 +24,9 @@ mod video;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
-use menu_page::{menu_page, picker_kind, picker_page, picker_stills};
+use menu_page::{
+    menu_page, picker_kind, picker_page, picker_stills, pure_chain_answers, pure_chain_page,
+};
 use offscreen::{offscreen, read_back, touch_preview, write_png};
 use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
@@ -732,6 +734,31 @@ pub fn run(
                     &records,
                 )?;
                 flyer_shot = shot;
+                (backdrop, video_format, list, space)
+            } else if let Some(answers) = pure_chain_answers(page) {
+                // Wipeout Pure's SINGLE PLAYER screens, the disc's own chain
+                // opened over the menus - see `crate::main::session::pure_chain`
+                // for the live flow this is a still of.
+                let mut archives = match options.race.as_ref() {
+                    Some(race) => open_for_previews(race)?,
+                    None => anyhow::bail!("--menu-page pure-chain needs a source open"),
+                };
+                let skin = oag_ui::menu::Skin::new(
+                    menu_skin,
+                    space,
+                    menu_font.as_ref().unwrap_or(&font).line_height,
+                );
+                let mut list = pure_chain_page(
+                    answers,
+                    &mut archives,
+                    title,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                )?;
+                let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
+                ticker_clip = menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
                 (backdrop, video_format, list, space)
             } else if let Some(kind) = endrace_kind(page) {
                 // The EndRace screens, opened off the disc's own source - see
