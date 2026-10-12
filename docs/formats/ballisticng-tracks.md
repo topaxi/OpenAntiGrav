@@ -173,11 +173,11 @@ of them lap.**
 
 ## How to race one
 
-1. From a checkout with the Workshop content linked at `data/unity/workshop-473770`: RACE REMIX, TRACK
+1. From a checkout with the Workshop content linked at `data/ballisticng/workshop-473770`: RACE REMIX, TRACK
    TITLE `CUSTOM`, TRACK `<name> (WORKSHOP)`, CRAFT TITLE the host whose ship and physics to use, START.
    The scan reads every item (about 22 s in a debug build) and lists a file that will not load dimmed with
    the reason. See [menus.md](../architecture/menus.md#race-remix-custom-tracks).
-2. Or `oag-game --unity-track "<name>"` (a path, or a name matched against the same list), `--race` to skip
+2. Or `oag-game --ballisticng-track "<name>"` (a path, or a name matched against the same list), `--race` to skip
    the front end. Both routes build the same race.
 
 ## Not covered

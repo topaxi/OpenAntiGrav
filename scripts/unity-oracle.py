@@ -7,7 +7,7 @@ at it. UnityPy is the second source: a different implementation of the same
 format, used as an oracle and never as code to port.
 
     python3 -m venv /tmp/unitypy-venv && /tmp/unitypy-venv/bin/pip install UnityPy
-    /tmp/unitypy-venv/bin/python -I scripts/unity-oracle.py data/unity/workshop-473770 /tmp/oracle.tsv
+    /tmp/unitypy-venv/bin/python -I scripts/unity-oracle.py data/ballisticng/workshop-473770 /tmp/oracle.tsv
 
 Each item file may be a bare bundle or wrap one at an offset (the signature is
 searched for). Rows, tab separated:

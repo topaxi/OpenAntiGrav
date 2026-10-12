@@ -57,7 +57,7 @@ flat-shaded floor and wall collision.
 | Other titles' default circuits | Pure PSP EU, HD/Fury PS3 EU, Omega PS4 EU and a 2048 DLC `.vpk` (`altima`) export and read back the same. The 2048 base `.pkg` is PFS-encrypted and not readable in place (checked, not checkable for its base circuits). |
 | Workshop `Original` tracks (27) mapped, written, read back | 27 of 27 equal. |
 | Lone AI craft, native circuit vs its exported file, world hash every tick, 3,600 ticks | identical on `03_Track` (Moa Therma) and `16_Track`. |
-| Lion's Den, `--unity-track` vs its converted file, 3,600 ticks | identical. |
+| Lion's Den, `--ballisticng-track` vs its converted file, 3,600 ticks | identical. |
 | The committed fixture (`tests/fixtures/oval.*`, a rounded octagon, 64 control points) | a lone AI craft gets round it: lap 4 in 7,200 ticks, no respawns, on Pulse's physics. |
 
 **What does not survive a disc round trip**, all by construction:
@@ -77,8 +77,8 @@ physics; HD, 2048 and Omega as hosts are not exercised (a Pulse image hosted eve
 
 ## How to race one
 
-Put the `*.track.toml` and its `.glb` in `tracks/` under a base `--unity-track` searches
-(`$OAG_UNITY`, `data/unity`, beside the program, `<data dir>/oag/unity`), then RACE REMIX, TRACK TITLE
+Put the `*.track.toml` and its `.glb` in `tracks/` under a base `--ballisticng-track` searches
+(`$OAG_BALLISTICNG`, `data/ballisticng`, beside the program, `<data dir>/oag/ballisticng`), then RACE REMIX, TRACK TITLE
 `CUSTOM`, TRACK `<title> (TRACK FILE)` (the manifest's own title), START
 ([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or `oag-game --track-file <manifest>`.
 A manifest or glb that will not read is listed dimmed with the reader's reason. The format carries no

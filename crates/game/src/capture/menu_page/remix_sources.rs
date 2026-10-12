@@ -18,7 +18,7 @@ pub(super) fn supply(
     settings: &crate::settings::Settings,
     strings: &oag_ui::language::StringTable,
 ) {
-    let mut scan = Scan::start(&oag_source::unity::search_path());
+    let mut scan = Scan::start(&oag_source::ballisticng::search_path());
     let mut titles = vec![Choice::plain(title.name)];
     if !scan.is_empty() {
         titles.push(Choice::labelled(CUSTOM, scan.title_label(strings)));

@@ -447,17 +447,17 @@ pub(crate) struct Cli {
 
     /// Race a Unity track the player already has instead of a circuit of the
     /// source: a path to a `.wtrk`, or a name matched against the files under
-    /// the foreign-track directories (`$OAG_UNITY`, `data/unity`, beside the
-    /// program, `<data dir>/oag/unity`; `tracks/*.wtrk` in each). The source
+    /// the foreign-track directories (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the
+    /// program, `<data dir>/oag/ballisticng`; `tracks/*.wtrk` in each). The source
     /// still supplies the ship, rules and physics. See `oag_raceplay::foreign`.
     #[arg(long)]
-    pub(crate) unity_track: Option<String>,
+    pub(crate) ballisticng_track: Option<String>,
 
     /// Race a track in this project's own format (ADR-0063): the path of its
     /// `*.track.toml` manifest, with the `.glb` it names beside it. The source
     /// still supplies the ship, rules and physics. Conflicts with
-    /// `--unity-track`. See `oag_trackfile`.
-    #[arg(long, conflicts_with = "unity_track")]
+    /// `--ballisticng-track`. See `oag_trackfile`.
+    #[arg(long, conflicts_with = "ballisticng_track")]
     pub(crate) track_file: Option<std::path::PathBuf>,
 
     /// The team, which selects both the handling stats and the model.

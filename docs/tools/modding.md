@@ -22,39 +22,18 @@ folders, which the game finds the same way for everything it saves.
 | What | Folder | Section |
 | --- | --- | --- |
 | Mods (folder, `.zip`, `.oagmod`) | `<data dir>/oag/mods/` | [Mod that adds a menu row](#a-mod-that-adds-a-menu-row) |
-| Custom tracks (own format, BallisticNG) | `<data dir>/oag/unity/tracks/` | [Race a Workshop track](#race-a-ballisticng-workshop-track) |
+| Custom tracks (own format) | `<data dir>/oag/ballisticng/tracks/` | [Build and race your own track](#build-and-race-your-own-track-with-blender) |
 | AI pilots | `<config dir>/oag/pilots/` | [Write an AI pilot](#write-an-ai-pilot) |
 
-Create a folder that is missing (`mods/` and `unity/` are not made for you).
+Create a folder that is missing (`mods/` and `ballisticng/` are not made for you).
 Two more places are searched for mods and tracks: **beside the program** (`mods/` or
-`unity/` next to `oag-game`, or next to the AppImage, which is the easy choice on a Steam
-Deck) and, from a checkout, `data/mods/` and `data/unity/`. Setting `OAG_MODS` or
-`OAG_UNITY` (a path list, `:` on Linux and macOS, `;` on Windows) replaces the whole
+`ballisticng/` next to `oag-game`, or next to the AppImage, which is the easy choice on a Steam
+Deck) and, from a checkout, `data/mods/` and `data/ballisticng/`. Setting `OAG_MODS` or
+`OAG_BALLISTICNG` (a path list, `:` on Linux and macOS, `;` on Windows) replaces the whole
 list. On Android the files are reached with `adb push` or a file manager that can open
 `Android/data`; iOS and a real Windows PC and Mac are described from the code and have
 not been run by the maintainers ([installing](../overview/installing.md#2-make-the-images-folder-and-put-your-files-in-it)
 says what was tried).
-
-## Race a BallisticNG Workshop track
-
-1. Subscribe to a track on the Steam Workshop for BallisticNG, and find its folder, one
-   directory per item holding a `.wtrk` (Linux, Steam: `steamapps/workshop/content/473770/<item>/`).
-2. Put the `.wtrk` in `<data dir>/oag/unity/tracks/`, or the whole item folder in
-   `<data dir>/oag/unity/` (the game looks in `tracks/` and one and two directories
-   down). To read Steam's own copy in place, set `OAG_UNITY` to
-   `.../steamapps/workshop/content/473770`.
-3. In the game: RACE REMIX, TRACK TITLE `CUSTOM`, pick the track, START.
-
-Notes:
-
-- Only tracks tagged **`Original`** on the Workshop were tested end to end (27 of the 32
-  items tried). A `Port/Remake` item reads but is not what the project checked.
-- The track is raced with the ship, rules and physics of the title on the CRAFT TITLE row.
-  The game draws the track as flat-shaded collision and names what it did not map.
-- A file that will not load is listed dimmed with the reason, and START refuses it.
-- Without the menu: `oag-game --unity-track <name or path>`.
-
-Depth: [BallisticNG tracks](../formats/ballisticng-tracks.md), [RACE REMIX: CUSTOM tracks](../architecture/menus.md#race-remix-custom-tracks).
 
 ## Build and race your own track with Blender
 
@@ -63,7 +42,7 @@ Depth: [BallisticNG tracks](../formats/ballisticng-tracks.md), [RACE REMIX: CUST
 2. In the 3D view sidebar (N), tab **OAG**: draw a closed Curve and tag it `spline`, then
    *Build Floor and Walls*, *Add Start*, and optionally pads.
 3. *Export OAG Track* writes `name.track.toml` and `name.glb`. Keep the two together.
-4. Copy both into `<data dir>/oag/unity/tracks/`, then RACE REMIX, TRACK TITLE `CUSTOM`,
+4. Copy both into `<data dir>/oag/ballisticng/tracks/`, then RACE REMIX, TRACK TITLE `CUSTOM`,
    track `<title> (TRACK FILE)`, START. Or `oag-game --track-file name.track.toml`.
 
 What a track file can carry is a closed list: the racing line, collision floor and walls,
@@ -167,11 +146,8 @@ Give the mod a licence. A mod with none loads, and the list prints `no license s
 ## What does not work yet
 
 - **Custom craft.** The `craft/` folder in a mod is reserved and nothing reads it.
-  BallisticNG `.csf` ships are read by the engine layer but not raced.
-- **Plain Unity tracks.** Only BallisticNG Workshop tracks and this project's own track
-  format. A track from some other Unity game is not a thing the engine reads.
 - **Tracks and pilots inside a mod.** `tracks/` and `pilots/` in a mod are reserved; put
-  them in `unity/tracks/` and `pilots/` as above for now.
+  them in `ballisticng/tracks/` and `pilots/` as above for now.
 - **A MODS page in the game.** There is no list, switch or licence screen; use `just mods-list`
   and the load report. Queued.
 - **Anything beyond menu rows in a mod**: no new pages, settings, modes, actions or art.

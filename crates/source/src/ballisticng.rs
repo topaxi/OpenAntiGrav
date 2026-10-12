@@ -1,10 +1,10 @@
-//! Where a player's Unity content lives: the foreign-track source.
+//! Where a player's BallisticNG content lives: the foreign-track source.
 //!
 //! A foreign track is its own source beside the disc images, not an entry of any
 //! title's archives and not an asset-override layer (ADR-0062, decision 4). It is
 //! looked for the way the override layer is: a directory per base, searched in
-//! `data/unity` (a checkout), beside the program, and `<data dir>/oag/unity`, or
-//! the path list in `$OAG_UNITY`. Under a base, tracks are `tracks/*.wtrk` and
+//! `data/ballisticng` (a checkout), beside the program, and `<data dir>/oag/ballisticng`, or
+//! the path list in `$OAG_BALLISTICNG`. Under a base, tracks are `tracks/*.wtrk` and
 //! `tracks/*.track.toml` (or the same one or two directories down, the shape of a
 //! Steam Workshop download) and ships `ships/*.csf`. Nothing here opens a file: reading belongs to the content
 //! layer, and a missing directory is the ordinary state of a copy of the game.
@@ -13,23 +13,23 @@ use std::path::{Path, PathBuf};
 
 /// The environment variable that names the base directories outright, split the
 /// way the platform splits `$PATH`.
-pub const UNITY_ENV: &str = "OAG_UNITY";
+pub const BALLISTICNG_ENV: &str = "OAG_BALLISTICNG";
 
 /// Where bases are looked for when nothing names one.
 #[must_use]
 pub fn search_path() -> Vec<PathBuf> {
-    if let Some(from_env) = std::env::var_os(UNITY_ENV) {
+    if let Some(from_env) = std::env::var_os(BALLISTICNG_ENV) {
         let paths: Vec<PathBuf> = std::env::split_paths(&from_env).collect();
         if !paths.is_empty() {
             return paths;
         }
     }
-    let mut paths = vec![PathBuf::from("data/unity")];
+    let mut paths = vec![PathBuf::from("data/ballisticng")];
     if let Some(directory) = crate::source::portable_directory() {
-        paths.push(directory.join("unity"));
+        paths.push(directory.join("ballisticng"));
     }
     if let Some(data) = dirs::data_dir() {
-        paths.push(data.join("oag").join("unity"));
+        paths.push(data.join("oag").join("ballisticng"));
     }
     paths
 }
@@ -72,7 +72,7 @@ fn is_track(path: &Path) -> bool {
 ///
 /// The deeper levels are the shapes a Steam Workshop download takes:
 /// `workshop/content/473770/<item>/<name>.wtrk` is a base whose tracks sit one
-/// level down, and a base holding that `473770` directory (`data/unity`) has
+/// level down, and a base holding that `473770` directory (`data/ballisticng`) has
 /// them two down. Only directory listings are read, never a file, so a game
 /// install living under a base costs a few `read_dir` calls and finds nothing.
 #[must_use]
@@ -162,7 +162,8 @@ mod tests {
 
     #[test]
     fn tracks_and_ships_are_listed_by_extension_per_base() {
-        let base = std::env::temp_dir().join(format!("oag-unity-source-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("oag-ballisticng-source-{}", std::process::id()));
         std::fs::create_dir_all(base.join("tracks")).unwrap();
         std::fs::create_dir_all(base.join("ships")).unwrap();
         std::fs::write(base.join("tracks/b.WTRK"), b"x").unwrap();
@@ -193,7 +194,8 @@ mod tests {
 
     #[test]
     fn a_workshop_download_and_an_own_format_track_are_found_too() {
-        let base = std::env::temp_dir().join(format!("oag-unity-layout-{}", std::process::id()));
+        let base =
+            std::env::temp_dir().join(format!("oag-ballisticng-layout-{}", std::process::id()));
         // `<base>/<content id>/<item>/<name>.wtrk`, as Steam lays it out.
         std::fs::create_dir_all(base.join("473770/111")).unwrap();
         std::fs::create_dir_all(base.join("tracks")).unwrap();

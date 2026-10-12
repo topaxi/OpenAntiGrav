@@ -9,7 +9,7 @@ use oag_raceplay as race;
 use std::path::PathBuf;
 
 fn item(id: &str) -> Option<PathBuf> {
-    let root = oag_testdata::exact("data/unity/workshop-473770")?;
+    let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     Some(std::fs::read_dir(root.join(id)).ok()?.next()?.ok()?.path())
 }
 
@@ -25,7 +25,7 @@ fn options(track: PathBuf) -> Option<race::Options> {
 }
 
 #[test]
-#[ignore = "needs a disc image and data/unity"]
+#[ignore = "needs a disc image and data/ballisticng"]
 fn lions_den_loads_and_the_report_names_what_it_did_not_map() {
     let (Some(track), Some(_)) = (
         item("1392209921"),
@@ -103,7 +103,7 @@ fn solo(track: PathBuf) -> Option<Solo> {
 }
 
 #[test]
-#[ignore = "needs a disc image and data/unity"]
+#[ignore = "needs a disc image and data/ballisticng"]
 fn an_ai_craft_laps_lions_den_on_pulse_physics() {
     let Some(track) = item("1392209921") else {
         return;
@@ -122,7 +122,7 @@ fn sweep_every_original_track() {
     if std::env::var_os("OAG_SWEEP").is_none() {
         return;
     }
-    let Some(root) = oag_testdata::exact("data/unity/workshop-473770") else {
+    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
         return;
     };
     let mut dirs: Vec<_> = std::fs::read_dir(root)

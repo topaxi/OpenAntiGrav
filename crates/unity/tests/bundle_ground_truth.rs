@@ -1,6 +1,6 @@
 //! Every UnityFS bundle in the Workshop census opens.
 //!
-//! Census (92 item files under `data/unity/workshop-473770`, counted by
+//! Census (92 item files under `data/ballisticng/workshop-473770`, counted by
 //! `read_dir` over each item directory): 47 `.csf` ship bundles, 32 `.wtrk`
 //! track files that wrap a bundle at an offset, 13 `.shp` legacy ships that
 //! hold none.
@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use oag_unity::bundle::Bundle;
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn census_opens_every_bundle() {
     let Some(root) = common::workshop() else {
         return;

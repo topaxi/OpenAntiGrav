@@ -1,5 +1,5 @@
 //! What a scan of the track directories finds, one [`Listing`] per file, for the
-//! menus to offer. See `oag_source::unity` for where the files are looked for.
+//! menus to offer. See `oag_source::ballisticng` for where the files are looked for.
 //!
 //! A file that will not read is still listed, with the reason: a player who put
 //! a track in the directory and does not see it learns nothing, and one who sees

@@ -98,8 +98,8 @@ accessors the format needs.)
 
 ## Race it
 
-Put `name.track.toml` and `name.glb` in `tracks/` under a directory `--unity-track` searches
-(`$OAG_UNITY`, `data/unity`, beside the program, `<data dir>/oag/unity`), then RACE REMIX,
+Put `name.track.toml` and `name.glb` in `tracks/` under a directory `--ballisticng-track` searches
+(`$OAG_BALLISTICNG`, `data/ballisticng`, beside the program, `<data dir>/oag/ballisticng`), then RACE REMIX,
 TRACK TITLE `CUSTOM`, TRACK `<title> (TRACK FILE)`, START
 ([menus.md](../architecture/menus.md#race-remix-custom-tracks)); or
 `oag-game --track-file name.track.toml`. The race uses the host title's ship, rules and

@@ -54,7 +54,7 @@ Windows, Mac, Linux, Steam Deck and Android: where the game files go, what
 the file names can be, and what to do when it says "no disc image found".
 
 **Want to add something?** The [modding guide](docs/tools/modding.md) covers
-BallisticNG Workshop tracks, your own tracks from Blender, AI pilots and menu-row
+your own tracks from Blender, AI pilots and menu-row
 mods. The TOML schemas are published at <https://oag.topaxi.com/mods/schemas/>.
 
 ## Play it

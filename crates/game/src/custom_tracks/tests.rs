@@ -99,7 +99,7 @@ mod disc {
     const ID: &str = "1392209921";
 
     fn workshop() -> Option<PathBuf> {
-        oag_testdata::exact("data/unity/workshop-473770")
+        oag_testdata::exact("data/ballisticng/workshop-473770")
     }
 
     fn scan_all(root: PathBuf) -> Scan {
@@ -114,7 +114,7 @@ mod disc {
     /// tagged `Original` loads (the race reads them the same way), and the
     /// `Port/Remake` ones are listed too: they are a user's files.
     #[test]
-    #[ignore = "needs data/unity"]
+    #[ignore = "needs data/ballisticng"]
     fn the_scan_lists_every_workshop_item_and_the_originals_all_load() {
         let Some(root) = workshop() else { return };
         let scan = scan_all(root);
@@ -141,10 +141,10 @@ mod disc {
         );
     }
 
-    /// A launch from the CUSTOM row and `--unity-track lion` build the same
+    /// A launch from the CUSTOM row and `--ballisticng-track lion` build the same
     /// race: the same world hash on every tick, a lone AI craft on Pulse.
     #[test]
-    #[ignore = "needs a Pulse image and data/unity"]
+    #[ignore = "needs a Pulse image and data/ballisticng"]
     fn the_menu_route_and_the_command_line_route_race_lions_den_identically() {
         let (Some(root), Some(image)) = (
             workshop(),
@@ -177,7 +177,7 @@ mod disc {
             class: "VENOM".to_string(),
             mode: oag_race::Mode::SingleRace,
             difficulty: oag_ai::Difficulty::Ace,
-            foreign_track: oag_source::unity::resolve_in(&[root], "lion's den"),
+            foreign_track: oag_source::ballisticng::resolve_in(&[root], "lion's den"),
             ..oag_raceplay::Options::default()
         };
         assert_eq!(from_menu.foreign_track, from_cli.foreign_track);

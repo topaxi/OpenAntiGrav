@@ -71,7 +71,7 @@ slot), so the question was how to serialise that model, and where it lives.
    track is a committed fixture (`crates/trackfile/tests/fixtures/oval.*`, written
    by `cargo run -p oag-trackfile --example make_fixture`, with a test that fails
    when the committed bytes drift from the generator).
-8. **Raced by `--track-file <manifest>`** (and `--unity-track`'s existing
+8. **Raced by `--track-file <manifest>`** (and `--ballisticng-track`'s existing
    `foreign_track` option, which now takes either): the same loader early return,
    host title's ship, rules and physics, a track id of `foreign:<id>` keying
    records and ghosts.

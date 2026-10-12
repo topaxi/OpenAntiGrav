@@ -12,13 +12,13 @@
 //! - [`dlc`]: the downloadable-content directories and the packs in them.
 //! - [`layers`]: the player's override and this project's fallback, mounted around a title's archives.
 //! - [`remix`]: a race's track and craft sources, one or two.
-//! - [`unity`]: the player's Unity content directories, the foreign-track source.
+//! - [`ballisticng`]: the player's BallisticNG content directory, the foreign-track source.
 //! - [`cache`]: where derived movie, audio and DLC copies live.
 
+pub mod ballisticng;
 pub mod cache;
 pub mod dlc;
 pub mod layers;
 pub mod remix;
 pub mod source;
 pub mod title;
-pub mod unity;

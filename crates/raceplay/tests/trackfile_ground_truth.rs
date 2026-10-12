@@ -175,7 +175,7 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
 }
 
 fn workshop_items() -> Option<Vec<std::path::PathBuf>> {
-    let root = oag_testdata::exact("data/unity/workshop-473770")?;
+    let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let mut dirs: Vec<_> = std::fs::read_dir(root)
         .ok()?
         .map(|e| e.unwrap().path())
@@ -196,7 +196,7 @@ fn workshop_items() -> Option<Vec<std::path::PathBuf>> {
 /// Every Workshop track tagged `Original`: mapped, written in this format, read
 /// back. Nothing is lost between the importer's output and the file.
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn every_original_workshop_track_converts_and_reads_back_the_same() {
     let Some(items) = workshop_items() else {
         return;
@@ -235,10 +235,10 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
     assert_eq!(converted + refused.len(), 27, "the census of Originals");
 }
 
-/// Lion's Den through `--unity-track` and through its converted file, a lone AI
+/// Lion's Den through `--ballisticng-track` and through its converted file, a lone AI
 /// craft on Pulse's physics: the same world hash on every tick.
 #[test]
-#[ignore = "needs a Pulse image and data/unity"]
+#[ignore = "needs a Pulse image and data/ballisticng"]
 fn lions_den_races_the_same_converted_as_loaded_directly() {
     let (Some(items), Some(image)) = (workshop_items(), oag_testdata::image(IMAGES[1])) else {
         return;
