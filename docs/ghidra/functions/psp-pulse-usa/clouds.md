@@ -609,15 +609,29 @@ packed with red in the low byte (`A << 24 | B << 16 | G << 8 | R`), the GE's
 
 ## Open
 
-- **No live A/B picture.** The field's values are reproduced from RAM. A
-  matched frame against PPSSPP's software renderer was not captured: placing
-  the craft near the clouds (track index about 3000) with
-  `psp-drive.py place` either was undone by the game's own reset or threw the
-  craft off the track, on two boots. The colour word at vertex `+4` of
-  `*(group+0x194)` can be zeroed in a paused emulator to hide the original's
-  clouds, which gives an A/B mask once a stable pose is found. Ours, from a
-  free camera at `(-158, -4, 239)` looking at the field, draws a steam bank
-  behind the wall.
+- **A matched frame, by shape and colour, not by mask (2026-10-12).** De
+  Konstruct Black, craft placed at rest at `(-359, 8, 382)` facing
+  `(0.985, -0.1, -0.13)` (track index about 3025 on `05_Track`, section 33;
+  `psp-drive.py place` settled this time, 90 ticks), PPSSPP software renderer,
+  960x544. The three groups' seeds were read from RAM (`group+0x70`: 3848,
+  715, 8769) and ours was built with them (`CHOSEN_SEEDS` patched in a scratch
+  build), then rendered `--pose-from` a `psp-trace.py --camera` row taken in
+  the same pause. The level geometry lines up to the pixel, and the cloud puffs
+  land on the same pixels with the same lumps and the same warm brown tone: over
+  the 300x160 patch at `(620, 80)` holding both puffs, `magick compare
+  -metric RMSE` reads `0.0053` (whole frame `0.11`, which is the HUD, the
+  ship and the other lighting). So the field's scatter, cull and seeds, the
+  atlas cell and its V orientation, the baked colour and the texel-by-colour
+  combine all hold against pixels. **Not obtained: the original's own cloud
+  mask by difference.** Zeroing vertex `+4` of `*(group+0x194)` while paused
+  made no change (the buffer is rewritten by every `CloudGroup_Draw`), and
+  writing a solid green into it at a breakpoint on the `Gu_CallList`
+  (`0x08932a70`, `s2` = the buffer's end) and grabbing a burst of 40 frames
+  afterwards showed no green either: the edit did not reach the picture by that
+  route, cause not found. The craft also drifts within minutes of a placement
+  (it crashed once), so `place`, the pose capture and the grab have to share one
+  shell. The mask-by-difference route stays open for the combine's exact
+  arithmetic; the match above is silhouette, position and tone.
 - **`FUN_0891e988`'s two integer arguments are not identified.** Forwarded
   unchanged to `FUN_088111cc`; plausibly a `Gu_TexFunc`-shaped call given its
   position in the state list, not confirmed. It decides how the vertex colour
