@@ -1,0 +1,92 @@
+# The rows OpenAntiGrav adds around each title's own main menu.
+#
+# A row says where it goes with `parent` (the id of a top-level row, or "top") and
+# optionally `after` a sibling. A row whose `id` the title's own menu already has is
+# skipped (`only_if_missing`): RACEBOX, OPTIONS and RECORDS are the original's own
+# rows on some titles and ours on the rest, and the definitions below are the same
+# ones `assets/ui/menu.toml` carries for the titles that have them. A `parent` the
+# title's menu lacks places the row at the top level. REMIX hangs off RACEBOX
+# because it is a race setup; QUIT and RECORDS hang off OPTIONS because no original
+# top level has a natural parent for either (RECORDS: Pulse's PROFILE would be one,
+# and nothing is built behind it here). Chosen, not measured.
+#
+# On a flat-list front end (Pulse, Pure, 2048) an attached row draws inline after its
+# parent. On HD and Omega, whose strip has no room for more tabs, it is shown below
+# the parent while the parent or one of its attached rows has focus.
+
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
+
+[[entry]]
+id = "racebox"
+parent = "top"
+after = "campaign"
+only_if_missing = true
+kind = "submenu"
+label = "RACEBOX"
+string_id = "OAG_MENU_RACEBOX"
+target = "race"
+subtitle = "Set up your own race, split screen included"
+subtitle_string_id = "OAG_MENU_RACEBOX_SUBTITLE"
+
+# **Shown unconditionally, not gated on "more than one title available".**
+# The menu definition has no way to ask that question - `disabled_by` only
+# ever reads another row's own held value (`Menu::held`), never an
+# externally-seeded fact, and it refuses to apply to anything but a `choice`
+# or a `toggle` in the first place, which a `submenu` entry is neither. With
+# one title on this machine, TRACK TITLE and CRAFT TITLE on the `remix` page
+# each offer exactly one row and the page degrades to an ordinary custom
+# race - nothing broken, nothing misleading, the same page doing less.
+[[entry]]
+id = "remix"
+parent = "racebox"
+kind = "submenu"
+label = "REMIX"
+string_id = "OAG_MENU_REMIX"
+target = "remix"
+subtitle = "Mix tracks and ships across every title you own"
+subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
+
+[[entry]]
+id = "options"
+parent = "top"
+after = "racebox"
+only_if_missing = true
+kind = "submenu"
+label = "OPTIONS"
+string_id = "OAG_MENU_OPTIONS"
+target = "options"
+subtitle = "Display, audio and control settings"
+subtitle_string_id = "OAG_MENU_OPTIONS_SUBTITLE"
+
+[[entry]]
+id = "records"
+parent = "options"
+only_if_missing = true
+kind = "submenu"
+label = "RECORDS"
+string_id = "OAG_MENU_RECORDS"
+target = "records"
+subtitle = "Your best times and scores, by track and class"
+subtitle_string_id = "OAG_MENU_RECORDS_SUBTITLE"
+
+# No `after`: on HD and Omega RECORDS is the disc's own top-level row, so it is no sibling
+# under OPTIONS to name. File order puts MODS after RECORDS and before QUIT everywhere.
+[[entry]]
+id = "mods"
+parent = "options"
+kind = "submenu"
+label = "MODS"
+string_id = "OAG_MENU_MODS"
+target = "mods"
+subtitle = "The mods this game loaded, their licences and the rows they add"
+subtitle_string_id = "OAG_MENU_MODS_SUBTITLE"
+
+[[entry]]
+id = "quit"
+parent = "options"
+kind = "action"
+label = "QUIT"
+string_id = "OAG_MENU_QUIT"
+action = "quit"
+subtitle = "Exit to the desktop"
+subtitle_string_id = "OAG_MENU_QUIT_SUBTITLE"

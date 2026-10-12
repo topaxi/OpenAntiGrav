@@ -35,7 +35,7 @@ use crate::session::Shell;
 /// once, the launcher's once per pick - and a player who backs out of a boot
 /// and picks a different image would read it again.
 pub(crate) struct Pending {
-    /// `--unity-track` resolved to a catalogue entry, or `None` when not given.
+    /// `--ballisticng-track` resolved to a catalogue entry, or `None` when not given.
     pub(crate) foreign_entry: Option<oag_raceplay::catalogue::Track>,
     pub(crate) cli: Cli,
     pub(crate) settings: settings::Settings,
@@ -43,12 +43,23 @@ pub(crate) struct Pending {
     /// startup error on every route rather than something a player meets after
     /// the intro.
     pub(crate) definition: menu::Definition,
+    /// What the tree is rebuilt from once a title is known: its own main menu
+    /// plus the built-in extras and the player's mods.
+    pub(crate) menu_source: MenuSource,
     pub(crate) dlc: Vec<PathBuf>,
     pub(crate) class: String,
     pub(crate) mode: oag_race::Mode,
     pub(crate) leg: frontend::Leg,
     pub(crate) pose: Option<race::PoseRequest>,
     pub(crate) camera: Option<race::CameraOverride>,
+}
+
+/// Where a run's menu tree comes from.
+pub(crate) enum MenuSource {
+    /// The project's tree with mods: built for the title once it is known.
+    Mods(Box<oag_game::mods::Mods>),
+    /// A `--menu` file, taken whole: no title trimming, no mods.
+    Custom,
 }
 
 /// What only a source can produce.
@@ -66,6 +77,28 @@ pub(crate) struct Prepared {
 }
 
 impl Pending {
+    /// The menu tree for `title`: its own main menu, then the extras and the
+    /// player's mods attached to it. `updated` is whether the title's update is
+    /// mounted. Logs what each mod did.
+    pub(crate) fn menu_for(
+        &self,
+        title: &oag_title::Title,
+        updated: bool,
+    ) -> Result<(menu::Definition, Vec<oag_game::mods::Listing>)> {
+        let MenuSource::Mods(mods) = &self.menu_source else {
+            return Ok((self.definition.clone(), Vec::new()));
+        };
+        let built = mods.build(
+            menu::BUILT_IN,
+            self.settings.language.as_deref(),
+            Some(menu::For { title, updated }),
+        )?;
+        for line in &built.report {
+            log::info!("{line}");
+        }
+        Ok((built.definition, built.listing))
+    }
+
     /// The boot sequence's own options for one source.
     pub(crate) fn boot_options(&self, source: &str) -> boot::Options {
         boot::Options {
@@ -251,6 +284,9 @@ impl Pending {
                 .is_some_and(|blocks| blocks.fury),
         );
         oag_raceplay::loader_log::lines(menu_sfx.report());
+        // Read before the media worker takes the archives: 2048's main menu
+        // grows two tiles when its update is mounted.
+        let updated = !archives.patch.is_empty();
         let media = boot::MediaWorker::spawn(archives, &boot_shell, &options);
 
         // Every team the player's own source declares, in the definition's file
@@ -271,7 +307,7 @@ impl Pending {
         // settings file stores, and on a circuit or a team those are different
         // strings - `16_Track` and `Mantis` against their localised names,
         // which are shipped content and only ever live in memory.
-        let mut definition = self.definition.clone();
+        let (mut definition, mods) = self.menu_for(title, updated)?;
         // A no-op on every title but Wipeout Pure and Wipeout Pulse, whose
         // race defaults declare no variant axis at all - see
         // `menu::Definition::drop_unavailable_race_variant`.
@@ -307,6 +343,7 @@ impl Pending {
         // (`Session::resupply_language`) read the same `boot::Shell` the
         // same way - see that function's own doc.
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
+        shell.mods = mods;
         shell.menu_sfx = Some(menu_sfx);
 
         println!("\n{}", hints::menu_keys(&boot_shell.strings));
@@ -345,27 +382,39 @@ impl Pending {
     }
 }
 
-/// Parses our own menu tree, or the one `--menu` names.
+/// Parses our own menu tree, or the one `--menu` names, and keeps what is
+/// needed to rebuild it for a title.
 ///
 /// Here rather than in `main`'s body only because it is the last thing between
 /// the command line and a source; it reads no disc and depends on nothing this
 /// module produces. `language` resolves a row's `string_id`, when it names
 /// one - see `oag_ui::strings::project_table` for why this, and not the
-/// disc's own `StringTable`, is what a caller this early can ever have.
+/// disc's own `StringTable`, is what a caller this early can ever have. The tree
+/// returned is the title-less one (every row the extras place); the title's own
+/// trimming happens in [`Pending::menu_for`].
 ///
 /// # Errors
 ///
 /// A `--menu` file that will not read, or a definition that will not parse.
-pub(crate) fn definition(cli: &Cli, language: Option<&str>) -> Result<menu::Definition> {
-    let strings = strings::project_table(language);
+pub(crate) fn definition(
+    cli: &Cli,
+    language: Option<&str>,
+) -> Result<(menu::Definition, MenuSource)> {
     match cli.menu_args.menu.as_deref() {
         Some(path) => {
             let text = std::fs::read_to_string(path)
                 .with_context(|| format!("reading {}", path.display()))?;
-            menu::Definition::parse(&text, &strings)
-                .with_context(|| format!("parsing {}", path.display()))
+            let strings = strings::project_table(language);
+            let tree = menu::Definition::parse(&text, &strings)
+                .with_context(|| format!("parsing {}", path.display()))?;
+            Ok((tree, MenuSource::Custom))
         }
-        None => menu::Definition::parse(menu::BUILT_IN, &strings)
-            .context("parsing the built-in menu definition"),
+        None => {
+            let mods = oag_game::mods::Mods::load()?;
+            let built = mods
+                .build(menu::BUILT_IN, language, None)
+                .context("building the menu definition")?;
+            Ok((built.definition, MenuSource::Mods(Box::new(mods))))
+        }
     }
 }

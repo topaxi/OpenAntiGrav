@@ -77,6 +77,8 @@ oag-mesh.workspace = true
 oag-gpu.workspace = true
 # The front end: boot movies, menus, the HUD's font, the strings a screen
 # draws. `render.rs` rasterises the `Draw` list this crate emits.
+oag-mod.workspace = true
+semver = "1"
 oag-ui.workspace = true
 oag-ui-screens.workspace = true
 # The composition root is allowed to read a captured trace: `--pose-from`
@@ -159,6 +161,7 @@ oag-ballisticng.workspace = true
 oag-testdata.workspace = true
 oag-fx.workspace = true
 oag-pob.workspace = true
+zip = { version = "8", default-features = false, features = ["deflate"] }
 oag-weapons.workspace = true
 
 # The Android entry point: the binary's own body again (`src/android.rs`

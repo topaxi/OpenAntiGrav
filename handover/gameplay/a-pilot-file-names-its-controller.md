@@ -35,6 +35,11 @@ controller = "ours"        # default: this project's driver, every axis below ap
 
 ## A mod's controller: the entry point
 
+The container a mod travels in exists since 2026-10-12 (`oag-mod`: a folder, `.zip` or `.oagmod`, the
+`oag-mod.toml` manifest, `docs/tools/mods.md`), with `pilots/` reserved beside `menu.toml` and
+`strings/`. Only menu rows are read from it today; a pilot file or a controller module in a
+mod's `pilots/` is not, and the entry point below is still to be built.
+
 The constraint is determinism: replays are inputs plus a hash a second
 ([ADR-0055](../../docs/architecture/adr/0055-replays-are-inputs-and-a-ghost-is-poses.md)),
 and multiplayer will need the same lockstep. So a mod controller must be a pure

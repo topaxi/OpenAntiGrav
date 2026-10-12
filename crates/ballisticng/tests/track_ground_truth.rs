@@ -1,6 +1,6 @@
 //! The 32 Workshop tracks, every one: the wrapper parses, the bundle opens, the
 //! track classes read into typed structs or the file is refused by name, and
-//! the numbers that cross-check the reader hold. Disc-backed (`data/unity`),
+//! the numbers that cross-check the reader hold. Disc-backed (`data/ballisticng`),
 //! so `#[ignore]`d and run by `just test-data`.
 
 use oag_ballisticng::track::{ColliderKind, LoopEnd, Tile, TileKind, Track};
@@ -15,7 +15,7 @@ struct Loaded {
 }
 
 fn load_all() -> Option<Vec<Loaded>> {
-    let root = oag_testdata::exact("data/unity/workshop-473770")?;
+    let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let mut dirs: Vec<_> = std::fs::read_dir(&root)
         .expect("workshop dir")
         .map(|e| e.expect("entry").path())
@@ -68,7 +68,7 @@ fn count(tiles: &[Tile], kind: TileKind) -> usize {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn every_workshop_track_reads_or_is_refused_by_name() {
     let Some(all) = load_all() else { return };
     assert_eq!(all.len(), 32, "the census");
@@ -80,7 +80,7 @@ fn every_workshop_track_reads_or_is_refused_by_name() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn the_section_graph_is_classified_on_every_track() {
     let Some(all) = load_all() else { return };
     let (mut closed, mut rho, mut open) = (0, 0, 0);
@@ -127,7 +127,7 @@ fn the_section_graph_is_classified_on_every_track() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn tile_positions_are_the_placed_centroids_of_their_vertices() {
     let Some(all) = load_all() else { return };
     let mut worst = 0.0f32;
@@ -182,7 +182,7 @@ fn tile_positions_are_the_placed_centroids_of_their_vertices() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn ai_lines_and_collider_kinds_across_the_census() {
     let Some(all) = load_all() else { return };
     let mut no_line = Vec::new();
@@ -219,7 +219,7 @@ fn ai_lines_and_collider_kinds_across_the_census() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn lions_den_matches_the_probe() {
     let Some(all) = load_all() else { return };
     let l = all
@@ -299,7 +299,7 @@ fn lions_den_matches_the_probe() {
 }
 
 fn open_item(id: &str) -> Option<(Vec<u8>, Wtrk)> {
-    let root = oag_testdata::exact("data/unity/workshop-473770")?;
+    let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let path = std::fs::read_dir(root.join(id)).ok()?.next()?.ok()?.path();
     let file = std::fs::read(path).ok()?;
     let w = Wtrk::parse(&file).ok()?;
@@ -313,7 +313,7 @@ fn byte_sum(b: &[u8]) -> u32 {
 /// UnityPy 1.25.4 is the second source: the byte sum of the RGBA bytes of the
 /// same texture, top row first, and its first texel run.
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn lions_den_atlas_decodes_as_unitypy_does() {
     let Some((file, w)) = open_item("1392209921") else {
         return;
@@ -343,12 +343,12 @@ fn lions_den_atlas_decodes_as_unitypy_does() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn every_track_texture_decodes_or_is_refused_by_name() {
     use oag_ballisticng::track::ObjectRef;
     use oag_unity::serialized::class_id;
     use oag_unity::value::PPtr;
-    let Some(root) = oag_testdata::exact("data/unity/workshop-473770") else {
+    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
         return;
     };
     let mut dirs: Vec<_> = std::fs::read_dir(&root)
@@ -400,9 +400,9 @@ fn every_track_texture_decodes_or_is_refused_by_name() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn every_ship_item_is_a_bare_bundle_and_the_wrapper_counts_hold() {
-    let Some(root) = oag_testdata::exact("data/unity/workshop-473770") else {
+    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
         return;
     };
     let (mut csf, mut wtrk, mut shp, mut original_tracks, mut ports) = (0, 0, 0, 0, 0);

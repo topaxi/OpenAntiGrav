@@ -75,7 +75,7 @@ the Team Selection screen drops a gated team the same way. `--unlock-all` lifts 
 
 Read off `Skin.xml` (`Main Menu`, `Single Player`) and `Selection_Definition.xml`
 (`Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection`,
-`Zone Track Selection`, `Team Selection`), identical on the EU and USA pressings
+`Zone Track Selection`, `Team Selection`), identical on the EU and USA pressings (`pure_flow_ground_truth`; the one difference is `Main Menu` itself: the USA disc has no `Teasers` row, `main_menu_ground_truth.rs`)
 (`pure_flow_ground_truth`):
 
 | Screen | Offers | Goes to |
@@ -103,8 +103,8 @@ the four Alpha circuits (a map of the highlighted one, its race and lap record, 
 height), and `Team Selection` lists eight teams (Feisar to Harimau) with its four ratings.
 **This build lists what the profile has opened and nothing else** (`Chain::view`), draws the rows
 on the skin as Pure's own menu pages are drawn (the same frame, title and selected ink,
-`oag_ui_screens::pure_chain::draw_list`), and does not draw the help line, the right-hand art
-or the circuit map. Chosen, not measured: the medal word and its inks at a row's right
+`oag_ui_screens::pure_chain::draw_list`), draws the right-hand art the disc authors for the focused row
+([below](#the-art-on-the-right-hand-side)) and does not draw the help line. Chosen, not measured: the medal word and its inks at a row's right
 edge, the context line (`SINGLE RACE - VENOM - ALPHA`) between the title and the first row,
 and (not captured) what `Zone Track Selection` hides on a fresh profile: Zone 2, 3 and 4
 are gated by medals and are hidden by the same rule. `Team Selection` is the race box's own
@@ -120,6 +120,50 @@ reaches it, so this build races the chosen circuit and class as a single race wh
 cannot award a medal (`oag_tables::pure_campaign::free_play_event`, targets 0/0/0) and is
 never written to `[[campaign]]` (chosen, not measured). `Team Selection`'s Back, and the
 end of any chain race, return to the screen that picked the event with the cursor on it.
+
+## The art on the right-hand side
+
+Each chain screen's picture is read off the disc and drawn beside the rows, following the
+cursor (pad and pointer): `oag_game::campaign::pure_art` reads it, `Chain::art_key` names
+it, the focused row decides which. **A census of every definition file Pure's `Skin.xml`
+loads** (`Selection`, `Teaser`, `Options`, `Multiplayer`, `RecordGrid`, `Controls`, `Stats`,
+`StartProfile`, `Demo`, `InGame`, plus `Skin.xml` itself; `Credits` and `Online` are localised and were not read) found a texture on the right-hand side in only these places:
+
+| Screen | What it shows | Authored in | Drawn here |
+| --- | --- | --- | --- |
+| Main Menu, Single Player | **nothing** (PPSSPP capture; the top-right mark is the frame's) | - | nothing |
+| Class Selection | the class's stat graph: `class_background.mip` at (250, 54) tinted `DesignColor2`, then `classgraph.mip` (`DesignColor`), `<class>graph3.mip` (`CrosshatchColor`) and `<class>graph2.mip` (`GraphColor`) at (252, 47), one `<Watch watch="Class" value="Vector">` per class | `Selection_Definition.xml` | yes |
+| League Selection, Tournament Selection | the league's emblem, `Data\Tournaments\<name>\Images\<name>league.mip` at (246, 45) tinted `AlphaColor`/`BetaColor`/`ClassicColor`/`ChampionshipColor`; the same entry serves both screens | the entry's own `screen.xml`, named by `PI_League`/`PI_Tournament` `location` | yes |
+| Track Selection, Zone Track Selection | the circuit's map (`Track_1`..`Track_3.mip`, two seconds each, in the slideshow `Team Selection` already plays) and its record panel | the circuit's `screen.xml` (`screen_z.xml` in Zone mode), named by `PI_Track` `location` | yes |
+| Team Selection | the craft's still and its four ratings | the ship's `screen.xml` | the race box's picker, unchanged |
+| Show Teasers | one of three 248x140 teaser stills at (220, 55) in a rule box, a `<Watch watch="Teaser">` per row | `Teaser_Definition.xml` | **no screen**: the main menu has no Teasers row here (`docs/architecture/menus.md`) |
+| Options, Records, Controls, Stats, Profile, Multiplayer | none (only rules, scroll arrows and the tab bars) | - | nothing |
+
+**`<Watch>` is a conditional group.** `watch` names a front-end global, `value` what it has
+to hold: the global is the focused row of the `<Menu global="Class">`, the value an entry's
+disc idstring (`Vector`, not the localised label). `oag_ui::screen::Screen::watches` holds
+them; the reader keeps the images they contain. `enabletransition` and `transition` (Phantom's
+spelling) are read as the seconds the picture takes to fade in, **chosen, not measured**;
+which of fade or wipe the original does is unmeasured. Paint order is the file's.
+
+**The panel's placeholders are the engine's to fill.** The circuit files author `Race Record`
+and `Lap Record` as `00' 00' 00` and the Zone panel's counters as `00`, then name
+`<DisplayRecords track="...">`. PPSSPP on a fresh profile (2026-10-12, `pure-psp-eu.chd`)
+reads `0.00.00` and `0.00.00` for the two records, `25`, `20`, `15` for Zone's gold,
+silver and bronze (the circuit's `<ZoneMedals>`, equal in `stats.xml` on both pressings), and
+`0` for `Best Zone` and `Best Score`. `oag_game::campaign::pure_art::Fills` writes those:
+a record is `oag_hud::format_lap_time` of the profile's quickest finished race and quickest lap
+on that circuit, **chosen, not measured** (any mode and class: which rows the original reads
+was not captured), and `Best Zone`/`Best Score` are left blank once a Zone result is stored
+(how the original words them is not captured). Compared by eye at 960x544 against the same screens on PPSSPP
+(software renderer), the class graph, the emblem, the map and the panel sit where the original's
+do; the tests pin the authored positions on both pressings.
+
+**Open, in the same capture.** The panel's labels and the help line are set in Pure's `Scroll`
+and `Stats` roles, which both resolve to `LTe50325.fnt` (`PI000`'s `<Font>` blocks); this build
+draws them in the menu face, so they are larger than the original's and crowd at the panel's
+columns. The renderer's third glyph slot is unused on Pure and is where that face goes; the
+same face is the `Confirm`/`Back` legend's, whose `Back` reads `BACK BUTTON` here.
 
 ## The class gate
 

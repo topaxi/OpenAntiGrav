@@ -576,7 +576,11 @@ pub fn load_shell(
     let (campaign_events, extra_tiles) = if front_end.touch.is_some() {
         (
             campaign2048::map_events(&mut archives, &strings, &mut report),
-            campaign2048::extra_tiles(options.language.as_deref()),
+            campaign2048::extra_tiles(
+                options.language.as_deref(),
+                title,
+                !archives.patch.is_empty(),
+            ),
         )
     } else {
         (Vec::new(), Vec::new())

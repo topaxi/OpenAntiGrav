@@ -61,6 +61,7 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod main_menu;
 pub mod race;
 
 /// Wipeout 2048, as the asset layer needs to know it.
@@ -163,6 +164,7 @@ pub const TITLE: &Title = &Title {
     }),
     // No campaign layout read (2048's campaign is its own event map): the
     // load path that reaches this falls through to Pulse's reader and refuses.
+    main_menu: main_menu::MAIN_MENU,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,

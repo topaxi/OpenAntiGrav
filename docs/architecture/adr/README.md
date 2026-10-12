@@ -75,6 +75,7 @@ out to be wrong.
 | [0062](0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md) | Unity content is a generic reader with a content-specific layer on top | Accepted; relates to [ADR-0061](0061-two-asset-layers-around-the-disc.md) |
 | [0063](0063-the-own-track-format-is-glb-plus-a-toml-manifest.md) | This project's own track format is a glTF binary plus a TOML manifest | Accepted; builds on [ADR-0062](0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md) |
 | [0065](0065-one-mobile-crate-for-every-phone-os.md) | One mobile crate holds the glue for every phone OS | Accepted; the entry points stay in `oag-game` |
+| [0066](0066-the-menu-is-the-disc-plus-mods.md) | The main menu is each title's own, plus rows that mods attach | Accepted; a mod is a folder, `.zip` or `.oagmod`, our own rows are the built-in `oag-extras` |
 
 ## Format
 

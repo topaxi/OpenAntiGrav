@@ -31,9 +31,9 @@ fn non_default(v: &Value) -> bool {
 const BEHAVIOUR: [&str; 4] = ["m_Enabled", "m_GameObject", "m_Name", "m_Script"];
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn the_fields_this_layer_does_not_read_are_frozen() {
-    let Some(root) = oag_testdata::exact("data/unity/workshop-473770") else {
+    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
         return;
     };
     let mut dirs: Vec<_> = std::fs::read_dir(&root)

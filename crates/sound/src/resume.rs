@@ -170,7 +170,7 @@ impl Audio {
         if self.race_index.is_some() {
             return Ok(());
         }
-        self.apply_restored(saved, &Self::booted_listing(discs))
+        self.apply_restored(saved, &Self::booted_track_seconds(discs))
     }
 
     /// [`Self::restore_race_music`] against a listing already read.
@@ -186,8 +186,11 @@ impl Audio {
         Ok(())
     }
 
-    /// The booted soundtrack's track lengths in order; empty when unreadable.
-    fn booted_listing(discs: &MusicDiscs) -> Vec<f64> {
+    /// The booted soundtrack's track lengths in order, whatever release it is
+    /// (an archived listing, or the PS2's `PS2MUSIC.WAD` directory); empty when
+    /// unreadable. What a saved [`RaceMusicState`] is checked against.
+    #[must_use]
+    pub fn booted_track_seconds(discs: &MusicDiscs) -> Vec<f64> {
         let Some((source, platform)) = discs.pick(MusicSource::Auto) else {
             return Vec::new();
         };

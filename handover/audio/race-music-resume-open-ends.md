@@ -1,12 +1,10 @@
 # Race music resume: what is left open
 
-2026-10-12, lane `music-resume`. The playlist's place persists and resumes on all six
+2026-10-12, lanes `music-resume` and `music-resume-2` (the PS2 track-1 gap and the `--race` route closed). The playlist's place persists and resumes on all six
 releases (`docs/architecture/race-music-resume.md`). Left over:
 
 ## Open
 
-- The `--race` developer route (no front-end shell) neither restores nor saves; only
-  menu-launched races do. A title key for it would come from `App::race_title`.
 - The web build writes `music.toml` through `localStorage` like `records.toml`; not run in
   a browser here.
 - The resume is asserted by tests on a null output (position, track); nobody has listened

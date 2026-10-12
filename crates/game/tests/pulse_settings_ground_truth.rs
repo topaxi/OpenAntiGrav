@@ -102,9 +102,7 @@ fn the_race_page_reads_the_racebox_settings_screen_off_both_pressings() {
         // Drawn: a page of the built-in tree named in the skin's list picks the
         // rules and the title's face up, and nothing else does.
         let skin = Skin::new(shell.menu_skin, shell.space, 22.0);
-        let mut menu = Menu::new(
-            Definition::parse(oag_ui::menu::BUILT_IN, &shell.strings).expect("the tree parses"),
-        );
+        let mut menu = Menu::new(Definition::built_in(&shell.strings).expect("the tree parses"));
         menu.open("race");
         menu.settle();
         let list = oag_ui::menu::draw_list(

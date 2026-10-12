@@ -85,12 +85,14 @@
 //! the player's hull record in `r19`, at cruise and with a boosted light
 //! in the visible list. See `docs/ghidra/functions/ps3-hdfury-eu/renderer.md`,
 //! "The hull's `record+0xe4 & 0x800` bit is set at load". So the craft
-//! binding below is the original's. It is also what flattens the inner rear
-//! panels to white at a boost here: an A/B at player size on `Assegai_n1`
-//! loses that wash with the craft binding dropped. The original's boosted
-//! hull glows at the nozzle and housings instead. So the gap is in the
-//! term's inputs, not in whether it applies. The candidates are named in
-//! renderer.md's section.
+//! binding below is the original's. It is also what whitens the housing
+//! rim and inner rear panels at a boost, and **the original does the same**
+//! (2026-10-12, confidence 85). Its flare node matches our locator on
+//! `Assegai`, `Assegai_c1` and `Harimau`. An injected light lights the same
+//! panels on both sides. In a real boosted race frame, holding the player's
+//! light at its rest colour removes the original's own white rim (Assegai)
+//! and white inner channel (Harimau). See renderer.md, "The original washes
+//! `Assegai` and `Harimau` at a real boost the way ours does".
 //!
 //! The track floor and walls light up only when a craft is
 //! within `D` of them: landings, wall scrapes and banked sections.

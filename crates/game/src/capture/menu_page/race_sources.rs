@@ -67,8 +67,7 @@ mod tests {
                 .into(),
         );
         let title = oag_pulse::TITLE;
-        let mut definition =
-            oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, &strings).unwrap();
+        let mut definition = oag_ui::menu::Definition::built_in(&strings).unwrap();
         definition.drop_unavailable_race_variant(title);
         definition.drop_rows_picked_on_screen(title);
         let setup = crate::boot::RaceSetup {

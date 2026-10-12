@@ -12,12 +12,12 @@ use std::path::PathBuf;
 /// The Workshop items directory, or `None` (skipping, or failing under
 /// `OAG_REQUIRE_GAME_DATA`).
 pub fn workshop() -> Option<PathBuf> {
-    oag_testdata::exact("data/unity/workshop-473770")
+    oag_testdata::exact("data/ballisticng/workshop-473770")
 }
 
 /// The game install directory.
 pub fn install() -> Option<PathBuf> {
-    oag_testdata::exact("data/unity/ballisticng")
+    oag_testdata::exact("data/ballisticng/ballisticng")
 }
 
 /// One item file of the Workshop census.

@@ -62,7 +62,11 @@ impl Session {
         let Some(race_options) = self.race_options.as_ref() else {
             return;
         };
-        let Some(definition) = self.shell.as_ref().map(|shell| shell.definition.clone()) else {
+        let Some((definition, mods)) = self
+            .shell
+            .as_ref()
+            .map(|shell| (shell.definition.clone(), shell.mods.clone()))
+        else {
             return;
         };
         let options = boot::Options {
@@ -91,6 +95,7 @@ impl Session {
         };
         oag_raceplay::loader_log::lines(&boot_shell.report);
         let mut shell = Shell::from_boot(title, definition, &boot_shell);
+        shell.mods = mods;
         // Decoded once at boot and language-independent, so it rides across.
         shell.menu_sfx = self.shell.as_ref().and_then(|old| old.menu_sfx.clone());
         let mode = self.race_mode();
@@ -133,6 +138,9 @@ impl Session {
                 .menu
                 .set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
             stage.menu.set_strip_layout(skin.strip().is_some());
+            stage
+                .menu
+                .set_reveal_attached(shell.title.main_menu.attached == oag_title::Attached::Revealed);
             stage.text_atlas = rows_face;
             stage.skin = skin;
             boot::fonts::install_faces(

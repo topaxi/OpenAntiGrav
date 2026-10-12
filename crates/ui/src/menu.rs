@@ -23,9 +23,10 @@
 //! [`draw_list`] picks between.
 //!
 //! So the shape is ours and it is written down in [`assets/ui/menu.toml`],
-//! which ships with the source rather than coming off a disc. What the disc's
-//! XML says the original's menus were is a separate, still-open question, and
-//! belongs in `docs/` when someone reads it - not in here.
+//! which ships with the source rather than coming off a disc. **The main page
+//! is the exception**: each title shows the top level its own disc authors
+//! (`oag_title::Title::main_menu`) with our rows attached as a mod
+//! ([`Definition::build`], ADR-0066); every other page is ours.
 //!
 //! [`assets/ui/menu.toml`]: https://github.com/topaxi/OpenAntiGrav/blob/main/assets/ui/menu.toml
 //!
@@ -466,46 +467,11 @@ impl Entry {
     }
 }
 
-/// One page: a title and its rows.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Page {
-    /// The id a `submenu` entry names.
-    pub id: String,
-    /// Heading drawn above the rows.
-    pub title: String,
-    /// The rows, in the order they are drawn and moved through.
-    pub entries: Vec<Entry>,
-    /// One row's second line, shown only while it is selected - `menu.toml`'s
-    /// own `subtitle`. Same length and order as [`Self::entries`], `None`
-    /// where a row named none. Kept parallel rather than folded into
-    /// [`Entry`] itself so adding it did not touch that enum's six variants
-    /// or their construction sites elsewhere in this crate and `oag_game`.
-    /// See `docs/architecture/menus.md#a-per-row-subtitle`.
-    pub subtitles: Vec<Option<String>>,
-}
-
-impl Page {
-    /// Drops rows from [`Self::entries`] and their [`Self::subtitles`]
-    /// together, so the two never drift out of the lockstep that field's own
-    /// doc promises. `definition::Definition`'s two row-dropping passes both
-    /// go through this rather than calling `entries.retain` directly, which
-    /// is what a plain `retain` here would silently get wrong: it would drop
-    /// a row from one vector and leave its subtitle attached to whatever row
-    /// slid into its old index.
-    pub(super) fn retain_rows(&mut self, mut keep: impl FnMut(&Entry) -> bool) {
-        let mut kept = Vec::with_capacity(self.entries.len());
-        self.entries.retain(|entry| {
-            let k = keep(entry);
-            kept.push(k);
-            k
-        });
-        let mut kept = kept.into_iter();
-        self.subtitles.retain(|_| kept.next().unwrap_or(false));
-    }
-}
+mod page;
+pub use page::{Page, RowMeta};
 
 mod definition;
-pub use definition::{Definition, Error};
+pub use definition::{Added, Definition, Error, For, ModMenu};
 
 /// What the menus did on a tick, for the composition root to act on.
 #[derive(Debug, Clone, PartialEq)]
@@ -558,6 +524,8 @@ pub struct Menu {
     /// Whether this title draws navigation pages as a strip. See
     /// [`Self::set_strip_layout`].
     strip_layout: bool,
+    /// Whether attached rows are revealed under their parent. See `reveal.rs`.
+    reveal: bool,
     /// How far each row's block has grown toward its selected width, per
     /// page and parallel to [`Self::cursor`]. See `focus.rs`.
     focus: Vec<Vec<f32>>,
@@ -601,6 +569,7 @@ impl Menu {
             // A column until a title says otherwise, which is what both PSP
             // discs measurably say.
             strip_layout: false,
+            reveal: false,
             focus,
             arrival: Some(0),
             scroller: pointer::Scroller::default(),
@@ -826,6 +795,9 @@ impl Menu {
     /// reason, and going through it here keeps one answer to "did the player
     /// press this" rather than two.
     pub fn update(&mut self, input: &mut Input) -> Vec<MenuEvent> {
+        if self.strip_layout && self.reveals() {
+            return self.update_revealed(input);
+        }
         let mut out = Vec::new();
         let rows = self.page().entries.len();
 
@@ -972,6 +944,7 @@ impl Menu {
 
 pub mod block;
 mod picture;
+mod reveal;
 pub use picture::{Backdrop, Picture};
 mod focus;
 mod frame;

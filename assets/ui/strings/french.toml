@@ -197,6 +197,20 @@ OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
 
 [untranslated]
 ids = [
+    # The MODS page, new 2026-10-12; no translation pass yet.
+    "OAG_MENU_MODS",
+    "OAG_MENU_MODS_SUBTITLE",
+    "OAG_MODS_PAGE_TITLE",
+    "OAG_MODS_ROW",
+    "OAG_MODS_ID",
+    "OAG_MODS_VERSION",
+    "OAG_MODS_AUTHORS",
+    "OAG_MODS_LICENSE",
+    "OAG_MODS_ADDS",
+    "OAG_MODS_NO_LICENSE",
+    "OAG_MODS_LICENSE_FILE",
+    "OAG_MODS_NOTHING",
+    "OAG_MODS_BUILT_IN",
     # BLUR RESOLUTION, new 2026-10-03 with the half-resolution blur; no
     # translation pass yet.
     "OAG_GRAPHICS_MOTION_BLUR_RESOLUTION",

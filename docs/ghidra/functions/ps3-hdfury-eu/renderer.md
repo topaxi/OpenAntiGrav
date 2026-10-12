@@ -7401,6 +7401,72 @@ A Racebox walk reaches it (Main Menu, Racebox, Time Trial, Talon's Junction, Tea
 
 No code changed.
 
+### The original washes `Assegai` and `Harimau` at a real boost the way ours does: the `Distance 0.0` gap is closed, ours is correct (2026-10-12, `hd-hull-wash-2`, confidence 85)
+
+**Question** (the thread's last open one): ours washes `harimau`'s inner rear panels and puts a white rim on `assegai`'s housing at a Turbo, while the 2026-10-02 and 2026-10-07 boots read the original's hull "clean" at a pad. Does the original wash at a boost at all? **Falsifier written before the capture:** in a real boosted race frame, with the player's own light read at `(36, 90, 360)`, the original's housing and inner panels look the same as in the same frame with that light held at its rest colour.
+
+**It washes. The falsifier was not met.** Our wash is the original's. Nothing is ported. Piranha is unchanged.
+
+**Method.** Private RPCS3 on HD EU, interpreter, GDB on its own port. Three new Time Trial states on Talon's Junction, each taken at rest just after `GO`. `scripts/rpcs3-hd-hull-light.py` does every read below. It reads the player through `rpcs3_place.find_player`, the team string at `*(*(ship+0x6298)+0x1b4)`, and `Distance`/`Radius` at `ship+0xfc`/`+0x100`. It picks the hull's own `SVC1` stop as `r19 == *0x008b7da0 + *(*(ship+0x6ae0)+0x204c) * 0x1b0`.
+
+| State (`data/saves/hd-fury/`) | Team read from memory | `Distance` / `Radius` | Rest light |
+| --- | --- | --- | --- |
+| `hd-timetrial-talons-assegai-start` | `Data\Ships\Assegai_c1` | 0.0 / 1.0 | `(40, 10, 4)`, a Fury skin |
+| `hd-timetrial-talons-assegai-classic-start` | `Data\Ships\Assegai` | 0.0 / 1.0 | `(4, 10, 40)` |
+| `hd-timetrial-talons-harimau-classic-start` | `Data\Ships\Harimau` | 0.0 / 1.0 | `(4, 10, 40)` |
+
+Racebox's Team Selection opens on the `_c1` row. The classic hull is one `down` (see emulator-recipes.md).
+
+**1. The flare node matches our locator on all three hulls (85).** `flare` breaks at `0x0029ff8c` (`r11` is the node's world matrix) and maps the node through the main-hull `EdgeGeom` matrix (`0x005d8488`, `r11`) into model space. Ours is the `Engine Flare` locator our loader hands `engine_light::record`:
+
+| Hull | Original node, model space (3 frames) | Ours | Axis, both |
+| --- | --- | --- | --- |
+| `Assegai_c1` | `(0.060, -0.225, -6.237)` | `(0.000, -0.273, -6.263)` | `(0, 0, 1)` |
+| `Assegai` | `(0.060, -0.052, -7.165)` | `(0.000, 0.003, -7.182)` | `(0, 0, 1)` |
+| `Harimau` | `(0.042, -0.174, -6.456)` | `(0.000, -0.193, -6.447)` | `(0, 0, 1)` |
+
+Every gap is under 0.07 units, inside the `U(+-0.1)` jitter. The steady `+0.06` in x on all three is the node and the matrix being read a few frames apart on a craft that drifts at rest. The staged light itself maps to within 0.12 of the node in every frame. So the anchor is not where the hulls differ.
+
+**2. At rest, an injected light lights the same panels as ours, with the same response (80).** `inject` overwrites the player's light in the staged list for 3-6 frames and grabs the screen while stopped. With `--pair`, it then grabs a control the same number of frames later, because the original's frame drifts between separate shots. Ours used the same colours through a temporary, uncommitted override, posed at the original's body pose with `--pose-from`. Our camera was hand-placed 11.5 back, 2.3 up, looking 10 ahead, to match the original's framing: **chosen, not measured.**
+
+- **`Assegai_c1`:** at `(440, 110, 44)`, the Fury boost snap, the original's two copper trapezoids either side of the nozzle, the nozzle rims and the strip under the dotted band brighten orange. Ours brightens the same three. Red `(360, 0, 0)` reddens the same strip and rims on both.
+- **`Assegai`** at `(44, 110, 440)`: the housing goes white on both, and so does the lower arc of the yellow spine. That arc is the "white housing rim".
+- **`Harimau`** at `(44, 110, 440)`: on both, the inner channel walls around the nozzle lift from navy and the inner yellow panels whiten.
+
+Pixels rising more than 60 in some channel, same-frame pairs, ship crops of matched size:
+
+| Hull, light | Original px / mean rise (R, G, B) | Ours px / mean rise |
+| --- | --- | --- |
+| `Assegai`, snap | 3,279 / (86, 80, 66) | 2,487 / (68, 82, 98) |
+| `Assegai`, red | 3,823 / (123, -25, -46) | 2,329 / (140, -23, -51) |
+| `Harimau`, snap | 6,144 / (80, 87, 89) | 7,680 / (77, 98, 63) |
+| `Harimau`, red | 5,410 / (131, -27, -52) | 6,795 / (142, -22, -22) |
+
+The original's Assegai crop is about 15% larger on screen. The original's livery is paler too, so its near-white panels cannot rise 60. Within those two effects the counts and rises agree.
+
+**3. In a real boosted frame, the original washes (85). This is the measurement that closes the thread.** `boost` writes the player's body onto the approach of Talon's first pad. The attitude comes from this project's spline through `oag-game --trace-out`, as `rpcs3-drive.py place` does. The command is `--pose=-212,-74,57.5` at 160 u/s. The game's own pad then fires the boost. `boost` waits for stops where the player's own staged light reads a channel of 300 or more, which was `(36, 90, 360)`, `D` 0.9-1.1, every time, at 147-155 u/s (about 530-560 km/h). It lets 2 frames pass, holds the light at its rest colour (`colour * 40 / 360`) for 2 frames and shoots, then shoots 2 native frames. Two A/B pairs per hull, nothing else written:
+
+- **`Assegai`:** native, the housing's upper rim goes white, a bright arc over the nozzle. At rest colour the rim is the hull's own blue and grey.
+- **`Harimau`:** native, the inner channel walls either side of the nozzle go white. At rest colour they stay navy.
+
+Ours at the same body pose, with `--pose-boost 0.1` and the same `(36, 90, 360)` light, shows the same thing: a white rim on Assegai's housing, and the inner channel lifting on Harimau.
+
+**Why the earlier boots read "clean".** Those frames were real, and the light was real: `(36, 90, 360)`, as here. At player size, and in Talon's cyan-lit pad section, the Assegai rim is a thin arc that reads as part of the nozzle glow. Harimau's white livery leaves the channel as the only panel that visibly changes. The 2026-10-02 table's "nozzle glow only" is that rim. This is a reading of those frames, not a re-measurement of them. The frames themselves were not kept.
+
+**What is still not the original's in these frames, and is not the light term:**
+- **The Harimau livery.** The original's in-race `Data\Ships\Harimau` is white and orange. Our `--team harimau` is orange and blue, as 2026-10-02 noted.
+- **The frame-wide brightness and the cyan tint** of the pad section.
+
+Neither is chased here.
+
+**Names:** none new. Every address above was already named in this page's earlier sections.
+
+**2048 / Omega: not checkable**, unchanged. The mechanism is the PS3's SPU `EdgeGeom` job.
+
+**Emulator route that worked** (the 2026-10-12 hang is avoided): cold boot with the stub off, walk to the race, take the state, then restore it with `--interpreter` and GDB. emulator-recipes.md has the details and the clean negative: a new race walked from a restored state aborts.
+
+No code changed.
+
 ## HD's lightmap is read raw: the extra `pow(_, 2.2)` was the frame-wide darkness (2026-10-05, `hd-darkness`)
 
 **Cause, confidence 85.** `mesh.wgsl`'s authored branch ran the lightmap through

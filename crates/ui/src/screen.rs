@@ -227,6 +227,24 @@ pub struct Image {
     pub start_enabled: bool,
 }
 
+/// A `<Watch watch="Class" value="Vector">`: the widgets the screen draws while
+/// the front-end global it names holds that value.
+///
+/// Pure's `Class Selection` authors one per speed class, each holding the three
+/// `<Image>`s of that class's stat graph; the global is the focused row of the
+/// screen's `<Menu global="Class">`. Only the images are read - a `Watch` on the
+/// discs read so far holds nothing else - and they are positioned as the XML
+/// gives them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Watch {
+    /// The global's name, `Class`.
+    pub global: String,
+    /// The value it has to hold, `Vector`: an entry's disc idstring.
+    pub value: String,
+    /// The images drawn meanwhile, in document order.
+    pub images: Vec<Image>,
+}
+
 /// A solid-colour `Image` widget: no `src`, so nothing to sample.
 ///
 /// **Carries its own rect since 2026-08-25** - it used to be a bare ARGB
@@ -327,6 +345,8 @@ pub struct Screen {
     pub brackets: Vec<Bracket>,
     /// `Image` widgets that name a texture, in document order.
     pub images: Vec<Image>,
+    /// `Watch` widgets in document order: images that follow a global.
+    pub watches: Vec<Watch>,
     /// `Movie` widgets in document order.
     ///
     /// **A `Vec`, because one screen really does declare several.** Pure's
@@ -654,6 +674,28 @@ impl Screens {
                     && let Some(argb) = self.resolve(value).and_then(parse_argb)
                 {
                     screen.clear = Some(argb);
+                }
+            }
+            "watch" => {
+                // The widgets under it are collected on a scratch screen so
+                // none of them lands on the screen's own lists.
+                let mut held = Screen::default();
+                for grandchild in &child.children {
+                    self.collect_widgets(
+                        &mut held,
+                        grandchild,
+                        viewport_width,
+                        inner,
+                        transition,
+                        fallback_images,
+                    );
+                }
+                if let (Some(global), Some(value)) = (child.value("watch"), child.value("value")) {
+                    screen.watches.push(Watch {
+                        global: global.to_string(),
+                        value: value.to_string(),
+                        images: held.images,
+                    });
                 }
             }
             "movie" => screen.movies.push(Movie::from_node(child)),

@@ -142,6 +142,41 @@ impl Slideshow {
         })
     }
 
+    /// A show of one state holding exactly `images`, which never changes: the
+    /// art a screen authors itself rather than in an entry's `screen.xml` (Pure's
+    /// `Class Selection` stat graphs), drawn through the same path.
+    #[must_use]
+    pub fn still(images: Vec<Image>) -> Self {
+        Self {
+            states: vec![State {
+                name: String::new(),
+                images,
+                fills: Vec::new(),
+                texts: Vec::new(),
+                delay: 0.0,
+                goto: None,
+            }],
+            path: vec![0],
+            cycle_from: None,
+            model: None,
+        }
+    }
+
+    /// Replaces the text of every label named `name` (any case), in every state:
+    /// the values a screen's own code writes into widgets the file authors with
+    /// a placeholder, such as a circuit's `Race Record`.
+    pub fn fill(&mut self, name: &str, value: &str) {
+        for text in self.states.iter_mut().flat_map(|state| &mut state.texts) {
+            if text
+                .name
+                .as_deref()
+                .is_some_and(|n| n.eq_ignore_ascii_case(name))
+            {
+                text.string = Some(value.to_string());
+            }
+        }
+    }
+
     /// Every state the file authors, in document order.
     #[must_use]
     pub fn states(&self) -> &[State] {

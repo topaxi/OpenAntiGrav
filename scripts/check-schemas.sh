@@ -16,8 +16,10 @@ for file in schemas/v*/*.tosd; do
   staged="$dist/$path/${file#schemas/}"
   [ -f "$staged" ] || { echo "not staged where $base serves it: $staged" >&2; exit 1; }
 done
-grep -q '^/mods/schemas/\*' web/_headers \
-  || { echo "web/_headers has no rule for /mods/schemas/*" >&2; exit 1; }
+# The generated index lists every schema and only schemas that exist.
+python3 scripts/gen-schema-index.py --verify "$dist"
+grep -q '^/mods/schemas/:major/\*' web/_headers \
+  || { echo "web/_headers has no rule for /mods/schemas/:major/*" >&2; exit 1; }
 grep -q 'stage-schemas.sh' scripts/build-web.sh \
   || { echo "scripts/build-web.sh does not stage the schemas into dist" >&2; exit 1; }
 echo "schemas: staged under $path/ ($(ls schemas/v*/*.tosd | wc -l) files)"

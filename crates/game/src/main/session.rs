@@ -108,7 +108,7 @@ pub(crate) struct Session {
     /// The race playlist's saved place: whether this run has already put it back,
     /// what was last written and the ticks since a race last wrote it. See
     /// `oag_game::music_state` and `session/music.rs`.
-    pub(crate) music_place: music::Place,
+    pub(crate) music_place: oag_game::music_state::Run,
     pub(crate) clock: TickClock,
     pub(crate) last: web_time::Instant,
     /// Recent frame times, for the performance overlay.
@@ -321,7 +321,7 @@ pub(crate) struct Session {
     /// which source is precisely what has not been decided yet. See
     /// [`Session::finish_launcher`].
     pub(crate) race_options: Option<race::Options>,
-    /// The track the command line named (`--unity-track`/`--track-file`), which
+    /// The track the command line named (`--ballisticng-track`/`--track-file`), which
     /// every launch that does not pick its own sets on `race_options`; a CUSTOM
     /// remix sets its file there instead, and RACE AGAIN keeps whatever was
     /// raced. See [`Session::inherit_cli_foreign_track`].
@@ -651,6 +651,8 @@ pub(crate) struct BackdropShape {
 #[derive(Clone)]
 pub(crate) struct Shell {
     pub(crate) definition: menu::Definition,
+    /// The mods the MODS page lists, built with [`Self::definition`].
+    pub(crate) mods: Vec<oag_game::mods::Listing>,
     /// The front end's navigation sounds, decoded at boot from the title's
     /// front-end bank. `None` where the boot never read one; a title without
     /// the bank holds an empty [`oag_sound::sfx::MenuSfx`] and plays nothing.
@@ -814,6 +816,7 @@ impl Shell {
     ) -> Self {
         Self {
             definition,
+            mods: Vec::new(),
             menu_sfx: None,
             title,
             platform: boot_shell.platform,

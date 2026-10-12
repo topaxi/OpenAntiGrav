@@ -182,5 +182,58 @@ impl Saver {
     }
 }
 
+/// One run's bookkeeping for the saved place: restored once, written when it
+/// moved, and every [`SAVE_EVERY_SECONDS`] seconds of racing ticks. The windowed
+/// game holds one (`Session`), the menu route and the `--race` route alike, so
+/// both go through this and nothing else.
+#[derive(Debug, Default)]
+pub struct Run {
+    restored: bool,
+    saver: Saver,
+    ticks: u32,
+    file: Option<PathBuf>,
+}
+
+impl Run {
+    /// A run that reads and writes `file` instead of [`path`].
+    #[must_use]
+    pub fn at(file: PathBuf) -> Self {
+        Self {
+            file: Some(file),
+            ..Self::default()
+        }
+    }
+
+    fn file(&self) -> Option<PathBuf> {
+        self.file.clone().or_else(path)
+    }
+
+    /// Once per run, before the race reserves its track; later calls do nothing.
+    pub fn resume(&mut self, audio: &mut Audio, discs: &MusicDiscs, title: &str) {
+        if std::mem::replace(&mut self.restored, true) {
+            return;
+        }
+        if let Some(file) = self.file() {
+            resume_from(&file, audio, discs, title);
+        }
+    }
+
+    /// Writes the place now if it moved. Cheap when it did not.
+    pub fn save(&mut self, audio: &Audio, title: &str) {
+        self.ticks = 0;
+        if let Some(file) = self.file() {
+            self.saver.save_to(&file, audio, title);
+        }
+    }
+
+    /// One fixed tick of a race: saves every [`SAVE_EVERY_SECONDS`] seconds.
+    pub fn racing_tick(&mut self, audio: &Audio, title: &str) {
+        self.ticks += 1;
+        if self.ticks >= SAVE_EVERY_SECONDS * 60 {
+            self.save(audio, title);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;

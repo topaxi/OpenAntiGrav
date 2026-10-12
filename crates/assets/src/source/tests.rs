@@ -134,6 +134,12 @@ const TITLE: &Title = &Title {
         origin: oag_title::Origin::Chosen,
     }),
     // A fixture: nothing here reads a campaign.
+    main_menu: &oag_title::MainMenu {
+        rows: &[],
+        updated_rows: None,
+        attached: oag_title::Attached::Inline,
+        origin: oag_title::Origin::Chosen,
+    },
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: None,

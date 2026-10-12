@@ -730,6 +730,8 @@ impl Session {
                 return;
             }
             "pilot.low" | "pilot.high" => return,
+            // The MODS page only moves its detail lines; nothing is stored.
+            oag_game::mods::SELECTED => return,
             other => {
                 warn!("nothing applies {other}");
                 return;

@@ -18,6 +18,7 @@ use oag_hud::sprite::Sheet;
 mod emblems;
 pub mod hit;
 pub mod launch;
+pub mod pure_art;
 pub mod pure_chain;
 pub mod pure_list;
 

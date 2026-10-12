@@ -1,8 +1,8 @@
 //! RACE REMIX's CUSTOM track title: the tracks a player has put in the
-//! directories `--unity-track` searches, offered on the TRACK row.
+//! directories `--ballisticng-track` searches, offered on the TRACK row.
 //!
-//! The list is the one [`oag_source::unity::tracks_in`] gives the command line,
-//! so a name that works for `--unity-track` is a row here and the reverse. Each
+//! The list is the one [`oag_source::tracks::all_in`] gives the command line,
+//! so a name that works for `--ballisticng-track` is a row here and the reverse. Each
 //! file is read the way a race reads it ([`oag_raceplay::foreign::survey`]), on a
 //! thread of its own: 32 Workshop tracks take about 20 s to read in a debug build,
 //! more than a menu should hold the window for. Until that finishes the rows are
@@ -31,10 +31,18 @@ pub struct Scan {
 }
 
 impl Scan {
-    /// Lists the files under `bases` now (directory reads only) and starts
-    /// reading them.
-    pub fn start(bases: &[PathBuf]) -> Self {
-        let files = oag_source::unity::tracks_in(bases);
+    /// [`Scan::start`] over the default search paths of both sources.
+    pub fn discover() -> Self {
+        Self::start(
+            &oag_source::tracks::search_path(),
+            &oag_source::ballisticng::search_path(),
+        )
+    }
+
+    /// Lists the files now (directory reads only) and starts reading them: the
+    /// own-format tracks in `own`, then BallisticNG's under `bases`.
+    pub fn start(own: &[PathBuf], bases: &[PathBuf]) -> Self {
+        let files = oag_source::tracks::all_in(own, bases);
         let task = (!files.is_empty()).then(|| {
             let files = files.clone();
             Task::spawn("oag-custom-tracks", move || survey::survey(&files))
@@ -164,7 +172,7 @@ fn label(listing: &Listing) -> String {
 }
 
 /// What racing the file at `path` sets on the options a remix is built from:
-/// exactly what `--unity-track` and `--track-file` set (`Pending::race_options`),
+/// exactly what `--ballisticng-track` and `--track-file` set (`Pending::race_options`),
 /// and clears what an earlier launch left (a disc circuit's name, a second
 /// source for the craft), so that both routes reach the same race.
 pub fn apply(options: &mut oag_raceplay::Options, path: &Path) {

@@ -13,7 +13,7 @@ use oag_ui::menu::*;
 /// The definition this build actually ships. Every test that can use it
 /// does, so the file is exercised rather than a fixture standing in for it.
 fn built_in() -> Definition {
-    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+    Definition::built_in(&oag_ui::language::StringTable::default())
         .expect("the built-in menu must parse")
 }
 
@@ -781,7 +781,9 @@ fn every_settings_row_is_one_the_game_seeds() {
                 continue;
             };
             // The web's own rows are dropped on a desktop and seeded only there.
+            // The MODS page's one row only says which mod the detail lines are about.
             if PILOT_EDITOR_ROWS.contains(&setting)
+                || setting == oag_game::mods::SELECTED
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
             {
                 continue;

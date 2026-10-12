@@ -532,6 +532,54 @@ impl Chain {
     }
 }
 
+impl Chain {
+    /// What the right-hand side of the screen shows while row `tag` is under the
+    /// cursor: `None` for a screen that authors nothing there (`Single Player`)
+    /// or a row that names nothing.
+    #[must_use]
+    pub fn art_key(&self, tag: usize) -> Option<super::pure_art::Key> {
+        use super::pure_art::Key;
+        let definition = &self.campaign.definition;
+        let entry = |location: &str, zone: bool, track: Option<&str>| {
+            (!location.is_empty()).then(|| Key::Entry {
+                location: location.to_string(),
+                zone,
+                track: track.map(str::to_string),
+            })
+        };
+        let track_location = |name: &str| {
+            definition
+                .tracks
+                .iter()
+                .find(|track| track.name == name)
+                .map(|track| track.location.as_str())
+        };
+        match self.at {
+            Step::Class => self.flow.classes.get(tag).cloned().map(Key::Class),
+            Step::League => entry(&definition.leagues.get(tag)?.location, false, None),
+            Step::Tournament => {
+                let event = self.events_of(EventKind::Tournament).into_iter().nth(tag)?;
+                let series = definition
+                    .tournaments
+                    .iter()
+                    .find(|series| series.name == event.subject)?;
+                entry(&series.location, false, None)
+            }
+            Step::Track => {
+                let track = definition.leagues.get(self.league)?.tracks.get(tag)?;
+                entry(track_location(track)?, false, Some(track))
+            }
+            Step::ZoneTrack => {
+                let events =
+                    pure_campaign::zone_events(&self.campaign.definition, &self.campaign.stats);
+                let track = &events.get(tag)?.subject;
+                entry(track_location(track)?, true, Some(track))
+            }
+            Step::Mode | Step::Team | Step::Launch => None,
+        }
+    }
+}
+
 /// Chooses row `tag` on the screen the chain is on, against what `records`
 /// hold.
 pub fn choose(

@@ -10,7 +10,7 @@ use oag_race::Course;
 use oag_raceplay::foreign;
 
 fn originals() -> Option<Vec<std::path::PathBuf>> {
-    let root = oag_testdata::exact("data/unity/workshop-473770")?;
+    let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let mut out = Vec::new();
     let mut dirs: Vec<_> = std::fs::read_dir(root)
         .ok()?
@@ -34,7 +34,7 @@ fn originals() -> Option<Vec<std::path::PathBuf>> {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn the_originals_map_and_hold_the_pulse_conventions() {
     let Some(items) = originals() else { return };
     assert_eq!(items.len(), 27);
@@ -103,9 +103,9 @@ fn the_originals_map_and_hold_the_pulse_conventions() {
 }
 
 #[test]
-#[ignore = "needs data/unity"]
+#[ignore = "needs data/ballisticng"]
 fn lions_den_maps_as_the_probe_read_it() {
-    let Some(root) = oag_testdata::exact("data/unity/workshop-473770") else {
+    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
         return;
     };
     let path = std::fs::read_dir(root.join("1392209921"))
