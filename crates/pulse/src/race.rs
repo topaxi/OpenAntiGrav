@@ -57,6 +57,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
     zoom_ring: None,
+    borrows_zoom_ring: true,
     zone_stage_textures: None,
     // `None` on the same terms as the table above: Pulse ships no Zone
     // effectSettings and no located Zone sky.

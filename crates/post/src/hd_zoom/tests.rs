@@ -5,7 +5,7 @@ use super::*;
 use crate::hd_bloom::{Chain, Glow, Params};
 
 /// HD's numbers, as `oag_hd::race::ZOOM_RING` carries them.
-fn tuning() -> Tuning {
+pub(super) fn tuning() -> Tuning {
     Tuning {
         history_weight: 0.25,
         history_weight_cap: 0.95,

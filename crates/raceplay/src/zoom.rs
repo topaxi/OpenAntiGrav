@@ -7,6 +7,13 @@
 //! pad's pulse on Talon's Junction at the start line's pad, a Turbo pickup) - and
 //! read by the scene as a [`oag_post::hd_zoom::Frame`].
 //!
+//! **Borrowed on Pulse and Pure.** Neither draws a ring of its own (nothing in their
+//! executables or data does; `docs/ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md`,
+//! "Pulse and Pure"). With the player's `graphics.boost_zoom` on, the race runs HD's
+//! numbers on the same two triggers and the scene's host pass
+//! ([`oag_post::hd_zoom::Host`]) draws it over the finished frame. **Chosen, not
+//! measured**: no original shows it on those titles.
+//!
 //! **Not wired, and why:**
 //!
 //! - **The start boost.** The original did not fire the pulse at `GO` in three
@@ -55,6 +62,21 @@ impl Race {
     #[must_use]
     pub fn hd_zoom_frame(&self) -> Option<Frame> {
         self.view.zoom.as_ref().map(oag_post::hd_zoom::Pulse::frame)
+    }
+
+    /// The tuning of a ring borrowed from HD, or `None` for a title with its own
+    /// (HD's, drawn inside its bloom chain) or none. The scene's host pass reads it.
+    #[must_use]
+    pub fn borrowed_zoom_tuning(&self) -> Option<Tuning> {
+        self.view
+            .zoom_borrowed
+            .then(|| {
+                self.view
+                    .zoom
+                    .as_ref()
+                    .map(oag_post::hd_zoom::Pulse::tuning)
+            })
+            .flatten()
     }
 
     /// The boost pulse, for the player's own speed pad or Turbo only.

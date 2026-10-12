@@ -303,6 +303,12 @@ pub struct Scene {
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
+    /// The borrowed zoom-streak ring (`graphics.boost_zoom`), built at the first frame
+    /// that asks for it, in the caller's frame format. `None` until then and on every
+    /// race that borrows nothing. See [`oag_post::hd_zoom::Host`].
+    boost_zoom: std::cell::RefCell<Option<oag_post::hd_zoom::Host>>,
+    /// The caller's frame format, the borrowed ring's target.
+    caller_format: wgpu::TextureFormat,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
     /// into the caller's own view. `None` for every other title, where the
@@ -931,6 +937,8 @@ impl Scene {
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
+            boost_zoom: std::cell::RefCell::new(None),
+            caller_format,
             hd,
             omega,
             motion_blur,

@@ -280,6 +280,7 @@ fn setup(handling: Handling) -> Setup {
         hover_rig: None,
         craft_laws: None,
         zoom_ring: None,
+        zoom_borrowed: false,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         // A synthetic track authors no pads, which is also what every Pure
         // track does: an empty set is an ordinary state, not a stub.

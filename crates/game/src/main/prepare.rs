@@ -116,6 +116,7 @@ impl Pending {
             // unnamed circuit from the title it opened, which is the only place
             // the title is known. See `race::Options::track`.
             track: self.cli.track.clone(),
+            boost_zoom: self.settings.graphics.boost_zoom,
             foreign_track: self
                 .foreign_entry
                 .as_ref()
@@ -269,6 +270,8 @@ impl Pending {
         // race defaults declare no variant axis at all - see
         // `menu::Definition::drop_unavailable_race_variant`.
         definition.drop_unavailable_race_variant(title);
+        // The BOOST ZOOM row exists where a ring can be borrowed: Pulse and Pure.
+        definition.drop_unavailable_boost_zoom(title);
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);

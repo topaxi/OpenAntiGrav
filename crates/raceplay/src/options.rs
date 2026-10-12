@@ -43,6 +43,10 @@ pub struct Options {
     /// A foreign (Unity) track to race instead of any circuit of the source
     /// (`crate::foreign`); the source still supplies craft, rules and physics.
     pub foreign_track: Option<PathBuf>,
+    /// The player's `graphics.boost_zoom`: draw HD's zoom-streak ring on boost on a
+    /// title that has none of its own (`oag_title::RaceDefaults::borrows_zoom_ring`).
+    /// Off by default, and ignored on every other title.
+    pub boost_zoom: bool,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -312,6 +316,7 @@ impl Default for Options {
             dlc: Vec::new(),
             track: None,
             foreign_track: None,
+            boost_zoom: false,
             team: None,
             hull_variant: None,
             skin: None,
@@ -642,6 +647,10 @@ pub struct Setup {
     pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
     /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,
+    /// Whether [`Self::zoom_ring`] is HD's ring borrowed on a title that draws none
+    /// of its own ([`Options::boost_zoom`]), and so is drawn by the scene's own host
+    /// pass rather than inside HD's bloom chain. **Chosen, not measured.**
+    pub zoom_borrowed: bool,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.

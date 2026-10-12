@@ -152,6 +152,7 @@ OAG_GRAPHICS_ANISOTROPIC_FILTERING = { text = "ANISOTROPIC FILTERING", human = f
 OAG_GRAPHICS_CAMERA_VIEW = { text = "CAMERA VIEW", human = false }
 OAG_GRAPHICS_FIELD_OF_VIEW = { text = "FIELD OF VIEW", human = false }
 OAG_GRAPHICS_BOOST_FOV_KICK = { text = "BOOST FOV KICK", human = false }
+OAG_GRAPHICS_BOOST_ZOOM = { text = "BOOST ZOOM", human = false }
 OAG_GRAPHICS_PERFORMANCE_OVERLAY = { text = "PERFORMANCE OVERLAY", human = false }
 
 # AUDIO's own rows - its title is `OAG_OPTIONS_AUDIO` above.

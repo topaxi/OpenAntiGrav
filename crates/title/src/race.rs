@@ -232,6 +232,11 @@ pub struct RaceDefaults {
     pub zone_transition: Option<&'static ZoneTransition>,
     /// HD/Fury's zoom-streak ring (see [`crate::ZoomRing`]); `None` on every other title.
     pub zoom_ring: Option<&'static crate::ZoomRing>,
+    /// Whether the player may switch on a borrowed copy of HD's zoom-streak ring
+    /// (`graphics.boost_zoom`, off by default) on this title: true where
+    /// [`Self::zoom_ring`] is `None` because the title draws no such ring of its
+    /// own, **chosen, not measured**. See [`crate::ZoomRing`].
+    pub borrows_zoom_ring: bool,
     /// Where this title keeps the per-stage textures a Zone race swaps as it
     /// escalates. See [`ZoneStageTextures`].
     ///

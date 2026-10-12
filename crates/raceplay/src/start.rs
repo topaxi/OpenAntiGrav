@@ -57,6 +57,7 @@ impl Race {
             hover_rig,
             craft_laws,
             zoom_ring,
+            zoom_borrowed,
             weapon_pad_glow,
             speedup_pads,
             weapon_pads,
@@ -554,6 +555,7 @@ impl Race {
                 exhaust_rng: std::array::from_fn(|slot| Rng::new(exhaust_seed(slot))),
                 zoom: zoom_ring
                     .map(|ring| oag_post::hd_zoom::Pulse::new(crate::zoom::tuning(ring))),
+                zoom_borrowed,
                 // Cold and empty for the same standing-start reason as `exhaust`
                 // above: `hd::Tube::ready` gates on a full ring too.
                 hd_trail: [exhaust::hd::Tube::new(); MAX_SHIPS],

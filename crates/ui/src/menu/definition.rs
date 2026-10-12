@@ -396,6 +396,20 @@ impl Definition {
         }
     }
 
+    /// Drops the BOOST ZOOM row on a title that cannot borrow HD's ring
+    /// (`oag_title::race::RaceDefaults::borrows_zoom_ring`): HD draws its own, always,
+    /// and 2048 and Omega are unread. Dropped for the reason
+    /// [`Self::drop_unavailable_race_variant`] drops its row: a title is fixed for the
+    /// life of a boot, so this runs once, before the row is drawn.
+    pub fn drop_unavailable_boost_zoom(&mut self, title: &oag_title::Title) {
+        if title.race.borrows_zoom_ring {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.boost_zoom"));
+        }
+    }
+
     /// Drops every QUIT row, for a platform whose apps are not quit from
     /// inside (Android: the player leaves with the system's home or app
     /// switcher, and the app is suspended, not ended). Same once-before-read

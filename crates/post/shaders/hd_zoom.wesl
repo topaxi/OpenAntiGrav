@@ -17,6 +17,13 @@ struct Constants {
     weight: f32,
     // The history sample's crop, 0.05 E: uv * (1 - 2c) + c.
     crop: f32,
+    // Where the history draw reads the scene: `min(uv * scale, max) + offset`.
+    // HD's quarter scene shares the mapping above with a zero offset; a borrowed
+    // ring reads the whole finished frame at its viewport's origin.
+    source_scale: vec2<f32>,
+    source_max: vec2<f32>,
+    source_offset: vec2<f32>,
+    padding: vec2<f32>,
 }
 
 // The quarter-resolution scene for the history draw; the history for the ring.
@@ -28,6 +35,10 @@ struct Constants {
 
 fn drawn(uv: vec2<f32>) -> vec2<f32> {
     return min(uv * constants.uv_scale, constants.uv_max);
+}
+
+fn drawn_source(uv: vec2<f32>) -> vec2<f32> {
+    return min(uv * constants.source_scale, constants.source_max) + constants.source_offset;
 }
 
 // What an 8-bit render target does to a value: the ROP clamps on write.
@@ -46,7 +57,7 @@ fn vs_history(@builtin(vertex_index) index: u32) -> VertexOutput {
 // Colour is the plain blend; alpha stays the scene's.
 @fragment
 fn fs_history(in: VertexOutput) -> @location(0) vec4<f32> {
-    let current = surface(textureSample(source_tex, source_sampler, drawn(in.uv)));
+    let current = surface(textureSample(source_tex, source_sampler, drawn_source(in.uv)));
     let c = constants.crop;
     let cropped = in.uv * (1.0 - 2.0 * c) + vec2<f32>(c);
     let previous = surface(textureSample(history_tex, source_sampler, drawn(cropped)));

@@ -104,3 +104,39 @@ impl Scene {
         self.hd.is_some() || self.omega.is_some()
     }
 }
+
+impl Scene {
+    /// Runs the borrowed zoom-streak ring over `view`, building its host at the first
+    /// frame that has a pulse to draw. Nothing is built, bound or encoded for a race
+    /// that borrows no ring, which is every race with `graphics.boost_zoom` off.
+    pub(super) fn run_boost_zoom(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        race: &Race,
+    ) {
+        let Some(tuning) = race.borrowed_zoom_tuning() else {
+            return;
+        };
+        let Some(frame) = race.hd_zoom_frame() else {
+            return;
+        };
+        let mut host = self.boost_zoom.borrow_mut();
+        let host =
+            host.get_or_insert_with(|| oag_post::hd_zoom::Host::new(tuning, self.caller_format));
+        let size = self.depth.size();
+        host.run(
+            device,
+            queue,
+            encoder,
+            view,
+            (size.width, size.height),
+            (viewport.0 as u32, viewport.1 as u32),
+            (viewport.2 as u32, viewport.3 as u32),
+            &frame,
+        );
+    }
+}

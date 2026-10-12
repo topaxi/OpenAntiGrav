@@ -456,6 +456,18 @@ pub struct Graphics {
     #[serde(default = "default_boost_fov_kick")]
     pub boost_fov_kick: oag_display::display::BoostFovKick,
 
+    /// Draw HD/Fury's zoom-streak ring on a boost, on a title that has none of its own
+    /// (Pulse and Pure; `oag_title::RaceDefaults::borrows_zoom_ring`). **Off by
+    /// default**, and ignored on every other title.
+    ///
+    /// **An enhancement of this project's, not the original's:** neither Pulse nor
+    /// Pure draws anything of the kind, so on is a divergence a player opts into.
+    /// The ring and its pulse are HD's own numbers, **chosen, not measured** on
+    /// these titles - see `oag_raceplay::zoom`. Baked into the race at load, so a
+    /// change applies from the next race.
+    #[serde(default)]
+    pub boost_zoom: bool,
+
     /// Which of the original's three in-race camera perspectives to fly with.
     ///
     /// **The one setting on this page a race also writes.** SELECT cycles the
@@ -497,6 +509,7 @@ impl Default for Graphics {
             frustum_culling: default_frustum_culling(),
             pvs_culling: default_pvs_culling(),
             boost_fov_kick: default_boost_fov_kick(),
+            boost_zoom: false,
             camera_view: default_camera_view(),
         }
     }
@@ -809,6 +822,14 @@ pub fn menu_seeds(
         (
             "graphics.boost_fov_kick",
             text(&settings.graphics.boost_fov_kick.to_string()),
+        ),
+        (
+            "graphics.boost_zoom",
+            text(if settings.graphics.boost_zoom {
+                "on"
+            } else {
+                "off"
+            }),
         ),
         (
             "graphics.camera_view",

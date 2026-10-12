@@ -967,6 +967,10 @@ impl Scene {
             }
             self.bloom_pending.set(true);
         }
+        // The borrowed zoom-streak ring, on the finished frame: Pulse and Pure run no
+        // HD chain to hold it, so it has a host of its own. After the bloom's prepare
+        // (which has taken what it needs of the frame), before the HUD.
+        self.run_boost_zoom(device, queue, encoder, view, viewport, race);
         // Motion blur, last: it smears the finished frame - but not the
         // Pulse glow, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the
