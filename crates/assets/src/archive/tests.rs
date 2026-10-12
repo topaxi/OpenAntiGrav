@@ -245,3 +245,60 @@ fn read_range_refuses_a_zlib_entry_too() {
 
     std::fs::remove_file(path).ok();
 }
+
+/// `plain` as an LZSS stream of literals only: a set flag bit and the byte,
+/// MSB first. Nine bits a byte is the stream's worst case, so it is the one
+/// `peek`'s bounded read has to survive.
+fn lzss_literals(plain: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for &byte in plain {
+        acc = (acc << 9) | 0x100 | u32::from(byte);
+        bits += 9;
+        while bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    if bits > 0 {
+        out.push((acc << (8 - bits)) as u8);
+    }
+    out
+}
+
+/// A real LZSS entry: the stored and uncompressed sizes differ, which is what
+/// makes `Directory::parse` classify it as LZSS.
+fn real_lzss_wad(name_hash: u32, plain: &[u8]) -> Vec<u8> {
+    let stream = lzss_literals(plain);
+    let offset = 64u32;
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&1u32.to_le_bytes()); // version
+    bytes.extend_from_slice(&1u32.to_le_bytes()); // entry_count
+    bytes.extend_from_slice(&name_hash.to_le_bytes());
+    bytes.extend_from_slice(&offset.to_le_bytes());
+    bytes.extend_from_slice(&(plain.len() as u32).to_le_bytes()); // size_uncompressed
+    bytes.extend_from_slice(&(stream.len() as u32).to_le_bytes()); // size
+    bytes.resize(offset as usize, 0);
+    bytes.extend_from_slice(&stream);
+    bytes
+}
+
+#[test]
+fn peek_decodes_only_the_head_of_an_lzss_entry_and_matches_read() {
+    let plain: Vec<u8> = (0..200u8).map(|i| i.wrapping_mul(37)).collect();
+    let bytes = real_lzss_wad(0x5555_6666, &plain);
+    let path = temp_file("peek-lzss.wad", &bytes);
+
+    let mut archive = Archive::open(path.to_str().unwrap()).unwrap();
+    assert_eq!(
+        archive.directory().entries[0].compression,
+        Compression::Lzss
+    );
+    assert_eq!(archive.read(0).unwrap(), plain);
+    for len in [0, 1, 4, 7, 8, 9, 63, 199, 200, 201, 4096] {
+        let want = &plain[..(len as usize).min(plain.len())];
+        assert_eq!(archive.peek(0, len).unwrap(), want, "peek {len}");
+    }
+
+    std::fs::remove_file(path).ok();
+}

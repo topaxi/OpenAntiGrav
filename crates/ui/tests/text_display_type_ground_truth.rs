@@ -58,6 +58,15 @@ fn front_end_xml(image: &str, title: &'static oag_title::Title) -> Vec<(String, 
         };
         let label = wad.label().to_string();
         for index in 0..wad.directory().entries.len() {
+            // `fexml::text` wants the whole blob to be UTF-8, so a head that is
+            // not (a cut character at its end aside) rules the entry out
+            // before it is read and decompressed whole.
+            let Ok(head) = wad.peek(index, 64) else {
+                continue;
+            };
+            if std::str::from_utf8(&head).is_err_and(|e| e.error_len().is_some()) {
+                continue;
+            }
             let Ok(raw) = wad.read(index) else { continue };
             // A shortened file spells the attribute as one letter, so only a
             // file with neither the name nor a `<code>` dictionary is skipped.

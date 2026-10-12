@@ -24,8 +24,10 @@
 use std::path::PathBuf;
 
 use oag_disc::DiscImage;
-use oag_formats::sblk::{self, Bank};
-use oag_formats::wad;
+use oag_formats::sblk::Bank;
+
+mod sblk_banks;
+use sblk_banks::banks_in;
 
 /// The PSP, PS2 and Pure discs, with the archives that hold banks on each.
 const DISCS: [(&str, &[&str]); 5] = [
@@ -90,48 +92,6 @@ fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)
 }
 
-/// Every `SBlk` blob in one WAD, decompressed.
-fn banks_in(disc: &mut DiscImage, archive_path: &str) -> Vec<Vec<u8>> {
-    let Some(archive) = disc
-        .entries()
-        .expect("entries")
-        .iter()
-        .find(|e| e.path == archive_path)
-        .cloned()
-    else {
-        panic!("{archive_path} present");
-    };
-    let header = disc
-        .read_entry_range(&archive, 0, wad::HEADER_LEN as u64)
-        .expect("header");
-    let count = wad::Directory::peek_entry_count(&header).expect("entry count");
-    let dir_bytes = disc
-        .read_entry_range(&archive, 0, wad::Directory::directory_len(count))
-        .expect("directory");
-    let dir = wad::Directory::parse(&dir_bytes, Some(archive.size)).expect("parse directory");
-
-    let mut out = Vec::new();
-    for entry in &dir.entries {
-        if entry.size == 0 {
-            continue;
-        }
-        let raw = disc
-            .read_entry_range(&archive, u64::from(entry.offset), u64::from(entry.size))
-            .expect("blob");
-        let blob = match entry.compression {
-            wad::Compression::None => raw,
-            wad::Compression::Lzss => {
-                oag_formats::lzss::decompress(&raw, entry.size_uncompressed as usize).expect("lzss")
-            }
-            wad::Compression::Zlib => continue,
-        };
-        if sblk::looks_like_bank(&blob) {
-            out.push(blob);
-        }
-    }
-    out
-}
-
 /// Every bank on every disc present, tagged with where it came from.
 fn every_bank() -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
@@ -139,7 +99,7 @@ fn every_bank() -> Vec<(String, Vec<u8>)> {
         let Some(path) = image(name) else { continue };
         let mut disc = DiscImage::open(&path).expect("open");
         for archive in archives {
-            for blob in banks_in(&mut disc, archive) {
+            for (_, blob) in banks_in(&mut disc, archive) {
                 out.push((format!("{name}:{archive}"), blob));
             }
         }

@@ -5,10 +5,12 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!   --run-ignored all novice_respawn_ground_truth
-//! # the tier x circuit sweep is also OAG_SWEEP-gated, see sweep_novice_respawns
+//! OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
+//!   --run-ignored all novice_respawn_ground_truth --no-capture
 //! ```
+//!
+//! Every test here is diagnostic (it prints, and asserts nothing), so each is
+//! a scratch sweep gated on `OAG_SWEEP` and `just test-data` skips it.
 //!
 //! Flagged 2026-09-07 by the barrel-roll pass
 //! (`docs/gameplay/ai.md`, "What it costs on the disc, measured") and out of
@@ -217,8 +219,11 @@ fn histogram(indices: &[u32], line_len: u32, bucket: u32) -> Vec<(u32, u32, usiz
 /// than asserting, because what to do about the finding is a separate
 /// question from confirming it exists.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn where_the_novice_craft_respawns_on_13_track() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };
@@ -275,8 +280,11 @@ fn where_the_novice_craft_respawns_on_13_track() {
 ///
 /// Diagnostic only, same reason as above.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn novice_13_track_before_and_after_look_speed() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };
@@ -345,8 +353,11 @@ fn sweep_novice_respawns() {
 /// what would happen if it moved, so a mechanism claim has a number behind it
 /// before anything is touched.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn novice_13_track_grip_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };

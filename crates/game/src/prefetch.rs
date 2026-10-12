@@ -512,9 +512,8 @@ fn plan(options: &Options) -> Result<Plan> {
             .iter()
             .enumerate()
             // Every blob in every shipped PSP archive is stored as-is, and the
-            // PS2's are LZSS throughout and hold neither container. Skipping
-            // the compressed ones is what stops the peek below from falling
-            // back to a full decompressed read of all 7,200 of them.
+            // PS2's are LZSS throughout and hold neither container, so the
+            // compressed ones are skipped without a peek at all.
             .filter(|(_, entry)| entry.compression == Compression::None)
             .map(|(index, entry)| (index, entry.name_hash, entry.size_uncompressed))
             .collect();

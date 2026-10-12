@@ -15,7 +15,13 @@
 //! have to be on the craft at seating, not only written by the tick.
 //!
 //! `lone_opponent_board` and the `field_on_*` tests print laps, wall contacts and shield, the before-and-after
-//! record in `docs/gameplay/ai.md`, "Each title's craft laws".
+//! record in `docs/gameplay/ai.md`, "Each title's craft laws". The `field_on_*` runs assert
+//! nothing, so they are a scratch sweep gated on `OAG_SWEEP` like the rest of this crate's and
+//! never run in `just test-data`:
+//!
+//! ```sh
+//! OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_ai_craft_laws_ground_truth --run-ignored all --no-capture field_on_
+//! ```
 
 use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
@@ -221,9 +227,12 @@ lone_opponent_tests! {
 }
 
 /// The full AI field, weapons off, at one seed: every opponent's laps and its end of run,
-/// then one summary line.
+/// then one summary line. Prints only, so it returns at once unless `OAG_SWEEP` is set.
 fn field(environment: &str, seed: u64) {
     const TICKS: u64 = 12_000;
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(mut race) = started_seeded(&oag_hd::names::track(environment), Some(seed)) else {
         return;
     };
@@ -254,7 +263,7 @@ fn field(environment: &str, seed: u64) {
 macro_rules! seed_test {
     ($environment:literal, $name:ident, $seed:literal) => {
         #[test]
-        #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+        #[ignore = "a scratch sweep: set OAG_SWEEP, read the printed record"]
         fn $name() {
             super::field($environment, $seed);
         }

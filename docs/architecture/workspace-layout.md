@@ -703,6 +703,59 @@ and was outside this lane. The same finding is recorded above for `ai_roll`.
 slowest 173 s (`ai_fork_split`), then `magstrip_wire_2048` 160 s and the 2048
 loads at 74-92 s. No Omega, flaps or HD field test is in the top ten.
 
+## Trimming redundant walks (2026-10-12)
+
+A full `just test-data` on `main` that day was 8,005 tests, 832 s wall under
+load and 12,908 s summed. Earlier passes had split the matrices and the tail,
+so this one went after **redundancy**: tests that each open the same archive
+and read, decompress or decode the same entries, since `cargo nextest` runs
+every test in its own process and shares nothing between them. The rule this
+became is in `CLAUDE.md`'s test-budget section.
+
+Measured with the affected binaries alone, before (`main` at `1511e997a`) and
+after, back to back under the gate lock at load 10-18 (contended, so read the
+ratio rather than the seconds):
+
+| | tests | summed | wall |
+| --- | ---: | ---: | ---: |
+| before | 159 | 3,079 s | 214 s |
+| after | 142 | 1,458 s | 108 s |
+
+| binary | before | after | what changed |
+| --- | ---: | ---: | --- |
+| `omega_gnf_ground_truth` + `_pixels` + `_mips` | 1,366 s, 27 tests | 988 s, 17 tests | one binary reads each `.gnf` once and holds it to the parse, decode and mip-chain claims; the decode is reused for the chain's base comparison |
+| `hd_ai_craft_laws` | 572 s | 127 s | the 20 print-only `field_on_*` runs gated on `OAG_SWEEP` |
+| `sblk_cue` + `sblk_child` | 332 s | 61 s | one shared `banks_in` that decompresses four bytes of an entry before reading it whole |
+| `gxp` | 132 s, 4 tests | 36 s, 1 test | four claims over one walk of the packages |
+| `gtf` | 98 s, 7 tests | 31 s, 3 tests | five whole-disc claims over one walk |
+| `pvs`, `collision`, `alpha_test_reference`, `vex_ps2`, `payload_coverage`, `cloud` | 315 s | 152 s | one shared `wad_walk` that sniffs 16 bytes before decompressing |
+| `text_display_type` | 78 s | 16 s | a UTF-8 head sniff before the full read |
+| `pob_*`, `psys_inventory` | 114 s | 42 s | `Archive::peek` now decodes only the head of an LZSS entry |
+| `novice_jump` + `novice_respawn` | 70 s | 0 s | six print-only diagnostics gated on `OAG_SWEEP` |
+
+Two shapes account for nearly all of it:
+
+- **Decompress everything, keep a few.** A walk over the PS2's `WADS2.WAD`
+  (7,200 entries, 221 MiB of LZSS unpacking to 516 MiB) to find its 44 sound
+  banks or its `.vex` files read and decompressed every entry, and
+  `Archive::peek` did the same to return four bytes. A literal costs nine bits
+  and `lzss::decompress` stops at the length asked for, so a head of
+  `ceil(9 * n / 8) + 1` stored bytes always yields `n`; each walk now rules an
+  entry out on that head and keeps its own filter on the full blob, so the set
+  found is the same (every count those tests pin is unchanged).
+- **N tests, one walk each.** Tests in one binary that each called the same
+  `survey()` or `for_every_*` became one test over one walk, each claim kept as
+  a named function or type with its doc comment and assertions as they were.
+
+**What did not change, and why.** The `ai_roll` full-grid tests recompute four
+of twelve tier-by-seed grids, but sharing them puts four grids in one test,
+past the per-test ceiling under load. `replay_ground_truth` records each title
+three times, once per property, which is that file's documented tail split.
+The `rcsmodel_decl`, `rcsmodel_material` and `psp2_rcsmodel` repeats are about
+6 s a walk, and those files keep a claim per test for legibility. A head sniff
+in `vex_class` and `lane_band_census` bought nothing (their archives are stored
+uncompressed) and was not kept.
+
 ## Dependency graph clean-up (2026-10-05)
 
 `cargo shear` found 29 unused or misplaced dependencies; they were removed and
