@@ -67,7 +67,7 @@ impl ModeKind {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Start {
     /// A campaign event: its cell launches, judges and records.
-    Event(Event),
+    Event(Box<Event>),
     /// A plain race on a circuit, in a class, that records nothing.
     FreePlay {
         /// The `PI_Track` name.
@@ -447,7 +447,7 @@ impl Chain {
                 class: self.class,
             });
         }
-        Chosen::Start(Start::Event(event))
+        Chosen::Start(Start::Event(Box::new(event)))
     }
 
     fn advance(&mut self) -> Chosen {

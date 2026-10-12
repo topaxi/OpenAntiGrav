@@ -16,7 +16,7 @@ fn skin() -> Skin {
 }
 
 fn rows(events: usize) -> Vec<Row> {
-    let mut rows = vec![Row::header("TOURNAMENT")];
+    let mut rows = Vec::new();
     for tag in 0..events {
         rows.push(Row::event(
             format!("EVENT {tag}"),
@@ -24,9 +24,6 @@ fn rows(events: usize) -> Vec<Row> {
             Status::Open,
             String::new(),
         ));
-        if tag == 1 {
-            rows.push(Row::header("RACE"));
-        }
     }
     rows
 }
@@ -36,17 +33,13 @@ fn list(events: usize) -> Choice {
 }
 
 #[test]
-fn the_cursor_starts_past_the_heading_and_steps_over_the_next_one() {
+fn the_cursor_starts_on_the_first_row_and_wraps_at_both_ends() {
     let mut list = list(4);
     assert_eq!(list.selected_row().map(|r| r.tag), Some(0));
     list.update(&mut tick(&[Button::Down]));
     assert_eq!(list.selected_row().map(|r| r.tag), Some(1));
     list.update(&mut tick(&[Button::Down]));
-    assert_eq!(
-        list.selected_row().map(|r| r.tag),
-        Some(2),
-        "the RACE heading is skipped"
-    );
+    assert_eq!(list.selected_row().map(|r| r.tag), Some(2));
     list.update(&mut tick(&[Button::Up]));
     list.update(&mut tick(&[Button::Up]));
     list.update(&mut tick(&[Button::Up]));
@@ -89,11 +82,11 @@ fn replacing_the_rows_keeps_the_cursor_on_the_same_event() {
 }
 
 #[test]
-fn a_click_on_a_row_selects_and_confirms_it_and_a_heading_is_not_a_target() {
+fn a_click_on_a_row_selects_and_confirms_it_and_a_click_past_the_rows_does_nothing() {
     let skin = skin();
     let mut list = list(3);
     let layout = Layout::new(&skin);
-    let row = layout.row_rect(2);
+    let row = layout.row_rect(1);
     let click = |x: f32, y: f32| Pointer {
         at: Some((x, y)),
         moved: true,
@@ -102,11 +95,11 @@ fn a_click_on_a_row_selects_and_confirms_it_and_a_heading_is_not_a_target() {
     };
     let events = list.pointer(&click(row[0] + 20.0, row[1] + row[3] * 0.5), &skin);
     assert_eq!(events, [Event::Moved, Event::Confirmed(1)]);
-    let heading = layout.row_rect(0);
+    let past = layout.row_rect(5);
     assert!(
-        list.pointer(&click(heading[0] + 20.0, heading[1] + 3.0), &skin)
+        list.pointer(&click(past[0] + 20.0, past[1] + 3.0), &skin)
             .is_empty(),
-        "a heading is not a target"
+        "below the last row is not a target"
     );
     let back = Pointer {
         back: true,

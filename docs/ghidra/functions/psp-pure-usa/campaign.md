@@ -97,8 +97,18 @@ parser shares by layout). Seventeen rows, three conditions, all modelled by
   (**chosen, not measured**), so a replay cannot farm a gate.
 - **Which class opens when.** A fresh profile's `Class Selection` lists only Vector
   and Venom (PPSSPP capture, 2026-09-10); the gate is in code, not in
-  `Definition.xml`, and `Unlock Phantom Class` (`0x08a7c848`) is its only named hook.
-  The list shows all five classes (**chosen, not measured**).
+  `Definition.xml`. Read 2026-10-12 (`pure-campaign-authored`): the strings
+  `Unlock Track`, `Unlock Liveries`, `Unlock Flash Class`, `Unlock Rapier Class` and
+  `Unlock Phantom Class` (`0x08a7c800`..`0x08a7c85c`) are entries 6 to 10 of an
+  eleven-entry reward-name pointer table at `0x08ab4a0c` (the pointers read `0x2787a0`..`0x278848`
+  as addends), whose one code reference is `FUN_08951538` (`0x08951538`), a per-frame routine
+  that shows the entry its index names and advances the index when one button (index 5) is
+  pressed: the reward reveal. So the classes open as **rewards** (confidence 60). The
+  menu attribute that hides an entry, `DisableEntriesBitField`, is parsed in the menu
+  reader `FUN_088c76a0`; **what raises a reward, and who sets the class menu's bitfield,
+  was not traced** (confidence under 50, so no renames). This build offers Vector and
+  Venom from `Campaign::classes_at_start` and opens a later class on any tournament medal
+  in the class before it (**chosen, not measured**).
 - **The time trial's lap count.** `RaceTimes` is a whole-race figure; the list
   races a time trial at the mode's own default laps, which the 111.78 s check above
   agrees with, not a measured Pure figure.

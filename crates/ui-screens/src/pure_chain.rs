@@ -36,8 +36,6 @@ pub enum Status {
 pub struct Row {
     /// What the line says.
     pub label: String,
-    /// A section heading: drawn dim, never selected.
-    pub header: bool,
     /// Open, locked or medalled.
     pub status: Status,
     /// The medal word drawn at the right edge, already in the player's
@@ -50,20 +48,7 @@ pub struct Row {
 }
 
 impl Row {
-    /// A section heading.
-    #[must_use]
-    pub fn header(label: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            header: true,
-            status: Status::Open,
-            status_text: String::new(),
-            requires: String::new(),
-            tag: usize::MAX,
-        }
-    }
-
-    /// An event.
+    /// A choice.
     #[must_use]
     pub fn event(
         label: impl Into<String>,
@@ -73,7 +58,6 @@ impl Row {
     ) -> Self {
         Self {
             label: label.into(),
-            header: false,
             status,
             status_text,
             requires: String::new(),
@@ -102,7 +86,6 @@ pub struct Choice {
     rows: Vec<Row>,
     selected: usize,
     scroll: usize,
-    notice: Option<String>,
 }
 
 const SCRIM: [f32; 4] = [0.0, 0.0, 0.0, 0.78];
@@ -191,19 +174,16 @@ impl Layout {
 }
 
 impl Choice {
-    /// A screen on `rows`, with the cursor on the first selectable one.
+    /// A screen on `rows`, with the cursor on the first row.
     #[must_use]
     pub fn new(title: String, context: String, rows: Vec<Row>) -> Self {
-        let mut list = Self {
+        Self {
             title,
             context,
             rows,
             selected: 0,
             scroll: 0,
-            notice: None,
-        };
-        list.selected = list.step(0, 1).unwrap_or(0);
-        list
+        }
     }
 
     /// The same screen with other rows, or after a medal changed a gate. The
@@ -212,14 +192,13 @@ impl Choice {
         let tag = self.selected_row().map(|row| row.tag);
         self.rows = rows;
         self.selected = tag
-            .and_then(|tag| self.rows.iter().position(|r| !r.header && r.tag == tag))
-            .or_else(|| self.step(0, 1))
+            .and_then(|tag| self.rows.iter().position(|r| r.tag == tag))
             .unwrap_or(0);
     }
 
     /// Puts the cursor on the event row with this tag, if there is one.
     pub fn select_tag(&mut self, tag: usize) {
-        if let Some(index) = self.rows.iter().position(|r| !r.header && r.tag == tag) {
+        if let Some(index) = self.rows.iter().position(|r| r.tag == tag) {
             self.selected = index;
         }
     }
@@ -227,7 +206,7 @@ impl Choice {
     /// The row under the cursor.
     #[must_use]
     pub fn selected_row(&self) -> Option<&Row> {
-        self.rows.get(self.selected).filter(|row| !row.header)
+        self.rows.get(self.selected)
     }
 
     /// Every row.
@@ -242,34 +221,15 @@ impl Choice {
         &self.context
     }
 
-    /// A line drawn in the footer until the next input, or `None`.
-    pub fn set_notice(&mut self, notice: Option<String>) {
-        self.notice = notice;
-    }
-
-    /// The first selectable row at or after `from`, going `direction`
-    /// (wrapping) and skipping headings.
-    fn step(&self, from: usize, direction: i32) -> Option<usize> {
-        let count = self.rows.len() as i64;
-        let sign = if direction < 0 { -1 } else { 1 };
-        (0..count)
-            .map(|offset| (from as i64 + offset * sign).rem_euclid(count) as usize)
-            .find(|&index| !self.rows[index].header)
-    }
-
     fn move_by(&mut self, direction: i32) -> bool {
         let count = self.rows.len();
         if count == 0 {
             return false;
         }
-        let from = (self.selected as i64 + i64::from(direction)).rem_euclid(count as i64) as usize;
-        match self.step(from, direction) {
-            Some(index) if index != self.selected => {
-                self.selected = index;
-                true
-            }
-            _ => false,
-        }
+        let to = (self.selected as i64 + i64::from(direction)).rem_euclid(count as i64) as usize;
+        let moved = to != self.selected;
+        self.selected = to;
+        moved
     }
 
     /// Consumes a tick of input. Every button is taken as an edge, as
@@ -289,9 +249,6 @@ impl Choice {
             && let Some(row) = self.selected_row()
         {
             out.push(Event::Confirmed(row.tag));
-        }
-        if !out.is_empty() {
-            self.notice = None;
         }
         out
     }
@@ -326,7 +283,7 @@ impl Choice {
             layout.visible.min(self.rows.len().saturating_sub(first)),
         )
         .map(|slot| first + slot)
-        .filter(|&index| self.rows.get(index).is_some_and(|row| !row.header));
+        .filter(|&index| index < self.rows.len());
         if let Some(index) = over {
             if (pointer.moved || pointer.clicked) && index != self.selected {
                 self.selected = index;
@@ -335,9 +292,6 @@ impl Choice {
             if pointer.clicked {
                 out.push(Event::Confirmed(self.rows[index].tag));
             }
-        }
-        if !out.is_empty() {
-            self.notice = None;
         }
         out
     }
@@ -412,7 +366,7 @@ impl Choice {
             .map(|(index, row)| (index - first, row))
         {
             let y = layout.rows_y + slot as f32 * layout.line;
-            let cursor = !row.header && first + slot == self.selected;
+            let cursor = first + slot == self.selected;
             if cursor {
                 out.push(Draw::Fill {
                     rect: layout.row_rect(slot),
@@ -426,12 +380,11 @@ impl Choice {
             };
             let dim = |c: [f32; 4]| [c[0] * DIM, c[1] * DIM, c[2] * DIM, c[3]];
             let (label_ink, status_ink) = match row.status {
-                _ if row.header => (dim(skin.normal()), ink),
                 Status::Locked => (dim(ink), dim(ink)),
                 Status::Medal(medal) => (ink, medal_ink(medal)),
                 Status::Open => (ink, ink),
             };
-            let indent = if row.header { 0.0 } else { layout.line * 0.6 };
+            let indent = layout.line * 0.6;
             out.push(text(
                 layout.text_x + indent,
                 y,
@@ -449,11 +402,10 @@ impl Choice {
                 ));
             }
         }
-        let footer = self.notice.clone().or_else(|| {
-            self.selected_row()
-                .filter(|row| row.status == Status::Locked && !row.requires.is_empty())
-                .map(|row| row.requires.clone())
-        });
+        let footer = self
+            .selected_row()
+            .filter(|row| row.status == Status::Locked && !row.requires.is_empty())
+            .map(|row| row.requires.clone());
         if let Some(footer) = footer {
             out.push(text(
                 layout.text_x,

@@ -263,3 +263,34 @@ fn backing_out_of_the_root_closes_the_menus() {
     assert_eq!(events, vec![MenuEvent::Closed]);
     assert_eq!(menu.depth(), 1, "and leaves the stack alone");
 }
+
+/// A title whose original words the campaign row differently has the row
+/// renamed in place, and a title that does not keeps the row as written.
+#[test]
+fn the_campaign_row_is_worded_by_the_title_and_keeps_its_place() {
+    let strings = crate::language::StringTable::default();
+    let label_of = |definition: &Definition| {
+        definition
+            .page("main")
+            .unwrap()
+            .entries
+            .iter()
+            .enumerate()
+            .find_map(|(index, entry)| match entry {
+                Entry::Run {
+                    action: Action::OpenCampaign,
+                    label,
+                } => Some((index, label.clone())),
+                _ => None,
+            })
+            .unwrap()
+    };
+    let built_in = Definition::parse(BUILT_IN, &strings).unwrap();
+    let (place, kept) = label_of(&built_in);
+    let mut pulse = built_in.clone();
+    pulse.rename_campaign_row(oag_pulse::TITLE, &strings);
+    assert_eq!(label_of(&pulse), (place, kept), "Pulse keeps RACE CAMPAIGN");
+    let mut pure = built_in;
+    pure.rename_campaign_row(oag_pure::TITLE, &strings);
+    assert_eq!(label_of(&pure), (place, "SINGLE PLAYER".to_string()));
+}
