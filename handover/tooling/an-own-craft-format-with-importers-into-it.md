@@ -87,8 +87,20 @@ it yields is plain `Handling` data.
 
 ## Open questions (the maintainer's)
 
-- Per-class handling in full, or one set the classes scale? Pulse authors four
-  tables per team; a modder may only want one.
+- ~~Per-class handling in full, or one set the classes scale?~~ **Decided 2026-10-12
+  (maintainer): per class.** Tables are keyed by the class **name**
+  (`[handling.venom]`, `[handling.vector]`, ...), the way `oag_title::SpeedClasses`
+  already keys a title's ladder, because ladders differ: Pulse and HD author four,
+  Pure five (`VECTOR` below Venom), 2048 adds Super Phantom. A race on a class the
+  craft does not author is an error naming the class, or `based_on` fills it.
+- **Blocker found 2026-10-12**: `oag_physics::SpeedClass` is a four-variant enum, so
+  Pure's Vector is raceable only through RACE REMIX's name route and 2048's Super
+  Phantom not at all (`2048s-original-opponent-flies-its-campaign.md`). A class as
+  data (name plus index into a ladder) is the prerequisite for both, and for
+  **classes of this project's own** (the maintainer's idea): an own class would be a
+  small file naming it, its place on the ladder, and the per-class globals a title
+  authors beside the team tables (`docs/formats/handling-stats.md`), with every craft
+  then needing a table for it or a `based_on`.
 - ~~May opponents fly custom craft?~~ **Decided 2026-10-12 (maintainer): yes**, outside the
   original campaigns.
 - Engine sound: borrow the host title's, or ship an audio file in the craft?
