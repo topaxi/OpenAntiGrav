@@ -46,11 +46,12 @@
 //! [`Layer::extend_vertices`] reads the roll with [`crate::mist::camera_roll`],
 //! the same law the mist uses.
 //!
-//! # What this module does not reproduce
+//! # Which groups draw
 //!
-//! The original skips a group's draw when the camera is far from it (live: the
-//! phases froze at the start line). The test is not read, so every group draws
-//! every frame here, and every phase advances every tick.
+//! The original skips a group's draw, and so its phase advance, when its
+//! parent section is outside the view section's PVS row (live: the phases froze
+//! at the start line); [`Layer`] takes that row as a mask. See `clouds.md`,
+//! "What gates a group".
 //!
 //! # Two halves, deliberately
 //!
@@ -171,10 +172,38 @@ fn quad(
     [bl, br, tl, br, tr, tl]
 }
 
+/// One `cloudGroup`'s run of sprites in [`Layer`], and the track section that
+/// gates it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Span {
+    /// The `section` id the group's parent node carries, `None` for a group
+    /// above every section, which the walk always reaches.
+    section: Option<u8>,
+    start: usize,
+    end: usize,
+}
+
+impl Span {
+    /// Whether the original's node walk reaches this group under `visible`,
+    /// the PVS row of the section the view is placed by (bit `n` set = section
+    /// `n` may be drawn).
+    ///
+    /// The walk (`0x08944160`) submits a group only when its parent's submit
+    /// returned nonzero, and a `Section` node's submit (`0x0892b638`) returns
+    /// zero when `(1 << section) & row == 0`. A group that is not submitted is
+    /// neither queued nor drawn, and `phase += rate` runs inside the draw, so
+    /// one test gates both. See `clouds.md`, "What gates a group".
+    fn reached(&self, visible: u64) -> bool {
+        self.section
+            .is_none_or(|id| id >= 64 || visible & (1u64 << id) != 0)
+    }
+}
+
 /// Every cloud sprite on one track, built once at load and advanced per tick.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Layer {
     sprites: Vec<Sprite>,
+    groups: Vec<Span>,
 }
 
 impl Layer {
@@ -186,18 +215,22 @@ impl Layer {
     /// original.
     #[must_use]
     pub fn from_groups(data: &[u8], nodes: &[oag_vex::vex::Node], seeds: &[u32]) -> Self {
-        let sprites = oag_vex::cloud::cloud_groups(data, nodes)
-            .iter()
-            .enumerate()
-            .flat_map(|(k, group)| {
-                let seed = authored_seed(group.attributes.seed)
-                    .or_else(|| seeds.get(k % seeds.len().max(1)).copied())
-                    .unwrap_or(CHOSEN_SEEDS[k % CHOSEN_SEEDS.len()]);
-                field::build(group, seed)
-            })
-            .map(|baked| Sprite::from_baked(&baked))
-            .collect();
-        Self { sprites }
+        let governing = oag_vex::pvs::governing_sections(data, nodes).unwrap_or_default();
+        let mut sprites = Vec::new();
+        let mut groups = Vec::new();
+        for (k, group) in oag_vex::cloud::cloud_groups(data, nodes).iter().enumerate() {
+            let seed = authored_seed(group.attributes.seed)
+                .or_else(|| seeds.get(k % seeds.len().max(1)).copied())
+                .unwrap_or(CHOSEN_SEEDS[k % CHOSEN_SEEDS.len()]);
+            let start = sprites.len();
+            sprites.extend(field::build(group, seed).iter().map(Sprite::from_baked));
+            groups.push(Span {
+                section: governing.get(group.node).copied().flatten(),
+                start,
+                end: sprites.len(),
+            });
+        }
+        Self { sprites, groups }
     }
 
     /// Whether this layer has anything to draw - a track that authors no
@@ -219,21 +252,31 @@ impl Layer {
         &self.sprites
     }
 
-    /// Advances every sprite's rotation by one tick.
-    pub fn advance(&mut self) {
-        for sprite in &mut self.sprites {
-            sprite.advance();
+    /// Advances the rotation of every sprite whose group the node walk reaches
+    /// under `visible` by one tick, and leaves the others where they were: the
+    /// original advances inside the draw, which a skipped group never runs.
+    /// Pass [`oag_vex::pvs::ALL_VISIBLE`] where the view's section is unknown.
+    pub fn advance(&mut self, visible: u64) {
+        for span in &self.groups {
+            if span.reached(visible) {
+                for sprite in &mut self.sprites[span.start..span.end] {
+                    sprite.advance();
+                }
+            }
         }
     }
 
     /// Appends this frame's vertices to `out`, facing `camera` and
-    /// counter-rotated by its roll per [`Sprite::vertices`]. The original
+    /// counter-rotated by its roll per [`Sprite::vertices`], for the groups the
+    /// node walk reaches under `visible` (see [`Self::advance`]). The original
     /// reads the roll every frame, not every tick.
-    pub fn extend_vertices(&self, out: &mut Vec<GpuVertex>, camera: &Frame) {
+    pub fn extend_vertices(&self, out: &mut Vec<GpuVertex>, camera: &Frame, visible: u64) {
         let roll = crate::mist::camera_roll(camera);
         out.reserve(self.sprites.len() * 6);
-        for sprite in &self.sprites {
-            out.extend_from_slice(&sprite.vertices(camera.right, camera.up, roll));
+        for span in self.groups.iter().filter(|span| span.reached(visible)) {
+            for sprite in &self.sprites[span.start..span.end] {
+                out.extend_from_slice(&sprite.vertices(camera.right, camera.up, roll));
+            }
         }
     }
 }

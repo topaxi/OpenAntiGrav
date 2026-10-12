@@ -62,6 +62,10 @@ const LIVE: [Live; 3] = [
     },
 ];
 
+/// The `Section` ids read live off each group's parent node: 39 for the outer
+/// group and the one nested in it, 50 (`Section_35`) for the third.
+const LIVE_SECTIONS: [Option<u8>; 3] = [Some(39), Some(39), Some(50)];
+
 fn close(a: f32, b: f32, tolerance: f32) -> bool {
     (a - b).abs() <= tolerance
 }
@@ -142,4 +146,28 @@ fn the_reversed_layout_builds_the_same_three_fields() {
         .map(|group| group.cubes.iter().map(field::record_count).sum())
         .collect();
     assert_eq!(counts, [46, 46, 277]);
+}
+
+/// The section that gates each group, as the original's node walk reads it.
+/// Live on `05_Track` forward (PPSSPP, 2026-10-12): the outer group and the
+/// group nested in it hang off the node whose `Section` child has id 39
+/// (`*(*(parent + 0x54) + 0x58)`), and the walk submitted them only while the
+/// craft's PVS row had bit 39 set; the third hangs off id 50.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_forward_layout_gates_its_groups_by_section() {
+    let Some(image) = oag_testdata::image("pulse-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("archives");
+    let blob = archives
+        .read_name(r"Data\Environments\05_Track\track.vex")
+        .expect("track.vex");
+    let nodes = vex::nodes(&blob).expect("nodes");
+    let governing = oag_vex::pvs::governing_sections(&blob, &nodes).expect("sections");
+    let sections: Vec<Option<u8>> = cloud::cloud_groups(&blob, &nodes)
+        .iter()
+        .map(|group| governing[group.node])
+        .collect();
+    assert_eq!(sections, LIVE_SECTIONS);
 }

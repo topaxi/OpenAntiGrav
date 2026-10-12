@@ -1135,7 +1135,7 @@ check-unused-deps:
 check-determinism:
     python3 scripts/check-transcendentals.py
 
-# A ratchet on file length: nothing new over 1,000 lines, and nothing already
+# A ratchet on file length: nothing new over 1,500 lines, and nothing already
 # over it grows. race.rs reached 11,294 lines before anything measured it
 check-size:
     python3 scripts/check-file-size.py

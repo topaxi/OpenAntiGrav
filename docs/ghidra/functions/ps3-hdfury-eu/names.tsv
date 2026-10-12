@@ -703,3 +703,6 @@
 0x000ff9b0	function	Ai_SnapToLane	88	ai-controls.md
 0x000fe510	function	Ai_ComputePitch	80	ai-controls.md
 0x00101b50	function	Ai_PlanLane	78	ai-controls.md
+0x005d6500	function	RenderOps_OpSetParamTable	80	renderer.md
+0x005d6408	function	RenderOps_OpSetParamEntry	80	renderer.md
+0x005d6250	function	RenderOps_OpSetNodeMatrixParam	75	renderer.md
