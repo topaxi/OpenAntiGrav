@@ -88,6 +88,9 @@ mv "$out/pkg" "$out/$hash" && mkdir "$out/pkg" && mv "$out/$hash" "$out/pkg/$has
 cp web/index.html web/style.css web/worker.js web/audio.js web/audio-worklet.js web/movie.js web/_headers "$out/"
 sed "s#\"./pkg/oag_web.js\"#\"./pkg/$hash/oag_web.js\"#" web/main.js > "$out/main.js"
 grep -q "./pkg/$hash/oag_web.js" "$out/main.js" || { echo "main.js import not rewritten" >&2; exit 1; }
+# The TOML Schemas every project file names in its [toml-schema] header, served at
+# /mods/schemas/v<N>/<kind>.tosd (docs/formats/toml-schema.md).
+scripts/stage-schemas.sh "$out"
 # The same notices every other release artifact carries (release.yml).
 cp LICENSE-MIT LICENSE-APACHE "$out/"
 cp -r licences "$out/licences"

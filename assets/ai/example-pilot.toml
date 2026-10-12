@@ -28,6 +28,11 @@
 # docs/architecture/adr/0006-no-copyrighted-content.md - and so are the limits
 # each one is checked against.
 
+# Which schema this file is written against, so an editor that reads TOML Schema
+# can complete and check it. Keep it: a pilot without it still loads, with a
+# warning. It must stay above any `[table]` header, which this file has none of.
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/pilot.tosd", version = "1.0.0" }
+
 # --- Where it drives ------------------------------------------------------
 # How far off the racing line it sits, as a fraction of the room the track's own
 # AI corridor gives on that side. The corridor comes off the disc, so this

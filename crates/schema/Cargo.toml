@@ -1,0 +1,25 @@
+[package]
+name = "oag-schema"
+description = "The [toml-schema] header every TOML file of this project carries: kind and major read from its location, refused by name when unknown"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+# The TOML Schema reference validator, for the tests and the gate. Never on in a
+# runtime build: a loader checks the header and its own parser checks the rest.
+validate = ["dep:toml-schema"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+# Not on crates.io (publish = false upstream), so a git dependency pinned to the
+# commit behind the tag `rust-v1.0.0-rc.2`. ADR-0064 says why.
+toml-schema = { git = "https://github.com/brunoborges/toml-schema", rev = "fa97c07e29d3400268b86a322d05ababba5078c4", optional = true }
+
+[lints]
+workspace = true

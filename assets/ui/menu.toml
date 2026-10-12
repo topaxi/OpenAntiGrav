@@ -45,7 +45,7 @@
 # shipped content ever lands in this file. See
 # `docs/architecture/adr/0006-no-copyrighted-content.md`.
 
-version = 1
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
 root = "main"
 
 [[page]]

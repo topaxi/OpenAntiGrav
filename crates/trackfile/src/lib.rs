@@ -21,7 +21,7 @@ mod model;
 use std::path::{Path, PathBuf};
 
 pub use error::Error;
-pub use manifest::{FORMAT_MAJOR, FORMAT_MINOR, FORMAT_NAME};
+pub use manifest::{FORMAT_MAJOR, SCHEMA_KIND};
 pub use model::{ABSENT, Loaded, Track};
 
 /// A manifest and its glb as bytes: what [`write`] puts on disk.
