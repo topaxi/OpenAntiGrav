@@ -209,6 +209,7 @@ fn setup(handling: Handling) -> Setup {
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
         handling,
+        opponent_handling: Vec::new(),
         // Round numbers, chosen to make the geometry readable. None of these
         // claims to be the game's; a real race reads all seven off the disc.
         chase: ChaseParams {
