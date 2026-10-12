@@ -73,7 +73,7 @@ RECORDS) are the first such rows.
 - Pure's SINGLE PLAYER, Pulse's seven, HD's five and 2048's tiles are each pinned
   to their disc; a disc that disagrees with another pressing is a recorded finding
   (the USA Pure disc has no `Teasers`; the PS2 Pulse disc authors two more `RACE CAMPAIGN`
-  variants and neither multiplayer row; 2048's `data1.psarc` patch authors a fifth tile
+  variants and no multiplayer or website row; 2048's `data1.psarc` patch authors a fifth tile
   that `data2.psarc` replaces).
 - The main page now only means something once a title and the extras are merged
   (`Definition::build`); `Definition::parse` on the shipped file alone reports the

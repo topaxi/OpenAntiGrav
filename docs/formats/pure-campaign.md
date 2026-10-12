@@ -75,7 +75,7 @@ the Team Selection screen drops a gated team the same way. `--unlock-all` lifts 
 
 Read off `Skin.xml` (`Main Menu`, `Single Player`) and `Selection_Definition.xml`
 (`Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection`,
-`Zone Track Selection`, `Team Selection`), identical on the EU and USA pressings
+`Zone Track Selection`, `Team Selection`), identical on the EU and USA pressings (`pure_flow_ground_truth`; the one difference is `Main Menu` itself: the USA disc has no `Teasers` row, `main_menu_ground_truth.rs`)
 (`pure_flow_ground_truth`):
 
 | Screen | Offers | Goes to |

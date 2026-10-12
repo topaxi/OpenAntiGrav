@@ -75,7 +75,7 @@ Rules:
   title's menu lacks places the row at the top level (the load report says so); an id
   nobody knows is an error.
 - **Only existing things.** A row is a `submenu` to a page of `assets/ui/menu.toml` or an
-  `action` of the closed set (`launch_race`, `launch_remix`, `quit`, `save_pilot`,
+  `action` of the closed set (`oag_ui::menu::Action::all()` in `crates/ui/src/menu/vocabulary.rs` is the source of truth; today `launch_race`, `launch_remix`, `quit`, `save_pilot`,
   `new_pilot`, `rename_pilot`, `delete_pilot`, `open_campaign`). An unknown action, page,
   parent, `after` or string id is an error naming the mod and the key. Such a mod is left
   out of the build and named in the load report; the game starts without it.
