@@ -408,7 +408,7 @@ pub(super) fn menu_page(
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
-        list.extend(prompt_draws(kind, &name, strings, skin, source)?);
+        list.extend(prompt_draws(kind, &name, strings, skin, source, title)?);
         return Ok((list, clip));
     }
     let Some(phase) = phase else {
@@ -500,6 +500,7 @@ fn prompt_draws(
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
+    title: &'static oag_title::Title,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
     let say_of = |id: &str, english: &str| strings.get(id).unwrap_or(english).replace("%s", name);
@@ -617,8 +618,9 @@ fn prompt_draws(
         // live list builds its rows with.
         other if other.starts_with("pure-campaign") => {
             let source = source.context("pure-campaign needs a --race source open")?;
-            let mut archives = oag_pure::open(source).context("this source is not Pure's own")?;
-            let campaign = crate::campaign::pure_list::load(&mut archives, oag_pure::TITLE)?;
+            let mut archives = oag_assets::Archives::open(source, title)
+                .with_context(|| format!("opening {source}"))?;
+            let campaign = crate::campaign::pure_list::load(&mut archives, title)?;
             let class = other
                 .strip_prefix("pure-campaign:")
                 .and_then(|n| n.parse::<usize>().ok())
@@ -627,7 +629,7 @@ fn prompt_draws(
             let (rows, _, class_name) = crate::campaign::pure_list::present(
                 &campaign,
                 strings,
-                oag_pure::TITLE.name,
+                title.name,
                 oag_tables::pure_ai_stats::PureClass::ALL[class],
                 &crate::records::load(),
             );

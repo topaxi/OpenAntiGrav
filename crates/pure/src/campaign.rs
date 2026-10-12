@@ -9,6 +9,3 @@
 /// The plugin definition: every `PI_Track`, `PI_League`, `PI_Tournament` and
 /// `PI_Team`. The same entry `oag_pure::hashes` resolves the circuit list from.
 pub const DEFINITION_ENTRY: &str = r"Data\Plugins\PI001\Definition.xml";
-
-/// A circuit's medal figures, relative to its `location`.
-pub const STATS_FILE: &str = "stats.xml";

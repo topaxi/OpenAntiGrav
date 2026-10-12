@@ -405,6 +405,9 @@ pub fn parse_stats(text: &str) -> Result<Stats> {
     })
 }
 
+/// A circuit's medal figures, relative to its `location`.
+pub const STATS_FILE: &str = "stats.xml";
+
 /// What an event is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventKind {

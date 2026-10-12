@@ -58,7 +58,7 @@ pub fn load(archives: &mut oag_assets::Archives, title: &oag_title::Title) -> Re
         .with_context(|| format!("reading {entry}"))?;
     let mut stats = BTreeMap::new();
     for track in &definition.tracks {
-        let file = format!(r"{}\{}", track.location, oag_pure::campaign::STATS_FILE);
+        let file = format!(r"{}\{}", track.location, pure_campaign::STATS_FILE);
         let read = archives
             .read_name(&file)
             .map_err(anyhow::Error::from)
