@@ -619,6 +619,13 @@ mac-app *ARGS:
     cargo build --profile dist -p oag-game
     ./scripts/build-mac-app.sh {{ARGS}}
 
+# OpenAntiGrav.app inside an unsigned-for-the-store .ipa, for aarch64-apple-ios
+# (macOS only: needs the iOS SDK; the layout assembles anywhere). See docs/tools/ios.md.
+ios-app *ARGS:
+    cargo build --profile dist --target aarch64-apple-ios -p oag-game
+    cargo build -p oag-game
+    ./scripts/build-ios-app.sh {{ARGS}}
+
 # The same package built in Debian bookworm, which is what a Steam Deck needs: a
 # native build links libm symbols an older glibc does not have and refuses to
 # start there. Needs podman or docker; the image is built once from
