@@ -10,11 +10,14 @@ made are recorded below so the next session does not reopen them.
 - **The original campaigns stay vanilla** (their own craft, tracks and original AI). A custom
   campaign - an "original OAG" one or a mod's - is where custom modes, tracks, craft and
   controllers belong.
-- **Mods are data, not code**: a mod's `menu.toml` may use only the closed `Action`/page
-  vocabulary (`docs/tools/mods.md`, the `menu-mods` ADR). Executable mod code (a deterministic
-  WebAssembly module) is designed in [a-pilot-file-names-its-controller.md](a-pilot-file-names-its-controller.md)
-  and not built. So a drag race is **built into the engine as an OAG mode** and described by data;
-  a mod can then pick it, not implement it.
+- **Custom race modes are implemented through mods, potentially WebAssembly** (maintainer,
+  2026-10-12). The drag race is the first such mod, not a hard-coded engine mode. Today a mod's
+  `menu.toml` may use only the closed `Action`/page vocabulary (`docs/tools/mods.md`, the
+  `menu-mods` ADR), and executable mod code (a deterministic WebAssembly module) is only designed,
+  in [a-pilot-file-names-its-controller.md](a-pilot-file-names-its-controller.md). So the engine
+  work is **extension points**: race rules a mod can declare as data (finish by laps or by
+  distance, grid position, weapons, eliminations), and a WebAssembly rules hook for what data
+  cannot express, both deterministic and recorded in the replay header.
 - **Every TOML file of ours** carries the `toml-schema` header (ADR-0064) with a schema under
   `schemas/v1/`, listed on the generated schema index.
 - **AI opponents** exist only for a class a controller covers (`oag_ai::coverage`), and only
@@ -47,10 +50,12 @@ drag race needs:
    records key of its own (best time per track and segment).
 6. **Medals**: target times are chosen per event (no original authors them), labelled chosen.
 
-Open question for the maintainer before building: are OAG modes **hard-coded variants**, or
-should the lap modes be refactored into **rules as data** (finish = laps or distance, weapons,
-eliminations, auto-speed), so that a mod could combine existing rules without code? The second
-is the better base for custom campaigns; it is also more work.
+Decided (mods, potentially WebAssembly), so the order is: first refactor the built-in lap
+modes into **rules as data** (finish = laps or distance, grid sample, weapons, eliminations,
+auto-speed) with every existing race hash unchanged; then a mod declares a mode in its own
+`modes/*.toml` (`schemas/v1/mode.tosd`) built from those rules - a drag race needs no code at
+all; then the WebAssembly rules hook (the ADR the pilot-controller thread calls for, one
+`wasmtime` host shared with mod controllers) for modes data cannot express.
 
 ## 2. A custom campaign
 
@@ -74,9 +79,11 @@ events as **campaign cells** through one path, record medals in `[[campaign]]` a
 
 ## Next Steps
 
-1. Decide hard-coded mode variants vs rules as data (the question above).
-2. Build the drag race as a sprint on an existing loop first (finish gate, grid at a sample, HUD,
-   results, records, replay header), on every title.
-3. The campaign definition format and its schema, the CAMPAIGNS row and picker, one built-in
+1. Refactor the lap modes into race rules as data, every existing hash unchanged.
+2. Mod-declared modes (`modes/*.toml`, `mode.tosd`) built from those rules; the drag race as an
+   example mod: a sprint on an existing loop first (finish gate, grid at a sample, HUD, results,
+   records, replay header), on every title.
+3. The WebAssembly rules hook (ADR first), shared with mod AI controllers.
+4. The campaign definition format and its schema, the CAMPAIGNS row and picker, one built-in
    OAG campaign containing a drag race event.
-4. Later: open (point-to-point) tracks in the track format, the spline and the AI plan.
+5. Later: open (point-to-point) tracks in the track format, the spline and the AI plan.
