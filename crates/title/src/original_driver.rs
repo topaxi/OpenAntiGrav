@@ -33,6 +33,44 @@ pub struct OriginalDriver {
     pub coin_ordered_search: Sourced<bool>,
     /// A choice scored above `0.5` moves the preferred lane (Pulse: no).
     pub preferred_follows_choice: Sourced<bool>,
+    /// What a campaign event's opponents read where the event leaves a field
+    /// empty; `None` on a title whose events author no AI of their own.
+    pub event_ai: Option<EventAi>,
+}
+
+/// What a campaign event's opponents read: its skill, its two AI skills and
+/// the pack shuffle's level. As a title's data, the defaults an event that
+/// authors nothing gets (2048: `GameModeBase`'s constructor).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EventAi {
+    /// `AI_ResolveSkillScale`'s value in an event (2048 `m_skillScale`).
+    pub skill_scale: f32,
+    /// The pad-tracking skill, `[0, 1]` (2048 `m_aiPadTrackingSkill`).
+    pub pad_tracking: f32,
+    /// The weapon-avoidance skill, `[0, 1]` (2048 `m_aiWeaponAvoidanceSkill`).
+    pub weapon_avoidance: f32,
+    /// The pack shuffle's level.
+    pub level: usize,
+}
+
+impl EventAi {
+    /// An event's authored values over these defaults, each AI skill clamped
+    /// to `[0, 1]` (2048 clamps them on load, `0x812b4152`).
+    #[must_use]
+    pub fn with_authored(
+        &self,
+        skill_scale: Option<f32>,
+        pad_tracking: Option<f32>,
+        weapon_avoidance: Option<f32>,
+    ) -> Self {
+        let unit = |v: f32| v.clamp(0.0, 1.0);
+        Self {
+            skill_scale: skill_scale.unwrap_or(self.skill_scale),
+            pad_tracking: unit(pad_tracking.unwrap_or(self.pad_tracking)),
+            weapon_avoidance: unit(weapon_avoidance.unwrap_or(self.weapon_avoidance)),
+            level: self.level,
+        }
+    }
 }
 
 /// One circuit whose original opponent halves its lookahead time outside a
@@ -93,7 +131,33 @@ mod tests {
         event_ring_rate: Sourced::measured(false),
         coin_ordered_search: Sourced::measured(false),
         preferred_follows_choice: Sourced::measured(false),
+        event_ai: None,
     };
+
+    #[test]
+    fn authored_event_values_win_and_the_two_skills_clamp_to_one() {
+        let defaults = EventAi {
+            skill_scale: 2.0,
+            pad_tracking: 1.0,
+            weapon_avoidance: 1.0,
+            level: 1,
+        };
+        assert_eq!(defaults.with_authored(None, None, None), defaults);
+        let ai = defaults.with_authored(Some(1.2), Some(0.0), Some(3.0));
+        assert_eq!(
+            (
+                ai.skill_scale,
+                ai.pad_tracking,
+                ai.weapon_avoidance,
+                ai.level
+            ),
+            (1.2, 0.0, 1.0, 1)
+        );
+        assert_eq!(
+            defaults.with_authored(None, Some(-1.0), None).pad_tracking,
+            0.0
+        );
+    }
 
     #[test]
     fn a_row_matches_its_circuit_and_class_and_nothing_else() {

@@ -97,7 +97,7 @@ fn event_4_reads_the_ai_vita3k_read() {
     let ai = loaded.campaign_2048_event.expect("a campaign event").ai;
     assert_eq!(
         ai,
-        Some(oag_2048::race::EventAi {
+        Some(oag_title::original_driver::EventAi {
             skill_scale: 1.0,
             pad_tracking: 1.0,
             weapon_avoidance: 1.0,

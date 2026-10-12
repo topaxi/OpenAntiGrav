@@ -609,7 +609,7 @@ impl Session {
                     && original_opponent
                 {
                     // A 2048 campaign event: its own `m_skillScale` and level
-                    // (`oag_2048::race::EventAi`), then the two AI skills the
+                    // (`oag_title::original_driver::EventAi`), then the two AI skills the
                     // ring rate follows. A Speed Lap or Zone event has no
                     // opponents and nothing here changes; an Elimination
                     // event carries no `ai` and keeps this project's driver.

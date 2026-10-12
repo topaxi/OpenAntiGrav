@@ -796,6 +796,8 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         event_ring_rate: oag_title::pre_race::Sourced::measured(false),
         coin_ordered_search: oag_title::pre_race::Sourced::chosen(false),
         preferred_follows_choice: oag_title::pre_race::Sourced::chosen(false),
+        // HD's campaign reads a cell's `stats.xml`, not an event.
+        event_ai: None,
     };
 
 /// `Ai_Construct`'s two circuit flags and `AI_UpdateCraft`'s windows

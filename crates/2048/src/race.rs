@@ -619,74 +619,38 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         coin_ordered_search: oag_title::pre_race::Sourced::measured(true),
         // `Ai_PlanLane`, `0x8119dcc4`.
         preferred_follows_choice: oag_title::pre_race::Sourced::measured(true),
+        event_ai: Some(EVENT_AI_DEFAULTS),
     };
 
 /// What a 2048 event's opponents read where `SP.xml` leaves a field empty:
-/// `GameModeBase`'s constructor defaults (`FUN_812afd9e`), and the AI level
-/// `GameModeBase_Apply` (`0x812b0d52`) copies to `g_GameState+0xe0` from a
-/// field no event authors. All four read live on "2048 - Event 4", whose
-/// `SP.xml` row authors only the skill (`1`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct EventAi {
-    /// `m_skillScale` (`+0x1a8`), `AI_ResolveSkillScale`'s value in an
-    /// event; `2.0` unless authored.
-    pub skill_scale: f32,
-    /// `m_aiPadTrackingSkill` (`+0x1f4`), clamped to `[0, 1]` on load.
-    pub pad_tracking: f32,
-    /// `m_aiWeaponAvoidanceSkill` (`+0x1f8`), clamped to `[0, 1]` on load.
-    pub weapon_avoidance: f32,
-    /// `event+0x1a4`, the pack shuffle's level: `1` on every event.
-    pub level: usize,
-}
-
-/// The constructor's values.
-pub const EVENT_AI_DEFAULTS: EventAi = EventAi {
-    skill_scale: 2.0,
-    pad_tracking: 1.0,
-    weapon_avoidance: 1.0,
-    level: 1,
-};
-
-impl EventAi {
-    /// An event's authored fields over [`EVENT_AI_DEFAULTS`], each AI skill
-    /// clamped to `[0, 1]` as `FUN_812b40de`'s tail (`0x812b4152`) clamps it.
-    #[must_use]
-    pub fn from_event(
-        skill_scale: Option<f32>,
-        pad_tracking: Option<f32>,
-        weapon_avoidance: Option<f32>,
-    ) -> Self {
-        let unit = |v: f32| v.clamp(0.0, 1.0);
-        Self {
-            skill_scale: skill_scale.unwrap_or(EVENT_AI_DEFAULTS.skill_scale),
-            pad_tracking: unit(pad_tracking.unwrap_or(EVENT_AI_DEFAULTS.pad_tracking)),
-            weapon_avoidance: unit(weapon_avoidance.unwrap_or(EVENT_AI_DEFAULTS.weapon_avoidance)),
-            level: EVENT_AI_DEFAULTS.level,
-        }
-    }
-}
+/// `GameModeBase`'s constructor defaults (`FUN_812afd9e`): `m_skillScale`
+/// `2.0` (`+0x1a8`), both AI skills `1.0` (`+0x1f4`/`+0x1f8`), and the level
+/// `GameModeBase_Apply` (`0x812b0d52`) copies to `g_GameState+0xe0` from
+/// `event+0x1a4`, `1`, a field no event authors. All four read live on
+/// "2048 - Event 4", whose `SP.xml` row authors only the skill (`1`).
+pub const EVENT_AI_DEFAULTS: oag_title::original_driver::EventAi =
+    oag_title::original_driver::EventAi {
+        skill_scale: 2.0,
+        pad_tracking: 1.0,
+        weapon_avoidance: 1.0,
+        level: 1,
+    };
 
 #[cfg(test)]
 mod event_ai_tests {
-    use super::{EVENT_AI_DEFAULTS, EventAi};
-
     #[test]
-    fn an_empty_event_reads_the_constructors_values() {
-        assert_eq!(EventAi::from_event(None, None, None), EVENT_AI_DEFAULTS);
-        assert_eq!(EVENT_AI_DEFAULTS.skill_scale, 2.0);
-        assert_eq!(EVENT_AI_DEFAULTS.level, 1);
-    }
-
-    #[test]
-    fn authored_values_win_and_the_two_skills_clamp_to_one() {
-        let ai = EventAi::from_event(Some(1.2), Some(0.0), Some(3.0));
+    fn the_driver_carries_the_constructors_event_defaults() {
+        let ai = super::ORIGINAL_DRIVER
+            .event_ai
+            .expect("2048 events author AI");
         assert_eq!(
-            (ai.skill_scale, ai.pad_tracking, ai.weapon_avoidance),
-            (1.2, 0.0, 1.0)
-        );
-        assert_eq!(
-            EventAi::from_event(None, Some(-1.0), None).pad_tracking,
-            0.0
+            (
+                ai.skill_scale,
+                ai.pad_tracking,
+                ai.weapon_avoidance,
+                ai.level
+            ),
+            (2.0, 1.0, 1.0, 1)
         );
     }
 }

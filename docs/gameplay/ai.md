@@ -637,8 +637,8 @@ frame back (why is not settled: a lagged clock, or every stop landing between th
 clock's increment and the AI update), and drivers updated before the reference racer
 read its spread from the tick before. Ported as `oag_ai::original::Laws` fields (`every_tick`,
 `event_ring_rate`, `coin_ordered_search`, `preferred_follows_choice`) carried by
-`oag_2048::race::ORIGINAL_DRIVER`, with `oag_2048::race::EventAi` resolving an
-event's values; **2048's campaign flies it**. On the disc
+`oag_2048::race::ORIGINAL_DRIVER`, whose `event_ai` defaults
+(`oag_title::original_driver::EventAi`) resolve an event's values; **2048's campaign flies it**. On the disc
 (`crates/game/tests/vita_2048_original_ai_ground_truth.rs`) the reference racer reads
 the capture's `63.0` and `74.0`, and the field finishes a race on nine of the ten
 circuits with the player parked (Arena with up to three respawns a craft). Sol loops

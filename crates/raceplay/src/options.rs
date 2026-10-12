@@ -965,10 +965,10 @@ pub struct Loaded {
     /// Carried on [`Loaded`] rather than threaded through `Session` the way
     /// `campaign_cell` is (Pulse/HD's own grid launch): `load_event` already
     /// has the parsed `SP.xml` `Document` in hand to resolve
-    /// [`campaign_2048::Campaign2048Progress::objectives`], and a second `Document` parse
+    /// [`Campaign2048Progress::objectives`], and a second `Document` parse
     /// at grading time would cost an archive read `RaceStage::observation`
     /// has no business making. See `crates/raceplay/src/load/campaign.rs`.
-    pub campaign_2048_event: Option<campaign_2048::Campaign2048Progress>,
+    pub campaign_2048_event: Option<Campaign2048Progress>,
     /// The road spans a Quake ripples, placed on the course - see
     /// `oag_render::ripple`. Empty everywhere but Pulse off a PSP disc, the one
     /// source the ripple was read from.
@@ -977,8 +977,21 @@ pub struct Loaded {
     pub report: Vec<String>,
 }
 
-/// [`Loaded::campaign_2048_event`]'s type.
-pub mod campaign_2048;
+/// What [`load_event`](super::load_event) resolved for `RaceStage` to
+/// grade the race against, once it finishes - see [`Loaded::campaign_2048_event`].
+#[derive(Debug, Clone)]
+pub struct Campaign2048Progress {
+    /// The `SP.xml` instance name, the key `oag_game::records::Store::record_campaign`
+    /// persists a medal under, as Pulse/HD's launch does a cell's name.
+    pub name: String,
+    /// The event's own pass/elite bars, when it authors them - `None` for a
+    /// Speed Lap or a generic template event, which never carries a medal
+    /// but still opens whatever names it as a prerequisite once finished.
+    /// See `oag_2048::campaign::event_objectives`.
+    pub objectives: Option<oag_2048::campaign::EventObjectives>,
+    /// The event's opponent AI over the title's defaults; `None` keeps this project's driver.
+    pub ai: Option<oag_title::original_driver::EventAi>,
+}
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
 mod headless;

@@ -9,8 +9,9 @@ Evidence: [vita-2048-eu-v104/ai-controls.md](../../docs/ghidra/functions/vita-20
 
 Settled: `oag_ai::original::Laws` gains `every_tick`, `event_ring_rate`,
 `coin_ordered_search` and `preferred_follows_choice`;
-`oag_2048::race::ORIGINAL_DRIVER` and `EventAi` (skill, two AI skills, level off
-`SP.xml` over the constructor's defaults) carry 2048's; `Campaign2048Progress::ai`
+`oag_2048::race::ORIGINAL_DRIVER` carries 2048's, its `event_ai`
+(`oag_title::original_driver::EventAi`: skill, two AI skills, level off `SP.xml`
+over the constructor's defaults) included; `Campaign2048Progress::ai`
 takes them to `Race::use_original_ai` and `Race::set_original_event_ai_skills`.
 
 ## Open
