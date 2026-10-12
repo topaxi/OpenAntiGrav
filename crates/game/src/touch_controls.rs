@@ -58,13 +58,13 @@ const GO_ROUND: f32 = 0.30;
 /// A quarter turn, for the side arrows.
 const QUARTER: f32 = std::f32::consts::FRAC_PI_2;
 
-/// Whether this machine has a touchscreen to need the overlay: Android, or
+/// Whether this machine has a touchscreen to need the overlay: a phone, or
 /// any platform with `OAG_TOUCH_CONTROLS` set, which is how a desktop run
 /// shows it (chosen, not measured: a desktop with no touchscreen gains
 /// nothing from the page, so it is offered only on request).
 #[must_use]
 pub fn available() -> bool {
-    cfg!(target_os = "android") || std::env::var_os("OAG_TOUCH_CONTROLS").is_some()
+    oag_mobile::MOBILE || std::env::var_os("OAG_TOUCH_CONTROLS").is_some()
 }
 
 fn scaled(mut color: [f32; 4], opacity: f32) -> [f32; 4] {

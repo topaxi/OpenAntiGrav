@@ -16,20 +16,11 @@ use crate::gpu::Gpu;
 /// The footer's `Confirm`/`Back` legend and tip ticker - split out under the 1,000-line rule.
 #[path = "menu_stage/footer.rs"]
 mod footer;
-
-/// The pause overlay's tint, over a parked race's picture.
-///
-/// **Chosen, not authored.** Neither PSP title's own front-end XML defines a
-/// pause screen to read one off: `Skin.xml`'s own `LoadXML` list is
-/// exhaustively 22 files - see
-/// [fe-menu-definitions.md](../../../../docs/formats/fe-menu-definitions.md) -
-/// and none of them is a `Pause` definition. The one HUD string that names
-/// pausing, `IG_PAUSE_QUIT`, is drawn by nothing:
-/// [hud.md](../../../../docs/ui/hud.md) records "There is no pause" against
-/// it, because leaving a race used to drop the `World` outright. So there is
-/// no colour or alpha on the disc for this to recover, and this one is
-/// this project's own rather than a reading of one.
-const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+/// What is drawn over the menus rather than as one of their pages: the pause tint
+/// and Wipeout Pure's SINGLE PLAYER screens.
+#[path = "menu_stage/screens.rs"]
+mod screens;
+use screens::PAUSE_OVERLAY;
 
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.
@@ -122,9 +113,9 @@ pub(crate) struct MenuStage {
     /// shape [`Self::picker`] is. See `crate::campaign_stage` and
     /// `crate::session::campaign`.
     pub(crate) campaign: Option<crate::campaign_stage::CampaignStage>,
-    /// Wipeout Pure's campaign list, when open: it takes the tick whole and is
-    /// drawn over the page behind it. See `crate::pure_campaign_stage`.
-    pub(crate) pure_campaign: Option<crate::pure_campaign_stage::PureCampaignStage>,
+    /// Wipeout Pure's SINGLE PLAYER chain, when open: it takes the tick whole and is
+    /// drawn on the frame the page behind it carries. See `crate::pure_chain_stage`.
+    pub(crate) pure_chain: Option<crate::pure_chain_stage::PureChainStage>,
 }
 
 /// A page change part-way through.
@@ -526,6 +517,9 @@ impl MenuStage {
             );
             return Ok(());
         }
+        if self.pure_chain.is_some() {
+            return self.render_pure_chain(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
+        }
         // The Race Campaign's own screens - no preview mesh, no slideshow:
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
         // same pass a picker's own body uses without the 3D tail.
@@ -736,7 +730,8 @@ impl MenuStage {
         // what lets `rows::draw` read it straight off `Menu::visible_rows`
         // instead of recomputing a second, possibly-disagreeing answer of
         // its own - see that method's doc.
-        let reserve_note = pilots::page_reserves_axis_preview(self.menu.page());
+        let reserve_note = pilots::page_reserves_axis_preview(self.menu.page())
+            || self.menu.reserves_unavailable_note();
         self.menu
             .set_visible_rows(menu::visible_rows(&self.skin, &self.frame, reserve_note));
         let arriving = menu::draw_list(
@@ -853,11 +848,6 @@ impl MenuStage {
         // through is a still picture of where the player will land back.
         let list: Vec<Draw> = match &self.prompt {
             Some(prompt) => list.into_iter().chain(prompt.draw(&self.skin)).collect(),
-            None => list,
-        };
-        // Wipeout Pure's campaign list, over the page it was opened from.
-        let list: Vec<Draw> = match &self.pure_campaign {
-            Some(open) => list.into_iter().chain(open.list().draw(&self.skin)).collect(),
             None => list,
         };
         // The key-capture prompt, last of all - even over a page mid-tween or

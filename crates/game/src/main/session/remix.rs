@@ -17,6 +17,7 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
+use oag_game::custom_tracks::{self, CUSTOM};
 use super::menus::{combine_variant, variant_choices};
 
 /// Brings a stored `remix.*` setting into step with the list its row is
@@ -157,10 +158,9 @@ impl Session {
     /// counterpart to [`Self::resupply_tracks_for_mode`]. A no-op when the
     /// menus are not open or [`Self::remix_catalogue_for`] found nothing.
     pub(crate) fn resupply_remix_tracks(&mut self) {
-        let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) else {
+        let Some(tracks) = self.remix_track_options() else {
             return;
         };
-        let tracks = remix_track_choices(&catalogue);
         settle(&mut self.settings.remix.track, &tracks);
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(menu::ValueSource::RemixTracks, &tracks);
@@ -202,11 +202,12 @@ impl Session {
     /// [`Session::titles`] already holds, which is why this is the one step
     /// that is free to run on every menu-open.
     pub(super) fn settle_remix_titles(&mut self) -> (Vec<menu::Choice>, Vec<menu::Choice>) {
-        let titles: Vec<menu::Choice> = self
+        let mut titles: Vec<menu::Choice> = self
             .titles
             .iter()
             .map(|candidate| menu::Choice::plain(candidate.title()))
             .collect();
+        titles.extend(self.custom_title_choice());
         settle(&mut self.settings.remix.track_title, &titles);
         let craft_titles = self.craft_title_choices();
         settle(&mut self.settings.remix.craft_title, &craft_titles);
@@ -285,7 +286,7 @@ impl Session {
 
     /// Which real candidate backs `remix.craft_title` -
     /// [`resolve_craft_backing`]'s own doc comment for the rule.
-    fn craft_backing(&self) -> Option<&oag_game::launcher::Candidate> {
+    pub(super) fn craft_backing(&self) -> Option<&oag_game::launcher::Candidate> {
         resolve_craft_backing(&self.titles, &self.settings.remix.craft_title)
     }
 
@@ -388,6 +389,8 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        // A remix names its own track: a disc circuit, or below a CUSTOM file.
+        self.inherit_cli_foreign_track(&mut race_options);
         race_options.eliminator_kill_target = None;
         race_options.laps_override = None;
         race_options.weapons_override = None;
@@ -425,16 +428,37 @@ impl Session {
         }
 
         let track_title = self.settings.remix.track_title.clone();
-        let Some(track_candidate) = self
-            .titles
-            .iter()
-            .find(|candidate| candidate.title() == track_title)
-            .cloned()
-        else {
+        let custom = track_title == CUSTOM;
+        // CUSTOM has no source of its own: the race is flown on the CRAFT TITLE's.
+        let track_candidate = if custom {
+            self.craft_backing().cloned()
+        } else {
+            self.titles
+                .iter()
+                .find(|candidate| candidate.title() == track_title)
+                .cloned()
+        };
+        let Some(track_candidate) = track_candidate else {
             warn!("no track title chosen yet, so there is nothing to remix");
             self.race_options = Some(race_options);
             return;
         };
+        if custom && race_options.mode == oag_race::Mode::Zone {
+            // The loader refuses it too; refusing here keeps the menus up.
+            warn!("a custom track has no Zone circuit; choose another MODE or a disc title");
+            self.race_options = Some(race_options);
+            return;
+        }
+        if custom {
+            match self.custom_tracks.raceable(&self.settings.remix.track) {
+                Ok(path) => custom_tracks::apply(&mut race_options, path),
+                Err(why) => {
+                    warn!("cannot race this custom track: {why}");
+                    self.race_options = Some(race_options);
+                    return;
+                }
+            }
+        }
         race_options.source = track_candidate.source.clone();
 
         // An unpicked CRAFT TITLE means "the same as the track's",
@@ -444,7 +468,7 @@ impl Session {
         // search path since it was saved) falls back the same way,
         // reported rather than silent.
         let craft_title = self.settings.remix.craft_title.clone();
-        let craft_source = if craft_title.is_empty() {
+        let craft_source = if craft_title.is_empty() || custom {
             None
         } else {
             // `craft_backing` is what resolves "Wipeout HD" to 2048's
@@ -463,8 +487,16 @@ impl Session {
         };
         race_options.craft_source = craft_source.clone();
 
-        match remix::catalogue(&track_candidate.source) {
-            Ok(catalogue) => {
+        // A CUSTOM track is a file, not a circuit of the source's, so no name
+        // is looked up.
+        let track_catalogue = if custom {
+            None
+        } else {
+            Some(remix::catalogue(&track_candidate.source))
+        };
+        match track_catalogue {
+            None => {}
+            Some(Ok(catalogue)) => {
                 let chosen = catalogue
                     .track(&self.settings.remix.track)
                     .or_else(|| {
@@ -484,7 +516,7 @@ impl Session {
                     ),
                 }
             }
-            Err(e) => warn!("{}: {e:#}", track_candidate.source),
+            Some(Err(e)) => warn!("{}: {e:#}", track_candidate.source),
         }
 
         // The team's own title, for VARIANT to combine against -
@@ -542,9 +574,11 @@ impl Session {
         info!(
             "remixing {}",
             race_options
-                .track
-                .as_deref()
-                .unwrap_or("this source's own default circuit")
+                .foreign_track
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .or_else(|| race_options.track.clone())
+                .unwrap_or_else(|| "this source's own default circuit".to_string())
         );
         self.race_options = Some(race_options);
         match self.launch_race() {

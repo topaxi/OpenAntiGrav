@@ -403,6 +403,10 @@ impl App {
             paused: false,
             next_frame: web_time::Instant::now(),
             logged_limit: None,
+            cli_foreign_track: self
+                .race_options
+                .as_ref()
+                .and_then(|options| options.foreign_track.clone()),
             race_options: self.race_options.clone(),
             pending: self.pending.take(),
             trace: self.trace,
@@ -439,6 +443,7 @@ impl App {
             // Race Remix's title pickers - see the field's own doc comment
             // for why this is a fresh survey rather than the chooser's.
             titles: launcher::distinct_titles(&launcher::survey(&source::candidates())),
+            custom_tracks: oag_game::custom_tracks::Scan::start(&oag_source::unity::search_path()),
             // Moved rather than cloned: `Assets` owns a decoded glow strip and
             // a full-screen backdrop, and `App` has no use for either once the
             // window it opened has them. What is left behind is the drawable
@@ -465,7 +470,7 @@ impl App {
             suspended_race: None,
             campaign_cell: None,
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
-            pure_campaign_class: 0,
+            pure_chain_class: 0,
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,

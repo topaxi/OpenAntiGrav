@@ -98,6 +98,8 @@ OAG_REMIX_PAGE_TITLE = { text = "RACE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TRACK TITLE", human = false }
 OAG_REMIX_NO_DRIVER = { text = "NO OPPONENTS: NO DRIVER FOR THIS CLASS", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "CRAFT TITLE", human = false }
+OAG_REMIX_CUSTOM = { text = "CUSTOM", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "still checking this file", human = false }
 
 # RECORDS' own title - its MODE and TRACK rows reuse OAG_RACE_MODE/
 # OAG_RACE_TRACK above, and BACK reuses OAG_MENU_BACK, the same sharing RACE
@@ -322,14 +324,10 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
 
-# Wipeout Pure's campaign list: our own wording around the disc's circuit,
-# tournament, class and mode names. `crates/game/src/main/pure_campaign_stage.rs`.
-OAG_PURE_CAMPAIGN_TITLE = { text = "CAMPAIGN", human = false }
-OAG_PURE_CAMPAIGN_CLASS = { text = "CLASS", human = false }
-OAG_PURE_CAMPAIGN_LOCKED = { text = "LOCKED", human = false }
-OAG_PURE_CAMPAIGN_NEEDS = { text = "NEEDS", human = false }
-OAG_PURE_CAMPAIGN_MEDALS = { text = "MEDALS", human = false }
-OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "ANY MEDAL", human = false }
+# Wipeout Pure's SINGLE PLAYER chain: our own wording around the disc's circuit,
+# tournament, class and mode names. `crates/game/src/main/pure_chain_stage.rs`.
+OAG_MENU_SINGLE_PLAYER = { text = "SINGLE PLAYER", human = false }
+OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, tournaments, time trials and Zone, class by class", human = false }
 OAG_MEDAL_GOLD = { text = "GOLD", human = false }
 OAG_MEDAL_SILVER = { text = "SILVER", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }

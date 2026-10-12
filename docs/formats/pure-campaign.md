@@ -1,14 +1,19 @@
 # Wipeout Pure's campaign
 
-**Status: read and built (2026-10-12).** `RACE CAMPAIGN` on a Pure source opens a
-list of events for the class being played; each event launches as a race, its medal
-is recorded in the profile, and the gates on tournaments, leagues, circuits, Zone
-circuits and two teams read those medals. The reader is
-`oag_tables::pure_campaign`, the rows are `oag_game::campaign::pure_list`, the screen
-is `oag_ui_screens::pure_campaign`, and the code that judges a result is
-[`campaign.md`](../ghidra/functions/psp-pure-usa/campaign.md).
+**Status: read and built (2026-10-12), walked the way the disc authors it
+(2026-10-12, `pure-campaign-authored`).** The main menu's top row on a Pure source
+is **SINGLE PLAYER**, and it opens the disc's own chain of one-choice screens (mode,
+class, league or tournament, circuit, team); the last screen before the team names an
+event, which launches as a race, its medal is recorded in the profile, and the gates on
+tournaments, leagues, circuits, Zone circuits and two teams read those medals. The
+chain's order is read off the screens' own redirects (`oag_tables::pure_flow`), the
+events are `oag_tables::pure_campaign`'s, the state machine is
+`oag_game::campaign::pure_chain`, the screen is `oag_ui_screens::pure_chain`, and the
+code that judges a result is [`campaign.md`](../ghidra/functions/psp-pure-usa/campaign.md).
+An earlier build (same day) offered the events as one chosen list panel from a
+`RACE CAMPAIGN` row; that panel is gone.
 
-Pure's campaign is **a list, not a grid**. Pulse and HD author grids of cells; Pure
+Pure's campaign is **a list of events, not a grid**. Pulse and HD author grids of cells; Pure
 authors no `grid_NN.xml` at all. What the disc carries is two files, identical on the
 EU and USA pressings (`pure_campaign_ground_truth`):
 
@@ -29,7 +34,7 @@ table names Ascension), twelve **single races** (the three leagues' circuits), t
 **time trials** (the same circuits) and four **Zone** circuits. Zone has no class, so
 its four events repeat in every class's list and are one event each in the store. 160
 events across the five classes, every one of which plans a race and names a circuit
-that is on the disc (`pure_campaign_walk_ground_truth`).
+that is on the disc (`pure_chain_walk_ground_truth`).
 
 Each is an `oag_tables::race_campaign::Cell`, the type Pulse's grids are made of, so
 the launch, the medal evaluation and the record are the campaign's own. The cell's
@@ -62,39 +67,100 @@ the ground truth: a league and a tournament of one name carry different gates
 `Gold` and `Any` in one file. A single race or a time trial on a circuit is gated by
 its own rows **and** its league's.
 
-A locked event is drawn dim with its requirement in the footer; the Team Selection
-screen drops a gated team until it opens. `--unlock-all` lifts every gate (ours).
+A gated event is not listed until it opens (the original lists none it has not opened);
+the Team Selection screen drops a gated team the same way. `--unlock-all` lifts every gate
+(ours).
 
-## The screen
+## The chain
 
-A scrolling list under mode headings, a class line (`CLASS: VENOM`) stepped with
-left and right, a medal word at each event's right edge (gold, silver and bronze
-inked), `LOCKED` on a gated one. Pad, wheel, hover and click all work: a click on a
-row confirms it, a click on the class line steps the class (the left third back), the
-secondary button backs out. **The screen is this project's own**: the original walks
-a chain of one-choice screens (class, league or tournament, circuit, team) and no
-capture of a list exists to match. A confirmed event opens `Team Selection`
-(Zone flies its own craft and skips it), then loads the race as a campaign cell, so a
-later lane can fly Pure's original opponent in it the way Pulse and HD do.
+Read off `Skin.xml` (`Main Menu`, `Single Player`) and `Selection_Definition.xml`
+(`Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection`,
+`Zone Track Selection`, `Team Selection`), identical on the EU and USA pressings
+(`pure_flow_ground_truth`):
 
-`--menu-page main --menu-prompt pure-campaign[:N]` draws the list headless, `N`
-indexing the class.
+| Screen | Offers | Goes to |
+| --- | --- | --- |
+| `Main Menu` | Single Player, Multiplayer, Profile, On Line, Teasers | `Single Player` on the first |
+| `Single Player` | Arcade (the disc's English "Single Race"), Tournament, Time Trial, Zone, Free Play | Arcade, Tournament, Time Trial and Free Play: `Class Selection`; Zone: `Zone Track Selection` |
+| `Class Selection` | Vector, Venom, Flash, Rapier, Phantom | Tournament: `Tournament Selection`; every other mode: `League Selection` |
+| `League Selection` | the three leagues | `Track Selection` |
+| `Tournament Selection` | the four tournaments | `Team Selection` |
+| `Track Selection` | the league's circuits | `Team Selection` (its back goes to `League Selection`) |
+| `Zone Track Selection` | the four Zone circuits | `Launch Game`: no class, league or team |
+| `Team Selection` | the teams | `Launch Game` |
+
+Multiplayer branches in the same redirects (`Multiplayer Redirect`, `Network Check`)
+are not followed. The Zone events are one each in the store, so Zone asks no class.
+
+**What the original shows, captured on PPSSPP (fresh profile, 2026-10-12, `pure-psp-eu.chd`).**
+Every screen is drawn on the white skin with the title pink at top left, the rows below it
+**18 grid lines apart** (36 px in a 2x window, `FlowFiles::row_pitch`), the selected row in
+the darker blue, an amber help line, and a `Confirm` / `Back` bar. Gated entries are
+**not listed**, they are not drawn locked: `Class Selection` offers Vector and Venom (with the
+class's stat graph on the right), `League Selection` and `Tournament Selection` offer Alpha
+alone (with the league's emblem and its four circuits on the right), `Track Selection` lists
+the four Alpha circuits (a map of the highlighted one, its race and lap record, length and
+height), and `Team Selection` lists eight teams (Feisar to Harimau) with its four ratings.
+**This build lists what the profile has opened and nothing else** (`Chain::view`), draws the rows
+on the skin as Pure's own menu pages are drawn (the same frame, title and selected ink,
+`oag_ui_screens::pure_chain::draw_list`), and does not draw the help line, the right-hand art
+or the circuit map. Chosen, not measured: the medal word and its inks at a row's right
+edge, the context line (`SINGLE RACE - VENOM - ALPHA`) between the title and the first row,
+and (not captured) what `Zone Track Selection` hides on a fresh profile: Zone 2, 3 and 4
+are gated by medals and are hidden by the same rule. `Team Selection` is the race box's own
+screen (`oag_ui_screens::picker`), with the disc's two gated teams dropped until they open;
+a fresh profile there lists 16 teams here against the original's 8, because the other
+eight are gated in the original's code, not in `Definition.xml` (unread).
+
+**The modes.** Arcade is a single race, Tournament a tournament, Time Trial the time
+trial and Zone a Zone event: each ends in one `Cell` (the tables above) that the
+campaign's own launch plays and records. **Free Play** is the one mode that is not a
+medal event: the disc names it and a "Free play session results" string and no medal law
+reaches it, so this build races the chosen circuit and class as a single race whose cell
+cannot award a medal (`oag_tables::pure_campaign::free_play_event`, targets 0/0/0) and is
+never written to `[[campaign]]` (chosen, not measured). `Team Selection`'s Back, and the
+end of any chain race, return to the screen that picked the event with the cursor on it.
+
+## The class gate
+
+A fresh profile's `Class Selection` lists **Vector and Venom** only (PPSSPP capture,
+2026-09-10); the menu authors all five and code hides the rest. This build reads that as
+data (`oag_title::Campaign::classes_at_start`, Pure: `["Vector", "Venom"]`) and hides the
+other three. **What opens Flash, Rapier and Phantom is not read.** The original's reward
+reveal names `Unlock Flash Class`, `Unlock Rapier Class` and `Unlock Phantom Class`
+(`0x08a7c820`.., the strings after `Unlock Track` and `Unlock Liveries` in a table at
+`0x08ab4a0c` the `Show Unlocks` reveal indexes at `0x08951538`), so the classes are unlocked
+as rewards, but the code that decides a reward was not found (`DisableEntriesBitField`,
+the menu attribute that hides entries, is parsed at `0x088c76a0`; who sets it for the class
+menu was not traced). **Chosen, not measured:** a later class opens once the class before it
+holds any tournament medal, the shape of the disc's own
+`Tournament="Alpha" class="asSelected" medal="Any"` rows. `--unlock-all` offers all five.
 
 **After a race.** Pure ships no EndRace screens this build reads, so a finished race
 shows the built-in results table, and its Cross, Start or a click leaves it: a single
-event returns to the list with the cursor on it and its medal shown; a tournament with
-a leg to go starts that leg instead (the medal is judged after the last). Escape
-abandons a tournament. Walked on an Xvfb with `--autopilot`: a Vineta K Vector time
-trial flown to a bronze (2:09.53 against 2:04 gold), recorded as
-`timetrial/vineta k/vector`, shown on the reopened list; and a Vector Alpha
-tournament's first leg handing on to Modesto Heights.
+event returns to the screen that picked it (circuit, tournament or Zone circuit) with the
+cursor on it and its medal shown; a tournament with a leg to go starts that leg instead
+(the medal is judged after the last). Escape abandons a tournament.
+
+**Walked windowed, 2026-10-12** (Xvfb, software Vulkan, `--autopilot --autopilot-skill ace`,
+mouse only, Back by the secondary button): SINGLE PLAYER, Time Trial, Venom, Alpha, Vineta K,
+`Team Selection`, a flown race, the built-in results table, a click out of it, and the chain
+back on `Track Selection` with the cursor on Vineta K. Also a Vector time trial and a Vector
+single race, each through the same path. The three runs **earned no medal**, each just short
+(a Venom time trial 111.43 s against the 111 s bronze limit, Vector 130.47 s and 130.75 s
+against 130 s, a single race finished fourth), so each wrote an empty `[[campaign]]` row; the
+medal itself is walked headless (`pure_chain_walk_ground_truth`): SINGLE PLAYER answered to
+Alpha's tournament at Venom, its four legs flown by the autopilot (places 5, 2, 3, 4; 18 points,
+rank 3), the **bronze recorded** in the store, and the chain read again with Beta opened and Flash's
+Beta still unlisted; and the same walk to a Vineta K Venom time trial (111.78 s against the 111 s bronze
+limit: judged, no medal).
 
 ## Chosen, not measured
 
-The screen, the colours and the row pitch; showing every class from the start (the
-original's fresh profile offers Vector and Venom and gates the rest in code, not
-data); counting each event's best medal once toward `MedalCount`; racing a time trial
-at the mode's default laps; the five classes in `PureClass::ALL` order. See
+The medal word, its inks and the context line; what the screens omit (help line, art,
+map); the opening rule for Flash, Rapier and Phantom; Free Play's plain race;
+counting each event's best medal once toward `MedalCount`; racing a time trial at the
+mode's default laps. See
 [`campaign.md`](../ghidra/functions/psp-pure-usa/campaign.md#what-is-not-determined).
 
 ## 2048 and Omega

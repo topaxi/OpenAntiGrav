@@ -32,10 +32,12 @@ use std::collections::{BTreeSet, HashMap};
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
-use super::{
-    Action, Choice, Condition, Entry, FORMAT_VERSION, Page, Pin, Restart, Value, ValueSource,
-    Warning,
-};
+use super::{Action, Choice, Condition, Entry, Page, Pin, Restart, Value, ValueSource, Warning};
+
+/// The schema kind a menu file declares in its `[toml-schema]` header.
+pub const SCHEMA_KIND: &str = "menu";
+/// The one schema major this build reads.
+pub const SCHEMA_MAJOR: u32 = 1;
 
 /// A parsed, checked menu tree.
 #[derive(Debug, Clone, PartialEq)]
@@ -52,12 +54,9 @@ pub enum Error {
     /// The file is not TOML, or not shaped like a definition.
     #[error("{0}")]
     Toml(#[from] toml::de::Error),
-    /// Written against a different vocabulary of entry kinds.
-    #[error("menu format version {found}, but this build understands {FORMAT_VERSION}")]
-    Version {
-        /// What the file declared.
-        found: u32,
-    },
+    /// No `[toml-schema]` header, or one naming another kind or major.
+    #[error("menu: {0}")]
+    Schema(#[from] oag_schema::Error),
     /// Two pages share an id, so a `target` would be ambiguous.
     #[error("duplicate page id {0:?}")]
     DuplicatePage(String),
@@ -116,14 +115,17 @@ mod raw {
     use serde::Deserialize;
 
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct File {
-        pub version: u32,
+        #[serde(rename = "toml-schema")]
+        pub toml_schema: Option<oag_schema::Header>,
         pub root: String,
         #[serde(default, rename = "page")]
         pub pages: Vec<Page>,
     }
 
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Page {
         pub id: String,
         #[serde(default)]
@@ -138,6 +140,7 @@ mod raw {
     }
 
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Entry {
         pub kind: String,
         #[serde(default)]
@@ -184,6 +187,7 @@ mod raw {
     /// `values = ["100", "125", "150", "200"]` for a condition that is not
     /// one-valued.
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Condition {
         pub setting: String,
         pub value: Option<toml::Value>,
@@ -192,10 +196,22 @@ mod raw {
 
     /// One `pinned` entry: a [`Condition`] plus the option shown while it holds.
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Pinned {
-        #[serde(flatten)]
-        pub when: Condition,
+        pub setting: String,
+        pub value: Option<toml::Value>,
+        pub values: Option<Vec<toml::Value>>,
         pub shows: String,
+    }
+
+    impl Pinned {
+        pub fn when(&self) -> Condition {
+            Condition {
+                setting: self.setting.clone(),
+                value: self.value.clone(),
+                values: self.values.clone(),
+            }
+        }
     }
 
     /// `warn_when = { message = "...", all = [{ ... }, { ... }] }`.
@@ -203,6 +219,7 @@ mod raw {
     /// The message is not optional: a marker with nothing to read is a puzzle,
     /// not a warning. Neither is the second condition - see [`super::Warning`].
     #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Warning {
         pub all: Vec<Condition>,
         pub message: String,
@@ -222,11 +239,7 @@ impl Definition {
     /// an entry missing a field its kind needs, and a page nothing links to.
     pub fn parse(text: &str, strings: &StringTable) -> Result<Self, Error> {
         let file: raw::File = toml::from_str(text)?;
-        if file.version != FORMAT_VERSION {
-            return Err(Error::Version {
-                found: file.version,
-            });
-        }
+        oag_schema::check(file.toml_schema.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
 
         let mut index = HashMap::new();
         for page in &file.pages {
@@ -449,6 +462,45 @@ impl Definition {
         }
     }
 
+    /// Words the row that fires `action` as `label`, with `subtitle` under it
+    /// while it is selected, for a title whose original names that row
+    /// differently (Wipeout Pure's `SINGLE PLAYER` where this project's tree
+    /// says `RACE CAMPAIGN`). The row keeps its place and its action. Same
+    /// once-before-read timing as [`Self::drop_quit`].
+    pub fn relabel_action(&mut self, action: Action, label: &str, subtitle: Option<&str>) {
+        for page in &mut self.pages {
+            for (entry, line) in page.entries.iter_mut().zip(&mut page.subtitles) {
+                if let Entry::Run {
+                    action: found,
+                    label: shown,
+                } = entry
+                    && *found == action
+                {
+                    *shown = label.to_string();
+                    *line = subtitle.map(str::to_string);
+                }
+            }
+        }
+    }
+
+    /// Words the campaign row as the title's original does
+    /// ([`oag_title::Campaign::main_row`]); a title that names none keeps
+    /// `RACE CAMPAIGN`. The words are the project's own, looked up in `strings`
+    /// and falling back to the English the title carries.
+    pub fn rename_campaign_row(&mut self, title: &oag_title::Title, strings: &StringTable) {
+        let Some(row) = title.campaign.main_row else {
+            return;
+        };
+        let say = |wording: oag_title::Wording| {
+            strings.get(wording.id).unwrap_or(wording.text).to_string()
+        };
+        self.relabel_action(
+            Action::OpenCampaign,
+            &say(row.label),
+            Some(&say(row.subtitle)),
+        );
+    }
+
     /// Drops every row that edits one of `settings`, for a platform that has
     /// no such thing (the web build has no monitor to pick and one present
     /// mode). Same once-before-read timing as [`Self::drop_quit`].
@@ -605,7 +657,7 @@ fn resolve(
         .flatten()
         .map(|pin| {
             Ok(Pin {
-                when: condition_from(&pin.when, context)?,
+                when: condition_from(&pin.when(), context)?,
                 shows: pin.shows.clone(),
             })
         })

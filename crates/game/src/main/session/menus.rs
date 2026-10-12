@@ -174,7 +174,8 @@ impl Session {
         // (AI PILOTS today) without this method running again. See
         // `menu::visible_rows`'s own doc for why the reservation has to
         // track the page rather than the frame's live row values.
-        let reserve_note = pilots::page_reserves_axis_preview(model.page());
+        let reserve_note =
+            pilots::page_reserves_axis_preview(model.page()) || model.reserves_unavailable_note();
         model.set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
         // And which way a page steps, for the disc that draws one of them as a
         // strip: left and right along the entries rather than up and down a
@@ -307,8 +308,7 @@ impl Session {
         // `Self::remix_craft_catalogue`. Nothing is settled in that case
         // either: an unreadable source is not evidence that a saved pick is
         // wrong, and clearing it would lose it.
-        if let Some(catalogue) = self.remix_catalogue_for(&self.settings.remix.track_title) {
-            let tracks = remix_menu::remix_track_choices(&catalogue);
+        if let Some(tracks) = self.remix_track_options() {
             remix_menu::settle(&mut self.settings.remix.track, &tracks);
             model.supply(menu::ValueSource::RemixTracks, &tracks);
         }
@@ -509,7 +509,7 @@ impl Session {
                 prompt: None,
                 picker: None,
                 campaign: None,
-                pure_campaign: None,
+                pure_chain: None,
                 styled,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
@@ -719,6 +719,7 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        self.inherit_cli_foreign_track(&mut race_options);
         // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed

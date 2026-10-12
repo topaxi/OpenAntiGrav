@@ -60,13 +60,6 @@ use oag_core::buttons::{Button, Input};
 /// [`Definition::parse`] available for an override path - see `--menu`.
 pub const BUILT_IN: &str = include_str!("../../../assets/ui/menu.toml");
 
-/// Definition-format version this build understands.
-///
-/// Refused rather than best-effort parsed: a definition written against a
-/// different entry vocabulary would otherwise load with entries silently
-/// missing, which is the failure mode this whole module is arranged to avoid.
-pub const FORMAT_VERSION: u32 = 1;
-
 mod vocabulary;
 pub use vocabulary::{Action, ValueSource};
 
@@ -123,6 +116,10 @@ pub struct Choice {
     pub value: String,
     /// What the row draws.
     pub label: String,
+    /// Why this option cannot be used, when it cannot. It is still offered and
+    /// can be stepped onto, so a player sees it and why not; the row draws it
+    /// dimmed with the reason in the note slot ([`Menu::unavailable`]).
+    pub unavailable: Option<String>,
 }
 
 impl Choice {
@@ -133,6 +130,7 @@ impl Choice {
         Self {
             label: value.clone(),
             value,
+            unavailable: None,
         }
     }
 
@@ -142,7 +140,15 @@ impl Choice {
         Self {
             value: value.into(),
             label: label.into(),
+            unavailable: None,
         }
+    }
+
+    /// This option marked unusable, for `reason`.
+    #[must_use]
+    pub fn unusable(mut self, reason: impl Into<String>) -> Self {
+        self.unavailable = Some(reason.into());
+        self
     }
 }
 
@@ -972,6 +978,7 @@ mod frame;
 mod jump;
 pub mod nav;
 mod pin;
+mod unavailable;
 pub use pin::Pin;
 mod layers;
 pub mod pointer;

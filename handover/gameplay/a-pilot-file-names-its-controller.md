@@ -75,4 +75,4 @@ The maintainer's framing: original campaigns stay vanilla; a custom campaign (an
 implies a campaign definition of this project's own (events, tracks including
 foreign and track-file ones, craft including craft files, each event's controller
 and pilots, medal targets, unlocks), read the way the titles' campaign tables are
-read and shown by the same list screen `pure-campaign` builds. Not designed yet.
+read and shown by screens of the shape `oag_ui_screens::pure_chain` builds. Not designed yet.

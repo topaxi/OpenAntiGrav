@@ -1,0 +1,95 @@
+# The pilot file: one AI driver's personality, see crates/raceplay/src/pilots.rs.
+# Every axis is optional (an absent one comes from `balanced`) and is a [low, high]
+# range of floats. The numeric limits an axis is held to are the parser's, not
+# this schema's: the schema says what shape a file has, the loader says how far
+# a number may go.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/pilot[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+# The loader reads `[120, 300]` as well as `[120.0, 300.0]`.
+[types.number]
+oneof = ["integer", "float"]
+
+[types.span]
+type = "array"
+itemtype = "types.number"
+minlength = 2
+maxlength = 2
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.lean]
+type = "string"
+allowedvalues = ["either", "left", "right"]
+optional = true
+
+[elements.line_bias]
+type = "types.span"
+
+[elements.wander]
+type = "types.span"
+
+[elements.wander_period]
+type = "types.span"
+
+[elements.look]
+type = "types.span"
+
+[elements.commitment]
+type = "types.span"
+
+[elements.patience]
+type = "types.span"
+
+[elements.trail]
+type = "types.span"
+
+[elements.width]
+type = "types.span"
+
+[elements.inside]
+type = "types.span"
+
+[elements.courtesy]
+type = "types.span"
+
+[elements.defence]
+type = "types.span"
+
+[elements.caution]
+type = "types.span"
+
+[elements.ram]
+type = "types.span"
+
+[elements.provocation_ticks]
+type = "types.span"
+
+[elements.trigger]
+type = "types.span"
+
+[elements.roll_chance]
+type = "types.span"
+
+[elements.roll_floor]
+type = "types.span"
+
+[elements.roll_airtime]
+type = "types.span"

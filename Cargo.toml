@@ -19,6 +19,7 @@ members = [
   "crates/input",
   "crates/livery",
   "crates/log",
+  "crates/mobile",
   "crates/mesh",
   "crates/music",
   "crates/omega",
@@ -31,6 +32,7 @@ members = [
   "crates/raceplay",
   "crates/rcs",
   "crates/render",
+  "crates/schema",
   "crates/replay",
   "crates/shader-check",
   "crates/sound",
@@ -75,6 +77,7 @@ oag-shader-check = { path = "crates/shader-check" }
 oag-hd = { path = "crates/hd" }
 oag-hud = { path = "crates/hud" }
 oag-log = { path = "crates/log" }
+oag-mobile = { path = "crates/mobile" }
 oag-input = { path = "crates/input" }
 oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
@@ -101,6 +104,7 @@ oag-unity = { path = "crates/unity" }
 oag-title = { path = "crates/title" }
 oag-trace = { path = "crates/trace" }
 oag-trackfile = { path = "crates/trackfile" }
+oag-schema = { path = "crates/schema" }
 oag-ui = { path = "crates/ui" }
 oag-ui-screens = { path = "crates/ui-screens" }
 oag-vex = { path = "crates/vex" }

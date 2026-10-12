@@ -82,6 +82,8 @@ OAG_REMIX_PAGE_TITLE = { text = "COURSE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TITRE DU CIRCUIT", human = false }
 OAG_REMIX_NO_DRIVER = { text = "AUCUN ADVERSAIRE : PAS DE PILOTE POUR CETTE CLASSE", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "TITRE DU VAISSEAU", human = false }
+OAG_REMIX_CUSTOM = { text = "PERSONNALISÉ", human = false }
+OAG_REMIX_CUSTOM_CHECKING = { text = "vérification du fichier en cours", human = false }
 
 # OPTIONS and its submenu rows.
 OAG_OPTIONS_PAGE_TITLE = { text = "OPTIONS", human = false }
@@ -187,12 +189,8 @@ OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} convertis", human = fa
 OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} déjà en cache", human = false }
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} échoué(s)", human = false }
 
-OAG_PURE_CAMPAIGN_TITLE = { text = "CAMPAGNE", human = false }
-OAG_PURE_CAMPAIGN_CLASS = { text = "CLASSE", human = false }
-OAG_PURE_CAMPAIGN_LOCKED = { text = "VERROUILLÉ", human = false }
-OAG_PURE_CAMPAIGN_NEEDS = { text = "REQUIERT", human = false }
-OAG_PURE_CAMPAIGN_MEDALS = { text = "MÉDAILLES", human = false }
-OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "N'IMPORTE QUELLE MÉDAILLE", human = false }
+OAG_MENU_SINGLE_PLAYER = { text = "UN JOUEUR", human = false }
+OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, tournois, contre-la-montre et Zone, classe par classe", human = false }
 OAG_MEDAL_GOLD = { text = "OR", human = false }
 OAG_MEDAL_SILVER = { text = "ARGENT", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }

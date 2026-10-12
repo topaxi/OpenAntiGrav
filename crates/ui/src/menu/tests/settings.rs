@@ -51,7 +51,7 @@ fn race_menu() -> Menu {
     Menu::new(
         Definition::parse(
             r#"
-            version = 1
+            toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
             root = "race"
             [[page]]
             id = "race"

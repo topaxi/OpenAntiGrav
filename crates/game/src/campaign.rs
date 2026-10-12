@@ -18,6 +18,7 @@ use oag_hud::sprite::Sheet;
 mod emblems;
 pub mod hit;
 pub mod launch;
+pub mod pure_chain;
 pub mod pure_list;
 
 /// `Data\Plugins\PI001\GUI\CellMode_Definition.xml` - the file Pulse's own

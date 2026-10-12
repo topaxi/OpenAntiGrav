@@ -66,8 +66,11 @@ the work in isolated worktrees.
   with no doc file in the diff has happened twice; so has a member's findings
   living only in a scratch file outside git.
 - **Merge with `--no-ff`** and the project's attribution trailers.
-- **`cargo check --workspace --all-targets` after every merge**, before the next
-  one and before telling members to merge main. Two branches that each gated green
+- **`cargo check --workspace --all-targets` and `cargo nextest run --workspace`
+  (no disc data, about ten seconds once built) after every merge**, before the next
+  one and before telling members to merge main. On the same day `toml-schemas`
+  dropped menu.toml's `version = 1` while `track-picker` added a test fixture
+  using it: it compiled, and only the test run caught it. Two branches that each gated green
   can conflict semantically with no textual conflict: on 2026-10-12 `speed-class`
   removed `SpeedClass::from_name` while `pure-orig-driver` added a call to it, and
   `main` did not compile until a member noticed.
@@ -80,8 +83,11 @@ the work in isolated worktrees.
     selection is `FULL` (see "Who runs which gate")
   - docs/handover only -> `just check-docs`, `check-names` if `names.tsv` moved,
     `check-handover`, `check-captures` if captures moved
-- **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`.
-  Only after the work is merged.
+- **Reap**: `git worktree remove <path> -f -f` then `git branch -d <branch>`,
+  then stop the member itself with `TaskStop` (its name as `task_id`) and check
+  `ListAgents` no longer shows it. Only after the work is merged. A member left
+  idle after its report still sits in the roster; the maintainer asked for a
+  full teardown (2026-10-12).
 - **Never reap a worktree whose agent may still resume.** A `completed`
   notification is not terminal - the same agent can be resumed and will find its
   Bash unusable. Merge first, then reap. **`ListAgents` cannot tell you this** -

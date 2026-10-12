@@ -652,7 +652,7 @@ title branch: `Campaign::circuit_unlocks`). Craft variants gate on the two loyal
 (`loyalty_unlocked`). `--unlock-all` is ours. Per title census, `<Unlock` elements in `PI001/Definition.xml`
 (`oag-wad cat --expand`): Pulse USA and EU identical, 85 rows, 21 with `Grid=`, 24 `PI_Track`; **Pure USA and EU
 identical, 17 rows, none with `Grid` or loyalty: `MedalCount` 10/25/40/60/60/70 on the Classic circuits,
-`Track`+`medal` chaining Zone 1..4, `Tournament` Alpha/Beta - checked, differs, and since 2026-10-12 read and wired as Pure's campaign list: [`pure-campaign.md`](pure-campaign.md)**; HD: see
+`Track`+`medal` chaining Zone 1..4, `Tournament` Alpha/Beta - checked, differs, and since 2026-10-12 read and wired as Pure's SINGLE PLAYER chain: [`pure-campaign.md`](pure-campaign.md)**; HD: see
 `hd-status.md` (its own progression is `hd-campaign`'s).
 
 ## The Race Campaign: the disc's own campaign grid, shape yes, content no

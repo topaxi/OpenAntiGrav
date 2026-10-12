@@ -17,7 +17,7 @@
 - **Universal binary.** `x86_64-apple-darwin` plus `lipo` is a second fat-LTO build;
   not done.
 - **Signing hook** (`OAG_MAC_SIGN`, rcodesign) is unused and unexercised.
-- **iOS** is not started.
+- **iOS** has its own thread: `tooling/the-ios-app-type-checks-and-has-never-been-built-or-run.md`.
 - **Texture compression** covers BC and ASTC only; see
   `rendering/texture-compression-only-covers-bc-astc-is-the.md`.
 
