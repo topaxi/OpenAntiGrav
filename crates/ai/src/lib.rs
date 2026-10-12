@@ -65,6 +65,7 @@ mod driver;
 mod field;
 mod line;
 mod noise;
+pub mod original;
 mod pilot;
 pub mod plan;
 pub mod probe;

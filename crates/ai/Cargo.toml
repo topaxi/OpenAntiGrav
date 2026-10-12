@@ -7,7 +7,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 
-# `oag-formats` is deliberately absent, and so is every renderer, audio and
+# `oag-tables` is here for the original driver alone (`original`), which reads
+# the class tables at runtime; it has no dependencies of its own. `oag-formats`
+# is deliberately absent, and so is every renderer, audio and
 # windowing crate. This crate takes a racing line as a list of world-space
 # points the caller built, not as a decoded `.vex` node, so it needs no asset
 # types at all - which is what lets it be tested against a synthetic circle with
@@ -15,6 +17,7 @@ rust-version.workspace = true
 [dependencies]
 oag-core.workspace = true
 oag-physics.workspace = true
+oag-tables.workspace = true
 
 [lints]
 workspace = true
