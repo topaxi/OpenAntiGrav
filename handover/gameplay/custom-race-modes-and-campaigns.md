@@ -139,14 +139,18 @@ and its HUD indicator (data plus the fallback assets) together. Cost: the simula
 (the observation struct, the return, the replay record), a deterministic `wasmtime` host behind a
 cargo feature that the simulation may depend on.
 
-**Engine choice (open, for the ADR; from memory, not re-verified 2026-10-12):** wasmtime's
-Cranelift is a JIT, which iOS forbids for ordinary apps and which cannot run inside our wasm32
-browser build. Candidates: **wasmi** (a pure-Rust interpreter built for deterministic execution;
-runs on iOS and compiles to wasm32 - one engine everywhere, so cross-platform determinism is one
-thing to prove, not two), or wasmtime's **Pulley** interpreter (no JIT, same API, less proven on
-iOS, not for wasm32). Recommended: wasmi everywhere behind a host trait; a JIT engine on desktop
-only later, and only if it matches bit for bit. The lane confirms crate status on iOS and wasm32
-before the ADR.
+**Engine choice (maintainer, 2026-10-12):** wasmtime with Cranelift on Linux, Windows, macOS and
+Android; wasmtime's **Pulley** interpreter on iOS (no JIT allowed there; same API and host code);
+on the web build the browser's own `WebAssembly` API, called from our Rust through JS glue, the
+module compiled asynchronously at race load (never per tick; browsers limit synchronous
+compiles on the main thread), per-tick calls copying the observation into the module's memory.
+Three engines must give bit-identical results, so: (1) a deterministic subset checked at load -
+refuse relaxed SIMD and threads; (2) a NaN rule - a NaN in a module's output is an error naming
+the mod (NaN payloads differ between engines; wasmtime's NaN canonicalisation on as well);
+(3) one host trait with three backends, the observation and controls defined once; (4) a
+conformance test running the same module and inputs on Cranelift, Pulley and a headless browser
+(`wasm-bindgen-test`) with identical outputs - Pilot Assist first, also against the built-in Rust
+law. The lane confirms Pulley's iOS status and the crates before the ADR.
 
 ## Next Steps
 
