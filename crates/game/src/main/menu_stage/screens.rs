@@ -41,16 +41,23 @@ impl MenuStage {
         frozen_race: bool,
         ticker_tips: &[String],
     ) -> Result<()> {
-        let Some(open) = self.pure_chain.as_ref() else {
+        let Some(open) = self.pure_chain.as_mut() else {
             return Ok(());
         };
-        let layers = oag_ui_screens::pure_chain::draw_list(
+        // The picture beside the rows lives on a sheet of its own, the front
+        // end's plus the textures shown so far.
+        if let Some(sheet) = open.art_mut().take_sheet() {
+            self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
+        }
+        let art = open.art().draws();
+        let mut layers = oag_ui_screens::pure_chain::draw_list(
             open.choice(),
             &self.skin,
             &self.frame,
             if frozen_race { None } else { shown },
             frozen_race,
         );
+        layers.body.extend(art);
         let footer = self
             .ticker
             .is_some()

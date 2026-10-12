@@ -6,6 +6,7 @@
 //! Like [`crate::campaign_stage::CampaignStage`] it takes the tick whole while
 //! open and is drawn over the page behind it.
 
+use oag_game::campaign::pure_art::Player;
 use oag_game::campaign::pure_chain::{self, Chain};
 use oag_game::records::Store;
 use oag_tables::pure_flow::Step;
@@ -18,6 +19,7 @@ pub(crate) struct PureChainStage {
     choice: Choice,
     strings: StringTable,
     title: &'static oag_title::Title,
+    art: Player,
 }
 
 impl PureChainStage {
@@ -27,14 +29,36 @@ impl PureChainStage {
         strings: StringTable,
         title: &'static oag_title::Title,
         records: &Store,
+        art: Player,
     ) -> Self {
         let view = pure_chain::present(&chain, &strings, title, records);
-        Self {
+        let mut open = Self {
             choice: Choice::new(view.title, view.context, view.pitch, view.rows),
             chain,
             strings,
             title,
-        }
+            art,
+        };
+        open.follow_art();
+        open
+    }
+
+    /// Puts the art of the row under the cursor on the right-hand side, and
+    /// moves its arrival on by `seconds`.
+    pub(crate) fn follow_art(&mut self) {
+        let key = self
+            .choice
+            .selected_row()
+            .and_then(|row| self.chain.art_key(row.tag));
+        self.art.show(key);
+    }
+
+    pub(crate) fn art(&self) -> &Player {
+        &self.art
+    }
+
+    pub(crate) fn art_mut(&mut self) -> &mut Player {
+        &mut self.art
     }
 
     /// Rebuilds the screen from `records`, on the same screen when `same` and
@@ -44,6 +68,7 @@ impl PureChainStage {
         let view = pure_chain::present(&self.chain, &self.strings, self.title, records);
         if same {
             self.choice.replace(view.rows);
+            self.follow_art();
             return;
         }
         let mut choice = Choice::new(view.title, view.context, view.pitch, view.rows);
@@ -55,6 +80,7 @@ impl PureChainStage {
             choice.select_tag(tag);
         }
         self.choice = choice;
+        self.follow_art();
     }
 
     pub(crate) fn title(&self) -> &'static oag_title::Title {

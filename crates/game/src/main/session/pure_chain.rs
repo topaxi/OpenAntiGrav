@@ -10,9 +10,11 @@
 //! its gates from.
 
 use log::warn;
+use oag_game::campaign::pure_art::{Fills, Player};
 use oag_game::campaign::pure_chain::{Chain, Chosen};
 use oag_game::campaign::pure_list;
 use oag_tables::pure_ai_stats::PureClass;
+use oag_tables::pure_flow::Step;
 use oag_ui::menu::nav::Nav;
 use oag_ui_screens::pure_chain::Event;
 
@@ -25,14 +27,14 @@ impl Session {
     /// The main menu's campaign row on a title whose campaign is a chain:
     /// reads the disc's screens and events and opens `Single Player`. Called by
     /// [`Self::open_campaign`] with the archives it already opened.
-    pub(super) fn open_pure_chain(&mut self, archives: &mut oag_assets::Archives) {
+    pub(super) fn open_pure_chain(&mut self, mut archives: oag_assets::Archives) {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
         let title = shell.title;
         let strings = shell.strings.clone();
-        let loaded = pure_list::load(archives, title)
-            .and_then(|campaign| Ok((campaign, pure_list::load_flow(archives, title)?)));
+        let loaded = pure_list::load(&mut archives, title)
+            .and_then(|campaign| Ok((campaign, pure_list::load_flow(&mut archives, title)?)));
         let (campaign, flow) = match loaded {
             Ok(loaded) => loaded,
             Err(error) => {
@@ -41,7 +43,27 @@ impl Session {
             }
         };
         let class = PureClass::ALL[self.pure_chain_class.min(PureClass::ALL.len() - 1)];
-        let open = PureChainStage::new(Chain::new(campaign, flow, class), strings, title, &self.records);
+        let art = Player::new(
+            archives,
+            shell.sprites.clone(),
+            shell.globals.clone(),
+            shell.strings.clone(),
+            (
+                title
+                    .campaign
+                    .flow
+                    .map_or_else(String::new, |files| files.selection.to_string()),
+                Step::Class.screen().to_string(),
+            ),
+            Fills::of(&campaign, title.name, self.records.rows()),
+        );
+        let open = PureChainStage::new(
+            Chain::new(campaign, flow, class),
+            strings,
+            title,
+            &self.records,
+            art,
+        );
         self.pure_classic_entries = open
             .chain()
             .campaign()
@@ -113,6 +135,8 @@ impl Session {
         let mut events = open.choice_mut().update(self.controls.buttons_mut());
         events.extend(open.choice_mut().pointer(pointer, &stage.skin));
         open.choice_mut().follow(&stage.skin);
+        open.follow_art();
+        open.art_mut().advance(1.0 / 60.0);
         for event in events {
             self.handle_pure_chain(event);
         }
