@@ -43,6 +43,7 @@ oag-pure.workspace = true
 oag-race.workspace = true
 oag-rcs.workspace = true
 oag-render.workspace = true
+oag-schema.workspace = true
 oag-replay.workspace = true
 oag-sound.workspace = true
 oag-source.workspace = true
@@ -77,5 +78,6 @@ workspace = true
 
 [dev-dependencies]
 oag-omega.workspace = true
+oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
 pollster.workspace = true

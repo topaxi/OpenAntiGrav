@@ -15,8 +15,7 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 
 | Key | Meaning |
 | --- | --- |
-| `track.format` | `"oag-track"`; anything else is refused. |
-| `track.version` | `"major.minor"`, now `1.1` (1.1 added the optional `_OAG_AI_BYTES` accessor; a `1.0` file is read with those bytes absent). Unknown major: refused. Newer minor: read, unknown keys reported as unread. |
+| `[toml-schema]` | `location` ending `v1/track.tosd`, `version = "1.0.0"`: the kind and major, per [ADR-0064](../architecture/adr/0064-project-toml-files-declare-a-toml-schema.md) and [TOML Schema](toml-schema.md). Missing, another kind or an unknown major: refused by name. This replaced `track.format` and `track.version`; there is no minor. A key the reader does not know is read and reported as unread. |
 | `track.id`, `track.title` | Identifier (keys records and ghosts as `foreign:<id>`) and display title. |
 | `track.glb` | The glb's file name, relative to the manifest. |
 | `track.notes` | The producer's free text (what it chose, ignored, could not map). Printed in the loader report. |

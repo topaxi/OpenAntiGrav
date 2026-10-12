@@ -43,7 +43,7 @@ fn a_walk_through_the_menus_asks_for_the_cues_the_original_plays() {
 fn a_press_that_changes_nothing_makes_no_sound() {
     let mut menu = Menu::new(
         Definition::parse(
-            "version = 1\nroot = \"main\"\n[[page]]\nid = \"main\"\n\
+            "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/menu.tosd\", version = \"1.0.0\" }\nroot = \"main\"\n[[page]]\nid = \"main\"\n\
          [[page.entry]]\nkind = \"back\"\nlabel = \"ONLY\"\n",
             &crate::language::StringTable::default(),
         )

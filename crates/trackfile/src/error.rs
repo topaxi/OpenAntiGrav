@@ -17,24 +17,9 @@ pub enum Error {
     /// The manifest is not valid TOML of the expected shape.
     #[error("manifest: {0}")]
     Manifest(String),
-    /// The manifest names a format other than this one.
-    #[error("manifest: format {0:?} is not {name:?}", name = crate::FORMAT_NAME)]
-    NotThisFormat(String),
-    /// A major version this reader does not know.
-    #[error(
-        "manifest: format version {found} has major {major}, this reader reads major {supported}"
-    )]
-    UnknownMajor {
-        /// The version string found.
-        found: String,
-        /// Its major.
-        major: u32,
-        /// The one this reader reads.
-        supported: u32,
-    },
-    /// A version string that is not `major.minor`.
-    #[error("manifest: version {0:?} is not major.minor")]
-    BadVersion(String),
+    /// No `[toml-schema]` header, or one naming another kind or major.
+    #[error("manifest: {0}")]
+    Schema(#[from] oag_schema::Error),
     /// The glb container or its glTF document is malformed.
     #[error("glb: {0}")]
     Glb(String),

@@ -14,3 +14,11 @@
 # revalidates on every load, so a deploy is picked up at once.
 /pkg/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The project's TOML Schemas (scripts/stage-schemas.sh). Editors and validators
+# fetch them from other origins, and a schema may change within its major, so the
+# lifetime is short.
+/mods/schemas/*
+  Content-Type: application/toml
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=3600
