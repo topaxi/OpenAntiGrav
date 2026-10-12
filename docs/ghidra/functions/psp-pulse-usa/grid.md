@@ -1148,6 +1148,13 @@ seven non-player teams, each matching its own file. Each team's stats object
 sits at one address across both boots, which is the "one parse per team" of
 `Ship_LoadHandlingStats`.
 
+**Scope.** Measured in Single Race (`g_game_mode` 3, `Race_CreateAiRacer`)
+only. What holds in every mode is the constructor: the handling key and the
+hull come from the same string in `Craft_Construct`, which every spawner calls
+(`Race_SpawnAiRacer`, `Race_CreateAiRacer`, `Race_CreatePlayer`); Tournament,
+`Race_SpawnGrid` and the campaign change only which string arrives. **The rule
+to implement: an opponent's handling is the team its hull is, in every mode.**
+
 **What would have falsified it:** any AI craft's `+0x6c` equal to the
 player's, or an AI class block carrying the player's `accelcap`/turning
 values. Neither happened on 14 AI crafts over two launches.

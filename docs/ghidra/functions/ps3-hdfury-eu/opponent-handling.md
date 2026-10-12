@@ -16,8 +16,13 @@ each craft flies its own team's file. HD keeps the shape.
   constructor consistent, and the same shape Pulse was measured to have.
 - **An AI's Fury variant (`normal`, `concept1`, `nitro`) is chosen per AI**,
   and in the single-player path it follows the variant the human entrants
-  chose when they all chose the same one. Confidence **55**: what the
-  entrant table at `g_GameState + 0x134` holds is inferred, not read.
+  chose when they all chose the same one. In single player that table has
+  one entry, so the test always passes: **the AI flies the player's variant
+  class** (player `concept1` gives AI `concept1`, `nitro` gives `nitro`,
+  `normal` gives `normal` or a team model outside the named variants), and `Team_LoadHandlingStats` reads that variant's
+  directory, so the AI flies **its own team's file in the player's variant**.
+  Confidence **55**: what the entrant table at `g_GameState + 0x134` holds is
+  inferred, not read.
 - **A team's handling file is loaded once per team, from the first craft's
   variant.** Confidence **70**. If two crafts of one team carry different
   variants, the second one flies the first one's file. Whether a race ever
@@ -112,9 +117,9 @@ differs between two teams' files.
 
 ## 2048 and Omega
 
-**Not checkable** in this lane: this is the HD executable's code, and no 2048
-or Omega executable was opened. Omega runs HD's front end, so the race-manager
-shape is the likelier carry-over; it is unverified.
+**Not checked**: no 2048 or Omega executable was opened in this lane. Omega
+runs HD's front end, so the race-manager shape is the likelier carry-over; it
+is unverified.
 
 ## Names landed
 

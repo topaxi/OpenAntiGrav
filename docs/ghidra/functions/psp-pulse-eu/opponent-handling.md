@@ -44,5 +44,6 @@ shows none; the only differences are relocated addresses.
 
 `Craft_Construct` is 85 here against 65 for the USA row (camera.md): the USA
 row predates the full read, and this lane read the whole body and watched the
-three fields it writes (`+0x370`, `+0x94`, `+0x6c`) on 16 live crafts. The USA
-row is another lane's and is left as it is.
+three fields it writes (`+0x370`, `+0x94`, `+0x6c`) on 16 live **USA** crafts;
+the EU body is carried by the diff above, not by an EU run. The USA row is
+another lane's and is left as it is.
