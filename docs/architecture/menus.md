@@ -1445,6 +1445,16 @@ it can offer, and in particular for why "render on the CPU" is a row that appear
 only on a machine with a software driver installed rather than a switch this
 project could provide.
 
+A row can also be **absent on a title that cannot honour it**. BOOST ZOOM (GRAPHICS,
+`graphics.boost_zoom`, `off`/`on`, default `off`, restart required) borrows HD's boost
+zoom-streak ring for the titles that draw none, so
+`menu::Definition::drop_unavailable_boost_zoom` removes it unless
+`RaceDefaults::borrows_zoom_ring` is set (Pulse and Pure): HD draws its own ring always, as
+the original does, and 2048 and Omega are unread. It is dropped once at boot, for the reason
+the RACE page's VARIANT row is (a title is fixed for the life of a boot), not greyed. The
+setting is a flat `[graphics]` boolean rather than a per-title render profile entry: it is a
+taste switch, not a render cost, and `--race` reads it before the title is known.
+
 A row can also be **warned** rather than greyed, which is a different thing and
 the RECONSTRUCTION row is why it exists. A greyed row cannot be changed *now* because
 another row rules it out. A warned row can be changed, is stored, and simply

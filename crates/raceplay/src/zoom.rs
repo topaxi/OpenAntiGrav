@@ -9,7 +9,7 @@
 //!
 //! **Borrowed on Pulse and Pure.** Neither draws a ring of its own (nothing in their
 //! executables or data does; `docs/ghidra/functions/ps3-hdfury-eu/funklayer-zoom.md`,
-//! "Pulse and Pure"). With the player's `graphics.boost_zoom` on, the race runs HD's
+//! "Back-ported to Pulse and Pure"). With the player's `graphics.boost_zoom` on, the race runs HD's
 //! numbers on the same two triggers and the scene's host pass
 //! ([`oag_post::hd_zoom::Host`]) draws it over the finished frame. **Chosen, not
 //! measured**: no original shows it on those titles.
