@@ -119,10 +119,8 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         // reached through it: a test that called the private predicate would pass
         // whatever that predicate did, including nothing.
         //
-        // `COUNTDOWN_TICKS` and the tick after are excluded - two specific, understood
-        // ticks (the second since opponents fly their own team's handling: on
-        // `16_Track` the slot-1 craft reads speed 0.97 at `COUNTDOWN_TICKS + 1`, just
-        // under `STALL_SPEED`, a slower launch, not a stall): the countdown hold releases every opponent's throttle from zero
+        // `tick != oag_race::COUNTDOWN_TICKS` excludes one specific, understood
+        // tick: the countdown hold releases every opponent's throttle from zero
         // to full in a single tick, so at `tick == COUNTDOWN_TICKS` `thrust` has
         // just gone positive while `linear_velocity` has not risen off ~0 yet -
         // which reads as `stalled` by this predicate's own three terms even
@@ -138,7 +136,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         let stalled = ship.physics.thrust > 0.0
             && !ship.standing.finished()
             && ship.physics.body.linear_velocity.length() < oag_race::recovery::STALL_SPEED
-            && !(oag_race::COUNTDOWN_TICKS..=oag_race::COUNTDOWN_TICKS + 1).contains(&tick);
+            && tick != oag_race::COUNTDOWN_TICKS;
         run = if stalled { run + 1 } else { 0 };
         solo.longest_stall = solo.longest_stall.max(run);
     }

@@ -312,14 +312,15 @@ impl Driver {
         let followed = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match followed {
             Some(plan) => {
-                planned::target(
-                    plan,
-                    index,
-                    speed,
-                    tuning,
-                    &personality,
-                    line.takeoff_within(index, planned::RUN_UP_REACH),
-                ) * (1.0 - f32::from(self.plan_deficit) / 1000.0)
+                let run_up = line.takeoff_within(index, planned::RUN_UP_REACH);
+                let target = planned::target(plan, index, speed, tuning, &personality, run_up);
+                // The share a hull can carry applies to corners, not to a run-up:
+                // the speed a gap needs is the gap's, whatever the hull turns at.
+                if run_up {
+                    target
+                } else {
+                    target * (1.0 - f32::from(self.plan_deficit) / 1000.0)
+                }
             }
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
