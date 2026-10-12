@@ -295,8 +295,10 @@ pub(super) fn emissive(
         // - it authors `a` and `b` (`mt_uvanim_diffuse_emissive`) - the scroll
         //   is per material and this replays it;
         // - it declares `time` but authors neither
-        //   (`nr_billboardholographicscanlines`, 17 slots on one circuit;
-        //   `scanlinebillboard`, `scroller_glow_v3`, `pipefx_v2`) - its
+        //   (`scanlinebillboard`, `scroller_glow_v3`, `pipefx_v2`; and
+        //   `nr_billboardholographicscanlines` off Amphiseum's file - Modesto
+        //   Heights' shape keeps its rates in material parameters this key does
+        //   not name) - its
         //   coordinate constants are the shader's own **inline literals**,
         //   which live in the code rather than in the material record and
         //   which this reading has not recovered;

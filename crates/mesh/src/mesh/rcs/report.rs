@@ -225,6 +225,15 @@ pub struct Report {
     /// HD light-cone materials whose noise and ramp were bound - see
     /// `super::light_cone`.
     pub light_cone_bound: usize,
+    /// HD holographic billboards whose three textures were bound, and the
+    /// materials of the family left on the generic emissive reading: one whose
+    /// program is the parameter-driven shape, or whose texture did not decode.
+    /// See `super::holo_billboard`.
+    pub holo_billboard_bound: usize,
+    /// See [`Self::holo_billboard_bound`].
+    pub holo_billboard_other_shape: usize,
+    /// See [`Self::holo_billboard_bound`].
+    pub holo_billboard_unread: usize,
     /// Water materials whose picture is a normal map (`super::water`), drawn
     /// as lit vertex colour: the program's reflection term is not drawn.
     pub water_lit_colour: usize,
@@ -369,6 +378,15 @@ impl Report {
         } + &match self.vertex_scrolls {
             0 => String::new(),
             n => format!(", {n} material(s) scrolling their texture off an authored rate"),
+        } + &match self.holo_billboard_bound {
+            0 => String::new(),
+            n => format!(", {n} holographic billboard material(s) drawn by their overlay combine"),
+        } + &match self.holo_billboard_other_shape + self.holo_billboard_unread {
+            0 => String::new(),
+            n => format!(
+                ", {n} holographic billboard material(s) left on the generic emissive reading \
+                 (parameter-driven program or an unreadable texture)"
+            ),
         } + &match self.light_cone_bound {
             0 => String::new(),
             n => format!(", {n} light-cone material(s) with their facing ramp bound"),

@@ -475,8 +475,14 @@ pub(super) fn emit_chunk(
             let texcoords = mesh.texcoords(model_blob, submesh, stride).ok();
             let lightmap_texcoords = mesh.lightmap_texcoords(model_blob, submesh, stride).ok();
             let vertex_light = mesh.vertex_light(model_blob, submesh, stride).ok();
-            let texcoords2 =
-                super::ice::second_uv(surface.roles, mesh, model_blob, submesh, stride);
+            let (lightmap_texcoords, texcoords2) = super::holo_billboard::route(
+                surface.roles,
+                (mesh, model_blob, submesh, stride),
+                (
+                    lightmap_texcoords,
+                    super::ice::second_uv(surface.roles, mesh, model_blob, submesh, stride),
+                ),
+            );
             report.authored_normals += normals.as_deref().map_or(0, authored);
             emit(
                 out,
