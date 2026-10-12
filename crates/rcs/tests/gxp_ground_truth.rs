@@ -188,20 +188,51 @@ fn sweep(out: &mut Survey, label: &str, blob: &[u8], check: &mut impl FnMut(&str
     }
 }
 
-/// Every container on the disc decodes, and every closure check holds.
-///
-/// [`Program::parse`] refuses anything that does not close, so a program that
-/// decodes at all is one whose header accounts for itself exactly.
+/// What one walk of the corpus collected for the per-program claims below.
+#[derive(Default)]
+struct Collected {
+    versions: BTreeMap<(u8, u8), usize>,
+    disagreed: Vec<String>,
+    wide_shadow_maps: usize,
+}
+
+/// Every claim below over **one** walk of the corpus, which reads every entry
+/// of three packages (about 33 s under load). They were four tests walking it
+/// four times until 2026-10-12.
 #[test]
 #[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
-fn every_gxp_program_on_the_disc_decodes_and_closes() {
-    let mut versions = BTreeMap::new();
-    let survey = survey(&mut |_, program| {
-        *versions.entry(program.version).or_insert(0usize) += 1;
+fn the_gxp_corpus_decodes_closes_and_declares_what_it_binds() {
+    let mut seen = Collected::default();
+    let survey = survey(&mut |label, program| {
+        *seen.versions.entry(program.version).or_default() += 1;
+        let attributes = program
+            .parameters
+            .iter()
+            .any(|p| p.category == Category::Attribute);
+        if attributes == program.is_fragment() {
+            seen.disagreed
+                .push(format!("{label}: flags {:#010x}", program.flags));
+        }
+        if let Some(p) = program.parameter("shadowMap")
+            && p.components != 1
+        {
+            seen.wide_shadow_maps += 1;
+        }
     });
     if survey.walked == 0 {
         return;
     }
+    every_gxp_program_on_the_disc_decodes_and_closes(&survey, &seen);
+    the_only_unaccounted_bytes_are_alignment_padding(&survey);
+    the_fragment_bit_agrees_with_what_each_program_declares(&seen);
+    the_shadow_term_is_a_single_channel_sampler_beside_the_lightmap(&survey, &seen);
+}
+
+/// Every container on the disc decodes, and every closure check holds.
+///
+/// [`Program::parse`] refuses anything that does not close, so a program that
+/// decodes at all is one whose header accounts for itself exactly.
+fn every_gxp_program_on_the_disc_decodes_and_closes(survey: &Survey, seen: &Collected) {
     assert_eq!(
         survey.walked, WALKED,
         "the corpus moved; the counts below are stale"
@@ -214,7 +245,7 @@ fn every_gxp_program_on_the_disc_decodes_and_closes() {
     assert_eq!(survey.fragment, FRAGMENT);
     // One toolchain built the whole disc, which is why one header layout fits
     // all of it.
-    assert_eq!(versions, BTreeMap::from([((1, 4), PROGRAMS)]));
+    assert_eq!(seen.versions, BTreeMap::from([((1, 4), PROGRAMS)]));
 }
 
 /// The only bytes no header field claims are 4 or 8 of alignment padding.
@@ -222,13 +253,7 @@ fn every_gxp_program_on_the_disc_decodes_and_closes() {
 /// Stated as a distribution rather than as a rule the parser enforces: a third
 /// value would be a fact about the container worth learning, not a decode
 /// failure.
-#[test]
-#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
-fn the_only_unaccounted_bytes_are_alignment_padding() {
-    let survey = survey(&mut |_, _| {});
-    if survey.walked == 0 {
-        return;
-    }
+fn the_only_unaccounted_bytes_are_alignment_padding(survey: &Survey) {
     let widths: Vec<usize> = survey.padding.keys().copied().collect();
     assert_eq!(widths, vec![4, 8], "padding widths: {:?}", survey.padding);
     assert_eq!(survey.padding.values().sum::<usize>(), PROGRAMS);
@@ -244,27 +269,12 @@ fn the_only_unaccounted_bytes_are_alignment_padding() {
 /// programs against the **same 67** `_vp`/`_fp` shader-name strings, so a
 /// container-to-name correspondence is not structural, however neatly the
 /// patch build's 32 / 35 split lines up with the 32 `_vp` / 35 `_fp` names.
-#[test]
-#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
-fn the_fragment_bit_agrees_with_what_each_program_declares() {
-    let mut disagreed = Vec::new();
-    let survey = survey(&mut |label, program| {
-        let attributes = program
-            .parameters
-            .iter()
-            .any(|p| p.category == Category::Attribute);
-        if attributes == program.is_fragment() {
-            disagreed.push(format!("{label}: flags {:#010x}", program.flags));
-        }
-    });
-    if survey.walked == 0 {
-        return;
-    }
+fn the_fragment_bit_agrees_with_what_each_program_declares(seen: &Collected) {
     assert!(
-        disagreed.is_empty(),
+        seen.disagreed.is_empty(),
         "{} disagreed: {:?}",
-        disagreed.len(),
-        &disagreed[..1]
+        seen.disagreed.len(),
+        &seen.disagreed[..1]
     );
 
     assert_eq!(embedded(SOURCES[0]), Some(BASE_EBOOT_PROGRAMS));
@@ -290,23 +300,14 @@ fn embedded(name: &str) -> Option<usize> {
 /// is `comp = 1` on every one of them, while `lightmap` beside it is `comp =
 /// 4`. Neither count is guessable from the executable's string table, which is
 /// all that page had.
-#[test]
-#[ignore = "needs the extracted 2048 packages in data/extracted/vita/"]
-fn the_shadow_term_is_a_single_channel_sampler_beside_the_lightmap() {
-    let mut wide = 0usize;
-    let survey = survey(&mut |_, program| {
-        if let Some(p) = program.parameter("shadowMap")
-            && p.components != 1
-        {
-            wide += 1;
-        }
-    });
-    if survey.walked == 0 {
-        return;
-    }
+fn the_shadow_term_is_a_single_channel_sampler_beside_the_lightmap(
+    survey: &Survey,
+    seen: &Collected,
+) {
     assert_eq!(
-        wide, 0,
-        "shadowMap is not single-channel on {wide} programs"
+        seen.wide_shadow_maps, 0,
+        "shadowMap is not single-channel on {} programs",
+        seen.wide_shadow_maps
     );
     assert_eq!(
         survey.samplers.get("shadowMap").copied(),
