@@ -190,12 +190,12 @@ pub struct RaceDefaults {
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
     /// The campaign's opponents fly the original's own driver
-    /// (`oag_ai::original`, the maintainer's AI mode 3). `true` only where
-    /// that driver was recovered off this title's executable and its thrust
-    /// law reproduced live: Pulse and HD. 2048 and Omega ship the same tables;
-    /// Omega's executable carries HD's driver (read statically, not run) and
-    /// neither title's race is complete enough to fly it (`docs/gameplay/ai.md`,
-    /// "The original driver, recovered"). `false` keeps this project's driver.
+    /// (`oag_ai::original`, the maintainer's AI mode 3). `true` where that
+    /// driver was recovered off this title's executable: Pulse, HD, 2048,
+    /// Omega and Pure (Pure's is a sibling design,
+    /// [`crate::original_driver::AiTables::LegacyBlock`]); see
+    /// `docs/gameplay/ai.md`, "The original driver, recovered". `false` keeps
+    /// this project's driver.
     pub original_opponent: bool,
     /// Where this title's original driver differs from Pulse's:
     /// [`crate::original_driver::OriginalDriver`]. `None` flies Pulse's.

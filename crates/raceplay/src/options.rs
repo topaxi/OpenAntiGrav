@@ -264,6 +264,12 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// The class has no controller that defines how to fly it
+    /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
+    /// the race box, RACE REMIX and the command line; a campaign launch leaves
+    /// it `false` because its own controller (the original's) is chosen by the
+    /// tables its title authors for the class.
+    pub no_driver_for_class: bool,
     /// Play the trail-hit sparks on the player regardless of the trigger.
     ///
     /// A verification aid for the draw path alone - see the `--trail-sparks`
@@ -328,6 +334,9 @@ pub struct Setup {
     pub difficulty: oag_ai::Difficulty,
     /// The finished player's thrust law, off the disc. See `race::finished_thrust`.
     pub finished_thrust: Option<super::finished_thrust::FinishedThrust>,
+    /// What the campaign's original opponent reads, for a title that flies
+    /// it. See `race::original_tables`.
+    pub original_tables: Option<super::original_tables::OriginalTables>,
     /// The speed class the race is run in, spelled the way the disc spells it.
     ///
     /// Most of what the class decides is already resolved by the time a `Setup`
@@ -347,6 +356,8 @@ pub struct Setup {
     /// this crate implements; the field exists only so a verification build
     /// can override that decision.
     pub opponents: bool,
+    /// See [`Options::no_driver_for_class`]: the grid is left empty.
+    pub no_opponents: bool,
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     pub trail_sparks: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].

@@ -121,6 +121,8 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
 
     let mut resolved = options.clone();
     resolved.mode = mode;
+    // The campaign's own controller flies every class its event authors.
+    resolved.no_driver_for_class = false;
 
     if let Some(track_ref) = event.track {
         let track = oag_2048::campaign::track_for(&doc, track_ref).ok_or_else(|| {

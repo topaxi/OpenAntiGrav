@@ -175,7 +175,7 @@ fn the_capture_stalls_and_reverses_rather_than_completing_a_lap() {
     // exactly that reason - `Mode::SpeedLap.laps_target` is `None` whatever it
     // is - so Venom is the engine's own default rather than a choice this test
     // depends on.
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     let mut laps = Vec::new();
     let mut furthest_forward = 0.0f32;
     let mut reversed_past_the_line = false;

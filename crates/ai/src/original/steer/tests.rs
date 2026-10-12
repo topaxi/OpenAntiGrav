@@ -112,11 +112,15 @@ fn airborne_pitch_turns_the_nose_toward_the_tangent() {
     let mut own = point(0.0);
     own.tangent = Vec3::new(0.0, 0.2, -1.0).normalize();
     let mut last = Vec3::NEG_Z;
-    let up = pitch(&pose(0.0), &own, 0.5, &mut last);
+    let up = pitch(&pose(0.0), &own, 0.5, 1.0, &mut last);
     assert!(up > 0.0, "nose below the tangent pitches up: {up}");
     own.tangent = Vec3::new(0.0, -0.2, -1.0).normalize();
-    assert!(pitch(&pose(0.0), &own, 0.0, &mut last) < 0.0);
-    assert_eq!(pitch(&pose(0.0), &own, 1.0, &mut last), 0.0, "grounded");
+    assert!(pitch(&pose(0.0), &own, 0.0, 1.0, &mut last) < 0.0);
+    assert_eq!(
+        pitch(&pose(0.0), &own, 1.0, 1.0, &mut last),
+        0.0,
+        "grounded"
+    );
 }
 
 #[test]

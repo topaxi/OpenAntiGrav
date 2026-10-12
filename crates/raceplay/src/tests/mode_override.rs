@@ -45,7 +45,7 @@ fn no_override_leaves_the_per_class_table_in_charge() {
     let race = Race::start(setup);
     assert_eq!(
         race.sim.world.laps_target(),
-        Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::Venom as usize])
+        Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::VENOM.index()])
     );
 }
 
@@ -138,4 +138,24 @@ fn a_single_race_with_weapons_off_has_no_pads_and_no_weapon_damage() {
         assert_eq!(race.sim.damage_rules().weapons, mode.weapons_enabled());
         assert_eq!(race.sim.weapon_pads.is_empty(), !mode.weapons_enabled());
     }
+}
+
+/// A class no controller covers races alone: `no_opponents` empties a grid the
+/// mode (or the verification override) would otherwise field.
+#[test]
+fn a_class_with_no_driver_fields_no_opponents() {
+    let grid = |no_opponents: bool| {
+        let mut setup = super::setup(super::hulled_handling());
+        setup.mode = Mode::SingleRace;
+        setup.start_position = Some(oag_vex::track::StartPosition {
+            position: [0.0, 0.0, 0.0],
+            left: [0.0, 0.0, -1.0],
+            up: [0.0, 1.0, 0.0],
+            forward: [1.0, 0.0, 0.0],
+        });
+        setup.no_opponents = no_opponents;
+        Race::start(setup).sim.world.ship_count
+    };
+    assert_eq!(grid(false), 8);
+    assert_eq!(grid(true), 1);
 }

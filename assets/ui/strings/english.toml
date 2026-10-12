@@ -96,6 +96,7 @@ OAG_RACE_START = { text = "START", human = false }
 # RACE REMIX's own two rows - see the block above for the rest of this page.
 OAG_REMIX_PAGE_TITLE = { text = "RACE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TRACK TITLE", human = false }
+OAG_REMIX_NO_DRIVER = { text = "NO OPPONENTS: NO DRIVER FOR THIS CLASS", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "CRAFT TITLE", human = false }
 OAG_REMIX_CUSTOM = { text = "CUSTOM", human = false }
 OAG_REMIX_CUSTOM_CHECKING = { text = "still checking this file", human = false }

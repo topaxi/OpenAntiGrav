@@ -75,6 +75,8 @@ pub(super) fn resolve(
         event_ring_rate: driver.event_ring_rate.value,
         coin_ordered_search: driver.coin_ordered_search.value,
         preferred_follows_choice: driver.preferred_follows_choice.value,
+        rail_turns_velocity: driver.rail_turns_velocity.value,
+        pitch_fade: driver.pitch_fade,
     };
     report.push(format!(
         "original AI: this title's driver variant, {laws:?}"

@@ -34,7 +34,7 @@ fn drive_lap(state: &mut RaceState, course: &Course, from_tick: u64) -> Vec<Outc
 #[test]
 fn crossing_the_line_just_after_the_start_is_not_a_lap() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
 
     // Spawn a few points *before* the line and drive over it.
     let before_line = course.len() - 3;
@@ -53,7 +53,7 @@ fn crossing_the_line_just_after_the_start_is_not_a_lap() {
 #[test]
 fn the_first_real_lap_after_an_early_crossing_still_counts() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
 
     let before_line = course.len() - 3;
     let mut tick = 0;
@@ -73,7 +73,7 @@ fn the_first_real_lap_after_an_early_crossing_still_counts() {
 #[test]
 fn the_first_crossing_is_reported_once() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     let before_line = course.len() - 3;
     let path = (before_line..course.len())
         .chain(0..3)
@@ -93,7 +93,7 @@ fn the_first_crossing_is_reported_once() {
 #[test]
 fn a_ship_nudged_back_and_forth_over_the_line_cannot_ratchet_the_counter() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     for tick in 0..20 {
         let index = if tick % 2 == 0 { course.len() - 1 } else { 0 };
         state.update(&course, course.position(index).unwrap(), tick, DT, false);
@@ -104,7 +104,7 @@ fn a_ship_nudged_back_and_forth_over_the_line_cannot_ratchet_the_counter() {
 #[test]
 fn the_first_fix_of_a_race_is_never_a_lap() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     // Spawn most of the way round, so the very first reading is a large
     // distance. Without the "no previous fix" guard this reads as a wrap.
     let position = course.position(course.len() - 1).expect("in range");
@@ -116,7 +116,7 @@ fn the_first_fix_of_a_race_is_never_a_lap() {
 #[test]
 fn driving_all_the_way_round_completes_exactly_one_lap() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     let outcomes = drive_lap(&mut state, &course, 0);
     let laps = outcomes.iter().filter(|o| o.lap_completed).count();
     assert_eq!(
@@ -135,7 +135,7 @@ fn driving_all_the_way_round_completes_exactly_one_lap() {
 #[test]
 fn the_lap_time_is_recorded_and_the_best_is_kept() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     let mut tick = 0;
 
     // Three laps. The clock is driven by the tick we pass in, not by how
@@ -180,7 +180,7 @@ fn the_lap_time_is_recorded_and_the_best_is_kept() {
 #[test]
 fn a_lap_past_the_recorded_maximum_is_not_recorded_and_does_not_panic() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     let mut tick = 0;
 
     for _ in 0..5 {
@@ -204,7 +204,7 @@ fn a_lap_past_the_recorded_maximum_is_not_recorded_and_does_not_panic() {
 fn a_time_trial_finishes_after_three_laps_and_a_speed_lap_never_does() {
     for (mode, expect_finish) in [(Mode::TimeTrial, true), (Mode::SpeedLap, false)] {
         let course = course();
-        let mut state = RaceState::new(mode, SpeedClass::Venom);
+        let mut state = RaceState::new(mode, SpeedClass::VENOM);
         let mut tick = 0;
         let mut finished_on = None;
 
@@ -233,7 +233,7 @@ fn a_time_trial_finishes_after_three_laps_and_a_speed_lap_never_does() {
 #[test]
 fn a_finished_race_stops_counting() {
     let course = course();
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     state.finished = true;
     let before = state;
     let outcome = state.update(&course, course.position(5).unwrap(), 999, DT, false);
@@ -244,7 +244,7 @@ fn a_finished_race_stops_counting() {
 #[test]
 fn crossing_the_line_backwards_leaves_the_lap_count_and_owes_the_crossing() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     drive_lap(&mut state, &course, 0);
     let position = course.position(0).expect("in range");
     state.update(&course, position, course.len() as u64, DT, false);
@@ -263,7 +263,7 @@ fn crossing_the_line_backwards_leaves_the_lap_count_and_owes_the_crossing() {
 #[test]
 fn the_lap_count_never_goes_below_one() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     // Sit just past the line, then reverse over it repeatedly.
     for _ in 0..3 {
         state.update(&course, course.position(1).unwrap(), 0, DT, false);
@@ -281,7 +281,7 @@ fn the_lap_count_never_goes_below_one() {
 #[test]
 fn a_ship_pushed_back_over_the_line_still_gets_the_lap_it_was_on() {
     let course = course();
-    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::SpeedLap, SpeedClass::VENOM);
     drive_lap(&mut state, &course, 0);
     let position = course.position(0).expect("in range");
     state.update(&course, position, course.len() as u64, DT, false);
@@ -301,7 +301,7 @@ fn a_ship_pushed_back_over_the_line_still_gets_the_lap_it_was_on() {
 #[test]
 fn a_zone_steps_every_ten_seconds_and_the_timer_resets_to_zero() {
     let course = course();
-    let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::Zone, SpeedClass::VENOM);
     let position = course.position(0).expect("in range");
 
     // Ten seconds at the fixed 60 Hz of ADR-0007 is 600 ticks, so the 600th
@@ -333,7 +333,7 @@ fn a_zone_steps_every_ten_seconds_and_the_timer_resets_to_zero() {
 fn only_zone_mode_scores_or_steps() {
     let course = course();
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
-        let mut state = RaceState::new(mode, SpeedClass::Venom);
+        let mut state = RaceState::new(mode, SpeedClass::VENOM);
         let position = course.position(0).expect("in range");
         for tick in 0..1_000 {
             state.update(&course, position, tick, DT, false);
@@ -349,8 +349,8 @@ fn a_clean_zone_pays_the_bonus_and_a_dirty_one_does_not() {
     let position = course.position(0).expect("in range");
     let ticks_per_zone = (zone::STEP_SECONDS * 60.0) as u64;
 
-    let mut clean = RaceState::new(Mode::Zone, SpeedClass::Venom);
-    let mut dirty = RaceState::new(Mode::Zone, SpeedClass::Venom);
+    let mut clean = RaceState::new(Mode::Zone, SpeedClass::VENOM);
+    let mut dirty = RaceState::new(Mode::Zone, SpeedClass::VENOM);
     let mut perfect = (false, false);
     for tick in COUNTDOWN..=COUNTDOWN + ticks_per_zone {
         perfect.0 |= clean
@@ -375,7 +375,7 @@ fn the_dirty_flag_clears_at_each_zone_step() {
     let course = course();
     let position = course.position(0).expect("in range");
     let ticks_per_zone = (zone::STEP_SECONDS * 60.0) as u64;
-    let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::Zone, SpeedClass::VENOM);
 
     // Dirty the first zone only.
     state.update(&course, position, COUNTDOWN, DT, true);
@@ -398,7 +398,7 @@ fn the_dirty_flag_clears_at_each_zone_step() {
 
 #[test]
 fn a_new_race_starts_on_lap_one_with_no_best() {
-    let state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     assert_eq!(state.lap, 1);
     assert_eq!(state.laps_completed(), 0);
     assert_eq!(state.best_lap_ticks, None);
@@ -409,15 +409,15 @@ fn a_new_race_starts_on_lap_one_with_no_best() {
 #[test]
 fn the_lap_target_comes_from_the_mode() {
     assert_eq!(
-        RaceState::new(Mode::TimeTrial, SpeedClass::Venom).laps_target,
+        RaceState::new(Mode::TimeTrial, SpeedClass::VENOM).laps_target,
         Some(3)
     );
     assert_eq!(
-        RaceState::new(Mode::SpeedLap, SpeedClass::Venom).laps_target,
+        RaceState::new(Mode::SpeedLap, SpeedClass::VENOM).laps_target,
         None
     );
     assert_eq!(
-        RaceState::new(Mode::Zone, SpeedClass::Venom).laps_target,
+        RaceState::new(Mode::Zone, SpeedClass::VENOM).laps_target,
         None
     );
 }
@@ -426,13 +426,13 @@ fn the_lap_target_comes_from_the_mode() {
 fn the_default_is_a_time_trial() {
     assert_eq!(
         RaceState::default(),
-        RaceState::new(Mode::TimeTrial, SpeedClass::Venom)
+        RaceState::new(Mode::TimeTrial, SpeedClass::VENOM)
     );
 }
 
 #[test]
 fn a_lap_clock_before_its_own_start_reads_zero() {
-    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     state.lap_start_tick = COUNTDOWN + 100;
     assert_eq!(state.lap_ticks(COUNTDOWN + 140), 40);
     assert_eq!(state.lap_ticks(COUNTDOWN + 100), 0);
@@ -445,7 +445,7 @@ fn a_lap_clock_before_its_own_start_reads_zero() {
 /// the floor that keeps the countdown out of it.
 #[test]
 fn the_lap_clock_starts_on_the_release_not_on_the_grid() {
-    let state = RaceState::new(Mode::TimeTrial, SpeedClass::Venom);
+    let state = RaceState::new(Mode::TimeTrial, SpeedClass::VENOM);
     assert_eq!(state.lap_ticks(0), 0);
     assert_eq!(state.lap_ticks(COUNTDOWN - 1), 0);
     assert_eq!(state.lap_ticks(COUNTDOWN), 0);
@@ -468,7 +468,7 @@ fn the_race_clock_is_zero_through_the_countdown_and_counts_from_the_release() {
 fn a_zone_holds_through_the_start_line_countdown() {
     let course = course();
     let position = course.position(0).expect("in range");
-    let mut state = RaceState::new(Mode::Zone, SpeedClass::Venom);
+    let mut state = RaceState::new(Mode::Zone, SpeedClass::VENOM);
     for tick in 0..COUNTDOWN {
         state.update(&course, position, tick, DT, false);
     }

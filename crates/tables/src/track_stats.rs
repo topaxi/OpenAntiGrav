@@ -101,7 +101,7 @@ impl TrackStats {
     /// the points [`resolve_skill_scale`] interpolates between.
     #[must_use]
     pub fn skill_curve(&self, class: SpeedClass) -> [f32; 3] {
-        self.skill_scale[class as usize]
+        self.skill_scale[class.index()]
     }
 }
 
@@ -212,25 +212,25 @@ pub fn parse(expanded: &str) -> Result<TrackStats> {
                 attribute: "Difficulty",
                 value: difficulty_name.to_string(),
             })?;
-            let class = SpeedClass::from_name(class_name).ok_or(Error::NotANumber {
+            let class = SpeedClass::census(class_name).ok_or(Error::NotANumber {
                 element: "Entry",
                 attribute: "Class",
                 value: class_name.to_string(),
             })?;
             let value = required_f32(entry, "Entry", "SkillScaleValue")?;
-            skill_scale[class as usize][difficulty as usize] = value;
+            skill_scale[class.index()][difficulty as usize] = value;
         }
         for row in levels.children_named("ModeModifiers") {
             let class_name = row.attr("Class").ok_or(Error::MissingAttribute {
                 element: "ModeModifiers",
                 attribute: "Class",
             })?;
-            let class = SpeedClass::from_name(class_name).ok_or(Error::NotANumber {
+            let class = SpeedClass::census(class_name).ok_or(Error::NotANumber {
                 element: "ModeModifiers",
                 attribute: "Class",
                 value: class_name.to_string(),
             })?;
-            mode_modifiers[class as usize] = ModeModifiers {
+            mode_modifiers[class.index()] = ModeModifiers {
                 head_to_head: required_f32(row, "ModeModifiers", "HeadToHead")?,
                 full_grid_with_weapons: required_f32(row, "ModeModifiers", "FullGridWithWeapons")?,
                 half_grid_with_weapons: required_f32(row, "ModeModifiers", "HalfGridWithWeapons")?,
@@ -280,7 +280,7 @@ fn class_row(stats: &Node, element: &'static str) -> Result<[f32; 4]> {
         .ok_or(Error::MissingElement { element })?;
     let mut row = [0.0; 4];
     for class in SpeedClass::ALL {
-        row[class as usize] = required_f32(node, element, class.as_str())?;
+        row[class.index()] = required_f32(node, element, class.as_str())?;
     }
     Ok(row)
 }
@@ -403,11 +403,15 @@ pub fn ambient_skill_scale(
     difficulty: Difficulty,
     mode: ModeTerm,
 ) -> f32 {
-    let Some(stats) = stats else {
+    // A class outside the four the track table is keyed by (Pure's VECTOR,
+    // 2048's SUPERPHANTOM) has no row in it: the same absent-table value the
+    // original substitutes when the table did not load. Chosen, not measured -
+    // no capture shows what a track table does for those rungs.
+    let (Some(stats), true) = (stats, class.slot().is_some()) else {
         return 2.0;
     };
     let base = stats.skill_curve(class)[difficulty as usize];
-    let terms = stats.mode_modifiers[class as usize];
+    let terms = stats.mode_modifiers[class.index()];
     base + match mode {
         ModeTerm::HeadToHead => terms.head_to_head,
         ModeTerm::Race {

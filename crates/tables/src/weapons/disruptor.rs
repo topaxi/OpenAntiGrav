@@ -194,7 +194,7 @@ impl DisruptorStats {
         let rung = if class.eq_ignore_ascii_case(VECTOR) {
             0
         } else {
-            crate::handling::SpeedClass::from_name(class)? as u8 + 1
+            crate::handling::SpeedClass::census(class)?.index() as u8 + 1
         };
         Some(self.speed_for_class(rung))
     }

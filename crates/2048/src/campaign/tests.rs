@@ -10,16 +10,26 @@ fn eclass_ordinals_round_trip() {
 }
 
 #[test]
-fn only_superphantom_has_no_four_wide_speed_class() {
+fn every_event_class_is_a_named_speed_class_in_ordinal_order() {
+    use oag_tables::handling::SpeedClass;
+    assert_eq!(EClass::Venom.speed_class(), SpeedClass::VENOM);
+    assert_eq!(EClass::Phantom.speed_class(), SpeedClass::PHANTOM);
     assert_eq!(
-        EClass::Venom.speed_class(),
-        Some(oag_tables::handling::SpeedClass::Venom)
+        EClass::SuperPhantom.speed_class(),
+        SpeedClass::SUPER_PHANTOM
     );
-    assert_eq!(
-        EClass::Phantom.speed_class(),
-        Some(oag_tables::handling::SpeedClass::Phantom)
+    for class in EClass::ALL {
+        assert_eq!(
+            SpeedClass::named(class.as_str()),
+            Some(class.speed_class()),
+            "{class:?}'s file spelling parses to the same rung"
+        );
+    }
+    assert!(
+        EClass::ALL
+            .windows(2)
+            .all(|p| p[0].speed_class() < p[1].speed_class())
     );
-    assert_eq!(EClass::SuperPhantom.speed_class(), None);
 }
 
 fn race_event(kind: EventKind, typedef_id: i64, laps: Option<u32>) -> Event {

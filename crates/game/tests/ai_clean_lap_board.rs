@@ -122,8 +122,8 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     // The class's own lap target, so a row can say whether five minutes held
     // the whole race - `[3, 4, 4, 5]`, so `PHANTOM` is two laps longer than
     // `VENOM` at a higher speed and the two do not automatically both fit.
-    let target = oag_tables::handling::SpeedClass::from_name(class).map_or(0, |rung| {
-        oag_race::Mode::SINGLE_RACE_LAPS_BY_CLASS[rung as usize]
+    let target = oag_tables::handling::SpeedClass::census(class).map_or(0, |rung| {
+        oag_race::Mode::SINGLE_RACE_LAPS_BY_CLASS[rung.index()]
     });
     let loaded = race::load(&race::Options {
         source: image.display().to_string(),

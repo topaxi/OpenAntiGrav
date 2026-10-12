@@ -54,7 +54,7 @@ use oag_tables::fexml::{Node, parse};
 /// reads as no count rather than a guess.
 #[must_use]
 pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
-    mode.laps_target(oag_race::SpeedClass::from_name(class)?)
+    mode.laps_target(oag_race::SpeedClass::census(class)?)
 }
 
 /// Lays a title's circuits out the way Wipeout HD/Fury's `Track Creation`

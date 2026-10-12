@@ -604,6 +604,8 @@ impl Race {
                 self.sim.respawns_in_a_row[slot] = 0;
             }
         }
+        // The race manager's field-wide writes the next tick's drivers read.
+        self.original_ai_end_tick(&places);
     }
 
     /// Advances every active craft's [`oag_race::Standing`].

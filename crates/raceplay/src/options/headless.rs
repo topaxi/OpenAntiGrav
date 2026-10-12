@@ -42,6 +42,7 @@ impl Setup {
             // one - which is what makes this a check of the per-slot work
             // rather than of slot 0 again.
             opponents: true,
+            no_opponents: false,
             trail_sparks: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has
@@ -91,6 +92,7 @@ impl Setup {
             leach_strip: None,
             destroy_stations: Vec::new(),
             finished_thrust: None,
+            original_tables: None,
             intro_camera: None,
             slot_teams: Vec::new(),
             collision: CollisionWorld::new(),

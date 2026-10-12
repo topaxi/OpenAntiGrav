@@ -389,6 +389,7 @@ impl Session {
         race_options.track = Some(plan.leg_entries[0].clone());
         race_options.mode = mode;
         race_options.class = plan.class;
+        race_options.no_driver_for_class = false;
         race_options.weapons_override = None;
         race_options.eliminator_kill_target = plan.eliminator_kill_target;
         race_options.laps_override = plan.laps_override;

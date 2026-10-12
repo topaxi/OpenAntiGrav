@@ -177,6 +177,9 @@ pub const ERA_2048_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     variants: &ERA_2048_VARIANTS,
     reships: "Wipeout 2048",
     alongside_label: Some("Wipeout 2048 (Omega)"),
+    // Unread: these are Omega's own re-textured copies of 2048's five craft, and
+    // their `handlingstats.xml` ladder has not been listed.
+    speed_classes: None,
     origin: oag_title::Origin::Measured,
 };
 
@@ -249,6 +252,11 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         preferred_follows_choice: oag_title::pre_race::Sourced::measured(false),
         // An HD campaign cell reads its skill off the circuit's `stats.xml`.
         event_ai: None,
+        tables: oag_title::original_driver::AiTables::PerClassFiles,
+        // Omega carries HD's driver; Pulse's rail and
+        // pitch, as before: neither was compared for Pure's two differences.
+        rail_turns_velocity: oag_title::pre_race::Sourced::chosen(true),
+        pitch_fade: None,
     };
 
 /// `AiManager_AddDriver`'s two circuit flags (`strcmp` with `05_Track`, class

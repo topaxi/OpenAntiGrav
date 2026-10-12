@@ -140,6 +140,8 @@ impl Pending {
             // against what the team declares once the source is open.
             skin: self.cli.skin.clone(),
             class: self.class.clone(),
+            // See `race::Options::no_driver_for_class`.
+            no_driver_for_class: !oag_ai::coverage::project_driver_covers(&self.class),
             mode: self.mode,
             // **From the settings here too, the same reason `difficulty`
             // below is** - `--race` has its own `settings::Settings`, loaded

@@ -524,7 +524,7 @@ ten of eleven ship directories, the eleventh being `Zone_01`, which authors no
 class**; it says the two titles differ, which is what makes the per-team file
 the thing to check rather than the global one.
 
-### Pure's fifth rung is raceable, and `SpeedClass` still has four variants
+### A speed class is a name on one ladder (2026-10-12)
 
 Confirmed 2026-09-05 on both Pure pressings: `VECTOR` is authored in every
 place a race reads a rung from, so nothing about it is a stand-in.
@@ -535,13 +535,29 @@ place a race reads a rung from, so nothing about it is a stand-in.
 | `<GlobalClass>` | `Data\XML\HandlingStats.xml` | yes | yes |
 | `<Pickupodds>` | `Data\XML\weaponstats.xml` | `class="Vector"` | **no** |
 
-**The enum was deliberately not widened.** `oag_physics::SpeedClass`'s
-discriminants index fixed four-wide tables - per-class weapon speeds and the
-global speed-pad/gravity/weapon-pad arrays - so a fifth variant would have
-forced a five-wide table on Pulse and HD, which author four, and given them a
-fabricated fifth entry. That is the invented stand-in `CLAUDE.md` forbids, and
-it would also have inverted `Stats::has_pulse_class_ladder`, whose whole meaning
-is `classes.len() == SpeedClass::ALL.len()`.
+**`SpeedClass` is data, not a four-variant enum.** `oag_tables::handling::SpeedClass`
+is one value type indexing `KNOWN` - `VECTOR, VENOM, FLASH, RAPIER, PHANTOM,
+SUPERPHANTOM`, slowest first, spelled as the files spell them - and
+`oag_physics::SpeedClass` and its gameplay glue are gone. A title's own ladder is
+`oag_title::SpeedClasses` (Pulse and HD four, Pure five with `VECTOR` below,
+2048 five with `SUPERPHANTOM` above, Omega unread). The four-wide census tables
+(lap counts 3/4/4/5, the `<GlobalClass>` arrays, AI and weapon-speed tables)
+are indexed by `SpeedClass::slot()`, which is `None` for a rung the census never
+covered: a table says "unmeasured for this class" instead of growing a fabricated
+fifth entry. A later file may extend `KNOWN`.
+
+**2048's ladder (measured 2026-10-12, both regions,
+`crates/tables/tests/speed_ladder_ground_truth.rs`):** the five native teams
+(`data/HandlingStats/<team>2048/<1..4>/`, 20 files each) author `VENOM, FLASH,
+RAPIER, PHANTOM, SUPERPHANTOM`; the twelve HD-derived teams it reships
+(`data/art/published/hdships/`, 36 files) author the four only; the Zone craft
+(`Zone`, `Zone Battle`, `Detonator`) author no `<Class>` at all. Omega:
+**checked, applies, not wired** - it re-ships 2048's native craft and AI tables
+(`SuperPhantomStats`), but its own craft `handlingstats.xml` ladder was not
+listed, so `speed_classes` stays `None` there.
+
+History, kept because the reasoning still explains the split: the enum was
+first left at four so Pulse and HD would not get a fabricated fifth entry.
 
 Instead a race carries the rung as **the name the disc spells** and resolves it
 against the file that authored it: `Stats::class_named`, `Global::class_named`

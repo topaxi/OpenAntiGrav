@@ -60,9 +60,9 @@ fn the_finished_venom_player_flies_at_the_thrust_ppsspp_read() {
     let (Some(mut data), Some(mut fedata)) = (archive("Data.wad"), archive("FEData.wad")) else {
         return;
     };
-    let entry = ai_race_stats::entry_name(SpeedClass::Venom);
+    let entry = ai_race_stats::entry_name(SpeedClass::VENOM);
     let stats =
-        ai_race_stats::from_blob(&data.read_name(&entry).expect("venom"), SpeedClass::Venom)
+        ai_race_stats::from_blob(&data.read_name(&entry).expect("venom"), SpeedClass::VENOM)
             .expect("venom parses");
     let track = track_stats::from_blob(
         &fedata
@@ -74,7 +74,7 @@ fn the_finished_venom_player_flies_at_the_thrust_ppsspp_read() {
     // g_weapons_enabled 1, eight racers, Easy.
     let skill = track_stats::ambient_skill_scale(
         Some(&track),
-        SpeedClass::Venom,
+        SpeedClass::VENOM,
         Difficulty::Easy,
         ModeTerm::Race {
             weapons: true,

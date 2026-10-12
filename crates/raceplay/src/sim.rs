@@ -60,6 +60,8 @@ pub struct RaceSim {
     /// The finished player's thrust table and skill; `None` off the four
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
+    /// The original opponent's tables, for [`super::Race::use_original_ai`].
+    pub(super) original_tables: Option<super::original_tables::OriginalTables>,
     /// The campaign's original opponent, when [`super::Race::use_original_ai`]
     /// switched it on; `None` flies this project's driver. Outside
     /// [`World`], so no state hash and no other mode moves.

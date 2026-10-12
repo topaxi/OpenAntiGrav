@@ -122,11 +122,11 @@ fn lap_counts_match_the_class_exactly_with_no_exception() {
             match cell.mode {
                 Mode::Race | Mode::Tournament | Mode::Head2Head => {
                     let expected = match cell.speed_class() {
-                        Some(oag_tables::handling::SpeedClass::Venom) => 3,
-                        Some(oag_tables::handling::SpeedClass::Flash) => 4,
-                        Some(oag_tables::handling::SpeedClass::Rapier) => 4,
-                        Some(oag_tables::handling::SpeedClass::Phantom) => 5,
-                        None => panic!(
+                        Some(oag_tables::handling::SpeedClass::VENOM) => 3,
+                        Some(oag_tables::handling::SpeedClass::FLASH) => 4,
+                        Some(oag_tables::handling::SpeedClass::RAPIER) => 4,
+                        Some(oag_tables::handling::SpeedClass::PHANTOM) => 5,
+                        _ => panic!(
                             "{}: {} cell has no recognised speed class ({:?})",
                             grid.name, cell.name, cell.class
                         ),

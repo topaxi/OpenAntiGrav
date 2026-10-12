@@ -51,6 +51,11 @@ pub struct GuestRoster {
     /// `None` for a roster that is the very same data (2048's HD twelve),
     /// where a real source of the reshipped title simply wins.
     pub alongside_label: Option<&'static str>,
+    /// The speed classes this roster's teams author, slowest first, as their
+    /// `handlingstats.xml` files spell them; `None` where the roster's files
+    /// have not been read. 2048's HD-derived twelve author four where its own
+    /// five author five.
+    pub speed_classes: Option<&'static [&'static str]>,
     /// Where the claim came from.
     pub origin: crate::effects::Origin,
 }
@@ -227,6 +232,35 @@ impl RaceDefaults {
         self.guest_roster
             .filter(|guest| guest.variants.teams.contains(&team))
             .map(|guest| guest.variants)
+    }
+
+    /// The speed classes a **bare** team id's `handlingstats.xml` authors:
+    /// [`GuestRoster::speed_classes`] for a guest team, this title's own
+    /// ladder ([`Self::speed_classes`]) for every other. `None` where that
+    /// ladder is unread.
+    #[must_use]
+    pub fn team_classes(&self, team: &str) -> Option<&'static [&'static str]> {
+        match self
+            .guest_roster
+            .filter(|guest| guest.variants.teams.contains(&team))
+        {
+            Some(guest) => guest.speed_classes,
+            None => self.speed_classes.map(|ladder| ladder.names),
+        }
+    }
+
+    /// Whether `team` can race `class`: `Some(false)` when its ladder is read
+    /// and does not name the class, `None` when it is unread.
+    ///
+    /// RACE REMIX hides a team that answers `Some(false)` - **chosen, not
+    /// measured** (the class row is shared with every other page, so the
+    /// team row, which RACE REMIX already re-supplies when the craft title
+    /// moves, is the one that narrows). An unread ladder hides nothing: the
+    /// load names what the files do carry.
+    #[must_use]
+    pub fn team_races_class(&self, team: &str, class: &str) -> Option<bool> {
+        self.team_classes(team)
+            .map(|names| names.iter().any(|n| n.eq_ignore_ascii_case(class)))
     }
 
     /// Whether this title has a variant axis at all, for *any* team.

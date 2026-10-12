@@ -7,11 +7,19 @@ use super::*;
 /// The four rungs every title measured so far shares.
 const FOUR: SpeedClasses = SpeedClasses {
     names: SpeedClasses::PULSE_LADDER,
+    remix_only: &[],
 };
 
 /// Wipeout Pure's shape: the same four with `VECTOR` ahead of them.
 const FIVE: SpeedClasses = SpeedClasses {
-    names: &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
+    names: SpeedClasses::PURE_LADDER,
+    remix_only: &[SpeedClasses::VECTOR],
+};
+
+/// Wipeout 2048's native shape: the four with `SUPERPHANTOM` above.
+const FIVE_ABOVE: SpeedClasses = SpeedClasses {
+    names: SpeedClasses::WIPEOUT_2048_LADDER,
+    remix_only: &[SpeedClasses::SUPER_PHANTOM],
 };
 
 /// The axis exists because the two disagree in **cardinality**, so that is
@@ -120,39 +128,46 @@ fn selectable_agrees_with_the_predicate() {
     assert!(FIVE.selectable().all(SpeedClasses::is_selectable));
 }
 
-/// `is_offered_outside_remix` confines `VECTOR` to RACE REMIX without
-/// touching `is_selectable` - the ordinary RACE page's narrower question,
-/// layered on top of the engine's own answer rather than replacing it.
+/// `is_offered_outside_remix` confines what the ladder's `remix_only` names to
+/// RACE REMIX without touching `is_selectable` - the ordinary RACE page's
+/// narrower question, layered on top of the engine's own answer.
 #[test]
-fn is_offered_outside_remix_confines_vector_and_nothing_else() {
-    assert!(!SpeedClasses::is_offered_outside_remix(
-        SpeedClasses::VECTOR
-    ));
-    assert!(!SpeedClasses::is_offered_outside_remix("vector"));
-
+fn is_offered_outside_remix_confines_the_ladders_remix_only_rungs_and_nothing_else() {
+    assert!(!FIVE.is_offered_outside_remix(SpeedClasses::VECTOR));
+    assert!(!FIVE.is_offered_outside_remix("vector"));
+    assert!(!FIVE_ABOVE.is_offered_outside_remix(SpeedClasses::SUPER_PHANTOM));
     for name in SpeedClasses::PULSE_LADDER {
-        assert!(
-            SpeedClasses::is_offered_outside_remix(name),
-            "{name} is not the confined rung and must still be offered"
-        );
+        assert!(FIVE.is_offered_outside_remix(name), "{name}");
+        assert!(FIVE_ABOVE.is_offered_outside_remix(name), "{name}");
+        assert!(FOUR.is_offered_outside_remix(name), "{name}");
     }
+    // A rung the ladder does not carry is not offered by it at all.
+    assert!(!FOUR.is_offered_outside_remix(SpeedClasses::VECTOR));
 
     // Every measured rung stays selectable - the confinement is a menu-page
     // rule on top of engine capability, not a narrower version of it.
     assert!(SpeedClasses::is_selectable(SpeedClasses::VECTOR));
+    assert!(SpeedClasses::is_selectable(SpeedClasses::SUPER_PHANTOM));
 }
 
 /// The subset of [`SpeedClasses::selectable`] the ordinary RACE page actually
-/// draws - four even for Pure's own five-rung ladder.
+/// draws - four even for Pure's five and 2048's five.
 #[test]
-fn a_pure_shaped_ladders_race_page_row_is_four() {
-    let race_page: Vec<&'static str> = FIVE
-        .selectable()
-        .filter(|name| SpeedClasses::is_offered_outside_remix(name))
-        .collect();
+fn a_five_rung_ladders_race_page_row_is_four() {
+    for ladder in [FIVE, FIVE_ABOVE] {
+        let race_page: Vec<&'static str> = ladder.race_page().collect();
+        assert_eq!(race_page, SpeedClasses::PULSE_LADDER);
+    }
+}
 
-    assert_eq!(race_page, SpeedClasses::PULSE_LADDER);
-    assert!(!race_page.contains(&SpeedClasses::VECTOR));
+/// RACE REMIX unions every mounted ladder: Pure's `VECTOR` first, 2048's
+/// `SUPERPHANTOM` last, whichever order the titles arrive in.
+#[test]
+fn the_union_spans_vector_below_and_super_phantom_above() {
+    let want: Vec<&str> = SpeedClasses::MEASURED.to_vec();
+    for order in [[FOUR, FIVE, FIVE_ABOVE], [FIVE_ABOVE, FIVE, FOUR]] {
+        assert_eq!(SpeedClasses::union(order), want);
+    }
 }
 
 /// [`SpeedClasses::MEASURED`] is a spell-checking vocabulary and must stay the
@@ -161,10 +176,11 @@ fn a_pure_shaped_ladders_race_page_row_is_four() {
 #[test]
 fn the_measured_vocabulary_is_the_union_of_the_read_ladders() {
     assert_eq!(
-        SpeedClasses::union(vec![FOUR, FIVE]),
+        SpeedClasses::union(vec![FOUR, FIVE, FIVE_ABOVE]),
         SpeedClasses::MEASURED
     );
     assert!(SpeedClasses::is_measured_name("vector"));
     assert!(SpeedClasses::is_measured_name("PHANTOM"));
+    assert!(SpeedClasses::is_measured_name("superphantom"));
     assert!(!SpeedClasses::is_measured_name("nonsense"));
 }

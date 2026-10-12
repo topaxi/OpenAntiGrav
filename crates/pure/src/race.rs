@@ -81,8 +81,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
-    original_opponent: false,
-    original_driver: None,
+    // The campaign's opponents fly Pure's own sibling driver
+    // ([`ORIGINAL_DRIVER`]); every other mode keeps this project's.
+    original_opponent: true,
+    original_driver: Some(&ORIGINAL_DRIVER),
     // Pure's own `speech_zone.bnk` was listed alongside Pulse's and HD's -
     // see `docs/formats/psp-audio.md`'s bank table - and names no `MR_*`-shaped
     // speed-class cues at all, only the numbered ladder and a medal set.
@@ -128,7 +130,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // where the filter lives.
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
-        names: &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
+        names: oag_title::SpeedClasses::PURE_LADDER,
+        remix_only: &[oag_title::SpeedClasses::VECTOR],
     }),
 };
 
@@ -447,6 +450,40 @@ pub const DEFAULT_TRACK: &str = r"Data\Environments\01_Vineta_K\track.vex";
 /// is Pure's own preference - its definition declares Feisar first - so change
 /// this freely; no measurement is calibrated to it.
 pub const DEFAULT_TEAM: &str = "Assegai";
+
+/// Pure's opponent, the sibling Pulse's grew out of, as read off `BOOT.BIN`
+/// (`docs/ghidra/functions/psp-pure-usa/ai-controls.md`): the legacy block's
+/// cruise throttle (measured on 1,688 of 1,689 live samples) and the ringless
+/// planner (209 of 209 live calls) come with [`AiTables::LegacyBlock`]; the
+/// rail and the pitch differ from Pulse's as below. The formation fields are
+/// never read by the cruise throttle.
+///
+/// [`AiTables::LegacyBlock`]: oag_title::original_driver::AiTables::LegacyBlock
+pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
+    oag_title::original_driver::OriginalDriver {
+        // Pulse's formation terms: no reader on Pure's legacy path.
+        finished_spread: oag_title::pre_race::Sourced::chosen(50.0),
+        finished_wander_to_place: oag_title::pre_race::Sourced::chosen(false),
+        eliminator_drops_when_behind: oag_title::pre_race::Sourced::chosen(false),
+        // `AiManager_Update` (`0x0891b8d0`) increments, then flags; moot under
+        // `every_tick`.
+        round_robin_pre_increment: oag_title::pre_race::Sourced::measured(true),
+        halved_lookahead: &[],
+        // `AiManager_SnapshotRacers` flags every racer every frame (measured,
+        // eight drivers a frame).
+        every_tick: oag_title::pre_race::Sourced::measured(true),
+        // The ringless planner's two bumps and Pulse's search, read whole.
+        event_ring_rate: oag_title::pre_race::Sourced::measured(false),
+        coin_ordered_search: oag_title::pre_race::Sourced::measured(false),
+        preferred_follows_choice: oag_title::pre_race::Sourced::measured(false),
+        event_ai: None,
+        tables: oag_title::original_driver::AiTables::LegacyBlock,
+        // `Ai_SnapToLane` (`0x08917b80`) hands `Body_SetPosition` the position
+        // alone; the turned velocity stays on the stack.
+        rail_turns_velocity: oag_title::pre_race::Sourced::measured(false),
+        // `Ai_ComputePitch` (`0x0891892c`) times `FUN_08917744(d, 1030, 1180, 1, 0)`.
+        pitch_fade: Some((1030.0, 1180.0)),
+    };
 
 #[cfg(test)]
 mod tests {

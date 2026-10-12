@@ -178,14 +178,15 @@ rather than a gap.** Wipeout Pure's own front end authors **five**
 `<Menu name="Class">` entries - `VECTOR`, `VENOM`, `FLASH`, `RAPIER`,
 `PHANTOM` - confidence 94, and this build's engine can name and race every one
 of them: see
-[handling-stats.md](../formats/handling-stats.md#pures-fifth-rung-is-raceable-and-speedclass-still-has-four-variants)
+[handling-stats.md](../formats/handling-stats.md#a-speed-class-is-a-name-on-one-ladder-2026-10-12)
 for how `Stats::class_named`, `Global::class_named` and
 `oag_weapons::pickup::table_for` resolve a rung by the name the disc spells,
 with no enum widened to fit it. Despite that, **the ordinary per-title RACE
 page offers four**, even when the booted title is Wipeout Pure - `VECTOR` is
 offered on the RACE REMIX page only.
 
-The mechanism is `oag_title::SpeedClasses::is_offered_outside_remix`, layered
+The mechanism is `oag_title::SpeedClasses::is_offered_outside_remix`, which reads the ladder's own
+`remix_only` list (Pure: `VECTOR`; 2048: `SUPERPHANTOM`), layered
 on top of `is_selectable` rather than replacing it: `is_selectable` still says
 `true` for `VECTOR`, which is what keeps RACE REMIX's union, `oag-trace`'s
 `--class` spell-check and every resolution path exactly as they were. Only the
@@ -223,6 +224,42 @@ page warns and clamps again on every launch from that state rather than
 silently adopting `"venom"` as the player's new saved choice. Writing back
 would clobber the remix pick the moment the player so much as glanced at the
 ordinary page - the clamp is a per-launch correction, not a migration.
+
+### RACE REMIX offers every known class, and hides a team that lacks it (2026-10-12)
+
+The RACE REMIX CLASS row is the union of every mounted title's ladder, slowest
+first: with Pulse, Pure and 2048 mounted it reads `VECTOR, VENOM, FLASH, RAPIER,
+PHANTOM, SUPERPHANTOM` (maintainer decision). 2048's `SUPERPHANTOM` is confined
+to remix on the same footing as `VECTOR` (chosen, not measured; 2048 has no race
+box anyway).
+
+**When a team's files do not author the chosen class, the TEAM row hides the
+team** (**chosen, not measured**). The class row is one shared setting while the
+team row is already scoped to the craft title and re-supplied when it changes, so
+it is the row that narrows; `race.class` changes now re-supply it too.
+`oag_title::RaceDefaults::team_races_class` answers per team from data: a guest
+roster carries its own ladder (`GuestRoster::speed_classes`: 2048's twelve HD
+teams author four, its native five author five), every other team the title's
+ladder, and an unread ladder (Omega) hides nothing. With no team left (`VECTOR`
+paired with a Pulse craft title) START refuses with a log line naming the class
+and the craft title, rather than racing a default team that cannot load it.
+Pinned by `super_phantom_hides_the_hd_teams_and_vector_hides_every_2048_team` and
+`a_craft_title_whose_ladder_lacks_the_class_offers_no_team`.
+
+### A class no controller covers races without opponents (2026-10-12)
+
+Maintainer rule: AI opponents exist only for a class something defines how to
+fly. This project's driver covers the classes its sweeps verify
+(`oag_ai::coverage::PROJECT_DRIVER_CLASSES`: Pulse's four and Pure's `VECTOR`);
+the original's driver covers the classes its title's AI tables author, in the
+campaign only. The set is data on the controller, so a later pilot-file
+`classes` key or a new sweep widens it in one place. RACE REMIX on `SUPERPHANTOM`
+therefore runs with no opponents, and its AI DIFFICULTY row is pinned to
+`NO OPPONENTS: NO DRIVER FOR THIS CLASS` (`OAG_REMIX_NO_DRIVER`) while that
+class is chosen; the `pinned` class list in `menu.toml` is held equal to the
+code's set by `the_remix_ai_row_is_pinned_for_exactly_the_uncovered_classes`.
+`Options::no_driver_for_class` carries it to `Race::start`, which fields an
+empty grid. Campaign launches clear it.
 
 ## RACE REMIX: CUSTOM tracks
 
@@ -386,7 +423,7 @@ of mistake the format check cannot see:
 - The TEAM row must carry no spelled-out `values` at all - the roster is what
   the open source offers plus what a mounted pack adds, and no list in this
   repository can know either, so `values_from` is the only legal source for
-  it - and every CLASS value must parse as `oag_physics::SpeedClass`. A
+  it - and every CLASS value must parse as `oag_tables::handling::SpeedClass::census`. A
   spelled team would fail deep inside an archive lookup at race load, with a
   message about a missing WAD entry rather than about a menu; see
   `the_race_page_offers_only_teams_and_classes_the_game_accepts` in

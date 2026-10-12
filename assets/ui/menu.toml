@@ -303,8 +303,16 @@ kind = "choice"
 label = "AI DIFFICULTY"
 string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
-values = ["novice", "skilled", "elite", "ace"]
+values_from = "remix_ai_difficulty"
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
+# A class no controller covers races without opponents (`oag_ai::coverage`:
+# this project's driver is verified on Pulse's four and Pure's VECTOR; the
+# original's driver only in the campaign). The list below is the classes the
+# project driver does not cover - a test keeps it equal to `KNOWN` minus
+# `PROJECT_DRIVER_CLASSES`.
+pinned = [
+    { setting = "race.class", values = ["superphantom"], shows = "none" },
+]
 
 # Title first, then a title-scoped list, on both halves - the shape the
 # feature's own request asked for. TRACK TITLE and CRAFT TITLE are the same

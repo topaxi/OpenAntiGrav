@@ -331,55 +331,9 @@ impl Handling {
     };
 }
 
-/// The four speed classes, in the order the XML lists them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpeedClass {
-    /// Slowest.
-    Venom,
-    /// Second.
-    Flash,
-    /// Third.
-    Rapier,
-    /// Fastest.
-    Phantom,
-}
-
-impl SpeedClass {
-    /// All four, slowest first.
-    pub const ALL: [Self; 4] = [Self::Venom, Self::Flash, Self::Rapier, Self::Phantom];
-
-    /// The `name` attribute the XML uses.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Venom => "VENOM",
-            Self::Flash => "FLASH",
-            Self::Rapier => "RAPIER",
-            Self::Phantom => "PHANTOM",
-        }
-    }
-
-    /// Parses the XML's `name` attribute, case-insensitively.
-    #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|class| class.as_str().eq_ignore_ascii_case(name))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn speed_class_names_round_trip() {
-        for class in SpeedClass::ALL {
-            assert_eq!(SpeedClass::from_name(class.as_str()), Some(class));
-        }
-        assert_eq!(SpeedClass::from_name("venom"), Some(SpeedClass::Venom));
-        assert_eq!(SpeedClass::from_name("nonsense"), None);
-    }
 
     /// `ride_height` looking like a target height is the likeliest misreading of this
     /// parameter set, so the correction is a test and not only a doc comment.

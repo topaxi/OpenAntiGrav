@@ -126,7 +126,7 @@ use oag_mesh::mesh;
 use oag_mesh::mesh::{DrawCall, Model};
 use oag_mesh::mesh_render;
 use oag_mesh::mesh_render::Anisotropy;
-use oag_physics::{CollisionWorld, Environment, Evaluated, Handling, SpeedClass};
+use oag_physics::{CollisionWorld, Environment, Evaluated, Handling};
 use oag_present::perf::SceneStats;
 use oag_race::recovery::{
     BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
@@ -142,6 +142,7 @@ use oag_render::pvs::{
 };
 use oag_render::{shield::ShipShield, track as track_render};
 use oag_tables::handling;
+use oag_tables::handling::SpeedClass;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
 use oag_vex::vex;
 
@@ -182,6 +183,7 @@ mod missile_blast;
 mod models;
 mod options;
 mod original_ai;
+mod original_tables;
 mod pads;
 mod perfect_start;
 mod pilot_assist;

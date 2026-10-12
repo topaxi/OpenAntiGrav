@@ -504,8 +504,8 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) dlc: Vec<String>,
 
-    /// The speed class: venom, flash, rapier or phantom - or vector, which
-    /// only Wipeout Pure authors.
+    /// The speed class: venom, flash, rapier or phantom - or vector (Wipeout
+    /// Pure) or superphantom (Wipeout 2048), which only those titles author.
     ///
     /// Checked here against every ladder measured so far, which is
     /// spell-checking rather than availability: whether *this* source's files
