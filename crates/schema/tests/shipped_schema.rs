@@ -17,6 +17,7 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/ui/menu.toml", "menu"),
         ("assets/ai/example-pilot.toml", "pilot"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
+        ("crates/game/tests/fixtures/music-state.toml", "music-state"),
     ]
 }
 

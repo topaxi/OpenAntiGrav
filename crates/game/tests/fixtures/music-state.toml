@@ -1,0 +1,10 @@
+# OpenAntiGrav race music place: which soundtrack track a race was on and how far
+# into it, per title. This project's own file, rewritten as you race.
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/music-state.tosd", version = "1.0.0" }
+
+[[playlist]]
+title = "Wipeout Pulse"
+index = 3
+second = 45
+tracks = 16
+track_seconds = 213.4

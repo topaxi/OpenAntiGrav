@@ -17,6 +17,13 @@ fn a_matching_listing_accepts_the_state() {
 }
 
 #[test]
+fn decoder_padding_is_the_same_track() {
+    let mut listed = LISTING;
+    listed[2] = 179.917;
+    assert_eq!(state().check(&listed), Ok(()));
+}
+
+#[test]
 fn a_changed_playlist_is_refused_with_its_reason() {
     assert_eq!(state().check(&[]), Err(Unusable::Unlisted));
     assert_eq!(
@@ -24,7 +31,7 @@ fn a_changed_playlist_is_refused_with_its_reason() {
         Err(Unusable::CountChanged { saved: 4, now: 3 })
     );
     let mut swapped = LISTING;
-    swapped[2] = 181.0;
+    swapped[2] = 183.0;
     assert!(matches!(
         state().check(&swapped),
         Err(Unusable::TrackChanged { index: 2, .. })

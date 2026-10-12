@@ -46,6 +46,8 @@ mod load;
 mod load_probe;
 #[path = "session/menu_sound.rs"]
 mod menu_sound;
+#[path = "session/music.rs"]
+mod music;
 pub(crate) use load_probe::LoadProbe;
 #[path = "session/menus.rs"]
 pub(crate) mod menus;
@@ -103,6 +105,10 @@ pub(crate) struct Session {
     pub(crate) audio: oag_sound::Audio,
     /// Which Pulse releases this machine has. See [`App::music_discs`].
     pub(crate) music_discs: oag_sound::MusicDiscs,
+    /// The race playlist's saved place: whether this run has already put it back,
+    /// what was last written and the ticks since a race last wrote it. See
+    /// `oag_game::music_state` and `session/music.rs`.
+    pub(crate) music_place: music::Place,
     pub(crate) clock: TickClock,
     pub(crate) last: web_time::Instant,
     /// Recent frame times, for the performance overlay.

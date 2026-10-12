@@ -54,6 +54,7 @@ pub mod loading;
 pub mod logfile;
 pub mod medal_watch;
 pub mod movie;
+pub mod music_state;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

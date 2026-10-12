@@ -374,6 +374,7 @@ impl App {
             touch_overlay: crate::touch::Overlay::default(),
             audio,
             music_discs: self.music_discs.clone(),
+            music_place: Default::default(),
             screen_filters,
             missing_screen_filter: None,
             clock: TickClock::new(TickRate::DEFAULT),
@@ -747,6 +748,14 @@ impl ApplicationHandler for App {
             }
 
             _ => {}
+        }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // Every way out of the run ends here (window close, a menu's quit, a
+        // quit from the race), so the playlist's place is saved once, whichever.
+        if let Some(session) = self.state.as_mut() {
+            session.save_race_music();
         }
     }
 
