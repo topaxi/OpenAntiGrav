@@ -1,0 +1,14 @@
+# OpenAntiGrav's own extras, as a mod. Built into the binary (crates/mod/src/extras.rs)
+# and read through the same reader a player's mod goes through; this is the worked
+# example of the format, see docs/tools/mods.md.
+
+toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod.tosd", version = "1.0.0" }
+
+[mod]
+id = "oag.extras"
+name = "OpenAntiGrav extras"
+version = "1.0.0"
+authors = ["The OpenAntiGrav contributors"]
+license = "MIT OR Apache-2.0"
+description = "The rows this project adds around each title's own main menu: REMIX, RECORDS, QUIT, and RACEBOX and OPTIONS where a title's original menu has none."
+repository = "https://github.com/topaxi/OpenAntiGrav"

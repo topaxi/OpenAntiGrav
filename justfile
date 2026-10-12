@@ -693,6 +693,17 @@ view *ARGS:
 wad *ARGS:
     cargo run -q -p oag-tools --bin oag-wad -- "$@"
 
+# Writes a mod folder as a `.oagmod` (zip, zstd for text and data, stored for PNG and OGG): `just pack-mod mods/my-mod`.
+# `just mods-check <path>` opens one and checks its manifest; `just mods-list` lists what the search path finds.
+pack-mod FOLDER *ARGS:
+    cargo run -q -p oag-tools --bin oag-mod -- pack {{FOLDER}} {{ARGS}}
+
+mods-check PATH:
+    cargo run -q -p oag-tools --bin oag-mod -- check {{PATH}}
+
+mods-list *DIRS:
+    cargo run -q -p oag-tools --bin oag-mod -- list {{DIRS}}
+
 # Rebuild the WAD entry-name candidate list from a disc image
 mine-names image:
     python3 scripts/mine-names.py {{image}}

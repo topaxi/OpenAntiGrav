@@ -32,7 +32,9 @@ use std::collections::{BTreeSet, HashMap};
 use crate::language::StringTable;
 use oag_core::buttons::button_from_name;
 
-use super::{Action, Choice, Condition, Entry, Page, Pin, Restart, Value, ValueSource, Warning};
+use super::{
+    Action, Choice, Condition, Entry, Page, Pin, Restart, RowMeta, Value, ValueSource, Warning,
+};
 
 /// The schema kind a menu file declares in its `[toml-schema]` header.
 pub const SCHEMA_KIND: &str = "menu";
@@ -97,6 +99,16 @@ pub enum Error {
     /// A page nothing can reach, which is a menu entry somebody forgot to add.
     #[error("page {0:?} is not reachable from the root page")]
     Unreachable(String),
+    /// A row a mod adds that cannot be placed or used. Names the mod and the key.
+    #[error("mod {mod_id}: {key}: {problem}")]
+    Mod {
+        /// The mod's `id`.
+        mod_id: String,
+        /// The row and key at fault, as the mod's file spells them.
+        key: String,
+        /// What is wrong with it.
+        problem: String,
+    },
     /// A `disabled_by` naming a setting nothing edits, or a value no row can
     /// hold.
     #[error("{context}: disabled_by {setting:?}: {problem}")]
@@ -109,6 +121,9 @@ pub enum Error {
         problem: String,
     },
 }
+
+mod build;
+pub use build::{Added, For, ModMenu};
 
 /// The file's own shape, before it is checked and resolved.
 mod raw {
@@ -142,6 +157,9 @@ mod raw {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     pub struct Entry {
+        /// The stable id a mod's `parent`/`after` names. Optional: a row nothing
+        /// refers to needs none.
+        pub id: Option<String>,
         pub kind: String,
         #[serde(default)]
         pub label: String,
@@ -238,6 +256,21 @@ impl Definition {
     /// not know, a duplicate or dangling page id, an unknown action or button,
     /// an entry missing a field its kind needs, and a page nothing links to.
     pub fn parse(text: &str, strings: &StringTable) -> Result<Self, Error> {
+        Self::parse_with(text, strings, true)
+    }
+
+    /// [`Self::parse`] without the reachability check: the tree this project
+    /// ships holds pages (REMIX, RECORDS) that only a mod's row opens, so it is
+    /// whole only once [`Self::build`] has merged the extras in.
+    ///
+    /// # Errors
+    ///
+    /// As [`Self::parse`], except [`Error::Unreachable`].
+    pub fn parse_vanilla(text: &str, strings: &StringTable) -> Result<Self, Error> {
+        Self::parse_with(text, strings, false)
+    }
+
+    fn parse_with(text: &str, strings: &StringTable, reachable: bool) -> Result<Self, Error> {
         let file: raw::File = toml::from_str(text)?;
         oag_schema::check(file.toml_schema.as_ref(), SCHEMA_KIND, SCHEMA_MAJOR)?;
 
@@ -256,21 +289,30 @@ impl Definition {
         for page in &file.pages {
             let mut entries = Vec::with_capacity(page.entries.len());
             let mut subtitles = Vec::with_capacity(page.entries.len());
+            let mut meta = Vec::with_capacity(page.entries.len());
             for (row, entry) in page.entries.iter().enumerate() {
                 let context = format!("page {:?} entry {row}", page.id);
                 entries.push(resolve(entry, &context, &index, strings)?);
                 subtitles.push(resolve_subtitle(entry, strings));
+                meta.push(RowMeta {
+                    id: entry.id.clone(),
+                    parent: None,
+                });
             }
             pages.push(Page {
                 id: page.id.clone(),
                 title: resolved(strings, page.title_string_id.as_deref(), &page.title),
                 entries,
                 subtitles,
+                meta,
             });
         }
 
         let definition = Self { pages, root };
-        definition.check()?;
+        definition.check_rows()?;
+        if reachable {
+            definition.check_reachable()?;
+        }
         Ok(definition)
     }
 
@@ -331,6 +373,11 @@ impl Definition {
     }
 
     pub fn check(&self) -> Result<(), Error> {
+        self.check_rows()?;
+        self.check_reachable()
+    }
+
+    fn check_rows(&self) -> Result<(), Error> {
         for page in &self.pages {
             for (row, entry) in page.entries.iter().enumerate() {
                 let context = format!("page {:?} entry {row}", page.id);
@@ -349,6 +396,10 @@ impl Definition {
             }
         }
 
+        Ok(())
+    }
+
+    fn check_reachable(&self) -> Result<(), Error> {
         let mut seen = BTreeSet::new();
         let mut stack = vec![self.root];
         while let Some(page) = stack.pop() {

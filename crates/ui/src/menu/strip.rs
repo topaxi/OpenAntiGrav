@@ -47,7 +47,7 @@
 
 use crate::frontend::{Align, Draw};
 
-use super::{Entry, Menu, Page, Skin, skin::Strip};
+use super::{Entry, Menu, Page, Skin, reveal::Tab, skin::Strip};
 
 /// Whether this page can be drawn as a strip.
 ///
@@ -134,8 +134,10 @@ fn draw_blocks(
 
     let mut out = Vec::new();
     let mut left = strip.x;
-    for (index, entry) in menu.page().entries.iter().enumerate() {
-        let selected = index == menu.selected();
+    let mut head_left = left;
+    for Tab { row: index, depth } in menu.tabs() {
+        let entry = &menu.page().entries[index];
+        let selected = menu.tab_selected(index);
         // `ItemWidth`, plus the selected bonus by however far this entry's
         // block has grown toward it - `1.0` at rest on the selected entry,
         // `0.0` on the rest, in between during a cursor move.
@@ -150,11 +152,18 @@ fn draw_blocks(
         } else {
             frame.ink
         };
+        // An attached row sits under its head, a tab-height and a gap down each.
+        let (x, y) = if depth == 0 {
+            head_left = left;
+            (left, strip.y)
+        } else {
+            (head_left, strip.y + depth as f32 * (height + gap))
+        };
         if let Some(color) = fill {
             super::block::draw(
                 &super::block::Block {
-                    x: left,
-                    y: strip.y,
+                    x,
+                    y,
                     width,
                     height,
                     color,
@@ -167,8 +176,8 @@ fn draw_blocks(
         }
 
         out.push(Draw::Text {
-            x: left + gap,
-            y: strip.y + tab_top_pad,
+            x: x + gap,
+            y: y + tab_top_pad,
             scale,
             // Every entry is this same colour, selected or not: `HD_White`
             // in `HorizMenu_LayoutBlocks`, which is `TextColor` here.
@@ -181,14 +190,16 @@ fn draw_blocks(
 
         // The underline, selected entry only, and only alongside its own
         // tab: on a title with no fill the mark would float under nothing.
-        if selected
+        if index == menu.selected()
             && fill.is_some()
             && let Some(cursor) = art.cursor
         {
-            underline(&numbers, cursor, menu, skin, left, strip.y, &mut out);
+            underline(&numbers, cursor, menu, skin, x, y, &mut out);
         }
 
-        left += width + gap;
+        if depth == 0 {
+            left += width + gap;
+        }
     }
     out
 }
@@ -274,12 +285,20 @@ fn draw_measured(
     // The **tab's own left edge**, not the label's pen position - see this
     // module's own "what the anchor means" note. The pen is derived from it.
     let mut left = strip.x;
-    for (index, entry) in menu.page().entries.iter().enumerate() {
-        let label = entry.label();
-        let selected = index == menu.selected();
+    let mut head_left = left;
+    for Tab { row: index, depth } in menu.tabs() {
+        let label = menu.page().entries[index].label();
+        let selected = menu.tab_selected(index);
         let width = measure(label) * scale;
-        let pen_x = left + tab_left_pad;
-        let pen_y = strip.y + tab_top_pad;
+        // An attached row sits under its head, a tab-height and a gap down each.
+        let (x, y) = if depth == 0 {
+            head_left = left;
+            (left, strip.y)
+        } else {
+            (head_left, strip.y + depth as f32 * (tab_height + gap))
+        };
+        let pen_x = x + tab_left_pad;
+        let pen_y = y + tab_top_pad;
 
         // The tab behind the label, in two pieces: the real tab's top-right
         // corner is a 45-degree cut followed by a flat landing before the
@@ -300,8 +319,8 @@ fn draw_measured(
             let tab_width = tab_left_pad + width;
             out.push(Draw::Fill {
                 rect: [
-                    left,
-                    strip.y + chamfer_height,
+                    x,
+                    y + chamfer_height,
                     tab_width,
                     tab_height - chamfer_height,
                 ],
@@ -312,12 +331,7 @@ fn draw_measured(
             // clamps its own cut to the band's width, so the two together
             // shrink the band to nothing rather than inverting it.
             out.push(Draw::ChamferedFill {
-                rect: [
-                    left,
-                    strip.y,
-                    (tab_width - chamfer_landing).max(0.0),
-                    chamfer_height,
-                ],
+                rect: [x, y, (tab_width - chamfer_landing).max(0.0), chamfer_height],
                 chamfer: [0.0, chamfer_cut],
                 color,
             });
@@ -345,7 +359,7 @@ fn draw_measured(
         // `super::read_frame` already chose. Its own colour is measured
         // rather than assumed: the one capture with a visible mark shows it
         // in the label's own white, not the tab's `HD_Blue`.
-        if selected && fill.is_some() {
+        if index == menu.selected() && fill.is_some() {
             out.push(Draw::Fill {
                 rect: [
                     pen_x,
@@ -359,7 +373,9 @@ fn draw_measured(
 
         // The pen advances by the same step it always did, so the gap between
         // two tabs is unchanged: `left` and `pen_x` differ by a constant.
-        left += width + gap;
+        if depth == 0 {
+            left += width + gap;
+        }
     }
     out
 }
@@ -391,14 +407,23 @@ pub(super) fn regions(
             let gap = numbers.gap * sx;
             let height = numbers.height * sy;
             let mut left = strip.x;
-            for index in 0..menu.page().entries.len() {
+            let mut head_left = left;
+            for Tab { row: index, depth } in menu.tabs() {
                 let width = (numbers.item_width + numbers.focus_extra * menu.focus_of(index)) * sx;
+                let (x, y) = if depth == 0 {
+                    head_left = left;
+                    (left, strip.y)
+                } else {
+                    (head_left, strip.y + depth as f32 * (height + gap))
+                };
                 out.push(Region {
                     row: index,
                     part: Part::Row,
-                    rect: [left, strip.y, width, height],
+                    rect: [x, y, width, height],
                 });
-                left += width + gap;
+                if depth == 0 {
+                    left += width + gap;
+                }
             }
         }
         _ => {
@@ -406,14 +431,23 @@ pub(super) fn regions(
             let (tab_left_pad, _) = skin.tab_pad();
             let tab_height = skin.tab_height();
             let mut left = strip.x;
-            for entry in &menu.page().entries {
-                let width = measure(entry.label()) * scale;
+            let mut head_left = left;
+            for Tab { row, depth } in menu.tabs() {
+                let width = measure(menu.page().entries[row].label()) * scale;
+                let (x, y) = if depth == 0 {
+                    head_left = left;
+                    (left, strip.y)
+                } else {
+                    (head_left, strip.y + depth as f32 * (tab_height + gap))
+                };
                 out.push(Region {
-                    row: out.len(),
+                    row,
                     part: Part::Row,
-                    rect: [left, strip.y, tab_left_pad + width, tab_height],
+                    rect: [x, y, tab_left_pad + width, tab_height],
                 });
-                left += width + gap;
+                if depth == 0 {
+                    left += width + gap;
+                }
             }
         }
     }

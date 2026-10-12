@@ -77,8 +77,8 @@ fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
 #[test]
 fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
     let strings = oag_ui::language::StringTable::default();
-    let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, &strings)
-        .expect("the built-in menu definition parses");
+    let mut definition =
+        oag_ui::menu::Definition::built_in(&strings).expect("the built-in menu definition parses");
     definition.drop_unavailable_race_variant(oag_pulse::TITLE);
     definition.drop_rows_picked_on_screen(oag_pulse::TITLE);
     let mut model = oag_ui::menu::Menu::new(definition);

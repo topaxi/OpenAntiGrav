@@ -25,7 +25,7 @@ use oag_ui::menu::*;
 /// The definition this build actually ships. Every test that can use it
 /// does, so the file is exercised rather than a fixture standing in for it.
 fn built_in() -> Definition {
-    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+    Definition::built_in(&oag_ui::language::StringTable::default())
         .expect("the built-in menu must parse")
 }
 

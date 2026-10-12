@@ -182,6 +182,9 @@ impl Session {
         // column. Set from the same skin the drawing side reads, so what is on
         // screen and what the buttons do cannot disagree.
         model.set_strip_layout(skin.strip().is_some());
+        // And whether rows a mod attached to another are revealed under it or drawn
+        // inline: the title's own answer (`oag_title::MainMenu::attached`).
+        model.set_reveal_attached(shell.title.main_menu.attached == oag_title::Attached::Revealed);
         // Supplied before seeding, because a value cannot be seeded onto a list
         // that is not there yet. The race list or the Zone one, matching
         // whichever `race.mode` is already saved - so a menu reopened on a

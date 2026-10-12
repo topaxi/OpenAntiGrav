@@ -133,6 +133,9 @@ impl Session {
                 .menu
                 .set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
             stage.menu.set_strip_layout(skin.strip().is_some());
+            stage
+                .menu
+                .set_reveal_attached(shell.title.main_menu.attached == oag_title::Attached::Revealed);
             stage.text_atlas = rows_face;
             stage.skin = skin;
             boot::fonts::install_faces(

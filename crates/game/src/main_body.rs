@@ -408,9 +408,11 @@ fn run(cli: Cli) -> Result<()> {
         .or_else(|| cli.track_file.clone())
         .map(|path| race::foreign::entry(&path))
         .transpose()?;
+    let (definition, menu_source) = prepare::definition(&cli, settings.language.as_deref())?;
     let pending = prepare::Pending {
         foreign_entry,
-        definition: prepare::definition(&cli, settings.language.as_deref())?,
+        definition,
+        menu_source,
         settings,
         dlc,
         class,

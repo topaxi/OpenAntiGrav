@@ -20,6 +20,7 @@ members = [
   "crates/livery",
   "crates/log",
   "crates/mobile",
+  "crates/mod",
   "crates/mesh",
   "crates/music",
   "crates/omega",
@@ -78,6 +79,7 @@ oag-hd = { path = "crates/hd" }
 oag-hud = { path = "crates/hud" }
 oag-log = { path = "crates/log" }
 oag-mobile = { path = "crates/mobile" }
+oag-mod = { path = "crates/mod" }
 oag-input = { path = "crates/input" }
 oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }

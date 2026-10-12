@@ -285,7 +285,7 @@ fn the_campaign_row_is_worded_by_the_title_and_keeps_its_place() {
             })
             .unwrap()
     };
-    let built_in = Definition::parse(BUILT_IN, &strings).unwrap();
+    let built_in = Definition::built_in(&strings).unwrap();
     let (place, kept) = label_of(&built_in);
     let mut pulse = built_in.clone();
     pulse.rename_campaign_row(oag_pulse::TITLE, &strings);

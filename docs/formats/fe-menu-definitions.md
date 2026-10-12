@@ -74,9 +74,11 @@ paired with a `helptext`*N* widget - only the selected row's is drawn, per
 
 Row 1 (`FE_RACE_CAM`) is the default cursor - confirmed independently by
 `docs/ui/campaign-screens.md`'s own capture. This project's tree has no row
-for `FE_MP`, `FE_WIPEOUT_DOT_COM` or `FE_EXTRAS` - there is nothing behind
-any of the three yet - so `assets/ui/menu.toml`'s own `main` page keeps only
-the two that map onto something this project builds: `RACE CAMPAIGN` first,
+for `FE_MP`, `FE_WIPEOUT_DOT_COM`, `FE_PROFILE` or `FE_EXTRAS` - there is nothing behind
+any of the four yet - so the rows a Pulse source shows are only
+the ones that map onto something this project builds (`Title::main_menu`; the whole list is
+pinned by `main_menu_ground_truth.rs`, and [the menus](../architecture/menus.md#the-main-menu-is-the-discs-plus-mods)
+has every title's). The first two: `RACE CAMPAIGN` first,
 and the existing custom-race page renamed to `RACEBOX` second, matching both
 the order and the naming above. See [the menus](../architecture/menus.md) for
 why the tree past those two rows is still ours rather than a transcription.

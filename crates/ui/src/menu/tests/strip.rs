@@ -431,9 +431,8 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
 fn a_page_with_a_value_column_stays_a_column() {
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
-    // RACE CAMPAIGN, RACEBOX, REMIX, RECORDS, OPTIONS - four steps down past
-    // the entries RACEBOX, REMIX and RECORDS added.
-    press(&mut menu, &[Button::Down]);
+    // RACE CAMPAIGN, RACEBOX, REMIX, OPTIONS - three steps down past the entries
+    // RACEBOX and REMIX.
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
@@ -512,13 +511,11 @@ fn right_and_left_do_not_step_a_column() {
     );
 
     // And on a strip title, a page that is not a strip behaves the same way:
-    // the flag says what the disc draws, `suits` says which pages. Four
-    // downs past RACE CAMPAIGN, RACEBOX, REMIX, RECORDS - see
-    // `a_page_with_a_value_column_stays_a_column`'s own comment for why it
-    // is four and not three.
+    // the flag says what the disc draws, `suits` says which pages. Three
+    // downs past RACE CAMPAIGN, RACEBOX, REMIX - see
+    // `a_page_with_a_value_column_stays_a_column`'s own comment.
     let mut menu = Menu::new(built_in());
     menu.set_strip_layout(true);
-    press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);

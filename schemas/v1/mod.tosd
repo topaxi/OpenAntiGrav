@@ -1,0 +1,78 @@
+# A mod's manifest, `oag-mod.toml` at the root of a folder, .zip or .oagmod:
+# see crates/mod/src/manifest.rs and docs/tools/mods.md. What cannot be said here
+# and stays the loader's: that `id` has the id shape, `version` is a semver release,
+# `license` is an SPDX expression, `license-file` names a file in the mod, `oag` is
+# a version requirement, and that exactly one of the two licence keys is present or
+# neither (a mod with no licence loads and is marked "no license stated").
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/mod[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.mod]
+type = "table"
+
+[types.mod.id]
+type = "string"
+
+[types.mod.name]
+type = "string"
+
+[types.mod.version]
+type = "string"
+
+[types.mod.authors]
+type = "array"
+itemtype = "string"
+minlength = 1
+
+[types.mod.license]
+type = "string"
+optional = true
+
+[types.mod.license-file]
+type = "string"
+optional = true
+
+[types.mod.description]
+type = "string"
+
+[types.mod.repository]
+type = "string"
+optional = true
+
+[types.mod.homepage]
+type = "string"
+optional = true
+
+[types.mod.keywords]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.mod.titles]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.mod.oag]
+type = "string"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.mod]
+type = "types.mod"

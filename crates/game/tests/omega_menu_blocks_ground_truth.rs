@@ -174,11 +174,8 @@ fn omegas_strip_blocks_ease_when_the_focus_moves() {
         oag_display::space::Space::OMEGA,
         32.0,
     );
-    let definition = oag_ui::menu::Definition::parse(
-        oag_ui::menu::BUILT_IN,
-        &oag_ui::language::StringTable::default(),
-    )
-    .expect("the built-in menu parses");
+    let definition = oag_ui::menu::Definition::built_in(&oag_ui::language::StringTable::default())
+        .expect("the built-in menu builds");
     let mut menu = oag_ui::menu::Menu::new(definition);
     menu.set_strip_layout(true);
 

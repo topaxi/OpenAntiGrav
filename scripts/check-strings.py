@@ -232,6 +232,29 @@ def main() -> int:
                 if baselined_subtitle:
                     graduated_subtitles.append(f"{subtitle_key!r}")
 
+    # The built-in mods' rows (`assets/mods/<mod>/menu.toml`, a top-level `entry`
+    # list) are this project's own rows just as the tree's are: same rule, and no
+    # baseline - they arrived after the debt was cleared.
+    for mod_menu in sorted((ROOT / "assets/mods").glob("*/menu.toml")):
+        with mod_menu.open("rb") as handle:
+            rows = tomllib.load(handle).get("entry", [])
+        origin = f"mod {mod_menu.parent.name}"
+        for entry in rows:
+            label = entry.get("label", "")
+            string_id = entry.get("string_id")
+            if string_id is None:
+                uncovered_labels.append(f"{origin} label {label!r}")
+            else:
+                menu_ids.add(string_id)
+            if entry.get("subtitle"):
+                subtitle_id = entry.get("subtitle_string_id")
+                if subtitle_id is None:
+                    uncovered_subtitles.append(
+                        f"{origin} subtitle {entry['subtitle']!r}"
+                    )
+                else:
+                    menu_ids.add(subtitle_id)
+
     vanished_labels = [f"{key!r}" for key in BASELINE_LABELS if key not in seen_labels]
     vanished_titles = [page_id for page_id in BASELINE_TITLES if page_id not in seen_titles]
     vanished_subtitles = [
