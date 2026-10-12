@@ -100,7 +100,8 @@ LIMIT = 1_500
 
 # What a `#[cfg(test)]` module sharing a file with the code it tests may not
 # exceed. Its own file has no such ceiling - only `LIMIT`.
-TEST_LIMIT = 200
+# Raised from 200 to 500 on 2026-10-12 (maintainer).
+TEST_LIMIT = 500
 
 # Every file still over `LIMIT`, at the size it measured on 2026-08-16 - after
 # the test-module rule below took 21,704 lines out of them and graduated 12 of
