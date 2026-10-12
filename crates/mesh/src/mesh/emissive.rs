@@ -39,7 +39,7 @@ pub struct Emissive {
     /// is drawn still, which under-claims rather than sliding a texture at a
     /// rate nobody read. (`nr_billboardholographicscanlines` is the example the
     /// first cut named; Amphiseum's shape of it now has its own path with the
-    /// literals read, `mesh::rcs::holo_billboard`, and Modesto Heights' shape
-    /// takes its rates from material parameters this key does not name.)
+    /// literals read, `mesh::rcs::holo_billboard`; Modesto Heights' shape takes
+    /// its rates from material parameters this key does not name.)
     pub rate: f32,
 }

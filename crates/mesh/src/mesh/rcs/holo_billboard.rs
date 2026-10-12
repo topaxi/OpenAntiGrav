@@ -38,14 +38,14 @@
 //!
 //! # What it does not take
 //!
-//! The same three samplers sit under a **parameter-driven** program: the
-//! `wes_` material on every circuit, and `nr_` on Modesto Heights (and the
-//! DLC copy under `02_track`), whose rates and scale are material parameters
-//! (`0x088b2c6a`, `0x4f2aef81`, `0xef6e4697`) and whose unit-1 tap sits behind
-//! a `FENCT`. [`is_holo`] refuses them, so they keep the generic emissive
-//! reading and the load report counts them in `holo_billboard_other_shape`.
-//! The combine looks the same; the coordinate routing and the parameters are
-//! unread.
+//! The same three samplers sit under two other programs, both refused by
+//! [`is_holo`] so those slots keep the generic emissive reading, counted in the
+//! load report's `holo_billboard_other_shape`: the **parameter-driven** one
+//! (`wes_` on every circuit, `nr_` on Modesto Heights), whose rates and scale are
+//! material parameters (`0x088b2c6a`, `0x4f2aef81`, `0xef6e4697`) behind a
+//! `FENCT`; and the DLC copy under `02_track`, whose literals are inline but
+//! whose advert tap is predicated on a `FENCT`-set condition register. The
+//! combine looks the same; the routing and the predicate are unread.
 
 use std::sync::Arc;
 

@@ -136,3 +136,25 @@ fn modesto_heights_parameter_driven_billboards_stay_on_the_generic_reading() {
             .all(|v| v.slots & slots::HOLO_BILLBOARD == 0)
     );
 }
+
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_dlc_copys_fence_predicated_shape_stays_on_the_generic_reading() {
+    let Some((model, report)) = build("DATA02.PSARC", "/data/environments/02_track/track.vex")
+    else {
+        return;
+    };
+    assert_eq!(report.holo_billboard_bound, 0, "{}", report.describe());
+    assert_eq!(
+        report.holo_billboard_other_shape,
+        5,
+        "{}",
+        report.describe()
+    );
+    assert!(
+        model
+            .vertices
+            .iter()
+            .all(|v| v.slots & slots::HOLO_BILLBOARD == 0)
+    );
+}
