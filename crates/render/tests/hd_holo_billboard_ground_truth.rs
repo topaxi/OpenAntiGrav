@@ -93,7 +93,12 @@ fn amphiseums_billboards_bind_inline_literals_and_parameters() {
         "{}",
         report.describe()
     );
-    assert_eq!(report.holo_billboard_other_shape, 0, "{}", report.describe());
+    assert_eq!(
+        report.holo_billboard_other_shape,
+        0,
+        "{}",
+        report.describe()
+    );
     assert_eq!(report.holo_billboard_unread, 0, "{}", report.describe());
 
     let bound = bound(&model);
@@ -140,7 +145,12 @@ fn modesto_heights_parameter_driven_billboards_read_their_own_parameters() {
     };
     // 21 `nr_` slots and the 2 `wes_` ones.
     assert_eq!(report.holo_billboard_bound, 23, "{}", report.describe());
-    assert_eq!(report.holo_billboard_other_shape, 0, "{}", report.describe());
+    assert_eq!(
+        report.holo_billboard_other_shape,
+        0,
+        "{}",
+        report.describe()
+    );
     let bound = bound(&model);
     assert_eq!(bound.len(), 23);
     for (slot, tint) in &bound {
@@ -159,7 +169,12 @@ fn the_dlc_copys_fence_predicated_shape_binds_with_its_inline_literals() {
         return;
     };
     assert_eq!(report.holo_billboard_bound, 5, "{}", report.describe());
-    assert_eq!(report.holo_billboard_other_shape, 0, "{}", report.describe());
+    assert_eq!(
+        report.holo_billboard_other_shape,
+        0,
+        "{}",
+        report.describe()
+    );
     let bound = bound(&model);
     assert_eq!(bound.len(), 5);
     for (slot, tint) in bound {
@@ -178,6 +193,11 @@ fn scanlinebillboard_is_another_program_and_stays_refused() {
     };
     // The one `wes_` slot binds; the eight `scanlinebillboard` slots do not.
     assert_eq!(report.holo_billboard_bound, 1, "{}", report.describe());
-    assert_eq!(report.holo_billboard_other_shape, 8, "{}", report.describe());
+    assert_eq!(
+        report.holo_billboard_other_shape,
+        8,
+        "{}",
+        report.describe()
+    );
     assert_eq!(bound(&model).len(), 1);
 }

@@ -54,7 +54,13 @@ fn texture(label: &str, rgb: [u8; 3]) -> Arc<ModelTexture> {
 /// texture and the layer the third.
 fn model(advert: u8, scanlines: [u8; 3], layer: u8, role: u32) -> Model {
     let tint = [0.25, -5.625, 1.0];
-    model_with(advert, scanlines, texture("layer", [layer; 3]), (tint, [0.0; 2]), role)
+    model_with(
+        advert,
+        scanlines,
+        texture("layer", [layer; 3]),
+        (tint, [0.0; 2]),
+        role,
+    )
 }
 
 /// The general fixture: any layer texture, the tint the material path writes

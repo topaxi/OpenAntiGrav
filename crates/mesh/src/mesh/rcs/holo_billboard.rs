@@ -192,7 +192,12 @@ fn classify(
         .iter()
         .all(|h| declared.parameters.contains(h))
     {
-        let value = |hash| parameters.iter().find(|p| p.hash == hash).map(|p| p.value[0]);
+        let value = |hash| {
+            parameters
+                .iter()
+                .find(|p| p.hash == hash)
+                .map(|p| p.value[0])
+        };
         return Some([value(DRIFT)?, value(SCROLL)?, value(SCALE)?]);
     }
     let (drift, scroll) = rates(declared, program)?;
