@@ -48,7 +48,7 @@ respawn; our AI is untouched (lone-craft regression identical, twelve clean).
 - **Other titles.** HD flies it since 2026-10-12 (lane `orig-ai-hd`, its own
   thread [hds-original-opponent-flies-its-campaign.md](hds-original-opponent-flies-its-campaign.md)).
   2048 and Omega ship the same tables; Omega's executable inlines HD's driver
-  (static); neither is wired. Pure is another schema.
+  (static); neither is wired. Pure is a sibling driver, its throttle measured and built, not flown (its own thread).
 - **The campaign skill was never resolved before 2026-10-12**: the session read
   `self.race_options` after taking it, so every Pulse campaign launch flew at the
   ambient scale. Fixed in `orig-ai-hd`; a Pulse cell now gets its own

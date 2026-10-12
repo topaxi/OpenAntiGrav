@@ -49,7 +49,7 @@ times larger" - because the finding is the coupling, not the number.
 | The racing line and AI corridor the controller follows | **recovered** - see [track.md](../formats/track.md) | 92 |
 | That AI speed is scheduled rather than driven | **recovered**, from shipped data | 85 |
 | Pulse's four speed blocks, and which two read the player | **recovered**, corroborated PSP and PS2 | 90 |
-| Pure's larger, earlier model - zones, fatigue, lead/tail | **recovered**, from shipped data | 85 |
+| Pure's earlier model as its executable flies it: a per-slot cruise speed, a per-track speed tweak, one field-wide zone multiplier (`Zone`/`LeadZone`), fatigue and a launch blend; `TailZone` and `<NewStats>` never read | **measured** (2026-10-12), 1,688 of 1,689 PPSSPP samples - see [Pure](#pure-a-sibling-driver-2026-10-12) | 94 |
 | That `BaseStartThrust` is authored and never read | **recovered** | 90 |
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **recovered** (2026-10-11): percent of the player's own full throttle, written to the craft's control record and run through the same engine; distances are `racer+0x240` lap-progress units - see [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) | 92 |
 | **The opponent drives the player's physics**: its driver's control record (`driver+0x08`) is the craft's registered input source | **measured** (2026-10-11), every opponent's `craft+0x3c` read live | 92 |
@@ -596,7 +596,20 @@ the rail's gates are Pulse's to the constant. What differs:
 | Floors | thrust at least `35`, `x 0.7` under a craft flag | the speed floor only |
 | Pitch | Pulse's, faded out between `1030` and `1180` units off the line | - |
 | Forks | the same coin, held 2 s | held to the merge |
-| Difficulty | no `SkillScale`, no pack shuffle | both |
+| Difficulty | no `SkillScale`, no pack shuffle, no difficulty row in a Single Race; the per-track speed tweak instead | both |
+
+**Measured** (2026-10-12, PPSSPP, Vineta K, Venom and Vector, the player parked):
+the throttle law reproduced on 1,688 of 1,689 opponent samples, the zone multiplier on
+633 frames, the switch byte `0` in every sample. The speed tweak is not in
+`AIRaceStats.xml` at all: it is drawn from each track's own `stats.xml`
+(`<AIStats><VenomTweak Min Max/>`), about `0.8` on the shipped files, so a Pure
+opponent cruises at roughly four fifths of its `NormalRaceSpeed` band.
+
+**Built**: `oag_tables::pure_ai_stats` and `oag_ai::original::cruise` (the throttle
+law as pure functions, the draws chosen from the seeded generator), held to the disc
+by `pure_original_ai_ground_truth.rs`. **Not flown**: this project has no Pure
+campaign, so `RaceDefaults::original_opponent` stays `false`; the planner, the rail
+variant and the every-frame update are named on the evidence page and unbuilt.
 
 So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model
 (`PosBalancing`'s steep gradient, `TailZone`, `ShipSpacingVariation`) are the
@@ -629,7 +642,7 @@ for the files, not for what Pure's opponents fly.
 - **The other titles.** HD flies it, [above](#hd-the-same-driver-five-gated-branches-2026-10-12). 2048 and Omega ship the
   same tables (checked, applies, not wired: `ClassRace` reads them with no
   title branch, and `original::Field` would run on them unchanged; 2048's
-  driver is unread, Omega's executable inlines HD's, static only); Pure's tables are another schema. Each opts in through
+  driver is unread, Omega's executable inlines HD's, static only); Pure's driver is a sibling, read and its throttle measured, [above](#pure-a-sibling-driver-2026-10-12). Each opts in through
   `RaceDefaults::original_opponent` once its own lane has read its driver.
 
 ## What we build instead

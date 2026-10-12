@@ -52,7 +52,7 @@ not mined cannot be counted there). Test: `ai_control_stats_ground_truth.rs` and
 | Pulse PSP USA, `Data.wad` | 1 | 4 | all 5 decode |
 | Pulse PSP EU, `Data.wad` | 1 | 4 | all 5 decode, equal to USA's |
 | Pulse PS2 EU, `WADS2.WAD` | 1 | 4 | all 5 decode (plain text), equal to PSP's |
-| Pure PSP USA and EU, `Data.wad` | 1 | 1 | **both refused**: the controller is `<ControllerPO>`, the race file has no `<RaceBalancing>`; the text equals HD's `_kart` pair |
+| Pure PSP USA and EU, `Data.wad` | 1 | 1 | **both refused** by these readers (the controller file adds `<ControllerPO>`, the race file has no `<RaceBalancing>`; the text equals HD's `_kart` pair); read by `oag_tables::pure_ai_stats` instead (2026-10-12), below |
 | HD disc `DATA02` (8 files) | 2 | 6 | `aicontrolstats` and the four per-class files decode, equal to Pulse's. Refused by name: `aicontrolstats_kart` (`ControllerPO`), `airacestats` (`ShipSpacingVariation`), `airacestats_kart` (no `RaceBalancing`) |
 | HD disc `DATA03` | 0 | 4 | decode: Pulse's four plus `SplitScreenMultiplier` |
 | HD disc `DATA00`, `01`, `04`, `05`, `06` | 0 | 0 | none |
@@ -75,7 +75,7 @@ tests compare the typed records), with `SplitScreenMultiplier` and 2048's
 | HD / Fury | **checked, applies, not wired**: the readers parse the disc and PSN files to Pulse's own records (plus `SplitScreenMultiplier`, which HD reads with more than one local player). HD's thrust law differs from Pulse's in four places (the lane's thread); no HD consumer exists. `oag_ai::original::Field` would run on HD's `ClassRace` unchanged, but HD's planner, steering and rail are unread, so `RaceDefaults::original_opponent` is `false` and a ground truth keeps HD's campaign on this project's driver. |
 | 2048 | **checked, applies, not wired**: same, plus `SuperPhantomStats`. The original driver could run on these tables as they read; 2048's own driver is unread, so `original_opponent` is `false`. |
 | Omega | **checked, applies, not wired**: `data00` carries 2048's set unchanged; no Omega driver reads it, and `original_opponent` is `false` (2048's verdict carries over). |
-| Pure | **checked, differs**: Pure's two files are the `_kart` family (`ControllerPO`, no `RaceBalancing`, `GridSpread`/`ZoningStats`/`FatigueStats`), a different schema these readers refuse by name. Reading it is a separate reader, [gameplay/ai.md](../gameplay/ai.md). |
+| Pure | **checked, differs; read by its own reader** (2026-10-12): Pure's two files are the `_kart` family, which these readers refuse by name. `oag_tables::pure_ai_stats` reads them the way Pure's executable does: the legacy block of `AIRaceStats.xml` (`StartStats`, `ZoningStats`, `FatigueStats`, `GridSpread`; `<NewStats>` and `MasterSpeedTweak` skipped by name, the executable never selects them), `<Controller>` (`<ControllerPO>` skipped, never parsed), and a track `stats.xml`'s `<<Class>Tweak Min Max>`. `pure_original_ai_ground_truth.rs` reads all five classes on the USA disc. The HD, 2048 and Omega `_kart` files carry the same text but no title's executable was found reading them; the reader was not run on them. See [psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md). |
 
 The combined `airacestats.xml` (HD `DATA02`, 2048, Omega: `ShipSpacingVariation`
 over all classes) and the `_kart` pair are **unread by every executable

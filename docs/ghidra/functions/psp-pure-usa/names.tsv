@@ -170,4 +170,5 @@
 0x08810ddc	function	RaceManager_UpdateLaunchPhase	70	ai-controls.md
 0x08923a1c	function	Craft_GapAlongTrack	75	ai-controls.md
 0x089336f0	function	Body_SetPosition	85	ai-controls.md
+0x088d9390	function	TrackStats_ParseElement	80	ai-controls.md
 0x08ab3b6c	data	g_ai_use_new_stats	94	ai-controls.md

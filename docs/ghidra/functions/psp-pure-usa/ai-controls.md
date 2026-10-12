@@ -77,6 +77,7 @@ Confidence is per row. Static reading unless a row says measured.
 | `0x08810ddc` | `RaceManager_UpdateLaunchPhase` | 70 | - | clears the launch flag `RM+0x1e34` once the field is strung out, [below](#launch-and-fatigue) |
 | `0x08923a1c` | `Craft_GapAlongTrack` | 75 | - | `wrap(b.progress - a.progress)` over the lap (`craft+0xa38`), [below](#the-zone-multiplier) |
 | `0x089336f0` | `Body_SetPosition` | 85 | `Body_SetPosition` | writes `body+0x30..+0x3c` and nothing else |
+| `0x088d9390` | `TrackStats_ParseElement` | 80 | `TrackStats_ParseElement` | a track `stats.xml`'s elements into the settings object (pointer at `0x08b17430`): `RaceTimes` to `+0xa8..`, `ZoneMedals` to `+0xc4..`, and `<AIStats><<Class>Tweak Min Max>` to `+0xd0 + 4 * class` (`Min`) and `+0xe4 + 4 * class` (`Max`), the speed tweak's range ([the record](#the-record)) |
 | `0x08ab3b6c` (data) | `g_ai_use_new_stats` | 94 | - | the block switch, [below](#which-of-the-two-blocks-is-live) |
 
 `FUN_0891a3d0` reads the `<NewStats>` spacing rows (`+0x124`, `+0x128`, `+0x12c`) and
@@ -130,7 +131,7 @@ the race's class (index addend `0x53530`, `0x08b173e0`).
 | --- | --- | --- |
 | `+0x00..+0x14` | `SteerMul`, `SteerDamp`, `LookAheadSecs`, `xtrackMul`, `xtrackMax`, `xtrackDamp` | Pulse's |
 | `+0x18` | `GridSpread distance` | `100` |
-| `+0x1c`, `+0x20` | the speed-tweak range | `1`, `1`; overwritten at load from a settings object (addend `0x53580`, `+0xd0 + 4 * class` and `+0xe4 + 4 * class`) when one exists, and set to `1` if zero |
+| `+0x1c`, `+0x20` | the speed-tweak range | `1`, `1`; overwritten at load from the race's settings object (pointer at `0x08b17430`, `+0xd0 + 4 * class` and `+0xe4 + 4 * class`) when one exists, and set to `1` if zero. Those two come from **the track's own `stats.xml`** in `FEData.wad` (`Data\Environments\<n>_<Name>\stats.xml`), `<AIStats><VectorTweak Min=".." Max=".."/>` and one row per class, parsed by `TrackStats_ParseElement`. Read live 2026-10-12: the object's ten words equal Vineta K's file, and its name field reads `Vineta K` |
 | `+0x24` | the speed tweak, drawn `U[+0x1c, +0x20]` once at load | - |
 | `+0x28[8]`, `+0x48[8]` | `NormalRaceSpeedMin`, `NormalRaceSpeedMax` | `70`, `95` |
 | `+0x68[8]` | the cruise speed per grid slot, drawn `U[min, max]` once at load | - |
@@ -410,7 +411,21 @@ Not measured: the steering's output, the planner's choices (the lane and its
 bang-bang), the pitch fade, the fork hold, the speed floor and the `35` floor, the
 `x 0.7` flag, and the `LeadZone` branch.
 
-## Not ported, by name
+## What is built, and what is not
 
-See [gameplay/ai.md](../../../gameplay/ai.md#pure-a-sibling-driver-2026-10-12) for what
-this project builds from this page and what it leaves.
+Built (2026-10-12): `oag_tables::pure_ai_stats` reads the three files as the
+executable does, and `oag_ai::original::cruise` carries the measured throttle
+(`CruiseDraws`, `zone_multiplier`, `CruiseState`, `cruise_thrust`,
+`finish_thrust`), with a unit test that reproduces a live sample to the bit and
+`crates/game/tests/pure_original_ai_ground_truth.rs` on the disc. The two
+`rand()` draws (the tweak and the eight cruise speeds) are drawn from the seeded
+generator instead: **chosen, not measured** (the captures show they are redrawn every
+race: two Venom races drew different values in the same bands).
+
+Not built, by name: the steering (Pulse's law, already in `oag_ai::original`), the
+ringless planner with its other-craft and track-object scoring (`FUN_08918d30`'s
+object list is unread), the position-only rail, the pitch fade, the 2 s fork hold,
+the every-frame update, and the field that would fly them. `original_opponent`
+stays `false` for Pure: this project has no Pure campaign, and the original's
+opponent is the campaign's. See
+[gameplay/ai.md](../../../gameplay/ai.md#pure-a-sibling-driver-2026-10-12).
