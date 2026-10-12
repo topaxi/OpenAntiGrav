@@ -108,7 +108,7 @@ pub(crate) struct Session {
     /// The race playlist's saved place: whether this run has already put it back,
     /// what was last written and the ticks since a race last wrote it. See
     /// `oag_game::music_state` and `session/music.rs`.
-    pub(crate) music_place: music::Place,
+    pub(crate) music_place: oag_game::music_state::Run,
     pub(crate) clock: TickClock,
     pub(crate) last: web_time::Instant,
     /// Recent frame times, for the performance overlay.

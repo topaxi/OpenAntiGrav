@@ -222,6 +222,7 @@ impl App {
         let Some(mut audio) = self.audio.take() else {
             return Ok(None);
         };
+        let mut music_place = oag_game::music_state::Run::default();
         let stage = if let Some(launcher) = self.launcher.take() {
             // Before both of the others, because it is what comes before both:
             // nothing has been opened yet and the two branches below are about
@@ -245,6 +246,15 @@ impl App {
             // play under a race, and no shell to return to (`escape` quits
             // outright on this leg), so there is nothing to pause and resume -
             // just the same list a menu-launched race plays, started fresh.
+            //
+            // The saved place is put back first and written back like a menu
+            // race's (`Session::save_race_music`, keyed on `race_title`), the
+            // same `music_state::Run` on both routes. The headless captures
+            // below this (`--screenshot`, `--trace-out`) stay out of it so a
+            // capture never depends on a profile.
+            if let Some(title) = self.race_title {
+                music_place.resume(&mut audio, &self.music_discs, title.name);
+            }
             audio.start_race_music(
                 &self.music_discs,
                 self.settings.audio.music_source,
@@ -374,7 +384,7 @@ impl App {
             touch_overlay: crate::touch::Overlay::default(),
             audio,
             music_discs: self.music_discs.clone(),
-            music_place: Default::default(),
+            music_place,
             screen_filters,
             missing_screen_filter: None,
             clock: TickClock::new(TickRate::DEFAULT),
