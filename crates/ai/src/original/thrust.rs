@@ -131,3 +131,6 @@ pub fn opponent_thrust(table: &ClassRace, input: &ThrustInput<'_>) -> Thrust {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+pub(crate) use tests::table as tests_table;

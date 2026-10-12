@@ -69,6 +69,7 @@ pub mod params;
 pub mod passive;
 pub mod pilot_assist;
 pub mod probe;
+pub mod rail;
 pub mod reset;
 pub mod ship;
 pub mod slowdown;

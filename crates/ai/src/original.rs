@@ -20,8 +20,18 @@
 //! [`ClassRace`]: oag_tables::ai_race_stats::ClassRace
 //! [`Controller`]: oag_tables::ai_control_stats::Controller
 
+mod field;
+mod lane;
 mod pack;
+mod rail;
+mod steer;
 mod thrust;
+mod track;
 
+pub use field::{Field, OriginalDriver, Output, SLOTS, Standings, Tick};
+pub use lane::{PlanInput, Planner, Ring};
 pub use pack::{Wander, race_fraction, shuffle};
+pub use rail::{Rail, RailCorrection};
+pub use steer::{Controller, Steering, airborne, lookahead_distance, pitch, steer};
 pub use thrust::{Racer, Thrust, ThrustInput, opponent_thrust};
+pub use track::{Pose, TrackPoint};
