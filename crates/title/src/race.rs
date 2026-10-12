@@ -192,11 +192,14 @@ pub struct RaceDefaults {
     /// The campaign's opponents fly the original's own driver
     /// (`oag_ai::original`, the maintainer's AI mode 3). `true` only where
     /// that driver was recovered off this title's executable and its thrust
-    /// law reproduced live: Pulse. HD's law differs in four places and its
-    /// planner, steering and rail are unread; 2048 and Omega ship the same
-    /// tables and their driver is unread (`docs/gameplay/ai.md`, "The
-    /// original driver, recovered"). `false` keeps this project's driver.
+    /// law reproduced live: Pulse and HD. 2048 and Omega ship the same tables;
+    /// Omega's executable carries HD's driver (read statically, not run) and
+    /// neither title's race is complete enough to fly it (`docs/gameplay/ai.md`,
+    /// "The original driver, recovered"). `false` keeps this project's driver.
     pub original_opponent: bool,
+    /// Where this title's original driver differs from Pulse's:
+    /// [`crate::original_driver::OriginalDriver`]. `None` flies Pulse's.
+    pub original_driver: Option<&'static crate::original_driver::OriginalDriver>,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///

@@ -55,7 +55,7 @@ fn sixteen_track_stats_match_the_live_capture() {
 
     assert_eq!(
         stats.length,
-        Some(5178),
+        Some(5178.0),
         "docs/formats/race-setup.md's own PPSSPP capture measured this exactly"
     );
     assert_eq!(

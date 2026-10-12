@@ -32,6 +32,7 @@ fn tick(z: f32) -> Tick {
         touching: false,
         finished: false,
         race_fraction: 0.1,
+        lap_distance: 520.0,
     }
 }
 
@@ -45,6 +46,7 @@ fn field() -> Field {
     Field::new(
         tests_table(),
         controller,
+        Laws::PULSE,
         1.0,
         1,
         [8, 1, 2, 3, 4, 5, 6, 7],
@@ -60,6 +62,7 @@ fn standings() -> Standings<'static> {
         player: 0,
         player_rubber_band_off: false,
         race_time: 30.0,
+        eliminator: false,
     }
 }
 
@@ -143,4 +146,97 @@ fn a_speed_floor_forces_full_throttle_below_its_speed() {
 #[test]
 fn a_field_replays_identically_from_its_seed() {
     assert_eq!(run(&mut field(), 300), run(&mut field(), 300));
+}
+
+fn hd_field(halved_lookahead: Option<(f32, f32)>) -> Field {
+    let mut field = field();
+    field.laws = Laws {
+        finished_spread: 75.0,
+        finished_wander_to_place: true,
+        eliminator_drops_when_behind: true,
+        round_robin_pre_increment: true,
+        halved_lookahead,
+    };
+    field.counter = 1;
+    field
+}
+
+#[test]
+fn hds_round_robin_flags_racer_one_first() {
+    let laws = Laws {
+        round_robin_pre_increment: true,
+        ..Laws::PULSE
+    };
+    let mut field = Field::new(
+        tests_table(),
+        field().controller,
+        laws,
+        1.0,
+        1,
+        [8, 1, 2, 3, 4, 5, 6, 7],
+        42,
+    );
+    let slots: Vec<usize> = (0..9).map(|_| field.begin_tick(&[1, 2])).collect();
+    assert_eq!(slots, [1, 2, 3, 4, 5, 6, 7, 0, 1]);
+}
+
+#[test]
+fn a_finished_racer_on_hd_takes_its_place_as_its_slot() {
+    let finished = Tick {
+        finished: true,
+        ..tick(-520.0)
+    };
+    let drive = |field: &mut Field| {
+        field.begin_tick(&[1, 2]);
+        field.drive(1, true, &finished, &standings(), 1.0 / 60.0, |d| {
+            Some(point(-520.0 - d))
+        });
+        field.drivers[1]
+    };
+    // `RACERS[1]` is in second place: `8 - 2`.
+    let hd = drive(&mut hd_field(None));
+    assert_eq!((hd.spread, hd.wander.start, hd.wander.end), (6.0, 6.0, 6.0));
+    let pulse = drive(&mut field());
+    assert_ne!(pulse.spread, 6.0, "Pulse's wander has no finished branch");
+}
+
+#[test]
+fn the_lookahead_halves_outside_the_circuits_window() {
+    let asked = |field: &mut Field| {
+        let mut distance = 0.0;
+        field.drive(1, false, &tick(-520.0), &standings(), 1.0 / 60.0, |d| {
+            distance = d;
+            Some(point(-520.0 - d))
+        });
+        distance
+    };
+    // Smoothed speed `6` after one tick at 120 u/s: `max(6 * t, 15)` is the
+    // 15 floor either way, so drive it up first.
+    let warm = |field: &mut Field| {
+        for _ in 0..200 {
+            asked(field);
+        }
+        asked(field)
+    };
+    let full = warm(&mut field());
+    let inside = warm(&mut hd_field(Some((250.0, 4600.0))));
+    let outside = warm(&mut hd_field(Some((600.0, 4600.0))));
+    assert_eq!(inside, full, "520 is inside [250, 4600]");
+    assert!(
+        (outside - full * 0.5).abs() < 1e-3,
+        "520 is under 600: half the lookahead time, {outside} against {full}"
+    );
+}
+
+#[test]
+fn laws_halve_only_outside_the_window() {
+    let laws = Laws {
+        halved_lookahead: Some((400.0, 5400.0)),
+        ..Laws::PULSE
+    };
+    assert!(laws.halves_lookahead(399.0));
+    assert!(!laws.halves_lookahead(400.0));
+    assert!(!laws.halves_lookahead(5400.0));
+    assert!(laws.halves_lookahead(5400.5));
+    assert!(!Laws::PULSE.halves_lookahead(0.0));
 }

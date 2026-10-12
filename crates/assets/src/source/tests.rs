@@ -88,6 +88,7 @@ const TITLE: &Title = &Title {
         hover_rig: None,
         craft_laws: None,
         original_opponent: false,
+        original_driver: None,
         zone_class_announcer: None,
         // Unread on the same terms: resolving archives has nothing to do with
         // the colour grade a Zone race climbs.

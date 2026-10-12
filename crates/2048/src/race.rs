@@ -64,6 +64,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     hover_rig: None,
     craft_laws: None,
     original_opponent: false,
+    original_driver: None,
     // Unread on this title: `data.psarc` is not extracted in this tree, so
     // its own speed-class bank (if it has one) has not been listed.
     zone_class_announcer: None,

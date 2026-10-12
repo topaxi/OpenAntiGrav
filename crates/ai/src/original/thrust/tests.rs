@@ -66,6 +66,8 @@ macro_rules! case {
                     own: $own,
                     player: $player,
                     finished: $finished,
+                    finished_spread: 50.0,
+                    drop_when_behind: false,
                     rubber_band_off: false,
                     race_time: $time,
                     skill: $skill,
@@ -319,6 +321,8 @@ fn the_rubber_band_is_off_while_the_player_is_in_states_four_to_six() {
         own: 1,
         player: 2,
         finished: false,
+        finished_spread: 50.0,
+        drop_when_behind: false,
         rubber_band_off,
         race_time: 30.0,
         skill: 2.0,
@@ -330,4 +334,48 @@ fn the_rubber_band_is_off_while_the_player_is_in_states_four_to_six() {
         9.0,
         "the WhenBehind clamp is the whole difference"
     );
+}
+
+/// HD's two thrust-law changes that a single-player race reaches
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`): a finished racer
+/// steers by its title's spacing, and an Eliminator race on HD leaves the
+/// `WhenBehind` term out.
+#[test]
+fn a_titles_finished_spread_and_eliminator_switch_reach_the_law() {
+    let racers = [
+        Racer {
+            progress: 900.0,
+            place: 1,
+            spread: 8.0,
+        },
+        Racer {
+            progress: 880.0,
+            place: 2,
+            spread: 6.0,
+        },
+        Racer {
+            progress: 100.0,
+            place: 3,
+            spread: 1.0,
+        },
+    ];
+    let input = |finished, finished_spread, drop_when_behind| ThrustInput {
+        racers: &racers,
+        own: 0,
+        player: 2,
+        finished,
+        finished_spread,
+        drop_when_behind,
+        rubber_band_off: false,
+        race_time: 30.0,
+        skill: 2.0,
+    };
+    let gap = |spread| opponent_thrust(&table(), &input(true, spread, false)).gap;
+    // The reference is place 2 (the player is third): `880 + (8 - 6) * s - 900`.
+    assert_eq!(gap(50.0), 80.0, "Pulse's finished spacing");
+    assert_eq!(gap(75.0), 130.0, "HD's finished spacing");
+
+    let kept = opponent_thrust(&table(), &input(false, 50.0, false)).throttle;
+    let dropped = opponent_thrust(&table(), &input(false, 50.0, true)).throttle;
+    assert_eq!(dropped - kept, 9.0, "the WhenBehind clamp, left out");
 }

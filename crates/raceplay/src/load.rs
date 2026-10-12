@@ -17,6 +17,7 @@ mod global;
 mod glow_mask;
 mod intro;
 pub(crate) mod magstrip_wake;
+mod original_laws;
 mod pads;
 mod pose;
 mod pulse_ps2;
@@ -712,6 +713,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
+    let original_laws =
+        original_laws::resolve(&mut archives, title, &track, &options.class, &mut report);
     let finished_thrust = super::finished_thrust::read(
         craft_of(&mut craft, &mut archives),
         &super::finished_thrust::RaceTerms {
@@ -722,6 +725,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             full_grid: options.opponents || options.mode.has_opponents(),
             track_stats: track_stats.as_ref(),
             original_opponent: title.race.original_opponent,
+            original_laws,
         },
         &mut report,
     );

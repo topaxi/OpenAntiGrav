@@ -68,8 +68,9 @@ pub struct TrackStats {
     /// `<Targets Zone="..."/>` - the zone count.
     pub zone_target: Option<u32>,
     /// `<Physical Length="..."/>`, in the units `race-setup.md`'s PPSSPP capture
-    /// measured metres in.
-    pub length: Option<u32>,
+    /// measured metres in. Pulse authors whole numbers (`5178`); HD authors a
+    /// decimal (`5.2` on Talon's Junction), so it is read as a float.
+    pub length: Option<f32>,
     /// `<SkillLevels><Entry>`: `[class][difficulty]`, both by discriminant
     /// (`Difficulty::Easy` is `0`); see [`TrackStats::skill_curve`].
     pub skill_scale: [[f32; 3]; 4],
@@ -190,7 +191,7 @@ pub fn parse(expanded: &str) -> Result<TrackStats> {
     let length = stats
         .children_named("Physical")
         .next()
-        .and_then(|p| optional_u32(p, "Length"))
+        .and_then(|p| optional_f32(p, "Physical", "Length"))
         .transpose()?;
 
     let levels = stats.children_named("SkillLevels").next();
@@ -302,6 +303,19 @@ fn required_f32(node: &Node, element: &'static str, attribute: &'static str) -> 
             value: raw.to_string(),
         })
     }
+}
+
+fn optional_f32(
+    node: &Node,
+    element: &'static str,
+    attribute: &'static str,
+) -> Option<Result<f32>> {
+    let raw = node.attr(attribute)?;
+    Some(raw.trim().parse().map_err(|_| Error::NotANumber {
+        element,
+        attribute,
+        value: raw.to_string(),
+    }))
 }
 
 fn optional_u32(node: &Node, attribute: &'static str) -> Option<Result<u32>> {
