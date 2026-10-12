@@ -124,13 +124,29 @@ events as **campaign cells** through one path, record medals in `[[campaign]]` a
 5. **Validation**: an unknown mode, track, class or craft is an error naming the campaign and the
    event (the mod format's rule); the MODS page shows it.
 
+## The first WebAssembly candidate: Pilot Assist on Pulse and Pure (2026-10-12)
+
+The maintainer's suggestion, and the recommended first user of the WebAssembly hook rather than
+the arena AI. Pilot Assist is HD's own measured law (`oag_physics::pilot_assist`, fed by
+`crates/raceplay/src/pilot_assist.rs`, `docs/physics/pilot-assist.md`), backported to Pulse and
+Pure, where it is a non-original addition - what mods are for. HD, 2048 and Omega keep it built in
+(original there). Why first: it is small; its shape (the craft's pose against the spline plus the
+player's controls in, a correction out) is the observation/controls interface AI controllers need
+too; and it has an exact oracle - the WebAssembly version must give **bit-identical replay hashes**
+to the built-in Rust one on Pulse and Pure (`pilot_assist_ground_truth.rs`,
+`pilot_assist_levels_ground_truth.rs`). It also exercises a mod carrying behaviour (WebAssembly)
+and its HUD indicator (data plus the fallback assets) together. Cost: the simulation-hook ADR
+(the observation struct, the return, the replay record), a deterministic `wasmtime` host behind a
+cargo feature that the simulation may depend on.
+
 ## Next Steps
 
 1. Refactor the lap modes into race rules as data, every existing hash unchanged.
 2. Mod-declared modes (`modes/*.toml`, `mode.tosd`) built from those rules; the drag race as an
    example mod: a sprint on an existing loop first (finish gate, grid at a sample, HUD, results,
    records, replay header), on the titles the mod declares.
-3. The WebAssembly rules hook (ADR first), shared with mod AI controllers.
+3. The WebAssembly simulation hook (ADR first), proven by moving Pulse/Pure's Pilot Assist
+   backport into a mod with bit-identical replay hashes; then shared by rules and AI controllers.
 4. The campaign definition format and its schema, the CAMPAIGNS row and picker, one built-in
    OAG campaign containing a drag race event.
 5. Later: open (point-to-point) tracks in the track format, the spline and the AI plan.
