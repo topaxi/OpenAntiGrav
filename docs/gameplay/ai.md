@@ -2896,7 +2896,10 @@ and the mode being Eliminator, so no other race moves. Chosen, not measured: see
 becomes the pilot's name**: `winston.toml` is a pilot called `winston`. There is
 no list to register one in and no limit on how many are kept.
 [`assets/ai/example-pilot.toml`](../../assets/ai/example-pilot.toml) is a
-documented one to copy under any name.
+documented one to copy under any name. A pilot file declares its schema
+(`toml-schema = { location = ".../v1/pilot.tosd", version = "1.0.0" }`, see
+[TOML Schema](../formats/toml-schema.md)); one without it still loads, with a
+warning naming the line to add, and the editor writes it on save.
 
 A file named after one of the built-ins - `aggressive.toml`, `balanced.toml`,
 `passive.toml`, `shy.toml` - **replaces** it rather than adding another pilot,

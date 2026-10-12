@@ -3088,6 +3088,7 @@ name = "oag-trackfile"
 version = "0.1.0"
 dependencies = [
  "gltf",
+ "oag-schema",
  "oag-vex",
  "serde",
  "serde_json",
