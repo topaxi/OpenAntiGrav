@@ -266,13 +266,15 @@ empty grid. Campaign launches clear it.
 TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
 the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
 files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page remix`). The race
-is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--unity-track` flies it on
+is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--ballisticng-track` flies it on
 `--craft-source`; RACEBOX is unchanged.
 
-- **Where it looks**: `oag_source::unity::tracks_in`, the lister `--unity-track` resolves names with:
-  per base (`$OAG_UNITY`, `data/unity`, beside the program, `<data dir>/oag/unity`) the files in
+- **Where it looks**: `oag_source::tracks::all_in`, the lister `--ballisticng-track` resolves names with:
+  own-format `*.track.toml` (`.glb` beside it) first, in the track directories (`$OAG_TRACKS`, `data/tracks`,
+  `tracks/` beside the program, `<data dir>/oag/tracks`; files in the directory and one level down); then
+  BallisticNG content, per base (`$OAG_BALLISTICNG`, `data/ballisticng`, beside the program, `<data dir>/oag/ballisticng`) the files in
   `tracks/`, and the same one and two directories down (Steam's `<item>/<name>.wtrk`, and a base that
-  holds the whole `473770` directory). `.wtrk` and `*.track.toml` (own format, `.glb` beside it).
+  holds the whole `473770` directory). `.wtrk` only: an own-format track in a BallisticNG base is not listed.
 - **A row** is `NAME (WORKSHOP)` or `NAME (TRACK FILE)`, upper case and cut with `..` to the value
   column's width on Pulse and Pure (28 characters; HD's value boxes are about 20 wide, so a long name there runs past its box's right edge over nothing). An author is printed `BY AUTHOR` when a file
   names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and
@@ -287,9 +289,9 @@ is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--un
   `disabled_by`: that row refuses to step, and the player could never leave the broken option. START on
   a broken pick logs the reason and does nothing, and never races another track in its place.
 - **Launch** is `launch_remix`'s own path with `custom_tracks::apply`: `foreign_track = Some(file)`,
-  `track` and `craft_source` cleared. That is what `--unity-track`/`--track-file` set
+  `track` and `craft_source` cleared. That is what `--ballisticng-track`/`--track-file` set
   (`Pending::race_options`), so both routes build the same race: the same per-tick world hash for
-  Lion's Den, asserted in `custom_tracks::tests::disc`. A command-line `--unity-track` is put back after
+  Lion's Den, asserted in `custom_tracks::tests::disc`. A command-line `--ballisticng-track` is put back after
   the launch, so a later RACE page launch still races it.
 - **Opponents** fly this project's driver. A track whose AI line does not read cannot load at all (the
   spline is the track), so it is listed unusable rather than raced without opponents; the class rule

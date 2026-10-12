@@ -35,7 +35,7 @@ use crate::session::Shell;
 /// once, the launcher's once per pick - and a player who backs out of a boot
 /// and picks a different image would read it again.
 pub(crate) struct Pending {
-    /// `--unity-track` resolved to a catalogue entry, or `None` when not given.
+    /// `--ballisticng-track` resolved to a catalogue entry, or `None` when not given.
     pub(crate) foreign_entry: Option<oag_raceplay::catalogue::Track>,
     pub(crate) cli: Cli,
     pub(crate) settings: settings::Settings,

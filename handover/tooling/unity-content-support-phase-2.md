@@ -10,9 +10,9 @@
 - `oag-ballisticng` (`crates/ballisticng`): wrappers, typed track, texture decode, ground truth over all 32 tracks,
   field census. Page: `docs/formats/ballisticng-tracks.md` (also holds the mapping, every chosen constant and the
   raced results). Rule 5 in `scripts/check-dependency-rules.py`.
-- Mapping and loader: `oag_raceplay::foreign` (`choice.rs` has every chosen number), `oag_source::unity` (the
-  `$OAG_UNITY` / `data/unity` / `<data dir>/oag/unity` source), `Options::foreign_track`, `catalogue::Track::foreign`
-  (the field only, no front-end row), `oag-game --unity-track`. `load.rs` shrank by 142 lines: the track-derived
+- Mapping and loader: `oag_raceplay::foreign` (`choice.rs` has every chosen number), `oag_source::ballisticng` (the
+  `$OAG_BALLISTICNG` / `data/ballisticng` / `<data dir>/oag/ballisticng` source), `Options::foreign_track`, `catalogue::Track::foreign`
+  (the field only, no front-end row), `oag-game --ballisticng-track`. `load.rs` shrank by 142 lines: the track-derived
   inputs are `load/track_inputs.rs`, with the foreign path one early return.
 - Raced on Pulse's ship and physics: all 27 `Original` tracks load, 26 get round, 14 with a clean lap. Lion's Den:
   loads, a craft sits on the grid, drives (a speed pad fires), and under `--autopilot` laps in 50.8 s (best lap) with
@@ -25,7 +25,7 @@
   compressed meshes, SerializedFile versions 18 to 21, bundles with the info at the end, crunched textures. Audio
   (78 `.resource` streams) is not read.
 - Foreign tracks have no menu row (the `catalogue::Track::foreign` field exists, nothing builds a list from
-  `oag_source::unity::tracks()`); the front-end row needs `string_id` text and pointer support.
+  `oag_source::ballisticng::tracks()`); the front-end row needs `string_id` text and pointer support.
 - The track atlas, sky, fog, lights and scenery are not drawn; the floor and wall are flat-shaded collision. Floor UVs
   need the `TrackFloor`/`TrackWall` mesh pointers (kept unread), checked equal to `FloorVertices` first.
 - Jumps: Lion's Den crosses two gaps (111 and 141 units) by rescue. The original uses `ModJumpZone` push; unmapped.
@@ -37,7 +37,7 @@
 
 ## Next Steps
 
-1. A foreign-track row in the track picker (strings, pointer support) reading `oag_source::unity::tracks()`.
+1. A foreign-track row in the track picker (strings, pointer support) reading `oag_source::ballisticng::tracks()`.
 2. Draw the atlas: keep `TrackFloor`/`TrackWall` pointers, check mesh positions equal the arrays, take UVs, decode the
    atlas through `oag_ballisticng::texture`. Then scenery meshes.
 3. Map `ModJumpZone` and read what the 12 respawn-dependent tracks need.
