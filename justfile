@@ -427,7 +427,7 @@ play *ARGS:
         ""|--*)
             args=("data/images/pulse-psp-eu.chd" "${args[@]}")
             ;;
-        pulse-psp-eu|psp-eu|eu)
+        pulse|pulse-psp-eu|psp-eu|eu)
             args=("data/images/pulse-psp-eu.chd" "${args[@]:1}")
             ;;
         pulse-psp-usa|psp-usa|usa)
