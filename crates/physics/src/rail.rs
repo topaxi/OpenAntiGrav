@@ -11,10 +11,13 @@
 use crate::ship::Body;
 use oag_core::math::Vec3;
 
-/// Sets `body`'s linear velocity and position, as the rail asks. Orientation,
+/// Sets `body`'s position, and its linear velocity when the rail turns it
+/// (`None` on Pure, whose rail moves the position alone). Orientation,
 /// angular velocity and the force accumulators are left alone.
-pub fn apply(body: &mut Body, velocity: Vec3, position: Vec3) {
-    body.linear_velocity = velocity;
+pub fn apply(body: &mut Body, velocity: Option<Vec3>, position: Vec3) {
+    if let Some(velocity) = velocity {
+        body.linear_velocity = velocity;
+    }
     body.position = position;
 }
 
@@ -33,7 +36,7 @@ mod tests {
         let before = body;
         apply(
             &mut body,
-            Vec3::new(1.0, 2.0, 3.0),
+            Some(Vec3::new(1.0, 2.0, 3.0)),
             Vec3::new(4.0, 5.0, 6.0),
         );
         assert_eq!(
@@ -43,5 +46,8 @@ mod tests {
         assert_eq!(body.orientation, before.orientation);
         assert_eq!(body.angular_velocity, before.angular_velocity);
         assert_eq!((body.force, body.torque), (before.force, before.torque));
+        apply(&mut body, None, Vec3::new(7.0, 8.0, 9.0));
+        assert_eq!(body.linear_velocity, Vec3::new(1.0, 2.0, 3.0), "kept");
+        assert_eq!(body.position, Vec3::new(7.0, 8.0, 9.0));
     }
 }

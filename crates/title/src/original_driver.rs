@@ -36,6 +36,28 @@ pub struct OriginalDriver {
     /// What a campaign event's opponents read where the event leaves a field
     /// empty; `None` on a title whose events author no AI of their own.
     pub event_ai: Option<EventAi>,
+    /// Which shape of AI tables the title ships, and so which throttle and
+    /// planner its driver flies: [`AiTables`].
+    pub tables: AiTables,
+    /// The rail turns the body's velocity as well as moving it (Pulse: yes).
+    pub rail_turns_velocity: Sourced<bool>,
+    /// The pitch controller's distance fade from the own track sample,
+    /// `(full, none)` in world units (Pulse: none).
+    pub pitch_fade: Option<(f32, f32)>,
+}
+
+/// The AI tables a title ships, which decide its driver's throttle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AiTables {
+    /// One `AIRaceStats_<class>.xml` a class and `AIControlStats.xml`: the
+    /// place-indexed throttle, the formation, the ringed planner (Pulse, HD,
+    /// 2048, Omega).
+    PerClassFiles,
+    /// One `AIRaceStats.xml` whose legacy block the executable reads, plus
+    /// a track's `stats.xml` speed tweak: the cruise throttle and the
+    /// ringless planner of Pure's sibling driver
+    /// (`docs/ghidra/functions/psp-pure-usa/ai-controls.md`).
+    LegacyBlock,
 }
 
 /// What a campaign event's opponents read: its skill, its two AI skills and
@@ -132,6 +154,9 @@ mod tests {
         coin_ordered_search: Sourced::measured(false),
         preferred_follows_choice: Sourced::measured(false),
         event_ai: None,
+        tables: AiTables::PerClassFiles,
+        rail_turns_velocity: Sourced::measured(true),
+        pitch_fade: None,
     };
 
     #[test]

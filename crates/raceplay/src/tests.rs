@@ -201,6 +201,7 @@ fn setup(handling: Handling) -> Setup {
         leach_strip: None,
         destroy_stations: Vec::new(),
         finished_thrust: None,
+        original_tables: None,
         intro_camera: None,
         slot_teams: Vec::new(),
         trail_sparks: false,

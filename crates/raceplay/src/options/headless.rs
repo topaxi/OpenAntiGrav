@@ -91,6 +91,7 @@ impl Setup {
             leach_strip: None,
             destroy_stations: Vec::new(),
             finished_thrust: None,
+            original_tables: None,
             intro_camera: None,
             slot_teams: Vec::new(),
             collision: CollisionWorld::new(),

@@ -328,6 +328,9 @@ pub struct Setup {
     pub difficulty: oag_ai::Difficulty,
     /// The finished player's thrust law, off the disc. See `race::finished_thrust`.
     pub finished_thrust: Option<super::finished_thrust::FinishedThrust>,
+    /// What the campaign's original opponent reads, for a title that flies
+    /// it. See `race::original_tables`.
+    pub original_tables: Option<super::original_tables::OriginalTables>,
     /// The speed class the race is run in, spelled the way the disc spells it.
     ///
     /// Most of what the class decides is already resolved by the time a `Setup`

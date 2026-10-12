@@ -47,6 +47,15 @@ pub struct Laws {
     /// A well-scored choice moves the preferred lane to `1 - chosen^2` on
     /// its side: 2048's `Ai_PlanLane` (`0x8119dcc4`), see [`super::lane`].
     pub preferred_follows_choice: bool,
+    /// The rail turns the body's velocity toward the lane as well as moving
+    /// its position: Pulse's `Ai_SnapToLane`. Pure's computes the turn and
+    /// never stores it (`0x08917dcc..0x08917f44`), so its rail moves the
+    /// position alone.
+    pub rail_turns_velocity: bool,
+    /// The pitch controller's distance fade, `(full, none)`: `1` within `full`
+    /// units of the craft's own track sample, `0` past `none`, linear between
+    /// (Pure's `Ai_ComputePitch`, `0x0891892c`, `1030..1180`). Pulse has none.
+    pub pitch_fade: Option<(f32, f32)>,
 }
 
 impl Laws {
@@ -61,7 +70,25 @@ impl Laws {
         event_ring_rate: false,
         coin_ordered_search: false,
         preferred_follows_choice: false,
+        rail_turns_velocity: true,
+        pitch_fade: None,
     };
+
+    /// [`Self::pitch_fade`] at `distance` units from the own sample: Pure's
+    /// `FUN_08917744(d, lo, hi, 1, 0)`, `1` with no fade.
+    #[must_use]
+    pub fn pitch_scale(&self, distance: f32) -> f32 {
+        let Some((lo, hi)) = self.pitch_fade else {
+            return 1.0;
+        };
+        if distance < lo {
+            return 1.0;
+        }
+        if hi < distance {
+            return 0.0;
+        }
+        1.0 + (0.0 - 1.0) * ((distance - lo) / (hi - lo))
+    }
 
     /// Whether the lookahead is halved at lap distance `lap_distance`.
     #[must_use]
