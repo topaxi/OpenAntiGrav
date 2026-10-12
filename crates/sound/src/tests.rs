@@ -13,6 +13,7 @@ use super::*;
 
 mod no_audio;
 mod race_switch;
+mod resume;
 mod source_switch;
 mod volumes;
 
@@ -264,6 +265,7 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -355,6 +357,7 @@ fn asking_for_the_music_again_never_restarts_it() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -408,6 +411,7 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -477,6 +481,7 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -535,6 +540,7 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -584,6 +590,7 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -636,6 +643,7 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -673,6 +681,7 @@ fn a_movie_with_no_voice_has_no_playhead() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -707,6 +716,7 @@ fn a_run_with_no_dump_accumulates_nothing() {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: None,
         menu_sound: None,
         race_context: None,
@@ -760,6 +770,7 @@ fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         race_from: None,
         race_index: None,
         race_position: 0.0,
+        race_tracks: 0,
         race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
         menu_sound: Some(Arc::clone(&menu_sound)),
         race_context: None,
