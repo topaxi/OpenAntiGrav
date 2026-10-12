@@ -128,7 +128,7 @@ from the list rather than greyed (`TrackSelection_PopulateList` filters). The
 mechanism is `oag_game::unlock::Gate`; `--unlock-all` lifts it and is ours, a
 developer and capture escape. The original's mode-gated per-track byte
 (`+0x16e`) is not modelled and stays open. Every other title's race box still
-offers everything: HD and Omega are not wired, and Pure's own gates (17 `<Unlock>` rows of other shapes) gate its campaign list and its team picker, not the race box ([Pure's campaign](#pures-campaign-is-a-list)).
+offers everything: HD and Omega are not wired, and Pure's own gates (17 `<Unlock>` rows of other shapes) gate its SINGLE PLAYER chain and its team picker, not the race box ([Pure's SINGLE PLAYER](#pures-single-player-is-the-discs-chain)).
 
 **Craft variants (Pulse): gated, since 2026-10-02.** Each `PI_ModelSkin` and
 `PI_TeamModel` carries an own-team and a `Team="any"` `Exclusive` loyalty row;
@@ -880,19 +880,40 @@ are not a row-for-row match, and multiplayer, the web link and extras have
 nothing at all - so none of the five was added as a row that would go
 nowhere or only partway there.
 
-## Pure's campaign is a list
+## Pure's SINGLE PLAYER is the disc's chain
 
-On a Wipeout Pure source `RACE CAMPAIGN` opens a scrolling list of events for the
-class being played, not a grid (`oag_ui_screens::pure_campaign`, driven by
-`Session::open_pure_campaign`). It is a screen over the main page, the same
-"takes the tick whole" shape the race box's pickers have, and it answers the pad, the
-wheel and the pointer through one function (`handle_pure_campaign`), so a locked
-event refuses a click the way it refuses a button. The data, the medal law and the
-gates are [Pure's campaign](../formats/pure-campaign.md); the screen itself is
-ours (chosen, not measured): Pure's own front end walks a chain of one-choice
-screens and no capture of a list exists. Which screen a title opens is
-[`oag_title::Campaign::dialect`](../../crates/title/src/campaign.rs), data, not a
-branch on the title's name.
+On a Wipeout Pure source the main page's first row reads **SINGLE PLAYER** (the
+original's own top row, `Skin.xml`'s `Main Menu`) and opens the disc's chain of
+one-choice screens: mode, class, league or tournament, circuit, then `Team Selection`
+(`oag_ui_screens::pure_chain` for the screens, `oag_game::campaign::pure_chain` for the
+state machine, driven by `Session::open_pure_chain`). It is a screen over the main page,
+the same "takes the tick whole" shape the race box's pickers have, and it answers the
+pad, the wheel and the pointer through one function (`handle_pure_chain`), so both
+reach a choice the same way (a gated row is not listed, so there is nothing to click); Back steps to the screen before and
+closes from the first. The order of the screens is read off their redirects
+(`oag_tables::pure_flow`); the data, the medal law and the gates are
+[Pure's campaign](../formats/pure-campaign.md). The screens are drawn on the title's own frame
+(`oag_ui_screens::pure_chain::draw_list`, the same `Layers` the race box's pickers return, so
+the barcode, arrows and `Confirm` legend are the page's own), the rows 18 grid lines apart
+(`FlowFiles::row_pitch`, measured on PPSSPP); the medal word and the context line are ours
+(chosen, not measured).
+Which campaign a title opens is
+[`oag_title::Campaign::dialect`](../../crates/title/src/campaign.rs), and the chain's
+files, the classes a fresh profile offers and the row's wording are fields beside it
+(`flow`, `classes_at_start`, `main_row`): data, not a branch on the title's name.
+
+**For the `menu-mods` lane, which copies each title's original main menu with stable
+ids.** The tree in `assets/ui/menu.toml` is unchanged: Pure's SINGLE PLAYER row **is**
+the existing `open_campaign` action row, reworded in place by
+`Definition::rename_campaign_row` from `Campaign::main_row` (project ids
+`OAG_MENU_SINGLE_PLAYER` and its subtitle, English in `english.toml`, translated in the
+other three). So the row keeps its action, its place (first) and its stable position, and
+only its label and subtitle are per-title; a title with no `main_row` keeps RACE CAMPAIGN.
+Pure's main page still shows our RACEBOX, REMIX, RECORDS, OPTIONS and QUIT after it; the
+original's `Multiplayer`, `Profile`, `On Line` and `Teasers` rows have nothing here to go
+to. `--menu-page pure-chain[:MODE[:CLASS[:LEAGUE]]]` draws each screen of the chain headless
+(`MODE` by name, the rest by row number): `pure-chain`, `pure-chain:arcade`,
+`pure-chain:arcade:1`, `pure-chain:arcade:1:0`, `pure-chain:tournament:1`, `pure-chain:zone`.
 
 ## What is not built
 

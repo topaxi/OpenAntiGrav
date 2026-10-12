@@ -140,6 +140,9 @@ pub const TITLE: &Title = &Title {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,
         list_entry: None,
+        flow: None,
+        classes_at_start: None,
+        main_row: None,
         circuit_unlocks: false,
         loyalty_unlocks: false,
         // Not wired, not measured absent: Omega's unlock rows are unread here.

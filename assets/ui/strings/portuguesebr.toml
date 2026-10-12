@@ -156,12 +156,8 @@ OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} já no cache", human = f
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} com falha", human = false }
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "O MODO DESTE EVENTO AINDA NÃO PODE SER CORRIDO NESTA VERSÃO", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "O CIRCUITO DESTE EVENTO NÃO ESTÁ NESTE DISCO", human = false }
-OAG_PURE_CAMPAIGN_TITLE = { text = "CAMPANHA", human = false }
-OAG_PURE_CAMPAIGN_CLASS = { text = "CLASSE", human = false }
-OAG_PURE_CAMPAIGN_LOCKED = { text = "BLOQUEADO", human = false }
-OAG_PURE_CAMPAIGN_NEEDS = { text = "PRECISA", human = false }
-OAG_PURE_CAMPAIGN_MEDALS = { text = "MEDALHAS", human = false }
-OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "QUALQUER MEDALHA", human = false }
+OAG_MENU_SINGLE_PLAYER = { text = "UM JOGADOR", human = false }
+OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, torneios, contra o relógio e Zona, classe por classe", human = false }
 OAG_MEDAL_GOLD = { text = "OURO", human = false }
 OAG_MEDAL_SILVER = { text = "PRATA", human = false }
 OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }

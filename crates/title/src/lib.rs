@@ -63,7 +63,7 @@ pub mod weapons;
 pub mod zoom;
 
 pub use boot::{BootProfile, BootStep, Provenance};
-pub use campaign::{Campaign, CampaignDialect};
+pub use campaign::{Campaign, CampaignDialect, FlowFiles, MainRow, Wording};
 pub use effects::{
     Burst, EffectSpec, Effects, Looks, Origin, Platforms, Rule, ShieldPalette, ShieldPalettes,
     Trigger,

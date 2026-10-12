@@ -142,3 +142,25 @@ fn only_pure_reads_its_campaign_as_a_list() {
         Some(oag_pure::campaign::DEFINITION_ENTRY)
     );
 }
+
+/// The SINGLE PLAYER chain, the fresh profile's two classes and the main menu's
+/// campaign wording are Wipeout Pure's alone: each is data a title names, never a
+/// comparison against its name.
+#[test]
+fn only_pure_names_a_single_player_chain_a_class_gate_and_a_campaign_row() {
+    for title in ALL {
+        let pure = title.campaign.dialect == CampaignDialect::Pure;
+        assert_eq!(title.campaign.flow.is_some(), pure, "{}", title.name);
+        assert_eq!(
+            title.campaign.classes_at_start.is_some(),
+            pure,
+            "{}",
+            title.name
+        );
+        assert_eq!(title.campaign.main_row.is_some(), pure, "{}", title.name);
+    }
+    assert_eq!(
+        oag_pure::TITLE.campaign.classes_at_start,
+        Some(&["Vector", "Venom"][..])
+    );
+}

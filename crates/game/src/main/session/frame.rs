@@ -503,8 +503,8 @@ impl Session {
                         continue;
                     }
                     // Wipeout Pure's campaign list, same shape.
-                    if stage.pure_campaign.is_some() {
-                        self.tick_pure_campaign(&grid);
+                    if stage.pure_chain.is_some() {
+                        self.tick_pure_chain(&grid);
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the
@@ -763,7 +763,13 @@ impl Session {
                     self.records.get(&key),
                     &observation,
                 ));
-                if let Some(cell) = stage.campaign_cell.as_ref() {
+                // A Free Play race has a cell to launch through and no medal to
+                // keep (`oag_tables::pure_campaign::free_play_event`).
+                if let Some(cell) = stage
+                    .campaign_cell
+                    .as_ref()
+                    .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
+                {
                     self.records.record_campaign(
                         &key.title,
                         &cell.name,

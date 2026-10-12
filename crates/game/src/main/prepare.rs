@@ -281,6 +281,9 @@ impl Pending {
         // And the three rows the race box's own screens pick, on a title
         // that authors them - see `menu::Definition::drop_rows_picked_on_screen`.
         definition.drop_rows_picked_on_screen(title);
+        // The campaign row as the title's original words it (`SINGLE PLAYER` on
+        // Pure) - see `menu::Definition::rename_campaign_row`.
+        definition.rename_campaign_row(title, &boot_shell.strings);
         // A phone app is left, not quit - see `menu::Definition::drop_quit`.
         if oag_mobile::MOBILE {
             definition.drop_quit();
