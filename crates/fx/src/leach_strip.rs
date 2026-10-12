@@ -22,9 +22,9 @@
 //!
 //! **Chosen, not measured**: the progress measure is this engine's unwrapped
 //! track distance (divided by the course length for the wobble) where the
-//! original stores a 0..1 lap fraction with a lap fix, the same ordering; and
-//! the phases start at 0 when the beam starts (the constructor zeroes them,
-//! the owner's reset was not read).
+//! original stores a 0..1 lap fraction with a lap fix, the same ordering. The
+//! phases start at 0 with the race and carry from one beam to the next
+//! (measured live, see `oag_raceplay`'s `advance_leach_strip`).
 
 use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;

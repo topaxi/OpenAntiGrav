@@ -15,7 +15,11 @@ LIGHT=os.environ.get('HOOK_LIGHT')=='1'
 NO_HEADS=os.environ.get('HOOK_NO_HEADS')=='1'
 # HOOK_TGT=cc0000,10000 limits the index and vertex stages to draws whose render target (0x210) is listed.
 TGTS={int(x,16) for x in os.environ.get('HOOK_TGT','').split(',') if x}
-def keep(d): return not TGTS or d.get(0x210) in TGTS
+# HOOK_LEACH=1 limits them further to HD's LeachBeam strip draw: unit 0 a 128x128 noise, unit 1 a
+# 256x256 glow (leach-beam-strips.md, "hd-leach-draw"), so a held beam's own vertices dump in seconds.
+LEACH=os.environ.get('HOOK_LEACH')=='1'
+def is_leach(d): return d.get(0x1a18)==0x00800080 and d.get(0x1a38)==0x01000100 and bool(d.get(0x1a2c,0)&0x80000000)
+def keep(d): return (not TGTS or d.get(0x210) in TGTS) and (not LEACH or is_leach(d))
 # HOOK_NEED_SCREEN=1 also retries a frame with no bloom-chain end (a draw on target 0x2240000) followed
 # by a draw on a screen buffer (0x10000 or 0x394000): the frame stops before the passes it is read for.
 def post_chain_complete(draws):

@@ -30,3 +30,18 @@ fn a_hull_with_no_locator_pushes_a_full_one_point_seven() {
     let push = (race.leach_anchor(&anchors, 0) - body).length();
     assert!((push - 1.7).abs() < 1e-4, "push {push}");
 }
+
+/// The wobble's phases stand still between beams and carry into the next one,
+/// as the original's do (read live, `hd-leach-2`): with no beam alive a tick
+/// leaves them where the last beam left them. Resetting them per beam fails this.
+#[test]
+fn the_wobble_phases_carry_over_between_beams() {
+    let mut race = race_with_a_grid();
+    let mut strip = Strip::new([None; MAX_SHIPS]);
+    strip.phases = [1.5; 3];
+    race.view.leach_strip = Some(strip);
+    assert!(race.leach_beam_live().is_none());
+    race.advance_leach_strip();
+    let phases = race.view.leach_strip.as_ref().map(|strip| strip.phases);
+    assert_eq!(phases, Some([1.5; 3]));
+}

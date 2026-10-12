@@ -206,6 +206,16 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_leach_lock: Option<String>,
 
+    /// With `--force-leach-lock`, draw HD's LeachBeam strip along a path read
+    /// off the original instead of the one this race walks: a text file of
+    /// `x,y,z` lines, the walked (target) end first, as the original's strip
+    /// object stores its samples (`scripts/rpcs3-hd-whiteout.py --leach`
+    /// dumps them). With `--pose-from`/`--camera-pose` and `--camera-fov` set
+    /// to the dumped frame's own, the frame isolates this renderer's draw of
+    /// the strip from the path. A verification aid only.
+    #[arg(long, value_name = "FILE", requires = "force_leach_lock")]
+    pub(crate) leach_path: Option<std::path::PathBuf>,
+
     /// With `--race --screenshot`, put craft `SLOT` on a Bomb the player has laid
     /// at the end of a tick: `TICK:SLOT`, e.g. `600:1`. A verification aid for
     /// the Bomb's detonation, there because a headless run has no rival that

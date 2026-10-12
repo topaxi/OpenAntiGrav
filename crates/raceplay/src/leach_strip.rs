@@ -66,6 +66,9 @@ pub(super) struct Strip {
     anchors: [Option<Mat4>; MAX_SHIPS],
     trails: Vec<AnchorTrail>,
     phases: [f32; 3],
+    /// A path read off the original (`--leach-path`): drawn as it is in place
+    /// of the walk, the bend and the wobble. A verification aid only.
+    path: Option<Vec<Vec3>>,
 }
 
 impl Strip {
@@ -74,6 +77,7 @@ impl Strip {
             anchors,
             trails: (0..MAX_SHIPS).map(|_| AnchorTrail::new()).collect(),
             phases: [0.0; 3],
+            path: None,
         }
     }
 }
@@ -83,6 +87,21 @@ impl Race {
     #[must_use]
     pub(crate) fn has_leach_strip(&self) -> bool {
         self.view.leach_strip.is_some()
+    }
+
+    /// Draws the live beam along `samples` (the walked end first, as the
+    /// original's strip stores them at `+0x150`) instead of the path this race
+    /// would walk: a verification aid (`--leach-path`) that puts the original's
+    /// own dumped path under this renderer's nodes, fins and material, so a
+    /// matched frame isolates the draw. `false` when the title has no strip.
+    pub fn force_leach_path(&mut self, samples: Vec<Vec3>) -> bool {
+        match self.view.leach_strip.as_mut() {
+            Some(strip) => {
+                strip.path = Some(samples);
+                true
+            }
+            None => false,
+        }
     }
 
     /// The craft's anchor this tick: its `arc_anchor_point` node's position
@@ -143,8 +162,11 @@ impl Race {
     }
 
     /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
-    /// phases, which step once a tick while a beam lives and start again with
-    /// the next.
+    /// phases, which step once a tick while a beam lives and **carry over to the
+    /// next beam**: read live (2026-10-12, `hd-leach-2`), the original's phases
+    /// start at 0 with the race, stand still between beams and go on from where
+    /// the last beam left them (0.133 at one fire, then 0.15, 0.583, 0.917
+    /// through states 2, 3 and 4), never reset at a fire.
     pub(crate) fn advance_leach_strip(&mut self) {
         let Some(mut strip) = self.view.leach_strip.take() else {
             return;
@@ -158,8 +180,6 @@ impl Race {
         }
         if self.leach_beam_live().is_some() {
             law::advance_wobble(&mut strip.phases);
-        } else {
-            strip.phases = [0.0; 3];
         }
         self.view.leach_strip = Some(strip);
     }
@@ -179,6 +199,36 @@ impl Race {
         let Some((reveal, window)) = Phase::at(beam.age).reveal() else {
             return Vec::new();
         };
+        let nodes = match &strip.path {
+            Some(path) => law::nodes(&Self::path_records(path), reveal, window),
+            None => self.walked_nodes(strip, beam, reveal, window),
+        };
+        let mut out =
+            Vec::with_capacity(nodes.len().saturating_sub(1) * oag_fx::rocket_smoke::FINS * 6);
+        law::extend_vertices(&mut out, &nodes);
+        out
+    }
+
+    /// A forced path as records: only the positions reach the nodes.
+    fn path_records(path: &[Vec3]) -> Vec<law::Record> {
+        path.iter()
+            .map(|&anchor| law::Record {
+                anchor,
+                progress: 0.0,
+                row0: Vec3::ZERO,
+                row1: Vec3::ZERO,
+            })
+            .collect()
+    }
+
+    /// The race's own path: walk, bend and wobble, then the nodes.
+    fn walked_nodes(
+        &self,
+        strip: &Strip,
+        beam: oag_weapons::projectile::leach_beam::Beam,
+        reveal: f32,
+        window: f32,
+    ) -> Vec<law::Node> {
         let (shooter, target) = (usize::from(beam.owner), usize::from(beam.target));
         let (shooter_record, target_record) = (
             self.leach_record(&strip.anchors, shooter),
@@ -198,11 +248,7 @@ impl Race {
         );
         law::bend(&mut samples, trailer_record.anchor);
         law::wobble(&mut samples, &strip.phases, self.leach_course_length());
-        let nodes = law::nodes(&samples, reveal, window);
-        let mut out =
-            Vec::with_capacity(nodes.len().saturating_sub(1) * oag_fx::rocket_smoke::FINS * 6);
-        law::extend_vertices(&mut out, &nodes);
-        out
+        law::nodes(&samples, reveal, window)
     }
 }
 

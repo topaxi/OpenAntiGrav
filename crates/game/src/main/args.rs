@@ -305,6 +305,25 @@ pub(crate) fn force_at_slot(text: Option<&str>, what: &str) -> Result<Option<(u3
     )))
 }
 
+/// Reads `--leach-path`'s file: one `x,y,z` sample per non-empty line.
+pub(crate) fn leach_path(path: Option<&std::path::Path>) -> Result<Option<Vec<oag_core::math::Vec3>>> {
+    let Some(path) = path else { return Ok(None) };
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| anyhow::anyhow!("--leach-path {}: {error}", path.display()))?;
+    let samples = text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let values: Vec<f32> = line.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+            match values[..] {
+                [x, y, z] => Ok(oag_core::math::Vec3::new(x, y, z)),
+                _ => Err(anyhow::anyhow!("--leach-path: {line:?} is not x,y,z")),
+            }
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok(Some(samples))
+}
+
 /// Resolves `--give`'s spelling to a weapon, case-insensitively.
 ///
 /// Rejects an unknown name rather than ignoring it: a silent no-op here looks
