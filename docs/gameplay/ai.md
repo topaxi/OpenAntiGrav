@@ -49,7 +49,7 @@ times larger" - because the finding is the coupling, not the number.
 | The racing line and AI corridor the controller follows | **recovered** - see [track.md](../formats/track.md) | 92 |
 | That AI speed is scheduled rather than driven | **recovered**, from shipped data | 85 |
 | Pulse's four speed blocks, and which two read the player | **recovered**, corroborated PSP and PS2 | 90 |
-| Pure's larger, earlier model - zones, fatigue, lead/tail | **recovered**, from shipped data | 85 |
+| Pure's earlier model as its executable flies it: a per-slot cruise speed, a per-track speed tweak, one field-wide zone multiplier (`Zone`/`LeadZone`), fatigue and a launch blend; `TailZone` and `<NewStats>` never read | **measured** (2026-10-12), 1,688 of 1,689 PPSSPP samples - see [Pure](#pure-a-sibling-driver-2026-10-12) | 94 |
 | That `BaseStartThrust` is authored and never read | **recovered** | 90 |
 | What the numbers *mean* - units, and what `AIThrust` multiplies | **recovered** (2026-10-11): percent of the player's own full throttle, written to the craft's control record and run through the same engine; distances are `racer+0x240` lap-progress units - see [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md) | 92 |
 | **The opponent drives the player's physics**: its driver's control record (`driver+0x08`) is the craft's registered input source | **measured** (2026-10-11), every opponent's `craft+0x3c` read live | 92 |
@@ -64,8 +64,8 @@ times larger" - because the finding is the coupling, not the number.
 | `SplinePt.unk_0x5c/0x5d` (an authored lane **exclusion** band: the target is kept out of it, on the side it started) and `unk_0x66` (a speed floor) | **recovered**, static, the band's direction at instruction level (2026-10-12); only `07_Track` authors a band and only `06_Track` a floor | 75 |
 | Where the rail sits in the frame: one `AiManager_Update` per `Body_StepWorld` | **measured** (2026-10-12): the round-robin counter advanced by one at each of 40 consecutive world steps | 90 |
 | **The original driver, built**: `oag_ai::original`, flown by Pulse's campaign opponents | **built** (2026-10-12), see [built](#built-2026-10-12-oag_aioriginal) | - |
-| The sign convention on Pure's `Position` attribute | hypothesis | 55 |
-| Which of Pure's two per-class blocks the engine reads | **unknown** | - |
+| The sign convention on Pure's `Position` attribute: the nearest opponent's distance **ahead of** the player, negative behind | **measured** (2026-10-12): the zone law reproduced on 633 frames, see [psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-zone-multiplier) | 88 |
+| Which of Pure's two per-class blocks the engine reads: **the legacy one**; `<NewStats>` is parsed and gated off by a byte initialised `0` with no writer, on both pressings | **measured** (2026-10-12): the byte reads `0` in a race - see [Pure](#pure-a-sibling-driver-2026-10-12) | 94 |
 | Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
 | Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
@@ -137,10 +137,12 @@ subsystem rather than a single function.
 
 Pure ships a **second** controller per class, `<ControllerPO>`, with an
 attribute `Controller` does not have (`xtrackMax`, a clamp on the cross-track
-term) and markedly higher gains. Its consumer is unidentified. Working
-hypothesis, confidence **40** and deliberately not acted on: the Autopilot
-pickup, which drives the *player's* craft and would want a different, more
-assertive tune. `PRO_STATS_AUTOPILOT`, `Autopilot` and `autopilot input` all
+term) and markedly higher gains. **It has no consumer** (2026-10-12): `ControllerPO`
+is not a string in either Pure executable, and the class parser matches element names
+exactly (`strcasecmp`), so only `<Controller>` is read
+([psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-cast)).
+The earlier hypothesis, the Autopilot pickup, is retired: Pure's autopilot is the
+same driver registered as `"autopilot input"`, on `<Controller>`'s gains. `PRO_STATS_AUTOPILOT`, `Autopilot` and `autopilot input` all
 appear in both string tables. Pulse's file has no `ControllerPO`.
 
 ## Speed, in Pulse: four blocks, two of them player-coupled
@@ -270,9 +272,10 @@ as a simplification of it and the parts that were dropped say what was not
 working.
 
 Each of Pure's five classes appears **twice**: a legacy block, and a `<NewStats>`
-block that supersedes it in structure. Which one the engine reads is not known -
-`<NewStats>` is the obvious guess, and the guess is worth nothing until someone
-reads the parser.
+block that supersedes it in structure. **The engine reads the legacy block**
+(2026-10-12): both are parsed, and a byte initialised `0` with no writer keeps every
+reader on the legacy half, see [Pure](#pure-a-sibling-driver-2026-10-12). The list
+below describes the files; what the opponents fly is that section.
 
 What Pure has that Pulse does not:
 
@@ -332,14 +335,13 @@ doing.
    is not identified - the call graph does not resolve in this region, for the
    reason [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#read-this-first-this-regions-addresses-are-unrelocated)
    records.
-2. **Sign convention** on Pure's `Position`. The reading above takes negative as
-   "behind the player", which makes the lead curve's negative end a catch-up
-   boost and its positive end a wait-up. Self-consistent, and unverified - hence
-   55.
-3. **Which of Pure's two per-class blocks is live.**
-4. **`ControllerPO`'s consumer** - see the Autopilot hypothesis above. Pulse's
-   parser has no branch for the element at all, which is consistent with it
-   being Pure-only.
+2. ~~**Sign convention** on Pure's `Position`.~~ **Answered 2026-10-12** (measured,
+   88): `Position` is the nearest opponent's distance ahead of the player, so
+   negative is an opponent behind - the reading above.
+3. ~~**Which of Pure's two per-class blocks is live.**~~ **Answered 2026-10-12**
+   (measured, 94): the legacy block, see [Pure](#pure-a-sibling-driver-2026-10-12).
+4. ~~**`ControllerPO`'s consumer**~~ **Answered 2026-10-12**: none; it is never
+   parsed, see above.
 5. **Weapon AI.** `Data\XML\WeaponAIstats.xml` is a sixth AI file that
    `AiStats_LoadAll` does *not* load. **Its loader is found** (2026-08-17):
    `WeaponAiStats_Load` (`0x08851d88`), called from `AiStats_LoadAll`'s own caller
@@ -575,6 +577,47 @@ Easy) and `104.58` (the upper stop at Hard), and the field laps Talon's
 Junction with no respawn and no wall contact. Omega's executable inlines the
 same driver (static census); it is not wired.
 
+### Pure: a sibling driver (2026-10-12)
+
+Pure's opponent is the earlier design Pulse grew out of, not Pulse's with branches
+([psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md)). The
+steering law, the lookahead, the lane-point helpers, the lane bumps, the fork coin and
+the rail's gates are Pulse's to the constant. What differs:
+
+| Piece | Pure | Pulse |
+| --- | --- | --- |
+| Which stats | the legacy block: `StartStats` cruise band, `ZoningStats`, `FatigueStats`, `GridSpread` | `PosBalancing`, `RubberBanding`, `SkillScale`, `AIPackSwapping` |
+| Thrust | a cruise speed per grid slot drawn once at load in `[NormalRaceSpeedMin, Max]`, times a speed tweak, times one field-wide zone multiplier, times fatigue, blended toward `StartSpeed` during the launch | `AIThrust[player's place]` plus a formation gap and the rubber band |
+| Player coupling | the zone multiplier (the nearest opponent's gap to the player, `LeadZone` when the player leads) and the fatigue window (own gap) | the player's place and the field-wide gap |
+| Lane | one current lane, moved by a rate-limited bang-bang, read by the steering and the rail alike | an 80-slot ring |
+| Planner | also scores the other craft and track objects; no contact push | contact push |
+| Rail | **position only**; the velocity turn is computed and dropped | position and velocity |
+| Update rate | every opponent, every frame (the snapshot sets every racer's round-robin byte), measured | one driver a frame, period eight |
+| Floors | thrust at least `35`, `x 0.7` under a craft flag | the speed floor only |
+| Pitch | Pulse's, faded out between `1030` and `1180` units off the line | - |
+| Forks | the same coin, held 2 s | held to the merge |
+| Difficulty | no `SkillScale`, no pack shuffle, no difficulty row in a Single Race; the per-track speed tweak instead | both |
+
+**Measured** (2026-10-12, PPSSPP, Vineta K, Venom and Vector, the player parked):
+the throttle law reproduced on 1,688 of 1,689 opponent samples, the zone multiplier on
+633 frames, the switch byte `0` in every sample. The speed tweak is not in
+`AIRaceStats.xml` at all: it is drawn from each track's own `stats.xml`
+(`<AIStats><VenomTweak Min Max/>`), about `0.8` on the shipped files, so a Pure
+opponent cruises at roughly four fifths of its `NormalRaceSpeed` band.
+
+**Built**: `oag_tables::pure_ai_stats` and `oag_ai::original::cruise` (the throttle
+law as pure functions, the draws chosen from the seeded generator), held to the disc
+by `pure_original_ai_ground_truth.rs`. **Not flown**: this project has no Pure
+campaign, so `RaceDefaults::original_opponent` stays `false`; the planner, the rail
+variant and the every-frame update are named on the evidence page and unbuilt.
+
+So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model
+(`PosBalancing`'s steep gradient, `TailZone`, `ShipSpacingVariation`) are the
+`<NewStats>` half the shipped executable never selects, `<NewStats>`' fatigue rows
+are not even stored, `MasterSpeedTweak` is parsed and dropped, and `ControllerPO` is
+never parsed. The paragraph above that read Pulse as "the model Pulse cut down" holds
+for the files, not for what Pure's opponents fly.
+
 ### Still open, with the next address
 
 - **Why our field closes into formation slower** than the original's, above:
@@ -599,7 +642,7 @@ same driver (static census); it is not wired.
 - **The other titles.** HD flies it, [above](#hd-the-same-driver-five-gated-branches-2026-10-12). 2048 and Omega ship the
   same tables (checked, applies, not wired: `ClassRace` reads them with no
   title branch, and `original::Field` would run on them unchanged; 2048's
-  driver is unread, Omega's executable inlines HD's, static only); Pure's tables are another schema. Each opts in through
+  driver is unread, Omega's executable inlines HD's, static only); Pure's driver is a sibling, read and its throttle measured, [above](#pure-a-sibling-driver-2026-10-12). Each opts in through
   `RaceDefaults::original_opponent` once its own lane has read its driver.
 
 ## What we build instead

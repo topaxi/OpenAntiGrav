@@ -84,7 +84,7 @@ pub fn parse_element(expanded: &str, element: &str) -> Result<Controller> {
     controller(child(class, "Controller")?)
 }
 
-fn controller(node: &Node) -> Result<Controller> {
+pub(crate) fn controller(node: &Node) -> Result<Controller> {
     only_attributes(node, "Controller", ATTRIBUTES)?;
     let read = |attribute: &'static str| -> Result<Option<f32>> {
         match node.attr(attribute) {

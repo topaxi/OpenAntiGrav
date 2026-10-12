@@ -20,6 +20,7 @@
 //! [`ClassRace`]: oag_tables::ai_race_stats::ClassRace
 //! [`Controller`]: oag_tables::ai_control_stats::Controller
 
+mod cruise;
 mod field;
 mod lane;
 mod laws;
@@ -29,6 +30,10 @@ mod steer;
 mod thrust;
 mod track;
 
+pub use cruise::{
+    CruiseDraws, CruiseState, cruise_thrust, finish_thrust, gap_along_track, zone_multiplier,
+    zone_speed,
+};
 pub use field::{Field, OriginalDriver, Output, SLOTS, Standings, Tick};
 pub use lane::{PlanInput, Planner, Ring};
 pub use laws::Laws;
