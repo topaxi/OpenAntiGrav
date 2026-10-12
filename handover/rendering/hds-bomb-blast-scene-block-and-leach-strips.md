@@ -122,20 +122,30 @@ needs the placement behind a rival of `hd-leach-draw`; (3) the held duration and
 reset; (4) `hd_leach_strip_ground_truth` still on the 4-sample staging: a dense staging needs a metric
 that isolates the strip (on/off frames diverge in sim state, trails are near-white in both).
 
+## 2026-10-12 (`hd-leach-2`): a held beam, the camera settled, the far-end brightness gap
+
+Held beams on RPCS3 behind a rival (`rpcs3-hd-whiteout.py --leach`), matched pairs with the
+path pinned (`oag-game --leach-path` plus the frame's own `--camera-pose`/`--camera-fov`). See
+leach-beam-strips.md, "hd-leach-2". Closed: the eye-distance question (the shared RPCS3
+profile flies `OPT_FAR`; our HD Far rig matches the original's at rest, our Close default is
+HD's own default), the wobble phase reset (phases carry across beams, wired).
+Open: (1) **the far part of the beam**: the original stays a saturated band to the rival
+(149 units), ours fades beyond about 20 units on the identical path, camera and fov; path,
+camera, fov, width and the depth term are ruled out; next suspects the post chain on a thin
+additive line, the mip chain, and the facing inputs of the original's vertex program (dump
+the strip draw's vertices and constants with `HOOK_LEACH=1` on a complete frame); (2) HD's
+Close view on the original (walk Options > Game Options > Camera, then a rest frame);
+(3) the held duration, 0.3 s longer in the original (sim, `active_time` counted from fire in
+ours); (4) `hd_leach_strip_ground_truth` still on the 4-sample staging: `--leach-path` with
+a dense path now gives a fixed strip, but on and off still differ by the forced lock.
+
 ## Next Steps
 
 1. ~~Build the strip~~ - done 2026-10-08, see the section above.
 2. Add the ghost-static axis to `Title` so HD stops asking.
-3. **Get a held LeachBeam on RPCS3 with a rival in range** (maintainer's idea, 2026-10-12; not queued as a
-   lane). `hd-leach-render` fired state 10 twice from the grid but started 8th with no rival in lock range,
-   so no beam formed. Two ways, in this order:
-   - **Single player plus a teleport (preferred, for pictures):** grant the LeachBeam
-     (`scripts/rpcs3-hd-weapon.py`), write the player's position into memory right behind an AI craft, fire.
-     The viewport and chase camera stay the race's own, so the matched frame pair (open item 2 of
-     `hd-leach-render`) and the chase-camera eye distance (13.8-15.3 against ours 7.7) can be read from it.
-     Whether a placement helper exists for HD was not checked.
-   - **Split screen (fallback, for logic only):** both craft are the maintainer's to place, so player 2
-     parks in lock range ahead of player 1. Read world-space data only - the strip's 300 samples, state 10
-     and its timer, the held duration (about 2.6 s, then state 6) and the wobble's phase reset. Do **not**
-     compare pixels off it: each half has its own aspect and field of view, HD may move the chase camera or
-     cut effects in split screen, and this port has no split screen to match.
+3. ~~Get a held LeachBeam on RPCS3 with a rival in range~~ - done 2026-10-12 (`hd-leach-2`):
+   single player, `scripts/rpcs3-hd-weapon.py`'s grant inside `rpcs3-hd-whiteout.py --leach`,
+   placed 40 behind the nearest rival at its speed, 3-4 s settle, TRIANGLE held. About one shot
+   in five holds; split screen was not needed. Pair against ours with `--camera-view far` (the
+   profile's view) or, for the strip alone, `--leach-path` at the dump's own camera.
+4. The far-end brightness gap above (item 1 of the 2026-10-12 section).

@@ -1141,6 +1141,25 @@ port. With a different `OAG_RPCS3_PAD_NAME` every press is silently dropped
 (the walk stalls at Main Menu or wanders into "Manual Part 1"); fix the device
 name and the port in your copy before the first boot.
 
+### Trap: the shared profile flies the Far camera (2026-10-12, `hd-leach-2`)
+
+The `dev_hdd0` every member's private tree copies (`scripts/emu-env.sh`) holds HD's
+autosave `savedata/BCES00664-AUTO-/DATA.BIN`, and it carries `CameraP1 = OPT_FAR`
+(`strings` finds `CameraP1`, `OPT_FAR`). HD's own default is `OPT_CLOSE`
+(`additional_definition.xml` in DATA06), as ours is. So **every HD frame from that profile
+is the Far chase view**: render ours with `--camera-view far` to pair with it. Measured at
+rest: the eye at (0, 3.0, -11.5) in the body frame against Feisar's Far (0, 3.0, -11.25)
+at the 0.75 scale, see
+[leach-beam-strips.md](../ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md), "hd-leach-2".
+In-race SELECT does not cycle the view.
+
+**Solving a dumped frame's camera.** `c[256..259]` of a draw are its view-projection with
+the clip rows as columns (`M[i][j] = c[256+j][i]`); the eye solves `M[0].p = M[1].p =
+M[3].p = 0`, forward is `M[3].xyz` normalised, up `M[1].xyz` normalised, and the vertical
+fov `2 atan(|M[3].xyz| / |M[1].xyz|)`. A dump retried after an incomplete frame mixes
+frames: take the matrix of the draw you read (the leach draw's own `c[467]` is its eye),
+and read poses in the same pause, after the dump.
+
 ## Ride height through the flyby, the grid and a straight (2026-10-08, `hd-ride-height`)
 
 `scripts/rpcs3-height.py` samples the player's body, craft entry and ship through `/proc/<pid>/mem`

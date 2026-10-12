@@ -12,6 +12,15 @@ before the first shot. Each frame lands in `<out>/<stem>.png` plus
     OAG_RPCS3_DISPLAY=96 OAG_RPCS3_GDB=127.0.0.1:23496 ... HOOK_LIGHT=1 \\
         uv run --with evdev python3 scripts/rpcs3-hd-whiteout.py \\
         --image data/images/hdfury-ps3-eu-dec.iso --out <dir> --delay 0.1 --delay 0.4
+
+`--leach` (2026-10-12) fires state 10 instead: the player goes `--behind-rival`
+units behind the nearest rival at its speed, waits `--settle` seconds (a shot
+fired at once after the teleport ends in state 6), holds TRIANGLE (the beam
+holds only while fire is held), pauses `--delay` after state 4 and in the same
+pause reads every craft's body and the beam (state, clock, the drawn strip's
+samples, wobble words) into `<stem>.json`. The state, beam clock and phase are
+logged live at every state change. `HOOK_LEACH=1` dumps the strip draw's own
+indices and vertices only. See leach-beam-strips.md, "hd-leach-2".
 """
 import argparse
 import importlib.util
