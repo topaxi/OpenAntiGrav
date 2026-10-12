@@ -711,3 +711,10 @@
 0x001e6ff8	function	Team_LoadHandlingStats	80	opponent-handling.md
 0x00058e38	function	Race_CreateAiRacer	75	opponent-handling.md
 0x00061770	function	SPArcadeRaceManager_Construct	78	opponent-handling.md
+# 2026-10-12 hd-quake-render: the Quake's fire path and its wave (quake.md)
+0x00147d18	function	QuakeManager_Fire	85	quake.md
+0x001560b0	function	Quake_Init	80	quake.md
+0x002d2a78	function	Quake_Update	75	quake.md
+0x002d2630	function	Quake_SampleSpan	75	quake.md
+0x002d3760	function	Quake_UpdateSpan	70	quake.md
+0x00ae98c0	data	g_quake	85	quake.md

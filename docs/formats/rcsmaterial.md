@@ -152,7 +152,7 @@ preimage to NUL-terminated strings in `EBOOT.elf` at `0x7a3560`:
 | Hash | Class | Variants | Materials |
 | --- | --- | ---: | ---: |
 | `0x7893d2ec` | `Static` | 17,333 | 631 |
-| `0xd29c9ee2` | `StaticQuake` | 7,797 | 171 |
+| `0xd29c9ee2` | `StaticQuake` | 7,797 | 171 (381 disc-wide; drawn by `GpuVertex::quake`, [quake.md](../ghidra/functions/ps3-hdfury-eu/quake.md)) |
 | `0xdd70bfd5` | `RigidBody` | 4,389 | 153 |
 | `0xa9edfe7e` | `StaticUncompressed` | 1 | 1 |
 

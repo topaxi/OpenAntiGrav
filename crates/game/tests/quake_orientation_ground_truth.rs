@@ -75,3 +75,57 @@ fn lean_with_the_track(image: &str, must_lean: bool) {
         "no banked stretch on the sampled circuit"
     );
 }
+
+/// How many of a model's draws start on a vertex carrying `GpuVertex::quake`,
+/// and how many draws it has.
+fn quake_draws(model: &oag_mesh::mesh::Model) -> (usize, usize) {
+    let lists = [
+        &model.draws,
+        &model.alpha_tested_draws,
+        &model.transparent_draws,
+    ];
+    let all: usize = lists.iter().map(|l| l.len()).sum();
+    let flagged = lists
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter(|draw| {
+            let first = model.indices[draw.range.start as usize] as usize;
+            model.vertices[first].quake > 0.5
+        })
+        .count();
+    (flagged, all)
+}
+
+/// The surfaces the Quake's displacement reaches are the materials that ship a
+/// `StaticQuake` vertex program: on Talon's Junction 281 of 2,211 draws, read off
+/// the materials themselves (`quake.wesl`, `docs/ghidra/functions/
+/// ps3-hdfury-eu/quake.md`). Dropping the flag from `skin::variants` marks none,
+/// and no other title marks any: Pulse's own track carries no `StaticQuake`
+/// program and moves through `oag_render::ripple` instead.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_hd_road_marks_the_surfaces_a_staticquake_program_reaches() {
+    let (Some(hd), Some(pulse)) = (
+        oag_testdata::image("hdfury-ps3-eu-dec.iso"),
+        oag_testdata::image("pulse-psp-usa.chd"),
+    ) else {
+        return;
+    };
+    let load = |path: std::path::PathBuf| {
+        race::load(&race::Options {
+            source: path.display().to_string(),
+            mode: oag_race::Mode::SingleRace,
+            ..race::Options::default()
+        })
+        .expect("loading the race")
+    };
+    let (flagged, all) = quake_draws(&load(hd).track_model);
+    assert!(all > 2000, "Talon's Junction has {all} draws");
+    assert!(
+        (200..400).contains(&flagged),
+        "{flagged} of {all} HD draws carry `quake`; the disc's materials say about 281"
+    );
+    let (flagged, all) = quake_draws(&load(pulse).track_model);
+    assert!(all > 0);
+    assert_eq!(flagged, 0, "Pulse marks no surface for the shader's wave");
+}

@@ -958,7 +958,8 @@ named, and a row below 80 says why:
 | 7 | Plasma | readout 60 = Plasma's `damage`; fire handler sets bit `0x4`, the id `Weapon_FirePlasma` uses | 80 |
 | 8 | Cannon | the HUD announces **"Machine Gun"**; readout 5 | 90 |
 | **9** | **Bomb** | readout 15 = Bomb's `damage`; fired, a red-and-white bomb sits on the track, ringed, and detonates | **90** |
-| 1, 2 | Missile, Quake | readouts 15 and 15 (both tables say 15), not told apart | 50 |
+| 1 | Missile | readout 15; the later row below (a projectile with five bounces, a hit that fills the explosion pool) | 70 |
+| **2** | **Quake** | readout 15; `Weapon_FireFromSlot`'s state-2 handler (`0x0012daa0`) sets slot `+0x200` bit `0x8`, which `QuakeManager_Fire` (`0x00147d18`) clears, and the live `g_quake` block (`0x00ae98c0`) runs (speed `270`, age, amplitude) the moment it is fired. `scripts/rpcs3-hd-quake.py`, `docs/ghidra/functions/ps3-hdfury-eu/quake.md` | **90** |
 | 3, 6, 10 | unresolved | readouts 1, 0, 1; state 3 never fired | - |
 
 The state is **not** Pulse's craft id: Pulse's Mine is 8 and Bomb 9 by id and 8 and 9 by
@@ -1050,7 +1051,7 @@ standing on the grid):
 | Fired state | What the memory and film show | Conf |
 | --- | --- | ---: |
 | 1 | a projectile flies for 5.5 s; a counter in the block after the manager (`manager + 0x198`, outside its `0x118` bytes) reads 1, 2, 3, 4 at the bounces and 5 as it ends, at host 2.1, 3.2, 4.2, 4.8, 5.5 s, and the projectile is gone at 5.5 s (the list count `manager + 0xc4` is 1 while it flies, 0 after). The Pulse Missile's bounce budget is 5 (`oag_weapons::projectile::missile::MAX_BOUNCES`). The end is a small orange-red burst in the film; **the explosion pool is untouched** (`+0x10c` stays 0, all 16 pool objects byte-identical over 40 s) | 70 that state 1 is the Missile |
-| 2 | a projectile that ends 3.4 s later in a large yellow-white burst with orange streaks, filling the left half of the frame (`m1`, `m2`); **the explosion pool is untouched** | state 2 unresolved |
+| 2 | a projectile that ends 3.4 s later in a large yellow-white burst with orange streaks, filling the left half of the frame (`m1`, `m2`); **the explosion pool is untouched** | **the Quake** (2026-10-12: a wave of fire across the road, not a projectile; the burst is the wave) |
 | 3, 6 | nothing drawn at the grid within 10 s (3); the craft is flung ahead (6) | - |
 | 10 | on the grid alone (`m4`): no byte of the manager or the pool changes in 14 s | - |
 | (m5: player 12 units behind the nearest rival, state 1 fired) | **a hit**: list count 1 to 0 and pool count 0 to 1 in the same 10 ms sample, 0.12 s after the press; the count back to 0 0.98 s later; the object's age field `+0x170` ran 0 to 0.967 linearly; film: full-frame white-out at video 9.67-10.0 s with the rival's hull in it, gone by 10.2 s | 80 |

@@ -113,7 +113,9 @@ Frames are in a scratch directory, not kept (gitignored):
   HD, and Pure, which is a different executable) keeps main's behaviour:
   `psys::Effect::without_extents` at load puts every emitter back at its
   anchor, and the Quake feeds its `/ 50` in as severity again. Checked
-  against main (a84003c7): PS2 Quake t305/t312 and HD Quake, and PS2/HD
+  against main (a84003c7): PS2 Quake t305/t312 and HD Quake (HD's `WO_QUAKE`
+  has the law since 2026-10-12, listed per effect in `oag_title::Effects::extents`,
+  matched by eye to the RPCS3 film), and PS2/HD
   engine flares at t240, all pixel-identical
   (`ps2-hd-gated-vs-main.png`, `after2/`). So
   PS2's Quake still blows out white exactly as on main - its `.pob`s embed

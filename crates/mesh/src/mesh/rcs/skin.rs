@@ -671,10 +671,11 @@ fn units(
 /// the reading actually reaches.
 ///
 /// **Also returned, per slot: whether the material ships a `StaticQuake` row** -
-/// the vertex program the Quake's displacement is the only difference of. The
-/// original issues a draw under that class when the wave is up, so the surfaces
-/// it reaches are the materials that carry the row, an authored set (377 of the
-/// disc's 1,632 materials). See `GpuVertex::quake`.
+/// the vertex program the Quake's displacement is the only difference of. A draw
+/// can only be issued under that class if its material carries the row, so the
+/// surfaces the wave can reach are the materials that do, an authored set (381
+/// of the disc's 1,632 materials, 281 of Talon's Junction's 2,211 draws). See
+/// `GpuVertex::quake`.
 pub(super) fn variants(
     model: &rcsmodel::Model,
     textures: Textures<'_>,

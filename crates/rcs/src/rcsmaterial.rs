@@ -70,7 +70,9 @@ pub enum Class {
     /// Its vertex program is the `Static` one with a world-space displacement
     /// in front of the transform, driven by four extra `float4` whose names all
     /// fall to preimage: `quakePointA`, `quakePointB`, `quakeOffset`,
-    /// `quakeTrackUpNormal`. 7,797 variants.
+    /// `quakeTrackUpNormal`. 7,797 variants. The program is decoded in
+    /// `docs/ghidra/functions/ps3-hdfury-eu/quake.md` and drawn by
+    /// `oag_mesh`'s `GpuVertex::quake`.
     StaticQuake,
     /// Geometry carried by a moving body - ships, weapons. 4,389 variants.
     RigidBody,
