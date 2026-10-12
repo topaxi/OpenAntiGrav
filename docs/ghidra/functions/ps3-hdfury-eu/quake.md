@@ -85,13 +85,18 @@ neighbour, as Pulse's ripple page records.
 frame uploads and calls the one with a `COS` a `StaticQuake`. A frame with no wave: none. With the
 wave 400 units from the eye, 8 of 596 scene-target draws; 190 units away, **50 of 596**, ten distinct
 programs. Matching those programs' bytes against Talon's Junction's materials finds `track_wall`,
-`track_surface`, the pad and glass families: walls and road both, not the road alone. Of the
+`track_surface`, the pad and glass families: walls and road both, not the road alone. The 50
+draws of the second frame are **50 distinct chunks** (distinct index-buffer offset and batch), each
+drawn once. Of the
 disc's 1,632 materials, **381 ship a `StaticQuake` row** (`oag_rcs::rcsmaterial::Class`: 377 beside a
 `Static` row, 4 alone); on Talon's Junction **281 of this project's 2,211 draws** are of such a
-material, and **21** of those are inside the 60-unit sphere round the second frame's midpoint,
-which over the two or three passes a chunk is drawn in is the original's 50. So the rule consistent with the dump is "a draw whose material ships the row, near
-the wave"; the displacement is zero beyond `A.w` of the midpoint, which is why marking every vertex
-of a flagged material draws the same picture.
+material. **Which chunks the original draws under that class is not established**: none in a frame
+dumped right after the shot, 8 with the wave far, 50 with it near, so it is not "every flagged chunk
+while a Quake is up"; the draw units differ (this project's `DrawCall` against the original's chunk
+draws) and the flagged draws within a radius `R` of the second frame's midpoint, bounds included, are
+`15, 21, 22, 22, 27, 30, 36, 53` at `R = 40, 60, 80, 100, 120, 150, 200, 300`, so no radius reproduces
+50 cleanly. Ours lifts every vertex of a flagged material inside `A.w = 60` of the midpoint, which
+is the program's own reach, and may lift chunks the original does not issue as `StaticQuake`.
 
 ## What a player sees, from the original (RPCS3, Talon's Junction, a craft at rest)
 
@@ -130,6 +135,14 @@ frames read at the HUD clock, the wave leaving a craft that stands on the grid.
 
 ## Open
 
+- **The top item: which flagged chunks the original lifts.** The dump above shows a selection by
+  something this page has not recovered (span membership is the likely rule: the table's batches are
+  the ones `Quake_UpdateSpan` walks). If it is narrower than "flagged material within `A.w`", ours
+  over-lifts (walls and pipes the original leaves still).
+- **The stationary-craft pair does not show the lift matching.** At `7.3` the film's walls and road
+  look straight where ours bends them; the evidence that the lift is real and large is the decoded
+  program, the live registers and the overtaking film (`--ahead 110`), not that pair, which is too
+  washed out beside the band to judge by eye.
 - **The launch white-out and the scene-wide yellow tint.** Ours has the fire and no wash. The tint
   tints the HUD's translucent panels and the hull as well, so it is not a mesh effect; none of the
   twelve callers of `SpuLight_AddCandidate` (`0x006778c8`) is in this module, and `Quake_Update`'s

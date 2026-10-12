@@ -368,6 +368,11 @@ Pulse, Pure and the PS2 are pixel-identical to main with a Quake in flight. Omeg
 checked, applies, not wired (same page).
 
 Open, in order of what a player would notice:
+- **Which flagged chunks the original lifts** (the dump shows a selection this lane did not
+  recover; ours lifts every vertex of a flagged material within 60 of the wave and may over-lift),
+  and the **stationary-craft pair does not show the lift matching** (film walls straight at the
+  wave's first half second, ours bent): the lift's evidence is the decoded program, the live
+  registers and the overtaking film, not that pair.
 - **The launch white-out and the scene-wide yellow tint** (green pipes lime, the hull orange, the
   HUD panels warm) are not drawn and have no producer found: none of `SpuLight_AddCandidate`'s
   twelve callers is in the Quake module, `Quake_Update` calls no flash. A screen-space wash from

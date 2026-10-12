@@ -141,13 +141,14 @@ pub struct GpuVertex {
     /// **Per material, read off the disc**: Wipeout HD builds a `Static` and a
     /// `StaticQuake` permutation of the vertex program for the materials the
     /// wave can deform (381 of the disc's 1,632), and the class a draw is issued
-    /// under is the only thing that differs between the two. Which of those
-    /// materials' draws the original issues as `StaticQuake` depends on where
-    /// the wave is - 50 of a frame's 596 scene draws with the wave 190 units
-    /// ahead, which on Talon's Junction is the flagged chunks inside the
-    /// 60-unit sphere (21) over their two or three passes. The displacement is
-    /// zero outside that sphere, so marking every vertex of a flagged material
-    /// draws the same picture. See `docs/ghidra/functions/ps3-hdfury-eu/quake.md`.
+    /// under is the only thing that differs between the two. **Which** of those
+    /// materials' chunks the original issues as `StaticQuake` is not
+    /// established: 50 distinct chunks of a frame's 596 scene draws with the
+    /// wave 190 units ahead, 8 with it 400 units away and none in a frame dumped
+    /// right after the shot, so it is not "every flagged chunk while a Quake is
+    /// up", and this marks every vertex of a flagged material, which lifts
+    /// everything of those materials inside the 60-unit radius. See
+    /// `docs/ghidra/functions/ps3-hdfury-eu/quake.md`, "Open".
     /// Last, for the reason [`Self::lightmap_texcoord`] gives.
     pub quake: f32,
 }
