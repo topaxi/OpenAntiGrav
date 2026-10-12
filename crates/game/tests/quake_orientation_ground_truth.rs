@@ -6,6 +6,10 @@
 //! up. On a banked stretch the two differ; dropping the `orient` call in
 //! `Race::advance_quake_visual` takes this to world up everywhere.
 //!
+//! HD's wave takes the same path, and only because its `Title` lifts the extent
+//! law for `WO_QUAKE`: with the effect not listed `quake_frame_up` is `None`
+//! everywhere, the frame never being built.
+//!
 //! **`#[ignore]`d and never run in CI**: it needs a disc image.
 
 use oag_gameplay::PlayerInputs;
@@ -14,7 +18,19 @@ use oag_raceplay as race;
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_quake_frame_leans_with_the_banked_track() {
-    let Some(path) = oag_testdata::image("pulse-psp-usa.chd") else {
+    lean_with_the_track("pulse-psp-usa.chd", true);
+}
+
+/// HD's Talon's Junction is flat where the wave runs, so only "the frame is
+/// built, and is the track's up" is asked of it.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_hd_quake_frame_is_built_from_the_track() {
+    lean_with_the_track("hdfury-ps3-eu-dec.iso", false);
+}
+
+fn lean_with_the_track(image: &str, must_lean: bool) {
+    let Some(path) = oag_testdata::image(image) else {
         return;
     };
     let loaded = race::load(&race::Options {
@@ -29,7 +45,7 @@ fn the_quake_frame_leans_with_the_banked_track() {
     }
     let stats = race.quake_stats().expect("Pulse authors a Quake");
     let length = race.course().expect("a course").length();
-    let mut leaned = 0;
+    let (mut leaned, mut built) = (0, 0);
     for step in 0..40 {
         let progress = length * (step as f32 / 40.0);
         race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
@@ -39,6 +55,7 @@ fn the_quake_frame_leans_with_the_banked_track() {
         let Some(up) = race.quake_frame_up() else {
             continue;
         };
+        built += 1;
         let point = race.quake_point().expect("a road point");
         let (_, sample, _) = race.spline().nearest(point).expect("a sample");
         // The midpoint is not the course point the wave samples at, so the
@@ -52,5 +69,9 @@ fn the_quake_frame_leans_with_the_banked_track() {
             leaned += 1;
         }
     }
-    assert!(leaned > 0, "no banked stretch on the sampled circuit");
+    assert!(built > 0, "{image}: the wave never built its frame");
+    assert!(
+        !must_lean || leaned > 0,
+        "no banked stretch on the sampled circuit"
+    );
 }

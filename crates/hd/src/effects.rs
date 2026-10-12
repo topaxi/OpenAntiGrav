@@ -76,6 +76,7 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
     effects.sprites = SPRITES;
+    effects.extents = EXTENTS;
     effects
 };
 
@@ -84,7 +85,16 @@ pub const EFFECTS: &Effects = &{
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
 /// smoke"). Every other HD effect still draws the procedural profile until a
 /// matched capture says its sprite reads right.
-const SPRITES: &[&str] = &[engine_effects::TRACK_BLAST_EFFECT];
+const SPRITES: &[&str] = &[
+    engine_effects::TRACK_BLAST_EFFECT,
+    engine_effects::QUAKE_EFFECT,
+];
+
+/// The effects whose emitters spread by the extent law on HD: the Quake's wave,
+/// which the original draws as a band of fire across the whole road
+/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`). Every other HD effect keeps
+/// its emitters at their anchors until a matched capture says otherwise.
+const EXTENTS: &[&str] = &[engine_effects::QUAKE_EFFECT];
 
 /// Two of the palette's three colours are read off HD's executable
 /// (`docs/ghidra/functions/ps3-hdfury-eu/shield.md`); the settled target is

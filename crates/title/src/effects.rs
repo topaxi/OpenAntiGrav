@@ -329,6 +329,14 @@ pub struct Effects {
     /// wiring one is a decision made per effect against a matched capture,
     /// never by extension to the rest of the title's `.pob` files.
     pub sprites: &'static [&'static str],
+    /// Effects whose line, rectangle, box and ring emitters place a particle
+    /// by the emitter extent law on a source that is not Pulse on the PSP,
+    /// where every effect does. A listed effect is spawned as the law says, and
+    /// the effect's own driver feeds it the extent co-factor; an effect not
+    /// listed keeps every emitter at its anchor. Wiring one is a decision made per
+    /// effect against a matched capture of the original, never by extension to
+    /// the rest of the title's `.pob` files - see `oag_fx::psys::spawn`.
+    pub extents: &'static [&'static str],
 }
 
 impl Effects {
@@ -337,6 +345,7 @@ impl Effects {
         table: [None; Trigger::COUNT],
         scenery: &[],
         sprites: &[],
+        extents: &[],
     };
 
     /// The entry for `trigger`.
