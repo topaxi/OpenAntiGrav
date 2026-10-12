@@ -110,6 +110,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
         let span = if weapon == Weapon::Plasma { 75 } else { 14 };
         next_shot = tick + 30;
         let mut released = false;
+        let mut was_airborne = false;
         for k in 0..span {
             let bits = if k == 0 {
                 Button::Cross.bit() | Button::Square.bit()
@@ -145,8 +146,16 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                 None,
                 false,
             ) else {
+                was_airborne = true;
                 continue;
             };
+            // The first probe hit after a miss is the shot finding a floor again,
+            // not riding one: a craft fired off a crest or a jump (`01_Vineta_K`,
+            // tick 2480 once opponents flew their own teams' stats: 8 ticks with no
+            // floor inside the 12-unit probe, then 7.37 above the road, and it was
+            // back at 3.00 the next tick) carries the shot out past the probe's reach.
+            // The height is judged from the second tick on; the angle always is.
+            let reattaching = std::mem::replace(&mut was_airborne, false);
             // A wall under the probe is the weapon's own ending or bounce, not a
             // floor to ride.
             if !floor.surface.is_hoverable() {
@@ -161,7 +170,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                     .acos()
                     .to_degrees(),
             );
-            if !(weapon == Weapon::Plasma && first_flying_tick) {
+            if !(weapon == Weapon::Plasma && first_flying_tick) && !reattaching {
                 out.worst_height_error = out
                     .worst_height_error
                     .max((floor.distance - RIDE_HEIGHT).abs());
