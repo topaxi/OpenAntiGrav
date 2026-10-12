@@ -501,6 +501,14 @@ impl Session {
         difficulty: Option<oag_tables::race_campaign::Difficulty>,
         default_cursor_on_pulse: bool,
     ) {
+        if self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
+        {
+            self.reopen_pure_campaign(cell);
+            return;
+        }
         self.open_campaign();
         let Stage::Menu(menu_stage) = &mut self.stage else {
             return;

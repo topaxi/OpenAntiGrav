@@ -250,6 +250,11 @@ impl Session {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
+        // Wipeout Pure's campaign list, same rule.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.pure_campaign.is_some()) {
+            self.handle_pure_campaign(oag_ui_screens::pure_campaign::Event::Back);
+            return;
+        }
         // Collected before anything else touches `self`: `handle_menu` takes
         // `&mut self` and the events borrow the stage.
         if let Stage::Menu(stage) = &mut self.stage {

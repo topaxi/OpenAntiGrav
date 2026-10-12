@@ -186,6 +186,16 @@ OAG_LOADING_COUNTS_CONVERTED = { text = "{done} / {total} convertis", human = fa
 OAG_LOADING_COUNTS_CACHED_SUFFIX = { text = ", {cached} déjà en cache", human = false }
 OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} échoué(s)", human = false }
 
+OAG_PURE_CAMPAIGN_TITLE = { text = "CAMPAGNE", human = false }
+OAG_PURE_CAMPAIGN_CLASS = { text = "CLASSE", human = false }
+OAG_PURE_CAMPAIGN_LOCKED = { text = "VERROUILLÉ", human = false }
+OAG_PURE_CAMPAIGN_NEEDS = { text = "REQUIERT", human = false }
+OAG_PURE_CAMPAIGN_MEDALS = { text = "MÉDAILLES", human = false }
+OAG_PURE_CAMPAIGN_ANY_MEDAL = { text = "N'IMPORTE QUELLE MÉDAILLE", human = false }
+OAG_MEDAL_GOLD = { text = "OR", human = false }
+OAG_MEDAL_SILVER = { text = "ARGENT", human = false }
+OAG_MEDAL_BRONZE = { text = "BRONZE", human = false }
+
 [untranslated]
 ids = [
     # BLUR RESOLUTION, new 2026-10-03 with the half-resolution blur; no

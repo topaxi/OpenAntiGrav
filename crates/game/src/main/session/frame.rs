@@ -381,7 +381,14 @@ impl Session {
                 for press in [Button::Cross, Button::Start] {
                     self.controls.buttons_mut().consume_press(press);
                 }
-                self.escape();
+                // A tournament with a leg to go carries on to it: a title with no
+                // EndRace flow (Pure) has no `NEXT RACE` row to do it from, and
+                // `escape` here would abandon the series after its first race.
+                if self.tournament_has_next_leg() {
+                    self.advance_tournament_leg();
+                } else {
+                    self.escape();
+                }
                 // The remaining steps this frame owed belong to whatever is on
                 // screen now, and it has not been drawn once yet.
                 break;
@@ -487,6 +494,11 @@ impl Session {
                     // the tick whole rather than sitting behind the rows.
                     if stage.campaign.is_some() {
                         self.tick_campaign(&grid);
+                        continue;
+                    }
+                    // Wipeout Pure's campaign list, same shape.
+                    if stage.pure_campaign.is_some() {
+                        self.tick_pure_campaign(&grid);
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the

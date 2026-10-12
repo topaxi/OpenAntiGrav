@@ -14,7 +14,7 @@ const ALL: [&Title; 5] = [
 ];
 
 #[test]
-fn campaign_dialect_is_pulse_for_pulse_pure_2048_hd_for_hd_omega_for_omega() {
+fn campaign_dialect_is_pulse_for_pulse_and_2048_pure_for_pure_hd_for_hd_omega_for_omega() {
     let dialects: Vec<(&str, CampaignDialect)> = ALL
         .iter()
         .map(|title| (title.name, title.campaign.dialect))
@@ -23,7 +23,7 @@ fn campaign_dialect_is_pulse_for_pulse_pure_2048_hd_for_hd_omega_for_omega() {
         dialects,
         [
             ("Wipeout Pulse", CampaignDialect::Pulse),
-            ("Wipeout Pure", CampaignDialect::Pulse),
+            ("Wipeout Pure", CampaignDialect::Pure),
             ("Wipeout HD", CampaignDialect::Hd),
             ("Wipeout 2048", CampaignDialect::Pulse),
             ("Wipeout: Omega Collection", CampaignDialect::Omega),
@@ -127,4 +127,18 @@ fn only_the_hd_disc_names_a_screen_archive() {
         );
     }
     assert_eq!(oag_hd::psn::PSN.campaign.screen_archive, None);
+}
+
+/// A campaign read as a list rather than a grid is Wipeout Pure's alone, and
+/// the dialect and the entry agree.
+#[test]
+fn only_pure_reads_its_campaign_as_a_list() {
+    for title in ALL {
+        let list = title.campaign.dialect == CampaignDialect::Pure;
+        assert_eq!(title.campaign.list_entry.is_some(), list, "{}", title.name);
+    }
+    assert_eq!(
+        oag_pure::TITLE.campaign.list_entry,
+        Some(oag_pure::campaign::DEFINITION_ENTRY)
+    );
 }

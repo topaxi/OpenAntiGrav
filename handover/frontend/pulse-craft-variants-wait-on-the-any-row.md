@@ -2,7 +2,7 @@
 
 ## Open
 
-- 2026-10-08 `pulse-unlocks` census: circuit gate and variant gate both apply on PS2 Pulse through the shared code (fresh Track Select 3 circuits on PSP and PS2); Pure's 17 `<Unlock>` rows are another shape (`MedalCount`, `Track`+`medal`, `Tournament`), unread and not wired. A fresh-profile loyalty earn-and-unlock walk through the real race loop is still unplayed (ground truths cover the law).
+- 2026-10-08 `pulse-unlocks` census: circuit gate and variant gate both apply on PS2 Pulse through the shared code (fresh Track Select 3 circuits on PSP and PS2); Pure's 17 `<Unlock>` rows are another shape (`MedalCount`, `Track`+`medal`, `Tournament`), read and wired as Pure's campaign list 2026-10-12 (`docs/formats/pure-campaign.md`). A fresh-profile loyalty earn-and-unlock walk through the real race loop is still unplayed (ground truths cover the law).
 
 - Landed 2026-10-02: `Definition_IsUnlocked`'s row combine and `Unlock_LoyaltyMet`'s `any` are traced (`race-box-screens.md`, "Traced 2026-10-02"); Team Selection's livery row and the RACE page's VARIANT row gate on them (`oag_game::unlock::loyalty_unlocked`, `--unlock-all` lifts it, ours); the Loyalty block is drawn.
 - RACE REMIX's craft-side VARIANT row (`resupply_remix_variant`) stays ungated **by decision** (maintainer, 2026-10-02): RACE REMIX is this project's own mode, not the original's, so no disc unlock applies to it.
