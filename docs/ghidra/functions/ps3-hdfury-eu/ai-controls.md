@@ -218,10 +218,13 @@ and `AI_ComputeControls` halves the lookahead time while `+0x8b4` is non-zero. I
 `PI_Track` table `05_Track` is **Ubermall forward** and `20_Track` is **Amphiseum
 reversed** (`DATA00` `/data/plugins/frontend/definition.xml`); `05_Track` is on HD's
 campaign grids 1 to 7 and `20_Track` on Fury's grids 10 to 15. What `craft+0x7010` is
-(its unit and origin) is not read statically: a field whose window is `[250, 4600]` on
-one circuit and `[400, 5400]` on another reads like distance along the lap, which
-would put both windows around the start line. Confidence 85 for the gate, 40 for that
-reading of the field.
+**is the distance into the current lap**, measured (below): on Talon's Junction
+(lap length `5070.3`) every racer's `+0x90` equals its race progress `+0x898` less
+its completed laps times the lap length, to `0.1`, and the own sample's lap fraction
+times the lap length. So both windows sit around the start line: the first 250 and the
+last 470 units of an Ubermall lap for a Phantom, the first 400 and whatever lies past
+5400 on Amphiseum reversed. Confidence 85 for the gate (read), 90 for the field
+(measured).
 
 ## The planner
 
@@ -254,10 +257,9 @@ HD's literal). The own-lane computation guards a corridor narrower than `0.0001`
 HD's first-call branch also writes `driver+0x17c` (race time, `RM+0x13dc`) and
 `+0x180` (that plus `13.0`); nothing in `0x000f9000..0x00105000` reads either.
 
-The `2^-29` scale assumes the PS3 C library's `rand()` returns 30 bits (`RAND_MAX =
-0x3fffffff`), which makes `u` uniform on `[-1, 1)` as Pulse's is. The rest of the
-driver agrees: the Duel draw is `rand() * 2^-30` against a probability in `[0, 1]`.
-Confidence 75 for the distribution; a live read of `Libc_Rand`'s returns settles it.
+The `2^-29` scale makes `u` uniform on `[-1, 1)` as Pulse's is, because the PS3 C
+library's `rand()` returns 30 bits (measured below through the wander, which draws
+with the same scale).
 
 Confidence 78 for the planner as Pulse's: every constant and offset matches and the
 control flow was read around each, but not every branch of the inlined bumps was
@@ -277,14 +279,71 @@ traced.
 
 Confidence 85.
 
+## Measured (2026-10-12)
+
+RPCS3 (interpreter decoder, `Assume External Debugger: true` in the lane's private
+config so stop-reply PCs are exact), `hdfury-ps3-eu-dec.iso`, the Fury campaign's first
+cell (Talon's Junction, mode `3`, VENOM, eight craft), the player parked on the grid
+in eighth, the `0x9384e1` byte `0`. The tool is `scripts/rpcs3-hd-ai-thrust.py`: it
+stops at `0x00100e3c`, right after `AI_ComputeOpponentThrust` returns, reads `f1`,
+snapshots the driver's wander block, every racer's progress, place, finished flag,
+craft kind and driver `spread`, the race time and the class record, and `--predict`
+recomputes each sample in `float32` in HD's own operation order. The skill scale is
+read once at `0x000fe03c`, right after `AI_ResolveSkillScale` returns.
+
+| Run | Level | Skill scale | Samples | Exact (`< 1e-3`) | Race time | Branches |
+| --- | --- | --- | ---: | ---: | --- | --- |
+| `fury-park-1` | 0 (as the cell launched) | `-0.07` | 48 | **48** | 4 to 76 s | `WhenBehind` on, gap steps both ways and at the `+/-30 %` stops, the own-`ref` zero gap, the `100` cap after 20 s and `1000` before |
+| `fury-park-hard` | 2 (written to `g_GameState+0xdc` during the load) | `3.48` | 30 | **30** | 4 to 45 s | the `SkillScalePoint2..3` branch, throttle above `100` (`104.58`) |
+| trial | 0 | `-0.07` | 5 | **5** | 5.6 to 5.7 s | |
+
+**83 samples, every one reproduced, worst residual `0.00000`**, and the logged
+`driver+0xcc` matched the recomputed gap on each. That is HD's law with the place
+indexing, the reference racer, the field-wide rubber band over the non-human racers
+(`craft+0x628c` read `2` on the seven opponents and `0` on the player, so it is the
+AI/human kind), the cap and the skill interpolation, measured on a second binary.
+Confidence on `AI_ComputeOpponentThrust`: **94** (the row in the `hd-ai-classic`
+section of `names.tsv` still says 85). Not exercised: `WhenLeading`, the finished
+branches (changes 1 and 2), Eliminator (change 3), several humans (change 4).
+
+- **The skill scale in a campaign cell is not the race default.** `-0.07` at Easy and
+  `3.48` at Hard, both outside the `1..3` curve: the cell's branch through
+  `0x001e1110` extrapolates, and the law takes the value as it comes.
+- **The shuffle reads the integer level.** At level 2 the sampled driver's end slot
+  differed from its start (`1` to `3`) and its segments were `4`, against `2` at
+  level 0.
+- **`rand()` is 30 bits.** Every wander draw seen (`next`, twelve distinct values over
+  both runs) lies inside `+/-amplitude`, the most at `0.937` of it; with a 31-bit
+  `rand()` three quarters of `rand() * 2^-29 - 1` would land outside. Confidence 90.
+- **The rail fires.** A stop on `Ai_SnapToLane`'s `Body_SetPosition` call
+  (`0x000ffda4`) hit all seven opponents in 40 stops, blend `0.48` to `0.66`, the move
+  `0.006` to `0.063` units (median `0.014`; Pulse measured `0.012`). Confidence on the
+  mechanism firing: 90.
+- **`racer+0x90` is the lap distance**, above.
+
+Not measured: the steering's output, the planner's choices, the pitch, and where
+`AIManager_Update` falls against the world step (Pulse measured one update per step;
+HD's world-step function is not identified).
+
+To reproduce, with an RPCS3 of your own (`scripts/emu-env.sh`, then `rpcs3-drive.py
+--interpreter serve` with `Assume External Debugger: true` in the private stock config,
+`race`, and a `cross` at "START RACE"):
+
+```sh
+OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-ai-thrust.py --skill --samples 30 --gap-seconds 1.5 --out run.json
+uv run --python 3.12 --with numpy python3 scripts/rpcs3-hd-ai-thrust.py --predict run.json
+OAG_RPCS3_ATTACH=1 python3 scripts/rpcs3-hd-ai-thrust.py --rail 40 --out rail.json
+```
+
+A run that a watchdog kills while it holds the stub costs the boot (the stub does not
+come back); keep each invocation well under the tool ceiling.
+
 ## Not ported, by name
 
 - The Eliminator spin (step 11 above): what `craft+0x628c == 2` means is not read.
   Our Eliminator handles a craft out of the race its own way.
 - The Duel override and the Duel rail gap: no Duel opponent is wired in this project.
 - The split-screen multiplier: no split screen.
-- The halved lookahead: `craft+0x7010` is not identified, so the gate cannot be
-  evaluated; HD's two circuits run Pulse's full lookahead until it is.
 
 ## Omega: checked, static, the same driver
 
