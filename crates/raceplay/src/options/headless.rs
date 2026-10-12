@@ -82,6 +82,7 @@ impl Setup {
             laid_from_rear: false,
             grid_frame_from_sample: false,
             screen_flash: false,
+            quake_flash: false,
             absorb_burst: None,
             absorb_anchors: Vec::new(),
             hit_spark_anchors: Vec::new(),

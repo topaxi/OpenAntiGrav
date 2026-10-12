@@ -41,10 +41,13 @@ impl Race {
     ) {
         let camera = self.camera_frame();
         // The GE's guard band, on Pulse's PSP source alone - `psys::guard`.
+        // That source is the one whose flash answers every kind; Pure's
+        // Quake-only wash is not a sign of it.
         let guard = self
             .view
             .screen_flash
-            .is_some()
+            .as_ref()
+            .is_some_and(oag_fx::flash::ScreenFlash::answers_every_kind)
             .then_some(psys::guard::GuardBand {
                 eye: camera.position,
                 right: camera.right,

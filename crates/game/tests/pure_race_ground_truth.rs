@@ -176,6 +176,38 @@ fn a_pure_races_load_report_names_no_boost_model_as_a_title_fact_not_a_fault() {
     }
 }
 
+/// Pure ships no LeachBeam (`weapons.md`: no block in its `weaponstats.xml`, no
+/// string in either executable, none of Pulse's six LeachBeam entries in its
+/// `Data.wad`), so a Pure race neither asks for Pulse's beam assets nor reports
+/// them absent, and says why in one positive line. Dropping the `.without`
+/// triggers in `oag_pure::effects` or the `authored` gate in
+/// `assets::leach_beam_texture` brings the absence lines back.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_neither_loads_nor_misses_a_leachbeam() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        let mentions: Vec<&String> = loaded
+            .report
+            .iter()
+            .filter(|line| {
+                let line = line.to_ascii_lowercase();
+                line.contains("leachbeam") || line.contains("leechbeam")
+            })
+            .collect();
+        assert_eq!(
+            mentions.len(),
+            1,
+            "{label}: only the one line saying why no beam is loaded, got {mentions:#?}"
+        );
+        assert!(
+            mentions[0].contains("authors no LeachBeam"),
+            "{label}: {}",
+            mentions[0]
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_pure_circuit_decodes_geometry_collision_and_a_spline() {

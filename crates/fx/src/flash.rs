@@ -31,7 +31,9 @@
 //! (kind 0, full falloff) adds `153 (1 - t)` to red and `153 (1 - t)^2` to
 //! green and nothing to blue, `t` stepping by `(1/60) / 0.5` a frame - see the
 //! doc page. **Pulse on the PSP only**: the caller holds no [`ScreenFlash`]
-//! for any other source.
+//! for any other source, except Pure's, which answers the Quake's kind alone
+//! ([`ScreenFlash::only`]): its `Quake_Update` starts kind 3, numerically
+//! [`QUAKE`], and the rest of its flashes are unread.
 
 use oag_core::math::Vec3;
 
@@ -248,6 +250,9 @@ fn strength(colour: [f32; 4]) -> f32 {
 /// The node's state: render-only, never in `World`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ScreenFlash {
+    /// The one kind this flash accepts, or `None` for every kind. Pure's wash
+    /// is its Quake's alone: its other detonations' kinds are unread there.
+    only: Option<Kind>,
     pending: Option<(Kind, Vec3)>,
     running: Option<(Kind, Vec3, f32)>,
     /// `+0x190..+0x19c`: the colour last computed, falloff included. Kept
@@ -257,10 +262,32 @@ pub struct ScreenFlash {
 }
 
 impl ScreenFlash {
+    /// A flash that answers `kind` and no other: a start of any other kind is
+    /// ignored.
+    #[must_use]
+    pub fn only(kind: Kind) -> Self {
+        Self {
+            only: Some(kind),
+            ..Self::default()
+        }
+    }
+
+    /// Whether this flash answers every kind, as Pulse's PSP node does, rather
+    /// than one ([`Self::only`]). The renderer also reads a flash that answers
+    /// every kind as "this is Pulse's PSP source" for the GE guard band, which
+    /// a Quake-only flash on another title must not switch on.
+    #[must_use]
+    pub fn answers_every_kind(&self) -> bool {
+        self.only.is_none()
+    }
+
     /// `ScreenFlash_Start`: a flash of `kind` at world position `at`. The
     /// last call before [`Self::advance`] wins, as the pending block is
     /// simply overwritten.
     pub fn start(&mut self, kind: Kind, at: Vec3) {
+        if self.only.is_some_and(|only| only != kind) {
+            return;
+        }
         self.pending = Some((kind, at));
     }
 

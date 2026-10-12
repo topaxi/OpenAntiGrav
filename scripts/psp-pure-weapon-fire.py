@@ -8,6 +8,8 @@ then run this while the countdown is still on. It holds cross, counts `Ship_Upda
 weapon id into the holder's `+0x1d8` (`*(ship+0xd0)`) and sets the fire byte at
 `*(*(ship+200)+0x48)+0x15`. Weapon ids: 1 Rocket, 2 Missile, 3 Quake, 4 Disruptor, 5 Turbo,
 6 Shield, 7 Autopilot, 8 Plasma, 9 Mine, 10 Bomb (`docs/ghidra/functions/psp-pure-usa/weapons.md`).
+Fired from a RESTART the moment the countdown starts, `--skip 150` is 0.3 s after GO (craft nearly stationary)
+and `--skip 205` is 2.2 s after GO (233 km/h); the Quake pair of 2026-10-12 used both.
 Screenshots are taken of the Xvfb root with ImageMagick `import`, the CPU stopped on each hit.
 
     uv run --with websocket-client scripts/psp-pure-weapon-fire.py 9 data/scratch/<lane>/emu/mine \

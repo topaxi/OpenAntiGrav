@@ -187,3 +187,7 @@
 0x0881f780	function	Hud_UpdateTimeDiff	85	hud-message-triggers.md
 0x0881e2a4	function	Hud_Construct	80	hud-message-triggers.md
 0x0892767c	function	Craft_UpdateLapProgress	85	hud-message-triggers.md
+0x08879d54	function	Quake_Update	85	quake.md
+0x08879020	function	Quake_SampleSpan	75	quake.md
+0x0882e648	function	ScreenFlash_Start	80	quake.md
+0x0893bf08	function	ParticleSystem_SetScaleParams	80	quake.md

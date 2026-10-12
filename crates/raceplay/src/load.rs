@@ -659,9 +659,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     // The LeachBeam ribbon's own texture - see `assets::leach_beam_texture`.
+    // A table that failed to load keeps asking, as it always did.
+    let leach_authored = weapons.as_ref().is_none_or(|w| w.leach_beam().is_some());
     let leach_beam_texture = assets::leach_beam_texture(
         craft_of(&mut craft, &mut archives),
         wm.leachbeam_ball.is_some(),
+        leach_authored,
         &mut report,
     );
 
@@ -780,6 +783,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
             grid_frame_from_sample: extents,
             screen_flash: extents,
+            quake_flash: craft_title.effects.quake_look.flash,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
