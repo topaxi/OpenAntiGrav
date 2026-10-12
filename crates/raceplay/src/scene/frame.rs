@@ -924,17 +924,8 @@ impl Scene {
         // downsample, the two blurs, the composite back over the linear
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
-        if let Some(hd) = &self.hd {
-            // The zoom-streak ring's pulses (stepped once a tick); `None` draws none.
-            hd.set_zoom_frame(race.hd_zoom_frame());
-            hd.run(
-                queue,
-                encoder,
-                view,
-                (viewport.0, viewport.1),
-                (viewport.2 as u32, viewport.3 as u32),
-                hd_bloom_timestamps,
-            );
+        if self.hd.is_some() {
+            self.run_hd(queue, encoder, view, viewport, race, hd_bloom_timestamps);
             stats.hd_bloom_encoded = true;
         } else if let Some(omega) = &self.omega {
             // Omega's tone map: the executable's exposure and curve over the
@@ -967,6 +958,8 @@ impl Scene {
             }
             self.bloom_pending.set(true);
         }
+        // The borrowed zoom-streak ring (`BoostZoom`): after the bloom's prepare, before the HUD.
+        self.run_boost_zoom(device, queue, encoder, view, viewport, race);
         // Motion blur, last: it smears the finished frame - but not the
         // Pulse glow, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the

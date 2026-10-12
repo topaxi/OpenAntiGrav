@@ -342,6 +342,9 @@ fn the_renderer_row_says_a_restart_is_needed() {
     // reason as MSAA: `Race::set_boost_fov_kick` is only ever called once,
     // at `Race::start`, so a race already running keeps whatever it was
     // built with until the next one starts.
+    //
+    // `graphics.boost_zoom` is the fourth: the borrowed ring is decided when the
+    // race loads (`race::Options::boost_zoom`), so a race running keeps its own.
     let deferred: Vec<&str> = definition
         .pages
         .iter()
@@ -354,7 +357,8 @@ fn the_renderer_row_says_a_restart_is_needed() {
         [
             "graphics.renderer",
             "graphics.msaa",
-            "graphics.boost_fov_kick"
+            "graphics.boost_fov_kick",
+            "graphics.boost_zoom"
         ]
     );
 }

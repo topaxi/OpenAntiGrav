@@ -94,6 +94,9 @@ pub struct RaceView {
     /// HD/Fury's zoom-streak pulses, stepped once a tick; `None` on a title with
     /// no ring. Render-side only, like [`Self::exhaust`]. See [`crate::zoom`].
     pub(super) zoom: Option<oag_post::hd_zoom::Pulse>,
+    /// Whether [`Self::zoom`] is HD's ring borrowed by a title that has none of its
+    /// own, drawn by the scene's host pass. See [`crate::zoom`].
+    pub(super) zoom_borrowed: bool,
     /// The flicker's generators, deliberately **not** `world.rng`.
     ///
     /// The exhaust draws two random numbers per tick. Taking them from the

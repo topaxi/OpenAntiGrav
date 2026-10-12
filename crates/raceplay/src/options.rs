@@ -43,6 +43,10 @@ pub struct Options {
     /// A foreign (Unity) track to race instead of any circuit of the source
     /// (`crate::foreign`); the source still supplies craft, rules and physics.
     pub foreign_track: Option<PathBuf>,
+    /// The ring the player's `graphics.boost_zoom` borrows, handed in by the composition
+    /// root (the one place that may name HD's); `None` is off. Used only where
+    /// `oag_title::RaceDefaults::borrows_zoom_ring`.
+    pub boost_zoom: Option<&'static oag_title::ZoomRing>,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///
@@ -299,53 +303,8 @@ pub struct Options {
 mod capture;
 pub use capture::{CameraOverride, PoseRequest};
 
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            source: oag_source::source::DEFAULT_IMAGE.to_string(),
-            craft_source: None,
-            difficulty: oag_ai::Difficulty::default(),
-            // Empty rather than the search path: a default that read the
-            // filesystem would make two runs of the same test differ by what
-            // the developer happens to have downloaded. The composition root
-            // fills this in from `source::resolve_dlc`.
-            dlc: Vec::new(),
-            track: None,
-            foreign_track: None,
-            team: None,
-            hull_variant: None,
-            skin: None,
-            // Empty for the same reason `dlc` is: the ids come off the
-            // player's own disc, and `load` may not invent one. The
-            // composition root fills it from the catalogue.
-            opponent_teams: Vec::new(),
-            // Empty is "no override anywhere" - see the field's own doc
-            // comment. Only `race::load_event` ever sets this.
-            grid_teams: Vec::new(),
-            zone_model: false,
-            hull_shine: true,
-            hull_wreck: true,
-            track_shine: true,
-            // The rung every measured title shares, named rather than
-            // defaulted from an enum: a title whose ladder was never read must
-            // not silently inherit one that was.
-            class: SpeedClass::Venom.as_str().to_string(),
-            mode: Mode::default(),
-            language: None,
-            eliminator_kill_target: None,
-            laps_override: None,
-            weapons_override: None,
-            zone_stage: None,
-            ribbon: false,
-            collision: false,
-            opponents: false,
-            trail_sparks: false,
-            seed: None,
-            pose: None,
-            camera: None,
-        }
-    }
-}
+/// [`Options`]' `Default`.
+mod defaults;
 
 /// Everything a race needs with no GPU anywhere in sight.
 ///
@@ -642,6 +601,10 @@ pub struct Setup {
     pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
     /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,
+    /// Whether [`Self::zoom_ring`] is HD's ring borrowed on a title that draws none
+    /// of its own ([`Options::boost_zoom`]), and so is drawn by the scene's own host
+    /// pass rather than inside HD's bloom chain. **Chosen, not measured.**
+    pub zoom_borrowed: bool,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The track's speedup pads, as trigger volumes.

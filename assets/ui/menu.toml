@@ -1104,6 +1104,20 @@ setting = "graphics.boost_fov_kick"
 values = ["0", "8", "16", "32"]
 restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
 
+# HD's boost zoom-streak ring, borrowed by the titles that draw nothing of the
+# kind: Pulse and Pure. **An enhancement of this project's, off by default** -
+# neither original has it, and the ring's numbers are HD's own, chosen rather than
+# measured on these titles. The row is dropped on every other title (HD draws its
+# own always; 2048 and Omega are unread), by
+# `menu::Definition::drop_unavailable_boost_zoom`. Read when a race loads.
+[[page.entry]]
+kind = "choice"
+label = "BOOST ZOOM"
+string_id = "OAG_GRAPHICS_BOOST_ZOOM"
+setting = "graphics.boost_zoom"
+values = ["off", "on"]
+restart_required = "TAKES EFFECT THE NEXT TIME A RACE STARTS"
+
 # `fps` is one line of numbers; `pacing` adds the graph, which is the one that
 # shows uneven frames - an average frame rate is exactly what hides them.
 # `dev` adds a third line of scene counts (draw calls, triangles). Drawn over

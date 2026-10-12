@@ -348,6 +348,43 @@ at speed), so the comparison is of the ring's character and its envelope, not of
 - **2048, Pure, Pulse**: HD's `FunkLayer*` names are HD's. Pulse's answer is in
   [bloom.md](../psp-pulse-usa/bloom.md).
 
+## Back-ported to Pulse and Pure as a setting, off by default (2026-10-12)
+
+The maintainer asked for HD's ring on Pulse and Pure behind a setting that is off by default.
+
+**Do they have a ring of their own?** No, by static reading, **confidence 75 on Pulse PSP, 65
+on Pure PSP, 55 on Pulse PS2** (no live frame of a speed pad was taken on PPSSPP for this).
+`strings` over `BOOT.BIN` of the Pulse EU and Pure EU PSP builds (and the Pulse EU PS2
+executable) finds no `FunkLayer`, `Zoom` (bar Pulse's `ER_PHOTO_ZOOMCAM` photo-mode camera) or
+`Streak` string; the one `Radial` is the `.pob` modifier list (`Drag`, `Gravity`, `Newton`,
+`Radial`, `Turbulence`, `Uniform`, `Vortex`), a particle force and not a screen pass. Pulse
+PSP's frame is the scene plus the bloom composite, with no grade and no motion blur
+([bloom.md](../psp-pulse-usa/bloom.md), [motion-blur.md](../../../rendering/motion-blur.md)).
+That is the basis for treating the back-port as an addition, not a replacement.
+
+**What it is, and is not.** The setting is `[graphics] boost_zoom` (BOOST ZOOM row, `off` by
+default, offered only where `RaceDefaults::borrows_zoom_ring`, which is Pulse and Pure; HD keeps
+its ring always on and shows no row). With it on, `oag_raceplay::load` hands the race HD's own
+`oag_hd::race::ZOOM_RING` (`RaceDefaults::zoom_ring` stays `None` on those titles: it still
+means "draws none of its own"), the player's speed pad and Turbo fire the same pulse, and the
+ring is drawn by `oag_post::hd_zoom::Host` on the finished frame instead of inside
+`hd_bloom::Chain`, which Pulse and Pure do not run. **Everything about it is chosen, not
+measured** on those titles (no confidence score): HD's numbers, HD's triggers, and
+- the history is the finished frame read through a bilinear decimation into a quarter-size
+  buffer, not HD's two box halvings of a linear float scene;
+- the blends run in the frame's own space (sRGB on a UNORM-sRGB target), where HD's run in
+  linear float;
+- the ring writes colour only, so the glow mask a bloom stamped in the frame's alpha survives;
+  it draws after the bloom's prepare and before the HUD, so the HUD stays sharp and the bloom
+  composite (which waits for the HUD) does not carry the ring;
+- the ring is scissored to the drawn rectangle: it reaches NDC 1.5 and the viewport alone does
+  not clip a fragment on every driver.
+
+With the setting off nothing is built: no pulse, no host, no extra target, and the frame is
+byte-identical to before. Evidence in tests: `oag-post` `hd_zoom::host::tests`,
+`oag-raceplay` `tests::zoom`. 2048 and Omega: **checked, applies, not wired** (the same
+borrow would work, but their posts are unread and the maintainer asked for Pulse and Pure).
+
 ## Names
 
 | Address | Name | Confidence |

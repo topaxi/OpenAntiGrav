@@ -360,6 +360,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_stages: None,
     zone_transition: None,
     zoom_ring: None,
+    borrows_zoom_ring: false,
     zone_stage_textures: None,
     zone_sky: None,
     team_variants: Some(&NATIVE),

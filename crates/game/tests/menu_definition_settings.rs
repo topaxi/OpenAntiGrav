@@ -243,6 +243,30 @@ fn the_race_variant_row_is_dropped_for_a_title_with_no_variant_axis() {
     );
 }
 
+/// The BOOST ZOOM row is offered where HD's ring can be borrowed - Pulse and Pure - and
+/// absent on HD (its own ring is always on) and on 2048 and Omega (unread).
+#[test]
+fn the_boost_zoom_row_is_dropped_where_the_ring_cannot_be_borrowed() {
+    let rows = |definition: &Definition| {
+        definition
+            .pages
+            .iter()
+            .flat_map(|page| page.entries.iter())
+            .filter(|entry| entry.setting() == Some("graphics.boost_zoom"))
+            .count()
+    };
+    for (title, offered) in [
+        (oag_pulse::TITLE, 1),
+        (oag_pure::TITLE, 1),
+        (oag_hd::TITLE, 0),
+    ] {
+        let mut definition = built_in();
+        assert_eq!(rows(&definition), 1, "the definition ships the row");
+        definition.drop_unavailable_boost_zoom(title);
+        assert_eq!(rows(&definition), offered, "{}", title.name);
+    }
+}
+
 /// Android drops QUIT (a phone app is left, not quit); every other row stays.
 #[test]
 fn drop_quit_removes_only_the_quit_rows() {

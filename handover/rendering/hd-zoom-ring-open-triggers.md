@@ -13,6 +13,12 @@ Turbo fire it. It is not a blur, so it has no motion blur setting value.
 
 ## Open
 
+- **Back-port to Pulse and Pure (2026-10-12, lane `boost-zoom-backport`)** landed as a setting,
+  `graphics.boost_zoom`, off by default: HD's ring borrowed, chosen not measured, drawn by
+  `oag_post::hd_zoom::Host`. Open: a PPSSPP frame of a Pulse speed pad to prove the original draws
+  nothing there (the static check is confidence 75, see the evidence page), and whether a PS2
+  build wants the same row (its post is unread).
+
 - **What fires `EngineFlare_TriggerZoomGlow` beyond a pad and a Turbo.** The start boost did not
   fire it in three starts, but none of them was shown to have had a start boost; a barrel roll is
   untested. The caller itself is unnamed: a write watch on `0x00ad7880` needs the PPU interpreter,

@@ -135,6 +135,7 @@ impl Setup {
             hover_rig: None,
             craft_laws: None,
             zoom_ring: None,
+            zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             speedup_pads: Vec::new(),
             weapon_pads: Vec::new(),

@@ -558,6 +558,15 @@ impl Session {
                     return;
                 }
             },
+            // Read when a race loads (`race::Options::boost_zoom`), so the next race.
+            "graphics.boost_zoom" => match text.as_str() {
+                "on" => self.settings.graphics.boost_zoom = true,
+                "off" => self.settings.graphics.boost_zoom = false,
+                _ => {
+                    warn!("ignoring {setting} = {text:?}: expected on or off");
+                    return;
+                }
+            },
             // Applied to the race already running, unlike the two rows above:
             // the original binds this to a button precisely so it can be changed
             // while flying, and a row that deferred it to the next race would be

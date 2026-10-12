@@ -180,6 +180,15 @@ pub fn identify(source: &str) -> Option<&'static Title> {
         .map(|opened| opened.title)
 }
 
+/// The zoom-streak ring a title with none of its own may borrow
+/// (`graphics.boost_zoom`, `oag_title::RaceDefaults::borrows_zoom_ring`): HD/Fury's.
+/// Here, the one place a title package is named for another's data, so no generic
+/// crate has to. **Chosen, not measured** on the borrowing title.
+#[must_use]
+pub fn borrowed_zoom_ring() -> &'static oag_title::ZoomRing {
+    &oag_hd::race::ZOOM_RING
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -341,6 +341,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
         track_model
     };
+    // HD's zoom-streak ring on a title that draws none of its own: the player's
+    // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not
+    // measured - see `crate::zoom`.
+    let borrowed_zoom = options.boost_zoom.filter(|_| title.race.borrows_zoom_ring);
     // The circuit's staging, all four readers at once: its light rig, its
     // distance fog, its bloom block and the Zone stage grade laid over the
     // first two. Every one of them reports what it found and substitutes
@@ -806,7 +810,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,
-            zoom_ring: title.race.zoom_ring,
+            zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
+            zoom_borrowed: borrowed_zoom.is_some(),
             weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
             weapon_pads,

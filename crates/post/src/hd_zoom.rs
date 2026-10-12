@@ -189,6 +189,12 @@ impl Pulse {
         self.tick += 1;
     }
 
+    /// The tuning this pulse runs.
+    #[must_use]
+    pub fn tuning(&self) -> Tuning {
+        self.tuning
+    }
+
     /// The pulses as the pass reads them for the tick last stepped.
     #[must_use]
     pub fn frame(&self) -> Frame {
@@ -300,6 +306,25 @@ struct Constants {
     half_texel: [f32; 2],
     weight: f32,
     crop: f32,
+    /// The history draw's scene source, mapped separately from the history
+    /// buffers: HD's quarter scene shares their mapping (`source_offset` zero), a
+    /// borrowed ring's source is the whole finished frame at some origin.
+    source_scale: [f32; 2],
+    source_max: [f32; 2],
+    source_offset: [f32; 2],
+    pad: [f32; 2],
+}
+
+/// Where the history draw reads the scene from, as UV mapping: `min(uv * scale,
+/// max) + offset`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SourceMap {
+    /// UV scale.
+    pub scale: [f32; 2],
+    /// Clamp, before the offset.
+    pub max: [f32; 2],
+    /// UV offset of the drawn rectangle.
+    pub offset: [f32; 2],
 }
 
 /// The pass's pipelines, history ping-pong and ring buffers.
@@ -315,8 +340,11 @@ pub struct Zoom {
     vertices: wgpu::Buffer,
     indices: wgpu::Buffer,
     index_count: u32,
-    /// `history[i]` writes ping-pong buffer `i`, reading the other.
-    history_groups: [wgpu::BindGroup; 2],
+    /// `history[i]` writes ping-pong buffer `i`, reading the other; empty when the
+    /// scene source is bound per frame ([`Self::history_from`]).
+    history_groups: Vec<wgpu::BindGroup>,
+    layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
     /// `ring[i]` samples ping-pong buffer `i`.
     ring_groups: [wgpu::BindGroup; 2],
     #[expect(dead_code, reason = "held so the views stay valid")]
@@ -342,6 +370,43 @@ impl Zoom {
         tuning: Tuning,
         quarter: &wgpu::TextureView,
         quarter_size: (u32, u32),
+    ) -> Result<Self> {
+        Self::build(
+            device,
+            tuning,
+            Some(quarter),
+            quarter_size,
+            SCENE_FORMAT,
+            wgpu::ColorWrites::ALL,
+        )
+    }
+
+    /// The pass for a frame of `format` whose scene is bound per frame
+    /// ([`Self::history_from`]) rather than at build; the ring leaves the frame's
+    /// alpha alone, since a bloom may have stamped its mask there.
+    pub(super) fn standalone(
+        device: &wgpu::Device,
+        tuning: Tuning,
+        quarter_size: (u32, u32),
+        format: wgpu::TextureFormat,
+    ) -> Result<Self> {
+        Self::build(
+            device,
+            tuning,
+            None,
+            quarter_size,
+            format,
+            wgpu::ColorWrites::COLOR,
+        )
+    }
+
+    fn build(
+        device: &wgpu::Device,
+        tuning: Tuning,
+        quarter: Option<&wgpu::TextureView>,
+        quarter_size: (u32, u32),
+        format: wgpu::TextureFormat,
+        ring_writes: wgpu::ColorWrites,
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("hd zoom"),
@@ -385,7 +450,7 @@ impl Zoom {
                 module: &shader,
                 entry_point: Some("fs_history"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: SCENE_FORMAT,
+                    format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -430,9 +495,9 @@ impl Zoom {
                 module: &shader,
                 entry_point: Some("fs_ring"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: SCENE_FORMAT,
+                    format,
                     blend: Some(blend),
-                    write_mask: wgpu::ColorWrites::ALL,
+                    write_mask: ring_writes,
                 })],
                 compilation_options: Default::default(),
             }),
@@ -454,7 +519,7 @@ impl Zoom {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: SCENE_FORMAT,
+                format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | if cfg!(test) {
@@ -510,10 +575,12 @@ impl Zoom {
             })
         };
         // history[i] writes buffer i, reading the quarter scene and buffer 1 - i.
-        let history_groups = [
-            group("hd zoom history a", quarter, &views[1], &constants[0]),
-            group("hd zoom history b", quarter, &views[0], &constants[0]),
-        ];
+        let history_groups = quarter.map_or_else(Vec::new, |quarter| {
+            vec![
+                group("hd zoom history a", quarter, &views[1], &constants[0]),
+                group("hd zoom history b", quarter, &views[0], &constants[0]),
+            ]
+        });
         // The ring samples one buffer; the second slot is never read there and
         // binds the other buffer, not the one being drawn into (the scene).
         let ring_groups = [
@@ -548,6 +615,8 @@ impl Zoom {
             indices,
             index_count: index_data.len() as u32,
             history_groups,
+            layout,
+            sampler,
             ring_groups,
             textures,
             views,
@@ -572,6 +641,80 @@ impl Zoom {
         rect: (u32, u32),
         mapping: ([f32; 2], [f32; 2]),
     ) {
+        let source = SourceMap {
+            scale: mapping.0,
+            max: mapping.1,
+            offset: [0.0; 2],
+        };
+        self.history_pass(queue, encoder, frame, rect, mapping, source, None);
+    }
+
+    /// [`Self::history`] for a scene bound this frame: the whole finished frame
+    /// `scene`, read through `source`, mixed into a buffer exactly the pass's own
+    /// size. The standalone pass's entry point.
+    pub(super) fn history_from(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: &Frame,
+        scene: &wgpu::TextureView,
+        source: SourceMap,
+    ) {
+        let next = 1 - self.current.get();
+        let group = self.group_for(device, scene, next);
+        self.history_pass(
+            queue,
+            encoder,
+            frame,
+            self.quarter,
+            ([1.0; 2], [1.0; 2]),
+            source,
+            Some(group),
+        );
+    }
+
+    fn group_for(
+        &self,
+        device: &wgpu::Device,
+        scene: &wgpu::TextureView,
+        next: usize,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("hd zoom history"),
+            layout: &self.layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(scene),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.constants[0].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&self.views[1 - next]),
+                },
+            ],
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn history_pass(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        frame: &Frame,
+        rect: (u32, u32),
+        mapping: ([f32; 2], [f32; 2]),
+        source: SourceMap,
+        group: Option<wgpu::BindGroup>,
+    ) {
         let first = self.last_tick.get().is_none();
         if self.last_tick.get() == Some(frame.tick) {
             return;
@@ -586,7 +729,7 @@ impl Zoom {
         if first {
             weight = 0.0;
         }
-        self.write_constants(queue, 0, mapping, weight, crop);
+        self.write_constants(queue, 0, mapping, source, weight, crop);
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("hd zoom history"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -605,7 +748,8 @@ impl Zoom {
         });
         pass.set_pipeline(&self.history_pipeline);
         pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-        pass.set_bind_group(0, &self.history_groups[next], &[]);
+        let bound = group.as_ref().unwrap_or_else(|| &self.history_groups[next]);
+        pass.set_bind_group(0, bound, &[]);
         pass.draw(0..3, 0..1);
     }
 
@@ -621,11 +765,31 @@ impl Zoom {
         rect: (u32, u32),
         mapping: ([f32; 2], [f32; 2]),
     ) {
+        self.ring_at(queue, encoder, scene, frame, (0, 0), rect, mapping);
+    }
+
+    /// [`Self::ring`] for a scene drawn at `origin` in its target.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn ring_at(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &wgpu::TextureView,
+        frame: &Frame,
+        origin: (u32, u32),
+        rect: (u32, u32),
+        mapping: ([f32; 2], [f32; 2]),
+    ) {
         if !frame.active() {
             return;
         }
         let (weight, crop) = history(&self.tuning, frame.boost);
-        self.write_constants(queue, 1, mapping, weight, crop);
+        let source = SourceMap {
+            scale: mapping.0,
+            max: mapping.1,
+            offset: [0.0; 2],
+        };
+        self.write_constants(queue, 1, mapping, source, weight, crop);
         queue.write_buffer(
             &self.vertices,
             0,
@@ -648,7 +812,17 @@ impl Zoom {
             multiview_mask: None,
         });
         pass.set_pipeline(&self.ring_pipeline);
-        pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
+        pass.set_viewport(
+            origin.0 as f32,
+            origin.1 as f32,
+            rect.0 as f32,
+            rect.1 as f32,
+            0.0,
+            1.0,
+        );
+        // The ring reaches past NDC 1 (radius 1.5): the viewport does not clip a
+        // fragment on every driver, so the drawn rectangle is also the scissor.
+        pass.set_scissor_rect(origin.0, origin.1, rect.0, rect.1);
         pass.set_bind_group(0, &self.ring_groups[self.current.get()], &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint16);
@@ -660,6 +834,7 @@ impl Zoom {
         queue: &wgpu::Queue,
         which: usize,
         (uv_scale, uv_max): ([f32; 2], [f32; 2]),
+        source: SourceMap,
         weight: f32,
         crop: f32,
     ) {
@@ -669,10 +844,17 @@ impl Zoom {
             half_texel: [0.5 / self.quarter.0 as f32, 0.5 / self.quarter.1 as f32],
             weight,
             crop,
+            source_scale: source.scale,
+            source_max: source.max,
+            source_offset: source.offset,
+            pad: [0.0; 2],
         };
         queue.write_buffer(&self.constants[which], 0, bytemuck::bytes_of(&constants));
     }
 }
+
+mod host;
+pub use host::Host;
 
 #[cfg(test)]
 mod tests;

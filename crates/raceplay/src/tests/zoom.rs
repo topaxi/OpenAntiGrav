@@ -6,6 +6,12 @@ use oag_gameplay::PlayerInputs;
 
 /// [`race_with_a_grid`]'s pad fixture with HD's ring switched on or off.
 fn grid_on_a_speed_pad(ring: bool) -> Race {
+    grid_on_a_pad_with(ring, false)
+}
+
+/// The same fixture with the ring HD's own (`borrowed` false) or borrowed by a
+/// title that draws none (`borrowed` true), as `load` sets `Setup::zoom_borrowed`.
+fn grid_on_a_pad_with(ring: bool, borrowed: bool) -> Race {
     let mut handling = hulled_handling();
     handling.speedup_pads = oag_physics::params::SpeedupPads {
         amount: 37.0,
@@ -15,6 +21,7 @@ fn grid_on_a_speed_pad(ring: bool) -> Race {
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
     setup.zoom_ring = ring.then_some(&oag_hd::race::ZOOM_RING);
+    setup.zoom_borrowed = ring && borrowed;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
         left: [0.0, 0.0, -1.0],
@@ -63,4 +70,53 @@ fn a_title_without_the_ring_has_no_pulse() {
         race.tick(&PlayerInputs::none());
     }
     assert_eq!(race.hd_zoom_frame(), None);
+}
+
+/// `graphics.boost_zoom` off: a Pulse-shaped race (no ring of its own, nothing
+/// borrowed) fires nothing on a speed pad and offers the scene's host pass nothing
+/// to build.
+#[test]
+fn a_title_with_the_setting_off_draws_no_borrowed_ring() {
+    let mut race = grid_on_a_pad_with(false, false);
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(race.hd_zoom_frame(), None);
+    assert_eq!(race.borrowed_zoom_tuning(), None);
+}
+
+/// `graphics.boost_zoom` on: the same race borrows HD's numbers, the player's speed
+/// pad raises `E`, and the scene's host pass is handed that tuning (HD's own ring,
+/// drawn in its bloom chain, is not).
+#[test]
+fn a_borrowed_ring_fires_on_the_players_speed_pad() {
+    let mut race = grid_on_a_pad_with(true, true);
+    let mut peak = 0.0_f32;
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+        peak = peak.max(race.hd_zoom_frame().expect("a ring").boost);
+    }
+    assert!(peak > 0.9, "the pad raised E to {peak}");
+    assert_eq!(
+        race.borrowed_zoom_tuning(),
+        Some(super::super::zoom::tuning(&oag_hd::race::ZOOM_RING)),
+    );
+    let own = grid_on_a_pad_with(true, false);
+    assert_eq!(
+        own.borrowed_zoom_tuning(),
+        None,
+        "HD's own ring is not borrowed"
+    );
+}
+
+/// Which titles may borrow the ring is title data: Pulse and Pure, no one else.
+#[test]
+fn only_pulse_and_pure_offer_the_borrowed_ring() {
+    assert!(oag_pulse::TITLE.race.borrows_zoom_ring);
+    assert!(oag_pure::TITLE.race.borrows_zoom_ring);
+    assert!(!oag_hd::TITLE.race.borrows_zoom_ring);
+    assert!(
+        oag_hd::TITLE.race.zoom_ring.is_some(),
+        "HD has a ring of its own"
+    );
 }
