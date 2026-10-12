@@ -309,6 +309,7 @@ impl Session {
             // `frontend::Player::follow`.
             let movie_playhead = self.audio.movie_playhead();
             self.audio.tick();
+            self.save_race_music_periodically();
             // The in-race camera cycle, read off the shared `Input` and consumed,
             // exactly as the front end and the menus consume their own presses -
             // a press seen on two devices is one press and there is one place to

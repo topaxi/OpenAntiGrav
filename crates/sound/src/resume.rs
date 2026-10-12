@@ -79,9 +79,12 @@ impl std::fmt::Display for Unusable {
 }
 
 /// How far a track's length may differ from the saved one and still be the same
-/// recording: the two PSP/PS2 releases of one track agree to 11.4 ms, a
-/// different recording is at least 130 ms away (see [`Soundtrack::pairs_with`]).
-const SAME_TRACK_SECONDS: f64 = 0.05;
+/// recording. The saved length is the decoded sound's and the listing's is the
+/// disc's own, and they differ by the decoder's padding: 83 ms on Pulse's PSP
+/// track 0 (187.664 s decoded, 187.581 s listed), measured. Half a second clears
+/// that with room and is still far under the seconds a swapped track differs by.
+/// **Chosen, not measured.**
+const SAME_TRACK_SECONDS: f64 = 0.5;
 
 impl RaceMusicState {
     /// Whether this state still names the same place in `listing`, the booted

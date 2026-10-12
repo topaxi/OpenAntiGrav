@@ -555,6 +555,7 @@ impl Session {
         // does.
         self.abandon_tournament();
         self.audio.pause_race_music();
+        self.save_race_music();
         self.audio.stop_race_sfx();
         if let Err(error) = self.open_menus() {
             log::error!("cannot return to the menus: {error:#}");
