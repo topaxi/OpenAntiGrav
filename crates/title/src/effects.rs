@@ -337,6 +337,55 @@ pub struct Effects {
     /// effect against a matched capture of the original, never by extension to
     /// the rest of the title's `.pob` files - see `oag_fx::psys::spawn`.
     pub extents: &'static [&'static str],
+    /// How the Quake wave is placed and washes the screen: its frame is read
+    /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
+    pub quake_look: QuakeLook,
+}
+
+/// Where a title's Quake wave takes the `+Y` of the frame its `WO_QUAKE` is
+/// spawned in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuakeUp {
+    /// The track's own up at the wave's midpoint: the negated interpolated
+    /// `down` of the record `AiTrack_LocatePosition` fills. Pulse's
+    /// `Quake_Update` (`0x0891d268`).
+    Track,
+    /// World `+Y`, a constant: Pure's `Quake_Update` (`0x08879d54`) loads
+    /// `(0, 1, 0)` with `mtv` and calls no track lookup at all.
+    World,
+}
+
+/// How a title's Quake wave is placed and what else it does on screen: the
+/// frame its `WO_QUAKE` is spawned in (the same Gram-Schmidt of
+/// `(across, up)` on every title read so far) and its screen wash.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct QuakeLook {
+    /// Where the frame's `+Y` comes from.
+    pub up: QuakeUp,
+    /// Units the anchor is raised above the midpoint of the span's two edge
+    /// points, along `up` made perpendicular to the wave's across. `0.0` puts
+    /// it on the road.
+    pub lift: f32,
+    /// The wave washes the screen on its own, whatever the title does for its
+    /// other detonations (Pure: kind 3 of its `ScreenFlash_Start`, numerically
+    /// Pulse's kind 4). A title that already draws every flash does not need
+    /// it; one that draws none keeps `false` until its own wave is read.
+    pub flash: bool,
+    /// Where this came from.
+    pub origin: Origin,
+}
+
+impl QuakeLook {
+    /// Pulse's: the track's up, the anchor on the road, no wash of its own.
+    #[must_use]
+    pub const fn track(origin: Origin) -> Self {
+        Self {
+            up: QuakeUp::Track,
+            lift: 0.0,
+            flash: false,
+            origin,
+        }
+    }
 }
 
 impl Effects {
@@ -346,6 +395,7 @@ impl Effects {
         scenery: &[],
         sprites: &[],
         extents: &[],
+        quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
     };
 
     /// The entry for `trigger`.
@@ -415,6 +465,7 @@ impl Effects {
         use Trigger as T;
         use engine_effects as n;
         let mut e = Self::NONE;
+        e.quake_look = QuakeLook::track(origin);
         e.scenery = &[
             n::BLUE_WELDER_EFFECT,
             n::MODESTO_STEAM_EFFECT,

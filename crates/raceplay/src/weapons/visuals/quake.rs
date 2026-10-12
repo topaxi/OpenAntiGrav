@@ -61,8 +61,10 @@ impl Race {
     /// original, not read): every other source still feeds it in as severity,
     /// by choice, until its own executable is read
     /// (`oag_fx::psys::Effect::without_extents`). **The frame's `X` is measured**,
-    /// `normalize(B - A)`; its `Y` is the track's own up at the midpoint,
-    /// read 2026-10-06 (see the `orient` call below).
+    /// `normalize(B - A)`; its `Y` is the track's own up at the midpoint on
+    /// Pulse, read 2026-10-06 (see the `orient` call below), and world `+Y` on
+    /// Pure, whose anchor also sits `10` units above the road
+    /// (`oag_title::QuakeLook`, `psp-pure-usa/quake.md`).
     ///
     /// Releases the instance the tick the wave goes away
     /// (`self.sim.world.quake` becomes `None`), as `Quake_Update` does
@@ -120,13 +122,27 @@ impl Race {
         // (`psys::Effect::without_extents`).
         let stretches = effect.has_extents();
         let severity = if stretches { 1.0 } else { scale };
+        let frame = self.view.handles.quake_look();
+        let frame_up = match frame.up {
+            oag_title::QuakeUp::Track => track_up,
+            oag_title::QuakeUp::World => Vec3::Y,
+        };
+        // The anchor above the road: `lift` along `frame_up` made
+        // perpendicular to the wave's across, unnormalised as the original's
+        // `(across x up) x across` is.
+        let anchor = match across.try_normalize() {
+            Some(a) if frame.lift != 0.0 => {
+                midpoint + (frame_up - a * a.dot(frame_up)) * frame.lift
+            }
+            _ => midpoint,
+        };
         let playing = match self.view.quake_effect {
             None => {
-                self.view.quake_effect = self.view.stage.attach(&effect, midpoint, severity);
+                self.view.quake_effect = self.view.stage.attach(&effect, anchor, severity);
                 self.view.quake_effect
             }
             Some(playing) => {
-                self.view.stage.follow(playing, midpoint);
+                self.view.stage.follow(playing, anchor);
                 self.view.stage.rescale(playing, severity);
                 Some(playing)
             }
@@ -135,11 +151,12 @@ impl Race {
         // `AiTrack_LocatePosition` fills at the midpoint: `-(+0x20)`, the
         // interpolated `down` axis negated (`vneg.q` at `0x0891daac`). Row 2
         // is `across x Y`, row 0 `Y x row 2` - the frame `frame_x` builds.
-        // On Pulse's PSP only, with the extent law: no other source's frame
-        // was read.
+        // Wherever the extent law is on (Pulse's PSP, and each title that
+        // lists `WO_QUAKE` in `Effects::extents`): `frame_up` is the title's
+        // own, the track's up on Pulse and world up on Pure.
         if let (true, Some(playing)) = (stretches, playing) {
             self.view.stage.stretch(playing, scale, across);
-            self.view.stage.orient(playing, track_up);
+            self.view.stage.orient(playing, frame_up);
         }
         // Every frame the wave's instance lives, at the span's first edge
         // point - `left` here, the same reading `across` makes (chosen: which

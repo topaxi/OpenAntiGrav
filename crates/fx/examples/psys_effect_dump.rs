@@ -2,23 +2,29 @@
 //!
 //! ```sh
 //! cargo run -q -p oag-render --example psys_effect_dump -- data/images/pulse-psp-usa.chd WO_BLUE_WELDER
+//! # a `.POB` already extracted from any title's archive (`oag-wad cat`):
+//! cargo run -q -p oag-fx --example psys_effect_dump -- --file WO_QUAKE.POB
 //! ```
 
 use oag_fx::psys;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let image = args.next().ok_or("usage: IMAGE NAME")?;
-    let name = args.next().ok_or("usage: IMAGE NAME")?;
-    let mut archives = oag_pulse::open(&image)?;
-    if name == "--jumps" {
-        return jumps(&mut archives, args.collect());
-    }
-    let blob = archives.read_name(&psys::effect_path(&name))?;
+    let image = args.next().ok_or("usage: IMAGE NAME | --file POB")?;
+    let blob = if image == "--file" {
+        std::fs::read(args.next().ok_or("usage: --file POB")?)?
+    } else {
+        let name = args.next().ok_or("usage: IMAGE NAME")?;
+        let mut archives = oag_pulse::open(&image)?;
+        if name == "--jumps" {
+            return jumps(&mut archives, args.collect());
+        }
+        archives.read_name(&psys::effect_path(&name))?
+    };
     let effect = psys::Effect::parse(&blob, psys::ColourScale::Full)?;
     for (i, e) in effect.emitters.iter().enumerate() {
         println!(
-            "#{i} {:?} looping {} dur {} interval {:?} per {:?} life {:?} speed {:?} dir {:?} grav {} render {:?} streak {:?} blend {:?} sprite {} template {} world {} child {:?}/{:?} size {:?} alpha {:?} pal0 {:?} pal128 {:?}",
+            "#{i} {:?} looping {} dur {} interval {:?} per {:?} life {:?} speed {:?} dir {:?} grav {} render {:?} streak {:?} blend {:?} sprite {} template {} world {} child {:?}/{:?} size {:?} alpha {:?} pal0 {:?} pal128 {:?} spawn {:?}",
             e.name,
             e.looping,
             e.duration_ticks,
@@ -39,7 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             e.size,
             e.alpha,
             e.palette[0],
-            e.palette[128]
+            e.palette[128],
+            e.spawn
         );
     }
     let system = oag_pob::ParticleSystem::parse(&blob)?;

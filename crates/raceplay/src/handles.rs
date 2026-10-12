@@ -18,12 +18,14 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct EffectHandles {
     slots: [Option<Arc<Effect>>; Trigger::COUNT],
+    quake_look: oag_title::QuakeLook,
 }
 
 impl Default for EffectHandles {
     fn default() -> Self {
         Self {
             slots: std::array::from_fn(|_| None),
+            quake_look: oag_title::QuakeLook::track(oag_title::Origin::Measured),
         }
     }
 }
@@ -35,6 +37,7 @@ impl EffectHandles {
     #[must_use]
     pub fn resolve(title: &oag_title::Title, library: &Library) -> Self {
         let mut handles = Self::default();
+        handles.quake_look = title.effects.quake_look;
         for trigger in Trigger::ALL {
             handles.slots[trigger.index()] = title
                 .effect_on(trigger)
@@ -48,6 +51,12 @@ impl EffectHandles {
     #[must_use]
     pub fn get(&self, trigger: Trigger) -> Option<&Arc<Effect>> {
         self.slots[trigger.index()].as_ref()
+    }
+
+    /// How the title places the Quake wave's effect in its frame.
+    #[must_use]
+    pub fn quake_look(&self) -> oag_title::QuakeLook {
+        self.quake_look
     }
 
     /// Puts `effect` on `trigger`. What a test uses to stand an effect in,

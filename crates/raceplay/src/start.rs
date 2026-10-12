@@ -84,6 +84,7 @@ impl Race {
             laid_from_rear,
             grid_frame_from_sample,
             screen_flash,
+            quake_flash,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors,
@@ -628,7 +629,11 @@ impl Race {
                 pulse_laid_pose,
                 laid_pose_scaled,
                 laid_from_rear,
-                screen_flash: screen_flash.then(oag_fx::flash::ScreenFlash::default),
+                screen_flash: if screen_flash {
+                    Some(oag_fx::flash::ScreenFlash::default())
+                } else {
+                    quake_flash.then(|| oag_fx::flash::ScreenFlash::only(oag_fx::flash::QUAKE))
+                },
                 craft_flashes: Default::default(),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(

@@ -437,6 +437,10 @@ pub struct Setup {
     /// wash - Pulse off a PSP disc only, the one executable its consumer is
     /// read off. See `oag_fx::flash`.
     pub screen_flash: bool,
+    /// Whether the Quake wave alone starts that wash: a title that draws none
+    /// of its other detonations' flashes but whose own wave is read
+    /// (`oag_title::QuakeLook::flash`). Ignored with [`Self::screen_flash`].
+    pub quake_flash: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
     pub absorb_burst: Option<oag_title::Burst>,

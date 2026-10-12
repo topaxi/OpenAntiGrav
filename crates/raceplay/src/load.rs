@@ -783,6 +783,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
             grid_frame_from_sample: extents,
             screen_flash: extents,
+            quake_flash: craft_title.effects.quake_look.flash,
             absorb_burst,
             absorb_anchors,
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
