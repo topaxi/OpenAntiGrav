@@ -94,8 +94,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# What a new file may not exceed.
-LIMIT = 1_000
+# What a new file may not exceed. Raised from 1,000 to 1,500 on 2026-10-12
+# (maintainer); the rows that then fit were deleted, as the ratchet requires.
+LIMIT = 1_500
 
 # What a `#[cfg(test)]` module sharing a file with the code it tests may not
 # exceed. Its own file has no such ceiling - only `LIMIT`.
@@ -121,7 +122,6 @@ BASELINE = {
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,
-    "crates/vex/src/vex.rs": 1651,
     # Ratcheted down from 1,719 when `Options`/`impl Options` moved to
     # `crates/game/src/boot/options.rs`, split out for the `platform` field
     # the title+platform render-profile split (`crates/game/src/settings.rs`)
@@ -132,32 +132,7 @@ BASELINE = {
     # prep for the `oag-ui` extraction, which cannot name a type that lives in
     # the composition root.
     "crates/game/src/movie.rs": 1756,
-    # Ratcheted down from 2,005 when the two drawing idioms split out into
-    # `menu/rows.rs` and `menu/strip.rs`; `draw_list` picks between them and
-    # draws nothing itself. Ratcheted down again from 1,785 to 1,276 when
-    # `Definition`, `Error`, the raw TOML shape and the parse/check functions
-    # split out into `menu/definition.rs` - the seam `string_id` resolution
-    # needs, and the file had zero lines of headroom to grow it in place.
-    "crates/ui/src/menu.rs": 1201,
-    # Ratcheted down from 1,956 to 1,782 when the draw pipeline moved out into
-    # `psys/pipeline.rs`, making room for the sprite sheet and the emitter
-    # extent, which live in `psys/sprite.rs` and `psys/spawn.rs`; to 1,781
-    # when the streak strips moved into `psys/streak.rs`; to 1,740 when
-    # `Particle` moved into `psys/particle.rs` to make room for the rotating
-    # template sprite's roll.
-    "crates/fx/src/psys.rs": 1501,
-    "crates/sound/src/lib.rs": 1408,
     "crates/trace/src/main.rs": 1543,
-    # Ratcheted down from 1,506 when `FlareTexture` moved out into
-    # `exhaust/texture.rs`, which is where the ribbon's second texture is
-    # uploaded from.
-    "crates/fx/src/exhaust.rs": 1430,
-    "crates/physics/tests/ship_dynamics.rs": 1262,
-    "crates/display/src/display.rs": 1043,
-    "crates/formats/tests/audio_ground_truth.rs": 1171,
-    "crates/view/src/main.rs": 1152,
-    "crates/ai/tests/closed_loop.rs": 1040,
-    "crates/trace/src/compare.rs": 1038,
 }
 
 # Inline `#[cfg(test)]` modules over `TEST_LIMIT`, keyed `<file>::<module>`.
