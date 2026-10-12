@@ -141,6 +141,7 @@ pub const TITLE: &Title = &Title {
     // Pure's campaign is a list, not a grid: `oag_tables::pure_campaign` reads
     // its `Definition.xml` and each circuit's `stats.xml`
     // (`docs/formats/pure-campaign.md`).
+    main_menu: main_menu::MAIN_MENU,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pure,
         definition_entry: None,
@@ -278,6 +279,7 @@ pub mod campaign;
 pub mod effects;
 pub mod frontend;
 pub mod hud;
+pub mod main_menu;
 pub mod race;
 
 /// Name hashes for `Data.wad` entries whose names are not recovered.

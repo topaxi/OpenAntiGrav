@@ -51,6 +51,7 @@ use oag_title::{ArchiveCandidates, Platform, Title};
 pub mod campaign;
 pub mod frontend;
 pub mod hud;
+pub mod main_menu;
 pub mod race;
 
 /// Wipeout: Omega Collection, as the asset layer needs to know it.
@@ -136,6 +137,7 @@ pub const TITLE: &Title = &Title {
     // HD's `PI001` front end carried forward (`docs/formats/omega-frontend.md`),
     // read through its own `load_omega`; no grids file is read on its own and no
     // unlock row is wired.
+    main_menu: main_menu::MAIN_MENU,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Omega,
         definition_entry: None,

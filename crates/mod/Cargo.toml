@@ -1,0 +1,30 @@
+[package]
+name = "oag-mod"
+description = "Mods: a folder, a .zip or a .oagmod read in place, the oag-mod.toml manifest it carries, and the built-in oag-extras"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+oag-schema.workspace = true
+dirs = "7"
+semver = "1"
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+zip = { version = "8", default-features = false, features = ["deflate"] }
+
+# zstd is a C library; the web build has no use for a mod search path and no
+# compiler for it, so the method is native-only. A zstd entry in a mod read on
+# the web is refused by name (zip's own "unsupported method").
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+zip = { version = "8", default-features = false, features = ["deflate", "zstd"] }
+
+[dev-dependencies]
+oag-schema = { workspace = true, features = ["validate"] }
+
+[lints]
+workspace = true

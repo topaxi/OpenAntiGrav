@@ -76,7 +76,7 @@ fn visible() -> usize {
 /// The definition this build actually ships. Every test that can use it
 /// does, so the file is exercised rather than a fixture standing in for it.
 fn built_in() -> Definition {
-    Definition::parse(BUILT_IN, &crate::language::StringTable::default())
+    Definition::built_in(&crate::language::StringTable::default())
         .expect("the built-in menu must parse")
 }
 

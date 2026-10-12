@@ -130,8 +130,17 @@ pub(super) fn menu_page(
     // `crate::records::ticker_tips`'s own doc.
     ticker_tips: &[String],
 ) -> Result<(Vec<oag_ui::frontend::Draw>, TickerClip)> {
-    let mut definition = oag_ui::menu::Definition::parse(oag_ui::menu::BUILT_IN, strings)
-        .context("parsing the built-in menu definition")?;
+    let mut definition = crate::mods::Mods::load()?
+        .build_with_strings(
+            oag_ui::menu::BUILT_IN,
+            strings,
+            Some(oag_ui::menu::For {
+                title,
+                updated: false,
+            }),
+        )
+        .context("building the menu definition")?
+        .definition;
     // The same two trims `crate::prepare` makes before a live menu opens, so
     // a captured RACE page has the rows a player's has.
     definition.drop_unavailable_race_variant(title);

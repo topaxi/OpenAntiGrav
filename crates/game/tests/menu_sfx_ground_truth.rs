@@ -186,7 +186,7 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
         let Some(image) = image(name) else { continue };
         let (mut sfx, _) = load(&image, fury);
         let strings = oag_ui::strings::project_table(None);
-        let mut menu = Menu::new(Definition::parse(BUILT_IN, &strings).expect("menu.toml"));
+        let mut menu = Menu::new(Definition::built_in(&strings).expect("menu.toml"));
         // The MODE row's values come from the disc at run time; two stand-ins
         // are enough for it to step.
         menu.supply(

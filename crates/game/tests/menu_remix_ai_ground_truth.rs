@@ -3,7 +3,7 @@
 use oag_ui::menu::*;
 
 fn built_in() -> Definition {
-    Definition::parse(BUILT_IN, &oag_ui::language::StringTable::default())
+    Definition::built_in(&oag_ui::language::StringTable::default())
         .expect("the built-in menu must parse")
 }
 

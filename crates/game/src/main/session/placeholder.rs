@@ -175,7 +175,10 @@ impl Session {
         self.music_discs = pending.music_discs(source);
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
         self.shell = Some(Shell {
-            definition: pending.definition.clone(),
+            definition: pending.menu_for(title, false).unwrap_or_else(|e| {
+                log::warn!("menu: {e:#}");
+                pending.definition.clone()
+            }),
             menu_sfx: None,
             title,
             platform: archives.layout.platform,

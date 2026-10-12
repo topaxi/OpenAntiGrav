@@ -49,6 +49,7 @@ pub mod hud;
 pub mod language;
 pub mod launch_hover;
 pub mod loading;
+pub mod main_menu;
 pub mod menu;
 pub mod original_driver;
 pub mod pre_race;
@@ -72,6 +73,7 @@ pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
+pub use main_menu::{Attached, MainMenu, OriginalRow};
 pub use menu::{
     HelpText, ListBlocks, MenuBlocks, MenuList, MenuSettings, MenuSkin, MenuStrip, StripBlocks,
 };
@@ -227,6 +229,9 @@ pub struct Title {
     /// Which campaign reader and draw list this title's front end uses, and
     /// what of the campaign it authors. See [`campaign::Campaign`].
     pub campaign: &'static campaign::Campaign,
+    /// The rows of this title's own main menu, as the disc authors them, and how a
+    /// row attached to one is drawn. See [`main_menu::MainMenu`].
+    pub main_menu: &'static main_menu::MainMenu,
     /// What this title's executable resolves per pressing (the title screen's
     /// wordmark, a localised boot movie), or `None` when it resolves nothing
     /// per pressing. See [`pressing::Pressings`].

@@ -23,6 +23,7 @@ pub mod effects;
 pub mod frontend;
 pub mod hud;
 pub mod loading;
+pub mod main_menu;
 pub mod movies;
 pub mod pre_race;
 pub mod prompts;
@@ -85,6 +86,7 @@ pub const TITLE: &Title = &Title {
     // Measured: `docs/ui/campaign-screens.md` (the grid and cell screens),
     // `docs/formats/race-campaign.md`'s `<Unlock Grid>` rows and
     // `docs/formats/race-setup.md`'s `Loyalty` unlock.
+    main_menu: main_menu::MAIN_MENU,
     campaign: &oag_title::Campaign {
         dialect: oag_title::CampaignDialect::Pulse,
         definition_entry: Some(campaign::DEFINITION_ENTRY),

@@ -53,6 +53,7 @@ pub mod launcher;
 pub mod loading;
 pub mod logfile;
 pub mod medal_watch;
+pub mod mods;
 pub mod movie;
 pub mod prefetch;
 pub mod preview;

@@ -77,6 +77,8 @@ oag-mesh.workspace = true
 oag-gpu.workspace = true
 # The front end: boot movies, menus, the HUD's font, the strings a screen
 # draws. `render.rs` rasterises the `Draw` list this crate emits.
+oag-mod.workspace = true
+semver = "1"
 oag-ui.workspace = true
 oag-ui-screens.workspace = true
 # The composition root is allowed to read a captured trace: `--pose-from`

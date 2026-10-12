@@ -176,6 +176,19 @@ pub fn overlay(table: &mut StringTable, language: &str, report: &mut Vec<String>
     }
 }
 
+/// Merges one strings file's text (a mod's `strings/<language>.toml`) into
+/// `table`, entries winning over what it holds. Returns how many it added.
+///
+/// # Errors
+///
+/// The text is not a strings file.
+pub fn overlay_text(table: &mut StringTable, text: &str) -> Result<usize, String> {
+    let file: File = toml::from_str(text).map_err(|e| e.to_string())?;
+    let count = file.strings.len();
+    table.merge(file.texts());
+    Ok(count)
+}
+
 /// The key a disc-keyed file uses for an id it must not spell out: `h_` and
 /// the 32-bit FNV-1a of the exact id string, in eight hex digits.
 ///

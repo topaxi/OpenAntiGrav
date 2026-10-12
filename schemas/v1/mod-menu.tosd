@@ -1,0 +1,73 @@
+# A mod's menu file, `menu.toml` at the root of a mod: rows attached to the main page,
+# see crates/ui/src/menu/definition/build.rs and docs/tools/mods.md. What cannot be said
+# here and stays the loader's: that `parent` is a top-level row's id or "top", `after`
+# a sibling under it, `target` a page and `action` one of the closed set, `string_id` an id
+# in some strings file, and that `id` is unused. A mod row is a `submenu` or an `action`.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/mod-menu[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.entry]
+type = "table"
+
+[types.entry.id]
+type = "string"
+
+[types.entry.parent]
+type = "string"
+
+[types.entry.after]
+type = "string"
+optional = true
+
+[types.entry.only_if_missing]
+type = "boolean"
+optional = true
+
+[types.entry.kind]
+type = "string"
+allowedvalues = ["submenu", "action"]
+
+[types.entry.label]
+type = "string"
+
+[types.entry.target]
+type = "string"
+optional = true
+
+[types.entry.action]
+type = "string"
+optional = true
+
+[types.entry.string_id]
+type = "string"
+optional = true
+
+[types.entry.subtitle]
+type = "string"
+optional = true
+
+[types.entry.subtitle_string_id]
+type = "string"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.entry]
+type = "array"
+itemtype = "types.entry"
+optional = true

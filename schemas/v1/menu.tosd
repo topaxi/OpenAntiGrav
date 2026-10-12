@@ -66,6 +66,10 @@ minlength = 2
 [types.entry]
 type = "table"
 
+[types.entry.id]
+type = "string"
+optional = true
+
 [types.entry.kind]
 type = "string"
 
