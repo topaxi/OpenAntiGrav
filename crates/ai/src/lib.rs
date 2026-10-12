@@ -12,14 +12,19 @@
 //! The original's opponents follow the same authored racing line with a
 //! controller of the same shape (lookahead point, cross-track term, damping
 //! constant, authored per speed class in `Data\XML\AIControlStats.xml`),
-//! recovered in `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`.
+//! recovered in `docs/ghidra/functions/psp-pulse-usa/ai-controls.md`.
 //!
-//! **Their speed is not.** There it comes from a schedule keyed on the player's
-//! race position and gap, so an opponent is fast because of where the player
-//! is. This crate derives a speed target from the corner ahead and the craft's
-//! own physics: an opponent's ceiling is the player's physics and it gets
-//! quicker by driving better. Neither the gap to the player nor the player's
-//! position is an input to anything here. Reasoning, schema and design:
+//! **Their speed comes from a schedule that reads the player**: a throttle
+//! indexed by the player's place, a formation held around the player, and a
+//! field-wide rubber band on the player's lead. That driver is built, in
+//! [`original`], and flies the campaign's opponents only (the maintainer's AI
+//! mode 3, chosen by the game mode, never a setting).
+//!
+//! [`Driver`] is this project's own and flies everything else. It derives a
+//! speed target from the corner ahead and the craft's own physics: an
+//! opponent's ceiling is the player's physics and it gets quicker by driving
+//! better. Neither the gap to the player nor the player's position is an
+//! input to anything [`Driver`] does. Reasoning, schema and design:
 //! `docs/gameplay/ai.md`.
 //!
 //! # Eight drivers, not one driver eight times
@@ -65,6 +70,7 @@ mod driver;
 mod field;
 mod line;
 mod noise;
+pub mod original;
 mod pilot;
 pub mod plan;
 pub mod probe;

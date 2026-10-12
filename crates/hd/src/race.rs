@@ -55,6 +55,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: Some(&HOVER_RIG),
     craft_laws: Some(&CRAFT_LAWS),
+    original_opponent: false,
     zone_class_announcer: Some(ZONE_CLASS_ANNOUNCER),
     // One title-wide table, layered over whichever circuit races - the shape
     // `ZoneCircuit::Separate(_, true)` above already implies, since ordinary

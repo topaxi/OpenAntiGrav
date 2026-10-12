@@ -462,7 +462,10 @@ struct SplinePt {             // 0x70 bytes
 
 **Three bytes the AI reads (2026-10-11, static, confidence 70):** `Ai_PlanLane`
 reads `unk_0x5c`/`unk_0x5d` as a lane band (`byte / 127.5 - 1`, applied only when
-the first is below the second, so the shipped `0xff`/`0x00` means "no band"), and
+the first is below the second, so the shipped `0xff`/`0x00` means "no band"); the
+planner keeps its lane target **out of** the band, on the side it started
+(instruction level, 2026-10-12, `0x08855708`), so an authored band reads as an
+obstacle in the corridor rather than a lane to hold; and
 `Ai_Update` reads `unk_0x66` as a per-point opponent speed floor when it is below
 `35`. See
 [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md#a-per-point-speed-floor).
@@ -479,7 +482,8 @@ version `0x105`.
   (progress about 0.71-0.81 and 0.88-0.98 forward), each run contiguous. Inside
   a run the low byte falls in about 35-133 and the high byte in about 125-218,
   which decode (`byte / 127.5 - 1`) to a low end of about -0.7 to 0.0 and a high
-  end of about 0.0 to 0.7: a band around the centre line. Every other point of every track is the default `0xff`/`0x00`, which
+  end of about 0.0 to 0.7: a band around the centre line, which the planner
+  steers its target clear of. Every other point of every track is the default `0xff`/`0x00`, which
   disables it. That is the shape a lane band has, so the reading is consistent
   with the data (confidence 75, up from the static 70) and unchecked live; the
   fields keep their `unk_` names until a leg measures it.

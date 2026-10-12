@@ -2293,6 +2293,7 @@ version = "0.1.0"
 dependencies = [
  "oag-core",
  "oag-physics",
+ "oag-tables",
 ]
 
 [[package]]

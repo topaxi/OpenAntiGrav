@@ -242,6 +242,17 @@ impl Driver {
         Personality::from_pilot_seed(pilot, self.seed)
     }
 
+    /// Finds the craft on `line` the way [`Self::drive`] does, without
+    /// driving: the windowed search around the last index. For a craft flown
+    /// by another driver (the campaign's `crate::original`) whose place on the
+    /// line still decides its hover surface, its respawn point and what the
+    /// rest of the field sees of it.
+    pub fn locate(&mut self, line: &Line, position: Vec3) {
+        if !line.is_empty() {
+            self.index = line.nearest(position, self.index as usize, SEARCH_WINDOW) as u32;
+        }
+    }
+
     /// Chooses this tick's controls and advances the driver's place on the line.
     ///
     /// Returns released controls when there is no line, which leaves opponents

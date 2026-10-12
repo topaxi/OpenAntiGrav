@@ -353,6 +353,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
+    original_opponent: false,
     zone_class_announcer: None,
     zone_palette: None,
     zone_stages: None,

@@ -60,6 +60,12 @@ pub struct RaceSim {
     /// The finished player's thrust table and skill; `None` off the four
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
+    /// The campaign's original opponent, when [`super::Race::use_original_ai`]
+    /// switched it on; `None` flies this project's driver. Outside
+    /// [`World`], so no state hash and no other mode moves.
+    pub(super) original_ai: Option<Box<super::original_ai::OriginalAi>>,
+    /// The race seed, for the original field's own generator.
+    pub(super) race_seed: u64,
     pub(super) collision: CollisionWorld,
     pub(super) spline: Spline,
     /// The authored racing line, as the opponents' drivers want it.

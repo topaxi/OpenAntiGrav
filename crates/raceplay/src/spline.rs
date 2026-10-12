@@ -163,6 +163,22 @@ pub struct Spline {
     samples: Vec<Sample>,
     /// Which path each sample came from, parallel to [`Self::samples`].
     paths: Vec<u16>,
+    /// The AI bytes of the control point each sample was evaluated from,
+    /// parallel to [`Self::samples`]: the original's driver reads them off the
+    /// craft's current point. See [`PointAi`].
+    point_ai: Vec<PointAi>,
+}
+
+/// A control point's `unk_0x5c`/`unk_0x5d` (the lane exclusion band) and
+/// `unk_0x66` (the opponent speed floor), as `oag_vex::track::SplinePoint`
+/// carries them. Read only by the campaign's original driver
+/// (`oag_ai::original`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PointAi {
+    /// `(unk_0x5c, unk_0x5d)`, `None` where the record has no band bytes.
+    pub band: Option<(u8, u8)>,
+    /// `unk_0x66`.
+    pub speed_floor: Option<u8>,
 }
 
 impl Spline {
@@ -177,18 +193,28 @@ impl Spline {
     pub fn from_track(ai: &AiTrack) -> Self {
         let mut samples = Vec::new();
         let mut paths = Vec::new();
+        let mut point_ai = Vec::new();
         for (index, path) in ai.paths.iter().enumerate() {
-            for segment in 0..path.points.len() {
+            for (segment, point) in path.points.iter().enumerate() {
+                let ai = PointAi {
+                    band: point.unk_0x5c.zip(point.unk_0x5d),
+                    speed_floor: point.unk_0x66,
+                };
                 for step in 0..Self::STEPS_PER_SEGMENT {
                     let t = step as f32 / Self::STEPS_PER_SEGMENT as f32;
                     if let Some(sample) = path.sample(segment, t) {
                         samples.push(sample);
                         paths.push(index as u16);
+                        point_ai.push(ai);
                     }
                 }
             }
         }
-        Self { samples, paths }
+        Self {
+            samples,
+            paths,
+            point_ai,
+        }
     }
 
     /// How many samples the table holds.
@@ -345,6 +371,12 @@ impl Spline {
     #[must_use]
     pub fn sample(&self, index: usize) -> Option<&Sample> {
         self.samples.get(index)
+    }
+
+    /// The AI bytes of the control point sample `index` was evaluated from.
+    #[must_use]
+    pub fn point_ai(&self, index: usize) -> PointAi {
+        self.point_ai.get(index).copied().unwrap_or_default()
     }
 
     /// Which path the sample at `index` belongs to.

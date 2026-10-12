@@ -59,9 +59,11 @@ times larger" - because the finding is the coupling, not the number.
 | Pack swapping and the spread wander (`AiManager_ShufflePack`, `Ai_UpdateSpreadWander`), keyed on the integer difficulty | **measured** (2026-10-11): the wander recomputes on all 1,140 samples to `5e-7`; the shuffle's row and swap parity checked at both levels | 92 |
 | One driver's thrust, lane choice and fork choice a tick, round-robin over the field | **measured** (2026-10-11) | 92 |
 | The steering controller (`Ai_ComputeControls`): lookahead aim, cross-track shift, damped heading error, saturation into the airbrakes | **recovered**, instruction-level, not traced | 85 |
-| The lane planner (`Ai_PlanLane`): nine lanes in the AI corridor, a random preferred lane, contact push, a rate-limited 80-slot lane ring | **recovered**, static | 80 |
+| The lane planner (`Ai_PlanLane`): nine lanes in the AI corridor, a random preferred lane, contact push, a rate-limited 80-slot lane ring | **recovered**, instruction level for the ring fill and the band (2026-10-12), the rest static | 82 |
 | `xtrackMax` and `xtrackDamp` are parsed and never read on Pulse | **recovered**, static | 70 |
-| `SplinePt.unk_0x5c/0x5d` (an authored lane band) and `unk_0x66` (a speed floor) | **recovered**, static; which tracks author them is open | 70 |
+| `SplinePt.unk_0x5c/0x5d` (an authored lane **exclusion** band: the target is kept out of it, on the side it started) and `unk_0x66` (a speed floor) | **recovered**, static, the band's direction at instruction level (2026-10-12); only `07_Track` authors a band and only `06_Track` a floor | 75 |
+| Where the rail sits in the frame: one `AiManager_Update` per `Body_StepWorld` | **measured** (2026-10-12): the round-robin counter advanced by one at each of 40 consecutive world steps | 90 |
+| **The original driver, built**: `oag_ai::original`, flown by Pulse's campaign opponents | **built** (2026-10-12), see [built](#built-2026-10-12-oag_aioriginal) | - |
 | The sign convention on Pure's `Position` attribute | hypothesis | 55 |
 | Which of Pure's two per-class blocks the engine reads | **unknown** | - |
 | Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
@@ -367,8 +369,10 @@ The maintainer's decision of 2026-10-11 gives the campaign a third AI mode:
 driver (race box, remix, multiplayer) and this project's driver on the cell's
 `SkillScale` curve (already on main). This section is that mode's specification
 in words; the formulas, addresses and the live measurement are on
-[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md). Nothing in
-it is built yet.
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md). **Built
+2026-10-12** as `oag_ai::original` and flown by every Pulse campaign race; see
+[built](#built-2026-10-12-oag_aioriginal) below for what it reproduces, what is
+mapped onto this engine, and what it does not do yet.
 
 ### What an original opponent is
 
@@ -385,15 +389,18 @@ it is built yet.
    dropped at once on contact. Orientation is never written. It fires on every
    tick (measured); in steady state the move is about a hundredth of a unit,
    and whether that is the rail holding the lane or the steering already
-   holding it is not separated. **This is the one place the original bypasses physics,
+   holding it is not separated. It sits between a tick's controls and the
+   next world step: exactly one `AiManager_Update` runs per `Body_StepWorld`
+   (measured, below). **This is the one place the original bypasses physics,
    and it is reproducible**: a deterministic vector correction on position and
    velocity, which `oag-physics` would have to accept from outside.
 3. **The lane is planned, not the racing line.** Each opponent holds a lane in
    `[-1, 1]` across the authored AI corridor (`0` the racing line, `+/-1` the
    bounds), chosen from nine candidates by a weak pull to the line and a strong
    pull to a **random preferred lane** re-drawn about once every 400 ticks
-   (biased toward the edges), pushed sideways by contacts, held inside an
-   optional authored band per track point, and laid out ahead in an 80-slot ring
+   (biased toward the edges), pushed sideways by contacts, kept **out of** an
+   optional authored band per track point (an obstacle zone, read at
+   instruction level 2026-10-12; it was written as a hold before), and laid out ahead in an 80-slot ring
    (one slot per 1/4000 lap) with a rate-limited lateral velocity.
 4. **The steering controller** aims at the lane point a lookahead of
    `LookAheadSecs` of smoothed speed ahead (at least 15 units), shifts the aim
@@ -421,10 +428,11 @@ it is built yet.
 7. **Weapons and forks are already ported** ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md),
    [branch choice](#branch-choice-at-a-fork)).
 
-### `OriginalDriver`: a sketch for the follow-up lane
+### `OriginalDriver`: the sketch it was built to
 
 **Chosen, not measured** - the shape below is this project's proposal for
-carrying the recovered law, not something read off the original.
+carrying the recovered law, not something read off the original. The build
+follows it; where it departs, [built](#built-2026-10-12-oag_aioriginal) says so.
 
 - **Where.** `oag_ai::original`, beside `Driver`, sharing nothing with it but the
   output type. `Field` picks one per race from the mode: the campaign gets
@@ -475,24 +483,96 @@ carrying the recovered law, not something read off the original.
   timestep (ADR-0007): its per-tick constants are per-frame at 60 Hz, which our
   fixed tick matches. Anything the open list below leaves unread.
 
+### Built (2026-10-12): `oag_ai::original`
+
+| Piece | Where | Reproduced how |
+| --- | --- | --- |
+| `AI_ComputeOpponentThrust` | `original::opponent_thrust` | In the order `scripts/psp-ai-thrust.py --predict` recomputes it; ten unit cases match that script's own `predict_one` **to the bit** on a synthetic table with non-unity multipliers, so the `AIThrust[0]` pivot and `SpreadMultiplier` are pinned too |
+| `Ai_UpdateSpreadWander`, `AiManager_ShufflePack` | `original::Wander`, `original::shuffle` | As recovered; the live sample's wander state recomputes to `5e-6`. The shuffle reads the cell's rung (Easy `0`, Medium `1`, Hard `2`) |
+| `Ai_PlanLane`, the lane ring | `original::Planner`, `original::Ring` | Read at instruction level for this build: the ring is nearest-slot (`AiLane_At` does not interpolate), and the fill's rates are built at runtime from one `a = 0.001` (`a * 0.9` up, `1.1 * a` reverse, brake once `v^2 * (0.5 / a)` reaches the distance, clamp `a * 15`). The candidate choice's first, global pass is overwritten by its local search and is not repeated |
+| The lane band | `Planner::keep_out_of_band` | **An exclusion zone**: `0x08855708..0x0885571c` cap a target that began under the band's middle at `lo` and lift one above it to `hi`. Only `07_Track` authors one |
+| `Ai_ComputeControls` (steer, airbrakes), `Ai_ComputePitch` | `original::steer`, `original::pitch` | As recovered; `last_forward` refreshes only while airborne (decompile). The yaw prediction uses `oag_core::math::sin_cos` |
+| `Ai_SnapToLane` | `original::Rail` and `oag_physics::rail::apply` | Velocity and position only. Applied between the opponent's controls and its physics step |
+| `AiManager_Update` | `original::Field` | Round robin of period eight over the slots, the shuffle on the first tick, one seeded generator of the field's own |
+| Campaign only | `oag_raceplay::Race::use_original_ai`, called from the campaign launch | Keyed on the campaign cell, at the cell's resolved skill scale or the race's ambient one; a title opts in through `oag_title::RaceDefaults::original_opponent` (Pulse only) |
+
+**Where the rail sits, measured.** `AiManager_Update` (vtable `0x08ac9f20`, slot 4)
+and the world step `FUN_0884e5bc` (vtable `0x08aca218`, slot 4, which calls
+`Body_StepWorld` once with `dt` clamped to `0.06666`) are two objects of one
+base class, both updated through their vtables. PPSSPP v1.20.4 only fires the
+most recently added breakpoint, so the two cannot be interleaved in one run;
+instead `AiManager`'s round-robin counter (`mgr+0xa8`) was read at each of 40
+consecutive `Body_StepWorld` entries in a Single Race: it advanced by exactly
+one every time. One AI update per world step, so the rail (inside the AI
+update) lands between this tick's controls and the next step, which is where
+`oag-raceplay` applies it. Confidence 90.
+
+**Mapped onto this engine, not measured** (each said where it happens, in
+`oag_raceplay::original_ai`): the craft's own sample is its nearest spline
+sample projected onto the segment to the next; its lap progress is the course
+distance over the course length, and race progress is `Standing::distance`;
+the lookahead walks the sample table `1.5 * max(speed * t, 15)` units, which is
+the original's progress offset at a uniform parameterisation; the contact list
+is the last step's wall response (non-floor contacts put on the resolved
+normal's side; craft-to-craft contacts are not in it); race time starts at the
+green light (the capture's leader had covered 1,211 units by `8.5` s, which
+agrees); the racer table is the slot order with the player last on the grid.
+
+**Against the live capture** (`original_ai_ground_truth.rs`: Talon's Junction,
+VENOM, full grid, player parked in eighth, the capture's scenario). What does
+not depend on this engine's physics matches: the racer one place ahead of the
+player reads `75.0` at skill `3.0` on every turn, as `hard-park` logged from
+`8.48` s; the upper stop reads `101.7`; at skill `0.9` the lowest throttle is
+`34.6`, as `easy-park` and `easy-auto` logged. The field gets round in four
+laps in 200 s with no respawn and no wall damage. **What does not match**: how
+fast the field closes into formation. In `hard-park` the medians fall from `95`
+(8 s) to `48` by 10 s with the median gap at `-25` to `-48` (the opponents
+overshoot their slots onto the lower stop); ours hold `75` to `102`, on or
+behind their slots, over the same window. At skill `0.9`, 64.6 to 70.6 s:
+original median `50.2`, ours `60.5`. Airbrakes are not the cause (on for 0.0 to
+0.1 % of samples), and the throttle reaches the engine unclamped (the engine
+state reads `101.7` on the upper stop, asserted). Open.
+
+**Relaunches keep it.** Race Again and a tournament's next leg re-arm the cell
+and its rung from the finished stage, and (since this build) its skill scale,
+which the campaign tuning had also been dropping on a relaunch. A multi-leg
+cell races every leg at its first track's scale (chosen, as before).
+
+**What no test sees.** The session hook (`session/load.rs`) needs a GPU-built
+race stage, so it has no automated coverage; a windowed walk through the front
+end (Grid 1, Moa Therma White, Medium) logged `original AI: the campaign's
+opponents fly the original driver, skill 2.90, level 1`, and it was that walk
+that found the first version keyed on a resolved skill, which Grid 1's cell
+does not author.
+
 ### Still open, with the next address
 
-- **Where the rail sits in the frame.** `AiManager_Update` is reached through a
-  vtable (no static caller); whether it runs before or after `Body_StepWorld`
-  (`0x0884f70c`'s loop) decides whether the rail corrects this tick's pose or
-  the next. One run breaking on both, alternately, settles it.
-- **The census of `unk_0x5c/0x5d/0x66`** over Pulse's track files: whether any
-  circuit authors a lane band or a speed floor.
+- **Why our field closes into formation slower** than the original's, above:
+  same law, same tables, so the craft's speed at a throttle or the line it
+  holds. A capture logging an opponent's speed and lateral error against its
+  throttle on both sides separates the two.
 - **The steering and lane planner, live.** Log the lookahead sample and the lane
   ring at `Ai_ComputeControls`' entry and recompute the steer, as
   `scripts/psp-ai-thrust.py` does for the thrust.
+- **How much of the line the rail holds**: NOP the `Body_SetPosition` `jal` at
+  `0x088548dc` and log the lateral error.
+- **`AI_ResolveSkillScale`'s campaign branch** has no live leg, and no
+  campaign cell was captured: the comparison above is a Single Race.
 - **`StartStats`** (`StartBoost[8]`): read at the launch
   ([ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#startboost8-has-a-consumer-the-ais-grade-3)),
   not part of this pass.
+- **Replays do not record the mode.** ADR-0055 wants every input from outside
+  `Race::tick` in the header; today only Time Trial and Speed Lap record, and
+  neither has opponents, so no recording holds the original driver. Recording
+  opponent races will need `(skill, level)` in `Header::options`, as the
+  campaign tuning will.
 - **The other titles.** HD's thrust law is Pulse's with four changes
   ([ps3-hdfury-eu/ai-stats.md](../ghidra/functions/ps3-hdfury-eu/ai-stats.md));
-  its steering, lane planner and rail are not read. Pure, 2048 and Omega are
-  not read.
+  its steering, lane planner and rail are not read. 2048 and Omega ship the
+  same tables (checked, applies, not wired: `ClassRace` reads them with no
+  title branch, and `original::Field` would run on them unchanged, but their
+  driver is unread); Pure's tables are another schema. Each opts in through
+  `RaceDefaults::original_opponent` once its own lane has read its driver.
 
 ## What we build instead
 

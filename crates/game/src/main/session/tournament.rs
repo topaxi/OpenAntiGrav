@@ -68,9 +68,20 @@ impl Session {
         // `self.campaign_cell` into the *first* leg's `RaceStage`, so a
         // relaunch with nothing set here would lose the medal evaluation
         // and `EndRace Rewards`' own `campaign` flag on the next leg.
-        (self.campaign_cell, self.campaign_difficulty) = match &self.stage {
-            Stage::Race(stage) => (stage.campaign_cell.clone(), stage.campaign_difficulty),
-            _ => (None, None),
+        // The skill scale too: the original driver and the campaign
+        // tuning both read it, and a relaunch without it races the cell
+        // at the ambient scale instead.
+        (
+            self.campaign_cell,
+            self.campaign_difficulty,
+            self.campaign_ai_skill_scale,
+        ) = match &self.stage {
+            Stage::Race(stage) => (
+                stage.campaign_cell.clone(),
+                stage.campaign_difficulty,
+                stage.campaign_ai_skill_scale,
+            ),
+            _ => (None, None, None),
         };
         let Some(progress) = self.tournament.as_mut() else {
             warn!("ER_NEXT_RACE pressed with no tournament in progress - ignoring");

@@ -584,6 +584,21 @@ impl Session {
                     // `AI_ResolveSkillScale` is its one source too.
                     race_stage.race.set_finished_thrust_skill(scale);
                 }
+                // **The campaign's opponents are the original's own** (the
+                // maintainer's AI mode 3): keyed on the campaign cell, the
+                // mode, and never a setting. The cell's resolved scale when it
+                // has one, else the race's ambient `AI_ResolveSkillScale`
+                // value the load already took (a cell authoring no skill);
+                // the cell's rung is the integer difficulty the pack shuffle
+                // reads, which `CellSelection_CommitSelection` writes to the
+                // original's `g_skill_level`. A class with no tables keeps
+                // this project's driver.
+                if race_stage.campaign_cell.is_some() {
+                    race_stage.race.use_original_ai(
+                        race_stage.campaign_ai_skill_scale,
+                        race_stage.campaign_difficulty.map_or(1, rung_level),
+                    );
+                }
             }
             if let Some(probe) = self.load_probe.as_mut() {
                 probe.span("race-build thread: build_race_stage", built.build);
@@ -746,5 +761,16 @@ impl Session {
                 self.settings.language.as_deref(),
             )));
         Ok(())
+    }
+}
+
+/// A campaign rung as the original's integer `g_skill_level`: Easy `0`,
+/// Medium `1`, Hard `2` (`race-campaign.md`, `CellSelection_CommitSelection`).
+/// A cell with no rung reads Medium, **chosen, not measured**.
+fn rung_level(rung: oag_tables::race_campaign::Difficulty) -> usize {
+    match rung {
+        oag_tables::race_campaign::Difficulty::Easy => 0,
+        oag_tables::race_campaign::Difficulty::Medium => 1,
+        oag_tables::race_campaign::Difficulty::Hard => 2,
     }
 }

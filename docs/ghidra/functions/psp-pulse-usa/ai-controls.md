@@ -215,17 +215,33 @@ Runs every tick, but its lane choice only on the `+0x360` tick.
   biased toward the corridor edges.
 - **The player's driver** zeroes the choice: the autopilot follows the racing line.
 - **Lane target** `driver+0x44 = clamp(chosen + push, -1, 1)`.
-- **Authored lane band.** With `lo = SplinePt.unk_0x5c / 127.5 - 1` and
-  `hi = unk_0x5d / 127.5 - 1` of the craft's current point (`craft+0xae4`): when
-  `lo < hi`, the target is held inside `[lo, hi]`, on the side picked once by
-  which half of the band it was in (`driver+0x148`). The shipped default
-  `0xff`/`0x00` gives `lo = 1 > hi = -1`, which disables the band.
+- **Authored lane band: kept out of, not held inside.** With
+  `lo = SplinePt.unk_0x5c / 127.5 - 1` and `hi = unk_0x5d / 127.5 - 1` of the
+  craft's current point (`craft+0xae4`): when `lo < hi`, a side is picked once
+  (`driver+0x148`): `1` if the target is below the band's middle, else `2`.
+  Side `1` caps the target at `lo` (`0x08855708: lwc1 f13,0x44(s0)`,
+  `c.le.s f13,f12`, `bc1t` past `swc1 f12,0x44(s0)`), side `2` lifts it to `hi`
+  (`0x08855730..0x08855748`). So the target never enters `[lo, hi]`: the band
+  is an obstacle the lane goes round, on the side it approached from. Read at
+  instruction level 2026-10-12 (the `orig-driver-pulse` build); an earlier
+  version of this bullet said "held inside", which the instructions do not
+  do. The side resets to `0` on any point without a band. The shipped default
+  `0xff`/`0x00` gives `lo = 1 > hi = -1`, which disables it.
 - **The ring.** `driver+0x220` holds 80 lane values, one per `1/4000` of a lap of
   progress (`driver+0x214` the head's progress slot, `+0x218` the head index,
   `+0x21c` the count). The planner appends until 80 are queued, rate-limited:
   a lateral velocity `driver+0x3b4` per slot changes by `0.0009` (accelerate),
   `0.001` (brake, when `v^2 * 500` reaches the remaining distance) or `0.0011`
-  (reverse), and is clamped to `+/-0.015` lane units per slot.
+  (reverse), and is clamped to `+/-0.015` lane units per slot. At instruction
+  level (`0x08855758..0x088558bc`, 2026-10-12) every rate is built at runtime
+  from one `a = 0.001` (`0x3a83126f`): `a * 0.9` to speed up, `1.1 * a` to
+  reverse, `a` to brake, once `v^2 * (0.5 / a)` (the `500`) is at least the
+  distance left, and the clamp `a * 15` through `vmin.s`/`vmax.s`.
+- **The ring reads nearest-slot.** `AiLane_At` returns the queued slot
+  `(int)(p * 4000) - head` slots on (wrapped into `-2000..2000` by
+  `+ 102000) % 4000 - 2000`), clamped to the queue; no interpolation.
+  `AiLane_Advance` reads the **own sample's normalised progress**
+  (`racer+0x2a0`, `0x08853b50`), not the race progress at `+0x240`.
 
 Confidence 80: read whole. Census (2026-10-12, [track.md](../../../formats/track.md)):
 only `07_Track` authors a band, on 311 points over both directions; the data has
@@ -544,3 +560,23 @@ uv run --with numpy python3 scripts/psp-ai-thrust.py --predict data/scratch/<lan
 lookahead sample would have to be logged), the lane planner's choices, the
 pitch controller, and the `SplinePt.unk_0x66` speed floor. Those stay at their
 static scores above.
+
+## Where `AiManager_Update` sits in the frame (measured 2026-10-12)
+
+`AiManager_Update` is slot 4 of the vtable at `0x08ac9f20` (constructor
+`FUN_08834934`, which also sets `DAT_08b34358` to the manager); the world step
+is slot 4 of the vtable at `0x08aca218` (constructor `FUN_0884e4a4`), whose
+update `FUN_0884e5bc` calls `Body_StepWorld` once with `dt` clamped to
+`0.06666`. Both vtables share their other entries (`0x089444d0`,
+`0x0894479c`, ...): one base class, updated in list order by whatever walks
+it. Neither has a static caller.
+
+PPSSPP v1.20.4 fires only the most recently added execution breakpoint, so
+the two cannot be interleaved in one run (`scripts/ppsspp_debugger.py`'s
+`each_hit_any` records the same limit). Instead, a breakpoint on
+`Body_StepWorld` read the manager's round-robin counter (`mgr+0xa8`) on 40
+consecutive hits in a Single Race (VENOM, `psp-drive.py menu --single-race`):
+`7, 0, 1, 2, ... 6`, advancing by exactly one at every step. **One AI update
+per world step**, so `Ai_SnapToLane`'s body write, made inside the AI update,
+lands between the controls it accompanies and the next `Body_StepWorld`.
+Confidence 90. `oag-raceplay` applies the rail there.
