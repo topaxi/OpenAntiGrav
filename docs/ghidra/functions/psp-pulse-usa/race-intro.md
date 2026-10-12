@@ -223,6 +223,5 @@ the exit test above** (`Camera_IntroProgress >= 1.0` or a held Cross), already r
 page, so there is nothing left of that item. Nothing here differs in timing from the 272-tick
 countdown this project's simulation already runs ([`oag_race::COUNTDOWN_TICKS`]).
 
-Cross-title: PS2 Pulse runs the same `Race_CreateModeObject` shape (not re-read); HD's mode
-table is [`ps3-hdfury-eu/gantry-clock.md`](../ps3-hdfury-eu/gantry-clock.md)'s own and was not
-read for a shared state 0 - checked, not applicable to this claim.
+Cross-title: PS2 Pulse and HD were not read for a shared state 0 - not checked (HD's mode
+table is its own, see [`ps3-hdfury-eu/gantry-clock.md`](../ps3-hdfury-eu/gantry-clock.md)).

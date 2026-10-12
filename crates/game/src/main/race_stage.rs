@@ -544,7 +544,7 @@ impl RaceStage {
                             gpu.queue(),
                             encoder,
                             view,
-                            oag_game::hud_countdown::widget_seconds(self.race.sim.world.tick),
+                            self.race.sim.world.tick as f32 / 60.0,
                             viewport,
                             target_size,
                         );

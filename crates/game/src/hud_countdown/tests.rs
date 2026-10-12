@@ -212,14 +212,3 @@ fn the_depth_attachment_matches_the_view_actually_drawn_into_not_the_window() {
          guard against, not that the underlying bug came back"
     );
 }
-
-/// The widget's clock is the gantry's: `0` at the tick `ready` plays, `3.0`
-/// (the asset's `GO`) on the release, and nothing before the start tick.
-#[test]
-fn the_widget_clock_starts_at_ready_and_reads_go_on_the_release() {
-    let start = oag_raceplay::gantry::CLOCK_START_TICK;
-    assert_eq!(widget_seconds(0), 0.0);
-    assert_eq!(widget_seconds(start), 0.0);
-    assert_eq!(widget_seconds(start + 60), 1.0);
-    assert_eq!(widget_seconds(oag_race::COUNTDOWN_TICKS), 3.0);
-}

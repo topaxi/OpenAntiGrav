@@ -132,23 +132,6 @@ use oag_mesh::mesh_render::{
 
 use oag_display::space::SCREEN;
 
-/// The countdown widget's own animation clock, in seconds, at race tick `tick`.
-///
-/// **Read from `BOOT.BIN`, confidence 85, unwatched on the widget itself**
-/// (`docs/ghidra/functions/psp-pulse-usa/gantry-clock.md`, section 5):
-/// `Hud_SetCountdownWidgetTime` (`0x0881a3b8`) sets the `Cockpit321Go` model's
-/// time to `0.0` on the call that plays `ready` and to `3.0` on every frame
-/// from the release, so the widget's timeline starts at the gantry's own start
-/// tick ([`oag_raceplay::gantry::CLOCK_START_TICK`], 92) and its `GO` lands on
-/// the release - not at tick 0, which showed `GO` 92 ticks before the thrust
-/// gate opened. Before the start tick the widget has not been written and
-/// reads `0.0` (alpha 0 in the asset). The pre-lap window's `3.2` write only
-/// runs under a gantry, which is exactly when this overlay stands down.
-#[must_use]
-pub fn widget_seconds(tick: u64) -> f32 {
-    tick.saturating_sub(oag_raceplay::gantry::CLOCK_START_TICK) as f32 / 60.0
-}
-
 /// The GPU half of the countdown overlay: one model, one small pass with its
 /// own depth buffer, drawn after the HUD's ordinary sprite pass.
 pub struct Countdown {
@@ -298,7 +281,7 @@ impl Countdown {
     }
 
     /// Draws one frame at `seconds` into the authored `Anim Transform` and
-    /// `TEXOFFSET` tracks - [`widget_seconds`] of `world.tick` (the raw tick, not the
+    /// `TEXOFFSET` tracks - `world.tick as f32 / 60.0` (the raw tick, not the
     /// HUD's racing clock), the same clock
     /// [`oag_race::RaceState::thrust_gated`] gates on, so a caller shows this
     /// for exactly the measured countdown span and no other window. Composites

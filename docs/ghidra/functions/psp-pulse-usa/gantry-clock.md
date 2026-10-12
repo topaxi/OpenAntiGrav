@@ -181,12 +181,16 @@ Natural run, `n == 0`, 300 consecutive manager calls: `3.0` on the first call
 (the release's write), `3.2` on the second, then `3.2168`, `3.2335`, ... in
 steps of `0.01668` s (the emulator's 59.94 Hz frame), and the reset to `3.2`
 on calls 140 and 279, **139 calls apart**. That is the predicted
-`[3.2, 5.5)` loop; its period is 139 manager calls, one more than the 138
-ticks `ReleaseWindow::period` counts, because a reset reads `3.2` twice
-(the call that resets, then the next call, before the first advance). Whether
-that extra read is a drawn frame depends on whether the board is drawn before
-or after the manager's call in a frame, which was not read: it is the one tick
-of phase uncertainty `clock.rs` already carries, not a new difference.
+`[3.2, 5.5)` loop, but one call longer than the 138 ticks the window spans:
+the call after a reset reads the set value with no advance (`3.2, 3.2, 3.2168`),
+so every loop is `span + 1`. Not a phase offset: all four windows below show the
+same +1, so a loop without it drifts a frame per loop (about 9 frames over the
+21 s stationary hold). **Fixed**: `ReleaseWindow::extra_tick`, true for Pulse's
+windows and false for HD's (its 86 came off a 30 fps capture that cannot
+resolve one tick), `clock/tests.rs::pulses_loops_are_the_measured_lengths`.
+What the extra tick *shows* (`from` held, or the out-of-window value read just
+before the reset) depends on whether the board is drawn before or after the
+manager's call in a frame, which was not read; ours shows `from`.
 
 Forced crossing count: the craft was not flown across a lap line. The
 player's `craft+0xac8` is recomputed every tick (a single write holds for one
@@ -219,8 +223,8 @@ race to the second and third crossings, so an in-race pair is still open.
 
 **Confidence 90** for the window selection and bounds (live, forced `n`);
 the natural lap crossing itself was not flown, so the events that move `n`
-rest on [race-progress.md](race-progress.md). PS2 Pulse: checked, applies
-(same windows inherited), unread on `SCES_547.48`. HD: its own numbers, read
+rest on [race-progress.md](race-progress.md). PS2 Pulse: **not checked**
+(inherits the PSP windows by the maintainer's rule, unread on `SCES_547.48`). HD: its own numbers, read
 independently ([ps3-hdfury-eu/gantry-clock.md](../ps3-hdfury-eu/gantry-clock.md));
 not re-measured here.
 
@@ -233,11 +237,15 @@ gantry at `ready`, to 3.0 on the release, and to 3.2 in the `n == 0` window
 only, so the overlay's `Cockpit_321GO.vex` clock is the gantry's own until the
 first crossing and then runs free. 75: the widget pointer is read, the `+0x94`
 child is not identified. This answers the overlay's open timing question; the
-overlay is drawn only where a circuit has no gantry. **Rewired 2026-10-12**
-(`pulse-race-start`): `oag_game::hud_countdown::widget_seconds` runs its clock from
-the gantry's start tick (92) so `GO` lands on the release, where it had run off tick 0
-and shown `GO` 92 ticks (1.5 s) early. The widget's own time was not watched live,
-so the rewiring rests on the writes above (75), not on a capture.
+overlay is drawn only where a circuit has no gantry. **Not rewired** (2026-10-12, `pulse-race-start`): the overlay's clock is
+`world.tick / 60`, where the original's widget runs from `0.0` at the `ready`
+tick (92) and is pinned to `3.0` from the release, so ours shows the widget's
+`GO` moment (3.0 s of its asset) 92 ticks early. A rewire (`(tick - 92) / 60`)
+was built and reverted: the overlay is drawn only while `thrust_gated` (tick < 272),
+which would put 3.0 s on the first undrawn tick and drop `GO` altogether. What
+blocks it is when the original stops drawing the widget after the release:
+`Hud_UpdateCountdownFade` (`0x0881f624`)'s visibility clear, unread. Unmeasured
+on the widget itself (75).
 
 ## The free Turbo: granted on the line crossing, not on the release
 
