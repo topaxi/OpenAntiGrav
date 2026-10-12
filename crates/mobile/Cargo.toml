@@ -1,0 +1,19 @@
+[package]
+name = "oag-mobile"
+description = "What a phone needs around the windowed game: where its files live, and the event loop each mobile OS hands the app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+log.workspace = true
+
+# Android: NativeActivity (no Java in the APK), winit's backend over
+# `android-activity`. See docs/tools/android.md.
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { workspace = true, features = ["android-native-activity"] }
+
+[lints]
+workspace = true

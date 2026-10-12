@@ -91,6 +91,7 @@ the tag without its `v` (a manual run uses `dev-<sha7>`). A consumer (an AUR
 | `OpenAntiGrav-<v>-windows-x86_64.zip` | `oag-game.exe`, both licences, `licences/` | Windows 10+ x64 (MSVC target) |
 | `OpenAntiGrav-<v>-android-arm64.apk` | `oag-game` as a NativeActivity cdylib, stripped, debug-signed, no game content | arm64 phones, Android 8+ with a Vulkan driver ([android.md](android.md)) |
 | `OpenAntiGrav-<v>-macos-arm64.zip` | `OpenAntiGrav.app` (ad-hoc signed, not notarized), both licences, `licences/` | Apple Silicon Macs, macOS 11+ ([macos.md](macos.md)); never run on a Mac |
+| `OpenAntiGrav-<v>-ios-arm64.ipa` | `OpenAntiGrav.app` for iPhone and iPad, ad-hoc signed only, no game content | **not published**: the `ios` job's artifact only; the player re-signs it ([ios.md](ios.md)); never run on a device |
 | `SHA256SUMS` | checksums of every file above | verification, AUR `sha256sums` |
 
 Only `oag-game` ships. `oag-unpack`, `oag-wad`, `oag-trace`, `oag-view` and
