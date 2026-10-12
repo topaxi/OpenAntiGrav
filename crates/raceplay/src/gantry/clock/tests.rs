@@ -174,5 +174,5 @@ fn pulses_loops_are_the_measured_lengths() {
 #[test]
 fn hds_loop_keeps_no_extra_tick() {
     assert_eq!(HD_PRE_LAP_WINDOW.period(), 86);
-    assert!(!HD_PRE_LAP_WINDOW.extra_tick);
+    assert!(!std::hint::black_box(super::super::HD_LAP_WINDOWS).extra_tick);
 }
