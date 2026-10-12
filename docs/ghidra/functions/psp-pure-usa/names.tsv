@@ -172,8 +172,19 @@
 0x089336f0	function	Body_SetPosition	85	ai-controls.md
 0x088d9390	function	TrackStats_ParseElement	80	ai-controls.md
 0x08ab3b6c	data	g_ai_use_new_stats	94	ai-controls.md
+<<<<<<< HEAD
 
 # Wipeout Pure's campaign: the medal evaluator and the <Unlock> element parser.
 # See campaign.md.
 0x088081d8	function	Medal_Evaluate	88	campaign.md
 0x088b4568	function	Unlock_ParseElement	80	campaign.md
+
+||||||| 847ac9625
+
+=======
+
+# 2026-10-12 (wreck-faithful): the collider enable byte, static only. See wreck-collision.md.
+0x08824fbc	function	Collision_BoxAgainstBox	80	wreck-collision.md
+0x08928824	function	Ship_SetState	75	wreck-collision.md
+
+>>>>>>> main

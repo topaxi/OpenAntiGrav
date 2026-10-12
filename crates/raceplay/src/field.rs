@@ -773,10 +773,28 @@ impl Race {
     /// fixed order anyway is what
     /// `docs/architecture/determinism.md` asks for, because a *sequence* of
     /// resolutions is order-dependent even when each one is not.
+    ///
+    /// **A craft in the original's state 6 takes no part.** Its box collider's
+    /// enable byte is zero, and `Collision_BoxAgainstBox` refuses a pair when
+    /// either side's is - so a wreck that has sat out state 5's `1.5` s is
+    /// driven through, while one still exploding, or any Eliminator craft, is
+    /// solid. [`oag_physics::damage::solid_to_craft`] is that rule; measured
+    /// on PPSSPP, `docs/ghidra/functions/psp-pulse-usa/wreck-collision.md`.
+    /// Every title inherits Pulse's rule: no other title has a measured one.
     pub(super) fn resolve_craft_pairs(&mut self) {
+        let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
                 if !self.sim.world.ships[a].active || !self.sim.world.ships[b].active {
+                    continue;
+                }
+                if !oag_physics::damage::solid_to_craft(
+                    &self.sim.world.ships[a].physics,
+                    eliminator_route,
+                ) || !oag_physics::damage::solid_to_craft(
+                    &self.sim.world.ships[b].physics,
+                    eliminator_route,
+                ) {
                     continue;
                 }
                 let (first, second) = self.sim.world.ships.split_at_mut(b);

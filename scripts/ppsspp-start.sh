@@ -19,7 +19,7 @@ if [ "${2:-}" = stop ]; then
 fi
 disp=${2:?display number}; port=${3:?debugger port}; image=${4:?image}
 mkdir -p "$W/home/.config/ppsspp/PSP/SYSTEM"
-printf '[General]\nRemoteDebuggerOnStartup = True\nRemoteDebuggerLocal = True\nRemoteISOPort = %s\n[Sound]\nEnable = False\n' "$port" > "$W/debugger.ini"
+printf '[General]\nRemoteDebuggerOnStartup = True\nRemoteDebuggerLocal = True\nRemoteISOPort = %s\n[Sound]\nEnable = False\n[Graphics]\nSoftwareRenderer = True\n' "$port" > "$W/debugger.ini"
 Xvfb ":$disp" -screen 0 1280x800x24 -listen tcp -nolisten unix > "$W/xvfb.log" 2>&1 &
 echo $! > "$W/xvfb.pid"; sleep 1
 (cd "$W"; env -u WAYLAND_DISPLAY DISPLAY=127.0.0.1:$disp HOME="$W/home" \
