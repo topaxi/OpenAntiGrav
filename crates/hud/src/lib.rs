@@ -59,6 +59,7 @@ mod runtime;
 mod shield_bar;
 mod sight_draw;
 pub mod sprite;
+pub mod time_gap;
 mod time_trial_pace;
 mod widget;
 
@@ -693,6 +694,9 @@ pub struct Readout {
     pub kill_target: u32,
     /// The message slots this frame - `Info1` to `Info4`. See [`messages`].
     pub messages: messages::Lines,
+    /// The lap-line time gap this frame - `TimeDiffText` and `TimeDiffIcon`.
+    /// See [`time_gap`].
+    pub time_gap: Option<time_gap::GapLine>,
 }
 
 /// What [`Readout::speed_full_kmh`] defaults to.

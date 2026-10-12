@@ -662,6 +662,8 @@ impl Race {
                 shield_flash_prev: 0.0,
                 shield_flash_timer: 0.0,
                 messages: oag_hud::messages::MessageBoard::default(),
+                lap_watch: None,
+                split_gap: None,
                 shield_blink_timer: 0.0,
                 shield_flash_prev_whole: 0.0,
                 shield_flash_timer_whole: 0.0,

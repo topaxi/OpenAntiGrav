@@ -194,6 +194,11 @@ impl Race {
                 0
             },
             messages: self.view.messages.lines(),
+            time_gap: self
+                .view
+                .split_gap
+                .as_ref()
+                .and_then(|split| split.display.line().cloned()),
         }
     }
 
