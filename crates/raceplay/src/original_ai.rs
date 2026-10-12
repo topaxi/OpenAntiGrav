@@ -53,20 +53,18 @@ impl Race {
     /// read or the track has no closed lap: the race keeps this project's
     /// driver, which is an honest fallback rather than a guessed table.
     pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
-        let Some(thrust) = self.sim.finished_thrust else {
-            log::warn!(
-                "original AI: no AI tables for this class; opponents keep this project's driver"
-            );
-            return false;
-        };
-        let Some(tables) = thrust.original else {
+        let Some(tables) = self.sim.original_tables else {
             log::warn!(
                 "original AI: no tables for this title and class (see the loader report); \
                  opponents keep this project's driver"
             );
             return false;
         };
-        let skill = skill.unwrap_or(thrust.skill);
+        // Pure's cruise throttle reads no skill; a Pulse-shaped table always
+        // comes with its finished-thrust read, the same file.
+        let skill = skill
+            .or(self.sim.finished_thrust.map(|thrust| thrust.skill))
+            .unwrap_or(0.0);
         if self.sim.course.is_none() {
             log::warn!(
                 "original AI: the track has no closed lap; opponents keep this project's driver"
@@ -84,15 +82,7 @@ impl Race {
             }
         });
         self.sim.original_ai = Some(Box::new(OriginalAi {
-            field: Field::new(
-                tables.race,
-                tables.controller,
-                tables.laws,
-                skill,
-                level.min(2),
-                grid,
-                self.sim.race_seed,
-            ),
+            field: tables.field(skill, level.min(2), grid, self.sim.race_seed),
             contacts: [(0, false); MAX_SHIPS],
         }));
         log::info!(
@@ -298,6 +288,7 @@ impl Race {
             player_rubber_band_off,
             race_time,
             eliminator: self.sim.world.mode() == oag_race::Mode::Eliminator,
+            lap_length,
         };
         // Out of the sim for the call, so the lookahead can read the track
         // while the field is driven.
@@ -310,6 +301,30 @@ impl Race {
             });
         self.sim.original_ai = Some(ai);
         Some(output)
+    }
+
+    /// `oag_ai::original::Field::end_tick` from the standings after this
+    /// tick's step: Pure's zone multiplier and launch flag. Nothing without
+    /// an original field or a closed lap.
+    pub(super) fn original_ai_end_tick(&mut self, places: &[u8; MAX_SHIPS]) {
+        let Some(course) = self.sim.course.as_ref() else {
+            return;
+        };
+        let count = self.sim.world.ship_count as usize;
+        let racers: [(f32, u8); MAX_SHIPS] =
+            std::array::from_fn(|k| (self.sim.world.ships[k].standing.distance(course), places[k]));
+        let player = self.sim.world.primary_slot();
+        let standings = Standings {
+            racers: &racers[..count],
+            player,
+            player_rubber_band_off: false,
+            race_time: 0.0,
+            eliminator: false,
+            lap_length: course.length(),
+        };
+        if let Some(ai) = self.sim.original_ai.as_mut() {
+            ai.field.end_tick(&standings);
+        }
     }
 
     /// Notes what this tick's step said about slot `slot`'s contacts, for the

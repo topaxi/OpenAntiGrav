@@ -104,7 +104,7 @@ impl Ring {
 
 /// `Ai_AddLaneBump` (`0x08853550`): a trapezoid over the nine candidates,
 /// written as the decompile reads.
-fn add_bump(scores: &mut [f32; 9], centre: f32, half_width: f32, weight: f32) {
+pub(super) fn add_bump(scores: &mut [f32; 9], centre: f32, half_width: f32, weight: f32) {
     if weight <= 0.001 {
         return;
     }
@@ -127,6 +127,29 @@ fn add_bump(scores: &mut [f32; 9], centre: f32, half_width: f32, weight: f32) {
             *score += add;
         }
     }
+}
+
+/// The local search of [`Planner::local_best`], on any nine scores: Pulse's,
+/// and Pure's `Ai_PlanLane` (`0x08919b6c`), whose passes also stop at a score
+/// of `-1` or below. No score reaches `-1` on either title (every bump that
+/// lands is positive), so that stop is not reproduced.
+pub(super) fn local_best(scores: &[f32; 9], own_lane: f32) -> usize {
+    let start = (((own_lane + 1.0) * 0.5 * 8.0) as i32).clamp(0, 8) as usize;
+    let mut best = start;
+    let mut best_score = -1.0_f32;
+    for (i, &score) in scores.iter().enumerate().take(8).skip(start) {
+        if score > best_score {
+            best = i;
+            best_score = score;
+        }
+    }
+    for i in (0..=start).rev() {
+        if scores[i] > best_score {
+            best = i;
+            best_score = scores[i];
+        }
+    }
+    best
 }
 
 /// What the planner reads of one tick, besides its own state.
@@ -197,7 +220,7 @@ impl Default for Planner {
 }
 
 /// `Ai_RandUnit` (`0x08852334`): `rand() * 2^-31`, the generator's top 31 bits.
-fn rand_unit(rng: &mut Rng) -> f32 {
+pub(super) fn rand_unit(rng: &mut Rng) -> f32 {
     (rng.next_u32() >> 1) as f32 * 4.656_613e-10
 }
 
@@ -262,22 +285,7 @@ impl Planner {
     /// one and so is not repeated. The `-1` blocking test never fires (no
     /// score reaches it) and is not reproduced.
     fn local_best(&self, own_lane: f32) -> usize {
-        let start = (((own_lane + 1.0) * 0.5 * 8.0) as i32).clamp(0, 8) as usize;
-        let mut best = start;
-        let mut best_score = -1.0_f32;
-        for i in start..8 {
-            if self.scores[i] > best_score {
-                best = i;
-                best_score = self.scores[i];
-            }
-        }
-        for i in (0..=start).rev() {
-            if self.scores[i] > best_score {
-                best = i;
-                best_score = self.scores[i];
-            }
-        }
-        best
+        local_best(&self.scores, own_lane)
     }
 
     /// 2048's search (`0x8119d534..0x8119d632`): from the candidate nearest

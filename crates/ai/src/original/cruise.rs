@@ -16,10 +16,8 @@
 //! from the seeded [`Rng`] instead, chosen, not measured** - the live samples
 //! read the drawn values, not the stream that drew them.
 //!
-//! Not built here (named on the evidence page): the steering, Pure's ringless
-//! lane planner and its other-craft scoring, the position-only rail, the pitch
-//! fade and the fork hold. Nothing flies this law yet: no Pure campaign exists
-//! in this project, and the original's opponent is the campaign's.
+//! The rest of Pure's driver, which flies this law in Pure's campaign, is
+//! [`super::sibling`].
 
 use oag_core::Rng;
 use oag_tables::pure_ai_stats::{Fatigue, PureClassRace, ZoneCurve};

@@ -728,9 +728,15 @@ pub fn load(options: &Options) -> Result<Loaded> {
             weapons_on: options.weapons_on(),
             full_grid: options.opponents || options.mode.has_opponents(),
             track_stats: track_stats.as_ref(),
-            original_opponent: title.race.original_opponent,
-            original_laws,
         },
+        &mut report,
+    );
+    let original_tables = super::original_tables::read(
+        craft_of(&mut craft, &mut archives),
+        title,
+        &options.class,
+        &track,
+        original_laws,
         &mut report,
     );
     stages::reach(stages::Stage::CraftsBuilt);
@@ -746,6 +752,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             weapons_override: options.weapons_override,
             difficulty: options.difficulty,
             finished_thrust,
+            original_tables,
             class: options.class.clone(),
             opponents: options.opponents,
             no_opponents: options.no_driver_for_class,

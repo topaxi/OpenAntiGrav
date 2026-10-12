@@ -132,15 +132,23 @@ pub fn steer(
 
 /// `Ai_ComputePitch`: toward the track tangent while the craft's ground
 /// fraction is at most `0.9`, else `0`. `last_forward` (`driver+0x190`) is
-/// only refreshed on the airborne branch, as the original does.
-pub fn pitch(pose: &Pose, own: &TrackPoint, grounded: f32, last_forward: &mut Vec3) -> f32 {
+/// only refreshed on the airborne branch, as the original does. `fade` is
+/// [`super::Laws::pitch_scale`], `1` on a title with no fade; Pure multiplies
+/// it in before the gain (`0x0891892c`), which with `1` is Pulse's bits.
+pub fn pitch(
+    pose: &Pose,
+    own: &TrackPoint,
+    grounded: f32,
+    fade: f32,
+    last_forward: &mut Vec3,
+) -> f32 {
     if grounded > 0.9 {
         return 0.0;
     }
     let rate = pose.forward.cross(*last_forward).dot(pose.left);
     *last_forward = pose.forward;
     let error = pose.forward.cross(own.tangent).dot(pose.left);
-    ((error + rate * 40.0) * -2500.0).clamp(-100.0, 100.0)
+    ((error + rate * 40.0) * fade * -2500.0).clamp(-100.0, 100.0)
 }
 
 #[cfg(test)]
