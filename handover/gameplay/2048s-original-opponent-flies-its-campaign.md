@@ -46,8 +46,8 @@ takes them to `Race::use_original_ai` and `Race::set_original_event_ai_skills`.
   opponent above it).
 - **Pulse's search bound**: `Planner::local_best`'s up pass stops before candidate
   `8`; 2048's runs through it. Whether Pulse's does was not re-read.
-- **Omega**: its executable inlines 2048's `Ai_Construct` and event tuning; checked,
-  applies, not wired.
+- **Omega**: its campaign flies the HD-lineage laws since 2026-10-12; the 2048-lineage
+  ones wait on Omega's 2048 campaign, [omega's thread](omegas-original-opponent-flies-its-campaign.md).
 
 ## Next Steps
 

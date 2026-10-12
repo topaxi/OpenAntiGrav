@@ -574,8 +574,9 @@ executable's `AI_ResolveSkillScale` reads it: the Fury cell `grid8_3_1` gives
 disc (`crates/game/tests/hd_original_ai_ground_truth.rs`) the law reads the
 capture's `54.51` (the reference racer), `81.21` and `27.81` (the stops at
 Easy) and `104.58` (the upper stop at Hard), and the field laps Talon's
-Junction with no respawn and no wall contact. Omega's executable inlines the
-same driver (static census); it is not wired.
+Junction with no respawn and no wall contact. Omega flies the same laws in its
+HD-lineage modes plus a search coin of its own,
+[below](#omega-hds-laws-and-a-coin-of-its-own-2026-10-12).
 
 ### Pure: a sibling driver (2026-10-12)
 
@@ -646,8 +647,9 @@ every craft through respawns under this project's driver too; Super Phantom even
 (no fifth `SpeedClass`) and Elimination events (2048's own Eliminator thrust law,
 `0x81199800`, is unread) keep this project's driver. 2048 ticks at 30 fps and this
 engine at 60 Hz, so the planner's per-call terms run twice as often a second: chosen,
-not measured. Omega's executable carries 2048's
-`Ai_Construct` and event tuning (static); not wired.
+not measured. Omega's executable carries the same laws under the same lineage
+byte; its campaign launches HD-lineage modes only, so they are not wired there
+([below](#omega-hds-laws-and-a-coin-of-its-own-2026-10-12)).
 
 So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model
 (`PosBalancing`'s steep gradient, `TailZone`, `ShipSpacingVariation`) are the
@@ -655,6 +657,24 @@ So the parts of Pure's `AIRaceStats.xml` this page used to read as Pure's model
 are not even stored, `MasterSpeedTweak` is parsed and dropped, and `ControllerPO` is
 never parsed. The paragraph above that read Pulse as "the model Pulse cut down" holds
 for the files, not for what Pure's opponents fly.
+
+### Omega: HD's laws and a coin of its own (2026-10-12)
+
+Omega's opponent is 2048's code carrying both lineages behind the byte
+`driver+0xa0 = (mode id < 0x17)`
+([ps4-omega-eu/ai-controls.md](../ghidra/functions/ps4-omega-eu/ai-controls.md),
+static only: no PS4 emulator). Every cell of the HD-schema campaign this project
+launches maps its `Mode` to a named id below `0x17`, so the campaign flies HD's
+laws: HD's four branches, HD's halved lookahead on `05_Track` (Ubermall, Phantom)
+and `20_Track` (Amphiseum reversed), the base `AIRaceStats` set, ring rate `0.001`.
+One law is Omega's own: the lane search's coin (2048's search order and its
+`1/200` redraw), drawn and read whatever the lineage, where HD has none. It is
+`oag_omega::race::ORIGINAL_DRIVER`, and **Omega's campaign flies it**. On the disc
+(`crates/game/tests/omega_original_ai_ground_truth.rs`) the field finishes on
+Vineta K, Talon's Junction, Ubermall (Phantom) and Amphiseum reversed with the
+player parked and no respawn, and a cell's skill comes off its circuit's
+`stats.xml` as HD's does. PS4 `rand()`'s width is chosen (HD's 30 bits), not
+measured.
 
 ### Still open, with the next address
 
@@ -677,11 +697,10 @@ for the files, not for what Pure's opponents fly.
   neither has opponents, so no recording holds the original driver. Recording
   opponent races will need `(skill, level)` in `Header::options`, as the
   campaign tuning will.
-- **The other titles.** HD flies it, [above](#hd-the-same-driver-five-gated-branches-2026-10-12). 2048 and Omega ship the
-  same tables (checked, applies, not wired: `ClassRace` reads them with no
-  title branch, and `original::Field` would run on them unchanged; 2048's
-  driver is unread, Omega's executable inlines HD's, static only); Pure's driver is a sibling, read and its throttle measured, [above](#pure-a-sibling-driver-2026-10-12). Each opts in through
-  `RaceDefaults::original_opponent` once its own lane has read its driver.
+- **The other titles.** HD, 2048 and Omega fly it, above; Pure's driver is a
+  sibling, read and its throttle measured, [above](#pure-a-sibling-driver-2026-10-12).
+  Each opted in through `RaceDefaults::original_opponent` once its own lane had
+  read its driver.
 
 ## What we build instead
 

@@ -1293,6 +1293,20 @@ Title names are plain values in this menu, so the label needs no `string_id`.
 2048 vs Omega: **checked, differs** (models and textures), **checked, same**
 (tuning).
 
+## The campaign flies the original opponent (2026-10-12, `orig-ai-omega`)
+
+Omega's executable carries 2048's opponent code with both lineages behind
+`driver+0xa0 = (mode id < 0x17)`, and every cell of the HD-schema campaign this
+project launches maps its `Mode` to a named id below `0x17`. So the campaign's
+opponents fly HD's laws plus one of Omega's own, the lane search's coin
+(`oag_omega::race::ORIGINAL_DRIVER`, `RaceDefaults::original_opponent` on).
+Static only (no PS4 emulator): [ps4-omega-eu/ai-controls.md](../ghidra/functions/ps4-omega-eu/ai-controls.md).
+Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
+`stats.xml`, and the field finishes on Vineta K, Talon's Junction, Ubermall
+(Phantom) and Amphiseum reversed with no respawn
+(`crates/game/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
+not wired: this project does not read Omega's 2048 campaign.
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's
