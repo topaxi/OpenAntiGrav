@@ -1,0 +1,54 @@
+# The race music place: which soundtrack track a race was on and how far into it, per
+# title, see crates/game/src/music_state.rs. Written by the game as you race; chosen,
+# not measured, this project's own file. The loader decides whether a saved place still
+# fits the booted soundtrack, the schema only says what shape the file has.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/music-state[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+[types.place]
+type = "table"
+
+[types.place.title]
+type = "string"
+
+# Track in the booted disc's soundtrack order.
+[types.place.index]
+type = "integer"
+min = 0
+
+# Whole seconds into the track.
+[types.place.second]
+type = "integer"
+min = 0
+
+# Tracks the soundtrack listed when saved.
+[types.place.tracks]
+type = "integer"
+min = 1
+
+# The track's length in seconds when saved.
+[types.place.track_seconds]
+type = "float"
+min = 0.0
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+
+[elements.playlist]
+type = "array"
+itemtype = "types.place"
+optional = true

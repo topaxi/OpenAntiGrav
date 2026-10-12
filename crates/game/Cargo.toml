@@ -98,6 +98,7 @@ wgpu.workspace = true
 winit.workspace = true
 pollster.workspace = true
 toml.workspace = true
+oag-schema.workspace = true
 dirs = "7"
 serde.workspace = true
 # `Instant` that is std's own on native and `performance.now()` on the web,
@@ -161,7 +162,6 @@ oag-testdata.workspace = true
 oag-fx.workspace = true
 oag-pob.workspace = true
 zip = { version = "8", default-features = false, features = ["deflate"] }
-oag-schema.workspace = true
 oag-weapons.workspace = true
 
 # The Android entry point: the binary's own body again (`src/android.rs`

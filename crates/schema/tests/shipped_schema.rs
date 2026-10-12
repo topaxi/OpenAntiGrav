@@ -19,6 +19,7 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/mods/oag-extras/oag-mod.toml", "mod"),
         ("assets/mods/oag-extras/menu.toml", "mod-menu"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
+        ("crates/game/tests/fixtures/music-state.toml", "music-state"),
     ]
 }
 

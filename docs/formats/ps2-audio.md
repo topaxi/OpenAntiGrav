@@ -383,4 +383,5 @@ and `oag_title::Music::tracks`.
   menu's own track** - this is an authored choice for this reimplementation,
   not a recovered mapping, and does not narrow the open question above: it is
   still unknown which recording, if any, the original intends for a given
-  circuit.
+  circuit. Its place is saved across restarts: see
+  [race music resume](../architecture/race-music-resume.md).

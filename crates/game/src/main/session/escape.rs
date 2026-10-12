@@ -290,6 +290,7 @@ impl Session {
             // to be sounding by the time the menus themselves draw. See
             // `Audio::pause_race_music`.
             self.audio.pause_race_music();
+            self.save_race_music();
             // The engine is a *held* voice - `~ENGINE` - so leaving the race
             // has to release it. Without this the menus hum.
             self.audio.stop_race_sfx();

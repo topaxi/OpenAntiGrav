@@ -487,6 +487,7 @@ impl Session {
         // starts, so it and `Audio::finish_race_music` (called once this
         // stage's fade runs out) agree on one without either asking `discs`
         // twice. See `LoadingStage::music` and `oag_sound::MusicFetchWorker`.
+        self.resume_race_music();
         let music_index = self.audio.reserve_race_music_index(&self.music_discs);
         let music = oag_sound::MusicFetchWorker::spawn(
             self.music_discs.clone(),
