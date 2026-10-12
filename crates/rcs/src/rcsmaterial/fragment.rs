@@ -439,8 +439,8 @@ impl Program {
     /// shape alone is not specific to specular at all.** Measured disc-wide:
     /// the identical three instructions raise a texture sample to a power on
     /// `track_surface`'s own lightmap curve (`pow(lightmap.rgb, k)`,
-    /// `renderer.md`'s block #9), compute `exp(x)` off a saturated dot by the
-    /// unrelated `log2(e)` constant, and raise other quantities to a power
+    /// `renderer.md`'s block #9), meet the fog curve's `log2(e)` multiply
+    /// through a shared register, and raise other quantities to a power
     /// reachability alone does not separate from a real specular term. So:
     ///
     /// - [`Self::dp3_feeding`] requires the `LG2` to read a register a
@@ -448,10 +448,13 @@ impl Program {
     ///   specular and sun-diffuse read in `renderer.md` shares, which a
     ///   texture-fed power curve does not.
     /// - The exponent literal is rejected when it is `log2(e)` (within
-    ///   `1e-3`): `EX2(log2(e) * LG2(x)) = exp(x)`, the idiom `mesh.wgsl`'s
-    ///   own fog curve names this constant for. A saturated dot raised
-    ///   through `exp()` rather than `pow()` - a Fresnel falloff, say -
-    ///   shares both other gates without being this idiom.
+    ///   `1e-3`). Re-read 2026-10-12: the identity this was first justified by
+    ///   is wrong (`EX2(log2(e) * LG2(x))` is `x^1.4427`; `exp(y)` is
+    ///   `EX2(log2(e) * y)` with no `LG2` in it), and all 58 chains it rejects
+    ///   disc-wide have a `MUL` that reads a lane the `LG2` did not write: the
+    ///   `MUL log2(e)` / `EX2` of `mesh.wgsl`'s own fog curve, paired with an
+    ///   unrelated `LG2` through the shared register (`hd_specular_log2e_excluded`).
+    ///   The exclusion stays, for that reason.
     /// - [`Self::reaches_output`] requires the chain's result to survive to
     ///   the last instruction that writes a colour channel - the same
     ///   instruction [`Self::taint`]'s own `last` picks out: most lit
@@ -552,16 +555,11 @@ impl Program {
                     .into_iter()
                     .find(|v| *v != 0.0)
                     .unwrap_or(exponent[0]);
-                // **A third false-positive class, found on a disc-wide sweep
-                // and not a guess: `LG2` / `MUL log2(e)` / `EX2` is not this
-                // idiom at all.** `EX2(log2(e) * LG2(x)) = exp(x)`, and
-                // `mesh.wgsl`'s own fog curve names exactly this constant for
-                // exactly this reason ("a MUL by log2(e) into EX2_SAT"). A
-                // saturated dot product raised through `exp()` instead of
-                // `pow()` is a Fresnel-style falloff sharing the specular
-                // idiom's two gates without being it, not a shininess of
-                // `1.4427`. Skip and keep looking, rather than returning a
-                // value that is not the exponent this method promises.
+                // `MUL log2(e)` is the fog curve's multiply, paired with an
+                // unrelated `LG2` through a shared register (the `MUL` reads
+                // a lane the `LG2` never wrote on all 58 such chains; the
+                // `EX2(log2(e) * LG2(x)) = exp(x)` identity this once cited
+                // is wrong, it is `x^1.4427`). Skip and keep looking.
                 if (value - std::f32::consts::LOG2_E).abs() > 1e-3 {
                     return Some((value, mul.const_slot, dp3_i));
                 }

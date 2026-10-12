@@ -265,24 +265,19 @@ Three things the disc authors that this project does not touch:
 
 ## Next Steps
 
-0. **2026-10-05, open: the fragment decoder now keeps source negate (bit 17)
-   and the condition field (commit `6428eae0`), and readings made before that
-   may move.** The pad's "specular scalar" turned out to be EXP2 fog once the
-   negate was honoured. Re-check, without re-deriving the pad itself, every
-   earlier conclusion that read decoded HD fragment programs:
-   `Program::specular_exponent` and `Program::dp3_feeding` (`crates/mesh/src/mesh.rs`,
-   `crates/rcs/tests/specular_power_ground_truth.rs`) and the `hd_specular_*`,
-   `hd_litex2_census` and `hd_dp3_feeding_lane_check` examples under
-   `crates/render/examples/`. The gate stayed green across the change, so no
-   asserted value moved; what is unchecked is the prose readings built on
-   those examples' output.
+0. **Done 2026-10-12 (`hd-pad-leftovers`).** The re-check found the negate fix moved no count
+   (it only added fields; `hd_dp3_feeding_lane_check` 10,087 of 10,087, `hd_litex2_census` 0,
+   `hd_specular_population_recheck` as published), corrected the `exp(x)` reading of the
+   `log2(e)` exclusion (a fog multiply on a wrong lane, 58 of 58), and found that
+   `specular_exponent_chain` matches its `MUL`/`EX2` by register, not lane (1,449 of 13,948
+   chains). That last one is **open**: `renderer.md` (2026-10-12 notes), no code changed.
 
 In order of cost, cheapest first. Step 1 (finding the binding) is done; the
 old step 0 (which alpha channel gates the accumulate) is done too, and
 changed step 1's own cost estimate - see below. What is left is deciding
 whether to spend on wiring it at all, and the two RE leads.
 
-1. **~~Done 2026-10-05~~ - wired; see `docs/rendering/pads.md`, "Wired, 2026-10-05". The multiply this item feared was EXP2 fog (the decoder had dropped the negate bit), `_ne` is bound third beside the lightmap, and the disc's own normal/glow terms are in `mesh.wgsl`. Original-four speed pads: also wired 2026-10-05 (hd-speed-pads), routed by pad material in `build_scene` because their node hashes name no chunk; see pads.md "Wired, 2026-10-05, the four original circuits' speed pads". Still open: the runtime cooldown colour, and which node owns which speed-pad chunk.** Old text follows. Attempted 2026-09-25, stopped before any code change - do not
+1. **~~Done 2026-10-05~~ - wired; see `docs/rendering/pads.md`, "Wired, 2026-10-05". The multiply this item feared was EXP2 fog (the decoder had dropped the negate bit), `_ne` is bound third beside the lightmap, and the disc's own normal/glow terms are in `mesh.wgsl`. Original-four speed pads: also wired 2026-10-05 (hd-speed-pads), routed by pad material in `build_scene` because their node hashes name no chunk; see pads.md "Wired, 2026-10-05, the four original circuits' speed pads". Since: the runtime cooldown colour is wired (2026-10-08) and the chunk ownership measured by position (2026-10-12), see the update sections below.** Old text follows. Attempted 2026-09-25, stopped before any code change - do not
    re-attempt without first reading `docs/rendering/pads.md`'s "Wiring
    attempted and stopped" section.** The question this item's own "read the
    trap before touching it, twice over" text asked - does the `_ne`-gated
@@ -462,16 +457,16 @@ cycle"; `docs/ghidra/functions/ps3-hdfury-eu/pads.md`). The "unmeasured runtime
 state" candidate was the right one: the cycle position and the cooling vector are
 pad-object state the engine copies into the fragment program's constant.
 
-Open, in order:
+Open, in order (updated 2026-10-12, `hd-pad-leftovers`):
 
-1. **A ready pad on a second circuit, and a cooling pad on Vineta K.** Seen: two
-   ready pads (Vineta K, two phases of one cycle) and one cooling pad (Sol 2).
-   Cheapest: `place` with a pose clear of every pad on arrival, so the pad is not
-   collected by the placement (the Sol 2 and the second Vineta captures were).
-2. **The code that carries `pad+0x1b0` into the constant** (material parameter
-   `W_Cycle`, `0xce5c4410`): no `lis 0xce5c` immediate exists, so it is indirect.
-   The wiring rests on the numbers fitting, not on a traced store.
-3. **The cycle's real rate against video**: 3 keys a second is read from
-   `DAT_008b4324`, not timed on frames.
-4. **The `_ne` normal-map lighting terms** of the pad program (the specular chain)
-   are still the renderer's own `pad_normal`, not the program's; unchanged here.
+1. **Closed 2026-10-12: a ready pad on Sol 2 and a cooling pad on Vineta K are seen** and match
+   ours in order and colour class (`docs/rendering/pads.md`, "Cooldown capture"). Left: the
+   cooling constant's value and the cooldown length against video (dump the constant on a
+   `place --settle 0.25 --recheck 0.1` frame; HD's `refresh_time` was not read here).
+2. **The code that carries `pad+0x1b0` into the constant** (`W_Cycle`, `0xce5c4410`): searched
+   statically again, negative (`ghidra/functions/ps3-hdfury-eu/pads.md`, 2026-10-12): not a pad
+   virtual, not a base virtual. Needs a read watchpoint on `pad+0x1b0`.
+3. **The cycle's real rate against video**: 3 keys a second is read from `DAT_008b4324`, not timed.
+4. **The `_ne` normal-map lighting terms** of the pad program are still the renderer's own `pad_normal`.
+5. **Speed-pad chunk ownership: measured by position, closed for drawing** (`pads.md`, 2026-10-12);
+   the engine's hash rule is the disc-wide unresolved-node question, `rcsmodel.md`.

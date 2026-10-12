@@ -818,6 +818,11 @@ materials, 182 speedup materials and stragglers), and a reader that excludes
 every *mentioned* hash from its second pass - as this project's did - draws
 none of them. The node presumably exists for the gameplay trigger and the
 armed/used visual state, both unread.
+**Update 2026-10-12:** on the four original circuits (`talons_junction`, `amphiseum`,
+`modesto_heights`, `tech_de_ra`) the `Speedup Pad` nodes name no chunk, yet each node's
+volume holds one and only one unnamed pad-material chunk's centroid (one to one,
+`hd_speed_pad_owner_ground_truth.rs`); a measured position correspondence, not the
+engine's addressing rule. See `docs/rendering/pads.md`.
 
 **56 of Talon's Junction's prop nodes address chunks the model does not have**,
 and they stay honest absence - open item 6 below has the full sweep (18 of the
