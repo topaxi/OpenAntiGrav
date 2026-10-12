@@ -20,6 +20,17 @@ save states: `emu-restore-state.sh` restores a drivable race in about 10 s, `emu
 - Scripts other than weapon, height, trace, whiteout, lightpoll, mem-poll and xfade-probe still
   `sleep(20)`/`sleep(70)`; the race has no `TTY.log` signal for the end of the countdown.
 
+- 2026-10-12 (`hd-leach-2`), four traps on one machine, none reproduced twice on purpose:
+  `emu-restore-state.sh` with `hd-racebox-talons-venom-weapons-grid` hung at RPCS3's state
+  loader (log stopped at 0.57 s, CPU idle afterwards; the `serve` stage watchdog ended it at
+  240 s), so every boot was a fresh `serve` plus the Racebox route by `rpcs3-drive.py press`;
+  an attached `Session`'s walk dropped every press on `Main Menu` and `Single Player` while
+  `rpcs3-drive.py press` on the same live session landed each one; a client killed while the
+  target was paused (an `emu-run` stall kill) wedged the stub for every later client until a
+  fresh `serve` (twice; a third such kill did not); and a weapon fired right after a
+  `rpcs3_place` teleport ends at once (the LeachBeam: state 6 on the next update, eight of
+  eight), so give the game a few seconds after a placement.
+
 ## Next Steps
 
 1. Wire a restored state into `Session` (`OAG_RPCS3_STATE=<name>` on attach: cross, wait, `restart_race`).

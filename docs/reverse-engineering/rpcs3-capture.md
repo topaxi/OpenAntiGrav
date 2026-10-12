@@ -1146,8 +1146,9 @@ name and the port in your copy before the first boot.
 The `dev_hdd0` every member's private tree copies (`scripts/emu-env.sh`) holds HD's
 autosave `savedata/BCES00664-AUTO-/DATA.BIN`, and it carries `CameraP1 = OPT_FAR`
 (`strings` finds `CameraP1`, `OPT_FAR`). HD's own default is `OPT_CLOSE`
-(`additional_definition.xml` in DATA06), as ours is. So **every HD frame from that profile
-is the Far chase view**: render ours with `--camera-view far` to pair with it. Measured at
+(`additional_definition.xml` in DATA06), as ours is. So **an HD frame from that profile is
+the Far chase view** (the value was read on 2026-10-12; what the file held earlier was not
+read, though the 2026-10-07 bomb match already pinned the Far rig): render ours with `--camera-view far` to pair with it. Measured at
 rest: the eye at (0, 3.0, -11.5) in the body frame against Feisar's Far (0, 3.0, -11.25)
 at the 0.75 scale, see
 [leach-beam-strips.md](../ghidra/functions/ps3-hdfury-eu/leach-beam-strips.md), "hd-leach-2".

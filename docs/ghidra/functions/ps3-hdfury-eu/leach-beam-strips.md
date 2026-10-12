@@ -420,9 +420,11 @@ profile every member's tree copies (`dev_hdd0/.../BCES00664-AUTO-/DATA.BIN`) car
 pos_length="-15.0"` and `ExternalCameraClose pos_height="3.7" pos_length="-11.0"`; at the
 0.75 craft scale, Far is (0, 3.0, -11.25) and Close (0, 2.78, -8.25) in the body frame. A
 frame at rest (7 u/s) solved from its view-projection reads the eye at **(-0.02, 3.0,
--11.5)**, vertical fov 60.5: the Far block. So every earlier HD pair taken from that profile
-(`hd-leach-bright`'s 13.8-15.3 included) shows the Far view, and our HD chase rig is not
-wrong: ours rendered with `--camera-view far` at the same pose frames the hull at the same
+-11.5)**, vertical fov 60.5: the Far block. The profile's value on earlier dates was not
+read (the file was last written 2026-10-12), but the 2026-10-07 bomb match had already
+pinned the Far rig against an original frame, so earlier pairs from the same profile
+(`hd-leach-bright`'s 13.8-15.3 among them) very likely show the Far view too. Our HD chase
+rig is not wrong: ours rendered with `--camera-view far` at the same pose frames the hull at the same
 size (`rest_pair.png`: original, ours Far, ours Close). Frames taken in motion read the eye
 11.2-18.1 back; those mix a frame-time eye with a CPU-time body and are not a measurement.
 **Not measured: HD's Close view on the original** (SELECT did not cycle it in race; the
@@ -446,7 +448,10 @@ lies exactly on the projected samples. Read at player size:
 - **Ruled out as the cause:** the path (pinned), the camera and fov (pinned, measured), the
   width (half-width 1.0 in both, the far line is about 10 px wide in both), and the
   `saturate(0.75 * window_z)` term (our depth range is 0..1 with the near plane at 1, so the
-  term is 0.70-0.75 at every distance, the same as a 0..1 window z on the PS3). The facing
+  term is 0.70-0.75 at every distance, the same as a 0..1 window z on the PS3), and the
+  facing eye (`race.view()` returns the `--camera-pose` override). The target's own engine
+  trails were checked by eye only: on a beam-free frame with rivals ahead they are short
+  red-orange streaks, not a white band, but they were not separated per pixel. The facing
   term `|n . v|` summed over the three fins falls from 1.8 at the anchor to 0.2-0.4 beyond
   30 units on the dumped geometry (`leach3_0`: 1.78 at 12 units, 0.29-0.42 from 40 to 159),
   and it is the original's own program, so by the static reading the original's far part
