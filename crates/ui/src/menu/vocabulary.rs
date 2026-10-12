@@ -233,6 +233,10 @@ pub enum ValueSource {
     /// that disc's ladder; a class whose title is not on this machine is not
     /// offered at all, rather than shown and then unable to load.
     RemixSpeedClasses,
+    /// RACE REMIX's AI DIFFICULTY: the four tiers, plus a `none` option the row
+    /// is pinned to when the chosen class has no controller
+    /// (`oag_ai::coverage`), labelled with the reason.
+    RemixAiDifficulty,
     /// [`Self::RaceVariant`]'s sibling for RACE REMIX's craft-side `TEAM` -
     /// scoped to whichever title `CRAFT TITLE` picked rather than to the
     /// title this process booted from.
@@ -300,6 +304,7 @@ impl ValueSource {
             Self::RemixTeams => "remix_teams",
             Self::SpeedClasses => "speed_classes",
             Self::RemixSpeedClasses => "remix_speed_classes",
+            Self::RemixAiDifficulty => "remix_ai_difficulty",
             Self::RaceVariant => "race_variant",
             Self::RemixVariant => "remix_variant",
             Self::Pilots => "pilots",
@@ -330,6 +335,7 @@ impl ValueSource {
             "remix_teams" => Some(Self::RemixTeams),
             "speed_classes" => Some(Self::SpeedClasses),
             "remix_speed_classes" => Some(Self::RemixSpeedClasses),
+            "remix_ai_difficulty" => Some(Self::RemixAiDifficulty),
             "race_variant" => Some(Self::RaceVariant),
             "remix_variant" => Some(Self::RemixVariant),
             "pilots" => Some(Self::Pilots),

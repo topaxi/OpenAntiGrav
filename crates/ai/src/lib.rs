@@ -65,6 +65,7 @@
 //! `docs/architecture/determinism.md` forbids (reasoning atop `noise.rs`).
 
 pub mod branch;
+pub mod coverage;
 mod difficulty;
 mod driver;
 mod field;

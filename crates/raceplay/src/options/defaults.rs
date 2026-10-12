@@ -40,6 +40,7 @@ impl Default for Options {
             eliminator_kill_target: None,
             laps_override: None,
             weapons_override: None,
+            no_driver_for_class: false,
             zone_stage: None,
             ribbon: false,
             collision: false,

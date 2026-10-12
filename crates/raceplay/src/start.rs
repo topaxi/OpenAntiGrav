@@ -27,6 +27,7 @@ impl Race {
             difficulty,
             finished_thrust,
             opponents,
+            no_opponents,
             trail_sparks,
             seed,
             zone,
@@ -168,16 +169,20 @@ impl Race {
         // the `--opponents` escape hatch that measurement's own ground-truth
         // tests use to force it. Read once, because both the player's own
         // pose below and the opponent loop further down have to agree on it.
-        let full_grid = start_position.is_some() && (mode.has_opponents() || opponents);
+        let full_grid =
+            start_position.is_some() && !no_opponents && (mode.has_opponents() || opponents);
         // How many of the grid's other seven slots are actually driven.
         // Every opponent-fielding mode except Head2Head fields all seven;
         // Head2Head fields exactly one - see [`Mode::opponent_count`]'s own
         // doc for the measurement. The `--opponents` escape hatch always
         // asks for the full seven, matching what it did before this field
         // existed.
-        let field_opponents = mode
-            .opponent_count()
-            .max(if opponents { GRID_SLOTS - 1 } else { 0 });
+        let field_opponents = if no_opponents {
+            0
+        } else {
+            mode.opponent_count()
+                .max(if opponents { GRID_SLOTS - 1 } else { 0 })
+        };
         // The override wins outright rather than being an offset from the grid
         // slot: it exists to put the craft at a position read off somewhere
         // else, and anything added to that would make the two disagree.

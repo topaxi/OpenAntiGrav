@@ -370,3 +370,28 @@ fn the_super_phantom_field_runs_square_clean() {
         );
     }
 }
+
+/// A RACE REMIX style race on Super Phantom, which this project's driver is
+/// not verified on, fields no opponents; the same race on Phantom fields all
+/// seven. (`oag_ai::coverage`; the campaign's own controller is separate.)
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_super_phantom_race_box_race_runs_without_opponents() {
+    let Some(source) = source() else {
+        return;
+    };
+    let ship_count = |class: &str| {
+        let options = oag_raceplay::Options {
+            source: source.display().to_string(),
+            mode: oag_race::Mode::SingleRace,
+            class: class.to_string(),
+            no_driver_for_class: !oag_ai::coverage::project_driver_covers(class),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        };
+        let loaded = oag_raceplay::load(&options).expect("loads");
+        oag_raceplay::Race::start(loaded.setup).sim.world.ship_count
+    };
+    assert_eq!(ship_count("PHANTOM"), 8);
+    assert_eq!(ship_count("SUPERPHANTOM"), 1);
+}

@@ -246,6 +246,21 @@ and the craft title, rather than racing a default team that cannot load it.
 Pinned by `super_phantom_hides_the_hd_teams_and_vector_hides_every_2048_team` and
 `a_craft_title_whose_ladder_lacks_the_class_offers_no_team`.
 
+### A class no controller covers races without opponents (2026-10-12)
+
+Maintainer rule: AI opponents exist only for a class something defines how to
+fly. This project's driver covers the classes its sweeps verify
+(`oag_ai::coverage::PROJECT_DRIVER_CLASSES`: Pulse's four and Pure's `VECTOR`);
+the original's driver covers the classes its title's AI tables author, in the
+campaign only. The set is data on the controller, so a later pilot-file
+`classes` key or a new sweep widens it in one place. RACE REMIX on `SUPERPHANTOM`
+therefore runs with no opponents, and its AI DIFFICULTY row is pinned to
+`NO OPPONENTS: NO DRIVER FOR THIS CLASS` (`OAG_REMIX_NO_DRIVER`) while that
+class is chosen; the `pinned` class list in `menu.toml` is held equal to the
+code's set by `the_remix_ai_row_is_pinned_for_exactly_the_uncovered_classes`.
+`Options::no_driver_for_class` carries it to `Race::start`, which fields an
+empty grid. Campaign launches clear it.
+
 ## The format
 
 A **flat list of pages keyed by id**, not a nested tree. Three consequences, all

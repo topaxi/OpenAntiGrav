@@ -264,6 +264,25 @@ impl Session {
         )
     }
 
+    /// RACE REMIX's AI DIFFICULTY options: the four tiers and a `none` option
+    /// the row is pinned to while the chosen class has no controller
+    /// (`oag_ai::coverage`), labelled with the reason.
+    pub(super) fn remix_ai_difficulty(&self) -> Vec<menu::Choice> {
+        let table = strings::project_table(self.settings.language.as_deref());
+        let mut choices: Vec<menu::Choice> = ["novice", "skilled", "elite", "ace"]
+            .into_iter()
+            .map(menu::Choice::plain)
+            .collect();
+        choices.push(menu::Choice::labelled(
+            "none",
+            table
+                .get("OAG_REMIX_NO_DRIVER")
+                .unwrap_or("NO OPPONENTS: NO DRIVER FOR THIS CLASS")
+                .to_string(),
+        ));
+        choices
+    }
+
     /// Which real candidate backs `remix.craft_title` -
     /// [`resolve_craft_backing`]'s own doc comment for the rule.
     fn craft_backing(&self) -> Option<&oag_game::launcher::Candidate> {
@@ -383,6 +402,10 @@ impl Session {
         if !class.is_empty() {
             race_options.class = class.to_string();
         }
+        // A class no controller covers races without opponents; the AI
+        // DIFFICULTY row says so (`Session::remix_ai_difficulty`).
+        race_options.no_driver_for_class =
+            !oag_ai::coverage::project_driver_covers(&race_options.class);
         if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
             race_options.difficulty = difficulty;
         }

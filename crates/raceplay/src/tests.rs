@@ -167,6 +167,7 @@ fn setup(handling: Handling) -> Setup {
         difficulty: oag_ai::Difficulty::default(),
         class: "VENOM".to_string(),
         opponents: false,
+        no_opponents: false,
         seed: SEED,
         // A time trial does not read it, and these tests never run a Zone
         // race: the numbers are the disc's and there is no disc here.

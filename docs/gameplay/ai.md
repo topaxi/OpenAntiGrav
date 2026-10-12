@@ -40,6 +40,16 @@ commands in [evidence](#evidence). Where the *shape* of a table matters to an
 argument below it is described in words - "the spread is a few points", "several
 times larger" - because the finding is the coupling, not the number.
 
+## Which classes a controller covers (2026-10-12)
+
+AI opponents exist only for a class something defines how to fly. This
+project's driver is verified on VENOM, FLASH, RAPIER, PHANTOM and Pure's VECTOR
+(`oag_ai::coverage::PROJECT_DRIVER_CLASSES`); the original's driver on the
+classes its title's own AI tables author (2048's SUPERPHANTOM included, campaign
+only). A race on any other class - RACE REMIX on Super Phantom - runs with no
+opponents and its setup screen says why ([menus.md](../architecture/menus.md)).
+The set is data on the controller, not a title branch.
+
 ## Read this first: what is recovered and what is ours
 
 | Piece | Status | Confidence |
