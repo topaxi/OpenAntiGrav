@@ -227,6 +227,9 @@ impl Audio {
             ))
         });
         let len = worker.soundtrack_len().filter(|&len| len > 0);
+        if let Some(len) = len {
+            self.race_tracks = len;
+        }
         self.race_context = Some((discs.clone(), choice, cache_dir.to_path_buf(), len));
         self.apply_fetched_race_track(index, fetched, seek);
         if self.race_voice.is_some() {
@@ -315,10 +318,14 @@ impl Audio {
             return 0;
         };
         if let Some(len) = *known {
+            self.race_tracks = len;
             return len;
         }
         let len = Self::booted_soundtrack_len(discs);
         *known = (len > 0).then_some(len);
+        if len > 0 {
+            self.race_tracks = len;
+        }
         len
     }
 

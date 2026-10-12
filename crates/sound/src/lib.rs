@@ -46,9 +46,11 @@ pub mod settings;
 pub mod sfx;
 
 mod race_music;
+mod resume;
 use library::{Library, NoLibrary, listing, load_entry, load_front_end};
 pub use race_music::MusicFetchWorker;
 use race_music::{PendingSwitch, locate};
+pub use resume::{RaceMusicState, Unusable};
 
 /// A bus volume, as a percentage of unattenuated.
 ///
@@ -449,6 +451,9 @@ pub struct Audio {
     /// Where the current race track was cut off, in the track's seconds
     /// ([`oag_audio::Mixer::seek`]'s unit), so the next race resumes.
     race_position: f64,
+    /// How many tracks the booted soundtrack lists, kept for [`Audio::race_music_state`]
+    /// across a pause (which drops [`Self::race_context`]). `0` until known.
+    race_tracks: usize,
     /// The one race track presently decoded, replaced the moment the playlist
     /// advances or [`MusicSource`] moves it. Unlike [`Self::held`] (fixed
     /// index), this makes one pause/resume on the same track free, bounded at
@@ -539,6 +544,7 @@ impl std::fmt::Debug for Audio {
             .field("race_from", &self.race_from)
             .field("race_index", &self.race_index)
             .field("race_position", &self.race_position)
+            .field("race_tracks", &self.race_tracks)
             .field("race_cache", &self.race_cache.is_some())
             .field("menu_sound", &self.menu_sound.is_some())
             .field("race_context", &self.race_context.is_some())
@@ -599,6 +605,7 @@ impl Audio {
             race_from: None,
             race_index: None,
             race_position: 0.0,
+            race_tracks: 0,
             race_cache: None,
             menu_sound: None,
             race_context: None,
