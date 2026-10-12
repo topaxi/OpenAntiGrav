@@ -390,7 +390,7 @@ pub fn capture(
     race.set_sight_screen(hud.space.size);
     race.set_sight_dialect(hud.art.sights);
     race.watch_laps(
-        hud.art.message_slots,
+        &hud,
         options
             .previous_best
             .as_ref()

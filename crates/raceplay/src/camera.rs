@@ -260,12 +260,21 @@ impl Race {
     /// Turns on the lap-crossing lines (`IG_HUD_PLAP`, `IG_HUD_NEWLAP_REC`,
     /// `IG_HUD_FIN_LAP`) and the lap-line time gap, comparing laps against `stored_best_ticks`: the best
     /// lap on this circuit, mode and class as it stood at load. Off for a title
-    /// whose HUD has no message slots (`oag_title::HudArt::message_slots`), so
-    /// no line queues and no `MESSAGE` cue plays for words nothing draws.
-    pub fn watch_laps(&mut self, message_slots: bool, stored_best_ticks: Option<u32>) {
-        self.view.lap_watch =
-            message_slots.then(|| super::lap_messages::LapWatch::new(stored_best_ticks));
-        self.view.split_gap = message_slots.then(super::split_gap::SplitGap::default);
+    /// whose HUD has no message slots (`oag_title::HudArt::message_slots`), the
+    /// lines also off where the title's table lacks their ids, so no line
+    /// queues and no `MESSAGE` cue plays for words nothing draws.
+    pub fn watch_laps(&mut self, hud: &oag_hud::Assets, stored_best_ticks: Option<u32>) {
+        let slots = hud.art.message_slots;
+        // A title whose table lacks the ids would raise lines nothing draws and
+        // still play the `MESSAGE` cue (Pure authors them under other keys).
+        let lines = slots
+            && hud.context().is_some_and(|cx| {
+                super::lap_messages::IDS
+                    .iter()
+                    .all(|id| cx.strings.get(id).is_some())
+            });
+        self.view.lap_watch = lines.then(|| super::lap_messages::LapWatch::new(stored_best_ticks));
+        self.view.split_gap = slots.then(super::split_gap::SplitGap::default);
     }
 
     /// Sets the HUD line that stays up for the rest of the race - the best

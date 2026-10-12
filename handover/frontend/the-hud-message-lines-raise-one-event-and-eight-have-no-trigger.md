@@ -25,10 +25,21 @@ raises "<Tier> medal awarded" through them the first time a tier is reached
   best medal for the rest of the race (`oag_game::medal_watch`, one function
   for the window and the headless capture; `--campaign-cell` reproduces it).
   Open: a live PPSSPP frame to confirm or kill the "no mid-race medal" reading.
-- **The eight events with no trigger**: `IG_HUD_PLAP`, `NEWLAP_REC`, `FIN_LAP`,
-  `CONT_ELIM`, `PERF_ZONE`, `PERF_BOOST`, `NEW_ZONE_RECORD`, `NEW_SCORE_RECORD`,
-  and the `0x200` queue at `DAT_08b32d40`. The flag word writers
-  (`*(hud+0x3c)+0xe0`) are the thing to find.
+- ~~**The eight events with no trigger**~~ **read 2026-10-12**
+  ([hud-message-triggers.md](../../docs/ghidra/functions/psp-pulse-usa/hud-message-triggers.md)):
+  `IG_HUD_PLAP`, `NEWLAP_REC` and `FIN_LAP` are raised by `Craft_UpdateLapProgress`
+  and are **wired** (`oag_raceplay::lap_messages`). Still open: `CONT_ELIM`'s
+  writer is `Ship_Damage` (Elimination, weapon kill) but the attacker byte
+  `+0x48` that picks green or red is read at 60 - wire it once that is
+  settled; `PERF_ZONE`, `PERF_BOOST`, `NEW_ZONE_RECORD`, `NEW_SCORE_RECORD`
+  and the `0x200` queue have **no setter in Pulse's race path** (a census, 75),
+  the queue being the multiplayer kill feed.
+- **A live PPSSPP frame of the lap lines and the gap.** The law is static (slot
+  law, gap flash phases and colours, the whole-second leader stamp); a capture of
+  a lap crossing with opponents about would confirm the 5 Hz flash and the 3.5 s
+  hold. The gap's `+0x10 == 1` stop rule reads `PLAYER_HUD+0x10` as the place.
+- **HD's own lap-line routine** is unread (wired by inheritance); Pure keeps
+  its strings under other keys, so its three lines are off and only the gap runs.
 - **Pure's phrase.** Pure authors the same four widgets and ships `HUD_Perfect
   Zone!`/`HUD_New Zone Record` and `zone_bronze/silver/gold` voice lines: the
   one lead that Pure announces a medal in Zone. `message_slots` is on (Pulse's
@@ -47,7 +58,8 @@ raises "<Tier> medal awarded" through them the first time a tier is reached
 
 ## Next Steps
 
-1. Find the writers of `*(hud+0x3c)+0xe0` (xrefs on `+0xe0` stores in
-   `PlayerStatus_Update` and the lap code) and wire `PLAP`/`NEWLAP_REC`/`FIN_LAP`.
-2. ~~Route `just_shown` to the `MESSAGE` cue.~~ Done.
-3. Read Pure's HUD message routine and turn `message_slots` on there.
+1. Read `Ship_Damage`'s attacker byte `+0x48` and wire `CONT_ELIM` in Elimination.
+2. ~~Find the writers of `*(hud+0x3c)+0xe0` and wire `PLAP`/`NEWLAP_REC`/`FIN_LAP`.~~ Done 2026-10-12.
+3. ~~Route `just_shown` to the `MESSAGE` cue.~~ Done.
+4. Read Pure's HUD message routine and turn `message_slots` on there.
+5. A live PPSSPP frame of a lap crossing.

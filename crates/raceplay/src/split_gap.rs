@@ -131,13 +131,9 @@ impl super::Race {
                 }
             }
         }
-        split.display.advance(
-            self.sim.dt,
-            now,
-            events,
-            live,
-            u32::from(places[player]),
-        );
+        split
+            .display
+            .advance(self.sim.dt, now, events, live, u32::from(places[player]));
     }
 }
 

@@ -20,6 +20,10 @@ Time Trial layout; the other layouts and Pure's three were not all
 counted line by line). `docs/ui/hud.md` had them as "debug, inferred from
 the names, confidence 40".
 
+**2026-10-12:** the writers of the flag word are now read: see
+[hud-message-triggers.md](hud-message-triggers.md) (three lap lines wired, `CONT_ELIM`
+located, the other four unset in Pulse's race path).
+
 ## The flag bits - and no medal among them
 
 | Bit | String id | Good byte |

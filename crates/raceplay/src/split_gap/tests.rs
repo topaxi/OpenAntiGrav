@@ -15,7 +15,10 @@ fn the_player_over_first_then_an_opponent_makes_a_green_gap() {
     assert_eq!(led.led_at, Some(65.0));
     let (secs, ahead) = table.cross(68.2, over(2, false)).gap.expect("a gap");
     assert!(ahead);
-    assert!((secs - 3.2).abs() < 1e-4, "against the whole second: {secs}");
+    assert!(
+        (secs - 3.2).abs() < 1e-4,
+        "against the whole second: {secs}"
+    );
     assert_eq!(table.cross(70.0, over(2, false)).gap, None);
 }
 

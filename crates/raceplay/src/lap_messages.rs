@@ -8,7 +8,9 @@
 //!
 //! Render-side: nothing here is in the hashed world.
 
-/// Message ids, in the order `Hud_UpdateMessages` drains the bits (`1`, `2`, `4`).
+/// The three ids, in the order `Hud_UpdateMessages` drains the bits (`1`, `2`, `4`).
+pub const IDS: [&str; 3] = [PERFECT_LAP, NEW_LAP_RECORD, FINAL_LAP];
+
 const PERFECT_LAP: &str = "IG_HUD_PLAP";
 const NEW_LAP_RECORD: &str = "IG_HUD_NEWLAP_REC";
 const FINAL_LAP: &str = "IG_HUD_FIN_LAP";

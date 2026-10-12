@@ -604,10 +604,7 @@ impl Stage {
         race.set_sight_fov(settings.graphics.fov);
         race.set_sight_screen(hud.space.size);
         race.set_sight_dialect(hud.art.sights);
-        race.watch_laps(
-            hud.art.message_slots,
-            standing.and_then(|record| record.best_lap_ticks),
-        );
+        race.watch_laps(&hud, standing.and_then(|record| record.best_lap_ticks));
         // Applied before the first tick, but unlike the kick this one is also
         // set again whenever the cycle button or the menu row moves it - see
         // `Session::cycle_camera_view`.

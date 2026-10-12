@@ -46,9 +46,17 @@ fn the_final_lap_line_comes_last_and_the_finish_says_nothing() {
 #[test]
 fn a_record_needs_a_stored_one_to_beat_and_the_best_lap_of_the_race() {
     let mut none = LapWatch::new(None);
-    assert!(!none.observe(true, lap(2, 100, 100)).contains(&"IG_HUD_NEWLAP_REC"));
+    assert!(
+        !none
+            .observe(true, lap(2, 100, 100))
+            .contains(&"IG_HUD_NEWLAP_REC")
+    );
     let mut slower = LapWatch::new(Some(3000));
-    assert!(!slower.observe(true, lap(2, 3600, 3600)).contains(&"IG_HUD_NEWLAP_REC"));
+    assert!(
+        !slower
+            .observe(true, lap(2, 3600, 3600))
+            .contains(&"IG_HUD_NEWLAP_REC")
+    );
     let mut worse_than_race_best = LapWatch::new(Some(4000));
     assert!(
         !worse_than_race_best
