@@ -541,9 +541,11 @@ pub struct ShipState {
     /// Where the craft is in the destroyed sequence, the original's `entity+0x8c`; only
     /// the three states the energy pool reaches ([`crate::damage::CraftState`]).
     pub craft_state: crate::damage::CraftState,
-    /// Seconds left on the current craft state, `entity+0x874`. Only
-    /// [`crate::damage::CraftState::Destroyed`] runs it down; zero otherwise, which keeps
-    /// it out of the hash on a race nobody dies in.
+    /// Seconds left on the current craft state, `entity+0x874`. Runs down in
+    /// [`crate::damage::CraftState::Destroyed`] and then in
+    /// [`crate::damage::CraftState::Eliminated`] (state 5's dwell, which ends craft contact,
+    /// [`crate::damage::solid_to_craft`]); zero while racing, which keeps it out of the hash
+    /// on a race nobody dies in.
     pub state_timer: f32,
     /// Seconds left on a fired Turbo pickup.
     ///

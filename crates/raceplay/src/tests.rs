@@ -55,6 +55,7 @@ mod thrust_chase;
 mod title_effects;
 mod trail_hits;
 mod weapons;
+mod wreck_contact;
 mod wreck_finished;
 mod wreck_fx;
 mod wreck_voice;
