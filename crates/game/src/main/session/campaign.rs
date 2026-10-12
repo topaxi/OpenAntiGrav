@@ -378,9 +378,12 @@ impl Session {
         // re-run AI setup between legs today, so a multi-track cell races
         // every leg at the position its first track's own curve gives -
         // chosen, not measured, on the multi-leg case only.
+        // `race_options` is out of `self` until just below, so the source is
+        // handed over rather than read back off `self` (which read `None`
+        // here and so never resolved a cell's skill, until 2026-10-12).
         let ai_skill_scale = difficulty.and_then(|rung| {
             let location = shell.track(mode, &first_track)?.location.clone();
-            self.resolve_campaign_ai_skill_scale(&cell, rung, &location)
+            self.resolve_campaign_ai_skill_scale(&cell, rung, &location, &race_options.source)
         });
         self.race_options = Some(race_options);
         self.campaign_cell = Some(cell);
@@ -440,10 +443,10 @@ impl Session {
         cell: &oag_tables::race_campaign::Cell,
         rung: oag_tables::race_campaign::Difficulty,
         location: &str,
+        source: &str,
     ) -> Option<f32> {
-        let options = self.race_options.as_ref()?;
         let entry = format!(r"{location}\stats.xml");
-        let spec = format!("{}:{}", options.source, oag_pulse::archives::FEDATA);
+        let spec = format!("{source}:{}", oag_pulse::archives::FEDATA);
         let blob = match oag_assets::Archive::open(&spec) {
             Ok(mut archive) => archive.read_name(&entry).ok(),
             // HD keeps each circuit's `stats.xml` in its own archives
@@ -456,7 +459,7 @@ impl Session {
             // there only for a title whose campaign flies the original's own
             // opponent, so no other title's campaign tuning moves.
             Err(_) if self.shell.as_ref()?.title.race.original_opponent => {
-                oag_assets::Archives::open(&options.source, self.shell.as_ref()?.title)
+                oag_assets::Archives::open(source, self.shell.as_ref()?.title)
                     .ok()?
                     .read_name(&entry)
                     .ok()
