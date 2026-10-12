@@ -492,3 +492,82 @@ fn a_lower_level_holds_its_share_of_the_plans_pace_on_a_straight() {
     assert_eq!(novice.thrust, 0.0);
     assert!(novice.airbrake_left > 0.0);
 }
+
+/// `f` on the stadium course `build_on` drives.
+fn on_course<T>(line: &Line, f: impl FnOnce(&Course<'_, Plane>) -> T) -> T {
+    let respawn = |index: usize| placed(line, index);
+    let course = Course {
+        line,
+        samples: &[],
+        raycaster: &Plane,
+        env: Environment::default(),
+        dt: 1.0 / 60.0,
+        off_line: OFF_LINE,
+        respawn: &respawn,
+        reset: &|_, _, _| false,
+        max_airborne: f32::INFINITY,
+        pad: &|_, _| None,
+    };
+    f(&course)
+}
+
+/// The fixture's hull, turning at `share` of its rate.
+fn slower_turning(line: &Line, share: f32) -> Craft {
+    let mut craft = craft(line);
+    craft.handling.turning.amount *= share;
+    craft
+}
+
+#[test]
+fn a_plan_adapted_to_its_own_hull_is_the_same_plan() {
+    let line = tight();
+    let (plan, _) = build_on(&line);
+    let (adapted, report) = on_course(&line, |course| {
+        plan.adapt(course, &craft(&line), &tuning(), STEP_BUDGET)
+    });
+    assert_eq!(report.passes, 0, "{report:?}");
+    assert_eq!(report.verify_failures, 0, "{report:?}");
+    assert_eq!(adapted, plan);
+}
+
+#[test]
+fn a_slower_turning_hull_adapts_the_plan_to_a_clean_lap() {
+    let line = tight();
+    let (plan, _) = build_on(&line);
+    let slow = slower_turning(&line, 0.6);
+    let yaw = crate::hull_yaw_ceiling(&slow.handling, &slow.start.body);
+    // The premise: the plan as learned puts the slower hull off its line.
+    let as_learned = on_course(&line, |course| {
+        let mut report = Report::default();
+        plan.clone()
+            .verify(course, &slow, &tuning(), yaw, &mut report, 1.0);
+        report
+    });
+    assert!(as_learned.verify_failures > 0, "{as_learned:?}");
+    let (adapted, report) = on_course(&line, |course| {
+        plan.adapt(course, &slow, &tuning(), STEP_BUDGET)
+    });
+    assert_eq!(report.verify_failures, 0, "{report:?}");
+    assert_eq!(report.verify_respawns, 0, "{report:?}");
+    assert_eq!(adapted.learned_yaw(), Some(yaw));
+    let total = |plan: &SpeedPlan| {
+        (0..plan.len())
+            .map(|i| plan.ceiling(i).min(UNLIMITED))
+            .sum::<f32>()
+    };
+    assert!(
+        total(&adapted) < total(&plan),
+        "nothing was lowered for the slower hull"
+    );
+}
+
+#[test]
+fn a_slower_turning_hull_follows_a_plan_at_the_ratio_of_the_yaw_ceilings() {
+    let line = tight();
+    let (plan, _) = build_on(&line);
+    let learned = plan.learned_yaw().expect("a built plan knows its hull");
+    assert_eq!(plan.share_for(Some(learned * 0.5)), 0.5);
+    assert_eq!(plan.share_for(Some(learned * 2.0)), 1.0);
+    assert_eq!(plan.share_for(None), 1.0);
+    assert_eq!(SpeedPlan::unlimited(&line).share_for(Some(0.1)), 1.0);
+}

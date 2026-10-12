@@ -148,12 +148,6 @@ pub struct Driver {
     pub roll_decided: bool,
     /// Which line it is on and what it decided at the last fork: [`crate::branch`].
     pub branching: crate::branch::Branching,
-    /// How much slower than the speed plan this craft's hull must drive it, in
-    /// thousandths: the plan is learned on one craft and the rest of the grid
-    /// follows it at `1 - plan_deficit / 1000` of its speed. Zero is the plan
-    /// as learned. Integer for [`Self::provocation`]'s reason, and derived from
-    /// the handling like it, so not hashed. **Chosen, not measured.**
-    pub plan_deficit: u16,
 }
 
 /// How much of the line either side of the last index a driver looks at.
@@ -314,12 +308,14 @@ impl Driver {
             Some(plan) => {
                 let run_up = line.takeoff_within(index, planned::RUN_UP_REACH);
                 let target = planned::target(plan, index, speed, tuning, &personality, run_up);
-                // The share a hull can carry applies to corners, not to a run-up:
-                // the speed a gap needs is the gap's, whatever the hull turns at.
+                // A plan learned on a quicker-turning hull is followed at the
+                // share this one can carry (`SpeedPlan::share_for`), in corners
+                // only: the speed a gap needs is the gap's, whatever the hull
+                // turns at.
                 if run_up {
                     target
                 } else {
-                    target * (1.0 - f32::from(self.plan_deficit) / 1000.0)
+                    target * plan.share_for(ctx.yaw_ceiling)
                 }
             }
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),

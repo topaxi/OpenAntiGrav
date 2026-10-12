@@ -220,8 +220,6 @@ fn write_driver(hasher: &mut StateHasher, driver: &oag_ai::Driver) {
         reflex,
         roll_decided,
         branching,
-        // Derived from the handling, which is not hashed either.
-        plan_deficit: _,
     } = driver;
 
     // **Hashed, unlike `handling`.** A driver's place on the racing line is the

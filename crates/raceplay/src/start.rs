@@ -448,6 +448,8 @@ impl Race {
                 // `Race::field_speed_plan`.
                 speed_plan: None,
                 plan_reference: None,
+                hull_plans: Vec::new(),
+                ship_plan: [None; oag_gameplay::MAX_SHIPS],
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
@@ -697,7 +699,8 @@ impl Race {
         // original never holds anything in the pickup slot through the
         // countdown; granting it at tick 0 put a HUD icon on screen during
         // those 272 ticks that the disc never draws.
-        race.sim.speed_plan = race.field_speed_plan();
+        let (reference, own) = race.field_speed_plan();
+        race.sim.speed_plan = reference;
         for (route, plan) in race
             .route_speed_plans()
             .into_iter()
@@ -706,6 +709,7 @@ impl Race {
         {
             race.sim.routes[route].plan = plan;
         }
+        race.adapt_hull_plans(own);
         race
     }
 }
