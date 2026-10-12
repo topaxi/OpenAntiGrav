@@ -66,6 +66,7 @@ impl Session {
             }
         };
         self.pending = None;
+        self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
         self.shell = Some(prepared.shell);

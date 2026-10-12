@@ -261,6 +261,43 @@ code's set by `the_remix_ai_row_is_pinned_for_exactly_the_uncovered_classes`.
 `Options::no_driver_for_class` carries it to `Race::start`, which fields an
 empty grid. Campaign launches clear it.
 
+## RACE REMIX: CUSTOM tracks
+
+TRACK TITLE offers **CUSTOM** (`OAG_REMIX_CUSTOM`) after the titles this machine can open, whenever
+the track directories hold at least one file; none found, no entry. Choosing it fills TRACK with those
+files (`oag_game::custom_tracks`, drawn the same by the live session and `--menu-page remix`). The race
+is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--unity-track` flies it on
+`--craft-source`; RACEBOX is unchanged.
+
+- **Where it looks**: `oag_source::unity::tracks_in`, the lister `--unity-track` resolves names with:
+  per base (`$OAG_UNITY`, `data/unity`, beside the program, `<data dir>/oag/unity`) the files in
+  `tracks/`, and the same one and two directories down (Steam's `<item>/<name>.wtrk`, and a base that
+  holds the whole `473770` directory). `.wtrk` and `*.track.toml` (own format, `.glb` beside it).
+- **A row** is `NAME (WORKSHOP)` or `NAME (TRACK FILE)`, upper case and cut with `..` to the value
+  column's width on Pulse and Pure (28 characters; HD's value boxes are about 20 wide, so a long name there runs past its box's right edge over nothing). An author is printed `BY AUTHOR` when a file
+  names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and
+  description, the author is a Steam account), so none is shown. There is no preview yet.
+- **Every file is read as a race reads it** (`oag_raceplay::foreign::survey`), on a thread
+  (`oag_thread::Task`): the 32 Workshop items here take about 22 s in a debug build. Until it is done
+  the rows are the file names, dimmed, reason "still checking this file", and START refuses them.
+- **A file that will not load is listed, never hidden.** `menu::Choice::unusable(reason)` marks an
+  option: the row draws its value dimmed, a `!` marker and the reason (`not a track file`, or a short
+  form of the loader's error) in the note line under the rows - the line a `Warning` uses, kept clear
+  of the list by `Menu::reserves_unavailable_note` joining `reserve_note` at `visible_rows`. Not
+  `disabled_by`: that row refuses to step, and the player could never leave the broken option. START on
+  a broken pick logs the reason and does nothing, and never races another track in its place.
+- **Launch** is `launch_remix`'s own path with `custom_tracks::apply`: `foreign_track = Some(file)`,
+  `track` and `craft_source` cleared. That is what `--unity-track`/`--track-file` set
+  (`Pending::race_options`), so both routes build the same race: the same per-tick world hash for
+  Lion's Den, asserted in `custom_tracks::tests::disc`. A command-line `--unity-track` is put back after
+  the launch, so a later RACE page launch still races it.
+- **Opponents** fly this project's driver. A track whose AI line does not read cannot load at all (the
+  spline is the track), so it is listed unusable rather than raced without opponents; the class rule
+  that keeps the AI to classes the driver covers is the SPEED CLASS row's, not this one's.
+- **MODE Zone** with CUSTOM: START logs "a custom track has no Zone circuit" and stays on the page (the loader refuses a foreign Zone race too).
+- `remix.track` stores the file's path (known before the file is read, unique, survives a restart);
+  moved or deleted, the row falls back to the first track.
+
 ## The format
 
 A **flat list of pages keyed by id**, not a nested tree. Three consequences, all

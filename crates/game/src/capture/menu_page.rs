@@ -150,6 +150,9 @@ pub(super) fn menu_page(
 
     let mut model = oag_ui::menu::Menu::new(definition);
     race_sources::supply(&mut model, title, tracks, teams, race_setup, strings);
+    if page == "remix" {
+        remix_sources::supply(&mut model, title, tracks, teams, settings, strings);
+    }
     model.supply(
         oag_ui::menu::ValueSource::Languages,
         &languages
@@ -295,7 +298,8 @@ pub(super) fn menu_page(
     // played one does rather than where a default happened to put it - the
     // AI PILOTS page's own reservation included, off the page just opened
     // rather than a live `AXIS` value. See `pilots::page_reserves_axis_preview`.
-    let reserve_note = oag_raceplay::pilots::page_reserves_axis_preview(model.page());
+    let reserve_note = oag_raceplay::pilots::page_reserves_axis_preview(model.page())
+        || model.reserves_unavailable_note();
     model.set_visible_rows(oag_ui::menu::visible_rows(skin, frame, reserve_note));
     // The file's own table, not the built-in default: a settings file that
     // rebound a key should show that key here too. See
@@ -955,6 +959,7 @@ pub(super) fn picker_stills(
 // `scripts/check-file-size.py`'s separate 1,000-line cap on the file
 // itself, and moving the tests out is the same fix either cap asks for.
 mod race_sources;
+mod remix_sources;
 mod track_entries;
 
 #[cfg(test)]

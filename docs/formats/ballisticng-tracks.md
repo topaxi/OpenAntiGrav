@@ -171,6 +171,15 @@ Flight stalls at lap 1 with 66 respawns. The craft crosses Lion's Den's two jump
 rescued: nothing here models the original's jump pads. **Nothing was tuned to make any
 of them lap.**
 
+## How to race one
+
+1. From a checkout with the Workshop content linked at `data/unity/workshop-473770`: RACE REMIX, TRACK
+   TITLE `CUSTOM`, TRACK `<name> (WORKSHOP)`, CRAFT TITLE the host whose ship and physics to use, START.
+   The scan reads every item (about 22 s in a debug build) and lists a file that will not load dimmed with
+   the reason. See [menus.md](../architecture/menus.md#race-remix-custom-tracks).
+2. Or `oag-game --unity-track "<name>"` (a path, or a name matched against the same list), `--race` to skip
+   the front end. Both routes build the same race.
+
 ## Not covered
 
 Ship classes (`CustomShipStorage` and friends), `TrackPad` and the `Mod*Zone`

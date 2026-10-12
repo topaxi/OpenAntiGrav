@@ -17,6 +17,7 @@
 pub mod choice;
 mod frame;
 mod map;
+pub mod survey;
 
 use std::path::Path;
 

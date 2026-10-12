@@ -736,7 +736,8 @@ impl MenuStage {
         // what lets `rows::draw` read it straight off `Menu::visible_rows`
         // instead of recomputing a second, possibly-disagreeing answer of
         // its own - see that method's doc.
-        let reserve_note = pilots::page_reserves_axis_preview(self.menu.page());
+        let reserve_note = pilots::page_reserves_axis_preview(self.menu.page())
+            || self.menu.reserves_unavailable_note();
         self.menu
             .set_visible_rows(menu::visible_rows(&self.skin, &self.frame, reserve_note));
         let arriving = menu::draw_list(
