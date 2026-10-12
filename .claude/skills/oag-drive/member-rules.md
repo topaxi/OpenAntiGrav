@@ -148,10 +148,12 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   **The gate may sit for several minutes before it starts** because another
   member holds the lock. That is correct, not a hang. Wait it out and never
   fall back to running the gate outside the lock.
-- **Run `git merge main` right before your final gate**, and again if the
-  lead tells you main moved. A gate on a stale base proves nothing about the
-  merge; a lane once gated without the engine-sound change that
-  touched the same `race::load`, and the lead had to re-gate the combination.
+- **Gate your branch as it is; do not merge `main` into it before the gate.**
+  The lead merges, runs `cargo check` and gates the merged batch, so a
+  member re-merging and re-gating every time `main` moved ran the same suite
+  several times over with two or three lanes open (maintainer, 2026-10-12).
+  Merge `main` into your branch only when the lead sends you back to resolve
+  a conflict or a red merge, then gate again.
 - A lane that changed only docs, `handover/` or `HANDOVER.md` runs
   `just check-docs` (plus `check-names`, `check-handover` or `check-status`
   when those files moved) instead of the gate (`gate-affected` would select
