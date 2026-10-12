@@ -61,7 +61,8 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// as `.gnf`, none under its authored spelling) and the layouts themselves.
 /// **Chosen, not measured, inherited from HD's frame readings**: `always_on`,
 /// `sights` (the widget names are checked to exist in Omega's layouts),
-/// `runtime`, `shield_percent` and `message_slots` - nobody has run Omega.
+/// `runtime` and `shield_percent` - nobody has run Omega. `message_slots` and
+/// `lap_hud` are read off its own executable (see their comments).
 /// `zone_speed_classes` is `None`: Omega's class names are unmeasured, so the
 /// Zone ladder's class text draws nothing rather than HD's list.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
@@ -95,7 +96,30 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     total_time_timed_modes_only: false,
     kill_column: false,
     message_slots: true,
-    lap_hud: None,
+    // **Measured** in the PS4 executable (`/omega/eboot-ps4-omega-eu.bin`, inside the
+    // `0x0125e9b0` HUD update, read 2026-10-12): the message drain at
+    // `0x01269f64`-`0x0126a1af` is HD's `0x91d20` shape (flag word at status `+0x138`,
+    // slots of `0x18` bytes, the `100.0` waiting sentinel, `IG_HUD_PLAP`/
+    // `NEWLAP_REC`/`FIN_LAP` and the new-lap-record line skipped in mode 5), and the
+    // gap display at `0x0126812a`-`0x01268398` is HD's `0x907b0` (count-up with no
+    // live-craft test in mode 5 and 10, the same four colours, a 3.5 s hold, no place
+    // stop). **Chosen, not measured, from HD**: the split table (unread), so one split
+    // a lap and a 100-crossing table. See
+    // `docs/ghidra/functions/ps4-omega-eu/hud-message-triggers.md`.
+    lap_hud: Some(oag_title::lap_hud::LapHud {
+        perfect_lap: "IG_HUD_PLAP",
+        new_lap_record: "IG_HUD_NEWLAP_REC",
+        final_lap: "IG_HUD_FIN_LAP",
+        record_line_in_time_trial: false,
+        tint: oag_title::lap_hud::MessageTint::GoodBad,
+        gap: oag_title::lap_hud::SplitGapRule {
+            text: oag_title::lap_hud::GapText::Signed,
+            green_hold_needs_first_place: false,
+            count_up_alone_in_timed_modes: true,
+            splits_per_lap: 1,
+            table_crossings: 100,
+        },
+    }),
     runtime: Some(RUNTIME),
     // The four widgets are Omega's own: `Data\XML\HUD_assist_indicator.xml`
     // (`HUD_Elim_assist_indicator.xml` in Elimination) is included by Arcade,

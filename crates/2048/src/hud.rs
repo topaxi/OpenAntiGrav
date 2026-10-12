@@ -169,8 +169,33 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     hud_small_font_role: None,
     total_time_timed_modes_only: false,
     kill_column: false,
-    message_slots: false,
-    lap_hud: None,
+    // **Measured**: `FUN_81150730` (`0x81150730`) is this title's message drain, and
+    // it reads exactly as HD's `0x91d20` does - the same flag word at status
+    // `+0xf4` with the same bits, the same 0.8 s gate, four seconds of life, the
+    // same alpha curve and `FrameMiddle%d`/`FrameLeft%d`/`FrameRight%d` backing - and
+    // its `Arcade_HUD.xml`, `TimeTrial_HUD.xml` and `Zone_HUD.xml` all author
+    // `Info1`-`Info4` and `TimeDiffText`. (`docs/formats/2048-hud.md` said it had no
+    // `Info1`-`Info4`; the composed layouts have them, censused 2026-10-12.)
+    message_slots: true,
+    // `docs/ghidra/functions/vita-2048-eu-v104/hud-message-triggers.md`. Read: the
+    // three ids, and `IG_HUD_NEWLAP_REC` skipped in mode 5. **Chosen, not measured,
+    // from HD**: the gap's hold and count-up rules (its update routine is unread; it
+    // binds `TimeDiffText` at `hud+0x204` and keeps `"- %.1f"`/`"+ %.1f"` at
+    // `+0xc4`/`+0xc8`, HD's shape), one split a lap and a 100-crossing table.
+    lap_hud: Some(oag_title::lap_hud::LapHud {
+        perfect_lap: "IG_HUD_PLAP",
+        new_lap_record: "IG_HUD_NEWLAP_REC",
+        final_lap: "IG_HUD_FIN_LAP",
+        record_line_in_time_trial: false,
+        tint: oag_title::lap_hud::MessageTint::GoodBad,
+        gap: oag_title::lap_hud::SplitGapRule {
+            text: oag_title::lap_hud::GapText::Signed,
+            green_hold_needs_first_place: false,
+            count_up_alone_in_timed_modes: true,
+            splits_per_lap: 1,
+            table_crossings: 100,
+        },
+    }),
     runtime: None,
     assist: None,
 };

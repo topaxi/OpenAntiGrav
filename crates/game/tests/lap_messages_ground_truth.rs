@@ -296,3 +296,38 @@ fn hd_skips_the_record_line_in_time_trial_and_counts_up_alone() {
     }
     assert!(counted, "the lone craft's count-up reaches TimeDiffText");
 }
+
+/// 2048 authors `Info1`-`Info4` and `TimeDiffText` in its own layouts and drains
+/// the same flag word as HD (`FUN_81150730`), so its lines run on its own table:
+/// the final-lap line once, no record line in Time Trial, the count-up alone.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn the_2048_lap_lines_run_on_its_own_layout_and_table() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::TimeTrial,
+        track: Some(oag_2048::race::DEFAULT_TRACK.to_string()),
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading 2048");
+    let hud = ids_of(&loaded);
+    let context = loaded.hud.context().expect("2048's layout parses");
+    for id in [hud.perfect_lap, hud.new_lap_record, hud.final_lap] {
+        assert_ne!(context.strings.get_or_id(id), id, "{id} resolves");
+    }
+    let (ids, _) = time_trial_ids(&loaded, Some(60 * 600));
+    assert!(
+        !ids.iter().any(|id| id == hud.new_lap_record),
+        "no record line in Time Trial: {ids:?}"
+    );
+    assert_eq!(
+        ids.iter().filter(|id| *id == hud.final_lap).count(),
+        1,
+        "{ids:?}"
+    );
+}
