@@ -9,6 +9,14 @@ use super::Session;
 use super::remix_menu;
 
 impl Session {
+    /// Sets `options.foreign_track` to what the command line named, or none. Run
+    /// by every launch that picks its own circuit (RACE, a campaign cell, a
+    /// remix) so a CUSTOM pick never carries into the next one, while RACE AGAIN
+    /// relaunches `race_options` untouched and so races the same track.
+    pub(super) fn inherit_cli_foreign_track(&self, options: &mut oag_raceplay::Options) {
+        options.foreign_track.clone_from(&self.cli_foreign_track);
+    }
+
     /// CUSTOM, as TRACK TITLE offers it - none when the scan found no file.
     pub(super) fn custom_title_choice(&self) -> Option<Choice> {
         let strings = oag_ui::strings::project_table(self.settings.language.as_deref());

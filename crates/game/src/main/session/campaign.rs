@@ -385,6 +385,7 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        self.inherit_cli_foreign_track(&mut race_options);
         race_options.track = Some(plan.leg_entries[0].clone());
         race_options.mode = mode;
         race_options.class = plan.class;

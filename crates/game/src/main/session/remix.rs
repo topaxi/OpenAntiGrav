@@ -356,9 +356,8 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
-        // What the command line asked for (`--unity-track`), put back after this
-        // launch: a remix names its own track, a disc circuit or a CUSTOM file.
-        let cli_foreign_track = race_options.foreign_track.take();
+        // A remix names its own track: a disc circuit, or below a CUSTOM file.
+        self.inherit_cli_foreign_track(&mut race_options);
         race_options.eliminator_kill_target = None;
         race_options.laps_override = None;
         race_options.weapons_override = None;
@@ -390,16 +389,20 @@ impl Session {
         };
         let Some(track_candidate) = track_candidate else {
             warn!("no track title chosen yet, so there is nothing to remix");
-            race_options.foreign_track = cli_foreign_track;
             self.race_options = Some(race_options);
             return;
         };
+        if custom && race_options.mode == oag_race::Mode::Zone {
+            // The loader refuses it too; refusing here keeps the menus up.
+            warn!("a custom track has no Zone circuit; choose another MODE or a disc title");
+            self.race_options = Some(race_options);
+            return;
+        }
         if custom {
             match self.custom_tracks.raceable(&self.settings.remix.track) {
                 Ok(path) => custom_tracks::apply(&mut race_options, path),
                 Err(why) => {
                     warn!("cannot race this custom track: {why}");
-                    race_options.foreign_track = cli_foreign_track;
                     self.race_options = Some(race_options);
                     return;
                 }
@@ -527,11 +530,7 @@ impl Session {
                 .unwrap_or_else(|| "this source's own default circuit".to_string())
         );
         self.race_options = Some(race_options);
-        let launched = self.launch_race();
-        if let Some(options) = self.race_options.as_mut() {
-            options.foreign_track = cli_foreign_track;
-        }
-        match launched {
+        match self.launch_race() {
             Ok(()) => {
                 let strings = strings::project_table(self.settings.language.as_deref());
                 println!(

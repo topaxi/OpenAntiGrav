@@ -718,6 +718,7 @@ impl Session {
             warn!("no disc image has been chosen yet, so there is nothing to race");
             return;
         };
+        self.inherit_cli_foreign_track(&mut race_options);
         // The campaign writes both fields - see
         // `Session::launch_campaign_cell` - and a RACE-page launch must
         // never inherit one left over from a campaign cell that was backed

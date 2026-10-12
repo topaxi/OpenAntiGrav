@@ -237,7 +237,7 @@ is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--un
   `tracks/`, and the same one and two directories down (Steam's `<item>/<name>.wtrk`, and a base that
   holds the whole `473770` directory). `.wtrk` and `*.track.toml` (own format, `.glb` beside it).
 - **A row** is `NAME (WORKSHOP)` or `NAME (TRACK FILE)`, upper case and cut with `..` to the value
-  column's width on the narrowest skin (28 characters). An author is printed `BY AUTHOR` when a file
+  column's width on Pulse and Pure (28 characters; HD's value boxes are about 20 wide, so a long name there runs past its box's right edge over nothing). An author is printed `BY AUTHOR` when a file
   names one; **neither format carries one today** (a `.wtrk` holds the Workshop title, tags and
   description, the author is a Steam account), so none is shown. There is no preview yet.
 - **Every file is read as a race reads it** (`oag_raceplay::foreign::survey`), on a thread
@@ -257,6 +257,7 @@ is flown on the **CRAFT TITLE** row's source, ship and physics, exactly as `--un
 - **Opponents** fly this project's driver. A track whose AI line does not read cannot load at all (the
   spline is the track), so it is listed unusable rather than raced without opponents; the class rule
   that keeps the AI to classes the driver covers is the SPEED CLASS row's, not this one's.
+- **MODE Zone** with CUSTOM: START logs "a custom track has no Zone circuit" and stays on the page (the loader refuses a foreign Zone race too).
 - `remix.track` stores the file's path (known before the file is read, unique, survives a restart);
   moved or deleted, the row falls back to the first track.
 

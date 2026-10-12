@@ -140,7 +140,9 @@ fn stem(path: &Path) -> String {
 }
 
 /// The most characters a row's value holds before it runs into the label beside
-/// it on the narrowest skin measured (Pulse's, 1280 wide: about 29).
+/// it on Pulse and Pure (1280 wide, about 29). Wipeout HD draws values in boxes
+/// about 20 characters wide, and a longer one runs past the box's right edge over
+/// nothing; the text stays whole and readable (measured in `--menu-page remix`).
 const ROW_WIDTH: usize = 28;
 
 /// The row: name, author when the file names one, and which format it is. The

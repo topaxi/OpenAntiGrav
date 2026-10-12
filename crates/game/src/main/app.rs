@@ -403,6 +403,10 @@ impl App {
             paused: false,
             next_frame: web_time::Instant::now(),
             logged_limit: None,
+            cli_foreign_track: self
+                .race_options
+                .as_ref()
+                .and_then(|options| options.foreign_track.clone()),
             race_options: self.race_options.clone(),
             pending: self.pending.take(),
             trace: self.trace,

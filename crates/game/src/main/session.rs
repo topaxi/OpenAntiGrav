@@ -315,6 +315,11 @@ pub(crate) struct Session {
     /// which source is precisely what has not been decided yet. See
     /// [`Session::finish_launcher`].
     pub(crate) race_options: Option<race::Options>,
+    /// The track the command line named (`--unity-track`/`--track-file`), which
+    /// every launch that does not pick its own sets on `race_options`; a CUSTOM
+    /// remix sets its file there instead, and RACE AGAIN keeps whatever was
+    /// raced. See [`Session::inherit_cli_foreign_track`].
+    pub(crate) cli_foreign_track: Option<std::path::PathBuf>,
     /// What the command line decided, until a pick turns it into a boot.
     ///
     /// Taken by [`Session::finish_launcher`], which is what makes that
