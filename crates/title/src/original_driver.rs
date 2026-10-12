@@ -1,6 +1,8 @@
 //! A title's original opponent where it differs from Pulse's: the branches
 //! Wipeout HD's driver adds, read off its executable
-//! (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`). Data, not a
+//! (`docs/ghidra/functions/ps3-hdfury-eu/ai-controls.md`), and the ones
+//! Wipeout 2048's adds to HD's
+//! (`docs/ghidra/functions/vita-2048-eu-v104/ai-controls.md`). Data, not a
 //! comparison on a title's name (ADR-0058). A title with `None` flies Pulse's
 //! driver as recovered (`docs/ghidra/functions/psp-pulse-usa/ai-controls.md`).
 
@@ -20,6 +22,17 @@ pub struct OriginalDriver {
     /// Circuits on which the steering's lookahead time is halved near the
     /// start line (Pulse: none).
     pub halved_lookahead: &'static [HalvedLookahead],
+    /// Every opponent runs its thrust law and lane choice every tick (Pulse:
+    /// on its round-robin turn).
+    pub every_tick: Sourced<bool>,
+    /// The ring's lateral rate follows the event's two AI skills (Pulse: a
+    /// fixed `0.001`).
+    pub event_ring_rate: Sourced<bool>,
+    /// The lane search runs its two directions in a per-driver coin's order
+    /// (Pulse: up, then down).
+    pub coin_ordered_search: Sourced<bool>,
+    /// A choice scored above `0.5` moves the preferred lane (Pulse: no).
+    pub preferred_follows_choice: Sourced<bool>,
 }
 
 /// One circuit whose original opponent halves its lookahead time outside a
@@ -76,6 +89,10 @@ mod tests {
         eliminator_drops_when_behind: Sourced::measured(true),
         round_robin_pre_increment: Sourced::measured(true),
         halved_lookahead: &ROWS,
+        every_tick: Sourced::measured(false),
+        event_ring_rate: Sourced::measured(false),
+        coin_ordered_search: Sourced::measured(false),
+        preferred_follows_choice: Sourced::measured(false),
     };
 
     #[test]

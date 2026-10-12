@@ -66,6 +66,10 @@ pub(super) fn resolve(
         eliminator_drops_when_behind: driver.eliminator_drops_when_behind.value,
         round_robin_pre_increment: driver.round_robin_pre_increment.value,
         halved_lookahead,
+        every_tick: driver.every_tick.value,
+        event_ring_rate: driver.event_ring_rate.value,
+        coin_ordered_search: driver.coin_ordered_search.value,
+        preferred_follows_choice: driver.preferred_follows_choice.value,
     };
     report.push(format!(
         "original AI: this title's driver variant, {laws:?}"

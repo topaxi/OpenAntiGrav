@@ -63,8 +63,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     launch_hover: None,
     hover_rig: None,
     craft_laws: None,
-    original_opponent: false,
-    original_driver: None,
+    // The campaign's events fly the original opponent (the maintainer's AI
+    // mode 3); race box and remix keep this project's driver.
+    original_opponent: true,
+    original_driver: Some(&ORIGINAL_DRIVER),
     // Unread on this title: `data.psarc` is not extracted in this tree, so
     // its own speed-class bank (if it has one) has not been listed.
     zone_class_announcer: None,
@@ -577,5 +579,110 @@ mod effect_dir_tests {
     fn this_title_reads_its_own_particle_directory_not_the_shared_one() {
         assert_eq!(super::DEFAULTS.effect_dir, r"Data\Particles2048");
         assert_ne!(super::DEFAULTS.effect_dir, oag_title::race::EFFECT_DIR);
+    }
+}
+
+/// Where 2048's original opponent differs from Pulse's, read off the v1.04
+/// `eboot.elf` (`docs/ghidra/functions/vita-2048-eu-v104/ai-controls.md`):
+/// HD's driver, whose four branches it keeps, plus four of its own that a
+/// 2048 event's mode switches on.
+///
+/// Its thrust law was reproduced live on Vita3K, 528 samples at skill `1.0`
+/// and `3.0` on "2048 - Event 4"; the every-tick flag and the ring rate were
+/// read live on all eight drivers. The search coin and the preferred-lane
+/// rule rest on the instructions.
+pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
+    oag_title::original_driver::OriginalDriver {
+        // `75.0` built at `0x81199f90`, the finished branch of `0x81199dc8`.
+        finished_spread: oag_title::pre_race::Sourced::measured(75.0),
+        // `0x811995d6..0x811995f8`: `8 - place` into the slot, start and end.
+        finished_wander_to_place: oag_title::pre_race::Sourced::measured(true),
+        // `FUN_8100193c` (modes `8`/`0x14`, or a game mode flagged `1`/`4`)
+        // skips the `WhenBehind` subtraction (`0x8119a1dc`).
+        eliminator_drops_when_behind: oag_title::pre_race::Sourced::measured(true),
+        // `0x8119fa02` increments `mgr+0xa8`, then flags that racer.
+        round_robin_pre_increment: oag_title::pre_race::Sourced::measured(true),
+        // `Ai_Construct` still compares the circuit record's path with
+        // `05_Track`/`20_Track`, which a 2048 circuit's path never equals.
+        halved_lookahead: &[],
+        // `driver+0x98` is `GameMode_IsHdLineage()`, clear in every 2048
+        // event: `AI_UpdateCraft` flags the racer every tick.
+        every_tick: oag_title::pre_race::Sourced::measured(true),
+        // `FUN_8119853c`: the ring rate from `m_aiPadTrackingSkill` and
+        // `m_aiWeaponAvoidanceSkill`; `0.00165` read live.
+        event_ring_rate: oag_title::pre_race::Sourced::measured(true),
+        // `Ai_PlanLane`, `0x8119d53a`: the search order by `driver+0xc8`.
+        coin_ordered_search: oag_title::pre_race::Sourced::measured(true),
+        // `Ai_PlanLane`, `0x8119dcc4`.
+        preferred_follows_choice: oag_title::pre_race::Sourced::measured(true),
+    };
+
+/// What a 2048 event's opponents read where `SP.xml` leaves a field empty:
+/// `GameModeBase`'s constructor defaults (`FUN_812afd9e`), and the AI level
+/// `GameModeBase_Apply` (`0x812b0d52`) copies to `g_GameState+0xe0` from a
+/// field no event authors. All four read live on "2048 - Event 4", whose
+/// `SP.xml` row authors only the skill (`1`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EventAi {
+    /// `m_skillScale` (`+0x1a8`), `AI_ResolveSkillScale`'s value in an
+    /// event; `2.0` unless authored.
+    pub skill_scale: f32,
+    /// `m_aiPadTrackingSkill` (`+0x1f4`), clamped to `[0, 1]` on load.
+    pub pad_tracking: f32,
+    /// `m_aiWeaponAvoidanceSkill` (`+0x1f8`), clamped to `[0, 1]` on load.
+    pub weapon_avoidance: f32,
+    /// `event+0x1a4`, the pack shuffle's level: `1` on every event.
+    pub level: usize,
+}
+
+/// The constructor's values.
+pub const EVENT_AI_DEFAULTS: EventAi = EventAi {
+    skill_scale: 2.0,
+    pad_tracking: 1.0,
+    weapon_avoidance: 1.0,
+    level: 1,
+};
+
+impl EventAi {
+    /// An event's authored fields over [`EVENT_AI_DEFAULTS`], each AI skill
+    /// clamped to `[0, 1]` as `FUN_812b40de`'s tail (`0x812b4152`) clamps it.
+    #[must_use]
+    pub fn from_event(
+        skill_scale: Option<f32>,
+        pad_tracking: Option<f32>,
+        weapon_avoidance: Option<f32>,
+    ) -> Self {
+        let unit = |v: f32| v.clamp(0.0, 1.0);
+        Self {
+            skill_scale: skill_scale.unwrap_or(EVENT_AI_DEFAULTS.skill_scale),
+            pad_tracking: unit(pad_tracking.unwrap_or(EVENT_AI_DEFAULTS.pad_tracking)),
+            weapon_avoidance: unit(weapon_avoidance.unwrap_or(EVENT_AI_DEFAULTS.weapon_avoidance)),
+            level: EVENT_AI_DEFAULTS.level,
+        }
+    }
+}
+
+#[cfg(test)]
+mod event_ai_tests {
+    use super::{EVENT_AI_DEFAULTS, EventAi};
+
+    #[test]
+    fn an_empty_event_reads_the_constructors_values() {
+        assert_eq!(EventAi::from_event(None, None, None), EVENT_AI_DEFAULTS);
+        assert_eq!(EVENT_AI_DEFAULTS.skill_scale, 2.0);
+        assert_eq!(EVENT_AI_DEFAULTS.level, 1);
+    }
+
+    #[test]
+    fn authored_values_win_and_the_two_skills_clamp_to_one() {
+        let ai = EventAi::from_event(Some(1.2), Some(0.0), Some(3.0));
+        assert_eq!(
+            (ai.skill_scale, ai.pad_tracking, ai.weapon_avoidance),
+            (1.2, 0.0, 1.0)
+        );
+        assert_eq!(
+            EventAi::from_event(None, Some(-1.0), None).pad_tracking,
+            0.0
+        );
     }
 }

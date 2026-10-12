@@ -217,3 +217,63 @@ fn the_local_search_breaks_ties_toward_the_first_visited() {
     // From 0 the upward pass meets 2 first.
     assert_eq!(planner.local_best(-1.0), 2);
 }
+
+#[test]
+fn the_2048_search_follows_its_coin_and_reaches_candidate_eight() {
+    let planner = Planner {
+        scores: [0.0, 0.0, 0.3, 0.0, 0.0, 0.0, 0.3, 0.0, 0.0],
+        ..Planner::default()
+    };
+    // From candidate 5: up first meets 6, down first meets 2.
+    assert_eq!(planner.coin_ordered_best(0.25, true), 6);
+    assert_eq!(planner.coin_ordered_best(0.25, false), 2);
+    // Pulse's upward pass stops short of 8; 2048's reaches it.
+    let edge = Planner {
+        scores: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3],
+        ..Planner::default()
+    };
+    assert_eq!(edge.local_best(0.75), 7);
+    assert_eq!(edge.coin_ordered_best(0.75, true), 8);
+    assert_eq!(edge.coin_ordered_best(0.75, false), 8);
+}
+
+#[test]
+fn a_well_scored_choice_moves_the_preferred_lane_on_2048_only() {
+    let scored = |follows: bool| {
+        let mut planner = Planner {
+            scores: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0],
+            preferred_follows_choice: follows,
+            coin: Some(true),
+            ..Planner::default()
+        };
+        planner.plan(&input(0.25, true), &mut Rng::new(3));
+        planner
+    };
+    // Candidate 6 is lane 0.5: the preferred lane becomes 1 - 0.25.
+    let moved = scored(true);
+    assert_eq!(moved.chosen, 0.5);
+    assert_eq!(moved.preferred, 0.75);
+    assert_eq!(scored(false).preferred, 0.0);
+}
+
+#[test]
+fn the_ring_rate_bounds_the_lane_velocity() {
+    let fill = |rate: f32| {
+        // A fresh ring at the left edge, aimed at the right one: the whole
+        // queue accelerates to the clamp, `15` times the rate.
+        let mut planner = Planner {
+            rate,
+            target: 1.0,
+            ..Planner::default()
+        };
+        planner.ring.reset(-1.0);
+        planner.fill();
+        planner.lane_velocity
+    };
+    assert!((fill(0.001) - 0.015).abs() < 1e-7, "{}", fill(0.001));
+    assert!(
+        (fill(0.001_65) - 0.024_75).abs() < 1e-7,
+        "{}",
+        fill(0.001_65)
+    );
+}

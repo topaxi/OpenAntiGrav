@@ -787,6 +787,15 @@ pub const ORIGINAL_DRIVER: oag_title::original_driver::OriginalDriver =
         // `AIManager_Update` increments `mgr+0xac`, then flags that racer.
         round_robin_pre_increment: oag_title::pre_race::Sourced::measured(true),
         halved_lookahead: &HALVED_LOOKAHEAD,
+        // 2048's four additions (`oag_2048::race::ORIGINAL_DRIVER`) are not
+        // HD's: `AI_UpdateCraft` flags only the round-robin racer, and the
+        // ring fill's rates are literals of `0.001`. The planner's search
+        // order and its preferred-lane rule were not compared on HD; HD flies
+        // Pulse's, as before.
+        every_tick: oag_title::pre_race::Sourced::measured(false),
+        event_ring_rate: oag_title::pre_race::Sourced::measured(false),
+        coin_ordered_search: oag_title::pre_race::Sourced::chosen(false),
+        preferred_follows_choice: oag_title::pre_race::Sourced::chosen(false),
     };
 
 /// `Ai_Construct`'s two circuit flags and `AI_UpdateCraft`'s windows

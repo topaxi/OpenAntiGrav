@@ -226,6 +226,11 @@ pub fn load_event(options: &Options, event_name: &str) -> Result<Loaded> {
     loaded.campaign_2048_event = Some(Campaign2048Progress {
         name: event.name.clone(),
         objectives: oag_2048::campaign::event_objectives(&doc, &event),
+        ai: oag_2048::race::EventAi::from_event(
+            event.skill_scale,
+            event.ai_pad_tracking_skill,
+            event.ai_weapon_avoidance_skill,
+        ),
     });
     Ok(loaded)
 }

@@ -101,6 +101,16 @@ impl Race {
         true
     }
 
+    /// A 2048 event's two AI skills, after [`Self::use_original_ai`]: the
+    /// field's ring rate follows them where the title's laws say so
+    /// (`oag_ai::original::Field::set_event_ai_skills`). Nothing without an
+    /// original field.
+    pub fn set_original_event_ai_skills(&mut self, pad_tracking: f32, weapon_avoidance: f32) {
+        if let Some(ai) = self.sim.original_ai.as_mut() {
+            ai.field.set_event_ai_skills(pad_tracking, weapon_avoidance);
+        }
+    }
+
     /// Whether this race's opponents fly the original's driver.
     #[must_use]
     pub fn original_ai_active(&self) -> bool {

@@ -156,6 +156,7 @@ fn hd_field(halved_lookahead: Option<(f32, f32)>) -> Field {
         eliminator_drops_when_behind: true,
         round_robin_pre_increment: true,
         halved_lookahead,
+        ..Laws::PULSE
     };
     field.counter = 1;
     field
@@ -239,4 +240,85 @@ fn laws_halve_only_outside_the_window() {
     assert!(!laws.halves_lookahead(5400.0));
     assert!(laws.halves_lookahead(5400.5));
     assert!(!Laws::PULSE.halves_lookahead(0.0));
+}
+
+#[test]
+fn every_tick_runs_the_thrust_law_off_the_racers_turn() {
+    let held = |every_tick: bool| {
+        let mut field = field();
+        field.laws = Laws {
+            every_tick,
+            ..Laws::PULSE
+        };
+        field.drive(1, false, &tick(-520.0), &standings(), 1.0 / 60.0, |d| {
+            Some(point(-520.0 - d))
+        });
+        field.drivers[1].held_thrust
+    };
+    let off_turn = held(false);
+    let every = held(true);
+    assert_ne!(every, off_turn, "the law ran: {every} against {off_turn}");
+}
+
+#[test]
+fn an_events_ai_skills_set_the_ring_rate_only_under_its_law() {
+    let rate = |event_ring_rate: bool| {
+        let mut field = Field::new(
+            tests_table(),
+            field().controller,
+            Laws {
+                event_ring_rate,
+                ..Laws::PULSE
+            },
+            1.0,
+            1,
+            [8, 1, 2, 3, 4, 5, 6, 7],
+            42,
+        );
+        field.set_event_ai_skills(1.0, 1.0);
+        field.drivers[3].planner.rate
+    };
+    assert_eq!(rate(false), crate::original::RING_RATE);
+    assert_eq!(rate(true), crate::original::event_ring_rate(1.0, 1.0));
+}
+
+#[test]
+fn the_2048_ring_rate_is_what_vita3k_read() {
+    // `driver+0xc4` read `0.0016499999910593033` on all eight drivers of
+    // "2048 - Event 4", whose two AI skills are the constructor's `1.0`.
+    assert_eq!(
+        f64::from(crate::original::event_ring_rate(1.0, 1.0)),
+        0.001_649_999_991_059_303_3
+    );
+    assert_eq!(crate::original::event_ring_rate(0.0, 0.0), 0.001);
+    // The larger skill decides, clamped to one.
+    assert_eq!(
+        crate::original::event_ring_rate(0.0, 4.0),
+        crate::original::event_ring_rate(1.0, 0.5)
+    );
+}
+
+#[test]
+fn a_2048_field_draws_each_drivers_coin_and_the_planner_rule() {
+    let drawn = Field::new(
+        tests_table(),
+        field().controller,
+        Laws {
+            coin_ordered_search: true,
+            preferred_follows_choice: true,
+            ..Laws::PULSE
+        },
+        1.0,
+        1,
+        [8, 1, 2, 3, 4, 5, 6, 7],
+        42,
+    );
+    assert!(drawn.drivers.iter().all(|d| d.planner.coin.is_some()));
+    assert!(
+        drawn
+            .drivers
+            .iter()
+            .all(|d| d.planner.preferred_follows_choice)
+    );
+    assert!(field().drivers.iter().all(|d| d.planner.coin.is_none()));
 }

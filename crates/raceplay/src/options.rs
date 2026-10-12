@@ -990,6 +990,9 @@ pub struct Campaign2048Progress {
     /// but still opens whatever names it as a prerequisite once finished.
     /// See `oag_2048::campaign::event_objectives`.
     pub objectives: Option<oag_2048::campaign::EventObjectives>,
+    /// What the event's opponents read: its skill, its two AI skills and the
+    /// level, authored values over the constructor's defaults.
+    pub ai: oag_2048::race::EventAi,
 }
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.

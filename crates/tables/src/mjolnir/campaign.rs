@@ -176,6 +176,13 @@ pub struct Event {
     /// Whether `M_MAXGHOSTSHIPS` is present at all ([`typedef::RACE_A`]'s
     /// discriminator). Not its value: every measured instance leaves it empty.
     pub has_ghost_capacity: bool,
+    /// `M_SKILLSCALE`, the opponents' `AI_ResolveSkillScale` value; `None`
+    /// when left empty (85 of `SP.xml`'s 141 events).
+    pub skill_scale: Option<f32>,
+    /// `M_AIPADTRACKINGSKILL`; empty on 135 events, `0` on 5.
+    pub ai_pad_tracking_skill: Option<f32>,
+    /// `M_AIWEAPONAVOIDANCESKILL`; empty on 135 events, `0` on 5.
+    pub ai_weapon_avoidance_skill: Option<f32>,
 }
 
 impl Event {
@@ -236,6 +243,13 @@ impl Event {
                 .field("M_bForceAlwaysUnlocked")
                 .and_then(super::Field::bool),
             has_ghost_capacity: instance.field("M_MAXGHOSTSHIPS").is_some(),
+            skill_scale: instance.field("M_SKILLSCALE").and_then(super::Field::float),
+            ai_pad_tracking_skill: instance
+                .field("M_AIPADTRACKINGSKILL")
+                .and_then(super::Field::float),
+            ai_weapon_avoidance_skill: instance
+                .field("M_AIWEAPONAVOIDANCESKILL")
+                .and_then(super::Field::float),
         })
     }
 }
