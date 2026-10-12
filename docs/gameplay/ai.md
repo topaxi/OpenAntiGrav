@@ -4125,7 +4125,8 @@ change, `ai_speed_plan_sweep` at Ace, 18,000 ticks:
 
 - Pulse, Pure and HD, every lone slice (every layout, both directions where
   the title has them, every class): one row differs, Pulse `06_Track` RAPIER
-  forward, corner model to plan, 38.35 to 28.80 s best lap (gold 24.0), 65 to 0
+  forward, corner model to plan, 38.35 to 28.80 s best lap (Speed Lap gold
+  24.00, `campaign_reference_laps`, grid 11 cell `grid11_4_1`), 65 to 0
   contact, shield lost per lap 4.01 to 0.00, end shield 78.94 to 95.00. Every
   other row is byte-identical.
 - Pulse field of seven, `06_Track` RAPIER forward: mean lap 37.69 to 29.05 s,
@@ -4142,7 +4143,8 @@ change, `ai_speed_plan_sweep` at Ace, 18,000 ticks:
   on `main` (lone 40.32 s, 4 contact), so the new path never fires there; lone
   and field rows are byte-identical. Of Omega's eight lone slices, six were
   compared (both RAPIER and PHANTOM directions, FLASH and VENOM reversed), all
-  byte-identical; FLASH and VENOM forward ran past 15 minutes under load and
+  byte-identical; FLASH and VENOM forward were stopped at a 10-minute time
+  box under load (the forward slices that finished took about 17 minutes) and
   were not compared. Checked against 2048: **checked, differs** (the same
   layout, but Omega's whole-window plan verifies there and 2048's does not;
   why was not looked into).

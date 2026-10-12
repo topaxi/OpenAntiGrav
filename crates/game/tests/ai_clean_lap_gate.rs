@@ -262,8 +262,10 @@
 //! **Tightened 2026-10-12, lane `ai-rapier-adopt`**: `06_Track` RAPIER takes
 //! the hardened trough plan (`docs/gameplay/ai.md`, "Where only the trough plan
 //! verifies"), 2301 to 1728 ticks and contact 173 to 0. Only that row was
-//! rewritten; the other 47 were left as committed, though a fresh generator run
-//! on `main` already differs on many of them inside the tolerances.
+//! rewritten. The other 47 were left as committed: `ai_speed_plan_sweep`'s lone
+//! slices are byte-identical on every other row with and without the change,
+//! though a generator run on this change's tree already differs from the table
+//! on many of them inside the tolerances.
 //!
 //! Before that, [`BASELINE`] was generated this way on commit `8f5070ef` ("Merge: the
 //! two changes only pay together, and 05_Track's line blocks them"),
