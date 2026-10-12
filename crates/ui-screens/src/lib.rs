@@ -14,5 +14,6 @@ pub mod endrace;
 pub mod marquee;
 pub mod picker;
 pub mod prompt;
+pub mod pure_campaign;
 pub mod tag_entry;
 pub mod track_panel;
