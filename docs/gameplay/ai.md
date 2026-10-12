@@ -590,8 +590,8 @@ the rail's gates are Pulse's to the constant. What differs:
 | Which stats | the legacy block: `StartStats` cruise band, `ZoningStats`, `FatigueStats`, `GridSpread` | `PosBalancing`, `RubberBanding`, `SkillScale`, `AIPackSwapping` |
 | Thrust | a cruise speed per grid slot drawn once at load in `[NormalRaceSpeedMin, Max]`, times a speed tweak, times one field-wide zone multiplier, times fatigue, blended toward `StartSpeed` during the launch | `AIThrust[player's place]` plus a formation gap and the rubber band |
 | Player coupling | the zone multiplier (the nearest opponent's gap to the player, `LeadZone` when the player leads) and the fatigue window (own gap) | the player's place and the field-wide gap |
-| Lane | one current lane, moved by a rate-limited bang-bang, read by the steering and the rail alike | an 80-slot ring |
-| Planner | also scores the other craft and track objects; no contact push | contact push |
+| Lane | one current lane, moved by a second-order bang-bang (`+/-0.0008` a frame, times a smoothed speed scale), read by the steering and the rail alike; measured on 209 of 209 live calls | an 80-slot ring |
+| Planner | Pulse's two bumps and search; code to score the other craft and track objects that lands nothing (a negative weight the bump refuses, and an object list that reads `0` entries); no contact push, no band | contact push, band |
 | Rail | **position only**; the velocity turn is computed and dropped | position and velocity |
 | Update rate | every opponent, every frame (the snapshot sets every racer's round-robin byte), measured | one driver a frame, period eight |
 | Floors | thrust at least `35`, `x 0.7` under a craft flag | the speed floor only |
@@ -606,11 +606,18 @@ the throttle law reproduced on 1,688 of 1,689 opponent samples, the zone multipl
 (`<AIStats><VenomTweak Min Max/>`), about `0.8` on the shipped files, so a Pure
 opponent cruises at roughly four fifths of its `NormalRaceSpeed` band.
 
-**Built**: `oag_tables::pure_ai_stats` and `oag_ai::original::cruise` (the throttle
-law as pure functions, the draws chosen from the seeded generator), held to the disc
-by `pure_original_ai_ground_truth.rs`. **Not flown**: this project has no Pure
-campaign, so `RaceDefaults::original_opponent` stays `false`; the planner, the rail
-variant and the every-frame update are named on the evidence page and unbuilt.
+**Built and flown in Pure's campaign** (2026-10-12): `oag_tables::pure_ai_stats`,
+`oag_ai::original::cruise` and `oag_ai::original::sibling` (the ringless planner,
+`Field::cruising`, `Field::end_tick`, Pure's `Ai_Update` every frame), selected by
+`oag_pure::race::ORIGINAL_DRIVER` (`AiTables::LegacyBlock`, a position-only rail, the
+pitch fade). A Pure campaign event's launch switches it on; every other mode keeps this
+project's driver. On the disc (`pure_original_ai_ground_truth.rs`) the field launches at
+each slot's `StartSpeed` and finishes Vineta K and Chenghou Project (Venom) with the
+player parked, no respawn, shield `100` at every lap and at the end. **Chosen, not
+measured**: the two `rand()` draws from the seeded generator, the `driver+0x80` flag
+never set (its craft state is unread), the zone multiplier written after this engine's
+step for the next tick. Not built: the 2 s fork hold (no title's original field
+chooses its own forks here).
 
 ### 2048: HD's driver, four laws of its own, flown (2026-10-12)
 
