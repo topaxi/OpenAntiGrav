@@ -64,8 +64,8 @@ times larger" - because the finding is the coupling, not the number.
 | `SplinePt.unk_0x5c/0x5d` (an authored lane **exclusion** band: the target is kept out of it, on the side it started) and `unk_0x66` (a speed floor) | **recovered**, static, the band's direction at instruction level (2026-10-12); only `07_Track` authors a band and only `06_Track` a floor | 75 |
 | Where the rail sits in the frame: one `AiManager_Update` per `Body_StepWorld` | **measured** (2026-10-12): the round-robin counter advanced by one at each of 40 consecutive world steps | 90 |
 | **The original driver, built**: `oag_ai::original`, flown by Pulse's campaign opponents | **built** (2026-10-12), see [built](#built-2026-10-12-oag_aioriginal) | - |
-| The sign convention on Pure's `Position` attribute: the nearest opponent's distance **ahead of** the player, negative behind | **recovered** (2026-10-12), static, from `Craft_GapAlongTrack` - see [psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-zone-multiplier) | 80 |
-| Which of Pure's two per-class blocks the engine reads: **the legacy one**; `<NewStats>` is parsed and gated off by a byte initialised `0` with no writer, on both pressings | **recovered** (2026-10-12), static - see [Pure](#pure-a-sibling-driver-2026-10-12) | 85 |
+| The sign convention on Pure's `Position` attribute: the nearest opponent's distance **ahead of** the player, negative behind | **measured** (2026-10-12): the zone law reproduced on 633 frames, see [psp-pure-usa/ai-controls.md](../ghidra/functions/psp-pure-usa/ai-controls.md#the-zone-multiplier) | 88 |
+| Which of Pure's two per-class blocks the engine reads: **the legacy one**; `<NewStats>` is parsed and gated off by a byte initialised `0` with no writer, on both pressings | **measured** (2026-10-12): the byte reads `0` in a race - see [Pure](#pure-a-sibling-driver-2026-10-12) | 94 |
 | Which side of a fork an opponent takes: a fair coin per craft per fork, `rand() & 0x100`, held to the merge | **recovered** (2026-10-05), same law in Pulse, 2048, HD and Omega - see [branch choice](#branch-choice-at-a-fork) | 84 |
 | Weapon selection and firing | **recovered** (2026-08-17); **the fire half is ported** for the forward weapons (2026-10-03, `oag_ai::weapon_ai`). `WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) rolls the authored odds against two five-entry rate tables on every call, and an aimed weapon also needs a craft in its predicted path. The absorb half is not ported. See [weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md#the-fire-half-at-instruction-level-read-2026-10-03) | 85 |
 | **Everything under [what we build instead](#what-we-build-instead)** | **ours** | - |
@@ -335,11 +335,11 @@ doing.
    is not identified - the call graph does not resolve in this region, for the
    reason [ai-stats.md](../ghidra/functions/psp-pulse-usa/ai-stats.md#read-this-first-this-regions-addresses-are-unrelocated)
    records.
-2. ~~**Sign convention** on Pure's `Position`.~~ **Answered 2026-10-12** (static,
-   80): `Position` is the nearest opponent's distance ahead of the player, so
+2. ~~**Sign convention** on Pure's `Position`.~~ **Answered 2026-10-12** (measured,
+   88): `Position` is the nearest opponent's distance ahead of the player, so
    negative is an opponent behind - the reading above.
 3. ~~**Which of Pure's two per-class blocks is live.**~~ **Answered 2026-10-12**
-   (static, 85): the legacy block, see [Pure](#pure-a-sibling-driver-2026-10-12).
+   (measured, 94): the legacy block, see [Pure](#pure-a-sibling-driver-2026-10-12).
 4. ~~**`ControllerPO`'s consumer**~~ **Answered 2026-10-12**: none; it is never
    parsed, see above.
 5. **Weapon AI.** `Data\XML\WeaponAIstats.xml` is a sixth AI file that
@@ -592,7 +592,7 @@ the rail's gates are Pulse's to the constant. What differs:
 | Lane | one current lane, moved by a rate-limited bang-bang, read by the steering and the rail alike | an 80-slot ring |
 | Planner | also scores the other craft and track objects; no contact push | contact push |
 | Rail | **position only**; the velocity turn is computed and dropped | position and velocity |
-| Round robin | wraps at the field size | wraps at eight |
+| Update rate | every opponent, every frame (the snapshot sets every racer's round-robin byte), measured | one driver a frame, period eight |
 | Floors | thrust at least `35`, `x 0.7` under a craft flag | the speed floor only |
 | Pitch | Pulse's, faded out between `1030` and `1180` units off the line | - |
 | Forks | the same coin, held 2 s | held to the merge |

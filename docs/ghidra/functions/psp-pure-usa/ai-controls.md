@@ -28,8 +28,8 @@ opponent's gap to the player, by a fatigue factor, and blended toward a launch s
 **there is no lane ring** (one current lane with a bang-bang lateral velocity, steered
 toward by both the controls and the rail); **the planner scores the other craft and
 track objects**, which Pulse's does not; **the rail moves position only** (it computes
-a velocity turn and never stores it); and **the round robin wraps at the field size,
-not at eight**. Of the two per-class blocks in `AIRaceStats.xml`, the engine parses
+a velocity turn and never stores it); and **every opponent updates its thrust and lane every frame** (the round-robin byte is
+set on all racers by the snapshot), where Pulse's run one driver a frame. Of the two per-class blocks in `AIRaceStats.xml`, the engine parses
 both into disjoint halves of one record and reads **the legacy half**: the switch that
 selects `<NewStats>` is initialised to `0` in `.data` and has no writer on either
 pressing. So `PosBalancing` (`AIThrust`, `SpreadDist`), `ShipSpacingVariation`,
@@ -59,7 +59,7 @@ Confidence is per row. Static reading unless a row says measured.
 | `0x0891d168` | `AiStats_ParsePosBalancing` | 85 | `AiStats_ParsePosBalancing` | `AIThrust` `+0x170`, `SpreadDist` `+0x190` |
 | `0x08919024` | `Ai_Construct` | 80 | `Ai_Construct` | registers `driver+0x08` as `"AI input %d"` (`0x08919170`) or `"autopilot input"` when `craft+0x488 == 0`; grid slot to `+0x60` (`8` for the player) |
 | `0x0891b8d0` | `AiManager_Update` | 80 | `AiManager_Update` | snapshot, the round-robin byte, `Ai_Update` on every driver, the weapon AIs; **no shuffle**, see [the round robin](#the-round-robin) |
-| `0x0891bee4` | `AiManager_SnapshotRacers` | 80 | `AiManager_SnapshotRacers` | racer table at addend `0xae0f0` (`0x08b71fa0`), stride `0x1c0`; count `0x08b72da0`, player craft `0x08b72da8` (from `RM+0x13c`), player racer `0x08b72da4` |
+| `0x0891bee4` | `AiManager_SnapshotRacers` | 90 | `AiManager_SnapshotRacers` | racer table at addend `0xae0f0` (`0x08b71fa0`), stride `0x1c0`; count `0x08b72da0`, player craft `0x08b72da8` (from `RM+0x13c`), player racer `0x08b72da4` |
 | `0x08919394` | `Ai_Update` | 80 | `Ai_Update` | per driver per tick, [below](#ai_update-0x08919394-in-order) |
 | `0x08919918` | `Ai_UpdateFatigue` | 75 | - | the launch blend and the fatigue factor, [below](#launch-and-fatigue) |
 | `0x0891ac04` | `Ai_ComputeControls` | 80 | `Ai_ComputeControls` | Pulse's steering law; the legacy thrust, [below](#the-thrust-legacy-block) |
@@ -73,11 +73,11 @@ Confidence is per row. Static reading unless a row says measured.
 | `0x08917b80` | `Ai_SnapToLane` | 85 | `Ai_SnapToLane` | Pulse's gates; position only, [below](#the-rail-position-only) |
 | `0x0891892c` | `Ai_ComputePitch` | 80 | `Ai_ComputePitch` | Pulse's law times a distance fade, [below](#pitch) |
 | `0x08917f70` | `Ai_ChooseBranch` | 75 | `Ai_ChooseBranch` | the `rand() & 0x100` coin, [below](#forks) |
-| `0x08810b30` | `RaceManager_UpdateZoneSpeed` | 75 | - | writes `RM+0x134` from the zone curves, [below](#the-zone-multiplier) |
+| `0x08810b30` | `RaceManager_UpdateZoneSpeed` | 88 | - | writes `RM+0x134` from the zone curves, [below](#the-zone-multiplier) |
 | `0x08810ddc` | `RaceManager_UpdateLaunchPhase` | 70 | - | clears the launch flag `RM+0x1e34` once the field is strung out, [below](#launch-and-fatigue) |
 | `0x08923a1c` | `Craft_GapAlongTrack` | 75 | - | `wrap(b.progress - a.progress)` over the lap (`craft+0xa38`), [below](#the-zone-multiplier) |
 | `0x089336f0` | `Body_SetPosition` | 85 | `Body_SetPosition` | writes `body+0x30..+0x3c` and nothing else |
-| `0x08ab3b6c` (data) | `g_ai_use_new_stats` | 85 | - | the block switch, [below](#which-of-the-two-blocks-is-live) |
+| `0x08ab3b6c` (data) | `g_ai_use_new_stats` | 94 | - | the block switch, [below](#which-of-the-two-blocks-is-live) |
 
 `FUN_0891a3d0` reads the `<NewStats>` spacing rows (`+0x124`, `+0x128`, `+0x12c`) and
 the `AIThrust` row and has no `jal` caller: an unused `<NewStats>` thrust variant.
@@ -108,8 +108,9 @@ and `psp-reloc.py refs` finds exactly those five sites, all `lbu`: no store and 
 address-forming `addiu` anywhere in `.text`. The EU pressing agrees: its byte is
 `0x08aad344`, initialised to `0`, referenced by five `lbu` and nothing else
 (`0x08810a64`, `0x08810c4c`, `0x08917a00`, `0x089192a8`, `0x0891abe4`). Two binaries,
-static: **the legacy block is live, confidence 85.** A write through a computed
-pointer would hide from that sweep; the live leg reads the byte in a race.
+static: **the legacy block is live.** A write through a computed pointer would hide
+from that sweep; the live leg read the byte as `0` in every sample of five races, so
+confidence 94.
 
 So in the shipped game: `PosBalancing` (`AIThrust`, `SpreadDist`) never reaches a
 craft, nor do `ShipSpacingVariation`, `BaseStartThrust`, `StartBoostSpeed`,
@@ -177,7 +178,9 @@ There is no second-controller block (Pulse's step 14).
 racer count (`0x08b72da0`), and sets that racer's `+0x1b0`. Pulse sets
 `racer[mgr+0xa8]` and then counts, wrapping at `8` whatever the field. So Pure's
 period is **the number of racers**, and its first thrust tick goes to racer `1`
-(HD's phase). With eight craft that is eight ticks, as on Pulse. Confidence 80.
+(HD's phase). **But it gates nothing**: `AiManager_SnapshotRacers`, called just before,
+sets `racer+0x1b0 = 1` on every racer every frame, so every driver's thrust, lane
+choice and fork choice run on every frame. Measured, [below](#measured-2026-10-12): 90.
 
 The update is skipped while a network condition holds (`0x08b173e4 >= 9` and a byte
 at `*(0x08b17780) + 0xb0`, unless `mgr+0xac > 99`); what it gates (an ad hoc session, by the shape) is not read.
@@ -333,6 +336,79 @@ second or first path, decided on the round-robin tick once the fork is under a s
 ahead at the current speed (`(fork progress - lap fraction) * lap_length / speed < 1`),
 and **held for 2 s** (`driver+0x6c = 2.0`, counted down by `dt`, then `-1`), where
 Pulse holds it to the merge. Confidence 75.
+
+## Measured (2026-10-12)
+
+PPSSPP 1.20.4 (software renderer), `pure-psp-usa.chd`, Single Race, Alpha league,
+Vineta K, Feisar, eight craft, the player parked on the grid in eighth (no input).
+Pure's Single Race has no difficulty setting (the walk goes Single Race, class,
+league, track, team), so the two "levels" are **two speed classes, Venom and
+Vector** - a deviation from the brief, named here. The tool is
+`scripts/psp-pure-ai-thrust.py`: it stops at `0x08919728`, right after
+`Ai_ComputeControls` returns inside `Ai_Update` (`s0` the driver), reads the law's
+output at `sp+0x14` and every input the law reads (the class record, `driver+0x54`,
+`+0x190`, `+0x1c0`, `+0x60`, `RM+0x134`, every racer's progress, place and lap), and
+`--predict` recomputes each sample in `float32`.
+
+| Run | Class | Race time | Samples (opponents) | Exact (`< 1e-3`) | Exercised |
+| --- | --- | --- | ---: | ---: | --- |
+| `trial` | Venom | 56 s | 9 | **9** | the cruise law under a zone multiplier of `0.72` |
+| `venom-start` | Venom | 0 to 0.7 s | 280 | **280** | the launch: blend `1`, every opponent at its `StartSpeed` |
+| `venom-decay` | Venom | 0 to 63 s | 420 | **420** | the blend ramping in (`0.5` on the first frame) and decaying over 500 frames, the zone plateaus and mid values, fatigue time accumulating while a lapping craft passes the player |
+| `vector-start` | Vector | 0 to 63 s | 420 | **419** | the same on Vector's record |
+| `vector-burst` | Vector | 2 to 80 s | 560 | **560** | two consecutive frames per sample, for the zone multiplier |
+
+**1,689 opponent samples, 1,688 reproduced with worst residual `0.00000`.** The one
+miss (Vector, 45.1 s, grid slot 5) logged `100` where the law gives `36.7`: the
+output record's default, which `Ai_ComputeControls` returns untouched when
+`Ai_SampleLookahead` or `Ai_LanePoint` fails (static reading; one sample, not
+chased). That is the legacy thrust law above, measured: the per-slot cruise draw, the
+speed tweak, `driver+0x54`, the launch blend toward `StartSpeed`. Confidence on the
+thrust law: **94** (runtime trace on one binary; the EU pressing agrees statically
+on the switch only).
+
+The rest, from the same runs:
+
+- **The switch reads `0` in a race** (`g_ai_use_new_stats`, every sample and the
+  run header), so the legacy block is live: **94**, runtime plus the static sweep on
+  both pressings.
+- **The zone multiplier.** `RaceManager_UpdateZoneSpeed`'s law, recomputed from the
+  logged racers (nearest non-player racer by wrapped progress gap, `Zone` or
+  `LeadZone` by the player's place, piecewise linear), equals the `RM+0x134` the
+  **next** frame logs on all 633 next-frame pairs (`trial` 8, `venom-start` 305,
+  `vector-burst` 320), worst residual `0`: the manager writes it once a frame from
+  the positions it sees then. The parked player never led, so the `LeadZone` branch
+  is unexercised; the `Position` sign is exercised (the plateaus at the far ends and
+  the mid values only come out with `gap = opponent - player`). **88** for the zone
+  law, `Position` sign included.
+- **No round robin in practice.** `AiManager_SnapshotRacers` sets `racer+0x1b0 = 1`
+  on every racer every frame (`*(piVar7 + 0x6c) = 1`), so the manager's own
+  round-robin byte is redundant: every stop on every frame had the byte set, eight
+  drivers a frame (`ticks` in every capture). **Every opponent runs its thrust law,
+  its lane choice and its fork choice every frame.** The round-robin paragraph above
+  is the code as written; this is what it does. **90.**
+- **Fatigue runs and changes nothing**: `driver+0xb0` rose while a lapping craft was
+  inside the window, and `driver+0x54` stayed equal to `RM+0x134` (the shipped
+  multiplier is unity).
+- **The rail fires**: a stop on `Body_SetPosition`'s `jal` (`0x08917f40`) hit five
+  distinct bodies in 60 stops (`venom-start`) and moved them `0.0` to `0.21` units in
+  80 stops (`vector-burst`, median `0.008`). That the velocity is not written stays
+  static (85).
+- **The launch**: on the first race frame the blend was already `0.5`
+  (`+0.5` per frame from `0`), `1` from the second; the drop to `0` took the logged
+  500 frames once the field had strung out past `GridSpread`.
+
+To reproduce, with a PPSSPP of your own on the USA disc, parked in a Single Race:
+
+```sh
+uv run --with websocket-client python3 scripts/psp-pure-ai-thrust.py --port <port> \
+    --out data/scratch/<lane>/venom.json --samples 480 --gap-seconds 1.0
+python3 scripts/psp-pure-ai-thrust.py --predict data/scratch/<lane>/venom.json
+```
+
+Not measured: the steering's output, the planner's choices (the lane and its
+bang-bang), the pitch fade, the fork hold, the speed floor and the `35` floor, the
+`x 0.7` flag, and the `LeadZone` branch.
 
 ## Not ported, by name
 

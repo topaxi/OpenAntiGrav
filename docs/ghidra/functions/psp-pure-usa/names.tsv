@@ -152,7 +152,7 @@
 0x0891d168	function	AiStats_ParsePosBalancing	85	ai-controls.md
 0x08919024	function	Ai_Construct	80	ai-controls.md
 0x0891b8d0	function	AiManager_Update	80	ai-controls.md
-0x0891bee4	function	AiManager_SnapshotRacers	80	ai-controls.md
+0x0891bee4	function	AiManager_SnapshotRacers	90	ai-controls.md
 0x08919394	function	Ai_Update	80	ai-controls.md
 0x08919918	function	Ai_UpdateFatigue	75	ai-controls.md
 0x0891ac04	function	Ai_ComputeControls	80	ai-controls.md
@@ -166,8 +166,8 @@
 0x08917b80	function	Ai_SnapToLane	85	ai-controls.md
 0x0891892c	function	Ai_ComputePitch	80	ai-controls.md
 0x08917f70	function	Ai_ChooseBranch	75	ai-controls.md
-0x08810b30	function	RaceManager_UpdateZoneSpeed	75	ai-controls.md
+0x08810b30	function	RaceManager_UpdateZoneSpeed	88	ai-controls.md
 0x08810ddc	function	RaceManager_UpdateLaunchPhase	70	ai-controls.md
 0x08923a1c	function	Craft_GapAlongTrack	75	ai-controls.md
 0x089336f0	function	Body_SetPosition	85	ai-controls.md
-0x08ab3b6c	data	g_ai_use_new_stats	85	ai-controls.md
+0x08ab3b6c	data	g_ai_use_new_stats	94	ai-controls.md
