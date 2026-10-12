@@ -157,7 +157,48 @@ fn emptying_the_pool_blows_the_craft_up_and_then_eliminates_it() {
     }
     advance_state(&mut s, dt);
     assert_eq!(s.craft_state, CraftState::Eliminated);
+    assert_eq!(s.state_timer, ELIMINATED_SOLID_DURATION);
+}
+
+/// The wreck stays solid to other craft for state 5's `1.5` s and then is not:
+/// `Ship_SetState` case 6 writes the collider enable byte to zero, cases 4 and
+/// 5 leave it. Dropping the timer, or the gate, fails this.
+#[test]
+fn a_wreck_is_solid_to_craft_for_state_fives_dwell_and_not_after() {
+    let d = dimensions(300.0);
+    let mut s = state(1.0);
+    apply_contact(&mut s, &d, &wall(1000.0), DamageRules::default());
+    let dt = 1.0 / 60.0;
+    assert!(solid_to_craft(&s, false), "state 4 is solid");
+    for _ in 0..30 {
+        advance_state(&mut s, dt);
+    }
+    assert_eq!(s.craft_state, CraftState::Eliminated);
+    assert!(solid_to_craft(&s, false), "state 5 begins solid");
+    for _ in 0..80 {
+        advance_state(&mut s, dt);
+    }
+    assert!(
+        solid_to_craft(&s, false),
+        "state 5 is solid until its 1.5 s run out"
+    );
+    for _ in 0..12 {
+        advance_state(&mut s, dt);
+    }
     assert_eq!(s.state_timer, 0.0);
+    assert!(!solid_to_craft(&s, false), "state 6 is not solid");
+    assert!(
+        solid_to_craft(&s, true),
+        "the Eliminator's state 8 never clears the collider byte"
+    );
+}
+
+/// A racing craft is always solid, whatever its timer holds.
+#[test]
+fn a_racing_craft_is_always_solid() {
+    let mut s = state(100.0);
+    s.state_timer = 0.0;
+    assert!(solid_to_craft(&s, false));
 }
 
 /// `Ship_Damage` refuses outright outside the racing states, so a craft
@@ -193,6 +234,7 @@ fn only_the_explosion_runs_the_state_timer_down() {
     done.craft_state = CraftState::Eliminated;
     advance_state(&mut done, 1.0);
     assert_eq!(done.craft_state, CraftState::Eliminated);
+    assert_eq!(done.state_timer, 0.0, "the dwell floors at zero");
 }
 
 /// Taking the grid clears the sequence as well as filling the pool - a

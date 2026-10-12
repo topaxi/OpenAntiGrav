@@ -48,6 +48,14 @@ original's orange textured fireball frame for frame at 480x272 (the opponent wre
   down outside the Eliminator (confidence 85). Still open from it: what `Race_FinishAllCrafts` does to a wreck at the flag, whether
   the standings drop a wreck, and a death by a real weapon or wall rather than a debugger call
   (`shield.md`, "State 6 measured on PPSSPP").
+- ~~**Does a destroyed craft still collide with the craft racing?**~~ **Closed 2026-10-12 (wreck-faithful).** Yes while it explodes and
+  for state 5's `1.5` s; **no from state 6 on** (a single race's wreck is driven through), and **always yes in the Eliminator** (state
+  8 never clears the byte). One byte, `collider+0x68`, which `Ship_SetState` cases 6 and 7 zero and `Collision_BoxAgainstBox`
+  reads; live on PPSSPP the exact pair fired `Body_ResolveContactPair` 4 of 4 in states 4, 5 and (Eliminator) 8 and 0 of 30 in state 6
+  (`wreck-collision.md`, confidence 90). Ours: `oag_physics::damage::solid_to_craft` and `Race::resolve_craft_pairs`. The Eliminator
+  respawn also leaves no wreck hull behind (measured 8 to 1: the hull is live again). **Still open from it:** a wreck made by a weapon
+  or wall rather than a debugger call; the flag (derived, not run to the end); whether a weapon, the AI or a shadow still sees a wreck
+  (the byte is not what they read); HD, 2048 and Omega (HD has a per-body enable byte in `Collision_ProcessPairs`, writer not found).
 - ~~The explosion's smoke is thinner and its fire brighter and longer in ours at k 160 to
   180 (2.2x to 2.4x).~~ **Closed 2026-10-01 (pulse-fx-recheck)**: the matrix's `0.75` rows scale every root
   emitter's spawn offset and velocity (and not sizes), an emitter's run is one tick short, a template dies one tick

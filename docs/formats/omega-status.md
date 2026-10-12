@@ -569,8 +569,8 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
 --hold cross --no-audio --screenshot out.png` (any directory holding both
 packages' `uroot/dataNN.psarc`; they are found by name). `just play omega`
 reads the same directory. `data/extracted/ps4` has held the corrected
-extraction since 2026-09-29; the short-read copy is `data/extracted/ps4.bak`,
-and a race does not get this far on it. Census figures on this page that name
+extraction since 2026-09-29; the short-read copy was `data/extracted/ps4.bak` (deleted 2026-10-12),
+and a race did not get this far on it. Census figures on this page that name
 a count were measured on whichever copy the paragraph says.
 
 `omega-race`, 2026-09-29. On the corrected extraction a race loads the real

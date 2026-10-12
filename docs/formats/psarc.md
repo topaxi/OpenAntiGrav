@@ -329,8 +329,8 @@ extraction and is wrong.** `PkgTool.Core`'s `PFSCReader.ReadSector` made one
 `Stream.Read` and treated a short return as a whole sector, leaving the rest
 of the sector zero. The tool was fixed and both `.pkg` files re-extracted
 2026-09-27; that copy became `data/extracted/ps4/{omega-eu,omega-eu-patch}`
-on 2026-09-29 (the short-read one is `data/extracted/ps4.bak`, a local
-backup with no other use). The root cause, the patch and the before-and-after
+on 2026-09-29 (the short-read one, `data/extracted/ps4.bak`, a local
+backup with no other use, was deleted 2026-10-12). The root cause, the patch and the before-and-after
 are in [`gnf.md`'s "Root cause"](gnf.md#root-cause-confidence-90-a-short-streamread-in-the-extraction-tool-not-this-projects-reader)
 and [`source-images.md`](../reverse-engineering/source-images.md); this page
 keeps only the measurements that survive.

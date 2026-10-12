@@ -126,6 +126,12 @@ earlier tree: `0.97` to `1.36` and `1.15` to `1.9`); the per-emitter pool census
 agrees to 1.0 for the smoke and within `0.8` to `1.2` for the fire and debris. The fire still holds a little
 longer at the tail and ours sits about `25` px to the right of the original's (our grid slot is not the original's).
 
+## Contact with other craft (2026-10-12)
+
+A wreck is solid to other craft in states 4 and 5 and not from state 6 on; the Eliminator's is always solid, and
+the respawned craft is the ordinary hull again (measured). One collider byte decides it: see
+[`wreck-collision.md`](wreck-collision.md).
+
 ## Not read
 
 - What `0x1000000` in the wreck's word at state 6 is.

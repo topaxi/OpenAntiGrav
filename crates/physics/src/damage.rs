@@ -186,14 +186,46 @@ impl Shield {
 /// Separate from [`apply_contact`] because it runs every tick, not only with contacts, and a
 /// caller driving the force law directly still wants the craft to finish blowing up.
 pub fn advance_state(state: &mut ShipState, dt: f32) {
-    if state.craft_state != CraftState::Destroyed {
-        return;
+    match state.craft_state {
+        CraftState::Destroyed => {
+            state.state_timer -= dt;
+            if state.state_timer <= 0.0 {
+                state.state_timer = ELIMINATED_SOLID_DURATION;
+                state.craft_state = CraftState::Eliminated;
+            }
+        }
+        CraftState::Eliminated => state.state_timer = (state.state_timer - dt).max(0.0),
+        CraftState::Racing => {}
     }
-    state.state_timer -= dt;
-    if state.state_timer <= 0.0 {
-        state.state_timer = 0.0;
-        state.craft_state = CraftState::Eliminated;
-    }
+}
+
+/// How long a craft that has finished exploding still takes part in craft-against-craft
+/// contact, in seconds: state 5's whole `1.5` s.
+///
+/// `Ship_SetState`'s case 5 (`0x08844548`) writes `1.5` into `entity+0x874`, and nothing in
+/// states 4 or 5 touches the box collider's enable byte (`collider+0x68`, reached through
+/// `entity+0x794 -> +0x3bc`). Case 6 (`0x088445d0`) and case 7 (`0x088445f8`) write it to
+/// zero, and `Collision_BoxAgainstBox` (`0x08817054`, `0x08817060`) refuses a pair when
+/// either side's byte is zero. Measured on PPSSPP 2026-10-12: a teleport onto the player
+/// fired `Body_ResolveContactPair` for the exact pair in states 4 and 5 and never in state 6,
+/// the byte reading `1, 1, 0` there. Confidence 90. See
+/// `docs/ghidra/functions/psp-pulse-usa/wreck-collision.md`.
+pub const ELIMINATED_SOLID_DURATION: f32 = 1.5;
+
+/// Whether a craft still resolves contact against other craft.
+///
+/// Every state but the original's state 6 does. State 6 is where a craft goes after state 5
+/// in every mode except the Eliminator, whose `Ship_UpdateDestroyed` (`0x08847650`) sends it
+/// to state 8 instead; state 8 never clears the collider byte, so an Eliminator craft is
+/// solid all the way back to racing (measured: contact fired in states 4, 5 and 8, the byte
+/// `1` throughout). `eliminator_route` is that mode fact. A pair resolves only when both
+/// craft pass.
+///
+/// Only craft-against-craft contact reads the byte: the box-against-mesh pass the circuit's
+/// walls and floor go through does not, which is why a wreck still lands and comes to rest.
+#[must_use]
+pub fn solid_to_craft(state: &ShipState, eliminator_route: bool) -> bool {
+    eliminator_route || state.craft_state != CraftState::Eliminated || state.state_timer > 0.0
 }
 
 /// Counts a fired Shield pickup down.

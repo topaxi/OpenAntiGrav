@@ -718,9 +718,11 @@ Three consequences, and the first is the interesting one:
   block and whose XML element is unknown, so there is no field to read it from.
 - **The gate on pitch input** (`FUN_088492bc`), not decoded, so pitch applies
   unconditionally.
-- **The sweep-and-prune broadphase.** A linear scan over triangles behind an AABB reject
-  is correct and is not the bottleneck yet. Worth recording before anyone implements it:
-  the original's packing quantises coordinates to 1 unit over roughly +/-1024 and caps ids
+- **The sweep-and-prune broadphase.** Not mirrored: `TriangleSoup` walks a bounding-volume
+  hierarchy (2026-10-12) that reports the same candidates in the same ascending index order
+  as the linear scan it replaced (a unit test holds it to that), because the scan had become
+  92% of a race's tick. Worth recording before anyone mirrors the original's:
+  its packing quantises coordinates to 1 unit over roughly +/-1024 and caps ids
   at 1024 per list, a hard limit inherited from the data rather than a design choice.
 - **The in-air roll-levelling branch**, which is [dead code](#a-dead-branch-not-to-port).
 - **The engine throttle ramp**, which is dead in the original: `<Engine gain/>` and

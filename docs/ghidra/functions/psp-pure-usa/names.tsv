@@ -172,3 +172,7 @@
 0x089336f0	function	Body_SetPosition	85	ai-controls.md
 0x088d9390	function	TrackStats_ParseElement	80	ai-controls.md
 0x08ab3b6c	data	g_ai_use_new_stats	94	ai-controls.md
+
+# 2026-10-12 (wreck-faithful): the collider enable byte, static only. See wreck-collision.md.
+0x08824fbc	function	Collision_BoxAgainstBox	80	wreck-collision.md
+0x08928824	function	Ship_SetState	75	wreck-collision.md
