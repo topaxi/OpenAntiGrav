@@ -84,6 +84,26 @@ most lives at a time limit). Mostly a custom track plus rules, but the track is 
    of ours if data-only mods should ship it.
 5. **HUD**: lives per craft instead of laps; results by survival order.
 
+## 1c. Custom HUDs and HUD modifications (maintainer, 2026-10-12)
+
+The modes above need HUDs of their own (distance to finish, lives per craft), and players will
+want to move, hide or add elements. What exists: `oag-hud` holds the layout model, the `Readout` a
+race hands it and the `Draw` list `draw_list` builds, with each title's HUD as data from its disc
+(`oag_game::hud_overlay` draws it); the asset layers (ADR-0061) already let an override replace a
+HUD texture by entry name.
+
+1. **HUD layouts as mod data**: a mod's `hud/*.toml` (a `hud.tosd` schema) that adds, moves, hides
+   or restyles elements by stable element id, the same `parent`-style patching the menus use, so
+   a small change does not copy a whole layout. Per title, only on the titles the mod declares.
+2. **Bindings**: an element shows one `Readout` field (speed, lap, position, lap delta, shield,
+   weapon, a mode's own values such as lives or distance to finish); a mode declares the extra
+   fields it publishes so its HUD can bind them.
+3. **Computed widgets**: anything data cannot express (a lap-delta graph, a mini-map) as a
+   WebAssembly widget later. The HUD is not simulation state, so it needs no determinism - a
+   simpler host than the rules hook, but the same sandbox (no files, network or clock).
+4. **The original HUDs stay as they are**: a HUD mod is opt-in, the vanilla layout is the default
+   and the original campaigns keep it.
+
 ## 2. A custom campaign
 
 What the titles' campaigns already give us: Pulse/HD/Omega grids and Pure's list (both launch
