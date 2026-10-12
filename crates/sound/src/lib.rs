@@ -732,32 +732,6 @@ impl Audio {
         }
     }
 
-    /// Where the race playlist starts the first time it is asked.
-    ///
-    /// One past the menu's track when the menu plays one of the sixteen (a PS2
-    /// boot), so the first race does not restart the recording the menu was
-    /// playing; otherwise [`MUSIC_TRACK`].
-    ///
-    /// Not silent when "one past" fails: `menu_from.is_some()` means the
-    /// soundtrack was already read once, so a failing re-read is an anomaly, and
-    /// falling back unannounced would look like the intended behaviour in the
-    /// load report.
-    fn initial_race_index(menu_from: &Option<Platform>, discs: &MusicDiscs) -> usize {
-        if menu_from.is_none() {
-            return MUSIC_TRACK;
-        }
-        match Self::booted_soundtrack_len(discs) {
-            0 => {
-                warn!(
-                    "audio: could not re-read the booted disc's own soundtrack length, so the \
-                     race playlist starts at track {MUSIC_TRACK} rather than one past the menu's"
-                );
-                MUSIC_TRACK
-            }
-            len => next_race_index(MUSIC_TRACK, len),
-        }
-    }
-
     /// How many tracks the **booted** disc's soundtrack lists, or `0` when it
     /// cannot be read (a PSP boot or no soundtrack). The wrap modulus of
     /// [`Self::race_index`].
