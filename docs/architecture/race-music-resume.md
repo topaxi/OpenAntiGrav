@@ -42,9 +42,16 @@ temporary file and is renamed over the old one.
 | While racing | every `SAVE_EVERY_SECONDS` = 10 s of ticks (**chosen, not measured**) |
 
 A write happens only when the whole-second state moved since the last one (`Saver`), so
-the menus do not rewrite the file. Headless captures and the `--race` developer route
-(no front-end shell, so no title key) neither restore nor save, as they never call
-`records::save`.
+the menus do not rewrite the file. The bookkeeping (restore once, save when moved, the
+10 s tick) is one struct, `oag_game::music_state::Run`, held by `Session` on every route.
+
+The windowed `--race` route has no front-end shell, so its title key is the one it
+opened (`Session::race_title`, via `Session::music_title`): it restores before
+`start_race_music` and saves on leaving, on quit and every 10 s like a menu race.
+**Headless captures (`--screenshot`, `--trace-out`, `--dry-run`) neither restore nor save,
+on purpose**: a capture must not depend on a profile's `music.toml`, the same reason they
+never call `records::save`. A windowed `--race` under a fresh `XDG_CONFIG_HOME` starts at
+the normal place.
 
 ## When it is read
 
@@ -71,13 +78,25 @@ track within 1 s, then repeats on track 1 at 7 s:
 | Title / release | Result |
 | --- | --- |
 | Pulse PSP (EU) | resumes; track 1 asserted |
-| Pulse PS2 (EU) | resumes; track 1 not asserted (the PS2 listing is not an archived listing) |
+| Pulse PS2 (EU) | resumes; track 1 asserted |
 | Pure PSP (EU) | resumes; track 1 asserted |
 | HD / Fury (PS3) | resumes; track 1 asserted |
 | 2048 (Vita) | resumes; track 1 asserted |
 | Omega (PS4) | resumes; track 1 asserted |
 
 Nothing falls back to the track start for lack of a seek.
+
+The PS2 row used to say "track 1 not asserted". The cause was the test's, not the
+engine's: it took the second track's length from `library::listing`, which is `None` for
+the PS2 (its soundtrack is the `PS2MUSIC.WAD` directory, not an archived listing), while
+`Audio::restore_race_music` already checks against `Audio::booted_track_seconds`, which
+reads both. The test now uses that, and the PS2 resumes track 1 at 7 s like the rest.
+
+`pulse_psp_run_restores_saves_and_quits` and the `pulse_ps2_` twin in the same file
+drive `music_state::Run` through a launch, 25 s of racing ticks (asserting the 20 s
+periodic save landed), a quit save and a second run that resumes from the file. A live
+`Session` needs a window and a GPU, so `Session` is a one-line wrapper over `Run` and the
+test covers everything but the wrapper's title choice.
 
 ## Omega / 2048 check
 

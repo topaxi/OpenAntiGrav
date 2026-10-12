@@ -54,8 +54,7 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
     let Some(image) = image else {
         return;
     };
-    let source = image.display().to_string();
-    let discs = audio::MusicDiscs::survey(&source, &GameLibrary);
+    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
     let cache = scratch(label);
     let file = cache.join("music.toml");
     let title = format!("title-{label}");
@@ -95,17 +94,17 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
 
     // Every disc's first track is the playlist's normal start, so a resume that
     // dropped the index would still pass above: do it again on the second track.
-    // The PS2 release's soundtrack is not an archived listing (`library::listing`
-    // is `None` for it), so its second track is not asserted here.
-    let Some(listed) = audio::library::listing(&GameLibrary, &source).unwrap() else {
-        println!("{label}: no archived listing, second track not asserted");
-        return;
-    };
+    // Lengths come from `booted_track_seconds`, which reads the PS2 release's
+    // `PS2MUSIC.WAD` directory as well as the archived listings
+    // (`library::listing` is `None` for the PS2, which is why this was once
+    // skipped there).
+    let listed = Audio::booted_track_seconds(&discs);
+    assert!(listed.len() > 1, "{label}: a soundtrack of several tracks");
     let wanted = audio::RaceMusicState {
         index: 1,
         second: 7,
         tracks: saved.tracks,
-        track_seconds: listed[1].seconds,
+        track_seconds: listed[1],
     };
     let mut third = open_audio(&cache);
     third.restore_race_music(&discs, &wanted).unwrap();
@@ -183,4 +182,61 @@ fn a_saved_place_from_another_soundtrack_is_refused() {
         "{why}"
     );
     assert!(audio.race_music_state().is_none(), "nothing was applied");
+}
+
+/// The session's own sequence (`music_state::Run`, which `Session::launch_race`,
+/// the fixed-timestep loop and `ApplicationHandler::exiting` and the `--race`
+/// route all call): restore at launch, a periodic save while racing, a save at
+/// quit, and a second run that resumes from it. Dropping any one of the three
+/// calls fails an assertion below.
+fn a_run_restores_saves_and_quits(label: &str, image: &str) {
+    let Some(image) = oag_testdata::image(image) else {
+        return;
+    };
+    let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
+    let cache = scratch(&format!("run-{label}"));
+    let file = cache.join("music.toml");
+    let title = format!("title-run-{label}");
+
+    let mut first = open_audio(&cache);
+    let mut run = music_state::Run::at(file.clone());
+    run.resume(&mut first, &discs, &title);
+    run.resume(&mut first, &discs, &title);
+    first.start_race_music(&discs, MusicSource::Auto, &cache);
+    for _ in 0..(25 * 60) {
+        first.tick();
+        run.racing_tick(&first, &title);
+    }
+    let periodic =
+        music_state::load_from(&file, &title).expect("a periodic save in 25 s of racing");
+    assert_eq!(periodic.second, 20, "{label}: the last whole 10 s save");
+    run.save(&first, &title);
+    let quit = music_state::load_from(&file, &title).unwrap();
+    assert!(
+        (i64::from(quit.second) - 25).abs() <= 1,
+        "{label}: quit saved {} s",
+        quit.second
+    );
+    drop(first);
+
+    let mut second = open_audio(&cache);
+    music_state::Run::at(file).resume(&mut second, &discs, &title);
+    second.start_race_music(&discs, MusicSource::Auto, &cache);
+    let at = second.playhead_race().expect("the resumed race is playing");
+    assert!(
+        (at - f64::from(quit.second)).abs() <= 1.0,
+        "{label}: {at} s"
+    );
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_psp_run_restores_saves_and_quits() {
+    a_run_restores_saves_and_quits("pulse-psp", "data/images/pulse-psp-eu.chd");
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulse_ps2_run_restores_saves_and_quits() {
+    a_run_restores_saves_and_quits("pulse-ps2", "data/images/pulse-ps2-eu.chd");
 }
