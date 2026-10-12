@@ -118,7 +118,8 @@ impl SingleLane {
         self.speed_scale = self.speed_scale * 0.9 + raw * 0.1;
         let k = dt60 * self.speed_scale;
         self.velocity = v + a * k;
-        self.lane = v * k + b * k * k + self.lane;
+        // `v_old * k + b * k * k + lane`; addition commutes, so the bits hold.
+        self.lane += v * k + b * k * k;
         self.lane
     }
 }
