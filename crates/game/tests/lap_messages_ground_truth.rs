@@ -102,7 +102,7 @@ fn the_final_lap_is_announced_once_and_the_finish_says_nothing() {
     let count = |id: &str| ids.iter().filter(|seen| *seen == id).count();
     assert_eq!(count("IG_HUD_FIN_LAP"), 1, "{ids:?}");
     assert!(
-        count("IG_HUD_PLAP") <= laps - 1,
+        count("IG_HUD_PLAP") < laps,
         "the finishing lap raises no perfect lap: {ids:?}"
     );
     assert_eq!(
