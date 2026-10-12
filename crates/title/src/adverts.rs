@@ -56,6 +56,26 @@ pub struct Adverts {
     /// 255 on screen against a full white from the model route, whose white sits
     /// above the bloom gate's knee and smears into a halo.
     pub gantry_card: bool,
+    /// The board slot 8 shows instead of the circuit's own while the race is a
+    /// Zone race, or `None` where the title keeps one gantry for every mode.
+    pub zone_gantry: Option<ZoneGantry>,
     /// Where the numbers came from.
     pub origin: crate::Origin,
+}
+
+/// A Zone race's own start board.
+///
+/// **Wipeout HD, measured on RPCS3 (2026-10-08, Vineta K, one boot per mode):**
+/// `GetMode()` 6 shows a board of its own before the release - a dark panel on
+/// which a loop icon assembles from light pieces - where modes 3 and 8 show
+/// `3 2 1 GO`. Confidence 85 for "the mode picks another file"; the file is
+/// inferred (80) from the picture, the names on the disc and the PS4 binary's
+/// mode table (`docs/ghidra/functions/ps4-omega-eu/billboards.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneGantry {
+    /// The model's archive path, spelled as a `trackstartup.xml` names one.
+    pub entry: &'static str,
+    /// Ticks the board's assembly runs before the release (HD: 210, read off the
+    /// capture as about 3.5 s; one boot, so a few ticks either way).
+    pub assembly_ticks: u64,
 }

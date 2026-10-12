@@ -561,6 +561,15 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // uniform, so the branch is uniform control flow and the fetches inside it
     // keep their implicit derivatives. Zero is what the mixes already reduced
     // these to, so the picture is unchanged to the byte.
+    // **A surface the Zone grade is switched off for** (`ZONE_EXEMPT_RATE`): the
+    // glow-table entry its material index names says so. Applied to the three
+    // mix weights and not to the `enabled` branch below, which has to stay uniform.
+    let zone_entry = in.slots >> 24u;
+    let zone_weight = select(
+        scene.zone.enabled,
+        0.0,
+        zone_entry != 0u && emissives.scale[zone_entry].y > 3.5,
+    );
     var zone_linear = vec3<f32>(0.0);
     var zone_gamma = vec3<f32>(0.0);
     var zone_glow_term = vec3<f32>(0.0);
@@ -575,7 +584,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // rather than trusting `effect.w` to be zero off a Zone race, the same
         // belt-and-braces `surface_linear`/`plain` below already take.
         zone_glow_term =
-            zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * scene.zone.enabled;
+            zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * zone_weight;
     }
 
     // The read specular term: half-vector against the sun, raised to
@@ -629,7 +638,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         // **replaces** the albedo rather than adding to it, so `enabled` is the
         // mix weight: it is 0.0 for every draw that is not a Zone race with all
         // its inputs resolved, and there this is `texel_linear` unchanged.
-        let surface_linear = mix(texel_linear, zone_linear, scene.zone.enabled);
+        let surface_linear = mix(texel_linear, zone_linear, zone_weight);
         // `colour = light * surface + glow` - the microcode's own order, and
         // **both glows are on the far side of the multiply because that is where
         // the disc puts them**. Read off `uvanim_diffuse_emissive`'s lit fragment
@@ -694,7 +703,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // `zone_gamma` already is on this path - it is a shader parameter and
     // texture-lookup product, not an albedo sample, so it owes no sRGB
     // decode either way.
-    let plain = mix(texel.rgb, zone_gamma, scene.zone.enabled) * tint * light
+    let plain = mix(texel.rgb, zone_gamma, zone_weight) * tint * light
         + glow + zone_glow_term + pad_glow + mag_glow_gamma;
     let plain_rgb = mix(plain, pow(plain, vec3<f32>(2.2)), linear_out);
 

@@ -535,6 +535,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         vex_geometry,
         gantry_visibility::adverts_for(title, options.mode),
         gantry_visibility::gantry_card(title),
+        options.mode,
         start_position.as_ref(),
         &mut report,
     );

@@ -439,3 +439,128 @@ fn hd_loads_slot_8_as_a_clocked_card_and_not_as_a_placed_model() {
     assert!(card.timeline.is_some(), "the gantry card carries its clock");
     assert_eq!(card.size, (512, 256));
 }
+
+/// A Zone race on HD's own circuit, loaded for the tests below.
+fn hd_zone_race() -> Option<crate::Loaded> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    Some(
+        crate::load(&crate::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            track: Some("/data/environments/01_vineta_k/track.vex".to_string()),
+            mode: oag_race::Mode::Zone,
+            ..crate::Options::default()
+        })
+        .expect("loading the Zone race"),
+    )
+}
+
+/// The mode picks the board (`GetMode()` 6, measured on RPCS3): a Zone race's
+/// slot 8 is the 8,368-byte `321Go_Zone.vex` the game loads last, not
+/// `3 2 1 GO`, and its clock starts 210 ticks before the release.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_zone_race_shows_the_zone_board_on_slot_8_and_starts_it_210_ticks_early() {
+    let Some(loaded) = hd_zone_race() else {
+        return;
+    };
+    let card = loaded
+        .billboards
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("slot 8 is a card");
+    let labels: Vec<String> = card
+        .model
+        .textures
+        .iter()
+        .flatten()
+        .map(|texture| texture.label.clone())
+        .collect();
+    assert!(
+        labels.iter().any(|l| l.ends_with("black_fadeout.gtf")),
+        "the Zone file's own textures, not the countdown's: {labels:?}"
+    );
+    assert!(
+        !labels.iter().any(|l| l.ends_with("321_go_64.gtf")),
+        "{labels:?}"
+    );
+    let clock = card.timeline.as_ref().expect("a clocked card").clock();
+    assert_eq!(clock.seconds(oag_race::COUNTDOWN_TICKS + 1 - 210), 0.0);
+    assert!((clock.seconds(oag_race::COUNTDOWN_TICKS + 1) - 3.5).abs() < 1e-3);
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("Zone grade is switched off")),
+        "the exemption says so in the loader report"
+    );
+}
+
+/// Every other mode keeps the countdown board.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_single_race_keeps_the_countdown_board() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        ..crate::Options::default()
+    })
+    .expect("loading the race");
+    let card = loaded
+        .billboards
+        .adverts
+        .iter()
+        .find(|card| card.slot == 8)
+        .expect("slot 8 is a card");
+    assert!(
+        card.model
+            .textures
+            .iter()
+            .flatten()
+            .any(|t| t.label.ends_with("321_go_64.gtf")),
+        "the countdown's own digits"
+    );
+}
+
+/// The Zone board's card draws something: a dark panel and the light pieces
+/// converging on the loop (more than the panel's one colour), at a mid-assembly
+/// reading, and not the same picture as the first tick of the clock.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU"]
+fn the_zone_board_card_is_assembling_mid_clock() {
+    let Some(loaded) = hd_zone_race() else {
+        return;
+    };
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("zone board test", &adapter)),
+    ) else {
+        return;
+    };
+    let cards: Vec<_> = loaded
+        .billboards
+        .adverts
+        .into_iter()
+        .filter(|card| card.slot == 8)
+        .collect();
+    let cards = Cards::new(&device, &queue, cards, Anisotropy::Off).expect("building the card");
+    let at = |seconds: f32| {
+        let (_, _, pixels) = cards
+            .read_back(&device, &queue, seconds)
+            .into_iter()
+            .next()
+            .expect("one card");
+        pixels
+    };
+    let (start, mid) = (at(0.0), at(2.0));
+    assert!(distinct_colours(&mid) >= 3, "a panel and its pieces");
+    assert_ne!(start, mid, "the board moves over its assembly");
+}

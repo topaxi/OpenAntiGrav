@@ -57,6 +57,7 @@ pub(super) fn build(
     vex_geometry: bool,
     (adverts_spec, adverts_off): (Option<&oag_title::adverts::Adverts>, &str),
     gantry_card: Option<&oag_title::adverts::Adverts>,
+    mode: Mode,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
 ) -> (
@@ -140,11 +141,14 @@ pub(super) fn build(
         if let Some(model) = manifest.billboard(8).and_then(|b| b.location()) {
             named_slot_8 = true;
             if let Some(spec) = gantry_card {
+                // The mode picks the board (measured on HD, `GetMode()` 6).
+                let zone_board = spec.zone_gantry.filter(|_| mode == Mode::Zone);
                 adverts.extend(super::super::gantry::place_card(
                     archives,
-                    model,
+                    zone_board.map_or(model, |zone| zone.entry),
                     track_model,
                     spec,
+                    zone_board,
                     report,
                 ));
             } else {
@@ -193,6 +197,22 @@ pub(super) fn build(
     }
     let placeholders = oag_render::gantry::placeholder_texture_slots(track_model);
     let served: Vec<u32> = adverts.iter().map(|card| card.slot).collect();
+    if mode == Mode::Zone && gantry_card.is_some() && served.contains(&8) {
+        let (exempted, skipped) =
+            oag_render::gantry::exempt_served_placeholders_from_zone(track_model, &[8]);
+        if exempted + skipped > 0 {
+            report.push(format!(
+                "Zone race: the Zone grade is switched off for {exempted} vertice(s) of the slot 8 \
+                 card's quad so the board shows (chosen, not measured: the original's Zone variant \
+                 of that material samples no albedo, yet its Zone races show the board){}",
+                if skipped > 0 {
+                    format!("; {skipped} vertice(s) kept the grade (a glow entry already named, or the table full)")
+                } else {
+                    String::new()
+                },
+            ));
+        }
+    }
     if adverts_spec.is_some_and(|spec| spec.flip_v) {
         let moved = oag_render::gantry::flip_served_placeholder_v(track_model, &served);
         if moved > 0 {

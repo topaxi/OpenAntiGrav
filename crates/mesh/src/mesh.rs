@@ -295,7 +295,7 @@ mod anim_node;
 pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 
 mod emissive;
-pub use emissive::Emissive;
+pub use emissive::{Emissive, ZONE_EXEMPT_RATE};
 
 mod external;
 pub use external::geometry_is_external;
