@@ -1,6 +1,7 @@
 //! The campaign's third AI mode: the original's own opponent
-//! (`oag_ai::original`), rubber banding included, flown on the player's
-//! physics. Chosen by the game mode and never by a player setting (the
+//! (`oag_ai::original`), rubber banding included, flown on each craft's
+//! own team's physics (`Setup::opponent_handling`; the controller reads no
+//! handling, the step does). Chosen by the game mode and never by a player setting (the
 //! maintainer's rule, 2026-10-11): only a campaign launch switches it on,
 //! through [`Race::use_original_ai`]; race box, remix and multiplayer keep this
 //! project's driver. Evidence: `docs/gameplay/ai.md`, "The original driver,
