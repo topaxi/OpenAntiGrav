@@ -172,6 +172,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "REMIX",
             "OPTIONS",
             "RECORDS",
+            "MODS",
             "QUIT"
         ]
     );
@@ -182,6 +183,7 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
             "RACEBOX",
             "REMIX",
             "OPTIONS",
+            "MODS",
             "QUIT",
             "RECORDS"
         ]

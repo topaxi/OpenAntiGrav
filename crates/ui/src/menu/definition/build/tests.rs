@@ -62,6 +62,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "racebox>remix",
         "options",
         "options>records",
+        "options>mods",
         "options>quit",
     ];
     assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), flat);
@@ -72,6 +73,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "racebox",
         "racebox>remix",
         "options",
+        "options>mods",
         "options>quit",
         "records",
     ];
@@ -86,6 +88,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
             "racebox>remix",
             "options",
             "options>records",
+            "options>mods",
             "options>quit"
         ]
     );
@@ -100,6 +103,7 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "racebox",
             "racebox>remix",
             "options",
+            "options>mods",
             "options>quit",
             "records"
         ]

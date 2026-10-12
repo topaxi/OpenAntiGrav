@@ -410,6 +410,30 @@ kind = "back"
 label = "BACK"
 string_id = "OAG_MENU_BACK"
 
+# **The MODS page: read-only.** One MOD row that steps through every mod the run has
+# (`values_from = "mods"`, built-in first; a mod that did not load is listed dimmed with
+# its error as the reason, the way a custom track that will not load is), and under it the
+# detail lines of the mod the row is on: id, version, authors, licence (NO LICENSE STATED
+# when it has none) and the menu rows it added. `mods.selected` is never stored; it only
+# says which mod the lines are about. Reached from OPTIONS through the built-in mod
+# `oag-extras`, like any mod's row. Chosen, not measured.
+[[page]]
+id = "mods"
+title = "MODS"
+title_string_id = "OAG_MODS_PAGE_TITLE"
+
+[[page.entry]]
+kind = "choice"
+label = "MOD"
+string_id = "OAG_MODS_ROW"
+setting = "mods.selected"
+values_from = "mods"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
 [[page]]
 id = "options"
 title = "OPTIONS"

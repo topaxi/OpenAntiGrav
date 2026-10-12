@@ -22,7 +22,7 @@ mod manifest;
 pub mod pack;
 
 pub use container::{Container, Origin};
-pub use discover::{Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
+pub use discover::{Failed, Found, Loaded, SEARCH_ENV, load, mods_search_path, search};
 pub use manifest::{
     Error as ManifestError, License, MANIFEST, Manifest, SCHEMA_KIND, SCHEMA_MAJOR,
 };

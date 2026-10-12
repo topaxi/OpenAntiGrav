@@ -283,6 +283,11 @@ pub enum ValueSource {
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
     /// list will not read; a title with no such list has the row dropped.
     Weapons,
+    /// Every mod this run has, the built-in one first: its name as the label, its id as the
+    /// value, and a mod that did not load listed dimmed with its error as the reason
+    /// (`oag_game::mods::Listing`). The MODS page is read-only, so the row only moves the
+    /// detail lines under it.
+    Mods,
 }
 
 impl ValueSource {
@@ -314,6 +319,7 @@ impl ValueSource {
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
             Self::Weapons => "weapons",
+            Self::Mods => "mods",
         }
     }
 
@@ -345,6 +351,7 @@ impl ValueSource {
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
             "weapons" => Some(Self::Weapons),
+            "mods" => Some(Self::Mods),
             _ => None,
         }
     }

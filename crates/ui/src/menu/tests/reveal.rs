@@ -57,7 +57,14 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
     press(&mut menu, &[Button::Right]);
     assert_eq!(
         drawn(&menu),
-        ["RACE CAMPAIGN", "RACEBOX", "OPTIONS", "QUIT", "RECORDS"]
+        [
+            "RACE CAMPAIGN",
+            "RACEBOX",
+            "OPTIONS",
+            "MODS",
+            "QUIT",
+            "RECORDS"
+        ]
     );
 }
 
@@ -74,7 +81,10 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "options");
     press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "mods");
+    press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "quit");
+    press(&mut menu, &[Button::Up]);
     press(&mut menu, &[Button::Up]);
     press(&mut menu, &[Button::Up]);
     assert_eq!(id(&menu), "options", "up from the head stays on it");
@@ -202,6 +212,7 @@ fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
             "RACEBOX",
             "REMIX",
             "OPTIONS",
+            "MODS",
             "QUIT",
             "RECORDS"
         ]

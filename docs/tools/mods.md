@@ -93,6 +93,25 @@ Rules:
 `assets/mods/oag-extras/` is the worked example: this project's own REMIX, RECORDS and
 QUIT, built into the program, in the same format, carrying the project's own licence.
 
+## The MODS page
+
+Every title's main menu has a **MODS** row under OPTIONS (added by `oag-extras` like any mod row,
+after RECORDS and before QUIT). It opens a read-only page: one MOD row that steps through the
+list, built-in first, then each mod in search order, then what was left out; and under it the
+lines for the mod the row is on: id, version (marked BUILT IN for `oag-extras`), authors,
+licence (**NO LICENSE STATED** when the manifest has neither `license` nor `license-file`;
+`see <file>` for a `license-file`) and the ids of the rows it added. Values over 22 characters are
+cut with `...`.
+
+A candidate the search left out (a broken zip, a duplicate id, a mod for another game version) and
+a mod whose rows did not fit the menu are listed too, **dimmed, with the error in the note line
+under the rows** and no detail lines: the mechanism a custom track that will not load uses. It
+is the same list the boot load report is written from (`oag_game::mods::Built::listing`). The
+pointer and touch move the MOD row as they move any choice row. A flat-list front end (Pulse,
+Pure, 2048) draws it as a page; HD and Omega reveal MODS below OPTIONS with the pad or pointer.
+There is no enable or disable: a mod is on while it is in the search path. `--menu-page mods`
+draws the page headless, and `--menu-page mods:<mod id>` puts the row on that mod.
+
 ## Packaging
 
 Entries may be **stored, deflate or zstd** (zip method 93); the reader takes all three.

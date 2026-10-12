@@ -137,7 +137,7 @@ pub(super) fn menu_page(
         Some((page, row)) => (page, Some(row)),
         None => (page, None),
     };
-    let mut definition = crate::mods::Mods::load()?
+    let built = crate::mods::Mods::load()?
         .build_with_strings(
             oag_ui::menu::BUILT_IN,
             strings,
@@ -146,8 +146,9 @@ pub(super) fn menu_page(
                 updated: false,
             }),
         )
-        .context("building the menu definition")?
-        .definition;
+        .context("building the menu definition")?;
+    let mods = built.listing;
+    let mut definition = built.definition;
     // The same two trims `crate::prepare` makes before a live menu opens, so
     // a captured RACE page has the rows a player's has.
     definition.drop_unavailable_race_variant(title);
@@ -170,6 +171,10 @@ pub(super) fn menu_page(
     if page == "remix" {
         remix_sources::supply(&mut model, title, tracks, teams, settings, strings);
     }
+    model.supply(
+        oag_ui::menu::ValueSource::Mods,
+        &crate::mods::choices(&mods, strings),
+    );
     model.supply(
         oag_ui::menu::ValueSource::Languages,
         &languages
@@ -309,7 +314,19 @@ pub(super) fn menu_page(
     }
     model.open(page);
     model.set_reveal_attached(title.main_menu.attached == oag_title::Attached::Revealed);
-    if let Some(row) = focus
+    // On the MODS page the suffix is a mod id (`--menu-page mods:example.garage`): there is
+    // one row, so what a still needs to choose is which mod it is on.
+    if page == crate::mods::PAGE
+        && let Some(id) = focus
+    {
+        anyhow::ensure!(
+            model.seed(
+                crate::mods::SELECTED,
+                &oag_ui::menu::Value::Text(id.to_string())
+            ),
+            "no mod {id:?} is listed"
+        );
+    } else if let Some(row) = focus
         && !model.focus_row(row)
     {
         anyhow::bail!("page {page:?} has no row with id {row:?}");
@@ -431,7 +448,9 @@ pub(super) fn menu_page(
                 &model, skin, text,
             ));
         }
-        list.extend(records_draws(&model, skin, title, tracks, records));
+        list.extend(records_draws(
+            &model, skin, title, tracks, records, &mods, strings,
+        ));
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
@@ -445,7 +464,9 @@ pub(super) fn menu_page(
                 &model, skin, text,
             ));
         }
-        list.extend(records_draws(&model, skin, title, tracks, records));
+        list.extend(records_draws(
+            &model, skin, title, tracks, records, &mods, strings,
+        ));
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
@@ -486,13 +507,16 @@ fn records_draws(
     title: &'static oag_title::Title,
     tracks: &[oag_raceplay::catalogue::Track],
     records: &crate::records::Store,
+    mods: &[crate::mods::Listing],
+    strings: &oag_ui::language::StringTable,
 ) -> Vec<oag_ui::frontend::Draw> {
     let Some(rows) = crate::scoreboard::records_table(model, title, records, |_mode, track_id| {
         tracks
             .iter()
             .find(|track| track.id == track_id)
             .map(oag_raceplay::catalogue::Track::entry_name)
-    }) else {
+    })
+    .or_else(|| crate::mods::table_for(model, mods, strings)) else {
         return Vec::new();
     };
     rows.iter()

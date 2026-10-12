@@ -69,6 +69,18 @@ target = "records"
 subtitle = "Your best times and scores, by track and class"
 subtitle_string_id = "OAG_MENU_RECORDS_SUBTITLE"
 
+# No `after`: on HD and Omega RECORDS is the disc's own top-level row, so it is no sibling
+# under OPTIONS to name. File order puts MODS after RECORDS and before QUIT everywhere.
+[[entry]]
+id = "mods"
+parent = "options"
+kind = "submenu"
+label = "MODS"
+string_id = "OAG_MENU_MODS"
+target = "mods"
+subtitle = "The mods this game loaded, their licences and the rows they add"
+subtitle_string_id = "OAG_MENU_MODS_SUBTITLE"
+
 [[entry]]
 id = "quit"
 parent = "options"

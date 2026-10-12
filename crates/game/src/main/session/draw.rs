@@ -643,7 +643,11 @@ impl Session {
             let records_table = self
                 .shell
                 .as_ref()
-                .and_then(|shell| crate::records_page::table_for(&stage.menu, shell, &self.records))
+                .and_then(|shell| {
+                    crate::records_page::table_for(&stage.menu, shell, &self.records).or_else(|| {
+                        oag_game::mods::table_for(&stage.menu, &shell.mods, &shell.strings)
+                    })
+                })
                 .unwrap_or_default();
             // The footer ticker's own honest rotation, off `Session::records` -
             // `None` shell answers empty, the same "nothing loaded yet" gap

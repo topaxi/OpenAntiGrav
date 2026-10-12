@@ -151,7 +151,15 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
         },
     );
 
-    let table_draws = records_draws(&model, &skin, oag_pulse::TITLE, &tracks, &store);
+    let table_draws = records_draws(
+        &model,
+        &skin,
+        oag_pulse::TITLE,
+        &tracks,
+        &store,
+        &[],
+        &oag_ui::language::StringTable::default(),
+    );
     let texts: Vec<&str> = table_draws
         .iter()
         .filter_map(|draw| match draw {

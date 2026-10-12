@@ -19,8 +19,8 @@ use oag_ui::strings;
 pub struct Mods {
     extras: oag_mod::Mod,
     player: Vec<oag_mod::Mod>,
-    /// One line for each candidate or row left out, with the reason.
-    pub problems: Vec<String>,
+    /// Each candidate the search left out, with the reason.
+    pub failed: Vec<oag_mod::Failed>,
 }
 
 #[derive(Debug)]
@@ -34,6 +34,181 @@ pub struct Built {
     pub strings: StringTable,
     /// Lines for the load report: every mod, its version, licence and rows.
     pub report: Vec<String>,
+    /// One entry per mod for the MODS page: the built-in first, then what loaded, then
+    /// what was left out with its error.
+    pub listing: Vec<Listing>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+/// One mod as the MODS page shows it. The page and the load report are built from the
+/// same facts in the same call, so they cannot name different things.
+pub struct Listing {
+    /// The mod's id; for a candidate that never opened, its file name.
+    pub id: String,
+    /// The name a player reads; the file name for a candidate that never opened.
+    pub name: String,
+    /// The mod's release, empty for a candidate that never opened.
+    pub version: String,
+    /// Who made it.
+    pub authors: Vec<String>,
+    /// `None` for a candidate that never opened.
+    pub license: Option<oag_mod::License>,
+    /// The ids of the menu rows it added.
+    pub rows: Vec<String>,
+    /// Whether this is the built-in mod.
+    pub builtin: bool,
+    /// Why it is not in the game, when it is not.
+    pub error: Option<String>,
+}
+
+/// The string id and English text of each label and word the MODS page draws.
+pub mod words {
+    /// `ID`, `VERSION`, `AUTHORS`, `LICENSE` and `ADDS`.
+    pub const ID: (&str, &str) = ("OAG_MODS_ID", "ID");
+    /// See [`ID`].
+    pub const VERSION: (&str, &str) = ("OAG_MODS_VERSION", "VERSION");
+    /// See [`ID`].
+    pub const AUTHORS: (&str, &str) = ("OAG_MODS_AUTHORS", "AUTHORS");
+    /// See [`ID`].
+    pub const LICENSE: (&str, &str) = ("OAG_MODS_LICENSE", "LICENSE");
+    /// See [`ID`].
+    pub const ADDS: (&str, &str) = ("OAG_MODS_ADDS", "ADDS");
+    /// A mod with no licence, visibly marked.
+    pub const NO_LICENSE: (&str, &str) = ("OAG_MODS_NO_LICENSE", "NO LICENSE STATED");
+    /// A licence kept in a file of the mod; `%s` is the file.
+    pub const LICENSE_FILE: (&str, &str) = ("OAG_MODS_LICENSE_FILE", "SEE %s");
+    /// A mod that added no row.
+    pub const NOTHING: (&str, &str) = ("OAG_MODS_NOTHING", "NOTHING");
+    /// The built-in mod's mark after its name.
+    pub const BUILT_IN: (&str, &str) = ("OAG_MODS_BUILT_IN", "BUILT IN");
+}
+
+/// Longest value the page draws before it cuts with `...`: the front end's wide face leaves
+/// about this much between the longest label (`AUTHORS`) and the right margin on a PSP-shaped
+/// screen.
+const VALUE_CHARS: usize = 22;
+
+fn fit(text: &str) -> String {
+    if text.chars().count() <= VALUE_CHARS {
+        return text.to_string();
+    }
+    let keep: String = text.chars().take(VALUE_CHARS - 3).collect();
+    format!("{keep}...")
+}
+
+/// The page the mods are listed on, and the setting its one row holds.
+pub const PAGE: &str = "mods";
+/// The MODS page's row. Never persisted: it only says which mod the detail lines are about.
+pub const SELECTED: &str = "mods.selected";
+
+/// The choices for `ValueSource::Mods`.
+#[must_use]
+pub fn choices(listing: &[Listing], strings: &StringTable) -> Vec<oag_ui::menu::Choice> {
+    listing.iter().map(|mod_| mod_.choice(strings)).collect()
+}
+
+/// The detail lines for the mod the MODS page's row is on; `None` off that page.
+#[must_use]
+pub fn table_for(
+    model: &oag_ui::menu::Menu,
+    listing: &[Listing],
+    strings: &StringTable,
+) -> Option<Vec<(String, String)>> {
+    if model.page().id != PAGE {
+        return None;
+    }
+    let held = model
+        .page()
+        .entries
+        .iter()
+        .find(|entry| entry.setting() == Some(SELECTED))
+        .and_then(oag_ui::menu::Entry::chosen)?;
+    let oag_ui::menu::Value::Text(id) = held else {
+        return None;
+    };
+    listing
+        .iter()
+        .find(|mod_| mod_.id == id)
+        .map(|mod_| mod_.table(strings))
+}
+
+impl Listing {
+    fn loaded(
+        module: &oag_mod::Mod,
+        rows: Vec<String>,
+        builtin: bool,
+        error: Option<String>,
+    ) -> Self {
+        let m = &module.manifest;
+        Self {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            version: m.version.to_string(),
+            authors: m.authors.clone(),
+            license: Some(m.license.clone()),
+            rows,
+            builtin,
+            error,
+        }
+    }
+
+    fn failed(failed: &oag_mod::Failed) -> Self {
+        Self {
+            id: failed.file_name(),
+            name: failed.file_name(),
+            version: String::new(),
+            authors: Vec::new(),
+            license: None,
+            rows: Vec::new(),
+            builtin: false,
+            error: Some(failed.cause().to_string()),
+        }
+    }
+
+    /// The MODS page's choice for this mod: dimmed, with the error as the reason, when it
+    /// is not in the game.
+    #[must_use]
+    pub fn choice(&self, _strings: &StringTable) -> oag_ui::menu::Choice {
+        let choice = oag_ui::menu::Choice::labelled(self.id.clone(), fit(&self.name));
+        match &self.error {
+            Some(error) => choice.unusable(error.clone()),
+            None => choice,
+        }
+    }
+
+    /// The detail lines under the MODS page's row: label and value, in reading order.
+    #[must_use]
+    pub fn table(&self, strings: &StringTable) -> Vec<(String, String)> {
+        let say = |(id, english): (&str, &str)| strings.get(id).unwrap_or(english).to_string();
+        // A mod that is not in the game has no detail lines: its error is in the note slot
+        // under the rows, where the same line would land.
+        let (Some(license), None) = (&self.license, &self.error) else {
+            return Vec::new();
+        };
+        let license = match license {
+            oag_mod::License::Spdx(expression) => expression.clone(),
+            oag_mod::License::File(path) => say(words::LICENSE_FILE).replace("%s", path),
+            oag_mod::License::None => say(words::NO_LICENSE),
+        };
+        let version = if self.builtin {
+            format!("{} {}", self.version, say(words::BUILT_IN))
+        } else {
+            self.version.clone()
+        };
+        let adds = if self.rows.is_empty() {
+            say(words::NOTHING)
+        } else {
+            self.rows.join(", ")
+        };
+        let lines = vec![
+            (say(words::ID), fit(&self.id)),
+            (say(words::VERSION), fit(&version)),
+            (say(words::AUTHORS), fit(&self.authors.join(", "))),
+            (say(words::LICENSE), fit(&license)),
+            (say(words::ADDS), fit(&adds)),
+        ];
+        lines
+    }
 }
 
 fn game_version() -> semver::Version {
@@ -62,7 +237,7 @@ impl Mods {
         Ok(Self {
             extras,
             player: found.mods,
-            problems: found.problems,
+            failed: found.failed,
         })
     }
 
@@ -112,13 +287,18 @@ impl Mods {
     ) -> Result<Built> {
         let mut left_out: Vec<String> = Vec::new();
         let mut problems = Vec::new();
+        let mut listed = Vec::new();
         loop {
             match self.try_build(vanilla, language, target, &left_out) {
                 Ok(mut built) => {
                     built.report.extend(problems);
+                    built.listing.extend(listed);
+                    built
+                        .listing
+                        .extend(self.failed.iter().map(Listing::failed));
                     return Ok(built);
                 }
-                Err(error) => self.leave_out(&error, &mut left_out, &mut problems)?,
+                Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,
             }
         }
     }
@@ -128,6 +308,7 @@ impl Mods {
         error: &Error,
         left_out: &mut Vec<String>,
         problems: &mut Vec<String>,
+        listed: &mut Vec<Listing>,
     ) -> Result<()> {
         let named = match error {
             Error::Mod { mod_id, .. } => self
@@ -142,6 +323,12 @@ impl Mods {
         problems.push(format!(
             "mod problem: {}: left out: {error}",
             module.label()
+        ));
+        listed.push(Listing::loaded(
+            module,
+            Vec::new(),
+            false,
+            Some(format!("left out: {error}")),
         ));
         left_out.push(module.manifest.id.clone());
         Ok(())
@@ -161,6 +348,7 @@ impl Mods {
     ) -> Result<Built> {
         let mut left_out: Vec<String> = Vec::new();
         let mut problems = Vec::new();
+        let mut listed = Vec::new();
         loop {
             let mut table = strings.clone();
             let mut english = strings::project_table(None);
@@ -171,9 +359,13 @@ impl Mods {
             match tried {
                 Ok(mut built) => {
                     built.report.extend(problems);
+                    built.listing.extend(listed);
+                    built
+                        .listing
+                        .extend(self.failed.iter().map(Listing::failed));
                     return Ok(built);
                 }
-                Err(error) => self.leave_out(&error, &mut left_out, &mut problems)?,
+                Err(error) => self.leave_out(&error, &mut left_out, &mut problems, &mut listed)?,
             }
         }
     }
@@ -246,11 +438,27 @@ impl Mods {
             .collect();
         let (definition, added) = Definition::build(vanilla, table, english, target, &mods)?;
         let report = self.report(&all, &added);
+        let listing = all
+            .iter()
+            .map(|module| {
+                let rows = added
+                    .iter()
+                    .find(|a| a.mod_id == module.manifest.id)
+                    .map_or_else(Vec::new, |a| a.rows.clone());
+                Listing::loaded(
+                    module,
+                    rows,
+                    module.origin() == oag_mod::Origin::Builtin,
+                    None,
+                )
+            })
+            .collect();
         Ok(Built {
             definition,
             added,
             strings: table.clone(),
             report,
+            listing,
         })
     }
 
@@ -283,7 +491,7 @@ impl Mods {
             });
             lines.push(format!("mod {} - {rows}", module.describe()));
         }
-        lines.extend(self.problems.iter().map(|p| format!("mod problem: {p}")));
+        lines.extend(self.failed.iter().map(|p| format!("mod problem: {p}")));
         lines
     }
 }

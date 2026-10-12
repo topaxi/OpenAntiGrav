@@ -781,7 +781,9 @@ fn every_settings_row_is_one_the_game_seeds() {
                 continue;
             };
             // The web's own rows are dropped on a desktop and seeded only there.
+            // The MODS page's one row only says which mod the detail lines are about.
             if PILOT_EDITOR_ROWS.contains(&setting)
+                || setting == oag_game::mods::SELECTED
                 || oag_game::settings::web::WEB_ONLY_ROWS.contains(&setting)
             {
                 continue;

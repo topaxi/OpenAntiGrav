@@ -118,7 +118,9 @@ just mods-check <data dir>/oag/mods/garage    # from a checkout; prints id, vers
 just mods-list                                # what the search finds, and what it left out
 ```
 
-On Pulse the main menu then ends with a GARAGE row (seen in a headless screenshot,
+In the game, OPTIONS then MODS lists every mod it loaded: name, id, version, authors, licence
+(**NO LICENSE STATED** when you left it out) and the rows it added. A mod that failed to load is
+listed dimmed with the reason under it. On Pulse the main menu then ends with a GARAGE row (seen in a headless screenshot,
 `oag-game --menu-page main --screenshot out.png`). A row can only open a page the menu
 already has, or run an action from a closed list; a mod cannot add a page, a setting or a
 mode. Anything wrong (an unknown page, parent or string id) leaves the whole mod out and
@@ -148,8 +150,8 @@ Give the mod a licence. A mod with none loads, and the list prints `no license s
 - **Custom craft.** The `craft/` folder in a mod is reserved and nothing reads it.
 - **Tracks and pilots inside a mod.** `tracks/` and `pilots/` in a mod are reserved; put
   them in `tracks/` and `pilots/` as above for now.
-- **A MODS page in the game.** There is no list, switch or licence screen; use `just mods-list`
-  and the load report. Queued.
+- **Switching a mod off in the game.** The MODS page (OPTIONS, then MODS) lists every mod and
+  cannot enable or disable one; move the folder out of the mods directory. Queued.
 - **Anything beyond menu rows in a mod**: no new pages, settings, modes, actions or art.
 
 ## Schemas

@@ -174,11 +174,13 @@ impl Session {
             Some(pending.race_options(source, teams.iter().map(|(id, _)| id.clone()).collect()));
         self.music_discs = pending.music_discs(source);
         self.loading_assets = loading::Assets::load(source, &strings, None, None);
+        let (definition, mods) = pending.menu_for(title, false).unwrap_or_else(|e| {
+            log::warn!("menu: {e:#}");
+            (pending.definition.clone(), Vec::new())
+        });
         self.shell = Some(Shell {
-            definition: pending.menu_for(title, false).unwrap_or_else(|e| {
-                log::warn!("menu: {e:#}");
-                pending.definition.clone()
-            }),
+            definition,
+            mods,
             menu_sfx: None,
             title,
             platform: archives.layout.platform,

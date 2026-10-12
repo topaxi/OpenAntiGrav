@@ -651,6 +651,8 @@ pub(crate) struct BackdropShape {
 #[derive(Clone)]
 pub(crate) struct Shell {
     pub(crate) definition: menu::Definition,
+    /// The mods the MODS page lists, built with [`Self::definition`].
+    pub(crate) mods: Vec<oag_game::mods::Listing>,
     /// The front end's navigation sounds, decoded at boot from the title's
     /// front-end bank. `None` where the boot never read one; a title without
     /// the bank holds an empty [`oag_sound::sfx::MenuSfx`] and plays nothing.
@@ -814,6 +816,7 @@ impl Shell {
     ) -> Self {
         Self {
             definition,
+            mods: Vec::new(),
             menu_sfx: None,
             title,
             platform: boot_shell.platform,
