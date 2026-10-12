@@ -149,6 +149,9 @@ pub(super) struct RaceTerms<'a> {
     pub full_grid: bool,
     /// The track's own `stats.xml`, when read.
     pub track_stats: Option<&'a TrackStats>,
+    /// The title flies the original's own opponent in its campaign
+    /// (`oag_title::RaceDefaults::original_opponent`).
+    pub original_opponent: bool,
 }
 
 /// The class's `AIRaceStats` off `archives`, and the race's skill scale.
@@ -203,7 +206,15 @@ pub(super) fn read(
         rung(terms.difficulty),
         mode_term(terms.mode, terms.weapons_on, terms.full_grid),
     );
-    let original = read_original(archives, &blob, class, report);
+    let original = if terms.original_opponent {
+        read_original(archives, &blob, class, report)
+    } else {
+        report.push(
+            "original AI: not wired for this title; its campaign keeps this project's driver"
+                .to_string(),
+        );
+        None
+    };
     let thrust = FinishedThrust {
         stats,
         skill,

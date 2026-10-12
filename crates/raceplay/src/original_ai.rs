@@ -61,8 +61,8 @@ impl Race {
         };
         let Some(tables) = thrust.original else {
             log::warn!(
-                "original AI: the class's whole AI tables did not read; opponents keep this \
-                 project's driver"
+                "original AI: no tables for this title and class (see the loader report); \
+                 opponents keep this project's driver"
             );
             return false;
         };

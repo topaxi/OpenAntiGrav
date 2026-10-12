@@ -187,6 +187,14 @@ pub struct RaceDefaults {
     pub hover_rig: Option<&'static crate::hover_rig::HoverRig>,
     /// The craft's inertia mass and steering clamp, `None` for Pulse's: [`crate::craft_laws::CraftLaws`].
     pub craft_laws: Option<&'static crate::craft_laws::CraftLaws>,
+    /// The campaign's opponents fly the original's own driver
+    /// (`oag_ai::original`, the maintainer's AI mode 3). `true` only where
+    /// that driver was recovered off this title's executable and its thrust
+    /// law reproduced live: Pulse. HD's law differs in four places and its
+    /// planner, steering and rail are unread; 2048 and Omega ship the same
+    /// tables and their driver is unread (`docs/gameplay/ai.md`, "The
+    /// original driver, recovered"). `false` keeps this project's driver.
+    pub original_opponent: bool,
     /// The Zone-mode **speed-class** announcer this title ships, when it has
     /// been read off the disc. See [`ZoneClassAnnouncer`].
     ///
