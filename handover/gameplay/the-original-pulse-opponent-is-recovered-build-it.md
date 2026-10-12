@@ -45,10 +45,14 @@ respawn; our AI is untouched (lone-craft regression identical, twelve clean).
   a windowed front-end walk is its only evidence.
 - **Replays** do not record the mode; none records an opponent race yet.
 - **`StartBoost`** at the launch (`ai-stats.md`) is still unwired.
-- **Other titles.** HD's thrust law is Pulse's with four changes and its
-  planner, steering and rail are unread; 2048 and Omega ship the same tables
-  (checked, applies, not wired). Each opts in through
-  `RaceDefaults::original_opponent` in its own lane. Pure is another schema.
+- **Other titles.** HD flies it since 2026-10-12 (lane `orig-ai-hd`, its own
+  thread [hds-original-opponent-flies-its-campaign.md](hds-original-opponent-flies-its-campaign.md)).
+  2048 and Omega ship the same tables; Omega's executable inlines HD's driver
+  (static); neither is wired. Pure is another schema.
+- **The campaign skill was never resolved before 2026-10-12**: the session read
+  `self.race_options` after taking it, so every Pulse campaign launch flew at the
+  ambient scale. Fixed in `orig-ai-hd`; a Pulse cell now gets its own
+  `stats.xml` value, which no Pulse windowed walk has re-checked since.
 
 ## Next Steps
 

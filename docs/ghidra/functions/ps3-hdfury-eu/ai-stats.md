@@ -13,6 +13,11 @@ Per [ADR-0006](../../../architecture/adr/0006-no-copyrighted-content.md) no valu
 file is written here: the census states identity, and the code constants below are the
 executable's own.
 
+**2026-10-12:** the rest of HD's driver is read against Pulse's, the thrust law
+below is measured on 83 RPCS3 samples (confidence 94), and HD's campaign flies it:
+[ai-controls.md](ai-controls.md). The "nothing reaches `oag-ai`" statements below
+are from before that.
+
 ## The finding
 
 1. **HD's two AI files are Pulse's, value for value** (confidence 95, an exact comparison of every
