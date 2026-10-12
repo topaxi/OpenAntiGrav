@@ -474,7 +474,10 @@ impl Directory {
             // back to the raw block.
             let start = out.len();
             if stored_len != 0 && chunk.first() == Some(&ZLIB_CMF) {
-                if !inflate_block_into(&mut inflater, chunk, &mut out, block_size) {
+                // Capped at what the entry has left, so its last block never grows
+                // `out` past the `size` it was allocated with.
+                let room = block_size.min(size.saturating_sub(start));
+                if !inflate_block_into(&mut inflater, chunk, &mut out, room) {
                     out.extend_from_slice(
                         &miniz_oxide::inflate::decompress_to_vec_zlib(chunk)
                             .unwrap_or_else(|_| chunk.to_vec()),
@@ -507,20 +510,20 @@ impl Directory {
 /// minus what that call costs per block: a fresh decompressor (about 11 KiB to
 /// set up) and an output buffer started at twice the input and doubled until the
 /// block fits, then copied once more onto `out`. Only a stream that finishes
-/// within `block_size` bytes is taken; anything else (an error, or more output
-/// than a block holds) leaves `out` as it was and returns `false`, and the
-/// caller runs `decompress_to_vec_zlib` itself, so every outcome is the one it
-/// always produced.
+/// within `room` bytes (a block, or what the entry has left) is taken; anything
+/// else (an error, or more output than `room` holds) leaves `out` as it was and
+/// returns `false`, and the caller runs `decompress_to_vec_zlib` itself, so
+/// every outcome is the one it always produced.
 fn inflate_block_into(
     inflater: &mut Option<Box<DecompressorOxide>>,
     chunk: &[u8],
     out: &mut Vec<u8>,
-    block_size: usize,
+    room: usize,
 ) -> bool {
     let inflater = inflater.get_or_insert_with(Box::default);
     inflater.init();
     let start = out.len();
-    out.resize(start + block_size, 0);
+    out.resize(start + room, 0);
     let flags = inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
         | inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
     let (status, _, written) = decompress(inflater, chunk, &mut out[start..], 0, flags);
