@@ -448,16 +448,7 @@ pub(super) fn emit_chunk(
             report.no_stride += 1;
             continue;
         };
-        let surface = surface(
-            model,
-            mesh,
-            &out.textures,
-            &out.material_slots,
-            &out.material_specular_exponent,
-            &out.material_colour_factor,
-            &out.material_quake,
-            &out.material_anim,
-        );
+        let surface = surface(model, mesh, out);
         report.see_through += usize::from(surface.blend.is_some());
         report.cutout += usize::from(surface.cutout);
         report.no_texcoord += usize::from(declares_no_texcoord(mesh));

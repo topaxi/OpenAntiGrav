@@ -33,7 +33,7 @@ use oag_core::math::{Mat4, Vec3};
 use oag_rcs::rcsmodel;
 use oag_vex::vex;
 
-use super::{Bounds, DrawCall, GpuVertex, Model, ModelTexture, TextureSlots, anim_node, slots};
+use super::{Bounds, DrawCall, GpuVertex, Model, TextureSlots, anim_node, slots};
 
 /// How far a dequantised point may miss the authored box face by, in world
 /// units, before a stride is rejected.
@@ -238,16 +238,13 @@ fn declares_no_texcoord(mesh: &rcsmodel::Mesh) -> bool {
 /// blending it would put the white 1x1 through the transparent pass and paint
 /// the same sheet with depth write off - strictly worse than before. Such a
 /// chunk stays in the opaque pass and is counted in [`Report::untextured`].
-fn surface(
-    model: &rcsmodel::Model,
-    mesh: &rcsmodel::Mesh,
-    skin: &[Option<std::sync::Arc<ModelTexture>>],
-    material_slots: &[u32],
-    material_specular_exponent: &[f32],
-    material_colour_factor: &[bool],
-    material_quake: &[bool],
-    material_anim: &[u32],
-) -> Surface {
+fn surface(model: &rcsmodel::Model, mesh: &rcsmodel::Mesh, tables: &Model) -> Surface {
+    let skin = &tables.textures;
+    let material_slots = &tables.material_slots;
+    let material_specular_exponent = &tables.material_specular_exponent;
+    let material_colour_factor = &tables.material_colour_factor;
+    let material_quake = &tables.material_quake;
+    let material_anim = &tables.material_anim;
     let slot = mesh.material as usize;
     let texture = skin.get(slot).and_then(Option::as_ref).map(|_| slot);
     // Which of `Model::anim_tracks` this material's own curve (if any) drives
@@ -792,16 +789,7 @@ fn build_with_options(
                 continue;
             };
 
-            let surface = surface(
-                &model,
-                mesh,
-                &out.textures,
-                &out.material_slots,
-                &out.material_specular_exponent,
-                &out.material_colour_factor,
-                &out.material_quake,
-                &out.material_anim,
-            );
+            let surface = surface(&model, mesh, &out);
             report.see_through += usize::from(surface.blend.is_some());
             report.cutout += usize::from(surface.cutout);
             report.no_texcoord += usize::from(declares_no_texcoord(mesh));

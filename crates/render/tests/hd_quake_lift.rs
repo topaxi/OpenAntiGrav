@@ -359,8 +359,6 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("draining the queue");
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
-    mapped
-        .chunks_exact(4)
-        .map(|p| [p[0], p[1], p[2], p[3]])
-        .collect()
+    let (pixels, _) = mapped.as_chunks::<4>();
+    pixels.to_vec()
 }
