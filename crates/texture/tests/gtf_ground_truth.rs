@@ -83,25 +83,55 @@ const FORMATS: &[(u8, usize)] = &[
     (0xa8, 3),
 ];
 
+/// Every whole-disc claim below over **one** walk of the 7,333 `.gtf` files.
+/// The read is most of the cost (about 17 s under load), and these were five
+/// tests reading the disc five times until 2026-10-12. Each claim is its own
+/// type: `visit` sees every file, `check` asserts once the walk is done.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn every_gtf_on_the_disc_parses_and_the_census_is_what_it_was() {
+fn every_gtf_on_the_disc_holds_every_whole_disc_claim() {
     let Some(image) = image() else {
         return;
     };
-    let mut census: BTreeMap<u8, usize> = BTreeMap::new();
-    let mut versions: BTreeMap<u32, usize> = BTreeMap::new();
-    let (mut files, mut cubemaps, mut non_power_of_two) = (0usize, 0usize, 0usize);
-
+    let mut census = Census::default();
+    let mut decode = DecodesToItsOwnDimensions::default();
+    let mut swizzle = SwizzleIsSmoother::default();
+    let mut shadows = SingleChannelShadows::default();
+    let mut cubemaps = CubemapFaces::default();
     for_every_gtf(&image, |path, blob| {
+        census.visit(path, blob);
+        decode.visit(path, blob);
+        swizzle.visit(path, blob);
+        shadows.visit(path, blob);
+        cubemaps.visit(path, blob);
+    });
+    census.check();
+    decode.check();
+    swizzle.check();
+    shadows.check();
+    cubemaps.check();
+}
+
+/// Every `.gtf` on the disc parses, and the census is what it was.
+#[derive(Default)]
+struct Census {
+    census: BTreeMap<u8, usize>,
+    versions: BTreeMap<u32, usize>,
+    files: usize,
+    cubemaps: usize,
+    non_power_of_two: usize,
+}
+
+impl Census {
+    fn visit(&mut self, path: &str, blob: &[u8]) {
         let parsed = Gtf::parse(blob).unwrap_or_else(|e| panic!("{path}: {e}"));
-        files += 1;
-        *versions.entry(parsed.version).or_default() += 1;
+        self.files += 1;
+        *self.versions.entry(parsed.version).or_default() += 1;
         assert_eq!(parsed.textures.len(), 1, "{path}: not one texture");
         let texture = parsed.only().expect("one");
-        *census.entry(texture.format_byte).or_default() += 1;
-        cubemaps += usize::from(texture.cubemap);
-        non_power_of_two += usize::from(
+        *self.census.entry(texture.format_byte).or_default() += 1;
+        self.cubemaps += usize::from(texture.cubemap);
+        self.non_power_of_two += usize::from(
             !u32::from(texture.width).is_power_of_two()
                 || !u32::from(texture.height).is_power_of_two(),
         );
@@ -110,30 +140,34 @@ fn every_gtf_on_the_disc_parses_and_the_census_is_what_it_was() {
         assert_eq!(texture.dimension, 2, "{path}");
         assert_eq!(texture.depth, 1, "{path}");
         assert_eq!(texture.location, 0, "{path}");
-    });
+    }
 
-    assert_eq!(files, 7333);
-    assert_eq!(cubemaps, 23);
-    assert_eq!(non_power_of_two, 131);
-    assert_eq!(
-        census.into_iter().collect::<Vec<_>>(),
-        FORMATS.to_vec(),
-        "the format census moved"
-    );
-    assert_eq!(
-        versions,
-        BTreeMap::from([(0x0105_0000, 6980), (0x0201_0100, 353)])
-    );
+    fn check(self) {
+        assert_eq!(self.files, 7333);
+        assert_eq!(self.cubemaps, 23);
+        assert_eq!(self.non_power_of_two, 131);
+        assert_eq!(
+            self.census.into_iter().collect::<Vec<_>>(),
+            FORMATS.to_vec(),
+            "the format census moved"
+        );
+        assert_eq!(
+            self.versions,
+            BTreeMap::from([(0x0105_0000, 6980), (0x0201_0100, 353)])
+        );
+    }
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
-    let Some(image) = image() else {
-        return;
-    };
-    let (mut decoded, mut unknown_format, mut cubemaps) = (0usize, 0usize, 0usize);
-    for_every_gtf(&image, |path, blob| {
+/// Every texture the reader accepts decodes to its own dimensions.
+#[derive(Default)]
+struct DecodesToItsOwnDimensions {
+    decoded: usize,
+    unknown_format: usize,
+    cubemaps: usize,
+}
+
+impl DecodesToItsOwnDimensions {
+    fn visit(&mut self, path: &str, blob: &[u8]) {
         let parsed = Gtf::parse(blob).expect("parses");
         let texture = parsed.only().expect("one");
         // The whole corpus is 2.4 GiB; decoding the base level of everything
@@ -146,36 +180,46 @@ fn every_texture_the_reader_accepts_decodes_to_its_own_dimensions() {
             Ok(rgba) => {
                 let (w, h) = texture.level_size(0);
                 assert_eq!(rgba.len(), (w * h) as usize, "{path}");
-                decoded += 1;
+                self.decoded += 1;
             }
             // Nothing on the disc reaches this: every format byte in `FORMATS`
             // decodes. Kept so an unknown format shows as a count, not a panic.
-            Err(gtf::Error::UnknownFormat { .. }) => unknown_format += 1,
-            Err(gtf::Error::Cubemap) => cubemaps += 1,
+            Err(gtf::Error::UnknownFormat { .. }) => self.unknown_format += 1,
+            Err(gtf::Error::Cubemap) => self.cubemaps += 1,
             Err(e) => panic!("{path}: {e}"),
         }
-    });
+    }
 
-    // The only refusals left are cubemaps, which need `face_to_rgba`; see
-    // `docs/formats/gtf.md`.
-    println!("{decoded} decoded, {unknown_format} unknown format, {cubemaps} cubemaps");
-    assert_eq!((decoded, unknown_format, cubemaps), (4513, 0, 8));
+    fn check(self) {
+        let Self {
+            decoded,
+            unknown_format,
+            cubemaps,
+        } = self;
+        // The only refusals left are cubemaps, which need `face_to_rgba`; see
+        // `docs/formats/gtf.md`.
+        println!("{decoded} decoded, {unknown_format} unknown format, {cubemaps} cubemaps");
+        assert_eq!((decoded, unknown_format, cubemaps), (4513, 0, 8));
+    }
 }
 
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn the_swizzle_order_is_smoother_than_a_linear_misread() {
-    let Some(image) = image() else {
-        return;
-    };
-    // Only 53 files on the disc are swizzled and not block-compressed (37
-    // `A8R8G8B8`, 7 `A8B8G8R8`, 9 `B8`), so the whole disc is a small sweep with no
-    // sampling.
-    //
-    // **No named exceptions.** Three files once were, an artefact of measuring
-    // roughness along rows only; [`roughness_2d`] retires them.
-    let (mut smoother, mut flat, mut rougher) = (0usize, 0usize, 0usize);
-    for_every_gtf(&image, |path, blob| {
+/// The swizzle order is smoother than a linear misread.
+///
+/// Only 53 files on the disc are swizzled and not block-compressed (37
+/// `A8R8G8B8`, 7 `A8B8G8R8`, 9 `B8`), so the whole disc is a small sweep with no
+/// sampling.
+///
+/// **No named exceptions.** Three files once were, an artefact of measuring
+/// roughness along rows only; [`roughness_2d`] retires them.
+#[derive(Default)]
+struct SwizzleIsSmoother {
+    smoother: usize,
+    flat: usize,
+    rougher: usize,
+}
+
+impl SwizzleIsSmoother {
+    fn visit(&mut self, path: &str, blob: &[u8]) {
         let parsed = Gtf::parse(blob).expect("parses");
         let texture = parsed.only().expect("one");
         if texture.format.is_block_compressed() || texture.is_linear() || texture.cubemap {
@@ -207,24 +251,31 @@ fn the_swizzle_order_is_smoother_than_a_linear_misread() {
         // A handful are flat single-colour masks (`corner2.gtf`'s RGB plane,
         // alpha carrying the shape) and say nothing either way.
         if a < 0.005 && b < 0.005 {
-            flat += 1;
+            self.flat += 1;
         } else if a <= b {
-            smoother += 1;
+            self.smoother += 1;
         } else {
-            rougher += 1;
+            self.rougher += 1;
             eprintln!("{path}: morton roughness {a:.2} >= raster misread {b:.2}");
         }
-    });
+    }
 
-    let judged = smoother + rougher;
-    println!("{smoother} smoother, {rougher} rougher, {flat} flat, {judged} judged");
-    assert!(judged > 20, "only {judged} textures had anything to say");
-    assert_eq!(
-        (judged, rougher),
-        (43, 0),
-        "the Morton reading was the smoother one on every judgeable file"
-    );
-    assert_eq!(flat, 10, "the flat bucket moved");
+    fn check(self) {
+        let Self {
+            smoother,
+            flat,
+            rougher,
+        } = self;
+        let judged = smoother + rougher;
+        println!("{smoother} smoother, {rougher} rougher, {flat} flat, {judged} judged");
+        assert!(judged > 20, "only {judged} textures had anything to say");
+        assert_eq!(
+            (judged, rougher),
+            (43, 0),
+            "the Morton reading was the smoother one on every judgeable file"
+        );
+        assert_eq!(flat, 10, "the flat bucket moved");
+    }
 }
 
 /// Every `B8` file on the disc, and what each one is.
@@ -256,20 +307,19 @@ const AMBIENT_SHADOWS: &[&str] = &[
 /// 3. The Morton reading is markedly smoother than the raster misread, by better
 ///    than 1.6x on all nine. `docs/formats/gtf.md` has the picture this number
 ///    stands in for.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
-    let Some(image) = image() else {
-        return;
-    };
-    let mut found = Vec::new();
-    for_every_gtf(&image, |path, blob| {
+#[derive(Default)]
+struct SingleChannelShadows {
+    found: Vec<String>,
+}
+
+impl SingleChannelShadows {
+    fn visit(&mut self, path: &str, blob: &[u8]) {
         let parsed = Gtf::parse(blob).expect("parses");
         let texture = parsed.only().expect("one");
         if texture.format != Format::B8 {
             return;
         }
-        found.push(path.to_string());
+        self.found.push(path.to_string());
         assert_eq!((texture.width, texture.height), (128, 64), "{path}");
         assert!(!texture.is_linear(), "{path}");
         assert_eq!(texture.remap, 0xa9ff, "{path}");
@@ -285,9 +335,8 @@ fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
         let texels = &blob[texture.level_range(0)];
         let mut wrong =
             gtf::decode_level(texture.format, texels, width, height, 0, true).expect("decodes");
-        // The same remap on both sides (see
-        // `the_swizzle_order_is_smoother_than_a_linear_misread`); without it the
-        // broadcast alone makes the Morton reading three times rougher.
+        // The same remap on both sides (see [`SwizzleIsSmoother`]); without it
+        // the broadcast alone makes the Morton reading three times rougher.
         gtf::Remap::decode(texture.remap).apply(&mut wrong);
         let (a, b) = (
             roughness_2d(&native, width as usize),
@@ -298,8 +347,11 @@ fn the_single_channel_textures_are_ship_shadows_and_read_in_morton_order() {
             b > a * 1.6,
             "{path}: morton {a:.3} is not markedly smoother than raster {b:.3}"
         );
-    });
-    assert_eq!(found, AMBIENT_SHADOWS);
+    }
+
+    fn check(self) {
+        assert_eq!(self.found, AMBIENT_SHADOWS);
+    }
 }
 
 /// [`roughness`], plus the same thing down columns.
@@ -553,15 +605,16 @@ fn the_huds_own_textures_decode() {
 /// Talon's Junction the zenith is deep blue (mean `(78, 123, 165)`), the nadir
 /// blank white and the four sides pale horizon (`204..217` red). Read level-major,
 /// the "faces" would be slices of one image and not separate that way.
-#[test]
-#[ignore]
-fn every_cubemap_decodes_six_distinct_faces() {
-    let Some(image) = image() else {
-        return;
-    };
-    let (mut cubemaps, mut decoded, mut refused) = (0usize, 0usize, 0usize);
-    let mut skies = 0usize;
-    for_every_gtf(&image, |path, blob| {
+#[derive(Default)]
+struct CubemapFaces {
+    cubemaps: usize,
+    decoded: usize,
+    refused: usize,
+    skies: usize,
+}
+
+impl CubemapFaces {
+    fn visit(&mut self, path: &str, blob: &[u8]) {
         let Ok(parsed) = gtf::Gtf::parse(blob) else {
             return;
         };
@@ -574,7 +627,7 @@ fn every_cubemap_decodes_six_distinct_faces() {
             );
             return;
         }
-        cubemaps += 1;
+        self.cubemaps += 1;
         assert_eq!(texture.faces(), 6, "{path}");
         let faces: Vec<_> = (0..6).map(|f| texture.face_to_rgba(blob, f)).collect();
         assert!(
@@ -582,10 +635,10 @@ fn every_cubemap_decodes_six_distinct_faces() {
             "{path}: a seventh face was accepted"
         );
         if faces.iter().any(Result::is_err) {
-            refused += 1;
+            self.refused += 1;
             return;
         }
-        decoded += 1;
+        self.decoded += 1;
         let (width, height) = texture.level_size(0);
         let means: Vec<[u64; 3]> = faces
             .iter()
@@ -604,7 +657,7 @@ fn every_cubemap_decodes_six_distinct_faces() {
         // void whose zenith and nadir are alike. Both are data, not decode errors.
         let luma = |m: &[u64; 3]| m[0] + m[1] + m[2];
         if path.ends_with("/sky.gtf") {
-            skies += 1;
+            self.skies += 1;
             println!(
                 "  zenith {:4} nadir {:4} sides {:4} {:4} {:4} {:4}  {path}",
                 luma(&means[2]),
@@ -637,8 +690,17 @@ fn every_cubemap_decodes_six_distinct_faces() {
                 }
             }
         }
-    });
-    println!("{cubemaps} cubemaps, {decoded} decoded, {refused} refused, {skies} skies");
-    assert_eq!(cubemaps, 23, "the disc's own count");
-    assert!(skies >= 8, "only {skies} circuit skies found");
+    }
+
+    fn check(self) {
+        let Self {
+            cubemaps,
+            decoded,
+            refused,
+            skies,
+        } = self;
+        println!("{cubemaps} cubemaps, {decoded} decoded, {refused} refused, {skies} skies");
+        assert_eq!(cubemaps, 23, "the disc's own count");
+        assert!(skies >= 8, "only {skies} circuit skies found");
+    }
 }
