@@ -87,8 +87,10 @@ pub(super) fn fade_border(readout: &super::Readout, name: &str, border: [f32; 4]
 /// `FrameRight`, numbered per slot on `Info1`-`Info4`), which the original
 /// shows with their parent and, on a message line, fades with the line's own
 /// alpha (HD's `0x91d20` writes the three frames' vertex colours with the same
-/// alpha byte as the text). Pulse and Pure author none, so for them this draws
-/// nothing; HD, 2048 and Omega author all of them.
+/// alpha byte as the text). Pulse and Pure author none, and neither do 2048's
+/// composed layouts (its drain names the frames, its layouts have none), so for
+/// them this draws nothing; HD authors all of them. Omega's layouts were not
+/// checked.
 ///
 /// **Not done**: HD widens the left and right caps with the text when it is
 /// wider than the 240 px middle (`FrameLeft`/`FrameRight` move to `+/-` half the

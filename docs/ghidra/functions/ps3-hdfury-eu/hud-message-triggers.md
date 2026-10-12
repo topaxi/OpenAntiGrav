@@ -167,16 +167,28 @@ neighbour stores them from TOC `-0x5b7c`/`-0x5b78`). Constants: `30.0`, `3.5`,
 
 The differences from Pulse's `Hud_UpdateTimeDiff` (`0x0881f890`):
 
-1. **Time Trial and Speed Lap count up alone.** When `GameState+0xe0` is `5` or
-   `10` and the profile byte `0x009384e1` is clear, a leading player gets the
-   count-up with no other craft live. Elsewhere it needs
-   `Race_CountLiveCrafts > 1`, as on Pulse.
+1. **Time Trial and Speed Lap keep the count-up with no other craft live.** When
+   `GameState+0xe0` is `5` or `10` and the profile byte `0x009384e1` is clear, a
+   leading player gets the count-up with no live-craft test. Elsewhere it needs
+   `Race_CountLiveCrafts > 1`, as on Pulse. **It can only bite after a stamp**, and
+   `Craft_RecordSplit` stamps nothing while one craft is live (its first lines are
+   `if (FUN_00055c90(race_manager, 0) == 1) return`, the live counter below), so a
+   solo Time Trial shows no count-up on HD: the branch matters once the other
+   craft is gone (an opponent wrecked in Speed Lap, say). Whether the counter
+   counts a ghost is unread.
 2. **No place stop.** Pulse re-reads `PLAYER_HUD+0x10` into its hold flag every
    tick, so a won gap ends the moment the player stops being first. HD's routine
    has no such read: the gap is held the full 3.5 s.
 3. **Three gaps a lap.** See below.
 
 ### `Craft_RecordSplit`: a lap is split in thirds
+
+It opens with `Race_CountLiveCrafts(race_manager, 0) == 1` and returns: **a lone
+craft stamps nothing**. The counter (`0x00055c90`) walks the manager's craft list
+(`rm+0xe8`...) and counts those with `craft+0x6a64 & 0x1000` clear and
+`FUN_000d19b0(craft) != 7`. Pulse's and Pure's lap functions have no such early-out
+(`Race_CountLiveCrafts` is called only from the display, `PlayerStatus_Update`
+and the weapon AI on Pulse). 88.
 
 `Craft_UpdateLapProgress` keeps two thresholds in the craft, `+0x71c4` and
 `+0x71c8`: the progress at the first line crossing plus `1/3` and `2/3`
@@ -201,11 +213,11 @@ just before: a split-screen rule, not read further (50).
 
 `oag_hd::hud::ART.lap_hud` carries all of it as data (`oag_title::lap_hud`):
 `record_line_in_time_trial: false`, `count_up_alone_in_timed_modes: true`,
-`green_hold_needs_first_place: false`, `splits_per_lap: 3`,
-`table_crossings: 100`. `oag_raceplay::split_gap` stamps a craft at
+`stamps_need_two_live: true`, `green_hold_needs_first_place: false`,
+`splits_per_lap: 3`, `table_crossings: 100`. `oag_raceplay::split_gap` stamps a craft at
 `crossings * 3 + floor(3 * progress / length)`. Disc-backed:
 `crates/game/tests/lap_messages_ground_truth.rs`
-(`hd_skips_the_record_line_in_time_trial_and_counts_up_alone`).
+(`hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing`).
 
 ## Other titles
 

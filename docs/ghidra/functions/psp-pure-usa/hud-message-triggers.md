@@ -19,6 +19,7 @@ keys.
 | --- | --- | ---: | --- |
 | `0x0881f2ec` | `Hud_UpdateMessages` | 85 | Drains `*(*(hud+0x40)+0xdc)` into four slots (`hud+0xd0`, sixteen bytes each); called from `Hud` update `0x0881e6bc`. |
 | `0x0881f780` | `Hud_UpdateTimeDiff` | 85 | The gap display, also from `0x0881e6bc`. |
+| `0x0892767c` | `Craft_UpdateLapProgress` | 85 | One craft's spline progress, line crossing and lap bookkeeping (`0x0892767c`-`0x08927dab`), decompiled in full: the writer of the three lap bits and of the split table. Pulse's function of the same name, with Pure's offsets. |
 | `0x0881e2a4` | `Hud_Construct` | 80 | Resolves the phrases through `FUN_088b8d0c(table, key, 0)` into `hud+0xa0`-`+0xb0` (`HUD_Ready...`, `HUD_GO!`, `HUD_Wrong Way!`, `HUD_You are %.1f secs ahead` at `+0xac`, `... behind` at `+0xb0`). |
 
 ## The eight bits and their keys
@@ -73,9 +74,9 @@ layout has no `FrameMiddle1` sprite, so there is no backing to draw.
 
 ## The lap function's conditions
 
-The three setters are in the function containing `0x08927a00`-`0x08927d70`
-(Pure's counterpart of `Craft_UpdateLapProgress`; its prologue was not located
-and it is left unnamed). `r16` is the craft, `r17` the game state:
+The three setters are in `Craft_UpdateLapProgress` (`0x0892767c`; `param_2` is the
+craft, `_DAT_00053524` the lap count). Its table stamp has **no live-craft early-out**
+(HD's has one). The decompile confirms each condition:
 
 - **`0x2` new lap record**: the profile test `0x08806414`
   (`Profile_IsNewLapRecord`'s counterpart, called as `jal 0x2414` from `0x08927bc0`) is nonzero (a stored record to beat),
@@ -131,4 +132,3 @@ SECS BEHIND", red, no icon).
   PPSSPP frame would tell).
 - The setters of the five unraised bits, if any exist outside the race path
   (Zone, Eliminator).
-- The lap function's prologue and a name for it.

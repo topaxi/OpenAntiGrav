@@ -168,6 +168,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             text: oag_title::lap_hud::GapText::Signed,
             green_hold_needs_first_place: false,
             count_up_alone_in_timed_modes: true,
+            stamps_need_two_live: true,
             splits_per_lap: 3,
             table_crossings: 100,
         },

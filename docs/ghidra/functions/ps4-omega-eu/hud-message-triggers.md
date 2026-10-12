@@ -74,6 +74,6 @@ size, **chosen, not measured, from HD**.
 
 `oag_omega::hud::ART.lap_hud` (`oag_title::lap_hud`): the three ids,
 `record_line_in_time_trial: false`, `MessageTint::GoodBad`, the gap rule as above
-with `splits_per_lap: 1`. Racing is still out of scope for Omega, so nothing
+with `splits_per_lap: 1` and, chosen from HD, `stamps_need_two_live`. Racing is still out of scope for Omega, so nothing
 disc-backed drives it; HD's tests carry the machine and the data is the only
 Omega-specific part.

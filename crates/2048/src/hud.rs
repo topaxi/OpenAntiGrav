@@ -181,7 +181,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // three ids, and `IG_HUD_NEWLAP_REC` skipped in mode 5. **Chosen, not measured,
     // from HD**: the gap's hold and count-up rules (its update routine is unread; it
     // binds `TimeDiffText` at `hud+0x204` and keeps `"- %.1f"`/`"+ %.1f"` at
-    // `+0xc4`/`+0xc8`, HD's shape), one split a lap and a 100-crossing table.
+    // `+0xc4`/`+0xc8`, HD's shape), `stamps_need_two_live` (HD's `Craft_RecordSplit`
+    // early-out), one split a lap and a 100-crossing table.
     lap_hud: Some(oag_title::lap_hud::LapHud {
         perfect_lap: "IG_HUD_PLAP",
         new_lap_record: "IG_HUD_NEWLAP_REC",
@@ -192,6 +193,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             text: oag_title::lap_hud::GapText::Signed,
             green_hold_needs_first_place: false,
             count_up_alone_in_timed_modes: true,
+            stamps_need_two_live: true,
             splits_per_lap: 1,
             table_crossings: 100,
         },

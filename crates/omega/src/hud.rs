@@ -103,8 +103,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `NEWLAP_REC`/`FIN_LAP` and the new-lap-record line skipped in mode 5), and the
     // gap display at `0x0126812a`-`0x01268398` is HD's `0x907b0` (count-up with no
     // live-craft test in mode 5 and 10, the same four colours, a 3.5 s hold, no place
-    // stop). **Chosen, not measured, from HD**: the split table (unread), so one split
-    // a lap and a 100-crossing table. See
+    // stop). **Chosen, not measured, from HD**: the split table (unread), so
+    // `stamps_need_two_live`, one split a lap and a 100-crossing table. See
     // `docs/ghidra/functions/ps4-omega-eu/hud-message-triggers.md`.
     lap_hud: Some(oag_title::lap_hud::LapHud {
         perfect_lap: "IG_HUD_PLAP",
@@ -116,6 +116,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             text: oag_title::lap_hud::GapText::Signed,
             green_hold_needs_first_place: false,
             count_up_alone_in_timed_modes: true,
+            stamps_need_two_live: true,
             splits_per_lap: 1,
             table_crossings: 100,
         },

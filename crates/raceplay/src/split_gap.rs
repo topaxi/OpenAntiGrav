@@ -78,6 +78,14 @@ impl SplitGap {
             .then_some(count * splits + split)
     }
 
+    /// Whether the table is written this tick with `live` craft in the race:
+    /// HD's `Craft_RecordSplit` returns first while only one is
+    /// ([`SplitGapRule::stamps_need_two_live`]).
+    #[must_use]
+    pub fn stamps_with(&self, live: usize) -> bool {
+        live >= 2 || !self.rule.stamps_need_two_live
+    }
+
     /// Folds one craft's reach of an index into the table; the event it raises,
     /// if any.
     pub fn cross(&mut self, now: f32, crossing: Crossing) -> GapEvents {
@@ -169,6 +177,9 @@ impl super::Race {
             let seen = split.seen(slot);
             if index > *seen {
                 *seen = index;
+                if !split.stamps_with(live) {
+                    continue;
+                }
                 let one = split.cross(
                     now,
                     Crossing {

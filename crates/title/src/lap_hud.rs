@@ -57,11 +57,20 @@ pub struct SplitGapRule {
     /// `PLAYER_HUD+0x10` into the hold flag every tick. HD's and Pure's
     /// routines have no such test and hold for the full 3.5 s.
     pub green_hold_needs_first_place: bool,
-    /// Whether Time Trial and Speed Lap run the count-up from the player's
-    /// crossing with no other craft live. **HD only**: its routine skips the
+    /// Whether Time Trial and Speed Lap keep the count-up running with no other
+    /// craft live. **HD only** (and Omega, read): its display routine skips the
     /// live-craft count in those two modes (while the profile byte
-    /// `0x009384e1` is clear, the ordinary race); Pulse and Pure need two.
+    /// `0x009384e1` is clear, the ordinary race); Pulse and Pure need two. It can
+    /// only bite once a stamp has been made, which on HD needs
+    /// [`Self::stamps_need_two_live`]'s second craft, so a solo Time Trial shows
+    /// nothing and this matters after the other craft is gone.
     pub count_up_alone_in_timed_modes: bool,
+    /// Whether the table is left unwritten while only one craft is live. **HD
+    /// only**: `Craft_RecordSplit` (`0x000d06e0`) opens with `if
+    /// Race_CountLiveCrafts(race_manager, 0) == 1 return`, so a lone craft never
+    /// stamps a split and no gap or count-up can start. Pulse's and Pure's lap
+    /// functions stamp unconditionally and test the live count only when drawing.
+    pub stamps_need_two_live: bool,
     /// Gaps raised per lap: `1` is the lap line alone; HD's `3` adds the two
     /// splits at a third and two thirds of the lap (`1/3` and `2/3` of the
     /// spline progress, `0x3eaaaaab`/`0x3f2aaaab` in `Craft_UpdateLapProgress`'s

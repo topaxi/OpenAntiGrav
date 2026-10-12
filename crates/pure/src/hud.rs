@@ -186,6 +186,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
             },
             green_hold_needs_first_place: false,
             count_up_alone_in_timed_modes: false,
+            stamps_need_two_live: false,
             splits_per_lap: 1,
             table_crossings: 6,
         },

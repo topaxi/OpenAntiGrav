@@ -254,11 +254,12 @@ fn pure_raises_its_own_keys_white_and_words_the_gap_as_a_sentence() {
 }
 
 /// HD raises the same ids as Pulse and no new-lap-record line in Time Trial
-/// (`0x91d20`, mode 5 behind the clear profile byte), counts up alone in Time
-/// Trial (`0x907b0`), and gaps three times a lap (`0xd06e0`).
+/// (`0x91d20`, mode 5 behind the clear profile byte), and its `Craft_RecordSplit`
+/// (`0xd06e0`) returns first while one craft is live, so a lone craft's Time
+/// Trial shows no count-up or gap at all.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn hd_skips_the_record_line_in_time_trial_and_counts_up_alone() {
+fn hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing() {
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
         return;
     };
@@ -286,15 +287,13 @@ fn hd_skips_the_record_line_in_time_trial_and_counts_up_alone() {
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
     race.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
-    let mut counted = false;
-    for _ in 0..9000 {
+    for tick in 0..9000 {
         race.tick(&PlayerInputs::none());
-        let readout = race.readout();
-        if let Some(line) = &readout.time_gap {
-            counted |= !line.icon && drawn(&loaded, &readout).iter().any(|t| t.contains('.'));
-        }
+        assert!(
+            race.readout().time_gap.is_none(),
+            "a lone craft raised a gap or count-up on tick {tick}"
+        );
     }
-    assert!(counted, "the lone craft's count-up reaches TimeDiffText");
 }
 
 /// 2048 authors `Info1`-`Info4` and `TimeDiffText` in its own layouts and drains

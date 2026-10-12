@@ -33,7 +33,8 @@ offsets moved**, not Pulse's:
   by `FUN_810006fc`), alpha `sin(pi * (1 - (t/life)^6))`, green `0x30ff30`, red
   `0xff3030`, the retro skin flag (`hud+0x6a8`) halving the alpha;
 - the same `FrameMiddle%d`/`FrameLeft%d`/`FrameRight%d` backing, faded with the
-  line, and a `MESSAGE` cue as a slot starts;
+  line (**the composed layouts author no such frames**, so nothing draws), and a
+  `MESSAGE` cue as a slot starts;
 - `IG_HUD_NEWLAP_REC` skipped when the game mode `DAT_8153fd24` is `5`, **with no
   profile-byte test** (HD has one);
 - the announcer cues `RACE_Perfect_lap`/`PERFECT_LAP`, `RACE_New_lap_record`/
@@ -64,7 +65,7 @@ rule as **chosen, not measured**.
 
 `oag_2048::hud::ART`: `message_slots: true`, and `lap_hud` with the three ids,
 `record_line_in_time_trial: false` (read), `MessageTint::GoodBad` (read), and the
-gap rule from HD with **one split a lap** (HD's thirds are not verified here;
+gap rule from HD (`stamps_need_two_live`, the hold and count-up rules) with **one split a lap** (HD's thirds are not verified here;
 the lap function and split table are unread) and a 100-crossing table (chosen).
 Disc-backed: `crates/game/tests/lap_messages_ground_truth.rs`
 (`the_2048_lap_lines_run_on_its_own_layout_and_table`), checked on the default
