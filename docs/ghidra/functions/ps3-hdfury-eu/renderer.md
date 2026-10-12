@@ -7918,3 +7918,25 @@ the falsifier closed the lane before it.
 
 **Other titles.** Omega: **not checkable** (no PS4 capture path; it authors a `Tonemap` block, not this chain). Pulse: no
 code changed.
+
+## The frame-wide luma lane is closed by the WCB-on references, and Amphiseum's billboards are an unported overlay combine (2026-10-12, `hd-frame-luma`)
+
+**Question** (the lane brief): what is the remaining frame-wide luma gap on the nine matched poses (Talon's -0.09 to -0.14, Sol 2 under, Amphiseum 01/02 over), and is it the light-sum domain or the encode end? **Answer: there is no gap to close, and no code changed for it.** The nine pairs (`talons-matched`, `sol2-matched`, `amphiseum-matched`) were shot with RPCS3's `Write Color Buffers` off and are retired as brightness references ("There is no darkening regression", above): they read about 1.6-1.7x bright. The encode end is read as well (`SET_SHADER_PACKER` is 1 on scene draws, so the final `pow(1/2.2)` is the ROP's sRGB encode, "The exposure is unity"; the `/2` output scale is ported). What would have falsified this: ours measuring well under a WCB-on reference at a grid pose; it measures -5 % to +7 % at every one (the `hd-dark-ref` table, four circuits). One re-measure here, Amphiseum pose 01 against the retired pair: ours 0.293, reference 0.457 (ratio 0.64, the WCB-off factor again), which is what the old "+0.10 overshoot" had been hiding. Not re-shot: the nine poses with the option on.
+
+**Amphiseum's billboards are a colour defect that exposure does not explain (confidence 75 that it is real, one frame, one boot).** In `amphiseum-matched/01` the PIRANHA boards draw saturated red-orange with dark scanline gaps in the original and pale pink-white, almost flat, in ours. A wrong exposure cannot desaturate and remove a scanline pattern, so the retired pair is still good as a hue and structure check even though it is no brightness reference. Attribution is by material, not by tint (the boards are `blended` draws, which `OAG_TINT_MATERIALS` does not paint): the blended list of Amphiseum (`hd_slot_list`) carries `nr_billboardholographicscanlines` on slots 590, 613, 614, 616 and 621 (`static_ad_landscape03`, `ag_landscape02`, `feisar_landscape02_glow`, `advert_c`, `ap_ad_temp_07`), plus `hologram` on 604-609. Which slot is the board in pose 01 is not pinned.
+
+**The combine, read from `nr_billboardholographicscanlines.rcsmaterial`'s lit fragment blocks (#2 unfogged, #3 and #4 fogged; `scripts/ps3-microcode.py fp-file`).** Three units: `0x6f469b89` unit 0 (the advert, sampled at the albedo coordinate), `0xfad8b460` unit 1 (the scanline texture, sampled at `f[TC3]` with a `time`-driven `u` offset and a per-row `v` of `R1.w - time * 5.625`; its `.yz` carry the scroll phase and the alpha), `0xdd7ec609` unit 2 (a second texture at a scrolling coordinate). The colour:
+
+```text
+H4 = unit0 * unit2                      (base)
+H5 = unit1                              (blend layer)
+SLT cc <- H4 < 0.5
+out = 2*H4*H5                where H4 < 0.5      (MUL x2, NE(xyzx))
+out = 1 - 2*(1 - H4)*(1 - H5) elsewhere          (ADD x2 -H4+1, ADD -H5+1, MAD -a*b+1)
+alpha = unit1 .z
+fogged variants: out = (f[TC1] + lerp(fog colour, out, fogfactor)) / 2
+```
+
+That is an **overlay** blend of the advert times its second layer under the scanline texture: shadows stay dark, highlights saturate toward the layer's colour, with no white lift. Ours draws these materials as a single-texture emissive (`shade.wesl` treats a program fed no scene light as `authored = 1.0` and the albedo as the picture), so the scanline layer and the overlay never run, and an alpha-blended advert over a bright sky reads pale. **Confidence 80 on the structure (instructions read, one material file), 65 on "overlay" as the name of the per-channel `SLT`/`NE` select, which rests on the condition-register reading already scored 60 for `dc_lightcone` (`FENCT` sets the condition register, "HD's light cone was a grey wedge")**; the units' texture identities, the constants (`0.25`, `5.625`, the `time` rate parameter `0x906b67ba`) and which of the 15 Amphiseum slots is the board are read, not named.
+
+**Not wired.** It needs a third texture unit and the overlay in the mesh shader (today's emissive-add family has two units and an add, `ADD_SECOND`), a new per-material path, and the one matched reference for it is a WCB-off frame. No before/after exists, so no number is claimed. **Other titles:** Omega ships `nr_billboardholographicscanlines`-named materials only through HD's lineage and its programs are GCN, unread: **not checkable** here. 2048 has no RSX: not checkable.
