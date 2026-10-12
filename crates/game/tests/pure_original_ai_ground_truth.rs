@@ -307,3 +307,54 @@ fn the_field_finishes_chenghou_project() {
         PureClass::Venom,
     );
 }
+
+/// Every race and tournament leg of Pure's campaign, every class, finds its
+/// circuit's speed-tweak row: the original driver's tables read for every
+/// campaign race that has opponents (a time trial or Zone event has none).
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn every_campaign_race_finds_its_circuits_tweak() {
+    use oag_tables::pure_campaign::EventKind;
+    let Some(image) = oag_testdata::image("pure-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("opening Pure");
+    let campaign =
+        oag_game::campaign::pure_list::load(&mut archives, oag_pure::TITLE).expect("the campaign");
+    let ladder = oag_pure::TITLE
+        .race
+        .speed_classes
+        .map_or(&[][..], |classes| classes.names);
+    let (mut legs, mut missing) = (0, Vec::new());
+    for class in PureClass::ALL {
+        for event in campaign.events(class) {
+            if !matches!(event.kind, EventKind::Race | EventKind::Tournament) {
+                continue;
+            }
+            let plan = oag_game::campaign::launch::plan_cell_for(
+                &event.cell,
+                class.title(),
+                ladder,
+                |_, id| campaign.track_entry(id),
+            )
+            .unwrap_or_else(|e| panic!("{} plans: {e:?}", event.name));
+            for entry in &plan.leg_entries {
+                legs += 1;
+                let directory = entry.rsplit_once('\\').expect("a directory").0;
+                let stats = format!(r"{directory}\stats.xml");
+                let read = archives
+                    .read_name(&stats)
+                    .map_err(|e| e.to_string())
+                    .and_then(|blob| {
+                        pure_ai_stats::tweak_from_blob(&blob, class).map_err(|e| e.to_string())
+                    });
+                if let Err(e) = read {
+                    missing.push(format!("{} {class:?} {stats}: {e}", event.name));
+                }
+            }
+        }
+    }
+    println!("{legs} race legs, {} without a tweak", missing.len());
+    assert!(legs > 0);
+    assert!(missing.is_empty(), "{missing:#?}");
+}
