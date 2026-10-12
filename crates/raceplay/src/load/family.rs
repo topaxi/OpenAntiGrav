@@ -72,9 +72,9 @@ pub(super) fn follow_player(
     ));
 }
 
-/// Each AI slot's own handling, `None` where it flies the player's (the slot's
-/// team is the player's, the title declares no families, or its file would not
-/// load - said in the report). The class, pad tunables and `<Special>` are the
+/// Each AI slot's own handling on every title, `None` where it flies the
+/// player's (the slot's team is the player's, or its file would not load - said
+/// in the report, never invented). The class, pad tunables and `<Special>` are the
 /// race's, as they are for the player.
 pub(super) fn opponent_handling(
     archives: &mut oag_assets::Archives,
@@ -86,9 +86,6 @@ pub(super) fn opponent_handling(
     report: &mut Vec<String>,
 ) -> Vec<Option<oag_physics::Handling>> {
     let mut out = vec![None; slot_teams.len()];
-    if table(race).is_none() {
-        return out;
-    }
     let Some(player) = slot_teams.first() else {
         return out;
     };

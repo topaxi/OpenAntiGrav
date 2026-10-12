@@ -133,3 +133,36 @@ fn hd_and_fury_author_different_numbers_for_one_team() {
         "Fury's top speed is above HD's"
     );
 }
+
+/// Every title, not only a variant one: Pulse's opponents fly their own team's
+/// numbers too.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_opponents_fly_their_own_teams_handling() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let options = |team: Option<&str>| race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: team.map(str::to_string),
+        ..race::Options::default()
+    };
+    let loaded = race::load(&options(None)).expect("loading the race");
+    let teams = loaded.setup.slot_teams.clone();
+    let race = Race::start(loaded.setup);
+    let mut differing = 0;
+    for (slot, team) in teams.iter().enumerate().skip(1) {
+        let own = race::load(&options(Some(team)))
+            .expect("load")
+            .setup
+            .handling;
+        assert_eq!(
+            race.sim.world.ships[slot].handling, own,
+            "slot {slot} ({team})"
+        );
+        differing += usize::from(own != race.sim.world.ships[0].handling);
+    }
+    assert!(differing > 0, "every Pulse team authors the same numbers");
+}

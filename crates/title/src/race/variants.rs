@@ -85,8 +85,7 @@ pub struct TeamVariants {
     /// opponents on suffixes of that same group only, each on **its own
     /// variant's tuning**. HD/Fury is `[[""], ["_c1", "_n1"]]` - HD against
     /// HD, Fury against Fury. Empty means the title makes no such rule and an
-    /// opponent keeps the id the roster drew and the player's tuning, as every
-    /// title did before this existed. **Chosen, not measured.**
+    /// opponent keeps the id the roster drew (its own team's tuning still loads). **Chosen, not measured.**
     pub opponent_families: &'static [&'static [&'static str]],
 }
 

@@ -965,9 +965,10 @@ What the game did before: the roster draw took the 12 base ids from
 the player flew, and a player on `Feisar_c1` could face `Feisar`. Worse, and for
 every title: `start.rs` gave **every opponent the player's handling**
 (`opponent.handling = handling`), so no opponent ever flew its own team's
-numbers. Now a title that declares families loads each AI slot's own
-`handlingstats.xml` (its variant's directory) for the race's class; a title that
-declares none keeps the player's handling for all, bit for bit.
+numbers. Now every title loads each AI slot's own `handlingstats.xml` for the
+race's class (maintainer decision 2026-10-12); a slot whose file will not load keeps
+the player's handling and the load report says so. HD's variant family then picks
+which variant's file.
 
 Evidence of the difference (HD EU, `Feisar`, class VENOM): `accelcap` 18.5 (HD),
 21.0 (`_c1`), 21.0 (`_n1`); engine `amount` 412 vs 418. All 12 teams differ
