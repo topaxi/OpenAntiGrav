@@ -198,6 +198,10 @@ pub struct Track {
 pub struct Series {
     /// The `name` attribute.
     pub name: String,
+    /// `location`, the directory whose `screen.xml` authors the emblem
+    /// `League Selection` and `Tournament Selection` show for it; empty when
+    /// the entry names none.
+    pub location: String,
     /// `<Entry track="...">`, in order: `PI_Track` names.
     pub tracks: Vec<String>,
     /// Its `<Unlock>` rows.
@@ -276,6 +280,12 @@ fn unlocks_of(node: &Node) -> Result<Vec<Unlock>> {
 fn read_series(node: &Node) -> Result<Series> {
     Ok(Series {
         name: attr(node, "name")?.to_string(),
+        location: node
+            .children_named("Values")
+            .next()
+            .and_then(|values| values.attr("location"))
+            .unwrap_or_default()
+            .to_string(),
         tracks: node
             .children_named("Entry")
             .map(|entry| attr(entry, "track").map(str::to_string))

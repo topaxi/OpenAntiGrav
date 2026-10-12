@@ -29,7 +29,7 @@ impl Session {
             .as_ref()
             .is_some_and(|shell| shell.title.campaign.list_entry.is_some())
         {
-            self.open_pure_chain(&mut archives);
+            self.open_pure_chain(archives);
             return;
         }
         let Some(shell) = self.shell.as_ref() else {

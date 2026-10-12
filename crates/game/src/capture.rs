@@ -735,8 +735,16 @@ pub fn run(
                 // Wipeout Pure's SINGLE PLAYER screens - see
                 // `crate::main::session::pure_chain` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let globals: Vec<(&str, &str)> = frontend
+                    .screens()
+                    .globals
+                    .iter()
+                    .map(|(name, value)| (name.as_str(), value.as_str()))
+                    .collect();
                 let (list, clip) = pure_chain_page::capture(
                     answers,
+                    &globals,
+                    &mut sprites,
                     options.race.as_ref(),
                     title,
                     &strings,
