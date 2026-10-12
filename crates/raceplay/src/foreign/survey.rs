@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 /// Which format a listed file is in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
-    /// A BallisticNG Workshop item (`.wtrk`).
+    /// A BallisticNG Workshop item (`.wtrk`), shown as a Workshop track.
     Workshop,
     /// This project's own format (`*.track.toml` and its `.glb`).
     Own,
@@ -23,8 +23,8 @@ impl Kind {
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
-            Self::Workshop => "BallisticNG",
-            Self::Own => "OAG track file",
+            Self::Workshop => "Workshop",
+            Self::Own => "Track file",
         }
     }
 }
@@ -88,7 +88,19 @@ pub fn listing(path: &Path) -> Listing {
                     out.tags = wtrk.tags;
                 }
                 Err(e) => {
-                    out.problem = Some(short(&e.to_string(), "not a track file"));
+                    log::warn!("{}: {e}", path.display());
+                    // A file with the wrapper's own opening is a damaged track
+                    // and says how; anything else was never one.
+                    out.problem = Some(
+                        if file
+                            .get(1..)
+                            .is_some_and(|f| f.starts_with(b"Workshop Track"))
+                        {
+                            short(&root_cause(&anyhow::anyhow!("{e}")), "damaged track file")
+                        } else {
+                            "not a track file".to_string()
+                        },
+                    );
                     return out;
                 }
             },
@@ -122,7 +134,7 @@ fn short(text: &str, fallback: &str) -> String {
     if text.is_empty() {
         return fallback.to_string();
     }
-    let mut cut: String = text.chars().take(64).collect();
+    let mut cut: String = text.chars().take(44).collect();
     if cut.len() < text.len() {
         cut.push_str("...");
     }

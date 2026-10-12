@@ -263,3 +263,61 @@ fn backing_out_of_the_root_closes_the_menus() {
     assert_eq!(events, vec![MenuEvent::Closed]);
     assert_eq!(menu.depth(), 1, "and leaves the stack alone");
 }
+
+/// An option that cannot be used is still offered: the row steps onto it, draws
+/// its value dimmed with the reason under the rows, and steps off again. A
+/// `disabled_by` row would refuse the step and strand the player on it.
+#[test]
+fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
+    let definition = Definition::parse(
+        r#"
+        version = 1
+        root = "main"
+        [[page]]
+        id = "main"
+        title = "MAIN"
+        [[page.entry]]
+        kind = "choice"
+        label = "TRACK"
+        setting = "remix.track"
+        values_from = "remix_tracks"
+        "#,
+        &crate::language::StringTable::default(),
+    )
+    .expect("parses");
+    let mut menu = Menu::new(definition);
+    menu.supply(
+        ValueSource::RemixTracks,
+        &[
+            Choice::labelled("good", "GOOD"),
+            Choice::labelled("bad", "BAD").unusable("no lap loop"),
+        ],
+    );
+    let drawn = |menu: &Menu| list(menu, &no_bindings, None);
+    let note = |draws: &[Draw]| {
+        draws
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text == "! no lap loop"))
+    };
+    let value_color = |draws: &[Draw], value: &str| {
+        draws.iter().find_map(|d| match d {
+            Draw::Text { text, color, .. } if text == value => Some(*color),
+            Draw::FacedText { text, color, .. } if text == value => Some(*color),
+            _ => None,
+        })
+    };
+
+    assert!(!note(&drawn(&menu)), "a usable option says nothing");
+    let events = press(&mut menu, &[Button::Right]);
+    assert_eq!(events.len(), 1, "the row steps onto the unusable option");
+    let on_bad = drawn(&menu);
+    assert!(note(&on_bad), "its reason shows under the rows");
+    assert_eq!(value_color(&on_bad, "BAD"), Some(DIMMED));
+    assert!(
+        menu.reserves_unavailable_note(),
+        "the note's line is kept clear"
+    );
+
+    press(&mut menu, &[Button::Left]);
+    assert!(!note(&drawn(&menu)), "stepping back clears it");
+}

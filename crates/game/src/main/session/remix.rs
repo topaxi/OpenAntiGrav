@@ -17,7 +17,7 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
-use super::custom_tracks;
+use oag_game::custom_tracks::{self, CUSTOM};
 use super::menus::{combine_variant, variant_choices};
 
 /// Brings a stored `remix.*` setting into step with the list its row is
@@ -378,7 +378,7 @@ impl Session {
         }
 
         let track_title = self.settings.remix.track_title.clone();
-        let custom = track_title == custom_tracks::CUSTOM;
+        let custom = track_title == CUSTOM;
         // CUSTOM has no source of its own: the race is flown on the CRAFT TITLE's.
         let track_candidate = if custom {
             self.craft_backing().cloned()

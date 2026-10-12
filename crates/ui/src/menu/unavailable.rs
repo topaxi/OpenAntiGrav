@@ -28,4 +28,16 @@ impl Menu {
     pub fn unavailable<'a>(&self, entry: &'a Entry) -> Option<&'a str> {
         entry.unavailable()
     }
+
+    /// Whether the current page has a row that can land on an unusable option,
+    /// so its note line is kept clear of the rows whether or not one is shown
+    /// now (a note that moved the rows when it appeared would shift the list
+    /// under the player's cursor). Joins `reserve_note` at `visible_rows`.
+    #[must_use]
+    pub fn reserves_unavailable_note(&self) -> bool {
+        self.page().entries.iter().any(|entry| match entry {
+            Entry::Choice { values, .. } => values.iter().any(|v| v.unavailable.is_some()),
+            _ => false,
+        })
+    }
 }

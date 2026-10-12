@@ -59,7 +59,7 @@ mod picker;
 #[path = "session/pilot_editor.rs"]
 mod pilot_editor;
 #[path = "session/custom_tracks.rs"]
-pub(crate) mod custom_tracks;
+mod custom_tracks;
 #[path = "session/pure_campaign.rs"]
 mod pure_campaign;
 #[path = "session/placeholder.rs"]
@@ -442,8 +442,8 @@ pub(crate) struct Session {
     /// which happens once per windowed boot, not per frame. See
     /// `oag_game::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<oag_game::launcher::Candidate>,
-    /// RACE REMIX's CUSTOM tracks. See [`custom_tracks`].
-    pub(crate) custom_tracks: custom_tracks::Scan,
+    /// RACE REMIX's CUSTOM tracks. See [`oag_game::custom_tracks`].
+    pub(crate) custom_tracks: oag_game::custom_tracks::Scan,
     /// What the loading screen draws, kept for the *second* time it goes up.
     ///
     /// The boot's own screen used to consume these on the way past, which was

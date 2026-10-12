@@ -174,7 +174,8 @@ impl Session {
         // (AI PILOTS today) without this method running again. See
         // `menu::visible_rows`'s own doc for why the reservation has to
         // track the page rather than the frame's live row values.
-        let reserve_note = pilots::page_reserves_axis_preview(model.page());
+        let reserve_note =
+            pilots::page_reserves_axis_preview(model.page()) || model.reserves_unavailable_note();
         model.set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));
         // And which way a page steps, for the disc that draws one of them as a
         // strip: left and right along the entries rather than up and down a

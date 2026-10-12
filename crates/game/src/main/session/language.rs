@@ -127,7 +127,8 @@ impl Session {
                 .unwrap_or_else(|| shell.font.clone());
             let mut skin = menu::Skin::new(shell.menu_skin, shell.space, rows_face.line_height);
             skin.set_row_ink(oag_ui::pointer::RowInk::measure(&rows_face));
-            let reserve_note = pilots::page_reserves_axis_preview(stage.menu.page());
+            let reserve_note = pilots::page_reserves_axis_preview(stage.menu.page())
+                || stage.menu.reserves_unavailable_note();
             stage
                 .menu
                 .set_visible_rows(menu::visible_rows(&skin, &shell.frame, reserve_note));

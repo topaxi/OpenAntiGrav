@@ -35,10 +35,24 @@ fn a_file_that_will_not_load_is_listed_unusable_with_its_reason_and_never_raced(
         choices[1].unavailable.as_deref(),
         Some("not a Workshop Track (Version 1)")
     );
-    assert_eq!(choices[0].label, "GOOD (BALLISTICNG)");
+    assert_eq!(choices[0].label, "GOOD (WORKSHOP)");
     assert!(scan.raceable(&choices[0].value).is_ok());
     let refused = scan.raceable(&choices[1].value).unwrap_err();
-    assert!(refused.contains("Bad") && refused.contains("not a Workshop Track"), "{refused}");
+    assert!(
+        refused.contains("Bad") && refused.contains("not a Workshop Track"),
+        "{refused}"
+    );
+}
+
+#[test]
+fn a_long_title_is_cut_to_fit_and_a_known_author_is_named() {
+    let mut long = listing("Gare d'Europa (WipEout2097)", None);
+    let text = label(&long);
+    assert_eq!(text, "GARE D'EUROPA.. (WORKSHOP)");
+    assert!(text.chars().count() <= ROW_WIDTH);
+    long.title = "Oval".to_string();
+    long.author = Some("Someone".to_string());
+    assert_eq!(label(&long), "OVAL BY SOMEONE (WORKSHOP)");
 }
 
 #[test]
@@ -71,7 +85,10 @@ fn applying_a_custom_track_clears_what_an_earlier_launch_left() {
         ..oag_raceplay::Options::default()
     };
     apply(&mut options, Path::new("/tracks/lion.wtrk"));
-    assert_eq!(options.foreign_track.as_deref(), Some(Path::new("/tracks/lion.wtrk")));
+    assert_eq!(
+        options.foreign_track.as_deref(),
+        Some(Path::new("/tracks/lion.wtrk"))
+    );
     assert_eq!(options.track, None);
     assert_eq!(options.craft_source, None);
 }
@@ -105,7 +122,9 @@ mod disc {
         let originals: Vec<&Listing> = scan
             .listings
             .iter()
-            .filter(|l| l.tags.iter().any(|t| t == "Original") && !l.tags.iter().any(|t| t == "Port/Remake"))
+            .filter(|l| {
+                l.tags.iter().any(|t| t == "Original") && !l.tags.iter().any(|t| t == "Port/Remake")
+            })
             .collect();
         assert_eq!(originals.len(), 27, "the census of Originals");
         for listing in &originals {
@@ -114,8 +133,12 @@ mod disc {
         let strings = StringTable::default();
         let choices = scan.choices(&strings);
         assert_eq!(choices.len(), 32);
-        assert!(choices.iter().any(|c| c.label == "LION'S DEN (BALLISTICNG)"));
-        assert!(scan.listings.iter().any(|l| l.tags.iter().any(|t| t == "Port/Remake")));
+        assert!(choices.iter().any(|c| c.label == "LION'S DEN (WORKSHOP)"));
+        assert!(
+            scan.listings
+                .iter()
+                .any(|l| l.tags.iter().any(|t| t == "Port/Remake"))
+        );
     }
 
     /// A launch from the CUSTOM row and `--unity-track lion` build the same
