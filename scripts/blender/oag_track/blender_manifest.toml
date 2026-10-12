@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "oag_track"
+version = "1.0.0"
+name = "OpenAntiGrav Track"
+tagline = "Author and export tracks for OpenAntiGrav"
+maintainer = "OpenAntiGrav contributors"
+type = "add-on"
+
+blender_version_min = "4.2.0"
+
+license = ["SPDX:MIT"]
+
+tags = ["Import-Export"]
+
+[permissions]
+files = "Read and write the track file (.track.toml and .glb) you pick"

@@ -44,6 +44,7 @@ just check-schemas # every shipped TOML validates against the TOML Schema it nam
 just check-status # docs/overview/status.md's RE-coverage table matches names.tsv and the evidence pages; `just gen-status` regenerates it (scripts/gen-re-coverage.py)
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
 just check-test-budget # no test-data suite over 450s and no single test over 300s, ratchet (scripts/check-test-budget.py)
+just blender-fixtures # rebuild the Blender add-on's committed fixtures headless and fail on a diff; needs Blender 4.2+, not in the gate (scripts/blender-fixtures.sh)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)

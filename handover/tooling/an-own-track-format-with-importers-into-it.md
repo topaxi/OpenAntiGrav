@@ -36,10 +36,15 @@ Also landed 2026-10-12: the track picker. RACE REMIX's TRACK TITLE offers CUSTOM
 `*.track.toml` the `--unity-track` directories hold (`docs/architecture/menus.md`, "RACE REMIX: CUSTOM tracks").
 Broken files are listed dimmed with their reason; the menu launch and `--unity-track` hash the same on Lion's Den.
 
+Landed 2026-10-12: the Blender add-on (`scripts/blender/oag_track`, `docs/tools/blender.md`): tags, spline sampling,
+floor and wall builder, start and pads, importer and exporter; a loop built from scratch and the oval re-exported
+are committed fixtures (`just blender-fixtures`), read by `crates/trackfile/tests/blender.rs` and raced by two new
+`trackfile_ground_truth` cases.
+
 ## Open
 
-- A Blender add-on that writes the format (bakes transforms, tags `oag_kind`, writes the manifest). The glb opens in
-  Blender as points and triangles today; nothing authors the spline attributes there yet.
+- Add-on follow-ups (`docs/tools/blender.md`, "Open"): banking and per-point width on the curve; multi-path and
+  junction authoring beyond the scene property the importer writes.
 - Visual meshes, materials, sky, fog, lights, emitters and PVS as optional records (a minor version each); today a track
   file draws as flat-shaded collision and the report names the absent list.
 - Hosts other than Pulse (HD, 2048, Omega physics) are not exercised for a raced track file.
@@ -49,5 +54,5 @@ Broken files are listed dimmed with their reason; the menu launch and `--unity-t
 0. Picker follow-ups: a preview (none yet), an author where a format gains one, and the same scan feeding
    the RACE page's CIRCUIT row if custom tracks should race outside RACE REMIX.
 
-1. The Blender add-on, or a script that builds a track from a Blender scene, against the page's attribute table.
+1. ~~The Blender add-on~~ landed 2026-10-12 (`scripts/blender/oag_track`, `docs/tools/blender.md`, `just blender-fixtures`).
 2. A first optional record: visual meshes with materials, so a custom track is drawn rather than flat-shaded.

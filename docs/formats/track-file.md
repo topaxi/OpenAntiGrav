@@ -9,7 +9,7 @@ circuit's race inputs unchanged (census below).
 ## Files
 
 `<name>.track.toml` (the manifest) and the `<name>.glb` it names in `track.glb`, in the same
-directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rules, physics).
+directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rules, physics). Authored in Blender with [the add-on](../tools/blender.md).
 
 ### Manifest (TOML)
 
@@ -19,7 +19,7 @@ directory. Raced with `oag-game --track-file <manifest>` (host title's ship, rul
 | `track.id`, `track.title` | Identifier (keys records and ghosts as `foreign:<id>`) and display title. |
 | `track.glb` | The glb's file name, relative to the manifest. |
 | `track.notes` | The producer's free text (what it chose, ignored, could not map). Printed in the loader report. |
-| `spline.point_version` | The `WO Track` point version (`SHORT_POINT_VERSION` = 261 for importer output). |
+| `spline.point_version` | The `WO Track` point version (`SHORT_POINT_VERSION` = `0x107` = 263 for importer output). |
 | `[[spline.path]]` | `points` (count, checked against the glb), `entry`/`exit` (junction index, `-1` none), `max_spacing_bits` (the `f32` bit pattern, an integer so exact). |
 | `[[spline.junction]]` | `prev`, `next`: two path indices each, `-1` none (primary, then alternate). |
 | `[counts]` | `collision_nodes`, `speedup_pads`, `weapon_pads`, checked against the glb. |
@@ -86,6 +86,7 @@ author field, so none is shown.
 
 ## Open
 
-- No authoring tool: a Blender add-on that writes this form (and bakes transforms) is the
-  next piece. The glb opens in Blender as plain points and triangles today.
+- Authoring: [the Blender add-on](../tools/blender.md) writes this form (2026-10-12). Blender 5.2.2's own
+  glTF importer cannot open the file (it raises on the pad `_OAG_TO_WORLD` `MAT4`); the add-on has its
+  own importer. Banking and per-point width are not authored yet.
 - Visual meshes, materials and the absent list above, as optional records in a minor version.
