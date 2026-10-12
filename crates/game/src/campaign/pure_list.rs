@@ -116,6 +116,19 @@ impl PureCampaign {
         pure_campaign::events(&self.definition, &self.stats, class)
     }
 
+    /// The event a stored name stands for, in any class: a medal event off the
+    /// disc, or a Free Play race.
+    #[must_use]
+    pub fn event_named(&self, name: &str) -> Option<Event> {
+        if let Some((track, class)) = pure_campaign::free_play_parts(name) {
+            return Some(pure_campaign::free_play_event(track, class));
+        }
+        PureClass::ALL
+            .iter()
+            .flat_map(|class| self.events(*class))
+            .find(|event| event.name == name)
+    }
+
     /// How many medals the profile holds: each event's best, once, over every
     /// class and Zone.
     #[must_use]

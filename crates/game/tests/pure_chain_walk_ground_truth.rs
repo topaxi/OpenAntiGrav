@@ -13,7 +13,7 @@
 //! the store, and the gates the new medals open.
 
 use oag_game::campaign::launch::plan_cell_for;
-use oag_game::campaign::pure_chain::{Chain, Chosen, Start, choose, present};
+use oag_game::campaign::pure_chain::{Chain, Chosen, choose, present};
 use oag_game::campaign::pure_list::{self, PureCampaign};
 use oag_game::records::{Medal, Store};
 use oag_raceplay as race;
@@ -143,8 +143,7 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
     };
     let mut chain = chain_of(&source);
     let mut store = Store::default();
-    let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, "Time Trial", &[1, 0, 0])
-    else {
+    let Chosen::Start(event) = answer(&mut chain, &store, "Time Trial", &[1, 0, 0]) else {
         panic!("SINGLE PLAYER, Time Trial, Venom, the first league and circuit start an event");
     };
     assert_eq!(event.name, "timetrial/Vineta K/Venom");
@@ -192,8 +191,7 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
     };
     let mut chain = chain_of(&source);
     let mut store = Store::default();
-    let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, "Tournament", &[1, 0])
-    else {
+    let Chosen::Start(event) = answer(&mut chain, &store, "Tournament", &[1, 0]) else {
         panic!("SINGLE PLAYER, Tournament, Venom, Alpha start an event");
     };
     assert_eq!(event.name, "tournament/Alpha/Venom");
@@ -276,21 +274,19 @@ fn a_fresh_profile_walks_every_mode_to_an_event_and_is_offered_two_classes() {
             ("Zone", &[0][..], EventKind::Zone),
         ] {
             let mut chain = chain_of(&source);
-            let Chosen::Start(Start::Event(event)) = answer(&mut chain, &store, mode, rest) else {
+            let Chosen::Start(event) = answer(&mut chain, &store, mode, rest) else {
                 panic!("{image}: {mode} did not start an event");
             };
             assert_eq!(event.kind, kind, "{image}: {mode}");
         }
         let mut chain = chain_of(&source);
+        let Chosen::Start(event) = answer(&mut chain, &store, "Free Play", &[0, 0, 0]) else {
+            panic!("{image}: Free Play did not start a race");
+        };
         assert!(
-            matches!(
-                answer(&mut chain, &store, "Free Play", &[0, 0, 0]),
-                Chosen::Start(Start::FreePlay {
-                    class: PureClass::Vector,
-                    ..
-                })
-            ),
-            "{image}: Free Play starts a plain race"
+            oag_tables::pure_campaign::is_free_play(&event.name)
+                && event.class == Some(PureClass::Vector),
+            "{image}: Free Play starts a race that keeps no medal"
         );
     }
 }

@@ -10,7 +10,7 @@
 //! its gates from.
 
 use log::warn;
-use oag_game::campaign::pure_chain::{Chain, Chosen, Start};
+use oag_game::campaign::pure_chain::{Chain, Chosen};
 use oag_game::campaign::pure_list;
 use oag_tables::pure_ai_stats::PureClass;
 use oag_ui::menu::nav::Nav;
@@ -92,17 +92,12 @@ impl Session {
         self.open_campaign();
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(open) = stage.pure_chain.as_mut()
+            && let Some(event) = open.chain().campaign().event_named(name)
         {
-            let found = PureClass::ALL
-                .iter()
-                .flat_map(|class| open.chain().campaign().events(*class))
-                .find(|event| event.name == name);
-            if let Some(event) = found {
-                open.chain_mut().return_to(&event);
-                open.refresh(&self.records, false);
-                if let Some(tag) = open.chain().tag_of(&event) {
-                    open.choice_mut().select_tag(tag);
-                }
+            open.chain_mut().return_to(&event);
+            open.refresh(&self.records, false);
+            if let Some(tag) = open.chain().tag_of(&event) {
+                open.choice_mut().select_tag(tag);
             }
         }
     }
@@ -154,53 +149,12 @@ impl Session {
                         open.refresh(&self.records, false);
                         self.play_navs(Some(Nav::Accept));
                     }
-                    Chosen::Start(Start::Event(event)) => {
+                    Chosen::Start(event) => {
                         self.play_navs(Some(Nav::Accept));
                         self.launch_campaign_cell(event.cell, None);
                     }
-                    Chosen::Start(Start::FreePlay { track, class }) => {
-                        self.play_navs(Some(Nav::Accept));
-                        self.launch_free_play(&track, class);
-                    }
                 }
             }
-        }
-    }
-
-    /// Free Play: a plain race on the circuit and class chosen, through the race
-    /// box's own launch (`Team Selection`, then the race), with no cell and so no
-    /// record. The disc names the mode and its results screen and authors no
-    /// medal law for it (chosen, not measured).
-    fn launch_free_play(&mut self, track: &str, class: PureClass) {
-        let Some(shell) = self.shell.as_ref() else {
-            return;
-        };
-        let ladder = shell
-            .title
-            .race
-            .speed_classes
-            .map_or(&[][..], |classes| classes.names);
-        let Some(class_name) = ladder
-            .iter()
-            .find(|name| name.eq_ignore_ascii_case(class.title()))
-        else {
-            warn!("Free Play: {} is not on this title's ladder", class.title());
-            return;
-        };
-        let mode = oag_race::Mode::SingleRace;
-        if shell.track(mode, track).is_none() {
-            warn!("Free Play: {track} is not a circuit this source offers for a plain race");
-            return;
-        }
-        self.settings.race.mode = mode.name().to_string();
-        self.settings.race.track = track.to_string();
-        self.settings.race.class = (*class_name).to_string();
-        self.campaign_cell = None;
-        if let Stage::Menu(stage) = &mut self.stage {
-            stage.pure_chain = None;
-        }
-        if !self.open_ship_picker() {
-            self.launch_from_settings();
         }
     }
 }

@@ -8,10 +8,10 @@
 //! [`oag_tables::race_campaign::Cell`] a Pulse grid is made of, so it launches
 //! and records through the campaign's own path.
 //!
-//! **Free Play** is the one mode that is not an event: the disc names it and
-//! its results screen ("Free play session results"), and no medal law reaches
-//! it. It races the chosen circuit and class as a plain race, with no cell and
-//! so no record (chosen, not measured).
+//! **Free Play** is the one mode that is not a medal event: the disc names it
+//! and its results screen ("Free play session results"), and no medal law
+//! reaches it. It races the chosen circuit and class as a single race whose
+//! cell cannot award a medal and is not recorded (chosen, not measured).
 
 use oag_tables::pure_ai_stats::PureClass;
 use oag_tables::pure_campaign::{self, Event, EventKind, Progress};
@@ -63,20 +63,6 @@ impl ModeKind {
     }
 }
 
-/// What a confirmed row on the last pre-race screen starts.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Start {
-    /// A campaign event: its cell launches, judges and records.
-    Event(Box<Event>),
-    /// A plain race on a circuit, in a class, that records nothing.
-    FreePlay {
-        /// The `PI_Track` name.
-        track: String,
-        /// The class.
-        class: PureClass,
-    },
-}
-
 /// What a confirm did.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Chosen {
@@ -84,8 +70,10 @@ pub enum Chosen {
     Advanced,
     /// The row is locked (or names nothing): nothing happened.
     Refused,
-    /// The chain is done; `Team Selection` follows.
-    Start(Start),
+    /// The chain is done and `Team Selection` follows: this event's cell
+    /// launches. A Free Play race is an event whose targets cannot be met
+    /// ([`pure_campaign::is_free_play`]).
+    Start(Box<Event>),
 }
 
 /// One screen's worth of rows, already worded.
@@ -172,6 +160,12 @@ impl Chain {
     #[must_use]
     pub fn campaign(&self) -> &PureCampaign {
         &self.campaign
+    }
+
+    /// The mode chosen on `Single Player`, by its disc idstring.
+    #[must_use]
+    pub fn mode_name(&self) -> &str {
+        self.flow.modes.get(self.mode).map_or("", String::as_str)
     }
 
     fn mode_kind(&self) -> Option<ModeKind> {
@@ -442,12 +436,12 @@ impl Chain {
             return Chosen::Refused;
         }
         if self.mode_kind() == Some(ModeKind::FreePlay) {
-            return Chosen::Start(Start::FreePlay {
-                track: event.subject,
-                class: self.class,
-            });
+            return Chosen::Start(Box::new(pure_campaign::free_play_event(
+                &event.subject,
+                self.class,
+            )));
         }
-        Chosen::Start(Start::Event(Box::new(event)))
+        Chosen::Start(Box::new(event))
     }
 
     fn advance(&mut self) -> Chosen {
@@ -499,6 +493,7 @@ impl Chain {
         let want = match event.kind {
             EventKind::Tournament => "Tournament",
             EventKind::Zone => "Zone",
+            EventKind::Race if pure_campaign::is_free_play(&event.name) => "Free Play",
             EventKind::Race => "Arcade",
             EventKind::TimeTrial => "Time Trial",
         };

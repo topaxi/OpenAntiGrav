@@ -479,6 +479,10 @@ impl Session {
         };
         let kind = picker.model.kind();
         let layout_is_hd = picker.layout.hd.is_some();
+        let pure_chain = self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.title.campaign.flow.is_some());
         match (kind, event) {
             (Kind::Track, Event::Moved) => {
                 if let Some(entry) = picker.model.selected() {
@@ -571,6 +575,9 @@ impl Session {
                 let hd = layout_is_hd;
                 match self.campaign_cell.take() {
                     Some(cell) if hd => self.reopen_cell_selection(&cell.name, difficulty, false),
+                    // Pure's chain: Back is the screen before `Team Selection`,
+                    // with the cursor on the event just left.
+                    Some(cell) if pure_chain => self.reopen_pure_chain(&cell.name),
                     Some(_) => self.open_campaign(),
                     None => {
                         self.open_track_picker();

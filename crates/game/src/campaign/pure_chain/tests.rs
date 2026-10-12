@@ -173,7 +173,7 @@ fn arcade_walks_class_league_circuit_and_starts_the_single_race_event() {
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused, "a locked league");
     assert_eq!(pick(&mut chain, 0, &[]), Chosen::Advanced);
     assert_eq!(chain.at(), Step::Track);
-    let Chosen::Start(Start::Event(event)) = pick(&mut chain, 0, &[]) else {
+    let Chosen::Start(event) = pick(&mut chain, 0, &[]) else {
         panic!("the circuit starts the event");
     };
     assert_eq!(event.name, "race/Vineta K/Venom");
@@ -191,7 +191,7 @@ fn a_time_trial_circuit_starts_the_time_trial_and_shows_that_events_medal() {
     ];
     let tracks = view(&chain, &held, false);
     assert_eq!(tracks.rows[0].status, Status::Medal(Medal::Silver));
-    let Chosen::Start(Start::Event(event)) = pick(&mut chain, 0, &held) else {
+    let Chosen::Start(event) = pick(&mut chain, 0, &held) else {
         panic!("started");
     };
     assert_eq!(event.name, "timetrial/Vineta K/Venom");
@@ -208,7 +208,7 @@ fn a_tournament_skips_the_league_and_a_locked_one_refuses() {
     assert_eq!(tournaments.rows[1].requires, "NEEDS ALPHA ANY MEDAL");
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused);
     let held = [("tournament/Alpha/Venom", Medal::Bronze)];
-    let Chosen::Start(Start::Event(event)) = pick(&mut chain, 1, &held) else {
+    let Chosen::Start(event) = pick(&mut chain, 1, &held) else {
         panic!("Beta opens on an Alpha medal in the class being played");
     };
     assert_eq!(event.name, "tournament/Beta/Venom");
@@ -223,7 +223,7 @@ fn zone_has_no_class_and_gates_its_circuits() {
     assert_eq!(labels(&zones), ["ZONE 1", "ZONE 2"]);
     assert_eq!(zones.rows[1].requires, "NEEDS ZONE 1 BRONZE");
     assert_eq!(pick(&mut chain, 1, &[]), Chosen::Refused);
-    let Chosen::Start(Start::Event(event)) = pick(&mut chain, 0, &[]) else {
+    let Chosen::Start(event) = pick(&mut chain, 0, &[]) else {
         panic!("started");
     };
     assert_eq!(event.name, "zone/Zone 1");
@@ -241,13 +241,24 @@ fn free_play_picks_a_circuit_and_starts_no_event() {
         Status::Open,
         "no medal is shown for a mode that awards none"
     );
+    let Chosen::Start(event) = pick(&mut chain, 0, &[]) else {
+        panic!("started");
+    };
+    assert_eq!(event.name, "freeplay/Vineta K/Venom");
+    assert_eq!(event.cell.mode, oag_tables::race_campaign::Mode::Race);
     assert_eq!(
-        pick(&mut chain, 0, &[]),
-        Chosen::Start(Start::FreePlay {
-            track: "Vineta K".into(),
-            class: PureClass::Venom
-        })
+        [1, 2, 3, 8].map(|place| event.cell.evaluate_medal(place)),
+        [None; 4],
+        "no place earns a medal"
     );
+    assert!(pure_campaign::is_free_play(&event.name));
+    assert_eq!(
+        pure_campaign::free_play_parts(&event.name),
+        Some(("Vineta K", PureClass::Venom))
+    );
+    chain.return_to(&event);
+    assert_eq!(chain.at(), Step::Track);
+    assert_eq!(chain.mode_name(), "Free Play");
 }
 
 #[test]

@@ -445,6 +445,43 @@ pub fn zone_event_name(track: &str) -> String {
     format!("zone/{track}")
 }
 
+/// The name prefix of a Free Play race: the mode the disc names and no medal law
+/// reaches, run as a single race whose targets cannot be met, so it earns and
+/// records no medal.
+pub const FREE_PLAY_PREFIX: &str = "freeplay/";
+
+/// A Free Play race on `track` in `class`, as an event a cell can launch.
+#[must_use]
+pub fn free_play_event(track: &str, class: PureClass) -> Event {
+    let name = format!("{FREE_PLAY_PREFIX}{track}/{}", class.title());
+    let mut cell = blank_cell(name.clone(), Mode::Race, class.title());
+    cell.track = Some(track.to_string());
+    cell.ai_count = Some(7);
+    [cell.gold, cell.silver, cell.bronze] = [0, 0, 0];
+    Event {
+        kind: EventKind::Race,
+        name,
+        subject: track.to_string(),
+        class: Some(class),
+        cell,
+        unlocks: Vec::new(),
+    }
+}
+
+/// Whether an event name is a Free Play race's.
+#[must_use]
+pub fn is_free_play(name: &str) -> bool {
+    name.starts_with(FREE_PLAY_PREFIX)
+}
+
+/// The circuit and class a Free Play event name stands for.
+#[must_use]
+pub fn free_play_parts(name: &str) -> Option<(&str, PureClass)> {
+    let (track, class) = name.strip_prefix(FREE_PLAY_PREFIX)?.rsplit_once('/')?;
+    let class = PureClass::ALL.into_iter().find(|c| c.title() == class)?;
+    Some((track, class))
+}
+
 /// The name a tournament event's medal is stored under.
 #[must_use]
 pub fn tournament_event_name(tournament: &str, class: &str) -> String {
