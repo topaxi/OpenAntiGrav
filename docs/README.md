@@ -34,6 +34,7 @@ Then, depending on what you are here to do:
 | Decode an asset format | [Format index](formats/README.md) |
 | Know what is on the discs | [PSP](psp/pulse-disc-layout.md) / [PS2](ps2/pulse-disc-layout.md) |
 | Use the tools | [Tool docs](tools/README.md) |
+| Mod the game: tracks, AI pilots, menu rows | [Modding guide](tools/modding.md) |
 | Package it for a Steam Deck | [Packaging](tools/packaging.md) |
 | Build or sideload the Android APK | [Android](tools/android.md) |
 | Build the macOS app | [macOS](tools/macos.md) |
