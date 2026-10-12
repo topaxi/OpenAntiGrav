@@ -74,11 +74,11 @@ impl RecordTarget {
         best_total_ticks: Option<u64>,
         best_lap_ticks: Option<u32>,
     ) -> Option<Self> {
-        let class = oag_tables::handling::SpeedClass::from_name(class);
+        let class = oag_tables::handling::SpeedClass::census(class);
         let authored = |figures: fn(&TrackStats) -> [f32; 4]| {
             let (stats, class) = (stats?, class?);
             #[allow(clippy::cast_possible_truncation)]
-            Some((figures(stats)[class as usize] * 100.0) as i64)
+            Some((figures(stats)[class.index()] * 100.0) as i64)
         };
         let (authored, best_ticks) = match mode {
             oag_race::Mode::TimeTrial => (authored(|stats| stats.race_times), best_total_ticks),

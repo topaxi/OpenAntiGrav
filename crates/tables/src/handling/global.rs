@@ -299,31 +299,31 @@ impl Global {
     /// The Pilot Assist tuning for one class, `None` when the title authors none.
     #[must_use]
     pub fn pilot_assist(&self, class: SpeedClass) -> Option<PilotAssist> {
-        self.pilot_assist[class as usize]
+        self.pilot_assist[class.index()]
     }
 
     /// 2048's Normal speed ramp for one class, `None` when the title authors none.
     #[must_use]
     pub fn steer_assist(&self, class: SpeedClass) -> Option<SteerAssist> {
-        self.steer_assist[class as usize]
+        self.steer_assist[class.index()]
     }
 
     /// The speed-pad tunables for one class.
     #[must_use]
     pub fn speedup_pads(&self, class: SpeedClass) -> SpeedupPads {
-        self.speedup_pads[class as usize]
+        self.speedup_pads[class.index()]
     }
 
     /// The weapon-pad cooldown for one class.
     #[must_use]
     pub fn weapon_pads(&self, class: SpeedClass) -> WeaponPad {
-        self.weapon_pads[class as usize]
+        self.weapon_pads[class.index()]
     }
 
     /// The gravity scale for one class.
     #[must_use]
     pub fn gravity_mul(&self, class: SpeedClass) -> GravityMul {
-        self.gravity_mul[class as usize]
+        self.gravity_mul[class.index()]
     }
 
     /// The whole `<GlobalClass>` for a rung named as the document spells it,
@@ -337,11 +337,11 @@ impl Global {
     /// substitute.
     #[must_use]
     pub fn class_named(&self, name: &str) -> Option<(SpeedupPads, GravityMul, WeaponPad)> {
-        if let Some(class) = SpeedClass::from_name(name) {
+        if let Some(class) = SpeedClass::census(name) {
             return Some((
-                self.speedup_pads[class as usize],
-                self.gravity_mul[class as usize],
-                self.weapon_pads[class as usize],
+                self.speedup_pads[class.index()],
+                self.gravity_mul[class.index()],
+                self.weapon_pads[class.index()],
             ));
         }
         self.extra
@@ -428,7 +428,7 @@ fn global_classes(global: &Node) -> Result<GlobalClasses> {
             attribute: "name",
         })?;
         let name = name.trim();
-        let Some(class) = SpeedClass::from_name(name) else {
+        let Some(class) = SpeedClass::census(name) else {
             // A rung outside the four: read it if whole, **drop it silently if
             // not**, so an unrecognised `name` can never fail a file (an
             // unmeasured disc's malformed foreign block must not reject a
@@ -445,7 +445,7 @@ fn global_classes(global: &Node) -> Result<GlobalClasses> {
             continue;
         };
 
-        let slot = &mut found[class as usize];
+        let slot = &mut found[class.index()];
         if slot.is_some() {
             return Err(Error::DuplicateGlobalClass { class });
         }
@@ -453,7 +453,7 @@ fn global_classes(global: &Node) -> Result<GlobalClasses> {
     }
 
     for class in SpeedClass::ALL {
-        if found[class as usize].is_none() {
+        if found[class.index()].is_none() {
             return Err(Error::MissingGlobalClass { class });
         }
     }

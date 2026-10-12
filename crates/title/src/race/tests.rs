@@ -316,6 +316,7 @@ const GUEST_ROSTER: GuestRoster = GuestRoster {
     variants: &GUEST,
     reships: "A Fixture Title",
     alongside_label: None,
+    speed_classes: Some(SpeedClasses::PULSE_LADDER),
     origin: crate::effects::Origin::Chosen,
 };
 

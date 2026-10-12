@@ -173,13 +173,13 @@ pub fn class_table(
 ///
 /// **The value is lowercase and the label is the disc's own spelling.** The
 /// value is what a settings file already holds (`race.class` defaults to
-/// `"venom"`) and what `oag_physics::SpeedClass::from_name` parses
+/// `"venom"`) and what `oag_tables::handling::SpeedClass::from_name` parses
 /// case-insensitively, so lowercasing keeps every existing settings file
 /// working; the label is the `<Class name="...">` the title actually
 /// authors, so what a reviewer reads on screen is what the file says.
 ///
 /// A title whose ladder is unread (`speed_classes: None`, Wipeout 2048 today)
-/// falls back to `oag_physics::SpeedClass::ALL`, which is this build's own
+/// falls back to `oag_tables::handling::SpeedClass::ALL`, which is this build's own
 /// list rather than some other title's measurement.
 ///
 /// **Confined to `oag_title::SpeedClasses::is_offered_outside_remix`, not
@@ -197,11 +197,8 @@ pub fn class_table(
 #[must_use]
 pub fn speed_class_choices(title: &'static oag_title::Title) -> Vec<menu::Choice> {
     let named: Vec<&'static str> = match title.race.speed_classes {
-        Some(ladder) => ladder
-            .selectable()
-            .filter(|name| oag_title::SpeedClasses::is_offered_outside_remix(name))
-            .collect(),
-        None => oag_physics::SpeedClass::ALL
+        Some(ladder) => ladder.race_page().collect(),
+        None => oag_tables::handling::SpeedClass::ALL
             .iter()
             .map(|class| class.as_str())
             .collect(),

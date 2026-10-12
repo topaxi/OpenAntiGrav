@@ -47,9 +47,8 @@ pub const MP_XML: &str = r"Data\xml\MP.xml";
 /// it hoping for a type table.
 pub const MJOLNIR_DATA_XML: &str = r"Data\xml\MjolnirData.xml";
 
-/// 2048's own five speed classes, **not** [`oag_tables::handling::SpeedClass`].
-/// That type is deliberately four-wide (see `docs/formats/handling-stats.md`'s
-/// "the enum was deliberately not widened" section) and this title's own
+/// 2048's five speed classes as `M_SPEEDCLASS` orders them; each one is a
+/// [`oag_tables::handling::SpeedClass`] ([`Self::speed_class`]). This title's
 /// `Data\HandlingStats\<team>\<1..4>\handlingstats.xml` authors a fifth,
 /// `SUPERPHANTOM`, confirmed directly:
 /// `data/HandlingStats/feisar2048/3/handlingstats.xml` carries `<Class
@@ -82,8 +81,7 @@ pub enum EClass {
     Rapier,
     /// Ordinal `3`.
     Phantom,
-    /// Ordinal `4`. Not in [`oag_tables::handling::SpeedClass`] at all - see
-    /// this enum's own doc comment.
+    /// Ordinal `4`, the rung above Phantom.
     SuperPhantom,
 }
 
@@ -127,19 +125,17 @@ impl EClass {
         }
     }
 
-    /// This class on [`oag_tables::handling::SpeedClass`]'s own four-wide
-    /// ladder. `None` for [`Self::SuperPhantom`], the same "not every rung a
-    /// title offers is one the shared enum has a slot for" shape
-    /// [`oag_tables::race_campaign::Cell::speed_class`] already applies to
-    /// Pulse's `Zone` cells.
+    /// This class as [`oag_tables::handling::SpeedClass`], the type a race and
+    /// its tables are keyed by: all five of 2048's rungs are named there.
     #[must_use]
-    pub fn speed_class(self) -> Option<oag_tables::handling::SpeedClass> {
+    pub fn speed_class(self) -> oag_tables::handling::SpeedClass {
+        use oag_tables::handling::SpeedClass;
         match self {
-            Self::Venom => Some(oag_tables::handling::SpeedClass::Venom),
-            Self::Flash => Some(oag_tables::handling::SpeedClass::Flash),
-            Self::Rapier => Some(oag_tables::handling::SpeedClass::Rapier),
-            Self::Phantom => Some(oag_tables::handling::SpeedClass::Phantom),
-            Self::SuperPhantom => None,
+            Self::Venom => SpeedClass::VENOM,
+            Self::Flash => SpeedClass::FLASH,
+            Self::Rapier => SpeedClass::RAPIER,
+            Self::Phantom => SpeedClass::PHANTOM,
+            Self::SuperPhantom => SpeedClass::SUPER_PHANTOM,
         }
     }
 }

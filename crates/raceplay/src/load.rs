@@ -748,6 +748,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             finished_thrust,
             class: options.class.clone(),
             opponents: options.opponents,
+            no_opponents: options.no_driver_for_class,
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,

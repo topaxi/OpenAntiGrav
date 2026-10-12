@@ -42,6 +42,7 @@ impl Setup {
             // one - which is what makes this a check of the per-slot work
             // rather than of slot 0 again.
             opponents: true,
+            no_opponents: false,
             trail_sparks: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has

@@ -14,7 +14,7 @@
 /// Pure or silently reused as if measured - the exact trap
 /// [`crate::MenuStrip`] was created to close for the layout numbers.
 ///
-/// # Names, not `oag_physics::SpeedClass` values
+/// # Names, not `SpeedClass` values
 ///
 /// Three reasons, in order of weight:
 ///
@@ -24,7 +24,7 @@
 ///    rather than the file. [`crate::MenuStrip::selected_fill`] is the same
 ///    call made the same way - "a name, not a colour".
 /// 2. **`oag-title` is deliberately thin**, and depends on `oag-disc` alone.
-///    Carrying `SpeedClass` would drag `oag-physics` into a crate whose whole
+///    Carrying `oag_tables::handling::SpeedClass` would drag `oag-tables` into a crate whose whole
 ///    job is to hold vocabulary rather than mechanism.
 /// 3. **A name can outrun the engine, and here it does.** Pure authors a rung
 ///    this build cannot yet *select* - see [`Self::VECTOR`] - and a name
@@ -52,6 +52,15 @@ pub struct SpeedClasses {
     /// case; it is kept so a reviewer can compare a row against the file it
     /// came from without transforming it.
     pub names: &'static [&'static str],
+    /// The names among [`Self::names`] only RACE REMIX offers; the ordinary
+    /// per-title RACE page draws the rest.
+    ///
+    /// **Chosen, not measured**, per rung: the maintainer settled it for
+    /// `VECTOR` on 2026-09-05 ("the ordinary page offers four on every
+    /// title") and the same shape holds for 2048's `SUPERPHANTOM`, which no
+    /// ordinary page of that title offers either (it has no race box). Data on
+    /// the ladder so a rung is added or confined without a name check in code.
+    pub remix_only: &'static [&'static str],
 }
 
 impl SpeedClasses {
@@ -71,12 +80,11 @@ impl SpeedClasses {
     ///
     /// # It is selectable, and what had to change first
     ///
-    /// It used to be filtered out of every menu, because `oag_physics::SpeedClass`
-    /// has four variants and nothing downstream could *name* a fifth rung. The
-    /// fix was not to grow that enum: its discriminants index fixed four-wide
-    /// tables, and a five-wide table would have had to invent a fifth entry for
-    /// Pulse and HD, which author four. That is the stand-in this project
-    /// forbids.
+    /// It used to be filtered out of every menu, because the class type was a
+    /// four-variant enum and nothing downstream could *name* a fifth rung.
+    /// `oag_tables::handling::SpeedClass` is now a name on one ladder; the
+    /// four-wide census tables stay four wide (`SpeedClass::slot`) so Pulse and
+    /// HD, which author four, are not given an invented fifth entry.
     ///
     /// Instead a race carries the rung's **name** and resolves it against the
     /// file that authored it -
@@ -84,9 +92,8 @@ impl SpeedClasses {
     /// `oag_tables::handling::Global::class_named` and
     /// `oag_weapons::pickup::table_for`. A title that authors four is asked
     /// for four and grows nothing; Pure is asked for five and answers with
-    /// five. `oag_physics::SpeedClass` still has exactly four variants and its
-    /// `ALL` still means "the rungs every measured title has", which is what
-    /// keeps `has_pulse_class_ladder` meaningful.
+    /// five. `SpeedClass::ALL` still means "the rungs every measured title has",
+    /// which is what keeps `has_pulse_class_ladder` meaningful.
     ///
     /// **Pulse authors a `<GlobalClass name="VECTOR">` too and still offers
     /// four**, because its per-team files author no such `<Class>` and its
@@ -106,6 +113,22 @@ impl SpeedClasses {
     /// title whose ladder was never read cannot silently inherit one that was.
     pub const PULSE_LADDER: &'static [&'static str] = &["VENOM", "FLASH", "RAPIER", "PHANTOM"];
 
+    /// Wipeout Pure's five rungs, `VECTOR` under Pulse's four.
+    pub const PURE_LADDER: &'static [&'static str] =
+        &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+
+    /// The rung 2048 authors above Phantom, spelled as its files spell it.
+    pub const SUPER_PHANTOM: &'static str = "SUPERPHANTOM";
+
+    /// Wipeout 2048's native roster: Pulse's four with `SUPERPHANTOM` above.
+    ///
+    /// Read off the five native teams' `handlingstats.xml` (20 files per
+    /// region, both regions: `VENOM, FLASH, RAPIER, PHANTOM, SUPERPHANTOM` in
+    /// that order, `oag-tables`' `speed_ladder_ground_truth`). The twelve HD
+    /// teams 2048 reships author the four only - see [`crate::GuestRoster`].
+    pub const WIPEOUT_2048_LADDER: &'static [&'static str] =
+        &["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERPHANTOM"];
+
     /// Every rung any measured ladder names, slowest first.
     ///
     /// **A spell-checking vocabulary, not a table to index.** It exists for one
@@ -115,11 +138,17 @@ impl SpeedClasses {
     /// rung is resolved against the file that authored it, and a name that is
     /// on this list but not in *that* file is still an honest load failure.
     ///
-    /// It is the union of [`Self::PULSE_LADDER`] and Wipeout Pure's, which is
-    /// every ladder read so far. Wipeout 2048's is unread, so a 2048 rung this
-    /// does not name is a gap in the measurement rather than in the list.
-    pub const MEASURED: &'static [&'static str] =
-        &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"];
+    /// It is the union of [`Self::PULSE_LADDER`], [`Self::PURE_LADDER`] and
+    /// [`Self::WIPEOUT_2048_LADDER`], which is every ladder read so far. HD's
+    /// is Pulse's four; Omega's is unmeasured.
+    pub const MEASURED: &'static [&'static str] = &[
+        "VECTOR",
+        "VENOM",
+        "FLASH",
+        "RAPIER",
+        "PHANTOM",
+        "SUPERPHANTOM",
+    ];
 
     /// Whether `name` is a rung some measured ladder carries.
     ///
@@ -176,26 +205,33 @@ impl SpeedClasses {
     }
 
     /// Whether `name` belongs on the ordinary per-title RACE page, as opposed
-    /// to only RACE REMIX.
+    /// to only RACE REMIX: it is on this ladder and not in [`Self::remix_only`].
     ///
     /// **`VECTOR` is confined to RACE REMIX, by a 2026-09-05 maintainer
-    /// decision.** Making the rung selectable at all made a Pure boot's
+    /// decision**, and 2048's `SUPERPHANTOM` follows it (2026-10-12, chosen,
+    /// not measured). Making a rung selectable at all made a Pure boot's
     /// ordinary RACE page offer five classes too, which is wider than what
-    /// was asked for - see `docs/architecture/menus.md`'s "Wipeout Pure
-    /// authors five, this build offers four outside remix" section for the
-    /// reasoning and for why this is written down as a deliberate divergence
-    /// rather than left to be found.
+    /// was asked for - see `docs/architecture/menus.md`'s "SPEED CLASS:
+    /// `VECTOR` is confined to RACE REMIX" section for the reasoning and for
+    /// why this is written down as a deliberate divergence.
     ///
     /// This is a **menu-page** rule layered on top of [`Self::is_selectable`],
-    /// not a narrower version of it. Everything below stays exactly as it
-    /// was: `is_selectable` still answers "can this build put a ship on
-    /// `name`" for `true` on every measured rung, RACE REMIX's union still
-    /// unions and still offers `VECTOR` when Pure's data is available, and
-    /// `oag-trace`'s `--class` still spell-checks and resolves it. Only the
-    /// ordinary RACE page's own row stops listing it.
+    /// not a narrower version of it: `is_selectable` still answers "can this
+    /// build put a ship on `name`" and RACE REMIX's union still offers the
+    /// rung. Only the ordinary RACE page's own row stops listing it.
     #[must_use]
-    pub fn is_offered_outside_remix(name: &str) -> bool {
-        Self::is_selectable(name) && !name.eq_ignore_ascii_case(Self::VECTOR)
+    pub fn is_offered_outside_remix(&self, name: &str) -> bool {
+        Self::is_selectable(name)
+            && self.names.iter().any(|n| n.eq_ignore_ascii_case(name))
+            && !self.remix_only.iter().any(|n| n.eq_ignore_ascii_case(name))
+    }
+
+    /// The rungs of this ladder the ordinary RACE page draws, slowest first.
+    pub fn race_page(&self) -> impl Iterator<Item = &'static str> + use<'_> {
+        self.names
+            .iter()
+            .copied()
+            .filter(|name| self.is_offered_outside_remix(name))
     }
 
     /// Every class any of `ladders` authors, as one ladder, slowest first.

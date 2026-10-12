@@ -4,6 +4,7 @@
 //! modules; see `scripts/check-file-size.py`.
 
 use super::*;
+use oag_tables::handling::SpeedClass;
 
 /// Invented values, one per field, all distinct and none of them the game's.
 /// Distinctness is the point: it is what makes a transposed pair of fields in
@@ -158,7 +159,7 @@ fn every_parameter_arrives_with_the_documents_value() {
         // checks against the disc. A file whose ladder does not reach this class is
         // another generation of the schema, and this conversion is Pulse's.
         let block = stats
-            .class(to_format_class(class))
+            .class(class)
             .expect("a Pulse handlingstats.xml carries all four speed classes");
         let mapped = handling_for(&stats, class.as_str(), pads(), special())
             .expect("the fixture authors this class");
@@ -282,7 +283,7 @@ fn each_speed_class_maps_to_a_different_parameter_set() {
 #[test]
 fn the_brake_parameter_arrives_negative() {
     let stats = stats();
-    let block = stats.class(FmtClass::Venom).expect("four rungs");
+    let block = stats.class(SpeedClass::VENOM).expect("four rungs");
     assert!(
         block.brakes.amount > 0.0,
         "the fixture's XML value is positive, or this test proves nothing"
@@ -356,7 +357,7 @@ fn the_airbrake_flap_deflection_is_converted_to_radians() {
 #[test]
 fn the_siblings_of_the_scaled_fields_are_untouched() {
     let stats = stats();
-    let block = stats.class(FmtClass::Venom).expect("four rungs");
+    let block = stats.class(SpeedClass::VENOM).expect("four rungs");
     let mapped =
         handling_for(&stats, "VENOM", pads(), special()).expect("the fixture authors VENOM");
     assert_eq!(mapped.engine.accelcap, block.engine.accelcap);
@@ -384,11 +385,4 @@ fn the_speed_pad_tunables_arrive_from_the_argument_unscaled() {
         !SCALED_FIELDS.iter().any(|f| f.starts_with("SpeedupPads")),
         "if this ever becomes a scaled field the mapping above has to change"
     );
-}
-
-#[test]
-fn the_two_speed_class_enums_round_trip() {
-    for class in SpeedClass::ALL {
-        assert_eq!(from_format_class(to_format_class(class)), class);
-    }
 }

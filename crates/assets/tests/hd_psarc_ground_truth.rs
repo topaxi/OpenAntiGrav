@@ -604,7 +604,7 @@ fn hds_global_handling_file_authors_vector_first_like_pulses() {
     // authors `VECTOR` at `time="0.18"` and `VENOM` at `0.27`, exactly as
     // Pulse does, so reading the first block into the first slot is visible.
     assert!(
-        (global.speedup_pads(handling::SpeedClass::Venom).time - 0.18).abs() > 1e-6,
+        (global.speedup_pads(handling::SpeedClass::VENOM).time - 0.18).abs() > 1e-6,
         "VECTOR's speedup-pad time landed in Venom's slot"
     );
 }

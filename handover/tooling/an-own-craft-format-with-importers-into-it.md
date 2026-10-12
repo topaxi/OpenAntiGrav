@@ -93,7 +93,7 @@ it yields is plain `Handling` data.
   already keys a title's ladder, because ladders differ: Pulse and HD author four,
   Pure five (`VECTOR` below Venom), 2048 adds Super Phantom. A race on a class the
   craft does not author is an error naming the class, or `based_on` fills it.
-- **Blocker found 2026-10-12**: `oag_physics::SpeedClass` is a four-variant enum, so
+- **Blocker CLEARED 2026-10-12 (`speed-class` lane)**: `SpeedClass` is data now (a name on `SpeedClass::KNOWN`; extending that list is the hook for an own class; four-wide census tables answer `None` for it). It was: `oag_physics::SpeedClass` a four-variant enum, so
   Pure's Vector is raceable only through RACE REMIX's name route and 2048's Super
   Phantom not at all (`2048s-original-opponent-flies-its-campaign.md`). A class as
   data (name plus index into a ladder) is the prerequisite for both, and for

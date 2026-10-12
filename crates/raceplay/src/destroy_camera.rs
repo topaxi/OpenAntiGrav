@@ -99,13 +99,7 @@ pub(super) fn stations(
 /// The camera's focus rate for a class name: Venom `0.4`, Flash `0.5`, Rapier
 /// and Phantom `0.6` (`FUN_0887f9bc`; only Venom's was seen running).
 pub(super) fn focus_rate(class: &str) -> f32 {
-    let index = oag_physics::SpeedClass::from_name(class)
-        .and_then(|class| {
-            oag_physics::SpeedClass::ALL
-                .iter()
-                .position(|c| *c == class)
-        })
-        .unwrap_or(0);
+    let index = oag_tables::handling::SpeedClass::census(class).map_or(0, |class| class.index());
     destroy::FOCUS_RATE_BY_CLASS[index]
 }
 

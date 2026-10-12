@@ -36,8 +36,7 @@ takes them to `Race::use_original_ai` and `Race::set_original_event_ai_skills`.
 - **The race-time lag** the Vita3K samples needed (`t - 1/30`) is unexplained: a
   lagged clock or the stop's position in the frame. A breakpoint at the law's
   return would settle it.
-- **Super Phantom events (20)** keep this project's driver: no fifth
-  `oag_tables::handling::SpeedClass`. The class's 2048 tables exist and parse.
+- **Super Phantom (2026-10-12): the ten `S Phantom Challenge` races fly the original driver** (`SpeedClass::SUPER_PHANTOM`, `AIRaceStats_superphantom.xml`); the ten Speed Laps have no opponents. On Square with the player parked 3 of 7 opponents respawn once in 120 s (the Flash race there: none); not chased.
 - **Not ported, named**: the section-change re-seed in the planner, the chase mode
   under `driver+0xcc` (its writer not found), 2048's own Eliminator-family thrust
   law `0x81199800`, the Eliminator spin, the Duel blocks, split screen.

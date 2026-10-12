@@ -80,6 +80,7 @@ OAG_RACE_START = { text = "DÉPART", human = false }
 # RACE REMIX's own rows.
 OAG_REMIX_PAGE_TITLE = { text = "COURSE REMIX", human = false }
 OAG_REMIX_TRACK_TITLE = { text = "TITRE DU CIRCUIT", human = false }
+OAG_REMIX_NO_DRIVER = { text = "AUCUN ADVERSAIRE : PAS DE PILOTE POUR CETTE CLASSE", human = false }
 OAG_REMIX_CRAFT_TITLE = { text = "TITRE DU VAISSEAU", human = false }
 
 # OPTIONS and its submenu rows.

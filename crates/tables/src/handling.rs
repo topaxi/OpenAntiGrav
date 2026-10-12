@@ -74,40 +74,115 @@ pub use global::{
     WeaponPad, global_from_blob, parse_global,
 };
 
-/// The four speed classes, in the order the XML lists them.
+/// A speed class: a name a title's `handlingstats.xml` authors, as data.
 ///
-/// Separate from `oag_physics::SpeedClass`: this describes the document, that
-/// the simulation's input, and `oag-physics` depends on `oag-core` alone.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SpeedClass {
-    Venom,
-    Flash,
-    Rapier,
-    Phantom,
+/// **A class is its authored name, not a variant of a four-wide enum.** The
+/// discs author more than four of them - Pure a fifth `VECTOR` under Venom,
+/// 2048 a `SUPERPHANTOM` above Phantom - and a closed enum could name neither
+/// without inventing a slot in tables the other titles do not have. A value of
+/// this type is an index into [`Self::KNOWN`], the names any measured title
+/// authors in one slowest-first order; a title's own ladder is the subset its
+/// files carry (`oag_title::SpeedClasses`), and a lookup goes by the name.
+///
+/// # What is still four wide, and why
+///
+/// Pulse's census rungs [`Self::ALL`] (`VENOM`..`PHANTOM`) are the four every
+/// per-class table in the engine was measured on: the lap counts, the
+/// global handling blocks, the AI tables, the weapon speeds. [`Self::slot`]
+/// is a rung's place in those four-wide tables and is `None` for a rung the
+/// census never covered - which is how a table says "unmeasured for this
+/// class" instead of inventing a fifth entry.
+///
+/// The type orders by [`Self::KNOWN`]'s position, slowest first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SpeedClass {
+    rank: u8,
 }
 
 impl SpeedClass {
-    /// All four, slowest first; the position is the discriminant, so
-    /// [`Stats::classes`] is indexable by class.
-    pub const ALL: [Self; 4] = [Self::Venom, Self::Flash, Self::Rapier, Self::Phantom];
+    /// Pure's fifth rung, under Venom.
+    pub const VECTOR: Self = Self { rank: 0 };
+    /// Slowest of Pulse's four.
+    pub const VENOM: Self = Self { rank: 1 };
+    /// Second of Pulse's four.
+    pub const FLASH: Self = Self { rank: 2 };
+    /// Third of Pulse's four.
+    pub const RAPIER: Self = Self { rank: 3 };
+    /// Fastest of Pulse's four.
+    pub const PHANTOM: Self = Self { rank: 4 };
+    /// 2048's rung above Phantom, spelled `SUPERPHANTOM` in its files.
+    pub const SUPER_PHANTOM: Self = Self { rank: 5 };
+
+    /// Every rung any measured title authors, slowest first, spelled as the
+    /// XML spells them. A later file may extend this list; nothing indexes a
+    /// fixed table by a position in it.
+    pub const KNOWN: [Self; 6] = [
+        Self::VECTOR,
+        Self::VENOM,
+        Self::FLASH,
+        Self::RAPIER,
+        Self::PHANTOM,
+        Self::SUPER_PHANTOM,
+    ];
+
+    /// The four rungs every per-class table was measured on, slowest first.
+    /// [`Self::slot`] is the position in this list.
+    pub const ALL: [Self; 4] = [Self::VENOM, Self::FLASH, Self::RAPIER, Self::PHANTOM];
+
+    const NAMES: [&'static str; 6] = [
+        "VECTOR",
+        "VENOM",
+        "FLASH",
+        "RAPIER",
+        "PHANTOM",
+        "SUPERPHANTOM",
+    ];
 
     /// The `name` attribute the XML uses.
     #[must_use]
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Venom => "VENOM",
-            Self::Flash => "FLASH",
-            Self::Rapier => "RAPIER",
-            Self::Phantom => "PHANTOM",
+        Self::NAMES[usize::from(self.rank)]
+    }
+
+    /// Parses the XML's `name` attribute, case-insensitively, for any rung a
+    /// measured title authors.
+    #[must_use]
+    pub fn named(name: &str) -> Option<Self> {
+        Self::KNOWN
+            .into_iter()
+            .find(|class| class.as_str().eq_ignore_ascii_case(name))
+    }
+
+    /// Like [`Self::named`] but only for the four census rungs: a name outside
+    /// [`Self::ALL`] is `None`. For a caller whose table is four wide and has
+    /// no entry for a fifth.
+    #[must_use]
+    pub fn census(name: &str) -> Option<Self> {
+        Self::named(name).filter(|class| class.slot().is_some())
+    }
+
+    /// [`Self::slot`] for a caller whose class already came through
+    /// [`Self::census`] or [`Self::ALL`].
+    ///
+    /// # Panics
+    ///
+    /// On a rung outside [`Self::ALL`]; such a caller should ask [`Self::slot`].
+    #[must_use]
+    pub const fn index(self) -> usize {
+        match self.slot() {
+            Some(slot) => slot,
+            None => panic!("a rung outside SpeedClass::ALL has no slot in the census tables"),
         }
     }
 
-    /// Parses the XML's `name` attribute, case-insensitively.
+    /// Where this rung sits in the four-wide census tables, `None` for a rung
+    /// outside [`Self::ALL`].
     #[must_use]
-    pub fn from_name(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|class| class.as_str().eq_ignore_ascii_case(name))
+    pub const fn slot(self) -> Option<usize> {
+        match self.rank {
+            1..=4 => Some(self.rank as usize - 1),
+            _ => None,
+        }
     }
 }
 
@@ -785,12 +860,12 @@ fn classes(stats: &Node) -> Result<Vec<Class>> {
             attribute: "name",
         })?;
         let name = name.trim();
-        let Some(class) = SpeedClass::from_name(name) else {
+        let Some(class) = SpeedClass::census(name) else {
             extra.push(Class::from_node_named(name, node)?);
             continue;
         };
 
-        let slot = &mut found[class as usize];
+        let slot = &mut found[class.index()];
         if slot.is_some() {
             return Err(Error::DuplicateClass { class });
         }
@@ -805,7 +880,7 @@ fn classes(stats: &Node) -> Result<Vec<Class>> {
     }
     // Reported in `ALL` order so the message does not depend on document order.
     for class in SpeedClass::ALL {
-        if found[class as usize].is_none() {
+        if found[class.index()].is_none() {
             return Err(Error::MissingClass { class });
         }
     }

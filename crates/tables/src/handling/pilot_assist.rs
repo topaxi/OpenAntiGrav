@@ -161,11 +161,11 @@ pub(super) fn per_class(global: &Node) -> Result<[Option<PilotAssist>; 4]> {
     for node in global.children_named("GlobalClass") {
         let Some(class) = node
             .value("name")
-            .and_then(|name| SpeedClass::from_name(name.trim()))
+            .and_then(|name| SpeedClass::census(name.trim()))
         else {
             continue;
         };
-        out[class as usize] = PilotAssist::from_class(node)?;
+        out[class.index()] = PilotAssist::from_class(node)?;
     }
     Ok(out)
 }
@@ -176,11 +176,11 @@ pub(super) fn steer_per_class(global: &Node) -> Result<[Option<SteerAssist>; 4]>
     for node in global.children_named("GlobalClass") {
         let Some(class) = node
             .value("name")
-            .and_then(|name| SpeedClass::from_name(name.trim()))
+            .and_then(|name| SpeedClass::census(name.trim()))
         else {
             continue;
         };
-        out[class as usize] = SteerAssist::from_class(node)?;
+        out[class.index()] = SteerAssist::from_class(node)?;
     }
     Ok(out)
 }
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn both_elements_fill_one_record() {
         let global = parse_global(&document(SPLIT)).unwrap().unwrap();
-        let assist = global.pilot_assist(SpeedClass::Rapier).unwrap();
+        let assist = global.pilot_assist(SpeedClass::RAPIER).unwrap();
         assert_eq!(assist.la_dist_const, 1.0);
         assert_eq!(assist.spring_mul, -4.0);
         assert_eq!(assist.max_ang_vel, 7.0);

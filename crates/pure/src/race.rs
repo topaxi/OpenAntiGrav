@@ -128,7 +128,8 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // where the filter lives.
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
-        names: &["VECTOR", "VENOM", "FLASH", "RAPIER", "PHANTOM"],
+        names: oag_title::SpeedClasses::PURE_LADDER,
+        remix_only: &[oag_title::SpeedClasses::VECTOR],
     }),
 };
 

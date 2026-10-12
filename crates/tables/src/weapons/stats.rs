@@ -80,7 +80,7 @@ impl RocketStats {
     /// Four per-class speeds are the file's own design, not engine scaling.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
+        self.speeds[class.index()]
     }
 
     /// The same, for a rung named the way the document spells it.
@@ -89,8 +89,8 @@ impl RocketStats {
     /// class; see [`Self::class_independent`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
-        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
-            return Some(self.speeds[class as usize]);
+        if let Some(class) = crate::handling::SpeedClass::census(name) {
+            return Some(self.speeds[class.index()]);
         }
         self.class_independent.then(|| self.speeds[0])
     }
@@ -155,14 +155,14 @@ impl MissileStats {
     /// `oag_weapons::projectile::missile_speed_kmh`.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
+        self.speeds[class.index()]
     }
 
     /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
-        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
-            return Some(self.speeds[class as usize]);
+        if let Some(class) = crate::handling::SpeedClass::census(name) {
+            return Some(self.speeds[class.index()]);
         }
         self.class_independent.then(|| self.speeds[0])
     }
@@ -227,14 +227,14 @@ impl PlasmaStats {
     /// `oag_weapons::projectile::plasma::launch`.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
+        self.speeds[class.index()]
     }
 
     /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
-        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
-            return Some(self.speeds[class as usize]);
+        if let Some(class) = crate::handling::SpeedClass::census(name) {
+            return Some(self.speeds[class.index()]);
         }
         self.class_independent.then(|| self.speeds[0])
     }
@@ -294,14 +294,14 @@ impl ShurikenStats {
     /// independently shows the authored speeds are km/h.
     #[must_use]
     pub fn speed_for(&self, class: crate::handling::SpeedClass) -> f32 {
-        self.speeds[class as usize]
+        self.speeds[class.index()]
     }
 
     /// As [`RocketStats::speed_for_named`].
     #[must_use]
     pub fn speed_for_named(&self, name: &str) -> Option<f32> {
-        if let Some(class) = crate::handling::SpeedClass::from_name(name) {
-            return Some(self.speeds[class as usize]);
+        if let Some(class) = crate::handling::SpeedClass::census(name) {
+            return Some(self.speeds[class.index()]);
         }
         self.class_independent.then(|| self.speeds[0])
     }

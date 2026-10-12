@@ -458,7 +458,7 @@ fn pures_zone_mode_file_authors_its_blocks_outside_any_class() {
         "an empty ladder must not read as Pulse's four"
     );
     assert!(
-        stats.class(handling::SpeedClass::Venom).is_none(),
+        stats.class(handling::SpeedClass::VENOM).is_none(),
         "there is no rung to find"
     );
 }

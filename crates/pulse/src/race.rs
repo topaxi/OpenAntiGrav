@@ -81,6 +81,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PULSE_LADDER,
+        remix_only: &[],
     }),
 };
 

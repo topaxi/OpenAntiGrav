@@ -362,7 +362,7 @@ impl Cell {
     /// four; `None` for `"Zone"` or anything unrecognised, never an error.
     #[must_use]
     pub fn speed_class(&self) -> Option<SpeedClass> {
-        SpeedClass::from_name(&self.class)
+        SpeedClass::census(&self.class)
     }
 
     /// The `(x, y)` parsed out of the cell's name as `PI_Cell_ParseElement`

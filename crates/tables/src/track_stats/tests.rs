@@ -52,17 +52,17 @@ fn parses_the_flat_class_rows() {
 #[test]
 fn parses_the_skill_curve_per_class() {
     let stats = parse(FIXTURE).expect("parses");
-    assert_eq!(stats.skill_curve(SpeedClass::Venom), [0.5, 2.1, 3.5]);
-    assert_eq!(stats.skill_curve(SpeedClass::Flash), [0.6, 2.2, 3.6]);
-    assert_eq!(stats.skill_curve(SpeedClass::Rapier), [0.7, 2.3, 3.7]);
-    assert_eq!(stats.skill_curve(SpeedClass::Phantom), [0.8, 2.4, 3.8]);
+    assert_eq!(stats.skill_curve(SpeedClass::VENOM), [0.5, 2.1, 3.5]);
+    assert_eq!(stats.skill_curve(SpeedClass::FLASH), [0.6, 2.2, 3.6]);
+    assert_eq!(stats.skill_curve(SpeedClass::RAPIER), [0.7, 2.3, 3.7]);
+    assert_eq!(stats.skill_curve(SpeedClass::PHANTOM), [0.8, 2.4, 3.8]);
 }
 
 #[test]
 fn parses_mode_modifiers_per_class() {
     let stats = parse(FIXTURE).expect("parses");
     assert_eq!(
-        stats.mode_modifiers[SpeedClass::Venom as usize],
+        stats.mode_modifiers[SpeedClass::VENOM.index()],
         ModeModifiers {
             head_to_head: 1.1,
             full_grid_with_weapons: 0.0,
@@ -157,7 +157,7 @@ fn ambient_skill_scale_adds_the_mode_term_to_the_plain_value() {
         weapons: false,
         full_grid: false,
     };
-    let at = |mode| ambient_skill_scale(Some(&stats), SpeedClass::Venom, Difficulty::Easy, mode);
+    let at = |mode| ambient_skill_scale(Some(&stats), SpeedClass::VENOM, Difficulty::Easy, mode);
     assert!((at(full) - 0.7).abs() < 1e-6);
     assert!((at(half) - 0.6).abs() < 1e-6);
     assert!((at(ModeTerm::HeadToHead) - 1.6).abs() < 1e-6);
@@ -165,7 +165,7 @@ fn ambient_skill_scale_adds_the_mode_term_to_the_plain_value() {
     assert_eq!(
         ambient_skill_scale(
             Some(&stats),
-            SpeedClass::Venom,
+            SpeedClass::VENOM,
             Difficulty::Hard,
             ModeTerm::None
         ),
@@ -178,7 +178,7 @@ fn ambient_skill_scale_without_a_table_is_two() {
     assert_eq!(
         ambient_skill_scale(
             None,
-            SpeedClass::Rapier,
+            SpeedClass::RAPIER,
             Difficulty::Easy,
             ModeTerm::HeadToHead
         ),

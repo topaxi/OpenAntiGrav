@@ -235,8 +235,8 @@ impl Session {
     /// Wipeout Pure authors a fifth rung, `VECTOR`, in every one of its race
     /// teams' `handlingstats.xml` files, and this build can put a ship on it -
     /// a race carries the rung as the name the disc spells and resolves it
-    /// against the file that authored it, so `oag_physics::SpeedClass` never
-    /// had to grow a fifth variant. `is_selectable` says `true` for it and
+    /// against the file that authored it, so no four-wide table
+    /// had to grow a fifth entry. `is_selectable` says `true` for it and
     /// filters nothing here: with a Pure image present the *union* genuinely
     /// contains five names and this row offers all five.
     ///
@@ -262,6 +262,25 @@ impl Session {
                 .filter(|name| oag_title::SpeedClasses::is_selectable(name))
                 .collect(),
         )
+    }
+
+    /// RACE REMIX's AI DIFFICULTY options: the four tiers and a `none` option
+    /// the row is pinned to while the chosen class has no controller
+    /// (`oag_ai::coverage`), labelled with the reason.
+    pub(super) fn remix_ai_difficulty(&self) -> Vec<menu::Choice> {
+        let table = strings::project_table(self.settings.language.as_deref());
+        let mut choices: Vec<menu::Choice> = ["novice", "skilled", "elite", "ace"]
+            .into_iter()
+            .map(menu::Choice::plain)
+            .collect();
+        choices.push(menu::Choice::labelled(
+            "none",
+            table
+                .get("OAG_REMIX_NO_DRIVER")
+                .unwrap_or("NO OPPONENTS: NO DRIVER FOR THIS CLASS")
+                .to_string(),
+        ));
+        choices
     }
 
     /// Which real candidate backs `remix.craft_title` -
@@ -321,6 +340,20 @@ impl Session {
                     .retain(|choice| Self::is_guest_team(guest, &choice.value));
             }
         }
+        // **A team whose files do not author the chosen class is hidden**
+        // (chosen, not measured; `oag_title::RaceDefaults::team_races_class`).
+        // Pure's VECTOR and 2048's SUPERPHANTOM are on one title's ladder or
+        // one roster only, and a remix can pair them with a craft title whose
+        // teams author neither: the TEAM row narrows, possibly to nothing,
+        // rather than offering a team that fails to load.
+        if let Some(title) = candidate.playable() {
+            let class = self.settings.race.class.trim();
+            if !class.is_empty() {
+                catalogue
+                    .teams
+                    .retain(|team| title.race.team_races_class(&team.value, class) != Some(false));
+            }
+        }
         Some(catalogue)
     }
 
@@ -369,8 +402,26 @@ impl Session {
         if !class.is_empty() {
             race_options.class = class.to_string();
         }
+        // A class no controller covers races without opponents; the AI
+        // DIFFICULTY row says so (`Session::remix_ai_difficulty`).
+        race_options.no_driver_for_class =
+            !oag_ai::coverage::project_driver_covers(&race_options.class);
         if let Some(difficulty) = oag_ai::Difficulty::from_name(&self.settings.ai.difficulty) {
             race_options.difficulty = difficulty;
+        }
+        // The TEAM row hides every team that does not author the class; with
+        // none left there is nothing to launch, and racing a default team that
+        // cannot load the class is the failure the row exists to prevent.
+        if self
+            .remix_craft_catalogue()
+            .is_some_and(|catalogue| catalogue.teams.is_empty())
+        {
+            warn!(
+                "no team of {} authors the speed class {:?}; pick another class or craft title",
+                self.settings.remix.craft_title, race_options.class
+            );
+            self.race_options = Some(race_options);
+            return;
         }
 
         let track_title = self.settings.remix.track_title.clone();

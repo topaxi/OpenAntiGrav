@@ -289,18 +289,53 @@ fn the_union_does_not_depend_on_the_survey_order() {
 }
 
 /// A title whose ladder is unread contributes nothing rather than lending the
-/// union another title's measurement - Wipeout 2048's `speed_classes: None`.
+/// union another title's measurement - Omega's `speed_classes: None`.
 #[test]
 fn an_unread_ladder_adds_nothing_to_the_union() {
     assert_eq!(
-        union_over(&[oag_pulse::TITLE, oag_2048::TITLE]),
+        union_over(&[oag_pulse::TITLE, oag_omega::TITLE]),
         union_over(&[oag_pulse::TITLE])
     );
-    assert!(union_over(&[oag_2048::TITLE]).is_empty());
+    assert!(union_over(&[oag_omega::TITLE]).is_empty());
+}
+
+/// RACE REMIX offers **every class any mounted title authors**: Pure's
+/// `VECTOR` first, 2048's `SUPERPHANTOM` last, in whichever order the survey
+/// lists them, and the ordinary page of each stays at four.
+#[test]
+fn the_union_offers_vector_below_and_super_phantom_above_with_both_titles_mounted() {
+    let want = vec![
+        "VECTOR",
+        "VENOM",
+        "FLASH",
+        "RAPIER",
+        "PHANTOM",
+        "SUPERPHANTOM",
+    ];
+    assert_eq!(
+        offered_over(&[oag_pulse::TITLE, oag_pure::TITLE, oag_2048::TITLE]),
+        want
+    );
+    assert_eq!(
+        offered_over(&[oag_2048::TITLE, oag_pure::TITLE, oag_pulse::TITLE]),
+        want
+    );
+    assert_eq!(
+        offered_over(&[oag_pulse::TITLE, oag_2048::TITLE]),
+        ["VENOM", "FLASH", "RAPIER", "PHANTOM", "SUPERPHANTOM"]
+    );
+    for title in [oag_pulse::TITLE, oag_pure::TITLE, oag_2048::TITLE] {
+        assert_eq!(
+            oag_game::scoreboard::speed_class_choices(title).len(),
+            4,
+            "{}: the ordinary page keeps its four",
+            title.name
+        );
+    }
 }
 
 /// **The third arm, and the one that bites**: a machine whose only playable
-/// source is Wipeout 2048 unions to *nothing*, because that title's ladder is
+/// source is Omega unions to *nothing*, because that title's ladder is
 /// unread.
 ///
 /// An empty list must not be settled against. `settle` clears a stored value
@@ -312,8 +347,8 @@ fn an_unread_ladder_adds_nothing_to_the_union() {
 /// makes the guard necessary, since the two facts live in different files and
 /// neither one alone looks dangerous.
 #[test]
-fn a_2048_only_machine_unions_to_nothing_which_must_not_be_settled_against() {
-    let union = union_over(&[oag_2048::TITLE]);
+fn an_omega_only_machine_unions_to_nothing_which_must_not_be_settled_against() {
+    let union = union_over(&[oag_omega::TITLE]);
     assert!(union.is_empty());
 
     // What the guard prevents, spelled out: settling a saved class against
@@ -371,23 +406,22 @@ fn vector_is_offered_with_pure_present_and_not_without_it() {
     }
 }
 
-/// `oag_physics::SpeedClass` **still names four**, and that is the load-bearing
-/// half of how the fifth rung was added.
+/// The census tables stay four wide, and the rungs outside them have a name
+/// but no slot.
 ///
-/// The alternative - a fifth variant - would have widened the fixed tables its
-/// discriminants index, and every title that authors four would have grown a
-/// fabricated fifth entry. Instead a race carries the rung's *name* and
-/// resolves it against the file that authored it. This test fails the moment
-/// somebody widens the enum, which is the change this design exists to avoid.
+/// A fifth entry in a four-wide table would be fabricated for every title that
+/// authors four. A race carries the rung's *name* and resolves it against the
+/// file that authored it; this fails the moment a four-wide table is given a
+/// slot for a rung nobody measured it on.
 #[test]
-fn the_physics_enum_still_names_exactly_the_four_every_title_shares() {
-    assert_eq!(oag_physics::SpeedClass::ALL.len(), 4);
-    assert!(
-        oag_physics::SpeedClass::from_name("VECTOR").is_none(),
-        "the fifth rung is carried as a name, never as a variant"
-    );
+fn the_census_tables_stay_four_wide_and_the_outer_rungs_have_no_slot() {
+    assert_eq!(oag_tables::handling::SpeedClass::ALL.len(), 4);
+    for outside in ["VECTOR", "SUPERPHANTOM"] {
+        assert!(oag_tables::handling::SpeedClass::census(outside).is_none());
+        assert!(oag_tables::handling::SpeedClass::named(outside).is_some());
+    }
     for name in oag_title::SpeedClasses::PULSE_LADDER {
-        assert!(oag_physics::SpeedClass::from_name(name).is_some());
+        assert!(oag_tables::handling::SpeedClass::census(name).is_some());
     }
 }
 
@@ -450,5 +484,54 @@ fn each_2048_entry_reads_its_own_sources_craft() {
         model(omega_label),
         489_720,
         "Omega's own, not the Vita disc's"
+    );
+}
+
+/// RACE REMIX's TEAM row hides a team whose files do not author the chosen
+/// class (chosen, not measured), over 2048's real roster: the five native
+/// teams author `SUPERPHANTOM`, the twelve HD-derived ones do not; no team of
+/// 2048 authors `VECTOR`.
+#[test]
+#[ignore = "needs the Vita 2048 extraction"]
+fn super_phantom_hides_the_hd_teams_and_vector_hides_every_2048_team() {
+    let Some(vita) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let catalogue = oag_game::remix::catalogue(&vita.display().to_string()).expect("opens");
+    let race = &oag_2048::TITLE.race;
+    let races = |class: &str| -> Vec<String> {
+        catalogue
+            .teams
+            .iter()
+            .filter(|team| race.team_races_class(&team.value, class) != Some(false))
+            .map(|team| team.value.clone())
+            .collect()
+    };
+    let guest = oag_2048::race::GUEST_ROSTER.variants.teams;
+    let all = races("PHANTOM");
+    assert_eq!(all.len(), catalogue.teams.len(), "every team races Phantom");
+    let upper = races("SUPERPHANTOM");
+    assert_eq!(upper.len(), 5, "{upper:?}");
+    assert!(upper.iter().all(|team| !guest.contains(&team.as_str())));
+    assert!(races("VECTOR").is_empty());
+}
+
+/// Pulse's teams author no `VECTOR`, so pairing it with a Pulse craft title
+/// leaves the TEAM row empty rather than offering a team that fails to load;
+/// Pure's own teams all author it.
+#[test]
+fn a_craft_title_whose_ladder_lacks_the_class_offers_no_team() {
+    assert_eq!(
+        oag_pulse::TITLE.race.team_races_class("any", "vector"),
+        Some(false)
+    );
+    assert_eq!(
+        oag_pure::TITLE.race.team_races_class("any", "vector"),
+        Some(true)
+    );
+    assert_eq!(
+        oag_omega::TITLE.race.team_races_class("any", "vector"),
+        None,
+        "an unread ladder hides nothing"
     );
 }

@@ -233,6 +233,7 @@ impl Session {
             remix_menu::settle(&mut self.settings.race.class, &remix_classes);
         }
         model.supply(menu::ValueSource::RemixSpeedClasses, &remix_classes);
+        model.supply(menu::ValueSource::RemixAiDifficulty, &self.remix_ai_difficulty());
         model.supply(menu::ValueSource::Languages, &shell.languages);
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
@@ -790,6 +791,8 @@ impl Session {
         ) {
             race_options.class = class;
         }
+        race_options.no_driver_for_class =
+            !oag_ai::coverage::project_driver_covers(&race_options.class);
         // The mode itself was already resolved above, before the
         // circuit - see the comment there.
         // Same shape again: an unrecognised level leaves the previous

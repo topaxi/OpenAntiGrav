@@ -40,6 +40,16 @@ commands in [evidence](#evidence). Where the *shape* of a table matters to an
 argument below it is described in words - "the spread is a few points", "several
 times larger" - because the finding is the coupling, not the number.
 
+## Which classes a controller covers (2026-10-12)
+
+AI opponents exist only for a class something defines how to fly. This
+project's driver is verified on VENOM, FLASH, RAPIER, PHANTOM and Pure's VECTOR
+(`oag_ai::coverage::PROJECT_DRIVER_CLASSES`); the original's driver on the
+classes its title's own AI tables author (2048's SUPERPHANTOM included, campaign
+only). A race on any other class - RACE REMIX on Super Phantom - runs with no
+opponents and its setup screen says why ([menus.md](../architecture/menus.md)).
+The set is data on the controller, not a title branch.
+
 ## Read this first: what is recovered and what is ours
 
 | Piece | Status | Confidence |
@@ -644,7 +654,8 @@ read its spread from the tick before. Ported as `oag_ai::original::Laws` fields 
 the capture's `63.0` and `74.0`, and the field finishes a race on nine of the ten
 circuits with the player parked (Arena with up to three respawns a craft). Sol loops
 every craft through respawns under this project's driver too; Super Phantom events
-(no fifth `SpeedClass`) and Elimination events (2048's own Eliminator thrust law,
+fly it too since 2026-10-12 (the ten `S Phantom Challenge` races; the ten Speed Laps have no opponents; on
+Square with the player parked 3 of 7 opponents respawn once in 120 s, the Flash race there has none) and Elimination events (2048's own Eliminator thrust law,
 `0x81199800`, is unread) keep this project's driver. 2048 ticks at 30 fps and this
 engine at 60 Hz, so the planner's per-call terms run twice as often a second: chosen,
 not measured. Omega's executable carries the same laws under the same lineage

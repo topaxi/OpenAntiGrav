@@ -285,3 +285,113 @@ circuit!(the_field_finishes_arena, "2049 - Event 6", 3);
 circuit!(the_field_finishes_cathedral, "2049 - Event 2", 0);
 circuit!(the_field_finishes_subway, "2049 - Event 4", 0);
 circuit!(the_field_finishes_altima, "2050 - Event 1", 0);
+
+/// Super Phantom is the rung above Phantom and 2048 authors its tables
+/// (`AIRaceStats_superphantom.xml`, `SuperPhantomStats` in
+/// `AIControlStats.xml`): its ten "S Phantom Challenge" events fly the
+/// original's driver like every other race event. They used to keep this
+/// project's driver because the class had no `SpeedClass` to read tables with.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn super_phantom_challenges_fly_the_original_driver() {
+    for track in [
+        "Tower",
+        "Mall",
+        "Bridge",
+        "Square",
+        "Park",
+        "Arena",
+        "Cathedral",
+        "Subway",
+        "Sol",
+        "Altima",
+    ] {
+        let event = format!("{track} - S Phantom Challenge");
+        let Some(loaded) = loaded(&event) else {
+            return;
+        };
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|line| line.contains("AIRaceStats_superphantom.xml")),
+            "{event}: the Super Phantom table is the one read: {:?}",
+            loaded.report
+        );
+        let ai = loaded
+            .campaign_2048_event
+            .as_ref()
+            .and_then(|event| event.ai)
+            .unwrap_or_else(|| panic!("{event} authors the original's AI"));
+        let mut race = oag_raceplay::Race::start(loaded.setup);
+        assert!(
+            race.use_original_ai(Some(ai.skill_scale), ai.level),
+            "{event}: the Super Phantom tables read, so the original driver flies"
+        );
+    }
+}
+
+/// The Super Phantom field on Unity Square for 120 s with the player parked:
+/// every opponent is under the original's driver and at most one respawn a
+/// craft (measured: three of the seven respawn once, the Flash race on the same
+/// circuit has none). Shield is
+/// reported at each lap crossing (per lap) and at the end of the run, apart.
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_super_phantom_field_runs_square_clean() {
+    let Some(mut race) = race("Square - S Phantom Challenge", None) else {
+        return;
+    };
+    let mut lap = [1u32; 8];
+    let mut per_lap: [Vec<f32>; 8] = Default::default();
+    while seconds(&race) <= 120.0 {
+        race.tick(&PlayerInputs::none());
+        for slot in 1..8 {
+            let ship = &race.sim.world.ships[slot];
+            if ship.standing.lap != lap[slot] {
+                lap[slot] = ship.standing.lap;
+                per_lap[slot].push(ship.physics.shield);
+            }
+        }
+    }
+    for (slot, shields) in per_lap.iter().enumerate().skip(1) {
+        let ship = &race.sim.world.ships[slot];
+        println!(
+            "slot {slot}: lap {} respawns {} per-lap shield {:?}, end-of-run shield {:.1}",
+            ship.standing.lap,
+            race.respawns_of(slot),
+            shields,
+            ship.physics.shield
+        );
+        assert!(race.respawns_of(slot) <= 1, "slot {slot}");
+        assert!(
+            ship.standing.lap >= 3,
+            "slot {slot} laps at a Super Phantom pace"
+        );
+    }
+}
+
+/// A RACE REMIX style race on Super Phantom, which this project's driver is
+/// not verified on, fields no opponents; the same race on Phantom fields all
+/// seven. (`oag_ai::coverage`; the campaign's own controller is separate.)
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn a_super_phantom_race_box_race_runs_without_opponents() {
+    let Some(source) = source() else {
+        return;
+    };
+    let ship_count = |class: &str| {
+        let options = oag_raceplay::Options {
+            source: source.display().to_string(),
+            mode: oag_race::Mode::SingleRace,
+            class: class.to_string(),
+            no_driver_for_class: !oag_ai::coverage::project_driver_covers(class),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        };
+        let loaded = oag_raceplay::load(&options).expect("loads");
+        oag_raceplay::Race::start(loaded.setup).sim.world.ship_count
+    };
+    assert_eq!(ship_count("PHANTOM"), 8);
+    assert_eq!(ship_count("SUPERPHANTOM"), 1);
+}
