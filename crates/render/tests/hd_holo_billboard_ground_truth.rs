@@ -55,8 +55,29 @@ fn parameters(archive: &str, path: &str, slot: usize) -> Option<[f32; 3]> {
     Some([find(0x4f2a_ef81)?, find(0x088b_2c6a)?, find(0xef6e_4697)?])
 }
 
+/// The two extra coordinate pairs reach the vertex, and differ from the
+/// advert's own: three distinct pairs, not one pair three times. `route`
+/// falls back silently when a chunk does not declare them, so every shape's
+/// test runs this.
+fn pairs_reach_the_vertex(model: &mesh::Model) {
+    let flagged: Vec<&mesh::GpuVertex> = model
+        .vertices
+        .iter()
+        .filter(|v| v.slots & slots::HOLO_BILLBOARD != 0)
+        .collect();
+    assert!(!flagged.is_empty());
+    let carried = |pair: fn(&mesh::GpuVertex) -> [f32; 2]| {
+        flagged.iter().filter(|v| pair(v) != [0.0; 2]).count() * 10 >= flagged.len() * 9
+    };
+    assert!(carried(|v| v.lightmap_texcoord), "the second layer's pair");
+    assert!(carried(|v| v.texcoord2), "the scanlines' pair");
+    assert!(flagged.iter().any(|v| v.texcoord2 != v.texcoord));
+    assert!(flagged.iter().any(|v| v.lightmap_texcoord != v.texcoord));
+}
+
 /// The slots of `model` carrying the role bit, with their glow-table tint.
 fn bound(model: &mesh::Model) -> Vec<(usize, [f32; 3])> {
+    pairs_reach_the_vertex(model);
     (0..model.material_slots.len())
         .filter(|&slot| model.material_slots[slot] & slots::HOLO_BILLBOARD != 0)
         .map(|slot| {
@@ -118,22 +139,6 @@ fn amphiseums_billboards_bind_inline_literals_and_parameters() {
             );
         }
     }
-
-    // The two extra coordinate pairs reach the vertex, and differ from the
-    // advert's own: three distinct pairs, not one pair three times.
-    let flagged: Vec<&mesh::GpuVertex> = model
-        .vertices
-        .iter()
-        .filter(|v| v.slots & slots::HOLO_BILLBOARD != 0)
-        .collect();
-    assert!(!flagged.is_empty());
-    let carried = |pair: fn(&mesh::GpuVertex) -> [f32; 2]| {
-        flagged.iter().filter(|v| pair(v) != [0.0; 2]).count() * 10 >= flagged.len() * 9
-    };
-    assert!(carried(|v| v.lightmap_texcoord), "the second layer's pair");
-    assert!(carried(|v| v.texcoord2), "the scanlines' pair");
-    assert!(flagged.iter().any(|v| v.texcoord2 != v.texcoord));
-    assert!(flagged.iter().any(|v| v.lightmap_texcoord != v.texcoord));
 }
 
 #[test]
