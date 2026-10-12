@@ -15,12 +15,13 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
+//! OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
 //!   --run-ignored all novice_jump_ground_truth --no-capture
 //! ```
 //!
 //! Diagnostic only: every test here prints and does not assert, because the
-//! finding is a shape, not a pass/fail. This file only reads
+//! finding is a shape, not a pass/fail. So each is a scratch sweep gated on
+//! `OAG_SWEEP` and `just test-data` skips it. This file only reads
 //! `crates/ai`'s public surface and `crates/game`'s own `race` module - it
 //! does not touch `crates/raceplay/src/`.
 
@@ -61,8 +62,11 @@ fn entry_for(id: &str) -> Option<String> {
 /// pass - before any respawn has had a chance to re-teleport it - so the
 /// speeds compared are the ones flown by an undisturbed approach.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn what_the_jumps_approach_looks_like() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };
@@ -196,8 +200,11 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
 /// yaw term is what is actually limiting the approach, and no amount of
 /// throttle-side change in `oag-ai` reaches this jump.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn novice_13_track_grip_ceiling() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };
@@ -223,8 +230,11 @@ fn novice_13_track_grip_ceiling() {
 /// (`0.40` at 350 respawns, `0.48` at 0). Turns "somewhere in that interval"
 /// into an actual number.
 #[test]
-#[ignore = "needs a disc image in data/images/"]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
 fn novice_13_track_grip_fine_sweep() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let Some(entry) = entry_for(TRACK_ID) else {
         return;
     };
