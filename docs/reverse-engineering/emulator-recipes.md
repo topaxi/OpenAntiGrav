@@ -133,6 +133,26 @@ OAG_RPCS3_ATTACH=1 uv run --with evdev python3 scripts/rpcs3-state-probe.py   # 
 | `hd-racebox-talons-venom-weapons-grid` | Racebox Single Race, Venom, weapons ON, Feisar, 8 ships, fly-over | same; weapon pickups seen in the race |
 | `hd-timetrial-talons-venom-start` | Racebox Time Trial, Venom, Feisar, 4.5 s after `GO`, ship at 0 km/h | drive at once |
 | `hd-racebox-talons-venom-midrace-absorb` | Racebox race, 312 km/h, `Absorb` pickup held, lap 1 | drive at once |
+| `hd-timetrial-talons-assegai-start` | Racebox Time Trial, Venom, `Assegai_c1` (the row Team Selection opens on), at rest just after `GO` | drive at once |
+| `hd-timetrial-talons-assegai-classic-start` | the same with the classic `Assegai` hull (Team Selection `down` once) | drive at once |
+| `hd-timetrial-talons-harimau-classic-start` | the same with the classic `Harimau` (nine `right`s from `Feisar`, then `down`) | drive at once |
+
+**A new team needs a cold boot, not a restore (2026-10-12, `hd-hull-wash-2`).** Restoring
+`hd-timetrial-talons-venom-start` with the stub off, quitting to the Main Menu and walking
+Racebox, Time Trial, Talon's Junction to a new team reached `Launch Game` and loaded the track. The
+game then called `abort()` from `0x0046007c` right after `Loading Screen Finished`, and the
+emulator exited. That was seen once with nothing attached. An earlier try of the same walk
+ended too, but an `rpcs3-drive.py shot` had started its own session on it, so it does not count.
+Booting cold with the stub off and walking the same route loaded every time (3 of 3). The
+route from `Main Menu`: `right`, `cross` (Racebox setup), `right` (`RACE TYPE` to Time Trial),
+`cross`, `right` x8 (Talon's), `cross`, `right` x7 (Assegai) or x9 (Harimau), `down` for
+the classic hull, `cross`, then `cross` at `START RACE`. Then take the state with
+`scripts/emu-save-state.sh`. A walk that needs a breakpoint then restores that state with
+`--interpreter` and the stub on, and attaches after the load. This also avoids the
+`Thread [GDB Server] is too sleepy` hang seen when the stub was attached through a race load.
+`rpcs3-drive.py shot` starts a session of its own, so never run it against a running `serve`:
+it ended one mid-load. A `right` straight after the cold boot's `Main Menu` is
+sometimes dropped (1 in 3, the walk went into Campaign). Read the screen after that first press.
 
 `scripts/emu-restore-state.sh ... --restart` is for attached scripts that wait for TTY lines: a
 restored run has none (`current_screen()` reads `?`), so the walk's first step finds no screen. After

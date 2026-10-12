@@ -1,163 +1,46 @@
-# HD's hull washes white on boost and blooms off it; the original's does not - the hull binding is measured correct, so the gap is in the light term's inputs
+# HD's hull wash on boost is the original's; what is left on the hull is the Harimau livery and the `_n1` wing rims
 
-2026-09-20. Reported from play by the user the same evening the light landed
-(`421b14c9`): "the light work looks amazing, but it exaggerates the bloom".
-The user's first guess - that the bloom had been tuned against the original
-before the light existed and the two now stack - is not what the code says,
-and the gap has a cleaner shape than "too much". This file is the gap; the
-mechanism's own history (producer, formula, capture) is on
-[hds-frame-was-too-bright-and-too-bloomy.md](hds-frame-was-too-bright-and-too-bloomy.md)
-and is not repeated here.
+2026-09-20, reported from play: "the light work looks amazing, but it
+exaggerates the bloom". **Closed 2026-10-12 (`hd-hull-wash-2`, confidence 85):
+the original washes the same panels at a boost.** Assegai gets a white housing
+rim and Harimau a white inner channel. Our engine light, its hull binding and
+its per-vertex law are the original's. Nothing was ported. Do not tune the
+bloom and do not drop the craft binding to hide the wash.
 
-## What is established, and is not the problem
+The evidence is in
+[renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md), "The
+original washes `Assegai` and `Harimau` at a real boost the way ours does":
 
-- **The hull binding is the original's (2026-09-25, confidence 90).**
-  Settled both statically and live. The hull `ship.vex` is registered with
-  flag word `0x1ccb` (`Ship_ReloadModelForSkin`, `li r5,0x1ccb` at
-  `0x000dc044`). `ModelRecord_Create` (`0x003f0348`) stores it at
-  `record+0xe4`, and nothing else in the renderer writes that word. On
-  RPCS3 in a Talon's Junction race, the player's hull record `0x00cb1ab0`
-  read `0x1ccb`. A `Z0` on the gate's taken branch (`0x003eb368`) stopped
-  10 times with that record in `r19`, at cruise and with a boosted light in
-  the visible list. Full read: renderer.md, "The hull's `record+0xe4 &
-  0x800` bit is set at load". **Do not remove the craft binding.**
-- **The SPU term is what flattens our inner rear panels to white.** The A/B
-  was on Talon's Junction at player size, with a fired Turbo (it arms the
-  same `exhaust.boost` the flame's blend reads). On `Assegai_n1` at tick
-  295, the panels either side of the nozzle go flat white with the craft
-  binding and keep their structure without it:
-  `rear-ab.png`. Two same-command runs differ by
-  about 2 % of pixels at that tick from motion blur, so read the frames, not
-  a pixel count. The white wing rims and the pink on the `_n1` wings stay
-  with the binding removed. They are a separate term.
+- the flare node matches our locator on `Assegai`, `Assegai_c1` and `Harimau`;
+- an injected light lights the same panels on both sides, with matched pixel counts;
+- in a real boosted race frame on the original, holding the player's light at its
+  rest colour removes the original's own wash.
 
-- **The bloom is measured, not tuned.** `crates/post/src/hd_bloom.rs`:
-  every pass is the EBOOT's own fragment microcode (`scripts/ps3-microcode.py`),
-  the parameters are the circuit's `.envsettings` `HDR and Bloom` values, and
-  `hd_bloom.wgsl`'s `surface()` applies the original's `A8R8G8B8` clamp at the
-  three points the chain samples the scene
-  ([renderer.md](../../docs/ghidra/functions/ps3-hdfury-eu/renderer.md),
-  "The bloom chain, read pass by pass"). Nothing in it changed on 2026-09-20.
-  **Do not tune the bloom to compensate** - it would be tuning a measured
-  chain to hide an unmeasured input.
-- **The light's numbers are the producer's own.** `EngineFlare_SubmitSpuLight`
-  (`0x0029ff28`, confidence 85, renderer.md "The captured buffer's producer is
-  found"): per craft per frame, position `flare_node.pos - flare_node.z *
-  Distance` plus `U(±0.1)` jitter, `D = Radius ± 0.1`, `w = 1.0`, colour
-  `(40, 10, 4)` on a Fury skin (else `(4, 10, 40)`) times `1 + 10 * boost_blend`.
-  Every one of the 40 live-captured records matches, including the `440`
-  magnitude at the boost snap. Two lanes found the same call site
-  independently (static byte scan, live `LR = 0x2a019c`).
-- **The pack/decode round trip is read and exact** (renderer.md, "The `SVC1`
-  combine is read", confidence 88): the EdgeGeom packer stores
-  `(rgb * 2^(7-k), k + 129) / 255`, the `SVC1` vertex program decodes to
-  `rgb * 256/255`. There is no hidden `1/255` between the producer's `440`
-  and the fragment program's diffuse sum - that candidate is **excluded**,
-  listed here only so nobody re-chases it.
-- **The per-vertex formula and the combine are read**: `max(0, 1 - |d|/D)^w
-  * max(0, N.L) * colour`, summed over lights within `D`, added to
-  `ambient + sun * N.L (+ lightmap)` *before* the albedo multiply (confidence
-  80 / 88). `crates/mesh/src/mesh.wgsl::spu_light_sum` is that, with the
-  `256/255`.
-- **At ride height the light never reaches the track.** Measured on both
-  sides (`crates/game/examples/hd_engine_light_reach_probe.rs`): all 40 of
-  the original's captured positions sit 2.98-4.41 units from the nearest
-  collision triangle with `D` 0.6-2.1; ours 2.85-4.53 on the same circuit
-  (Talon's Junction, not Amphiseum - `hd_engine_light_which_circuit.rs`).
-  Bound to the track alone the term changed zero pixels of a frame. So the
-  only receiver within `D` is the craft's own hull, and **the light list is
-  bound to the craft as well as the track** in `crates/raceplay/src/scene/frame.rs`
-  - a binding the implementing lane labelled **chosen, not measured**, on
-  static evidence only: 74 ship materials compile `SVC1` twins
-  (`scripts/ps3-sho.py svc-twins`), so the hull *can* take the stream.
+The earlier "clean" reads (2026-10-02, 2026-10-07) were the same rim, read at
+player size as nozzle glow. The earlier sections of that page carry the full
+history: the hull binding, the `EdgeGeom` space, the `SVC1` combine and the
+"no clamp" result.
 
-## The observation, as a measurement
-
-Two frames, both at the boost snap (`k = 11`, a 440-unit light a hand's
-breadth from the housing), cropped around the craft's rear:
-
-- **Original**: `data/traces/hd-spu-light-companion/race.png` (RPCS3, Talon's
-  Junction, 443 km/h on a speed pad - the capture whose records include the
-  `440`s). The engine housings are **copper, unsaturated**; the hull's rear
-  is its livery; the bloom is the plume's and the pad's.
-- **Ours**: `talons-t487.png` (same circuit, the
-  probe's boost tick). The **whole rear of the hull washes warm-white** and
-  the bloom gate picks the wash up.
-
-Ours at rest (`after-t700.png` beside `before-t700.png`) is not the problem:
-a warm tint on the housings only, which is what the reference shows. The gap
-opens with `k`, which is what a `440` term added pre-albedo into a sum whose
-other members are order `1` must do to any receiver within half a `D` of
-it - unless the original's hull is not a receiver, or is much further from
-the light than ours.
+The capture tool is `scripts/rpcs3-hd-hull-light.py` (`team`, `flare`,
+`inject`, `boost`). The three Time Trial states it was run on are listed in
+`docs/reverse-engineering/emulator-recipes.md`.
 
 ## Open
 
-- **Candidate 1 (boost blend at the compared frames) is closed - it does
-  not explain the gap.** `EngineFlare_Update`'s snap-and-decay law is
-  measured identical on both sides already (direct decompile: `*(this+0x144)
-  = 1.0f` under the boost-timer gate, `*= 0.8` per substep otherwise -
-  `engine-flare.md`, "The boost gate is a timer, a snap and an exponential
-  decay"), and `Flame::advance` is the same two branches. There is no
-  ramp-vs-snap bug to find.
-- **The `x11`-vs-`x6` comparison this thread had been running compared two
-  different ships, not two blend states of one ship.** `bp-081.png`'s
-  player is confirmed Piranha (renderer.md's own "Live, RPCS3" entry); the
-  wash this thread chased (`rear-ab.png`, `talons-t487.png`) is
-  `Assegai_n1`. A same-command A/B this session across three ships
-  (`{piranha,assegai_n1,harimau}-snap.png`,
-  same circuit, same tick, same boost cadence) found Piranha does not wash
-  and both Assegai_n1 and Harimau do - **and `EngineLightData.xml` gives a
-  disc-verified reason**: Piranha's `Distance` is `0.4` (anchor pulled back
-  off the hull), Assegai's and Harimau's are `0.0` (anchor exactly at the
-  flare locator). Full survey and the reasoning: renderer.md, "Candidate 1
-  ... is closed ... candidate 2 ... gets a disc-verified, per-ship
-  mechanism" (2026-09-25, later still).
-- **Answered 2026-10-02: the original's `Distance = 0.0` hulls do not wash.**
-  Live on RPCS3, the player's own light read boosted (`(36, 90, 360)`) and the
-  hull clean, on `Assegai` and `Harimau` (team read from memory, not the
-  screen); falsifier met, so "our wash is correct per ship" is **false** and
-  the `Distance` correlation is not the original's behaviour. Method, the
-  trap of picking the player's light out of the visible list, and the frames:
-  renderer.md, "The original does not wash a `Distance = 0.0` hull at the
-  boost snap" (confidence 75, one verified boot per ship). The paired frame of
-  ours is **not** at the same stretch of track (sunlit, a pale spine already at
-  rest), so the evidence of our wash is a same-place on/off A/B of the craft's light term, now on the classic `assegai` (tick 295: spine and wing go flat white, tick 220 mild) as well as `assegai_n1`.
-- **~~Candidate 3's clamp reading~~ closed 2026-10-12: no clamp.** The hull `SVC1` programs have none (renderer.md 2026-10-12); the original goes white on the vents at a `(36,90,360)` injected light. The rest of this item is history.
-- **The white wing rims on the `_n1` skins** are not the SPU term. Whether
-  the original shows them is unread.
+- **The Harimau livery.** The original's in-race `Data\Ships\Harimau` is the
+  white and orange scheme its carousel shows. Our `--team harimau` flies an
+  orange and blue one. It shows in every paired frame of 2026-10-12. This is
+  a texture or skin choice, not lighting, and it is unread.
+- **The white wing rims on the `_n1` skins** are not the SPU term: they stay
+  with the craft binding removed. Whether the original shows them is unread.
 
 ## Next Steps
 
-1. **`Assegai` at rest in the original, the same three reads `Feisar_c1` got on
-   2026-10-12.** First, the flare node in model space: break at `0x0029ff8c`,
-   take `r11`, and map it through the main-hull chunk matrix from `0x005d8488`.
-   Second, the injection set at `0x003eb368`. Third, a `--pose-from` pair of
-   ours. Route: Racebox, Time Trial, Talon's Junction, Team Selection seven
-   rights. Interpreter decoder. Expect a race load of a minute or more; on
-   2026-10-12 RPCS3 hung joining its GDB thread during that load. If the node
-   matches our locator and the injected boost washes the original's Assegai
-   panels too, the gap is in the pad frames themselves (camera, exposure, which
-   tick), not the hull lighting. If it does not, read that hull's chunk set and
-   normals.
-2. Identify the record every `0x003eb368` stop carried as the player's hull or
-   not (largely answered: `r19` against `*0x008b7da0 + idx(+0x204c) * 0x1b0`
-   picks the player's own stop reliably, see renderer.md 2026-10-12).
-3. Second verified boot for `Harimau`.
-
-## 2026-10-07 hd-hull-wash (partial)
-
-Second boot of the original on Assegai at the pad, player light `(36,90,360)`, hull clean (renderer.md, "The hull reaches `EdgeGeom` as a node-local chunk"). Every hull chunk is flag bit 1 (kind 2, node-local), so `EdgeGeom` takes the `0x3030` branch; whether its rows are a world matrix or the decode quads is unresolved. Next: identify the DMA piece at `$18`, then inject into the list the job really reads. Steps 1 and 3-4 above are partly done; Harimau and Piranha not re-booted.
-
-## 2026-10-12 hd-hull-wash (second pass, docs only)
-
-The `EdgeGeom` space question is closed: hull chunks are lit in world space with
-the draw's own world matrix (gather entry 7, hash `0xc588eebc` = the hull vertex
-program's `c256`), and normals are rotated by the same 3x3. The node-local
-reading is falsified. There is no frame lag at 427 km/h, and the anchor law
-matches in model space on `Feisar_c1`. Injecting the same lights on the original
-and on ours lights the same panels with the same response, white on the vents at
-`(36,90,360)` on both. So the per-vertex law is the original's and nothing was
-ported. No clamp exists in the hull `SVC1` programs. Full read: renderer.md,
-"The hull's `EdgeGeom` light runs in world space and matches ours". The
-`Distance 0.0` boost gap is still open: step 1 above.
+1. Harimau livery: list the textures that `Data\Ships\Harimau`'s
+   `ship.rcsmodel` materials name, and the ones our hull loader binds for
+   `harimau`. Check which skin `PI_ModelSkin`/`PI_TeamModel` selects for the
+   classic row. The state `hd-timetrial-talons-harimau-classic-start` shows
+   the original's livery at rest, on screen in about 20 s.
+2. `_n1` rims: walk Team Selection to an `_n1` row, take a state as in
+   emulator-recipes.md, and read whether the wing rims are white at rest in
+   the original.
