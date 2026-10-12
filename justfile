@@ -1150,6 +1150,12 @@ check-status:
 check-schemas:
     scripts/check-schemas.sh
 
+# Rebuild the Blender add-on's committed fixtures with a headless Blender and fail on a
+# diff (`--update` rewrites them). Needs Blender 4.2+, so it is not in the gate.
+# docs/tools/blender.md
+blender-fixtures *ARGS:
+    scripts/blender-fixtures.sh "$@"
+
 # Regenerate that table after a names.tsv or evidence-page change
 gen-status:
     python3 scripts/gen-re-coverage.py
