@@ -354,13 +354,13 @@ fn the_super_phantom_field_runs_square_clean() {
             }
         }
     }
-    for slot in 1..8 {
+    for (slot, shields) in per_lap.iter().enumerate().skip(1) {
         let ship = &race.sim.world.ships[slot];
         println!(
             "slot {slot}: lap {} respawns {} per-lap shield {:?}, end-of-run shield {:.1}",
             ship.standing.lap,
             race.respawns_of(slot),
-            per_lap[slot],
+            shields,
             ship.physics.shield
         );
         assert!(race.respawns_of(slot) <= 1, "slot {slot}");
