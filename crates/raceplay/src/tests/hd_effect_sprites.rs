@@ -30,25 +30,25 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
     }
 }
 
-/// Only HD lifts the extent law, and only for the Quake's wave, the one effect
-/// a matched capture of the original has shown spreading across the road.
+/// Only HD and Pure lift the extent law, and only for the Quake's wave, the
+/// one effect a matched capture of the original has shown spreading across the
+/// road on each (Pure's `Quake_Update`, `psp-pure-usa/quake.md`).
 #[test]
-fn only_hd_lifts_the_extent_law_and_only_for_the_quake() {
-    for title in [
-        oag_pulse::TITLE,
-        oag_pure::TITLE,
-        oag_2048::TITLE,
-        oag_omega::TITLE,
-    ] {
+fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake() {
+    for title in [oag_pulse::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
         assert!(title.effects.extents.is_empty(), "{}", title.name);
     }
-    assert_eq!(
-        oag_hd::TITLE.effects.extents,
-        [oag_title::engine_effects::QUAKE_EFFECT]
-    );
-    let names = oag_hd::TITLE.effects.names();
-    for listed in oag_hd::TITLE.effects.extents {
-        assert!(names.contains(listed), "{listed} is loaded by the race");
+    for title in [oag_hd::TITLE, oag_pure::TITLE] {
+        assert_eq!(
+            title.effects.extents,
+            [oag_title::engine_effects::QUAKE_EFFECT],
+            "{}",
+            title.name
+        );
+        let names = title.effects.names();
+        for listed in title.effects.extents {
+            assert!(names.contains(listed), "{listed} is loaded by the race");
+        }
     }
 }
 

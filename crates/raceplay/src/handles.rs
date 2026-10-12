@@ -36,8 +36,10 @@ impl EffectHandles {
     /// empty; the loader has already reported the missing name.
     #[must_use]
     pub fn resolve(title: &oag_title::Title, library: &Library) -> Self {
-        let mut handles = Self::default();
-        handles.quake_look = title.effects.quake_look;
+        let mut handles = Self {
+            quake_look: title.effects.quake_look,
+            ..Self::default()
+        };
         for trigger in Trigger::ALL {
             handles.slots[trigger.index()] = title
                 .effect_on(trigger)

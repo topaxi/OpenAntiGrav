@@ -39,9 +39,12 @@ const UNAUTHORED: [Trigger; 3] = [
 fn the_vita_and_ps4_titles_drop_what_they_never_author_and_the_rest_keep_it() {
     let has = |trigger| ALL.map(|t| t.effect_on(trigger).is_some());
     for trigger in UNAUTHORED {
+        // Pure has no LeachBeam at all (`PURE_ABSENT`), so it names none of the
+        // beam's effects, the energy one included.
+        let pure = !PURE_ABSENT.contains(&trigger);
         assert_eq!(
             has(trigger),
-            [true, true, true, false, false],
+            [true, pure, true, false, false],
             "{trigger:?}"
         );
     }
@@ -122,6 +125,16 @@ const PULSE_ABSENT: [Trigger; 7] = [
     Trigger::MagstripZone,
 ];
 
+/// The LeachBeam's three engine-table effects, which Pure does not ask for:
+/// it ships no LeachBeam (`docs/ghidra/functions/psp-pure-usa/weapons.md`, "Pure
+/// ships no LeachBeam"), so its table leaves them unread rather than inheriting
+/// Pulse's names for entries no Pure disc carries.
+const PURE_ABSENT: [Trigger; 3] = [
+    Trigger::LeachbeamEnergy,
+    Trigger::LeachbeamCharging,
+    Trigger::LeachbeamAbsorb,
+];
+
 /// The 2048-lineage magstrip pair, which no archive of HD's disc carries and
 /// which HD replaces with the arc wake (`docs/formats/pob.md`, "Which names HD
 /// does not author").
@@ -150,6 +163,10 @@ fn pulse_asks_for_none_of_the_effects_its_discs_do_not_author() {
         );
         for title in [oag_pure::TITLE, oag_hd::TITLE, oag_2048::TITLE] {
             if title.name == oag_hd::TITLE.name && HD_ABSENT.contains(&trigger) {
+                continue;
+            }
+            if title.name == oag_pure::TITLE.name && PURE_ABSENT.contains(&trigger) {
+                assert!(title.effect_on(trigger).is_none(), "Pure names {trigger:?}");
                 continue;
             }
             assert!(
@@ -188,6 +205,7 @@ fn every_title_tries_the_engines_own_effects_as_pulses() {
                 && *t != Trigger::WreckExplosion
                 && !(title.name == oag_pulse::TITLE.name && PULSE_ABSENT.contains(t))
                 && !(title.name == oag_hd::TITLE.name && HD_ABSENT.contains(t))
+                && !(title.name == oag_pure::TITLE.name && PURE_ABSENT.contains(t))
                 && !(at >= 3 && UNAUTHORED.contains(t))
                 && !(at == 4 && matches!(t, Trigger::MagstripSparks | Trigger::MagstripZone))
         }) {
