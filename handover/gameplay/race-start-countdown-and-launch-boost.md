@@ -562,12 +562,7 @@ In short:
   release; the original grants it on the line crossing, fixed. Evidence:
   [gantry-clock.md](../../docs/ghidra/functions/psp-pulse-usa/gantry-clock.md),
   [start-gantry.md](../../docs/rendering/start-gantry.md#what-the-original-does-after-go-it-holds-go).
-  **Still open from it**: the lap states (`Board`, `FINAL LAP`, chequered) are the
-  asset's frames at the read windows and were not captured on PPSSPP; one live read
-  of `mesh+0x40` after the release (prediction: 3.0, then 3.2, ramping, reset every
-  138 ticks) would take the law from 85 to 90; whether HD's glyph shows the same
-  stray strip past 6.000 s is still unread; the `Cockpit321Go` overlay's clock is
-  now known (countdown-widgets.md) and not rewired. **PS2 Pulse inherits the PSP
+  **2026-10-12 (`pulse-race-start`): read live, 85 to 90** - `mesh+0x40` is 3.0, then 3.2 ramping, reset after 139 manager calls (the loop was one tick short in ours; fixed with `ReleaseWindow::extra_tick`, Pulse only), and a forced crossing count selects `[6.0, 9.0)`, `[9.5, 12.0)`, `[12.4, 13.3)` and (past the finish) `[6.0, 9.0)` again; the four boards were matched against the asset (`gantry-clock.md`, 4b). **Still open from it**: an in-race frame of ours at the three lap windows (no headless route forces a race to crossings 2 and 3); the natural first crossing was not flown; whether HD's glyph shows the same stray strip past 6.000 s is still unread. **Open, ready to wire once one read lands**: the `Cockpit321Go` overlay (gantry-less circuits only) runs off `tick / 60`, so its `GO` shows 92 ticks before the release. The right clock is `(tick - 92) / 60` (`gantry-clock.md` section 5), but the overlay stops at `thrust_gated` (tick 272) where that clock reads 3.0, so wiring it needs `Hud_UpdateCountdownFade`'s (`0x0881f624`) post-release visibility read first, or `GO` disappears. **PS2 Pulse inherits the PSP
   windows** (`ClockRule::Measured` covers every non-PS3 source, the maintainer's
   inheritance rule): unread on `SCES_547.48`, its lap states newly drawn (the
   between-laps `Board` looked right on `16_Track` at tick 2690, the rest unviewed),
@@ -605,15 +600,8 @@ In short:
   has carried at confidence 50 for its own reasons and settle whether `0x08ab2120` is
   or is not the same object, on hard evidence rather than the size argument this pass
   used.
-- **Whether a circuit race's own state-0 countdown handler matches Zone's shape**
-  (same 40-tick cue, same two-part gate) or differs is the single most direct
-  open question for the display/logic focus. One attempt this session to reach it
-  through `Race_CreateModeObject`'s dispatch table failed (landed on an unrelated
-  function, see `zone-mode.md`) - needs the table re-derived from raw disassembly,
-  not reused from this session's addresses.
-- **The second gate condition (`fVar17`) substate 1 waits on**, alongside the tick
-  counter reaching zero, was not resolved to a real function this session - a
-  guessed address decompiled to an unrelated matrix-inverse routine.
+- ~~Whether a circuit race's own state-0 countdown handler matches Zone's shape~~ **Answered 2026-10-12: it is the same code** (`race-intro.md`, 88).
+- ~~The second gate condition (`fVar17`) substate 1 waits on~~ **Answered:** `race-intro.md`.
 - **`CountdownTime`/`ReadyText`/`GoText` have no direct code xref** - consistent
   with a hash-resolved HUD-XML attribute rather than a literal string a function
   loads, but not traced to the hash lookup itself, so this is an inference from the
@@ -888,47 +876,10 @@ three names (`RaceMode_UpdateCountdown` 80, `Sound_PlayNamedInSlot` 75,
 
 **Display/logic, current focus:**
 
-0. ~~Close the `GO`-to-green gap~~ **Answered 2026-09-29 by measurement, and this
-   older answer (the two share a zero, 82) is wrong - see the section above.**
-   Kept for the evidence trail: The asset's clock and the thrust gate
-   share a zero. `g_ingame->0x40` is the one clock every in-race animation path
-   reads (`anim-transform.md`, 85), and it is **not** free-running across a
-   session the way this thread and `start-gantry.md` both had it: it is zeroed
-   once per race in `InGame_Construct` (`mtc1 zero,f20` at `0x08812d98`,
-   `swc1 f20,0x40(s0)` at `0x08813090`) and advanced by `InGame_Update` from
-   three frames later. The 272 ticks are counted from the first frame the front
-   end reports `InGame` - the same instant. So the original itself lights `GO`
-   about 0.93 s before the craft can move and holds it lit for 1.4 s after, and
-   the render reproduces that rather than suffering from it. The strobing `GO`
-   column (33 of 47 samples lit across its window) says the same thing
-   independently: it is an announcement spanning the release, not a starting
-   pistol. See `docs/rendering/start-gantry.md`, "The gap is not a pre-roll".
-
-   **The one thing that would take this from 82 to settled** is not a debugger
-   session: it is the project owner playing the original and saying whether `GO`
-   appears as the craft becomes drivable or about a second before. Nothing has
-   watched slot 8's own node read that clock during a countdown, which is why
-   the gated accumulator at `0x0890cf34` stays on the page as an unresolved
-   alternative.
-1. **The 18-entry table at `0x08a7a1e8` is a dead end for this, confirmed rather
-   than just suspected** - both entries checked land on genuine mid-function
-   re-entry points inside one HUD-text formatter (`0x0881d458`, raw
-   `disassemble_bytes` shows no function prologue at either), a PSP-overlay
-   explanation was checked and ruled out, and it most likely reads as a *later*,
-   unrelated per-mode dispatch inside `Race_CreateModeObject` (position-label
-   formatting) rather than the mode-object-type switch `zone-mode.md`'s own
-   `## Identification` section already documents for `case 6`. **Re-read
-   `Race_CreateModeObject` end to end for that first switch instead** - it is
-   what actually selects `Zone_Create` vs. whatever a circuit race calls, and
-   finding a non-Zone mode's own countdown handler needs that one, then its
-   vtable `+0x1c` slot - the direct way to see whether a circuit race's
-   countdown matches Zone's 40-tick-cue, two-part-gate
-   shape or differs from it.
-2. ~~`create_function` for Zone's inner-substate setter~~ **Done this session**:
-   named `RaceMode_SetSubstate` (`0x08827454`, confidence 80); the outer-state
-   call at substate 4 turned out to already be `RaceMode_SetState` itself.
-3. Resolve substate 1's second gate condition (the `fVar17` call) from the raw
-   disassembly of `0x08829e6c` rather than a guessed address.
+0. ~~Close the `GO`-to-green gap~~ Closed 2026-09-29 by measurement (the gantry's clock starts at tick 92, `GO` on the release); the older "shared zero" reading is retired, see `docs/rendering/start-gantry.md`.
+1. ~~Find a circuit race's countdown handler~~ **Closed 2026-10-12 (`pulse-race-start`, 88):** the 18-entry table at `0x08a7a1e8` is the real mode switch and every mode's state 0 and 1 are thin wrappers over the same `RaceMode_UpdateIntro` / `RaceMode_UpdateCountdown`; see `docs/ghidra/functions/psp-pulse-usa/race-intro.md`, "Every mode runs this countdown".
+2. ~~`create_function` for Zone's inner-substate setter~~ Done: `RaceMode_SetSubstate` (`0x08827454`, 80).
+3. ~~Resolve substate 1's second gate condition~~ Closed: it is `Camera_IntroProgress >= 1.0` or a held Cross (`race-intro.md`).
 4. **Mode-display axis is closed for Pulse and Pure** - no further work needed there
    (see `hud.md`). For HD/Fury and 2048, **try the same primary-source approach that
    worked here before returning to Ghidra**: both ship data as archives this project

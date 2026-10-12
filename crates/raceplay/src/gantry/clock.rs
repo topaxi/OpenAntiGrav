@@ -103,6 +103,16 @@ pub struct ReleaseWindow {
     pub to: f32,
     /// The race tick the window first applies on.
     pub from_tick: u64,
+    /// Whether each loop is one tick longer than the span between `from` and
+    /// `to` allows: the manager's reset leaves the clock showing `from` for
+    /// an extra tick, so the loop is `span + 1`. **Measured on Pulse**
+    /// (`gantry-clock.md`, 4b): 139, 181, 151 and 55 manager calls for
+    /// windows of 138, 180, 150 and 54 ticks, on all four. What that extra
+    /// tick shows (`from` held, or the out-of-window value read just before
+    /// the reset) depends on the draw order inside a frame, which was not
+    /// read; this shows `from`. HD's loops (86 ticks) were measured off a
+    /// 30 fps capture that cannot resolve one tick, so HD keeps `false`.
+    pub extra_tick: bool,
 }
 
 /// HD's window before the first line crossing: `[3.83, 5.25)` s, from the
@@ -123,6 +133,7 @@ pub const HD_PRE_LAP_WINDOW: ReleaseWindow = ReleaseWindow {
     from: f32::from_bits(0x4075_1eb8),
     to: f32::from_bits(0x40a8_0000),
     from_tick: COUNTDOWN_TICKS + 1,
+    extra_tick: false,
 };
 
 /// Pulse's window before the first line crossing: `[3.2, 5.5)` s, from the
@@ -143,18 +154,26 @@ pub const PULSE_PRE_LAP_WINDOW: ReleaseWindow = ReleaseWindow {
     from: f32::from_bits(0x404c_cccd),
     to: f32::from_bits(0x40b0_0000),
     from_tick: COUNTDOWN_TICKS + 1,
+    extra_tick: true,
 };
+
+/// A 60 Hz step landing within this many seconds of a window's end counts as
+/// outside it. The original steps at the display's 59.94 Hz, so a step that
+/// lands on the bound at 60 Hz overshoots it there; without this the
+/// chequered window (`12.4 + 54/60` is `13.3` to within the constant's own
+/// rounding) loops 56 calls where 55 were read.
+const EDGE_SLACK: f32 = 1e-3;
 
 impl ReleaseWindow {
     /// Whether `seconds` is inside the window.
     fn holds(&self, seconds: f32) -> bool {
-        seconds >= self.from && seconds < self.to
+        seconds >= self.from && seconds < self.to - EDGE_SLACK
     }
 
     /// Ticks from `from` until the next reset: the loop's period.
     #[must_use]
     pub fn period(&self) -> u64 {
-        self.ticks_inside(self.from)
+        self.ticks_inside(self.from) + u64::from(self.extra_tick)
     }
 
     /// How many ticks the clock stays inside from `start`, `start` included.
@@ -179,7 +198,11 @@ impl ReleaseWindow {
         if ticks < first {
             start + ticks as f32 / 60.0
         } else {
-            self.from + ((ticks - first) % self.period()) as f32 / 60.0
+            // After a reset the extra tick (if any) shows `from` again, then
+            // the loop runs `from`, `from + 1/60`, ...
+            let extra = u64::from(self.extra_tick);
+            let j = (ticks - first) % self.period();
+            self.from + j.saturating_sub(extra) as f32 / 60.0
         }
     }
 }

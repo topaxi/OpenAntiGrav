@@ -56,6 +56,9 @@ pub struct LapWindows {
     /// the chequered window; Pulse's does not, so a Pulse craft past the
     /// line on its last lap is back between laps.
     pub finish_is_chequered: bool,
+    /// Each window's loop is one tick longer ([`ReleaseWindow::extra_tick`]):
+    /// measured on Pulse, not on HD.
+    pub extra_tick: bool,
 }
 
 /// HD's: [`HD_BETWEEN_LAPS_WINDOW`], [`HD_FINAL_LAP_AHEAD_WINDOW`],
@@ -65,6 +68,7 @@ pub const HD_LAP_WINDOWS: LapWindows = LapWindows {
     final_lap_ahead: HD_FINAL_LAP_AHEAD_WINDOW,
     chequered: HD_CHEQUERED_WINDOW,
     finish_is_chequered: true,
+    extra_tick: false,
 };
 
 /// Pulse's, **read from `BOOT.BIN`, confidence 85**: `RaceManager_Update`
@@ -81,6 +85,7 @@ pub const PULSE_LAP_WINDOWS: LapWindows = LapWindows {
     final_lap_ahead: (f32::from_bits(0x4118_0000), f32::from_bits(0x4140_0000)),
     chequered: (f32::from_bits(0x4146_6666), f32::from_bits(0x4154_cccd)),
     finish_is_chequered: false,
+    extra_tick: true,
 };
 
 /// Which of the race manager's windows holds the gantry's time.
@@ -180,6 +185,7 @@ impl WindowEntry {
             from,
             to,
             from_tick: self.since,
+            extra_tick: windows.extra_tick,
         })
     }
 }

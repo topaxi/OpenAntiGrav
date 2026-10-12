@@ -107,6 +107,7 @@ fn a_clock_inside_the_window_is_not_reset() {
         from: 1.0,
         to: 2.0,
         from_tick: 0,
+        extra_tick: false,
     };
     assert_eq!(window.period(), 60);
     assert_eq!(window.seconds(1.5, 0), 1.5);
@@ -128,7 +129,9 @@ fn pulses_go_is_held_by_its_race_managers_window() {
     assert_eq!(clock.seconds(COUNTDOWN_TICKS) * 60.0, 180.0);
     assert_eq!(clock.seconds(COUNTDOWN_TICKS + 1), 3.2);
     let period = PULSE_PRE_LAP_WINDOW.period();
-    assert_eq!(period, 138);
+    // 138 ticks inside [3.2, 5.5), plus the extra tick every reset costs:
+    // 139 manager calls apart, read live (gantry-clock.md, 4b).
+    assert_eq!(period, 139);
     for k in 1..3000 {
         let seconds = clock.seconds(COUNTDOWN_TICKS + k);
         assert!((3.2..5.5).contains(&seconds), "+{k}: {seconds}");
@@ -146,4 +149,30 @@ fn pulses_go_is_held_by_its_race_managers_window() {
 fn the_race_start_clock_is_the_plain_timeline() {
     assert_eq!(Clock::FROM_RACE_START.seconds(90), 1.5);
     assert_eq!(Clock::PULSE.seconds(CLOCK_START_TICK + 60), 1.0);
+}
+
+/// The live read's loop lengths, in manager calls, for the four windows the
+/// crossing count selects: 139, 181, 151 and 55 on Pulse. Each is the span in
+/// ticks plus the one tick a reset costs; drop the extra tick and all four
+/// come back one short, which drifts the board a frame every loop.
+#[test]
+fn pulses_loops_are_the_measured_lengths() {
+    use super::super::PULSE_LAP_WINDOWS;
+    let window = |(from, to): (f32, f32)| ReleaseWindow {
+        from,
+        to,
+        from_tick: 0,
+        extra_tick: true,
+    };
+    assert_eq!(PULSE_PRE_LAP_WINDOW.period(), 139);
+    assert_eq!(window(PULSE_LAP_WINDOWS.between_laps).period(), 181);
+    assert_eq!(window(PULSE_LAP_WINDOWS.final_lap_ahead).period(), 151);
+    assert_eq!(window(PULSE_LAP_WINDOWS.chequered).period(), 55);
+}
+
+/// HD's loop was measured off a 30 fps capture and keeps no extra tick.
+#[test]
+fn hds_loop_keeps_no_extra_tick() {
+    assert_eq!(HD_PRE_LAP_WINDOW.period(), 86);
+    assert!(!std::hint::black_box(super::super::HD_LAP_WINDOWS).extra_tick);
 }
