@@ -136,9 +136,11 @@ back on `Track Selection` with the cursor on Vineta K. Also a Vector time trial 
 single race, each through the same path. The three runs **earned no medal**, each just short
 (a Venom time trial 111.43 s against the 111 s bronze limit, Vector 130.47 s and 130.75 s
 against 130 s, a single race finished fourth), so each wrote an empty `[[campaign]]` row; the
-medal itself is walked headless (`pure_chain_walk_ground_truth`: SINGLE PLAYER answered to a
-time trial, flown to a bronze or not by the same law, recorded, and the chain read again with
-the medal on the row; and a four-leg tournament ranked and its Beta unlocked).
+medal itself is walked headless (`pure_chain_walk_ground_truth`): SINGLE PLAYER answered to
+Alpha's tournament at Venom, its four legs flown by the autopilot (places 5, 2, 3, 4; 18 points,
+rank 3), the **bronze recorded** in the store, and the chain read again with Beta opened and Flash's
+Beta still locked; and the same walk to a Vineta K Venom time trial (111.78 s against the 111 s bronze
+limit: judged, no medal).
 
 ## Chosen, not measured
 
