@@ -513,6 +513,37 @@ fn the_far_lip_face() {
             )),
         );
     }
+    let flagged: Vec<usize> = (0..line.len())
+        .filter(|&index| {
+            race.ai_sample(index)
+                .is_some_and(|sample| sample.flags & 1 != 0)
+        })
+        .collect();
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for &index in &flagged {
+        match runs.last_mut() {
+            Some((_, end)) if *end + 1 == index => *end = index,
+            _ => runs.push((index, index)),
+        }
+    }
+    println!(
+        "\nflags bit 0 set on {} of {} line indices, runs {runs:?}",
+        flagged.len(),
+        line.len(),
+    );
+    for index in (0..70).step_by(5) {
+        if let Some(sample) = race.ai_sample(index) {
+            println!(
+                "  idx {index}: flags {:#04x} half_width {:.2}/{:.2} ai_bound {:.2}/{:.2} line {:.2}",
+                sample.flags,
+                sample.half_width_left,
+                sample.half_width_right,
+                sample.ai_bound_left,
+                sample.ai_bound_right,
+                sample.racing_line
+            );
+        }
+    }
     let from = 40;
     let start = line.point(from);
     let tangent = (line.point(from + 4) - start).normalize();
@@ -541,5 +572,62 @@ fn the_far_lip_face() {
             None => println!("{dy:.1},none"),
         }
         dy += 0.5;
+    }
+}
+
+/// Contiguous runs of `true` in a ring of `len` entries, as inclusive
+/// `(first, last)` pairs.
+fn runs_of(len: usize, set: impl Fn(usize) -> bool) -> Vec<(usize, usize)> {
+    let mut runs: Vec<(usize, usize)> = Vec::new();
+    for index in (0..len).filter(|&index| set(index)) {
+        match runs.last_mut() {
+            Some((_, end)) if *end + 1 == index => *end = index,
+            _ => runs.push((index, index)),
+        }
+    }
+    runs
+}
+
+/// Every forward circuit: where its spline authors `flags` bit 0, against
+/// where its racing line has no surface under it.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
+fn the_flag_bit_zero_census() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("mounting the disc");
+    let blob = archives
+        .read_name(oag_pulse::names::GAME_PLUGIN_DEFINITION)
+        .expect("the game plugin definition");
+    let definition = oag_tables::fexml::expand(&blob).expect("expanding it");
+    for track in catalogue::tracks(&definition) {
+        let Ok(loaded) = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            track: Some(track.entry_name()),
+            ..race::Options::default()
+        }) else {
+            continue;
+        };
+        let race = race::Race::start(loaded.setup);
+        let line = race.racing_line();
+        let flagged = runs_of(line.len(), |index| {
+            race.ai_sample(index)
+                .is_some_and(|sample| sample.flags & 1 != 0)
+        });
+        let other = runs_of(line.len(), |index| {
+            race.ai_sample(index)
+                .is_some_and(|sample| sample.flags & !1 != 0)
+        });
+        let gaps = runs_of(line.len(), |index| line.is_unsupported(index));
+        println!(
+            "{} rev {} len {}: bit0 {flagged:?} other_bits {other:?} unsupported {gaps:?}",
+            track.id,
+            track.reversed,
+            line.len()
+        );
     }
 }
