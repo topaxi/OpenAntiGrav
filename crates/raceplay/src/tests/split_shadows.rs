@@ -201,3 +201,48 @@ fn the_mapped_map_follows_the_craft_of_each_view() {
         "the last view's craft is slot 1"
     );
 }
+
+/// **The `mapped` tier's track caster is culled to each map's own box**: a
+/// view's depth map records the track draws whose bounds touch the box fitted on
+/// that view's craft, not the whole circuit. The test circuit is one triangle at
+/// the origin, so a view whose box clears it records none and a view whose box
+/// holds it records it, and what each records is read back from the pass. Drop
+/// the cull (every range recorded) and a view whose box misses the triangle reads 1.
+#[test]
+fn the_mapped_depth_map_records_only_the_track_draws_in_its_box() {
+    let Some(gpu) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&gpu.0, &gpu.1);
+    let view = target(&gpu.0);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2);
+    let touches = |slot: usize| {
+        let frustum = oag_core::math::frustum::Frustum::from_view_projection(
+            scene.mapped_fit_for(&race, slot).matrix(),
+        );
+        u32::from(frustum.intersects_sphere(Vec3::ZERO, 1.5))
+    };
+    let (first, second) = (touches(0), touches(1));
+    assert_ne!(
+        (first, second),
+        (0, 0),
+        "the test needs one view whose box holds the triangle"
+    );
+    assert_ne!(first, second, "and one whose box clears it");
+    // Each view's map is its own pass and the last one drawn leaves its count:
+    // two views leave view 1's.
+    frame_with(&gpu, &scene, &view, &mut race, 1.0, Shadows::Mapped);
+    assert_eq!(
+        scene.frame_work().track_ranges_in_depth_map,
+        second,
+        "the last view's map records the track only if its box holds the triangle"
+    );
+    race.set_viewport_count(1);
+    frame_with(&gpu, &scene, &view, &mut race, 1.0, Shadows::Mapped);
+    assert_eq!(
+        scene.frame_work().track_ranges_in_depth_map,
+        first,
+        "and a single view's map likewise, on its own craft"
+    );
+}

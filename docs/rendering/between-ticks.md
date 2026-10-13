@@ -51,7 +51,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   scales lerp; a view matrix is blended as the camera transform it inverts, so
   the eye moves in a straight line and turns about itself.
 - **The `original` tier's hulls are gathered per tick and lerped.** The gather (a floor ray per
-  hull vertex, about 1.7 ms a frame on Pulse's eight-craft grid) used to run every drawn frame
+  hull vertex, about 1.7 ms a frame on Pulse's eight-craft grid, 0.4 ms a tick since each distinct point is asked once) used to run every drawn frame
   from the blended pose. It is now taken at each tick's own poses (`Race::pose_generations` keys
   the cache, `Race::ship_tick_model` and `ship_tick_body` read the tick exactly) and a draw
   between ticks lerps the projected vertices of the last two by the alpha, skipping a craft

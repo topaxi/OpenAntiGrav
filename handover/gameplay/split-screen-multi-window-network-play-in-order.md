@@ -208,11 +208,20 @@ view and 1.25 to 1.6 ms up to eight, a 60 Hz window neither gains nor loses
 ([split-screen.md](../../docs/rendering/split-screen.md#cost)). The `mapped` depth map is redrawn
 per view around that view's craft (view two's shadows are there where main's had none): about
 0.1 ms of CPU a view on the discrete card and **1 to 1.6 ms of iGPU time a view**. **Open from it**:
-the floor rays (`conform_to_floor`, 1.7 ms a tick on an eight-craft grid, the whole gather) could be
-culled to the craft a view can see or answered from the collision grid's cell lookup; the track is
-drawn whole into every `mapped` map, so culling that caster to the map's box would cut the iGPU cost
-and the single-view tier's too; the bench needs `OAG_RENDER_BENCH_FRAMES_PER_TICK` set to mean a
-refresh rate.
+the floor rays and the track caster, both done in `shadow-floor-rays` (next entry); the bench
+needs `OAG_RENDER_BENCH_FRAMES_PER_TICK` set to mean a refresh rate.
+**2026-10-13, `shadow-floor-rays`: the floor rays ask once per point, the `mapped` track is culled to each map's box.**
+`conform_to_floor` remembers each `(position, normal)` it has asked the road about for the one
+hull: the gather is bit-identical (496,800 vertices over 300 ticks hash equal, 26 stills `cmp`
+equal) and 2.9 times cheaper, 1,196 -> 417 us a tick on the eight-craft grid, 1.0 ms of CPU a frame
+at a 60 Hz window on the RX 7800 XT at every view count. The `mapped` depth map records only the
+track draws whose bounding sphere touches that map's box (Pulse 465 of 1,737, Pure 123 of
+1,179): pictures identical, the iGPU's pipelined time down 0.3 to 0.7 ms at one view and about 2
+ms at eight views (18.45 -> 16.55 on Pulse, so eight views now hold 60 Hz there). No simulation
+crate changed. **Open from it**: a cheaper per-ray query is a semantics change (`floor_above`
+sees only the first four hits in collider and triangle order); culling the gather to craft some
+view can see needs the two-tick cache to keep every craft's gather; the Steam Deck numbers.
+([split-screen.md](../../docs/rendering/split-screen.md#cost))
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives
