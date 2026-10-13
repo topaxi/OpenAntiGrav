@@ -437,10 +437,8 @@ at one, two, four and eight views, load 9 to 26).
 and `original` draws no hull there (no authored occluder), so their stills at one and two views
 are `cmp` equal to main's, and the `mapped` redraw per view is the same code on every title.
 
-*Open from it:* the floor rays are the cost. Culling them to the craft any view can see
-(with eight craft and two or four views most hulls are projected for nothing) or answering them
-from the collision grid's own cell lookup would cut every refresh rate, keeps the picture exact,
-and is not done.
+*Open from it:* the floor rays are the cost; **done since, below** ("The floor rays ask the road once
+per point").
 
 *The `mapped` map per view.* The depth map is fitted on the craft its view follows
 (`Race::viewed_slot`), not on slot 0 for every view: each later view redraws the map itself, in
@@ -461,12 +459,101 @@ three, ms:
 | 8 | 8.19 / 8.02 -> 9.49 / 8.96 | 6 to 10 | 11.74 -> 18.86 | 4 to 5 |
 
 On the discrete card a redraw costs about 0.1 to 0.2 ms a view; on the iGPU **1 to 1.6 ms of GPU
-time a view past the first**, because the depth pass draws the whole circuit into every map (the
-track is one caster, not culled to the map's box). The shared-map alternative costs what main's
+time a view past the first**, because the depth pass drew the whole circuit into every map (the
+track was one caster, not culled to the map's box). The shared-map alternative costs what main's
 single map does (the "before" column), so that is the price of views two and up getting their
-shadows. The `mapped` tier is opt-in and the iGPU split is
-Pulse and Pure only, but eight views at 18.9 ms miss 60 Hz. **Open**: cull the track caster to
-the fit's box, which would also cheapen the single-view tier (about 1.5 ms of the iGPU's 7.35).
+shadows. The `mapped` tier is opt-in and the iGPU split is Pulse and Pure only, and eight views
+at 18.9 ms missed 60 Hz. **Culled since, below** ("The track caster is culled to each map's box").
+
+*The floor rays ask the road once per point* (2026-10-13, `shadow-floor-rays`). The hull gather's
+cost was `conform_to_floor`: one `Race::floor_above` ray (a `raycast_all` over the circuit's BVH)
+per output vertex, twelve per coarse hull triangle. A triangle has six distinct points (three
+corners, three midpoints), each shared by three or four of the twelve, and the ear-clipped fan of
+a hull ring shares its corners and diagonals across neighbouring triangles, so most rays repeated
+an earlier one. `conform_to_floor` now keeps the answer of each `(position, normal)` bit pattern
+for the one hull and asks the road once per distinct point. `floor` is a function of exactly
+those bits, so **the vertices are the same, bit for bit**: no approximation, no change to
+`oag-physics` (the floor query itself is untouched, `just gate-affected` did not select a
+simulation crate). The cache lives for one hull in one call, never across ticks (the poses move
+every tick, so it would never hit).
+
+- **Proof**: a probe over Pulse's eight-craft Single Race grid, 300 ticks on autopilot, hashes
+  every position, normal and colour of the 496,800 gathered vertices through `HullGather::at_tick`:
+  `906fd5eb7311ca08` on main and on the branch. 26 stills `cmp` equal to main's binary (Pulse
+  `mapped` and `original` at one, two, four and eight views at ticks 300 and 1200; HD `mapped` and
+  `original`, Omega and Pulse PS2 and Pure `mapped` at one and two views, tick 300). 2048 has no
+  source this checkout can read (its `.pkg` is PFS-encrypted, no `.vpk`), so it was not run; its
+  `original` tier draws no hull, so the change cannot reach it. Unit tests: `a_point_shared_by_triangles_is_asked_of_the_road_once`
+  counts `floor` calls on a two-triangle quad (24 vertices, 9 distinct points) against a copy of
+  the old per-vertex loop and asserts the two outputs bit-equal; it fails if the memo is dropped.
+- **Cost**: `HullGather::at_tick`, release build, three runs each, load average 14 to 16: **1,196
+  us a tick before, 417 after** (2.9 times). What is left is the rays that are distinct, in
+  `raycast_all`'s per-collider `Vec` and sort; answering them from a cheaper query was not done
+  because `floor_above` sees only the **first four** hits in collider and triangle order
+  (`MAX_HITS`), non-hoverable and coplanar duplicates included, and a nearest-per-collider query
+  would not (a semantics change, to be agreed rather than slipped in).
+
+RX 7800 XT, Pulse, `original` tier, tick 300, medians of three runs, load average 1.2 to 1.5, ms,
+`render_viewports` CPU (pipelined in brackets), before (main) -> after:
+
+| Views | 60 Hz (K=1) | 240 Hz (K=4) |
+| ---: | --- | --- |
+| 1 | 2.44 (2.25) -> 1.46 (1.48) | 1.03 (1.40) -> 1.04 (1.17) |
+| 2 | 3.24 (3.27) -> 2.22 (2.27) | 1.83 (2.21) -> 1.83 (1.97) |
+| 4 | 4.86 (4.91) -> 3.85 (3.89) | 3.46 (3.83) -> 3.45 (3.58) |
+| 8 | 8.11 (8.15) -> 7.09 (7.12) | 6.68 (7.06) -> 6.71 (6.85) |
+
+A 60 Hz window now saves 1.0 ms of CPU a frame at every view count (it paid the whole gather every
+frame, since the per-tick cache never hits there); a 240 Hz window already paid it once a tick
+and saves 0.2 to 0.25 ms of pipelined time. On the Raphael iGPU the `original` tier is bound by
+the scene passes (4.8 to 8.0 ms) and the pipelined column does not move (4.83 -> 4.99, 5.68 ->
+5.72, 7.67 -> 7.58, 9.83 -> 9.37 at K=1, inside the spread); its CPU column falls the same way
+(2.17 -> 1.50, 2.98 -> 2.15, 4.38 -> 3.66, 7.38 -> 6.62 ms).
+
+*The track caster is culled to each map's box* (same lane). `render_depth_map` draws the track,
+every craft and nothing else into the `mapped` tier's depth map, and the map covers a box of
+`MAPPED_RADIUS` (70) around one craft. Each opaque track draw carries its own world-space
+bounding sphere (`DrawCall::bounds`, the one the scene pass frustum-culls with), so the pass now
+tests every sphere against the box's own frustum (`Frustum::from_view_projection(fit.matrix())`,
+the matrix the pass renders with) and records only the draws that touch it
+(`Drawable::opaque_ranges_in`). A draw an `Anim Transform` moves has no trustworthy bound and is
+always kept. Nothing is approximated: the sphere test is conservative, and the pass has no
+depth clamp, so a draw wholly outside the box was clipped away whole before. Per map, so each
+view of a split culls to its own craft. Kept of the track's opaque draws: Pulse 465 of 1,737
+(ticks 300 and 1200), Pure 123 of 1,179, HD 286 to 287 of 1,835.
+
+- **Proof**: the same 26 stills `cmp` equal (the `mapped` ones are the claim), plus 16 more `mapped`
+  stills at ticks 1200 and 2400 (Pulse, Pure, HD and Omega at one and two views) equal to main's.
+  Stills can only catch an over-cull (with no cull the pass draws main's whole circuit), so
+  they were checked to be sensitive: a throwaway build whose test sphere has radius 0 differs from
+  main on all four stills tried (9,595 pixels of Pulse's two views at tick 300), and `mapped`
+  differs from `off` by 25,057. **The cull being there** is the unit test
+  `the_mapped_depth_map_records_only_the_track_draws_in_its_box` (`tests/split_shadows.rs`): the
+  test circuit is one triangle at the origin, one view's box holds it and the other's clears it,
+  and the pass's own count (`FrameWork::track_ranges_in_depth_map`) must read 1 and 0; with the
+  cull replaced by "every range" the second reads 1 and the test fails. Also
+  `only_the_draws_that_touch_the_light_box_are_kept` (inside, a sphere reaching in at the side,
+  outside, behind the far plane, an unbounded moving draw).
+- **Cost**, `mapped` tier, Pulse, tick 300, medians of three, before -> after. RX 7800 XT, K=1
+  (60 Hz), load 1.0 to 1.4, CPU / pipelined ms: one view 1.11 / 1.14 -> 1.07 / 1.09, two 1.98 /
+  2.01 -> 1.89 / 1.93, four 3.77 / 3.79 -> 3.62 / 3.64, eight 7.38 / 7.43 -> 7.05 / 7.05 (0.05 to
+  0.4 ms: the discrete card was never limited here). Raphael iGPU, pipelined ms (the rows were
+  taken with other lanes' work running, the per-run load average ranged from 1 to 8, so read them
+  as a direction): Pulse K=1 one view 7.33 -> 6.60, two 9.70 -> 9.04, four 13.47 -> 12.93, eight 18.45
+  -> 16.55; K=4 7.34 -> 7.06, 9.11 -> 9.28, 13.91 -> 12.12, 18.89 -> 16.39. Pure (`mapped`), K=1: 6.32 ->
+  5.85, 8.47 -> 7.15, 10.82 -> 9.57, 14.61 -> 12.90. So the single-view tier gains about 0.3 to
+  0.7 ms on the iGPU and eight views about 2 ms, **less than the 1 to 1.6 ms a view the map cost**:
+  what remains is the 2048 x 2048 depth clear, the craft casters, and the 465 draws Pulse's box
+  still touches (the track's draws are big, a sphere is loose around them; a tighter bound is
+  not authored in the model).
+- **2048 and Omega** (shared lineage): the cull is the `Drawable`'s own and title-agnostic
+  (**ported**): HD and Omega's `mapped` stills at one and two views are `cmp` equal; 2048 not
+  runnable here, as above.
+
+*Open from this lane:* culling the hull gather to the craft some view can see (with eight craft
+and two views most hulls are projected for nothing: needs the visibility to be exact, and the
+two-tick cache wants every craft's gather on the tick before); the Steam Deck numbers above
+(the maintainer's).
 
 **Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
 2048 and Omega stay off integrated GPUs in a split):

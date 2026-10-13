@@ -93,6 +93,10 @@ pub(super) struct Drawable {
     /// does not - a shadow map of a craft's glow would darken the road under
     /// its own light.
     opaque_ranges: Vec<std::ops::Range<u32>>,
+    /// Each of [`Self::opaque_ranges`]'s own world-space bounding sphere, or
+    /// `None` for a draw an `Anim Transform` moves (its bound is a statement
+    /// about time zero, so it is never culled). Index for index.
+    opaque_reach: Vec<Option<(Vec3, f32)>>,
     /// This instance's per-frame `LodGroup` choice - see [`Self::select_lod`].
     /// Starts on every group's finest child, which a drawable nobody
     /// switches keeps.
@@ -285,7 +289,7 @@ impl Drawable {
         // tier first drew shadows on the scenery and none under the ship.
         // The cutout itself is ignored in the caster pass: a chain-link fence
         // casts a solid shadow, which is a divergence and a cheap one.
-        let opaque_ranges = model
+        let opaque: Vec<&oag_mesh::mesh::DrawCall> = model
             .draws
             .iter()
             .chain(model.alpha_tested_draws.iter())
@@ -293,7 +297,13 @@ impl Drawable {
             // a switch per shadow pass is not what it is for - chosen, not
             // measured.
             .filter(|draw| model.lod_groups.shows_nearest(draw))
-            .map(|draw| draw.range.clone())
+            .collect();
+        let opaque_ranges = opaque.iter().map(|draw| draw.range.clone()).collect();
+        let opaque_reach = opaque
+            .iter()
+            .map(|draw| {
+                (!draw.moving).then(|| (Vec3::from_array(draw.bounds.centre), draw.bounds.radius))
+            })
             .collect();
         // The pictures are on the GPU now; the model keeps its slots and drops
         // the texels it decoded them from.
@@ -305,6 +315,7 @@ impl Drawable {
         }
         Ok(Self {
             opaque_ranges,
+            opaque_reach,
             lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
             model,
             pipeline,
@@ -412,6 +423,19 @@ impl Drawable {
     /// materials are the GE's fixed pipeline, answers `false`.
     pub(super) fn is_ps3_shaded(&self) -> bool {
         self.model.material_variants.iter().any(Option::is_some)
+    }
+
+    /// The opaque index ranges whose bounds touch `frustum`, for a model drawn at
+    /// the identity (the track): its draws' bounds are world space, so the
+    /// frustum is tested against them as they stand. A draw an animation moves
+    /// is always kept. Conservative, so a cull cannot change a pixel: a range
+    /// dropped here lies wholly outside the frustum and the caster pass would
+    /// have clipped every triangle of it.
+    pub(super) fn opaque_ranges_in(
+        &self,
+        frustum: &oag_core::math::frustum::Frustum,
+    ) -> Vec<std::ops::Range<u32>> {
+        ranges_in(frustum, &self.opaque_ranges, &self.opaque_reach)
     }
 
     pub(super) fn caster(&self, model: Mat4) -> oag_render::shadow::map::Caster<'_> {
@@ -993,3 +1017,52 @@ mod occlusion;
 mod overlay;
 mod ripple;
 mod stamp;
+
+/// `ranges` whose `reach` sphere touches `frustum`; a range with no sphere (a moving draw)
+/// is always kept. See [`Drawable::opaque_ranges_in`].
+fn ranges_in(
+    frustum: &oag_core::math::frustum::Frustum,
+    ranges: &[std::ops::Range<u32>],
+    reach: &[Option<(Vec3, f32)>],
+) -> Vec<std::ops::Range<u32>> {
+    ranges
+        .iter()
+        .zip(reach)
+        .filter(|(_, reach)| {
+            reach.is_none_or(|(centre, radius)| frustum.intersects_sphere(centre, radius))
+        })
+        .map(|(range, _)| range.clone())
+        .collect()
+}
+
+#[cfg(test)]
+mod ranges_tests {
+    use super::*;
+    use oag_core::math::camera;
+    use oag_core::math::frustum::Frustum;
+
+    /// A light box 10 across and 20 deep, looking down -z from z = 0 .. -20.
+    fn light_box() -> Frustum {
+        Frustum::from_view_projection(
+            camera::orthographic(-5.0, 5.0, -5.0, 5.0, 0.0, 20.0) * Mat4::IDENTITY,
+        )
+    }
+
+    #[test]
+    fn only_the_draws_that_touch_the_light_box_are_kept() {
+        let ranges = [0..3, 3..6, 6..9, 9..12, 12..15];
+        let reach = [
+            Some((Vec3::new(0.0, 0.0, -10.0), 1.0)),
+            Some((Vec3::new(50.0, 0.0, -10.0), 1.0)),
+            Some((Vec3::new(0.0, 0.0, -100.0), 1.0)),
+            Some((Vec3::new(6.0, 0.0, -10.0), 2.0)),
+            None,
+        ];
+        let kept = ranges_in(&light_box(), &ranges, &reach);
+        assert_eq!(
+            kept,
+            [0..3, 9..12, 12..15],
+            "inside, a sphere reaching in at the side, and an unbounded moving draw"
+        );
+    }
+}

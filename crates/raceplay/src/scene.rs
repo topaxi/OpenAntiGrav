@@ -45,6 +45,10 @@ pub(crate) struct FrameWork {
     pub(crate) shadow_gathers: u32,
     pub(crate) scenery_clocks: u32,
     pub(crate) advert_cards: u32,
+    /// How many of the track's opaque draws the latest `mapped` depth map recorded:
+    /// those whose bounds touch that map's box, not the whole circuit.
+    #[cfg(test)]
+    pub(crate) track_ranges_in_depth_map: u32,
 }
 
 /// The track and the ship on the GPU, drawn from a chase camera.
