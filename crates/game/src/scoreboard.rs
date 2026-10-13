@@ -346,7 +346,7 @@ pub fn draw_list(
                 format!("{}", row.place),
             ));
         }
-        out.push(text(CRAFT_X, y, Align::Left, color, craft_label(row)));
+        out.push(text(CRAFT_X, y, Align::Left, color, craft_label(row, board.persons() > 1)));
         out.push(text(
             LAPS_X,
             y,
@@ -451,8 +451,13 @@ pub fn draw_list(
 ///
 /// **A slot number and not a team**, for the reason the module header gives: the
 /// team a slot flies is an id held by the renderer's liveries, not by the race.
-fn craft_label(row: &Row) -> String {
-    if row.player {
+///
+/// **With several people** on the board `YOU` would name all of them, so each is
+/// `P1`, `P2`... by the seat (the grid slot) they fly. Chosen, not measured.
+fn craft_label(row: &Row, several_people: bool) -> String {
+    if row.player && several_people {
+        format!("P{}", row.slot + 1)
+    } else if row.player {
         "YOU".to_string()
     } else {
         format!("SLOT {}", row.slot + 1)

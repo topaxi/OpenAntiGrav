@@ -215,7 +215,7 @@ impl RaceStage {
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. No timers, blur or jitter - the views
         // share one camera history that `N` cameras would corrupt.
-        if self.race.viewport_count() > 1 {
+        if self.race.views_drawn() > 1 {
             return self.scene.render_viewports(
                 gpu.device(),
                 gpu.queue(),

@@ -739,7 +739,7 @@ pub fn capture(
     }
     // A split screen draws one scene per view, each submitted on its own: see
     // `Scene::render_viewports`. One view is the call below, untouched.
-    let stats = if race.viewport_count() > 1 {
+    let stats = if race.views_drawn() > 1 {
         scene.render_viewports(
             &device,
             &queue,
@@ -874,17 +874,21 @@ pub fn capture(
         Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
             Ok(mut overlay) => {
                 let observation = describe::observation(&race);
-                let personal_best = crate::records::PersonalBest::compare(
-                    options.previous_best.as_ref(),
-                    &observation,
-                );
+                // A split's result is nobody's record (slot 0's was a race a second
+                // person was in): no personal-best lines, as the window draws none.
+                let personal_best = (race.viewport_count() <= 1).then(|| {
+                    crate::records::PersonalBest::compare(
+                        options.previous_best.as_ref(),
+                        &observation,
+                    )
+                });
                 overlay.draw(
                     &device,
                     &queue,
                     &mut encoder,
                     &hud_view,
                     board,
-                    Some(&personal_best),
+                    personal_best.as_ref(),
                     hud_viewport,
                 );
             }

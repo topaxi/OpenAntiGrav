@@ -132,7 +132,11 @@ impl Race {
     pub fn set_autopilot(&mut self, on: bool) {
         self.sim.autopilot = on;
         if on {
-            self.locate_player_driver(self.sim.world.primary_slot());
+            for slot in 0..oag_gameplay::MAX_PLAYERS {
+                if self.autopilot_flies(slot) {
+                    self.locate_player_driver(slot);
+                }
+            }
         }
     }
 
@@ -205,16 +209,26 @@ impl Race {
     /// `race::finished_thrust`.
     #[must_use]
     pub fn flown_for_the_player(&self, slot: usize) -> bool {
-        // The operator's switch flies the primary slot: it is a verification aid
-        // for the one craft a person is watching, not a mode every human slot in
-        // a shared race inherits.
-        (self.sim.autopilot && slot == self.sim.world.primary_slot())
+        self.autopilot_flies(slot)
             || self.sim.world.ships[slot].standing.finished()
             || self.sim.world.ships[slot].autopilot_timer > 0.0
             || self.sim.world.ships[slot]
                 .disruption
                 .autopilot_thrust_scale()
                 .is_some()
+    }
+
+    /// Whether the operator's `--autopilot` flies `slot`: the primary slot, and
+    /// in a split screen every other **local** seat too, because a verification
+    /// aid that flew one of two people would never let the second finish (the
+    /// race ends when every person has). A remote slot is somebody else's craft
+    /// and is never taken. With one person this is `slot == primary`, as it was.
+    fn autopilot_flies(&self, slot: usize) -> bool {
+        self.sim.autopilot
+            && (slot == self.sim.world.primary_slot()
+                || (slot < oag_gameplay::MAX_PLAYERS
+                    && self.sim.world.controllers[slot] == oag_gameplay::Controller::Local
+                    && self.sim.world.person_flown(slot)))
     }
 
     /// Counts the Autopilot pickup down and lets go of the craft at zero.
