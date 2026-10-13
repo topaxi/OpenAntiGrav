@@ -17,16 +17,16 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   `13`. Every other ground truth of the original driver flies `16_Track` (Pulse)
   or its title's default circuit. HD's default track: 0 for both. Foreign
   (Lion's Den): the original flies, respawns unmeasured.
-- **The speed plan is still learned at every race start** (`Race::start`,
-  `start.rs`), though nothing uses it when the original flies. Release cost of
-  the field plan alone: Pulse `16_Track` 0.5 to 1.0 s of a 1.3 to 1.9 s headless
-  start, HD 3.0 to 3.7 s of 5.2 to 5.9 s (route plans come on top, unlogged).
-  Skipping needs a `Setup` field (`options.rs`, `options/headless.rs`, `load.rs`,
-  `start.rs`), because the choice is made after `start`; the same plan drives
-  `--autopilot` (`field.rs`), and a fallback to our driver would fly without it.
-- **No second human in a race.** `original_ai_begin_tick` and `step_opponents`
-  treat every slot from 1 as an opponent; a split-screen mode must filter
-  `World::human_slots` out first.
+- **A forked circuit still learns the speed plans** when the original flies:
+  the route plans gate which routes the coin offers
+  (`Race::steer_branching`) and are learned on the ring plan's reference hull.
+  Skipping them for the original field means deciding what offers a route
+  there (every route, or a rule of the original's own), which changes how an
+  original opponent goes round a fork, so it was not done. Everything else
+  skips them: `Race::start_deferred`, `Race::ensure_speed_plans`.
+- **Races with more than one human keep this project's driver**
+  (`ai_choice::Reason::MultipleHumans`): the original field's slot, place and
+  rubber-band handling with several humans is unread.
 - **Classes without an original table keep opponents off** (RACE REMIX on Super
   Phantom): `ai.md`'s class coverage is unchanged by this lane.
 - Ghosts recorded before this change raced opponents flown by our driver; they
@@ -38,7 +38,9 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
    leaves the line (`Race::respawns_of`, the same trace the `13_Track` Novice
    chase used for ours). Either a mapping error in `original_ai.rs` (nearest
    sample, contact list) or a track the original's own driver also loses on.
-2. Decide the speed-plan skip (the lead has the numbers) and, if yes, thread a
-   `Setup` field through start, with `--autopilot` building its plan lazily.
+2. Decide what offers a route to the original field without the plan gate, then
+   skip the plans on forked circuits too.
 3. Add a round-the-lap ground truth over every Pulse circuit for the original
    field, next to `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`.
+4. Read the original field with several humans (slot, place, rubber band), then
+   lift `Reason::MultipleHumans`.

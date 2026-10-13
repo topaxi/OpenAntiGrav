@@ -73,6 +73,10 @@ pub enum Reason {
     NoOpponents,
     /// A 2048 event that authors no `ai` block (Elimination).
     EventWithoutAi,
+    /// More than one human is racing. **Unread, not decided**: the original
+    /// field's slot, place and rubber-band handling with several humans has
+    /// not been recovered, and filtering slots there is a design question.
+    MultipleHumans,
 }
 
 impl Reason {
@@ -83,6 +87,7 @@ impl Reason {
             Self::Flag => "--ai ours",
             Self::NoOpponents => "the race has no opponents",
             Self::EventWithoutAi => "the 2048 event authors no AI block",
+            Self::MultipleHumans => "more than one human is racing",
         }
     }
 }
@@ -104,14 +109,18 @@ pub const fn free_level(difficulty: oag_ai::Difficulty) -> usize {
     }
 }
 
-/// The rules: `opponents` is whether the grid holds any.
+/// The rules: `opponents` is whether the grid holds any, `humans` how many
+/// slots a person drives.
 #[must_use]
-pub fn decide(choice: AiChoice, opponents: bool, source: Source) -> Decision {
+pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) -> Decision {
     if choice == AiChoice::Ours {
         return Decision::Ours(Reason::Flag);
     }
     if !opponents {
         return Decision::Ours(Reason::NoOpponents);
+    }
+    if humans > 1 {
+        return Decision::Ours(Reason::MultipleHumans);
     }
     match source {
         Source::Campaign { skill, level } => Decision::Original {
@@ -138,7 +147,8 @@ pub fn decide(choice: AiChoice, opponents: bool, source: Source) -> Decision {
 /// and for [`Race::use_original_ai`]'s own fallbacks, which it logs itself).
 pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
     let opponents = race.sim.world.ship_count > 1;
-    match decide(choice, opponents, source) {
+    let humans = race.sim.world.human_slots().count();
+    match decide(choice, opponents, humans, source) {
         Decision::Ours(reason) => {
             log::info!("AI: this project's driver flies ({})", reason.text());
             false

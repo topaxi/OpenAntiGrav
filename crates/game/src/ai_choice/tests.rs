@@ -14,7 +14,12 @@ fn event(level: usize) -> EventAi {
 fn the_default_is_the_original_driver() {
     assert_eq!(AiChoice::default(), AiChoice::Original);
     assert_eq!(
-        decide(AiChoice::default(), true, Source::Free(Difficulty::Elite)),
+        decide(
+            AiChoice::default(),
+            true,
+            1,
+            Source::Free(Difficulty::Elite)
+        ),
         Decision::Original {
             skill: None,
             level: 1,
@@ -34,7 +39,7 @@ fn ours_overrides_every_source() {
         Source::Free(Difficulty::Ace),
     ] {
         assert_eq!(
-            decide(AiChoice::Ours, true, source),
+            decide(AiChoice::Ours, true, 1, source),
             Decision::Ours(Reason::Flag)
         );
     }
@@ -43,7 +48,12 @@ fn ours_overrides_every_source() {
 #[test]
 fn no_opponents_keeps_ours() {
     assert_eq!(
-        decide(AiChoice::Original, false, Source::Free(Difficulty::Elite)),
+        decide(
+            AiChoice::Original,
+            false,
+            1,
+            Source::Free(Difficulty::Elite)
+        ),
         Decision::Ours(Reason::NoOpponents)
     );
 }
@@ -54,6 +64,7 @@ fn a_campaign_cell_keeps_its_own_skill_and_rung() {
         decide(
             AiChoice::Original,
             true,
+            1,
             Source::Campaign {
                 skill: Some(0.4),
                 level: 2
@@ -70,7 +81,12 @@ fn a_campaign_cell_keeps_its_own_skill_and_rung() {
 #[test]
 fn a_2048_event_carries_its_two_skills_and_elimination_keeps_ours() {
     assert_eq!(
-        decide(AiChoice::Original, true, Source::Event2048(Some(event(2)))),
+        decide(
+            AiChoice::Original,
+            true,
+            1,
+            Source::Event2048(Some(event(2)))
+        ),
         Decision::Original {
             skill: Some(0.5),
             level: 2,
@@ -78,7 +94,7 @@ fn a_2048_event_carries_its_two_skills_and_elimination_keeps_ours() {
         }
     );
     assert_eq!(
-        decide(AiChoice::Original, true, Source::Event2048(None)),
+        decide(AiChoice::Original, true, 1, Source::Event2048(None)),
         Decision::Ours(Reason::EventWithoutAi)
     );
 }
@@ -88,4 +104,20 @@ fn the_free_level_runs_easy_to_hard_and_the_default_is_medium() {
     assert_eq!(free_level(Difficulty::Novice), 0);
     assert_eq!(free_level(Difficulty::default()), 1);
     assert_eq!(free_level(Difficulty::Ace), 2);
+}
+
+#[test]
+fn several_humans_keep_ours() {
+    assert_eq!(
+        decide(AiChoice::Original, true, 2, Source::Free(Difficulty::Elite)),
+        Decision::Ours(Reason::MultipleHumans)
+    );
+    assert_eq!(
+        decide(AiChoice::Original, true, 1, Source::Free(Difficulty::Elite)),
+        Decision::Original {
+            skill: None,
+            level: 1,
+            event: None
+        }
+    );
 }

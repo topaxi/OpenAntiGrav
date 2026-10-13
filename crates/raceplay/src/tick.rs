@@ -38,6 +38,7 @@ impl Race {
     ///
     /// [`PlayerInputs`]: oag_gameplay::PlayerInputs
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluated {
+        self.ensure_speed_plans();
         // Decays every tick regardless of contact, like `Camera_ArmShake`'s own
         // `shake_timer`, and **first**: the original arms the shake while it
         // updates the craft and reads the full `0.6` s timer in the same

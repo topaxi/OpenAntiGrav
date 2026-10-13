@@ -295,7 +295,7 @@ pub(crate) fn run_windowless(
 /// and the pilot assist applied.
 fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race::Race {
     let difficulty = loaded.setup.difficulty;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start_deferred(loaded.setup);
     oag_game::ai_choice::apply(
         &mut race,
         cli.driver.ai,

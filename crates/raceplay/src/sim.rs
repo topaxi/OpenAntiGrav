@@ -91,6 +91,10 @@ pub struct RaceSim {
     /// race has no opponents or the plan did not verify clean. See
     /// [`Race::field_speed_plan`] and `oag_ai::plan`.
     pub(super) speed_plan: Option<oag_ai::SpeedPlan>,
+    /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
+    /// the first tick, not in `Race::start`, so a race whose opponents all fly
+    /// the original driver can skip them.
+    pub(super) plans_built: bool,
     /// The handling the speed plans were learned on, see [`Race::field_speed_plan`].
     pub(super) plan_reference: Option<Handling>,
     /// Each other hull on the grid's own ring and route plans, one entry per
