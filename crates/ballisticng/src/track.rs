@@ -370,8 +370,9 @@ pub struct Track {
 }
 
 /// The fields of each class this layer reads, by class name. The field census
-/// (`tests/field_census.rs`) holds the other fields of the 32 tracks to a frozen
-/// list with their non-default counts, so a field the tools add is noticed.
+/// (`tests/fields/mod.rs`, on `track_ground_truth.rs`'s walk) holds the other
+/// fields of the 32 tracks to a frozen list with their non-default counts, so a
+/// field the tools add is noticed.
 pub const READ_FIELDS: &[(&str, &[&str])] = &[
     (
         "TrackDataStorage",

@@ -10,7 +10,7 @@
 //! (facts, not code), then checked against the content: every high-bit offset in
 //! all 111 SerializedFiles of the census lands on a string boundary, and the
 //! typetree built from it consumes every object's bytes exactly
-//! (`tests/serialized_ground_truth.rs`), which a wrong name would not survive.
+//! (`tests/census_ground_truth.rs`), which a wrong name would not survive.
 
 /// The table, strings separated by NUL, ending in one.
 const TABLE: &str = concat!(
