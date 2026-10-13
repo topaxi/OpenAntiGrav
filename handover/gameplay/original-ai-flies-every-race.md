@@ -9,16 +9,17 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 ## Open
 
 - **A lagging human makes the leader fall on `13_Track`: the original's does too
-  (measured 2026-10-13, PPSSPP; docs/gameplay/ai.md, "The original's own field
-  falls ...").** Four restarts, player parked: every one shows falls at the
-  authored jump. The split is speed at spline row 19: falls 66 to 101.8, clears
-  102.5 and up (71 of 71); the leaders' held thrust is 47.1 and their speed
-  91 to 100, this engine's numbers. What clears is the speed pad just before the
-  jump (pad 6, 45 units ahead of it, lateral -1.9 to -9.8): at held thrust 47, 14
-  of 14 on-pad entries cleared, 8 of 11 off-pad fell. The original's fall loops
-  end (13 in a row at skill level 0, at most 2 at level 2); this engine's slot 3
-  looped 129 times. Not measured in this engine: its signed lateral at the pad
-  and whether its pad test boosts an AI craft there. `05_Track` (4 resets parked, 1 with the
+  (measured 2026-10-13, PPSSPP, two boots; docs/gameplay/ai.md, "The original's
+  own field falls ...").** Falls at the authored jump in every capture. Speed at
+  spline row 19: falls 66 to 103.6, clears 101.8 and up; the leaders' held thrust
+  is 47.1 and their speed 89.6 to 103.6 when they fall (16 of 39 entries at 47.x),
+  this engine's 91 to 100. What clears is the speed pad just before the jump (pad
+  6, 45 units ahead of it, lateral -1.9 to -9.8): at held thrust 47, 20 of 20
+  on-pad entries cleared, 16 of 19 off-pad fell. The original's fall loops end
+  (13 in a row at skill level 0, at most 2 at level 2 before the finish); this
+  engine's slot 3 looped 129 times. **Hypothesis only:** our leader sits on the
+  pad's off side. Not measured here: our signed lateral at the pad and whether
+  our pad test boosts an AI craft there. `05_Track` (4 resets parked, 1 with the
   default-skill autopilot, a reset volume on lap 4) was not captured on the original.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
