@@ -361,10 +361,12 @@ impl Session {
             // this only decides whether `Race::tick` below runs, so the world
             // is exactly as the freezing tick left it, the way the finished
             // race arm below already leaves it under the results table.
+            // **Any seated player's Start**, not the keyboard's slot alone: in a
+            // split race each pad drives its own slot, and a Deck's own Start
+            // was otherwise never seen (reported from play, 2026-10-13).
             if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-                && self.controls.buttons().is_pressed(Button::Start)
+                && self.controls.take_any(Button::Start)
             {
-                self.controls.buttons_mut().consume_press(Button::Start);
                 self.paused = !self.paused;
             }
             // Circle is "back" everywhere else on screen - the menus, the
@@ -374,11 +376,11 @@ impl Session {
             // `spend_pickup`'s absorb - see `race::weapons`. Same shape as
             // the results-table block below: hand the window back to the
             // menus, exactly as `escape` does from any race.
+            // Any seated player's Circle, as for Start above.
             if matches!(self.stage, Stage::Race(_))
                 && self.paused
-                && self.controls.buttons().is_pressed(Button::Circle)
+                && self.controls.take_any(Button::Circle)
             {
-                self.controls.buttons_mut().consume_press(Button::Circle);
                 self.escape();
                 // The remaining steps this frame owed belong to whatever is on
                 // screen now, and it has not been drawn once yet.

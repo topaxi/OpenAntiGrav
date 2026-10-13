@@ -583,6 +583,11 @@ carries both players' widget sets, `docs/formats/race-setup.md`) is a camera cho
 and a per-player team pick, not a device join, so it is not what the entry below
 follows. Confidence scores do not apply.
 
+**Any seated player pauses.** Start pauses and Circle leaves the paused race from
+every seated device, not the keyboard's slot alone (`Controls::take_any`): with
+devices seated a pad's presses land on its own slot, and before 2026-10-13 a Steam
+Deck's own Start did nothing in a split race (reported from play).
+
 **The assignment** is `oag_input::pad::Assignment`, generic over the pad's id so
 the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
 
