@@ -53,6 +53,7 @@ mod dlc_ground_truth;
 mod eliminator_ai_stats_ground_truth;
 mod eliminator_finish_ground_truth;
 mod eliminator_pads_ground_truth;
+mod endrace_split_ground_truth;
 mod endrace_trophy_ground_truth;
 mod endrace_voice_ground_truth;
 mod falloff_survey_ground_truth;

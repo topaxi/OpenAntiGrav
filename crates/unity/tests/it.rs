@@ -11,15 +11,13 @@
 
 mod common;
 
-mod bundle_ground_truth;
-mod classes_ground_truth;
+mod census_ground_truth;
 mod export_samples;
 mod fixture_track;
 mod hostile_real;
 mod install_census;
 mod known_items;
 mod oracle_ground_truth;
-mod serialized_ground_truth;
 mod synthetic;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
