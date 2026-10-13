@@ -178,6 +178,10 @@
   `[graphics] motion_blur` strength row
   ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)) - an
   invented feature rather than a recovered one
+- [Split screen](split-screen.md) - **built** 2026-10-13: `--players N`, one window, one
+  race, `N` views of it (layout for 1 to 8, a chase camera per view, one scene draw
+  per view). Layout and the camera rig are chosen, not measured; HUD hidden while
+  split.
 - [Drawing between ticks](between-ticks.md) - **built** 2026-10-13: the window
   draws a race between its last two 60 Hz ticks, so motion is smooth at 144 or
   240 Hz; captures still draw each tick exactly, byte for byte. A modern

@@ -61,7 +61,13 @@ fn rgba_of(png: &[u8]) -> Vec<[u8; 4]> {
         .collect()
 }
 
-fn frame(image: &Path, scratch: &Path, name: &str, players: Option<u8>) -> Vec<[u8; 4]> {
+fn frame(
+    image: &Path,
+    scratch: &Path,
+    name: &str,
+    players: Option<u8>,
+    msaa: &str,
+) -> Vec<[u8; 4]> {
     let out = scratch.join(format!("{name}.png"));
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
     command
@@ -74,7 +80,7 @@ fn frame(image: &Path, scratch: &Path, name: &str, players: Option<u8>) -> Vec<[
             "--autopilot",
         ])
         .args(["--size", &format!("{}x{}", SIZE.0, SIZE.1)])
-        .args(["--render-scale", "100", "--msaa", "off"])
+        .args(["--render-scale", "100", "--msaa", msaa])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--ticks", "600"])
         .arg("--screenshot")
@@ -115,6 +121,27 @@ fn drawn(rect: &[[u8; 4]]) -> f32 {
         / rect.len() as f32
 }
 
+/// Every view holds a picture, and no two hold the same one.
+fn distinct_views(name: &str, frame: &[[u8; 4]], rects: &[Rect]) {
+    let views: Vec<_> = rects.iter().map(|&rect| pixels(frame, rect)).collect();
+    for (i, view) in views.iter().enumerate() {
+        let filled = drawn(view);
+        assert!(
+            filled > 0.5,
+            "{name}: view {i} is {filled:.2} drawn, a later view cleared it"
+        );
+    }
+    for i in 0..views.len() {
+        for j in i + 1..views.len() {
+            let apart = differing(&views[i], &views[j]);
+            assert!(
+                apart > 0.15,
+                "{name}: views {i} and {j} differ in {apart:.2} of their pixels, one camera drawn twice"
+            );
+        }
+    }
+}
+
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
 fn players_draws_distinct_cameras_into_distinct_rectangles() {
@@ -124,15 +151,15 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
     let scratch = std::env::temp_dir().join(format!("oag-split-screen-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
 
-    let none = frame(&image, &scratch, "none", None);
-    let one = frame(&image, &scratch, "one", Some(1));
+    let none = frame(&image, &scratch, "none", None, "off");
+    let one = frame(&image, &scratch, "one", Some(1), "off");
     assert!(
         none == one,
         "--players 1 is the frame with no flag, to the byte"
     );
 
-    let two = frame(&image, &scratch, "two", Some(2));
-    let four = frame(&image, &scratch, "four", Some(4));
+    let two = frame(&image, &scratch, "two", Some(2), "off");
+    let four = frame(&image, &scratch, "four", Some(4), "off");
     std::fs::remove_dir_all(&scratch).ok();
 
     let (w, h) = SIZE;
@@ -147,25 +174,8 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
         (w - col, h - half, col, half),
     ];
 
-    for (name, frame, rects) in [("two", &two, &two_up[..]), ("four", &four, &quads[..])] {
-        let views: Vec<_> = rects.iter().map(|&rect| pixels(frame, rect)).collect();
-        for (i, view) in views.iter().enumerate() {
-            let filled = drawn(view);
-            assert!(
-                filled > 0.5,
-                "{name}: view {i} is {filled:.2} drawn, a later view cleared it"
-            );
-        }
-        for i in 0..views.len() {
-            for j in i + 1..views.len() {
-                let apart = differing(&views[i], &views[j]);
-                assert!(
-                    apart > 0.15,
-                    "{name}: views {i} and {j} differ in {apart:.2} of their pixels, one camera drawn twice"
-                );
-            }
-        }
-    }
+    distinct_views("two", &two, &two_up);
+    distinct_views("four", &four, &quads);
 
     // The gap between two views is what the target was cleared to, and the split
     // really is two views and not the whole frame drawn as one.
@@ -179,4 +189,28 @@ fn players_draws_distinct_cameras_into_distinct_rectangles() {
         differing(&pixels(single, (0, 0, w, half)), &pixels(&two, two_up[0])) > 0.05,
         "the two-up top view is a different picture from the full-screen one's top half"
     );
+}
+
+/// The window's default is multisampled, and a multisample resolve rewrites the
+/// whole target: the later views have to load the multisampled colour, not only
+/// the resolved one.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and a GPU adapter"]
+fn four_views_survive_a_multisample_resolve() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-split-msaa-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let four = frame(&image, &scratch, "four", Some(4), "4x");
+    std::fs::remove_dir_all(&scratch).ok();
+    let (w, h) = SIZE;
+    let (half, col) = ((h - 2) / 2, (w - 2) / 2);
+    let quads: [Rect; 4] = [
+        (0, 0, col, half),
+        (w - col, 0, col, half),
+        (0, h - half, col, half),
+        (w - col, h - half, col, half),
+    ];
+    distinct_views("four, msaa", &four, &quads);
 }
