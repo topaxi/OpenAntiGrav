@@ -266,8 +266,8 @@ pub fn rewards_split(single: &Layout, to: [f32; 2]) -> Option<Layout> {
         .texts
         .iter()
         .find(|text| text.name.is_none() && text.idstring.as_deref() == Some("ER_REWARD"))?;
-    for panel in 0..2 {
-        let shift = PS2_PANEL_Y[panel] * k;
+    for (panel, offset) in PS2_PANEL_Y.iter().enumerate() {
+        let shift = offset * k;
         for fill in source.fills.iter().skip(backdrop + 1) {
             let mut fill = fill.clone();
             fill.name = suffixed(&fill.name, panel);
