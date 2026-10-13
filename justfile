@@ -126,6 +126,15 @@ test:
 
 # Behavioural / ground-truth tests that need data/images populated.
 #
+# `scripts/test-data.py` runs it. It skips every test binary that passed in
+# full on an earlier run of this checkout and is byte-identical since, with
+# unchanged inputs (`data/`, the repository files tests read, the environment
+# variables they read) - see that script's doc comment for the fingerprint.
+# Skipped binaries are listed by name before and after the run, and nextest
+# counts their tests as skipped, never as passed. `just test-data --full`, or
+# `OAG_TEST_DATA_FULL=1`, runs everything. The record is
+# `target/test-data-pass.json`; deleting it is the same as `--full` once.
+#
 # `--no-fail-fast` because this run's job is to produce a *list*. Without it the
 # sweep stops at the first failure - and the two `oag-formats` ones sort early
 # enough to stop it at 138 of 3,300, which reads as a far worse tree than it is
@@ -134,26 +143,17 @@ test:
 #
 # The run is teed to `target/test-data.log` and handed to `check-test-budget`,
 # which is the only place the suite's own cost is measured - see that script for
-# why a per-test ceiling catches what a total cannot.
+# why a per-test ceiling catches what a total cannot. A run that skipped
+# binaries is marked as partial in the log, and the suite ceiling is judged
+# only on a run that skipped nothing.
 #
-# Both exit codes are kept, and a red test wins: the budget report is worth
-# printing either way - a run that failed still measured every test that
-# passed - but "the suite is red" is the more urgent of the two things to say,
-# so it is the one this recipe exits on.
+# A red test wins the exit code over the budget, as "the suite is red" is the
+# more urgent of the two things to say.
 #
 # `--tests` for the reason `test` gives: the examples are never run here either,
 # and the selection is the same 8,323 tests with or without it (2026-10-13).
-test-data:
-    #!/usr/bin/env bash
-    set -uo pipefail
-    mkdir -p target
-    cargo nextest run --workspace --tests --run-ignored all --no-fail-fast 2>&1 \
-        | tee target/test-data.log
-    tests=${PIPESTATUS[0]}
-    budget=0
-    just check-test-budget || budget=$?
-    [ "$tests" -ne 0 ] && exit "$tests"
-    exit "$budget"
+test-data *ARGS:
+    python3 scripts/test-data.py "$@"
 
 # A member lane's gate: every check in `check` in full, but only the tests of
 # the packages this branch changed and everything that depends on them.

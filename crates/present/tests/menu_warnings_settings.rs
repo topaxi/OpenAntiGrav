@@ -15,10 +15,10 @@
 //! high enough that the statement holds anyway - because `Condition.all` is an
 //! AND and "off, or floored high" is an OR.
 //!
-//! Moved to the composition root's own integration tests, unlike its siblings
-//! that stayed in `oag-ui`'s `menu/tests.rs`: a warning is pinned against
-//! `oag_present::upscale`/`drs`/`perf`, which only a crate that can see both
-//! `oag-ui` and `oag-game` can assert.
+//! Here rather than with its siblings in `oag-ui`'s `menu/tests.rs`: a warning
+//! is pinned against `oag_present::upscale`/`drs`/`perf`, which only a crate
+//! that can see both `oag-ui` and `oag-present` can assert, and `oag-present`
+//! depends on `oag-ui`.
 
 use oag_ui::menu::*;
 

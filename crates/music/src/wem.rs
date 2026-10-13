@@ -20,7 +20,7 @@
 //! stereo voice clip it agrees to within one least-significant bit on 99.75%
 //! of samples and **is the negation of it** - a polarity difference between two
 //! implementations, inaudible on its own and not corrected here, since which
-//! polarity Sony's decoder has is not known. `crates/game/tests/
+//! polarity Sony's decoder has is not known. `crates/music/tests/
 //! omega_wem_ground_truth.rs` decodes every `.wem` on the archives.
 //!
 //! The crate's README rates multi-channel decoding "partial" and skips the

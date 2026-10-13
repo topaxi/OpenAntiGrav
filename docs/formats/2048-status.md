@@ -210,7 +210,7 @@ the start line and runs the simulation. What it does **not** do, and why:
   font Data\XML\2048_hud\font\2048_hud.fnt (role "2048HUD")` and the
   screenshot shows the same clean sans-serif face the real Vita3K captures
   in [2048-hud.md](2048-hud.md) do, not blocky 5x7 glyphs. Pinned by
-  `crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+  `crates/hud/tests/vita_2048_hud_ground_truth.rs`'s
   `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`.
   See [2048-frontend.md](2048-frontend.md#the-language-plugins-carry-a-hud-font-role-too).
 - **2026-09-20: the HUD font role was located but did not yet draw.** Wiring

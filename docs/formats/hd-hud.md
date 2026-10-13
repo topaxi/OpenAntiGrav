@@ -917,7 +917,7 @@ all three functions are now read -
 the addresses, the constants and the branch table. `oag_title::HudArt::runtime`
 holds the values (`oag_hd::hud::RUNTIME`) and `oag_hud::runtime` applies
 them; `crates/hud/src/runtime/tests.rs` pins each rule and
-`crates/game/tests/hd_hud_runtime_ground_truth.rs` checks the widgets it acts on
+`crates/hud/tests/hd_hud_runtime_ground_truth.rs` checks the widgets it acts on
 are where it looks on the disc's own layouts.
 
 - **`DamageBar` is a fill, not a second state.** `Hud_UpdateShieldReadout`

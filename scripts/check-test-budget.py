@@ -64,6 +64,12 @@ run's wall clock says nothing about the whole suite's, and no `BASELINE` row is
 called for deletion off a partial run. The ceiling on the whole suite is the
 lead's full `just test-data` once per merge batch.
 
+`just test-data` itself skips test binaries that passed unchanged
+(`scripts/test-data.py`), and the log of a run that skipped any carries
+`PARTIAL_MARKER`. This script treats such a log as `--partial` on its own, so
+the suite ceiling is judged on `just test-data --full` or on a run that
+happened to skip nothing.
+
 It is deliberately not in the default `just` gate: that runs `test`, which skips
 every `#[ignore]`d test, so there would be nothing to measure.
 """
@@ -143,6 +149,9 @@ RESULT = re.compile(
 )
 SUMMARY = re.compile(r"^\s*Summary\s+\[\s*([0-9.]+)s\]")
 
+# Kept in step with `PARTIAL_MARKER` in `scripts/test-data.py`.
+PARTIAL_MARKER = "test-data: PARTIAL RUN"
+
 
 def measure(log: str) -> tuple[dict[str, float], float | None]:
     """The slowest run of each test in `log`, and the suite's wall clock."""
@@ -212,8 +221,17 @@ def main() -> int:
         )
         return 1
 
-    durations, wall = measure(path.read_text(errors="replace"))
+    log = path.read_text(errors="replace")
+    # `scripts/test-data.py` writes this line when it skipped test binaries
+    # that passed unchanged: that run's wall clock is not the suite's.
+    if any(line.startswith(PARTIAL_MARKER) for line in log.splitlines()):
+        partial = True
+        print(f"{path}: a run that skipped test binaries, suite ceiling not judged")
+    durations, wall = measure(log)
     if not durations:
+        if partial:
+            print(f"{path}: every test binary was skipped, nothing to measure")
+            return 0
         print(f"{path} holds no nextest results", file=sys.stderr)
         return 1
 

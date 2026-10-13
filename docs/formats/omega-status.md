@@ -1276,7 +1276,7 @@ present, and its own list drops the 2048-era teams to that row.
 
 ### Vita 2048 against Omega's 2048-era craft: census (2026-10-06, `remix-labels`)
 
-`crates/game/tests/remix_2048_sources_ground_truth.rs` reads all twenty craft
+`crates/source/tests/remix_2048_sources_ground_truth.rs` reads all twenty craft
 (five teams, four each) off `data/extracted/vita/PCSF00007` and
 `data/extracted/ps4`:
 

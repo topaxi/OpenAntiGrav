@@ -2653,6 +2653,8 @@ version = "0.1.0"
 dependencies = [
  "log",
  "oag-2048",
+ "oag-assets",
+ "oag-disc",
  "oag-display",
  "oag-hd",
  "oag-physics",
@@ -2661,6 +2663,7 @@ dependencies = [
  "oag-race",
  "oag-schema",
  "oag-tables",
+ "oag-testdata",
  "oag-texture",
  "oag-title",
  "oag-ui",
@@ -2693,6 +2696,7 @@ dependencies = [
  "oag-race",
  "oag-rcs",
  "oag-tables",
+ "oag-testdata",
  "oag-texture",
  "oag-title",
  "oag-vex",
@@ -2763,6 +2767,7 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-tables",
+ "oag-testdata",
  "oag-title",
  "symphonia",
 ]
@@ -3028,6 +3033,7 @@ dependencies = [
  "oag-omega",
  "oag-pulse",
  "oag-pure",
+ "oag-tables",
  "oag-testdata",
  "oag-title",
  "zip",
@@ -3158,6 +3164,7 @@ dependencies = [
 name = "oag-ui-screens"
 version = "0.1.0"
 dependencies = [
+ "oag-ai",
  "oag-assets",
  "oag-display",
  "oag-gameplay",

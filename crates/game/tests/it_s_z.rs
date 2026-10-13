@@ -55,7 +55,6 @@ mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_campaign_progress_ground_truth;
 mod vita_2048_endrace_ground_truth;
 mod vita_2048_event_card_ground_truth;
-mod vita_2048_hud_ground_truth;
 mod vita_2048_lighting_ground_truth;
 mod vita_2048_music_ground_truth;
 mod vita_2048_original_ai_ground_truth;

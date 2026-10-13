@@ -1054,7 +1054,7 @@ corrects the earlier "DATA00 only"; which one HD's runtime reads is not establis
 (`Archives::read_name` takes `DATA00`'s). The row is Fury-era: the base game's copy has none.
 `oag_tables::weapons::ai` now parses both rows (`WeaponAiStats::all_weapons`,
 `WeaponAiStats::eliminator`), refuses a short row by name and ignores attributes it does not
-know. `crates/game/tests/eliminator_ai_stats_ground_truth.rs` decodes every copy above and pins
+know. `crates/source/tests/eliminator_ai_stats_ground_truth.rs` decodes every copy above and pins
 relations rather than literals (ADR-0006): the three copies that carry the row are equal, the
 `easy`/`medium`/`hard` flip, use and score scales rise, the absorb scale falls, and Pulse's and
 Pure's files carry neither row.
