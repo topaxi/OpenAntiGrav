@@ -424,8 +424,8 @@ impl Race {
                     }
                     // The lock is the Missile's own, unmodified - the same
                     // `Ship_AcquireLock` scan off the LeachBeam's own
-                    // `<Stats>` window, which `Race::sight_target` already
-                    // computes for the reticle. `FUN_0883f540` confirms the
+                    // `<Stats>` window, which `Race::sight_target` computes
+                    // per slot. `FUN_0883f540` confirms the
                     // reuse directly: it calls `Ship_AcquireLock` for held
                     // weapon ids `1` and `10` and no others.
                     //
@@ -447,21 +447,20 @@ impl Race {
                     // Wipeout HD's LeachBeam reticle is a different function, so it
                     // keeps firing off the window alone. An opponent has no reticle.
                     //
-                    // **A second person has no sight to read yet.**
-                    // [`Race::sight_target`] measures from `ships[0]` through the
-                    // view's one reticle, so another person-flown slot would be
-                    // handed slot 0's target (possibly itself). Fired unlocked
-                    // until split screen gives each viewport its own sight.
+                    // **A second person has no reticle, so no hold.** The
+                    // [`Race::sight_target`] window is computed for `slot` itself,
+                    // from its own craft; only the primary's reticle adds the
+                    // `0.34` s hold on top, because it is the only one that
+                    // exists. Every other person-flown slot fires off the window
+                    // alone, as an opponent does. **Chosen, not measured**: the
+                    // original has one reticle, and what a second pad's sight
+                    // would hold is not recovered.
                     let primary = self.sim.world.primary_slot();
-                    let target = if slot != primary && self.sim.world.person_flown(slot) {
-                        None
-                    } else {
-                        self.sight_target().filter(|_| {
-                            slot != primary
-                                || !self.view.sight.leach_law()
-                                || self.view.sight.locked()
-                        })
-                    };
+                    let target = self.sight_target(slot).filter(|_| {
+                        slot != primary
+                            || !self.view.sight.leach_law()
+                            || self.view.sight.locked()
+                    });
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
                             self.sim.cues.push(oag_sound::sfx::CueEvent::new(
