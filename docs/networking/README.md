@@ -64,6 +64,9 @@ model):
    restore pair and a loopback proof exist (`crates/raceplay/src/reconcile.rs`).
 5. **Up to 8 players**, the existing `MAX_SHIPS` grid, so a networked race never
    exceeds what a local one handles ([ADR-0052](../architecture/adr/0052-world-and-race-tick-widen-to-n-players.md)).
+   `Race::tick` steps every person-flown slot (`World::person_flown`) since
+   2026-10-13, so a remote slot's input reaches its own craft; ADR-0052's
+   "the player step still runs once" consequence no longer holds.
 6. **Mods may change anything**, simulation and race modes included. The
    server advertises its rules and content fingerprint and the client shows it
    on join. Mod code arriving through a lobby is never auto-run.

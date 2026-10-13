@@ -460,7 +460,7 @@ what any of those games do.
 1. **M1, remote-input predictability.** Replay recorded human (or AI) input as the
    remote craft and count corrections and position error of last-input prediction
    over windows of 3, 6 and 12 ticks (50, 100 and 200 ms), under both "every
-   packet" and a threshold policy. Needs a remote slot's input to reach its craft.
+   packet" and a threshold policy. A remote slot's input reaches its craft since 2026-10-13.
 2. **M2, replay cost per tick.** Time one sim-only `Race` tick for 8 craft plus
    weapons on the desktop and on the Galaxy S24. Budget is rollbacks per second
    times window ticks times that cost. Runs on the existing loopback in
@@ -470,8 +470,9 @@ what any of those games do.
 4. **M4, what a correction looks like.** A scripted contact scene with the
    renderer-side smoothing, judged by eye.
 
-M2 and M3 are roughly half a day on the existing loopback. M1 and M4 wait on the
-remote-slot input path, which is split screen's step 2 and of unknown size.
+M2 and M3 are roughly half a day on the existing loopback. M1 and M4 waited on the
+remote-slot input path, which landed 2026-10-13 (`Race::tick` steps every
+person-flown slot), so both are unblocked.
 Proposed pass condition, number chosen arbitrarily and open to challenge: a
 100 ms round trip (6 ticks) costs at most 25 percent of a 16.7 ms frame on the S24.
 
@@ -601,9 +602,10 @@ a guess.
      `flown_for_the_player`, `autopilot_controls`, `grant_free_turbo`,
      `spend_pickup`, `tick_autopilot` and `lost_off_the_track`;
      `advance_cannons` asks `World::controllers` instead of `slot == 0`.
-     **The player step still runs once** and returns one `Evaluated` - N
-     cameras and N HUDs are step 2's work, and `Race::tick`'s doc comment says
-     so.
+     ~~**The player step still runs once** and returns one `Evaluated`~~ -
+     superseded 2026-10-13: it runs once per person-flown slot and returns
+     `Evaluations` (see Open, "Every human slot's input reaches its own
+     craft"). N cameras and N HUDs are still step 2's work.
    - `oag_input::pad::Assignment` maps `GamepadId` and the keyboard to slots;
      `Pad::poll_players` and `Controls::player_snapshots` read per slot, and
      `Controls`' button state is one `Input` per slot because an edge is per
@@ -682,18 +684,49 @@ a guess.
   are already separated by type. This is the largest unscoped piece of
   networking work currently known, and it is worth doing before the transport
   rather than after: it changes what a client calls per tick.
-- **A remote slot's input still reaches no craft and no hash, so nothing can
-  mispredict one yet.** Measured 2026-09-21 and now held by
-  `race::tests::reconcile::a_remote_slots_input_does_not_yet_reach_the_hash`:
-  two races identical but for slot 1's stick held hard over in one hash the
-  same after sixty ticks. This is ADR-0052's own "the player step still runs
-  once" consequence, seen from the network side rather than the split-screen
-  side, and it is why the loopback test injects its misprediction on the
-  *primary* slot instead. Widening `Race::tick`'s loop bound is split
-  screen's step 2 work, and network play inherits it: **until it lands, no
-  test can exercise what a real client actually mispredicts**, which is
-  somebody else's craft. The test is written to fail loudly when the bound
-  changes.
+- ~~**A remote slot's input still reaches no craft and no hash, so nothing can
+  mispredict one yet.**~~ **Landed 2026-10-13** (lane `remote-slot-input`).
+  `Race::tick` runs the player step for every slot `World::person_flown` names
+  (a `Local` or `Remote` controller with a craft on the grid, plus the primary
+  slot always) in `crates/raceplay/src/player_step.rs`, and `step_opponents`
+  skips those slots. It returns `Evaluations`: a `[Option<Evaluated>; MAX_PLAYERS]`
+  with `get(slot)`, `primary()` and a `Deref` to the primary's, so a
+  single-player caller reads `.wall` as before. Pinned positively by
+  `tests::reconcile::a_remote_slots_input_reaches_its_own_craft` (two races
+  identical but for slot 1's stick: hash differs, slot 1's heading turns, slot
+  0's craft does not move) and
+  `a_mispredicted_remote_slot_reconciles_to_the_servers_hash` (the loopback
+  with the wrong guess on slot 1). The old pin passed vacuously: its slot 1 was
+  never made active, so a stepped slot 1 would have been skipped too; the new
+  fixture activates it and sets it 60 units to the side so `resolve_craft_pairs`
+  does not mask the stick. **Sections 3a's M1 and M4 are unblocked**: a remote
+  slot's input now reaches its craft. ADR-0052's "the player step still runs
+  once" consequence no longer holds; the decision text stays as written (ADRs
+  are immutable) and a superseding note is the maintainer's call.
+- **What is per slot now, and what stays on the primary (audit of every
+  `primary_slot()` use, 2026-10-13).** Simulation, now per person-flown slot:
+  controls, autopilot (the operator's `--autopilot` flag flies the primary only),
+  pickup spend, pads, the force law, the off-track/airborne/reset rescue with its
+  own `last_on_track[slot]`, `race[slot]` rules (laps, Zone counter and
+  recharge, free turbo, Eliminator lap refill, `eliminate`), the Eliminator
+  respawn delay and sample, `tick_wreck_voice`'s "is a player" test, the
+  finish-line driver hand-over (`update_standings`), the Autopilot pickup's
+  `locate_player_driver(slot)`, and the Eliminator's kill-target finish.
+  Simulation that **still names the primary** (open, each needs a decision for
+  two humans): `original_ai.rs` `Standings.player` (rubber band, one player),
+  `field/pad_seek.rs:126` and `field/fire_law.rs:119` (the AI's one "player" to
+  skip or watch), `speed_plan.rs:100` (the player's hull plan), `results.rs`
+  (`finished()` reads `primary_race`, the end of the race is the primary's).
+  View, stays primary for split screen's lane: `zoom.rs` boost pulse,
+  `destroy_camera.rs`, `craft_flash.rs` (shake cancel, reset flash),
+  `countdown.rs` cue slot, `hit_sparks.rs` shake, `intro_camera.rs` skip button,
+  `access.rs::player_slot` and everything reading through it (telemetry,
+  camera, finish camera, split gap, scenery fx, lap messages), and the
+  `ships[0]` reads at the end of `tick.rs` (camera target, boost FOV kick,
+  flaps, `shielded`, contact cue slot) and in `weapons/reticle.rs` and
+  `effects.rs`. `RaceSim::last_on_track` became a row per slot; its hash writes
+  the primary's value where the scalar was and then each other person-flown
+  slot's, so a one-person race hashes byte-for-byte as before.
 - **Cloning `RaceSim` copies the track along with the race.** The collision
   soup (`Vec<TriangleSoup>`, hundreds of thousands of vertices on a real
   circuit), the spline, the racing line, `ai_order`, both pad-volume lists
