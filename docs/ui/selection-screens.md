@@ -456,9 +456,10 @@ whichever screen is open in the sequential flow, and on the shared page a click
 lands on the half it is over and the wheel steps the half under it; a held seat
 ignores everything but back.
 
-**Cross-title.** HD: authored sequence ported (wired, but HD's front end shows no
-SPLIT SCREEN row, so the race box is reachable there only from `--players`,
-which has no Ship Select). Omega: **checked, not located** - its
+**Cross-title.** HD: **checked, applies, wired, untested** - the authored sequence is what
+the one-per-seat flow follows, but HD's front end shows no SPLIT SCREEN row, so
+the race box is reachable there only from `--players` (which has no Ship Select)
+and no test or walk exercised it. Omega: **checked, not located** - its
 `team_selection_definition.xml` (`data00`, `data09`) holds the `PI_Team` rows and no
 `Team Selection Player` screen; where Omega authors its Ship Select screens is
 open. 2048: checked, string ids present, screens unread. Pure and PSP Pulse:

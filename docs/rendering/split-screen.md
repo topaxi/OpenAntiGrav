@@ -260,6 +260,9 @@ does not exist: the race frames are that evidence.
 - A team of a variant family on HD (`Feisar_c1`) is compared by exact id when a seat's
   pick is moved out of the opponents' draw, so a seat on `X_c1` can still face an
   `X` that `follow_player` then moves onto the player's variant.
+- Replays: the game does not record one yet (`Race::start_recording` is called only by
+  tests), but when it does, the header carries slot 0's `team` alone, so a split race's
+  seat picks would not be in it and playback would desync.
 - Stick navigation on a seat's screen: a seat reads its device's pressed buttons
   (the d-pad, the keys), as the join screen does, so a pad with only a stick
   cannot move a pick.
