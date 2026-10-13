@@ -356,3 +356,48 @@ fn a_seated_persons_pick_reaches_their_craft() {
     assert_eq!(texels(&plain, 0), texels(&painted, 0));
     assert_eq!(texels(&alone, 0), texels(&painted, 0));
 }
+
+/// The intro flyby is the player's own camera, and the extra views have none: it
+/// plays full screen, and the split starts on the tick it ends.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn the_flyby_plays_full_screen_and_the_split_starts_after_it() {
+    use oag_gameplay::PlayerInputs;
+    use oag_raceplay as race;
+
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        views: 2,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    oag_game::split_screen::apply(&mut race, 2);
+    assert_eq!(race.viewport_count(), 2, "a two-person split");
+    assert_eq!(
+        race.views_drawn(),
+        2,
+        "a flyby that has not begun leaves the split alone"
+    );
+    assert!(race.begin_intro(), "a Pulse single race opens on its flyby");
+    assert!(race.in_intro());
+
+    let mut flyby_ticks = 0;
+    while race.in_intro() {
+        assert_eq!(race.views_drawn(), 1, "the flyby is one full-screen view");
+        race.tick_intro(&PlayerInputs::none());
+        flyby_ticks += 1;
+        assert!(flyby_ticks < 60 * 60, "the flyby ends by itself");
+    }
+    assert!(flyby_ticks > 0);
+    assert_eq!(
+        race.views_drawn(),
+        2,
+        "the split starts when the flyby ends"
+    );
+}

@@ -866,7 +866,7 @@ pub fn capture(
             &mut encoder,
             &hud_view,
             progress,
-            crate::hud_views::panel_viewport(race.viewport_count(), hud_viewport),
+            crate::hud_views::panel_viewport(race.views_drawn(), hud_viewport),
         );
     }
     let scale = options.hud_scale;

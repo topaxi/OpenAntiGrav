@@ -19,7 +19,8 @@
 //!   (`RaceView::chase_far`), whatever team the craft it follows belongs to: the
 //!   load keeps one team's camera blocks, and a rig per slot is open work.
 //! - An extra view has **no impact shake**, no intro flyby, no finish or destroy
-//!   camera and no cockpit view. Those belong to the player's own camera.
+//!   camera and no cockpit view. Those belong to the player's own camera, and the
+//!   flyby plays full screen before the split starts ([`Race::views_drawn`]).
 //! - The speed widen of the field of view follows the viewed craft; the boost
 //!   kick does not (it is armed from slot 0's pad alone).
 
@@ -75,9 +76,13 @@ impl Race {
     }
 
     /// How many views are drawn right now: [`Self::viewport_count`] while the race
-    /// runs, and **one once it is over** (every person has finished), so the end
-    /// screens sit over the one picture the single-player flow has - the
-    /// spectator camera of `Race End Photo` - and not over a split.
+    /// runs, and **one while the intro flyby plays and once the race is over**
+    /// (every person has finished). The flyby is the player's own camera and the
+    /// extra views have none, so it plays full screen and the split starts when it
+    /// ends; the end screens sit over the one picture the single-player flow has -
+    /// the spectator camera of `Race End Photo` - and not over a split. The extra
+    /// cameras keep stepping through the flyby, so they are settled on their craft
+    /// when the split appears.
     ///
     /// **Chosen, not measured**: the original's split screen is not read. The split
     /// itself ([`Self::viewport_count`]) is left alone, because it is also the
@@ -86,7 +91,7 @@ impl Race {
     /// with no blur, jitter or upscaler history, for its one last view too.
     #[must_use]
     pub fn views_drawn(&self) -> usize {
-        if self.finished() {
+        if self.in_intro() || self.finished() {
             1
         } else {
             self.viewport_count()

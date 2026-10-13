@@ -65,6 +65,13 @@ puts the player's back. Chosen, not measured:
 - An extra view has **no impact shake**, no intro flyby, no finish or destroy camera
   and no cockpit view. The speed widen of its field follows the viewed craft; the
   boost kick does not.
+- **The flyby plays full screen and the split starts when it ends**
+  (`Race::views_drawn` is one while `Race::in_intro`), with the track panel over the
+  whole screen as in a one-player race. The extra cameras keep stepping through the
+  flyby, so each is settled on its craft when the split appears. A flyby that never
+  begins (a headless capture without `--intro-ticks`) leaves the split alone.
+  Reported from play by the maintainer 2026-10-13; checked by
+  `split_screen_ground_truth::the_flyby_plays_full_screen_and_the_split_starts_after_it`.
 - Extra views are blended between ticks by the draw alpha like the player's, with
   their own previous pose, and re-snap on a respawn.
 
