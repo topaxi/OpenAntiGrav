@@ -260,6 +260,7 @@ impl Race {
                 plan: super::routes::plan_for(
                     &self.sim.routes,
                     self.sim.speed_plan.as_ref(),
+                    super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
                     route,
                 ),
             },
@@ -417,6 +418,10 @@ impl Race {
                         plan: super::routes::plan_for(
                             &self.sim.routes,
                             self.sim.speed_plan.as_ref(),
+                            super::speed_plan::hull_of(
+                                &self.sim.hull_plans,
+                                self.sim.ship_plan[slot],
+                            ),
                             route,
                         ),
                     },

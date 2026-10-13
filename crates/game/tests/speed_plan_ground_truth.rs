@@ -67,7 +67,7 @@ fn slice(class: &str, reversed: bool) {
         })
         .unwrap_or_else(|error| panic!("loading {entry} at {class}: {error}"));
         let race = race::Race::start(loaded.setup);
-        let (plan, report) = race.build_speed_plan(1);
+        let (plan, report) = race.build_player_speed_plan();
         assert_eq!(plan.len(), race.racing_line().len());
         let clean = report.verify_failures == 0 && report.verify_respawns == 0;
         let expected = !NOT_CLEAN.contains(&(id.as_str(), class));

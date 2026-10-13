@@ -293,6 +293,7 @@ const NATIVE: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Subdirectory,
+    opponents_match_player_variant: false,
 };
 
 const GUEST: TeamVariants = TeamVariants {
@@ -308,6 +309,7 @@ const GUEST: TeamVariants = TeamVariants {
         },
     ],
     join: VariantJoin::Suffix,
+    opponents_match_player_variant: false,
 };
 
 const GUEST_ROSTER: GuestRoster = GuestRoster {
@@ -506,4 +508,33 @@ fn a_circuit_prefix_overrides_the_effect_directory_and_nothing_else_does() {
         DEFAULTS.effect_dir,
         "a title with no table keeps its one directory"
     );
+}
+
+const MATCHING: TeamVariants = TeamVariants {
+    teams: &["Feisar", "EGX"],
+    variants: &[
+        TeamVariant {
+            suffix: "",
+            label: "HD",
+        },
+        TeamVariant {
+            suffix: "_c1",
+            label: "Fury Concept",
+        },
+        TeamVariant {
+            suffix: "_n1",
+            label: "Fury Nitro",
+        },
+    ],
+    join: VariantJoin::Suffix,
+    opponents_match_player_variant: true,
+};
+
+/// A combined id splits back into its base and suffix; an id off the table
+/// finds nothing.
+#[test]
+fn split_reads_a_combined_id_back() {
+    assert_eq!(MATCHING.split("Feisar_n1"), Some(("Feisar", "_n1")));
+    assert_eq!(MATCHING.split("EGX"), Some(("EGX", "")));
+    assert_eq!(MATCHING.split("Goteki_c1"), None);
 }

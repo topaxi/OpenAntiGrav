@@ -80,9 +80,37 @@ pub struct TeamVariants {
     /// How a variant's suffix combines with a team's own id. See
     /// [`VariantJoin`].
     pub join: VariantJoin,
+    /// Whether every opponent flies the **player's exact variant** (its own
+    /// team's directory and handling file in that variant): player on `_c1`,
+    /// all opponents on `_c1`. `false` leaves the id the roster drew. HD/Fury
+    /// is `true`, from the executable read statically (`Ship_Construct`
+    /// `0x000ddd58`, the AI spawner `0x00058e38`: the AI flies the player's
+    /// variant class), confidence 55, a live RPCS3 check still open - see
+    /// `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`.
+    pub opponents_match_player_variant: bool,
 }
 
 impl TeamVariants {
+    /// The base team and the variant suffix of a combined id, `None` when
+    /// `combined` is not one of this table's own ids.
+    ///
+    /// Reuses [`VariantJoin::combine`], like [`Self::recognizes`], and prefers
+    /// the longest suffix so an empty one only matches a bare team.
+    #[must_use]
+    pub fn split(&self, combined: &str) -> Option<(&'static str, &'static str)> {
+        let mut best: Option<(&'static str, &'static str)> = None;
+        for team in self.teams {
+            for variant in self.variants {
+                if self.join.combine(team, variant.suffix) == combined
+                    && best.is_none_or(|(_, s)| variant.suffix.len() > s.len())
+                {
+                    best = Some((team, variant.suffix));
+                }
+            }
+        }
+        best
+    }
+
     /// Whether `combined` is one of this table's own combined ids - some team
     /// of [`Self::teams`] joined with one of [`Self::variants`]' own
     /// suffixes, [`Self::join`]'s rule.

@@ -38,6 +38,7 @@ impl Race {
             start_position,
             collision,
             handling,
+            opponent_handling,
             chase,
             chase_close,
             internal,
@@ -354,7 +355,15 @@ impl Race {
                 .take(GRID_SLOTS as usize - 1)
                 .skip(pose_start)
             {
-                let opponent = &mut world.ships[slot_index - pose_start + 1];
+                let ship_index = slot_index - pose_start + 1;
+                // Its own team's tuning where the title's variant family gave
+                // it one (`load::family`), the player's otherwise.
+                let handling = opponent_handling
+                    .get(ship_index)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(handling);
+                let opponent = &mut world.ships[ship_index];
                 opponent.active = true;
                 opponent.handling = handling;
                 opponent.physics.body.mass = handling.physical.mass;
@@ -439,6 +448,9 @@ impl Race {
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
+                plan_reference: None,
+                hull_plans: Vec::new(),
+                ship_plan: [None; oag_gameplay::MAX_SHIPS],
                 // **Degraded from the measured tuning**, never boosted toward it -
                 // see `oag_ai::Difficulty`. At the top level this is the
                 // measurement unchanged.
@@ -704,6 +716,7 @@ impl Race {
         {
             race.sim.routes[route].plan = plan;
         }
+        race.adapt_hull_plans();
         race
     }
 }

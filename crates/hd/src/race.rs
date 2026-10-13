@@ -147,6 +147,9 @@ pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
         },
     ],
     join: oag_title::VariantJoin::Suffix,
+    // Static read of the executable, confidence 55; see
+    // `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`.
+    opponents_match_player_variant: true,
 };
 
 /// The model row Ship Select opens on for a profile that has never chosen

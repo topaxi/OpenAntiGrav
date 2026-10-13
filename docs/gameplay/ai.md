@@ -3911,8 +3911,8 @@ carries no confidence score.
 by driving the authored line in **our own physics** - the same
 `oag_physics::step`, the same collision, the same handling, the race's own
 pads, reset volumes and four-second airborne rescue. `Race::start` builds one
-for the field (every opponent flies the same handling), from opponent slot 1's
-grid pose. `crates/ai/src/plan.rs` and `plan/brake.rs`:
+reference plan from opponent slot 1's grid pose, and every other hull on the
+grid gets it re-learned for itself ([a plan per hull](#a-plan-per-hull-2026-10-13)). `crates/ai/src/plan.rs` and `plan/brake.rs`:
 
 1. **Calibration.** Full throttle from the grid, then full symmetric
    airbrake from the fastest point; the deceleration actually seen is binned
@@ -4565,6 +4565,96 @@ wall-contact clusters are the same, and its deaths stay in the region they were 
 
 Open: the field on Talon's Junction (samples 2700-2749 and 3150-3199) in traffic. The measured
 lever is the traffic term near tight samples, bounded by the sticking ratchet.
+
+### A plan per hull (2026-10-13)
+
+Every opponent flies its own team's handling (`oag_raceplay::load::family`,
+[`hd-status.md`](../formats/hd-status.md), "Opponents follow the player's hull
+family"), and Pulse's eight teams span a turn of 1.30 to 1.80 and two hull widths. A
+plan learned on the player's hull carried the default grid's slot 1, Triakis (the
+slowest `accelcap` and turn, a 6.0 wide hull), into walls the reference never touched:
+36 of `ai_clean_lap_gate`'s 48 rows failed with the field following one plan at the
+ratio of the yaw ceilings. **Ours, chosen, not measured.**
+
+**What is built** (`crates/raceplay/src/speed_plan.rs`, `crates/ai/src/plan/adapt.rs`):
+
+1. **The reference**, as before: the player's hull where its plan verifies clean, else
+   the most agile AI hull whose plan does. The route plans are learned on its handling.
+2. **Every other distinct hull re-learns it** (`SpeedPlan::adapt`): the reference's
+   ceilings and takeoff run-ups kept, the braking re-measured on this hull, the plan
+   verified as it stands, then up to four whole-window learning passes that lower only
+   where this hull fails. Each route plan is adapted the same way. A hull's copies are
+   built on a thread each natively (`par_map`; one after another on the web, whose race
+   already starts on a worker) and written back in slot order, so the race is the same
+   either way.
+3. **Followed where it verifies**: no wall on either verification lap and a flying lap
+   completed without a rescue. A rescue from the grid is allowed, the underpowered case
+   the search itself accepts; without that, Triakis at `01_Track` RAPIER fell back to
+   the reference and was rescued short of the jump (samples 330-354) on every lap
+   instead of once. A route copy must also touch no wall, as a route plan must.
+4. **Otherwise the reference, at its share**: `SpeedPlan::share_for`, the ratio of the
+   hull's yaw ceiling to the one the plan was learned on (a plan now records it), in
+   corners only, never on a takeoff run-up.
+
+**Measured on `ai_clean_lap_gate`** (lone slot 1, Triakis): 36 rows red on one shared
+plan, 15 on adapted ring plans, 13 with the rescue-from-the-grid rule and adapted route
+plans. A plan searched **from scratch** per hull was also built and measured: 12 rows
+red, and better wherever it verifies (`02_Track` RAPIER 0 contact ticks against 290
+adapted, `07_Track` RAPIER 2,448 ticks a lap against 2,781). It is not built at race
+start because of what it costs.
+
+**Race start, release, three runs each** (a 16-core host; the absolute numbers moved
+about twofold between two sessions with the host's load, the ratios did not):
+
+| circuit | main: one plan | a search per hull, threaded | adapted per hull, threaded |
+| --- | --- | --- | --- |
+| `01_Track` VENOM | 0.34 s wall, 0.45 s CPU | 0.8-1.2 s, 5.3-6.6 s | 1.3-1.4 s, 4.4-4.5 s (main 0.4-0.9 s CPU that session) |
+| `02_Track` FLASH | 0.42 s, 0.52 s | 1.5-2.0 s, 7.7-10.3 s | 1.6-1.7 s, 4.9-5.1 s (main 1.0 s) |
+| `06_Track` RAPIER | 1.21 s, 1.3 s | 4.9-5.3 s, 29.7-30.8 s | 3.0-3.2 s, 6.2-6.4 s (main 2.4-2.7 s) |
+
+A search per hull is 12 to 24 times main's CPU, and on the web it would run serially.
+The maintainer's decision (2026-10-13): **own-hull plans are computed ahead of the race
+and bundled**, in a lane of their own, and adapted plans are what the race builds
+meanwhile and the fallback for anything not bundled (a mod, a custom track).
+
+**Pretrained plans per track, and what may ship** (maintainer, 2026-10-13, recorded as
+design, not built). Plans can be trained ahead of time for every circuit, **the original
+discs' included**, and shipped, so a race only trains on a custom track (on first use,
+with an adapted plan as the fallback until then). [`legal.md`](../overview/legal.md)
+forbids derived data only "in a form that reconstitutes the original": the line is
+between describing the work and reproducing it. So a shipped plan holds **per-sample
+values only** (each sample's target speed and ceiling, the takeoff holds, the tight
+flags, the verified pace, the braking table, the yaw ceiling it was learned on),
+indexed by the circuit's own spline samples, and **no positions, no line geometry,
+no sample spacing, nothing else that would rebuild the track's shape**. The plan's
+`spacing` field is geometry: it is re-derived from the user's own disc at load, never
+shipped. A shipped table would be keyed by title, circuit, class and the hull stats the
+plan reads, plus a plan version, and checked against the loaded line's sample count;
+a key that does not match trains or adapts instead. This project's own track format
+(the Blender add-on's tracks) can ship its plans beside the track with no such limit.
+
+**What a plan cannot fix.** Triakis on `02_Track` FLASH scrapes samples 1614-1636 on
+every plan tried: its own search 280 contact ticks, adapted 266, adapted with the
+driver's line slack forced to zero 87. Its steering is at full lock from about sample
+1500 on every hull; the verifying driver (neutral, seed 0) holds about 14-19 units off
+the line there, the race's Ace spends a few per cent of its line character and drifts
+to 40 units and the wall. A plan's `tight` mark only sees a wall within a unit, so it
+does not hold the line here. Marking samples where the verifier sat at full lock as
+tight too was tried: 132 of 3,112 samples tight instead of 24, and 123 contact ticks,
+not 0. Open.
+
+**Shield with a raced field** (autopilot player, seven Ace opponents, weapons on,
+9,000 ticks, one seed; slots 0-7, main then this branch). **End-of-run** is the pool at
+tick 9,000; **per-lap** is the worst single lap's loss per craft:
+
+| circuit | end-of-run, main | end-of-run, branch | worst per-lap, main | worst per-lap, branch | wall contact ticks, main / branch |
+| --- | --- | --- | --- | --- | --- |
+| Pulse `01_Track` VENOM | 0, 36, 5, 93, 74, 50, 95, 50 | 0, 36, 54, 36, 80, 60, 58, 88 | 41, 35, 42, 5, 13, 38, 28, 47 | 36, 28, 8, 23, 24, 18, 25, 10 | 159 / 305 |
+| HD Talon's Junction VENOM | 52, 71, 0, 95, 73, 35, 67, 91 | 22, 52, 0, 94, 61, 95, 90, 92 | 23, 22, 95, 10, 10, 60, 22, 3 | 48, 25, 30, 35, 37, 21, 19, 3 | 179 / 191 |
+
+The player's slot 0 (on the reference plan in both) was destroyed on `01_Track` on
+this branch and survived on main: with weapons on, a changed field is a different race.
+Slot 1 (Triakis) carries 151 of the branch's 305 contact ticks on `01_Track`.
 
 ## Where this sits
 
