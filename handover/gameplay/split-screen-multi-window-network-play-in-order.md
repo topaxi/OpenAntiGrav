@@ -347,6 +347,239 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
    duplicated crate to crate on purpose"), which is a working precedent for
    option 1's same-crate reuse being preferred over a wider refactor.
 
+## 3a. Remote craft: interpolate or roll back (2026-10-13)
+
+**Status: MEASURE. Not decided.** Written up from a design discussion between
+the maintainer and Claude. The options, outcomes, evidence and survey below are
+the record; the recommendation at the end is Claude's and is meant to be
+argued with. The network-protocol ADR waits on the measurements. The permanent
+summary is `docs/networking/README.md`.
+
+### The options
+
+Only the remote craft differ; your own craft is predicted either way.
+
+- **A. Interpolate.** Draw other craft slightly in the past, blended between
+  authoritative snapshots. Your craft runs in the present, theirs in the past.
+- **B. Roll back.** Simulate every craft in the present. Guess each remote
+  craft's input (repeat the last known one); when the authoritative state
+  differs, restore the saved `RaceSim` to the last confirmed tick and replay.
+- **C. Mix** (rollback near you, interpolation far away). Ruled out: the sim is
+  one `World`, and a craft in the past cannot collide with one in the present,
+  so the two timelines would need a seam inside the sim.
+- **D. Split by object class** (craft rolled back, weapons as server-confirmed
+  events). Not evaluated. Raised as a question for the challenge below.
+
+### One scenario, both options
+
+Round trip 100 ms is 6 ticks at 60 Hz. A craft covers "a few units per tick" even
+at Phantom class (`docs/gameplay/lap-counting.md`), so a remote craft drawn 6
+ticks stale is roughly 10 to 20 units off (an estimate, not a measurement).
+
+- **Ship contact.** A: you see no contact, the server resolves a bump anyway and
+  shoves your craft by something you cannot see (or you see a clean pass the
+  server scored as a hit). B: the contact happens on your screen at about the
+  right moment; if the guess was wrong the rival jumps a small distance or a bump
+  is undone.
+- **A missile.** A: it spawns when its snapshot arrives and is drawn behind where
+  it is; homing runs against stale positions; shots at a displayed target need
+  FPS-style hit rewinding. B: the fire input arrives about 6 ticks late, so the
+  replay spawns the missile mid-flight and it pops into view ahead of the
+  launcher; you can dodge it on screen and be hit after a rollback.
+
+### Outcomes
+
+| | A. Interpolate | B. Roll back |
+| --- | --- | --- |
+| Remote craft look | Smooth, but behind | In the present, occasional small snaps |
+| Contact fairness | Worst: contact you cannot see | Mostly agrees with the server |
+| Artefacts | Phantom pushes, rubber-banding at contact | Missile pop-in, undone dodges, small teleports |
+| Jitter and loss | Tolerant: hold or extrapolate | Window grows with delay, needs a cap |
+| Bandwidth | Server sends state (8 craft plus projectiles) at some rate | Inputs only, a few bytes per craft per tick |
+| Client CPU | Cheap, no replay | Replay of up to N ticks times 8 craft per correction |
+| Determinism | Tolerates drift, snapshots correct it | Inputs-only needs bit-exact sims |
+| Mod mismatch | Remote craft still draw; own prediction suffers | A mismatch mispredicts constantly, so the fingerprint must match to join |
+| Code to build | Snapshot format, interpolation buffer, hit rewinding | Sim-only tick path, snapshot budget, replay window cap |
+
+Where each breaks. **A** breaks on contact, which a Wipeout pack has constantly;
+it is the better fit for high-jitter links and weak devices. **B** has three
+specific risks, all unmeasured: (1) an analog stick changes almost every tick,
+so "repeat the last input" is rarely exact and a strict policy would roll back on
+nearly every server packet, about 60 rollbacks a second of about 6 ticks each, so
+roughly 7 times the sim cost (an expectation from the input type); (2) the
+project targets phones (`oag-mobile`), where a replay budget that is fine on a
+desktop may not be; (3) the repo gaps already listed under Open: a replay
+re-fires view and audio effects, `RaceSim` clones the track, `TickClock` caps
+catch-up at 8 ticks, and a remote slot's input still reaches no craft (pinned by
+`crates/raceplay/src/tests/reconcile.rs:218`, which I did not run).
+
+### Evidence
+
+**Rocket League, primary source.** Cone, "It IS Rocket Science!", GDC 2018
+(slides at `https://media.gdcvault.com/gdc2018/presentations/Cone_Jared_It_Is_Rocket.pdf`,
+GDC Vault 1024972), read as `pdftotext` output. The animations and the spoken talk
+are not covered, so a diagram-only or spoken point is missing.
+
+| The slides say | What it means here |
+| --- | --- |
+| Challenges: "Input delay is not an option", "Server can't wait for client input", "100% server authoritative"; fixed tick 120 Hz | Same constraints as ours except weapons. My earlier "1 to 3 ticks of input delay" conflicts with this and is dropped from the recommendation |
+| Hitting a moving object: "Client predicts his vehicle / Server authoritative ball / Client interpolates ball / Client's vehicle and the ball exist in two different timelines" | They tried option A for the ball and it failed for hits. The strongest evidence against A for contact |
+| FPS-style lag compensation shown with a 200 ms and a 10 ms client; the closing slide says "No server-side lag compensation" | Rewinding hitboxes was weighed and not shipped |
+| Input buffer: client sends one input per physics frame; the server buffers them, "No need to pause for input", "Eliminates some cheats (speed, jitter)", "Increases average latency"; empty buffer runs physics on the previous input; upstream throttle (server tells the client to run extra or fewer frames); downstream throttle (server consumes 0, 1 or 2 inputs a frame, "minor desyncs") | A server-side jitter buffer with throttles is part of the design. It replaces my earlier "server stamps inputs and drops late ones" |
+| Prediction and correction: record input and frame number, run physics, record history; server returns frame number and physics state; compare with history; "Large difference requires correction"; "Revert all physics actors to that frame", "Run multiple physics frames to catch up" | The machinery we already have (snapshot, restore, replay), with a threshold, applied to all actors |
+| "Predict Everything": "Works well with ball (predictable)", "Not as well with cars (unpredictable)", "Expensive corrections: 200ms ping, 120hz = 24 correction frames". Results: "No input delay", "High-ping clients don't ruin game", "Reliably hit moving objects", "100% server authority" | Remote cars are the weak case, and cars are our whole game. At 60 Hz, 200 ms is 12 frames. Not stated in the text: what input a remote car is assumed to hold |
+
+Limits of the analogy. Rocket League has one ball, a few cars, no weapons and
+simple bodies; we have 8 craft, projectiles and a track collision soup. The 60 Hz
+server send rate is secondhand (a Steam forum post relaying a Psyonix developer,
+disputed in the same thread).
+
+**Papers**, from search excerpts only (see `docs/networking/README.md` for the
+list): Mauve et al. 2004 (local lag is deliberate input delay, timewarp is
+rollback; the choice against dead reckoning is application-dependent), Fiedler's
+networked-physics series (lockstep needs exact determinism and every frame waits
+for all players), Pantel and Wolf (two racing games handled delay-induced
+collisions poorly; stale opponent positions without compensation).
+
+**Other racing games.** One search each; no technical description found for any.
+
+| Game | What the sources say | Quality |
+| --- | --- | --- |
+| iRacing | Architecture undocumented in what I found. A forum user believes it shows little warping; one article describes long-running "phantom collisions" | Forum belief and one article |
+| Forza Horizon 5 | A report says contact can happen on one screen and not the other, which points to per-client views that disagree. Forza Motorsport: only server-side progression | Anecdotal |
+| Mario Kart 8 Deluxe | Press attributes disconnects to peer-to-peer; players reported inconsistent hits and repeated items; a patch fixed an item bug under unstable connections | Press attribution |
+| Gran Turismo 7 | Always online, which Polyphony said is meant to curb cheaters. Nothing on collision sync; one guide claims a peer-to-peer hybrid, uncorroborated | Low |
+| Codemasters F1, ACC, Trackmania, Wipeout HD | F1 older games were host-based (a hosting vendor's claim); ACC ships a standalone dedicated server; Trackmania matchmaking has no car collisions (sync unconfirmed); Wipeout HD nothing | Low |
+
+The pattern: every complaint found is about contact (phantom collisions, ramming,
+inconsistent hits), consistent with stale remote cars (option A) but not proof of
+what any of those games do.
+
+### Measure (the gate)
+
+1. **M1, remote-input predictability.** Replay recorded human (or AI) input as the
+   remote craft and count corrections and position error of last-input prediction
+   over windows of 3, 6 and 12 ticks (50, 100 and 200 ms), under both "every
+   packet" and a threshold policy. Needs a remote slot's input to reach its craft.
+2. **M2, replay cost per tick.** Time one sim-only `Race` tick for 8 craft plus
+   weapons on the desktop and on the Galaxy S24. Budget is rollbacks per second
+   times window ticks times that cost. Runs on the existing loopback in
+   `crates/raceplay/src/tests/reconcile.rs`.
+3. **M3, snapshot cost.** `RaceSim` clone with and without the immutable track
+   half, in milliseconds and bytes.
+4. **M4, what a correction looks like.** A scripted contact scene with the
+   renderer-side smoothing, judged by eye.
+
+M2 and M3 are roughly half a day on the existing loopback. M1 and M4 wait on the
+remote-slot input path, which is split screen's step 2 and of unknown size.
+Proposed pass condition, number chosen arbitrarily and open to challenge: a
+100 ms round trip (6 ticks) costs at most 25 percent of a 16.7 ms frame on the S24.
+
+### Recommendation (Claude's, to be challenged)
+
+1. Option B: predict every craft in one present timeline and replay only on a
+   large difference from the server's state, as Rocket League does. Periodic server
+   snapshots are the safety net.
+2. The server buffers each client's input, consumes one per tick, throttles the
+   client up or down, and repeats the previous input on an empty buffer.
+3. No client input delay by default. If M1 shows rollback storms on bad links, an
+   opt-in local lag for those links only.
+4. Interpolation only as the fallback for a stalled link or a craft beyond the
+   window cap. Correction smoothing in the renderer only.
+
+Why: Rocket League tried the interpolated-object approach for hits and shipped
+predict-everything; it also weighed and dropped lag compensation. Contact is the
+core of our game. This reuses the snapshot, restore and replay machinery that
+exists.
+
+Assumptions to attack: the sim ticks cheaply enough (M2); remote stick input is
+smooth enough for last-input prediction (M1); 8 craft plus weapons are not much
+more chaotic than Rocket League's scene; bit-exact determinism holds on every
+client including modded rules; a phone can afford the replay.
+
+Weakest points. Rocket League itself says its predict-everything is weak for
+cars, and a pack of 7 remote craft is that case at scale. It has no weapons, so
+missile pop-in and retroactive hits (dodge on screen, hit after the rollback) are
+untouched by its evidence. Our bodies and collision are heavier. The sim-only tick
+path is not built.
+
+What would change my mind: M1 shows many corrections a second even with a
+threshold; M2 puts the 6-tick replay over the budget on the S24; playtests find
+weapon pop-in unacceptable. Then A for remote craft plus a cheap contact
+prediction, or D (weapons as server-confirmed events) on top of B.
+
+Questions for the challenge: is client input delay really off the table at 60 Hz
+with heavier craft? Is 25 percent of a frame the right budget? Should weapons be
+server-confirmed events from the start (D)? Should the correction threshold be in
+world units or in effect on lap or contact outcome?
+
+## 3b. Transport: WebTransport for the server and the web build (2026-10-13)
+
+**Status: leaning, not decided.** Raised by the maintainer: support WebTransport
+on the server and in the web build, "or even all builds". Not measured, and the
+crate facts below come from search excerpts, so check them against docs.rs before
+choosing.
+
+**Decided, 2026-10-13 (maintainer): accepting self-signed certificates on a LAN is
+acceptable.** A native client may trust a LAN host's self-signed certificate
+(pinning or trust on first use). A browser has no click-through for WebTransport
+(from memory, verify), so a web client still needs the host to advertise the
+certificate hash for `serverCertificateHashes`, for example in the join code or
+LAN discovery. A public dedicated server still uses a normal certificate.
+
+**Why it comes up.** The web build (`docs/tools/web.md`) is `wasm32` in a browser
+tab. A browser cannot send raw UDP, WebSocket is TCP (a lost packet stalls every
+packet behind it, which hurts 60 Hz input streams), and WebRTC data channels need
+signalling and ICE. WebTransport gives unreliable datagrams plus reliable streams
+over QUIC, which is exactly the two channel kinds the protocol needs: inputs and
+fast state on the unreliable one with redundancy, events and snapshots on the
+reliable one.
+
+**Browser support (search excerpts, not caniuse or MDN).** Chrome and Edge from
+97, Firefox from 114, Safari 26.4 in March 2026 with WebTransport on by default.
+Sources call it Baseline since about March 2026 but "newly available", not
+"widely available". One source warns that engines disagree about what a server
+must advertise (a legacy `:protocol = "webtransport"` token versus the newer draft
+value), and that devtools do not show its traffic yet.
+
+**Constraints that shape the design.**
+1. It needs TLS. A public dedicated server gets a normal certificate. A LAN
+   listen server has none, so browsers must pin it with `serverCertificateHashes`
+   (from memory: SHA-256 of a self-signed ECDSA P-256 certificate, validity under
+   14 days; verify). Native clients can pin or skip verification. How a LAN host
+   mints the certificate and advertises its hash to web clients is the part to
+   prove first; native clients accepting it is decided (above).
+2. A browser tab cannot accept inbound connections, so a web build can be a
+   client but never a listen server. A LAN game with a browser player needs a
+   native or dedicated host.
+3. UDP-blocked networks fail QUIC. A WebSocket fallback would cost the
+   head-of-line behaviour; decide whether to offer one at all.
+4. A listen server then has to run an HTTP/3 stack inside a game client.
+
+**Rust side (search excerpts only).** `wtransport` is a pure-Rust WebTransport
+crate; its old 0.1.x docs needed Chrome flags for a self-signed certificate and a
+newer `SelfSignedIdentityBuilder` was reported but not verified. The
+`web-transport-quinn` family lists certificate fingerprints among its features,
+and `aeronet_wt_wasm` was found as a browser-side client crate. None of this was
+read in the crates' own docs.
+
+**The choice, "which builds".**
+- **WebTransport everywhere.** One wire protocol and one stack on every client and
+  the server. Cost: the certificate dance and an HTTP/3 layer even for native LAN
+  play.
+- **WebTransport for web and the dedicated server, plain QUIC or UDP for native.**
+  Native skips the HTTP/3 and certificate layer. Cost: two stacks, and the server
+  speaks both anyway.
+- **A transport trait with the two channel kinds, WebTransport implemented first.**
+  Keeps the other two open and costs little.
+
+Claude's lean, to be challenged: the trait with WebTransport first, and "all
+builds" as the target if the LAN certificate story proves workable, since one wire
+protocol is worth a lot while the protocol is still being designed. Prove first,
+in order: a native server and a native client over WebTransport with a pinned
+self-signed certificate; the same server from the wasm build. Roughly a day each,
+a guess.
+
 ## Recommended order
 
 1. ~~**Shared prerequisite**: per-player `RaceState`, N-input `Race::tick`,
@@ -481,12 +714,24 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   `TickClock` instead.
 - Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
-  tick) - not decided, needed before the crate is created.
+  tick) - not decided, needed before the crate is created. Section 3b has the
+  WebTransport option for the server and the web build (leaning, not decided).
 - Reconciliation tuning: how many ticks of local input the client buffers
   for replay, how snapshots are diffed/compressed for the wire, and how a
   genuine desync (caught by the state hash) is surfaced to the player - none
   of this is decided, all of it sits inside the server-authoritative/
   client-prediction shape section 3 already commits to.
+- **Trust model and server roles, decided 2026-10-13** in a design discussion
+  and written into `docs/networking/README.md`. Online is server-authoritative.
+  A client-hosted game exists on LAN only and is trusted; cheating there is a
+  social problem. It is one server role with two deployments, a headless
+  dedicated binary and a listen server inside a client; the second `[[bin]]`
+  in `oag-game` above serves both. No client anti-cheat: an oracle bot or
+  assist, including a screen-reading one with a faked input device, is out of
+  band and accepted. Mods may change anything, so the server advertises a
+  rules and content fingerprint that the client shows on join, and mod code
+  from a lobby is never auto-run. A malicious server is out of scope. Still
+  owed: the network-protocol ADR.
 - Whether the original's ad-hoc/game-sharing scope
   (`docs/networking/README.md`) is worth recreating separately from this
   online design, purely as its own RE-and-reimplement exercise - not a
@@ -517,7 +762,8 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
   confidence-99 page in the same tree, and it means the ad-hoc/game-sharing
   scope two entries up has a real subsystem behind it rather than a
   suspected one. **Correcting that page is its own change and is not on this
-  thread's critical path.**
+  thread's critical path.** **Done, 2026-10-13**: `docs/networking/README.md`
+  is rewritten, the stale claim replaced by the import-table evidence.
 - **8-way split screen is 8 full scene renders per frame**, not a cost this
   thread has estimated. Worth a frame-budget pass once the viewport work in
   section 1 exists, before committing to 8-up as a shipped configuration
@@ -563,13 +809,20 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 - Before writing that ADR, resolve the remote-player prediction question
   flagged in section 3 (interpolation vs. rollback-with-predicted-inputs) -
   it changes the protocol shape, not just a tuning parameter.
+  **2026-10-13: status is MEASURE, not decided.** Section 3a has the options,
+  their outcomes, the Rocket League slides, the racing-game survey, the four
+  measurements and Claude's recommendation, which is open to challenge. The ADR
+  waits on the numbers.
+- Run section 3a's measurements: M2 (replay cost per tick, desktop and Galaxy
+  S24) and M3 (snapshot cost) first on the existing loopback, about half a day;
+  M1 and M4 after the remote-slot input path lands.
 - ~~Check `BOOT.BIN`'s import table for `sceUtilityLoadNetModule`/
   `sceNetInet*`/`sceNetAdhoc*` NIDs to confirm or correct
   `docs/networking/README.md`'s "no online play" reading before citing it
   further.~~ **Done, 2026-09-21** - see the Open entry above.
   `docs/ghidra/functions/psp-pulse-usa/imports.md` already had the answer and
-  it corrects the reading: the full stack is imported. What is left is
-  rewriting `docs/networking/README.md` itself, which nothing here blocks.
+  it corrects the reading: the full stack is imported. The rewrite of
+  `docs/networking/README.md` landed 2026-10-13.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
