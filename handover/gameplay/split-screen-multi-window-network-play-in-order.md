@@ -223,8 +223,8 @@ each confirms) is followed on PS2 Pulse with two seats; HD authors the players t
 count above two get (chosen). Each seat is driven by its own device and a pick reaches
 slot `i` (`Options::seat_picks`; `--seat-team` headless). Written up in
 [split-screen.md](../../docs/rendering/split-screen.md#ship-select-per-seat). **Still
-open**: HD's front end shows no SPLIT SCREEN row (the authored sequence is wired and
-unreachable by menu there), stick navigation on a seat's screen, a variant family's
+open**: ~~HD's front end shows no SPLIT SCREEN row~~ (it always had one, revealed under
+RACEBOX; walked 2026-10-13, see the entry below), stick navigation on a seat's screen, a variant family's
 duplicate check on HD, and where Omega authors its Ship Select screens.
 **2026-10-13, `split-screen-end-race`: the end of the race is every person's.**
 A person's view holds after their own line (lap and clocks held, a `FINISHED` line, the
@@ -957,6 +957,20 @@ a guess.
 - Snapshot/delta sizing for the wire (8 ships plus projectiles plus
   `RaceSim`'s non-`World` extras) is unestimated - relevant to the
   transport decision above but not computed here.
+- **2026-10-13, `split-entry-hd-2048-omega`: the split entry on HD, Omega and 2048, and
+  the integrated-GPU rule.** The SPLIT SCREEN row was already on HD and Omega (revealed
+  under RACEBOX); 2048 had no way in, so it gained a third extra tile. Walked windowed with
+  two virtual pads on all three: join, the title's own screens, a two-view race (HD to
+  `Ship Select - Player 2`). The join screen was unreadable on HD (names drawn over the
+  device column) and invisible on Omega (white text on a light page); it now uses HD's list
+  blocks there. `Title::split_on_integrated_gpu` (Pulse, Pure) drops the row and tile on an
+  integrated GPU and sends a windowed `--players N` to one view. Written up in
+  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
+  **Open from it**: HD authors the local entry in RACEBOX itself (`NumberOfPlayers` 1 or 2,
+  `SplitScreen` horizontal or vertical, [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut))
+  - not wired, and the vertical cut has no layout; Omega's racebox has neither list and
+  where it authors local split is unread; a real integrated adapter was not walked; the
+  per-seat Ship Select was not looked at on Omega.
 
 ## Next Steps
 

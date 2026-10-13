@@ -141,12 +141,12 @@ pub(super) fn map_events(
     out
 }
 
-/// This build's own two tiles: the rows of the menu tree built for 2048 that open
-/// the race box and RACE REMIX, labelled as that tree labels them (so a mod that
+/// This build's own three tiles: the rows of the menu tree built for 2048 that open
+/// the race box, RACE REMIX and the split-screen join screen, labelled as that tree labels them (so a mod that
 /// words them differently, or the language, reaches the tile too).
 ///
 /// 2048's grid is the disc's own touch front end and not a page of this tree, so
-/// the tree supplies only the words and the two destinations
+/// the tree supplies only the words and the three destinations
 /// ([`oag_ui::frontend::Launch`]); the positions are chosen
 /// (`oag_ui::frontend::EXTRA_TILES`). A language with no project file of its own
 /// falls back to the English text, as every row does.
@@ -170,16 +170,16 @@ pub(super) fn extra_tiles(
         }
     };
     let page = &built.definition.pages[built.definition.root];
-    ["racebox", "remix"]
+    ["racebox", "remix", "split_screen"]
         .into_iter()
         .filter_map(|id| {
             let row = page.row_with_id(id)?;
             Some(ExtraTile {
                 label: page.entries[row].label().to_string(),
-                launch: if id == "racebox" {
-                    Launch::RaceBox
-                } else {
-                    Launch::Remix
+                launch: match id {
+                    "racebox" => Launch::RaceBox,
+                    "remix" => Launch::Remix,
+                    _ => Launch::SplitScreen,
                 },
             })
         })

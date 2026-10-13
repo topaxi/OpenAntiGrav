@@ -2303,6 +2303,30 @@ verification against a real disc-driven HD race.
 [`FrontEnd::root`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/title/src/lib.rs
 [`MenuOption`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/ui-screens/src/endrace.rs
 
+## RACEBOX authors local split screen: a players list and a cut
+
+(2026-10-13, `split-entry-hd-2048-omega`; read straight out of `DATA00.PSARC`, same file in
+`DATA05` and `DATA06`.) `racebox_definition.xml`'s `Single Player` screen carries, beside
+MODE, DIFFICULTY and the weapon settings:
+
+| Widget | Strings | Entries |
+| --- | --- | --- |
+| `<List name="NumberOfPlayers" global="NumberOfPlayers" default="1">` at `y=370`, with a `NumPlayersPadlock` image at `(970, 360)` | `RB_NUMP` | `1` (`intvalue 14`), `2` (`intvalue 15`) |
+| `<List name="SplitScreen" global="SplitScreen" default="RB_HORIZ">` at `y=420`, `IDCantFocusString="FE_OFF"` | `RB_SPLSCR` | `RB_HORIZ` (18), `RB_VERT` (19) |
+
+So HD's local multiplayer is **two people**, picked on the RACEBOX page, with a horizontal
+or vertical cut that cannot be focused while the count is one, and the padlock and
+`intvalue`s read as unlock gates. The race then goes `Track Creation`, `Team Selection`
+for player one and again for player two (the `Team Selection Player 1`/`2` sequence the
+per-seat Ship Select follows). Not wired here: this build opens the join screen from a
+chosen SPLIT SCREEN row instead (`docs/rendering/split-screen.md`, "Where the entry is,
+per title"). Confidence 85 for the reading (the XML as shipped; the unlock meaning of the
+ids is inferred from the padlock, not seen). The online screens are a different file
+(`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`, `Network Sync`).
+**Omega: checked, differs** - its `racebox_definition.xml` (`data09`) has neither list and
+no other front-end file read names a local split row. **2048: not checkable here** - its
+touch front end has no RACEBOX screen (`docs/formats/2048-frontend.md`).
+
 ## What could not be determined
 
 Named explicitly, with what each would take.

@@ -101,3 +101,27 @@ fn an_integrated_gpu_menu_has_the_split_row_for_pulse_and_pure_alone() {
         }
     }
 }
+
+#[test]
+fn the_split_tile_on_2048s_grid_goes_with_the_row_on_an_integrated_gpu() {
+    use oag_ui::frontend::{ExtraTile, Launch};
+    let tiles = || {
+        vec![
+            ExtraTile {
+                label: "RACEBOX".into(),
+                launch: Launch::RaceBox,
+            },
+            ExtraTile {
+                label: "SPLIT SCREEN".into(),
+                launch: Launch::SplitScreen,
+            },
+        ]
+    };
+    let mut igpu = tiles();
+    trim_tiles(&mut igpu, oag_2048::TITLE, DeviceType::IntegratedGpu);
+    assert_eq!(igpu.len(), 1);
+    assert_eq!(igpu[0].launch, Launch::RaceBox);
+    let mut discrete = tiles();
+    trim_tiles(&mut discrete, oag_2048::TITLE, DeviceType::DiscreteGpu);
+    assert_eq!(discrete.len(), 2);
+}

@@ -474,9 +474,9 @@ lands on the half it is over and the wheel steps the half under it; a held seat
 ignores everything but back.
 
 **Cross-title.** HD: **checked, applies, wired, untested** - the authored sequence is what
-the one-per-seat flow follows, but HD's front end shows no SPLIT SCREEN row, so
-the race box is reachable there only from `--players` (which has no Ship Select)
-and no test or walk exercised it. Omega: **checked, not located** - its
+the one-per-seat flow follows. The SPLIT SCREEN row is revealed under RACEBOX on HD
+(a correction of this page's earlier "no row"), and a windowed walk on 2026-10-13 went
+join, Track Select, `Ship Select - Player 1`, `Ship Select - Player 2`, race. Omega: **checked, not located** - its
 `team_selection_definition.xml` (`data00`, `data09`) holds the `PI_Team` rows and no
 `Team Selection Player` screen; where Omega authors its Ship Select screens is
 open. 2048: checked, string ids present, screens unread. Pure: authors no split screen
