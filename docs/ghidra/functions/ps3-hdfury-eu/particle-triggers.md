@@ -264,9 +264,11 @@ HD Zone race already plays.
 
 - **Omega:** `ps4-omega-eu/ship-collision-fx.md` reads the same `kind` switch, with
   `WO_SHIP_SPARK_DAMAGE_WEAPON` at `kind == 1`. **Checked, applies, not wired.**
-  Whether Omega's disc ships that `.pob` was not determined: `scripts/psarc.py list`
-  on its `data0*.psarc` returned no `.pob` rows in this run (a listing failure, not a
-  result), so the disc side is **not checkable here**.
+  Omega's disc ships it (re-read 2026-10-13 on all nine archives, 46,005 digest-matched
+  entries): `Data/particles/WO_SHIP_SPARK_DAMAGE_WEAPON.pob` (12,560 bytes) and a
+  `Data/particles2048/` copy (9,216 bytes), both in `data00.psarc`, among 422 `.pob`
+  entries. The earlier "no `.pob` rows" was a listing failure, not a result. The
+  asset side is therefore present; the trigger stays unwired.
 - **2048:** the Vita executable carries the string too (`strings -a` on
   `PCSF00007/base/eboot.elf` and `patch-v104/eboot.elf`: 2 hits each, with
   `WO_SHIP_COLL_SPARK_DAMAGE` and `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` beside it).

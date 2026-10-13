@@ -14,6 +14,7 @@ mod omega_psarc_ground_truth;
 mod pmf_ground_truth;
 mod ps2_font_ground_truth;
 mod ps2_image_ground_truth;
+mod psarc_script_ground_truth;
 mod pulse_title_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

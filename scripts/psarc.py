@@ -3,13 +3,20 @@
 
   psarc.py info    <image>[:<archive>]           header, and a census by extension
   psarc.py list    <image>[:<archive>]           one line per entry: size, path
-  psarc.py verify  <image>[:<archive>]           check the directory against itself
+  psarc.py verify  <image>[:<archive>]           every path matched to an entry by digest
   psarc.py cat     <image>:<archive> <path>      one entry to stdout
   psarc.py extract <image>:<archive> <outdir> [substring ...]
 
 `<archive>` is a path inside the image (`PS3_GAME/USRDIR/DATA00.PSARC`) or a
 loose `.psarc` file on disk. Omit it and every `.psarc` on the image is read,
 which is what produces the census the format page quotes.
+
+A path is matched to its entry by `MD5(path.upper())`, never by position: on the
+PS4 Omega Collection family the entry table is digest-ordered and the manifest
+is not, so "entry n + 1 is manifest line n" holds for 3 of `data00`'s 10,926
+entries. This is the rule `oag_formats::psarc::match_paths_to_entries` applies,
+and `crates/assets/tests/psarc_script_ground_truth.rs` holds the two readers
+to the same bytes. See docs/formats/psarc.md.
 
 Nothing is extracted to read a table of contents: the archive is decompressed
 block by block straight out of the image, at the LBA the ISO 9660 walk reports.
@@ -26,6 +33,7 @@ import zlib
 SECTOR = 2048
 HEADER_LEN = 32
 ENTRY_LEN = 30
+ZERO_DIGEST = bytes(16)
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ps3iso import walk_iso9660  # noqa: E402
@@ -66,6 +74,7 @@ class Reader:
             )
         self.blocks = self._read_block_table(toc[count * entry_len :])
         self.paths = self._read_manifest()
+        self.matched = self._match_paths()
 
     def _read_block_table(self, rest):
         """Block sizes, whose width is whatever divides the table evenly."""
@@ -92,24 +101,69 @@ class Reader:
                 continue
             chunk = self.f.read(n)
             # A block is stored raw whenever deflating it would not have paid.
-            out += zlib.decompress(chunk) if chunk[:1] == b"\x78" else chunk
+            # A short raw block can still begin with 0x78 by coincidence; a
+            # real zlib stream always inflates, so a failed inflate means the
+            # bytes were raw (as oag_formats::psarc::Directory::read_entry does).
+            if chunk[:1] == b"\x78":
+                try:
+                    chunk = zlib.decompress(chunk)
+                except zlib.error:
+                    pass
+            out += chunk
         return bytes(out[: e["size"]])
 
     def _read_manifest(self):
-        text = self.read(0).decode("utf-8", "replace")
-        return [line for line in text.replace("\r", "").replace("\0", "\n").split("\n") if line.strip()]
+        """Manifest paths in manifest order.
+
+        The delimiter is read off the manifest's own bytes, as
+        `oag_formats::psarc::parse_manifest` does: no `\\n` anywhere and at
+        least one NUL reads as NUL-delimited (the PS4 family), anything else as
+        newline-delimited (PS3 and Vita, `\\r\\n` tolerated).
+        """
+        raw = self.read(0)
+        if b"\n" not in raw and b"\0" in raw:
+            parts = raw.split(b"\0")
+        else:
+            parts = raw.split(b"\n")
+        text = (p.decode("utf-8", "replace").rstrip("\r") for p in parts)
+        return [line for line in text if line.strip()]
+
+    def _match_paths(self):
+        """[(path, index)] in entry order, each path found by its digest.
+
+        Mirrors `oag_formats::psarc::match_paths_to_entries`: a zero digest
+        marks a placeholder row and is skipped, the first spelling of a repeated
+        path wins, and an entry naming no manifest path is dropped.
+        """
+        path_by_digest = {}
+        for path in self.paths:
+            path_by_digest.setdefault(hashlib.md5(path.upper().encode()).digest(), path)
+        out = []
+        for index in range(1, len(self.entries)):
+            digest = self.entries[index]["md5"]
+            if digest == ZERO_DIGEST:
+                continue
+            path = path_by_digest.get(digest)
+            if path is not None:
+                out.append((path, index))
+        return out
 
     def files(self):
         """(path, size, index) per real entry, the manifest excluded."""
-        for i, path in enumerate(self.paths):
-            yield path, self.entries[i + 1]["size"], i + 1
+        for path, index in self.matched:
+            yield path, self.entries[index]["size"], index
 
     def find(self, path):
-        want = path.lstrip("/").lower()
+        want = normalise(path)
         for p, _size, index in self.files():
-            if p.lstrip("/").lower() == want:
+            if normalise(p) == want:
                 return index
         return None
+
+
+def normalise(path):
+    """One spelling of a path, as `oag_assets::psarc::Archive` folds it."""
+    return path.lstrip("/").replace("\\", "/").lower()
 
 
 def open_archives(spec):
@@ -164,30 +218,42 @@ def cmd_list(spec):
 
 
 def cmd_verify(spec):
-    """The directory predicting itself: each entry's digest against its own path.
+    """Every manifest path matched to exactly one entry, and the reverse.
 
-    This is the check the format page's confidence rests on. The 16-byte field
-    is `MD5(path.upper())`, so it ties the manifest text, the entry ordering and
-    the entry stride together - a parse one field out fails on entry one.
+    The 16-byte field is `MD5(path.upper())`, so the digest is what ties a path
+    to its entry. Per archive this counts the paths with no entry, the entries
+    with no path (the manifest excluded), and the zero digests past entry 0. The
+    PS3 archives also keep the older positional invariant, "entry n + 1 is
+    manifest line n", reported as information: it holds on all of them and on
+    3 of the PS4 `data00`'s 10,926, which is why nothing reads by it any more.
     """
-    total = digests = archives = counted = 0
+    archives = bijective = paths = matched = 0
     for arc in open_archives(spec):
         archives += 1
-        counted += len(arc.paths) == len(arc.entries) - 1
-        for path, _size, index in arc.files():
-            total += 1
-            digests += (
-                hashlib.md5(path.upper().encode()).digest() == arc.entries[index]["md5"]
-            )
+        unmatched_paths = len(arc.paths) - len(arc.matched)
+        zero_rows = sum(
+            1 for e in arc.entries[1:] if e["md5"] == ZERO_DIGEST
+        )
+        unmatched_entries = len(arc.entries) - 1 - zero_rows - len(arc.matched)
+        line_of = {}
+        for n, path in enumerate(arc.paths):
+            line_of.setdefault(path, n)
+        in_place = sum(1 for path, i in arc.matched if line_of[path] + 1 == i)
+        paths += len(arc.paths)
+        matched += len(arc.matched)
+        ok = unmatched_paths == 0 and unmatched_entries == 0 and zero_rows == 0
+        bijective += ok
         print(
-            f"{arc.label}: {len(arc.paths)} manifest paths for "
-            f"{len(arc.entries) - 1} entries"
+            f"{arc.label}: {len(arc.paths)} manifest paths, {len(arc.entries) - 1} "
+            f"entries, {len(arc.matched)} matched by digest; {unmatched_paths} paths "
+            f"with no entry, {unmatched_entries} entries with no path, "
+            f"{zero_rows} zero-digest rows; {in_place} in manifest position"
         )
     print(
-        f"{counted} of {archives} archives name every entry but the manifest; "
-        f"{digests} of {total} entries carry MD5(uppercased path)"
+        f"{bijective} of {archives} archives are a bijection; "
+        f"{matched} of {paths} manifest paths matched to an entry by digest"
     )
-    return 0 if digests == total and counted == archives else 1
+    return 0 if bijective == archives else 1
 
 
 def cmd_cat(spec, path):

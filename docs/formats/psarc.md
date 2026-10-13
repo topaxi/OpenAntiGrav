@@ -127,11 +127,10 @@ readings that could each be wrong on their own:
 
 The lowercase spelling - which is how the paths are actually stored - matches
 **zero** entries, so the uppercasing is measured rather than assumed. Reproduce
-with:
-
-```sh
-just psarc verify data/images/hdfury-ps3-eu-dec.iso
-```
+with `just psarc verify data/images/hdfury-ps3-eu-dec.iso`: it matches each
+manifest path to the entry carrying `MD5(path.upper())` and prints the totals
+(11,664 of 11,664, and the same number again sitting at its manifest position,
+the positional reading "entry `n + 1` is line `n`" this page started from).
 
 Two weaker checks corroborate it. The manifest's line count equals the entry
 count minus one on 7 of 7 archives; and every block run an entry names lies
@@ -452,11 +451,52 @@ damaged copy.
 - [HD status](hd-status.md) - what is inside, and what already parses
 - [Legal](../overview/legal.md) - why no key and no content is committed
 
-## `scripts/psarc.py` reads a NUL-delimited manifest too (2026-10-06)
+## `scripts/psarc.py` and the Rust reader agree (2026-10-13)
 
-The Python helper split the manifest on `\n` only, so on a PS4 archive its
-`list` printed one giant entry and `cat`/`extract` found nothing by name. A
-census made with it said Omega ships no `arcade_hud.xml`; it ships five roots
-at HD's own paths (`omega-status.md`, the HUD section). It now splits on NUL as
-well, as `parse_manifest` does. `extract` on `data00.psarc` still fails with a
-zlib "incorrect header check" on that archive: use the Rust reader there.
+`scripts/psarc.py` (behind `just psarc`) has had three states on the PS4 family,
+and the first two cost claims:
+
+1. **Until 2026-10-06** it split the manifest on `\n` only, so on a PS4 archive
+   `list` printed one giant entry and `cat`/`extract` found nothing by name. A
+   census made with it said Omega ships no `arcade_hud.xml`; it ships five roots
+   at HD's own paths (`omega-status.md`, the HUD section).
+2. **2026-10-06 to 2026-10-13** it split on NUL too but still mapped manifest line
+   `n` to entry `n + 1`. That is true of every PS3 and Vita archive and of 3 of
+   `data00`'s 10,926 entries, so `list` named the right paths with the wrong
+   sizes and `cat` returned another file: on the patch's `data09`,
+   `racebox_definition.xml` came back as a 5,475-byte `<PI_Grid>` file (the real
+   one is 15,805 bytes with `NumberOfPlayers` and `SplitScreen` lists) and the
+   English `entries.xml` as a shader blob. Path *sets* from `list` were right
+   throughout; sizes, `cat` and `extract` were not.
+3. **Now** it matches by digest exactly as `match_paths_to_entries` does: the
+   manifest delimiter is read off its own bytes (NUL only when there is no `\n`
+   and at least one NUL), an entry's path is the manifest line whose
+   `MD5(path.upper())` it carries, a zero digest past entry 0 is skipped, the
+   first spelling of a repeated path wins, and `find` folds case, `\` and a
+   leading `/` as `Archive::index_of_path` does. A short raw block that begins
+   with `0x78` falls back to raw when it does not inflate, as the Rust reader
+   does (the old `extract` on `data00.psarc` failed on four such `.gnf` entries
+   with "incorrect header check"). It now reads all 46,005 Omega entries without
+   an error.
+
+`just psarc verify` now reports the bijection per archive (paths with no entry,
+entries with no path, zero-digest rows) and, as information, how many entries
+still sit at their manifest position: 11,664 of 11,664 on HD's seven archives,
+3 of 10,926 on `data00`. It prints 11,664 of 11,664 matched on HD and 46,005 of
+46,005 across the nine Omega archives, the same totals the Rust reader's tests
+pin.
+
+**The check that would have caught it** is
+`crates/assets/tests/psarc_script_ground_truth.rs` (`#[ignore]`d, disc-backed):
+per archive it runs `psarc.py list` once and asserts the script's `(path, size)`
+sequence equals the Rust reader's `paths()` with each entry's declared size, in
+order; asserts `verify` reports a bijection; and compares `psarc.py cat` bytes
+against `read_path` for five paths spread across the archive. It covers Omega's
+nine archives (46,005 entries), HD's seven (11,664) and Vita 2048 EU's five
+(24,434), and pins the two reads that were wrong by name. Run against the
+previous script it fails on Omega `data00`, the first archive it opens.
+
+HD output is unchanged: `list` over the seven HD archives is byte-identical to
+the previous script's (11,664 lines), as is `info`, and the `(path, entry index)`
+pairs are equal; the nine Vita 2048 archives (EU and USA) list identically too.
+`scripts/hd_time_shapes.py` imports `psarc.open_archives` and is unaffected.

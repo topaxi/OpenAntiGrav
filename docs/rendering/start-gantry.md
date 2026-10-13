@@ -1068,9 +1068,13 @@ new `oag_race::Mode`s, which is not this lane. Their files are `321Go_HD_Zone_Ba
 Detonator board's art is on the disc under another file's name.
 
 **Per title (2026-10-12).** **2048:** checked, applies, not wired - its `base/PSP2/data.psarc` ships a
-`321Go_Zone.vex` (8,448 bytes, not HD's 8,368) but 2048 draws no card and no manifest names it. **Omega:** not
-checkable - no extracted copy of its archives and the binary only names the file in its mode table
-(`ps4-omega-eu/billboards.md`). **Pulse:** differs - one gantry file, no chooser.
+`321Go_Zone.vex` (8,448 bytes, not HD's 8,368) but 2048 draws no card and no manifest names it. **Omega:** checked,
+applies, not wired (corrected 2026-10-13: this said "not checkable, no extracted copy of its archives",
+and the copy was there) - `data00.psarc` ships `Data/billboards/HD_Adverts/321Go/321Go_Zone.vex`
+(8,448 bytes), `321Go_StartFinish.vex` (13,584), `321Go_HD_Detonator.vex` (11,392) and
+`321Go_HD_Zone_Battle.vex` (9,744), each byte-identical to the 2048 copy (MD5 compared), and the
+binary names them in its mode table (`ps4-omega-eu/billboards.md`); no PS4 capture path exists to
+say which a mode loads. **Pulse:** differs - one gantry file, no chooser.
 
 ## Wipeout 2048: eight files plus `fx350`, two reached by any of 26 manifests, a third countdown mechanism
 
