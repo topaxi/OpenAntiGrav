@@ -453,6 +453,7 @@ fn a_colour_only_image_inside_an_animation_keeps_its_own_rect_and_carries_the_re
             height: Some(1.0),
             color: 0xff3a_bcf2,
             gradient: None,
+            own_offset: (0.0, 0.0),
             reveal: vec![
                 RevealKey {
                     time: 0.0,
@@ -504,6 +505,7 @@ fn an_animation_wrapped_fill_resolves_a_feglobals_colour() {
             height: Some(16.0),
             color: 0xffff_ffff,
             gradient: None,
+            own_offset: (0.0, 0.0),
             reveal: Vec::new(),
             transition: 0.0,
         }]
@@ -544,6 +546,7 @@ fn collects_solid_colour_backdrops() {
             height: Some(272.0),
             color: 0xff00_0000,
             gradient: None,
+            own_offset: (0.0, 0.0),
             reveal: Vec::new(),
             transition: 0.0,
         }]

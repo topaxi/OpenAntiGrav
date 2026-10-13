@@ -17,7 +17,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{Fill, Image, Text, argb_to_rgba};
 
-use super::table::{Shown, lap_slot, table_layers};
+use super::table::{LapCell, Shown, lap_cell, table_layers};
 use super::{EndRaceMenu, Headline, Layout, Results, Rewards, TournamentResults, TournamentRow};
 
 #[cfg(test)]
@@ -99,7 +99,7 @@ pub fn results_draw_list(
         backdrop,
         race_behind,
         sprites,
-        shown,
+        &[(None, shown)],
         &|text| {
             let name = text.name.as_deref().unwrap_or("");
             if name.starts_with("lap") {
@@ -165,7 +165,7 @@ pub fn tournament_results_draw_list(
         backdrop,
         race_behind,
         sprites,
-        shown,
+        &[(None, shown)],
         &|text| {
             let name = text.name.as_deref().unwrap_or("");
             if name.starts_with("lap") {
@@ -425,7 +425,9 @@ fn lap_cell_text(
     strings: &StringTable,
     totals: bool,
 ) -> Option<String> {
-    let (n, c) = lap_slot(name)?;
+    let LapCell {
+        row: n, column: c, ..
+    } = lap_cell(name)?;
     if n == 0 {
         return match c {
             0 => Some(strings.get_or_id("RC_LAP").to_string()),
@@ -488,7 +490,9 @@ fn tournament_lap_cell_text(
     rows: &[TournamentRow],
     strings: &StringTable,
 ) -> Option<String> {
-    let (n, c) = lap_slot(name)?;
+    let LapCell {
+        row: n, column: c, ..
+    } = lap_cell(name)?;
     if n == 0 {
         return match c {
             0 => Some(strings.get_or_id("PRO_POS").to_string()),

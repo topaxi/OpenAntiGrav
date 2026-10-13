@@ -2,7 +2,6 @@
 
 use super::*;
 use crate::endrace::draw::results_draw_list;
-use crate::endrace::table::{highlight_y, row_of};
 use crate::endrace::{Headline, LapSplit, Results};
 use oag_ui::frontend::Draw;
 use oag_ui::screen::Screens;
@@ -54,6 +53,20 @@ fn xml() -> String {
 </Screen>"#,
     );
     xml
+}
+
+/// The row a widget at `y` is nested in on the PSP's file: row 1 owns `[92, 113)`, row
+/// `i > 1` owns `[93 + 20 (i - 1), 113 + 20 (i - 1))`.
+fn row_of(y: f32) -> Option<usize> {
+    if !(92.0..253.0).contains(&y) {
+        return None;
+    }
+    Some((((y - 93.0) / 20.0).floor().max(0.0) as usize + 1).min(8))
+}
+
+/// The highlight's `y` on the PSP's file: the literal `0x5d + 0x14 * (row - 1)`.
+fn highlight_y(row: usize) -> f32 {
+    93.0 + (row - 1) as f32 * 20.0
 }
 
 fn strings() -> StringTable {

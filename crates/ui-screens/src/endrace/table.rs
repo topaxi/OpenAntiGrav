@@ -1,17 +1,23 @@
-//! The one table `EndRace Results` authors, and which of it a mode shows.
+//! The tables `EndRace Results` authors, and which of them a mode shows.
 //!
-//! `EndRace_Definition.xml` authors a single grid - `zonetopline`,
-//! `tablebg1`-`tablebg8`, `topbarcenter`, 27 `lap{r}.{c}` cells, `perfectlap1`-`5`,
-//! `boostimg` and `tablehighlight` - and every mode's populate function fills
-//! it differently. `EndRaceResults_ResetTable` hides the rows and the icons, and
-//! each populate shows exactly what it uses: **bit `0x4` of a widget's flag
-//! word is the visible bit**, which this crate had read the wrong way round
-//! until 2026-09-30 and so drew all eight row backgrounds on every table. See
-//! `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s "Bit `0x4` is
-//! the visible bit".
+//! `EndRace_Definition.xml` authors a grid - `zonetopline`, `tablebg1`-`tablebg8`,
+//! `topbarcenter`, 27 `lap{r}.{c}` cells, `perfectlap1`-`5`, `boostimg` and
+//! `tablehighlight` - and every mode's populate function fills it differently.
+//! `EndRaceResults_ResetTable` hides the rows and the icons, and each populate shows
+//! exactly what it uses: **bit `0x4` of a widget's flag word is the visible bit**,
+//! which this crate had read the wrong way round until 2026-09-30 and so drew all
+//! eight row backgrounds on every table. See
+//! `docs/ghidra/functions/psp-pulse-usa/endrace-screens.md`'s "Bit `0x4` is the
+//! visible bit".
+//!
+//! **The grid's geometry is the file's own** ([`Grid`]): the PSP authors a 20 px
+//! pitch from `y = 92` in 480x272, the PS2 a 32.94 px pitch from 152 in 640x448
+//! under a `-10` `Item`, and its `Results Split` two 25 px tables, one per person, whose
+//! widgets carry a `_0`/`_1` suffix. Until 2026-10-13 the PSP's numbers were
+//! constants here, so a PS2 table drew its row backs and its highlight in the wrong rows.
 //!
 //! [`table_layers`] is the one walk over the layout every table shares;
-//! what differs per mode is a [`Shown`] and the text a cell reads.
+//! what differs per mode is a [`Shown`] per table and the text a cell reads.
 
 use oag_ui::frontend::{Draw, Placed};
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
@@ -20,23 +26,8 @@ use oag_ui::screen::{Fill, Text, argb_to_rgba};
 use super::Layout;
 use super::draw::{fill_draw, image_draw, text_draw};
 
-/// `tablebg1`'s own `OffsetY`, the top edge of the first row.
-const FIRST_ROW_Y: f32 = 92.0;
-
-/// The distance between two rows' `OffsetY`s.
-const ROW_PITCH: f32 = 20.0;
-
 /// How many rows the grid authors.
 const ROWS: usize = 8;
-
-/// The `y` a row's highlight sits at: `0x5d + 0x14 * (row - 1)`, the literal every
-/// populate function steps - `EndRaceResults_PopulateLapTable` ends on `laps * 0x14 +
-/// 0x5d` for its totals row, the Tournament and Elimination tables step it per craft.
-/// One pixel below the row's own `tablebg` `OffsetY`.
-#[must_use]
-pub(super) fn highlight_y(row: usize) -> f32 {
-    93.0 + row.saturating_sub(1) as f32 * ROW_PITCH
-}
 
 /// Which parts of the authored table one mode's populate function leaves shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,73 +49,150 @@ pub(super) struct Shown {
     pub also_highlight: u16,
 }
 
-/// The row an unnamed widget at `y` is nested in, when it is one of the grid's row
-/// backgrounds.
+/// Which table of a screen a widget belongs to: `None` for the one an ordinary
+/// `EndRace Results` authors, `Some(n)` for `Results Split`'s `_n` copies.
+pub(super) type Suffix = Option<u8>;
+
+/// A widget name without its `_N` person suffix, and the suffix: `tablebg2_1` is
+/// `("tablebg2", Some(1))`, `tablebg2` is `("tablebg2", None)`.
+fn split_suffix(name: &str) -> (&str, Suffix) {
+    match name.rsplit_once('_') {
+        Some((stem, number)) => match number.parse() {
+            Ok(number) => (stem, Some(number)),
+            Err(_) => (name, None),
+        },
+        None => (name, None),
+    }
+}
+
+/// A `tablebg{r}` wrapper fill: its table and 1-based row.
+fn row_wrapper(name: &str) -> Option<(Suffix, usize)> {
+    let (stem, suffix) = split_suffix(name);
+    let row = stem.strip_prefix("tablebg")?.parse::<usize>().ok()?;
+    (1..=ROWS).contains(&row).then_some((suffix, row))
+}
+
+/// One authored table's rows.
+#[derive(Debug, Clone, PartialEq)]
+struct Table {
+    suffix: Suffix,
+    /// Each row's fill top, row 1 first, in screen space.
+    tops: Vec<f32>,
+}
+
+/// What an anonymous widget nested in a table is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Part {
+    /// The rule above the first row: `zonetopline` and its anonymous right half.
+    TopRule,
+    /// Row `r`'s (1-based) tile and rules.
+    Row(usize),
+}
+
+/// The geometry of every table a layout authors, read off its `tablebg` wrappers.
 ///
-/// Each `tablebg{i}` is an `<Image OffsetY=...>` holding a dark fill, a `hex_bg.mip`
-/// tile and two fading rules, and the format collects the nested three as anonymous
-/// widgets at absolute positions - so their row is recoverable only from `y`. Row 1
-/// owns `[92, 113)`, which takes in the rules it draws at `112`; row `i > 1` owns
-/// `[93 + 20 (i - 1), 113 + 20 (i - 1))`. `docs` and a ground-truth test count four
-/// widgets per row on the real file, so the bands are not a guess about it.
+/// A wrapper is `<Image name="tablebg{r}" OffsetY="...">` with no `src`, so the screen
+/// reader collects it as a fill and places it at its own `y` **without** the tag's
+/// `OffsetY` (`Fill::own_offset`) - the container offset reaches the widgets nested
+/// inside it and, for an image with a `src`, the image itself, but not a colour-only
+/// wrapper's own rectangle. Left alone, all eight dark row backings pile up along the
+/// top of the screen and no row has one; [`Self::top`] puts the offset back.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Grid {
+    tables: Vec<Table>,
+    /// Each wrapper's table index and row, in document order - the order the
+    /// anonymous tile images follow.
+    wrappers: Vec<(usize, usize)>,
+}
+
+impl Grid {
+    pub(super) fn read(layout: &Layout) -> Self {
+        let mut grid = Self {
+            tables: Vec::new(),
+            wrappers: Vec::new(),
+        };
+        for fill in &layout.screen.fills {
+            let Some((suffix, row)) = fill.name.as_deref().and_then(row_wrapper) else {
+                continue;
+            };
+            let index = grid
+                .tables
+                .iter()
+                .position(|table| table.suffix == suffix)
+                .unwrap_or_else(|| {
+                    grid.tables.push(Table {
+                        suffix,
+                        tops: Vec::new(),
+                    });
+                    grid.tables.len() - 1
+                });
+            let table = &mut grid.tables[index];
+            if table.tops.len() + 1 == row {
+                table.tops.push(fill.y + fill.own_offset.1);
+                grid.wrappers.push((index, row));
+            }
+        }
+        grid
+    }
+
+    fn index(&self, suffix: Suffix) -> Option<usize> {
+        self.tables.iter().position(|table| table.suffix == suffix)
+    }
+
+    /// The `y` a row's highlight sits at.
+    ///
+    /// The PSP executable steps the literal `0x5d + 0x14 * (row - 1)`
+    /// (`EndRaceResults_PopulateLapTable` ends on `laps * 0x14 + 0x5d` for its totals
+    /// row, the Tournament and Elimination tables step it per craft): one pixel below
+    /// row 1's `tablebg` `OffsetY`, which is where every later row's own fill starts.
+    /// So a row's highlight is its fill's top, and row 1's the same distance above
+    /// row 2's. **Read off the PSP's file this is the literal; on the PS2's it is chosen**,
+    /// not measured: its executable is not in a Ghidra project and the placement is
+    /// unread. `None` for a table the grid does not have.
+    #[must_use]
+    pub(super) fn highlight_y(&self, suffix: Suffix, row: usize) -> Option<f32> {
+        let tops = &self.tables[self.index(suffix)?].tops;
+        let row = row.max(1);
+        let pitch = match tops.as_slice() {
+            [_, second, third, ..] => third - second,
+            _ => return None,
+        };
+        Some(tops[1] + (row as f32 - 2.0) * pitch)
+    }
+}
+
+/// The widget name a table cell carries, `lap{n}.{c}` or `lap{n}.{c}_{N}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct LapCell {
+    pub table: Suffix,
+    /// `0` is the header row.
+    pub row: usize,
+    pub column: usize,
+}
+
+/// `"lap3.1"` -> row 3, column 1 of the one table; `"lap3.1_1"` the same cell of table 1.
 #[must_use]
-pub(super) fn row_of(y: f32) -> Option<usize> {
-    let end = FIRST_ROW_Y + ROWS as f32 * ROW_PITCH + 1.0;
-    if !(FIRST_ROW_Y..end).contains(&y) {
-        return None;
-    }
-    if y < FIRST_ROW_Y + ROW_PITCH + 1.0 {
-        return Some(1);
-    }
-    let row = ((y - (FIRST_ROW_Y + 1.0)) / ROW_PITCH).floor() as usize + 1;
-    Some(row.min(ROWS))
+pub(super) fn lap_cell(name: &str) -> Option<LapCell> {
+    let (stem, table) = split_suffix(name);
+    let rest = stem.strip_prefix("lap")?;
+    let (row, column) = rest.split_once('.')?;
+    Some(LapCell {
+        table,
+        row: row.parse().ok()?,
+        column: column.parse().ok()?,
+    })
 }
 
-/// A `tablebg{N}` wrapper fill at the row's own position.
-///
-/// The wrapper is an `<Image name="tablebg{N}" OffsetY="...">` with no `src`, so the
-/// screen reader collects it as a fill and places it at its own `y` **without** the
-/// tag's `OffsetY` - the container offset reaches the widgets nested inside and, for
-/// an image with a `src`, the image itself, but not a colour-only wrapper's own
-/// rectangle. Left alone, all eight dark row backings pile up along the top of the
-/// screen (`y` 0 and 1) and no row has one. The reader is shared by every screen and
-/// nothing here measured how another one relies on that, so this puts the offset
-/// back for the eight widgets it is known to matter for rather than changing it.
-fn with_row_offset(fill: &Fill) -> Fill {
-    let Some(row) = fill
-        .name
-        .as_deref()
-        .and_then(|name| name.strip_prefix("tablebg"))
-        .and_then(|number| number.parse::<usize>().ok())
-        .filter(|row| (1..=ROWS).contains(row))
-    else {
-        return fill.clone();
-    };
-    Fill {
-        y: fill.y + FIRST_ROW_Y + (row - 1) as f32 * ROW_PITCH,
-        ..fill.clone()
-    }
+fn shown_for(shows: &[(Suffix, Shown)], suffix: Suffix) -> Option<&Shown> {
+    shows
+        .iter()
+        .find(|(table, _)| *table == suffix)
+        .map(|(_, shown)| shown)
 }
 
-/// Whether a widget belongs to the `table` group: a named piece of it, or a row
-/// background nested in one.
-fn in_table(name: Option<&str>, y: f32) -> bool {
-    matches!(
-        name,
-        Some("zonetopline" | "topbarcenter" | "boostimg" | "tablehighlight")
-    ) || row_of(y).is_some()
-        || is_top_rule(y)
-}
-
-/// The anonymous right half of `zonetopline`, nested in it at the same `y` (91) as the
-/// named left half - a rule one pixel above the first row.
-fn is_top_rule(y: f32) -> bool {
-    (FIRST_ROW_Y - 1.0..FIRST_ROW_Y).contains(&y)
-}
-
-/// One `EndRace Results` draw list: the backdrop, then the layout's own fills,
-/// images and texts, with the table gated by `shown` and every text's content asked
-/// of `cell`.
+/// One draw list: the backdrop, then the layout's own fills,
+/// images and texts, with each table in `shows` gated by its [`Shown`] (a table the list
+/// does not name is hidden whole) and every text's content asked of `cell`.
 ///
 /// `cell` answers for every `Text` widget but the `MSC_PL` overlay nested in each
 /// `perfectlap{n}` (the icon it sits on is never shown - this build keeps no
@@ -140,7 +208,7 @@ pub(super) fn table_layers(
     backdrop: Option<Picture>,
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
-    shown: Shown,
+    shows: &[(Suffix, Shown)],
     cell: &dyn Fn(&Text) -> Option<String>,
 ) -> Layers {
     let mut layers = Layers {
@@ -153,13 +221,32 @@ pub(super) fn table_layers(
         ..Layers::default()
     };
     let screen = &layout.screen;
+    let grid = Grid::read(layout);
+    let part_shown = |table: usize, part: Part| {
+        shown_for(shows, grid.tables[table].suffix).is_some_and(|shown| {
+            shown.table
+                && match part {
+                    Part::TopRule => true,
+                    Part::Row(row) => row <= shown.rows,
+                }
+        })
+    };
     let mut out = Vec::new();
-    let row_shown = |y: f32| row_of(y).is_none_or(|row| row <= shown.rows);
+    // What the anonymous fills after a table's wrapper are nested in: the document
+    // order is the nesting, which a `y` could not tell apart where two tables'
+    // rows overlap (`Results Split` keeps the one-person table beside its two).
+    let mut owner: Option<(usize, Part)> = None;
+    let mut top_rules = 0;
     for authored in &screen.fills {
         let name = authored.name.as_deref();
-        let fill = &with_row_offset(authored);
-        if name == Some("tablehighlight") {
-            let Some(row) = shown.highlight.filter(|_| shown.table) else {
+        let (stem, suffix) = name.map_or(("", None), split_suffix);
+        if stem == "tablehighlight" {
+            owner = None;
+            let Some((shown, row)) = grid
+                .index(suffix)
+                .and(shown_for(shows, suffix))
+                .and_then(|shown| Some((shown, shown.highlight.filter(|_| shown.table)?)))
+            else {
                 continue;
             };
             let rows = std::iter::once(row).chain(
@@ -167,30 +254,61 @@ pub(super) fn table_layers(
                     .filter(|&other| other != row && (shown.also_highlight >> other) & 1 == 1),
             );
             for row in rows {
+                let Some(y) = grid.highlight_y(suffix, row) else {
+                    continue;
+                };
                 out.push(Draw::Fill {
                     rect: [
                         0.0,
-                        highlight_y(row),
-                        fill.width.unwrap_or(0.0),
-                        fill.height.unwrap_or(0.0),
+                        y,
+                        authored.width.unwrap_or(0.0),
+                        authored.height.unwrap_or(0.0),
                     ],
-                    color: argb_to_rgba(fill.color),
+                    color: argb_to_rgba(authored.color),
                 });
             }
             continue;
         }
-        if in_table(name, fill.y) && !(shown.table && row_shown(fill.y)) {
+        if stem == "zonetopline" {
+            owner = grid
+                .tables
+                .get(top_rules)
+                .map(|_| (top_rules, Part::TopRule));
+            top_rules += 1;
+        } else if let Some((suffix, row)) = name.and_then(row_wrapper) {
+            owner = grid.index(suffix).map(|table| (table, Part::Row(row)));
+        } else if name.is_some() {
+            owner = None;
+        }
+        if owner.is_some_and(|(table, part)| !part_shown(table, part)) {
             continue;
         }
-        out.push(fill_draw(fill));
+        let placed = match name.and_then(row_wrapper) {
+            Some(_) => Fill {
+                y: authored.y + authored.own_offset.1,
+                ..authored.clone()
+            },
+            None => authored.clone(),
+        };
+        out.push(fill_draw(&placed));
     }
+    let mut tiles = 0;
     for image in &screen.images {
         let name = image.name.as_deref();
-        let visible = match name {
-            Some(name) if name.starts_with("perfectlap") => false,
-            Some("boostimg") => shown.table && shown.boost_icon,
-            Some("topbarcenter") => shown.table && shown.header_bar,
-            _ => !in_table(name, image.y) || (shown.table && row_shown(image.y)),
+        let (stem, suffix) = name.map_or(("", None), split_suffix);
+        let table_shown = |wanted: fn(&Shown) -> bool| {
+            shown_for(shows, suffix).is_some_and(|shown| shown.table && wanted(shown))
+        };
+        let visible = match stem {
+            _ if stem.starts_with("perfectlap") => false,
+            "boostimg" => table_shown(|shown| shown.boost_icon),
+            "topbarcenter" => table_shown(|shown| shown.header_bar),
+            _ if name.is_none() && image.src.ends_with("hex_bg.mip") => {
+                let owner = grid.wrappers.get(tiles).copied();
+                tiles += 1;
+                owner.is_none_or(|(table, row)| part_shown(table, Part::Row(row)))
+            }
+            _ => true,
         };
         if !visible {
             continue;
@@ -205,7 +323,9 @@ pub(super) fn table_layers(
             continue;
         }
         let name = text.name.as_deref().unwrap_or("");
-        if name.starts_with("lap") && !shown.table {
+        if let Some(cell) = lap_cell(name)
+            && !shown_for(shows, cell.table).is_some_and(|shown| shown.table)
+        {
             continue;
         }
         let Some(content) = cell(text) else { continue };
@@ -215,47 +335,5 @@ pub(super) fn table_layers(
     layers
 }
 
-/// The `lap{n}.{c}` widget name a table cell carries, e.g. `"lap3.1"` ->
-/// `(3, 1)`. `n = 0` is the header row.
-#[must_use]
-pub(super) fn lap_slot(name: &str) -> Option<(usize, usize)> {
-    let rest = name.strip_prefix("lap")?;
-    let mut parts = rest.split('.');
-    let n = parts.next()?.parse().ok()?;
-    let c = parts.next()?.parse().ok()?;
-    Some((n, c))
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The bands take every widget a real `tablebg{i}` nests to its own row: the fill and
-    /// tile at the row's `OffsetY` (plus one below the first), and the two rules at
-    /// `OffsetY + 20`.
-    #[test]
-    fn a_row_owns_its_fill_its_tile_and_its_rules() {
-        assert_eq!(row_of(91.0), None, "`zonetopline` sits above the first row");
-        for row in 1..=ROWS {
-            let offset = FIRST_ROW_Y + (row - 1) as f32 * ROW_PITCH;
-            let fill = if row == 1 { offset } else { offset + 1.0 };
-            assert_eq!(row_of(fill), Some(row), "row {row}'s fill");
-            assert_eq!(row_of(offset + 20.0), Some(row), "row {row}'s rules");
-        }
-        assert_eq!(row_of(253.0), None);
-    }
-
-    /// The highlight steps the literal the executable does.
-    #[test]
-    fn the_highlight_sits_one_pixel_under_its_row() {
-        assert!((highlight_y(1) - 93.0).abs() < f32::EPSILON);
-        assert!((highlight_y(4) - 153.0).abs() < f32::EPSILON);
-    }
-
-    #[test]
-    fn lap_slot_reads_the_cell_names() {
-        assert_eq!(lap_slot("lap3.1"), Some((3, 1)));
-        assert_eq!(lap_slot("lap0.2"), Some((0, 2)));
-        assert_eq!(lap_slot("Line1"), None);
-    }
-}
+mod tests;

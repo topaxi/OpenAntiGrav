@@ -21,6 +21,13 @@ const XML: &str = r#"
 <Text name="Line1"><Values string="race complete!" x="240" y="50"></Values></Text>
 <Text name="table">
 <Image name="tablebg1" OffsetY="92"><Values x="0" y="0" width="480" height="22" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg2" OffsetY="112"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg3" OffsetY="132"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg4" OffsetY="152"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg5" OffsetY="172"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg6" OffsetY="192"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg7" OffsetY="212"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
+<Image name="tablebg8" OffsetY="232"><Values x="0" y="1" width="480" height="19" Color1="0x9f000000" Color2="0x9f000000" Color3="0x9f000000" Color4="0x9f000000"></Values></Image>
 <Text name="lap0.0"><Values x="140" y="76"></Values></Text>
 <Text name="lap0.1"><Values x="220" y="76"></Values></Text>
 <Text name="lap0.2"><Values x="320" y="76"></Values></Text>
