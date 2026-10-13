@@ -309,10 +309,10 @@ fn a_second_slot_keeps_its_own_button_edges() {
 
 /// A split race's pause: a press on a slot other than the keyboard's (a seated
 /// pad's, stood in for here by a press made on slot 1 before the keyboard moves
-/// back to slot 0) is invisible to `buttons()` and found by `take_any`, which
-/// consumes it so the next frame does not toggle again.
+/// back to slot 0) is invisible to `buttons()` and reported by `take_presses`
+/// as slot 1's, which consumes it so the next frame does not toggle again.
 #[test]
-fn take_any_finds_a_press_on_a_slot_the_keyboard_does_not_drive() {
+fn take_presses_names_the_slot_the_keyboard_does_not_drive() {
     let mut controls = Controls::without_pad();
     controls.assignment_mut().assign_keyboard(1);
     controls.set_key(&Key::Named(NamedKey::Space), true);
@@ -323,8 +323,8 @@ fn take_any_finds_a_press_on_a_slot_the_keyboard_does_not_drive() {
         !controls.buttons().is_pressed(Button::Start),
         "the keyboard's slot never saw slot 1's Start"
     );
-    assert!(controls.take_any(Button::Start));
-    assert!(!controls.take_any(Button::Start), "consumed once");
+    assert_eq!(controls.take_presses(Button::Start), 0b10);
+    assert_eq!(controls.take_presses(Button::Start), 0, "consumed once");
 }
 
 #[test]

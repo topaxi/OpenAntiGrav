@@ -363,11 +363,13 @@ impl Session {
             // race arm below already leaves it under the results table.
             // **Any seated player's Start**, not the keyboard's slot alone: in a
             // split race each pad drives its own slot, and a Deck's own Start
-            // was otherwise never seen (reported from play, 2026-10-13).
-            if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-                && self.controls.take_any(Button::Start)
-            {
-                self.paused = !self.paused;
+            // was otherwise never seen (reported from play, 2026-10-13). And
+            // only the player who paused resumes - see `session::pause`.
+            if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
+                let presses = self.controls.take_presses(Button::Start);
+                let paused = super::pause::start(self.pause_state(), presses);
+                self.paused = paused.is_some();
+                self.pause_owner = paused.flatten();
             }
             // Circle is "back" everywhere else on screen - the menus, the
             // front end - and a paused race is the one place a still-running
@@ -376,10 +378,13 @@ impl Session {
             // `spend_pickup`'s absorb - see `race::weapons`. Same shape as
             // the results-table block below: hand the window back to the
             // menus, exactly as `escape` does from any race.
-            // Any seated player's Circle, as for Start above.
+            // Only the player who paused leaves, as for Start above.
             if matches!(self.stage, Stage::Race(_))
                 && self.paused
-                && self.controls.take_any(Button::Circle)
+                && super::pause::leaves(
+                    self.pause_state(),
+                    self.controls.take_presses(Button::Circle),
+                )
             {
                 self.escape();
                 // The remaining steps this frame owed belong to whatever is on

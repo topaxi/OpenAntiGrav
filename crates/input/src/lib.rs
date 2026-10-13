@@ -594,21 +594,21 @@ impl Controls {
         &mut self.buttons[slot]
     }
 
-    /// Takes a press of `button` from whichever slot made it: the keyboard's, or
-    /// any seated pad's. What a split race's pause reads, since with devices
-    /// seated a pad's Start lands on its own slot and [`Self::buttons`] (the
-    /// keyboard's slot) never sees it. Every slot's press is consumed, so two
-    /// people pressing on the same frame toggle once. With devices merged every
-    /// press is on slot 0 and this is [`Self::buttons_mut`]'s `consume_press`.
-    pub fn take_any(&mut self, button: Button) -> bool {
-        let mut pressed = false;
-        for input in &mut self.buttons {
+    /// Takes every slot's press of `button` and says which slots made one, bit
+    /// `slot` set for each: the keyboard's slot, or any seated pad's. What a split
+    /// race's pause reads, since with devices seated a pad's Start lands on its
+    /// own slot and [`Self::buttons`] (the keyboard's slot) never sees it - and the
+    /// pause needs to know *who* pressed, because only they may resume. Every
+    /// press is consumed. With devices merged every press is on slot 0.
+    pub fn take_presses(&mut self, button: Button) -> u8 {
+        let mut slots = 0;
+        for (slot, input) in self.buttons.iter_mut().enumerate() {
             if input.is_pressed(button) {
                 input.consume_press(button);
-                pressed = true;
+                slots |= 1 << slot;
             }
         }
-        pressed
+        slots
     }
 
     /// Whether the pad contributed anything to the last [`Self::snapshot`].
