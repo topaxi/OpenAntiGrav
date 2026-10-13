@@ -15,7 +15,7 @@
 
 use oag_ui::frontend::Draw;
 
-use super::draw::Frame;
+use super::draw::{Frame, Span};
 
 /// Where a view's HUD goes, in the grid the layout is authored in.
 ///
@@ -123,11 +123,26 @@ impl Frame {
             hud_text: place_all(&self.hud_text),
             small_text: place_all(&self.small_text),
             default_text: place_all(&self.default_text),
+            spans: vec![Span {
+                clip: p.clip,
+                start: [0; 4],
+            }],
         }
     }
 
-    /// Appends `other`'s draws after this frame's, list by list.
+    /// Appends `other`'s draws after this frame's, list by list, and its spans
+    /// with them.
     pub fn extend(&mut self, other: Frame) {
+        let at = [
+            self.sprites.len(),
+            self.hud_text.len(),
+            self.small_text.len(),
+            self.default_text.len(),
+        ];
+        self.spans.extend(other.spans.into_iter().map(|span| Span {
+            clip: span.clip,
+            start: [0, 1, 2, 3].map(|i| span.start[i] + at[i]),
+        }));
         self.sprites.extend(other.sprites);
         self.hud_text.extend(other.hud_text);
         self.small_text.extend(other.small_text);

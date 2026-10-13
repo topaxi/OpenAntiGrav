@@ -159,6 +159,9 @@ pub struct Renderer {
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
+    /// Where a draw list's views start, and the pixel rectangle each is clipped to:
+    /// see [`Self::set_scissors`]. Empty draws the list unclipped, the common case.
+    scissors: Vec<(usize, [u32; 4])>,
     atlas: Atlas,
     /// The sprite sheet's pixel size, which the shader needs to normalise UVs.
     sprites: (u32, u32),
@@ -423,6 +426,7 @@ impl Renderer {
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
+            scissors: Vec::new(),
             atlas,
             sprites: (sprites.width, sprites.height),
             video,
@@ -566,6 +570,15 @@ impl Renderer {
         );
     }
 
+    /// Clips the next [`Self::overlay`] per view of a split screen: from draw index
+    /// `at` of the list until the next entry's, only pixels inside `rect`
+    /// (`[x, y, width, height]` in target pixels) are written. Entries are in draw
+    /// order; the draws before the first are clipped to the viewport. Spent by the
+    /// next overlay, so a list that sets none is drawn whole.
+    pub fn set_scissors(&mut self, scissors: Vec<(usize, [u32; 4])>) {
+        self.scissors = scissors;
+    }
+
     /// Draws `list` **over** whatever is already in `view`.
     ///
     /// What the performance overlay does: it is not a stage and does not own
@@ -630,7 +643,16 @@ impl Renderer {
         // this one and its composite is drawn at its place in the order.
         let mut fury_at = None;
         let mut scene_at = None;
+        let scissors = std::mem::take(&mut self.scissors);
+        let mut segments: Vec<(u32, [u32; 4])> = Vec::new();
         for (index, draw) in list.iter().enumerate() {
+            // Where this draw's quads begin is where a view's scissor does.
+            while let Some(&(at, rect)) = scissors.get(segments.len()) {
+                if at > index {
+                    break;
+                }
+                segments.push((self.quads.len() as u32, rect));
+            }
             match draw {
                 Draw::FuryBackdrop(frame) => {
                     fury_at = Some((self.quads.len() as u32, frame.as_ref()));
@@ -902,12 +924,37 @@ impl Renderer {
         cuts.extend(scene_at.map(|(at, _)| (at, backdrop::Cut::Scene)));
         cuts.sort_unstable();
         let mut drawn = 0;
+        let whole = [
+            viewport.0 as u32,
+            viewport.1 as u32,
+            viewport.2 as u32,
+            viewport.3 as u32,
+        ];
         let draw_quads = |pass: &mut wgpu::RenderPass<'_>, range: std::ops::Range<u32>| {
-            if range.start < range.end {
-                pass.set_pipeline(&self.ui_pipeline);
-                pass.set_bind_group(0, &self.ui_bind_group, &[]);
-                pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
+            if range.start >= range.end {
+                return;
+            }
+            pass.set_pipeline(&self.ui_pipeline);
+            pass.set_bind_group(0, &self.ui_bind_group, &[]);
+            pass.set_vertex_buffer(0, self.quad_buffer.slice(..));
+            if segments.is_empty() {
                 pass.draw(0..6, range);
+                return;
+            }
+            // One draw per view, each inside its own rectangle: the quads before
+            // the first view's start have the whole viewport.
+            let mut from = range.start;
+            while from < range.end {
+                let seen = segments.partition_point(|&(at, _)| at <= from);
+                let rect = seen.checked_sub(1).map_or(whole, |i| segments[i].1);
+                let to = segments
+                    .get(seen)
+                    .map_or(range.end, |&(at, _)| at.min(range.end));
+                if rect[2] > 0 && rect[3] > 0 {
+                    pass.set_scissor_rect(rect[0], rect[1], rect[2], rect[3]);
+                    pass.draw(0..6, from..to);
+                }
+                from = to;
             }
         };
         for (at, cut) in cuts {

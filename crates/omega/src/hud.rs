@@ -54,6 +54,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: r"Data\XML\Zone_HUD.xml",
     elimination: r"Data\XML\Elimination_HUD.xml",
     split: None,
+    split_layout: None,
 };
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].

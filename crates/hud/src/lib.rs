@@ -59,6 +59,7 @@ mod placement;
 mod runtime;
 mod shield_bar;
 mod sight_draw;
+pub mod split_hud;
 pub mod sprite;
 pub mod time_gap;
 mod time_trial_pace;
@@ -66,7 +67,7 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets};
 pub use compose::{Composed, compose};
-pub use draw::{Context, Frame, draw_list, sprite_draw};
+pub use draw::{Context, Frame, Span, draw_list, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
 pub use pickup::pickup_icon_name;

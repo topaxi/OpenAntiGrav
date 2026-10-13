@@ -1,0 +1,180 @@
+# This project's split-screen HUD for Wipeout HD / Fury: where each group of the title's
+# own widgets goes inside one view, for every view count and shape the disc's own
+# `splitscreen_hud` layouts (two views, top and bottom, four modes) do not cover: three to
+# eight views, and the modes the authored family has no layout for. Read by
+# oag_hud::split_hud through the fallback asset layer (docs/architecture/asset-layers.md);
+# a file of the same name in overrides/wipeout-hd/Data/XML/ replaces it and, unlike this
+# one, beats the disc's authored layout too.
+#
+# CHOSEN, NOT MEASURED. Every anchor, offset and scale below is this project's choice,
+# made for legibility at the size a player sees a view. It places HD's own widgets and
+# draws no art of its own. A widget no group names is not drawn in a split. The groups sit
+# in the corners HD's whole-screen layout puts them in: lap top left, place top right, the
+# held weapon and shield at the top centre, time bottom left, speed bottom right.
+#
+# Units: `offset` is a fraction of the view's width and height from the view's own
+# `anchor` point; `scale` 1.0 is the whole-screen HUD scaled to fit the view.
+#
+# The first layout whose `views`, `aspect` (a view's width over height, [min, max)) and
+# `modes` all fit the view answers it.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
+version = "1.0.0"
+
+# A strip wider than 2.4:1: the top view of three, and two views in a mode the disc authors no split layout for.
+[[layout]]
+name = "strip"
+aspect = [2.4, 99.0]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*"]
+anchor = "bottom-right"
+offset = [-0.012, -0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["LapPanel", "LapBar*", "LapTxt", "Lap", "LapOf", "Lap Outof"]
+anchor = "top-left"
+offset = [0.012, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["TimeIcon", "ClockIcon", "BestLapImage", "CurrentTime", "CurrentTimeTxt", "BestTimeTxt", "BestTime"]
+anchor = "bottom-left"
+offset = [0.012, -0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["PositionPanel", "PosBar*", "PositionTxt", "Position", "DistanceApart", "Position Outof", "PositionTxt2BG", "PositionTxt2", "TotalTime*"]
+anchor = "top-right"
+offset = [-0.012, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["PickupBackground", "ShieldIcon", "AutopilotIcon", "CannonIcon", "RocketIcon", "BombIcon", "QuakeIcon", "MineIcon", "PlasmaIcon", "MissileIcon", "TurboIcon", "LeachBeamIcon", "RepulserIcon", "ShurikenIcon", "PickupFarBackground", "PickupAbsorbBG", "PickupDamageBG", "DamageBarBg", "DamageBar", "AbsorbBar", "ShieldBarText", "PickupAbsorbTxt", "PickupAbsorb", "PickupDamageTxt", "PickupDamage", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay*"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.0
+
+
+# A little wider than tall to a little wider than the screen: four views, the larger
+# views of three or five.
+[[layout]]
+name = "landscape"
+aspect = [1.4, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*"]
+anchor = "bottom-right"
+offset = [-0.015, -0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["LapPanel", "LapBar*", "LapTxt", "Lap", "LapOf", "Lap Outof"]
+anchor = "top-left"
+offset = [0.015, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["TimeIcon", "ClockIcon", "BestLapImage", "CurrentTime", "CurrentTimeTxt", "BestTimeTxt", "BestTime"]
+anchor = "bottom-left"
+offset = [0.015, -0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["PositionPanel", "PosBar*", "PositionTxt", "Position", "DistanceApart", "Position Outof", "PositionTxt2BG", "PositionTxt2", "TotalTime*"]
+anchor = "top-right"
+offset = [-0.015, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["PickupBackground", "ShieldIcon", "AutopilotIcon", "CannonIcon", "RocketIcon", "BombIcon", "QuakeIcon", "MineIcon", "PlasmaIcon", "MissileIcon", "TurboIcon", "LeachBeamIcon", "RepulserIcon", "ShurikenIcon", "PickupFarBackground", "PickupAbsorbBG", "PickupDamageBG", "DamageBarBg", "DamageBar", "AbsorbBar", "ShieldBarText", "PickupAbsorbTxt", "PickupAbsorb", "PickupDamageTxt", "PickupDamage", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay*"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.0
+
+
+# Squarer and smaller views: the small views of five to seven.
+[[layout]]
+name = "square"
+aspect = [1.0, 1.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*"]
+anchor = "bottom-right"
+offset = [-0.02, -0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["LapPanel", "LapBar*", "LapTxt", "Lap", "LapOf", "Lap Outof"]
+anchor = "top-left"
+offset = [0.02, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["PositionPanel", "PosBar*", "PositionTxt", "Position", "DistanceApart", "Position Outof", "PositionTxt2BG", "PositionTxt2", "TotalTime*"]
+anchor = "top-right"
+offset = [-0.02, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["PickupBackground", "ShieldIcon", "AutopilotIcon", "CannonIcon", "RocketIcon", "BombIcon", "QuakeIcon", "MineIcon", "PlasmaIcon", "MissileIcon", "TurboIcon", "LeachBeamIcon", "RepulserIcon", "ShurikenIcon", "PickupFarBackground", "PickupAbsorbBG", "PickupDamageBG", "DamageBarBg", "DamageBar", "AbsorbBar", "ShieldBarText", "PickupAbsorbTxt", "PickupAbsorb", "PickupDamageTxt", "PickupDamage", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay*"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.1
+
+
+# Taller than wide: the small views of seven and eight.
+[[layout]]
+name = "portrait"
+aspect = [0.0, 1.0]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["LapPanel", "LapBar*", "LapTxt", "Lap", "LapOf", "Lap Outof"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PositionPanel", "PosBar*", "PositionTxt", "Position", "DistanceApart", "Position Outof", "PositionTxt2BG", "PositionTxt2", "TotalTime*"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PickupBackground", "ShieldIcon", "AutopilotIcon", "CannonIcon", "RocketIcon", "BombIcon", "QuakeIcon", "MineIcon", "PlasmaIcon", "MissileIcon", "TurboIcon", "LeachBeamIcon", "RepulserIcon", "ShurikenIcon", "PickupFarBackground", "PickupAbsorbBG", "PickupDamageBG", "DamageBarBg", "DamageBar", "AbsorbBar", "ShieldBarText", "PickupAbsorbTxt", "PickupAbsorb", "PickupDamageTxt", "PickupDamage", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay*"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.3
+

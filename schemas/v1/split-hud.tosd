@@ -1,0 +1,90 @@
+# A split screen's HUD layout, one file per title: see crates/hud/src/split_hud.rs and
+# docs/rendering/split-screen.md. It only places a title's own widgets, by name, inside
+# a view; it cannot add art. What cannot be said here and stays the loader's: that
+# `views` hold 1 to 8, that `aspect` is an increasing range from 0, that `scale` is in
+# (0, 8] and an `offset` within one view, that a `widgets` pattern is not empty, and that
+# the header names this kind at a major the build reads.
+
+[toml-schema]
+version = "1.0.0"
+
+[types.toml-schema-reference]
+type = "table"
+
+[types.toml-schema-reference.location]
+type = "string"
+pattern = "/v1/split-hud[.]tosd$"
+
+[types.toml-schema-reference.version]
+type = "string"
+allowedvalues = ["1.0.0"]
+
+# The loader reads `[1, 2]` as well as `[1.0, 2.0]`.
+[types.number]
+oneof = ["integer", "float"]
+
+[types.pair]
+type = "array"
+itemtype = "types.number"
+minlength = 2
+maxlength = 2
+optional = true
+
+[types.group]
+type = "table"
+
+[types.group.widgets]
+type = "array"
+itemtype = "string"
+minlength = 1
+
+[types.group.anchor]
+type = "string"
+allowedvalues = [
+  "top-left", "top", "top-right",
+  "left", "centre", "right",
+  "bottom-left", "bottom", "bottom-right",
+]
+
+[types.group.offset]
+type = "types.pair"
+
+[types.group.scale]
+type = "types.number"
+optional = true
+
+[types.layout]
+type = "table"
+
+[types.layout.name]
+type = "string"
+optional = true
+
+[types.layout.views]
+type = "array"
+itemtype = "integer"
+optional = true
+
+[types.layout.aspect]
+type = "types.pair"
+
+[types.layout.modes]
+type = "array"
+itemtype = "string"
+optional = true
+
+[types.layout.group]
+type = "array"
+itemtype = "types.group"
+optional = true
+
+[elements]
+
+[elements.toml-schema]
+type = "types.toml-schema-reference"
+optional = true
+
+[elements.layout]
+type = "array"
+itemtype = "types.layout"
+optional = true

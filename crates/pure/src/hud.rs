@@ -94,6 +94,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     // above). See `oag_title::HudLayouts::elimination`.
     elimination: layouts::ARCADE,
     split: None,
+    split_layout: Some(r"Data\XML\SplitHud_Pure.toml"),
 };
 
 /// How Pure's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

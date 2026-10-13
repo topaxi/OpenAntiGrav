@@ -66,6 +66,11 @@ pub struct Assets {
     /// [`Self::sheet`]. `None` for everything else, which draws the whole-screen
     /// [`Self::layout`] scaled into each view instead.
     pub split: Option<SplitAssets>,
+    /// This race's split-HUD file, cut for its mode and view count, read only for
+    /// a race of two or more views on a title that names one
+    /// ([`oag_title::HudLayouts::split_layout`]). `None` for one view and for a
+    /// file that is absent or refused, which is reported at load.
+    pub split_hud: Option<crate::split_hud::SplitHudAssets>,
 }
 
 /// A title's own split-screen HUD for two players: one layout per player.

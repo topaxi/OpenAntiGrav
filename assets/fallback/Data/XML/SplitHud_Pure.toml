@@ -1,0 +1,191 @@
+# This project's split-screen HUD for Wipeout Pure: where each group of the title's own
+# widgets goes inside one view. Read by oag_hud::split_hud through the fallback asset
+# layer (docs/architecture/asset-layers.md); a file of the same name in
+# overrides/wipeout-pure/Data/XML/ replaces it.
+#
+# CHOSEN, NOT MEASURED. The original's split screen has not been read, so every anchor,
+# offset and scale below is this project's choice, made for legibility at the size a
+# player sees a view. It places Pure's own widgets (its text and its weapon icons, which
+# the title authors as models) and draws no art of its own. A widget no group names is
+# not drawn in a split. Groups sit at the corners the whole-screen layout puts them in:
+# lap bottom left, time top left, place top right, speed bottom right, the held weapon at
+# the bottom centre.
+#
+# Units: `offset` is a fraction of the view's width and height from the view's own
+# `anchor` point; `scale` 1.0 is the whole-screen HUD scaled to fit the view.
+#
+# The first layout whose `views`, `aspect` (a view's width over height, [min, max)) and
+# `modes` all fit the view answers it.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
+version = "1.0.0"
+
+# Two views, or any strip wider than 2.4:1.
+[[layout]]
+name = "strip"
+aspect = [2.4, 99.0]
+
+[[layout.group]]
+widgets = ["SpeedL", "SpeedR"]
+anchor = "bottom-right"
+offset = [-0.012, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "bottom-left"
+offset = [0.012, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["CurrentTime*"]
+anchor = "top-left"
+offset = [0.012, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Position*"]
+anchor = "top-right"
+offset = [-0.012, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
+anchor = "bottom"
+offset = [0.0, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.2
+
+
+# A little wider than tall to a little wider than the screen: four views, the larger
+# views of three or five.
+[[layout]]
+name = "landscape"
+aspect = [1.4, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedL", "SpeedR"]
+anchor = "bottom-right"
+offset = [-0.015, -0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "bottom-left"
+offset = [0.015, -0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["CurrentTime*"]
+anchor = "top-left"
+offset = [0.015, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["Position*"]
+anchor = "top-right"
+offset = [-0.015, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
+anchor = "bottom"
+offset = [0.0, -0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.0
+
+
+# Squarer and smaller views: the small views of five to seven.
+[[layout]]
+name = "square"
+aspect = [1.0, 1.4]
+
+[[layout.group]]
+widgets = ["SpeedL", "SpeedR"]
+anchor = "bottom-right"
+offset = [-0.02, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "bottom-left"
+offset = [0.02, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["CurrentTime*"]
+anchor = "top-left"
+offset = [0.02, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Position*"]
+anchor = "top-right"
+offset = [-0.02, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
+anchor = "bottom"
+offset = [0.0, -0.04]
+scale = 1.2
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.1
+
+
+# Taller than wide: the small views of seven and eight.
+[[layout]]
+name = "portrait"
+aspect = [0.0, 1.0]
+
+[[layout.group]]
+widgets = ["SpeedL", "SpeedR"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "bottom-left"
+offset = [0.03, -0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["CurrentTime*"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["Position*"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
+anchor = "bottom"
+offset = [0.0, -0.04]
+scale = 1.4
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.2
+

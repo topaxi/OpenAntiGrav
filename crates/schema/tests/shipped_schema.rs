@@ -20,6 +20,9 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/mods/oag-extras/menu.toml", "mod-menu"),
         ("crates/trackfile/tests/fixtures/oval.track.toml", "track"),
         ("crates/game/tests/fixtures/music-state.toml", "music-state"),
+        ("assets/fallback/Data/XML/SplitHud_Pulse.toml", "split-hud"),
+        ("assets/fallback/Data/XML/SplitHud_Pure.toml", "split-hud"),
+        ("assets/fallback/Data/XML/SplitHud_HD.toml", "split-hud"),
     ]
 }
 

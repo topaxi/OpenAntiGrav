@@ -211,6 +211,22 @@ pub(super) fn load_hud(
         font.clone()
     };
 
+    let heights = oag_hud::split_hud::LineHeights {
+        hud: font.line_height,
+        small: small_font.line_height,
+        default: default_font.line_height,
+    };
+    let split_hud = load_split_hud(
+        archives,
+        title,
+        mode,
+        views,
+        layout.as_ref(),
+        heights,
+        split.is_some(),
+        report,
+    );
+
     oag_hud::Assets {
         layout,
         sheet,
@@ -226,7 +242,92 @@ pub(super) fn load_hud(
         space,
         art: title.hud_art,
         split,
+        split_hud,
     }
+}
+
+/// This project's split-screen layout file for a race of `views` views, cut for
+/// `layout`, when the title names one.
+///
+/// **Read only for two or more views**: a single view draws the whole-screen
+/// layout and never reads, reports or arranges anything of this. The entry goes
+/// through the asset layers, so a player's override answers ahead of the disc and
+/// the file this project ships answers behind it; which of them did decides where
+/// it sits against the title's authored layout (`oag_hud::split_hud::source`). A
+/// file that will not parse is reported by name and the whole-screen layout is
+/// scaled into each view instead, so a bad override costs the player its own
+/// layout and nothing else.
+#[expect(clippy::too_many_arguments, reason = "one load's worth of context")]
+fn load_split_hud(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    views: u8,
+    layout: Option<&oag_hud::Layout>,
+    heights: oag_hud::split_hud::LineHeights,
+    authored: bool,
+    report: &mut Vec<String>,
+) -> Option<oag_hud::split_hud::SplitHudAssets> {
+    use oag_hud::split_hud::{Origin, SplitHud, SplitHudAssets};
+    if views < 2 {
+        return None;
+    }
+    let entry = title.hud.split_layout?;
+    let layout = layout?;
+    let origin = match archives.layer_of(entry) {
+        Some(oag_assets::layers::Kind::Override) => Origin::Override,
+        Some(oag_assets::layers::Kind::Fallback) => Origin::Fallback,
+        None => {
+            report.push(format!("HUD split layout: {entry} is not in this source"));
+            return None;
+        }
+    };
+    let parsed = archives
+        .read_name(entry)
+        .map_err(|error| error.to_string())
+        .and_then(|bytes| {
+            String::from_utf8(bytes)
+                .map_err(|error| error.to_string())
+                .and_then(|text| SplitHud::parse(&text).map_err(|error| error.to_string()))
+        });
+    let file = match parsed {
+        Ok(file) => file,
+        Err(error) => {
+            report.push(format!(
+                "HUD split layout: {entry} refused: {error}; the whole-screen layout is scaled into each view"
+            ));
+            return None;
+        }
+    };
+    let assets = SplitHudAssets::new(
+        entry,
+        origin,
+        file,
+        layout,
+        heights,
+        mode,
+        usize::from(views),
+    );
+    let mut covering = 0;
+    for (rule, pieces) in assets.file.rules.iter().zip(&assets.arranged) {
+        if let Some(pieces) = pieces {
+            covering += 1;
+            report.push(format!(
+                "HUD split layout: {entry} layout {:?}, {} group(s) placing {} widget(s), for {views} view(s)",
+                rule.name,
+                pieces.len(),
+                pieces.iter().map(|p| p.layout.widget_count() + p.layout.models.len()).sum::<usize>(),
+            ));
+        }
+    }
+    report.push(match (covering, authored, origin) {
+        (0, true, _) => format!("HUD split layout: {entry} has no layout for {views} view(s) in this mode; the authored layout draws"),
+        (0, false, _) => format!("HUD split layout: {entry} has no layout for {views} view(s) in this mode; the whole-screen layout is scaled into each view"),
+        (_, true, Origin::Override) => "HUD split layout: the player's file answers where it has a layout and the title's authored layout elsewhere".to_owned(),
+        (_, true, Origin::Fallback) => "HUD split layout: the title's authored layout answers, and this project's file where it has none".to_owned(),
+        (_, false, _) => "HUD split layout: answered by the file, the whole-screen layout elsewhere".to_owned(),
+    });
+    Some(assets)
 }
 
 /// The title's own two-player split-screen layouts for `mode`, when the race is

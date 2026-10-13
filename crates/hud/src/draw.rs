@@ -590,6 +590,21 @@ pub struct Frame {
     pub small_text: Vec<Draw>,
     /// Text in the `Default` font: the per-craft rows.
     pub default_text: Vec<Draw>,
+    /// For a split screen, where each view's draws start in the four lists, so the
+    /// pass can scissor them to the view. Empty for a whole-screen frame, which is
+    /// painted unclipped.
+    pub spans: Vec<Span>,
+}
+
+/// One view's share of a [`Frame`]: its draws run from these indices of the four
+/// lists to the next span's, and are clipped to `clip`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Span {
+    /// The view's rectangle in the HUD's grid, `[x, y, width, height]`.
+    pub clip: [f32; 4],
+    /// Where its draws start in [`Frame::sprites`], [`Frame::hud_text`],
+    /// [`Frame::small_text`] and [`Frame::default_text`].
+    pub start: [usize; 4],
 }
 
 impl Frame {
