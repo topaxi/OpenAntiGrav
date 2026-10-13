@@ -65,9 +65,12 @@ fn players_fall_back_to_one_view_only_where_the_split_is_not_offered() {
 
 fn has_split_row(definition: &oag_ui::menu::Definition) -> bool {
     definition.pages.iter().any(|page| {
-        page.meta
-            .iter()
-            .any(|meta| meta.id.as_deref() == Some("split_screen"))
+        page.meta.iter().any(|meta| {
+            matches!(
+                meta.id.as_deref(),
+                Some("split_screen" | "split_vertical" | "split_horizontal")
+            )
+        })
     })
 }
 
