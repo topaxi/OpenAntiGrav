@@ -360,7 +360,7 @@ fn conform_every_vertex(
     vertices: &mut Vec<GpuVertex>,
     mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
 ) {
-    let coarse: Vec<GpuVertex> = vertices.drain(..).collect();
+    let coarse = std::mem::take(vertices);
     let mut place = |vertex: GpuVertex| {
         let (at, normal) = (
             Vec3::from_array(vertex.position),
@@ -378,7 +378,7 @@ fn conform_every_vertex(
         position: (Vec3::from_array(a.position).midpoint(Vec3::from_array(b.position))).to_array(),
         ..*a
     };
-    for t in coarse.chunks_exact(3) {
+    for t in coarse.as_chunks::<3>().0 {
         let (ab, bc, ca) = (
             middle(&t[0], &t[1]),
             middle(&t[1], &t[2]),
