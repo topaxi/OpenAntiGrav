@@ -39,6 +39,26 @@ motion blur measures per drawn frame now, see
    `--draw-alpha` sequence; nobody has watched a windowed race on a 144 or
    240 Hz panel since. A player's look at one (`just play`, frame limit 240)
    is the check this thread cannot do from a member's Xvfb at 5-7 fps.
+6. **Optional, off by default: extrapolate the local craft and chase camera**
+   (maintainer, 2026-10-13). Interpolation draws up to one tick (16.7 ms)
+   late; drawing the player's own craft and the chase camera *past* the
+   current tick by the same alpha wins that back. It overshoots on contact, so
+   a tick with a wall hit (`Evaluated::wall.impact` in `Race::tick`) or a
+   craft-to-craft contact must not extrapolate: the snap keys in
+   `between_ticks` gain a contact flag for those two poses. Remote craft,
+   projectiles and everything else stay interpolated. **Convention:** in this
+   code alpha `1.0` is the current tick, where captures, pauses and parked
+   races draw; the maintainer's "capture at alpha 0" is that same tick.
+   Extrapolation would draw at `t = 1 + alpha` along `previous -> current`
+   (`blend_transform` with `t > 1`), so a capture still draws `t = 1`.
+   **Pairs with the swapchain-acquire hoist** in
+   `vk-amd-anti-lag-is-the-next-latency-lever.md` in this directory (moving
+   `get_current_texture`, `session/draw.rs`, to before `self.clock.advance`,
+   `session/frame.rs`): nothing between the advance and the acquire reads the
+   draw alpha (it is read at the race's render call, after the acquire), so
+   the hoist is unaffected. Put the acquire before `let now` (`frame.rs`,
+   ahead of the advance) too, so a blocking acquire's wait is inside this
+   frame's elapsed and the alpha describes the instant after it.
 
 ## Next Steps
 
@@ -48,6 +68,10 @@ motion blur measures per drawn frame now, see
    continuous in alpha across a tick boundary. Two to three hours.
 3. Particle positions between ticks (item 2), if item 1's look says it is
    worth it. Half a day.
+4. Local-craft and chase-camera extrapolation (item 6), behind an off-by-default
+   setting, with a test that a contact tick never extrapolates. After the
+   acquire hoist lands and an input-to-photon number exists to judge it by.
+   Half a day to a day.
 
 ## Survey (2026-10-13), for reference
 
