@@ -58,7 +58,7 @@ tracks; the ships carry **275 of the census's 2,302 textures** in their bundle's
 (`Assets::texture`). The 78 `.resource` nodes (129 MB) are audio streams,
 measured: all 134 `AudioClip` objects in the census have an
 `m_Resource.m_Source` naming a `.resource` node (asserted in
-`classes_ground_truth`; UnityPy agrees). They are not read: **audio is out of
+`census_ground_truth`; UnityPy agrees). They are not read: **audio is out of
 scope**.
 
 ## UnityFS container
@@ -250,9 +250,10 @@ measurement.
 Ground truth, all `#[ignore]`d and going through `oag-testdata`'s skip-or-fail
 contract (`OAG_REQUIRE_GAME_DATA=1` makes a missing tree a failure):
 
-- `bundle_ground_truth`: 79 of 79 bundles open, the census table above.
-- `serialized_ground_truth`: 111 files, 123,083 objects, 0 leftover bytes.
-- `classes_ground_truth`: every built-in object reads or is refused by name (0 refused).
+- `census_ground_truth`, three claims over one walk of the census:
+  - 79 of 79 bundles open, the census table above;
+  - 111 files, 123,083 objects, 0 leftover bytes;
+  - every built-in object reads or is refused by name (0 refused).
 - `oracle_ground_truth`: with `OAG_UNITY_ORACLE` set to a table written by
   [`scripts/unity-oracle.py`](../../scripts/unity-oracle.py) (UnityPy 1.25.4 as a
   second implementation), **1,529 meshes match** on vertex count, triangle count and

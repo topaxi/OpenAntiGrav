@@ -298,13 +298,19 @@ fn the_chain_smears_what_moved_and_leaves_still_surfaces_sharp() {
     assert_eq!(red_at(32, 28), 0, "the smear leaked vertically");
     assert_eq!(red_at(32, 36), 0, "the smear leaked vertically");
     // The still block, same colour and same background: essentially
-    // untouched - the per-object separation the buffer exists for. One
-    // count of tolerance, and it is understood rather than shrugged at:
+    // untouched - the per-object separation the buffer exists for. Two
+    // counts of tolerance, and they are understood rather than shrugged at:
     // `cone`'s quarter-pixel radius floor gives sub-pixel taps a little
     // weight, and at this block's own edge those taps bilinearly graze the
-    // background - measured at exactly 254 here, with zero leakage into any
-    // neighbouring pixel (asserted below).
-    assert!(red_at(16, 31) >= 254, "the still block was dimmed");
+    // background. How much they graze is the adapter's sub-texel filtering
+    // precision, which Vulkan leaves to the implementation: measured at
+    // exactly 254 with no leakage when this landed, and on 2026-10-13 at 253
+    // with one count into the pixel to its left on an Intel Arc 140T (Mesa
+    // 26.2.3 and 26.2.4, Vulkan and GL alike). The same source read 254 and
+    // 253 on that machine on the same afternoon, so it is not a code change.
+    // The leak stays bounded to that one pixel (asserted below).
+    assert!(red_at(16, 31) >= 253, "the still block was dimmed");
+    assert!(red_at(15, 31) <= 1, "the still block smeared left");
     assert_eq!(red_at(14, 31), 0, "the still block smeared left");
     assert_eq!(red_at(19, 31), 0, "the still block smeared right");
 }

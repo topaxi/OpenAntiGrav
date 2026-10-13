@@ -89,7 +89,7 @@ are counted (`Track::unresolved_scripts`) and skipped, never guessed at. The AI
 line has a point per section on all 31 (`SectionNextArrayIndex` equals the
 section's `Next` on Lion's Den).
 
-## Field coverage (measured, `tests/field_census.rs`)
+## Field coverage (measured, `tests/fields/mod.rs`)
 
 Across the 32 tracks, the fields of `Section`, `Tile` and `TrackDataStorage` this
 layer does **not** read, as `objects carrying it / objects holding a non-default

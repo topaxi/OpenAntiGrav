@@ -39,8 +39,9 @@
 //! that set's entries a given material means) is resolved by each `Texture`
 //! node's own declared name - see `docs/formats/ps2-texture.md`. Both halves are
 //! exact now: every slot on every one of the 32 track models decodes, and
-//! [`every_ps2_track_s_texture_set_is_found_by_directory_position`] asserts it
-//! stays that way. The load report still names any model whose slots did not
+//! `spawn_heading_ground_truth.rs`'s
+//! `every_ps2_track_s_texture_set_is_found_by_directory_position` asserts it
+//! stays that way, on the load of each circuit that sweep already makes. The load report still names any model whose slots did not
 //! all fill rather than guessing at one, for whichever half regresses.
 
 use std::path::PathBuf;
@@ -367,8 +368,8 @@ fn the_loading_glow_strip_decodes_off_both_discs() {
 /// coincidental adjacency would show up as one team fitting and its neighbour
 /// not, since the rule is purely positional and every ship sits next to a
 /// different texture set. The same rule, checked separately, also holds for
-/// track models - see
-/// [`every_ps2_track_s_texture_set_is_found_by_directory_position`].
+/// track models - see `spawn_heading_ground_truth.rs`'s
+/// `every_ps2_track_s_texture_set_is_found_by_directory_position`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
@@ -424,60 +425,6 @@ fn every_ps2_ship_s_texture_set_is_found_by_directory_position() {
             ship.textures.len(),
             loaded.report.join("\n")
         );
-    }
-}
-
-/// The archive-entry lookup is the same directory-position rule the ship uses,
-/// checked independently for every circuit's own
-/// `track.vex`/`track_reversed.vex` rather than extrapolated from the ship
-/// result above - but finding the right *entry* is only half of it. 5 of the
-/// 32 `<n>_Track` models have a nested set with fewer entries than the model
-/// has `Texture` nodes, because two nodes there declare the same name and the
-/// set holds one entry per unique name; see
-/// `docs/formats/ps2-texture.md#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal`.
-/// Resolving each node by its own declared name rather than by position in
-/// that set is what makes the duplicate harmless - a repeated name simply
-/// resolves to the one entry it always named - so **every slot on every one
-/// of the 32 models decodes**, no exceptions. Asserting the exact zero rather
-/// than "no more than a handful" is deliberate: a regression that broke the
-/// by-name lookup and fell back to position (or to nothing) would still pass
-/// a looser bound.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn every_ps2_track_s_texture_set_is_found_by_directory_position() {
-    let Some(image) = image(PS2_IMAGE) else {
-        return;
-    };
-
-    for n in 1..=16u32 {
-        for variant in ["track.vex", "track_reversed.vex"] {
-            let track = format!(r"Data\Environments\{n:02}_Track\{variant}");
-            let loaded = race::load(&race::Options {
-                source: image.display().to_string(),
-                track: Some(track.clone()),
-                class: "VENOM".to_string(),
-                ..race::Options::default()
-            })
-            .unwrap_or_else(|e| panic!("loading {track} off {PS2_IMAGE}: {e:#}"));
-
-            let model = &loaded.track_model;
-            assert!(
-                !model.textures.is_empty(),
-                "{track}'s PS2 track model declares no texture slots at all, which \
-                 contradicts docs/formats/ps2-texture.md's one-entry-per-Texture-node \
-                 reading"
-            );
-            let decoded = model.textures.iter().filter(|t| t.is_some()).count();
-            assert_eq!(
-                decoded,
-                model.textures.len(),
-                "{track}: only {decoded} of {} texture slot(s) decoded; by-name \
-                 resolution should fill every slot now, including the ones a \
-                 duplicate Texture node name used to leave unbound; report was:\n{}",
-                model.textures.len(),
-                loaded.report.join("\n")
-            );
-        }
     }
 }
 

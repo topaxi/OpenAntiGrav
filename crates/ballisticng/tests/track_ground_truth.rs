@@ -3,6 +3,8 @@
 //! the numbers that cross-check the reader hold. Disc-backed (`data/ballisticng`),
 //! so `#[ignore]`d and run by `just test-data`.
 
+mod fields;
+
 use oag_ballisticng::track::{ColliderKind, LoopEnd, Tile, TileKind, Track};
 use oag_ballisticng::wtrk::Wtrk;
 use oag_unity::assets::Assets;
@@ -14,7 +16,48 @@ struct Loaded {
     track: Result<Track, String>,
 }
 
-fn load_all() -> Option<Vec<Loaded>> {
+/// What every `Texture2D` of every track decoded to, gathered on the same walk
+/// that reads the tracks: a bundle is LZMA- or LZ4-unpacked once, not once per
+/// claim.
+#[derive(Default)]
+struct Textures {
+    ok: usize,
+    empty: usize,
+    refused: std::collections::BTreeMap<String, usize>,
+}
+
+impl Textures {
+    fn decode_every(&mut self, a: &Assets) {
+        use oag_ballisticng::track::ObjectRef;
+        use oag_unity::serialized::class_id;
+        use oag_unity::value::PPtr;
+        for (fi, sf) in a.files().iter().enumerate() {
+            for o in sf
+                .objects
+                .iter()
+                .filter(|o| o.class_id == class_id::TEXTURE_2D)
+            {
+                let at = ObjectRef {
+                    file: fi,
+                    pptr: PPtr {
+                        file_id: 0,
+                        path_id: o.path_id,
+                    },
+                };
+                match oag_ballisticng::texture::decode(a, at) {
+                    Ok(img) if img.rgba.is_empty() => self.empty += 1,
+                    Ok(img) => {
+                        assert_eq!(img.rgba.len(), (img.width * img.height * 4) as usize);
+                        self.ok += 1;
+                    }
+                    Err(e) => *self.refused.entry(e.to_string()).or_default() += 1,
+                }
+            }
+        }
+    }
+}
+
+fn load_all() -> Option<(Vec<Loaded>, Textures, fields::Fields)> {
     let root = oag_testdata::exact("data/ballisticng/workshop-473770")?;
     let mut dirs: Vec<_> = std::fs::read_dir(&root)
         .expect("workshop dir")
@@ -22,6 +65,8 @@ fn load_all() -> Option<Vec<Loaded>> {
         .collect();
     dirs.sort();
     let mut out = Vec::new();
+    let mut textures = Textures::default();
+    let mut fields = fields::Fields::default();
     for d in dirs {
         for e in std::fs::read_dir(&d).expect("item dir") {
             let path = e.expect("entry").path();
@@ -43,6 +88,8 @@ fn load_all() -> Option<Vec<Loaded>> {
             );
             let b = Bundle::parse(w.bundle(&file)).expect("bundle opens");
             let a = Assets::open(&b).expect("serialized files open");
+            textures.decode_every(&a);
+            fields.count(&a);
             out.push(Loaded {
                 id: w.workshop_id.to_string(),
                 title: w.title,
@@ -50,7 +97,25 @@ fn load_all() -> Option<Vec<Loaded>> {
             });
         }
     }
-    Some(out)
+    Some((out, textures, fields))
+}
+
+/// Every claim over the 32 tracks, on one walk of them. Each claim is its own
+/// function below; the walk is shared because each one used to unpack every
+/// bundle again (`CLAUDE.md`, "find what already walks that data").
+#[test]
+#[ignore = "needs data/ballisticng"]
+fn the_workshop_tracks() {
+    let Some((all, textures, fields)) = load_all() else {
+        return;
+    };
+    every_workshop_track_reads_or_is_refused_by_name(&all);
+    the_section_graph_is_classified_on_every_track(&all);
+    tile_positions_are_the_placed_centroids_of_their_vertices(&all);
+    ai_lines_and_collider_kinds_across_the_census(&all);
+    lions_den_matches_the_probe(&all);
+    every_track_texture_decodes_or_is_refused_by_name(&textures);
+    fields.the_fields_this_layer_does_not_read_are_frozen();
 }
 
 fn centroid(v: &[[f32; 3]], idx: &[usize]) -> [f32; 3] {
@@ -67,10 +132,7 @@ fn count(tiles: &[Tile], kind: TileKind) -> usize {
     tiles.iter().filter(|t| t.kind == kind).count()
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn every_workshop_track_reads_or_is_refused_by_name() {
-    let Some(all) = load_all() else { return };
+fn every_workshop_track_reads_or_is_refused_by_name(all: &[Loaded]) {
     assert_eq!(all.len(), 32, "the census");
     let refused: Vec<_> = all
         .iter()
@@ -79,15 +141,12 @@ fn every_workshop_track_reads_or_is_refused_by_name() {
     assert_eq!(refused, Vec::<(&str, &str)>::new(), "refusals");
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn the_section_graph_is_classified_on_every_track() {
-    let Some(all) = load_all() else { return };
+fn the_section_graph_is_classified_on_every_track(all: &[Loaded]) {
     let (mut closed, mut rho, mut open) = (0, 0, 0);
     let mut unreached = Vec::new();
     let mut branches = 0;
     let mut pit_branches = 0;
-    for l in &all {
+    for l in all {
         let t = l.track.as_ref().expect("reads");
         match t.chains.end {
             LoopEnd::Closed => closed += 1,
@@ -126,14 +185,11 @@ fn the_section_graph_is_classified_on_every_track() {
     assert_eq!((branches, pit_branches), (33, 32));
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn tile_positions_are_the_placed_centroids_of_their_vertices() {
-    let Some(all) = load_all() else { return };
+fn tile_positions_are_the_placed_centroids_of_their_vertices(all: &[Loaded]) {
     let mut worst = 0.0f32;
     let mut checked = 0;
     let mut scales = std::collections::BTreeMap::<String, usize>::new();
-    for l in &all {
+    for l in all {
         let t = l.track.as_ref().expect("reads");
         let fp = t.floor_placement().expect("one floor placement");
         *scales
@@ -181,14 +237,11 @@ fn tile_positions_are_the_placed_centroids_of_their_vertices() {
     );
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn ai_lines_and_collider_kinds_across_the_census() {
-    let Some(all) = load_all() else { return };
+fn ai_lines_and_collider_kinds_across_the_census(all: &[Loaded]) {
     let mut no_line = Vec::new();
     let mut kind3_tracks = 0;
     let mut unresolved = Vec::new();
-    for l in &all {
+    for l in all {
         let t = l.track.as_ref().expect("reads");
         if t.racing_lines.is_empty() {
             no_line.push(l.id.as_str());
@@ -218,10 +271,7 @@ fn ai_lines_and_collider_kinds_across_the_census() {
     assert_eq!(unresolved, [("2175514157", 3)]);
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn lions_den_matches_the_probe() {
-    let Some(all) = load_all() else { return };
+fn lions_den_matches_the_probe(all: &[Loaded]) {
     let l = all
         .iter()
         .find(|l| l.id == "1392209921")
@@ -342,61 +392,11 @@ fn lions_den_atlas_decodes_as_unitypy_does() {
     assert_eq!(byte_sum(&illum.rgba), 75_854_033);
 }
 
-#[test]
-#[ignore = "needs data/ballisticng"]
-fn every_track_texture_decodes_or_is_refused_by_name() {
-    use oag_ballisticng::track::ObjectRef;
-    use oag_unity::serialized::class_id;
-    use oag_unity::value::PPtr;
-    let Some(root) = oag_testdata::exact("data/ballisticng/workshop-473770") else {
-        return;
-    };
-    let mut dirs: Vec<_> = std::fs::read_dir(&root)
-        .unwrap()
-        .map(|e| e.unwrap().path())
-        .collect();
-    dirs.sort();
-    let (mut ok, mut empty) = (0usize, 0usize);
-    let mut refused = std::collections::BTreeMap::<String, usize>::new();
-    for d in dirs {
-        for e in std::fs::read_dir(&d).unwrap() {
-            let path = e.unwrap().path();
-            if path.extension().and_then(|x| x.to_str()) != Some("wtrk") {
-                continue;
-            }
-            let file = std::fs::read(&path).unwrap();
-            let w = Wtrk::parse(&file).unwrap();
-            let b = Bundle::parse(w.bundle(&file)).unwrap();
-            let a = Assets::open(&b).unwrap();
-            for (fi, sf) in a.files().iter().enumerate() {
-                for o in sf
-                    .objects
-                    .iter()
-                    .filter(|o| o.class_id == class_id::TEXTURE_2D)
-                {
-                    let at = ObjectRef {
-                        file: fi,
-                        pptr: PPtr {
-                            file_id: 0,
-                            path_id: o.path_id,
-                        },
-                    };
-                    match oag_ballisticng::texture::decode(&a, at) {
-                        Ok(img) if img.rgba.is_empty() => empty += 1,
-                        Ok(img) => {
-                            assert_eq!(img.rgba.len(), (img.width * img.height * 4) as usize);
-                            ok += 1;
-                        }
-                        Err(e) => *refused.entry(e.to_string()).or_default() += 1,
-                    }
-                }
-            }
-        }
-    }
-    assert_eq!(refused, std::collections::BTreeMap::new());
+fn every_track_texture_decodes_or_is_refused_by_name(t: &Textures) {
+    assert_eq!(t.refused, std::collections::BTreeMap::new());
     // 1,753 textures (the probe's census); the 32 empty ones are each track's
     // 0 by 0 dynamic-font atlas.
-    assert_eq!((ok, empty), (1_721, 32));
+    assert_eq!((t.ok, t.empty), (1_721, 32));
 }
 
 #[test]

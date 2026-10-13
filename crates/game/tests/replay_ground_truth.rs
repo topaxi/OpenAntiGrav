@@ -21,8 +21,11 @@
 //! stick moves nearly every tick, which also makes the recorded size the
 //! analog worst case rather than a keyboard's best one.
 //!
-//! One test per title per property, so the matrix is the test axis rather
-//! than a loop inside one test - `CLAUDE.md`'s rule for the data suite.
+//! One test per title, each property a named function over that title's one
+//! recording. Until 2026-10-13 it was one test per title per property, and
+//! each recorded the same 7,200-tick run again; the recording is deterministic
+//! (the same setup and the same pad), so every property still sees exactly the
+//! run it saw, and the title stays the test axis.
 
 use std::path::{Path, PathBuf};
 
@@ -144,10 +147,22 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
     })
 }
 
-fn round_trip(title: &str) {
-    let Some((mut race, replay)) = record(title) else {
+/// Every property, on one recording of `title`.
+fn properties(title: &str) {
+    let Some((race, replay)) = record(title) else {
         return;
     };
+    if let Some(tampered) = TAMPERED.iter().find(|t| **t == title) {
+        tamper(tampered, replay.clone());
+    }
+    ghost_changes_nothing(title, &replay);
+    round_trip(title, race, replay);
+}
+
+/// The titles the tamper property is asserted on.
+const TAMPERED: [&str; 2] = ["pulse", "pure"];
+
+fn round_trip(title: &str, mut race: race::Race, replay: Replay) {
     // The file a session saves as a ghost: cut at the end of the best lap,
     // and still a replay that re-drives to the last tick it kept.
     let ghost = race.take_new_best_ghost().expect("a lap was completed");
@@ -193,10 +208,7 @@ fn round_trip(title: &str) {
 /// The desync test on a real race: one stick deflection flipped a little
 /// past the countdown, where steering is consumed, must be caught at the next
 /// stored hash.
-fn tamper(title: &str) {
-    let Some((_, mut replay)) = record(title) else {
-        return;
-    };
+fn tamper(title: &str, mut replay: Replay) {
     let tick = oag_race::state::COUNTDOWN_TICKS + 100;
     let index = usize::try_from(tick).expect("fits");
     let snapshot = &mut replay.inputs[0][index];
@@ -215,10 +227,7 @@ fn tamper(title: &str) {
 
 /// A ghost is outside the simulation: the same inputs with and without one
 /// hash identically, tick for tick - and the ghost is really there.
-fn ghost_changes_nothing(title: &str) {
-    let Some((_, replay)) = record(title) else {
-        return;
-    };
+fn ghost_changes_nothing(title: &str, replay: &Replay) {
     let lap = replay
         .ghost
         .clone()
@@ -258,60 +267,24 @@ fn ghost_changes_nothing(title: &str) {
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulse_a_replay_reproduces_every_stored_hash() {
-    round_trip("pulse");
+fn pulse_replays_reproduce_catch_a_tampered_input_and_ghosts_change_nothing() {
+    properties("pulse");
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulse_a_tampered_input_is_caught() {
-    tamper("pulse");
+fn pure_replays_reproduce_catch_a_tampered_input_and_ghosts_change_nothing() {
+    properties("pure");
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulse_a_ghost_changes_no_state_hash() {
-    ghost_changes_nothing("pulse");
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn pure_a_replay_reproduces_every_stored_hash() {
-    round_trip("pure");
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn pure_a_tampered_input_is_caught() {
-    tamper("pure");
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn pure_a_ghost_changes_no_state_hash() {
-    ghost_changes_nothing("pure");
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn hd_a_replay_reproduces_every_stored_hash() {
-    round_trip("hd");
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn hd_a_ghost_changes_no_state_hash() {
-    ghost_changes_nothing("hd");
+fn hd_replays_reproduce_and_ghosts_change_nothing() {
+    properties("hd");
 }
 
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn wipeout_2048_a_replay_reproduces_every_stored_hash() {
-    round_trip("2048");
-}
-
-#[test]
-#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn wipeout_2048_a_ghost_changes_no_state_hash() {
-    ghost_changes_nothing("2048");
+fn wipeout_2048_replays_reproduce_and_ghosts_change_nothing() {
+    properties("2048");
 }
