@@ -190,6 +190,7 @@ mod pads;
 mod perfect_start;
 mod pilot_assist;
 pub mod pilots;
+pub mod player_step;
 mod reconcile;
 mod replay;
 mod repulser_field;

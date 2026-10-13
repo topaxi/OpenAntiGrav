@@ -460,6 +460,32 @@ impl World {
         self.human_slots().next().unwrap_or(0)
     }
 
+    /// Whether a person flies `slot`, and so the player step runs for it.
+    ///
+    /// Every slot [`Self::human_slots`] names whose craft is on the grid, and
+    /// [`Self::primary_slot`] always - the fallback slot is stepped as a player
+    /// even when nobody is marked human, which is what a race with no human in
+    /// it (an attract demo, a headless run that never touched the controllers)
+    /// has always done. With the default grid this is `slot == 0`, so asking it
+    /// where the code used to say "slot 0" or "not slot 0" changes nothing.
+    ///
+    /// **A human slot with no craft in it is not flown.** `ship_count` and
+    /// `Ship::active` decide, because a slot marked human but never filled
+    /// (`oag-headless-sim` marks three with one craft on the grid) has no body
+    /// for a player step to move, and stepping its zeroed hull would spend
+    /// pickups and respawns on a ghost. The fallback slot is exempt: it was
+    /// stepped before this existed, whatever its flags say.
+    #[must_use]
+    pub fn person_flown(&self, slot: usize) -> bool {
+        if slot == self.primary_slot() {
+            return true;
+        }
+        slot < MAX_PLAYERS
+            && self.controllers[slot].is_human()
+            && slot < self.ship_count as usize
+            && self.ships[slot].active
+    }
+
     /// [`Self::primary_slot`]'s race: the clock a full-screen HUD draws.
     ///
     /// **Not `race[0]`, even though it resolves to `race[0]` today.** The two

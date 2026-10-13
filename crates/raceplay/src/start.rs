@@ -327,14 +327,6 @@ impl Race {
         let line = racing_line(&spline, &order, &collision, handling.antigrav.ride_height);
         let rescue_distance = spline.max_half_width() * RESCUE_HALF_WIDTHS;
         let player_rescue_distance = spline.max_half_width() * PLAYER_RESCUE_HALF_WIDTHS;
-        // Where the player is placed, so the first recovery before they have
-        // driven anywhere is onto the grid rather than onto sample zero - which
-        // on a circuit whose start line is sample 2,791 is a different piece of
-        // track entirely. See `Race::last_on_track`.
-        let last_on_track = spline
-            .nearest(world.ships[0].physics.body.position)
-            .and_then(|(index, _, _)| u32::try_from(index).ok())
-            .unwrap_or(0);
         let mut pilot_names: [String; oag_gameplay::MAX_SHIPS] = Default::default();
         // The built-ins, plus whatever the player has authored. A directory
         // that cannot be read is not a reason to refuse to race: the built-ins
@@ -460,6 +452,17 @@ impl Race {
             &collision,
             handling.antigrav.ride_height,
         );
+        // Where each craft is placed - after the whole grid is, so a slot a
+        // person takes over later starts from its own grid pose - so the first recovery before they have
+        // driven anywhere is onto the grid rather than onto sample zero - which
+        // on a circuit whose start line is sample 2,791 is a different piece of
+        // track entirely. See `RaceSim::last_on_track`.
+        let last_on_track = std::array::from_fn(|slot| {
+            spline
+                .nearest(world.ships[slot].physics.body.position)
+                .and_then(|(index, _, _)| u32::try_from(index).ok())
+                .unwrap_or(0)
+        });
         let race = Self {
             sim: RaceSim {
                 racing_line: line,

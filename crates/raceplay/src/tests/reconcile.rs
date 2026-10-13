@@ -14,21 +14,18 @@
 //! inputs lands on the authoritative state exactly, against the real
 //! [`Race::tick`] rather than against a model of it.
 //!
-//! # The misprediction is injected on the player's own slot, and that is a
-//! # limitation rather than a choice
+//! # The misprediction is injected on the primary slot, and on a remote one
 //!
-//! The natural shape for this test would be a *remote* slot predicted wrong.
-//! It would assert nothing. [`Race::tick`] still steps only
-//! [`World::primary_slot`] - ADR-0052 says so in as many words, and its own
-//! "the player step still runs once" consequence is why - so a non-primary
-//! slot's [`InputSnapshot`] reaches no craft and moves no hash. Measured here
-//! before this file was written: two races ticked 300 times, identical but for
-//! slot 1's stick held hard over in one of them, hash the same. So the
-//! divergence is injected where the engine can currently express one, on the
-//! primary slot, and the mechanism under test - restore, replay, converge - is
-//! the same mechanism either way.
-//! [`a_remote_slots_input_does_not_yet_reach_the_hash`] holds the measurement
-//! so it fails loudly when the loop bound widens.
+//! The first test below mispredicts the player's own slot, the simplest shape.
+//! What a real netcode client mispredicts is someone else's craft, and that
+//! needed [`Race::tick`] to step more than [`World::primary_slot`]: until
+//! 2026-10-13 a second `Remote` slot's [`InputSnapshot`] reached no craft and
+//! moved no hash, measured as two races ticked 300 times, identical but for
+//! slot 1's stick held hard over, hashing the same. It steps every
+//! person-flown slot now, so [`a_remote_slots_input_reaches_its_own_craft`]
+//! holds the positive of that measurement and
+//! [`a_mispredicted_remote_slot_reconciles_to_the_servers_hash`] runs the
+//! reconciliation with the wrong guess on slot 1.
 //!
 //! # Why the stick and not a button
 //!
@@ -206,52 +203,179 @@ fn reconciling_a_correct_prediction_changes_nothing() {
     );
 }
 
-/// A non-primary slot's input reaches no craft and no hash, so the
-/// misprediction above could not have been injected on a remote slot.
+/// A loopback race with a second craft on the grid, flown by `controller`.
 ///
-/// This is the measurement the module doc cites, kept as a test so the day
-/// `Race::tick` grows its loop bound past `primary_slot` the claim fails
-/// loudly instead of quietly becoming false. **A failure here is good news** -
-/// it means a second slot is flown, and the test above can move onto a remote
-/// one, which is what a real client mispredicts.
+/// The craft is slot 0's, copied and set well to its right: sharing a spawn
+/// point would have [`Race::resolve_craft_pairs`] fling the two apart and hide
+/// what slot 1's stick did behind the collision. Slot 1 is active, because
+/// a slot with no craft is not flown at all - the previous version of this test
+/// left it inactive, which is why it could pass for the wrong reason.
+fn two_person_race(controller: Controller) -> Race {
+    let mut race = loopback_race();
+    // The fixture's craft cannot turn (`Handling::ZERO` has no yaw authority),
+    // and "slot 1 turned" is the claim, so both get some.
+    race.sim.world.ships[0].handling.turning = oag_physics::params::Turning {
+        amount: 60.0,
+        falloff: 5.0,
+        gain: 5.0,
+    };
+    let mut second = race.sim.world.ships[0];
+    let pose = oag_gameplay::Pose {
+        position: second.physics.body.position + second.physics.body.right() * 60.0,
+        orientation: second.physics.body.orientation,
+    };
+    second.place_at(pose);
+    race.sim.world.ships[1] = second;
+    race.sim.world.ships[1].active = true;
+    race.sim.world.ship_count = 2;
+    race.sim.world.controllers[1] = controller;
+    race
+}
+
+/// One tick's input for both slots: slot 0 steers by `own`, slot 1 by `other`.
+fn two_steering(own: f32, other: f32) -> PlayerInputs {
+    let held = |stick_x: f32| {
+        InputSnapshot {
+            stick_x,
+            ..InputSnapshot::default()
+        }
+        .sanitised()
+    };
+    let mut inputs = PlayerInputs::none();
+    inputs.set(0, held(own));
+    inputs.set(1, held(other));
+    inputs
+}
+
+/// A second person's input reaches *their* craft and nobody else's.
+///
+/// The positive of `a_remote_slots_input_does_not_yet_reach_the_hash`, which
+/// this replaces. Two races identical but for slot 1's stick: it must move the
+/// hash, turn slot 1's craft, and leave slot 0's alone - the third being the
+/// guard against the step reading slot 0's snapshot for everybody. And the
+/// slot is stepped by the player step, not the opponent loop: a person's slot
+/// has an [`Evaluations`](crate::player_step::Evaluations) entry and an AI
+/// slot's does not.
 #[test]
-fn a_remote_slots_input_does_not_yet_reach_the_hash() {
-    let mut held = loopback_race();
-    let mut swung = loopback_race();
-    for race in [&mut held, &mut swung] {
-        race.sim.world.ship_count = 2;
-        race.sim.world.controllers[1] = Controller::Remote;
-    }
+fn a_remote_slots_input_reaches_its_own_craft() {
+    for controller in [Controller::Remote, Controller::Local] {
+        let mut idle = two_person_race(controller);
+        let mut hard_over = two_person_race(controller);
+        let start_heading = hard_over.sim.world.ships[1].physics.body.forward();
 
-    for tick in 0..AGREED_TICKS + PREDICTED_TICKS {
-        let mut steady = PlayerInputs::none();
-        steady.set(
-            1,
-            InputSnapshot {
-                stick_x: 1.0,
-                ..InputSnapshot::default()
-            }
-            .sanitised(),
-        );
-        let mut swinging = PlayerInputs::none();
-        swinging.set(
-            1,
-            InputSnapshot {
-                stick_x: if tick % 2 == 0 { 1.0 } else { -1.0 },
-                ..InputSnapshot::default()
-            }
-            .sanitised(),
-        );
-        advance(&mut held, &steady);
-        advance(&mut swung, &swinging);
-    }
+        for _ in 0..60 {
+            let evaluations = hard_over.tick(&two_steering(0.0, 1.0));
+            assert!(
+                evaluations.get(1).is_some(),
+                "{controller:?}: slot 1 was not stepped"
+            );
+            hard_over.drain_cues();
+            advance(&mut idle, &two_steering(0.0, 0.0));
+        }
 
+        assert_ne!(
+            idle.sim.state_hash(),
+            hard_over.sim.state_hash(),
+            "{controller:?}: slot 1's stick did not reach the hash"
+        );
+        let turned = hard_over.sim.world.ships[1].physics.body.forward();
+        let held_straight = idle.sim.world.ships[1].physics.body.forward();
+        assert!(
+            (turned - start_heading).length() > 1.0e-3,
+            "{controller:?}: slot 1's craft did not turn: {start_heading:?} -> {turned:?}"
+        );
+        assert!(
+            (held_straight - start_heading).length() < (turned - start_heading).length(),
+            "{controller:?}: the idle craft turned as much as the one held over"
+        );
+        assert_eq!(
+            idle.sim.world.ships[0].physics.body.position,
+            hard_over.sim.world.ships[0].physics.body.position,
+            "{controller:?}: slot 1's input moved slot 0's craft"
+        );
+    }
+}
+
+/// An AI slot gives no [`Evaluations`](crate::player_step::Evaluations) entry
+/// and obeys no snapshot: the person-flown set did not swallow the grid.
+#[test]
+fn an_ai_slot_is_not_stepped_as_a_player() {
+    let mut idle = two_person_race(Controller::Ai);
+    let mut shouted_at = two_person_race(Controller::Ai);
+    for _ in 0..60 {
+        let evaluations = shouted_at.tick(&two_steering(0.0, 1.0));
+        assert!(
+            evaluations.get(1).is_none(),
+            "an AI slot was stepped as a player"
+        );
+        shouted_at.drain_cues();
+        advance(&mut idle, &two_steering(0.0, 0.0));
+    }
     assert_eq!(
-        held.sim.state_hash(),
-        swung.sim.state_hash(),
-        "a remote slot's input now reaches the hash - good, and the \
-         misprediction test should move onto one"
+        idle.sim.state_hash(),
+        shouted_at.sim.state_hash(),
+        "a snapshot in an AI slot reached the simulation"
     );
+}
+
+/// What a real netcode client does: it predicts *someone else's* craft wrong,
+/// is handed the server's snapshot, replays, and lands on the server's hash.
+///
+/// [`a_mispredicted_run_reconciles_to_the_servers_hash`] with the wrong guess
+/// on slot 1. The same non-vacuous guards, for the same reasons: the guess must
+/// actually diverge, and the restored client must still differ from the server
+/// until the replay closes it.
+#[test]
+fn a_mispredicted_remote_slot_reconciles_to_the_servers_hash() {
+    let mut server = two_person_race(Controller::Remote);
+    let mut client = two_person_race(Controller::Remote);
+
+    for _ in 0..AGREED_TICKS {
+        advance(&mut server, &two_steering(0.5, 1.0));
+        advance(&mut client, &two_steering(0.5, 1.0));
+    }
+    assert_eq!(
+        server.sim.state_hash(),
+        client.sim.state_hash(),
+        "client and server disagree while being fed identical inputs"
+    );
+    let authoritative = server.snapshot_sim();
+
+    // The local player's own input is known exactly; the remote player's is a
+    // guess, and the guess is the opposite of what they did.
+    let truth: Vec<PlayerInputs> = (0..PREDICTED_TICKS)
+        .map(|_| two_steering(0.5, 1.0))
+        .collect();
+    let guessed: Vec<PlayerInputs> = (0..PREDICTED_TICKS)
+        .map(|_| two_steering(0.5, -1.0))
+        .collect();
+    for inputs in &truth {
+        advance(&mut server, inputs);
+    }
+    for inputs in &guessed {
+        advance(&mut client, inputs);
+    }
+    assert_ne!(
+        server.sim.state_hash(),
+        client.sim.state_hash(),
+        "the guess about slot 1 did not diverge, so reconciling it proves nothing"
+    );
+
+    client.restore_sim(&authoritative);
+    assert_ne!(
+        server.sim.state_hash(),
+        client.sim.state_hash(),
+        "the restored client already matched the server"
+    );
+    for inputs in &truth {
+        advance(&mut client, inputs);
+    }
+    assert_eq!(
+        server.sim.state_hash(),
+        client.sim.state_hash(),
+        "reconciliation did not land on the authoritative state for a remote slot"
+    );
+    assert_eq!(client.sim.world.tick, server.sim.world.tick);
 }
 
 /// [`Race::restore_sim`] puts the simulation back and leaves the view alone.

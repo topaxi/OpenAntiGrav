@@ -5,6 +5,8 @@
 //! `scripts/check-file-size.py`; a move, with no behaviour change.
 
 use super::*;
+use crate::player_step::{Evaluations, PlayerStep};
+use oag_gameplay::MAX_PLAYERS;
 
 impl Race {
     /// Advances the simulation one fixed tick, and the camera with it.
@@ -12,7 +14,7 @@ impl Race {
     /// Each slot's snapshot is mapped through [`oag_gameplay::ship_controls`],
     /// which is the one place "cross is thrust" is written down.
     ///
-    /// # One snapshot per grid slot, and one craft stepped from one of them
+    /// # One snapshot per grid slot, and every person's craft stepped from its own
     ///
     /// This took a single [`InputSnapshot`] until 2026-09-16, which made "the
     /// player" and "slot 0" the same statement and left nowhere to put a second
@@ -21,23 +23,29 @@ impl Race {
     /// `World::controllers` are - so split screen, a second window and a remote
     /// client differ only in where a snapshot comes from.
     ///
-    /// **What this change does *not* do is step two human craft.** The player
-    /// half of this function still runs once, for
-    /// [`oag_gameplay::World::primary_slot`], and returns that craft's
-    /// [`Evaluated`] for the camera and the view to read. Making the step
-    /// itself per-slot means N cameras, N `Evaluated`s and N HUDs, which is
-    /// split screen's own work rather than this prerequisite's - see the
-    /// handover thread that planned it. The slot is read rather than written as
-    /// `0` so that work is a change of loop bound and not a hunt through the
-    /// file.
+    /// **The player step runs once per person-flown slot**
+    /// ([`oag_gameplay::World::person_flown`]): `Local` and `Remote` controllers
+    /// with a craft on the grid, and the primary slot whatever its controller
+    /// says. Each gets its own controls, autopilot, pickup spend, pads, force
+    /// law, off-track rescue and race rules (`crate::player_step`); an AI slot
+    /// is still flown by [`Self::step_opponents`] and a person's slot is
+    /// skipped by it. Until 2026-10-13 only the primary slot was stepped and a
+    /// second human's snapshot reached nothing (ADR-0052 recorded that as a
+    /// consequence of its own decision).
     ///
-    /// The pieces that *do* already run over the whole grid - `lay_mines`,
+    /// The return value is one [`Evaluations`] entry per stepped slot; the
+    /// camera and the full-screen HUD read the primary's through
+    /// [`Evaluations::primary`]. What stays on the primary slot is the *view*
+    /// (camera, shake, messages, run statistics), because a viewport per player
+    /// is split screen's work, not this tick's.
+    ///
+    /// The pieces that run over the whole grid - `lay_mines`,
     /// [`Self::advance_cannons`], `slowdown::drain`, `disruption::advance`,
     /// [`Self::step_opponents`] - ask `World::controllers` which slots take a
-    /// snapshot, so they are per-player today.
+    /// snapshot.
     ///
     /// [`PlayerInputs`]: oag_gameplay::PlayerInputs
-    pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluated {
+    pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         self.ensure_speed_plans();
         // Before anything moves: the poses a draw blends from. See `between_ticks`.
         self.capture_poses();
@@ -92,46 +100,16 @@ impl Race {
             ship.physics.four_corner = four_corner;
         }
         self.set_hover_caps();
-        // The one craft a person is flying this tick. `0` under
-        // `World::SINGLE_PLAYER`, which is every session this engine starts, so
-        // reading it changes nothing and hard-coding it would have cost the
-        // next reader the search.
-        let player = self.sim.world.primary_slot();
-        let snapshot = inputs.get(player);
-        // Flown for the player by either route - the operator's `--autopilot`
-        // or the pickup - and then the snapshot is not consulted for steering
-        // at all. See [`Race::flown_for_the_player`].
-        //
-        // Before `spend_pickup`, which still reads the snapshot: an autopiloted
-        // craft is steered for and fires nothing, because nothing picks a target
-        // for anybody yet. It also means a pickup armed *this* tick takes hold
-        // on the next one, which is a tick of latency this port has and has not
-        // measured against the original.
-        let flown = self.flown_for_the_player(player);
-        let mut controls = if flown {
-            self.autopilot_controls(player)
-        } else {
-            ship_controls(snapshot, self.sim.scheme)
-        };
-        // Past the line the original's own law sets the pace - see
-        // `race::finished_thrust`.
-        if let Some(cap) = self.finished_thrust_cap(player) {
-            controls.thrust = controls.thrust.min(cap);
-        }
-        // A Disruptor hit filters whatever the pilot - human or driver -
-        // asked for: no thrust, no airbrakes, a mirrored yaw, or an
-        // autopilot's thrust scale. Before the start-line gate below, so a
-        // stalled craft on the line is still gated and not doubly so. See
-        // `oag_weapons::disruption`.
-        controls = self.disrupted_controls(player, controls, flown);
-        // The start-line countdown: measured, not authored - see
-        // `RaceState::thrust_gated` for the live capture this reproduces. Only
-        // thrust was held and recorded, so only thrust is gated; steering stays
-        // live through the countdown, which is unmeasured either way but costs
-        // nothing to leave alone. Autopilot is gated too - the capture measured
-        // the engine's own gate, not a distinction between input sources.
-        if RaceState::thrust_gated(self.sim.world.tick) {
-            controls.thrust = 0.0;
+        // Every craft a person is flying this tick. Slot 0 alone under
+        // `World::SINGLE_PLAYER`, which is every session this engine starts
+        // today; a second `Local` or `Remote` slot is stepped the same way and
+        // an AI slot never is. Controls first, all of them, so a slot's
+        // autopilot reads the field as the tick found it.
+        let mut controls = [oag_physics::ShipControls::default(); MAX_PLAYERS];
+        for slot in 0..MAX_PLAYERS {
+            if self.sim.world.person_flown(slot) {
+                controls[slot] = self.player_controls(slot, inputs.get(slot));
+            }
         }
 
         // **Before every craft is stepped, and over the whole field at once.**
@@ -148,11 +126,15 @@ impl Race {
         );
 
         // Before the force law, so a Turbo fired this tick boosts this tick.
-        self.spend_pickup(player, snapshot);
-        // After it, so a pickup armed this tick gets its whole duration rather
-        // than a tick less, and so the cancel-on-fire branch inside
-        // `spend_pickup` is not immediately undone by a decrement.
-        self.tick_autopilot(player);
+        // `tick_autopilot` after it, so a pickup armed this tick gets its whole
+        // duration rather than a tick less, and so the cancel-on-fire branch
+        // inside `spend_pickup` is not immediately undone by a decrement.
+        for slot in 0..MAX_PLAYERS {
+            if self.sim.world.person_flown(slot) {
+                self.spend_pickup(slot, inputs.get(slot));
+                self.tick_autopilot(slot);
+            }
+        }
         // The start-of-race voice, on the ticks the original plays it.
         self.tick_countdown_voice();
         // Immediately after both, so the first mine of a cluster is laid on the
@@ -167,130 +149,22 @@ impl Race {
         // above consumes - see `Race::advance_cannons`'s own doc comment.
         self.advance_cannons(inputs);
 
-        // The two spline samples the magstrip hold reads. In the original these are
-        // `AiTrack_LocatePosition`'s two output records on the ship entity; here
-        // they are the nearest table entry and the one after it, which is the same
-        // "where am I and what is next" pair at this crate's resolution. Off a
-        // magstrip nothing consumes them, so a track without one is unaffected.
-        let nearest = self
-            .sim
-            .spline
-            .nearest(self.sim.world.ships[player].physics.body.position);
-        let index = nearest.map(|(index, _, _)| index);
-        // The same scan, read a third way: how far off the sample table the craft
-        // is, which is the player's own off-track trigger below. Taken from here
-        // rather than scanned again after the step - the table is ~3,400 samples
-        // and a second fold would double the tick's hottest loop to move a
-        // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
-        let spline_distance = nearest.map(|(_, _, distance)| distance);
-        let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
-        // The neighbour is the next entry in table order, which at the end of a
-        // path is the *next path's* first sample rather than the geometric
-        // successor through a junction. The original follows the junction graph;
-        // this is one sample out of 34,000 per lap and is recorded rather than
-        // pretended away.
-        //
-        // Still table order, deliberately: the player's locator works in sample
-        // space, where every path the track authors is reachable. An opponent's
-        // equivalent goes through [`Self::ai_sample`] instead, because a driver
-        // is asking a lap question. See [`ai_order`].
-        let track_sample_next = index
-            .and_then(|index| self.sim.spline.sample(index + 1))
-            .map(Spline::track_sample);
-
-        // **Latched on the distance itself**, not on the counters below, so where
-        // the craft is put back cannot depend on the order the two are updated
-        // in. See [`RaceSim::last_on_track`].
-        if let (Some(index), Some(distance)) = (index, spline_distance)
-            && distance <= self.sim.player_rescue_distance
-        {
-            // Zero on an index that will not fit, matching `Race::start` - the
-            // arm is unreachable on any real table, and the value it writes is
-            // read back as a sample index, so it has to be a *valid* one. A
-            // saturating `u32::MAX` here would make `Race::respawn` find no
-            // sample and return having recovered nothing, silently.
-            self.sim.last_on_track = u32::try_from(index).unwrap_or(0);
+        // Each person's craft, in slot order, against the same unmoved
+        // projectile pool and the same unspent field-wide effects: the force law
+        // sees this tick's pads, the walls and its own controls, and nothing a
+        // neighbour did to it until the pair pass after. See
+        // `Race::step_player`.
+        let mut steps: [Option<PlayerStep>; MAX_PLAYERS] = std::array::from_fn(|_| None);
+        for slot in 0..MAX_PLAYERS {
+            if self.sim.world.person_flown(slot) {
+                steps[slot] = Some(self.step_player(slot, &controls[slot]));
+            }
         }
-
-        if let Some(index) = index {
-            // An index into this module's own sample table, which is *not* what
-            // `Ship::segment` documents: that field means a per-path control-point
-            // segment. Nothing reads it today, and it is written because a locator
-            // that keeps no note of where it was is the thing that has to be replaced
-            // when the brute-force scan does. Converting the one into the other needs
-            // a lap-counting convention nobody has recovered.
-            self.sim.world.ships[player].segment = u16::try_from(index).unwrap_or(u16::MAX);
-        }
-
-        // Zone's auto-speed, from the zone the run has reached. Read before the
-        // step, from the zone the last tick left behind, because that is the
-        // order the original runs in: `Zone_Update` assigns the counter into the
-        // craft and `Ship_UpdateEngine` reads it on the following craft update.
-        let auto_speed = self.sim.zone.map(|zone| {
-            oag_race::zone::thrust(
-                zone.start,
-                zone.increment,
-                self.sim.world.primary_race().zone,
-            )
-        });
-        let before = self.sim.world.ships[player].physics.body.position;
-        // Step 15's input, measured before the step because that is when the
-        // original measures it: `Ship_ApplySpeedupPad` runs inside the same craft
-        // update as the other fourteen terms, all of them against the position the
-        // tick started at, and the integrator moves the body afterwards.
-        let (moved, sweep) = self.pad_sweep(player, before);
-        let pad_hit = self.test_speedup_pads(player, before, moved, &sweep);
-        // After the speed pad, sharing its sweep. The two are independent - a
-        // track can author a weapon pad on top of a speed pad and both fire -
-        // and this one returns nothing, because a pickup is an event rather than
-        // a per-tick force.
-        self.test_weapon_pads(player, before, moved, &sweep);
-        // The mode's rules, read before the craft is borrowed: `World::mode`
-        // asks the whole world and the borrow checker will not have both.
-        let env_damage_rules = self.sim.damage_rules();
-        let pilot_assist = self.pilot_assist_input(player);
-        let ship = &mut self.sim.world.ships[player];
-        // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
-        // throttle armed last tick is consumed by this step and nothing after
-        // it. See `Ship::pending_thrust_scale`. One asymmetry: the original's
-        // engine early-returns *above* that line for a stunned or slowed
-        // craft and so keeps the armed value for a later tick, where this
-        // discards it either way. A beam re-arms it every tick the link
-        // holds, so the two differ only on the tick a stun ends after the
-        // link has already broken - one tick of throttle, not chased.
-        let thrust_scale = std::mem::replace(&mut ship.pending_thrust_scale, 1.0);
-        let env = Environment {
-            track_sample,
-            track_sample_next,
-            auto_speed,
-            pad_hit,
-            thrust_scale,
-            class_gravity_scale: self.sim.class_gravity_scale,
-            start_boost: self.sim.start_boost,
-            // The mode's own `Weapons`/`Damage` defaults, which decide both what
-            // a wall costs the energy pool and whether it recovers - a time trial
-            // and a speed lap run with both off, so their pool floors at 20 and
-            // regenerates, exactly as the disc's manual text describes. See
-            // `oag_gameplay::damage_rules`.
-            damage_rules: env_damage_rules,
-            pilot_assist,
-            ..Environment::default()
-        };
-        let evaluated = oag_physics::step(
-            &mut ship.physics,
-            &controls,
-            &ship.handling,
-            &env,
-            &self.sim.collision,
-            self.sim.dt,
-        );
-        // The contact half of the same edge as the blast one below, and the one
-        // a player meets first: scraping a wall behind a shield costs nothing
-        // and bulges the shell. The original's contact loop takes exactly this
-        // branch instead of its hull-damage call.
-        if evaluated.shield.absorbed {
-            self.view.shield[player].hit();
-        }
+        let primary = self.sim.world.primary_slot();
+        let evaluated = steps[primary]
+            .as_ref()
+            .expect("the primary slot is always stepped as a player")
+            .evaluated;
         // **After the craft moved and before the race rules.** A rocket fired
         // this tick was spawned from the pose the tick *started* at, in
         // `spend_pickup`, so flying it here gives it a full tick of travel from
@@ -480,36 +354,10 @@ impl Race {
             .advance(self.sim.dt, &mut self.view.stage_rng);
         self.advance_scenery_fx(self.sim.dt);
 
-        self.sim.respawn_cooldown[player] = self.sim.respawn_cooldown[player].saturating_sub(1);
-        // Unconditionally and before the `||`, so the dwell sees every tick -
-        // the same argument `step_opponents` makes for its two counters.
-        let off_the_track = self.lost_off_the_track(player, spline_distance);
-        // **Not a wreck**, the same gate `step_opponents` applies: in an
-        // Eliminator the player sits `Eliminated` for the respawn dwell, and
-        // a rescue firing inside it would rebuild the craft as a racing one
-        // with an empty pool. In a single race the ending has already fired.
-        let alive =
-            self.sim.world.ships[player].physics.craft_state == oag_physics::CraftState::Racing;
-        let reset = self.reset_zone_touched(player, &env, before);
-        let airborne = self.airborne_too_long(player);
-        if alive && (off_the_track || airborne || reset) {
-            self.sim.last_respawn_cause[player] = Some(if off_the_track {
-                respawn::RespawnCause::OffTrack
-            } else if airborne {
-                respawn::RespawnCause::Airborne
-            } else {
-                respawn::RespawnCause::ResetZone
-            });
-            // The last sample the craft was *on the track* at, which for a reset
-            // contact is where it was a tick or two ago and for the off-track
-            // trigger is where it left. `index` - the nearest sample to wherever
-            // the craft is now - would be that same place for the first and a
-            // sample on some other part of the circuit for the second.
-            self.respawn(player, Some(self.sim.last_on_track as usize));
-        } else if self.sim.respawn_cooldown[player] == 0 {
-            // Clear of the trigger with the cooldown expired: whatever run of
-            // back-to-back respawns was happening is over.
-            self.sim.respawns_in_a_row[player] = 0;
+        for slot in 0..MAX_PLAYERS {
+            if let Some(step) = &steps[slot] {
+                self.rescue_player(slot, step);
+            }
         }
 
         self.step_opponents();
@@ -536,126 +384,52 @@ impl Race {
 
         self.sim.world.tick += 1;
 
-        // The race rules run last of the simulation, on the position the step
-        // produced and the tick it produced it on. Running them before the step
-        // would test last tick's position against this tick's clock, which is a
-        // whole tick of error on a quantity whose job is to be exact at one
-        // instant. A track with no closed ring simply has no lap counter; the
-        // load report already said so.
-        // The craft finished blowing up this tick, so the race is over. Checked
-        // before the rules run rather than after, because a wrecked craft's
-        // position should not go on counting laps - and checked every tick
-        // because `RaceState::eliminate` is the thing that makes it idempotent.
-        //
-        // Zone *and a single race* reach this - a time trial and a speed lap do
-        // not, racing with the original's `Damage` option off, which floors
-        // their pool at 20. See `oag_gameplay::damage_rules`, and
-        // `RaceState::eliminate` for the disc text that settles the single
-        // race's own answer as the same one.
-        //
-        // **Eliminator does not reach this branch at all.**
-        // `tick_destroyed_craft` above has already turned this tick's
-        // `Eliminated` craft back into a `Racing` one via a respawn, before
-        // this read - see `crate::eliminator`'s own doc comment for why
-        // the mode's own text rules out `RaceState::eliminate` as its ending.
-        // An *opponent* in a single race never reaches it, because the branch
-        // reads the player's own state alone; an opponent's wreck stays down
-        // (the original's state 6, measured live) and ends nothing.
-        if self.sim.world.mode() != Mode::Eliminator
-            && self.sim.world.ships[player].physics.craft_state
-                == oag_physics::CraftState::Eliminated
-            && self.sim.world.primary_race_mut().eliminate()
-        {
-            self.view.wreck_ended_tick = Some(self.sim.world.tick);
-            // The original plays `~BLOWUP`, hides the HUD and swings the camera
-            // into its mode 5 on the way here. **The sound is built** and is
-            // held on `Race::craft_is_exploding` rather than raised here,
-            // because case 4 opens a handle rather than firing a one-shot. The
-            // HUD hide and the camera mode are still absent - case 4's own
-            // addresses for both are on zone-mode.md. See
-            // `oag_physics::damage::CraftState`.
-        }
-
-        {
-            let body = &self.sim.world.ships[player].physics.body;
-            self.view
-                .run_stats
-                .observe(body.linear_velocity.dot(body.forward()).abs());
-        }
-
-        if let Some(course) = &self.sim.course {
-            let position = self.sim.world.ships[player].physics.body.position;
-            // The same flag the collision sparks fire on, so "the HUD says that
-            // zone was not clean" and "sparks came off the hull" cannot disagree.
-            let contact = evaluated.wall.impact;
-            let tick = self.sim.world.tick;
-            let outcome = self.sim.world.primary_race_mut().update(
-                course,
-                position,
-                tick,
-                self.sim.dt,
-                contact,
-            );
-
-            // A zone survived without touching anything pays shield back, clamped
-            // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
-            // same clamp against the stat block's maximum, so a full ship gains
-            // nothing and the bar cannot overfill.
-            if outcome.perfect_zone {
-                self.view.run_stats.perfect_zones += 1;
+        // Each person-flown slot's own elimination and race rules. The ending
+        // below reaches `RaceState::eliminate` for the craft that finished
+        // blowing up; its view half (the wreck timer, the HUD hide) is the
+        // primary slot's alone.
+        for slot in 0..MAX_PLAYERS {
+            let Some(step) = &steps[slot] else {
+                continue;
+            };
+            // The craft finished blowing up this tick, so its race is over.
+            // Checked before the rules run rather than after, because a wrecked
+            // craft's position should not go on counting laps - and checked every
+            // tick because `RaceState::eliminate` is the thing that makes it
+            // idempotent.
+            //
+            // Zone *and a single race* reach this - a time trial and a speed lap
+            // do not, racing with the original's `Damage` option off, which
+            // floors their pool at 20. See `oag_gameplay::damage_rules`, and
+            // `RaceState::eliminate` for the disc text that settles the single
+            // race's own answer as the same one.
+            //
+            // **Eliminator does not reach this branch at all.**
+            // `tick_destroyed_craft` above has already turned this tick's
+            // `Eliminated` craft back into a `Racing` one via a respawn, before
+            // this read - see `crate::eliminator`'s own doc comment for why
+            // the mode's own text rules out `RaceState::eliminate` as its ending.
+            // An *opponent* in a single race never reaches it, because the branch
+            // reads a person-flown craft's state alone; an opponent's wreck stays
+            // down (the original's state 6, measured live) and ends nothing.
+            if self.eliminate_if_wrecked(slot) && slot == primary {
+                self.view.wreck_ended_tick = Some(self.sim.world.tick);
+                // The original plays `~BLOWUP`, hides the HUD and swings the camera
+                // into its mode 5 on the way here. **The sound is built** and is
+                // held on `Race::craft_is_exploding` rather than raised here,
+                // because case 4 opens a handle rather than firing a one-shot. The
+                // HUD hide and the camera mode are still absent - case 4's own
+                // addresses for both are on zone-mode.md. See
+                // `oag_physics::damage::CraftState`.
             }
-            if outcome.perfect_zone
-                && let Some(zone) = self.sim.zone
-            {
-                let ship = &mut self.sim.world.ships[player];
-                let max = ship.handling.dimensions.shield;
-                ship.physics.shield = (ship.physics.shield + zone.recharge).min(max);
-            }
-
-            // The announcer's own trigger: raised on every zone step, whether
-            // or not this title's ladder names that particular number - the
-            // same "raise the edge, let the audio layer decide if it has
-            // anything to say" split `raise_contact_cue` and `Banks::pick`
-            // already keep. See `oag_title::ZoneAnnouncer`.
-            if outcome.zone_advanced {
-                self.push_announcement(self.sim.world.primary_race().zone);
-            }
-
-            // The speed-class announcer's own trigger, on a title whose
-            // zone-to-stage ladder is recovered: the zone counter just
-            // stepped by exactly one (`RaceState::advance_zone`'s own
-            // `saturating_add(1)`), so the zone before this tick is the new
-            // value minus one. Fires only when that step also crosses a
-            // stage boundary - most zone steps do not, since the ladder's
-            // bands are wider than one zone - which is what keeps this from
-            // announcing a class on every zone survived. See
-            // `oag_title::ZoneStages` and `oag_title::ZoneClassAnnouncer`.
-            if outcome.zone_advanced
-                && let Some(stages) = self.sim.zone_stages
-            {
-                let after = self.sim.world.primary_race().zone;
-                let before = after.saturating_sub(1);
-                if let Some(stage_after) = stages.stage_for(after)
-                    && Some(stage_after) != stages.stage_for(before)
-                {
-                    self.push_class_announcement(stage_after);
-                }
-            }
-
-            // The free Time Trial/Speed Lap Turbo, on every tick the player
-            // crosses the line forwards - the first crossing included - as the
-            // original's state-2 handlers do (`0x0882ddd8`, `0x0882d578`,
-            // `0x08823270`: `craft+0x911` set -> held = 4). Never at the
-            // release: a craft that has not reached the line holds nothing.
-            if outcome.lap_completed || outcome.first_crossing {
-                self.grant_free_turbo(player);
-            }
-            self.raise_lap_messages(&outcome, contact && !evaluated.shield.absorbed);
-            if outcome.lap_completed {
-                // Eliminator's own per-lap mechanic, a no-op on every other
-                // mode - see `Race::eliminator_lap_health_refill`.
-                self.eliminator_lap_health_refill(player);
-            }
+            // The race rules run last of the simulation, on the position the step
+            // produced and the tick it produced it on. Running them before the step
+            // would test last tick's position against this tick's clock, which is a
+            // whole tick of error on a quantity whose job is to be exact at one
+            // instant. A track with no closed ring simply has no lap counter; the
+            // load report already said so.
+            let evaluated = step.evaluated;
+            self.advance_player_rules(slot, &evaluated);
         }
 
         // Every craft's standing, the player's included, from the position it
@@ -979,6 +753,6 @@ impl Race {
         // the player's lap edge the rules above just produced. A no-op unless
         // `start_recording` was called - see `race::replay`.
         self.record_tick(inputs);
-        evaluated
+        Evaluations::new(&steps, primary)
     }
 }

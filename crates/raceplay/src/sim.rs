@@ -280,8 +280,10 @@ pub struct RaceSim {
     /// the threshold is a scale read from the circuit, and a circuit that states
     /// no scale has not stated one.
     pub(super) player_rescue_distance: f32,
-    /// The last spline sample the player was within [`Self::player_rescue_distance`]
-    /// of, and therefore where [`Race::respawn`] puts them back.
+    /// For each slot a person flies, the last spline sample its craft was within
+    /// [`Self::player_rescue_distance`] of, and therefore where [`Race::respawn`]
+    /// puts it back. Indexed by slot; an AI slot's entry is seeded at the start and
+    /// never written, since an opponent's recovery reads its own driver.
     ///
     /// **Latched rather than reconstructed at the respawn.** By the time the
     /// dwell expires the craft is hundreds of units below the circuit, where the
@@ -293,7 +295,7 @@ pub struct RaceSim {
     /// Seeded at [`Race::start`] from where the craft is placed, not at zero, for
     /// the reason `Self::set_autopilot` gives about `Driver::index`: on a circuit
     /// whose grid sits at sample 2,791, zero is a different piece of track.
-    pub(super) last_on_track: u32,
+    pub(super) last_on_track: [u32; oag_gameplay::MAX_PLAYERS],
     /// This title's own zone-to-speed-class ladder, straight out of
     /// [`Setup::zone_stages`] - what [`RaceView::class_announcer`] fires against.
     pub(super) zone_stages: Option<&'static oag_title::ZoneStages>,

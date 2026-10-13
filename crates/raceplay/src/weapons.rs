@@ -209,7 +209,7 @@ impl Race {
                     // `Race::set_autopilot` records. A pickup is collected
                     // anywhere on the circuit, so this matters more here than
                     // it does for the operator's flag.
-                    self.locate_player_driver();
+                    self.locate_player_driver(slot);
                 }
                 oag_tables::weapons::Weapon::Rocket => {
                     let Some(stats) = weapons.rocket() else {

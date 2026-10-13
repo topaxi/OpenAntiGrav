@@ -88,7 +88,19 @@ impl RaceSim {
         // Not a dwell but the same argument: this is *where* the player's next
         // recovery puts them, so two machines that disagree on it produce
         // different races the moment one is needed. See [`RaceSim::last_on_track`].
-        hasher.write_u32(self.last_on_track);
+        //
+        // The primary slot's, in the position the single scalar held, so a
+        // one-person race hashes exactly as it did before the field became a
+        // row per slot; then each other slot a person flies, in slot order. The
+        // extra entries are present exactly when `controllers` (hashed with
+        // the world) says a second person is in the race, so the stream's
+        // shape is still a function of hashed state.
+        hasher.write_u32(self.last_on_track[self.world.primary_slot()]);
+        for slot in 0..self.last_on_track.len() {
+            if slot != self.world.primary_slot() && self.world.person_flown(slot) {
+                hasher.write_u32(self.last_on_track[slot]);
+            }
+        }
         // The respawn countdown and the kill credit: a craft one tick out on
         // its return is one tick out on every position after it, and a kill
         // credited to a different slot is a different Eliminator.

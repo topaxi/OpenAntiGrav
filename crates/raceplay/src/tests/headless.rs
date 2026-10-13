@@ -85,3 +85,26 @@ fn a_snapshot_in_an_unflown_slot_changes_nothing() {
         "input in a slot the AI flies reached the simulation"
     );
 }
+
+/// A slot marked human with no craft in it is not flown: `oag-headless-sim`
+/// marks three with one craft on the grid, and stepping the two empty ones
+/// would spend pickups and respawns on a zeroed hull. The primary slot is
+/// flown whatever the controllers say.
+#[test]
+fn a_human_slot_with_no_craft_is_not_person_flown() {
+    let mut race = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    for slot in 1..3 {
+        race.sim.world.controllers[slot] = Controller::Local;
+    }
+    assert_eq!(race.sim.world.ship_count, 1);
+    let flown: Vec<usize> = (0..oag_gameplay::MAX_PLAYERS)
+        .filter(|&slot| race.sim.world.person_flown(slot))
+        .collect();
+    assert_eq!(flown, [0], "an empty human slot was stepped as a player");
+
+    race.sim.world.controllers[0] = Controller::Ai;
+    assert!(
+        race.sim.world.person_flown(0),
+        "the primary slot lost its player step when nobody was marked human"
+    );
+}

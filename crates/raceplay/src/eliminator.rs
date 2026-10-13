@@ -129,7 +129,6 @@ impl Race {
     pub(super) fn tick_destroyed_craft(&mut self) {
         self.tick_wreck_voice();
         let mode = self.sim.world.mode();
-        let player = self.sim.world.primary_slot();
 
         for slot in 0..self.sim.world.ship_count as usize {
             if !self.sim.world.ships[slot].active {
@@ -144,7 +143,7 @@ impl Race {
                 continue;
             }
             let delay = if mode == Mode::Eliminator {
-                eliminator_respawn_delay(slot == player)
+                eliminator_respawn_delay(self.sim.world.person_flown(slot))
             } else {
                 // The player's own ending is `RaceState::eliminate`; an
                 // opponent's wreck stays where it is (state 6, measured).
@@ -182,8 +181,8 @@ impl Race {
             // midpoint five units up, facing forty units down the tangent -
             // a stated departure, since `Race::respawn` is the one recovery
             // every path here shares.
-            let sample_index = if slot == player {
-                Some(self.sim.last_on_track as usize)
+            let sample_index = if self.sim.world.person_flown(slot) {
+                Some(self.sim.last_on_track[slot] as usize)
             } else {
                 // **Where the wreck came to rest, not where the driver last
                 // looked.** `Driver::drive` does not run while a craft is down,
@@ -225,10 +224,13 @@ impl Race {
             .map(|ship| ship.standing.kills)
             .max()
             .unwrap_or(0);
-        self.sim
-            .world
-            .primary_race_mut()
-            .eliminator_finished(target, kills);
+        // Every person's race ends on the same kill count; the field's leader is
+        // the event's, not a slot's.
+        for slot in 0..oag_gameplay::MAX_PLAYERS {
+            if self.sim.world.person_flown(slot) {
+                self.sim.world.race[slot].eliminator_finished(target, kills);
+            }
+        }
     }
 
     /// Refills a fifth of a craft's shield on a completed lap, Eliminator only.
@@ -423,12 +425,11 @@ impl Race {
         if !self.sim.countdown_voice || self.sim.world.mode() == Mode::Eliminator {
             return;
         }
-        let player = self.sim.world.primary_slot();
         for slot in 0..self.sim.world.ship_count as usize {
             let down = self.sim.world.ships[slot].active
                 && self.sim.world.ships[slot].physics.craft_state
                     == oag_physics::CraftState::Eliminated;
-            if slot == player || !down {
+            if self.sim.world.person_flown(slot) || !down {
                 self.sim.wreck_voice[slot] = 0.0;
                 continue;
             }
@@ -444,7 +445,7 @@ impl Race {
                 *timer = -1.0;
                 self.sim.cues.push(oag_sound::sfx::CueEvent::new(
                     oag_sound::sfx::Cue::ContElim,
-                    player,
+                    self.sim.world.primary_slot(),
                 ));
             }
         }

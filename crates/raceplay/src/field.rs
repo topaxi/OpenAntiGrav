@@ -132,26 +132,26 @@ impl Race {
     pub fn set_autopilot(&mut self, on: bool) {
         self.sim.autopilot = on;
         if on {
-            self.locate_player_driver();
+            self.locate_player_driver(self.sim.world.primary_slot());
         }
     }
 
-    /// Puts slot 0's driver where slot 0 actually is.
+    /// Puts slot `slot`'s driver where that craft actually is.
     ///
     /// Shared by the operator's flag above and by the **Autopilot pickup**,
     /// which arrives at any point on the circuit and so needs it more: a driver
     /// left at index zero steers at the piece of line it thinks it is on, for
     /// the windowed-search reason [`Self::set_autopilot`] spells out.
-    pub(super) fn locate_player_driver(&mut self) {
+    pub(super) fn locate_player_driver(&mut self, slot: usize) {
         if self.sim.racing_line.is_empty() {
             return;
         }
-        let position = self.sim.world.ships[0].physics.body.position;
+        let position = self.sim.world.ships[slot].physics.body.position;
         let index = self
             .sim
             .racing_line
             .nearest(position, 0, self.sim.racing_line.len());
-        let driver = &mut self.sim.world.ships[0].driver;
+        let driver = &mut self.sim.world.ships[slot].driver;
         driver.index = u32::try_from(index).unwrap_or(0);
         // Located on the ring, so it is on the ring. See `oag_ai::branch::Branching::on_ring`.
         driver.branching = driver.branching.on_ring();
@@ -179,7 +179,10 @@ impl Race {
     /// `race::finished_thrust`.
     #[must_use]
     pub fn flown_for_the_player(&self, slot: usize) -> bool {
-        self.sim.autopilot
+        // The operator's switch flies the primary slot: it is a verification aid
+        // for the one craft a person is watching, not a mode every human slot in
+        // a shared race inherits.
+        (self.sim.autopilot && slot == self.sim.world.primary_slot())
             || self.sim.world.ships[slot].standing.finished()
             || self.sim.world.ships[slot].autopilot_timer > 0.0
             || self.sim.world.ships[slot]
@@ -353,8 +356,11 @@ impl Race {
         // The campaign's original field, when on: its round robin advances
         // once a tick before any driver, as `AiManager_Update` does.
         let lane_slot = self.original_ai_begin_tick();
-        for slot in 1..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].active {
+        for slot in 0..self.sim.world.ship_count as usize {
+            // A craft a person flies is stepped by `Race::tick`'s player step,
+            // not here. With one person in slot 0 this skips slot 0, which the
+            // loop used to start past.
+            if !self.sim.world.ships[slot].active || self.sim.world.person_flown(slot) {
                 continue;
             }
 
@@ -629,17 +635,22 @@ impl Race {
         // A free function so the `course` and `world` borrows stay disjoint -
         // cloning a `Course` once a tick to satisfy the borrow checker would be
         // a `Vec` copy per frame for nothing.
-        let player = self.player_slot();
-        let finished_before = self.sim.world.ships[player].standing.finished();
+        let finished_before: [bool; oag_gameplay::MAX_PLAYERS] =
+            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.finished());
         if let Some(course) = &self.sim.course {
             advance_standings(&mut self.sim.world, course);
         }
-        // The tick the player crosses the line for the last time is the tick
+        // The tick a person crosses the line for the last time is the tick
         // their craft is handed to the driver, which has never run for them:
         // put it on the piece of line the craft is actually on, for the
         // windowed-search reason `Self::set_autopilot` spells out.
-        if !finished_before && self.sim.world.ships[player].standing.finished() {
-            self.locate_player_driver();
+        for slot in 0..oag_gameplay::MAX_PLAYERS {
+            if self.sim.world.person_flown(slot)
+                && !finished_before[slot]
+                && self.sim.world.ships[slot].standing.finished()
+            {
+                self.locate_player_driver(slot);
+            }
         }
     }
 
