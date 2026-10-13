@@ -1235,8 +1235,8 @@ disc, `#[ignore]`d and out of CI:
 ```sh
 just test-data   # picks up both, along with every other ground-truth test
 # or, on their own:
-cargo nextest run -p oag-assets --run-ignored all --test pob_ground_truth --no-capture
-cargo nextest run -p oag-render --run-ignored all --test psys_ground_truth --no-capture
+cargo nextest run -p oag-assets --run-ignored all --test it pob_ground_truth:: --no-capture
+cargo nextest run -p oag-render --run-ignored all --test it psys_ground_truth:: --no-capture
 ```
 
 `pob_ground_truth` is the structural corpus walk described above;

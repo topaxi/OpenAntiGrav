@@ -469,7 +469,7 @@ measure"; an instantaneous CPU-busy sample plus a process check is the right
 one.**
 
 `ai_roll_ground_truth`'s six full-grid tests, each its own process (`cargo
-nextest run -p oag-game --run-ignored all -E 'binary(ai_roll_ground_truth)'`):
+nextest run -p oag-game --run-ignored all -E 'test(/^ai_roll_ground_truth::/)'`):
 
 | test (tier pair, seed) | 2026-09-13 | 2026-09-17 (idle) |
 | --- | --- | --- |
@@ -480,7 +480,7 @@ nextest run -p oag-game --run-ignored all -E 'binary(ai_roll_ground_truth)'`):
 | elite/skilled, default | within 158-165s band | **99.3s** |
 | elite/skilled, held-out | within 158-165s band | **99.7s** |
 
-`spawn_heading_ground_truth` (`-E 'binary(spawn_heading_ground_truth)'`):
+`spawn_heading_ground_truth` (`-E 'test(/^spawn_heading_ground_truth::/)'`):
 forward **43.3s** (was 81s), reversed **37.1s**; the three per-source tests
 5.5-31.2s (was 37s max). All comfortably under both the historical split
 figures and `CEILING`.

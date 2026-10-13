@@ -20,9 +20,11 @@
 
 # The ground-truth binaries are the ones that need `data/images`, and so the ones
 # that are `#[ignore]`d in the ordinary run. Under plain `just test` they are
-# skipped and this ordering costs nothing.
+# skipped and this ordering costs nothing. Most crates link every `tests/*.rs`
+# into one `it` binary (see a crate's `tests/it/main.rs`), where a file's tests
+# sit behind its module, so the file name is matched in the test name too.
 [[profile.default.overrides]]
-filter = 'binary(~ground_truth)'
+filter = 'binary(~ground_truth) | test(~ground_truth::)'
 priority = 50
 
 # The longest test in the suite, and the one that sets the floor on
@@ -43,7 +45,7 @@ priority = 100
 # this, so no extra tool (`cargo-test-changed`, `cargo-difftests`) is needed:
 #
 #   cargo nextest run -E 'rdeps(oag-rcs)'          # oag-rcs and its dependents
-#   cargo nextest run -E 'binary(ai_roll_ground_truth)'  # one ground-truth file
+#   cargo nextest run -p oag-game ai_roll_ground_truth::  # one ground-truth file
 #
 # A member's gate is a selection too, since 2026-10-07: `just gate-affected` and
 # `just test-data-affected` hand `cargo nextest` the packages

@@ -1751,7 +1751,7 @@ it with
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
-    -E 'binary(vex_batch_layout_ground_truth)'
+    -E 'test(/^vex_batch_layout_ground_truth::/)'
 ```
 
 That is also what settles the `u8` decode behind the `0.008`/`0.031` above:

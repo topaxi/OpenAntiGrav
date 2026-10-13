@@ -202,7 +202,7 @@ The checks above run as `crates/formats/tests/psarc_ground_truth.rs`, `#[ignore]
 like every ground-truth test because they need the decrypted image:
 
 ```sh
-cargo nextest run -p oag-formats --run-ignored all -E 'binary(psarc_ground_truth)'
+cargo nextest run -p oag-formats --run-ignored all -E 'test(/^psarc_ground_truth::/)'
 ```
 
 **What is not implemented**: the `lzma` branch, which no archive here declares,

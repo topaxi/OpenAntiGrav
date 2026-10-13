@@ -82,7 +82,7 @@ file does not need to carry its own.
      **39 passed**, of 39 tests, none of which was a failure.
 
      **Use `binary(...)`, not `test(...)`, to re-run a ground-truth failure**:
-     `-E 'binary(race_finish_ground_truth)'` lists all three of that binary's
+     `-E 'test(/^race_finish_ground_truth::/)'` lists all three of that binary's
      tests including both reds. Keep `--run-ignored all` with it - all six are
      `#[ignore]`d, so an exact-name filter *without* that flag is a second,
      independent route to the same false green, reporting
@@ -163,9 +163,9 @@ file does not need to carry its own.
 
   Verified together and against the rest of the disc-backed suite: `cargo
   nextest run --workspace --run-ignored all --no-fail-fast -E
-  'binary(race_finish_ground_truth) or binary(stall_rescue_ground_truth) or
-  binary(difficulty_ground_truth) or binary(rcsmodel_decl_ground_truth) or
-  binary(rcsmodel_material_ground_truth) or binary(rcsmodel_stride_ground_truth)'`
+  'test(/^race_finish_ground_truth::/) or test(/^stall_rescue_ground_truth::/) or
+  test(/^difficulty_ground_truth::/) or test(/^rcsmodel_decl_ground_truth::/) or
+  test(/^rcsmodel_material_ground_truth::/) or test(/^rcsmodel_stride_ground_truth::/)'`
   - 29 of 29 pass, 76s.
 - **Check `git status` before assuming the tree is clean.** A whole milestone's
   work once sat uncommitted for a day.

@@ -39,7 +39,7 @@
   directly this session. All 15 names being present on the disc is already
   what `mod hd`'s own `every_wired_effect_is_on_the_disc` test asserts
   (`just test-data`, or `cargo nextest run -p oag-game --run-ignored all -E
-  'binary(psys_inventory_ground_truth)'`), so this correction rests on
+  'test(/^psys_inventory_ground_truth::/)'`), so this correction rests on
   existing, reproducible coverage rather than a fresh one-off scan.
   **82 - 15 wired = 67 unbucketed**,
   a number worth re-deriving from `RACE_EFFECTS.len()` rather than trusting
