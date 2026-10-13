@@ -88,7 +88,7 @@ through `oag_mesh::mesh::ModelTexture::from_gtf` (promoted out of
 `mesh::rcs::skin` so a second caller can reach it); and
 `ZoneGrade::stage_art()` hands back the showing stage's texture. Checked
 against `hdfury-ps3-eu-dec.iso` in
-`crates/game/tests/zone_grade_ground_truth.rs`: all fifteen decode at 256x256
+`crates/raceplay/tests/zone_grade_ground_truth.rs`: all fifteen decode at 256x256
 and **no two are the same picture**, which is the assertion that catches a
 regression re-pointing the loader at the blank general set. Nothing draws them
 - the load report says so in as many words.
@@ -233,7 +233,7 @@ mode**. They are never what a Zone race shows.
 
 **Wired**: `oag_title::RaceDefaults::zone_sky`, `oag_hd::race::ZONE_SKY`, and
 `hd_sky_model` taking it when `Mode::Zone`. Checked against
-`hdfury-ps3-eu-dec.iso` in `crates/game/tests/zone_sky_ground_truth.rs`: a Zone
+`hdfury-ps3-eu-dec.iso` in `crates/raceplay/tests/zone_sky_ground_truth.rs`: a Zone
 race and a Single Race on the **same named circuit** resolve different cubemaps,
 the Zone one 64x64 against `01_vineta_k`'s 2048x2048, and five of its six faces
 carry real art rather than a flat fill. The size is the load-bearing assertion:

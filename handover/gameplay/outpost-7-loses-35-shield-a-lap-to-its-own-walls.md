@@ -187,7 +187,7 @@ at.
 ## Step 4 is done: A and the span both landed, and the span was swept twice
 
 Measured 2026-09-06 on the fixed tree. `sweep_curvature_span` in the new
-`crates/game/tests/ai_span_sweep.rs` is the harness, `OAG_SWEEP_SPAN` taking a
+`crates/raceplay/tests/ai_span_sweep.rs` is the harness, `OAG_SWEEP_SPAN` taking a
 comma-separated list of caps with `none` for the uncapped row. **The `none` row
 without A is bit-identical to `main`** and reproduces every baseline figure this
 thread quotes, and **A plus a 10-unit cap reproduces the known point to the

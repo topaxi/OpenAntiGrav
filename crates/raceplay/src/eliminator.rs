@@ -164,7 +164,7 @@ impl Race {
 
             // Counted in every mode a craft comes back in, not only the one
             // whose results screen has a row for it: a death is a fact about
-            // the race, and `crates/game/tests/ai_clean_lap_gate.rs` reads it
+            // the race, and `crates/raceplay/tests/ai_clean_lap_gate.rs` reads it
             // to tell a craft that died and came back from one that never died.
             self.sim.world.ships[slot].standing.deaths += 1;
             // **A full pool, measured for the Eliminator's state 8**:

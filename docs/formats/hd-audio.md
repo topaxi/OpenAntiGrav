@@ -3,7 +3,7 @@
 HD's `.bnk` are ordinary `SBlk` version 3 banks (the PSP container, name table
 in the clear; [psp-audio.md](psp-audio.md)). This page is what a circuit's
 authored `soundcone` nodes need to find a cue, and what the disc ships for them.
-Evidence: `crates/game/tests/track_audio_hd_ground_truth.rs` (`#[ignore]`d, `just
+Evidence: `crates/raceplay/tests/track_audio_hd_ground_truth.rs` (`#[ignore]`d, `just
 test-data`) over all sixteen environment directories of `hdfury-ps3-eu-dec.iso`,
 and [the executable's bank literals](../ghidra/functions/ps3-hdfury-eu/sound-bank-loads.md).
 

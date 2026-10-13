@@ -32,7 +32,7 @@ craft rather than the driver's perception filter; the `+0x2c` held timer never
 reset, latching the absorb bias on). It lives on branch **`plasma-flash-ai`**
 (`56ed06cc` the port, `6c390a2d` the gap fix, `6b826d9d` its docs, `5da274b5`
 naming the regression) with `just` green at 3708/3708 - and `just test-data`
-red: **14-15 rows of `crates/game/tests/ai_clean_lap_gate.rs`** over their
+red: **14-15 rows of `crates/raceplay/tests/ai_clean_lap_gate.rs`** over their
 frozen baseline, worst `07_Track` at up to 634 contact ticks against 329. That
 file's `LONE` craft is an AI opponent, so it runs real weapon pads through the
 port; bisected to the port, root cause not confirmed (working hypothesis: the

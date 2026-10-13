@@ -205,7 +205,7 @@ fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline
 /// measured against (`16_Track`/Talon's Junction), the grid's own start straight
 /// happens to be close enough to flat that a straight line stays on the track. It
 /// is not close enough on most others: a sweep of every Wipeout HD circuit's
-/// grid (`crates/game/tests/hd_trackwall_ground_truth.rs`, both directions,
+/// grid (`crates/raceplay/tests/hd_trackwall_ground_truth.rs`, both directions,
 /// opponents on) found 9 of 12 *reversed* grids putting one or more slots off
 /// the collision mesh entirely - up to 145 units from the driveable line on
 /// `tech_de_ra`'s reversed grid - against only one flagged forward grid (`zone_3`,

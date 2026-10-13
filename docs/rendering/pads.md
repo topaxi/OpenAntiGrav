@@ -244,7 +244,7 @@ was changed to make room for it.
 Both are gone. `oag_render::speedup_pad` is deleted rather than gated,
 `Drawable::tint_weapon_pads` returns early on any model with
 `vertex_colour_is_light`, and
-`crates/game/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
+`crates/raceplay/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
 pins all three facts against the disc.
 
 ### And putting HD's pads back on the lit path had to be checked as a picture

@@ -348,7 +348,7 @@ pub const ALWAYS_ON: &[&str] = &[
 /// The five shipped layouts, by race mode.
 ///
 /// Widget counts are `<Image>` plus `<Text>`, measured off the USA PSP disc and
-/// pinned in `crates/game/tests/hud_layout_ground_truth.rs`. Most widgets are
+/// pinned in `crates/raceplay/tests/hud_layout_ground_truth.rs`. Most widgets are
 /// inactive in any given frame, so these are sizes of the layout rather than of
 /// what is on screen.
 pub mod layouts {

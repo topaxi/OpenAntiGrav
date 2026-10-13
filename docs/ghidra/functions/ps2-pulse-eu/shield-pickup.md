@@ -8,7 +8,7 @@ the object's fields through PINE (2026-10-01), and a **GS dump** of it
 (2026-10-01, second pass) settled what the first pass left open: the PS2 draws
 **`<Team>\extrashield.vex`, not `shipshield.vex`**, with its own texture, and
 **never tints the shell's vertices**. Both are fixed in `oag-game` and pinned by
-`crates/game/tests/ps2_shield_ground_truth.rs`.
+`crates/raceplay/tests/ps2_shield_ground_truth.rs`.
 
 ## The object
 

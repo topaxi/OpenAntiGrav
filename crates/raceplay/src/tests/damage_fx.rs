@@ -2,7 +2,7 @@
 //!
 //! Hand-laid one-emitter effects, no disc: what is asserted is the state law
 //! (70 and 40), the 3.3 s hold and what leaves the smoke unplayed. The
-//! disc-backed half is `crates/game/tests/damage_fx_ground_truth.rs`.
+//! disc-backed half is `crates/raceplay/tests/damage_fx_ground_truth.rs`.
 
 use super::*;
 use oag_gameplay::PlayerInputs;

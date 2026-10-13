@@ -880,7 +880,7 @@ impl Race {
     /// So an opponent's shot is gated twice - by its own willingness *and* by the
     /// lock - which is the original's arrangement rather than an extra of ours.
     ///
-    /// `pub` rather than `pub(super)` so `crates/game/tests/missile_ground_truth.rs`
+    /// `pub` rather than `pub(super)` so `crates/raceplay/tests/missile_ground_truth.rs`
     /// can reach it: an integration test links the *library*, so nothing narrower
     /// is visible to one. `oag-game` is the composition root and
     /// `scripts/check-dependency-rules.py` forbids anything depending on it, so

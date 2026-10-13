@@ -4,7 +4,7 @@
 //! deliberate: the lap rule is `oag_race`'s and is tested there, and this is
 //! about *when* the board is taken and *what* goes on it. The end-to-end
 //! version - eight craft actually driving three laps until the flag falls out
-//! of the simulation itself - is `crates/game/tests/race_finish_ground_truth.rs`,
+//! of the simulation itself - is `crates/raceplay/tests/race_finish_ground_truth.rs`,
 //! which needs a disc image.
 
 use super::*;

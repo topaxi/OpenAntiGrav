@@ -7,7 +7,7 @@ use oag_title::{
 
 /// `Data\Plugins\PI001\GUI\Skin.xml`'s `Main Menu` `Mode` menu: five rows on the EU disc;
 /// the USA disc authors the same without `Teasers`, which nothing is built behind
-/// (`crates/game/tests/main_menu_ground_truth.rs`). Its first row is the entry
+/// (`crates/raceplay/tests/main_menu_ground_truth.rs`). Its first row is the entry
 /// `Campaign::main_row` words as SINGLE PLAYER.
 ///
 /// Pure ships no split screen, so it mirrors its closest relative (maintainer, 2026-10-13):

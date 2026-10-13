@@ -11,7 +11,7 @@ categories: [frontend, rendering]
 **Shipped.** `oag_omega::hud` names `Data\XML\{Arcade,Elimination,TimeTrial,SpeedLap,Zone}_HUD.xml`
 (measured off the single-player race managers) and `texture_extension: .gnf`; the HUD font takes
 `Space::font_texel_scale` so Omega's 2x faces lay out at HD's size. The two HUD-atlas WARN lines are
-gone. Disc-backed: `crates/game/tests/omega_hud_ground_truth.rs`. An earlier "Omega ships no per-mode
+gone. Disc-backed: `crates/raceplay/tests/omega_hud_ground_truth.rs`. An earlier "Omega ships no per-mode
 composition" claim was a truncated census (NUL-separated PS4 manifest read by `scripts/psarc.py`).
 
 ## Open

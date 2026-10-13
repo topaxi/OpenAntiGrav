@@ -788,7 +788,7 @@ are not touched, being not lengths.
 > `data/traces/pad0-boost.csv`: pre-multiplied offsets miss the original's own
 > recorded eye by `0.121` RMS, applying the scale after the spring by `0.008`.
 > `oag_render::camera::chase::ChaseParams::craft_scale` is the field that exists
-> because of this; `crates/game/tests/chase_camera_ground_truth.rs` is the
+> because of this; `crates/raceplay/tests/chase_camera_ground_truth.rs` is the
 > measurement.
 
 Confidence **85**: the value and the write site are read directly and the store is
@@ -951,7 +951,7 @@ enforces is about the look-at point 25 units ahead.
 
 Confidence **90** for the rig as a whole, up from 85: an instruction-level read
 plus a 150-tick numerical agreement to three decimal places, on a capture that
-was not used to fit anything. `crates/game/tests/chase_camera_ground_truth.rs` is
+was not used to fit anything. `crates/raceplay/tests/chase_camera_ground_truth.rs` is
 the comparison, `#[ignore]`d because it needs both a disc image and the capture.
 
 **One thing was not confirmed and should not be transcribed.** The far block's

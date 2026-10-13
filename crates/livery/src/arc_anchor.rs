@@ -5,7 +5,7 @@
 //! warns `Ship has no arc_anchor_point locator` when it is missing, so the
 //! wake belongs to the hull. Exactly one per hull, on the centreline, in
 //! `Locators.vex`, identical on HD and Omega - see
-//! `crates/game/tests/magstrip_anchor_ground_truth.rs` and
+//! `crates/raceplay/tests/magstrip_anchor_ground_truth.rs` and
 //! `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`.
 
 use oag_core::math::Mat4;

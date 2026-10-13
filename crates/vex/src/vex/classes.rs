@@ -49,7 +49,7 @@ pub const CLASS_CAGE_COLLISION: u32 = 0x3e7;
 /// 16 of HD's circuits: one node each, all parsing, 97 % of triangles
 /// near-vertical, extent matching the floor's rather than the wall's. See
 /// `docs/formats/hd-status.md`; tests in
-/// `crates/game/tests/hd_trackwall_ground_truth.rs`.
+/// `crates/raceplay/tests/hd_trackwall_ground_truth.rs`.
 pub const CLASS_TRACK_WALL_COLLISION: u32 = 0x3ed;
 
 /// Class ID of an `absorb` node: where Wipeout HD plays `WO_WEAPON_ABSORB` when

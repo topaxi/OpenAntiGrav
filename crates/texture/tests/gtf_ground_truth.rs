@@ -470,7 +470,7 @@ fn the_dxt_endpoints_are_little_endian_inside_a_big_endian_file() {
 ///
 /// `oag_hd::hud::TEXTURES`'s spellings cannot be used (`oag-texture` does not
 /// depend on `oag-hd`), so these are the resolved entry paths;
-/// `crates/game/tests/hd_hud_ground_truth.rs` ties the two together.
+/// `crates/raceplay/tests/hd_hud_ground_truth.rs` ties the two together.
 const HUD_TEXTURES: &[(&str, &str, u16, u16, Format)] = &[
     (
         "DATA02",

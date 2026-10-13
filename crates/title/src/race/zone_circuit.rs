@@ -249,7 +249,7 @@ impl ZoneCircuit {
     /// directly: `oag-title` sits beneath `oag-game` in the dependency graph
     /// (`docs/architecture/workspace-layout.md`) and must not reach up to it.
     /// `available_in_zone` and `by_own_names` are the two questions
-    /// `crates/game/tests/zone_ground_truth.rs` asked by hand, once per
+    /// `crates/raceplay/tests/zone_ground_truth.rs` asked by hand, once per
     /// title, before this method existed; this is that dispatch moved to the
     /// one place that has to agree with itself everywhere it is asked - the
     /// title axis, not a caller (a ground-truth test, a menu, `--menu-page`)

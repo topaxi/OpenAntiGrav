@@ -82,7 +82,7 @@ impl VertAlign {
 /// `docs/formats/hd-hud.md`.
 ///
 /// So today an HD sprite's `src` is read, checked against the real texture's
-/// dimensions by `crates/game/tests/hd_hud_ground_truth.rs`, and then thrown
+/// dimensions by `crates/raceplay/tests/hd_hud_ground_truth.rs`, and then thrown
 /// away at draw time, because [`Assets::atlas_origin`] and [`sprite_draw`] both
 /// take **one** origin for the whole frame. Five of the six textures a layout
 /// names cannot be reached.

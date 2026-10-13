@@ -124,12 +124,20 @@ and BC7-decoded every Omega `.gnf`, two copies of one helper LZSS-decompressed a
 
 **A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`, not a binary of
 its own (2026-10-13).** Each crate links its integration tests into one binary
-(`tests/it.rs`); `oag-game` splits them into five by first letter (`tests/it_*.rs`).
-A file nobody lists is never compiled, and the crate's `every_test_file_is_listed` guard
-fails naming it. The exceptions are `oag-physics`, `oag-gameplay` and `oag-ai`, which keep
-a binary per file because CI runs `--test determinism` by name. Test names carry the
-module path, e.g. `oag-game::it_p_r ram_ground_truth::...`, so a nextest filter selects
-by `test(...)` rather than `binary(...)`.
+(`tests/it.rs`); `oag-game` and `oag-raceplay` split them into five by first letter
+(`tests/it_*.rs`). A file nobody lists is never compiled, and the crate's
+`every_test_file_is_listed` guard fails naming it. The exceptions are `oag-physics`,
+`oag-gameplay` and `oag-ai`, which keep a binary per file because CI runs
+`--test determinism` by name. Test names carry the module path, e.g.
+`oag-raceplay::it_p_r ram_ground_truth::...`, so a nextest filter selects by `test(...)`
+rather than `binary(...)`.
+
+**A test goes in the lowest crate whose dependencies reach everything it reads
+(2026-10-13).** Almost every change touches `oag-game`, so its binaries rerun on nearly
+every `just test-data`; a test in `oag-raceplay` or below is skipped when its crate did
+not change. A test belongs in `oag-game` only when it names `oag_game` or spawns the
+`oag-game` binary (`CARGO_BIN_EXE_oag-game`); a race test that only needs
+`oag_raceplay::race` goes in `oag-raceplay`, a decoder census in the decoder's crate.
 
 **Wall clock here is contended, so measure it on an idle machine or not at all.** The
 same tree measured 456 s, 402 s and 415 s at load averages of 21, 17 and 2, with four,

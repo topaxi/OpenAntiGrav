@@ -92,7 +92,7 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   "2048 - Event 6"` reports `"grid: 7 of 7 AI slot(s) authored..."` and the
   exact authored roster (three Feisar, two Auricom, two AG_Systems). See
   `docs/formats/2048-campaign.md`'s "Craft choice" section and
-  `crates/game/tests/vita_2048_campaign_grid_ground_truth.rs`.
+  `crates/raceplay/tests/vita_2048_campaign_grid_ground_truth.rs`.
 - **The rank gate (`M_RankRequired`) on the Ship/Phantom Challenge side
   events.** This engine has no player rank at all; live verification needs a
   progressed save, which `data/extracted/vita/PCSF00007/base/savedata` does

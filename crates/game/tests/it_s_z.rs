@@ -12,70 +12,33 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
-mod scenery_fx_ground_truth;
 mod selection_screens_ground_truth;
 mod sfx_ground_truth;
-mod sfx_repeating_ground_truth;
-mod sfx_timeline_ground_truth;
 mod sfx_weapon_ground_truth;
-mod sfx_xfade_2048_ground_truth;
-mod sfx_xfade_ground_truth;
-mod shadow_ground_truth;
-mod shadow_stability_ground_truth;
 mod shake_blur_ground_truth;
 mod shield_shell_scroll_ground_truth;
 mod shine_ground_truth;
-mod ship_spawn_ground_truth;
-mod shuriken_ground_truth;
 mod spawn_heading_ground_truth;
-mod speed_plan_ground_truth;
 mod split_end_race_ground_truth;
 mod split_grid_ground_truth;
 mod split_hud_ground_truth;
 mod split_screen_ground_truth;
-mod stall_rescue_ground_truth;
-mod start_gantry_clock_inherit_ground_truth;
-mod start_gantry_go_hold_ground_truth;
-mod start_gantry_hd_laps_ground_truth;
-mod start_gantry_hd_mount_ground_truth;
-mod start_gantry_report_ground_truth;
-mod start_gantry_report_pure_ground_truth;
-mod start_line_ground_truth;
-mod start_pose_ground_truth;
 mod texture_detail_ground_truth;
-mod texture_stream_ground_truth;
 mod title_behaviour_data;
 mod track_audio_2048_ground_truth;
 mod track_audio_ground_truth;
-mod track_audio_hd_ground_truth;
 mod track_panel_ground_truth;
 mod unlock_ground_truth;
 mod variant_unlock_ground_truth;
 mod vita_2048_boot_ground_truth;
-mod vita_2048_campaign_grid_ground_truth;
 mod vita_2048_campaign_progress_ground_truth;
 mod vita_2048_endrace_ground_truth;
 mod vita_2048_event_card_ground_truth;
-mod vita_2048_lighting_ground_truth;
 mod vita_2048_music_ground_truth;
-mod vita_2048_original_ai_ground_truth;
-mod vita_2048_zone_scenery_ground_truth;
-mod wall_collision_ground_truth;
-mod weapon_floor_sweep;
-mod weapon_slowdown_ground_truth;
 mod weapon_stamp_ground_truth;
-mod weapons_row_ground_truth;
-mod weather_ground_truth;
-mod web_picker_table;
 mod wreck_ground_truth;
 mod wreck_voice_ground_truth;
 mod zone_airbrake_flaps_ground_truth;
-mod zone_announcer_ground_truth;
-mod zone_craft_ground_truth;
-mod zone_grade_ground_truth;
-mod zone_ground_truth;
-mod zone_sky_ground_truth;
-mod zone_start_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

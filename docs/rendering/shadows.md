@@ -341,7 +341,7 @@ path that names one. A silhouette is found **beside the race's hull model**
   The disc's image is played regardless, as on HD.
 - **Same image three times.** The decoded Zone silhouette matches HD's `zone`
   one in size, in the red channel `shadow.wgsl` reads, and in row order
-  (`crates/game/tests/shadow_ground_truth.rs`,
+  (`crates/raceplay/tests/shadow_ground_truth.rs`,
   `zone_craft_blob_shadow_is_the_discs_own_on_2048_and_omega`): the row-sum
   profile is within a tenth of HD's straight and ten times that reversed, so
   Omega's `.gnf` needs **no** row flip, unlike its eight `bottom_up_gnf`
@@ -1081,7 +1081,7 @@ against `blob` 5,259 at 70, and - the check that says the two tiers draw
 than eyeballed: every vertex lands exactly one `LIFT` above the contact plane,
 and the polygon's centre sits `0.836` units from the contact point under a
 craft whose hull is `10.5` long
-(`crates/game/tests/shadow_ground_truth.rs`).
+(`crates/raceplay/tests/shadow_ground_truth.rs`).
 
 ## The shadow blinked, 2026-10-05: a flat polygon on a road that is not flat
 
@@ -1116,7 +1116,7 @@ the maintainer's profile of 4x MSAA and high motion blur):
    road at `LIFT` 0.05, on **22 of 60 ticks**; at 3000 ticks 0.28 on 9 of 60;
    at 900 ticks 0.12 on 2 of 60. The same circuit as an ordinary race, at
    `LIFT` 0.15: 0.10 on 1 of 60 at 3000 ticks and nothing at 6000.
-   [`shadow_stability_ground_truth.rs`](../../crates/game/tests/shadow_stability_ground_truth.rs)
+   [`shadow_stability_ground_truth.rs`](../../crates/raceplay/tests/shadow_stability_ground_truth.rs)
    prints all of it.
 4. *The picture agrees, and says more.* Changed pixels, shadow on minus off,
    per tick over 20 ticks (Zone, tick 6000-6020): before, 3102 at worst against

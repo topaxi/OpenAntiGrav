@@ -26,7 +26,7 @@
 //! throws no spark. The struck hull sparks from its side: `Ship_Damage`'s weapon
 //! branch throws `WO_SHIP_COLL_SPARK_DAMAGE` (see [`super::WeaponHit::landed`]).
 //! Wired at `oag_raceplay::CANNON_SPARKS_EFFECT`;
-//! `crates/game/tests/psys_inventory_ground_truth.rs`'s `WO_CANNON_HIT_SHIP` entry
+//! `crates/raceplay/tests/psys_inventory_ground_truth.rs`'s `WO_CANNON_HIT_SHIP` entry
 //! is a PS2-only asset this does not settle.
 
 use crate::Craft;

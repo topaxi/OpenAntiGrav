@@ -2,7 +2,7 @@
 
 2026-10-02, from the `pulse-eliminator` lane. Evidence: `docs/gameplay/race-modes.md` ("Who is
 credited with a kill, and how this build's Eliminator reaches five"). Guarded by
-`crates/game/tests/eliminator_finish_ground_truth.rs` (target 5, seeds 5, 9, 13, 16, one test each,
+`crates/raceplay/tests/eliminator_finish_ground_truth.rs` (target 5, seeds 5, 9, 13, 16, one test each,
 plus the respawn-keeps-its-place test).
 
 ## Open

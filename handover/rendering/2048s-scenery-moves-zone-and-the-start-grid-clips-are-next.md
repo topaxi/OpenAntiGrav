@@ -61,7 +61,7 @@ every submesh record reachable from exactly one mesh object.
   and PVS, **behind `race::Options::zone_model`, off by default since the merge
   (2026-10-05, lead)**: with `fc01_dummy` undrawn a Zone race showed no road,
   only sky and saturated colour, so Zone races the ordinary model until that
-  shader is read (`race::load::geometry::sibling_model`; `crates/game/tests/vita_2048_zone_scenery_ground_truth.rs`).
+  shader is read (`race::load::geometry::sibling_model`; `crates/raceplay/tests/vita_2048_zone_scenery_ground_truth.rs`).
 - **The material instance table is solved** - `0x18`-byte entries, `~crc32`
   names, a float pool and a half pool - and read with coverage (15,561 of
   15,565 uniform hashes are names the material's own shader declares, 52,637

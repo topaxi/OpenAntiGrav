@@ -308,7 +308,7 @@ Law (life 1.85 s, half-width 0.4 to 2.0, alpha from `smoke_trails_opacity_ramp.t
 20, three single-sided fins, alpha-over, ambient forced to 0.8) matched against a live RPCS3 dump,
 695/695 node alphas exact: `docs/ghidra/functions/ps3-hdfury-eu/rocket-trail.md`. Drawn by
 `oag_fx::rocket_smoke` + `oag_raceplay::rocket_smoke`; ground truth
-`crates/game/tests/hd_rocket_smoke_ground_truth.rs`. The shadow ribbon draws nothing in the original
+`crates/raceplay/tests/hd_rocket_smoke_ground_truth.rs`. The shadow ribbon draws nothing in the original
 (its alpha is always 0), so none here. Omega: checked, differs (ships the textures, no ramp).
 
 Open:

@@ -74,7 +74,7 @@ pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw
         // their own `ART::sights` doc comments) and reach this arm for real:
         // HD's weapon table *does* author a `<Weapon type="LeachBeam">` with a
         // lock window - pinned by `only_pulse_and_hd_author_a_leachbeam_block`
-        // in `crates/game/tests/lock_sight_ground_truth.rs` - so
+        // in `crates/raceplay/tests/lock_sight_ground_truth.rs` - so
         // `oag_race::sight::Held::LeachBeam` is reachable on this title and
         // would otherwise put the wrong weapon's reticle on screen.
         //

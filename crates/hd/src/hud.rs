@@ -128,7 +128,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // directly off the composed layout, confidence 90. There is no
     // `LeachBeamSight*LockedOn*` widget anywhere on any of the eighteen
     // composed layouts (checked, not assumed -
-    // `crates/game/tests/lock_sight_ground_truth.rs`), so unlike the Missile's
+    // `crates/raceplay/tests/lock_sight_ground_truth.rs`), so unlike the Missile's
     // pair above there is no second widget for a lock to add. **Which of the
     // four draws when is measured and ported, at reduced confidence** - see
     // `Sights::Concentric`'s own `leach` field doc for the reveal law and
@@ -459,7 +459,7 @@ pub mod layouts {
 /// Every root layout the disc ships, default skin first.
 ///
 /// Eighteen: the eight in [`layouts`], plus five each for [`skins::WO3`] and
-/// [`skins::RETRO_2097`]. `crates/game/tests/hd_hud_ground_truth.rs` re-derives
+/// [`skins::RETRO_2097`]. `crates/raceplay/tests/hd_hud_ground_truth.rs` re-derives
 /// this from the manifests rather than trusting it.
 ///
 /// **Single-screen only.** The disc also ships a split-screen family -

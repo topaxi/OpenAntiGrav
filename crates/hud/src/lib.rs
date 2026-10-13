@@ -428,7 +428,7 @@ impl Layout {
 /// any more: they resolve to a fixed on-screen column, `(405, 25..165)` on
 /// the arcade layout and `(460, 25..165)` on the eliminator one, both
 /// measured and pinned by `postag_is_a_fixed_column_not_a_runtime_anchor`
-/// (`crates/game/tests/hud_layout_ground_truth.rs`), and the Eliminator's
+/// (`crates/raceplay/tests/hud_layout_ground_truth.rs`), and the Eliminator's
 /// kill column now draws in them - see [`kill_tags`]. See `docs/ui/hud.md`.
 ///
 /// This exists because the on-screen check is otherwise the sharpest test of the
@@ -907,7 +907,7 @@ pub fn format_lap_time(ticks: u64, precision: Precision) -> String {
 /// screen-positioned widget across all five layouts lands inside both the PSP's
 /// 480x272 and the PS2's 640x448, and this function needed nothing beyond the
 /// `screen` parameter to check either. See
-/// `crates/game/tests/hud_layout_ground_truth.rs`'s PS2 sweep.
+/// `crates/raceplay/tests/hud_layout_ground_truth.rs`'s PS2 sweep.
 ///
 /// **What the previous version of this comment got wrong.** It attributed a
 /// `y="-4"` "predicted -7" to `TimeDiffIcon`, which authors no such value in

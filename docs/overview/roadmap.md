@@ -504,7 +504,7 @@ seen from the authoring side.
       there is blank on purpose (the trophy model, the per-lap table's third
       column). `--autopilot` is what reaches the end
       without a human driving, and
-      `crates/game/tests/race_finish_ground_truth.rs` races a real circuit to
+      `crates/raceplay/tests/race_finish_ground_truth.rs` races a real circuit to
       the flag. See
       [race-modes.md](../gameplay/race-modes.md#what-happens-when-a-race-ends).
 - [~] HUD. **The disc's own layout is parsed and drawn.** All five
@@ -1158,7 +1158,7 @@ change how this list should be read:
       `Ship.vex`, plume and `Engine Flare` locator, so a race fields eight
       different models rather than one repainted - measured at 845 to 1,497
       triangles across the eight teams the disc declares, and pinned by
-      `crates/game/tests/livery_ground_truth.rs`. The four teams whose
+      `crates/raceplay/tests/livery_ground_truth.rs`. The four teams whose
       `Ship.vex` did not resolve are [downloadable content](../formats/dlc-pack.md)
       and the packs mount, so all twelve are loadable; with them the catalogue
       is twelve teams for eight slots and the extras simply do not race.
@@ -1293,7 +1293,7 @@ recipe and its three traps.
       `oag-replay`): a run is recorded as its per-slot input stream plus a state
       hash a second, re-drives bit for bit on Pulse, Pure, HD and 2048, and
       reports a changed input at the next stored hash
-      (`crates/game/tests/replay_ground_truth.rs`). Time Trial and Speed Lap
+      (`crates/raceplay/tests/replay_ground_truth.rs`). Time Trial and Speed Lap
       race a best-lap ghost drawn from poses, saved under
       `<config dir>/oag/ghosts/`. **Still open:** a full-race replay viewer
       (the same file serves it; the ADR sketches the whole-race pose track it
@@ -1666,7 +1666,7 @@ The grid now reads the disc's twelve declared teams and fields eight of them, at
 `Locators.vex` nozzle. The front end offers all twelve rather than the eight-team
 stand-in it was falling back to. Which team flies which slot is still this
 project's, exactly as on the PSP grid. Pinned by
-`crates/game/tests/hd_livery_ground_truth.rs` and
+`crates/raceplay/tests/hd_livery_ground_truth.rs` and
 `hd_boot_ground_truth.rs::the_menus_offer_the_twelve_teams_this_disc_declares`;
 see [hd-status.md](../formats/hd-status.md#the-roster-is-declared-and-under-hds-own-plugin-name---2026-08-18).
 

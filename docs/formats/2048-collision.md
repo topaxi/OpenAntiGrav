@@ -224,7 +224,7 @@ other 4,617 to one ulp (the tree was rebuilt); every one of the 38 files' leaf
 runs tiles its leaf array exactly. `oag_vex::kdcol` reads both as
 `NodeLayout::Wide` and `NodeLayout::Packed`.
 Reproducers: `crates/vex/examples/omega_col_probe.rs` and
-`crates/game/tests/omega_race_ground_truth.rs`. See
+`crates/raceplay/tests/omega_race_ground_truth.rs`. See
 [omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 
 ## What a race does with it

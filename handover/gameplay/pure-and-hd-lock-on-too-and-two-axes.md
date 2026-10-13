@@ -52,7 +52,7 @@ about whether the seeking set stays up underneath, so they are drawn
 Confidence 70, and nothing of HD's own HUD code has been disassembled for it.
 
 **Verified**: `just` green, five disc-backed tests in
-`crates/game/tests/lock_sight_ground_truth.rs` covering all three titles, four
+`crates/raceplay/tests/lock_sight_ground_truth.rs` covering all three titles, four
 new draw tests for the concentric dialect and the unread one, and a capture per
 title showing the reticle over a craft ahead.
 

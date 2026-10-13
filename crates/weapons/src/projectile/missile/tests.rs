@@ -1,7 +1,7 @@
 //! What the Missile's lock, guidance and speed ramp are asserted to do. Fixture
 //! numbers are invented (ADR-0006). These pin the recovered arithmetic against the
 //! shape it was recovered as; whether a missile gets anywhere on a real circuit is
-//! `crates/game/tests/missile_ground_truth.rs`'s job.
+//! `crates/raceplay/tests/missile_ground_truth.rs`'s job.
 
 use super::*;
 

@@ -622,7 +622,7 @@ misses at all, which is the cleanest agreement any of the three model types has
 produced; the ship finding's eleven and the track finding's 27-of-32 both
 predate it. `oag_livery::ps2_skin` is the call site, on the same
 all-slots-empty gate the hull takes, and
-`crates/game/tests/boost_plume_ground_truth.rs` asserts both halves for every
+`crates/raceplay/tests/boost_plume_ground_truth.rs` asserts both halves for every
 file - that the preceding entry decodes, *and* that rebuilding through it
 leaves no slot empty. The second half is the one that matters as a regression
 test: a set shorter than the slot count would pass the first and draw a plume
@@ -650,7 +650,7 @@ of 13 exact. The shell's one texture is `pulse_shield_extra_ADD`, 128x64
 `oag_livery::shield::shield_model` now calls `ps2_skin` on the same
 all-slots-empty gate. Before that, both models bound the white 1x1, which is
 half of why the PS2 shell drew as a flat pale dome.
-`crates/game/tests/ps2_shield_ground_truth.rs` walks all thirteen the way the
+`crates/raceplay/tests/ps2_shield_ground_truth.rs` walks all thirteen the way the
 plume check walks its 24, and also asserts the eight shells a race fields
 come out of the load skinned. The other half of that report was the shell's
 blend, not its texture - and then the file itself. See

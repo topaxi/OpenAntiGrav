@@ -46,7 +46,7 @@ itself (`cannon::launch`, built from the craft's right and forward) was never
 at fault: where the probe missed, the residual was exactly zero. Pinned by
 `oag_weapons::projectile::cannon::tests` (a craft rolled 0 to 135 degrees over
 a floor) and the disc-backed
-`crates/game/tests/cannon_tilt_ground_truth.rs`.
+`crates/raceplay/tests/cannon_tilt_ground_truth.rs`.
 
 **Lineage.** HD authors a Cannon (`weaponstats_Race.xml`, drawn by
 `hd_weapon_scene_ground_truth`) and runs the same `Race::advance_cannons` and
@@ -67,7 +67,7 @@ and it was one.
 
 ## What was measured
 
-`crates/game/tests/rocket_floor_trace.rs` (a scratch trace, `#[ignore]`d and
+`crates/raceplay/tests/rocket_floor_trace.rs` (a scratch trace, `#[ignore]`d and
 gated on `OAG_ROCKET_TRACE`) flies the player on the autopilot, fires a volley
 every two seconds, and re-runs each rocket's own probe and sweep against the
 race's own `CollisionWorld` (`Race::collision`) every tick, so the tick a
@@ -200,7 +200,7 @@ correctly; one real fault was found, the Plasma's fall axis, and fixed.**
 The Cannon's fault was a ridden normal seeded with world up, so its first probe
 landed on a different deck. The four other floor followers now carry the craft's
 up from birth (2026-10-07) and probe along it, so they cannot repeat that.
-`crates/game/tests/projectile_tilt_ground_truth.rs` flies each one off the
+`crates/raceplay/tests/projectile_tilt_ground_truth.rs` flies each one off the
 autopilot's craft, fired through the pad every 30 ticks, on Pulse's Moa Therma
 (`03_Track`, the loop) and HD's Vineta K (`01_vineta_k/track.vex`), and on every
 tick a projectile is in the air casts the weapon's own probe along `-surface`

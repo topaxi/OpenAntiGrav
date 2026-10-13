@@ -71,7 +71,7 @@ language's `entries.xml` (`PI008`-`PI012` carry the same English text), ending i
 `NN_Track\track.vex`, or `track_reversed.vex` when `Reversed="True"`. This build
 does the same - `oag_raceplay::catalogue::label` and `Track::entry_name` - so our
 Track Select shows the disc's titles and starts the layout the original starts.
-`crates/game/tests/pulse_variant_titles_ground_truth.rs` pins the table below on
+`crates/raceplay/tests/pulse_variant_titles_ground_truth.rs` pins the table below on
 both PSP discs (colour words only; the titles stay on the disc).
 
 | Circuit | White entry | White loads | Black entry | Black loads | Confidence |
@@ -128,7 +128,7 @@ attribute predicts the file **24 times out of 24**, sixteen present and eight
 absent, with no exception in either direction. `pulse-ps2-eu.chd` declares 32
 entries and the same biconditional holds there, 22 present and 10 absent.
 Confidence **94** - direct name resolution over the whole set.
-`crates/game/tests/zone_ground_truth.rs` is that sweep, and
+`crates/raceplay/tests/zone_ground_truth.rs` is that sweep, and
 `oag_raceplay::catalogue::Track::available_in_zone` is where it is read.
 
 **A zone circuit is a different environment, not a filtered view of the race

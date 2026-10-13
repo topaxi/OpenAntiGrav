@@ -7,7 +7,7 @@ than shortened - and it goes through the reader Pulse's HUD already had, with
 two changes that the lineage forced. All **eighteen** shipped layouts compose
 with **nothing missing and nothing skipped**, into 2,320 widgets.
 
-Pinned by `crates/game/tests/hd_hud_ground_truth.rs`; the entry names are
+Pinned by `crates/raceplay/tests/hd_hud_ground_truth.rs`; the entry names are
 [`oag_hd::hud`](../../crates/hd/src/hud.rs), the reader is
 [`oag_hud::compose`](../../crates/hud/src/compose.rs). Measured
 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.

@@ -66,7 +66,7 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// state it keeps is unscaled, while a pre-multiplied offset set keeps a scaled
 /// one - and the ship those two are measured from has moved in between. Over the
 /// 150 ticks of `data/traces/pad0-boost.csv` that is `0.121` RMS against `0.008`.
-/// See `crates/game/tests/chase_camera_ground_truth.rs`.
+/// See `crates/raceplay/tests/chase_camera_ground_truth.rs`.
 ///
 /// Three independent numbers agree that the scale belongs here at all. The
 /// authored close block times `0.75` is `11.643` units from the craft; a static
@@ -107,7 +107,7 @@ pub(super) fn chase_pos_length(from_disc: f32) -> f32 {
 /// `length` of `3`. Counterintuitive next to the two external blocks, and
 /// measured twice, so it stays.
 ///
-/// `pub` so that `crates/game/tests/chase_camera_ground_truth.rs` compares the
+/// `pub` so that `crates/raceplay/tests/chase_camera_ground_truth.rs` compares the
 /// **shipped** conversion against the original's own camera rather than a second
 /// transcription of it - which would pass while the game rendered something
 /// else.

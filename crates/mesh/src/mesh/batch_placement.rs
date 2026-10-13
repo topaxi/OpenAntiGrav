@@ -9,7 +9,7 @@
 //! the buffer are that batch's, and which matrix moved them there. This is the
 //! same walk, reporting instead of building.
 //! `batch_placements_tile_each_node` in
-//! `crates/game/tests/quake_ripple_ground_truth.rs` holds it to
+//! `crates/raceplay/tests/quake_ripple_ground_truth.rs` holds it to
 //! `build_class`'s own per-node ranges.
 
 use anyhow::{Context, Result};

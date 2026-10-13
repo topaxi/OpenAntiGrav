@@ -13,21 +13,15 @@
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
 mod mag_floor_scroll_ground_truth;
-mod maglock_ground_truth;
-mod magstrip_anchor_ground_truth;
 mod magstrip_wire_2048_ground_truth;
 mod magstrip_wire_hd_ground_truth;
-mod main_menu_ground_truth;
 mod medal_message_ground_truth;
 mod menu_definition_settings;
-mod menu_disabled_and_restart;
 mod menu_screen_filter;
 mod menu_sfx_ground_truth;
 mod menu_web_rows;
-mod mine_ground_truth;
 mod mine_launch_audio_ground_truth;
 mod mine_texture_scroll_ground_truth;
-mod missile_ground_truth;
 mod mods_menu;
 mod mods_page;
 mod movie_access_units_ground_truth;
@@ -35,25 +29,12 @@ mod movie_container_audio_ground_truth;
 mod movie_ground_truth;
 mod mp4_movie_ground_truth;
 mod music_resume_ground_truth;
-mod name_voice_ground_truth;
-mod novice_jump_ground_truth;
-mod novice_respawn_ground_truth;
-mod off_track_rescue_ground_truth;
-mod omega_2048_era_craft_ground_truth;
-mod omega_assist_hud_ground_truth;
 mod omega_campaign_launch_ground_truth;
 mod omega_campaign_screens_ground_truth;
-mod omega_font_scale_ground_truth;
-mod omega_hud_ground_truth;
-mod omega_lightmap_ground_truth;
 mod omega_menu_backdrop_ground_truth;
 mod omega_menu_blocks_ground_truth;
 mod omega_music_ground_truth;
-mod omega_original_ai_ground_truth;
-mod omega_race_ground_truth;
 mod omega_track_model_ground_truth;
-mod opponent_fire_ground_truth;
-mod opponent_weapons_ground_truth;
 mod original_ai_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

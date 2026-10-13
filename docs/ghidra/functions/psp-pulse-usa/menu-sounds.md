@@ -193,7 +193,7 @@ item's register (`item + 0xac`, `item + 0x160`) behind three string compares of 
 team is its two grains ten ticks apart and a circuit its own child cue. The title names the bank
 (`oag_title::FrontEndSounds::voices`, `Some` on Pulse only). Played dry on the speech bus, **chosen, not measured**
 (the original plays it through the one front-end slot, as the end-of-race lines). The grains' 30 and 330 degree angles
-play centred: the front end is dry. The ground truth is `crates/game/tests/name_voice_ground_truth.rs`: every circuit
+play centred: the front end is dry. The ground truth is `crates/raceplay/tests/name_voice_ground_truth.rs`: every circuit
 value's walk equals its child cue's own, the first three are the circuits the capture saw, a team is a pair ten ticks
 apart, eleven teams give eleven different names, the registers read from the discs' definitions are the measured ones,
 and a headless WAV is silent until a confirm and sounds on it.

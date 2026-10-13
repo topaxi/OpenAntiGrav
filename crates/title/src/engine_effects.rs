@@ -11,7 +11,7 @@
 //! fires them is `oag-raceplay`'s `effects` module, which indexes by
 //! `Trigger` so a typo is a compile error. Which of them are wired at all is
 //! asserted against the disc itself by
-//! `crates/game/tests/psys_inventory_ground_truth.rs`.
+//! `crates/raceplay/tests/psys_inventory_ground_truth.rs`.
 //!
 //! Moved here from `oag-raceplay` (2026-10-06) so a title's table can name
 //! them; the evidence on each constant came with it.
@@ -391,7 +391,7 @@ pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
 /// `LeachBall_Advance` (`0x00114c78`); read
 /// `docs/ghidra/functions/ps3-hdfury-eu/weapons.md`'s "2026-09-25" section.
 /// **Not on the PSP or PS2 disc** - HD-only, absent from `PSP_WIRED` and
-/// `PS2_WIRED` in `crates/game/tests/psys_inventory_ground_truth.rs`, the
+/// `PS2_WIRED` in `crates/raceplay/tests/psys_inventory_ground_truth.rs`, the
 /// same footing [`PLASMA_LIGHTNING_EXPAND_EFFECT`] already has.
 ///
 /// **Played as a one-shot burst, not attached and followed.** The original

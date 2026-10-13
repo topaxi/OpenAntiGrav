@@ -12,7 +12,7 @@
 //!
 //! # This file stops at the layout, not the pixels
 //!
-//! `crates/game/tests/hd_hud_ground_truth.rs` has a check
+//! `crates/raceplay/tests/hd_hud_ground_truth.rs` has a check
 //! (`every_sprite_s_source_rectangle_fits_inside_the_texture_it_names`) that
 //! decodes every texture a layout names and checks the composed sprite
 //! rectangles fit inside it. `oag_texture::gxt` can do the equivalent now -
@@ -197,7 +197,7 @@ fn every_named_sight_widget_is_authored_by_at_least_one_layout() {
 /// `oag_2048::hud::ART::sights`'s `leach` set is authored too, and no layout
 /// authors a `LeachBeamSight*LockedOn*` widget - the same data-only check
 /// `oag_hd::hud::ART`'s own `leach` field rests on
-/// (`crates/game/tests/lock_sight_ground_truth.rs`'s
+/// (`crates/raceplay/tests/lock_sight_ground_truth.rs`'s
 /// `no_hd_layout_authors_a_leachbeam_lockedon_widget`), since no Vita3K
 /// exists here to check a frame against.
 #[test]

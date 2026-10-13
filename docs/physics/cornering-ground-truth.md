@@ -602,7 +602,7 @@ reseeded near the inverted section, position error against the capture is roughl
 with the locator attached versus without, and **298 of 3,020** probe raycasts over the lap hit
 `Surface::MagFloor` rather than `Floor`. **Resample density is not the residual's source**:
 1 to 4 samples per segment measurably improves tracking and 4 to 32 changes nothing outside
-noise. `crates/game/tests/maglock_ground_truth.rs` still carries the 49.5 % residual figure;
+noise. `crates/raceplay/tests/maglock_ground_truth.rs` still carries the 49.5 % residual figure;
 the two are complementary (that one measures the hold's contribution to a rotation identity,
 this one its effect on a trajectory).
 

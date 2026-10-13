@@ -4,7 +4,7 @@
 PPSSPP 1.20.4, 2026-10-01, Time Trial, Venom, Assegai, `16_Track`; the held-through
 launch also on `01_Track`. Code: `oag_physics::launch`, parameters from
 `oag_tables::handling::StartBoost`, wired in `oag_raceplay` through
-`Environment::start_boost`. Test: `crates/game/tests/launch_boost_ground_truth.rs`.
+`Environment::start_boost`. Test: `crates/raceplay/tests/launch_boost_ground_truth.rs`.
 
 [grid-state.md](grid-state.md) measured that a craft whose thrust is held through the
 countdown accelerates faster than ours did, named `craft+0x294` as the cause and left

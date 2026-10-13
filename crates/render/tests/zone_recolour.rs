@@ -3,7 +3,7 @@
 //!
 //! # Why a pixel and not the uniform
 //!
-//! `crates/game/tests/zone_grade_ground_truth.rs` asserts the *assembly* of
+//! `crates/raceplay/tests/zone_grade_ground_truth.rs` asserts the *assembly* of
 //! `zoneColourTint.xy` and `zoneEffect.rgb` off the disc. Nothing there
 //! reaches the GPU, so a wiring error - the stage texture on the wrong
 //! binding, `zone_sample` unreachable, the uniform's `zone` field at a

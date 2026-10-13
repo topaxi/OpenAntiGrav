@@ -19,7 +19,7 @@ is complete and this file is only what it did **not** close.
 - On a PS3 chunk `GpuVertex::colour` is HD's baked per-vertex **light**, not a
   tint. `Drawable::tint_weapon_pads` gates on `Model::vertex_colour_is_light`
   for that reason, and
-  `crates/game/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
+  `crates/raceplay/tests/hd_pad_illumination_ground_truth.rs::hd_pads_keep_their_authored_light_and_are_never_recoloured`
   pins it.
 - `uNumSpeedupPads` / `uNumWeaponPads` are **leaderboard stat fields**, not
   render state - their only reader is the `sceNpManagerGetOnlineName`

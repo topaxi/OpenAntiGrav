@@ -13,7 +13,7 @@
   not just as a matter of scope. Wiring it is [trail-ribbon.md](../../docs/rendering/trail-ribbon.md)'s
   "not implemented, and what it would take" section, unrelated to this thread.
 - **The inventory ground truth now reads HD, narrowly.**
-  `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` pins that
+  `crates/raceplay/tests/psys_inventory_ground_truth.rs`'s `mod hd` pins that
   every `RACE_EFFECTS` name (including both `WO_TRAIL_HITSHIP` variants) is
   really on the disc, and that `WO_TRAIL_HITSHIP_RED` is authored only in
   `DATA06` - corroborating engine-trail.md's "red variant on a Fury skin"
@@ -85,7 +85,7 @@
   Full writeup: `docs/formats/pob.md`'s HD corpus section. Still no
   code-side change - six of 82 doesn't justify assembling an HD-side
   `NO_TRIGGER_RECOVERED` const yet (see
-  `crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment).
+  `crates/raceplay/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment).
 
 ## Next Steps
 

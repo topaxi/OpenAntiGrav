@@ -35,7 +35,7 @@ pub(super) fn hull_contact_point(centre: Vec3, contact: Vec3, reach: f32) -> Vec
 /// the PSP disc, 41 on the PS2 one and 82 on HD's; what decides whether one
 /// appears here is whether the *executable's* reason for playing it has been
 /// recovered, because an effect with no recovered trigger would just be this
-/// engine guessing when to fire it. `crates/game/tests/psys_inventory_ground_truth.rs`
+/// engine guessing when to fire it. `crates/raceplay/tests/psys_inventory_ground_truth.rs`
 /// holds every effect on the PSP and PS2 discs against this list and fails if
 /// one is neither played nor explicitly recorded as having no recovered
 /// trigger; on HD it only checks that every name here is really on the disc -
@@ -144,7 +144,7 @@ impl Race {
     /// state `oag_physics::controls::update` writes every tick, and Zone's
     /// `Environment::auto_speed` (`crates/physics/src/forces.rs`) replaces the
     /// throttle entirely at the force law without touching it. Left wired to the
-    /// button, `crates/game/tests/zone_ground_truth.rs`'s
+    /// button, `crates/raceplay/tests/zone_ground_truth.rs`'s
     /// `zone_speed_is_automatic_but_exhaust_intensity_still_follows_the_accelerate_button`
     /// caught exhaust intensity pinned at exactly `0.0` for 300 ticks at 374 km/h.
     /// So this mirrors `oag_physics::engine::engine`'s own four-corner gate -

@@ -35,7 +35,7 @@ Evidence: the decompile above; **live**, 2026-10-05, `g_sound_system = 0x00b6cc9
 back at those offsets equal `GlobalAudioConfig.xml`'s Stereo rows (`PreRace` music `0.0`, user7
 `0.4`; `RaceNormal` music `0.65`, user7 `0.68`, user8 `0.8`) and `+0xe8` read `2`. The copy read is
 the `DATA00.PSARC` one: the live critical-energy row held music `0.45` and user7 `0.7`, which
-`DATA01.PSARC`'s copy changes to `0.5` and `0.8`. `crates/game/tests/hd_mix_ground_truth.rs`
+`DATA01.PSARC`'s copy changes to `0.5` and `0.8`. `crates/raceplay/tests/hd_mix_ground_truth.rs`
 asserts the same from the disc.
 
 ## `SoundSystem_UpdateOutputGains_q` (`0x003084c0`)

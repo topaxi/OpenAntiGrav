@@ -1,6 +1,6 @@
 //! Hardware-free tests for [`super::Runner`]. The corpus half (`~BLOWUP` and
 //! `~ROCKLOCK` from Pulse's `hud.bnk`) is
-//! `crates/game/tests/sfx_repeating_ground_truth.rs`.
+//! `crates/raceplay/tests/sfx_repeating_ground_truth.rs`.
 
 use crate::sblk::Bank;
 use crate::sblk::timeline::tests::{Spec, build, key, raw};

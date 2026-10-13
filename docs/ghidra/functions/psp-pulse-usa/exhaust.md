@@ -1392,7 +1392,7 @@ independently, over `handlingstats.xml` rather than `Engine Flare`, and each
 pack supplies its own team's file.
 
 `Loaded::boost_model` is `None` for a team with no entry rather than a load
-failure, and `crates/game/tests/boost_plume_ground_truth.rs` pins what a bare
+failure, and `crates/raceplay/tests/boost_plume_ground_truth.rs` pins what a bare
 disc establishes: the eight disc teams' `shipboost.vex` decoding with exactly
 two meshes, a resolved texture and all four batches landing in the
 transparent-draw list `exhaust::BLEND` needs to reach, and the four DLC teams

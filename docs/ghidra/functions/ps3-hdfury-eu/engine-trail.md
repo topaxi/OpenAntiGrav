@@ -459,7 +459,7 @@ attaches to *that* craft's hull either way.
 
 **Implemented 2026-08-24**, and the split is deliberate. `oag_fx::psys`
 plays the disc's own `.POB` - both variants load from the HD archives, pinned
-by `crates/game/tests/hd_engine_flare_ground_truth.rs` - and
+by `crates/raceplay/tests/hd_engine_flare_ground_truth.rs` - and
 `oag_raceplay::Race::advance_trail_hits` fires it. **Nothing about the effect
 is invented; only the moment it fires is.** Three things there are this
 engine's and are named in that method's own doc rather than buried: the
@@ -608,7 +608,7 @@ decay, `Spikes Random Scale Min/Max` 0.65/0.85 the per-shape flicker range,
 1000 and `Thrust Contrib` 0.25 the `speed01` law, `Thrust Min/Max Scale`
 XY 1.0/1.5 and Z 0.25/1.5 the flame's throttle scales, and
 `Thrust Extra Boost Scale` XY 1.4 / Z 2.0 the boost's additions.
-`crates/game/tests/hd_engine_flare_ground_truth.rs` pins
+`crates/raceplay/tests/hd_engine_flare_ground_truth.rs` pins
 `oag_fx::exhaust::hd`'s constants against the file itself.
 
 ### All 41 rows, read 2026-09-01
