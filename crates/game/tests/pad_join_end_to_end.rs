@@ -132,3 +132,54 @@ fn a_lobby_of_one_changes_nothing() {
     assert_eq!(race.sim.world.human_slots().count(), 1);
     assert!(assignment.is_single_player());
 }
+
+/// A race ends when every person-flown slot has finished, so a local slot with
+/// no device would hold the results forever. With three seated and no pad on
+/// slot 2 the grid flies it; a pad that appears takes it back, and one that
+/// goes away gives it up. Remote slots are left alone.
+#[test]
+fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
+    let mut race = race(3);
+    let mut assignment = Assignment::<u32>::seated(3);
+    assignment.claim_keyboard(0);
+    assignment.assign_pad(5, 1);
+    split_screen::apply(&mut race, 3);
+    let local = |race: &Race, slot: usize| race.sim.world.controllers[slot] == Controller::Local;
+
+    assignment.reconcile(&[5]);
+    assert_eq!(split_screen::follow_devices(&mut race, &assignment), 1);
+    assert!(local(&race, 0), "the keyboard's slot");
+    assert!(local(&race, 1), "pad 5's slot");
+    assert!(!local(&race, 2), "nobody is on slot 2");
+    assert!(
+        !race.sim.world.person_flown(2),
+        "the end rule would wait on it"
+    );
+
+    assignment.reconcile(&[5, 9]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert!(local(&race, 2), "a pad that connected took the slot back");
+
+    assignment.reconcile(&[9]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert!(!local(&race, 1), "pad 5 left, so its slot flies as the AI");
+    assert!(race.sim.world.person_flown(0));
+
+    race.sim.world.controllers[2] = Controller::Remote;
+    assignment.reconcile(&[]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert_eq!(race.sim.world.controllers[2], Controller::Remote);
+}
+
+/// Merged devices are a single person: nothing is reverted.
+#[test]
+fn merged_devices_leave_the_controllers_alone() {
+    let mut race = race(2);
+    split_screen::apply(&mut race, 2);
+    let before = race.sim.state_hash();
+    assert_eq!(
+        split_screen::follow_devices(&mut race, &Assignment::<u32>::default()),
+        0
+    );
+    assert_eq!(race.sim.state_hash(), before);
+}

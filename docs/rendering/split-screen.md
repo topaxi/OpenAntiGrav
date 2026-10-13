@@ -134,6 +134,14 @@ the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
   its slot, whose craft then flies on an empty input.
 - **A pad past `n`, with no slot free, drives nothing.** Merging it into slot 0
   would put two people on one craft.
+- **A local slot with no device on it is flown by the grid's driver** (chosen, not
+  measured; `split_screen::follow_devices`, once a tick in the windowed session). A
+  race ends when every person-flown slot has finished, so a slot nobody can steer -
+  a pad unplugged mid-race, or `--players 4` on a machine with one pad - would hold
+  the end-of-race screens for ever. The slot goes back to `Controller::Ai` and returns
+  to `Local` when a pad takes it again; remote slots are never touched. It writes
+  `World::controllers` from outside the tick, so a replay or a network client would
+  have to carry it as an input (open). Headless captures never run it.
 - **A keyboard that did not join still drives slot 0**, merged with that seat's
   pad: it has to reach the pause key and the menus. A keyboard that did join holds
   its seat, so no pad that connects later takes it.

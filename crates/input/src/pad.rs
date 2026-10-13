@@ -590,6 +590,14 @@ impl<D: Copy + PartialEq> Assignment<D> {
         }
     }
 
+    /// Whether something is on `slot` right now: the keyboard, which is always
+    /// plugged in, or a pad [`Self::reconcile`] has seated there. What a race asks
+    /// to know which of its local slots still have a person at them.
+    #[must_use]
+    pub fn drives(&self, slot: usize) -> bool {
+        self.keyboard_slot() == slot || self.pads.iter().any(|(_, held)| usize::from(*held) == slot)
+    }
+
     /// Whether every device still drives [`DEFAULT_SLOT`].
     ///
     /// What a caller asks to know it is in the single-player case - the one

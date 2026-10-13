@@ -735,6 +735,12 @@ impl Session {
                     // default every device is on slot 0, so this is the one
                     // snapshot the single-argument signature used to take, in
                     // the slot it used to go to.
+                    // A local slot nobody is on flies as the AI, or the race
+                    // never ends: see `split_screen::follow_devices`.
+                    oag_game::split_screen::follow_devices(
+                        &mut stage.race,
+                        self.controls.assignment(),
+                    );
                     stage.race.tick(&inputs);
                     stage.tick_messages();
                     // Immediately after the tick and inside this loop, so a cue

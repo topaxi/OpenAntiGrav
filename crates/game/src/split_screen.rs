@@ -62,3 +62,40 @@ pub fn seat<D: Copy + PartialEq>(
     lobby.seat(assignment, connected);
     count
 }
+
+/// Keeps `race`'s local slots to the ones a device is on: a slot below the seated
+/// count with nothing driving it is flown by the grid's driver
+/// ([`Controller::Ai`]), and goes back to [`Controller::Local`] when a device
+/// takes it again. Returns how many slots changed.
+///
+/// **Why.** A race ends when every person-flown slot has finished
+/// (`oag_raceplay`'s `results.rs`), so a local slot nobody can steer - a pad
+/// unplugged mid-race, or `--players 4` on a machine with one pad - would hold
+/// the end-of-race screens for ever. **Chosen, not measured**: a slot whose
+/// device left reverts to the AI rather than coasting or ending the race. A
+/// remote slot is never touched. Run once a tick in the windowed session, before
+/// [`Race::tick`], after the devices were polled; a no-op while the devices are
+/// merged.
+///
+/// This writes `World::controllers`, which the state hash covers, from outside
+/// the tick: a replay or a network client would have to carry it as an input.
+pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignment<D>) -> usize {
+    let Some(humans) = assignment.humans() else {
+        return 0;
+    };
+    let mut changed = 0;
+    for slot in 0..humans.min(MAX_PLAYERS) {
+        let want = if assignment.drives(slot) {
+            Controller::Local
+        } else {
+            Controller::Ai
+        };
+        let have = race.sim.world.controllers[slot];
+        if have != want && matches!(have, Controller::Local | Controller::Ai) {
+            race.sim.world.controllers[slot] = want;
+            changed += 1;
+            log::info!("split screen: slot {slot} is now {want:?}");
+        }
+    }
+    changed
+}
