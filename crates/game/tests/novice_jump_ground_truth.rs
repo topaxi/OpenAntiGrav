@@ -420,40 +420,51 @@ fn parked_field() -> Option<(race::Setup, race::Race)> {
 }
 
 /// The original's reset puts a craft that falls into `13_Track`'s jump back on
-/// the road behind it, moving (`oag_raceplay`'s `breadcrumbs` module): the
-/// parked-player field never comes back over a sample with no surface or with
-/// the disc's no-crumb flag, leaves at no less than the reset's bare launch
-/// speed and down the line, and so falls a handful of times rather than in a
-/// loop. Under the old pose (at rest, on the sample nearest the fall) the same
-/// 9,000 ticks gave 389 respawns, every one back over the gap; 2 measured on
-/// 2026-10-13 after the port.
+/// the road behind it, moving (`oag_raceplay`'s `breadcrumbs` module), and so
+/// does ours: the parked-player field comes back where the original's does,
+/// at the speed its law gives, and falls a handful of times rather than in a
+/// loop.
+///
+/// The window is the original's, read live on PPSSPP (`docs/gameplay/ai.md`,
+/// "What the original does after a fall"): AI resets at line rows 2938 to 2953,
+/// natural Time Trial falls all at row 2949, widened by two samples a side for
+/// this project's nearest-sample locate. The speed is `50 + 0.25 * latch`, the
+/// latch being the craft's speed on its last fully grounded tick; the original
+/// held it to 0.1 u/s on five of five falls. Under the old pose (at rest, on
+/// the sample nearest the fall, over the gap) the same 9,000 ticks gave 389
+/// respawns; 2 measured on 2026-10-13 after the port.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_parked_field_is_put_back_behind_the_jump_and_moving() {
+fn the_parked_field_is_put_back_where_the_original_puts_it() {
     let Some((_, mut race)) = parked_field() else {
         return;
     };
     let mut seen = [0u32; 8];
+    let mut latch = [0.0f32; 8];
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
         for (slot, seen) in seen.iter_mut().enumerate().skip(1) {
+            let ship = &race.sim.world.ships[slot];
             if race.respawns_of(slot) == *seen {
+                if ship.physics.grounded == 1.0 {
+                    latch[slot] = ship.physics.body.linear_velocity.length();
+                }
                 continue;
             }
             *seen = race.respawns_of(slot);
-            let line = race.racing_line();
-            let ship = &race.sim.world.ships[slot];
             let index = ship.driver.index as usize;
-            let flags = race.ai_sample(index).map_or(0, |sample| sample.flags);
             assert!(
-                !line.is_unsupported(index) && flags & 1 == 0,
-                "slot {slot} was put back at line index {index} (flags {flags:#x})"
+                (2936..=2955).contains(&index),
+                "slot {slot} was put back at line row {index}, the original at 2938-2953"
             );
+            let line = race.racing_line();
             let velocity = ship.physics.body.linear_velocity;
             let along = (line.point(index + 1) - line.point(index)).normalize();
+            let want = 50.0 + 0.25 * latch[slot];
             assert!(
-                velocity.length() >= 50.0 - 1e-3 && velocity.dot(along) > 0.9 * velocity.length(),
-                "slot {slot} was put back moving {velocity:?}, the line runs {along:?}"
+                (velocity.length() - want).abs() < 1e-3
+                    && velocity.dot(along) > 0.9 * velocity.length(),
+                "slot {slot} was put back moving {velocity:?}, want {want} along {along:?}"
             );
         }
     }
@@ -674,5 +685,76 @@ fn the_flag_bit_zero_census() {
             track.reversed,
             line.len()
         );
+    }
+}
+
+/// The speed pad before the jump (`oag-trace pads` pad 6, on line row 3073,
+/// about 45 units before the gap): each pad near that row, its signed lateral
+/// offset from the line along the spline's `lateral`, and then every crossing
+/// of row 3073 by the parked-player field over 9,000 ticks, with the craft's
+/// signed lateral, its speed either side, and whether the pad armed
+/// (`ShipState::pad_timer`). The original's boosted crossings sit at -9.8 to
+/// -1.9 (`docs/gameplay/ai.md`).
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
+fn the_pad_before_the_jump() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some((_, mut race)) = parked_field() else {
+        return;
+    };
+    const ROW: usize = 3073;
+    let lateral_at = |race: &race::Race, index: usize, position: oag_core::math::Vec3| {
+        race.ai_sample(index).map_or(f32::NAN, |sample| {
+            let axis = oag_core::math::Vec3::from_array(sample.lateral).normalize();
+            (position - oag_core::math::Vec3::from_array(sample.pos)).dot(axis)
+        })
+    };
+    let line = race.racing_line();
+    for (n, pad) in race.speedup_pads().iter().enumerate() {
+        let centre =
+            oag_core::math::Vec3::new(pad.to_world[12], pad.to_world[13], pad.to_world[14]);
+        let index = line.nearest(centre, 0, line.len());
+        if (3040..3100).contains(&index) {
+            println!(
+                "pad {n}: centre {centre:?} line row {index} lateral {:.2} box {:?}..{:?}",
+                lateral_at(&race, index, centre),
+                pad.min,
+                pad.max
+            );
+        }
+    }
+    println!("tick,slot,lap,lateral,speed_before,speed_after,pad_timer,place");
+    let mut before = [(0u32, 0.0f32); 8];
+    let mut pending = [None::<(u64, f32)>; 8];
+    for _ in 0..9_000 {
+        race.tick(&PlayerInputs::none());
+        let places = race.places();
+        for slot in 1..8 {
+            let ship = &race.sim.world.ships[slot];
+            let index = ship.driver.index;
+            let speed = ship.physics.body.linear_velocity.length();
+            if let Some((at, was)) = pending[slot]
+                && race.sim.world.tick == at + 20
+            {
+                println!("gain,{slot},{at},{:.1}", speed - was);
+                pending[slot] = None;
+            }
+            if before[slot].0 < ROW as u32 && index >= ROW as u32 && index < ROW as u32 + 30 {
+                pending[slot] = Some((race.sim.world.tick, before[slot].1));
+                println!(
+                    "{},{slot},{},{:.2},{:.1},{:.1},{:.3},{}",
+                    race.sim.world.tick,
+                    ship.standing.lap,
+                    lateral_at(&race, index as usize, ship.physics.body.position),
+                    before[slot].1,
+                    speed,
+                    ship.physics.pad_timer,
+                    places[slot]
+                );
+            }
+            before[slot] = (index, speed);
+        }
     }
 }
