@@ -34,7 +34,7 @@ use std::path::PathBuf;
 use oag_disc::DiscImage;
 use oag_vex::vex::{self, Batch};
 
-mod wad_walk;
+use crate::wad_walk;
 
 /// The PS2 archives that hold models.
 const PS2_ARCHIVES: [&str; 2] = ["54748/WADS2.WAD", "54748/WADSP.WAD"];

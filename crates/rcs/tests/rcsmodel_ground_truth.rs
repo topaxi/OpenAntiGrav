@@ -38,7 +38,7 @@
 //! file's own relocation table, and the render-block flags behind it put the
 //! track bit on 4,365 of 41,861 chunks - 124 of Talon's Junction's 983.
 
-mod rcsmodel_common;
+use crate::rcsmodel_common;
 
 use oag_rcs::rcsmodel;
 use rcsmodel_common::*;

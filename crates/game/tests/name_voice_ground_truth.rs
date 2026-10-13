@@ -1,7 +1,7 @@
 //! Pulse's team and circuit name voices, off real discs.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test name_voice_ground_truth --run-ignored all`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game name_voice_ground_truth:: --run-ignored all`.
 //!
 //! `FRONT_END_VO.bnk`'s `TMTX_NAME` and `TRTX_NAME` are guarded by a runtime
 //! global the selection screens write (`menu-sounds.md`, "The name voices").

@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(magstrip_anchor_ground_truth)'
+//!     -E 'test(/^magstrip_anchor_ground_truth::/)'
 //! ```
 //!
 //! `MagstripWake_Construct` resolves a node called `arc_anchor_point` against the

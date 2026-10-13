@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_behind_glass_ground_truth)'
+//!     -E 'test(/^hd_behind_glass_ground_truth::/)'
 //! ```
 //!
 //! The measurement (`docs/ghidra/functions/ps3-hdfury-eu/visibility.md`,
@@ -18,7 +18,7 @@
 //! own target instead (`mesh::rcs::build_scene_views`), split by the fog bit
 //! `0x20` the same capture ties to the alternate fog pair.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 use oag_rcs::rcsmodel;

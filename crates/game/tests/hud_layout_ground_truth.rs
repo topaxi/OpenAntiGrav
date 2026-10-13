@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hud_layout_ground_truth)'
+//!     -E 'test(/^hud_layout_ground_truth::/)'
 //! ```
 //!
 //! # Why this file is the real test of the layout parser

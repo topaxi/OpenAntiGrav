@@ -31,7 +31,7 @@
 //!    decided by its own authored vertex normal** - and the billboard family
 //!    is mixed where the crowds and the flat banners are not.
 
-mod rcsmodel_common;
+use crate::rcsmodel_common;
 
 use oag_rcs::rcsmodel;
 use rcsmodel_common::*;

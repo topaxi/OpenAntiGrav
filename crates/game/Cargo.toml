@@ -6,6 +6,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary per first-letter range of `tests/*.rs` instead of one
+# per file; see any `tests/it_*.rs`.
+autotests = false
 default-run = "oag-game"
 
 [lib]
@@ -185,3 +188,23 @@ name = "oag_web"
 path = "src/web.rs"
 crate-type = ["cdylib"]
 required-features = ["web"]
+
+[[test]]
+name = "it_a_g"
+path = "tests/it_a_g.rs"
+
+[[test]]
+name = "it_h_l"
+path = "tests/it_h_l.rs"
+
+[[test]]
+name = "it_m_o"
+path = "tests/it_m_o.rs"
+
+[[test]]
+name = "it_p_r"
+path = "tests/it_p_r.rs"
+
+[[test]]
+name = "it_s_z"
+path = "tests/it_s_z.rs"

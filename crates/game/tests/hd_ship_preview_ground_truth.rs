@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_ship_preview_ground_truth)'
+//!     -E 'test(/^hd_ship_preview_ground_truth::/)'
 //! ```
 
 #[test]

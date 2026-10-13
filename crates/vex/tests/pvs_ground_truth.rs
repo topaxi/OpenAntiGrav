@@ -67,7 +67,7 @@ use oag_vex::pvs::{self, MAX_SECTIONS, TrackPvs};
 use oag_vex::track;
 use oag_vex::vex;
 
-mod wad_walk;
+use crate::wad_walk;
 
 /// Fixed block: index, flag, padding, and the two mask words.
 const FIXED_LEN: usize = 0x10;

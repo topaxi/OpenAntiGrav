@@ -21,7 +21,7 @@ cuts of exactly the same two sizes. See
 Reproduce the numbers with:
 
 ```sh
-cargo nextest run -p oag-game --run-ignored all -E 'binary(ipf_ground_truth)'
+cargo nextest run -p oag-game --run-ignored all -E 'test(/^ipf_ground_truth::/)'
 just play data/images/pulse-ps2-eu.chd --movie 'Data\Movies\Backdrop.ipf' \
     --screenshot /tmp/ps2-backdrop.png --ticks 90
 ```

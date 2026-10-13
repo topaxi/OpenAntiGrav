@@ -21,7 +21,7 @@
 //! sampled correctly; what it authors is a smooth reveal ramp per material,
 //! staggered across the four materials, not four discrete glyph states.
 
-mod rcsmodel_common;
+use crate::rcsmodel_common;
 
 use oag_rcs::rcsmodel;
 use rcsmodel_common::image;

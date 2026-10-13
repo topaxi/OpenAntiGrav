@@ -5,14 +5,14 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_light_cone_ground_truth)'
+//!     -E 'test(/^hd_light_cone_ground_truth::/)'
 //! ```
 //!
 //! `hd_light_cone_lit_path.rs` proves the shader's combine; this proves the
 //! two circuits that author `dc_lightcone` reach it with the values their own
 //! records carry (`crates/render/examples/hd_light_cone_census.rs`).
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

@@ -12,7 +12,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_original_ai_ground_truth)'
+//!     -E 'test(/^omega_original_ai_ground_truth::/)'
 //! ```
 
 use oag_gameplay::PlayerInputs;

@@ -11,7 +11,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_gantry_curve_replay_ground_truth)'
+//!     -E 'test(/^hd_gantry_curve_replay_ground_truth::/)'
 //! ```
 //!
 //! # What this is for
@@ -36,7 +36,7 @@
 //! authors and what the shader table should hold - it does not, and was
 //! never meant to, assert that all four are visible.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

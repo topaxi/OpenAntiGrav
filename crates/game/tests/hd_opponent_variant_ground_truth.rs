@@ -4,7 +4,7 @@
 //! **`#[ignore]`d and never run in CI.** It needs the HD disc image.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_opponent_variant_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hd_opponent_variant_ground_truth:: --run-ignored all
 //! ```
 //!
 //! The rule is `oag_hd::race::TEAM_VARIANTS`'s `opponents_match_player_variant`

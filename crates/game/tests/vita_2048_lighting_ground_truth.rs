@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!     --run-ignored all -E 'binary(vita_2048_lighting_ground_truth)'
+//!     --run-ignored all -E 'test(/^vita_2048_lighting_ground_truth::/)'
 //! ```
 //!
 //! The regression this guards: before `GeometryKind` split HD's and 2048's

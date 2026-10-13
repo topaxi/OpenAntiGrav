@@ -9,7 +9,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(blend_class_ground_truth)'
+//!     -E 'test(/^blend_class_ground_truth::/)'
 //! ```
 //!
 //! # Why this exists

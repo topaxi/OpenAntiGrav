@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_vineta_ceiling_ground_truth)'
+//!     -E 'test(/^hd_vineta_ceiling_ground_truth::/)'
 //! ```
 //!
 //! `mt_tunnelrefraction` and `cl_tunnelrefraction` declare the engine-bound
@@ -14,7 +14,7 @@
 //! behind a write to `H2.w`, which `Program::accumulates` used to read as
 //! taking the sample away, so the arch strips drew the honeycomb alone.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

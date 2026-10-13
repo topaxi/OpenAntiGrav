@@ -346,7 +346,7 @@ python3 scripts/psarc.py cat  $ISO:PS3_GAME/USRDIR/DATA02.PSARC \
     /data/tex/zonesky.gtf | head -c 64 | xxd
 
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-    --run-ignored all -E 'binary(zone_sky_ground_truth)'
+    --run-ignored all -E 'test(/^zone_sky_ground_truth::/)'
 ```
 
 Two traps this page tripped over, both already on

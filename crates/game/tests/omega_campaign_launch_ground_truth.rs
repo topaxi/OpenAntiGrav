@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_campaign_launch_ground_truth)'
+//!     -E 'test(/^omega_campaign_launch_ground_truth::/)'
 //! ```
 
 use oag_game::campaign::launch::{self, CellPlan, Refusal};

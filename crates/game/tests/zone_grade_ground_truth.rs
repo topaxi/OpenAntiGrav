@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!     --run-ignored all -E 'binary(zone_grade_ground_truth)'
+//!     --run-ignored all -E 'test(/^zone_grade_ground_truth::/)'
 //! ```
 //!
 //! # What this file is the evidence for

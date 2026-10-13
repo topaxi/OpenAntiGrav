@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_airbrake_flaps_ground_truth)'
+//!     -E 'test(/^hd_airbrake_flaps_ground_truth::/)'
 //! ```
 //!
 //! HD's `Ship.vex` authors the same `Airbrake` tree Pulse does and the
@@ -21,7 +21,7 @@
 //! a positive deflection about the hinge's local X raises the flap and flares
 //! it outward, on both sides of every team, in world space.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh;

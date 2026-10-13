@@ -4,7 +4,7 @@
 //! ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_flyby_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hd_flyby_ground_truth:: --run-ignored all
 //! ```
 //!
 //! HD opens a race on a fly-over with a `START RACE` prompt and one tap of cross skips it

@@ -8,7 +8,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test plasma_cues_audio_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game plasma_cues_audio_ground_truth:: --run-ignored all
 //! ```
 //!
 //! Its own file rather than a section of `plasma_ground_truth.rs`, the same

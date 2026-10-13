@@ -102,7 +102,7 @@ header and refuses a mismatch by name.
 | Check | Result |
 | --- | --- |
 | File lists, paths and sizes vs the extracted folders | exact, both packages (`file_lists_and_sizes_match_the_extracted_folders`) |
-| **Every byte** of all 25 files vs `data/extracted/ps4/omega-eu{,-patch}` | **equal**: `OAG_PS4_PKG_FULL=1 cargo nextest run --release -p oag-disc --run-ignored all -E 'binary(ps4_pkg_ground_truth)'`, 26 tests passed, 92.7 s wall, the longest single file (`data00`) 92 s, about 45 GB compared, run once outside the suite |
+| **Every byte** of all 25 files vs `data/extracted/ps4/omega-eu{,-patch}` | **equal**: `OAG_PS4_PKG_FULL=1 cargo nextest run --release -p oag-disc --run-ignored all -E 'test(/^ps4_pkg_ground_truth::/)'`, 26 tests passed, 92.7 s wall, the longest single file (`data00`) 92 s, about 45 GB compared, run once outside the suite |
 | In the `test-data` suite | files up to 64 MiB whole; the five multi-gigabyte archives (and `data05`, `data08`) by head, tail and 48 spread 256 KiB windows. A full compare is not in the suite: it would sit at the 300 s per-test ceiling under load |
 | Omega as a source | `omega_pkg_source_ground_truth`: six names (front end, a grid, plugin definitions, `tech_de_ra`'s `track.vex` and `.EnvSettings`) are served by the same archive and read the same bytes opening Omega from the `.pkg` and from the folders |
 | A race frame | `oag-game <pkg> --race --no-audio --ticks 120 --screenshot` and the same from `data/extracted/ps4`: PNGs **byte-identical** (SHA-256 `1e3ba0ff...8b141`), logs identical but for a Vulkan handle |

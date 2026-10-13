@@ -4,7 +4,7 @@
 //! A shipped player strips type trees, so these parse to a header, a type table
 //! and an object table, and `read_object` refuses each with `NoTypeTree`.
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeMap;
 

@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
+autotests = false
 
 [dependencies]
 oag-pob.workspace = true
@@ -30,3 +32,7 @@ pollster.workspace = true
 oag-assets.workspace = true
 oag-pulse.workspace = true
 oag-tables.workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

@@ -39,7 +39,7 @@
 //! counts: the field shoves about a fifth as often as it did, and the sample
 //! behind the bound below is correspondingly thinner.
 
-mod in_parallel;
+use crate::in_parallel;
 
 use std::path::{Path, PathBuf};
 

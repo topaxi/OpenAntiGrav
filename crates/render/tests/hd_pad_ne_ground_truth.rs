@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_pad_ne_ground_truth)'
+//!     -E 'test(/^hd_pad_ne_ground_truth::/)'
 //! ```
 //!
 //! # What each test would catch being dropped
@@ -23,7 +23,7 @@
 //!   vertex normal alone draw - which is what dropping the lightmap, or
 //!   mis-decoding the normal, does and a pixel count does not show.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::Path;
 

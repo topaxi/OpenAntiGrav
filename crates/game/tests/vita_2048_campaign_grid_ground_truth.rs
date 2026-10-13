@@ -12,7 +12,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(vita_2048_campaign_grid_ground_truth)'
+//!     -E 'test(/^vita_2048_campaign_grid_ground_truth::/)'
 //! ```
 
 use std::path::{Path, PathBuf};

@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-hd --run-ignored all \
-//!     -E 'binary(hd_psn_ground_truth)'
+//!     -E 'test(/^hd_psn_ground_truth::/)'
 //! ```
 
 use oag_assets::Archives;

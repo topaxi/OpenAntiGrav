@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(font_border_ground_truth)'
+//!     -E 'test(/^font_border_ground_truth::/)'
 //! ```
 //!
 //! The census half answers the question an extended quad raises: how much of

@@ -30,7 +30,7 @@ use oag_vex::collision::{self, CollisionNode, PAYLOAD_ALIGN, SurfaceKind};
 use oag_vex::vex;
 use oag_vex::vex::classes::V6;
 
-mod wad_walk;
+use crate::wad_walk;
 
 /// Collision nodes in the PSP disc's `Data.wad`: 40 floor, 40 wall, 26 reset,
 /// 24 mag floor, and no cages.

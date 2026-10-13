@@ -4,7 +4,7 @@
 //!
 //! **`#[ignore]`d and never run in CI**: needs `data/extracted/vita/PCSF00007`
 //! and `data/extracted/ps4`. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'binary(remix_2048_sources_ground_truth)' --no-capture`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'test(/^remix_2048_sources_ground_truth::/)' --no-capture`.
 
 use oag_tables::handling;
 

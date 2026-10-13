@@ -134,5 +134,5 @@ stray-magic files; these are the swept numbers.
 ```sh
 python3 scripts/vita-gxp.py census data/extracted/vita/PCSF00007/base/eboot.elf
 python3 scripts/vita-gxp.py grep   data/extracted/vita/PCSF00007/base/PSP2/data.psarc shadow
-cargo nextest run -p oag-formats --release --run-ignored all -E 'binary(gxp_ground_truth)'
+cargo nextest run -p oag-formats --release --run-ignored all -E 'test(/^gxp_ground_truth::/)'
 ```

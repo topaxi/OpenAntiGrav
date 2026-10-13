@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
+autotests = false
 
 # No dependencies at all, and that is the point of the crate. The numbers that
 # tune a race are parsed from text; nothing here reads an archive, a byte order
@@ -39,3 +41,7 @@ oag-hd.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_track_model_ground_truth)'
+//!     -E 'test(/^omega_track_model_ground_truth::/)'
 //! ```
 
 use std::path::PathBuf;

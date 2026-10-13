@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(wall_collision_ground_truth)'
+//!     -E 'test(/^wall_collision_ground_truth::/)'
 //! ```
 //!
 //! # What this is for that the synthetic tests are not

@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_hud_ground_truth)'
+//!     -E 'test(/^hd_hud_ground_truth::/)'
 //! ```
 //!
 //! # What makes these checks rather than restatements

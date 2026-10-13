@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(ps2_shield_ground_truth)'
+//!     -E 'test(/^ps2_shield_ground_truth::/)'
 //! ```
 //!
 //! Reported from play on 2026-09-17: on the PS2 source the Shield pickup's

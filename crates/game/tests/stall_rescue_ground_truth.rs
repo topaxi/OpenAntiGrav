@@ -7,7 +7,7 @@
 //! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! cargo nextest run -p oag-game --run-ignored all -E 'binary(stall_rescue_ground_truth)'
+//! cargo nextest run -p oag-game --run-ignored all -E 'test(/^stall_rescue_ground_truth::/)'
 //! ```
 //!
 //! # Why this needed a disc, and why it needed *this* circuit

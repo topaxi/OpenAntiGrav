@@ -8,7 +8,7 @@
 //!
 //! `#[ignore]`d and never run in CI; `just test-data` runs it.
 
-mod rcsmodel_common;
+use crate::rcsmodel_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;

@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(asset_layers_ground_truth)'
+//!     -E 'test(/^asset_layers_ground_truth::/)'
 //! ```
 //!
 //! See `docs/architecture/asset-layers.md` for the decision and the census.

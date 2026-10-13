@@ -129,7 +129,7 @@ a green-looking figure produced by a run that had not exercised the thing**:
   up exactly one unrelated unit test,
   `race::results::tests::the_board_is_taken_on_the_tick_the_race_finishes`.
   Thirty-nine tests genuinely passed; not one was a failure being re-run.
-  **`binary(race_finish_ground_truth)` is the predicate that selects what the
+  **`test(/^race_finish_ground_truth::/)` is the predicate that selects what the
   name suggests** - verified, it lists all three of that binary's tests.
 
   *And they are all `#[ignore]`d*, so even a correct exact-name filter runs

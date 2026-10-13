@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_campaign_ground_truth)'
+//!     -E 'test(/^hd_campaign_ground_truth::/)'
 //! ```
 //!
 //! Omega shares `Cell`, `plan_cell`, `records::Store` and `grid_points_met`

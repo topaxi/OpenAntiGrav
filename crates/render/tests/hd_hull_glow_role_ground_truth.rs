@@ -9,7 +9,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_hull_glow_role_ground_truth)'
+//!     -E 'test(/^hd_hull_glow_role_ground_truth::/)'
 //! ```
 //!
 //! # What this pins
@@ -42,7 +42,7 @@
 //!    first (`aux_traced`) attempt regressed; all three still carry
 //!    `ADD_SECOND` on Talon's Junction after this fix.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 
