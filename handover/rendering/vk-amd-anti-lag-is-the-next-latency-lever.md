@@ -42,21 +42,20 @@ little to remove: the limiter already waits *before* a frame
 - **Where "input sampling" is.** The simulation ticks at a fixed 60 Hz inside
   a faster render loop; the call must sit right before the frame's
   `InputSnapshot` is built, which the loop does not yet treat as one point.
-- **Hoist the swapchain acquire to before the tick loop** (maintainer,
-  2026-10-13), a vendor-neutral latency win that needs no extension. Input is
-  sampled once per tick in the frame's tick loop (`player_snapshots`), and the
-  swapchain is acquired afterwards, as the first call in `Session::draw`
-  (`crates/game/src/main/session/draw.rs`, `get_current_texture`). Under a
-  blocking present mode (`Vsync::On`, or `smooth` falling back to Fifo) the
-  acquire waits for a free image, so input sampled before that wait is up to a
-  frame old when drawn. Move the acquire above the frame's `now`/elapsed read
-  in `crates/game/src/main/session/frame.rs` (before `self.clock.advance`), so
-  the wait counts toward this frame's elapsed and the ticks, the input and the
-  draw alpha all describe the moment after it. The between-ticks draw keeps
-  this easy: its alpha is read only in the race's render call, after the
-  acquire, and nothing between the advance and the acquire depends on it
-  (checked 2026-10-13; see `drawing-between-ticks-what-is-still-stepped.md`).
-  This is also the natural place for `VK_ANTI_LAG_STAGE_INPUT_AMD` above.
+- **The swapchain acquire hoist landed 2026-10-13** (vendor-neutral, no
+  extension): `Session::frame` acquires the image (`Gpu::acquire`,
+  `crates/game/src/main/gpu.rs`) before its `now`/elapsed read, so a blocking
+  acquire's wait counts toward the frame's `elapsed` and the ticks, the pad
+  input they sample (`player_snapshots` polls gilrs there) and the draw alpha
+  describe the moment after it. Keyboard events that arrive during the wait
+  still reach the next frame (the event loop is blocked in it). See
+  `docs/architecture/engine-lifecycle.md`, "Frame structure". **Not
+  measured**: no member's sandbox can present (no lavapipe installed, RADV
+  needs DRI3, which Xvfb lacks), so the before/after acquire wait under Fifo
+  is still to be read on a real display with the `frame timing` debug line
+  (`RUST_LOG=info,oag_game=debug`; acquire wait and where the frame's input
+  sample sits against it, once a second). `VK_ANTI_LAG_STAGE_INPUT_AMD`
+  belongs right after that acquire, before the clock read.
 - **Reach**: Vulkan on AMD only (RADV >= 26.3; AMD's Windows driver). A no-op
   elsewhere, so it must stay optional and detected, never required.
 - **Local Mesa is 26.2.4** (2026-10-09), so nothing here is testable on the
@@ -66,8 +65,9 @@ little to remove: the limiter already waits *before* a frame
 
 ## Next Steps
 
-1. Hoist the swapchain acquire (Open, above), measured with step 3's probe
-   if it exists by then. An hour or two; any GPU.
+1. Read the hoist's effect on a real display: the `frame timing` debug line
+   on a build before `b0ec1779a` and one after, `vsync = "on"`, a minute of
+   racing each. Ten minutes, maintainer.
 2. When Mesa 26.3 is installed: check `vulkaninfo | rg anti_lag`, then check
    wgpu-hal 30 for a device-creation hook that takes extra extensions. 30 min.
 3. Build an input-to-photon probe (or use an external camera / LDAT-style

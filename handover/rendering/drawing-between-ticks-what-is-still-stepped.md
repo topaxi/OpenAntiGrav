@@ -51,14 +51,11 @@ motion blur measures per drawn frame now, see
    races draw; the maintainer's "capture at alpha 0" is that same tick.
    Extrapolation would draw at `t = 1 + alpha` along `previous -> current`
    (`blend_transform` with `t > 1`), so a capture still draws `t = 1`.
-   **Pairs with the swapchain-acquire hoist** in
-   `vk-amd-anti-lag-is-the-next-latency-lever.md` in this directory (moving
-   `get_current_texture`, `session/draw.rs`, to before `self.clock.advance`,
-   `session/frame.rs`): nothing between the advance and the acquire reads the
-   draw alpha (it is read at the race's render call, after the acquire), so
-   the hoist is unaffected. Put the acquire before `let now` (`frame.rs`,
-   ahead of the advance) too, so a blocking acquire's wait is inside this
-   frame's elapsed and the alpha describes the instant after it.
+   **Pairs with the swapchain-acquire hoist**, which landed 2026-10-13
+   (`vk-amd-anti-lag-is-the-next-latency-lever.md` in this directory): the
+   frame acquires its image before it reads the clock, so the alpha an
+   extrapolation would draw at already describes the moment after the
+   acquire's wait.
 
 ## Next Steps
 

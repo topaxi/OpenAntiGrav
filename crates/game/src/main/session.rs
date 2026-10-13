@@ -236,7 +236,9 @@ pub(crate) struct Session {
     pub(crate) hd_bloom_timer: Option<oag_gpu::timing::PassTimer>,
     /// How long [`Session::frame`] itself took, in the same seconds
     /// [`Session::meter`] is fed - the **fifth** meter, and the first one that
-    /// is not a GPU timestamp at all.
+    /// is not a GPU timestamp at all. Measured from the swapchain acquire near
+    /// its top (`Gpu::acquire`) to the present, so both blocking swapchain
+    /// calls are inside it and inside [`Session::present_cost`] alike.
     ///
     /// **What the `OTHER` row could never say.** That row is
     /// `frame - (every timed pass)`, and a large one has three possible

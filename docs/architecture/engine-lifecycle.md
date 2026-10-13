@@ -14,20 +14,34 @@ ticks.
 
 ```
 loop {
-    poll window and input events
-    input_snapshot = input.sample()
+    poll window and input events               // keyboard, mouse, resize
+
+    image = surface.acquire()                  // may block: vsync, a full queue
+    elapsed = now() - last                     // read after the wait
 
     ticks = clock.advance(elapsed_nanos)      // 0, 1, or several
     for _ in 0..ticks {
+        input_snapshot = input.sample()        // polls the pads here
         race.tick(&input_snapshot)             // first keeps this tick's draw poses
     }
 
     alpha = if paused { 1.0 } else { clock.interpolation_alpha() }
     race.set_draw_alpha(alpha)                 // the draw reads poses blended by it
-    renderer.draw(&race)
+    renderer.draw(&race, image)                // nothing drawn if no image
+    present(image)
     race.set_draw_alpha(1.0)
 }
 ```
+
+**The swapchain image is acquired before the clock is read** (since
+2026-10-13; `Gpu::acquire`, called from `Session::frame`). Under a blocking
+present mode (`vsync = on`, or `smooth` falling back to Fifo) the acquire is
+where the loop waits for a free image; taken first, that wait counts toward the
+frame's `elapsed`, so the ticks, the pad input they sample and the draw alpha
+all describe the moment after it, where taken at the top of the draw they were
+a wait older. Window events (the keyboard) that arrive during the wait are
+still delivered after the frame, as before. The `PRESENT` row carries the
+acquire's wait and the `CPU` row does not, as before.
 
 `World` is never cloned for this: each tick path copies only the poses a draw
 reads (the camera, every craft, every projectile) into `RaceView`, outside the
