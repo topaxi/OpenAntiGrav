@@ -61,6 +61,10 @@
 //!   neither; nothing about this was measured against them.
 //! - **Slerp, not nlerp.** A handful of matrices a frame, and slerp keeps the
 //!   angular speed even across the tick.
+//! - **The shadow hulls lerp between two ticks' projections** instead of
+//!   projecting from the blended pose, so a gather costs once a tick and not once
+//!   a frame (`scene/frame/hull_cache.rs`). Within a world unit's few hundredths
+//!   of the live gather on a real lap; see `docs/rendering/split-screen.md`.
 //! - **[`SNAP_DISTANCE`]'s value.**
 
 use super::*;
@@ -84,6 +88,31 @@ pub(super) struct Poses {
     /// How far between [`Self::previous`] and the current tick a draw is:
     /// `1.0` is the current tick exactly, and is the value outside a draw.
     alpha: f32,
+    /// Which tick path last moved the poses, and which one before it: a draw-side
+    /// cache of anything gathered from a tick's poses keys on these. See
+    /// [`Race::pose_generations`].
+    generations: PoseGenerations,
+}
+
+/// Names the tick path that produced the poses a draw reads, and the one before.
+///
+/// A number from [`next_generation`], so it is unique across every race in the
+/// process and a cache that outlives a race restart cannot mistake the new race's
+/// poses for the old one's. It moves on every tick path ([`Race::tick`], the intro
+/// and cosmetic ticks) and on [`Race::settle_poses`], which is not the same thing
+/// as [`World::tick`]: the flyby and the cosmetic ticks hold that still.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PoseGenerations {
+    /// The poses a draw at alpha `1.0` shows.
+    pub current: u64,
+    /// The poses [`Race::set_draw_alpha`] blends from, `0` where there are none
+    /// (before the first tick path and after [`Race::settle_poses`]).
+    pub previous: u64,
+}
+
+fn next_generation() -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Default for Poses {
@@ -92,6 +121,10 @@ impl Default for Poses {
             previous: None,
             projectiles: Vec::new(),
             alpha: 1.0,
+            generations: PoseGenerations {
+                current: next_generation(),
+                previous: 0,
+            },
         }
     }
 }
@@ -242,12 +275,64 @@ impl Race {
     pub fn settle_poses(&mut self) {
         self.view.poses.previous = None;
         self.view.poses.projectiles.clear();
+        self.view.poses.generations = PoseGenerations {
+            current: next_generation(),
+            previous: 0,
+        };
+    }
+
+    /// Which tick path the next draw's poses come from, and which the one it
+    /// blends from. Changes exactly when a tick path or [`Self::settle_poses`]
+    /// runs, and never during a draw.
+    #[must_use]
+    pub fn pose_generations(&self) -> PoseGenerations {
+        self.view.poses.generations
+    }
+
+    /// The craft in `slot`'s model matrix at this tick exactly, whatever the draw
+    /// alpha is: what [`Self::ship_model_matrix_of`] returns at `1.0`.
+    #[must_use]
+    pub fn ship_tick_model(&self, slot: usize) -> Mat4 {
+        model_matrix_of(&self.sim.world.ships[slot])
+    }
+
+    /// The craft in `slot`'s body at this tick exactly, whatever the draw alpha
+    /// is: what [`Self::body_between`] returns at `1.0`.
+    #[must_use]
+    pub fn ship_tick_body(&self, slot: usize) -> oag_physics::Body {
+        self.sim.world.ships[slot].physics.body
+    }
+
+    /// The craft in `slot`'s model matrix on the previous tick, when a draw
+    /// between ticks would sweep from it to this one: `None` where the draw shows
+    /// this tick as it is (no previous tick, a respawn or a change of whether it
+    /// is racing, or a move past [`SNAP_DISTANCE`] in the model or the body).
+    /// The same cases [`Self::ship_model_matrix_of`] and [`Self::body_between`]
+    /// skip a blend on.
+    #[must_use]
+    pub fn ship_swept_from(&self, slot: usize) -> Option<Mat4> {
+        let previous = self.view.poses.previous.as_ref()?;
+        let from = previous.ships[slot];
+        let moved =
+            |a: Vec3, b: Vec3| !a.is_finite() || !b.is_finite() || a.distance(b) > SNAP_DISTANCE;
+        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        (from.key == self.ship_key(slot)
+            && !moved(from.model.w_axis.truncate(), model.w_axis.truncate())
+            && !moved(
+                from.position,
+                self.sim.world.ships[slot].physics.body.position,
+            ))
+        .then_some(from.model)
     }
 
     /// Keeps this tick's draw poses as the previous ones, before the tick
     /// moves them: the first thing every tick path does.
     pub(super) fn capture_poses(&mut self) {
         self.view.poses.alpha = 1.0;
+        self.view.poses.generations = PoseGenerations {
+            current: next_generation(),
+            previous: self.view.poses.generations.current,
+        };
         let pose = TickPose {
             world_tick: self.sim.world.tick,
             camera: CameraPose {

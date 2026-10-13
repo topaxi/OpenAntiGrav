@@ -67,6 +67,7 @@ pub mod race;
 /// Wipeout 2048, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout 2048",
+    split_on_integrated_gpu: false,
     archives: ArchiveCandidates {
         patch: PATCH_CANDIDATES,
         data: DATA_CANDIDATES,

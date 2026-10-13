@@ -11,6 +11,7 @@
 
 mod between_ticks_ground_truth;
 mod foreign_ground_truth;
+mod hull_gather_ground_truth;
 mod pilot_schema;
 mod survey;
 mod trackfile_ground_truth;

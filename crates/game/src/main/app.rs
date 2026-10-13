@@ -300,7 +300,10 @@ impl App {
                     self.ai_choice,
                     oag_game::ai_choice::Source::Free(ai_difficulty),
                 );
-                oag_game::split_screen::apply(&mut race_stage.race, usize::from(self.players));
+                let players = self.race_title.map_or(self.players, |title| {
+                    oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
+                });
+                oag_game::split_screen::apply(&mut race_stage.race, usize::from(players));
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {

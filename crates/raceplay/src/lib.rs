@@ -174,6 +174,7 @@ mod hash;
 mod held_buttons;
 mod hit_sparks;
 mod hud;
+pub mod hull_gather;
 pub mod intro_camera;
 pub mod lap_messages;
 pub mod launch_hover;

@@ -51,6 +51,10 @@ pub(crate) struct Gpu {
     /// with something in particular. See [`adapter::Chosen::in_use`] and the
     /// row's restart note.
     pub(crate) in_use: Vec<String>,
+    /// What kind of adapter this run draws with: the split-screen rule reads it
+    /// (`oag_game::split_screen::offered`). Fixed for the run, since the RENDERER row
+    /// takes effect on a restart.
+    pub(crate) device_type: wgpu::DeviceType,
     /// Whether this adapter can run the temporal upscaler at all.
     ///
     /// **Asked once, here, because this is the only place the adapter exists.**
@@ -77,6 +81,7 @@ pub(crate) struct BroughtUp {
     offered: Vec<wgpu::PresentMode>,
     adapters: Vec<String>,
     in_use: Vec<String>,
+    device_type: wgpu::DeviceType,
     temporal: bool,
 }
 
@@ -174,6 +179,7 @@ impl Gpu {
             offered,
             adapters: chosen.offered,
             in_use: chosen.in_use,
+            device_type: info.device_type,
         })
     }
 
@@ -283,6 +289,7 @@ impl Gpu {
             offered,
             adapters,
             in_use,
+            device_type,
             temporal,
         } = brought;
 
@@ -297,6 +304,7 @@ impl Gpu {
             offered,
             adapters,
             in_use,
+            device_type,
             held: None,
         };
         gpu.apply_vsync(settings.vsync);

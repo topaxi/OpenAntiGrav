@@ -184,3 +184,15 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
         EntryRef::Name("3d2c85f8".to_string())
     );
 }
+
+#[test]
+fn wipeout_2048s_grid_gets_the_race_box_remix_and_split_screen_tiles() {
+    use oag_ui::frontend::Launch;
+    let tiles = super::campaign2048::extra_tiles(None, oag_2048::TITLE, false);
+    let launches: Vec<Launch> = tiles.iter().map(|tile| tile.launch.clone()).collect();
+    assert_eq!(
+        launches,
+        [Launch::RaceBox, Launch::Remix, Launch::SplitScreen]
+    );
+    assert_eq!(tiles[2].label, "SPLIT SCREEN");
+}

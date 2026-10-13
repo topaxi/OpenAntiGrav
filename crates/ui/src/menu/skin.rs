@@ -558,6 +558,14 @@ impl Skin {
         self.skin.menu_x * self.from_theirs.0
     }
 
+    /// Whether the first row's place is this build's own rather than the title's: no
+    /// measured `first_row_y`, so [`Self::first_row_y`] is ours, which leaves less room
+    /// under the title than a measured layout does (the placeholder menu 2048 boots into).
+    #[must_use]
+    pub fn first_row_is_ours(&self) -> bool {
+        self.skin.first_row_y.is_none()
+    }
+
     /// Top of the first row's line box.
     #[must_use]
     pub fn first_row_y(&self) -> f32 {

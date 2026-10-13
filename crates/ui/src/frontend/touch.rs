@@ -40,20 +40,21 @@
 //! cross-play are network sessions this build does not have. Confirming one
 //! of those says so in a note and stays.
 //!
-//! # Two tiles the disc does not author: RACE BOX and REMIX
+//! # Three tiles the disc does not author: RACE BOX, REMIX and SPLIT SCREEN
 //!
 //! **This build's own, not on the disc**, and the one place this module
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
 //! build's own race box and RACE REMIX pages (`assets/ui/menu.toml`,
-//! ADR-0034) from its own front end. So the two are appended **after** the
+//! ADR-0034) from its own front end, and the split-screen join screen (2048 authors
+//! no local split entry, so that tile is chosen too). So the three are appended **after** the
 //! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
-//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` strings (the
+//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`/`OAG_MENU_SPLIT_SCREEN` strings (the
 //! same ids the menu tree uses), and drawn as the labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
 //! shape holding an unauthored destination. **Their positions are chosen,
-//! not measured**: the left column, stacked at `(16, 110)` and `(16, 226)`,
+//! not measured**: the left column, stacked at `(16, 110)`, `(16, 226)` and `(16, 342)`,
 //! clear of the v1.04 patch's grid (two rows of three from x=228) - they sat
 //! at `(16, 432)` and `(158, 432)` until the patch was mounted and its second
 //! row put `ONLINE CAMPAIGN` under them. The parent shell
@@ -95,6 +96,10 @@ pub enum Launch {
     RaceBox,
     /// This build's own RACE REMIX page (ADR-0034).
     Remix,
+    /// This build's split-screen join screen (`oag_ui_screens::join`). 2048 authors no
+    /// local split in its front end (its `GameModeChoice` tiles are single player, online,
+    /// ad-hoc and cross-play), so the entry is ours, **chosen, not measured**.
+    SplitScreen,
 }
 
 /// One of this build's own tiles on `GameModeChoice`, in the terms the
@@ -106,12 +111,16 @@ pub struct ExtraTile {
     pub launch: Launch,
 }
 
-/// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
+/// Where the three extra tiles sit, in the order [`Frontend::set_extra_tiles`]
 /// was given them. **Chosen, not measured** - see the module docs. The
-/// 122x96 is the tick's own authored size; the 20-unit gap between the two
+/// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's
 /// three columns that start at x=228.
-pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 110.0, 122.0, 96.0], [16.0, 226.0, 122.0, 96.0]];
+pub const EXTRA_TILES: [[f32; 4]; 3] = [
+    [16.0, 110.0, 122.0, 96.0],
+    [16.0, 226.0, 122.0, 96.0],
+    [16.0, 342.0, 122.0, 96.0],
+];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
 /// been chosen, and what a confirmed tap asked the composition root for.

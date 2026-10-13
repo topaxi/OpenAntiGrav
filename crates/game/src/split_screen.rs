@@ -23,6 +23,58 @@ use oag_input::lobby::Lobby;
 use oag_input::pad::Assignment;
 use oag_raceplay::Race;
 
+/// Whether `title` offers a split screen on an adapter of kind `device`.
+///
+/// **The maintainer's product rule (2026-10-13)**: on an integrated GPU a split is offered
+/// for the titles that say so (`oag_title::Title::split_on_integrated_gpu`: Pulse and
+/// Pure) and for no other; every other kind of adapter, a software one included, offers
+/// every title. The rule is data on the title, not a comparison of names.
+#[must_use]
+pub fn offered(title: &oag_title::Title, device: wgpu::DeviceType) -> bool {
+    device != wgpu::DeviceType::IntegratedGpu || title.split_on_integrated_gpu
+}
+
+/// Takes the SPLIT SCREEN row out of `definition` when `title` offers no split on `device`
+/// ([`offered`]); returns whether it did. Run on every menu a run installs, once the
+/// adapter is known.
+pub fn trim_menu(
+    definition: &mut oag_ui::menu::Definition,
+    title: &oag_title::Title,
+    device: wgpu::DeviceType,
+) -> bool {
+    if offered(title, device) {
+        return false;
+    }
+    definition.drop_split_screen();
+    true
+}
+
+/// [`trim_menu`] for 2048's touch grid, which carries the entry as a tile.
+pub fn trim_tiles(
+    tiles: &mut Vec<oag_ui::frontend::ExtraTile>,
+    title: &oag_title::Title,
+    device: wgpu::DeviceType,
+) {
+    if !offered(title, device) {
+        tiles.retain(|tile| tile.launch != oag_ui::frontend::Launch::SplitScreen);
+    }
+}
+
+/// The view count `--players players` settles on for `title` on `device`: `players` where
+/// the split is [`offered`], else one, said in the log.
+#[must_use]
+pub fn players_offered(title: &oag_title::Title, device: wgpu::DeviceType, players: u8) -> u8 {
+    if players <= 1 || offered(title, device) {
+        return players;
+    }
+    log::warn!(
+        "--players {players}: split screen is not offered for {} on an integrated GPU, \
+         so one view",
+        title.name
+    );
+    1
+}
+
 /// Makes `race` an `players`-way split screen and returns the count it settled
 /// on, which is clamped to the craft fielded and to the grid's own cap. `1` -
 /// the default - leaves the race exactly as it was.
@@ -117,3 +169,6 @@ pub fn follow_devices<D: Copy + PartialEq>(race: &mut Race, assignment: &Assignm
     }
     changed
 }
+
+#[cfg(test)]
+mod tests;

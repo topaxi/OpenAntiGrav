@@ -49,7 +49,7 @@ impl Session {
         self.stalled = true;
         info!("disc image: {source}");
 
-        let prepared = {
+        let mut prepared = {
             let Some(pending) = self.pending.as_ref() else {
                 return Ok(());
             };
@@ -66,10 +66,18 @@ impl Session {
             }
         };
         self.pending = None;
+        // 2048's grid carries the split entry as a tile, which the menu tree's own trim
+        // (`drop_split_screen_row`) does not reach.
+        oag_game::split_screen::trim_tiles(
+            &mut prepared.boot_shell.extra_tiles,
+            prepared.shell.title,
+            self.gpu.device_type,
+        );
         self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
         self.shell = Some(prepared.shell);
+        self.drop_split_screen_row();
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;
         self.stage = Stage::loading(
@@ -84,6 +92,23 @@ impl Session {
         // again for every race this run launches. See `Session::loading_assets`.
         self.loading_assets = assets;
         Ok(())
+    }
+
+    /// Takes the SPLIT SCREEN row off the menus when the adapter this run draws with is
+    /// one the title offers no split on (`oag_game::split_screen::offered`, the
+    /// maintainer's integrated-GPU rule). Called wherever a `Shell` is installed from a
+    /// freshly built definition; a language reload clones the current definition and so
+    /// keeps the row gone.
+    pub(crate) fn drop_split_screen_row(&mut self) {
+        let device = self.gpu.device_type;
+        if let Some(shell) = self.shell.as_mut()
+            && oag_game::split_screen::trim_menu(&mut shell.definition, shell.title, device)
+        {
+            log::info!(
+                "split screen is not offered for {} on this {device:?} adapter: no SPLIT SCREEN row",
+                shell.title.name
+            );
+        }
     }
 
     /// Starts `--prefetch`, now that the boot's own movies are out of the cache.

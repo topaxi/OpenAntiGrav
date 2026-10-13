@@ -197,13 +197,22 @@ clocks and the advert cards were redone per view though they do not depend on th
 the first view now does them alone (`Layer::Next` skips them) and eight views cost 9.4 ms.
 Pictures are byte-identical (29 stills). **Open from it**: the Steam Deck number, which
 decides whether the next lever is a per-view draw budget (CPU) or render scale (GPU); steps
-in the doc, the maintainer runs them. The shadow gather is still the largest single CPU item
-at any view count (a ray per hull vertex, redone every rendered frame instead of every
-tick), `encoder.finish` looks proportional to the draw count (the lever for per-view LOD and draw
+in the doc, the maintainer runs them. `encoder.finish` looks proportional to the draw count (the lever for per-view LOD and draw
 distance, see `handover/rendering/graphics-settings-resolve-from-intent-and-context.md`),
 and per-view uniform slices are the prerequisite for recording views on several threads.
-The `mapped` shadow tier follows slot 0 only, so views two and up are not covered unless
-near it (read from the code, not looked at).
+**2026-10-13, `shadow-gather-per-tick`: the gather is per tick now, and `mapped` follows each view.**
+The hull gather is taken at each tick's poses and lerped between ticks (once per tick, not per
+rendered frame): 47 of 49 stills `cmp` equal to main, the lerp within 0.053 world units at p99 and
+0.237 at worst of the live gather on a real Zone lap, a 240 Hz window saves 1.5 ms of CPU at one
+view and 1.25 to 1.6 ms up to eight, a 60 Hz window neither gains nor loses
+([split-screen.md](../../docs/rendering/split-screen.md#cost)). The `mapped` depth map is redrawn
+per view around that view's craft (view two's shadows are there where main's had none): about
+0.1 ms of CPU a view on the discrete card and **1 to 1.6 ms of iGPU time a view**. **Open from it**:
+the floor rays (`conform_to_floor`, 1.7 ms a tick on an eight-craft grid, the whole gather) could be
+culled to the craft a view can see or answered from the collision grid's cell lookup; the track is
+drawn whole into every `mapped` map, so culling that caster to the map's box would cut the iGPU cost
+and the single-view tier's too; the bench needs `OAG_RENDER_BENCH_FRAMES_PER_TICK` set to mean a
+refresh rate.
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives
@@ -223,8 +232,8 @@ each confirms) is followed on PS2 Pulse with two seats; HD authors the players t
 count above two get (chosen). Each seat is driven by its own device and a pick reaches
 slot `i` (`Options::seat_picks`; `--seat-team` headless). Written up in
 [split-screen.md](../../docs/rendering/split-screen.md#ship-select-per-seat). **Still
-open**: HD's front end shows no SPLIT SCREEN row (the authored sequence is wired and
-unreachable by menu there), stick navigation on a seat's screen, a variant family's
+open**: ~~HD's front end shows no SPLIT SCREEN row~~ (it always had one, revealed under
+RACEBOX; walked 2026-10-13, see the entry below), stick navigation on a seat's screen, a variant family's
 duplicate check on HD, and where Omega authors its Ship Select screens.
 **2026-10-13, `split-screen-end-race`: the end of the race is every person's.**
 A person's view holds after their own line (lap and clocks held, a `FINISHED` line, the
@@ -957,6 +966,20 @@ a guess.
 - Snapshot/delta sizing for the wire (8 ships plus projectiles plus
   `RaceSim`'s non-`World` extras) is unestimated - relevant to the
   transport decision above but not computed here.
+- **2026-10-13, `split-entry-hd-2048-omega`: the split entry on HD, Omega and 2048, and
+  the integrated-GPU rule.** The SPLIT SCREEN row was already on HD and Omega (revealed
+  under RACEBOX); 2048 had no way in, so it gained a third extra tile. Walked windowed with
+  two virtual pads on all three: join, the title's own screens, a two-view race (HD to
+  `Ship Select - Player 2`). The join screen was unreadable on HD (names drawn over the
+  device column) and invisible on Omega (white text on a light page); it now uses HD's list
+  blocks there. `Title::split_on_integrated_gpu` (Pulse, Pure) drops the row and tile on an
+  integrated GPU and sends a windowed `--players N` to one view. Written up in
+  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
+  **Open from it**: HD authors the local entry in RACEBOX itself (`NumberOfPlayers` 1 or 2,
+  `SplitScreen` horizontal or vertical, [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut))
+  - not wired, and the vertical cut has no layout; Omega's racebox has neither list and
+  where it authors local split is unread; a real integrated adapter was not walked; the
+  Omega has no Ship Select in a split (join, Track Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
 
 ## Next Steps
 
