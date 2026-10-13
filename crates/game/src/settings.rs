@@ -873,6 +873,8 @@ pub fn menu_seeds(
         ("race.variant", text(&settings.race.variant)),
         ("race.kill_target", text(&settings.race.kill_target)),
         ("race.weapons", text(&settings.race.weapons)),
+        ("race.players", text(&settings.race.players)),
+        ("race.split_cut", text(&settings.race.split_cut)),
         ("ai.difficulty", text(&settings.ai.difficulty)),
         ("remix.track_title", text(&settings.remix.track_title)),
         ("remix.track", text(&settings.remix.track)),
@@ -880,16 +882,6 @@ pub fn menu_seeds(
         ("remix.team", text(&settings.remix.team)),
         ("remix.variant", text(&settings.remix.variant)),
     ];
-    // The race box's split rows exist on the titles that author them, and an empty pick is
-    // the list's own first entry: seeding "" would report a row that does not exist.
-    for (key, value) in [
-        ("race.players", &settings.race.players),
-        ("race.split_cut", &settings.race.split_cut),
-    ] {
-        if !value.is_empty() {
-            out.push((key, text(value)));
-        }
-    }
     // The web's own row; a desktop file has no such key (see `web::not_on_the_web`).
     if cfg!(target_arch = "wasm32") {
         out.push(("display.canvas_size", text(&settings.display.canvas_size)));

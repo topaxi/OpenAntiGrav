@@ -565,7 +565,10 @@ impl Session {
             } else {
                 settings::web::WEB_ONLY_ROWS.contains(&key)
             };
-            if !model.seed(key, &value) && !dropped {
+            // An empty pick is "untouched": the row keeps its list's first entry, and the
+            // race box's split rows are dropped on every title that authors no such list.
+            let untouched = matches!(&value, menu::Value::Text(text) if text.is_empty());
+            if !model.seed(key, &value) && !dropped && !untouched {
                 warn!("nothing in the menus edits {key}");
             }
         }
