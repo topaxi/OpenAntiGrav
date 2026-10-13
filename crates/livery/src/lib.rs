@@ -203,6 +203,18 @@ pub struct LoadContext<'a> {
     pub zone_liveries: &'a [(String, String)],
 }
 
+/// A hull file and a paint job picked for one craft.
+///
+/// What a person seated at a slot picked on Ship Select, borrowed from the
+/// caller: [`load`] takes one per seated slot after the first.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Paint<'a> {
+    /// The hull stem override, [`crate::race::ship_entry_name`]'s own.
+    pub hull_variant: Option<&'a str>,
+    /// A `PI_ModelSkin`'s archive entry, already resolved by [`ship_skin::resolve`].
+    pub skin: Option<&'a str>,
+}
+
 /// Loads one [`Livery`] per entry of `teams`, in that order.
 ///
 /// Each distinct team is read once however many slots fly it, because a
@@ -216,18 +228,20 @@ pub struct LoadContext<'a> {
 /// failure falls back to slot 0's hull and says so in `report`.
 ///
 /// `hull_variant` is [`crate::race::ship_entry_name`]'s own override, applied
-/// to **slot 0 only**: it is the RACE page's own pick for the player's craft,
-/// and nothing offers an opponent a choice of their own - see
-/// `oag_title::race::HullVariant`'s doc comment for why there is no unlock
-/// model behind it either.
+/// to **slot 0**, plus each slot `seats` names: it is the RACE page's own pick
+/// for a person's craft, and nothing offers an opponent a choice of their own -
+/// see `oag_title::race::HullVariant`'s doc comment for why there is no unlock
+/// model behind it either. `seats[i]` is slot `i + 1`'s, for a split screen
+/// whose second and later people each picked their own craft; empty is every
+/// race that has one person.
 ///
 /// The player's `hull_variant` also reaches **every** slot's shield shell, as
 /// `team_model`: the original's `ShipShield_Construct` reads the `FE_TeamModel`
 /// registry value itself, so a Concept player's field all raises `extrashield`.
 /// See [`crate::race::shield_entry_names`].
 ///
-/// `skin` is the *other* half of that axis and lands on slot 0 for the same
-/// reason: a `PI_ModelSkin`'s own `.dat`, already resolved to an archive entry
+/// `skin` is the *other* half of that axis and lands on slot 0 (and a seated
+/// slot) for the same reason: a `PI_ModelSkin`'s own `.dat`, already resolved to an archive entry
 /// by [`ship_skin::resolve`], repainting the hull this slot just built. **Which
 /// skin a race flies is chosen, not measured** - see that module's own docs
 /// for what the original appears to do instead and what would settle it.
@@ -237,14 +251,36 @@ pub fn load(
     ctx: &LoadContext,
     hull_variant: Option<&str>,
     skin: Option<&str>,
+    seats: &[Paint<'_>],
     report: &mut Vec<String>,
 ) -> Result<Vec<Livery>> {
     let mut out: Vec<Livery> = Vec::with_capacity(teams.len());
     for (slot, team) in teams.iter().enumerate() {
+        let paint = match slot {
+            0 => Paint { hull_variant, skin },
+            _ => seats.get(slot - 1).copied().unwrap_or_default(),
+        };
+        let seated = (1..=seats.len()).contains(&slot);
         // Already loaded for an earlier slot: clone rather than re-read, which
         // is what makes a repeated livery cost nothing. Never true for slot 0
-        // itself, so a variant pick can only ever land once, on the player.
-        if let Some(first) = out.iter().position(|other| &other.team == team) {
+        // itself, so a variant pick can only ever land once, on the player. A
+        // seated person's craft clones only a craft painted exactly as theirs,
+        // and an opponent never clones a seated person's.
+        let source = out.iter().enumerate().position(|(index, other)| {
+            let other_seated = (1..=seats.len()).contains(&index);
+            other.team == *team
+                && if seated {
+                    let other_paint = if index == 0 {
+                        Paint { hull_variant, skin }
+                    } else {
+                        seats[index - 1]
+                    };
+                    other_paint == paint
+                } else {
+                    !other_seated
+                }
+        });
+        if let Some(first) = source {
             let source = &out[first];
             let livery = Livery {
                 team: team.clone(),
@@ -278,8 +314,8 @@ pub fn load(
             team,
             ctx.race.ships_for(team),
             ctx,
-            (if slot == 0 { hull_variant } else { None }, hull_variant),
-            if slot == 0 { skin } else { None },
+            (paint.hull_variant, hull_variant),
+            paint.skin,
             report,
         ) {
             Ok(livery) => out.push(livery),

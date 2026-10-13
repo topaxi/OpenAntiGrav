@@ -171,6 +171,10 @@ pub(crate) struct PickerStage {
     /// times this. Set by the caller after [`Self::new`]; `None` when the
     /// race has no lap target, which is the row's `Infinity` glyph.
     pub(crate) laps: Option<u32>,
+    /// `(seat, seated)` when this is one seat's Ship Select on a split-screen
+    /// race box, which reads that seat's device alone - see
+    /// `crate::session::picker`'s `seat` module. `None` is every ordinary screen.
+    pub(crate) seat: Option<(usize, usize)>,
 }
 
 impl PickerStage {
@@ -207,6 +211,7 @@ impl PickerStage {
             sheet: None,
             sheet_uploaded: false,
             laps: None,
+            seat: None,
         }
     }
 

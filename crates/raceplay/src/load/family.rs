@@ -35,10 +35,13 @@ pub(super) fn pool(
 }
 
 /// Moves every AI slot onto the player's exact variant: its base team kept, the
-/// player's suffix applied. A slot the table does not recognise is left alone.
+/// player's suffix applied. A slot the table does not recognise is left alone,
+/// and so is a seated person's (`seated` slots after the first): they picked
+/// their own variant.
 pub(super) fn follow_player(
     race: &oag_title::RaceDefaults,
     slot_teams: &mut [String],
+    seated: usize,
     report: &mut Vec<String>,
 ) {
     let Some(variants) = table(race) else { return };
@@ -48,7 +51,7 @@ pub(super) fn follow_player(
     let Some((_, suffix)) = variants.split(player) else {
         return;
     };
-    for team in slot_teams.iter_mut().skip(1) {
+    for team in slot_teams.iter_mut().skip(1 + seated) {
         if let Some((base, _)) = variants.split(team) {
             *team = variants.join.combine(base, suffix);
         }

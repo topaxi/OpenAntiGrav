@@ -71,6 +71,9 @@ pub struct Boot {
     /// The race box's selection screens. See [`Shell::track_select`].
     pub track_select: Option<oag_ui_screens::picker::Layout>,
     pub ship_select: Option<oag_ui_screens::picker::Layout>,
+    /// `Team SelectionSplit`'s two halves where the source authors it (Pulse's PS2
+    /// pressing) - see [`oag_ui_screens::picker::Layout::read_split`].
+    pub ship_select_split: Option<[oag_ui_screens::picker::Layout; 2]>,
     /// The `KILLS` and `WEAPONS` rows' values - see [`Shell::race_setup`].
     pub race_setup: RaceSetup,
     /// The circuit names, for a capture's circuit labels.
@@ -278,6 +281,9 @@ pub struct Shell {
     /// [`oag_ui_screens::picker`].
     pub track_select: Option<oag_ui_screens::picker::Layout>,
     pub ship_select: Option<oag_ui_screens::picker::Layout>,
+    /// `Team SelectionSplit`'s two halves where the source authors it (Pulse's PS2
+    /// pressing) - see [`oag_ui_screens::picker::Layout::read_split`].
+    pub ship_select_split: Option<[oag_ui_screens::picker::Layout; 2]>,
     /// The `KILLS`/`WEAPONS` rows' values, off the disc's own lists.
     pub race_setup: RaceSetup,
     /// The face menu rows are drawn in, when the title names one and it
@@ -815,7 +821,7 @@ pub fn load_shell(
     if let Some(ticker) = &ticker {
         report.push(format!("footer ticker: viewport {:?}", ticker.viewport));
     }
-    let (track_select, ship_select) = selection_layouts(
+    let (track_select, ship_select, ship_select_split) = selection_layouts(
         race_box.as_ref(),
         team_box.as_ref(),
         track_box.as_ref(),
@@ -852,6 +858,7 @@ pub fn load_shell(
             fury_backdrop,
             track_select,
             ship_select,
+            ship_select_split,
             race_setup,
             menu_font,
             title_font,
@@ -1170,6 +1177,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         fury_backdrop,
         track_select,
         ship_select,
+        ship_select_split,
         race_setup,
         menu_font,
         title_font,
@@ -1379,6 +1387,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
         fury_backdrop,
         track_select,
         ship_select,
+        ship_select_split,
         race_setup,
         circuit_names,
         menu_font,

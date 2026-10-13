@@ -119,6 +119,16 @@ pub struct Options {
     /// module's doc comment for what fraction of `SP.xml`'s events author it
     /// and how fully.
     pub grid_teams: Vec<Option<String>>,
+    /// What each person seated after the first picked for their own craft,
+    /// index `0` being grid slot `1` - the split screen's Ship Select, once per
+    /// seat. **Empty is every race with one person**, and changes nothing
+    /// anywhere.
+    ///
+    /// Slot `i + 1` flies `seat_picks[i].team` in its hull variant and skin,
+    /// and the opponents fill the slots after the seated ones; a team a person
+    /// took is moved out of the opponents' draw rather than flown twice. See
+    /// `load::roster::apply_seat_picks`.
+    pub seat_picks: Vec<SeatPick>,
     /// Whether a Wipeout 2048 Zone race draws its own `trackZone.rcsmodel`.
     ///
     /// Off by default: that model's road shader (`fc01_dummy`) is unread, so
@@ -317,6 +327,8 @@ pub use capture::{CameraOverride, PoseRequest};
 
 /// [`Options`]' `Default`.
 mod defaults;
+mod seat;
+pub use seat::SeatPick;
 
 /// Everything a race needs with no GPU anywhere in sight.
 ///

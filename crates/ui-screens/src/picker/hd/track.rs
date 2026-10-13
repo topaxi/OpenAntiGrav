@@ -266,6 +266,7 @@ pub fn read(
         ],
         hd: None,
         hd_track: Some(Box::new(extra)),
+        ready: String::new(),
     })
 }
 
