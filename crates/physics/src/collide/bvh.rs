@@ -49,6 +49,11 @@ impl Bvh {
         }
     }
 
+    /// Each item's own box, by item index.
+    pub(super) fn boxes(&self) -> &[Aabb] {
+        &self.boxes
+    }
+
     /// Calls `f` with the index of every triangle whose box overlaps `query`, in no
     /// particular order.
     pub(super) fn visit(&self, query: &Aabb, mut f: impl FnMut(u32)) {

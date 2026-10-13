@@ -427,6 +427,24 @@ impl TriangleSoup {
         self.bounds
     }
 
+    /// The hit report for a triangle the segment crosses: its crossing recomputed, so
+    /// every caller reports the same numbers for the same triangle.
+    fn hit(&self, ray: Ray, index: u32) -> RaycastHit {
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let [a, b, c] = self.corners(index);
+        let hit = segment_triangle(p0, p1, a, b, c).expect("the segment crosses it");
+        RaycastHit {
+            point: p0 + (p1 - p0) * hit.t,
+            normal: hit.normal.normalize_or_zero(),
+            distance: hit.t * ray.length,
+            surface: self.surface,
+            vertex_scalar: self.triangle_scalar(self.triangles[index as usize]),
+            collider: self.collider,
+            triangle: Some([a, b, c]),
+        }
+    }
+
     /// One triangle's corners by index into `triangles`, which the broadphase hands out.
     fn corners(&self, index: u32) -> [Vec3; 3] {
         let [a, b, c] = self.triangles[index as usize];
@@ -490,19 +508,7 @@ impl Raycaster for TriangleSoup {
             }
         });
 
-        nearest.map(|(_, index)| {
-            let [a, b, c] = self.corners(index);
-            let hit = segment_triangle(p0, p1, a, b, c).expect("it hit a moment ago");
-            RaycastHit {
-                point: p0 + (p1 - p0) * hit.t,
-                normal: hit.normal.normalize_or_zero(),
-                distance: hit.t * ray.length,
-                surface: self.surface,
-                vertex_scalar: self.triangle_scalar(self.triangles[index as usize]),
-                collider: self.collider,
-                triangle: Some([a, b, c]),
-            }
-        })
+        nearest.map(|(_, index)| self.hit(ray, index))
     }
 
     /// Every triangle the segment crosses, in **ascending triangle index**: the order
@@ -539,19 +545,10 @@ impl Raycaster for TriangleSoup {
                 break;
             }
             let [a, b, c] = self.corners(index);
-            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+            if segment_triangle(p0, p1, a, b, c).is_none() {
                 continue;
-            };
-
-            out[found] = Some(RaycastHit {
-                point: p0 + (p1 - p0) * hit.t,
-                normal: hit.normal.normalize_or_zero(),
-                distance: hit.t * ray.length,
-                surface: self.surface,
-                vertex_scalar: self.triangle_scalar(self.triangles[index as usize]),
-                collider: self.collider,
-                triangle: Some([a, b, c]),
-            });
+            }
+            out[found] = Some(self.hit(ray, index));
             found += 1;
         }
 
@@ -569,15 +566,53 @@ impl Raycaster for TriangleSoup {
 ///
 /// A circuit is a couple of hundred colliders of at most 32 triangles each (`05_Track`:
 /// 201), so a query that asked each collider in turn spent most of its time on colliders
-/// its segment's box does not reach. A [`Bvh`] over the colliders' own boxes hands the
-/// query only those whose box the segment's box overlaps - exactly the colliders whose own
-/// first reject in [`TriangleSoup::raycast`] would have passed - and they are asked in
-/// ascending index, the order the scan asked them in, so every answer is the scan's.
+/// its segment's box does not reach, and the two-level walk that replaced it (colliders,
+/// then each collider's own tree) still spent most of its time walking. One [`Bvh`] over
+/// every triangle of every collider hands a query exactly the triangles whose box the
+/// segment's box overlaps - the candidates each collider's own walk would have produced,
+/// since a triangle's box lies inside its collider's - numbered so that ascending order is
+/// ascending collider, then ascending triangle: the order the scan asked them in. The
+/// narrowphase and every comparison are the scan's, so every answer is the scan's.
 #[derive(Debug, Clone, Default)]
 pub struct CollisionWorld {
     colliders: Vec<TriangleSoup>,
     /// Built on the first query after the last [`Self::push`].
-    broadphase: OnceLock<Bvh>,
+    broadphase: OnceLock<Flat>,
+}
+
+/// Every triangle of a world in one tree. Item `i` is triangle `i - first[c]` of
+/// collider `c`, where `first[c] <= i < first[c + 1]`.
+#[derive(Debug, Clone)]
+struct Flat {
+    tree: Bvh,
+    /// The collider of each item.
+    collider: Vec<u32>,
+    /// Each collider's first item.
+    first: Vec<u32>,
+}
+
+impl Flat {
+    fn build(colliders: &[TriangleSoup]) -> Self {
+        let mut boxes = Vec::new();
+        let mut collider = Vec::new();
+        let mut first = Vec::with_capacity(colliders.len());
+        for (index, soup) in colliders.iter().enumerate() {
+            first.push(boxes.len() as u32);
+            boxes.extend_from_slice(soup.broadphase.boxes());
+            collider.extend(std::iter::repeat_n(index as u32, soup.triangles.len()));
+        }
+        Self {
+            tree: Bvh::build(boxes),
+            collider,
+            first,
+        }
+    }
+
+    /// `(collider, triangle)` of an item.
+    fn item(&self, item: u32) -> (usize, u32) {
+        let collider = self.collider[item as usize] as usize;
+        (collider, item - self.first[collider])
+    }
 }
 
 impl CollisionWorld {
@@ -599,12 +634,14 @@ impl CollisionWorld {
         &self.colliders
     }
 
-    /// The colliders whose box the segment's box overlaps, in ascending index.
-    fn reached_by(&self, ray: Ray) -> Indices {
-        let broadphase = self
-            .broadphase
-            .get_or_init(|| Bvh::build(self.colliders.iter().map(TriangleSoup::bounds).collect()));
-        Indices::overlapping(broadphase, &Aabb::from_segment(ray.origin, ray.end()))
+    fn flat(&self) -> &Flat {
+        self.broadphase.get_or_init(|| Flat::build(&self.colliders))
+    }
+
+    /// Whether a query with these arguments asks this collider at all: the two rejects
+    /// each [`TriangleSoup`] query makes before its walk.
+    fn asks(soup: &TriangleSoup, skip: Option<u32>, include_reset: bool) -> bool {
+        skip != Some(soup.collider) && (include_reset || !soup.surface.is_skipped_by_default())
     }
 }
 
@@ -612,23 +649,59 @@ impl Raycaster for CollisionWorld {
     /// Nearest hit across every collider. Self-skipping and the [`Surface::Reset`] exclusion
     /// are each collider's business; the original applies both at the broadphase, the same
     /// thing one level up.
+    ///
+    /// The scan's two comparisons, kept apart: within a collider the strictly smaller `t`,
+    /// the lower triangle on a tie ([`TriangleSoup::raycast`]); across colliders the
+    /// strictly smaller distance, the lower collider on a tie.
     fn raycast(&self, ray: Ray, skip: Option<u32>, include_reset: bool) -> Option<RaycastHit> {
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let segment = Aabb::from_segment(p0, p1);
+        let flat = self.flat();
+        let candidates = Indices::overlapping(&flat.tree, &segment);
+
         let mut nearest: Option<RaycastHit> = None;
-
-        for &index in self.reached_by(ray).as_slice() {
-            let collider = &self.colliders[index as usize];
-            let Some(hit) = collider.raycast(ray, skip, include_reset) else {
-                continue;
+        // The collider being walked and its nearest `(t, triangle)` so far.
+        let mut walking: Option<(usize, Option<(f32, u32)>)> = None;
+        let settle = |walking: Option<(usize, Option<(f32, u32)>)>,
+                      nearest: &mut Option<RaycastHit>| {
+            let Some((collider, Some((_, triangle)))) = walking else {
+                return;
             };
-
+            let hit = self.colliders[collider].hit(ray, triangle);
             let nearer = match nearest {
                 Some(best) => hit.distance < best.distance,
                 None => true,
             };
             if nearer {
-                nearest = Some(hit);
+                *nearest = Some(hit);
+            }
+        };
+        for &item in candidates.as_slice() {
+            let (collider, triangle) = flat.item(item);
+            let soup = &self.colliders[collider];
+            if !Self::asks(soup, skip, include_reset) {
+                continue;
+            }
+            if walking.is_none_or(|(at, _)| at != collider) {
+                settle(walking, &mut nearest);
+                walking = Some((collider, None));
+            }
+            let [a, b, c] = soup.corners(triangle);
+            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                continue;
+            };
+            if let Some((_, best)) = &mut walking {
+                let nearer = match *best {
+                    Some((t, at)) => hit.t < t || (hit.t == t && triangle < at),
+                    None => true,
+                };
+                if nearer {
+                    *best = Some((hit.t, triangle));
+                }
             }
         }
+        settle(walking, &mut nearest);
 
         nearest
     }
@@ -643,13 +716,28 @@ impl Raycaster for CollisionWorld {
         include_reset: bool,
         out: &mut [Option<RaycastHit>],
     ) -> usize {
+        let p0 = ray.origin;
+        let p1 = ray.end();
+        let segment = Aabb::from_segment(p0, p1);
+        let flat = self.flat();
+        let candidates = Indices::overlapping(&flat.tree, &segment);
+
         let mut found = 0;
-        for &index in self.reached_by(ray).as_slice() {
+        for &item in candidates.as_slice() {
             if found == out.len() {
                 break;
             }
-            let collider = &self.colliders[index as usize];
-            found += collider.raycast_all(ray, skip, include_reset, &mut out[found..]);
+            let (collider, triangle) = flat.item(item);
+            let soup = &self.colliders[collider];
+            if !Self::asks(soup, skip, include_reset) {
+                continue;
+            }
+            let [a, b, c] = soup.corners(triangle);
+            if segment_triangle(p0, p1, a, b, c).is_none() {
+                continue;
+            }
+            out[found] = Some(soup.hit(ray, triangle));
+            found += 1;
         }
         found
     }
