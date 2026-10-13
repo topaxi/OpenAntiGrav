@@ -119,3 +119,48 @@ fn the_places_are_a_permutation_of_the_field() {
     places.sort_unstable();
     assert_eq!(places, (1..=8).collect::<Vec<_>>());
 }
+
+/// With two people the race is over when both are, not when the first is: the
+/// first to cross sees the world run on (their craft the driver's) until the
+/// second does, and the board marks both of their rows.
+#[test]
+fn a_race_with_two_people_ends_when_both_have_finished() {
+    let mut race = race_with_a_grid();
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert!(race.sim.world.person_flown(1));
+
+    finish(&mut race, 0, 1_000);
+    race.sim.world.race[0].finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(
+        !race.finished(),
+        "the race ended with a person still racing"
+    );
+    assert!(!race.runs_on_after_the_line());
+    assert!(race.results().is_none(), "the board was taken early");
+
+    finish(&mut race, 1, 1_200);
+    race.sim.world.race[1].finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(race.finished(), "both people finished and the race did not");
+    assert!(race.runs_on_after_the_line());
+    let board = race.results().expect("the last person finished");
+    let players: Vec<u8> = board
+        .rows
+        .iter()
+        .filter(|row| row.player)
+        .map(|row| row.slot)
+        .collect();
+    assert_eq!(players, vec![0, 1], "every person's row is a player's row");
+}
+
+/// The second person alone finishing does not end it either: the primary's
+/// flag was the whole condition before, and this is what guards its being
+/// *every* person's and not "any".
+#[test]
+fn the_second_person_finishing_first_does_not_end_the_race() {
+    let mut race = race_with_a_grid();
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    race.sim.world.race[1].finished = true;
+    assert!(!race.finished());
+}

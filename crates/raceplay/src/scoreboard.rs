@@ -12,8 +12,11 @@
 /// numbers and can be tested without a disc, a track or a physics step.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Craft {
-    /// Grid slot, zero-based. Slot 0 is the player.
+    /// Grid slot, zero-based.
     pub slot: u8,
+    /// Whether a person flies this craft ([`oag_gameplay::World::person_flown`]):
+    /// its row is a player's row. One in a one-person race, slot 0's.
+    pub person: bool,
     /// Race position, 1-based, as `oag_race::places` ordered it.
     pub place: u8,
     /// The lap this craft was on, 1-based, exactly as `oag_race::Standing`
@@ -44,7 +47,8 @@ pub struct Row {
     /// The craft's own clock (`oag_race::Standing::best_lap_ticks`) rather than
     /// the player's, which is what makes this a column rather than a footer.
     pub best_lap_ticks: Option<u32>,
-    /// Whether this is the player's row.
+    /// Whether this is a player's row: a person flew this craft. Every
+    /// person-flown slot has one, so a two-person race marks two.
     pub player: bool,
 }
 
@@ -68,7 +72,8 @@ pub struct Board {
 }
 
 impl Board {
-    /// The player's row, which is the one a caller usually wants.
+    /// The player's row, which is the one a caller usually wants: with several
+    /// people in the race, the best-placed one's (rows are in place order).
     #[must_use]
     pub fn player(&self) -> Option<&Row> {
         self.rows.iter().find(|row| row.player)
@@ -110,7 +115,7 @@ pub fn build(crafts: &[Craft], laps_target: Option<u32>, tick: u64) -> Board {
             },
             finish_tick: craft.finish_tick,
             best_lap_ticks: craft.best_lap_ticks,
-            player: craft.slot == 0,
+            player: craft.person,
         })
         .collect();
     rows.sort_by_key(|row| (row.place, row.slot));
