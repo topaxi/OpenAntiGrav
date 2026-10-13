@@ -178,7 +178,15 @@ drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
 two-player split layouts for a two-view race. **Still open from this list**:
 per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
 origin), the 8-up frame budget, the results/end-race flow (still slot 0's, ends
-every view), and a check of HD's and Omega's post chains under a split.
+every view). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
+checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
+clears the frame), and on Omega and HD the last view was graded from the first view's
+pixels; the chain now runs once over the whole area after the last view
+([split-screen.md](../../docs/rendering/split-screen.md#drawing)). **Open from it**
+(all chosen, not measured): one shared exposure and glow for all views, HD's boost
+zoom streak and Omega's distortion offsets are not drawn under a split, and a
+race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
+from the primary's pulse (read from the code, not captured).
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives
