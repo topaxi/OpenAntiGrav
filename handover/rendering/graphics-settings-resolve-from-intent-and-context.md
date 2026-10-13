@@ -100,7 +100,11 @@ Questions to answer:
   `encoder.finish` (0.4 ms a view on Pulse, 1.1 ms on HD) and matter when `pipelined` sits
   near the CPU number; render scale matters when it sits near the GPU's scene-pass sum,
   which the Raphael iGPU shows at one and two views. The Deck decides; its steps are in the
-  doc and the maintainer runs them.
+  doc and the maintainer runs them. **Decided (maintainer, 2026-10-13): split screen on an
+  integrated GPU is offered for Pulse and Pure only; HD, 2048 and Omega stay off it.** The
+  Raphael iGPU measured for those two holds eight views at 6 to 10 ms at 1280x720, so the
+  evidence implies no view-count cap there; render scale is the lever if a slower APU or a
+  larger window needs one.
 - High-refresh panels: a frame-rate target that follows the display.
 - Thermal throttling on any device, and iOS.
 - The `original` setting value (offered only on titles whose original had the
