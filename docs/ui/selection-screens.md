@@ -380,7 +380,8 @@ things differ, and all three are handled rather than special-cased:
   the PSP's are bare (`Track Creation`'s are bare on both). Read under the
   PSP's names by stripping the `0` when a screen has a `honey0` and no
   `honey` (`picker::strip_player_suffix`); the `1` set only exists on
-  `Team SelectionSplit`, a screen this build does not open.
+  `Team SelectionSplit`, which a split-screen race box opens for two seats -
+  see [the split screen](#the-split-screens-team-selection-2026-10-13).
 - **Both previews need the circuit's or the craft's sibling texture set**,
   the same rule a race applies (`oag_livery::entry::ps2_texture_set`); without it the
   outline and the hull both drew flat white.
@@ -392,6 +393,77 @@ The handful of numbers this module measured off the PSP capture rather
 than read out of a widget - the panel's fallback rect, the craft's
 viewport, the name block's inset - are multiplied by the grid ratio
 (`Layout::scale`) rather than copied.
+
+## The split screen's Team Selection (2026-10-13)
+
+What the originals author for two people picking a craft on one console, read
+from the disc and followed where it exists. Evidence: `Selection_Definition.xml`
+(PS2 Pulse, `54748/WADS2.WAD`, entry `Data\Plugins\PI001\GUI\Selection_Definition.xml`)
+and HD's `team_selection_definition.xml` (`DATA06.PSARC`,
+`/data/plugins/frontend/gui/`), both read with `oag-wad cat` / `just psarc cat`.
+
+**PS2 Pulse: both players pick at once, on one page.** `Team SelectionSplit`
+(`type="TeamSelection"`, `NavigationButtons="2"`) holds two full widget sets,
+`Player 1` first (`Item OffsetY -15`, stats at 79, `Infogradient` at y 9) and
+`Player 2` below it (`OffsetY 181`, stats at 274, `Infogradient` at y 204), the
+same shape as the single-player screen. Each set has its own `List` with
+`focus="true"` and a global of its own (`Team0`, `Team1`), names carry the player
+index (`honey0`/`honey1`, `Speed Bar0`/`Speed Bar1`, `skin0`/`skin1`,
+`up arrow0`...), and the page has its own help (`Team HelpSplit`,
+`MSC_HELP_RC_SS`) and music pick (`Pre Race Music SelectSplit`). `Track
+CreationSplit` is the one shared circuit pick that precedes it. Confidence
+**95** for the page's structure, **70** for "one player per list on one pad
+each" (read off `focus` and `NavigationButtons`, no capture of the original's
+split screen exists). Two players only: there is no third set.
+
+**HD/Fury: the players pick in turn.** `team_selection_definition.xml` holds
+`Team Selection`, then `Team Selection Player 1` (title `FE_SHIPSEL_P1`, its
+redirect goes to `Team Selection Player 2`) and `Team Selection Player 2` (title
+`FE_SHIPSEL_P2`, its redirect launches), all the one `TeamSelection` page
+re-titled, with `TeamRedirectBack` bound by `InputPad="1"` and a
+`TeamRedirectBack0` by `InputPad="0"` on the second: the redirect names a pad.
+Confidence **90** for the sequence and the titles, **60** for what `InputPad`
+does (the file names it; no behaviour was observed). 2048's string table carries
+the same two ids (`FE_SHIPSEL_P1`/`_P2`); its front end is unread.
+
+**What this build does** (`crates/game/src/main/session/picker.rs` and its `seat`
+module, `oag_ui_screens::picker::split`):
+
+- A source that authors `Team SelectionSplit` (the PS2 pressing) **and** a race
+  box of exactly two seats shows it: `Layout::read_split` reads the two halves
+  back into one `Layout` each. The widget tree is flattened when parsed, so a
+  widget's half is read from the player index its name ends in, and from its
+  height (below or above the second panel's top) for the unnamed rules and bars
+  and the shared `Infogradient`/`Infohexgrid`; the lone `Suggest` line is the
+  second half's and the online lobby's status line is neither's. Each half
+  draws, points and picks like the single-player screen, on its own seat's
+  device. A seat confirms to **hold** its pick (`READY`, new string
+  `OAG_PICK_READY`) and the race starts when both hold; back takes a hold back,
+  and back on a seat that holds nothing returns both to Track Select.
+- **Every other source and every other count** gets one Ship Select per seat in
+  seat order (HD's authored order; chosen elsewhere). Each opens for its seat,
+  titled by the source's own `FE_SHIPSEL_P<n>` when its table has one and by
+  `<SHIP SELECT> - PLAYER <n>` otherwise, driven by that seat's device alone.
+  Back returns to the seat before.
+
+**Chosen, not measured** (the original authors none of this): the second half's
+craft rect (the column between its arrows; the original places its craft in
+code); a seat opening on the team after the previous seat's, so bare confirms
+race different teams; two people may take the same team (the draw does not
+offer a person's pick to an opponent, and when the two picks differ the
+opponent that held it takes the team a person left); the pointer drives
+whichever screen is open in the sequential flow, and on the shared page a click
+lands on the half it is over and the wheel steps the half under it; a held seat
+ignores everything but back.
+
+**Cross-title.** HD: authored sequence ported (wired, but HD's front end shows no
+SPLIT SCREEN row, so the race box is reachable there only from `--players`,
+which has no Ship Select). Omega: **checked, not located** - its
+`team_selection_definition.xml` (`data00`, `data09`) holds the `PI_Team` rows and no
+`Team Selection Player` screen; where Omega authors its Ship Select screens is
+open. 2048: checked, string ids present, screens unread. Pure and PSP Pulse:
+neither authors a split screen (`docs/formats/race-setup.md`), so they take the
+one-per-seat order, chosen.
 
 ## The flow
 

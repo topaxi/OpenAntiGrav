@@ -100,52 +100,49 @@ pub(super) fn menu_pointer(
 /// A selection screen answering the pointer, against the targets it just
 /// drew. See `oag_ui_screens::picker::pointer`.
 pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<picker::Event> {
-    let boundary = stage.partner.as_deref().map(|partner| partner.layout.panel[1] - 12.0);
+    let shared = stage.partner.is_some();
     let Some(stage_picker) = stage.picker.as_mut() else {
         return Vec::new();
     };
-    let pointer = &in_half(pointer, boundary, false);
-    if pointer.is_idle() {
-        return Vec::new();
-    }
-    let targets = picker::pointer::targets(
-        &stage_picker.model,
-        &stage_picker.layout,
-        &stage.skin,
-        &|src| stage_picker.placed(src),
-    );
-    stage_picker.model.pointer(pointer, &targets)
-}
-
-/// `pointer` as one half of a shared Ship Select sees it: a pointer on the
-/// other side of `boundary` (the second panel's top, less a margin) is idle, so
-/// the wheel and a hover act on the half under it alone. Whole when there is no
-/// boundary - an ordinary screen.
-fn in_half(pointer: &Pointer, boundary: Option<f32>, lower: bool) -> Pointer {
-    match (boundary, pointer.at) {
-        (Some(boundary), Some((_, y))) if (y >= boundary) != lower => Pointer::default(),
-        _ => *pointer,
-    }
+    drive_picker(stage_picker, &stage.skin, pointer, shared)
 }
 
 /// The second seat's half of a shared Ship Select answering the pointer, the
 /// same way [`picker_pointer`] does the first's: each half's targets are its own
-/// widgets, so a click lands on one.
+/// widgets, so a click or a hover lands on one.
 pub(super) fn partner_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<picker::Event> {
     let Some(partner) = stage.partner.as_deref_mut() else {
         return Vec::new();
     };
-    let pointer = &in_half(pointer, Some(partner.layout.panel[1] - 12.0), true);
+    drive_picker(partner, &stage.skin, pointer, true)
+}
+
+/// One selection screen against `pointer`. On a page two people share
+/// (`shared`) the wheel steps only the half whose arrows, panel or craft the
+/// pointer is over, because a wheel has no position of its own to tell the two
+/// lists apart.
+fn drive_picker(
+    picker: &mut crate::picker_stage::PickerStage,
+    skin: &oag_ui::menu::Skin,
+    pointer: &Pointer,
+    shared: bool,
+) -> Vec<picker::Event> {
     if pointer.is_idle() {
         return Vec::new();
     }
-    let targets = picker::pointer::targets(
-        &partner.model,
-        &partner.layout,
-        &stage.skin,
-        &|src| partner.placed(src),
-    );
-    partner.model.pointer(pointer, &targets)
+    let targets = picker::pointer::targets(&picker.model, &picker.layout, skin, &|src| {
+        picker.placed(src)
+    });
+    let mut pointer = *pointer;
+    if shared
+        && pointer.scroll != 0
+        && !pointer
+            .at
+            .is_some_and(|at| targets.iter().any(|target| oag_ui::pointer::contains(target.rect, at)))
+    {
+        pointer.scroll = 0;
+    }
+    picker.model.pointer(&pointer, &targets)
 }
 
 /// `Grid Selection`/`Cell Selection` answering the pointer, against the

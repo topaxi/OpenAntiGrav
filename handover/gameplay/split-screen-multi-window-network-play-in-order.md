@@ -184,9 +184,19 @@ button to join" screen (`oag_ui_screens::join`, `oag_input::lobby`) whose START 
 on to Track and Ship Select with the seated count. All **chosen, not measured**; the
 PS2's authored flow is a camera choice (`FE_RACE_CAM_SS`) and a per-player team
 pick, not a device join. See [split-screen.md](../../docs/rendering/split-screen.md).
-A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: a second player's own ship pick (only slot 0 picks a team, the PS2's
-`Team SelectionSplit` has a set per player), and two real pads on real hardware (the
-rules are unit-tested over stand-in ids, the keyboard path runs end to end).
+A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: two real pads on real hardware (the rules are unit-tested over stand-in
+ids, the keyboard path runs end to end; since `per-player-ship-pick` two virtual uinput
+pads also walked the join screen, Track and Ship Select and a race in an Xvfb).
+**2026-10-13, `per-player-ship-pick`: each seat picks its own craft.** The PS2 disc's
+authored `Team SelectionSplit` (both players on one page, top and bottom, READY once
+each confirms) is followed on PS2 Pulse with two seats; HD authors the players taking
+`Team Selection Player 1` then `Player 2` in turn, which every other title and any
+count above two get (chosen). Each seat is driven by its own device and a pick reaches
+slot `i` (`Options::seat_picks`; `--seat-team` headless). Written up in
+[split-screen.md](../../docs/rendering/split-screen.md#ship-select-per-seat). **Still
+open**: HD's front end shows no SPLIT SCREEN row (the authored sequence is wired and
+unreachable by menu there), stick navigation on a seat's screen, a variant family's
+duplicate check on HD, and where Omega authors its Ship Select screens.
 
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track

@@ -802,10 +802,9 @@ fn wrap_name(label: &str, layout: &Layout, measure: &dyn Fn(&str) -> f32) -> Vec
 /// The PS2 pressing authors `Team Selection` for split screen, so every
 /// widget on it is `honey0`/`honey1`, `Speed Bar0`/`Speed Bar1` and so on -
 /// one set per player - where the PSP's are bare (`docs/formats/race-setup.md`).
-/// This build draws one player and has no split screen, so the `0` set is
-/// read under the PSP's own names; the `1` set only exists on
-/// `Team SelectionSplit`, a screen nothing opens yet. When split screen
-/// arrives this becomes "read set N" rather than "strip the zero".
+/// The one-player screen reads the `0` set under the PSP's own names; the `1`
+/// set only exists on `Team SelectionSplit`, which [`Layout::read_split`]
+/// reads, a half at a time, for a split-screen race box.
 /// Keyed on the counter: a screen with a `honey0` and no `honey` is one
 /// authored that way, and a screen with a bare `honey` (`Track Creation` on
 /// both discs) is left alone, `Info Track 1.1` and `line bg10` included.
