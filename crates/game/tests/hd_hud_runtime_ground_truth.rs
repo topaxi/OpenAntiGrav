@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_hud_runtime_ground_truth)'
+//!     -E 'test(/^hd_hud_runtime_ground_truth::/)'
 //! ```
 
 use oag_hud as hud;

@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_lightmapped_albedo_ground_truth)'
+//!     -E 'test(/^hd_lightmapped_albedo_ground_truth::/)'
 //! ```
 //!
 //! Vineta K's `d_s_n_customr` wet floor names `ds_dualparaboloid_c` (512x256,
@@ -14,7 +14,7 @@
 //! entry 1. Binding entry 0 drew the floor black with the reflection map's
 //! pattern. Dropping the declared-sampler filter in `skin::picks` fails this.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 

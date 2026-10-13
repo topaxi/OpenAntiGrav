@@ -116,7 +116,7 @@ it; this thread only confirms what the file itself demonstrates.
 Header matches `crates/game/tests/maglock_ground_truth.rs`'s expectations
 exactly (`omega_x`, `right_x`/`up_x`/`fwd_x`, `pos_x`, `vel_x`, `dt`), 3,140
 data rows. Verified with `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p
-oag-game --run-ignored all -E 'binary(maglock_ground_truth)'`: both tests
+oag-game --run-ignored all -E 'test(/^maglock_ground_truth::/)'`: both tests
 pass, including `the_hold_reproduces_the_rotation_the_momentum_column_does_not`,
 which previously printed the skip message and returned `None` (this is the
 "one place in the workspace where `None` is still the honest answer" the test

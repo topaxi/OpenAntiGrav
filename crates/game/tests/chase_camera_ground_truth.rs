@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(chase_camera_ground_truth)'
+//!     -E 'test(/^chase_camera_ground_truth::/)'
 //! ```
 //!
 //! # Why this file exists rather than a number in a comment

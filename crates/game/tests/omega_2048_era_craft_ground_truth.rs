@@ -4,7 +4,7 @@
 //!
 //! **`#[ignore]`d and never run in CI**: needs the extracted Omega packages.
 //! Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'binary(omega_2048_era_craft_ground_truth)'`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'test(/^omega_2048_era_craft_ground_truth::/)'`.
 //!
 //! The roster is read off the disc's own `Data\plugins\teams\Definition.xml`,
 //! not a hand list, so a team the table forgets fails here. A 2048-era craft

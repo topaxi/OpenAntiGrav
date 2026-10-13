@@ -3,7 +3,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_font_scale_ground_truth)'
+//!     -E 'test(/^omega_font_scale_ground_truth::/)'
 //! ```
 
 fn median(mut v: Vec<f32>) -> f32 {

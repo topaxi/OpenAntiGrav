@@ -1,7 +1,7 @@
 //! Pulse's and Wipeout HD/Fury's end-of-race voice lines, off real discs.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test endrace_voice_ground_truth --run-ignored all`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game endrace_voice_ground_truth:: --run-ignored all`.
 //!
 //! Does `speech_results.bnk` load, does each place and medal name resolve, and
 //! does the trigger put the right line into the mixer on the tick its screen

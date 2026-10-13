@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_race_ground_truth)'
+//!     -E 'test(/^omega_race_ground_truth::/)'
 //! ```
 //!
 //! `OAG_OMEGA_SOURCE=<dir>` reads a different directory pair than

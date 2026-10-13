@@ -13,7 +13,7 @@
 //! `#[ignore]`d because it needs `data/images/hdfury-ps3-eu-dec.iso`; run with
 //! `just test-data`.
 
-mod rcsmodel_common;
+use crate::rcsmodel_common;
 
 use oag_rcs::rcsmodel;
 use rcsmodel_common::image;

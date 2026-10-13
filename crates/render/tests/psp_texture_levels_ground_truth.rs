@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(psp_texture_levels_ground_truth)'
+//!     -E 'test(/^psp_texture_levels_ground_truth::/)'
 //! ```
 //!
 //! The rule that picks among the levels is `psp_slope_lod.rs`'s; this pins the

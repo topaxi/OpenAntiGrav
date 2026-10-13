@@ -4,10 +4,10 @@
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test sfx_xfade_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game sfx_xfade_ground_truth:: --run-ignored all
 //! # and keep the WAVs:
 //! OAG_XFADE_WAV_DIR=<wav-dir> OAG_REQUIRE_GAME_DATA=1 \
-//!   cargo nextest run -p oag-game --test sfx_xfade_ground_truth --run-ignored all --no-capture
+//!   cargo nextest run -p oag-game sfx_xfade_ground_truth:: --run-ignored all --no-capture
 //! ```
 //!
 //! What it proves: every team's table resolves on the disc (each layer a

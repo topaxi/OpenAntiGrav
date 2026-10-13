@@ -20,7 +20,7 @@ Both intro cuts on the PS2 disc carry one:
 Reproduce the numbers with:
 
 ```sh
-cargo nextest run -p oag-video --run-ignored all -E 'binary(pss_ground_truth)'
+cargo nextest run -p oag-video --run-ignored all -E 'test(/^pss_ground_truth::/)'
 just play data/images/pulse-ps2-eu.chd --dump-audio /tmp/intro.wav \
     --screenshot /tmp/intro.png --ticks 2300 --movie-frames 30
 ```

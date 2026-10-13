@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(gantry_mount_hd_circuits_ground_truth)'
+//!     -E 'test(/^gantry_mount_hd_circuits_ground_truth::/)'
 //! ```
 //!
 //! # Why this exists, next to `start_gantry_hd_mount_ground_truth.rs`

@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(zone_airbrake_flaps_ground_truth)'
+//!     -E 'test(/^zone_airbrake_flaps_ground_truth::/)'
 //! ```
 //!
 //! HD's and 2048's hulls hang each flap under an `Anim Transform` hinge, so its

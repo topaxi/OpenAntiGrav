@@ -9,7 +9,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(lod_switch_ground_truth)'
+//!     -E 'test(/^lod_switch_ground_truth::/)'
 //! ```
 //!
 //! `oag_mesh::mesh::LodGroups` reads each group's position and switch

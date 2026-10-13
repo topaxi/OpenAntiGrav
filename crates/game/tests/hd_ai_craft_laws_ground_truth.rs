@@ -4,7 +4,7 @@
 //! ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_ai_craft_laws_ground_truth --run-ignored all --no-capture
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hd_ai_craft_laws_ground_truth:: --run-ignored all --no-capture
 //! ```
 //!
 //! HD builds the craft's inertia with mass `1.0` (`I_yy` 24 against Pulse's 21.6), clamps its
@@ -20,7 +20,7 @@
 //! never run in `just test-data`:
 //!
 //! ```sh
-//! OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_ai_craft_laws_ground_truth --run-ignored all --no-capture field_on_
+//! OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hd_ai_craft_laws_ground_truth:: --run-ignored all --no-capture field_on_
 //! ```
 
 use oag_gameplay::PlayerInputs;

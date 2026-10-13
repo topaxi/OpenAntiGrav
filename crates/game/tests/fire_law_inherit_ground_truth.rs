@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(fire_law_inherit_ground_truth)'
+//!     -E 'test(/^fire_law_inherit_ground_truth::/)'
 //! ```
 //!
 //! The maintainer's rule (2026-10-03): a title with no measured law of its

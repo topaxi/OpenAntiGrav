@@ -32,9 +32,9 @@ unread.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-video --run-ignored all \
-    -E 'binary(mp4_ground_truth)'                    # the 26-file survey
+    -E 'test(/^mp4_ground_truth::/)'                    # the 26-file survey
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-    -E 'binary(mp4_movie_ground_truth)'               # the lossless transcode
+    -E 'test(/^mp4_movie_ground_truth::/)'               # the lossless transcode
 
 python3 scripts/psarc.py cat \
     data/extracted/vita/PCSF00007/base/PSP2/data.psarc \

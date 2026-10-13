@@ -5,7 +5,7 @@
 //! test prints that and passes, so a plain `just test-data` stays hermetic; the
 //! committed facts in `known_items.rs` cover the two named items regardless.
 
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 

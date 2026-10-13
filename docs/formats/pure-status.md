@@ -1393,7 +1393,7 @@ original's own menus start on is not established.
 just wad cat "data/images/pure-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" \
     'Data\Plugins\PI001\Definition.xml' | grep -A3 PI_Music
 just wad hash 'Data\Music\frontend.at3'          # -> 1ddc4f8e
-cargo nextest run -p oag-game --test pure_music_ground_truth --run-ignored all
+cargo nextest run -p oag-game pure_music_ground_truth:: --run-ignored all
 ```
 
 ## Sound effects: the same container after all

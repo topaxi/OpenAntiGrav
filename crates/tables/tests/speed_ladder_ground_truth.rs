@@ -4,7 +4,7 @@
 //! `#[ignore]`d: needs the extracted 2048 archives under `data/extracted/vita/`
 //! (the `.pkg`s unpacked).
 
-mod common;
+use crate::common;
 
 use oag_tables::handling::{self, SpeedClass};
 

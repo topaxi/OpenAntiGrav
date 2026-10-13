@@ -2,7 +2,7 @@
 //! both tagged `Original`. The numbers are facts about the files, cross-checked
 //! with UnityPy at the time of writing, not file contents.
 
-mod common;
+use crate::common;
 
 use oag_unity::assets::Assets;
 use oag_unity::bundle::Bundle;

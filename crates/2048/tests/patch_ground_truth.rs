@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-2048 --run-ignored all \
-//!     -E 'binary(patch_ground_truth)'
+//!     -E 'test(/^patch_ground_truth::/)'
 //! ```
 
 use oag_assets::Archives;

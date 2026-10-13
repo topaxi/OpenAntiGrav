@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_rocket_smoke_ground_truth)'
+//!     -E 'test(/^hd_rocket_smoke_ground_truth::/)'
 //! ```
 //!
 //! The ramp entries asserted are the alphas the live RPCS3 dump read off the

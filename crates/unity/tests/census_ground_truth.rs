@@ -12,7 +12,7 @@
 //! nearly all of their time. Each claim keeps its own type and assertions; the
 //! walk hands every one the same opened bundle.
 
-mod common;
+use crate::common;
 
 use std::collections::BTreeMap;
 

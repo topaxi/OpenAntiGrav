@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_ship_hull_material_ground_truth)'
+//!     -E 'test(/^hd_ship_hull_material_ground_truth::/)'
 //! ```
 //!
 //! # What this pins
@@ -32,7 +32,7 @@
 //! pins that every drawn material resolves and every drawn chunk is covered,
 //! so the regression this fixed cannot silently return.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

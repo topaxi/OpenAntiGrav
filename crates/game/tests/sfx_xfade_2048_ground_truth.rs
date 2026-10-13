@@ -5,7 +5,7 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test sfx_xfade_2048_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game sfx_xfade_2048_ground_truth:: --run-ignored all
 //! ```
 //!
 //! What it proves: each of the five `<team>2048` tables, and Zone's five, loads

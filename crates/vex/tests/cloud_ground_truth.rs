@@ -17,7 +17,7 @@ use oag_formats::wad::{self, Directory};
 use oag_vex::cloud;
 use oag_vex::vex;
 
-mod wad_walk;
+use crate::wad_walk;
 
 /// The three sea-environment classes, none of which any Pulse `.vex` authors -
 /// see [`sea_classes_author_no_instance_on_either_pulse_pressing`].

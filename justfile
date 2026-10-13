@@ -112,8 +112,12 @@ fmt-check:
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
 
+# `--tests` builds what has tests to run - libraries, binaries, integration tests -
+# and leaves out the examples, which plain `cargo nextest run` also links but
+# never runs: 283 of them, about 216 CPU-s of a cold build (2026-10-13).
+# `just lint`'s `--all-targets` still type-checks every example.
 test:
-    cargo nextest run --workspace
+    cargo nextest run --workspace --tests
 
 # Behavioural / ground-truth tests that need data/images populated.
 #
@@ -160,8 +164,8 @@ test-affected:
     selection=$(python3 scripts/affected.py)
     case "$selection" in
         none) echo "test-affected: no package selected, nothing to run" ;;
-        full) cargo nextest run --workspace ;;
-        *) cargo nextest run $selection ;;
+        full) cargo nextest run --workspace --tests ;;
+        *) cargo nextest run $selection --tests ;;
     esac
 
 # `just test-data`, narrowed the same way. A full selection is `just test-data`

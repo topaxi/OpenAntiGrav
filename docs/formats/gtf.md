@@ -13,7 +13,7 @@ Measured 2026-08-17 on `hdfury-ps3-eu-dec.iso`, serial `BCES-00664`.
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
-    -E 'binary(gtf_ground_truth)'
+    -E 'test(/^gtf_ground_truth::/)'
 ```
 
 92 rather than higher because **nothing has been compared against the running

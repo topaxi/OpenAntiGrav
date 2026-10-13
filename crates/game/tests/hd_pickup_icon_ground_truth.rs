@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_pickup_icon_ground_truth)'
+//!     -E 'test(/^hd_pickup_icon_ground_truth::/)'
 //! ```
 //!
 //! # What only real data can say here

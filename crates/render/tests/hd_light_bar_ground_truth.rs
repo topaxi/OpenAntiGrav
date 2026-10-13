@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_light_bar_ground_truth)'
+//!     -E 'test(/^hd_light_bar_ground_truth::/)'
 //! ```
 //!
 //! The reading (`docs/formats/rcsmaterial.md`, "The start line's light bars"):
@@ -15,7 +15,7 @@
 //! `ds_pit`/`ds_wall`, the azure panels of the original's start line). The
 //! scene bound none of it, so those panels drew dark.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

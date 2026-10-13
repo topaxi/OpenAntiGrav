@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
+autotests = false
 
 # A title package is tables. Deliberately thinner than `oag-pulse`: this holds
 # what `docs/formats/pure-status.md` actually measured and nothing more, and it
@@ -24,3 +26,7 @@ oag-pulse.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

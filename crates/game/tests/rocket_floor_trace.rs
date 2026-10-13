@@ -12,7 +12,7 @@
 //! ```sh
 //! OAG_ROCKET_TRACE=hd:/data/environments/10_sebenco_climb/track.vex \
 //!   OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!   -E 'binary(rocket_floor_trace)' --no-capture
+//!   -E 'test(/^rocket_floor_trace::/)' --no-capture
 //! ```
 //!
 //! `OAG_ROCKET_TRACE` is `<title>:<track>` with `title` one of `hd` or

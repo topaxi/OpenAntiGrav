@@ -15,7 +15,7 @@
 //! page is `docs/ghidra/functions/psp-pulse-usa/ai-stats.md`; the cross-title
 //! result is `docs/formats/ai-tables.md`.
 
-mod common;
+use crate::common;
 
 use common::{outcomes, psarc_ai_files, race_class, race_outcome};
 use oag_tables::ai_race_stats::{self, ClassRace};

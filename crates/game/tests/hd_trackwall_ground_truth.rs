@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_trackwall_ground_truth)'
+//!     -E 'test(/^hd_trackwall_ground_truth::/)'
 //! ```
 //!
 //! The image has to be layer-1 decrypted first - `scripts/ps3iso.py decrypt`,

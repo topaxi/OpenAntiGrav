@@ -14,7 +14,7 @@ shared BC1-3 block math. Measured on `data/extracted/vita/PCSF00007`
 
 ```sh
 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
-    -E 'binary(gxt_ground_truth)'
+    -E 'test(/^gxt_ground_truth::/)'
 ```
 
 ## The container

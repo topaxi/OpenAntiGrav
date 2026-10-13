@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_weapon_pad_split_ground_truth)'
+//!     -E 'test(/^hd_weapon_pad_split_ground_truth::/)'
 //! ```
 //!
 //! # What this pins
@@ -38,7 +38,7 @@
 //! is what `Drawable::tint_weapon_pads` needs to cycle a
 //! pad's ready/cooling colour at all.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

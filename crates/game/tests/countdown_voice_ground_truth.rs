@@ -8,7 +8,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test countdown_voice_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game countdown_voice_ground_truth:: --run-ignored all
 //! ```
 //!
 //! # What is pinned, and against what

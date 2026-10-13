@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(start_gantry_hd_mount_ground_truth)'
+//!     -E 'test(/^start_gantry_hd_mount_ground_truth::/)'
 //! ```
 //!
 //! # What this is for, and how it differs from `crates/hd`'s own gantry test

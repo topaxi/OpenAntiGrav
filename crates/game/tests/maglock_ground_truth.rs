@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(maglock_ground_truth)'
+//!     -E 'test(/^maglock_ground_truth::/)'
 //! ```
 //!
 //! # What is being measured, and why it is not a replay

@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-pure --run-ignored all \
-//!     -E 'binary(collision_classes_ground_truth)'
+//!     -E 'test(/^collision_classes_ground_truth::/)'
 //! ```
 //!
 //! # The question

@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-omega --run-ignored all \
-//!     -E 'binary(omega_title_ground_truth)'
+//!     -E 'test(/^omega_title_ground_truth::/)'
 //! ```
 
 fn source() -> Option<String> {

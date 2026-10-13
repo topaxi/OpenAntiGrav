@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(ps2_ship_skin_ground_truth)'
+//!     -E 'test(/^ps2_ship_skin_ground_truth::/)'
 //! ```
 //!
 //! Reported from play: "on PS2 pulse, the craft alternative textures are

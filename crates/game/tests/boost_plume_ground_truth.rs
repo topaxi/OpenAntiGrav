@@ -30,7 +30,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(boost_plume_ground_truth)'
+//!     -E 'test(/^boost_plume_ground_truth::/)'
 //! ```
 //!
 //! # What this pins

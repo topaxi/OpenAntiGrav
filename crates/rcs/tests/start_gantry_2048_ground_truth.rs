@@ -9,7 +9,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --run-ignored all \
-//!     -E 'binary(start_gantry_2048_ground_truth)'
+//!     -E 'test(/^start_gantry_2048_ground_truth::/)'
 //! ```
 //!
 //! # What this reproduces, and what it does not

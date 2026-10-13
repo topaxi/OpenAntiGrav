@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game \
-//!     --test pulse_variant_titles_ground_truth --run-ignored all
+//!     pulse_variant_titles_ground_truth:: --run-ignored all
 //! ```
 //!
 //! The maintainer's ruling of 2026-10-03 is to align with the original, and the

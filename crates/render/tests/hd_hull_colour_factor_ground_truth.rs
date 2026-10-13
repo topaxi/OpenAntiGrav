@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_hull_colour_factor_ground_truth)'
+//!     -E 'test(/^hd_hull_colour_factor_ground_truth::/)'
 //! ```
 //!
 //! `diffuse_vcol`'s lit block multiplies `f[TC0]` (the vertex program's
@@ -13,7 +13,7 @@
 //! baked light, which drew `feisar_c1`'s rear housing about 3x too bright.
 //! See `docs/rendering/hd-ship-materials.md`, "Finding 3, resolved".
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 

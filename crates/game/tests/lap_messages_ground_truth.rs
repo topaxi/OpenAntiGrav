@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(lap_messages_ground_truth)'
+//!     -E 'test(/^lap_messages_ground_truth::/)'
 //! ```
 //!
 //! # What only real data can say here

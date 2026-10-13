@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(reversed_grid_ground_truth)'
+//!     -E 'test(/^reversed_grid_ground_truth::/)'
 //! ```
 //!
 //! Its own file rather than a fourth-thousand line added to `race_ground_truth.rs`,

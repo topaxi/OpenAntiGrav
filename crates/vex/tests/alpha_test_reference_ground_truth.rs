@@ -47,7 +47,7 @@ use std::path::PathBuf;
 use oag_disc::DiscImage;
 use oag_vex::vex;
 
-mod wad_walk;
+use crate::wad_walk;
 
 /// One corpus' worth of counts.
 #[derive(Debug, Default, PartialEq, Eq)]
