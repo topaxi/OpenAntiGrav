@@ -618,7 +618,8 @@ the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
 
 **The join screen** is the second way to seat people. Entry: a SPLIT SCREEN row
 under RACEBOX in the built-in `oag-extras` mod (an action, `split_screen`), on
-every title that shows the extras. `oag_input::lobby::Lobby` is the model:
+every title that shows the extras, and a tile on 2048's grid (see "Where the entry is,
+per title"). `oag_input::lobby::Lobby` is the model:
 
 | Device | Press | Does |
 | --- | --- | --- |
@@ -636,6 +637,57 @@ Per-device presses come from the backend's own press events for pads
 (`Pad::take_presses`, so a press shorter than a tick counts and two pads are told
 apart before either has a slot) and from the keyboard's newly pressed bits
 (`Controls::device_presses`).
+
+### Where the entry is, per title (2026-10-13, `split-entry-hd-2048-omega`)
+
+Walked windowed on an own Xvfb with two virtual pads (`scripts/uinput-pads.py`): menu,
+SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
+
+| Title | Where the entry is | Authored by the original? |
+| --- | --- | --- |
+| Pulse, Pure | SPLIT SCREEN row after REMIX, under RACEBOX (the `oag-extras` mod) | PS2 Pulse authors `Team SelectionSplit` and the split cameras but no join step; the row is **chosen, not measured** |
+| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's `racebox_definition.xml` (`data09`, 5,475 bytes) carries neither list; where Omega authors local split, if it does, is unread |
+| 2048 | A third extra tile, SPLIT SCREEN, under RACEBOX and REMIX in the left column of `GameModeChoice` (`oag_ui::frontend::EXTRA_TILES[2]`; click or pad); it opens the join screen, then the race (the placeholder menu has no Track or Ship Select of 2048's own) | **No.** The authored tiles are single player campaign, online campaign, ad-hoc and cross-play; 2048 ships a `SplitScreen_hud` family but its front end has no local entry. **Chosen, not measured** |
+
+HD's other multiplayer files (`multiplayer_definition.xml`, `DATA02`) are the online
+screens (`Join Game`, `Lobby`, `Network Sync`), not local. The cross-check of the lane: the
+2048 tile is **checked, differs** on Omega (its front end is HD's strip, so the row there
+is the same revealed row as HD's); the join screen's block rows are **ported** (one
+reader serves HD and Omega, the same skin numbers).
+
+**The join screen on HD and Omega** takes HD's own `<List>` geometry (origin, pitch,
+text scale, block height and gap from `oag_title::MenuList` and `ListBlocks`) with a label
+block and a value block per row, drawn through `oag_ui::menu::block` in the frame's ink, so
+it reads like HD's own RACE page and is legible on Omega's light page (white text with no
+box was invisible there). The value block is twice HD's list value width (**chosen**: a
+device's name is longer than any value HD's lists hold). Before this change the rows were
+mirrored off the strip's column (800 on a 1920 grid, the title at 194), which put the
+device column 320 units from the names and drew "PLAYER 1" over a pad's name. The hint
+goes under the rows there, and also on a skin whose row origin is ours (2048's
+placeholder menu), where it overlapped the title. Pulse and Pure are unchanged (their
+rows and title share one margin; a test pins the right edge).
+
+### Integrated GPUs (2026-10-13)
+
+The maintainer's product rule (see "Cost"): on an integrated GPU a split is offered for
+Pulse and Pure only. It is `Title::split_on_integrated_gpu` (`true` on those two, `false` on
+HD, 2048 and Omega: data on the title, no title-name branch), read by
+`oag_game::split_screen::offered(title, wgpu::DeviceType)`: only `IntegratedGpu` is gated;
+a discrete, virtual, software (lavapipe) or unknown adapter offers every title. Where it
+acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
+
+- **The menus**: `Definition::drop_split_screen` removes the row (and `trim_tiles` the 2048
+  tile) when a `Shell` is installed (`Session::drop_split_screen_row`, from the windowed
+  boot and from 2048's placeholder route; a language reload clones the trimmed
+  definition). REMIX and every other row stay.
+- **A windowed `--race --players N`** on such a title logs `--players N: split screen is
+  not offered for <title> on an integrated GPU, so one view` and runs one view
+  (`players_offered`). **Headless captures and the render bench are not gated**: they are
+  diagnostics and the Raphael numbers in "Cost" were taken that way.
+- The adapter is chosen at launch (`graphics.renderer` takes effect on a restart), so the
+  row never changes mid-run. Unit-tested over stand-in device types; no real integrated
+  adapter was walked (Xvfb offers lavapipe only), so the gate on a real iGPU is read, not
+  looked at.
 
 A split screen writes **no result and no ghost** (`records.toml` and the ghost
 store are for the one person the result is about), and it **fields opponents
@@ -735,8 +787,17 @@ does not exist: the race frames are that evidence.
   column, lap times and Zone ladder are placed by name and have not been judged on a
   real display. Per-person messages and records, and a lock that
   gates another person's fire.
-- HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
-  Select (wired, `Team Selection Player 1`/`2`) is unreachable by menu there.
+- ~~HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
+  Select is unreachable by menu there.~~ **It always had one** (the `oag-extras` row,
+  revealed under RACEBOX); walked 2026-10-13, join to `Ship Select - Player 2`. Open
+  instead: HD authors `NumberOfPlayers` (1, 2) and `SplitScreen` (horizontal, vertical) lists
+  on its RACEBOX screen, not wired (see "Where the entry is, per title"); the vertical cut
+  has no layout in `oag_render::viewport`; and the join screen's hint line on HD and Omega is
+  small (0.6 of the row scale, under the rows).
+- **Omega has no Ship Select in a split**: the 2026-10-13 walk went join, Track Select,
+  then the LOADING screen and the two-view race with both HUDs, and nobody picks a ship
+  (Omega's own Ship Select is unread, so `open_ship_picker` finds none; the seats fly the
+  settings team and the draw's picks). Where Omega authors its Ship Select is still unread.
 - A seat past the second on the PS2 (the authored page holds two) and every other
   title take Ship Select in turn; a third and later seat's pick is the same
   machinery, but only two seats were walked live.

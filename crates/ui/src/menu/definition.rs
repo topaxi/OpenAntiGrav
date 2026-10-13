@@ -492,6 +492,23 @@ impl Definition {
         }
     }
 
+    /// Drops every SPLIT SCREEN row, for a run whose adapter the title does not offer a
+    /// split on (`oag_title::Title::split_on_integrated_gpu`). Same once-before-read
+    /// timing as [`Self::drop_quit`]: the adapter is fixed for the run.
+    pub fn drop_split_screen(&mut self) {
+        for page in &mut self.pages {
+            page.retain_rows(|entry| {
+                !matches!(
+                    entry,
+                    Entry::Run {
+                        action: Action::OpenSplitScreen,
+                        ..
+                    }
+                )
+            });
+        }
+    }
+
     /// Changes what the row editing `setting` draws for its option `value`,
     /// leaving the stored value alone (the web build reads `borderless` as
     /// FULLSCREEN). Same once-before-read timing as [`Self::drop_quit`].

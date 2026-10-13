@@ -454,6 +454,51 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
 }
 
 #[test]
+fn the_split_screen_tile_is_the_third_extra_and_asks_for_the_join_screen() {
+    let tiles = || {
+        vec![
+            ExtraTile {
+                label: "RACEBOX".to_string(),
+                launch: Launch::RaceBox,
+            },
+            ExtraTile {
+                label: "REMIX".to_string(),
+                launch: Launch::Remix,
+            },
+            ExtraTile {
+                label: "SPLIT SCREEN".to_string(),
+                launch: Launch::SplitScreen,
+            },
+        ]
+    };
+    // The pad: three authored buttons, then the extras, so right five times is the third.
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(tiles());
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    for _ in 0..5 {
+        press(&mut frontend, &mut input, Button::Right);
+    }
+    press(&mut frontend, &mut input, Button::Cross);
+    assert_eq!(frontend.launch(), Some(&Launch::SplitScreen));
+    // The pointer: a tap in the third tile's rectangle, which is clear of the second's.
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(tiles());
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    let [x, y, w, h] = EXTRA_TILES[2];
+    let click = Pointer {
+        at: Some((x + w * 0.5, y + h * 0.5)),
+        moved: true,
+        clicked: true,
+        ..Pointer::default()
+    };
+    assert!(frontend.pointer(&click));
+    tick(&mut frontend, &mut input, 0);
+    assert_eq!(frontend.launch(), Some(&Launch::SplitScreen));
+}
+
+#[test]
 fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     let mut frontend = boot(0);
     frontend.set_extra_tiles(vec![ExtraTile {

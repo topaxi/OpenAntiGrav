@@ -237,3 +237,57 @@ fn the_extras_that_duplicate_a_vanilla_row_are_that_row() {
         );
     }
 }
+
+fn built_for(title: &oag_title::Title) -> Definition {
+    let extras = extras();
+    let english = english();
+    Definition::build(
+        crate::menu::BUILT_IN,
+        &english,
+        &english,
+        Some(For {
+            title,
+            updated: false,
+        }),
+        &[ModMenu {
+            id: "oag.extras",
+            text: &extras,
+        }],
+    )
+    .unwrap()
+    .0
+}
+
+fn main_row_ids(definition: &Definition) -> Vec<String> {
+    definition.pages[definition.root]
+        .meta
+        .iter()
+        .map(|meta| match (&meta.parent, &meta.id) {
+            (Some(parent), Some(id)) => format!("{parent}>{id}"),
+            (_, id) => id.clone().unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// The integrated-GPU rule drops the one row and nothing around it: REMIX stays under
+/// RACEBOX, and a definition it is not applied to still has the row.
+#[test]
+fn dropping_the_split_screen_row_leaves_every_other_row() {
+    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
+        let mut definition = built_for(title);
+        let before = main_row_ids(&definition);
+        assert!(
+            before.iter().any(|row| row == "racebox>split_screen"),
+            "{}: {before:?}",
+            title.name
+        );
+        definition.drop_split_screen();
+        let after = main_row_ids(&definition);
+        let expected: Vec<String> = before
+            .into_iter()
+            .filter(|row| row != "racebox>split_screen")
+            .collect();
+        assert_eq!(after, expected, "{}", title.name);
+        assert!(after.iter().any(|row| row == "racebox>remix"));
+    }
+}
