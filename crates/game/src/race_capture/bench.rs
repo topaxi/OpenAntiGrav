@@ -64,7 +64,7 @@ impl TickPacer {
     pub(super) fn starts_tick(&self) -> bool {
         let frame = self.frame.get();
         self.frame.set(frame + 1);
-        frame % self.frames_per_tick == 0
+        frame.is_multiple_of(self.frames_per_tick)
     }
 }
 

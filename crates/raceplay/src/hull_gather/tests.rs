@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::tests::race_with_a_grid;
+use oag_core::math::Mat4;
 use oag_core::math::Vec3;
 use oag_gameplay::PlayerInputs;
 
@@ -31,8 +32,8 @@ fn vertex(at: [f32; 3], strength: f32) -> GpuVertex {
 }
 
 /// One slot's gather with `vertices`, taken at `race`'s poses.
-fn gather(race: &Race, slot: usize, vertices: Vec<GpuVertex>) -> Gather {
-    Gather {
+fn gather(race: &Race, slot: usize, vertices: Vec<GpuVertex>) -> HullGather {
+    HullGather {
         generation: 0,
         models: (0..usize::from(race.ship_count()))
             .map(|slot| race.ship_tick_model(slot))
@@ -62,7 +63,7 @@ fn a_blend_lerps_the_vertices_and_alpha_one_is_the_current_gather() {
     );
 
     race.set_draw_alpha(0.25);
-    let drawn = blend(&race, &before, &now, 0.25).expect("both ticks hold the hull");
+    let drawn = HullGather::blend(&race, &before, &now, 0.25).expect("both ticks hold the hull");
     assert_eq!(drawn.len(), 2);
     assert_eq!(drawn[0].position, [0.25, 0.0, 0.0]);
     assert_eq!(drawn[1].position, [2.25, 0.0, 5.0]);
@@ -85,20 +86,20 @@ fn a_craft_with_no_matching_previous_hull_is_gathered_live() {
         vec![vertex([8.0, 0.0, 0.0], 0.4), vertex([8.0, 0.0, 1.0], 0.4)],
     );
     assert!(
-        blend(&race, &before, &now, 0.5).is_none(),
+        HullGather::blend(&race, &before, &now, 0.5).is_none(),
         "a different vertex count is a different hull: gathered live"
     );
 
     let empty = gather(&race, 1, Vec::new());
     assert!(
-        blend(&race, &empty, &now, 0.5).is_none(),
+        HullGather::blend(&race, &empty, &now, 0.5).is_none(),
         "the previous gather holds no hull for this slot: gathered live"
     );
 
     // A previous gather taken on some other tick is not this tick's predecessor.
     let mut stale = gather(&race, 0, vec![vertex([0.0; 3], 0.4), vertex([0.0; 3], 0.4)]);
-    stale.models[0] = stale.models[0] * Mat4::from_translation(Vec3::X);
-    assert!(blend(&race, &stale, &now, 0.5).is_none());
+    stale.models[0] *= Mat4::from_translation(Vec3::X);
+    assert!(HullGather::blend(&race, &stale, &now, 0.5).is_none());
 }
 
 /// A craft that jumps past the snap distance in one tick is drawn where it lands,
@@ -112,7 +113,7 @@ fn a_teleporting_craft_draws_its_current_gather() {
     race.tick(&PlayerInputs::none());
     assert!(race.ship_swept_from(0).is_none());
     let now = gather(&race, 0, vec![vertex([100.0, 0.0, 0.0], 0.8)]);
-    let drawn = blend(&race, &before, &now, 0.5).expect("nothing to sweep");
+    let drawn = HullGather::blend(&race, &before, &now, 0.5).expect("nothing to sweep");
     assert_eq!(drawn[0].position, [100.0, 0.0, 0.0]);
     assert_eq!(drawn[0].colour[3], 0.8);
 }
