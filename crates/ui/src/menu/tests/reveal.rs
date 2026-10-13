@@ -209,6 +209,54 @@ fn a_hidden_row_has_no_pointer_region_and_a_revealed_one_is_clickable() {
     assert_eq!(menu.page().id, "remix");
 }
 
+/// A finger has no hover: its tap is a move and a click in one tick. On a row whose
+/// attached rows are hidden, the first tap only reveals them (else RACEBOX opens
+/// with REMIX and SPLIT SCREEN unreachable), and a second tap activates.
+#[test]
+fn a_tap_on_a_row_with_hidden_attached_rows_reveals_them_first() {
+    let mut menu = revealing();
+    let skin = skin();
+    let frame = Frame {
+        ink: Some([0.4, 0.4, 0.4, 1.0]),
+        tab_selected: Some([0.54, 0.75, 0.79, 1.0]),
+        ..Frame::default()
+    };
+    assert_eq!(id(&menu), "campaign");
+    let racebox = menu.page().row_with_id("racebox").unwrap();
+    let tap_on = |menu: &mut Menu, row: usize| {
+        let regions = pointer::regions(menu, &skin, &frame, &measure);
+        let region = regions.iter().find(|r| r.row == row).expect("drawn");
+        let tap = crate::pointer::Pointer {
+            at: Some((region.rect[0] + 4.0, region.rect[1] + 4.0)),
+            moved: true,
+            clicked: true,
+            ..crate::pointer::Pointer::default()
+        };
+        menu.pointer(&tap, &regions);
+    };
+
+    tap_on(&mut menu, racebox);
+    assert_eq!(
+        menu.page().id,
+        "main",
+        "the first tap does not open RACEBOX"
+    );
+    assert_eq!(id(&menu), "racebox");
+    assert!(
+        drawn(&menu).contains(&"SPLIT SCREEN".to_string()),
+        "its rows show"
+    );
+
+    // A revealed child is one tap away.
+    let remix = menu.page().row_with_id("remix").unwrap();
+    tap_on(&mut menu, remix);
+    assert_eq!(
+        menu.page().id,
+        "remix",
+        "a revealed row activates on its first tap"
+    );
+}
+
 #[test]
 fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
     let mut menu = Menu::new(built_in());

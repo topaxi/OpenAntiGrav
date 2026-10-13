@@ -583,6 +583,15 @@ carries both players' widget sets, `docs/formats/race-setup.md`) is a camera cho
 and a per-player team pick, not a device join, so it is not what the entry below
 follows. Confidence scores do not apply.
 
+**Any seated player pauses; only they resume.** Start pauses from every seated
+device, not the keyboard's slot alone (`Controls::take_presses`): with devices seated
+a pad's presses land on its own slot, and before 2026-10-13 a Steam Deck's own Start
+did nothing in a split race (reported from play). The pause then belongs to the player
+who pressed: only their Start resumes and only their Circle leaves the race
+(maintainer's rule, 2026-10-13; `session::pause`). A pause nobody pressed for, the
+window losing focus, is anyone's to lift. A one-player race is unchanged, since every
+press is slot 0's there.
+
 **The assignment** is `oag_input::pad::Assignment`, generic over the pad's id so
 the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
 
@@ -646,7 +655,7 @@ SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
 | Title | Where the entry is | Authored by the original? |
 | --- | --- | --- |
 | Pulse, Pure | SPLIT SCREEN row after REMIX, under RACEBOX (the `oag-extras` mod) | PS2 Pulse authors `Team SelectionSplit` and the split cameras but no join step; the row is **chosen, not measured** |
-| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's `racebox_definition.xml` (`data09`, 5,475 bytes) carries neither list; where Omega authors local split, if it does, is unread |
+| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's real `racebox_definition.xml` (`data09`, 15,805 bytes) carries the same two lists (corrected 2026-10-13: the earlier "neither list" came from `scripts/psarc.py` mis-mapping PS4 paths; see [hd-frontend.md](../formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)); not wired either |
 | 2048 | A third extra tile, SPLIT SCREEN, under RACEBOX and REMIX in the left column of `GameModeChoice` (`oag_ui::frontend::EXTRA_TILES[2]`; click or pad); it opens the join screen, then the race (the placeholder menu has no Track or Ship Select of 2048's own) | **No.** The authored tiles are single player campaign, online campaign, ad-hoc and cross-play; 2048 ships a `SplitScreen_hud` family but its front end has no local entry. **Chosen, not measured** |
 
 HD's other multiplayer files (`multiplayer_definition.xml`, `DATA02`) are the online

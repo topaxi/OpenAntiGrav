@@ -148,6 +148,9 @@ impl Menu {
         let pointer = &self.scroll_gesture(pointer, regions);
 
         let hit = pointer.at.and_then(|at| hit(regions, at));
+        // Whose family was revealed before this tick's hover could move the
+        // cursor: a finger's tap arrives as a hover and a click in one tick.
+        let revealed_before = self.page().family_of(self.cursor[page]);
 
         if pointer.moved
             && let Some(region) = hit
@@ -159,7 +162,18 @@ impl Menu {
             && let Some(region) = hit
         {
             self.move_cursor(page, region.row);
+            // **A click on a row whose attached rows are hidden only reveals
+            // them** (HD's and Omega's main menu): a mouse has already revealed
+            // them by hovering, but a finger has no hover, and activating at once
+            // would open RACEBOX or OPTIONS with no way to reach the rows under
+            // it. The second tap activates. Reported from play, 2026-10-13.
+            let reveals_first = region.part == Part::Row
+                && self.reveals()
+                && !self.page().is_attached(region.row)
+                && revealed_before != region.row
+                && self.page().family(region.row).nth(1).is_some();
             match region.part {
+                Part::Row if reveals_first => {}
                 Part::Row => out.extend(self.activate()),
                 Part::StepBack => out.extend(self.adjust(-1)),
                 Part::StepForward => out.extend(self.adjust(1)),

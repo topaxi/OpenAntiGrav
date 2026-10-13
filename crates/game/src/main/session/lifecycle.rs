@@ -78,7 +78,14 @@ impl Session {
         match pause {
             Pause::Nothing => {}
             Pause::Menu => self.back(),
-            Pause::Freeze => self.paused = true,
+            Pause::Freeze => {
+                // Nobody pressed for this pause, so anyone may lift it - unless
+                // a player already holds one, which stays theirs.
+                if !self.paused {
+                    self.pause_owner = None;
+                }
+                self.paused = true;
+            }
         }
         if silences(away) {
             self.audio.set_suspended(true);

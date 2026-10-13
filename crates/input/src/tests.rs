@@ -307,6 +307,26 @@ fn a_second_slot_keeps_its_own_button_edges() {
     assert!(inputs.get(1).buttons.is_held(Button::Start));
 }
 
+/// A split race's pause: a press on a slot other than the keyboard's (a seated
+/// pad's, stood in for here by a press made on slot 1 before the keyboard moves
+/// back to slot 0) is invisible to `buttons()` and reported by `take_presses`
+/// as slot 1's, which consumes it so the next frame does not toggle again.
+#[test]
+fn take_presses_names_the_slot_the_keyboard_does_not_drive() {
+    let mut controls = Controls::without_pad();
+    controls.assignment_mut().assign_keyboard(1);
+    controls.set_key(&Key::Named(NamedKey::Space), true);
+    controls.player_snapshots();
+    controls.assignment_mut().assign_keyboard(0);
+
+    assert!(
+        !controls.buttons().is_pressed(Button::Start),
+        "the keyboard's slot never saw slot 1's Start"
+    );
+    assert_eq!(controls.take_presses(Button::Start), 0b10);
+    assert_eq!(controls.take_presses(Button::Start), 0, "consumed once");
+}
+
 #[test]
 fn an_android_pad_button_is_a_pad_press_and_hides_nothing_it_should_not() {
     let mut controls = Controls::without_pad();

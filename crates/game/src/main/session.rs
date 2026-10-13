@@ -55,6 +55,8 @@ pub(crate) use load_probe::LoadProbe;
 pub(crate) mod menus;
 #[path = "session/pacing.rs"]
 mod pacing;
+#[path = "session/pause.rs"]
+mod pause;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
@@ -314,6 +316,10 @@ pub(crate) struct Session {
     /// else. There is deliberately no pause screen behind it - see
     /// [`Session::frame`], which is the only place this is read.
     pub(crate) paused: bool,
+    /// The slot whose Start paused the race, which alone may resume or leave it;
+    /// `None` for a pause nobody pressed for. Meaningless while not paused. See
+    /// `session::pause`.
+    pub(crate) pause_owner: Option<usize>,
     /// When the next frame is due, under a frame limit.
     ///
     /// A schedule rather than a stopwatch - see

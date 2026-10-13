@@ -440,6 +440,7 @@ impl App {
             cursor_title: None,
             stalled: true,
             paused: false,
+            pause_owner: None,
             next_frame: web_time::Instant::now(),
             logged_limit: None,
             cli_foreign_track: self

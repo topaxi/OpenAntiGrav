@@ -977,8 +977,8 @@ a guess.
   [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
   **Open from it**: HD authors the local entry in RACEBOX itself (`NumberOfPlayers` 1 or 2,
   `SplitScreen` horizontal or vertical, [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut))
-  - not wired, and the vertical cut has no layout; Omega's racebox has neither list and
-  where it authors local split is unread; a real integrated adapter was not walked; the
+  - not wired, and the vertical cut has no layout; Omega's racebox has the same two lists (corrected 2026-10-13, `scripts/psarc.py` had
+  read the wrong file) and is not wired; a real integrated adapter was not walked; the
   Omega has no Ship Select in a split (join, Track Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
 
 ## Next Steps

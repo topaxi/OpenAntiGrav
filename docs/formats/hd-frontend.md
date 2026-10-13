@@ -2323,9 +2323,16 @@ chosen SPLIT SCREEN row instead (`docs/rendering/split-screen.md`, "Where the en
 per title"). Confidence 85 for the reading (the XML as shipped; the unlock meaning of the
 ids is inferred from the padlock, not seen). The online screens are a different file
 (`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`, `Network Sync`).
-**Omega: checked, differs** - its `racebox_definition.xml` (`data09`) has neither list and
-no other front-end file read names a local split row. **2048: not checkable here** - its
-touch front end has no RACEBOX screen (`docs/formats/2048-frontend.md`).
+**Omega: checked, applies, not wired** (corrected 2026-10-13) - its real
+`racebox_definition.xml` (`data09`, 15,805 bytes) has HD's `NumberOfPlayers` (y 420, with
+the padlock) and `SplitScreen` (y 470) lists with the same ids and English text, read with
+the digest-matching Rust reader (`cargo build -p oag-assets --example psarc_cat`). The
+earlier "neither list" came from `scripts/psarc.py`, which maps PS4 archive paths by
+position and returned a 5,475-byte `<PI_Grid>` file under that name; treat any Omega
+claim built on `just psarc` output as unchecked. Omega's join prompt differs:
+"PLAYER 2 PRESS OPTIONS TO JOIN". **2048: checked, differs** - its English table carries
+HD's split ids word for word (`RB_NUMP`, `RB_SPLSCR`, `FE_SHIPSEL_P1`/`P2`, `MAN_2_SPL`) but
+its touch front end has no `racebox_definition.xml` (`docs/formats/2048-frontend.md`).
 
 ## What could not be determined
 
