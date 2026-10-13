@@ -24,6 +24,18 @@ level in an earlier handover thread. This page is the first pass that opens
 the front-end files that census only named, and diffs their content against
 HD's.
 
+> **Corrected 2026-10-13 (`psarc-ps4-fix`).** This page's census and its
+> "corrupted prefix" findings were measured on the short-read extraction
+> ([psarc.md](psarc.md#block-data-location-and-the-short-read-extraction)) and
+> never re-measured on the whole one. Re-read through the digest-matching reader
+> (46,005 of 46,005 entries, no read error, no all-zero or garbage plugin file in
+> the four front-end-bearing archives): **`data00` and `data08` each carry a
+> front end of their own, not only `data09`**, `campaign2048_definition.xml` is
+> whole, and `data08` does ship `cellmode_definition.xml`. The census, the
+> clean/garbage table and the load-order facts below are replaced; each claim
+> that survived says so. The `FEGlobals`, boot-chain and colour-skin sections
+> were read off `data09` and are unaffected.
+
 ## The headline
 
 | Question | Answer | Confidence |
@@ -48,81 +60,60 @@ cargo run -p oag-game --example omega_frontend_probe -- data/extracted/ps4/omega
 `fd`/`rg` return nothing under `data/` without `--no-ignore` (`psarc.md`'s own
 warning applies here too); use `/bin/ls`, `find` or the tools above.
 
-## The census: front-end content is in two of nine archives, not spread evenly
+## The census: front-end content is in four of nine archives
 
-**Confidence 92** - this is a direct enumeration, not an inference. Of the
-nine `dataNN.psarc` archives (`omega-eu/uroot/data00`-`data04`,
-`omega-eu-patch/uroot/data05`/`data07`/`data08`/`data09`),
-**`data01`-`data04` carry zero paths under `Data/plugins/frontend/`,
-`Data/plugins/languages/` or `Data/fe/`** - checked directly, not inferred
-from the base game's five-chunk PlayGo mount
-([`psarc-mount.md`](../ghidra/functions/ps4-omega-eu/psarc-mount.md)). All
-front-end content lives in `data00` (base) and the patch's `data05`/`data07`/
-`data08`/`data09`:
+**Confidence 92** - a direct enumeration of each archive's digest-matched paths
+(`just psarc list`, the same 46,005 the Rust reader returns), re-done on
+2026-10-13. Of the nine `dataNN.psarc` archives (`omega-eu/uroot/data00`-`data04`,
+`omega-eu-patch/uroot/data05`/`data07`/`data08`/`data09`), **`data01`-`data04`
+carry zero paths under `Data/plugins/frontend/`, `Data/plugins/languages/` or
+`Data/fe/`** (confirmed). Front-end content is in `data00` (base) and the
+patch's `data05`/`data07`/`data08`/`data09`:
 
-| Archive | Package | `frontend/gui/*.xml` | `plugins/languages/*` | `Data/fe/*` (fonts/images/models) | Total entries |
+| Archive | Package | `frontend/gui/*.xml` | `plugins/languages/*` | `Data/fe/*` | Total entries |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `data00.psarc` | base | 10 | 5 | 182 | 1,492 |
-| `data05.psarc` | patch | 1 | 10 | 7 | 1,205 |
+| `data00.psarc` | base | 42 | 46 | 1,437 | 10,926 |
+| `data05.psarc` | patch | 3 | 46 | 49 | 8,205 |
 | `data07.psarc` | patch | 1 | 0 | 4 | 6 |
-| `data08.psarc` | patch | 9 | 5 | 182 | 1,786 |
+| `data08.psarc` | patch | 43 | 46 | 1,095 | 11,266 |
 | `data09.psarc` | patch | 45 | 46 | 0 | 120 |
 
-**`data00` alone is not a bootable front end.** Its 10 XML files are
-`controls_definition_ps3.xml`, `credits_text_jp.xml`, `ingame_definition.xml`,
-`manual_definition.xml`/`_jp.xml`, `minigamelist.xml`, `online_definition.xml`,
-`stats_definition.xml`, `team_selection_definition.xml`, and
-`vita/vita_ingame_definition.xml`. **No `skin.xml`, no `mainmenu_definition.xml`,
-no `racebox_definition.xml` anywhere in the base package** - checked across
-all five base archives, not just `data00`. Wipeout: Omega Collection ships as
-a base `.pkg` plus a mandatory day-one patch the way many PS4 titles do; the
-base disc's own front-end plugin is an older, partial build the patch
-supersedes wholesale, not a redundant copy the way HD's PS3 six-skin lineage
-was. `data09.psarc` is almost entirely front-end/language/plugin XML (91 of
-its 120 entries; the rest are `plugins/billboards`, `plugins/downloads`,
-`plugins/grids/grid_00`-`18.xml`, `plugins/music`, `plugins/teams`,
-`plugins/tracks` - no assets at all), and it is the only archive that carries
-the complete file: `skin.xml`, `mainmenu_definition.xml`,
-`racebox_definition.xml`, `cellmode_definition.xml`, and a brand-new
-`campaign2048_definition.xml`, none of which the base package or `data05`/
-`data07`/`data08` carry in full. `data08.psarc` carries the bulk of front-end
-*assets* (fonts, `.gnf` images, `.rcsmodel` flyers - the same 182-file count
-as `data00`, but a different, newer set of 9 XML files) and `data07.psarc` is
-a six-entry oddity: one stale `cellmode_definition.xml`, two Korean font
-pairs, and one `Zone` ship model fix.
+(The earlier table read 10 / 5 / 182 / 1,492 for `data00` and 9 / 5 / 182 / 1,786
+for `data08`: the short-read extraction's torn manifests.)
 
-### Which files read clean, per the documented block-data-location trap
+**`data00` is a bootable front end, an older build.** It carries `skin.xml`
+(30,235 bytes), `mainmenu_definition.xml` (9,797), `racebox_definition.xml`
+(15,784), `cellmode_definition.xml` (68,013), `campaign2048_definition.xml`
+(31,664), `team_selection_definition.xml` and `selection_definition.xml`; the
+earlier "no `skin.xml`, no `mainmenu_definition.xml`, no `racebox_definition.xml`
+anywhere in the base package" was **wrong** (retired), as was "`data09` is the
+only archive that carries the complete file". The three layers are nested:
 
-[`psarc.md`'s "Block data location"](psarc.md#block-data-location-and-the-short-read-extraction)
-already established a three-way split (valid / all-zero / garbage-with-real-
-bytes-elsewhere) for `.gnf`/`.vex`/`.rcsmodel`/`.rcsmaterial` on the five base
-archives. The same trap applies to these XML entries, checked directly by
-reading every `plugins/frontend/gui/*.xml` and `plugins/languages/*.xml` entry
-in all five front-end-bearing archives and classifying by where its first
-non-zero byte falls: `0` is "clean" (parses top to bottom), `all-zero` means
-every byte in the declared range is `0`, and any other offset is "garbage" -
-real, legible XML text, just not starting where the archive says the entry
-starts (the same failure `campaign2048_definition.xml` shows below).
+| Pair, over the `Data/plugins/` entries both hold | Common | Byte-identical | Only in the first | Only in the second |
+| --- | ---: | ---: | ---: | ---: |
+| `data08` vs `data09` | 117 | 93 | 0 | 3 |
+| `data00` vs `data09` | 114 | 70 | 2 | 6 |
+| `data00` vs `data08` | 114 | 71 | 2 | 3 |
 
-| Archive | frontend/gui XML | clean | garbage | languages XML | clean | garbage | all-zero |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `data00.psarc` | 10 | 8 | 2 | 5 | 1 | 2 | 2 |
-| `data05.psarc` | 1 | 1 | 0 | 10 | 2 | 3 | 5 |
-| `data07.psarc` | 1 | 0 | 1 | 0 | - | - | - |
-| `data08.psarc` | 9 | 9 | 0 | 5 | 1 | 2 | 2 |
-| `data09.psarc` | 45 | 39 | 6 | 46 | 19 | 14 | 13 |
+`data09` is the newest layer and a superset of `data08`'s plugin set: it adds
+`endrace_definition_demo.xml`, `ingame_definition_demo.xml` and
+`music/definition_demo.xml`, and the two differ in `skin.xml` (35,828 against
+41,150 bytes) and in 23 of the language `entries.xml` tables; everything else in
+the plugin tree is byte-identical (`racebox_definition.xml`, 15,805 bytes in
+both; `cellmode_definition.xml`, 69,457 in both; `campaign2048_definition.xml`,
+29,919 in both). `data08` also carries the bulk of the front-end *assets* (fonts,
+`.gnf` images, `.rcsmodel` flyers - 1,095 `Data/fe` paths, `data00` has 1,437)
+and `data07` is a six-entry oddity: one older `cellmode_definition.xml` (69,013
+bytes), two Korean font pairs and one `Zone` ship model fix. `data09` stays the
+archive this project's boot chain reads (chosen: it is the newest, not the only
+one).
 
-**`data09` reads best of all five for exactly the files this page needs**:
-`skin.xml`, `mainmenu_definition.xml`, `cellmode_definition.xml` and 36 more
-of its 45 `frontend/gui` files are clean from byte zero. Its 6 garbage
-`frontend/gui` files are `campaign2048_definition.xml`, `stats_definition.xml`,
-`selection_definition.xml`, `showunlocks_definition.xml`,
-`credits_text_eu.xml` and `endrace_definition_demo.xml` - real text recovered
-from an offset 3.5-18 KB into the declared range, never from the start. Every
-`english/definition.xml` on every archive that carries one (`data00`, `data08`,
-`data09`) is **all-zero**, not garbage - the language's own name-and-code table
-is unrecoverable from this dump on all three copies, a clean negative result
-rather than a gap in the check.
+**Every entry reads whole.** The "which files read clean" table of the earlier
+revision (garbage and all-zero counts per archive) was the extraction's
+zero-padding and is retired: all 120 `data09` entries, `data08`'s 117 plugin
+entries, `data00`'s 116 and `data05`'s 49 read, none is all-zero or starts with a
+NUL byte, and `english/definition.xml` (the language's name-and-code table) reads
+on every copy.
 
 ## `FEGlobals` is bit-identical to HD's
 
@@ -268,18 +259,19 @@ both under the unchanged `Data\Plugins\PI001\GUI\` path:
 <LoadXML><Values Src="Data\Plugins\PI001\GUI\Campaign2048_Definition.xml" SrcRel="Campaign2048_Definition.xml"></Values></LoadXML>
 ```
 
-The recovered fragment of `campaign2048_definition.xml` (real text starts at
-byte 18,269 of 29,919 - see the census above) is wall-to-wall `<CanvasLabel>`
-widgets naming actual 2048 events by their original titles - `"Arena Speed
-Lap - Super P"`, `"Mall Speed Lap - Flash"`, `"Cathedral..."` - the same
-`linkedevent` attribute 2048-frontend.md documents. **This page did not trace
-which screen inside `campaign2048_definition.xml` `Cell Selection 2048`
-actually redirects to** - the file's own opening `<Screen>`/`<FE3DCanvas>`
-tags sit inside the corrupted, unreadable prefix (bytes 0-18,268 are zero),
-so the `<CanvasLabel>` fragment's parent element is not visible in this
-extraction. Confidence 80 for "the file exists, is loaded, and carries 2048's
-own map vocabulary"; the exact wiring from `Cell Selection 2048` into it is
-inference from adjacency and naming, not a traced `goto`.
+`campaign2048_definition.xml` (29,919 bytes in `data08` and `data09`, 31,664 in
+`data00`) is whole (corrected 2026-10-13; the earlier "real text starts at byte
+18,269" was the short-read extraction). It opens with a bare `<Screen>` holding
+the `ScreenTitle` text (`FE_RC`), then one `<Screen type="Campaign2048"
+name="Cell Selection 2048" DefaultPrevious="Grid Selection 2048">` with a
+`Flyer` and wall-to-wall `<CanvasLabel>` widgets naming actual 2048 events by
+their original titles - `"Arena Speed Lap - Super P"`, `"Mall Speed Lap - Flash"`,
+`"Cathedral..."` - the same `linkedevent` attribute 2048-frontend.md documents.
+So the screen `Cell Selection 2048` lives in this file, typed `Campaign2048`
+(its own screen type, not HD's `CellSelection`), and its back target is `Grid
+Selection 2048`. Confidence 85 for the file, its load and the screen's name,
+type and back target (read, not traced through `skin.xml`'s `<LoadXML>`
+consumer in the executable).
 
 **2048's *other* own vocabulary - `NEWGUI`, `GameModeChoice`, standalone
 `FE3DCanvas` screens - survives too, but as a live, separately-scoped
@@ -351,12 +343,10 @@ data/plugins/frontend/gui/campaign2048_definition.xml: 0 screens, 0 globals, 0 L
 
 `skin.xml`, `mainmenu_definition.xml` and `cellmode_definition.xml` parse
 clean with this project's existing, unmodified `Screens` reader - no fork,
-no HD-only assumption breaks. `campaign2048_definition.xml` parses to zero
-screens, exactly as the byte-level census predicts: its real content starts
-past the file's own corrupted prefix, so there is no top-level `<Screen>`
-element in what this reader is handed. **This is not a parser gap** - handing
-the same reader the recoverable *fragment* would still find no `<Screen>`
-open tag, because the corruption eats it.
+no HD-only assumption breaks. `campaign2048_definition.xml` parsed to zero
+screens in that 2026-09-21 run, on the short-read extraction; the file now reads
+whole and opens with `<Screen>` (above), so the last line of the output block is
+retired and the probe was not re-run for this correction.
 
 What this does **not** show: a full `oag_title::MenuSkin` for Omega. That
 needs an `oag-omega` title crate with its own `FrontEnd`/archive-candidate
@@ -372,23 +362,22 @@ question below by construction (chosen, not measured). `just play omega`
 boots and stops on `Language Selection`; see
 [`omega-status.md`](omega-status.md) for what draws, what does not, and why
 racing stays out of scope. This page's own open questions - which archive
-really wins a duplicate path, `campaign2048_definition.xml`'s corrupted
-prefix, `StudioLiverpool_fury.bik`'s absence - are all still open; the crate
-answers "does this project's parser and archive layer work at all", not any
-of those.
+really wins a duplicate path and `StudioLiverpool_fury.bik`'s absence - are still
+open (`campaign2048_definition.xml`'s "corrupted prefix" was the extraction, and is
+resolved above); the crate answers "does this project's parser and archive layer
+work at all", not either of those.
 
 ## Load order is not settled
 
 **No confidence assigned - this is the one open question HD's own equivalent
 took an emulator capture to answer**, and no PS4 emulator capture exists in
-this project. Two independent copies of `cellmode_definition.xml` exist
-across the patch's own four archives - `data07.psarc`'s (garbage: real text
-recovered from byte 35,404 of 69,013) and `data09.psarc`'s (clean from byte
-zero, 69,457 bytes, five screens including `Grid Selection 2048`) - and they
-are **not** byte-identical even past the corruption (`data07`'s recovered
-tail differs from `data09`'s at every line checked). `data08.psarc` also
-carries no `cellmode_definition.xml` at all, and `data05.psarc` carries
-neither.
+this project. Four copies of `cellmode_definition.xml` exist across the
+nine archives (corrected 2026-10-13, re-read whole): `data00`'s (68,013 bytes),
+`data07`'s (69,013), and `data08`'s and `data09`'s, which are **byte-identical**
+(69,457 bytes, five screens including `Grid Selection 2048`). `data07`'s older copy
+differs from them (the `FE_CAMPAIGNLIST` row is not `IsHidden`, and the flyer
+`Values` are in 1280x720 pixel units against 1920x1080 and `orthoScaleX/Y/Z`);
+`data05.psarc` carries none.
 
 [`psarc-mount.md`](../ghidra/functions/ps4-omega-eu/psarc-mount.md)'s own
 reading of `eboot.bin` explains the **base package's** five-chunk PlayGo
@@ -406,9 +395,10 @@ tooling - `oag-trace`'s emulator list is PCSX2/PPSSPP/RPCS3, no PS4 backend).
 
 The circumstantial case for `data09` being the live copy, same shape as the
 evidence that once pointed at HD's `DATA00` before its own capture upgraded
-it: `data09` is the only archive with a complete plugin/language set (91 of
-120 entries are `plugins/*`, nothing else); it reads clean far more often
-than the other four (see the census table above); and it is the
+it: `data09` holds the whole plugin/language set in 120 entries, nothing else, and
+it is a superset of `data08`'s plugin tree (corrected 2026-10-13: `data00` and
+`data08` also carry a front end, and nothing here reads "clean far more
+often" any more, every entry reads); and it is the
 highest-numbered patch archive, consistent with (but not proof of) "newest
 layer wins" the way HD's own `DATA00`-loads-last turned out to be. This is
 **inference from geometry alone, explicitly the caution `hd-frontend.md`'s
@@ -419,14 +409,10 @@ guessed at 50-60 to look decisive.
 
 ## Open
 
-- **Which archive wins when a path is duplicated across the patch's own four
-  archives** - `cellmode_definition.xml` in `data07` vs `data09` is the
-  concrete, checkable instance; needs either the patch `eboot.bin`'s own FIOS
+- **Which archive wins when a path is duplicated across the archives** -
+  `cellmode_definition.xml` in `data07` vs `data09` (they differ), or `skin.xml` in
+  `data00`, `data08` and `data09` (three sizes), is the concrete, checkable instance; needs either the patch `eboot.bin`'s own FIOS
   logic or a boot capture, neither done here.
-- **`campaign2048_definition.xml`'s own opening screen/`FE3DCanvas` block** -
-  unreadable in this dump (block-location corruption eats bytes 0-18,268 of
-  29,919); what screen name it declares and what widget wraps the recovered
-  `<CanvasLabel>` fragment is unknown.
 - **Whether `StudioLiverpool_fury.bik` exists anywhere in Omega under a
   different name**, or the Fury/base distinction lost its separate movie
   entirely - not checked past "the old name isn't in any path listing".
@@ -449,13 +435,8 @@ guessed at 50-60 to look decisive.
 - A PS4 emulator (if one is ever added to this project's toolchain) doing for
   Omega what RPCS3 did for HD - settle load order and the boot chain's
   `Provenance` in one pass, per [ADR-0025](../architecture/adr/0025-a-boot-chain-carries-its-provenance.md).
-- Extracting past `campaign2048_definition.xml`'s corrupted prefix - either a
-  different extraction/repack of the same `.pkg` pair, or a targeted look at
-  whether the corruption pattern the census found (real bytes some KB into
-  the declared range) has a fixed relationship to the entry's own block table
-  that `oag_formats::psarc` could compensate for generically, the way the
-  short-stored-block fix in `psarc.md` did for a different symptom of the same
-  family.
+- ~~Extracting past `campaign2048_definition.xml`'s corrupted prefix~~ - there was no
+  corruption in the archive; the short-read extraction caused it (2026-10-13).
 
 ## See also
 

@@ -84,7 +84,10 @@ corrupt here), not a decoder gap.
 **Fonts are unread too, on the same terms.** `Data\FE\Fonts\helv.fnt`/
 `helvb.fnt` (HD's own spellings) do not resolve on Omega under either
 name checked this lane; whether Omega ships a font under a different name or
-a different container was not searched.
+a different container was not searched. **Superseded 2026-10-13**: on the corrected
+extraction both ship in `data00.psarc` (`Data/fe/fonts/helv.fnt` 530,304 bytes,
+`helvb.fnt` 1,054,592, with `.gnf` atlases) and in `data08.psarc`, and the font
+sections below read them; the "do not resolve" came from the short-read copy.
 
 **Circuits: every one ships a `track.vex` with a readable `WO Track`, and its
 baked outputs under a `.final` infix.** Across the whole package pair, **39 of

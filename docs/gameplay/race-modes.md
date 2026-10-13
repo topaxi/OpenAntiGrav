@@ -1036,7 +1036,8 @@ odds; that case does not exist, so no cross-title read or restated constant was 
 
 **Census** (`scripts/psarc.py list` over every `.psarc` under `data/extracted/ps3`, `ps4` and
 `vita`: 7 HD archives, 9 Omega, 9 for 2048's two pressings with patches and DLC, 25 in all;
-Omega's per-copy sizes were not listed, `psarc.py` reads a PS4 `data00` as one entry):
+Omega's sizes were filled in on 2026-10-13 from `data00`'s digest-matched entries, and the
+`AllWeapons`/`EliminatorAIStats` cells re-read there: both held, so the Omega rows are confirmed):
 
 | Where | Copy | Bytes | `AllWeapons` | `EliminatorAIStats` |
 | --- | --- | --- | --- | --- |
@@ -1044,8 +1045,8 @@ Omega's per-copy sizes were not listed, `psarc.py` reads a PS4 `data00` as one e
 | HD `DATA02.PSARC` (the base game's) | `weaponaistats.xml` | 1,046 | yes | no |
 | 2048 EU `PCSF00007` `data.psarc` | `WeaponAIStats.xml`, `WeaponAIStats2048.xml` | 1,369 each | yes | yes, both |
 | 2048 US `PCSA00015` `data.psarc` | the same two | 1,369 each | yes | yes, both |
-| Omega `data00.psarc` | `weaponaistats.xml` (named by `oag_omega::TITLE`) | n/a | yes | **no** |
-| Omega `data00.psarc` | `WeaponAIStats2048.xml` | n/a | yes | yes |
+| Omega `data00.psarc` | `weaponaistats.xml` (named by `oag_omega::TITLE`) | 1,046 | yes | **no** |
+| Omega `data00.psarc` | `WeaponAIStats2048.xml` | 1,369 | yes | yes |
 
 Every other archive (HD `DATA01`, `03` to `06`, Omega `data01` to `04` and the patch's `data05`,
 `07`, `08`, `09`, the 2048 patches and DLC) holds none. `HD DATA00` and `DATA02` both being listed

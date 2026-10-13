@@ -15,7 +15,7 @@ A path is matched to its entry by `MD5(path.upper())`, never by position: on the
 PS4 Omega Collection family the entry table is digest-ordered and the manifest
 is not, so "entry n + 1 is manifest line n" holds for 3 of `data00`'s 10,926
 entries. This is the rule `oag_formats::psarc::match_paths_to_entries` applies,
-and `crates/assets/tests/{hd,omega}_psarc_ground_truth.rs` hold the two readers
+and `crates/assets/tests/psarc_script_ground_truth.rs` holds the two readers
 to the same bytes. See docs/formats/psarc.md.
 
 Nothing is extracted to read a table of contents: the archive is decompressed
