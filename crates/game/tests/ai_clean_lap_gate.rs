@@ -502,7 +502,10 @@ const BASELINE: &[Row] = &[
     Row { circuit: "03_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1940), contact_ticks: 0 },
     Row { circuit: "02_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1728), contact_ticks: 290 },
     Row { circuit: "10_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1904), contact_ticks: 0 },
-    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1554), contact_ticks: 0 },
+    // 2026-10-13, 0 -> 16 contact ticks: the lone Ace overshoots off the road at
+    // idx 318, is airborne-reset to idx 89 and scrapes on the way back. A
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    Row { circuit: "05_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1554), contact_ticks: 16 },
     Row { circuit: "04_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1768), contact_ticks: 0 },
     Row { circuit: "09_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(2094), contact_ticks: 0 },
     Row { circuit: "14_Track", class: "RAPIER", status: Status::CleanLap, lap_ticks: Some(1959), contact_ticks: 141 },

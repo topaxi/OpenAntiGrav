@@ -24,12 +24,17 @@ Basilico Black is `01_Track`.
 
 ## Open
 
-- **Our reset lands differently.** `Race::respawn` puts the craft at rest on the
-  racing line; the original's state-3 update (`FUN_0883ff6c`) puts it at the
-  corridor midpoint five up via `AiTrack_LocatePosition` from `craft+0xaf0` and
-  launches it at `FUN_0883db20(+0x78c * 0.25 + 50)` (53.5 u/s measured), and for
-  the player charges `min(5, shield - 1)` of shield. Same for a `Reset` contact,
-  which enters the same state. Confidence 50 on what the `+0x78c` term is.
+- ~~**Our reset lands differently.**~~ Ported 2026-10-13 (branch
+  `jump-13-flight`) for `Reset` contacts and the airborne clock
+  ([reset-relocation.md](../../docs/ghidra/functions/psp-pulse-usa/reset-relocation.md)):
+  the oldest of seven grounded crumbs, never on a record with `flags` bit 0, the
+  width midpoint five up, launched at a quarter of the last grounded speed plus
+  50 (`+0x78c` is that speed, settled). Still open from it:
+  - the player's `min(5, shield - 1)` shield charge;
+  - the Eliminator's state-8 return, which reads the same ring.
+
+  The ring was read live by `pulse-13-capture` the same day: nine resets of
+  nine on the oldest crumb, speed exact. Names are applied at 90/92.
 - **The distance trigger** (`0x08841cec`: more than 200 units from `craft+0xaf0`
   for 0.5 s) is read, not ported; the invented `LostCircuit`/`OffTrack` dwells
   stand where it would. Porting it would retire two inventions and needs its
@@ -52,11 +57,10 @@ Basilico Black is `01_Track`.
 
 ## Next Steps
 
-1. Port the reset state's relocation (corridor midpoint, five up, launch speed)
-   and the player's shield charge, for `Reset` and airborne alike; re-run the
-   lip same-pose trial, which should then match the original's relocation too.
-2. Read `+0x78c` (`body+0x398` written in `FUN_088418e0`) to settle whether
-   `FUN_0883db20`'s first argument is a launch speed.
+1. ~~Port the reset state's relocation~~ (done 2026-10-13; the same-pose trial
+   now leaves at 53.6 u/s against the original's 53.5; the ring was verified
+   live). Left: the player's shield charge.
+2. ~~Read `+0x78c`~~: `|velocity|` latched on every fully grounded frame.
 3. Log a Vertica Single Race through the join at 1196 with the dev-unlock byte.
 4. Compare the original's `01_Track` grid from the log above against
    `grid_poses`.

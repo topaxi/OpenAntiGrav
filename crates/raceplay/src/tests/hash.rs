@@ -80,6 +80,25 @@ fn both_recovery_dwells_move_the_race_hash() {
     );
 }
 
+/// Where a reset would put a craft back is race state: a crumb laid a tick
+/// apart, or a speed latched differently, is a reset somewhere else at a
+/// different speed (`crate::breadcrumbs`).
+#[test]
+fn the_reset_crumbs_move_the_race_hash() {
+    let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
+    race.tick(&PlayerInputs::none());
+    let before = race.sim.state_hash();
+    race.sim.breadcrumbs[1].push(Vec3::new(500.0, 0.0, 0.0));
+    let after_push = race.sim.state_hash();
+    assert_ne!(before, after_push, "a crumb was invisible to the gate");
+    race.sim.breadcrumbs[1].lay(Vec3::ZERO, 80.0, 1.0, crate::breadcrumbs::NO_CRUMB_FLAG);
+    assert_ne!(
+        after_push,
+        race.sim.state_hash(),
+        "the latched speed was invisible to the gate"
+    );
+}
+
 /// Two races from one seed driven with identical input agree on the whole
 /// hash, tick for tick - not only at the end. A run that diverged and
 /// converged again would pass a final-state comparison.

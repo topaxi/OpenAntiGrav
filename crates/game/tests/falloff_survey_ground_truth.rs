@@ -890,7 +890,13 @@ fn shove_trial_trace() {
     } else {
         throttle
     };
-    for tick in 0..200 {
+    // `OAG_TRIAL_TICKS=<n>` runs longer than the 200 ticks the sweep uses, to
+    // reach the airborne reset (tick 372 in the original's 20 u/s coast).
+    let ticks = std::env::var("OAG_TRIAL_TICKS")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(200);
+    for tick in 0..ticks {
         let ship = &race.sim.world.ships[0];
         let position = ship.physics.body.position;
         let lat = race.spline().nearest(position).map_or(0.0, |(_, s, _)| {
@@ -904,7 +910,7 @@ fn shove_trial_trace() {
             lat / half.max(1e-3)
         });
         println!(
-            "TRACE|{tick}|{:.3},{:.3},{:.3}|{:.1}|{lat:+.2}|air {:.2}|up {:.2},{:.2},{:.2}",
+            "TRACE|{tick}|{:.3},{:.3},{:.3}|{:.1}|{lat:+.2}|air {:.2}|up {:.2},{:.2},{:.2}|sample {}|respawns {}",
             position.x,
             position.y,
             position.z,
@@ -913,6 +919,10 @@ fn shove_trial_trace() {
             ship.physics.body.up().x,
             ship.physics.body.up().y,
             ship.physics.body.up().z,
+            race.spline()
+                .nearest(position)
+                .map_or(0, |(index, _, _)| index),
+            race.respawns(),
         );
         race.tick(&PlayerInputs::single(input));
     }

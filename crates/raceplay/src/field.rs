@@ -546,6 +546,10 @@ impl Race {
                 &self.sim.collision,
                 self.sim.dt,
             );
+            self.lay_crumb(
+                slot,
+                self.ai_sample_for(slot, index).map(|sample| sample.flags),
+            );
             if lane_slot.is_some() {
                 self.original_ai_contacts(slot, &evaluated.wall);
             }
@@ -640,7 +644,7 @@ impl Race {
             let reset = self.reset_zone_touched(slot, &env, position);
             let airborne = self.airborne_too_long(slot);
             if alive && (lost || stalled || airborne || reset) {
-                self.sim.last_respawn_cause[slot] = Some(if lost && self.beneath_the_line(slot) {
+                let cause = if lost && self.beneath_the_line(slot) {
                     respawn::RespawnCause::Beneath
                 } else if lost {
                     respawn::RespawnCause::LostCircuit
@@ -650,8 +654,15 @@ impl Race {
                     respawn::RespawnCause::Airborne
                 } else {
                     respawn::RespawnCause::ResetZone
-                });
-                self.respawn(slot, last_good);
+                };
+                self.sim.last_respawn_cause[slot] = Some(cause);
+                // The two triggers the original has go through its reset
+                // state's relocation; this project's own dwells keep theirs.
+                if cause.is_the_originals() {
+                    self.reset(slot, last_good);
+                } else {
+                    self.respawn(slot, last_good);
+                }
             } else if self.sim.respawn_cooldown[slot] == 0 {
                 self.sim.respawns_in_a_row[slot] = 0;
             }
