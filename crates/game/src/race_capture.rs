@@ -177,6 +177,9 @@ pub struct CaptureOptions {
     /// different way is not necessarily the same phase. See
     /// [`oag_post::jitter`].
     pub camera_jitter: bool,
+    /// `--draw-alpha`: how far between the last two ticks the captured frame
+    /// is drawn, `1.0` the tick itself. See `oag_raceplay::between_ticks`.
+    pub draw_alpha: f32,
     /// Force the exhaust into the state it holds this many seconds after a
     /// speed pad entry, at saturated intensity, before the frame is drawn.
     ///
@@ -620,8 +623,8 @@ pub fn capture(
     // **One tick per drawn frame, so every frame is the tick exactly.** A
     // capture draws at draw alpha 1.0, the picture it drew before
     // `race::between_ticks` existed, bit for bit; only the window draws
-    // between ticks. Spelled out rather than left to the default so that
-    // changing it is a visible edit here.
+    // between ticks, and `--draw-alpha` (its default 1.0) asks for one such
+    // frame at the end. Spelled out rather than left to the default.
     race.set_draw_alpha(1.0);
 
     // The primer frame a motion blur capture needs: the scene at the
@@ -697,6 +700,9 @@ pub fn capture(
         scene.rebind_zone_art(&device, &queue);
     }
     let spectrum = spectrum::zone_spectrum(options, audio);
+    // The captured frame, and only it, at `--draw-alpha`: the primer above
+    // drew its tick exactly, and every tick since put 1.0 back.
+    race.set_draw_alpha(options.draw_alpha);
     oag_gpu::perfprobe::reset();
     oag_gpu::perfprobe::mark("frame-start");
     // `OAG_RENDER_BENCH` and `OAG_RENDER_GPU_BENCH`: see `bench`. `cfg!`

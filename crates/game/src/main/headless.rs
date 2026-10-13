@@ -633,6 +633,7 @@ pub(crate) fn run_race(
                 model_detail: render_profile.model_detail,
                 texture_detail: render_profile.texture_detail,
                 camera_jitter: cli.camera_jitter,
+                draw_alpha: cli.draw_alpha,
                 pose_boost: cli.pose_boost,
                 pose_intensity: cli.pose_intensity,
                 pose_speed: cli.pose_speed,

@@ -744,6 +744,14 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) camera_jitter: bool,
 
+    /// With `--race --screenshot`, draw the captured frame this far between
+    /// the last two ticks, `0.0..=1.0`, as a window does between frames.
+    /// `1.0`, the default, is the tick itself. A verification aid: a few
+    /// captures at the same `--ticks` and rising alphas are the frames a
+    /// 240 Hz window draws inside one tick. See `oag_raceplay::between_ticks`.
+    #[arg(long, default_value_t = 1.0, requires = "screenshot")]
+    pub(crate) draw_alpha: f32,
+
     /// How many samples the rasterizer takes: off or 4x.
     ///
     /// Overrides `[render_profiles.<title>] msaa` for *every* title, for this

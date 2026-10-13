@@ -472,6 +472,8 @@ pub fn run(
                 pvs_culling: options.settings.graphics.pvs_culling,
                 anim_seconds: options.anim_seconds,
                 camera_jitter: options.camera_jitter,
+                // The tick exactly, as every capture draws it.
+                draw_alpha: 1.0,
                 boost_fov_kick: options.settings.graphics.boost_fov_kick,
                 camera_view: options.settings.graphics.camera_view,
                 msaa: render_profile.msaa,
