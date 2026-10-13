@@ -198,13 +198,18 @@ back on the main menu.
 `Controls` -> `Race::tick` path with the keyboard assigned to slot 1: slot 1's
 craft turns and slot 0's does not, and the same key on slot 0 does the reverse.
 A pad reading on slot 1 reaching slot 1's snapshot, and the lobby's and the
-assignment's rules, are `oag-input`'s unit tests. Not checked, and the lead's to run with two pads: the
-session wiring has no test of its own (the `seat_split_race` call in the race
-build, the merge on returning to the menus, the lobby dropping on Track Select's
-back), and the windowed walk only reached Track Select with the keyboard seated
-alone. To run: `just play data/images/pulse-psp-eu.chd --no-audio`, SPLIT SCREEN,
-press cross on each pad, START, pick a track and ship, and steer each pad; then
-leave the race and check a pad moves the menu cursor again.
+assignment's rules, are `oag-input`'s unit tests. The session wiring (the
+`seat_split_race` call in the race build, the merge on returning to the menus, the
+lobby dropping on Track Select's back, the front end's seat picks reaching
+`Options::seat_picks`) has no test of its own: it was **walked live on 2026-10-13**
+with two virtual pads (`scripts/uinput-pads.py`, below) on PSP and PS2 Pulse EU in an
+Xvfb, through the join screen, Track Select, each Ship Select and a race, and a
+change that dropped the `launch_from_settings` copy of the picks would fail no test.
+The walk, to repeat it: start an Xvfb, `oag-game data/images/pulse-psp-eu.chd
+--no-audio` windowed under the member-rules env prefix, and drive the pads with
+`uv run --with evdev python3 scripts/uinput-pads.py < fifo` (commands in its
+docstring): `a press cross`, `b press cross` at the join screen, `a press start`, and
+on.
 
 ## Ship Select per seat
 
@@ -234,11 +239,15 @@ keep every other team once; two people may take the same team (**chosen**). A se
 handling is its team's own (`opponent_handling[slot]`), not slot 0's. `--seat-team
 TEAM[:SKIN]` (repeatable) is the headless way to set them.
 
-Verified live on PS2 Pulse EU and PSP Pulse EU in an Xvfb with two virtual pads on
-uinput: each pad moved only its own list, a confirm held and a held seat ignored the
-other pad, the mouse clicked a half's arrows and craft and its wheel stepped the half it
-was over, and the race that followed flew each seat's pick (Qirex and EG-X on PSP, Qirex
-and AG Systems on PS2).
+Verified live on PS2 and PSP Pulse EU in an Xvfb with two virtual pads
+(`scripts/uinput-pads.py`): each pad moved only its own list, a confirm held and a held
+seat ignored the other pad, back on the second seat while the first held took both to
+Track Select with the hold dropped, the mouse clicked a half's arrows and craft and its
+wheel stepped the half it was over. The race that followed showed the pad-picked
+Qirex and EG-X on PSP (live, both views); the PS2 pair's AG Systems is the headless
+`--players 2 --team Qirex --seat-team AG_Systems` race (the live PS2 frame cut it off
+at the view's edge). Both seats confirming launches at once, so a "both done" still
+does not exist: the race frames are that evidence.
 
 ## Open
 

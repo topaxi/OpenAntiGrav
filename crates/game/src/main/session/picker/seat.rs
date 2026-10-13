@@ -235,6 +235,22 @@ impl Session {
         }
     }
 
+    /// An unconfirmed seat leaves the shared page: both people go back to Track
+    /// Select, as the first seat's back does on a page of its own. Run from the
+    /// second seat directly, because the first seat's back handler would read the
+    /// *first* seat's hold.
+    pub(super) fn leave_shared(&mut self) {
+        if let Stage::Menu(stage) = &mut self.stage {
+            stage.picker = None;
+            stage.partner = None;
+        }
+        self.split_picks.clear();
+        self.campaign_difficulty.take();
+        self.campaign_ai_skill_scale = None;
+        self.abandon_tournament();
+        self.open_track_picker();
+    }
+
     /// Back on a seat that had confirmed on the shared page: take the confirm back.
     pub(super) fn unlock_shared(&mut self, partner: bool) {
         let Stage::Menu(stage) = &mut self.stage else {
@@ -272,9 +288,7 @@ impl Session {
                 if locked {
                     self.unlock_shared(true);
                 } else {
-                    // An unconfirmed seat leaving takes the page back to Track
-                    // Select, for both people - the same as the first seat does.
-                    self.handle_picker(Event::Back);
+                    self.leave_shared();
                 }
             }
         }
