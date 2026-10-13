@@ -1,4 +1,5 @@
 use super::*;
+use oag_ui::menu::Frame;
 
 fn skin() -> Skin {
     Skin::new(
@@ -32,7 +33,7 @@ fn centre(skin: &Skin, index: usize) -> (f32, f32) {
     let layout = Layout::new(skin);
     (
         layout.width / 2.0,
-        layout.rows_y + (index as f32 + 0.5) * layout.line,
+        layout.top + (index as f32 + 0.5) * layout.line,
     )
 }
 
@@ -131,7 +132,7 @@ fn hover_follows_a_move_and_an_idle_pointer_does_nothing() {
 fn the_body_names_every_seat_and_its_device() {
     let join = screen(2);
     let texts: Vec<String> = join
-        .body(&skin())
+        .body(&skin(), &Frame::default())
         .into_iter()
         .filter_map(|draw| match draw {
             Draw::Text { text, .. } => Some(text),
@@ -149,7 +150,7 @@ fn the_body_names_every_seat_and_its_device() {
 }
 
 fn right_aligned_x(join: &Join, skin: &Skin) -> f32 {
-    join.body(skin)
+    join.body(skin, &Frame::default())
         .into_iter()
         .find_map(|draw| match draw {
             Draw::Text {
@@ -162,28 +163,93 @@ fn right_aligned_x(join: &Join, skin: &Skin) -> f32 {
         .expect("a seated row has a device column")
 }
 
-/// HD's rows start at 800 on a 1920 grid and its title at 194. Mirroring the rows'
-/// edge put the device column 320 units from the name, so "PLAYER 1" and a pad's
-/// name drew over each other; the column ends at the title's margin instead. Omega's
-/// skin carries HD's numbers to the digit (`oag_omega::frontend::MENU_SKIN`).
-#[test]
-fn on_hds_grid_the_device_column_clears_the_player_names() {
-    let skin = Skin::new(
+fn hd_skin() -> Skin {
+    Skin::new(
         oag_hd::frontend::FRONT_END.menu.unwrap(),
         oag_display::space::Space::HD,
         33.0,
-    );
-    let right = right_aligned_x(&screen(2), &skin);
-    let (title_x, _, _) = skin.title_at();
+    )
+}
+
+fn block_frame() -> Frame {
+    let placed = |x: u32, width: u32, height: u32| oag_ui::frontend::Placed {
+        x,
+        y: 0,
+        width,
+        height,
+        quad_extent: None,
+        blend: None,
+    };
+    Frame {
+        ink: Some([0.4, 0.4, 0.4, 1.0]),
+        tab_selected: Some([0.54, 0.75, 0.79, 1.0]),
+        blocks: Some(oag_ui::menu::block::BlockArt {
+            frame: placed(0, 64, 64),
+            fill_alpha: 110.0 / 255.0,
+            solid_alpha: 1.0,
+            cursor: None,
+            arrow: None,
+            fury: false,
+        }),
+        ..Frame::default()
+    }
+}
+
+/// HD's rows used to be mirrored off the strip's column (800 on a 1920 grid) with the title's
+/// margin at 194, which left 320 units between a name and its seat's device, so "PLAYER 1"
+/// and a pad's name drew over each other. The rows now take HD's own `<List>` geometry. Omega's
+/// skin carries HD's numbers to the digit (`oag_omega::frontend::MENU_SKIN`).
+#[test]
+fn on_hds_grid_the_device_column_clears_the_player_names() {
+    let skin = hd_skin();
+    let layout = Layout::new(&skin);
+    let list = skin.list().unwrap();
     assert!(
-        (right - (1920.0 - title_x)).abs() < f32::EPSILON,
-        "ends at the title's margin, got {right}"
+        (layout.text_x - list.x).abs() > 1.0,
+        "the label is inside its block"
     );
-    // A 33-unit face at 20 characters is roughly 400 units; the old gap was 320.
+    // "XBOX 360 CONTROLLER" at the list's own text scale is about 350 units.
+    assert!(layout.right_x - layout.text_x > 700.0);
     assert!(
-        right - skin.menu_x() > 800.0,
-        "{} units between the columns",
-        right - skin.menu_x()
+        layout.right_x < layout.width - 194.0,
+        "inside the title's margin"
+    );
+    assert!((layout.line - list.pitch).abs() < f32::EPSILON);
+}
+
+/// A label and a value block per row, except BACK which has no value; and the same title with
+/// a frame that has no block art (or a PSP title) draws none.
+#[test]
+fn a_title_that_draws_blocks_boxes_its_rows_and_a_bare_one_does_not() {
+    let hd = hd_skin();
+    let join = screen(2);
+    assert!(join.blocks(&hd, &Frame::default()).is_empty());
+    let with = join.blocks(&hd, &block_frame());
+    // 2 seats + empty + START + BACK = 5 rows, 4 of them with a value block.
+    let plain = {
+        let mut one = Vec::new();
+        let frame = block_frame();
+        let art = frame.blocks.unwrap();
+        let block = oag_ui::menu::block::Block {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 40.0,
+            color: [1.0; 4],
+            landing: false,
+        };
+        oag_ui::menu::block::draw(&block, &art, (1.0, 1.0), &mut one);
+        one.len()
+    };
+    assert_eq!(
+        with.len(),
+        plain * 9,
+        "{} draws for nine blocks",
+        with.len()
+    );
+    assert!(
+        screen(2).blocks(&skin(), &block_frame()).is_empty(),
+        "no list on a PSP skin"
     );
 }
 
