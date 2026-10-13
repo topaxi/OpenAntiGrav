@@ -727,17 +727,27 @@ gap**, moving along the track at speed 66 to 70 (skill level 0) or 72.6 to 76.1
 one point whatever the fall row (38 to 61); different craft and laps differ by a
 few units. It is not a pose the craft held earlier (the nearest earlier sample is
 about 12 units away, passed 2.5 to 4.4 s before at 130 to 170 u/s), so the rule
-is a point on the line about 280 units behind plus a separately set speed.
-Confidence 50 for the rule, 85 for the numbers. *The player in a Time Trial*,
-teleported into the gap with `scripts/psp-fall-log.py` (not a legitimate
-approach, so this may not be the natural rule): about one frame (0.98 to 1.1
-frames between hits), and it reappears **far behind, on the start straight**, line
-rows 1257 to 1379 ((-403.3, 7.5, -302.3), (-363.6, 7.8, -302.3), (-282.4, 8.0,
--303.8), (-240.9, 8.6, -306.3), (-220.0, 8.0, -308.5)), drifting later across the
-session, **identical for falls at rows 25 and 35 and after sitting at rows 2500,
-1800 and 600**, so it is not the nearest line sample to the fall. Heading is
-15 to 27 degrees off the line tangent in two of five cases; speed 50 to 65 along
-the heading in four of nine, zero in the rest. Unresolved: what the rule keys on.
+is the crumb ring below.
+Confidence 85 for the numbers; the rule is the crumb ring below. *The player in a Time Trial* (same mechanism, read live): the entity
+(`craft+0x1c4`) keeps an 8-slot ring of position crumbs (`entity+0x380+i*0x40`,
+position at `+0x30`, head `+0x780`, oldest `+0x784`, the latched speed `+0x78c`,
+a no-crumb flag byte `+0xb51`), and a reset puts the craft **on the oldest crumb,
+moved to the track-width midpoint and 5 up, moving along the line at
+`50 + 0.25 * latched speed`**. Four falls with the ring read every tick
+(`scripts/psp-fall-log.py --ring`, a craft placed rolling at 85 to 95 u/s that fell
+short, and two teleported into the gap): oldest crumb (-364.7, 1.2, 231.1), row 2933,
+latch 82.8: back at (-364.6, 7.3, 240.8), speed 70.7 (predicted 70.7); (-385.2, 3.6,
+239.9), row 2947, latch 83.7: (-385.8, 7.3, 240.8), 70.9 (70.9); and from rows 25 and 35
+(latch 0.2 and 0.1) the identical point (-427.6, 7.9, 240.7), row 2975, speed 50.0
+(50.05). So it is **not the nearest sample to the fall** and **not in the gap**: it is
+150 to 250 units behind the fall, before the pad, heading along the line tangent
+(within 2.5 degrees), the reset itself taking one frame (0.97 to 1.03 frames between
+consecutive hits). It matches the AI craft's point above (x -372 to -395, rows 2938 to
+2953, 73 to 76 u/s at level 2). The reappearance on the start straight seen in
+teleported tests before the ring was read (rows 1257 to 1379) is the ring still
+holding crumbs from there, since a teleported craft lays none. Confidence 85 (one
+boot, four falls, the model was read from the executable first and the prediction held
+to 0.1 u/s). Crumb spacing in the placed runs was about 20 units (rows 2919 to 3018).
 *Flight* (clears, line rows 18 to 44): the ramp climbs about 6.6 degrees (vy about
 0.115 of speed); liftoff at row 17 to 20; apex about 0.12 s later at row 27
 (y 22.56 for an entry-93 faller; the road is at 20.4); vy then falls at
