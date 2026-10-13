@@ -54,13 +54,6 @@ impl Race {
         self.sim.pilot_assist_level == Level::Extreme && self.sim.pilot_assist.extreme.is_some()
     }
 
-    /// Advances the HUD indicator off the player's assist state this tick.
-    pub(crate) fn advance_assist_indicator(&mut self) {
-        let acting = self.ship().physics.pilot_assist.acting;
-        let (shown, dt) = (self.pilot_assist_shown(), self.sim.dt);
-        self.view.assist_indicator.advance(shown, acting, dt);
-    }
-
     /// The player's assist input for this tick, or `None` when the race has no law
     /// for the chosen level, which leaves the step bit-for-bit as it was.
     pub(crate) fn pilot_assist_input(&self, player: usize) -> Option<Input> {

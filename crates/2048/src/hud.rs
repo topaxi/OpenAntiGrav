@@ -49,6 +49,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: skins::played::SPEED_LAP,
     zone: skins::played::ZONE,
     elimination: skins::played::ELIMINATION,
+    split: None,
 };
 
 /// How 2048's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

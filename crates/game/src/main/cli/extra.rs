@@ -394,8 +394,8 @@ pub(crate) struct DriverArgs {
     ///
     /// Slots `0..N` become local players and the screen is cut into `N` views,
     /// two stacked top and bottom, four as quadrants, up to eight - **chosen, not
-    /// measured**. The race starts with `N` craft on the grid at least. The
-    /// full-screen HUD is hidden while split. See [`oag_game::split_screen`].
+    /// measured**. The race starts with `N` craft on the grid at least. Each view
+    /// draws its own slot's HUD. See [`oag_game::split_screen`].
     #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=8))]
     pub(crate) players: u8,
 }

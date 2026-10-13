@@ -688,22 +688,14 @@ impl Race {
                 results: None,
                 run_stats: results::RunStats::default(),
                 shield_was_up: false,
-                // `0.0`, not `1.0`: the pool is `0.0` until `<Misc>` loads (see
-                // `Readout::shield_fraction`'s own zero-guard), and a full-pool
-                // reading here would arm the flash on a false "drop" from 100%
-                // to whatever the first real tick measures.
-                shield_flash_prev: 0.0,
-                shield_flash_timer: 0.0,
+                // Every bar starts at `0.0`, not `1.0`: the pool is `0.0` until
+                // `<Misc>` loads (see `Readout::shield_fraction`'s own
+                // zero-guard), and a full-pool reading would arm the flash on a
+                // false "drop" from 100% to whatever the first real tick measures.
+                huds: Default::default(),
                 messages: oag_hud::messages::MessageBoard::default(),
                 lap_watch: None,
                 split_gap: None,
-                shield_blink_timer: 0.0,
-                shield_flash_prev_whole: 0.0,
-                shield_flash_timer_whole: 0.0,
-                shield_blink_timer_whole: 0.0,
-                energy_bar_delay_fraction: 0.0,
-                thrust_chase_percent: 0.0,
-                assist_indicator: oag_hud::assist::Indicator::default(),
                 sight: sight::Sight::default(),
                 sight_state: sight::State::Absent,
                 sight_fov: oag_display::display::Fov::AUTHORED,

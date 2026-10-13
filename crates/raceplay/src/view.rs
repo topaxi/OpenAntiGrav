@@ -183,23 +183,11 @@ pub struct RaceView {
     /// the audio layer so that every cue *edge* is raised from one place - see
     /// [`Race::tick`] - and out of the hash like the rest of this group.
     pub(super) shield_was_up: bool,
-    /// The player's shield percentage as of the previous tick.
-    ///
-    /// `Hud_UpdateEnergyBar`'s own `hud+0x118`. Read-only outside
-    /// [`Race::advance_shield_flash`], which is the only thing that needs
-    /// last tick's value rather than this one's - render-side memory, like
-    /// [`Self::shield_was_up`] beside it, and out of the hash for the same
-    /// reason.
-    pub(super) shield_flash_prev: f32,
-    /// The shield bar's post-hit flash accumulator.
-    ///
-    /// `Hud_UpdateEnergyBar`'s own `hud+0x11c`: `0.0` means "not flashing",
-    /// and it counts *up* while running rather than down, wrapping to `0.0`
-    /// at `1.0` - see [`Race::advance_shield_flash`] for why that is not
-    /// rewritten as a countdown. `> 0.0` is what
-    /// [`oag_hud::Readout::shield_flashing`] reads out of it every tick.
-    /// Render-side, like [`Self::shield_was_up`], and out of the hash.
-    pub(super) shield_flash_timer: f32,
+    /// Each slot's HUD bar state: the shield bar's flash and blink, HD's twin of
+    /// them, 2048's lagging bar and thrust chase, and a display-only reticle for
+    /// a split-screen view. Indexed by slot; the primary slot's is the one the
+    /// full-screen HUD reads. See [`super::slot_hud`]. Render-side, out of the hash.
+    pub(super) huds: [super::slot_hud::SlotHud; MAX_SHIPS],
     /// The HUD's four message lines - `oag_hud::messages`. Render-side and out
     /// of the hash; advanced a tick at a time by [`Race::tick`], so a paused race
     /// holds them still. Raised by [`Race::raise_message`].
@@ -209,50 +197,6 @@ pub struct RaceView {
     pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
     /// The lap-line time gap, on and off with [`Self::lap_watch`].
     pub(super) split_gap: Option<super::split_gap::SplitGap>,
-    /// The shield bar's blink accumulator.
-    ///
-    /// `Hud_UpdateEnergyBar`'s own `hud+0x1dc`: advances by the tick's `dt`
-    /// whenever [`oag_hud::Readout::shield_blinking`]'s three conditions
-    /// hold (low shield, [`Self::shield_flash_timer`] running, or absorbing),
-    /// **freezes rather than resets** the rest of the time - so two blinks
-    /// in the same race can start at different phases, exactly like the
-    /// original - and wraps to `0.0` once it exceeds `1.0`. `floor(t * 8.0)`
-    /// even is the "on" phase; see [`Race::advance_shield_blink`]. Starts at
-    /// `0.0` on a fresh race - **assumed, not read off `Craft_Construct_q`
-    /// or the HUD's own constructor this pass** - so the very first blink of
-    /// a race is known to start "on" only under that assumption. Render-side,
-    /// like [`Self::shield_was_up`], and out of the hash.
-    pub(super) shield_blink_timer: f32,
-    /// HD's `hud+0x10c`: the shield percentage as of the previous tick, the
-    /// memory behind [`Self::shield_flash_timer_whole`]. A twin of
-    /// [`Self::shield_flash_prev`] because HD and Pulse disagree on what a
-    /// drop is, and the two readouts are not told apart here. Render-side, and
-    /// out of the hash.
-    pub(super) shield_flash_prev_whole: f32,
-    /// HD's `hud+0x110`, the post-hit timer: armed by a drop of the
-    /// **truncated whole** percentage, where [`Self::shield_flash_timer`]
-    /// arms on any drop. `Hud_UpdateShieldReadout` compares the two
-    /// percentages after `fctiwz`, so 60.9 to 60.2 arms nothing and 60.2 to
-    /// 59.9 does (3 of 3 reps each, hud-readouts.md). Render-side, out of the hash.
-    pub(super) shield_flash_timer_whole: f32,
-    /// HD's `hud+0x1e8`, the flash accumulator: the same freeze-not-reset
-    /// shape as [`Self::shield_blink_timer`], gated on
-    /// [`Self::shield_flash_timer_whole`]. Render-side, out of the hash.
-    pub(super) shield_blink_timer_whole: f32,
-    /// 2048's `EnergyBarDelay`: the lagging shield fraction
-    /// [`oag_hud::Readout::energy_bar_delay_fraction`] reads out of it
-    /// every tick - `Hud_UpdateEnergyBar`'s own `hud+0x1ec`
-    /// (`0x811957a2`, vita-2048-eu-v104), advanced by
-    /// [`super::Race::advance_energy_bar_delay`]. `0.0` on a fresh race, the
-    /// same reasoning [`Self::shield_flash_prev`] gives for its own seed:
-    /// the pool itself is `0.0` before `<Misc>` loads. Render-side, like
-    /// every other field in this group, and out of the hash.
-    pub(super) energy_bar_delay_fraction: f32,
-    /// 2048's `ThrustBar` chase value in percent, advanced by
-    /// [`super::Race::advance_thrust_chase`]. Render-side, out of the hash.
-    pub(super) thrust_chase_percent: f32,
-    /// Pilot Assist's HUD indicator timers. Render-side, out of the hash.
-    pub(super) assist_indicator: oag_hud::assist::Indicator,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///
     /// One value for the whole field, because every craft wears the player's hull

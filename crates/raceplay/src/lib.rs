@@ -203,6 +203,7 @@ pub mod scenery_fx;
 pub mod scoreboard;
 mod shadow;
 mod sim;
+mod slot_hud;
 mod spawn;
 mod speed_plan;
 mod spline;

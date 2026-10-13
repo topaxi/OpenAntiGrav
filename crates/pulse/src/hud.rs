@@ -36,6 +36,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: layouts::TIME_TRIAL,
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
+    split: None,
 };
 
 /// How Pulse's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

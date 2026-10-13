@@ -53,6 +53,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: r"Data\XML\SpeedLap_HUD.xml",
     zone: r"Data\XML\Zone_HUD.xml",
     elimination: r"Data\XML\Elimination_HUD.xml",
+    split: None,
 };
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].

@@ -518,35 +518,30 @@ impl RaceStage {
                 if let (Some(panel), Some(progress)) =
                     (&mut self.track_panel, self.race.track_panel_progress())
                 {
-                    panel.draw(gpu.device(), gpu.queue(), encoder, view, progress, viewport);
+                    panel.draw(
+                        gpu.device(),
+                        gpu.queue(),
+                        encoder,
+                        view,
+                        progress,
+                        oag_game::hud_views::panel_viewport(self.race.viewport_count(), viewport),
+                    );
                 }
                 if let Some(hud) = &mut self.hud
                     && self.race.hud_shown()
                 {
-                    let mut readout = self.race.readout();
-                    // The rung the grade is showing, which is what names the
-                    // speed class - see `Scene::zone_stage`.
-                    readout.zone_stage = self.scene.zone_stage().unwrap_or(0);
-                    readout.zone_next_in = self
-                        .scene
-                        .zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
-                    // A campaign cell races its own ladder; any other Time
-                    // Trial or Speed Lap races the record. See
-                    // `oag_hud::Readout::time_trial_pace`. `campaign_cell`
-                    // is title-blind (HD reuses the same
-                    // `oag_tables::race_campaign::Cell`), so nothing here
-                    // stops it computing on HD - what keeps this Pulse-only is
-                    // `record_target` (`stats.xml` is read off Pulse's PSP disc
-                    // alone) and `draw.rs`'s widget-name match: no shipped HD
-                    // layout authors a widget named `TotalTime`/`TotalTimeTxt`.
-                    readout.time_trial_pace = oag_hud::pace_for(
-                        readout.mode,
-                        readout.race_ticks,
-                        readout.lap_ticks,
+                    oag_game::hud_views::draw(
+                        hud,
+                        gpu.device(),
+                        gpu.queue(),
+                        encoder,
+                        view,
+                        &self.race,
+                        &self.scene,
                         self.campaign_cell.as_ref(),
                         self.record_target.as_ref(),
+                        viewport,
                     );
-                    hud.draw(gpu.device(), gpu.queue(), encoder, view, &readout, viewport);
                     // The countdown, for exactly the measured start-line gate's
                     // span and no other window - see `oag_game::hud_countdown`
                     // and `oag_race::RaceState::thrust_gated`, whose own doc

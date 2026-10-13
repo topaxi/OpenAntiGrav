@@ -402,7 +402,7 @@ pub fn capture(
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
-    race.set_sight_screen(hud.space.size);
+    race.set_sight_screen(hud.sight_screen());
     race.set_sight_dialect(hud.art.sights);
     race.watch_laps(
         &hud,
@@ -866,7 +866,7 @@ pub fn capture(
             &mut encoder,
             &hud_view,
             progress,
-            hud_viewport,
+            crate::hud_views::panel_viewport(race.viewport_count(), hud_viewport),
         );
     }
     let scale = options.hud_scale;
@@ -893,27 +893,18 @@ pub fn capture(
         None if !race.hud_shown() => {}
         None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale) {
             Ok(Some(mut overlay)) => {
-                let mut readout = race.readout();
-                // The rung the grade is showing - see `Scene::zone_stage`. A
-                // `--zone-stage` capture reads its own class name back here.
-                readout.zone_stage = scene.zone_stage().unwrap_or(0);
-                readout.zone_next_in =
-                    scene.zones_to_next_stage(u16::try_from(readout.zone).unwrap_or(u16::MAX));
                 // No campaign cell on this path (`campaign_medal: None` above):
                 // no ladder, so `RECORD`.
-                readout.time_trial_pace = oag_hud::pace_for(
-                    readout.mode,
-                    readout.race_ticks,
-                    readout.lap_ticks,
-                    None,
-                    record_target.as_ref(),
-                );
-                overlay.draw(
+                crate::hud_views::draw(
+                    &mut overlay,
                     &device,
                     &queue,
                     &mut encoder,
                     &hud_view,
-                    &readout,
+                    &race,
+                    &scene,
+                    None,
+                    record_target.as_ref(),
                     hud_viewport,
                 );
                 // The countdown, on the same terms `RaceStage::draw_hud` draws

@@ -264,6 +264,12 @@ pub struct Options {
     /// [`pose`]: Options::pose
     /// [`camera`]: Options::camera
     pub opponents: bool,
+    /// How many split-screen views the race will be drawn in; `0` and `1` are
+    /// no split. **Only the load needs it**, to read a title's authored
+    /// two-player split HUD ([`oag_title::hud::SplitLayouts`]) and pack its
+    /// textures into the HUD sheet when there are two views; with one view the
+    /// sheet and the layout are exactly what they always were.
+    pub views: u8,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
     /// the race box, RACE REMIX and the command line; a campaign launch leaves

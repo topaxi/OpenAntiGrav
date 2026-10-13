@@ -45,6 +45,7 @@ impl Default for Options {
             ribbon: false,
             collision: false,
             opponents: false,
+            views: 1,
             trail_sparks: false,
             seed: None,
             pose: None,

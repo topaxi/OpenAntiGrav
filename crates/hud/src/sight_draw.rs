@@ -28,7 +28,7 @@ use super::draw::Context;
 /// of the named widgets, or when their art did not decode - the last being this
 /// project's rule for an asset it cannot play: draw nothing, and the loader
 /// report already said why.
-pub(super) fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw> {
+pub fn sight_draws(cx: &Context<'_>, sight: &oag_race::sight::Sight) -> Vec<Draw> {
     // **Visibility alone.** The seeking blink is a *tint* - the original writes
     // a colour on both of its phases and drops the draw on neither - so gating
     // on it here would strobe the reticle off every 0.1 s. See
