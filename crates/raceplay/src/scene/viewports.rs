@@ -12,13 +12,16 @@
 //!   matrices: every rectangle the same camera.
 //! - **Only the first view clears.** The scene pass clears the whole attachment
 //!   whatever the viewport is, so the later views load what is there
-//!   ([`Scene::keep_target`]). Depth is cleared each time; the views do not
+//!   ([`Layer::Next`]). Depth is cleared each time; the views do not
 //!   overlap and nothing reads one view's depth in another. Under MSAA the
 //!   resolve rewrites the whole target from the multisampled attachment, which
 //!   is why the colour attachment's load is switched, not only the resolve's.
-//! - **The Pulse bloom is composited per view, onto the scene target**, instead of
-//!   once after the HUD: its intermediates are one set, rebuilt by every
-//!   [`Scene::render`], and the split draws no HUD to sit under it.
+//! - **No Pulse bloom under a split.** `oag_post::bloom` reads the glow mask from
+//!   the top-left of the target whatever the viewport's origin is (its `prepare`
+//!   takes the size and ignores the origin), so a view anywhere else would glow
+//!   from the first view's pixels; and its composite lands on the resolved
+//!   target, which the next view's multisample resolve rewrites whole. Skipped
+//!   rather than drawn wrong. **Chosen, not measured**; per-view bloom is open.
 //! - **No motion blur and no jitter.** [`MotionState`] and the temporal
 //!   upscaler's frame record hold one camera's history, and `N` cameras a tick
 //!   would corrupt it. **Chosen, not measured.**
@@ -27,6 +30,17 @@
 //! verified under a split; Pulse and Pure are what was checked.
 
 use super::*;
+
+/// Which split-screen view a [`Scene::render`] call is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Layer {
+    /// No split: the one view, clearing the target and blooming as always.
+    Whole,
+    /// The first view of a split: clears the target.
+    First,
+    /// A later view: loads what the earlier ones drew.
+    Next,
+}
 
 impl Scene {
     /// Draws `race` into the rectangles `race.viewport_count()` cuts `area` into,
@@ -55,7 +69,8 @@ impl Scene {
         let mut stats = SceneStats::default();
         for (slot, rect) in rects.into_iter().enumerate() {
             race.set_viewpoint(slot);
-            self.keep_target.set(slot > 0);
+            self.layer
+                .set(if slot == 0 { Layer::First } else { Layer::Next });
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race viewport"),
             });
@@ -78,10 +93,9 @@ impl Scene {
                 None,
                 None,
             ));
-            self.composite_bloom(&mut encoder, view, rect);
             queue.submit(Some(encoder.finish()));
         }
-        self.keep_target.set(false);
+        self.layer.set(Layer::Whole);
         race.reset_viewpoint();
         stats
     }

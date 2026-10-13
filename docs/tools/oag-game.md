@@ -25,6 +25,10 @@ just play           # intro, menu, then a race
 just play --race    # the race on its own
 ```
 
+`just play --race --players 4` splits the window into one view per local player
+(1 to 8, default 1), the layout and the camera rig chosen rather than measured; see
+[split screen](../rendering/split-screen.md).
+
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
 and right airbrakes, C and V are square and triangle.
 
