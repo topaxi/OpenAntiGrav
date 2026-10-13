@@ -35,14 +35,6 @@ pub(super) fn hull_of(hull_plans: &[HullPlans], chosen: Option<u8>) -> Option<&H
     chosen.and_then(|k| hull_plans.get(usize::from(k)))
 }
 
-/// A hull other than the reference's, and its own plan where its search
-/// verified clean. See [`Race::field_speed_plan`].
-#[derive(Debug, Clone)]
-pub(super) struct HullOwn {
-    handling: oag_physics::Handling,
-    plan: Option<oag_ai::SpeedPlan>,
-}
-
 /// `f` over every item, each on a thread of its own natively, in order. On the
 /// web the race starts on a worker already (`worker.rs`), so there they run one
 /// after another. Each result is a pure function of its item, so the order
@@ -68,6 +60,17 @@ fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> 
 /// Whether a ring plan's verification came back clean.
 fn ring_clean(report: &oag_ai::plan::Report) -> bool {
     report.verify_failures == 0 && report.verify_respawns == 0
+}
+
+/// Whether a plan adapted for another hull is fit to follow: no wall touched
+/// on either verification lap and a flying lap completed without a rescue. A
+/// rescue on the standing lap is allowed, the underpowered case the search
+/// itself accepts (`oag_ai::SpeedPlan::learn`): the alternative is the
+/// reference at the hull's yaw share, and on Pulse `01_Track` RAPIER that put
+/// Triakis short of the jump at samples 330-354 on every lap, where its adapted
+/// plan is rescued once, from the grid. **Chosen, not measured.**
+fn adapted_clean(report: &oag_ai::plan::Report) -> bool {
+    report.verify_failures == 0 && report.verify_lap_ticks.is_some()
 }
 
 /// Whether a route plan's did: stricter, see [`Race::route_speed_plans`].
@@ -233,27 +236,20 @@ impl Race {
         f(&course, &craft)
     }
 
-    /// The plan the field drives, or `None`, with every hull's own plan
-    /// searched first: returns the reference plan and, for each other hull,
-    /// its own plan where that verified clean (`None` where it did not), for
-    /// [`Self::adapt_hull_plans`].
+    /// The plan the field drives, or `None`: the **reference** every other
+    /// hull's plans are re-learned from ([`Self::adapt_hull_plans`]).
     ///
-    /// **The reference** is the player's craft where its plan verifies clean
-    /// (two laps from the grid with no wall touched and no rescue), else the AI
-    /// slot with the most agile hull (`oag_ai::hull_yaw_ceiling`, highest
-    /// first, slot order breaking a tie) whose plan does; a layout none of them
-    /// solves keeps the corner model it drove before, rather than a plan known
-    /// to put the craft into a wall. `05_Track` is the standing case;
-    /// `speed_plan_ground_truth.rs` names all of them. The route plans are
-    /// learned on its handling ([`Self::route_speed_plans`]).
-    ///
-    /// Every craft flies its own team's handling, so every distinct hull's plan
-    /// is searched, each on a thread of its own natively ([`par_map`]); the
-    /// reference is then chosen among them by the rule above, exactly as if
-    /// they had been searched one after another. **Chosen, not measured.**
-    pub(super) fn field_speed_plan(&mut self) -> (Option<oag_ai::SpeedPlan>, Vec<HullOwn>) {
+    /// The player's craft where its plan verifies clean (two laps from the grid
+    /// with no wall touched and no rescue), else the AI slot with the most
+    /// agile hull (`oag_ai::hull_yaw_ceiling`, highest first, slot order
+    /// breaking a tie) whose plan does; a layout none of them solves keeps the
+    /// corner model it drove before, rather than a plan known to put the craft
+    /// into a wall. `05_Track` is the standing case; `speed_plan_ground_truth.rs`
+    /// names all of them. The route plans are learned on its handling
+    /// ([`Self::route_speed_plans`]). **Chosen, not measured.**
+    pub(super) fn field_speed_plan(&mut self) -> Option<oag_ai::SpeedPlan> {
         if self.sim.world.ship_count < 2 || self.sim.racing_line.len() < 3 {
-            return (None, Vec::new());
+            return None;
         }
         let yaw = |race: &Self, slot: usize| {
             let ship = &race.sim.world.ships[slot];
@@ -265,29 +261,23 @@ impl Race {
             .collect();
         opponents.sort_by(|&a, &b| yaw(self, b).total_cmp(&yaw(self, a)).then(a.cmp(&b)));
         candidates.extend(opponents);
-        // Distinct hulls in candidate order, each with the first slot flying it.
-        let mut hulls: Vec<(usize, oag_physics::Handling)> = Vec::new();
+        let mut tried: Vec<oag_physics::Handling> = Vec::new();
         for slot in candidates {
-            let handling = self.sim.world.ships[slot].handling;
-            if !hulls.iter().any(|(_, h)| *h == handling) {
-                hulls.push((slot, handling));
+            let reference = self.sim.world.ships[slot].handling;
+            if tried.contains(&reference) {
+                continue;
             }
-        }
-        let sim = &self.sim;
-        let built = par_map(&hulls, |&(_, handling)| {
-            Self::with_plan_course_on(
-                sim,
-                &sim.racing_line,
-                &sim.ai_order,
+            tried.push(reference);
+            let (plan, report) = Self::with_plan_course_on(
+                &self.sim,
+                &self.sim.racing_line,
+                &self.sim.ai_order,
                 1,
                 None,
-                Some(handling),
+                Some(reference),
                 |course, craft| oag_ai::SpeedPlan::build(course, craft, &oag_ai::Tuning::default()),
-            )
-        });
-        let reference = built.iter().position(|(_, report)| ring_clean(report));
-        for (k, ((slot, _), (plan, report))) in hulls.iter().zip(&built).enumerate() {
-            let clean = ring_clean(report);
+            );
+            let clean = ring_clean(&report);
             info!(
                 "ai speed plan (learned on slot {slot}): {} steps, lap {:?} ticks, {} unresolved, \
                  {} of {} samples tight, verification {} - {}",
@@ -297,65 +287,65 @@ impl Race {
                 plan.tight_samples(),
                 plan.len(),
                 if clean { "clean" } else { "not clean" },
-                match reference {
-                    Some(r) if r == k => "the reference, followed",
-                    _ if clean => "followed by its own hull",
-                    _ => "not used",
+                if clean {
+                    "the reference, followed"
+                } else {
+                    "not used, next candidate"
                 }
             );
-        }
-        let Some(reference) = reference else {
-            return (None, Vec::new());
-        };
-        self.sim.plan_reference = Some(hulls[reference].1);
-        let mut chosen = None;
-        let mut own = Vec::new();
-        for (k, ((_, handling), (plan, report))) in hulls.into_iter().zip(built).enumerate() {
-            if k == reference {
-                chosen = Some(plan);
-            } else {
-                own.push(HullOwn {
-                    handling,
-                    plan: ring_clean(&report).then_some(plan),
-                });
+            if clean {
+                self.sim.plan_reference = Some(reference);
+                return Some(plan);
             }
         }
-        (chosen, own)
+        None
     }
 
-    /// Gives every hull other than the reference its plans, filling
-    /// [`RaceSim::hull_plans`] and [`RaceSim::ship_plan`]; run once the
-    /// reference's ring and route plans are built.
+    /// Gives every hull other than the reference its own copy of the
+    /// reference's ring and route plans, filling [`RaceSim::hull_plans`] and
+    /// [`RaceSim::ship_plan`]; run once those are built.
     ///
-    /// The ring's: the hull's own search where it verified clean
-    /// ([`Self::field_speed_plan`]), else the reference's re-learned for it
-    /// ([`oag_ai::SpeedPlan::adapt`]: ceilings and takeoff run-ups kept, lowered
-    /// where this hull fails) where that verifies; a route's: the reference's
-    /// route plan adapted. Anything that does not verify leaves the hull on the
-    /// reference's plan at [`oag_ai::SpeedPlan::share_for`]. A hull's own
-    /// search is the better plan where it verifies (Pulse Triakis at RAPIER: 0
-    /// wall contact ticks on `02_Track` against 288 adapted) and fails on the
-    /// jump layouts (`01`, `07`, `13`, `14_Track`) that the reference's run-ups
-    /// rescue. Each hull on a thread natively, written back in slot order.
-    /// **Chosen, not measured.**
-    pub(super) fn adapt_hull_plans(&mut self, own: Vec<HullOwn>) {
-        let Some(reference_plan) = self.sim.speed_plan.as_ref() else {
+    /// Each is the reference's re-learned for this hull
+    /// ([`oag_ai::SpeedPlan::adapt`]: ceilings and takeoff run-ups kept, braking
+    /// re-measured, lowered only where this hull fails), followed where it
+    /// verifies clean; a hull whose copy does not follows the reference at
+    /// [`oag_ai::SpeedPlan::share_for`]. A hull's own plan searched from
+    /// scratch was measured as the better plan where it verifies (Pulse
+    /// Triakis at RAPIER: 0 wall contact ticks on `02_Track` against 288
+    /// adapted) but costs a whole search per hull: 12 to 24 times the CPU of a
+    /// race start (release, `06_Track` RAPIER 30 s against 1.3 s), so it waits
+    /// on plans computed ahead of the race. Each hull on a thread natively
+    /// ([`par_map`]), written back in slot order. **Chosen, not measured.**
+    pub(super) fn adapt_hull_plans(&mut self) {
+        let (Some(reference_plan), Some(reference)) =
+            (self.sim.speed_plan.as_ref(), self.sim.plan_reference)
+        else {
             return;
         };
-        let sim = &self.sim;
-        let built = par_map(&own, |hull| Self::hull_plans_for(sim, reference_plan, hull));
+        let mut hulls: Vec<oag_physics::Handling> = Vec::new();
         let mut owner: [Option<u8>; oag_gameplay::MAX_SHIPS] = [None; oag_gameplay::MAX_SHIPS];
         for (slot, chosen) in owner
             .iter_mut()
             .enumerate()
             .take(usize::from(self.sim.world.ship_count))
         {
-            let handling = self.sim.world.ships[slot].handling;
-            *chosen = own
+            let ship = &self.sim.world.ships[slot];
+            if (slot > 0 && !ship.active) || ship.handling == reference {
+                continue;
+            }
+            let hull = hulls
                 .iter()
-                .position(|hull| hull.handling == handling)
-                .and_then(|k| u8::try_from(k).ok());
+                .position(|h| *h == ship.handling)
+                .unwrap_or_else(|| {
+                    hulls.push(ship.handling);
+                    hulls.len() - 1
+                });
+            *chosen = u8::try_from(hull).ok();
         }
+        let sim = &self.sim;
+        let built = par_map(&hulls, |&handling| {
+            Self::hull_plans_for(sim, reference_plan, handling)
+        });
         self.sim.hull_plans = built;
         self.sim.ship_plan = owner;
     }
@@ -364,11 +354,10 @@ impl Race {
     fn hull_plans_for(
         sim: &RaceSim,
         reference_plan: &oag_ai::SpeedPlan,
-        hull: &HullOwn,
+        handling: oag_physics::Handling,
     ) -> HullPlans {
         let tuning = oag_ai::Tuning::default();
-        let handling = hull.handling;
-        let ring = hull.plan.clone().or_else(|| {
+        let ring = {
             let (adapted, report) = Self::with_plan_course_on(
                 sim,
                 &sim.racing_line,
@@ -378,7 +367,7 @@ impl Race {
                 Some(handling),
                 |course, craft| reference_plan.adapt(course, craft, &tuning, HULL_PLAN_BUDGET),
             );
-            let clean = ring_clean(&report);
+            let clean = adapted_clean(&report);
             info!(
                 "ai speed plan for a hull of turn {:.3}, the reference's adapted: {} steps, \
                  lap {:?} ticks, verification {} - {}",
@@ -393,7 +382,7 @@ impl Race {
                 }
             );
             clean.then_some(adapted)
-        });
+        };
         let routes = sim
             .routes
             .iter()
