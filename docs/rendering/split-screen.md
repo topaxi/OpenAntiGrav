@@ -361,6 +361,12 @@ alternating runs without the per-run load (uptime readings of 7 to 14 around the
 Pulse two, four and eight views 5.81, 11.39 and 22.59 ms of CPU before against 3.74, 5.78
 and 9.76 after, and HD four views 8.16 against 5.43.
 
+**2048 and Omega** (the shared-lineage check): the hoist is title-agnostic, so both ran it
+(**ported**, nothing title-specific to port). Pictures are `cmp` equal at two and four views
+(Omega) and two and four views (2048), and each was timed once at two views (table above;
+single runs, so only the order of magnitude: 1.2 to 2.0 ms of CPU, which is the GPU's
+business more than the CPU's on Omega, whose scene passes cost 1.1 ms).
+
 **Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
 2048 and Omega stay off integrated GPUs in a split):
 
