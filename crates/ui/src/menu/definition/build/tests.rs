@@ -123,7 +123,12 @@ fn a_mod_row_goes_after_a_sibling_or_at_the_end_of_its_parents_rows() {
     .unwrap();
     assert_eq!(
         rows[1..5],
-        ["racebox", "racebox>remix", "racebox>split_screen", "racebox>a"]
+        [
+            "racebox",
+            "racebox>remix",
+            "racebox>split_screen",
+            "racebox>a"
+        ]
     );
 
     let rows = main_rows(

@@ -69,7 +69,7 @@ OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Jusqu'à huit joueurs sur un seul éc
 OAG_JOIN_HINT = { text = "CHAQUE JOUEUR APPUIE SUR UN BOUTON POUR REJOINDRE", human = false }
 OAG_JOIN_PLAYER = { text = "JOUEUR", human = false }
 OAG_JOIN_EMPTY = { text = "APPUYEZ SUR UN BOUTON", human = false }
-OAG_JOIN_KEYBOARD = { text = "CLAVIER / SOURIS", human = false }
+OAG_JOIN_KEYBOARD = { text = "CLAVIER", human = false }
 OAG_JOIN_PAD = { text = "MANETTE", human = false }
 OAG_JOIN_START = { text = "DÉMARRER", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }

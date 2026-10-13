@@ -31,7 +31,7 @@ OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Bis zu acht Spieler an einem Bildschi
 OAG_JOIN_HINT = { text = "JEDER SPIELER DRÜCKT EINE TASTE ZUM BEITRETEN", human = false }
 OAG_JOIN_PLAYER = { text = "SPIELER", human = false }
 OAG_JOIN_EMPTY = { text = "TASTE DRÜCKEN", human = false }
-OAG_JOIN_KEYBOARD = { text = "TASTATUR / MAUS", human = false }
+OAG_JOIN_KEYBOARD = { text = "TASTATUR", human = false }
 OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
 OAG_JOIN_START = { text = "START", human = false }
 OAG_MENU_RECORDS = { text = "REKORDE", human = false }

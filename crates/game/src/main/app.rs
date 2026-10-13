@@ -323,6 +323,14 @@ impl App {
         };
 
         let mut controls = Controls::new();
+        // `--players N`: the keyboard and the first pad on slot 0, each further
+        // pad on the next slot in connection order. Chosen, not measured; the
+        // join screen (`Session::open_split_screen`) seats by who pressed instead.
+        if let Stage::Race(stage) = &stage
+            && stage.race.viewport_count() > 1
+        {
+            controls.seat_default(stage.race.viewport_count());
+        }
         // The pad's own preferences, which belong to the device rather than to
         // a race - so they are applied once here and then only by the menu row
         // that changes them. See `Session::apply_setting`.
@@ -500,6 +508,7 @@ impl App {
             campaign_cell: None,
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
             pure_chain_class: 0,
+            split_lobby: None,
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,
             campaign_ai_skill_scale: None,

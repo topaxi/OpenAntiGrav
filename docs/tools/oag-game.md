@@ -27,7 +27,12 @@ just play --race    # the race on its own
 
 `just play --race --players 4` splits the window into one view per local player
 (1 to 8, default 1), the layout and the camera rig chosen rather than measured; see
-[split screen](../rendering/split-screen.md).
+[split screen](../rendering/split-screen.md). With `N > 1` the keyboard and the first
+pad drive slot 0 and each further pad the next slot, in connection order; a pad
+plugged in mid-race takes the lowest free slot and one unplugged frees its slot.
+From the menus, SPLIT SCREEN (under RACEBOX) opens a screen where each device
+presses a button to take a seat, START begins with the seated count, and
+`--menu-page join[:N]` draws it as a still with `N` seats taken.
 
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
 and right airbrakes, C and V are square and triangle.

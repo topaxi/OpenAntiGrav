@@ -29,7 +29,7 @@ OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Até oito jogadores em uma só tela",
 OAG_JOIN_HINT = { text = "CADA JOGADOR APERTA UM BOTÃO PARA ENTRAR", human = false }
 OAG_JOIN_PLAYER = { text = "JOGADOR", human = false }
 OAG_JOIN_EMPTY = { text = "APERTE UM BOTÃO", human = false }
-OAG_JOIN_KEYBOARD = { text = "TECLADO / MOUSE", human = false }
+OAG_JOIN_KEYBOARD = { text = "TECLADO", human = false }
 OAG_JOIN_PAD = { text = "CONTROLE", human = false }
 OAG_JOIN_START = { text = "INICIAR", human = false }
 OAG_MENU_RECORDS = { text = "RECORDES", human = false }

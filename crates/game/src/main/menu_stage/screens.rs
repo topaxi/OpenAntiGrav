@@ -1,6 +1,6 @@
 //! What `MenuStage` draws over the menus rather than as one of their pages,
-//! split out of `menu_stage.rs` under the 1,000-line rule: the pause tint, and
-//! Wipeout Pure's SINGLE PLAYER screens.
+//! split out of `menu_stage.rs` under the 1,000-line rule: the pause tint,
+//! Wipeout Pure's SINGLE PLAYER screens and the split-screen join screen.
 
 use anyhow::Result;
 use oag_ui::menu;
@@ -58,6 +58,51 @@ impl MenuStage {
             frozen_race,
         );
         layers.body.extend(art);
+        let footer = self
+            .ticker
+            .is_some()
+            .then(|| self.footer_overlay(Vec::new(), ticker_tips));
+        let (list, ticker_clip) = footer::append(layers.flatten(), footer);
+        self.renderer.render_with(
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            &gpu.device,
+            &gpu.queue,
+            encoder,
+            view,
+            &list,
+            viewport,
+            footer::resolve_clip(None, ticker_clip, frozen_race),
+        );
+        Ok(())
+    }
+
+    /// The split-screen join screen, drawn as Wipeout Pure's SINGLE PLAYER
+    /// screens are: on the frame the page behind it would carry, with the
+    /// page's rows replaced by the screen's (`oag_ui_screens::join::draw_list`).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the same facts `MenuStage::render` already has in hand"
+    )]
+    pub(super) fn render_join(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        shown: Option<menu::Picture>,
+        frozen_race: bool,
+        ticker_tips: &[String],
+    ) -> Result<()> {
+        let Some(open) = self.join.as_ref() else {
+            return Ok(());
+        };
+        let layers = oag_ui_screens::join::draw_list(
+            open.screen(),
+            &self.skin,
+            &self.frame,
+            if frozen_race { None } else { shown },
+            frozen_race,
+        );
         let footer = self
             .ticker
             .is_some()

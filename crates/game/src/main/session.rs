@@ -64,6 +64,8 @@ mod picker;
 mod pilot_editor;
 #[path = "session/custom_tracks.rs"]
 mod custom_tracks;
+#[path = "session/join.rs"]
+mod join;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]
@@ -573,6 +575,11 @@ pub(crate) struct Session {
     /// Wipeout Pure's campaign list: the class it was left on, as an index into
     /// `PureClass::ALL`, so reopening it lands where the player was.
     pub(crate) pure_chain_class: usize,
+    /// The split-screen lobby Start left, from the join screen's START until the
+    /// race it asked for is built (`Session::seat_split_race`, which drains it)
+    /// or the player backs out of the race box's screens (which drop it). `None`
+    /// is an ordinary race.
+    pub(crate) split_lobby: Option<oag_input::lobby::Lobby>,
     /// Where the `Classic` circuits a Pure campaign event races are, by
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.

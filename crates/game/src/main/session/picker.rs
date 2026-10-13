@@ -553,7 +553,11 @@ impl Session {
                     self.launch_from_settings();
                 }
             }
-            (Kind::Track, Event::Back) => stage.picker = None,
+            (Kind::Track, Event::Back) => {
+                stage.picker = None;
+                // Out of the race box the join screen opened: the lobby went with it.
+                self.split_lobby = None;
+            }
             (Kind::Ship, Event::Back) => {
                 stage.picker = None;
                 // Backing out of `Team Selection` on a campaign launch has

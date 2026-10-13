@@ -502,6 +502,10 @@ impl Session {
                 }
                 Stage::Menu(stage) => {
                     stage.tick(dt);
+                    self.unseat_after_split_race();
+                    let Stage::Menu(stage) = &mut self.stage else {
+                        continue;
+                    };
                     // A selection screen takes the tick whole, the way a
                     // modal prompt does below: the rows behind it are a
                     // picture. Confirming may hand the window to a loading
@@ -524,6 +528,15 @@ impl Session {
                     // Wipeout Pure's campaign list, same shape.
                     if stage.pure_chain.is_some() {
                         self.tick_pure_chain(&grid);
+                        continue;
+                    }
+                    // The split-screen join screen, same shape. Starting it hands
+                    // the window to the race box's screens, and possibly a load.
+                    if stage.join.is_some() {
+                        self.tick_join(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the

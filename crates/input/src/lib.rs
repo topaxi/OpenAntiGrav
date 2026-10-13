@@ -313,12 +313,6 @@ impl Controls {
         self.pad.name_of(id)
     }
 
-    /// Puts every device where `lobby` seated it: a split-screen race's
-    /// assignment. See [`lobby::Lobby::seat`].
-    pub fn seat(&mut self, lobby: &lobby::Lobby) {
-        lobby.seat(self.pad.assignment_mut());
-    }
-
     /// Seats `humans` people the default way - keyboard and first pad on slot 0,
     /// each further pad on the next slot - for a race that was not set up on the
     /// join screen (`--players N`). See [`pad::Assignment::seated`].

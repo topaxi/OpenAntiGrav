@@ -22,14 +22,14 @@ fn labels() -> Labels {
 }
 
 fn screen(seated: usize) -> Join {
-    let mut join = Join::new(labels(), 8, 18.0);
+    let mut join = Join::new(labels(), 8);
     join.set_seats((0..seated).map(|n| format!("PAD {n}")).collect());
     join
 }
 
 /// The centre of row `index` in the grid the skin draws in.
-fn centre(join: &Join, skin: &Skin, index: usize) -> (f32, f32) {
-    let layout = Layout::new(skin, join.pitch());
+fn centre(skin: &Skin, index: usize) -> (f32, f32) {
+    let layout = Layout::new(skin);
     (
         layout.width / 2.0,
         layout.rows_y + (index as f32 + 0.5) * layout.line,
@@ -54,7 +54,13 @@ fn the_rows_are_the_seats_then_one_empty_seat_then_start_and_back() {
     );
     assert_eq!(
         screen(2).rows(),
-        [Row::Seat(0), Row::Seat(1), Row::Empty, Row::Start, Row::Back]
+        [
+            Row::Seat(0),
+            Row::Seat(1),
+            Row::Empty,
+            Row::Start,
+            Row::Back
+        ]
     );
 }
 
@@ -69,7 +75,7 @@ fn a_full_grid_offers_no_empty_seat() {
 fn a_click_on_the_empty_row_asks_the_keyboard_to_join() {
     let skin = skin();
     let mut join = screen(1);
-    let events = join.pointer(&click(centre(&join, &skin, 1)), &skin);
+    let events = join.pointer(&click(centre(&skin, 1)), &skin);
     assert!(events.contains(&Event::Join), "{events:?}");
 }
 
@@ -77,7 +83,7 @@ fn a_click_on_the_empty_row_asks_the_keyboard_to_join() {
 fn a_click_on_a_taken_seat_leaves_it() {
     let skin = skin();
     let mut join = screen(3);
-    let events = join.pointer(&click(centre(&join, &skin, 1)), &skin);
+    let events = join.pointer(&click(centre(&skin, 1)), &skin);
     assert!(events.contains(&Event::Leave(1)), "{events:?}");
 }
 
@@ -85,11 +91,11 @@ fn a_click_on_a_taken_seat_leaves_it() {
 fn start_answers_only_with_somebody_seated() {
     let skin = skin();
     let mut nobody = screen(0);
-    let at = centre(&nobody, &skin, 1);
+    let at = centre(&skin, 1);
     assert!(!nobody.pointer(&click(at), &skin).contains(&Event::Start));
 
     let mut two = screen(2);
-    let at = centre(&two, &skin, 3);
+    let at = centre(&skin, 3);
     assert!(two.pointer(&click(at), &skin).contains(&Event::Start));
 }
 
@@ -97,7 +103,7 @@ fn start_answers_only_with_somebody_seated() {
 fn back_is_a_click_on_back_or_the_secondary_button() {
     let skin = skin();
     let mut join = screen(1);
-    let at = centre(&join, &skin, 3);
+    let at = centre(&skin, 3);
     assert!(join.pointer(&click(at), &skin).contains(&Event::Back));
     let secondary = Pointer {
         back: true,
@@ -111,7 +117,7 @@ fn hover_follows_a_move_and_an_idle_pointer_does_nothing() {
     let skin = skin();
     let mut join = screen(1);
     assert!(join.pointer(&Pointer::default(), &skin).is_empty());
-    let at = centre(&join, &skin, 2);
+    let at = centre(&skin, 2);
     let moved = Pointer {
         at: Some(at),
         moved: true,
@@ -132,7 +138,12 @@ fn the_body_names_every_seat_and_its_device() {
             _ => None,
         })
         .collect();
-    for want in ["PLAYER 1", "PAD 0", "PLAYER 2", "PAD 1", "PLAYER 3", "OPEN", "START"] {
-        assert!(texts.iter().any(|t| t == want), "{want} missing in {texts:?}");
+    for want in [
+        "PLAYER 1", "PAD 0", "PLAYER 2", "PAD 1", "PLAYER 3", "OPEN", "START",
+    ] {
+        assert!(
+            texts.iter().any(|t| t == want),
+            "{want} missing in {texts:?}"
+        );
     }
 }

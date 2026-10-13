@@ -81,12 +81,7 @@ pub struct Join {
     capacity: usize,
     /// The row the pointer last moved onto.
     hover: Option<Row>,
-    /// The distance between two rows in the PSP's 272-line grid.
-    pitch: f32,
 }
-
-/// The grid height a pitch is measured in.
-const PSP_LINES: f32 = 272.0;
 
 /// Where the rows sit on the skin's grid.
 struct Layout {
@@ -99,13 +94,13 @@ struct Layout {
 }
 
 impl Layout {
-    fn new(skin: &Skin, pitch: f32) -> Self {
-        let (width, height) = skin.space().size;
+    fn new(skin: &Skin) -> Self {
+        let (width, _) = skin.space().size;
         let text_x = skin.menu_x();
         Self {
             text_x,
             right_x: width - text_x,
-            line: pitch * height / PSP_LINES,
+            line: skin.row_pitch(),
             scale: skin.row_scale(),
             rows_y: skin.first_row_y(),
             width,
@@ -116,13 +111,12 @@ impl Layout {
 impl Join {
     /// A screen with nobody seated, for a grid of `capacity` seats.
     #[must_use]
-    pub fn new(labels: Labels, capacity: usize, pitch: f32) -> Self {
+    pub fn new(labels: Labels, capacity: usize) -> Self {
         Self {
             labels,
             seats: Vec::new(),
             capacity,
             hover: None,
-            pitch,
         }
     }
 
@@ -173,7 +167,7 @@ impl Join {
         let Some(at) = pointer.at else {
             return out;
         };
-        let layout = Layout::new(skin, self.pitch);
+        let layout = Layout::new(skin);
         let rows = self.rows();
         let Some(row) = row_at(
             at,
@@ -205,7 +199,7 @@ impl Join {
     /// The hint and the rows, drawn on the skin's grid.
     #[must_use]
     pub fn body(&self, skin: &Skin) -> Vec<Draw> {
-        let layout = Layout::new(skin, self.pitch);
+        let layout = Layout::new(skin);
         let text =
             |x: f32, y: f32, scale: f32, color: [f32; 4], align: Align, text: String| Draw::Text {
                 x,
@@ -224,7 +218,7 @@ impl Join {
         let mut out = vec![text(
             layout.text_x,
             layout.rows_y - layout.line * 0.5,
-            layout.scale * 0.5,
+            layout.scale * 0.6,
             skin.normal(),
             Align::Left,
             self.labels.hint.clone(),
@@ -256,14 +250,7 @@ impl Join {
                 }
                 Row::Back => (self.labels.back.clone(), String::new()),
             };
-            out.push(text(
-                layout.text_x,
-                y,
-                layout.scale,
-                ink,
-                Align::Left,
-                left,
-            ));
+            out.push(text(layout.text_x, y, layout.scale, ink, Align::Left, left));
             if !right.is_empty() {
                 out.push(text(
                     layout.right_x,
@@ -288,12 +275,6 @@ impl Join {
     #[must_use]
     pub fn labels(&self) -> &Labels {
         &self.labels
-    }
-
-    /// The row the title's pitch gives; kept so the draw and the hit test agree.
-    #[must_use]
-    pub fn pitch(&self) -> f32 {
-        self.pitch
     }
 }
 

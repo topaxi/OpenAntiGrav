@@ -253,6 +253,11 @@ impl Session {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
+        // The split-screen join screen: escape is the keyboard pressing back.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.join.is_some()) {
+            self.escape_join();
+            return;
+        }
         // Wipeout Pure's campaign list, same rule.
         if matches!(&self.stage, Stage::Menu(stage) if stage.pure_chain.is_some()) {
             self.handle_pure_chain(oag_ui_screens::pure_chain::Event::Back);

@@ -116,6 +116,9 @@ pub(crate) struct MenuStage {
     /// Wipeout Pure's SINGLE PLAYER chain, when open: it takes the tick whole and is
     /// drawn on the frame the page behind it carries. See `crate::pure_chain_stage`.
     pub(crate) pure_chain: Option<crate::pure_chain_stage::PureChainStage>,
+    /// The split-screen join screen, when open: it takes the tick whole and is
+    /// drawn on the frame the page behind it carries. See `crate::join_stage`.
+    pub(crate) join: Option<crate::join_stage::JoinStage>,
 }
 
 /// A page change part-way through.
@@ -519,6 +522,9 @@ impl MenuStage {
         }
         if self.pure_chain.is_some() {
             return self.render_pure_chain(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
+        }
+        if self.join.is_some() {
+            return self.render_join(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
         }
         // The Race Campaign's own screens - no preview mesh, no slideshow:
         // both are plain 2D widget draws off `CellMode_Definition.xml`, the
