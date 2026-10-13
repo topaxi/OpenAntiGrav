@@ -4560,9 +4560,23 @@ about twofold between two sessions with the host's load, the ratios did not):
 A search per hull is 12 to 24 times main's CPU, and on the web it would run serially.
 The maintainer's decision (2026-10-13): **own-hull plans are computed ahead of the race
 and bundled**, in a lane of their own, and adapted plans are what the race builds
-meanwhile and the fallback for anything not bundled (a mod, a custom track). Whether a
-speed table derived from the disc may ship is for [`legal.md`](../overview/legal.md) to
-answer first.
+meanwhile and the fallback for anything not bundled (a mod, a custom track).
+
+**Pretrained plans per track, and what may ship** (maintainer, 2026-10-13, recorded as
+design, not built). Plans can be trained ahead of time for every circuit, **the original
+discs' included**, and shipped, so a race only trains on a custom track (on first use,
+with an adapted plan as the fallback until then). [`legal.md`](../overview/legal.md)
+forbids derived data only "in a form that reconstitutes the original": the line is
+between describing the work and reproducing it. So a shipped plan holds **per-sample
+values only** (each sample's target speed and ceiling, the takeoff holds, the tight
+flags, the verified pace, the braking table, the yaw ceiling it was learned on),
+indexed by the circuit's own spline samples, and **no positions, no line geometry,
+no sample spacing, nothing else that would rebuild the track's shape**. The plan's
+`spacing` field is geometry: it is re-derived from the user's own disc at load, never
+shipped. A shipped table would be keyed by title, circuit, class and the hull stats the
+plan reads, plus a plan version, and checked against the loaded line's sample count;
+a key that does not match trains or adapts instead. This project's own track format
+(the Blender add-on's tracks) can ship its plans beside the track with no such limit.
 
 **What a plan cannot fix.** Triakis on `02_Track` FLASH scrapes samples 1614-1636 on
 every plan tried: its own search 280 contact ticks, adapted 266, adapted with the
