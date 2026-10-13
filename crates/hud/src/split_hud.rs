@@ -390,7 +390,7 @@ pub fn arrange(rule: &Rule, layout: &Layout, heights: LineHeights) -> Vec<Piece>
         let mut bounds = Bounds::default();
         for (at, sprite) in layout.sprites.iter().enumerate() {
             if claimed.take(Kind::Sprite, at, group, &sprite.name) {
-                bounds.add_rect(sprite.rect);
+                bounds.add_rect(turned(sprite.rect, sprite.rotation));
                 piece.sprites.push(sprite.clone());
             }
         }
@@ -583,6 +583,20 @@ impl Claimed {
         }
         *slot = true;
         true
+    }
+}
+
+/// `rect` as it lies on screen: a quarter turn about its centre swaps its width and
+/// height, which is what stands HD's Zone ladder up as a column. Other angles are the
+/// small tilts of a row of lights and leave the box alone.
+fn turned(rect: [f32; 4], rotation: f32) -> [f32; 4] {
+    let quarters = (rotation / std::f32::consts::FRAC_PI_2).round();
+    let off = (rotation - quarters * std::f32::consts::FRAC_PI_2).abs();
+    if off < 0.05 && quarters as i32 % 2 != 0 {
+        let (cx, cy) = (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
+        [cx - rect[3] * 0.5, cy - rect[2] * 0.5, rect[3], rect[2]]
+    } else {
+        rect
     }
 }
 

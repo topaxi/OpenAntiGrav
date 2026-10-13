@@ -144,7 +144,7 @@ the first source that has a layout for the view's count, mode and shape wins:
 
 | | Source | |
 | --- | --- | --- |
-| HD / Fury and Omega, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below); Omega **ported, not looked at** |
+| HD / Fury and Omega, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below); Omega **ported, looked at** |
 | Pulse (PSP, PS2), Pure and HD otherwise, any count 2 to 8 and every view shape | `SplitHud_Pulse.toml`, `SplitHud_Pure.toml`, `SplitHud_HD.toml` | **chosen, not measured** |
 | 2048; Omega's other cases | the whole-screen layout scaled to fit the view | **chosen, not measured** |
 
@@ -167,8 +167,8 @@ where there is room):
 | --- | --- | --- | --- |
 | 2.4 and wider (`strip`) | two views, the top of three | every group at its corner, larger | every group |
 | 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group |
-| 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield, held weapon, current time | no time group |
-| under 1.0 (`portrait`) | seven and eight views' lower rows | the same, larger | no time group |
+| 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group |
+| under 1.0 (`portrait`) | seven and eight views' lower rows | the same, larger | the same, larger |
 
 Each group is its own draw (`ViewDraw`): the layout is cut once at load into one
 sub-layout per group (`SplitHudAssets`), and the reticle, which is not a widget of any
@@ -199,11 +199,11 @@ the view's own offset. **2048 and Omega ship the same four files**
 `data.psarc`, Omega as `Data/xml/splitscreen_hud/splitscreen_{,elimination_}hud_{0,1}.xml`
 in `data00.psarc`. All three titles compose them to the same 109 sprites and 63
 labels (108 and 67 for Elimination), widest 1895 (2208), lowest 734 and 1274 (778
-and 1318): the second player is 540 lower in each. **Omega: ported, not looked at** -
+and 1318): the second player is 540 lower in each. **Omega: ported, looked at** -
 its HUD grid is HD's 1920x1080, so `oag_omega::hud::SPLIT` is the same row, and
 `split_hud_ground_truth` composes the roots that row names and checks them against
-HD's; no Omega race could be looked at on this machine's extraction (the short-read
-note in `omega_race_ground_truth`). **2048: checked, differs** - the
+HD's; a two-view Single Race on `data/extracted/ps4` (2026-10-13) draws each player's
+own lap panel, place, time and speed arc in its half, as HD's does. **2048: checked, differs** - the
 files are authored in HD's 1920x1080 while 2048's HUD space is the Vita's 960x544,
 so its copy would need scaling first (as `oag_hud::assist::splice` scales a
 fragment). The PS2 pressing of Pulse names only
@@ -402,10 +402,15 @@ does not exist: the race frames are that evidence.
   shipped and not wired. 2048's authored two-view HUD is **checked, differs** (1920x1080
   files in a 960x544 HUD space, needs scaling first) and has no file of ours;
   Omega's other cases and 2048's draw the scaled whole-screen layout.
-- The split-HUD files' groups are not looked at for 2048 and Omega, nor for HD's own
-  Zone, Eliminator or Time Trial at three or more views beyond the screenshots in
-  this change; modes that move widgets (the Eliminator's kill column) are claimed by
-  name and not otherwise adapted. Per-person messages and records, and a lock that
+- The split-HUD files were looked at in Single Race at every count, and in Zone and
+  the Eliminator at four views on Pulse and Zone at four on HD; Time Trial and the
+  Eliminator on Pure and HD, and every mode at five to eight views other than Single
+  Race, were checked by name against the layouts (`the_shipped_split_files_name_only_widgets_their_titles_author`)
+  and not by eye. The PS2 pressing draws its text smaller against its bars than the
+  PSP does (that is how its whole-screen HUD is authored here, one file serves both),
+  so its split HUD reads smaller; a per-platform scale is open. HD's Eliminator
+  column, lap times and Zone ladder are placed by name and have not been judged on a
+  real display. Per-person messages and records, and a lock that
   gates another person's fire.
 - HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
   Select (wired, `Team Selection Player 1`/`2`) is unreachable by menu there.

@@ -180,57 +180,82 @@ fn a_label_contributes_its_text_height_to_the_bounds() {
 }
 
 /// What the per-group draw rests on: a layout with no widgets draws nothing, whatever
-/// the readout holds, so a group's frame is its own widgets and not a copy of
-/// everything the readout can summon. The reticle is the one exception and is stripped
-/// by the caller, which draws it once per view.
+/// the readout holds and whichever title's rules are in force, so a group's frame is its
+/// own widgets and not a copy of everything the readout can summon. The reticle is the
+/// one exception and is stripped by the caller, which draws it once per view.
 #[test]
 fn a_layout_with_no_widgets_draws_nothing_from_a_full_readout() {
     let strings = crate::tests::strings();
-    let sheet = crate::sprite::Sheet::placed_at(&[]);
-    for mode in [
-        Mode::SingleRace,
-        Mode::Eliminator,
-        Mode::Head2Head,
-        Mode::TimeTrial,
-        Mode::Zone,
-    ] {
-        let layout = Layout::default();
-        let cx = Context {
-            sheet: &sheet,
-            ..crate::tests::context(&layout, &strings)
-        };
-        let readout = Readout {
-            speed_kmh: 400.0,
-            shield: 50.0,
-            shield_max: 100.0,
-            lap: 2,
-            laps: 3,
-            place: 2,
-            ships: 8,
-            wrong_way: true,
-            zone: 4,
-            score: 10,
-            zone_stage: 1,
-            pilot_assist: true,
-            pickup: Some(oag_tables::weapons::Weapon::Rocket),
-            head_to_head: Some(crate::HeadToHead {
-                gap: 12.0,
-                player_leads: true,
-            }),
-            kill_tags: vec![crate::KillTag {
-                team: "Feisar".into(),
-                kills: 3,
-                player: true,
-            }],
-            kill_target: 5,
-            mode,
-            ..Readout::blank()
-        };
-        assert!(
-            draw_list(&cx, &readout).is_empty(),
-            "{mode:?}: {:?}",
-            draw_list(&cx, &readout)
-        );
+    let sheet = crate::sprite::Sheet::default();
+    let arts: [(&str, &'static oag_title::HudArt); 4] = [
+        ("Pulse", oag_pulse::hud::ART),
+        ("Pure", oag_pure::hud::ART),
+        ("HD", oag_hd::hud::ART),
+        ("2048", oag_2048::hud::ART),
+    ];
+    for (title, art) in arts {
+        for mode in [
+            Mode::SingleRace,
+            Mode::Eliminator,
+            Mode::Head2Head,
+            Mode::TimeTrial,
+            Mode::SpeedLap,
+            Mode::Zone,
+            Mode::Tournament,
+        ] {
+            let layout = Layout::default();
+            let cx = Context {
+                sheet: &sheet,
+                art,
+                ..crate::tests::context(&layout, &strings)
+            };
+            let mut readout = Readout {
+                speed_kmh: 400.0,
+                shield: 50.0,
+                shield_max: 100.0,
+                lap: 2,
+                laps: 3,
+                place: 2,
+                ships: 8,
+                race_ticks: 5000,
+                lap_ticks: 1200,
+                best_lap_ticks: Some(1100),
+                wrong_way: true,
+                zone: 4,
+                score: 10,
+                zone_stage: 1,
+                zone_next_in: Some(2),
+                pilot_assist: true,
+                shield_flashing: true,
+                shield_flashing_whole: true,
+                shield_absorbing: true,
+                shield_blink_phase: 0.5,
+                shield_blink_phase_whole: 0.5,
+                thrust_chase_percent: 40.0,
+                energy_bar_delay_fraction: 0.5,
+                pickup: Some(oag_tables::weapons::Weapon::Rocket),
+                head_to_head: Some(crate::HeadToHead {
+                    gap: 12.0,
+                    player_leads: true,
+                }),
+                kill_tags: vec![crate::KillTag {
+                    team: "Feisar".into(),
+                    kills: 3,
+                    player: true,
+                }],
+                kill_target: 5,
+                mode,
+                ..Readout::blank()
+            };
+            readout.assist = crate::assist::AssistReadout {
+                enabled: true,
+                main: true,
+                left: true,
+                right: true,
+            };
+            let frame = draw_list(&cx, &readout);
+            assert!(frame.is_empty(), "{title} {mode:?}: {frame:?}");
+        }
     }
 }
 
@@ -322,4 +347,24 @@ fn only_the_rules_for_this_races_count_are_cut() {
     assert!(two.arranged[1].is_some(), "the rule for any count");
     let four = assets(Origin::Fallback, 4);
     assert!(four.arranged[0].is_some());
+}
+
+#[test]
+fn a_quarter_turned_sprite_is_bounded_where_it_lies() {
+    // 676 wide and 153 tall, turned a quarter: a column 153 wide and 676 tall about
+    // the same centre (140, 580).
+    let mut layout = Layout::from_xml(
+        "<Screen><Image name=\"Bar\" x=\"-198\" y=\"503.5\" width=\"676\" height=\"153\" Src=\"a.mip\" U=\"0\" V=\"0\" TxtrWidth=\"1\" TxtrHeight=\"1\"/></Screen>",
+    );
+    layout.sprites[0].rotation = 1.5708;
+    let hud = SplitHud::parse(&file(
+        "[[layout]]\n[[layout.group]]\nwidgets = [\"Bar\"]\nanchor = \"top-left\"\n",
+    ))
+    .unwrap();
+    let pieces = arrange(&hud.rules[0], &layout, HEIGHTS);
+    assert_eq!(pieces[0].source, [140.0 - 76.5, 580.0 - 338.0]);
+    // A small tilt does not move the box.
+    layout.sprites[0].rotation = 0.385;
+    let pieces = arrange(&hud.rules[0], &layout, HEIGHTS);
+    assert_eq!(pieces[0].source, [-198.0, 503.5]);
 }

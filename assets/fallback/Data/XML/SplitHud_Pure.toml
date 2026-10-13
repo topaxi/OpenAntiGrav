@@ -39,13 +39,13 @@ offset = [0.012, -0.04]
 scale = 1.3
 
 [[layout.group]]
-widgets = ["CurrentTime*"]
+widgets = ["CurrentTime*", "Score", "ScoreTxt"]
 anchor = "top-left"
 offset = [0.012, 0.04]
 scale = 1.3
 
 [[layout.group]]
-widgets = ["Position*"]
+widgets = ["Position*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.012, 0.04]
 scale = 1.3
@@ -82,13 +82,13 @@ offset = [0.015, -0.04]
 scale = 1.1
 
 [[layout.group]]
-widgets = ["CurrentTime*"]
+widgets = ["CurrentTime*", "Score", "ScoreTxt"]
 anchor = "top-left"
 offset = [0.015, 0.04]
 scale = 1.1
 
 [[layout.group]]
-widgets = ["Position*"]
+widgets = ["Position*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.015, 0.04]
 scale = 1.1
@@ -124,13 +124,13 @@ offset = [0.02, -0.04]
 scale = 1.3
 
 [[layout.group]]
-widgets = ["CurrentTime*"]
+widgets = ["CurrentTime*", "Score", "ScoreTxt"]
 anchor = "top-left"
 offset = [0.02, 0.04]
 scale = 1.3
 
 [[layout.group]]
-widgets = ["Position*"]
+widgets = ["Position*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.02, 0.04]
 scale = 1.3
@@ -166,13 +166,13 @@ offset = [0.03, -0.04]
 scale = 1.6
 
 [[layout.group]]
-widgets = ["CurrentTime*"]
+widgets = ["CurrentTime*", "Score", "ScoreTxt"]
 anchor = "top-left"
 offset = [0.03, 0.04]
 scale = 1.6
 
 [[layout.group]]
-widgets = ["Position*"]
+widgets = ["Position*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.03, 0.04]
 scale = 1.6

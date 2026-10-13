@@ -61,9 +61,9 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// ship (`splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml`): one
 /// 1920x1080 layout per player, the second the first shifted 540 down. **Wired the
 /// way HD's are** (`oag_hd::hud::SPLIT`), whose HUD grid Omega shares; the row is
-/// **ported, not looked at**: no Omega race can be seen on this project's
-/// extraction (the short-read note in `omega_race_ground_truth`), so what is checked
-/// is that the four roots compose to the sprites HD's do, in
+/// **ported**, and looked at on 2026-10-13: a two-view Single Race on
+/// `data/extracted/ps4` draws each player's own layout in its half. The four roots
+/// are also checked to compose to the sprites HD's do, in
 /// `crates/game/tests/split_hud_ground_truth.rs`.
 pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
     arcade: [

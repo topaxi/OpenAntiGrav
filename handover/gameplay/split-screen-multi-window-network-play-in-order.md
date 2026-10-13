@@ -211,15 +211,16 @@ unreachable by menu there), stick navigation on a seat's screen, a variant famil
 duplicate check on HD, and where Omega authors its Ship Select screens.
 **2026-10-13, `split-hud-layout-toml`: the split HUD is data.** A title's split-screen
 layout is `schemas/v1/split-hud.tosd` files (`oag_hud::split_hud`): override, then the
-disc's authored layout (HD and, newly, Omega: ported, not looked at), then ours through
+disc's authored layout (HD and, newly, Omega: ported, and a two-view frame looked at), then ours through
 the fallback layer (`SplitHud_{Pulse,Pure,HD}.toml`, chosen, not measured, Pulse's one
 file for both pressings), then the scaled whole-screen layout; one rule per view shape,
 so three, five and seven views mix. Each view also has a scissor now. See
 [split-screen.md](../../docs/rendering/split-screen.md#hud) and
 [asset-layers.md](../../docs/architecture/asset-layers.md#a-split-screen-hud-layout-file).
-**Still open from it**: no file for 2048 or Omega (the scaled layout draws), HD's
-Eliminator and Zone and Pulse's Eliminator kill column are claimed by name and not looked
-at beyond a Single Race frame, and nobody has judged the layouts on a real display.
+**Still open from it**: no file for 2048 or Omega (the scaled layout draws; Omega's
+two-view authored layout does draw), Time Trial and the Eliminator on Pure and HD and
+HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
+than the PSP's in the same file, and nobody has judged the layouts on a real display.
 
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track

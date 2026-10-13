@@ -564,3 +564,67 @@ fn the_shipped_split_files_name_only_widgets_their_titles_author() {
     }
     println!("checked {checked:?}");
 }
+
+/// The load report says which layout answers a split race, and says nothing about the
+/// file for one view, which reads, reports and arranges none of it.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and hdfury-ps3-eu-dec.iso"]
+fn the_load_report_names_the_split_layout_that_answers() {
+    let load = |image: &str, views: u8| {
+        let path = oag_testdata::image(image)?;
+        Some(
+            race::load(&race::Options {
+                source: path.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::SingleRace,
+                views,
+                ..race::Options::default()
+            })
+            .expect("loading the race")
+            .report,
+        )
+    };
+    if let (Some(four), Some(one)) = (
+        load("data/images/pulse-psp-usa.chd", 4),
+        load("data/images/pulse-psp-usa.chd", 1),
+    ) {
+        let lines = |report: &[String]| -> Vec<String> {
+            report
+                .iter()
+                .filter(|line| line.contains("SplitHud") || line.contains("split layout"))
+                .cloned()
+                .collect()
+        };
+        let four = lines(&four);
+        assert!(
+            four.iter()
+                .any(|l| l.contains("SplitHud_Pulse.toml answered by this project's fallback")),
+            "{four:?}"
+        );
+        for rule in ["strip", "landscape", "square", "portrait"] {
+            assert!(
+                four.iter()
+                    .any(|l| l.contains(&format!("layout \"{rule}\", "))),
+                "{rule}: {four:?}"
+            );
+        }
+        assert!(
+            four.iter()
+                .any(|l| l.contains("answered by the file, the whole-screen layout elsewhere")),
+            "{four:?}"
+        );
+        assert!(
+            lines(&one).is_empty(),
+            "one view reads no split file: {:?}",
+            lines(&one)
+        );
+    }
+    if let Some(two) = load("data/images/hdfury-ps3-eu-dec.iso", 2) {
+        assert!(
+            two.iter().any(|l| l.contains(
+                "the title's authored layout answers, and this project's file where it has none"
+            )),
+            "{two:?}"
+        );
+    }
+}
