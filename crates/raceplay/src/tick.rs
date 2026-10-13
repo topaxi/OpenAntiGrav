@@ -106,9 +106,9 @@ impl Race {
         // an AI slot never is. Controls first, all of them, so a slot's
         // autopilot reads the field as the tick found it.
         let mut controls = [oag_physics::ShipControls::default(); MAX_PLAYERS];
-        for slot in 0..MAX_PLAYERS {
+        for (slot, slot_controls) in controls.iter_mut().enumerate() {
             if self.sim.world.person_flown(slot) {
-                controls[slot] = self.player_controls(slot, inputs.get(slot));
+                *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
 
@@ -354,8 +354,8 @@ impl Race {
             .advance(self.sim.dt, &mut self.view.stage_rng);
         self.advance_scenery_fx(self.sim.dt);
 
-        for slot in 0..MAX_PLAYERS {
-            if let Some(step) = &steps[slot] {
+        for (slot, step) in steps.iter().enumerate() {
+            if let Some(step) = step {
                 self.rescue_player(slot, step);
             }
         }
@@ -388,8 +388,8 @@ impl Race {
         // below reaches `RaceState::eliminate` for the craft that finished
         // blowing up; its view half (the wreck timer, the HUD hide) is the
         // primary slot's alone.
-        for slot in 0..MAX_PLAYERS {
-            let Some(step) = &steps[slot] else {
+        for (slot, step) in steps.iter().enumerate() {
+            let Some(step) = step else {
                 continue;
             };
             // The craft finished blowing up this tick, so its race is over.

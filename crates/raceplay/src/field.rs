@@ -644,9 +644,9 @@ impl Race {
         // their craft is handed to the driver, which has never run for them:
         // put it on the piece of line the craft is actually on, for the
         // windowed-search reason `Self::set_autopilot` spells out.
-        for slot in 0..oag_gameplay::MAX_PLAYERS {
+        for (slot, &was_finished) in finished_before.iter().enumerate() {
             if self.sim.world.person_flown(slot)
-                && !finished_before[slot]
+                && !was_finished
                 && self.sim.world.ships[slot].standing.finished()
             {
                 self.locate_player_driver(slot);

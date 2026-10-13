@@ -102,7 +102,9 @@ fn a_human_slot_with_no_craft_is_not_person_flown() {
         .collect();
     assert_eq!(flown, [0], "an empty human slot was stepped as a player");
 
-    race.sim.world.controllers[0] = Controller::Ai;
+    for slot in 0..3 {
+        race.sim.world.controllers[slot] = Controller::Ai;
+    }
     assert!(
         race.sim.world.person_flown(0),
         "the primary slot lost its player step when nobody was marked human"
