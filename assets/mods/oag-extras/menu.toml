@@ -46,6 +46,22 @@ target = "remix"
 subtitle = "Mix tracks and ships across every title you own"
 subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
 
+# **SPLIT SCREEN: chosen, not measured.** The PS2 pressing authors split-screen race
+# screens (`Team SelectionSplit`, `Track CreationSplit`) but takes its players from the
+# pads in port order; there is no join step to follow, so this row opens one: every
+# device presses a button to take a seat, START begins, and the race box's own Track and
+# Ship Select follow. See `oag_ui_screens::join`.
+[[entry]]
+id = "split_screen"
+parent = "racebox"
+after = "remix"
+kind = "action"
+label = "SPLIT SCREEN"
+string_id = "OAG_MENU_SPLIT_SCREEN"
+action = "split_screen"
+subtitle = "Up to eight people on one screen"
+subtitle_string_id = "OAG_MENU_SPLIT_SCREEN_SUBTITLE"
+
 [[entry]]
 id = "options"
 parent = "top"

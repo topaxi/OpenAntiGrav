@@ -57,6 +57,11 @@ pub enum Action {
     /// screen launches a race here - see `oag_ui_screens::campaign`'s own module doc
     /// for why, and the `campaign` handover thread's "Next Steps".
     OpenCampaign,
+    /// Opens the "press a button to join" screen that sets up a split-screen
+    /// race - see `oag_ui_screens::join` and `crate::main::session::join` in
+    /// `oag-game`. Reached from the built-in `oag-extras` mod's RACEBOX row;
+    /// the screen goes on to the race box's own Track and Ship Select.
+    OpenSplitScreen,
 }
 
 impl Action {
@@ -72,6 +77,7 @@ impl Action {
             Self::RenamePilot => "rename_pilot",
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
+            Self::OpenSplitScreen => "split_screen",
         }
     }
 
@@ -87,13 +93,14 @@ impl Action {
             "rename_pilot" => Some(Self::RenamePilot),
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
+            "split_screen" => Some(Self::OpenSplitScreen),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 8] {
+    pub fn all() -> [Self; 9] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -103,6 +110,7 @@ impl Action {
             Self::RenamePilot,
             Self::DeletePilot,
             Self::OpenCampaign,
+            Self::OpenSplitScreen,
         ]
     }
 }
