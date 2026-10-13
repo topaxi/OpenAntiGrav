@@ -5217,6 +5217,39 @@ the plan's pace, from `plan_margin`'s corner fractions (0.55 and 0.69) and
 - What the original does with a craft in this pit (a PPSSPP capture) was not
   measured.
 
+### After a reset, the relaunch falls short (2026-10-13)
+
+The original's reset relocation landed on 2026-10-13
+([reset-relocation.md](../ghidra/functions/psp-pulse-usa/reset-relocation.md)).
+A craft that falls is put back on the oldest of its last seven grounded
+positions, at `50 + 0.25 *` its last grounded speed. `05_Track` authors no
+no-crumb flag around its first jump, so the original lays crumbs up to the lip
+too, and a reset sends a craft back 50 to 100 samples before the jump.
+
+Measured on the seven-Ace field, VENOM, seed 1, 18,000 ticks:
+- relaunched at 64 to 107 u/s, a craft reaches sample 150 at **107 to 117
+  u/s**;
+- the jump needs about 120 (above), and a normal pass is 128 to 135;
+- so it falls into the pit again or stops on the lip at 206 to 209.
+
+The pose this replaced put a craft at rest on the sample nearest its fall,
+often past the jump, which skipped part of the lap. The lone RAPIER Ace that
+overshoots off the road at sample 318 (271 u/s) used to come back at 688; it
+now comes back at 89 at 113 u/s.
+
+**Re-baselined, by the maintainer's choice to keep the faithful reset:**
+- `ai_clean_lap_gate` `05_Track` RAPIER: 0 -> 16 contact ticks;
+- `ai_dekonstruct_symptoms_ground_truth`, field dead stops: VENOM 1 -> 5,
+  FLASH 3 -> 5, PHANTOM 1 -> 4; lone RAPIER 0 -> 1;
+- `ai_dekonstruct_black_ground_truth` RAPIER seed 2 forward: 1 -> 2 destroyed.
+
+Lion's Den on Pulse physics (`foreign_race_ground_truth`) now gets one lap,
+not two: the craft falls off the start jump even at 212 u/s, and the reset
+puts it back before that jump at about 86 u/s.
+
+Whether the original's relaunched craft clears this jump is not measured.
+
+
 ## Tuning sweep tables
 
 The evidence behind `oag_ai::Tuning`'s swept constants, moved here from the
