@@ -15,6 +15,10 @@ them, ask the lead with `SendMessage` to `main` rather than guessing.
    `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/` (create it).
 4. Do not spawn sub-agents or forks. A member fork once wrote into the main
    checkout.
+5. Never use `git stash`. The stash list is shared by every worktree of the
+   repository, so `git stash pop` can apply another lane's changes onto your
+   tree (2026-10-13, `pulse-split-pages`). Commit work in progress on your own
+   branch instead.
 
 ## Safety on a shared machine
 
