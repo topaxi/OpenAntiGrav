@@ -322,12 +322,22 @@ fn the_plans_are_the_same_whether_asked_for_before_the_first_tick_or_at_it() {
             }
             race.set_autopilot(autopilot);
         }
-        assert!(asked.speed_plan().is_some(), "{track} {original} {autopilot}");
+        assert!(
+            asked.speed_plan().is_some(),
+            "{track} {original} {autopilot}"
+        );
         ticked.tick(&PlayerInputs::none());
-        assert!(ticked.speed_plan().is_some(), "{track} {original} {autopilot}");
+        assert!(
+            ticked.speed_plan().is_some(),
+            "{track} {original} {autopilot}"
+        );
         assert_eq!(asked.speed_plan(), ticked.speed_plan(), "{track}");
         for slot in 1..8 {
-            assert_eq!(asked.plan_of(slot), ticked.plan_of(slot), "{track} slot {slot}");
+            assert_eq!(
+                asked.plan_of(slot),
+                ticked.plan_of(slot),
+                "{track} slot {slot}"
+            );
         }
     }
 }
