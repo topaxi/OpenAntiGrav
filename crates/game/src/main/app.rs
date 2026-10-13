@@ -416,6 +416,7 @@ impl App {
             hd_bloom_timer,
             cpu_cost: perf::Meter::new(),
             present_cost: perf::Meter::new(),
+            frame_timing: Default::default(),
             drs_unreachable_said: false,
             frame_index: 0,
             stall_frame: 0,

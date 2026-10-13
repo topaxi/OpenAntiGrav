@@ -34,6 +34,8 @@ mod endrace;
 mod escape;
 #[path = "session/frame.rs"]
 mod frame;
+#[path = "session/frame_timing.rs"]
+pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
 #[path = "session/language.rs"]
@@ -234,7 +236,9 @@ pub(crate) struct Session {
     pub(crate) hd_bloom_timer: Option<oag_gpu::timing::PassTimer>,
     /// How long [`Session::frame`] itself took, in the same seconds
     /// [`Session::meter`] is fed - the **fifth** meter, and the first one that
-    /// is not a GPU timestamp at all.
+    /// is not a GPU timestamp at all. Measured from the swapchain acquire near
+    /// its top (`Gpu::acquire`) to the present, so both blocking swapchain
+    /// calls are inside it and inside [`Session::present_cost`] alike.
     ///
     /// **What the `OTHER` row could never say.** That row is
     /// `frame - (every timed pass)`, and a large one has three possible
@@ -259,6 +263,10 @@ pub(crate) struct Session {
     /// happens inside the frame rather than in the limiter's own sleep, so
     /// without this a vsync-bound run reads as CPU-bound.
     pub(crate) present_cost: perf::Meter,
+    /// Where each window frame's input sample sat against its swapchain
+    /// acquire, summed a second at a time and logged at `debug`. See
+    /// [`frame_timing`].
+    pub(crate) frame_timing: frame_timing::FrameTiming,
     /// Whether the "this target is out of reach" line has already been said
     /// for the spell the controller is currently in.
     ///
@@ -949,9 +957,7 @@ impl Session {
         }
         self.gpu.config.width = width;
         self.gpu.config.height = height;
-        self.gpu
-            .surface
-            .configure(&self.gpu.device, &self.gpu.config);
+        self.gpu.configure();
         // The depth attachment follows the *framebuffer*, not the window, and
         // `frame` resizes both together - so a resize only has to invalidate,
         // which configuring the surface above already did.

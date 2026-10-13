@@ -28,6 +28,10 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   frame clock's `TickClock::interpolation_alpha` before it draws a race and
   puts `1.0` back after the HUD; every tick path puts `1.0` back too, so
   nothing the tick computes reads a blend. `1.0` is the current tick exactly.
+  The frame acquires its swapchain image before it reads the clock
+  ([engine lifecycle](../architecture/engine-lifecycle.md), "Frame
+  structure"), so under a blocking present mode the alpha describes the moment
+  after the acquire's wait, not before it.
 - **Blended at the choke points.** The accessors every continuous pose is read
   through blend by the alpha, so their readers follow without each being
   changed:

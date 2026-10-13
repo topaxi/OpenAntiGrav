@@ -66,31 +66,27 @@ little to remove: the limiter already waits *before* a frame
   falls outside this frame's `elapsed` and the ticks are computed from a
   pre-sleep time. The `about_to_wait` limiter waits as well, so with anti-lag
   active one of the two waits has to go.
-- **Hoist the swapchain acquire to before the tick loop** (maintainer,
-  2026-10-13), a vendor-neutral latency win that needs no extension. Input is
-  sampled once per tick in the frame's tick loop (`player_snapshots`), and the
-  swapchain is acquired afterwards, as the first call in `Session::draw`
-  (`crates/game/src/main/session/draw.rs`, `get_current_texture`). Under a
-  blocking present mode (`Vsync::On`, or `smooth` falling back to Fifo) the
-  acquire waits for a free image, so input sampled before that wait is up to a
-  frame old when drawn. Move the acquire above the frame's `now`/elapsed read
-  in `crates/game/src/main/session/frame.rs` (before `self.clock.advance`), so
-  the wait counts toward this frame's elapsed and the ticks, the input and the
-  draw alpha all describe the moment after it. The between-ticks draw keeps
-  this easy: its alpha is read only in the race's render call, after the
-  acquire, and nothing between the advance and the acquire depends on it
-  (checked 2026-10-13; see `drawing-between-ticks-what-is-still-stepped.md`).
-  This is also the natural place for `VK_ANTI_LAG_STAGE_INPUT_AMD` above.
-  **Who is exposed, and what to watch** (added 2026-10-13). It applies to `on`
+- **The swapchain acquire hoist landed 2026-10-13** (vendor-neutral, no
+  extension): `Session::frame` acquires the image (`Gpu::acquire`,
+  `crates/game/src/main/gpu.rs`) before its `now`/elapsed read, so a blocking
+  acquire's wait counts toward the frame's `elapsed` and the ticks, the pad
+  input they sample (`player_snapshots` polls gilrs there) and the draw alpha
+  describe the moment after it. Keyboard events that arrive during the wait
+  still reach the next frame (the event loop is blocked in it). See
+  `docs/architecture/engine-lifecycle.md`, "Frame structure". **Not
+  measured**: no member's sandbox can present (no lavapipe installed, RADV
+  needs DRI3, which Xvfb lacks), so the before/after acquire wait under Fifo
+  is still to be read on a real display with the `frame timing` debug line
+  (`RUST_LOG=info,oag_game=debug`; acquire wait and where the frame's input
+  sample sits against it, once a second). `VK_ANTI_LAG_STAGE_INPUT_AMD`
+  belongs right after that acquire, before the clock read.
+- **Who the acquire order exposed** (added 2026-10-13). It applied to `on`
   and to `smooth` when it falls back to `Fifo`; `off` (`Immediate`) and `smooth`
   on `Mailbox` do not block there, so the maintainer's own setting is
   unaffected where Mailbox is offered. **Unchecked on the Deck**: if gamescope's
   surface does not offer Mailbox, `smooth` falls back to `Fifo` at latency 2
   (`present_mode` warns only once), and the cost there is up to two queued
-  frames, not one. Pitfalls for the change: an early return in `frame` would
-  drop the held image, a load stall would hold it for hundreds of milliseconds,
-  `Outdated` and `Lost` need the reconfigure path, the `present_cost` meter
-  times the acquire inside `draw`, and the web build has no blocking acquire.
+  frames, not one.
 - **Reach**: Vulkan on AMD only (RADV >= 26.3; AMD's Windows driver). A no-op
   elsewhere, so it must stay optional and detected, never required.
 - ~~**Local Mesa is 26.2.4** (2026-10-09), so nothing here is testable on the
@@ -116,8 +112,10 @@ little to remove: the limiter already waits *before* a frame
 
 ## Next Steps
 
-1. Hoist the swapchain acquire (Open, above), measured with step 3's probe
-   if it exists by then. An hour or two; any GPU.
+1. Read the hoist's effect on a real display: the `frame timing` debug line
+   on a build of `edc07a0c6` (the counter on the old order) and one of
+   `b0ec1779a` or later (the hoist), `vsync = "on"`, a minute of racing each.
+   Ten minutes, maintainer.
 1b. On the Deck, look for the log line "this surface offers ..., so vsync smooth
    falls back to Fifo" (or run `vulkaninfo` for the present modes). Two minutes
    once someone is at the Deck; it decides how much `smooth` is exposed to the
