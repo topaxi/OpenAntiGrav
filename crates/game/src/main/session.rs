@@ -580,6 +580,10 @@ pub(crate) struct Session {
     /// or the player backs out of the race box's screens (which drop it). `None`
     /// is an ordinary race.
     pub(crate) split_lobby: Option<oag_input::lobby::Lobby>,
+    /// What the people seated after the first picked on their own Ship Select,
+    /// in seat order, until the launch moves them into
+    /// `oag_raceplay::Options::seat_picks`. Empty outside a split-screen race box.
+    pub(crate) split_picks: Vec<picker::SeatChoice>,
     /// Where the `Classic` circuits a Pure campaign event races are, by
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.

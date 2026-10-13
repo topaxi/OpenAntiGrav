@@ -133,7 +133,7 @@ mod variant;
 pub(crate) use variant::{combine_variant, gated_variant_choices, variant_choices};
 
 #[path = "menus/team.rs"]
-mod team;
+pub(crate) mod team;
 
 impl Session {
     /// Replaces the front end with the menus, seeded from the settings.
@@ -647,7 +647,7 @@ impl Session {
             event,
             menu::MenuEvent::Fired(menu::Action::OpenSplitScreen)
         ) {
-            self.split_lobby = None;
+            self.drop_split_lobby();
         }
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
@@ -833,6 +833,12 @@ impl Session {
         if self.split_lobby.is_some() {
             race_options.opponents = true;
         }
+        // What the people seated after the first picked, each on their own
+        // Ship Select; empty for a race of one, which clears a stale list.
+        race_options.seat_picks = std::mem::take(&mut self.split_picks)
+            .into_iter()
+            .map(|choice| choice.pick)
+            .collect();
         // Back before the load, which reads it.
         self.race_options = Some(race_options);
         self.finish_launch();

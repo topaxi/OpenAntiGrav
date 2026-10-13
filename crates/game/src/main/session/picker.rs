@@ -29,6 +29,10 @@ use crate::stage::Stage;
 
 use super::Session;
 
+#[path = "picker/seat.rs"]
+mod seat;
+pub(crate) use seat::SeatChoice;
+
 impl Session {
     /// Opens Track Select over the menus, on the circuit `race.track` names.
     ///
@@ -111,7 +115,7 @@ impl Session {
             order.rotate_left(selected);
         }
         let distances = self.spawn_distance_worker(order);
-        self.open_picker(model, layout, LiveryAxis::Variant, sources, distances)
+        self.open_picker(model, layout, LiveryAxis::Variant, sources, distances, None)
     }
 
     /// The circuit gate, read off the source's own archives. Open (nothing
@@ -187,6 +191,14 @@ impl Session {
 
     /// Opens Ship Select over the menus, on the team `race.team` names.
     pub(crate) fn open_ship_picker(&mut self) -> bool {
+        self.open_ship_picker_for(0)
+    }
+
+    /// Ship Select for the person in `seat`. Seat `0` is the player the
+    /// settings belong to and is [`Self::open_ship_picker`] exactly; a later
+    /// seat opens the same screen on their own pick (see [`seat`]) and writes
+    /// nothing to the settings.
+    pub(crate) fn open_ship_picker_for(&mut self, seat: usize) -> bool {
         // Read before `shell` is borrowed: it opens the disc.
         let locked_teams = self.pure_locked_teams();
         let Some(shell) = self.shell.as_ref() else {
@@ -290,9 +302,10 @@ impl Session {
         // themselves, not on the row's first id being empty - HD's own
         // variant table opens on the classic hull's empty suffix too, which
         // read as a skin row and sent `_c1`/`_n1` to `race.skin`.
+        let (team_id, seat_livery) = self.seat_opening(seat, &entries);
         let selected = entries
             .iter()
-            .position(|entry| entry.id == self.settings.race.team)
+            .position(|entry| entry.id == team_id)
             .unwrap_or(0);
         let axis = match sources.get(selected) {
             Some(PreviewSource::Ship { skins, .. }) if !skins.is_empty() => LiveryAxis::Skin,
@@ -300,14 +313,18 @@ impl Session {
         };
         // A profile that has not picked a model opens on the title's own
         // fresh-profile row - `Race::opening_variant`.
-        let livery = match axis {
-            LiveryAxis::Skin => self.settings.race.skin.clone(),
-            LiveryAxis::Variant => self.settings.race.opening_variant(title).to_string(),
+        let livery = match (seat_livery, seat, axis) {
+            (Some(picked), _, _) => picked,
+            (None, 0, LiveryAxis::Skin) => self.settings.race.skin.clone(),
+            (None, _, LiveryAxis::Skin) => String::new(),
+            (None, _, LiveryAxis::Variant) => {
+                self.settings.race.opening_variant(title).to_string()
+            }
         };
         let model = Picker::new(
             Kind::Ship,
             entries,
-            Some(self.settings.race.team.as_str()),
+            Some(team_id.as_str()),
             Some(livery.as_str()),
         );
         // HD's screen lays the teams out across - see
@@ -319,20 +336,25 @@ impl Session {
         };
         // As `open_track_picker` does for the circuit: the screen's own
         // selection is the setting, from the first frame.
-        if let Some(entry) = model.selected()
-            && entry.id != self.settings.race.team
-        {
-            self.settings.race.team = entry.id.clone();
-            self.resupply_race_variant();
+        // A later seat's pick is its own and the settings are the first
+        // player's, so it leaves them alone.
+        if seat == 0 {
+            if let Some(entry) = model.selected()
+                && entry.id != self.settings.race.team
+            {
+                self.settings.race.team = entry.id.clone();
+                self.resupply_race_variant();
+            }
+            // What the screen opened on is what a bare Confirm races.
+            if axis == LiveryAxis::Variant
+                && let Some((id, _)) = model.variant()
+                && !self.settings.race.variant_chosen
+            {
+                self.settings.race.variant = id.clone();
+            }
         }
-        // What the screen opened on is what a bare Confirm races.
-        if axis == LiveryAxis::Variant
-            && let Some((id, _)) = model.variant()
-            && !self.settings.race.variant_chosen
-        {
-            self.settings.race.variant = id.clone();
-        }
-        self.open_picker(model, layout, axis, sources, None)
+        let seat = self.seat_of_picker(seat);
+        self.open_picker(model, layout, axis, sources, None, seat)
     }
 
     /// The three info rows for a circuit: distance, lap record, race
@@ -379,7 +401,9 @@ impl Session {
         livery_axis: LiveryAxis,
         sources: Vec<PreviewSource>,
         distances: Option<Distances>,
+        seat: Option<(usize, usize)>,
     ) -> bool {
+        let layout = self.seat_layout(layout, seat);
         let Some(options) = self.race_options.as_ref() else {
             return false;
         };
@@ -447,6 +471,7 @@ impl Session {
             previews,
         );
         picker.laps = laps;
+        picker.seat = seat;
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();
         stage.picker = Some(picker);
@@ -462,7 +487,17 @@ impl Session {
             return;
         };
         picker.refresh_info();
-        let mut events = picker.model.update(self.controls.buttons_mut());
+        // A split-screen seat's screen reads its own device and no other.
+        let mut events = match picker.seat {
+            Some((seat, _)) => picker
+                .model
+                .update(&mut seat::input(
+                    self.split_lobby.as_ref(),
+                    seat,
+                    self.controls.device_presses(),
+                )),
+            None => picker.model.update(self.controls.buttons_mut()),
+        };
         events.extend(super::pointer::picker_pointer(stage, pointer));
         for event in events {
             self.handle_picker(event);
@@ -483,6 +518,18 @@ impl Session {
             .shell
             .as_ref()
             .is_some_and(|shell| shell.title.campaign.flow.is_some());
+        // A split-screen race box: Ship Select is one screen per seat.
+        if let (Kind::Ship, Some((seat, count))) = (kind, picker.seat) {
+            match event {
+                Event::Moved | Event::VariantChanged if seat > 0 => {
+                    picker.refresh_preview(&self.gpu);
+                    return;
+                }
+                Event::Confirmed => return self.confirm_seat(seat, count),
+                Event::Back if seat > 0 => return self.back_seat(seat),
+                _ => {}
+            }
+        }
         match (kind, event) {
             (Kind::Track, Event::Moved) => {
                 if let Some(entry) = picker.model.selected() {
@@ -556,7 +603,7 @@ impl Session {
             (Kind::Track, Event::Back) => {
                 stage.picker = None;
                 // Out of the race box the join screen opened: the lobby went with it.
-                self.split_lobby = None;
+                self.drop_split_lobby();
             }
             (Kind::Ship, Event::Back) => {
                 stage.picker = None;
