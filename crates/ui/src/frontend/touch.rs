@@ -40,21 +40,21 @@
 //! cross-play are network sessions this build does not have. Confirming one
 //! of those says so in a note and stays.
 //!
-//! # Three tiles the disc does not author: RACE BOX, REMIX and SPLIT SCREEN
+//! # Two tiles the disc does not author: RACE BOX and REMIX
 //!
 //! **This build's own, not on the disc**, and the one place this module
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
 //! build's own race box and RACE REMIX pages (`assets/ui/menu.toml`,
-//! ADR-0034) from its own front end, and the split-screen join screen (2048 authors
-//! no local split entry, so that tile is chosen too). So the three are appended **after** the
+//! ADR-0034) from its own front end. So the two are appended **after** the
 //! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
-//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`/`OAG_MENU_SPLIT_SCREEN` strings (the
+//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` strings (the
 //! same ids the menu tree uses), and drawn as the labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
-//! shape holding an unauthored destination. **Their positions are chosen,
-//! not measured**: the left column, stacked at `(16, 110)`, `(16, 226)` and `(16, 342)`,
+//! shape holding an unauthored destination. Split screen is not a tile: it is
+//! two rows of the race box's page (`oag_title::LocalSplit::Borrowed`). **Their positions are chosen,
+//! not measured**: the left column, stacked at `(16, 110)` and `(16, 226)`,
 //! clear of the v1.04 patch's grid (two rows of three from x=228) - they sat
 //! at `(16, 432)` and `(158, 432)` until the patch was mounted and its second
 //! row put `ONLINE CAMPAIGN` under them. The parent shell

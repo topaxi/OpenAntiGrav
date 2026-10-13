@@ -630,6 +630,30 @@ fn omega_wires_hds_vert_layouts_one_column_apart() {
     ) else {
         return;
     };
+    // A vertically cut two-view Omega race reads them: the layouts it draws are the 960-wide
+    // columns, one view apart, where the horizontal cut's are the half-height rows.
+    let load = |cut| {
+        race::load(&race::Options {
+            source: ps4.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            views: 2,
+            cut,
+            ..race::Options::default()
+        })
+        .expect("loading Omega's race")
+    };
+    let vertical = load(oag_render::viewport::Cut::Vertical);
+    let horizontal = load(oag_render::viewport::Cut::Horizontal);
+    let columns = vertical.hud.split.as_ref().expect("the vert_ family");
+    let rows = horizontal
+        .hud
+        .split
+        .as_ref()
+        .expect("the horizontal family");
+    assert_eq!(columns.view, (960.0, 1080.0));
+    assert_eq!(columns.step, (960.0, 0.0));
+    assert_eq!(rows.view, (1920.0, 540.0));
     let mut hd = oag_hd::open(&image.display().to_string()).expect("HD opens");
     let mut omega = oag_omega::open(&ps4.display().to_string()).expect("Omega opens");
     let hd_vert = oag_hd::hud::SPLIT

@@ -2351,7 +2351,9 @@ the digest-matching Rust reader (`cargo build -p oag-assets --example psarc_cat`
 `oag_omega::frontend::FRONT_END` names it as `local_split`, so the same code puts both rows
 on Omega's RACE page (test `omega_race_box_offers_the_discs_own_players_and_cuts`). The
 earlier "neither list" came from `scripts/psarc.py`, which maps PS4 archive paths by
-position and returned a 5,475-byte `<PI_Grid>` file under that name. Omega's join prompt
+position and returned a 5,475-byte `<PI_Grid>` file under that name. Omega's `NumPlayersPadlock` (970, 410) is the same widget as HD's trial-lock padlock; whether
+Omega's executable hides it the way `RaceBox_UpdateTrialPadlocks` does is **not checkable this
+lane** (no Ghidra access), so the lists are unlocked here as on HD. Omega's join prompt
 differs from HD's: `FE_GUEST_JOIN` is "PLAYER 2 PRESS OPTIONS TO JOIN" there. Omega's
 `team_selection_definition.xml` (`data09`) authors `Team Selection`, `Team Selection Player 1`
 and `Team Selection Player 2` like HD's (**checked, applies, not wired**: `team_select` is
