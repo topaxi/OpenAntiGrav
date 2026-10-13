@@ -52,6 +52,10 @@ pub(super) struct Shown {
     pub boost_icon: bool,
     /// The row `tablehighlight` sits on, or `None` to hide it.
     pub highlight: Option<usize>,
+    /// Further rows the highlight is drawn on as well, bit `r` for row `r`
+    /// (1-based): a race several people flew marks each person's row, and the
+    /// original's one highlight widget is drawn once per row. Zero everywhere else.
+    pub also_highlight: u16,
 }
 
 /// The row an unnamed widget at `y` is nested in, when it is one of the grid's row
@@ -158,15 +162,21 @@ pub(super) fn table_layers(
             let Some(row) = shown.highlight.filter(|_| shown.table) else {
                 continue;
             };
-            out.push(Draw::Fill {
-                rect: [
-                    0.0,
-                    highlight_y(row),
-                    fill.width.unwrap_or(0.0),
-                    fill.height.unwrap_or(0.0),
-                ],
-                color: argb_to_rgba(fill.color),
-            });
+            let rows = std::iter::once(row).chain(
+                (1..=ROWS)
+                    .filter(|&other| other != row && (shown.also_highlight >> other) & 1 == 1),
+            );
+            for row in rows {
+                out.push(Draw::Fill {
+                    rect: [
+                        0.0,
+                        highlight_y(row),
+                        fill.width.unwrap_or(0.0),
+                        fill.height.unwrap_or(0.0),
+                    ],
+                    color: argb_to_rgba(fill.color),
+                });
+            }
             continue;
         }
         if in_table(name, fill.y) && !(shown.table && row_shown(fill.y)) {

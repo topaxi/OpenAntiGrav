@@ -22,10 +22,9 @@
 //! same reason every other ground-truth file in this directory reaches for
 //! `oag_raceplay`/`oag_game::endrace` rather than `crate::main::*`. What
 //! those two hold beyond what this test exercises is thin, GPU-touching
-//! glue: opening a renderer and copying `Board` rows into `FieldRow`, the
-//! second of which has its own fast, disc-free unit tests
-//! (`crate::main::race_stage::endrace::tests::hd_field_rows_*` in the binary
-//! itself). This test is the disc-backed half: a real race, a real board, a
+//! glue: opening a renderer. The `Board` rows become `FieldRow`s in
+//! `oag_game::results_tables`, which has its own fast, disc-free unit tests and
+//! is called here directly. This test is the disc-backed half: a real race, a real board, a
 //! real `EndRace_Definition.xml`, and a real draw list built from both.
 
 use std::path::PathBuf;
@@ -101,19 +100,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         "the player's own row should be on the board"
     );
 
-    // `race_stage::endrace::hd_field_rows`'s own mapping, inlined - that
-    // function lives in the binary crate and is unit-tested there; this is
-    // the same three fields, fed real data, to confirm the shape survives
-    // contact with a real board rather than only a hand-built one.
-    let rows: Vec<oag_ui_screens::endrace::FieldRow> = board
-        .rows
-        .iter()
-        .map(|row| oag_ui_screens::endrace::FieldRow {
-            place: row.place,
-            time_ticks: row.finish_tick,
-            player: row.player,
-        })
-        .collect();
+    let rows = oag_game::results_tables::field_rows(Some(&board));
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(
@@ -244,6 +231,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
             place: 1,
             time_ticks: Some(1000),
             player: true,
+            seat: None,
         }],
     };
     let layers = oag_ui_screens::endrace::hd::hd_results_draw_list(
@@ -553,6 +541,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
             place,
             time_ticks: Some(6000 + u64::from(place) * 60),
             player: place == 5,
+            seat: None,
         })
         .collect();
     let model = oag_ui_screens::endrace::FieldResults {

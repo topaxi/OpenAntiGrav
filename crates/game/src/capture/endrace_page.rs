@@ -55,6 +55,12 @@ pub(super) enum EndRaceKind {
     /// never enters it (untraced entry). Synthetic three-craft top three;
     /// the pilot names are this capture's own, not the disc's.
     Podium,
+    /// `EndRace Results` for a race two people flew (a split screen): the table
+    /// of [`oag_ui_screens::endrace::PeopleResults`] on Pulse, the field grid with
+    /// each person named on HD. Fed a stated board through `scoreboard::build`,
+    /// the function a race builds its own with: **chosen numbers**, no race
+    /// behind it.
+    PeopleResults,
     /// A Zone race's `EndRace Results` - `EndRaceResults_PopulateZoneTable`
     /// (`0x088db574`). **Chosen numbers**, not measured: no Zone frame is
     /// reachable, and two of the six statistics draw blank on purpose, as this
@@ -96,6 +102,7 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
             Some(EndRaceKind::EliminationResults)
         }
         "endrace-results-zone" | "endrace_results_zone" => Some(EndRaceKind::ZoneResults),
+        "endrace-results-people" | "endrace_results_people" => Some(EndRaceKind::PeopleResults),
         other => super::endrace_touch_page::touch_kind(other).map(EndRaceKind::Touch),
     }
 }
@@ -114,6 +121,26 @@ const TICKS_PER_SECOND: f64 = 60.0;
 /// `docs/ui/endrace-screens.md`.
 fn seconds_to_ticks(seconds: f64) -> u32 {
     (seconds * TICKS_PER_SECOND).round() as u32
+}
+
+/// The board a two-person race leaves, stated: slots 0 and 1 are people and
+/// finish 5th and 7th of eight, and the last craft is still racing when the
+/// race ends. Built through `scoreboard::build` as `Race::capture_results` does.
+fn two_person_board() -> oag_raceplay::scoreboard::Board {
+    use oag_raceplay::scoreboard::Craft;
+    let places = [5, 7, 1, 2, 3, 4, 6, 8];
+    let crafts: Vec<Craft> = (0..8u8)
+        .map(|slot| Craft {
+            slot,
+            person: slot < 2,
+            place: places[usize::from(slot)],
+            lap: if slot == 7 { 3 } else { 4 },
+            finish_tick: (slot != 7)
+                .then(|| 120 * 60 + 4 + u64::from(places[usize::from(slot)]) * 97),
+            best_lap_ticks: Some(2300 + u32::from(slot)),
+        })
+        .collect();
+    oag_raceplay::scoreboard::build(&crafts, Some(3), 125 * 60)
 }
 
 /// Opens `options.race`'s own source and draws one EndRace screen - the
@@ -404,6 +431,31 @@ fn endrace_page(
         EndRaceKind::Podium => anyhow::bail!(
             "EndRace Podium is Wipeout HD/Fury's only; this title's screen file has none"
         ),
+        EndRaceKind::PeopleResults => {
+            let roster = [
+                "Assegai",
+                "Feisar",
+                "EGX",
+                "Qirex",
+                "Goteki",
+                "AG_Systems",
+                "Triakis",
+                "Piranha",
+            ]
+            .map(String::from);
+            let model = crate::results_tables::people_rows(Some(&two_person_board()), &roster)
+                .context("the stated board has rows")?;
+            oag_ui_screens::endrace::people_results_draw_list(
+                &model,
+                &screens.results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
         EndRaceKind::ZoneResults => {
             let model = oag_ui_screens::endrace::ZoneResults {
                 zones_cleared: 7,
@@ -512,13 +564,33 @@ fn hd_endrace_page(
                         place: 1,
                         time_ticks: Some(u64::from(seconds_to_ticks(191.76))),
                         player: true,
+                        seat: None,
                     },
                     oag_ui_screens::endrace::FieldRow {
                         place: 2,
                         time_ticks: Some(u64::from(seconds_to_ticks(203.11))),
                         player: false,
+                        seat: None,
                     },
                 ],
+            };
+            oag_ui_screens::endrace::hd::hd_results_draw_list(
+                &model,
+                results,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        EndRaceKind::PeopleResults => {
+            let rows = crate::results_tables::field_rows(Some(&two_person_board()));
+            let model = oag_ui_screens::endrace::FieldResults {
+                loyalty: None,
+                headline: oag_ui_screens::endrace::Headline::Several,
+                rows,
             };
             oag_ui_screens::endrace::hd::hd_results_draw_list(
                 &model,

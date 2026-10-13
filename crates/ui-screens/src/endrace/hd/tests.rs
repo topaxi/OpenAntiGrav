@@ -123,11 +123,13 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
                 place: 1,
                 time_ticks: Some(180),
                 player: true,
+                seat: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: None,
                 player: false,
+                seat: None,
             },
         ],
     };
@@ -161,6 +163,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
             place: 1,
             time_ticks: Some(180),
             player: true,
+            seat: None,
         }],
     };
     let strings = strings();
@@ -210,11 +213,13 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
                 place: 1,
                 time_ticks: Some(60),
                 player: false,
+                seat: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: Some(90),
                 player: true,
+                seat: None,
             },
         ],
     };
@@ -281,6 +286,7 @@ fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_pla
             place: 1,
             time_ticks: Some(60),
             player: true,
+            seat: None,
         }],
     };
     let strings = strings();

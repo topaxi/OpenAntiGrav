@@ -173,6 +173,7 @@ pub fn elimination_results_draw_list(
         header_bar: true,
         boost_icon: false,
         highlight: model.place().map(usize::from),
+        also_highlight: 0,
     };
     table_layers(
         layout,
@@ -237,6 +238,7 @@ pub fn zone_results_draw_list(
         header_bar: false,
         boost_icon: false,
         highlight: None,
+        also_highlight: 0,
     };
     table_layers(
         layout,

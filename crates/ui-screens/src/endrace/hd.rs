@@ -206,7 +206,14 @@ pub fn hd_results_draw_list(
     };
     let screen = &layout.screen;
     let mut out = Vec::new();
-    let player_row = model.rows.iter().position(|row| row.player);
+    // Every person's row: one in a one-person race, one per seat in a split.
+    let player_rows: Vec<usize> = model
+        .rows
+        .iter()
+        .enumerate()
+        .filter(|(_, row)| row.player)
+        .map(|(index, _)| index)
+        .collect();
     let race = RaceGrid::of(model.headline, screen);
     for fill in &screen.fills {
         // `0x00223f50`, the grid reset every mode's layout runs first,
@@ -216,7 +223,7 @@ pub fn hd_results_draw_list(
             continue;
         }
         if let Some(race) = &race {
-            if let Some(draw) = race.fill(fill, player_row) {
+            if let Some(draw) = race.fill(fill, &player_rows) {
                 out.extend(draw);
                 continue;
             }
@@ -226,7 +233,7 @@ pub fn hd_results_draw_list(
             // the identical idiom on Pulse. Drawn nowhere when this race
             // never placed the player at all (a field of one race that
             // never finished, say), which is honest rather than a guess.
-            if let Some(row) = player_row {
+            for &row in &player_rows {
                 out.push(Draw::Fill {
                     rect: [
                         fill.x,
@@ -256,13 +263,13 @@ pub fn hd_results_draw_list(
         if let Some((col, row)) = grid_slot(name)
             && let Some(race) = &race
         {
-            let Some(content) = race_cell_text(col, row, model) else {
+            let Some(content) = race_cell_text(col, row, model, strings) else {
                 continue;
             };
             let mut positioned = text.clone();
             positioned.x = race.origin.0 + RACE_COLUMN_X[col];
             positioned.y = race.origin.1 + RACE_ROW_TOP + row as f32 * RACE_ROW_PITCH;
-            if player_row == Some(row) {
+            if player_rows.contains(&row) {
                 positioned.color = 0xffff_ffff;
             }
             out.push(text_draw(&positioned, &content, layout));
@@ -431,7 +438,10 @@ impl RaceGrid {
     /// position less its `y = 24` - `0x0022c068` moves it to `x = 0` and
     /// leaves the file's `y`, so the block itself is the anchor.
     fn of(headline: Headline, screen: &Screen) -> Option<Self> {
-        if !matches!(headline, Headline::Position(_) | Headline::NoPosition) {
+        if !matches!(
+            headline,
+            Headline::Position(_) | Headline::NoPosition | Headline::Several
+        ) {
             return None;
         }
         let head = find_block(screen, "GridHead1")?;
@@ -443,7 +453,7 @@ impl RaceGrid {
     /// A frame fill as the race layout draws it: `Some(vec![])` for one it
     /// hides, `Some` of the moved fill for one it moves, `None` for a fill
     /// it leaves as authored.
-    fn fill(&self, fill: &oag_ui::screen::Fill, player_row: Option<usize>) -> Option<Vec<Draw>> {
+    fn fill(&self, fill: &oag_ui::screen::Fill, player_rows: &[usize]) -> Option<Vec<Draw>> {
         let moved = |y: f32, height: Option<f32>| {
             let mut moved = fill.clone();
             moved.y = self.origin.1 + y;
@@ -456,9 +466,12 @@ impl RaceGrid {
             "GridTopBar" | "GridBottomBlock" => Some(Vec::new()),
             "GridSideBarL" | "GridSideBarR" => Some(moved(RACE_FRAME_TOP, Some(RACE_FRAME_HEIGHT))),
             "GridBottomBar" => Some(moved(RACE_BOTTOM_BAR_Y, None)),
-            "GridHighlight" => Some(player_row.map_or_else(Vec::new, |row| {
-                moved(RACE_HIGHLIGHT_TOP + row as f32 * RACE_ROW_PITCH, None)
-            })),
+            "GridHighlight" => Some(
+                player_rows
+                    .iter()
+                    .flat_map(|&row| moved(RACE_HIGHLIGHT_TOP + row as f32 * RACE_ROW_PITCH, None))
+                    .collect(),
+            ),
             _ => None,
         }
     }
@@ -468,14 +481,25 @@ impl RaceGrid {
 const GRID_HEAD_Y: f32 = 24.0;
 
 /// A race-layout cell's content: column 0 the place (`0x0022b688` formats
-/// the entry's `+0x168` position), column 2 the finish time. **Column 1
-/// draws nothing**: `0x0022b688` fills it from a string at the entry's own
-/// `+0x50`, a field this pass did not identify - most likely a pilot or team
-/// name, but a guess is not drawn. Column 3 is never written on a race.
-fn race_cell_text(col: usize, row: usize, model: &FieldResults) -> Option<String> {
+/// the entry's `+0x168` position), column 2 the finish time. **Column 1 is
+/// drawn only for a person of a race several people flew**: `0x0022b688` fills
+/// it from a string at the entry's own `+0x50`, a field this pass did not identify
+/// (the podium's slot setter reads the same field as the name it prints, so in a
+/// multiplayer race it is the player's name), and a guess is not drawn for an
+/// opponent. A person's seat, `PLAYER 1`, is ours, **chosen, not measured**.
+/// Column 3 is never written on a race.
+fn race_cell_text(
+    col: usize,
+    row: usize,
+    model: &FieldResults,
+    strings: &StringTable,
+) -> Option<String> {
     let entry = model.rows.get(row)?;
     match col {
         0 => Some(entry.place.to_string()),
+        1 => entry
+            .seat
+            .map(|seat| format!("{} {seat}", strings.get_or_id("OAG_JOIN_PLAYER"))),
         2 => Some(
             entry
                 .time_ticks

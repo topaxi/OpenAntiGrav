@@ -346,7 +346,13 @@ pub fn draw_list(
                 format!("{}", row.place),
             ));
         }
-        out.push(text(CRAFT_X, y, Align::Left, color, craft_label(row, board.persons() > 1)));
+        out.push(text(
+            CRAFT_X,
+            y,
+            Align::Left,
+            color,
+            craft_label(row, board.persons() > 1),
+        ));
         out.push(text(
             LAPS_X,
             y,

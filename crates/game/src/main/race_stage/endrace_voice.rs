@@ -38,6 +38,8 @@ pub(crate) fn voice_for(
                 .and_then(|index| u8::try_from(index + 1).ok()),
         ),
         ResultsModel::Pulse(_) | ResultsModel::PulseZone(_) => (race_place, None),
+        // Several people: nobody's place is "the" place, so nothing is announced.
+        ResultsModel::PulsePeople(_) => return None,
     };
     Some(Voice::new(
         law?,

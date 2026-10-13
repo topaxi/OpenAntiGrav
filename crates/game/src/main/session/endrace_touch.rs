@@ -28,6 +28,15 @@ impl Session {
             return;
         };
         let title = shell.title;
+        // The pages summarise one racer (their place, medal and records), so for a
+        // race several people flew they would be slot 0's alone: the built-in
+        // table, which names every person, stays instead. Chosen, not measured -
+        // 2048's own split screen is not read.
+        if stage.race.viewport_count() > 1 {
+            log::info!("split screen: keeping the built-in results table over the touch pages");
+            self.mark_endrace_unavailable();
+            return;
+        }
         let Some(entry) = title.front_end.and_then(|f| f.endrace_entry) else {
             warn!("{} names no EndRace definition", title.name);
             self.mark_endrace_unavailable();
