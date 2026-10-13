@@ -733,21 +733,36 @@ Confidence 85 for the numbers; the rule is the crumb ring below. *The player in 
 position at `+0x30`, head `+0x780`, oldest `+0x784`, the latched speed `+0x78c`,
 a no-crumb flag byte `+0xb51`), and a reset puts the craft **on the oldest crumb,
 moved to the track-width midpoint and 5 up, moving along the line at
-`50 + 0.25 * latched speed`**. Four falls with the ring read every tick
-(`scripts/psp-fall-log.py --ring`, a craft placed rolling at 85 to 95 u/s that fell
-short, and two teleported into the gap): oldest crumb (-364.7, 1.2, 231.1), row 2933,
-latch 82.8: back at (-364.6, 7.3, 240.8), speed 70.7 (predicted 70.7); (-385.2, 3.6,
-239.9), row 2947, latch 83.7: (-385.8, 7.3, 240.8), 70.9 (70.9); and from rows 25 and 35
-(latch 0.2 and 0.1) the identical point (-427.6, 7.9, 240.7), row 2975, speed 50.0
-(50.05). So it is **not the nearest sample to the fall** and **not in the gap**: it is
-150 to 250 units behind the fall, before the pad, heading along the line tangent
-(within 2.5 degrees), the reset itself taking one frame (0.97 to 1.03 frames between
-consecutive hits). It matches the AI craft's point above (x -372 to -395, rows 2938 to
-2953, 73 to 76 u/s at level 2). The reappearance on the start straight seen in
-teleported tests before the ring was read (rows 1257 to 1379) is the ring still
-holding crumbs from there, since a teleported craft lays none. Confidence 85 (one
-boot, four falls, the model was read from the executable first and the prediction held
-to 0.1 u/s). Crumb spacing in the placed runs was about 20 units (rows 2919 to 3018).
+`50 + 0.25 * latched speed`**, one frame later (0.97 to 1.03 frames between
+consecutive hits). **Natural drive-in falls, 5 of 5**
+(`scripts/psp-fall-drive.py`: the craft steered at the racing line by a pure-pursuit
+controller, throttle held only below a cap, the ring read every tick):
+
+| Cap | Speed at the lip (row 17-18) | Fell from row | Latch | Speed after | 50 + 0.25 x latch |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 85 | 83.4 | 68 | 84.0 | 71.0 | 71.0 |
+| 70 | 70.6 | 56 | 71.9 | 68.0 | 68.0 |
+| 60 | 60.2 | 49 | 59.1 | 64.8 | 64.8 |
+| 85, throttle off from row 3045 | 80.4 | 45 | 79.6 | 69.9 | 69.9 |
+| 100 | 98.1 | 38 | 100.0 | 75.0 | 75.0 |
+
+Every fall reappears at **(-388.6, 7.3, 240.8), line row 2949**, heading (-0.999,
+0.036, -0.025): the oldest crumb (-388.1, 3.3, 240.4) lifted to the midpoint. The
+ring just before each reset has head 4, oldest 5, flag 1, crumbs at rows 2935 to
+3032 about 14 rows (20 units) apart: it is **frozen on the last 8 crumbs laid
+before the no-crumb zone** (authored from row 3036 on `13_Track`), so the oldest is
+always row 2949 whatever the craft's speed, and only the speed after the reset
+varies, through the latch (the speed when the ring was last pushed, at row
+about 3032, a few tens of units before the lip). It is **not the nearest sample to
+the fall** and **not in the gap**: 280 to 300 units behind the fall. It is the same
+point the AI craft returns to (slot 1 at x -388.1 to -389.2, row 2950; the others a
+few units either side by lane and lap), and the AI numbers above fit the same law.
+The Time Trial start pose is (-404.4, 3.8, -312.1) (row about 1250), and the ring
+starts out holding it: a craft **teleported** into the gap before it has driven in
+reappears there (rows 1257 to 1379, with a few teleported tests at row 2975 from
+teleport-laid crumbs), which is why the teleported tests disagreed with the AI's
+point; they are not the natural rule. Confidence 90 (five natural falls, the law
+read from the executable first and every prediction held to 0.1 u/s; one boot).
 *Flight* (clears, line rows 18 to 44): the ramp climbs about 6.6 degrees (vy about
 0.115 of speed); liftoff at row 17 to 20; apex about 0.12 s later at row 27
 (y 22.56 for an entry-93 faller; the road is at 20.4); vy then falls at
