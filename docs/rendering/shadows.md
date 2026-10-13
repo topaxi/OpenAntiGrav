@@ -1156,7 +1156,10 @@ gather**: on Pulse's eight-craft Single Race grid (release build, 300 ticks)
 the placement rays took 10 us a tick, `hull_triangles` 20 us and
 `conform_to_floor` 1,722 us. The gather is taken once per tick and lerped between
 ticks now - see [split-screen.md](split-screen.md#cost), "The shadow gather per
-tick"; cheapening the floor rays themselves is open.
+tick" - and `conform_to_floor` asks the road once per distinct point rather than once
+per output vertex (a triangle's twelve places are six points, and the ear-clipped fan
+shares more): the same vertices bit for bit, 1,196 us a tick before and 417 after on
+the same grid ("The floor rays ask the road once per point").
 
 ## Constraints this touches
 
