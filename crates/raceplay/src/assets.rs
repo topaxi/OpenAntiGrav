@@ -57,11 +57,22 @@ pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD
 /// `own_strips` is a title with its own LeachBeam model (HD): its beam is two
 /// SPU-extruded strips of `leachbeam_triangle`, unread, so it is not asked for
 /// Pulse's texture.
+///
+/// `authored` is whether the title's weapon table authors a LeachBeam at all.
+/// Wipeout Pure's does not (no `LeachBeam` block, no string for one in either
+/// pressing's executable, none of Pulse's six LeachBeam entries in its
+/// `Data.wad`; `docs/ghidra/functions/psp-pure-usa/weapons.md`), so nothing can
+/// fire a beam and the texture is not looked for rather than reported absent.
 pub(super) fn leach_beam_texture(
     archives: &mut oag_assets::Archives,
     own_strips: bool,
+    authored: bool,
     report: &mut Vec<String>,
 ) -> Option<FlareTexture> {
+    if !authored {
+        report.push("the weapon table authors no LeachBeam: no ribbon texture is loaded".into());
+        return None;
+    }
     if own_strips {
         report.push("the LeachBeam's own strips are not built - no ribbon body".into());
         return None;

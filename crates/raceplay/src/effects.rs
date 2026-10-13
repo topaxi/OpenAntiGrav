@@ -884,6 +884,20 @@ impl Race {
         self.stage().up_of(self.view.quake_effect?)
     }
 
+    /// Where the Quake wave's effect sits, while one travels: the road
+    /// midpoint [`Self::quake_point`], plus the title's `QuakeLook::lift`.
+    #[must_use]
+    pub fn quake_anchor(&self) -> Option<oag_core::math::Vec3> {
+        self.stage().anchor_of(self.view.quake_effect?)
+    }
+
+    /// The full-screen wash a detonation or the Quake is drawing this frame,
+    /// as `RGBA`, or `None` with none (and on a source that draws none).
+    #[must_use]
+    pub fn screen_wash(&self) -> Option<[f32; 4]> {
+        self.view.screen_flash.as_ref()?.colour()
+    }
+
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:

@@ -265,6 +265,16 @@ impl Stage {
             .filter(|i| i.generation == playing.generation && i.attached)
             .map(|i| i.up)
     }
+
+    /// Where an attached instance sits, as [`Self::follow`] last put it.
+    /// `None` on a stale handle.
+    #[must_use]
+    pub fn anchor_of(&self, playing: Playing) -> Option<Vec3> {
+        self.instances
+            .get(usize::from(playing.index))
+            .filter(|i| i.generation == playing.generation && i.attached)
+            .map(|i| i.anchor)
+    }
 }
 
 #[cfg(test)]

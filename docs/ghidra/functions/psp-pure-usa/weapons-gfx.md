@@ -21,7 +21,7 @@ under `Data\Weapons\` and `Data\Psys\` resolves in `Data.wad` by hash (50 of 50,
 | Plasma blast | `0x0885b4f4`, `0x0885b5b0`, `0x0885b66c` (ctor `0x0885b2a0`) | `plasma_halo`, `plasma_hemisphere_noglow`, `plasma_hemisphere` | **open**: three 255-to-0 key tables of its own, not Pulse's baked track |
 | Missile | - | `WO_MISSILE_HEAD`, `_EXPLO`, `_BOUNCE` | open (triggers unread) |
 | Disruptor | `0x08859c70`, `0x0885a3b0`, `0x0885a8fc` | `disruptor_effect.vex`, `disruptor_cockpit.vex`, `electric_halo2.vex`, `explosion_gaseous.vex`, `WO_DISRUPTOR_*` | open |
-| Quake | - | `WO_QUAKE`, `WO_QUAKE_NEW_ROCKS`, `WO_QUAKE_VR` | open |
+| Quake | `0x08879d54` | `WO_QUAKE` (spawned), `WO_QUAKE_VR` (VR build), `WO_QUAKE_NEW_ROCKS` (loaded, no spawn found) | **wired 2026-10-12**: the extent law, world-up frame, `10` lift and the screen wash, [quake.md](quake.md) |
 | Cannon | - | none: no `Cannon` string | `cannon: None` |
 
 ## The laid Mine is Pulse's code; the laid Bomb is not

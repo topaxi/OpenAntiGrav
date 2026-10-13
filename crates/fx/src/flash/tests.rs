@@ -136,3 +136,18 @@ fn a_reset_flash_does_not_fall_off_with_distance() {
     // One frame in: alpha `1 - 1/60`, truncated to a byte.
     assert_eq!(near.colour().unwrap()[3], 250.0 / 255.0);
 }
+
+/// Pure's wash is its Quake's alone: a flash built `only` for one kind ignores
+/// the start of any other, so a Pure Rocket or Bomb draws no tint.
+#[test]
+fn a_flash_that_answers_one_kind_ignores_the_rest() {
+    let mut flash = ScreenFlash::only(QUAKE);
+    flash.start(BLAST, Vec3::ZERO);
+    flash.advance(DT, Vec3::ZERO);
+    assert_eq!(flash.colour(), None, "the Rocket's kind drew");
+    flash.start(QUAKE, Vec3::ZERO);
+    flash.advance(DT, Vec3::ZERO);
+    assert!(flash.colour().is_some(), "the Quake's own kind did not");
+    assert!(!flash.answers_every_kind());
+    assert!(ScreenFlash::default().answers_every_kind());
+}

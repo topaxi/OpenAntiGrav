@@ -60,8 +60,10 @@
 //! `ParticleSystem_DeriveScaledParams` multiplies into the three extent
 //! fields and nothing else. Size and speed are left as authored.
 //!
-//! **Applied to Pulse on the PSP only** - the law is read off that
-//! executable alone; other sources call
+//! **Applied to Pulse on the PSP, and to each effect a title lists in
+//! `oag_title::Effects::extents`** (HD's and Pure's `WO_QUAKE`) - the law is
+//! read off Pulse's executable, and Pure's `Quake_Update` writes the same
+//! co-factor through the same instance field; other sources call
 //! [`super::Effect::without_extents`] at load, by choice, until their own
 //! executables are read.
 
