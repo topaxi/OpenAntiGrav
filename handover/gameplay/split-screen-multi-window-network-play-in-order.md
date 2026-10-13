@@ -984,11 +984,28 @@ a guess.
   blocks there. `Title::split_on_integrated_gpu` (Pulse, Pure) drops the row and tile on an
   integrated GPU and sends a windowed `--players N` to one view. Written up in
   [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
-  **Open from it**: HD authors the local entry in RACEBOX itself (`NumberOfPlayers` 1 or 2,
-  `SplitScreen` horizontal or vertical, [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut))
-  - not wired, and the vertical cut has no layout; Omega's racebox has the same two lists (corrected 2026-10-13, `scripts/psarc.py` had
-  read the wrong file) and is not wired; a real integrated adapter was not walked; the
-  Omega has no Ship Select in a split (join, Track Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
+  **Open from it**: Omega's racebox has HD's two lists (corrected 2026-10-13, `scripts/psarc.py` had read the wrong file) and they are not wired;
+  a real integrated adapter was not walked; Omega has no Ship Select in a split (join, Track
+  Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
+- **2026-10-13, `hd-authored-split-setup`: HD's own split setup is wired.** HD authors the local
+  entry in RACEBOX itself (`NumberOfPlayers` 1 or 2, `SplitScreen` horizontal or vertical,
+  [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)):
+  the RACE page carries both rows as authored (after AI DIFFICULTY, the cut greyed at one person),
+  and they replace our generic SPLIT SCREEN row on HD. START with two people opens the join screen
+  for exactly two seats (START refused until both are taken, chosen), then HD's Track Select and
+  per-seat Ship Select, then the race. `RB_VERT` cuts left and right (`oag_render::viewport::Cut`,
+  `Race::cut`/`view_rects` the one rect source for scene and HUD) and composes HD's `vert_`
+  `splitscreen_hud` layouts; `--split-cut vertical` does it from the command line. The padlock
+  beside `NumberOfPlayers` is a trial-build lock (`g_FuryContentFlags`, confidence 72,
+  [racebox-padlocks.md](../../docs/ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md)), not
+  progression, so two players are unlocked. The lists' `intvalue`s are preview-image indices, not
+  unlock ids (the earlier reading was wrong). Walked windowed with two virtual pads: race box ->
+  2 players -> vertical -> join -> Track Select -> Ship Select P1/P2 -> a two-column race. **Open
+  from it**: the authored `FE_OFF` text over a greyed cut row is not drawn; HD has no menu route to
+  three or more people (the authored maximum is two; `--players N` still cuts up to eight); the
+  vertical cut on titles that author no choice (`--split-cut`) was not judged by eye; Omega ships
+  the `vert_` files but its race box authors no cut to choose them by; the trial build's other
+  padlocks (which modes, classes and weapon states it locks) are unenumerated.
 
 ## Next Steps
 

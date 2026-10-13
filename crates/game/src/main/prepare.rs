@@ -237,6 +237,7 @@ impl Pending {
             opponents: self.cli.opponents || self.cli.driver.players > 1,
             // The load reads a title's authored split HUD for two views.
             views: self.cli.driver.players,
+            cut: self.cli.driver.cut(),
             trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,

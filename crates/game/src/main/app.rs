@@ -70,6 +70,8 @@ pub(crate) struct App {
     pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
     /// `--players`: split-screen views of a direct `--race`. See `oag_game::split_screen`.
     pub(crate) players: u8,
+    /// `--split-cut`: which way two views are cut.
+    pub(crate) split_cut: oag_render::viewport::Cut,
     /// `--anim-seconds`: pins the trackside animation clock. See
     /// `Session::anim_seconds`.
     pub(crate) anim_seconds: Option<f32>,
@@ -303,7 +305,11 @@ impl App {
                 let players = self.race_title.map_or(self.players, |title| {
                     oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
                 });
-                oag_game::split_screen::apply(&mut race_stage.race, usize::from(players));
+                oag_game::split_screen::apply(
+                    &mut race_stage.race,
+                    usize::from(players),
+                    self.split_cut,
+                );
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {
@@ -513,6 +519,7 @@ impl App {
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
             pure_chain_class: 0,
             split_lobby: None,
+            split_cut: self.split_cut,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,

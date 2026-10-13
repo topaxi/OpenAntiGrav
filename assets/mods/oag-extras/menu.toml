@@ -46,6 +46,10 @@ target = "remix"
 subtitle = "Mix tracks and ships across every title you own"
 subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
 
+# On Wipeout HD/Fury the race box authors its own `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows
+# (`docs/formats/hd-frontend.md`) and `Definition::drop_rows_picked_on_screen` takes this row
+# off that title: the authored place wins. Every other title keeps it.
+#
 # **SPLIT SCREEN: chosen, not measured.** The PS2 pressing authors split-screen race
 # screens (`Team SelectionSplit`, `Track CreationSplit`) but takes its players from the
 # pads in port order; there is no join step to follow, so this row opens one: every

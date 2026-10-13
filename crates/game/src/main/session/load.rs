@@ -470,6 +470,9 @@ impl Session {
         {
             options.views = u8::try_from(seats).unwrap_or(u8::MAX);
         }
+        // Which way two views are cut: the load reads the left-and-right HUD for a vertical
+        // cut, and `split_screen::seat_for_launch` cuts the screen the same way.
+        options.cut = self.split_cut;
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
@@ -577,6 +580,7 @@ impl Session {
         let pvs_culling = self.pvs_culling();
         let render_profile = self.render_profile();
         let ai_choice = self.ai_choice;
+        let cut = self.split_cut;
         let ai_difficulty = crate::args::resolve_difficulty(&self.settings);
         let Stage::Loading(stage) = &mut self.stage else {
             return;
@@ -614,6 +618,7 @@ impl Session {
                     &mut self.split_lobby,
                     &mut self.controls,
                     &mut race_stage.race,
+                    cut,
                 );
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();

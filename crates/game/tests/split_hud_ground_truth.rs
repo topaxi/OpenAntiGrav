@@ -43,7 +43,7 @@ fn split_race(players: usize) -> Option<(race::Race, oag_hud::Assets)> {
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(hud.space.size);
-    oag_game::split_screen::apply(&mut race, players);
+    oag_game::split_screen::apply(&mut race, players, oag_render::viewport::Cut::Horizontal);
     Some((race, hud))
 }
 
@@ -88,6 +88,7 @@ fn draws<'a>(
         hud.split.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
+        race.cut(),
         VIEWPORT,
         hud.space,
     )
@@ -262,6 +263,7 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
         hud.split.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
+        oag_render::viewport::Cut::Horizontal,
         VIEWPORT,
         hud.space,
     );
@@ -288,6 +290,145 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
     }
 }
 
+fn hd_loaded_cut(views: u8, cut: oag_render::viewport::Cut) -> Option<race::Loaded> {
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso")?;
+    Some(
+        race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            views,
+            cut,
+            ..race::Options::default()
+        })
+        .expect("loading the race"),
+    )
+}
+
+/// A race cut vertically reads HD's `vert_` layouts, one per player: the second is the
+/// first moved right half the screen (960), each sits in its own column of the 1920x1080
+/// grid, the reticle is view-relative to a 960x1080 view, and each view's text lands in its
+/// own column. A horizontal cut and every other view count read the family they always did.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
+    use oag_render::viewport::Cut;
+    let (Some(vertical), Some(horizontal), Some(three)) = (
+        hd_loaded_cut(2, Cut::Vertical),
+        hd_loaded_cut(2, Cut::Horizontal),
+        hd_loaded_cut(3, Cut::Vertical),
+    ) else {
+        return;
+    };
+    assert!(
+        three.hud.split.is_none(),
+        "a vertical cut means nothing but for two views: three read no authored layout"
+    );
+    let rows = horizontal
+        .hud
+        .split
+        .as_ref()
+        .expect("the horizontal family");
+    assert_eq!(rows.view, (1920.0, 540.0));
+    assert_eq!(rows.step, (0.0, 540.0));
+
+    let hud = vertical.hud;
+    let split = hud.split.as_ref().expect("HD ships the vert_ layouts");
+    let [left, right] = &split.layouts;
+    assert!(left.skipped.is_empty() && right.skipped.is_empty());
+    assert_eq!(left.sprites.len(), right.sprites.len());
+    let lowest = |layout: &oag_hud::Layout| {
+        layout
+            .sprites
+            .iter()
+            .map(|s| s.rect[1] + s.rect[3])
+            .fold(0.0_f32, f32::max)
+    };
+    assert!(
+        lowest(left) > lowest(&rows.layouts[0]),
+        "the vert_ layout is the taller column's: {} against the half-height one's {}",
+        lowest(left),
+        lowest(&rows.layouts[0])
+    );
+    let widest = |layout: &oag_hud::Layout| {
+        layout
+            .sprites
+            .iter()
+            .map(|s| s.rect[0] + s.rect[2])
+            .fold(0.0_f32, f32::max)
+    };
+    assert_eq!(
+        widest(right) - widest(left),
+        split.view.0,
+        "player 1's layout is player 0's moved right one view"
+    );
+    assert_eq!(split.view, (960.0, 1080.0));
+    assert_eq!(split.step, (960.0, 0.0));
+    assert_eq!(split.region(1), [960.0, 0.0, 960.0, 1080.0]);
+    assert_eq!(hud.sight_screen(), (960.0, 1080.0));
+    for layout in &split.layouts {
+        for reference in layout.textures() {
+            assert!(
+                hud.sheet.get(reference).is_some(),
+                "{reference} is named by a vert_ layout and missing from the sheet"
+            );
+        }
+    }
+
+    // The Eliminator pair (`DATA00`'s, where the arcade pair is `DATA03`'s) composes whole
+    // and is also one view apart in x: all four `vert_` roots, one pass.
+    let image = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso").unwrap();
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let vert = oag_hd::hud::SPLIT
+        .vertical
+        .expect("HD names the vert_ family");
+    for roots in [vert.arcade, vert.elimination] {
+        let first = extent(&composed(&mut archives, roots[0]).layout);
+        let second = extent(&composed(&mut archives, roots[1]).layout);
+        assert_eq!(first.0, second.0, "{roots:?}: the same sprites");
+        assert_eq!(
+            second.2 - first.2,
+            vert.view_width as f32,
+            "{roots:?}: one column apart"
+        );
+        assert_eq!(second.3, first.3, "{roots:?}: at the same height");
+    }
+
+    let views = oag_game::hud_views::view_draws(
+        hud.context().expect("the layout parsed"),
+        hud.split.as_ref(),
+        hud.split_hud.as_ref(),
+        vec![Readout::blank(), Readout::blank()],
+        Cut::Vertical,
+        VIEWPORT,
+        hud.space,
+    );
+    assert!(std::ptr::eq(views[0].cx.layout, &split.layouts[0]));
+    assert!(std::ptr::eq(views[1].cx.layout, &split.layouts[1]));
+    let (a, b) = (views[0].placement.clip, views[1].placement.clip);
+    assert!(
+        b[0] > a[0] && a[1] == b[1],
+        "the second view is beside the first"
+    );
+    let (sa, sb) = (views[0].sight.unwrap(), views[1].sight.unwrap());
+    assert!(
+        sb.clip[0] > sa.clip[0],
+        "the reticle moves right with its view"
+    );
+    for (i, view) in views.iter().enumerate() {
+        let words = texts(&views_frame(&views[i..=i]));
+        assert!(!words.is_empty(), "view {i} drew no text");
+        let [x0, y0, w, h] = view.placement.clip;
+        for (x, y, text) in &words {
+            assert!(
+                *x >= x0 && *x < x0 + w && *y >= y0 && *y < y0 + h,
+                "view {i}: {text:?} at ({x}, {y}) is outside {:?}",
+                view.placement.clip
+            );
+        }
+    }
+}
+
 /// HD's concentric reticle is looked up by sprite name in the layout the view
 /// draws, which in a two-view race is the authored split layout: if that names its
 /// sight sprites differently from the title's table, HD draws no reticle in a split
@@ -295,14 +436,27 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_draws_a_reticle_in_its_authored_split_view() {
-    let Some(loaded) = hd_loaded(2) else {
+    hd_reticle_in_split_view(oag_render::viewport::Cut::Horizontal);
+}
+
+/// The same for the left-and-right cut, which reads the `vert_` layouts: the arcade one
+/// includes the whole-screen `HUD_sights.xml` (the horizontal one has `splitscreen_sights.xml`)
+/// and the reticle's view is 960x1080, so its centre could land in the wrong column.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_a_reticle_in_its_authored_vertical_split_view() {
+    hd_reticle_in_split_view(oag_render::viewport::Cut::Vertical);
+}
+
+fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
+    let Some(loaded) = hd_loaded_cut(2, cut) else {
         return;
     };
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(hud.sight_screen());
     race.set_sight_dialect(hud.art.sights);
-    oag_game::split_screen::apply(&mut race, 2);
+    oag_game::split_screen::apply(&mut race, 2, cut);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }

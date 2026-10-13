@@ -50,6 +50,9 @@ struct Cam {
 pub(super) struct Viewpoints {
     /// How many views are drawn, `1` meaning no split.
     count: usize,
+    /// Which way two views are cut. Read through [`Race::cut`], which ignores it for
+    /// any other count.
+    cut: oag_render::viewport::Cut,
     /// The extra slot the scene is being drawn for right now, `None` for the
     /// player's own view. Set by the draw through `&Race`, so a [`Cell`].
     drawing: Cell<Option<u8>>,
@@ -73,6 +76,28 @@ impl Race {
     #[must_use]
     pub fn viewport_count(&self) -> usize {
         self.view.viewpoints.count.max(1)
+    }
+
+    /// Which way the screen is cut: the one answer the scene's view rectangles
+    /// ([`Self::view_rects`]) and the HUD's placements both read, so a vertical scene cannot
+    /// get a horizontal HUD. Only two views can be cut left and right
+    /// ([`oag_render::viewport::Cut::for_views`]).
+    #[must_use]
+    pub fn cut(&self) -> oag_render::viewport::Cut {
+        self.view.viewpoints.cut.for_views(self.viewport_count())
+    }
+
+    /// Chooses the cut for a two-view race. A view-side choice like the cameras: no tick
+    /// reads it and the state hash does not hold it.
+    pub fn set_cut(&mut self, cut: oag_render::viewport::Cut) {
+        self.view.viewpoints.cut = cut;
+    }
+
+    /// The rectangles of the views drawn right now ([`Self::views_drawn`]) in `area`,
+    /// in view order: the single source for where a view and its HUD go.
+    #[must_use]
+    pub fn view_rects(&self, area: oag_render::viewport::Rect) -> Vec<oag_render::viewport::Rect> {
+        oag_render::viewport::layout(self.views_drawn(), area, self.cut())
     }
 
     /// How many views are drawn right now: [`Self::viewport_count`] while the race

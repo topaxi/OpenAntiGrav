@@ -75,6 +75,9 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
         "Data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
     ],
     view_height: 540,
+    // Omega ships HD's `vert_` files too (checked, not wired: its race box authors no cut
+    // to choose them by).
+    vertical: None,
 };
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].

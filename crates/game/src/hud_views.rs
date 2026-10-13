@@ -159,11 +159,12 @@ fn grid_rect(
 #[must_use]
 pub fn placements(
     count: usize,
+    cut: oag_render::viewport::Cut,
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> Vec<Placement> {
     let whole = [0.0, 0.0, space.size.0, space.size.1];
-    oag_render::viewport::layout(count, viewport)
+    oag_render::viewport::layout(count, viewport, cut)
         .into_iter()
         .map(|view| place_into(view, whole, viewport, space))
         .collect()
@@ -183,11 +184,12 @@ pub fn view_draws<'a>(
     split: Option<&'a oag_hud::SplitAssets>,
     split_hud: Option<&'a oag_hud::split_hud::SplitHudAssets>,
     readouts: Vec<Readout>,
+    cut: oag_render::viewport::Cut,
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> Vec<ViewDraw<'a>> {
     let count = readouts.len();
-    let views = oag_render::viewport::layout(count, viewport);
+    let views = oag_render::viewport::layout(count, viewport, cut);
     let whole = [0.0, 0.0, space.size.0, space.size.1];
     let mut out = Vec::new();
     for (slot, (readout, view)) in readouts.into_iter().zip(views).enumerate() {
@@ -196,7 +198,7 @@ pub fn view_draws<'a>(
             oag_hud::split_hud::Source::Authored(split) => {
                 let layout = &split.layouts[slot];
                 let (width, height) = split.view;
-                let region = [0.0, height * slot as f32, width, height];
+                let region = split.region(slot);
                 out.push(ViewDraw {
                     cx: Context {
                         layout,
@@ -250,8 +252,12 @@ pub fn view_draws<'a>(
 /// the first view's rectangle, which is the one that flies the intro. Chosen,
 /// not measured.
 #[must_use]
-pub fn panel_viewport(count: usize, viewport: (f32, f32, f32, f32)) -> (f32, f32, f32, f32) {
-    oag_render::viewport::layout(count, viewport)[0]
+pub fn panel_viewport(
+    count: usize,
+    cut: oag_render::viewport::Cut,
+    viewport: (f32, f32, f32, f32),
+) -> (f32, f32, f32, f32) {
+    oag_render::viewport::layout(count, viewport, cut)[0]
 }
 
 /// Draws the race HUD over `view`: one HUD, or one per view of a split screen.
@@ -279,7 +285,7 @@ pub fn draw(
     let readouts: Vec<Readout> = (0..count)
         .map(|slot| readout(race, scene, slot, campaign, record_target))
         .collect();
-    overlay.draw_views(device, queue, encoder, view, readouts, viewport);
+    overlay.draw_views(device, queue, encoder, view, readouts, race.cut(), viewport);
 }
 
 #[cfg(test)]

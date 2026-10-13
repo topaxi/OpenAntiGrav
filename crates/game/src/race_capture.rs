@@ -48,6 +48,8 @@ pub struct CaptureOptions {
     pub ai_choice: crate::ai_choice::AiChoice,
     /// `--players`: how many split-screen views. See [`crate::split_screen`].
     pub players: u8,
+    /// `--split-cut`: which way two views are cut.
+    pub cut: oag_render::viewport::Cut,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
     /// See [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
@@ -397,7 +399,7 @@ pub fn capture(
         options.ai_choice,
         crate::ai_choice::Source::Free(difficulty),
     );
-    crate::split_screen::apply(&mut race, usize::from(options.players));
+    crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
@@ -933,7 +935,7 @@ pub fn capture(
             &mut encoder,
             &hud_view,
             progress,
-            crate::hud_views::panel_viewport(race.views_drawn(), hud_viewport),
+            crate::hud_views::panel_viewport(race.views_drawn(), race.cut(), hud_viewport),
         );
     }
     let scale = options.hud_scale;

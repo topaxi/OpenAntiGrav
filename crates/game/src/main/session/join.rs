@@ -21,8 +21,46 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
-    /// Opens the screen with nobody seated.
+    /// The head count the race box's `NUMBER OF PLAYERS` row holds
+    /// ([`oag_game::split_screen::authored_people`]).
+    pub(crate) fn authored_people(&self) -> usize {
+        self.shell.as_ref().map_or(1, |shell| {
+            oag_game::split_screen::authored_people(
+                shell.title,
+                &shell.player_counts,
+                &self.settings.race.players,
+            )
+        })
+    }
+
+    /// The cut the race box's `SPLIT SCREEN` row holds
+    /// ([`oag_game::split_screen::authored_cut`]).
+    fn authored_cut(&self) -> oag_render::viewport::Cut {
+        self.shell.as_ref().map_or(Default::default(), |shell| {
+            oag_game::split_screen::authored_cut(&shell.split_cuts, &self.settings.race.split_cut)
+        })
+    }
+
+    /// The race box's START with the `NUMBER OF PLAYERS` row on two: the join screen of
+    /// exactly that many seats first, which only claims the devices, and then Track Select
+    /// and each seat's Ship Select as the generic entry does. Returns whether it opened.
+    pub(crate) fn open_authored_split(&mut self) -> bool {
+        let people = self.authored_people();
+        if people < 2 {
+            return false;
+        }
+        self.open_join(Some(people));
+        true
+    }
+
+    /// Opens the screen with nobody seated: the generic SPLIT SCREEN row's, up to the
+    /// grid's eight.
     pub(crate) fn open_split_screen(&mut self) {
+        self.open_join(None);
+    }
+
+    /// The screen, for `people` seats all of which must be taken, or the grid's.
+    fn open_join(&mut self, people: Option<usize>) {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
@@ -38,7 +76,10 @@ impl Session {
             back: say("OAG_MENU_BACK", "BACK"),
         };
         if let Stage::Menu(stage) = &mut self.stage {
-            stage.join = Some(JoinStage::new(labels));
+            stage.join = Some(match people {
+                Some(people) => JoinStage::for_people(labels, people),
+                None => JoinStage::new(labels),
+            });
         }
     }
 
@@ -137,9 +178,17 @@ impl Session {
                 let Stage::Menu(stage) = &mut self.stage else {
                     return;
                 };
+                // The race box authored the head count: START waits for everyone.
+                if stage.join.as_ref().is_some_and(|open| !open.screen().can_start()) {
+                    self.play_navs(Some(Nav::Decline));
+                    return;
+                }
                 let Some(open) = stage.join.take() else {
                     return;
                 };
+                if self.authored_people() >= 2 {
+                    self.split_cut = self.authored_cut();
+                }
                 self.play_navs(Some(Nav::Accept));
                 if open.lobby().count() > 1 {
                     self.split_lobby = Some(open.lobby().clone());

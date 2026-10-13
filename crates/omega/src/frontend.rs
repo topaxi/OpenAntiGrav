@@ -237,6 +237,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: None,
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
+    local_split: None,
     preview_meshes: false,
     ship_preview_hull: None,
     circuit_models: &CIRCUIT_MODELS,

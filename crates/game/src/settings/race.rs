@@ -82,6 +82,16 @@ pub struct Race {
     /// row is editable; see [`Self::weapons_override`].
     #[serde(default)]
     pub weapons: String,
+    /// The people the `PLAYERS` row holds, as the disc's own `NumberOfPlayers` list spells it
+    /// (`"1"` or `"2"`), or empty for "untouched", which is one. Read only on a title whose
+    /// race box authors the list ([`oag_title::FrontEnd::local_split`]).
+    #[serde(default)]
+    pub players: String,
+    /// The `SPLIT SCREEN` row's pick, as the disc's own `SplitScreen` list spells it
+    /// (`"RB_HORIZ"` or `"RB_VERT"`), or empty for "untouched", which is the list's authored
+    /// default (`RB_HORIZ`).
+    #[serde(default)]
+    pub split_cut: String,
 }
 
 /// Time trial: the mode the RACE page opens on, and the one the reference
@@ -113,6 +123,8 @@ impl Default for Race {
             skin: String::new(),
             kill_target: String::new(),
             weapons: String::new(),
+            players: String::new(),
+            split_cut: String::new(),
         }
     }
 }

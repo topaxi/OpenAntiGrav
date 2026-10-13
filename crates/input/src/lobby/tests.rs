@@ -164,3 +164,20 @@ fn a_mid_race_pad_never_lands_on_the_keyboards_seat() {
         "unplugged and back, it is a new pad and takes the freed seat"
     );
 }
+
+/// A race box that authored a head count seats exactly that many: the next device is told
+/// the seats are full, and the grid's own cap still bounds a larger ask.
+#[test]
+fn a_lobby_of_two_seats_is_full_after_two() {
+    let mut lobby = Lobby::with_capacity(2);
+    assert_eq!(lobby.capacity(), 2);
+    assert_eq!(lobby.join(Device::Pad(1)), Outcome::Joined(0));
+    assert_eq!(lobby.join(Device::Keyboard), Outcome::Joined(1));
+    assert_eq!(lobby.join(Device::Pad(2)), Outcome::Full);
+    assert_eq!(lobby.count(), 2);
+    assert_eq!(
+        Lobby::with_capacity(99).capacity(),
+        oag_gameplay::MAX_PLAYERS
+    );
+    assert_eq!(Lobby::new().capacity(), oag_gameplay::MAX_PLAYERS);
+}

@@ -75,14 +75,47 @@ pub fn players_offered(title: &oag_title::Title, device: wgpu::DeviceType, playe
     1
 }
 
+/// The head count the race box's `NUMBER OF PLAYERS` row holds: `pick` read as the disc's
+/// own entry of `counts`, on a title whose race box authors the list
+/// ([`oag_title::FrontEnd::local_split`]); `1` for a pick the list does not hold and on every
+/// other title, where the generic SPLIT SCREEN row is the entry.
+#[must_use]
+pub fn authored_people(
+    title: &oag_title::Title,
+    counts: &[oag_ui::menu::Choice],
+    pick: &str,
+) -> usize {
+    let authored = title
+        .front_end
+        .is_some_and(|front_end| front_end.local_split.is_some());
+    if authored && counts.iter().any(|choice| choice.value == pick) {
+        pick.parse().unwrap_or(1)
+    } else {
+        1
+    }
+}
+
+/// The cut the race box's `SPLIT SCREEN` row holds: `RB_VERT` is left and right, and anything
+/// the disc's own list does not name is the horizontal cut it defaults to.
+#[must_use]
+pub fn authored_cut(cuts: &[oag_ui::menu::Choice], pick: &str) -> oag_render::viewport::Cut {
+    if pick == "RB_VERT" && cuts.iter().any(|choice| choice.value == pick) {
+        oag_render::viewport::Cut::Vertical
+    } else {
+        oag_render::viewport::Cut::Horizontal
+    }
+}
+
 /// Makes `race` an `players`-way split screen and returns the count it settled
 /// on, which is clamped to the craft fielded and to the grid's own cap. `1` -
-/// the default - leaves the race exactly as it was.
-pub fn apply(race: &mut Race, players: usize) -> usize {
+/// the default - leaves the race exactly as it was. `cut` is how two views are
+/// cut (`oag_render::viewport::Cut`); it means nothing for any other count.
+pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) -> usize {
     if players <= 1 {
         return 1;
     }
     let count = race.set_viewport_count(players);
+    race.set_cut(cut);
     for slot in 0..count.min(MAX_PLAYERS) {
         race.sim.world.controllers[slot] = Controller::Local;
     }
@@ -104,11 +137,12 @@ pub fn seat<D: Copy + PartialEq>(
     lobby: &Lobby<D>,
     assignment: &mut Assignment<D>,
     connected: &[D],
+    cut: oag_render::viewport::Cut,
 ) -> usize {
     if lobby.count() <= 1 {
         return 1;
     }
-    let count = apply(race, lobby.count());
+    let count = apply(race, lobby.count(), cut);
     lobby.seat(assignment, connected);
     count
 }
@@ -124,12 +158,13 @@ pub fn seat_for_launch(
     lobby: &mut Option<oag_input::lobby::Lobby>,
     controls: &mut oag_input::Controls,
     race: &mut Race,
+    cut: oag_render::viewport::Cut,
 ) {
     if let Some(lobby) = lobby.take() {
         let connected = controls.connected_pads();
-        seat(race, &lobby, controls.assignment_mut(), &connected);
+        seat(race, &lobby, controls.assignment_mut(), &connected, cut);
     } else if let Some(humans) = controls.assignment().humans() {
-        apply(race, humans);
+        apply(race, humans, cut);
     }
 }
 

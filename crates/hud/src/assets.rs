@@ -82,6 +82,20 @@ pub struct SplitAssets {
     /// One view's size in the layouts' grid: the width of the screen and the
     /// half of its height a player's HUD sits in. The reticle projects into it.
     pub view: (f32, f32),
+    /// How far player `i + 1`'s view sits from player `i`'s in the layouts' grid: down by
+    /// one view's height for a top-and-bottom split, right by its width for a left-and-right
+    /// one.
+    pub step: (f32, f32),
+}
+
+impl SplitAssets {
+    /// Player `slot`'s view in the layouts' grid, `[x, y, width, height]`: where its layout
+    /// sits in the screen it was authored for.
+    #[must_use]
+    pub fn region(&self, slot: usize) -> [f32; 4] {
+        let n = slot as f32;
+        [self.step.0 * n, self.step.1 * n, self.view.0, self.view.1]
+    }
 }
 
 impl Assets {

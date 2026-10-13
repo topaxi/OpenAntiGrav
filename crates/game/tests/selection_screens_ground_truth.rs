@@ -772,6 +772,42 @@ fn the_kills_row_offers_the_discs_own_eliminations_list() {
     );
 }
 
+/// HD's `racebox_definition.xml` authors the local split's two lists after AI DIFFICULTY:
+/// `NumberOfPlayers` (`1`, `2`) and `SplitScreen` (`RB_HORIZ`, `RB_VERT`). The row's own
+/// `idstring` (`RB_NUMP`, `RB_SPLSCR`) sits on a `Values` tag ahead of the entries and is the
+/// label, not an entry. HD reads no `KILLS` or `WEAPONS` list from it (its `Eliminations` is a
+/// slider), so naming the file does not switch those rows on.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_race_box_offers_the_discs_own_players_and_cuts() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let shell = shell(&path);
+    let setup = &shell.race_setup;
+    assert_eq!(setup.players, ["1", "2"]);
+    assert_eq!(setup.cuts, ["RB_HORIZ", "RB_VERT"]);
+    assert!(setup.kill_targets.is_empty() && setup.weapons.is_empty());
+    let cuts = setup.cut_choices(&shell.strings);
+    let shown: Vec<(&str, &str)> = cuts
+        .iter()
+        .map(|choice| (choice.value.as_str(), choice.label.as_str()))
+        .collect();
+    assert_eq!(
+        shown,
+        [("RB_HORIZ", "HORIZONTAL"), ("RB_VERT", "VERTICAL")],
+        "the language's own words for the disc's ids"
+    );
+    assert_eq!(
+        setup
+            .player_choices()
+            .iter()
+            .map(|choice| choice.label.as_str())
+            .collect::<Vec<_>>(),
+        ["1", "2"]
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_weapons_row_offers_the_discs_own_two_states() {

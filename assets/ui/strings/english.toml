@@ -98,6 +98,8 @@ OAG_RACE_SPEED_CLASS = { text = "SPEED CLASS", human = false }
 OAG_RACE_WEAPONS = { text = "WEAPONS", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "AI DIFFICULTY", human = false }
 OAG_RACE_KILLS = { text = "KILLS", human = false }
+OAG_RACE_PLAYERS = { text = "NUMBER OF PLAYERS", human = false }
+OAG_RACE_SPLIT_CUT = { text = "SPLIT SCREEN", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANT", human = false }
 OAG_RACE_TRACK = { text = "TRACK", human = false }

@@ -199,6 +199,29 @@ setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
 disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
 
+# **The race box's local split screen, as Wipeout HD/Fury authors it**: its `Single Player`
+# screen has a `NumberOfPlayers` list (`1`, `2`) and a `SplitScreen` list (`RB_HORIZ`,
+# `RB_VERT`) after AI DIFFICULTY, in that order. Both lists are the disc's own
+# (`oag_game::boot::RaceSetup::players`/`cuts`); a title whose race box authors neither has
+# both rows dropped (`Definition::drop_rows_picked_on_screen`) and keeps its own entry.
+# The authored `SplitScreen` row cannot be focused while the count is one, which is
+# `disabled_by` here: greyed, still drawing its stored cut. (The original draws `FE_OFF` over
+# it; this build does not, as it does not draw Pulse's `FE_NA` over a greyed difficulty.)
+[[page.entry]]
+kind = "choice"
+label = "NUMBER OF PLAYERS"
+string_id = "OAG_RACE_PLAYERS"
+setting = "race.players"
+values_from = "player_counts"
+
+[[page.entry]]
+kind = "choice"
+label = "SPLIT SCREEN"
+string_id = "OAG_RACE_SPLIT_CUT"
+setting = "race.split_cut"
+values_from = "split_cuts"
+disabled_by = { setting = "race.players", value = "1" }
+
 # The race box's `KILLS` row: the values are the disc's own `Eliminations` list
 # (`oag_game::boot::screens::read_race_setup`); a title that reads none has the
 # row dropped (`Definition::drop_rows_picked_on_screen`) instead of offering
