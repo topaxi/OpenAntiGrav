@@ -135,11 +135,14 @@ test:
 # printing either way - a run that failed still measured every test that
 # passed - but "the suite is red" is the more urgent of the two things to say,
 # so it is the one this recipe exits on.
+#
+# `--tests` for the reason `test` gives: the examples are never run here either,
+# and the selection is the same 8,323 tests with or without it (2026-10-13).
 test-data:
     #!/usr/bin/env bash
     set -uo pipefail
     mkdir -p target
-    cargo nextest run --workspace --run-ignored all --no-fail-fast 2>&1 \
+    cargo nextest run --workspace --tests --run-ignored all --no-fail-fast 2>&1 \
         | tee target/test-data.log
     tests=${PIPESTATUS[0]}
     budget=0
@@ -182,7 +185,7 @@ test-data-affected:
         full) exec just test-data ;;
     esac
     mkdir -p target
-    cargo nextest run $selection --run-ignored only --no-fail-fast 2>&1 \
+    cargo nextest run $selection --tests --run-ignored only --no-fail-fast 2>&1 \
         | tee target/test-data-affected.log
     tests=${PIPESTATUS[0]}
     budget=0
