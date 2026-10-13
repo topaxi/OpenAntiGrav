@@ -256,3 +256,290 @@ fn novice_13_track_grip_fine_sweep() {
         grip += 0.01;
     }
 }
+
+/// Arc length along the racing line to every sample, so a position projects
+/// to a distance travelled rather than to an index (samples are unevenly
+/// spaced).
+fn arc_lengths(line: &oag_ai::Line) -> Vec<f32> {
+    let mut out = Vec::with_capacity(line.len());
+    let mut total = 0.0f32;
+    for index in 0..line.len() {
+        out.push(total);
+        total += (line.point(index + 1) - line.point(index)).length();
+    }
+    out
+}
+
+/// One tick of one craft near the jump, as a CSV row: where it is along the
+/// line, its velocity split along the line's own tangent, sideways and
+/// vertically, the forward-axis speed the earlier passes logged, its
+/// attitude and its ground contact.
+fn flight_row(
+    label: &str,
+    race: &race::Race,
+    arcs: &[f32],
+    slot: usize,
+    previous: Option<oag_core::math::Vec3>,
+) -> String {
+    let line = race.racing_line();
+    let ship = &race.sim.world.ships[slot];
+    let index = ship.driver.index as usize;
+    let here = line.point(index);
+    let tangent = (line.point(index + 1) - here).normalize();
+    let flat = oag_core::math::Vec3::new(tangent.x, 0.0, tangent.z).normalize();
+    let side = oag_core::math::Vec3::new(-flat.z, 0.0, flat.x);
+    let body = &ship.physics.body;
+    let velocity = body.linear_velocity;
+    let forward = body.forward();
+    let up = body.up();
+    let along = (body.position - here).dot(tangent);
+    let accel = previous.map_or(oag_core::math::Vec3::ZERO, |was| (velocity - was) * 60.0);
+    format!(
+        "{label},{},{slot},{index},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.2},{:.3},{:.3},{:.3},{:.3},{:.2},{:.3},{:.2},{:.2},{:.2},{:.2},{},{}",
+        race.sim.world.tick,
+        arcs[index] + along,
+        body.position.y,
+        body.position.y - here.y,
+        velocity.dot(tangent),
+        velocity.dot(side),
+        velocity.y,
+        velocity.dot(forward),
+        velocity.length(),
+        (velocity.x * velocity.x + velocity.z * velocity.z).sqrt(),
+        forward.y,
+        up.x,
+        up.y,
+        up.z,
+        ship.physics.grounded,
+        ship.physics.time_airborne,
+        ship.physics.thrust,
+        accel.dot(flat),
+        accel.y,
+        ship.physics.brake,
+        ship.physics.wall_contact_prev,
+        race.respawns_of(slot),
+    )
+}
+
+const FLIGHT_HEADER: &str = "run,tick,slot,idx,arc,y,y_above_line,v_along,v_lat,v_vert,speed_fwd,v_len,v_horiz,fwd_y,up_x,up_y,up_z,grounded,t_air,thrust,a_flat,a_vert,brake,wall,respawns";
+
+/// Every tick of a craft's first pass over the jump (`idx` 10..70) until it
+/// is past it or respawns, as CSV: the per-tick table `docs/gameplay/ai.md`,
+/// "The 13_Track jump, flown tick by tick", is read from. Two runs: a lone
+/// Novice craft on this project's driver, and the original driver's field
+/// of seven with the player parked on the grid (seed 1, VENOM, single race).
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
+fn the_jump_flown_tick_by_tick() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(entry) = entry_for(TRACK_ID) else {
+        return;
+    };
+    let Some(image) = image() else { return };
+    let options = |difficulty| race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        difficulty,
+        track: Some(entry.clone()),
+        seed: Some(1),
+        ..race::Options::default()
+    };
+
+    println!("{FLIGHT_HEADER}");
+    let novice = race::load(&options(oag_ai::Difficulty::Novice)).expect("loading 13_Track");
+    let mut lone = race::Race::start(novice.setup);
+    for slot in (0..8).filter(|&slot| slot != LONE) {
+        lone.sim.world.ships[slot].active = false;
+    }
+    let arcs = arc_lengths(lone.racing_line());
+    log_first_passes("novice", &mut lone, &arcs, &[LONE], 18_000);
+
+    let field = race::load(&options(race::Options::default().difficulty)).expect("loading");
+    let mut parked = race::Race::start(field.setup);
+    assert!(parked.use_original_ai(None, 1), "VENOM's AI tables read");
+    let slots: Vec<usize> = (1..8).collect();
+    log_first_passes("original", &mut parked, &arcs, &slots, 9_000);
+}
+
+/// Ticks `race` with no player input and prints [`flight_row`] for each of
+/// `slots` while it is inside `idx` 10..70 on its first pass, stopping that
+/// slot's log once it is past index 70 or 60 ticks after its first respawn.
+fn log_first_passes(label: &str, race: &mut race::Race, arcs: &[f32], slots: &[usize], ticks: u32) {
+    let mut entered = [false; 8];
+    let mut done = [false; 8];
+    let mut after_respawn = [0u32; 8];
+    let mut previous = [None; 8];
+    for _ in 0..ticks {
+        race.tick(&PlayerInputs::none());
+        for &slot in slots {
+            if done[slot] {
+                continue;
+            }
+            let index = race.sim.world.ships[slot].driver.index as usize;
+            let inside = (10..70).contains(&index);
+            if inside {
+                entered[slot] = true;
+            }
+            if entered[slot] && (inside || race.respawns_of(slot) > 0) {
+                println!("{}", flight_row(label, race, arcs, slot, previous[slot]));
+            }
+            previous[slot] = Some(race.sim.world.ships[slot].physics.body.linear_velocity);
+            if race.respawns_of(slot) > 0 {
+                after_respawn[slot] += 1;
+            }
+            if entered[slot] && (index >= 70 || after_respawn[slot] > 60) {
+                done[slot] = true;
+            }
+        }
+        if slots.iter().all(|&slot| done[slot]) {
+            break;
+        }
+    }
+}
+
+/// Loads the parked-player scenario `the_jump_flown_tick_by_tick` runs: the
+/// original driver's field of seven, VENOM, seed 1, single race.
+fn parked_field() -> Option<(race::Setup, race::Race)> {
+    let entry = entry_for(TRACK_ID)?;
+    let image = image()?;
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        track: Some(entry),
+        seed: Some(1),
+        ..race::Options::default()
+    })
+    .expect("loading 13_Track");
+    let mut race = race::Race::start(loaded.setup.clone());
+    assert!(race.use_original_ai(None, 1), "VENOM's AI tables read");
+    Some((loaded.setup, race))
+}
+
+/// Every respawn of the parked-player field over 9,000 ticks: which slot,
+/// which trigger, the line index it was lost at and the one it was put back
+/// on, and its speed the tick before. `OAG_FLIGHT_GRAVITY_SCALE` multiplies
+/// every craft's `flight_gravity` first, a counterfactual for which gravity
+/// lane the class scale belongs on.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
+fn the_parked_field_at_the_jump() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some((_, mut race)) = parked_field() else {
+        return;
+    };
+    let scale: f32 = std::env::var("OAG_FLIGHT_GRAVITY_SCALE")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(1.0);
+    for ship in &mut race.sim.world.ships {
+        ship.handling.physical.flight_gravity *= scale;
+    }
+    println!("flight_gravity scale {scale}");
+    println!("tick,slot,cause,lost_idx,put_idx,speed_before,y_before,put_y");
+    let mut counts = [0u32; 8];
+    let mut before = [(0u32, 0.0f32, 0.0f32); 8];
+    for _ in 0..9_000 {
+        race.tick(&PlayerInputs::none());
+        for slot in 1..8 {
+            let ship = &race.sim.world.ships[slot];
+            let respawns = race.respawns_of(slot);
+            if respawns > counts[slot] {
+                counts[slot] = respawns;
+                let cause = race
+                    .last_respawn_cause_of(slot)
+                    .map_or("?", |cause| cause.label());
+                let (lost, speed, y) = before[slot];
+                println!(
+                    "{},{slot},{cause},{lost},{},{speed:.2},{y:.2},{:.2}",
+                    race.sim.world.tick, ship.driver.index, ship.physics.body.position.y,
+                );
+            }
+            before[slot] = (
+                ship.driver.index,
+                ship.physics.body.linear_velocity.length(),
+                ship.physics.body.position.y,
+            );
+        }
+    }
+    println!(
+        "flight_gravity scale {scale}: respawns per slot 1..8 {:?}, total {}, \
+         flight_gravity now {}",
+        &counts[1..],
+        counts.iter().sum::<u32>(),
+        race.sim.world.ships[3].handling.physical.flight_gravity,
+    );
+}
+
+/// What the far lip is made of: rays along the line's tangent at a ladder
+/// of heights relative to the line, from a point inside the gap, and rays
+/// straight down along the line either side of it. Answers whether what a
+/// low craft hits is the far road's own front face or something standing
+/// proud of it.
+#[test]
+#[ignore = "a scratch sweep: set OAG_SWEEP=1, read the table"]
+fn the_far_lip_face() {
+    use oag_physics::collide::{Ray, Raycaster};
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some((setup, race)) = parked_field() else {
+        return;
+    };
+    let line = race.racing_line();
+    let arcs = arc_lengths(line);
+    println!("down casts: idx,arc,line_y,surface_y,normal,surface");
+    for index in (10..60).step_by(2) {
+        let point = line.point(index);
+        let ray = Ray::new(
+            point + oag_core::math::Vec3::new(0.0, 50.0, 0.0),
+            oag_core::math::Vec3::new(0.0, -1.0, 0.0),
+            100.0,
+        );
+        let hit = setup.collision.raycast(ray, None, true);
+        println!(
+            "{index},{:.2},{:.2},{},{}",
+            arcs[index],
+            point.y,
+            hit.map_or("none".to_string(), |hit| format!("{:.2}", hit.point.y)),
+            hit.map_or("-".to_string(), |hit| format!(
+                "{:.2} {:.2} {:.2},{:?}",
+                hit.normal.x, hit.normal.y, hit.normal.z, hit.surface
+            )),
+        );
+    }
+    let from = 40;
+    let start = line.point(from);
+    let tangent = (line.point(from + 4) - start).normalize();
+    let flat = oag_core::math::Vec3::new(tangent.x, 0.0, tangent.z).normalize();
+    println!(
+        "\nforward casts from idx {from} (arc {:.2}), along flat tangent:",
+        arcs[from]
+    );
+    println!("dy_vs_line,hit_arc,hit_y,normal,surface");
+    let mut dy = -6.0f32;
+    while dy <= 2.01 {
+        let origin = start + oag_core::math::Vec3::new(0.0, dy, 0.0);
+        let hit = setup
+            .collision
+            .raycast(Ray::new(origin, flat, 30.0), None, true);
+        match hit {
+            Some(hit) => println!(
+                "{dy:.1},{:.2},{:.2},{:.2} {:.2} {:.2},{:?}",
+                arcs[from] + hit.distance,
+                hit.point.y,
+                hit.normal.x,
+                hit.normal.y,
+                hit.normal.z,
+                hit.surface
+            ),
+            None => println!("{dy:.1},none"),
+        }
+        dy += 0.5;
+    }
+}
