@@ -301,6 +301,23 @@ populate functions in full:
   capture this pass has (which shows a real time), so this branch is
   decompiled-only. Confidence 78.
 
+## `EndRace Results Split` and `EndRace Rewards Split`: the PS2's two-player end
+
+**Added 2026-10-13** (`pulse-ps2-eu`, `WADS2.WAD`, the same entry name as the
+single-player file). The PS2 pressing's `EndRace_Definition.xml` carries two screens
+the PSP's does not, named in its executable beside `Split ScreenV`/`Split ScreenH`:
+`EndRace Results Split` (type `EndRace Results`) is two stacked per-player copies of
+the lap table, `<Item name="Player_0" OffsetY="-96">` and `Player_1` at `110`, each
+with its own `Line1_N`, `table_N`, `tablebg{r}_N` (`OffsetY` 152 + 25 (r - 1), height
+28), `lap{r}.{c}_N`, `perfectlap{n}_N`, `boostimg_N` and `tablehighlight_N`, in the
+640x448 space; its `EndRaceRewardsRedirect` goes to `EndRace Rewards Split`
+(`PlayerRW_0` at -52 and `PlayerRW_1` at 176, each a trophy panel, `MedalImg_N`,
+`LoyaltyImg_N`, `RewardLine1_N`/`RewardLine2_N`, `loyaltynum_N` and the bar), whose
+redirect goes to `Race End Save`; the ordinary `EndRace Menu` follows, with
+`IG_PAUSE_QUIT` going to `Kill Game Multiplayer`. Two people only. **Not drawn by this
+build**; what enters it is in the executable and unread. See
+[split-end-race.md](../ui/split-end-race.md).
+
 ## What is not determined
 
 - ~~**The per-lap third column on `EndRace Results`**~~ **Settled 2026-09-30**: the number of

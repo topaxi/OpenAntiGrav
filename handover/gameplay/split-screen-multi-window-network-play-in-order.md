@@ -177,8 +177,9 @@ viewed slot (`Race::readout_for`), the shield bars' state per slot, one HUD per 
 drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
 two-player split layouts for a two-view race. **Still open from this list**:
 per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
-origin), the 8-up frame budget, the results/end-race flow (still slot 0's, ends
-every view). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
+origin), the 8-up frame budget. ~~The results/end-race flow (still slot 0's, ends
+every view)~~ **2026-10-13, `split-screen-end-race`: done** (below, and
+[split-end-race.md](../../docs/ui/split-end-race.md)). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
 checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
 clears the frame), and on Omega and HD the last view was graded from the first view's
 pixels; the chain now runs once over the whole area after the last view
@@ -196,6 +197,22 @@ button to join" screen (`oag_ui_screens::join`, `oag_input::lobby`) whose START 
 on to Track and Ship Select with the seated count. All **chosen, not measured**; the
 PS2's authored flow is a camera choice (`FE_RACE_CAM_SS`) and a per-player team
 pick, not a device join. See [split-screen.md](../../docs/rendering/split-screen.md).
+**2026-10-13, `split-screen-end-race`: the end of the race is every person's.**
+A person's view holds after their own line (lap and clocks held, a `FINISHED` line, the
+driver flying their craft); when the last person finishes one view is drawn
+(`Race::views_drawn`) under end screens that name every person: Pulse's own
+`PopulateMultiplayerTable` (read, network-gated in the original, ours for a split) with
+`PLAYER 1`/`PLAYER 2` and a highlight per person, HD's grid with the same names, the
+built-in table's `P1`/`P2` for Pure and 2048 (whose touch pages summarise one racer). A
+split banks no loyalty, builds no `Rewards`, plays no results voice; restart keeps the
+seats and quit unseats (already the case). `--autopilot` now flies every local seat so
+a headless 2-person race reaches its end. **Found and not wired: the PS2 pressing authors
+`EndRace Results Split` and `EndRace Rewards Split`** (two stacked per-player lap tables
+and reward panels, `Player_0`/`Player_1`, two people only; its executable names them
+beside `Split ScreenV/H` and `Kill Game Multiplayer`), see
+[split-end-race.md](../../docs/ui/split-end-race.md). **Open from it**: wiring those
+screens for two people on a PS2 source, a windowed walk with two real pads, HD's podium
+for a split, per-person rewards and records.
 A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: a second player's own ship pick (only slot 0 picks a team, the PS2's
 `Team SelectionSplit` has a set per player), and two real pads on real hardware (the
 rules are unit-tested over stand-in ids, the keyboard path runs end to end).
@@ -794,9 +811,9 @@ a guess.
   (opponent grid position `slot + 8 - count`), which a person in another slot
   would shift; nobody has measured the original's field with two players, so
   lifting the decline is a decision, not a fix. `Board.tick` is still "the
-  player's own last crossing" (now the tick the last person finished), and the
-  end-race screens read `Board::player()` for one row - per-person panels
-  belong to split screen's lane.
+  player's own last crossing" (now the tick the last person finished). ~~The
+  end-race screens read `Board::player()` for one row~~ - they name every person
+  now (2026-10-13, `split-screen-end-race`).
   View, stays primary for split screen's lane: `zoom.rs` boost pulse,
   `destroy_camera.rs`, `craft_flash.rs` (shake cancel, reset flash),
   `countdown.rs` cue slot, `hit_sparks.rs` shake, `intro_camera.rs` skip button,

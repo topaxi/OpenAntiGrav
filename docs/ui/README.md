@@ -11,7 +11,8 @@
 > screens - Grid Selection and Cell Selection - draw the same way; see
 > [campaign-screens.md](campaign-screens.md). A finished Pulse race's own
 > three `EndRace` screens (`Results`/`Rewards`/`Menu`) draw too; see
-> [endrace-screens.md](endrace-screens.md).
+> [endrace-screens.md](endrace-screens.md), and the end of a split-screen
+> race in [split-end-race.md](split-end-race.md).
 
 Why the raster HUD text reads poorly, and which HUD skins the later titles
 ship, are in [hud-skins.md](hud-skins.md).

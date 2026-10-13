@@ -414,8 +414,9 @@ them from the first frame.
   tallies on the same pad-entry edge. Open: lap 1 reads `6` on both captures against
   `9`-`10` on the laps after, unexplained, and this build's own counts have not been
   laid against a full lap of the original on the same circuit.
-- **`EndRaceResults_Update` and the network table** are read but draw nothing here:
-  this build has no network play (`EndRaceResults_PopulateMultiplayerTable`).
+- **`EndRaceResults_Update` and the network table**: `EndRaceResults_PopulateMultiplayerTable`
+  is drawn since 2026-10-13, **for a split-screen race** and not for network play (this
+  build has none): see [split-end-race.md](split-end-race.md).
 - **A parser quirk this pass routed around** rather than fixing:
   `Screens::collect_widgets` places a colour-only `<Image OffsetY=...>` wrapper at
   its own `y` without the tag's `OffsetY`, so the eight `tablebg{n}` backings landed
