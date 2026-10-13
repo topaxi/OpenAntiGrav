@@ -94,6 +94,9 @@ impl Race {
     /// all in the old grid's units. Called once before the first tick.
     pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
         self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
+        for hud in &mut self.view.huds {
+            hud.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
+        }
     }
 
     /// Which reticle dialect the title draws, and so which law a held LeachBeam's
@@ -107,10 +110,14 @@ impl Race {
     /// place a race is built, after [`Self::set_sight_screen`] (which resets the
     /// reticle).
     pub fn set_sight_dialect(&mut self, sights: &oag_title::hud::Sights) {
-        self.view.sight.set_leach_law(matches!(
+        let leach_law = matches!(
             sights,
             oag_title::hud::Sights::Brackets { leach: Some(_), .. }
-        ));
+        );
+        self.view.sight.set_leach_law(leach_law);
+        for hud in &mut self.view.huds {
+            hud.sight.set_leach_law(leach_law);
+        }
     }
 
     /// The lock-on reticle, for whoever draws it.

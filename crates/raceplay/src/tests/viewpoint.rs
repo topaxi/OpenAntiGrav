@@ -93,12 +93,19 @@ fn viewports_leave_the_simulation_hash_unchanged() {
     }
 }
 
+/// The HUD's gate is the primary's flyby and `hud_delay` whatever the view count:
+/// a split does not hide it (each view draws its own slot's, `Race::readout_for`),
+/// and does not show it where the primary's own rules would not.
 #[test]
-fn the_player_hud_is_hidden_while_split_and_back_after() {
+fn the_hud_gate_is_the_same_split_or_not() {
     let mut race = race_with_a_grid();
     assert!(race.hud_shown());
     race.set_viewport_count(2);
-    assert!(!race.hud_shown());
+    assert!(race.hud_shown(), "a split no longer hides the HUD");
+    assert!(
+        race.track_panel_progress().is_none(),
+        "no flyby, no track panel, split or not"
+    );
     race.set_viewport_count(1);
     assert!(race.hud_shown());
 }

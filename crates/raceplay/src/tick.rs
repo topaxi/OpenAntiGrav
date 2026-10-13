@@ -572,22 +572,10 @@ impl Race {
         // After every writer of the shield pool this tick has run - the wall
         // contact above, the weapon damage inside `projectile::step`, and the
         // perfect-zone recharge - so a hit from any of the three flashes on
-        // the tick it lands rather than one late. See
-        // `Self::advance_shield_flash`.
-        self.advance_shield_flash();
-        // After it and after `advance_absorb_bursts` above - see
-        // `Self::advance_shield_blink`'s own doc comment for why both must
-        // already reflect this tick.
-        self.advance_shield_blink();
-        // HD's twin of the pair above, for the title whose readout arms on a
-        // whole-percent drop - see `Self::advance_shield_flash_whole`.
-        self.advance_shield_flash_whole();
-        // 2048's own trail, independent of the two above - see
-        // `Self::advance_energy_bar_delay`.
-        self.advance_energy_bar_delay();
-        // 2048's `ThrustBar` chase - see `Self::advance_thrust_chase`.
-        self.advance_thrust_chase();
-        self.advance_assist_indicator();
+        // the tick it lands rather than one late; and after
+        // `advance_absorb_bursts`, which the blink reads. Every bar of every
+        // viewed slot: see `Self::advance_slot_huds`.
+        self.advance_slot_huds();
 
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically

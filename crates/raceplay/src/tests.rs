@@ -50,6 +50,7 @@ mod scene;
 mod scene_build;
 mod second_person;
 mod shield_flash;
+mod slot_hud;
 mod spawn;
 mod spectator_press;
 mod spline;

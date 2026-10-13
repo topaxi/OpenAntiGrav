@@ -16,9 +16,7 @@
 //! **chosen, not measured**; the original's split screen takes its players from
 //! the pads in port order.
 //!
-//! **The full-screen HUD is hidden when `N > 1`** (chosen, not measured): one
-//! HUD for slot 0 spread across a quadrant layout reads as every player's. A
-//! per-player HUD is the next piece of work.
+//! **Each view draws its own slot's HUD**, [`crate::hud_views`].
 
 use oag_gameplay::{Controller, MAX_PLAYERS};
 use oag_input::lobby::Lobby;

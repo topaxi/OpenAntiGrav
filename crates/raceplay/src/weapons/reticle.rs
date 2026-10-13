@@ -79,6 +79,46 @@ impl Race {
             sight::project(view, projection * view, world, screen)
         });
         self.view.sight_state = self.view.sight.update(self.sim.dt, projected);
+        self.update_viewed_sights();
+    }
+
+    /// The reticle of every other slot a split-screen view follows.
+    ///
+    /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
+    /// that slot's [`SlotHud`](crate::slot_hud::SlotHud), fed by
+    /// [`Self::sight_target`] (the per-slot lock the simulation already computes
+    /// for the LeachBeam) and projected through that slot's own chase camera and
+    /// field of view. The weapons code reads the primary's `RaceView::sight` and
+    /// nothing here, so a second person's fire does not wait for this lock:
+    /// open. A no-op with one view.
+    ///
+    /// Projects at the title's HUD aspect, as the primary's does, and a view
+    /// narrower than that sees a wider vertical field than this assumes
+    /// (`fit_vertical_fov`), so on a tall quadrant the brackets sit a little off
+    /// the craft. **Chosen, not measured.**
+    fn update_viewed_sights(&mut self) {
+        let primary = self.sim.world.primary_slot();
+        for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
+            if let Some(held) = self.sight_held(slot) {
+                self.view.huds[slot].sight.set_held(held);
+            }
+            let target = self.sight_target(slot);
+            let screen = self.view.huds[slot].sight.screen();
+            // The camera accessors follow the viewpoint; put the player's back
+            // after, as the draw does.
+            self.set_viewpoint(slot);
+            let projected = target.and_then(|target| {
+                let world = self.sim.world.ships[target as usize].physics.body.position;
+                let view = self.view();
+                let projection =
+                    self.projection(screen[0] / screen[1], SIGHT_FAR, self.view.sight_fov);
+                sight::project(view, projection * view, world, screen)
+            });
+            self.reset_viewpoint();
+            let dt = self.sim.dt;
+            let hud = &mut self.view.huds[slot];
+            hud.sight_state = hud.sight.update(dt, projected);
+        }
     }
 
     /// Which of the two lockable weapons `slot` is holding, or `None`.

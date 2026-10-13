@@ -64,6 +64,7 @@ pub(super) fn load_hud(
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
+    views: u8,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let entry = hud_layout(title, mode);
@@ -112,7 +113,20 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
-    let sheet = load_atlases(archives, title, layout.as_ref(), entry, report);
+    let split = split_assets(archives, title, mode, views, space, report);
+    // The sheet packs the textures of every layout this race can draw, the
+    // whole-screen one first so a race with no split packs what it always did.
+    let sheet = match (&layout, &split) {
+        (Some(layout), Some(split)) => {
+            let mut every = layout.clone();
+            for authored in &split.layouts {
+                every.sprites.extend(authored.sprites.iter().cloned());
+                every.models.extend(authored.models.iter().cloned());
+            }
+            load_atlases(archives, title, Some(&every), entry, report)
+        }
+        _ => load_atlases(archives, title, layout.as_ref(), entry, report),
+    };
 
     // The HUD's captions are `idstring` keys - `IG_HUD_LAP` on Pulse,
     // `HUD_Lap` on Pure, whatever the layout's own XML names - and without a
@@ -211,7 +225,55 @@ pub(super) fn load_hud(
         // makes for the front end.
         space,
         art: title.hud_art,
+        split,
     }
+}
+
+/// The title's own two-player split-screen layouts for `mode`, when the race is
+/// loaded for exactly two views and the title ships them.
+///
+/// **Two views only**: the authored family covers a top-and-bottom pair and
+/// nothing more, so any other count, and every mode the family has no layout
+/// for (Time Trial, Speed Lap, Zone: HD ships a Zone one that is not wired),
+/// keep the whole-screen layout scaled into each view. A layout that does not
+/// compose is reported and the whole-screen one is used instead, rather than a
+/// half HUD.
+fn split_assets(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    views: u8,
+    space: oag_display::space::Space,
+    report: &mut Vec<String>,
+) -> Option<oag_hud::SplitAssets> {
+    let authored = title.hud.split.filter(|_| views == 2)?;
+    let roots = match mode {
+        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => authored.arcade,
+        Mode::Eliminator => authored.elimination,
+        Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => return None,
+    };
+    let mut layouts = Vec::new();
+    for root in roots {
+        let composed = oag_hud::compose(root, |path| archives.read_name(path).ok());
+        let Some(composed) = composed.filter(|c| c.missing.is_empty()) else {
+            report.push(format!(
+                "HUD split {root} did not compose; the whole-screen layout is scaled into each view"
+            ));
+            return None;
+        };
+        report.push(format!(
+            "HUD split {root}: {} sprite(s), {} label(s) composed from {} file(s)",
+            composed.layout.sprites.len(),
+            composed.layout.labels.len(),
+            composed.files.len()
+        ));
+        layouts.push(composed.layout);
+    }
+    let layouts: [oag_hud::Layout; 2] = layouts.try_into().ok()?;
+    Some(oag_hud::SplitAssets {
+        layouts,
+        view: (space.size.0, authored.view_height as f32),
+    })
 }
 
 /// Splices Pilot Assist's indicator into a layout that does not author it, on a

@@ -434,6 +434,17 @@ impl Session {
             .graphics
             .boost_zoom
             .then(oag_source::title::borrowed_zoom_ring);
+        // The join screen's seats, or the seats a restart kept: the load reads a
+        // title's authored two-player split HUD, so it needs the view count
+        // before `seat_split_race` cuts the screen. See `race::Options::views`.
+        if let Some(seats) = self
+            .split_lobby
+            .as_ref()
+            .map(oag_input::lobby::Lobby::count)
+            .or_else(|| self.controls.assignment().humans())
+        {
+            options.views = u8::try_from(seats).unwrap_or(u8::MAX);
+        }
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
