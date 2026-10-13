@@ -310,9 +310,9 @@ craft and shield uniform writes 0.3 ms, scenery clocks and adverts 0.1 ms, the r
 (`render_shadow_passes`), the shadow gather (`upload_shadow_geometry`; every view still
 uploads it with its own matrix), the scenery's animation clocks and the advert cards.
 Each is a function of the craft and the race clock, never the camera: the casters are fixed
-buffers and ranges, the `mapped` fit reads slot 0's model matrix, the sun-occlusion fit is
-each craft's own, the adverts draw through their own authored cameras. Every picture is
-byte-identical to before: 22 stills (six titles at one view, Pulse at two, four and eight,
+buffers and ranges, the coverage fit spans every craft (the `mapped` fit is per view since
+2026-10-13, below), the sun-occlusion fit is each craft's own, the adverts draw through their own authored cameras. Every picture was
+byte-identical to before the hoist (the `mapped` tier at two or more views has changed since, below): 22 stills (six titles at one view, Pulse at two, four and eight,
 Pure, HD, Omega, 2048 and Pulse PS2 at two, and the `mapped` and `original` shadow tiers on
 Pulse and HD) plus seven at tick 1200 (up to eight views) `cmp` equal, each pair taken with the
 shadow tier that reaches the hoisted code. **Not hoistable**, each reads the view's matrix,
@@ -368,6 +368,105 @@ and 9.76 after, and HD four views 8.16 against 5.43.
 (Omega) and two and four views (2048), and each was timed once at two views (table above;
 single runs, so only the order of magnitude: 1.2 to 2.0 ms of CPU, which is the GPU's
 business more than the CPU's on Omega, whose scene passes cost 1.1 ms).
+
+**The shadow gather per tick, and the `mapped` map per view** (2026-10-13, `shadow-gather-per-tick`).
+Both are for the Raphael iGPU and the discrete card alike; the numbers follow.
+
+*The gather.* The `original` tier's hull gather (`oag_raceplay::hull_gather`) is a ray per hull
+vertex onto the floor, and it ran every **rendered** frame although the craft move once per
+60 Hz tick. Profiled on Pulse's Single Race grid (eight craft, release build, one run of 300
+ticks): the placement rays 10 us, `hull_triangles` 20 us and `conform_to_floor` (the per-vertex
+floor rays, about 240 vertices a craft) **1,722 us a tick**, so the floor rays are the whole
+gather. It is now taken at the tick's own poses, kept with the tick before it, and a draw
+between ticks lerps the two by the draw alpha (`Scene::original_hulls`,
+`scene/frame/hull_cache.rs`):
+
+- **At alpha 1.0 the picture is main's, bit for bit.** Every capture, trace and screenshot
+  draws there: 47 of 49 stills `cmp` equal to main's binary (six titles at one view at ticks 300,
+  1200 and 2400 and at two views at tick 300; Pulse at two, four and eight views at ticks 300 and
+  1200; the `original`, `blob`, `mapped` and `off` tiers of Pulse and HD at one view; Pulse's `blob`
+  at two and four views; `--draw-alpha` 0.25, 0.5 and 0.75 at one and four views, which draw the
+  live gather because a single capture has no predecessor to blend from); the other two are the
+  intended `mapped` change below.
+- **Between ticks it is not the same picture, and is not meant to be.** The old gather projected
+  the hull from the blended pose; this lerps the projected vertices of the two ticks. On Zone's
+  circuit (three 60-tick windows, 540 frames at alpha 0.25, 0.5 and 0.75, 168,480 vertices,
+  `hull_gather_ground_truth`) the lerped vertex sits from the live one by a median 0.0006 world
+  units, p90 0.013, p99 0.053, p99.9 0.147 and **at worst 0.237**; a craft is some 13 units long
+  and a pixel at the chase camera about 0.03 units, so the p99 is under two pixels and the worst
+  vertex (a floor seam under one ray) under eight. **Chosen, not measured** as acceptable.
+- **Anything the blend cannot represent is gathered live, as before**: a craft that gained or
+  lost its shadow over the tick, a previous gather that is not this tick's predecessor
+  (a respawn or a jump past `SNAP_DISTANCE` draws the current gather, as the hull does). Under
+  60 Hz the race runs several ticks between draws, so no draw has a predecessor and the cache
+  would only double the work: after two misses it stops seeding, and a frame is one gather, as
+  before (seeded again on one draw in sixteen).
+- The cache key is a pose generation (`Race::pose_generations`, moved by every tick path and by
+  `settle_poses`, unique across races) plus each craft's tick model matrix, not `World::tick`,
+  which the flyby and cosmetic ticks hold still. Tests: `tests::split_shadows` (once per tick
+  at four draws a tick, once per frame under 60 Hz), `hull_gather::tests` (the lerp, a changed
+  hull, a snap).
+
+*The bench must say how many frames share a tick.* It draws one captured tick over and over, so a
+per-tick cache hits on every frame but the first. `OAG_RENDER_BENCH_FRAMES_PER_TICK=K` (default 1)
+makes every K-th benched frame a new tick: **1 is a 60 Hz window (the cost before the cache), 4 a
+240 Hz one, and a very large number is the upper bound** where the cache never misses. Pulse,
+tick 300, medians of three runs, load average 11 to 14 (the machine was shared), RX 7800 XT,
+`render_viewports` CPU and pipelined, ms:
+
+| Views | before (main) CPU / pipelined | 60 Hz (K=1) | 240 Hz (K=4) | upper bound |
+| ---: | --- | --- | --- | --- |
+| 1 | 2.98 / 3.07 | 3.09 / 3.04 | 1.52 / 1.73 | 1.26 / 1.29 |
+| 2 | 3.53 / 3.81 | 3.60 / 3.86 | 2.28 / 2.59 | 2.02 / 2.15 |
+| 4 | 5.44 / 5.83 | 5.34 / 5.78 | 3.86 / 4.41 | 3.82 / 4.03 |
+| 8 | 8.10 / 8.17 | 8.11 / 8.19 | 6.68 / 7.04 | 6.74 / 6.72 |
+
+A 60 Hz window gains nothing (and loses nothing: the rows are inside the machine's own spread);
+a 240 Hz window saves 1.5 ms of CPU at one view and 1.25 to 1.6 ms at two, four and eight (the
+gather costs the same however many views share it, since the earlier hoist). The GPU sum was 0.31, 0.49,
+0.85 and 1.46 ms in every column. On the Raphael iGPU (load 3 to 5, N = 1, 2, 4; the eight-view
+rows were taken at load 33 to 65 and are not quoted) the CPU column moves the same way
+(2.21 -> 2.20 -> 1.16 ms at one view, 3.10 -> 1.84 at two, 4.58 -> 3.82 at four, K = 1, 4) and
+the **pipelined time does not**: 4.89, 5.81 and 7.92 ms before against 4.75, 5.69 and 7.95 at
+K = 4, because the iGPU is bound by its 4.8 to 7.3 ms of scene passes. Pure draws no shadows and
+did not move on the iGPU (pipelined 4.58, 4.93, 5.65, 6.11 ms before; 4.65, 4.88, 5.46, 5.83 after,
+at one, two, four and eight views, load 9 to 26).
+
+*2048 and Omega* (the shared-lineage check): both draw through the same `original_hulls` and
+`render_shadow_passes` code, **ported**, nothing title-specific: their default tier is `off`
+and `original` draws no hull there (no authored occluder), so their stills at one and two views
+are `cmp` equal to main's, and the `mapped` redraw per view is the same code on every title.
+
+*Open from it:* the floor rays are the cost. Culling them to the craft any view can see
+(with eight craft and two or four views most hulls are projected for nothing) or answering them
+from the collision grid's own cell lookup would cut every refresh rate, keeps the picture exact,
+and is not done.
+
+*The `mapped` map per view.* The depth map is fitted on the craft its view follows
+(`Race::viewed_slot`), not on slot 0 for every view: each later view redraws the map itself, in
+its own encoder (each view is its own submission, and a queue write lands before the submission
+that follows it, so no view's fit reaches another's draws). The alternative, one map that fits
+every viewed craft, loses texels as the craft spread (a 140 unit box becomes the whole spread
+plus 70 each side), and the race's craft are track-lengths apart within seconds. **Chosen, not
+measured** for the picture; the cost is measured. Pictures: view one of a two-view race is pixel
+equal to main's (ImageMagick `compare -metric AE` 0 over its half), views two and up now carry
+their craft's shadow where main's had none; N = 1 is `cmp` equal. Pulse, tick 300, medians of
+three, ms:
+
+| Views | RX 7800 XT before -> after (CPU / pipelined) | load | iGPU before -> after (pipelined) | load |
+| ---: | --- | --- | --- | --- |
+| 1 | 1.13 / 1.16 -> 1.12 / 1.15 | 5 | 7.35 -> 7.21 (unchanged path) | 6 to 8 |
+| 2 | 2.30 / 2.27 -> 2.31 / 2.33 | 4 to 5 | 7.80 -> 9.40 | 5 to 6 |
+| 4 | 4.27 / 4.23 -> 4.56 / 4.66 | 4 to 6 | 9.74 -> 13.72 | 3 to 4 |
+| 8 | 8.19 / 8.02 -> 9.49 / 8.96 | 6 to 10 | 11.74 -> 18.86 | 4 to 5 |
+
+On the discrete card a redraw costs about 0.1 to 0.2 ms a view; on the iGPU **1 to 1.6 ms of GPU
+time a view past the first**, because the depth pass draws the whole circuit into every map (the
+track is one caster, not culled to the map's box). The shared-map alternative costs what main's
+single map does (the "before" column), so that is the price of views two and up getting their
+shadows. The `mapped` tier is opt-in and the iGPU split is
+Pulse and Pure only, but eight views at 18.9 ms miss 60 Hz. **Open**: cull the track caster to
+the fit's box, which would also cheapen the single-view tier (about 1.5 ms of the iGPU's 7.35).
 
 **Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
 2048 and Omega stay off integrated GPUs in a split):
@@ -663,10 +762,10 @@ does not exist: the race frames are that evidence.
   The render bench does time every view (`Scene::render_viewports`' `view_timers`);
   it also shows resolution would not help a split here: the GPU is not the limit
   (see "Cost").
-- **The `mapped` shadow tier follows slot 0 only** (`mapped_fit(ship_model_matrix_of(0))`,
-  a 140 unit box ahead of the first craft): in a split, views two and up get a map that
-  covers their craft only when it is near the first. Read from the code, not looked at;
-  unchanged by the hoist below.
+- ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
+  view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
+  and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole
+  into every one of those maps, 1 to 1.6 ms of iGPU time a view.
 - `--players N > 1` **changes `RaceSim::state_hash`**, because `World::controllers`
   is hashed; the cameras, views and draw do not.
 - Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but

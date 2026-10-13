@@ -1029,8 +1029,10 @@ impl Scene {
 mod anims;
 mod attachments;
 mod beam;
+mod hull_cache;
 mod lod;
 mod particles;
 mod road;
 mod shadow;
 pub(super) use attachments::{depth_texture, msaa_color_texture};
+pub(super) use hull_cache::HullCache;

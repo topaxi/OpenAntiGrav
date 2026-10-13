@@ -23,7 +23,10 @@
 //!   clock, so a later view ([`Layer::Next`]) reads what the first left in the
 //!   buffers and textures. Measured on Pulse, the gather alone was half of a view's
 //!   CPU, and a split is CPU-bound (`docs/rendering/split-screen.md`, "Cost"). The
-//!   picture of every view is byte-identical to drawing it all per view.
+//!   picture of every view is byte-identical to drawing it all per view. **One
+//!   exception: the `mapped` tier's depth map is fitted on the craft its view
+//!   follows, so each later view redraws it** in its own encoder
+//!   (`Scene::render_shadow_passes`).
 //! - **No Pulse bloom under a split.** `oag_post::bloom` reads the glow mask from
 //!   the top-left of the target whatever the viewport's origin is (its `prepare`
 //!   takes the size and ignores the origin), so a view anywhere else would glow
