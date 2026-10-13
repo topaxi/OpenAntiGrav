@@ -154,19 +154,32 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 /// way), its wall-contact clusters are the same (2850 at 973 -> 978 ticks, 2400
 /// at 992 -> 973), and its deaths stay in the region they were in (samples
 /// 2700-2970: 11 -> 15; the rest scattered).
+///
+/// **Four cells raised 2026-10-13 for per-team opponent handling** (lane
+/// `hd-opponent-variant-2`): the seven opponents now fly their own teams'
+/// handling instead of the player's, each on the player's speed plan re-learned
+/// for its own hull (`oag_ai::SpeedPlan::adapt`),
+/// so every race is a different race from the grid on. VENOM 3 forward 0 -> 1,
+/// RAPIER 1 reversed 1 -> 3, PHANTOM 1 forward 0 -> 1, PHANTOM 3 forward 3 -> 4
+/// and reversed 2 -> 3; only the exceeded halves. Over seeds 1-23, every class, both layouts
+/// (`ai_dekonstruct_black_board`, `OAG_SEEDS=23`, release, main against this
+/// change): destroyed 140 -> 134 (forward 63 -> 47, reversed 77 -> 87; by class
+/// VENOM 10 -> 5, FLASH 16 -> 9, RAPIER 44 -> 48, PHANTOM 70 -> 72) and
+/// wall-contact ticks 84,770 -> 113,679: no more craft lost, more wall touched
+/// by a field of seven different hulls, some of them wider.
 const BOUND: &[(&str, u64, u32, u32)] = &[
     ("VENOM", 1, 0, 0),
     ("VENOM", 2, 2, 1),
-    ("VENOM", 3, 0, 0),
+    ("VENOM", 3, 1, 0),
     ("FLASH", 1, 2, 1),
     ("FLASH", 2, 0, 1),
     ("FLASH", 3, 1, 2),
-    ("RAPIER", 1, 1, 1),
+    ("RAPIER", 1, 1, 3),
     ("RAPIER", 2, 1, 2),
     ("RAPIER", 3, 3, 3),
-    ("PHANTOM", 1, 0, 2),
+    ("PHANTOM", 1, 1, 2),
     ("PHANTOM", 2, 3, 3),
-    ("PHANTOM", 3, 3, 2),
+    ("PHANTOM", 3, 4, 3),
 ];
 
 fn check(class: &str, seed: u64) {

@@ -119,24 +119,28 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         // reached through it: a test that called the private predicate would pass
         // whatever that predicate did, including nothing.
         //
-        // `tick != oag_race::COUNTDOWN_TICKS` excludes one specific, understood
-        // tick: the countdown hold releases every opponent's throttle from zero
-        // to full in a single tick, so at `tick == COUNTDOWN_TICKS` `thrust` has
-        // just gone positive while `linear_velocity` has not risen off ~0 yet -
-        // which reads as `stalled` by this predicate's own three terms even
-        // though the craft is not stuck. Confirmed by instrumenting
-        // `(tick, thrust, speed)` around the release: on all of `16_Track`,
-        // `03_Track` and `06_Track` at ace, `thrust` reads 100 and `speed`
-        // ~0.57 units/s at exactly `COUNTDOWN_TICKS`, and >1.0 the very next
-        // tick - identically on all three, so this is a property of the
-        // countdown gate itself, not of any one circuit. Excluded here rather
-        // than by loosening the zero-tolerance assertion below, the same way
+        // `COUNTDOWN_TICKS` and the tick after are excluded, two specific,
+        // understood ticks: the countdown hold releases every opponent's
+        // throttle from zero to full in a single tick, so at
+        // `tick == COUNTDOWN_TICKS` `thrust` has just gone positive while
+        // `linear_velocity` has not risen off ~0 yet, which reads as `stalled`
+        // by this predicate's own three terms though the craft is not stuck.
+        // Confirmed by instrumenting `(tick, thrust, speed)` around the
+        // release: on all of `16_Track`, `03_Track` and `06_Track` at ace,
+        // `thrust` reads 100 and `speed` ~0.57 units/s at exactly
+        // `COUNTDOWN_TICKS`, a property of the countdown gate itself, not of
+        // any one circuit. **The tick after** since opponents fly their own
+        // team's handling (2026-10-12): the slot-1 craft on the default grid
+        // is Triakis, the slowest `accelcap`, and reads 0.97 on `16_Track` at
+        // `COUNTDOWN_TICKS + 1`, just under `STALL_SPEED`: a slower launch,
+        // not a stall. Excluded here rather than by loosening the
+        // zero-tolerance assertion below, the same way
         // `shuriken_ground_truth::WARM_UP_TICKS` skips past its own known
         // window rather than starting exactly at `COUNTDOWN_TICKS`.
         let stalled = ship.physics.thrust > 0.0
             && !ship.standing.finished()
             && ship.physics.body.linear_velocity.length() < oag_race::recovery::STALL_SPEED
-            && tick != oag_race::COUNTDOWN_TICKS;
+            && !(oag_race::COUNTDOWN_TICKS..=oag_race::COUNTDOWN_TICKS + 1).contains(&tick);
         run = if stalled { run + 1 } else { 0 };
         solo.longest_stall = solo.longest_stall.max(run);
     }
