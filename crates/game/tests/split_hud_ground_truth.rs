@@ -86,6 +86,7 @@ fn draws<'a>(
     oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_hud.as_ref(),
         readouts,
         VIEWPORT,
         hud.space,
@@ -103,18 +104,30 @@ fn every_view_draws_its_own_slots_numbers_inside_its_own_rectangle() {
     for _ in 0..600 {
         race.tick(&inputs);
     }
-    let views = draws(&race, &hud);
-    assert_eq!(views.len(), 4);
+    let all_draws = draws(&race, &hud);
+    // This project's split-HUD file places each group of widgets on its own, so a
+    // view is several draws and the reticle's: every view the same number of them.
+    assert!(
+        hud.split_hud.is_some(),
+        "a four-view race reads the split-HUD file"
+    );
+    let per = all_draws.len() / 4;
+    assert!(per > 1 && all_draws.len() == per * 4, "{}", all_draws.len());
+    let views: Vec<&[oag_game::hud_overlay::ViewDraw<'_>]> = all_draws.chunks(per).collect();
+    let clip_of = |i: usize| views[i][0].placement.clip;
 
     // The four craft are on different parts of the grid, so their readouts differ
     // in something the HUD prints.
-    let speeds: Vec<u32> = views.iter().map(|v| v.readout.speed_kmh as u32).collect();
+    let speeds: Vec<u32> = views
+        .iter()
+        .map(|v| v[0].readout.speed_kmh as u32)
+        .collect();
     assert!(
         speeds.iter().any(|&s| s != speeds[0]),
         "four slots, one speed: {speeds:?}"
     );
 
-    let places: Vec<u32> = views.iter().map(|v| v.readout.place).collect();
+    let places: Vec<u32> = views.iter().map(|v| v[0].readout.place).collect();
     println!("places at tick 600: {places:?}");
     let mut distinct = places.clone();
     distinct.sort_unstable();
@@ -127,15 +140,15 @@ fn every_view_draws_its_own_slots_numbers_inside_its_own_rectangle() {
 
     let mut per_view = Vec::new();
     for (i, view) in views.iter().enumerate() {
-        let frame = views_frame(&views[i..=i]);
+        let frame = views_frame(view);
         let words = texts(&frame);
         assert!(!words.is_empty(), "a view with no text at all");
-        let [cx0, cy0, cw, ch] = view.placement.clip;
+        let [cx0, cy0, cw, ch] = clip_of(i);
         for (x, y, text) in &words {
             assert!(
                 *x >= cx0 && *x < cx0 + cw && *y >= cy0 && *y < cy0 + ch,
                 "{text:?} at ({x}, {y}) is outside its view {:?}",
-                view.placement.clip
+                clip_of(i)
             );
         }
         per_view.push(words);
@@ -146,7 +159,7 @@ fn every_view_draws_its_own_slots_numbers_inside_its_own_rectangle() {
     );
 
     // Together, in the one list the renderer paints.
-    let all = views_frame(&views);
+    let all = views_frame(&all_draws);
     let one_by_one: usize = per_view.iter().map(Vec::len).sum();
     assert_eq!(texts(&all).len(), one_by_one);
 }
@@ -247,6 +260,7 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
     let views = oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
         hud.split.as_ref(),
+        hud.split_hud.as_ref(),
         readouts,
         VIEWPORT,
         hud.space,
@@ -418,15 +432,17 @@ fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
     }
     if let Some(ps4) = oag_testdata::exact("data/extracted/ps4") {
         let mut archives = oag_omega::open(&ps4.display().to_string()).expect("Omega opens");
-        let roots = family(
-            "Data/xml/splitscreen_hud/",
-            [
-                "splitscreen_hud_0",
-                "splitscreen_hud_1",
-                "splitscreen_elimination_hud_0",
-                "splitscreen_elimination_hud_1",
-            ],
-        );
+        // The roots the title's own row names, so dropping the row fails here.
+        let split = oag_omega::hud::LAYOUTS
+            .split
+            .expect("Omega wires the split row");
+        let roots: Vec<String> = split
+            .arcade
+            .iter()
+            .chain(&split.elimination)
+            .map(|root| (*root).to_owned())
+            .collect();
+        assert_eq!(split.view_height, 540);
         found.push(("Omega", take(&mut archives, &roots)));
     }
     println!(
@@ -445,5 +461,170 @@ fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
     // The second player of each pair sits exactly one half-screen lower.
     for pair in [(0, 1), (2, 3)] {
         assert_eq!(reference[pair.1].3 - reference[pair.0].3, 540.0);
+    }
+}
+
+/// Every name a split-HUD file writes is a widget its title authors, in some mode, or
+/// one of the assist indicator's, which this project splices in for the titles whose
+/// discs author none. A typo would otherwise draw nothing and say nothing, and a rule
+/// whose names stopped matching would leave a view with no HUD.
+#[test]
+#[ignore = "needs data/images/{pulse-psp-eu,pulse-ps2-eu,pure-psp-eu}.chd and hdfury-ps3-eu-dec.iso"]
+fn the_shipped_split_files_name_only_widgets_their_titles_author() {
+    use oag_hud::split_hud::{LineHeights, SplitHud, arrange};
+    let assist = oag_hud::Layout::from_xml(
+        &std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/fallback/Data/XML/HUD_assist_indicator.xml"
+        ))
+        .unwrap(),
+    );
+    let heights = LineHeights {
+        hud: 25.0,
+        small: 10.0,
+        default: 13.0,
+    };
+    let mut checked = Vec::new();
+    for (image, file) in [
+        ("data/images/pulse-psp-eu.chd", "Pulse"),
+        ("data/images/pulse-ps2-eu.chd", "Pulse"),
+        ("data/images/pure-psp-eu.chd", "Pure"),
+        ("data/images/hdfury-ps3-eu-dec.iso", "HD"),
+    ] {
+        let Some(path) = oag_testdata::image(image) else {
+            continue;
+        };
+        let opened =
+            oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+                .expect("the title opens");
+        let (mut archives, title) = (opened.archives, opened.title);
+        let layouts = [
+            title.hud.arcade,
+            title.hud.time_trial,
+            title.hud.speed_lap,
+            title.hud.zone,
+            title.hud.elimination,
+        ];
+        let mut whole = oag_hud::Layout::default();
+        let mut arcade = oag_hud::Layout::default();
+        for entry in layouts {
+            let composed = composed(&mut archives, entry);
+            let layout = &composed.layout;
+            if entry == title.hud.arcade {
+                arcade = layout.clone();
+            }
+            whole.sprites.extend(layout.sprites.iter().cloned());
+            whole.fills.extend(layout.fills.iter().cloned());
+            whole.labels.extend(layout.labels.iter().cloned());
+            whole.models.extend(layout.models.iter().cloned());
+        }
+        for layout in [&mut whole, &mut arcade] {
+            layout.sprites.extend(assist.sprites.iter().cloned());
+        }
+        let text = std::fs::read_to_string(format!(
+            "{}/../../assets/fallback/Data/XML/SplitHud_{file}.toml",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .unwrap();
+        let hud = SplitHud::parse(&text).expect("the shipped file parses");
+        let names: Vec<&str> = whole
+            .sprites
+            .iter()
+            .map(|w| w.name.as_str())
+            .chain(whole.fills.iter().map(|w| w.name.as_str()))
+            .chain(whole.labels.iter().map(|w| w.name.as_str()))
+            .chain(whole.models.iter().map(|w| w.name.as_str()))
+            .collect();
+        for rule in &hud.rules {
+            for group in &rule.groups {
+                for pattern in &group.widgets {
+                    let one = oag_hud::split_hud::Group {
+                        widgets: vec![pattern.clone()],
+                        ..group.clone()
+                    };
+                    assert!(
+                        names.iter().any(|name| one.matches(name)),
+                        "{file} {:?}: `{pattern}` names no widget of {image}",
+                        rule.name
+                    );
+                }
+            }
+            // And the rule is not an empty HUD: most of its groups find widgets in
+            // the single-race layout.
+            let pieces = arrange(rule, &arcade, heights);
+            assert!(
+                pieces.len() * 2 >= rule.groups.len() && pieces.len() >= 3,
+                "{file} {:?}: only {} of {} groups place anything in the arcade layout",
+                rule.name,
+                pieces.len(),
+                rule.groups.len()
+            );
+        }
+        checked.push(image);
+    }
+    println!("checked {checked:?}");
+}
+
+/// The load report says which layout answers a split race, and says nothing about the
+/// file for one view, which reads, reports and arranges none of it.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd and hdfury-ps3-eu-dec.iso"]
+fn the_load_report_names_the_split_layout_that_answers() {
+    let load = |image: &str, views: u8| {
+        let path = oag_testdata::image(image)?;
+        Some(
+            race::load(&race::Options {
+                source: path.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::SingleRace,
+                views,
+                ..race::Options::default()
+            })
+            .expect("loading the race")
+            .report,
+        )
+    };
+    if let (Some(four), Some(one)) = (
+        load("data/images/pulse-psp-usa.chd", 4),
+        load("data/images/pulse-psp-usa.chd", 1),
+    ) {
+        let lines = |report: &[String]| -> Vec<String> {
+            report
+                .iter()
+                .filter(|line| line.contains("SplitHud") || line.contains("split layout"))
+                .cloned()
+                .collect()
+        };
+        let four = lines(&four);
+        assert!(
+            four.iter()
+                .any(|l| l.contains("SplitHud_Pulse.toml answered by this project's fallback")),
+            "{four:?}"
+        );
+        for rule in ["strip", "landscape", "square", "portrait"] {
+            assert!(
+                four.iter()
+                    .any(|l| l.contains(&format!("layout \"{rule}\", "))),
+                "{rule}: {four:?}"
+            );
+        }
+        assert!(
+            four.iter()
+                .any(|l| l.contains("answered by the file, the whole-screen layout elsewhere")),
+            "{four:?}"
+        );
+        assert!(
+            lines(&one).is_empty(),
+            "one view reads no split file: {:?}",
+            lines(&one)
+        );
+    }
+    if let Some(two) = load("data/images/hdfury-ps3-eu-dec.iso", 2) {
+        assert!(
+            two.iter().any(|l| l.contains(
+                "the title's authored layout answers, and this project's file where it has none"
+            )),
+            "{two:?}"
+        );
     }
 }

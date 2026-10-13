@@ -581,6 +581,18 @@ impl Archives {
             .collect()
     }
 
+    /// Which asset layer answers `name`, or `None` when an archive does (or
+    /// nothing does): how a caller tells a player's override from this project's
+    /// own fallback, both of which [`Self::read_name`] reads the same way.
+    #[must_use]
+    pub fn layer_of(&self, name: &str) -> Option<crate::layers::Kind> {
+        match self.holder_of(name)? {
+            Held::Override => Some(LayerKind::Override),
+            Held::Fallback => Some(LayerKind::Fallback),
+            _ => None,
+        }
+    }
+
     /// Mounts the player's override in front of every archive.
     ///
     /// Empty layers are not mounted, so the common case - the player has

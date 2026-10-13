@@ -90,6 +90,18 @@ pub fn fallback_layer() -> Layer {
         "Data\\HUD\\Textures\\AssistIndicator.pix",
         include_bytes!("../../../assets/fallback/Data/HUD/Textures/AssistIndicator.pix"),
     );
+    layer.insert_bytes(
+        "Data\\XML\\SplitHud_Pulse.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pulse.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\SplitHud_Pure.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_Pure.toml"),
+    );
+    layer.insert_bytes(
+        "Data\\XML\\SplitHud_HD.toml",
+        include_bytes!("../../../assets/fallback/Data/XML/SplitHud_HD.toml"),
+    );
     layer
 }
 

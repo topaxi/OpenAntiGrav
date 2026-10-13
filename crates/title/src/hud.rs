@@ -76,6 +76,14 @@ pub struct HudLayouts {
     /// The title's own two-player split-screen layouts, `None` where it ships
     /// none (both PSP titles and the PS2 pressing).
     pub split: Option<SplitLayouts>,
+    /// This project's own split-screen layout for the title, as an entry name
+    /// (`oag_hud::split_hud` reads it): where each of the title's widgets goes in
+    /// a view, for every view count and shape the authored [`Self::split`] does not
+    /// cover. It is looked up through the asset layers, so a player's override beats
+    /// it and the disc's own copy (there is none) would sit between; the shipped
+    /// one is in `assets/fallback/`. `None` draws the whole-screen layout scaled
+    /// into each view instead.
+    pub split_layout: Option<&'static str>,
 }
 
 /// A title's authored two-player split-screen HUD: one root per player, for the

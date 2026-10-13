@@ -53,7 +53,28 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: r"Data\XML\SpeedLap_HUD.xml",
     zone: r"Data\XML\Zone_HUD.xml",
     elimination: r"Data\XML\Elimination_HUD.xml",
-    split: None,
+    split: Some(SPLIT),
+    split_layout: None,
+};
+
+/// The two-player split-screen layouts Omega ships, the same four files HD and 2048
+/// ship (`splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml`): one
+/// 1920x1080 layout per player, the second the first shifted 540 down. **Wired the
+/// way HD's are** (`oag_hd::hud::SPLIT`), whose HUD grid Omega shares; the row is
+/// **ported**, and looked at on 2026-10-13: a two-view Single Race on
+/// `data/extracted/ps4` draws each player's own layout in its half. The four roots
+/// are also checked to compose to the sprites HD's do, in
+/// `crates/game/tests/split_hud_ground_truth.rs`.
+pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
+    arcade: [
+        "Data/xml/splitscreen_hud/splitscreen_hud_0.xml",
+        "Data/xml/splitscreen_hud/splitscreen_hud_1.xml",
+    ],
+    elimination: [
+        "Data/xml/splitscreen_hud/splitscreen_elimination_hud_0.xml",
+        "Data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
+    ],
+    view_height: 540,
 };
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].

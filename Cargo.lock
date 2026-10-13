@@ -2651,6 +2651,7 @@ dependencies = [
 name = "oag-hud"
 version = "0.1.0"
 dependencies = [
+ "log",
  "oag-2048",
  "oag-display",
  "oag-hd",
@@ -2658,11 +2659,15 @@ dependencies = [
  "oag-pulse",
  "oag-pure",
  "oag-race",
+ "oag-schema",
  "oag-tables",
  "oag-texture",
  "oag-title",
  "oag-ui",
  "oag-vex",
+ "serde",
+ "thiserror 2.0.19",
+ "toml",
 ]
 
 [[package]]

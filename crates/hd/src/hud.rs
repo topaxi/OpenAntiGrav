@@ -62,6 +62,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
     split: Some(SPLIT),
+    split_layout: Some(r"Data\XML\SplitHud_HD.toml"),
 };
 
 /// The two-player split-screen HUD the disc authors, default skin: one 1920x1080

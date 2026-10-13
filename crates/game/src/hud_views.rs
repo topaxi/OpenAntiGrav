@@ -73,14 +73,7 @@ pub fn place_into(
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> Placement {
-    let (left, top, width, height) = viewport;
-    let [fit_x, fit_y] =
-        crate::render::letterbox_in((width as u32, height as u32), space.display_aspect);
-    // The whole-screen HUD's rectangle in pixels, and its pixels per grid unit.
-    let (hud_w, hud_h) = (width * fit_x, height * fit_y);
-    let hud_x = left + (width - hud_w) * 0.5;
-    let hud_y = top + (height - hud_h) * 0.5;
-    let pixels_per_grid = hud_w / space.size.0;
+    let (hud_x, hud_y, pixels_per_grid) = grid_of(viewport, space);
     let (x, y, w, h) = view;
     let (region_w, region_h) = (region[2] * pixels_per_grid, region[3] * pixels_per_grid);
     let scale = (w / region_w).min(h / region_h);
@@ -102,6 +95,65 @@ pub fn place_into(
     }
 }
 
+/// Where the HUD's grid sits in the target: the pixel position of its origin and
+/// how many pixels one grid unit is.
+fn grid_of(viewport: (f32, f32, f32, f32), space: oag_display::space::Space) -> (f32, f32, f32) {
+    let (left, top, width, height) = viewport;
+    let [fit_x, fit_y] =
+        crate::render::letterbox_in((width as u32, height as u32), space.display_aspect);
+    // The whole-screen HUD's rectangle in pixels, and its pixels per grid unit.
+    let (hud_w, hud_h) = (width * fit_x, height * fit_y);
+    (
+        left + (width - hud_w) * 0.5,
+        top + (height - hud_h) * 0.5,
+        hud_w / space.size.0,
+    )
+}
+
+/// A rectangle of the HUD's grid as the whole target pixels `set_scissor_rect`
+/// takes, `[x, y, width, height]`, kept inside `viewport`.
+#[must_use]
+pub fn scissor_rect(
+    grid: [f32; 4],
+    viewport: (f32, f32, f32, f32),
+    space: oag_display::space::Space,
+) -> [u32; 4] {
+    let (hud_x, hud_y, per) = grid_of(viewport, space);
+    let edge = |low: f32, high: f32, from: f32, to: f32| {
+        let start = (low.round()).clamp(from, to);
+        let end = (high.round()).clamp(from, to);
+        [start as u32, (end - start).max(0.0) as u32]
+    };
+    let [x, w] = edge(
+        hud_x + grid[0] * per,
+        hud_x + (grid[0] + grid[2]) * per,
+        viewport.0,
+        viewport.0 + viewport.2,
+    );
+    let [y, h] = edge(
+        hud_y + grid[1] * per,
+        hud_y + (grid[1] + grid[3]) * per,
+        viewport.1,
+        viewport.1 + viewport.3,
+    );
+    [x, y, w, h]
+}
+
+/// A view's rectangle in the HUD's grid, `[x, y, width, height]`.
+fn grid_rect(
+    view: oag_render::viewport::Rect,
+    viewport: (f32, f32, f32, f32),
+    space: oag_display::space::Space,
+) -> [f32; 4] {
+    let (hud_x, hud_y, per) = grid_of(viewport, space);
+    [
+        (view.0 - hud_x) / per,
+        (view.1 - hud_y) / per,
+        view.2 / per,
+        view.3 / per,
+    ]
+}
+
 /// Where each of `count` views' whole-screen HUD goes: [`place_into`] with the
 /// whole screen as the region, for each of `oag_render::viewport::layout`'s views.
 #[must_use]
@@ -119,30 +171,33 @@ pub fn placements(
 
 /// Every view's draw: `readouts[i]` is slot `i`'s, drawn into view `i`.
 ///
-/// With the title's authored split layouts (two views and `split` is `Some`) view
-/// `i` draws player `i`'s own layout - whole-screen, sitting in its half - and
-/// its reticle, which is view-relative, is placed on its own. Otherwise every view
-/// draws the whole-screen layout `cx` carries, scaled into it.
+/// Which layout a view draws is `oag_hud::split_hud::source`'s answer for its
+/// shape: a player's override file, the title's authored layout (two views, one per
+/// player, whole-screen and sitting in its half, its reticle view-relative), this
+/// project's split-HUD file, or the whole-screen layout `cx` carries scaled into
+/// the view. A file places each of its groups of widgets on its own, so it yields
+/// one draw per group and one more for the reticle.
 #[must_use]
 pub fn view_draws<'a>(
     cx: Context<'a>,
     split: Option<&'a oag_hud::SplitAssets>,
+    split_hud: Option<&'a oag_hud::split_hud::SplitHudAssets>,
     readouts: Vec<Readout>,
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> Vec<ViewDraw<'a>> {
-    let views = oag_render::viewport::layout(readouts.len(), viewport);
-    let authored = split.filter(|_| readouts.len() == 2);
-    readouts
-        .into_iter()
-        .zip(views)
-        .enumerate()
-        .map(|(slot, (readout, view))| match authored {
-            Some(split) => {
+    let count = readouts.len();
+    let views = oag_render::viewport::layout(count, viewport);
+    let whole = [0.0, 0.0, space.size.0, space.size.1];
+    let mut out = Vec::new();
+    for (slot, (readout, view)) in readouts.into_iter().zip(views).enumerate() {
+        let aspect = view.2 / view.3;
+        match oag_hud::split_hud::source(split, split_hud, readout.mode, count, aspect) {
+            oag_hud::split_hud::Source::Authored(split) => {
                 let layout = &split.layouts[slot];
                 let (width, height) = split.view;
                 let region = [0.0, height * slot as f32, width, height];
-                ViewDraw {
+                out.push(ViewDraw {
                     cx: Context {
                         layout,
                         default_border: layout.default_border(),
@@ -151,21 +206,44 @@ pub fn view_draws<'a>(
                     readout,
                     placement: place_into(view, region, viewport, space),
                     sight: Some(place_into(view, [0.0, 0.0, width, height], viewport, space)),
-                }
+                    sight_only: false,
+                });
             }
-            None => ViewDraw {
+            oag_hud::split_hud::Source::File(_, pieces, _) => {
+                let rect = grid_rect(view, viewport, space);
+                for piece in pieces {
+                    out.push(ViewDraw {
+                        cx: Context {
+                            layout: &piece.layout,
+                            ..cx
+                        },
+                        readout: Readout {
+                            sight: None,
+                            ..readout.clone()
+                        },
+                        placement: piece.placement(rect, space.size),
+                        sight: None,
+                        sight_only: false,
+                    });
+                }
+                out.push(ViewDraw {
+                    cx,
+                    placement: place_into(view, whole, viewport, space),
+                    sight: Some(place_into(view, whole, viewport, space)),
+                    readout,
+                    sight_only: true,
+                });
+            }
+            oag_hud::split_hud::Source::Scaled => out.push(ViewDraw {
                 cx,
                 readout,
-                placement: place_into(
-                    view,
-                    [0.0, 0.0, space.size.0, space.size.1],
-                    viewport,
-                    space,
-                ),
+                placement: place_into(view, whole, viewport, space),
                 sight: None,
-            },
-        })
-        .collect()
+                sight_only: false,
+            }),
+        }
+    }
+    out
 }
 
 /// Where the track-description panel goes: the whole `viewport`, or under a split

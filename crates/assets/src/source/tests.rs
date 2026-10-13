@@ -117,6 +117,7 @@ const TITLE: &Title = &Title {
         zone: r"Data\XML\Nothing_HUD.xml",
         elimination: r"Data\XML\Nothing_HUD.xml",
         split: None,
+        split_layout: None,
     },
     // And unread on the same terms: which widgets a HUD keeps up, and out of
     // which texture, is decided long after an archive has been found.

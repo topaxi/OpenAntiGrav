@@ -6,7 +6,7 @@
 //! the first place. Nothing here decides anything - every widget, string and
 //! colour is already resolved by the time [`Overlay::draw`] runs.
 
-use oag_hud::{Assets, Context, Frame, Layout, Placement, Readout, draw_list};
+use oag_hud::{Assets, Context, Frame, Layout, Placement, Readout, Span, draw_list};
 
 /// The stretch a title's HUD is drawn with: the player's `[graphics] hud_scale`
 /// for a raster HUD, plain linear for every other.
@@ -37,6 +37,10 @@ pub struct ViewDraw<'a> {
     /// split layout is whole-screen and the reticle is view-relative, so it moves
     /// by the view's own offset. `None` draws it with the rest.
     pub sight: Option<Placement>,
+    /// Draw only the reticle, with [`Self::sight`]'s placement. A split-HUD file
+    /// places each group of widgets on its own, so the reticle, which is not a
+    /// widget of any group, is one more draw of the view's own.
+    pub sight_only: bool,
 }
 
 /// The draw list of a split screen: each view's HUD from its own `Readout`, moved
@@ -46,20 +50,36 @@ pub struct ViewDraw<'a> {
 pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
     let mut frame = Frame::default();
     for view in views {
+        let sight_draws =
+            |sight: &oag_race::sight::Sight, at: &Placement| -> Vec<oag_ui::frontend::Draw> {
+                oag_hud::sight_draws(&view.cx, sight)
+                    .iter()
+                    .filter_map(|draw| oag_hud::place(draw, at))
+                    .collect()
+            };
+        if view.sight_only {
+            let mut mine = Frame::default();
+            if let (Some(sight), Some(at)) = (&view.readout.sight, &view.sight) {
+                mine.sprites = sight_draws(sight, at);
+            }
+            mine.spans.push(Span {
+                clip: view.placement.clip,
+                start: [0; 4],
+            });
+            frame.extend(mine);
+            continue;
+        }
         let Some(sight_at) = &view.sight else {
             frame.extend(draw_list(&view.cx, &view.readout).placed(&view.placement));
             continue;
         };
         let mut readout = view.readout.clone();
         let sight = readout.sight.take();
-        frame.extend(draw_list(&view.cx, &readout).placed(&view.placement));
+        let mut mine = draw_list(&view.cx, &readout).placed(&view.placement);
         if let Some(sight) = sight {
-            frame.sprites.extend(
-                oag_hud::sight_draws(&view.cx, &sight)
-                    .iter()
-                    .filter_map(|draw| oag_hud::place(draw, sight_at)),
-            );
+            mine.sprites.extend(sight_draws(&sight, sight_at));
         }
+        frame.extend(mine);
     }
     frame
 }
@@ -101,6 +121,7 @@ pub struct Overlay {
     rows: crate::render::Renderer,
     /// The authored split layouts, [`Assets::split`].
     split: Option<oag_hud::SplitAssets>,
+    split_hud: Option<oag_hud::split_hud::SplitHudAssets>,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -186,6 +207,7 @@ impl Overlay {
             captions,
             rows,
             split: assets.split.clone(),
+            split_hud: assets.split_hud.clone(),
         }))
     }
 
@@ -256,6 +278,7 @@ impl Overlay {
         let frame = views_frame(&crate::hud_views::view_draws(
             self.context(),
             self.split.as_ref(),
+            self.split_hud.as_ref(),
             readouts,
             viewport,
             self.space,
@@ -276,19 +299,43 @@ impl Overlay {
             return;
         }
 
+        // One scissor per view of a split screen, from where its draws start.
+        let clip = |at: usize, grid: [f32; 4]| {
+            (
+                at,
+                crate::hud_views::scissor_rect(grid, viewport, self.space),
+            )
+        };
+        let sprite_count = frame.sprites.len();
+        let scissors = |pick: &dyn Fn(&Span) -> usize, base: usize| -> Vec<(usize, [u32; 4])> {
+            frame
+                .spans
+                .iter()
+                .map(|span| clip(base + pick(span), span.clip))
+                .collect()
+        };
+        let values = scissors(&|span| span.start[1], sprite_count);
+        let mut starts = scissors(&|span| span.start[0], 0);
+        starts.extend(values);
+        let captions = scissors(&|span| span.start[2], 0);
+        let rows = scissors(&|span| span.start[3], 0);
+
         // Sprites first so text sits over the bars, and both in one pass because
         // one renderer holds both the sheet and the value font.
         let mut first = frame.sprites;
         first.extend(frame.hud_text);
         if !first.is_empty() {
+            self.values.set_scissors(starts);
             self.values
                 .overlay(device, queue, encoder, view, &first, viewport);
         }
         if !frame.small_text.is_empty() {
+            self.captions.set_scissors(captions);
             self.captions
                 .overlay(device, queue, encoder, view, &frame.small_text, viewport);
         }
         if !frame.default_text.is_empty() {
+            self.rows.set_scissors(rows);
             self.rows
                 .overlay(device, queue, encoder, view, &frame.default_text, viewport);
         }

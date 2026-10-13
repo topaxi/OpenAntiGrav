@@ -81,6 +81,7 @@ fn a_frame_keeps_its_lists_apart() {
         hud_text: vec![text(10.0, 10.0)],
         small_text: vec![text(10.0, 10.0), text(-900.0, 0.0)],
         default_text: Vec::new(),
+        ..Frame::default()
     };
     let placed = frame.placed(&HALF);
     assert_eq!(
@@ -95,4 +96,24 @@ fn a_frame_keeps_its_lists_apart() {
     let mut both = placed.clone();
     both.extend(placed);
     assert_eq!(both.len(), 6);
+}
+
+#[test]
+fn each_extended_frame_keeps_where_its_draws_start() {
+    let frame = Frame {
+        sprites: vec![Draw::Fill {
+            rect: [0.0, 0.0, 10.0, 10.0],
+            color: [1.0; 4],
+        }],
+        hud_text: vec![text(10.0, 10.0)],
+        ..Frame::default()
+    };
+    let one = frame.placed(&HALF);
+    let mut all = Frame::default();
+    all.extend(one.clone());
+    all.extend(one);
+    assert_eq!(all.spans.len(), 2);
+    assert_eq!(all.spans[0].start, [0, 0, 0, 0]);
+    assert_eq!(all.spans[1].start, [1, 1, 0, 0]);
+    assert_eq!(all.spans[1].clip, HALF.clip);
 }

@@ -37,6 +37,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
     split: None,
+    split_layout: Some(r"Data\XML\SplitHud_Pulse.toml"),
 };
 
 /// How Pulse's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

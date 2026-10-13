@@ -134,12 +134,60 @@ show every view the last one's numbers. Each view's draw list is moved into its
 rectangle by an `oag_hud::Placement` and anything outside the view is dropped, so
 a layout that authors a widget off-screen cannot paint over a neighbour.
 
-Where the layout comes from, per title and view count:
+Where the layout comes from. **One function answers it per view**
+(`oag_hud::split_hud::source`, called by `hud_views::view_draws`), in this order, and
+the first source that has a layout for the view's count, mode and shape wins:
+
+1. **A player's override**: `Data\XML\SplitHud_<Title>.toml` under
+   `overrides/<title>/` (see [asset-layers.md](../architecture/asset-layers.md#a-split-screen-hud-layout-file)).
+2. **The disc's authored layout**: HD, Omega (and 2048, unwired), two views, Single
+   Race, Tournament, Head2Head or Eliminator (**measured**, below).
+3. **This project's file**, from the fallback layer: Pulse (PSP and PS2 pressings, one
+   file), Pure and HD ship one in `assets/fallback/Data/XML/SplitHud_*.toml`, **chosen,
+   not measured**.
+4. **The whole-screen layout scaled** uniformly to fit the view, aspect kept, centred:
+   the last resort, **chosen, not measured**. 2048 and Omega's non-authored cases are
+   still here (no file written for either yet).
 
 | | Source | |
 | --- | --- | --- |
-| HD / Fury, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below) |
-| everything else (any other count, mode or title) | the title's whole-screen layout, scaled uniformly to fit the view, aspect kept, centred | **chosen, not measured** |
+| HD / Fury and Omega, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below); Omega **ported, looked at** |
+| Pulse (PSP, PS2), Pure and HD otherwise, any count 2 to 8 and every view shape | `SplitHud_Pulse.toml`, `SplitHud_Pure.toml`, `SplitHud_HD.toml` | **chosen, not measured** |
+| 2048; Omega's other cases | the whole-screen layout scaled to fit the view | **chosen, not measured** |
+
+**The file** (`schemas/v1/split-hud.tosd`, `oag_hud::split_hud`) is a list of
+`[[layout]]` rules, each with `views`, `aspect` (a *view's* width over height, so
+three, five and seven views, whose views differ in shape, pick a rule per view) and
+`modes`, and its `[[layout.group]]`s: a list of the title's own widget names (a
+trailing `*` is a prefix), the point of their authored bounding box to pin
+(`anchor`: a corner, an edge midpoint or the centre), an `offset` in fractions of the
+view, and a `scale` relative to the whole-screen HUD fitted to the view. It **only
+places the title's own widgets**; a widget no group names is not drawn in a split,
+which is how 5 to 8 views drop the secondary ones. Every number is chosen for
+legibility at the size a player sees a view, never measured. Offsets and scales carry
+no grid, so one file serves the PSP's 480x272 and the PS2's 640x448.
+
+What each shipped file draws (lap, place, the held weapon, speed and shield, time
+where there is room):
+
+| View shape (a view's width/height) | Where it occurs | Pulse and Pure | HD |
+| --- | --- | --- | --- |
+| 2.4 and wider (`strip`) | two views, the top of three | every group at its corner, larger | every group |
+| 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group |
+| 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group |
+| under 1.0 (`portrait`) | seven and eight views' lower rows | the same, larger | the same, larger |
+
+Each group is its own draw (`ViewDraw`): the layout is cut once at load into one
+sub-layout per group (`SplitHudAssets`), and the reticle, which is not a widget of any
+group, is one more draw per view, placed as the whole-screen HUD would be. A layout with
+no widgets draws nothing whatever the readout holds (`a_layout_with_no_widgets_draws_nothing_from_a_full_readout`),
+which is what keeps a group from drawing the whole readout again.
+
+**Per-view scissor.** `Frame` carries a `Span` per view (where its draws start in the
+four lists and its rectangle), and `Renderer::set_scissors` turns them into one
+scissored draw per view in the one pass, so a widget straddling a view's edge is cut at
+it rather than painting over the neighbour. A whole-screen frame has no spans and is
+drawn as it always was.
 
 **The authored layouts** (HD, `oag_hd::hud::SPLIT`). `/data/xml/splitscreen_hud/`
 holds `splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml`,
@@ -158,10 +206,11 @@ the view's own offset. **2048 and Omega ship the same four files**
 `data.psarc`, Omega as `Data/xml/splitscreen_hud/splitscreen_{,elimination_}hud_{0,1}.xml`
 in `data00.psarc`. All three titles compose them to the same 109 sprites and 63
 labels (108 and 67 for Elimination), widest 1895 (2208), lowest 734 and 1274 (778
-and 1318): the second player is 540 lower in each. **Omega: checked, applies, not
-wired** - its HUD grid is HD's 1920x1080, so `oag_omega::hud::LAYOUTS` could carry
-the same row; no Omega race could be looked at on this machine's extraction (the
-short-read note in `omega_race_ground_truth`). **2048: checked, differs** - the
+and 1318): the second player is 540 lower in each. **Omega: ported, looked at** -
+its HUD grid is HD's 1920x1080, so `oag_omega::hud::SPLIT` is the same row, and
+`split_hud_ground_truth` composes the roots that row names and checks them against
+HD's; a two-view Single Race on `data/extracted/ps4` (2026-10-13) draws each player's
+own lap panel, place, time and speed arc in its half, as HD's does. **2048: checked, differs** - the
 files are authored in HD's 1920x1080 while 2048's HUD space is the Vita's 960x544,
 so its copy would need scaling first (as `oag_hud::assist::splice` scales a
 fragment). The PS2 pressing of Pulse names only
@@ -172,12 +221,11 @@ change, `Camera_SubmitScene`'s viewport count, see
 
 **Chosen, not measured:**
 
-- **The scaled whole-screen layout** for every case with no authored one: uniform
-  scale to fit, aspect kept, centred. In a two-up strip (about 3.5:1) the HUD is
-  height-limited and sits in the middle of the strip, so its corner widgets are not
-  at the strip's corners. The layout source for those cases is meant to be data
-  (a TOML layout per view count and aspect through the fallback layer); this is the
-  stand-in until it exists.
+- **The scaled whole-screen layout** for a case with no file and no authored layout:
+  uniform scale to fit, aspect kept, centred. In a two-up strip (about 3.5:1) the HUD
+  is height-limited and sits in the middle of the strip, so its corner widgets are not
+  at the strip's corners. Pulse, Pure and HD no longer reach it; 2048 and Omega's
+  other cases do.
 - **One answer per screen for the intro**: the HUD shows for the primary's flyby and
   `hud_delay`, for every view, since the other views have no flyby. The
   track-description panel draws into the first view's rectangle.
@@ -369,14 +417,19 @@ does not exist: the race frames are that evidence.
 - **HD draws only the last view's scene** in a `--screenshot` of `--players 2` or
   `4` (the earlier views are black), on `main` as well: the post chain writes
   `view` per call and was never verified under a split. The HUDs are drawn.
-- **The HUD overlay has no per-view scissor.** `Placement::clip` drops a draw that
-  lies wholly outside its view, so a sprite or label straddling a view's edge still
-  paints across it by its overhang.
-- A split HUD layout as data (a TOML layout per title, view count and aspect, with
-  the authored one first), for Pulse, Pure, the PS2 and the counts and aspects the
-  authored family does not cover. HD's Wo3 and 2097 skins, its Zone layout and
-  the `vert_` left-and-right family are shipped and not wired; 2048 and Omega's are
-  the same data and not wired. Per-person messages and records, and a lock that
+- HD's Wo3 and 2097 skins, its Zone layout and the `vert_` left-and-right family are
+  shipped and not wired. 2048's authored two-view HUD is **checked, differs** (1920x1080
+  files in a 960x544 HUD space, needs scaling first) and has no file of ours;
+  Omega's other cases and 2048's draw the scaled whole-screen layout.
+- The split-HUD files were looked at in Single Race at every count, and in Zone and
+  the Eliminator at four views on Pulse and Zone at four on HD; Time Trial and the
+  Eliminator on Pure and HD, and every mode at five to eight views other than Single
+  Race, were checked by name against the layouts (`the_shipped_split_files_name_only_widgets_their_titles_author`)
+  and not by eye. The PS2 pressing draws its text smaller against its bars than the
+  PSP does (that is how its whole-screen HUD is authored here, one file serves both),
+  so its split HUD reads smaller; a per-platform scale is open. HD's Eliminator
+  column, lap times and Zone ladder are placed by name and have not been judged on a
+  real display. Per-person messages and records, and a lock that
   gates another person's fire.
 - HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
   Select (wired, `Team Selection Player 1`/`2`) is unreachable by menu there.

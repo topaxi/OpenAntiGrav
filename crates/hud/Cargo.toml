@@ -11,16 +11,22 @@ rust-version.workspace = true
 oag-display.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
+oag-schema.workspace = true
 oag-tables.workspace = true
 oag-texture.workspace = true
 oag-title.workspace = true
 oag-ui.workspace = true
 oag-vex.workspace = true
+log.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
+oag-schema = { workspace = true, features = ["validate"] }
 oag-2048.workspace = true
 oag-hd.workspace = true
 oag-pulse.workspace = true

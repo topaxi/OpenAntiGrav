@@ -233,6 +233,18 @@ Rewards Split question and the unread entry law are in the doc's "Follow-up lane
 current "no loyalty on a split" rule is chosen and **provisional** until Rewards Split
 lands. **Also open**: a windowed walk with two real pads, HD's podium for a split,
 per-person records.
+**2026-10-13, `split-hud-layout-toml`: the split HUD is data.** A title's split-screen
+layout is `schemas/v1/split-hud.tosd` files (`oag_hud::split_hud`): override, then the
+disc's authored layout (HD and, newly, Omega: ported, and a two-view frame looked at), then ours through
+the fallback layer (`SplitHud_{Pulse,Pure,HD}.toml`, chosen, not measured, Pulse's one
+file for both pressings), then the scaled whole-screen layout; one rule per view shape,
+so three, five and seven views mix. Each view also has a scissor now. See
+[split-screen.md](../../docs/rendering/split-screen.md#hud) and
+[asset-layers.md](../../docs/architecture/asset-layers.md#a-split-screen-hud-layout-file).
+**Still open from it**: no file for 2048 or Omega (the scaled layout draws; Omega's
+two-view authored layout does draw), Time Trial and the Eliminator on Pure and HD and
+HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
+than the PSP's in the same file, and nobody has judged the layouts on a real display.
 
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track
