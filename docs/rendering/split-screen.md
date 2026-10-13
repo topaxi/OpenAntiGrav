@@ -125,10 +125,19 @@ each does the same with 960 in x for a left and right split, and the family cove
 two players, so it is shipped and not wired. The reticle is authored view-relative
 (`splitscreen_sights.xml` places its models off screen and the runtime places
 them), so the race projects it into a 1920x540 view and the draw moves it down by
-the view's own offset. 2048 (`data.psarc`, `Data\XML\SplitScreen_hud`) and Omega
-(`data00.psarc`, `Data/xml/splitscreen_hud`) ship the same family under the same
-names (**checked, applies, not wired**: their `SPLIT` is a data row each, and
-neither title's split race has been looked at). The PS2 pressing of Pulse names only
+the view's own offset. **2048 and Omega ship the same four files**
+(`hd_2048_and_omega_ship_the_same_split_layouts_540_apart`): 2048 as
+`Data\XML\SplitScreen_hud\SplitScreen_{,Elimination_}HUD_{0,1}.xml` in
+`data.psarc`, Omega as `Data/xml/splitscreen_hud/splitscreen_{,elimination_}hud_{0,1}.xml`
+in `data00.psarc`. All three titles compose them to the same 109 sprites and 63
+labels (108 and 67 for Elimination), widest 1895 (2208), lowest 734 and 1274 (778
+and 1318): the second player is 540 lower in each. **Omega: checked, applies, not
+wired** - its HUD grid is HD's 1920x1080, so `oag_omega::hud::LAYOUTS` could carry
+the same row; no Omega race could be looked at on this machine's extraction (the
+short-read note in `omega_race_ground_truth`). **2048: checked, differs** - the
+files are authored in HD's 1920x1080 while 2048's HUD space is the Vita's 960x544,
+so its copy would need scaling first (as `oag_hud::assist::splice` scales a
+fragment). The PS2 pressing of Pulse names only
 `Arcade_HUD.xml` and `TimeTrial_HUD.xml` as HUD paths in its executable and has no
 split layout file (**checked, differs**: its split is the camera's own aspect
 change, `Camera_SubmitScene`'s viewport count, see
@@ -177,6 +186,15 @@ There is no 8-up frame budget yet.
 
 ## Open
 
+- **A launch must set `race::Options::views`** (the CLI's `--players` does, in
+  `prepare.rs`) for any race that will call `split_screen::apply(.., 2)`: without it
+  HD reads no authored layout and the reticle projects into the full screen.
+- **HD draws only the last view's scene** in a `--screenshot` of `--players 2` or
+  `4` (the earlier views are black), on `main` as well: the post chain writes
+  `view` per call and was never verified under a split. The HUDs are drawn.
+- **The HUD overlay has no per-view scissor.** `Placement::clip` drops a draw that
+  lies wholly outside its view, so a sprite or label straddling a view's edge still
+  paints across it by its overhang.
 - A split HUD layout as data (a TOML layout per title, view count and aspect, with
   the authored one first), for Pulse, Pure, the PS2 and the counts and aspects the
   authored family does not cover. HD's Wo3 and 2097 skins, its Zone layout and

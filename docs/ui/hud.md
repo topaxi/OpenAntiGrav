@@ -12,6 +12,10 @@ and closes on independent counts, while **what drives each widget** - which are
 visible when, how a bar's fill maps to a value - is still inference. Those are
 scored separately below.
 
+**Split screen** draws one of these per view, each from its own slot, and reads
+HD's own two-player layouts where the title ships them: see
+[split-screen.md](../rendering/split-screen.md#hud).
+
 ## The correction that produced this page
 
 The first pass concluded the HUD was drawn from code and planned to recover

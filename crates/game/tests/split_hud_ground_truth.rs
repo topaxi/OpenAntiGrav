@@ -114,6 +114,17 @@ fn every_view_draws_its_own_slots_numbers_inside_its_own_rectangle() {
         "four slots, one speed: {speeds:?}"
     );
 
+    let places: Vec<u32> = views.iter().map(|v| v.readout.place).collect();
+    println!("places at tick 600: {places:?}");
+    let mut distinct = places.clone();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(
+        distinct.len(),
+        places.len(),
+        "two slots share a place: {places:?}"
+    );
+
     let mut per_view = Vec::new();
     for (i, view) in views.iter().enumerate() {
         let frame = views_frame(&views[i..=i]);
@@ -260,5 +271,177 @@ fn hd_draws_its_own_authored_split_layouts_in_a_two_view_race() {
                 view.placement.clip
             );
         }
+    }
+}
+
+/// HD's concentric reticle is looked up by sprite name in the layout the view
+/// draws, which in a two-view race is the authored split layout: if that names its
+/// sight sprites differently from the title's table, HD draws no reticle in a split
+/// and nothing else notices.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_a_reticle_in_its_authored_split_view() {
+    let Some(loaded) = hd_loaded(2) else {
+        return;
+    };
+    let hud = loaded.hud;
+    let mut race = race::Race::start(loaded.setup);
+    race.set_sight_screen(hud.sight_screen());
+    race.set_sight_dialect(hud.art.sights);
+    oag_game::split_screen::apply(&mut race, 2);
+    for _ in 0..30 {
+        race.tick(&PlayerInputs::none());
+    }
+    for slot in 0..2 {
+        race.sim.world.ships[slot].pickup.weapon = Some(oag_tables::weapons::Weapon::Missile);
+    }
+
+    let mut drawn = [false; 2];
+    for _ in 0..200 {
+        race.tick(&PlayerInputs::none());
+        let views = draws(&race, &hud);
+        for (i, view) in views.iter().enumerate() {
+            let Some(sight) = view.readout.sight else {
+                continue;
+            };
+            if !sight.visible() {
+                continue;
+            }
+            let own = oag_hud::sight_draws(&view.cx, &sight);
+            assert!(
+                !own.is_empty(),
+                "view {i}: the reticle is up and the authored split layout draws none of it"
+            );
+            // Where the reticle's centre lands: its view-relative position, moved
+            // by the view's own placement, inside that view.
+            let at = view
+                .sight
+                .expect("an authored view places its reticle on its own");
+            let [cx, cy] = sight.centre();
+            let (x, y) = (cx * at.scale + at.offset[0], cy * at.scale + at.offset[1]);
+            let [x0, y0, w, h] = view.placement.clip;
+            assert!(
+                x >= x0 && x < x0 + w && y >= y0 && y < y0 + h,
+                "view {i}: the reticle's centre ({x}, {y}) is outside its view {:?}",
+                view.placement.clip
+            );
+            let frame = views_frame(&views[i..=i]);
+            let near = |d: &Draw| match d {
+                Draw::Sprite { rect, .. } | Draw::BlendedSprite { rect, .. } => {
+                    let (mx, my) = (rect[0] + rect[2] * 0.5, rect[1] + rect[3] * 0.5);
+                    (mx - x).abs() < 40.0 && (my - y).abs() < 40.0
+                }
+                _ => false,
+            };
+            assert!(
+                frame.sprites.iter().any(near),
+                "view {i}: no sprite of the frame is at the reticle's centre ({x}, {y})"
+            );
+            drawn[i] = true;
+        }
+    }
+    assert!(
+        drawn.iter().any(|&d| d),
+        "a Missile in hand for 200 ticks and no view of an HD two-view race showed a reticle"
+    );
+}
+
+/// `(sprites, labels, widest, lowest)` of a composed layout's sprites.
+fn extent(layout: &oag_hud::Layout) -> (usize, usize, f32, f32) {
+    let mut wide = 0.0_f32;
+    let mut low = 0.0_f32;
+    for sprite in &layout.sprites {
+        wide = wide.max(sprite.rect[0] + sprite.rect[2]);
+        low = low.max(sprite.rect[1] + sprite.rect[3]);
+    }
+    (layout.sprites.len(), layout.labels.len(), wide, low)
+}
+
+fn composed(archives: &mut oag_assets::Archives, root: &str) -> oag_hud::Composed {
+    let composed = oag_hud::compose(root, |path| archives.read_name(path).ok())
+        .unwrap_or_else(|| panic!("{root} composes"));
+    assert!(
+        composed.missing.is_empty() && composed.layout.skipped.is_empty(),
+        "{root}: missing {:?}, skipped {:?}",
+        composed.missing,
+        composed.layout.skipped
+    );
+    composed
+}
+
+/// HD, 2048 and Omega ship the same four split layouts, byte for byte as far as a
+/// composed layout can say, and all in HD's 1920x1080 grid with the second player
+/// 540 lower. Omega's grid is HD's, so `oag_omega` could carry the same row; 2048's
+/// HUD space is the Vita's, so its copy would need scaling first, and neither is
+/// wired.
+#[test]
+#[ignore = "needs the HD image and the extracted Vita and PS4 packages"]
+fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
+    let mut found: Vec<(&str, [(usize, usize, f32, f32); 4])> = Vec::new();
+    let hd_roots: Vec<String> = oag_hd::hud::SPLIT
+        .arcade
+        .iter()
+        .chain(&oag_hd::hud::SPLIT.elimination)
+        .map(|root| (*root).to_string())
+        .collect();
+    let family = |directory: &str, names: [&str; 4]| -> Vec<String> {
+        names
+            .iter()
+            .map(|name| format!("{directory}{name}.xml"))
+            .collect()
+    };
+    let take = |archives: &mut oag_assets::Archives, roots: &[String]| {
+        let mut out = [(0, 0, 0.0, 0.0); 4];
+        for (slot, root) in roots.iter().enumerate() {
+            out[slot] = extent(&composed(archives, root).layout);
+        }
+        out
+    };
+    if let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") {
+        let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+        found.push(("HD", take(&mut archives, &hd_roots)));
+    }
+    if let Some(vita) = oag_testdata::exact("data/extracted/vita/PCSF00007/base") {
+        let mut archives = oag_2048::open(&vita.display().to_string()).expect("2048 opens");
+        let roots = family(
+            r"Data\XML\SplitScreen_hud\",
+            [
+                "SplitScreen_HUD_0",
+                "SplitScreen_HUD_1",
+                "SplitScreen_Elimination_HUD_0",
+                "SplitScreen_Elimination_HUD_1",
+            ],
+        );
+        found.push(("2048", take(&mut archives, &roots)));
+    }
+    if let Some(ps4) = oag_testdata::exact("data/extracted/ps4") {
+        let mut archives = oag_omega::open(&ps4.display().to_string()).expect("Omega opens");
+        let roots = family(
+            "Data/xml/splitscreen_hud/",
+            [
+                "splitscreen_hud_0",
+                "splitscreen_hud_1",
+                "splitscreen_elimination_hud_0",
+                "splitscreen_elimination_hud_1",
+            ],
+        );
+        found.push(("Omega", take(&mut archives, &roots)));
+    }
+    println!(
+        "compared: {:?}",
+        found.iter().map(|(t, _)| *t).collect::<Vec<_>>()
+    );
+    let Some((first, reference)) = found.first().copied() else {
+        return;
+    };
+    for (title, measured) in &found {
+        assert_eq!(
+            measured, &reference,
+            "{title}'s split layouts are not {first}'s"
+        );
+    }
+    // The second player of each pair sits exactly one half-screen lower.
+    for pair in [(0, 1), (2, 3)] {
+        assert_eq!(reference[pair.1].3 - reference[pair.0].3, 540.0);
     }
 }
