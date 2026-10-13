@@ -331,6 +331,11 @@ impl Race {
     /// faded. The panel's own timing is [`oag_ui_screens::track_panel`]; the clock is the 60 Hz tick.
     #[must_use]
     pub fn track_panel_progress(&self) -> Option<oag_ui_screens::track_panel::Progress> {
+        // A full-screen panel over several views would cover every player's: hidden
+        // while split, like the HUD. Chosen, not measured.
+        if self.viewport_count() > 1 {
+            return None;
+        }
         let intro = self.view.intro.as_ref()?;
         let tick = 1.0 / 60.0;
         let progress = oag_ui_screens::track_panel::Progress {
