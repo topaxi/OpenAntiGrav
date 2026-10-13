@@ -315,6 +315,10 @@ fn every_event_plans_and_its_circuits_are_on_the_disc() {
         let zones = oag_raceplay::catalogue::tracks_of_kind(&def, "Zone");
         let ordinary = oag_raceplay::catalogue::tracks(&def);
         let mut planned = 0;
+        // Each circuit entry with the first event that races it. Many events
+        // share a circuit, so each is read off the disc once rather than once
+        // per event that names it: a read decompresses the whole entry.
+        let mut raced = std::collections::BTreeMap::<String, String>::new();
         for class in PureClass::ALL {
             for event in campaign.events(class) {
                 let plan = plan_cell_for(&event.cell, "Venom", LADDER, |mode, id| {
@@ -329,16 +333,21 @@ fn every_event_plans_and_its_circuits_are_on_the_disc() {
                         .or_else(|| campaign.track_entry(id))
                 })
                 .unwrap_or_else(|e| panic!("{image}: {} does not plan: {e}", event.name));
-                for entry in &plan.leg_entries {
-                    assert!(
-                        archives.read_name(entry).is_ok(),
-                        "{image}: {} races {entry}, which is not on the disc",
-                        event.name
-                    );
+                for entry in plan.leg_entries {
+                    raced.entry(entry).or_insert_with(|| event.name.clone());
                 }
                 planned += 1;
             }
         }
-        println!("{image}: {planned} events planned");
+        for (entry, event) in &raced {
+            assert!(
+                archives.read_name(entry).is_ok(),
+                "{image}: {event} races {entry}, which is not on the disc",
+            );
+        }
+        println!(
+            "{image}: {planned} events planned over {} circuit entries",
+            raced.len()
+        );
     }
 }
