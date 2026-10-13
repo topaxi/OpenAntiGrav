@@ -210,9 +210,16 @@ a headless 2-person race reaches its end. **Found and not wired: the PS2 pressin
 `EndRace Results Split` and `EndRace Rewards Split`** (two stacked per-player lap tables
 and reward panels, `Player_0`/`Player_1`, two people only; its executable names them
 beside `Split ScreenV/H` and `Kill Game Multiplayer`), see
-[split-end-race.md](../../docs/ui/split-end-race.md). **Open from it**: wiring those
-screens for two people on a PS2 source, a windowed walk with two real pads, HD's podium
-for a split, per-person rewards and records.
+[split-end-race.md](../../docs/ui/split-end-race.md). **Follow-up lane, written to start
+cold** (maintainer 2026-10-13): wire `EndRace Results Split` / `Rewards Split` for Pulse
+on **both** pressings - the PSP borrows the PS2's design (640x448 numbers rescaled, PSP
+assets, labelled "borrowed from the PS2 pressing"), as it will `Team SelectionSplit`. The
+entry names, widget geometry, the `table_layers` changes (suffix- and Item-offset-aware
+`lap_slot`/row bands, per-person `Line1_N`; fix the PS2 highlight geometry first), the
+Rewards Split question and the unread entry law are in the doc's "Follow-up lane". The
+current "no loyalty on a split" rule is chosen and **provisional** until Rewards Split
+lands. **Also open**: a windowed walk with two real pads, HD's podium for a split,
+per-person records.
 A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: a second player's own ship pick (only slot 0 picks a team, the PS2's
 `Team SelectionSplit` has a set per player), and two real pads on real hardware (the
 rules are unit-tested over stand-in ids, the keyboard path runs end to end).
