@@ -623,7 +623,7 @@ fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
 /// discs author none. A typo would otherwise draw nothing and say nothing, and a rule
 /// whose names stopped matching would leave a view with no HUD.
 #[test]
-#[ignore = "needs data/images/{pulse-psp-eu,pulse-ps2-eu,pure-psp-eu}.chd and hdfury-ps3-eu-dec.iso"]
+#[ignore = "needs data/images/{pulse-psp-eu,pulse-ps2-eu,pure-psp-eu}.chd, hdfury-ps3-eu-dec.iso and data/extracted/vita/PCSF00007"]
 fn the_shipped_split_files_name_only_widgets_their_titles_author() {
     use oag_hud::split_hud::{LineHeights, SplitHud, arrange};
     let assist = oag_hud::Layout::from_xml(
@@ -644,6 +644,7 @@ fn the_shipped_split_files_name_only_widgets_their_titles_author() {
         ("data/images/pulse-ps2-eu.chd", "Pulse"),
         ("data/images/pure-psp-eu.chd", "Pure"),
         ("data/images/hdfury-ps3-eu-dec.iso", "HD"),
+        ("data/extracted/vita/PCSF00007", "2048"),
     ] {
         let Some(path) = oag_testdata::image(image) else {
             continue;
@@ -773,6 +774,20 @@ fn the_load_report_names_the_split_layout_that_answers() {
             lines(&one)
         );
     }
+    if let Some(two) = load("data/extracted/vita/PCSF00007", 2) {
+        for rule in ["tall", "strip"] {
+            assert!(
+                two.iter()
+                    .any(|l| l.contains(&format!("layout \"{rule}\", "))),
+                "2048 {rule}: {two:?}"
+            );
+        }
+        assert!(
+            two.iter()
+                .any(|l| l.contains("SplitHud_2048.toml answered by this project's fallback")),
+            "{two:?}"
+        );
+    }
     if let Some(two) = load("data/images/hdfury-ps3-eu-dec.iso", 2) {
         assert!(
             two.iter().any(|l| l.contains(
@@ -781,4 +796,78 @@ fn the_load_report_names_the_split_layout_that_answers() {
             "{two:?}"
         );
     }
+}
+
+/// Pulse, Pure and 2048 draw a vertically cut two-view race from this project's `tall` rule,
+/// each column's HUD inside its own column: the left view's text left of the middle, the right
+/// view's right of it, every group of a view present in it, and a horizontal cut of the same
+/// race still reading `strip`.
+#[test]
+#[ignore = "needs data/images/{pulse-psp-usa,pure-psp-eu}.chd and data/extracted/vita/PCSF00007"]
+fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
+    use oag_render::viewport::Cut;
+    let mut checked = Vec::new();
+    for source in [
+        "data/images/pulse-psp-usa.chd",
+        "data/images/pure-psp-eu.chd",
+        "data/extracted/vita/PCSF00007",
+    ] {
+        let Some(path) = oag_testdata::image(source) else {
+            continue;
+        };
+        let load = |cut| {
+            race::load(&race::Options {
+                source: path.display().to_string(),
+                class: "VENOM".to_string(),
+                mode: oag_race::Mode::SingleRace,
+                views: 2,
+                cut,
+                ..race::Options::default()
+            })
+            .expect("loading the race")
+        };
+        for (cut, rule, aspect) in [
+            (Cut::Vertical, "tall", 0.89),
+            (Cut::Horizontal, "strip", 3.56),
+        ] {
+            let loaded = load(cut);
+            let file = loaded
+                .hud
+                .split_hud
+                .as_ref()
+                .unwrap_or_else(|| panic!("{source}: a two-view race reads the split file"));
+            let (answered, _) = file
+                .answer(oag_race::Mode::SingleRace, 2, aspect)
+                .unwrap_or_else(|| panic!("{source}: no rule for {rule}"));
+            assert_eq!(answered.name, rule, "{source} {cut:?}");
+        }
+        let loaded = load(Cut::Vertical);
+        let hud = loaded.hud;
+        let mut race = race::Race::start(loaded.setup);
+        race.set_sight_screen(hud.space.size);
+        oag_game::split_screen::apply(&mut race, 2, Cut::Vertical);
+        for _ in 0..300 {
+            race.tick(&throttle(2));
+        }
+        let all = draws(&race, &hud);
+        let per = all.len() / 2;
+        assert!(per > 1 && all.len() == per * 2, "{source}: {}", all.len());
+        let middle = {
+            let [x, _, w, _] = all[0].placement.clip;
+            x + w
+        };
+        for (slot, view) in all.chunks(per).enumerate() {
+            let words = texts(&views_frame(view));
+            assert!(!words.is_empty(), "{source}: view {slot} draws no text");
+            for (x, _, text) in &words {
+                let inside = if slot == 0 { *x < middle } else { *x >= middle };
+                assert!(
+                    inside,
+                    "{source}: {text:?} at x {x} is outside column {slot}"
+                );
+            }
+        }
+        checked.push(source);
+    }
+    println!("checked {checked:?}");
 }

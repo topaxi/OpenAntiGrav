@@ -44,3 +44,29 @@ fn the_fallback_holds_the_assist_indicator_and_the_art_its_layout_names() {
         "the atlas the layout's UVs index"
     );
 }
+
+/// A title that names a split-HUD file in its `HudLayouts` has it in the fallback under that
+/// name, and a split race of it reads a file rather than scaling the whole-screen layout.
+/// Dropping either half, or a title's row, fails here.
+#[test]
+fn every_title_with_a_split_hud_row_has_its_file_in_the_fallback() {
+    let layer = fallback_layer();
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_2048::TITLE,
+    ] {
+        let entry = title
+            .hud
+            .split_layout
+            .unwrap_or_else(|| panic!("{} names no split-HUD file", title.name));
+        assert!(layer.contains(entry), "{}: {entry}", title.name);
+        let text = String::from_utf8(layer.read(entry).unwrap()).unwrap();
+        assert!(
+            text.contains("CHOSEN, NOT MEASURED"),
+            "{}: labelled",
+            title.name
+        );
+    }
+}
