@@ -192,15 +192,23 @@ def data_inputs() -> dict[str, str]:
         if base.is_file():
             st = base.stat()
             h.update(f"{top}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
-        for dirpath, dirnames, filenames in os.walk(base, followlinks=True):
+        # The top-level entry is followed - in a worktree `just link-data` makes it
+        # a symlink into the main checkout - but nothing below it is: a scratch
+        # directory holding a linked `data/` is a cycle, and a Wine prefix's
+        # `dosdevices/z:` is the whole filesystem. Either made this walk endless
+        # (2026-10-14). A nested link counts by its own path, size and mtime, and a
+        # symlinked directory below the top is hashed as such, not entered.
+        real = os.path.realpath(base)
+        for dirpath, dirnames, filenames in os.walk(real, followlinks=False):
             dirnames.sort()
-            for name in sorted(filenames):
+            linked = [d for d in dirnames if os.path.islink(os.path.join(dirpath, d))]
+            for name in sorted(filenames + linked):
                 path = os.path.join(dirpath, name)
                 try:
-                    st = os.stat(path)
+                    st = os.lstat(path)
                 except OSError:
-                    continue  # a dangling link
-                rel = os.path.relpath(path, data)
+                    continue
+                rel = os.path.join(top, os.path.relpath(path, real))
                 h.update(f"{rel}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
         out[top] = h.hexdigest()
     return out
