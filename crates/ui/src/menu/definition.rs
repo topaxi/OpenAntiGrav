@@ -492,19 +492,23 @@ impl Definition {
         }
     }
 
-    /// Drops every SPLIT SCREEN row, for a run whose adapter the title does not offer a
-    /// split on (`oag_title::Title::split_on_integrated_gpu`). Same once-before-read
-    /// timing as [`Self::drop_quit`]: the adapter is fixed for the run.
+    /// Drops every split-screen entry (the generic SPLIT SCREEN row and the vertical and
+    /// horizontal ones), for a run whose adapter the title does not offer a split on
+    /// (`oag_title::Title::split_on_integrated_gpu`). Same once-before-read timing as
+    /// [`Self::drop_quit`]: the adapter is fixed for the run.
     pub fn drop_split_screen(&mut self) {
+        self.drop_actions(&[
+            Action::OpenSplitScreen,
+            Action::OpenSplitVertical,
+            Action::OpenSplitHorizontal,
+        ]);
+    }
+
+    fn drop_actions(&mut self, actions: &[Action]) {
         for page in &mut self.pages {
             page.retain_rows(|entry| {
-                !matches!(
-                    entry,
-                    Entry::Run {
-                        action: Action::OpenSplitScreen,
-                        ..
-                    }
-                ) && !is_authored_split_row(entry)
+                !matches!(entry, Entry::Run { action, .. } if actions.contains(action))
+                    && !is_authored_split_row(entry)
             });
         }
     }

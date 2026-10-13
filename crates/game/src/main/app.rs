@@ -308,8 +308,7 @@ impl App {
                 oag_game::split_screen::apply(
                     &mut race_stage.race,
                     usize::from(players),
-                    self.split_cut,
-                );
+                    self.split_cut,);
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {
@@ -520,6 +519,7 @@ impl App {
             pure_chain_class: 0,
             split_lobby: None,
             split_cut: self.split_cut,
+            split_race_box: false,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,

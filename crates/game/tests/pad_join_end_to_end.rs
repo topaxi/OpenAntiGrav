@@ -242,6 +242,36 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
     assert_eq!(fresh.viewport_count(), 1);
 }
 
+/// The cut a SPLIT SCREEN VERTICAL row chose reaches the race through the seating call
+/// the race build makes, for two views and for no other count. Where the race draws it is
+/// the viewport layout's (`Race::cut`); without a cut the race is cut top and bottom.
+#[test]
+fn the_cut_the_row_chose_reaches_the_race_for_two_views_only() {
+    use oag_render::viewport::Cut;
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    let mut vertical = race(2);
+    split_screen::seat_for_launch(&mut None, &mut controls, &mut vertical, Cut::Vertical);
+    assert_eq!(vertical.viewport_count(), 2);
+    assert_eq!(vertical.cut(), Cut::Vertical);
+
+    controls.seat_default(3);
+    let mut three = race(3);
+    split_screen::seat_for_launch(&mut None, &mut controls, &mut three, Cut::Vertical);
+    assert_eq!(three.viewport_count(), 3);
+    assert_eq!(
+        three.cut(),
+        Cut::Horizontal,
+        "only two views can be cut left and right"
+    );
+
+    let ordinary = race(2);
+    assert_eq!(
+        ordinary.cut(),
+        Cut::Horizontal,
+        "an ordinary race is cut as it always was"
+    );
+}
 /// The cut reaches the race through both ways a split is made: `apply` (the command line and
 /// a restart) and `seat` (the join screen's lobby). Two views cut vertically are columns,
 /// the same race cut horizontally is rows, and a lobby of one is no split at all.

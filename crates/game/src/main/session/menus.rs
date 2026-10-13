@@ -7,6 +7,7 @@ use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{boot, movie, settings};
 use oag_raceplay::catalogue;
+use oag_render::viewport::Cut;
 use oag_raceplay::pilots;
 use oag_ui::{menu, strings};
 use oag_ui_screens::marquee;
@@ -657,6 +658,10 @@ impl Session {
         }
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
+            // The split-screen race box seats its people first (`session::join`).
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) if self.split_race_box => {
+                self.open_split_join();
+            }
             menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
                 // On a title whose race box authors a head count, two people mean the
                 // seats are claimed first (`Session::open_authored_split`).
@@ -665,6 +670,12 @@ impl Session {
                 }
             }
             menu::MenuEvent::Fired(menu::Action::OpenSplitScreen) => self.open_split_screen(),
+            menu::MenuEvent::Fired(menu::Action::OpenSplitVertical) => {
+                self.open_split_race_box(Cut::Vertical);
+            }
+            menu::MenuEvent::Fired(menu::Action::OpenSplitHorizontal) => {
+                self.open_split_race_box(Cut::Horizontal);
+            }
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for
             // `LaunchRace` above. `Self::launch_remix` builds `race::Options`

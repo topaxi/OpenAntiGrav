@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use oag_gameplay::input::{Button, Input};
 use oag_sound::sfx::{Cue, MenuSfx};
-use oag_ui::menu::{Definition, Menu};
+use oag_ui::menu::Menu;
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(&format!("data/images/{name}"))
@@ -185,8 +185,23 @@ fn a_walk_of_the_menus_sounds_each_cue_on_the_tick_of_its_press() {
     ] {
         let Some(image) = image(name) else { continue };
         let (mut sfx, _) = load(&image, fury);
-        let strings = oag_ui::strings::project_table(None);
-        let mut menu = Menu::new(Definition::built_in(&strings).expect("menu.toml"));
+        // HD's main menu, whose second row is RACEBOX: the walk presses Cross on it. The
+        // title-less tree is every vanilla row, Pulse's and Pure's own show the two split
+        // rows there, and none of that is what the cues are being checked on.
+        let mut menu = Menu::new(
+            oag_game::mods::Mods::load()
+                .expect("the built-in mods")
+                .build(
+                    oag_ui::menu::BUILT_IN,
+                    None,
+                    Some(oag_ui::menu::For {
+                        title: oag_hd::TITLE,
+                        updated: false,
+                    }),
+                )
+                .expect("menu.toml")
+                .definition,
+        );
         // The MODE row's values come from the disc at run time; two stand-ins
         // are enough for it to step.
         menu.supply(

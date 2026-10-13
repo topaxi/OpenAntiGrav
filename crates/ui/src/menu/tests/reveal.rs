@@ -6,7 +6,7 @@ use super::*;
 use crate::menu::pointer;
 
 fn revealing() -> Menu {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     menu.set_reveal_attached(true);
     menu.settle();
@@ -259,7 +259,7 @@ fn a_tap_on_a_row_with_hidden_attached_rows_reveals_them_first() {
 
 #[test]
 fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     // Not revealing: the flat order, attached rows included.
     assert_eq!(

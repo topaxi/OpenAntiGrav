@@ -929,7 +929,7 @@ whole list (read 2026-10-12, all passing):
 | Title | Where | Rows (`builds` the row, else "nothing here") |
 | --- | --- | --- |
 | Pulse PSP, EU and USA | `MainMenu_Definition.xml` `Main Menu` | `FE_RACE_CAM` (campaign), `FE_RACEBOX` (racebox), `FE_MP`, `FE_WIPEOUT_DOT_COM`, `FE_PROFILE`, `FE_OPT_PLUS` (options), `FE_EXTRAS` |
-| Pulse PS2 (checked, differs) | same file | `FE_RACE_CAM`, `FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, `FE_RACEBOX`, `FE_PROFILE`, `FE_OPT_PLUS`, `FE_EXTRAS`: two split-screen variants of the first row, no multiplayer or website row. The built rows keep their order. |
+| Pulse PS2 (checked, differs) | same file | `FE_RACE_CAM`, `FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, `FE_RACEBOX`, `FE_PROFILE`, `FE_OPT_PLUS`, `FE_EXTRAS`: two split-screen variants of the first row, no multiplayer or website row. Since 2026-10-13 the two split rows are `MainMenu::borrowed` (the PSP pressing and Pure show them too, borrowed from this pressing), so the built order is the PS2 disc's exactly; see [split screen](../rendering/split-screen.md#the-pulse-and-pure-entry-2026-10-13-split-entry-align). |
 | Pure EU | `Skin.xml` `Main Menu` | `Single Player` (campaign), `Multiplayer`, `Profile`, `On Line`, `Teasers` |
 | Pure USA (checked, differs) | same | the same without `Teasers` |
 | HD / Fury | `<HorizMenu name="Mode">`, all five archives agree | `FE_RC` (campaign), `FE_RACEBOX` (racebox), `FE_ONLINE`, `FE_OPT_PLUS` (options), `FE_RECORDS` (records) |

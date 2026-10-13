@@ -590,6 +590,10 @@ pub(crate) struct Session {
     /// `SPLIT SCREEN` row on a title that authors it, set when the join screen starts the
     /// race. Kept across a restart from the end screens, which keeps the seats.
     pub(crate) split_cut: oag_render::viewport::Cut,
+    /// Set while the RACE page is open as a split-screen race box (`Session::open_split_race_box`):
+    /// its START goes through the join screen first. Cleared when the menu leaves that
+    /// page.
+    pub(crate) split_race_box: bool,
     /// What the people seated after the first picked on their own Ship Select,
     /// in seat order, until the launch moves them into
     /// `oag_raceplay::Options::seat_picks`. Empty outside a split-screen race box.

@@ -67,7 +67,7 @@ fn first_pen(skin: &Skin) -> (f32, f32) {
 /// well as their size, which is exactly what was wrong before.
 #[test]
 fn hds_root_page_runs_left_to_right_from_its_own_anchor() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let list = draw_list(
@@ -184,7 +184,7 @@ fn frame_with_fills() -> Frame {
 /// is still open; it is not this. See `docs/formats/hd-frontend.md`.
 #[test]
 fn every_entry_is_the_same_text_colour_selected_or_not() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let list = draw_list(
@@ -226,7 +226,7 @@ fn every_entry_is_the_same_text_colour_selected_or_not() {
 /// `HD_Blue` and `HD_Grey` on the served archive.
 #[test]
 fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let frame = frame_with_fills();
@@ -269,7 +269,7 @@ fn the_selected_tab_is_the_frames_accent_and_the_rest_are_its_ink() {
 /// `Skin::TAB_CHAMFER_CUT` and `docs/formats/hd-frontend.md`.
 #[test]
 fn the_tab_corner_is_a_45_degree_cut_followed_by_a_flat_landing() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let list = draw_list(
@@ -353,7 +353,7 @@ fn the_tab_corner_is_a_45_degree_cut_followed_by_a_flat_landing() {
 /// band's own width, so a zero-width band takes a zero-width cut.
 #[test]
 fn a_tab_narrower_than_the_landing_collapses_its_band_rather_than_inverting_it() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let (_, landing, _) = skin.tab_chamfer();
@@ -395,7 +395,7 @@ fn a_tab_narrower_than_the_landing_collapses_its_band_rather_than_inverting_it()
 /// field behind them and not to the one drawn regardless.
 #[test]
 fn with_no_frame_colours_nothing_but_the_text_draws() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     let skin = hd_skin();
     let list = draw_list(
@@ -429,7 +429,7 @@ fn with_no_frame_colours_nothing_but_the_text_draws() {
 /// `strip::suits`.
 #[test]
 fn a_page_with_a_value_column_stays_a_column() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     // RACE CAMPAIGN, RACEBOX, REMIX, SPLIT SCREEN, OPTIONS - four steps down
     // past the entries RACEBOX, REMIX and SPLIT SCREEN.
@@ -470,7 +470,7 @@ fn a_page_with_a_value_column_stays_a_column() {
 /// The control for every test above: same page, same button, Pulse's own table.
 #[test]
 fn a_title_that_authors_no_strip_draws_a_column() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(oag_pulse::FRONT_END.menu.unwrap().strip.is_some());
     let subtitle = menu.page().subtitles[menu.selected()].clone();
     let list = list(&menu, &no_bindings, None);
@@ -487,7 +487,7 @@ fn a_title_that_authors_no_strip_draws_a_column() {
 /// Right and left step a strip, because that is the axis it is drawn on.
 #[test]
 fn right_and_left_step_a_strip() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     assert_eq!(menu.selected(), 0);
     press(&mut menu, &[Button::Right]);
@@ -502,7 +502,7 @@ fn right_and_left_step_a_strip() {
 /// PSP title draws and every page of this build's that carries a setting.
 #[test]
 fn right_and_left_do_not_step_a_column() {
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(false);
     press(&mut menu, &[Button::Right]);
     assert_eq!(
@@ -515,7 +515,7 @@ fn right_and_left_do_not_step_a_column() {
     // the flag says what the disc draws, `suits` says which pages. Four
     // downs past RACE CAMPAIGN, RACEBOX, REMIX, SPLIT SCREEN - see
     // `a_page_with_a_value_column_stays_a_column`'s own comment.
-    let mut menu = Menu::new(built_in());
+    let mut menu = Menu::new(built_in_hd());
     menu.set_strip_layout(true);
     press(&mut menu, &[Button::Down]);
     press(&mut menu, &[Button::Down]);

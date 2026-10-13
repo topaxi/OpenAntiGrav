@@ -168,9 +168,10 @@ fn the_extras_alone_give_each_title_its_own_main_menu() {
         order(oag_pulse::TITLE),
         [
             "RACE CAMPAIGN",
+            "SPLIT SCREEN VERTICAL",
+            "SPLIT SCREEN HORIZONTAL",
             "RACEBOX",
             "REMIX",
-            "SPLIT SCREEN",
             "OPTIONS",
             "RECORDS",
             "MODS",

@@ -16,10 +16,11 @@
 
 toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/mod-menu.tosd", version = "1.0.0" }
 
+# RACEBOX is the first row the extras add, so with no `after` it lands at the end of what
+# the title shows: after its campaign and, on Pure, after the two split rows it borrows.
 [[entry]]
 id = "racebox"
 parent = "top"
-after = "campaign"
 only_if_missing = true
 kind = "submenu"
 label = "RACEBOX"
@@ -50,15 +51,18 @@ subtitle_string_id = "OAG_MENU_REMIX_SUBTITLE"
 # (`docs/formats/hd-frontend.md`) and `Definition::drop_rows_picked_on_screen` takes this row
 # off that title: the authored place wins. Every other title keeps it.
 #
-# **SPLIT SCREEN: chosen, not measured.** The PS2 pressing authors split-screen race
-# screens (`Team SelectionSplit`, `Track CreationSplit`) but takes its players from the
-# pads in port order; there is no join step to follow, so this row opens one: every
-# device presses a button to take a seat, START begins, and the race box's own Track and
-# Ship Select follow. See `oag_ui_screens::join`.
+# **SPLIT SCREEN: chosen, not measured.** The row for the titles whose own main menu has no
+# split-screen rows of its own: HD, Omega and 2048. Pulse and Pure show the PS2 pressing's
+# SPLIT SCREEN VERTICAL and HORIZONTAL rows after RACE CAMPAIGN instead
+# (`oag_title::MainMenu::borrowed`), and the build then skips this one (`only_if_missing`
+# against the id the title claims). It opens the join screen: every device presses a
+# button to take a seat, START begins, and the race box's own Track and Ship Select
+# follow. See `oag_ui_screens::join`.
 [[entry]]
 id = "split_screen"
 parent = "racebox"
 after = "remix"
+only_if_missing = true
 kind = "action"
 label = "SPLIT SCREEN"
 string_id = "OAG_MENU_SPLIT_SCREEN"

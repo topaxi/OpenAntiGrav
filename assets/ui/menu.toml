@@ -83,6 +83,33 @@ action = "open_campaign"
 subtitle = "The story mode: work your way up the tournament grid"
 subtitle_string_id = "OAG_MENU_RACE_CAMPAIGN_SUBTITLE"
 
+# **The two split-screen rows of the PS2 pressing of Pulse**, `FE_RACE_CAM_SS` and
+# `FE_RACE_CAM_SSH`, right after `FE_RACE_CAM` in its `MainMenu_Definition.xml`; the PSP
+# pressing and Pure **borrow** them (`oag_title::MainMenu::borrowed`, the maintainer's
+# rule 2026-10-13), and no other title shows them. Each opens the RACE page as a
+# split-screen race box (`Split ScreenV`/`Split ScreenH` on the PS2, on-screen title
+# RACEBOX): START goes through the join screen, our addition because the PS2 seats the
+# pads in port order, and on to Track Select and each seat's Ship Select. The subtitle is
+# the PS2's `FE_HELP_SS`, which it shows for both rows. The vertical row cuts the screen left
+# and right, the horizontal one top and bottom.
+[[page.entry]]
+id = "split_vertical"
+kind = "action"
+label = "SPLIT SCREEN VERTICAL"
+string_id = "OAG_MENU_SPLIT_VERTICAL"
+action = "split_screen_vertical"
+subtitle = "Play in multiplayer split screen mode"
+subtitle_string_id = "OAG_MENU_SPLIT_HELP"
+
+[[page.entry]]
+id = "split_horizontal"
+kind = "action"
+label = "SPLIT SCREEN HORIZONTAL"
+string_id = "OAG_MENU_SPLIT_HORIZONTAL"
+action = "split_screen_horizontal"
+subtitle = "Play in multiplayer split screen mode"
+subtitle_string_id = "OAG_MENU_SPLIT_HELP"
+
 # **Renamed from `RACE` to match the disc's own `FE_RACEBOX` naming for this
 # row** - a custom single race or split-screen match, the same thing the
 # original's Racebox sets up. The page this targets (`race`, below) is

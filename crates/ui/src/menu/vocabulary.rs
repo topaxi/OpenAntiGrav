@@ -62,6 +62,13 @@ pub enum Action {
     /// `oag-game`. Reached from the built-in `oag-extras` mod's RACEBOX row;
     /// the screen goes on to the race box's own Track and Ship Select.
     OpenSplitScreen,
+    /// The main menu's SPLIT SCREEN VERTICAL row, `FE_RACE_CAM_SS` on the PS2 pressing: opens
+    /// the RACE page as a split-screen race box, and the race is cut left and right. See
+    /// `crate::main::session::join` in `oag-game`.
+    OpenSplitVertical,
+    /// The main menu's SPLIT SCREEN HORIZONTAL row, `FE_RACE_CAM_SSH`: the same, cut top and
+    /// bottom.
+    OpenSplitHorizontal,
 }
 
 impl Action {
@@ -78,6 +85,8 @@ impl Action {
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
             Self::OpenSplitScreen => "split_screen",
+            Self::OpenSplitVertical => "split_screen_vertical",
+            Self::OpenSplitHorizontal => "split_screen_horizontal",
         }
     }
 
@@ -94,13 +103,15 @@ impl Action {
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
             "split_screen" => Some(Self::OpenSplitScreen),
+            "split_screen_vertical" => Some(Self::OpenSplitVertical),
+            "split_screen_horizontal" => Some(Self::OpenSplitHorizontal),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 9] {
+    pub fn all() -> [Self; 11] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -111,6 +122,8 @@ impl Action {
             Self::DeletePilot,
             Self::OpenCampaign,
             Self::OpenSplitScreen,
+            Self::OpenSplitVertical,
+            Self::OpenSplitHorizontal,
         ]
     }
 }
