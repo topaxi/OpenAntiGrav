@@ -280,3 +280,46 @@ fn the_weapon_ai_sees_a_second_person_ahead() {
         "the person ahead was not the one handed over: {gap}"
     );
 }
+
+/// A weapon pad hands a second person the human column of the odds table, by
+/// their own place, and not the AI's. Turbo is weighted for people alone and
+/// Shield for the AI alone, so which one slot 1 is handed says which column
+/// was read; slot 0's Turbo is the control.
+#[test]
+fn a_second_person_draws_from_the_human_column_of_a_weapon_pad() {
+    let table = oag_tables::weapons::parse(
+        r#"<WeaponStats>
+             <Weapon type="Global"><Stats slowdown_limit="0"/></Weapon>
+             <Weapon type="Turbo"><Stats absorb="23" time="0.75"/></Weapon>
+             <Weapon type="Shield"><Stats absorb="24" time="0.85"/></Weapon>
+             <Pickupodds class="Venom">
+               <Weapon type="Turbo"><Stats ai="0" back="1" front="1" human="1"/></Weapon>
+               <Weapon type="Shield"><Stats ai="1" back="0" front="0" human="0"/></Weapon>
+             </Pickupodds>
+           </WeaponStats>"#,
+    )
+    .expect("the fixture table must parse");
+    let mut race = race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 0.0, table);
+    let mut second = race.sim.world.ships[0];
+    second.place_at(oag_gameplay::Pose {
+        position: second.physics.body.position + second.physics.body.right() * 60.0,
+        orientation: second.physics.body.orientation,
+    });
+    race.sim.world.ships[1] = second;
+    race.sim.world.ships[1].pickup.weapon = None;
+    race.sim.world.ship_count = 2;
+    race.sim.world.controllers[1] = Controller::Local;
+    for _ in 0..3 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert_eq!(
+        race.sim.world.ships[0].pickup.weapon,
+        Some(Weapon::Turbo),
+        "the control: the first person draws from the human column"
+    );
+    assert_eq!(
+        race.sim.world.ships[1].pickup.weapon,
+        Some(Weapon::Turbo),
+        "the second person was dealt from the AI column"
+    );
+}
