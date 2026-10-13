@@ -37,6 +37,7 @@ pub mod flyer;
 pub mod ghosts;
 pub mod hud_countdown;
 pub mod hud_overlay;
+pub mod hud_views;
 pub mod icon;
 pub mod touch_controls;
 /// The abstract button layer, which lives in `oag-gameplay` because the

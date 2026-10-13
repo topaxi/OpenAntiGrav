@@ -80,7 +80,13 @@ impl Race {
     /// round: a spurious warning is worse than a missing one.
     #[must_use]
     pub fn wrong_way(&self) -> bool {
-        let ship = self.ship();
+        self.wrong_way_for(self.player_slot())
+    }
+
+    /// [`Self::wrong_way`] for the craft in `slot`.
+    #[must_use]
+    pub fn wrong_way_for(&self, slot: usize) -> bool {
+        let ship = &self.sim.world.ships[slot];
         let Some((_, sample, _)) = self.sim.spline.nearest(ship.physics.body.position) else {
             return false;
         };
@@ -97,8 +103,24 @@ impl Race {
     /// not have. See `docs/ui/hud.md`.
     #[must_use]
     pub fn readout(&self) -> oag_hud::Readout {
-        let ship = self.ship();
-        let race = self.sim.world.primary_race();
+        self.readout_for(self.player_slot())
+    }
+
+    /// What the HUD of the view that follows `slot` shows.
+    ///
+    /// [`Self::readout`] for the primary slot, which is the full-screen HUD. A
+    /// split-screen race draws one per viewed slot. Every number comes off that
+    /// slot's craft and race state; the bars animate from that slot's
+    /// [`SlotHud`](super::slot_hud::SlotHud). **Primary only**, and left empty for
+    /// any other slot: the message lines and the split gap, which compare laps
+    /// against the primary's stored best and raise the `MESSAGE` cue. The Zone
+    /// colour grade the caller fills in is one per scene.
+    #[must_use]
+    pub fn readout_for(&self, slot: usize) -> oag_hud::Readout {
+        let primary = slot == self.player_slot();
+        let ship = &self.sim.world.ships[slot];
+        let race = &self.sim.world.race[slot];
+        let hud = &self.view.huds[slot];
         // Zero still means "unknown", and a track with no closed ring still has
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.
@@ -130,7 +152,7 @@ impl Race {
             // arithmetic rather than a standing, and the widget group is omitted
             // the same way the lap group is on a track that cannot count.
             place: if counted && self.sim.world.ship_count > 1 {
-                u32::from(self.player_place())
+                u32::from(self.places()[slot])
             } else {
                 0
             },
@@ -154,7 +176,7 @@ impl Race {
             } else {
                 [None; oag_race::MAX_RECORDED_LAPS]
             },
-            wrong_way: self.wrong_way(),
+            wrong_way: self.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the
@@ -169,16 +191,16 @@ impl Race {
             // unconditionally rather than gated here - the brackets are watched
             // opening again after a target is lost, which a gate on "has a
             // target" would cut off.
-            sight: Some(self.view.sight),
-            shield_flashing: self.view.shield_flash_timer > 0.0,
-            shield_absorbing: self.absorb_window_active(self.player_slot()),
-            shield_blink_phase: self.view.shield_blink_timer,
-            shield_flashing_whole: self.view.shield_flash_timer_whole > 0.0,
-            shield_blink_phase_whole: self.view.shield_blink_timer_whole,
-            energy_bar_delay_fraction: self.view.energy_bar_delay_fraction,
-            thrust_chase_percent: self.view.thrust_chase_percent,
+            sight: Some(if primary { self.view.sight } else { hud.sight }),
+            shield_flashing: hud.shield_flash_timer > 0.0,
+            shield_absorbing: self.absorb_window_active(slot),
+            shield_blink_phase: hud.shield_blink_timer,
+            shield_flashing_whole: hud.shield_flash_timer_whole > 0.0,
+            shield_blink_phase_whole: hud.shield_blink_timer_whole,
+            energy_bar_delay_fraction: hud.energy_bar_delay_fraction,
+            thrust_chase_percent: hud.thrust_chase_percent,
             pilot_assist: self.pilot_assist_shown(),
-            assist: self.view.assist_indicator.readout(),
+            assist: hud.assist_indicator.readout(),
             mode: self.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the
             // stored best, which live on `RaceStage`, one level up -
@@ -186,18 +208,23 @@ impl Race {
             // the same seam
             // `zone_stage`/`zone_next_in` already use above.
             time_trial_pace: None,
-            head_to_head: self.head_to_head(),
-            kill_tags: self.kill_tags(),
+            head_to_head: self.head_to_head(slot),
+            kill_tags: self.kill_tags(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
                 self.sim.eliminator_kill_target
             } else {
                 0
             },
-            messages: self.view.messages.lines(),
+            messages: if primary {
+                self.view.messages.lines()
+            } else {
+                Default::default()
+            },
             time_gap: self
                 .view
                 .split_gap
                 .as_ref()
+                .filter(|_| primary)
                 .and_then(|split| split.display.line().cloned()),
         }
     }
@@ -205,7 +232,7 @@ impl Race {
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
     /// for a slot with no team on record (a `Setup` built by hand).
-    fn kill_tags(&self) -> Vec<oag_hud::KillTag> {
+    fn kill_tags(&self, player: usize) -> Vec<oag_hud::KillTag> {
         let world = &self.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {
             return Vec::new();
@@ -217,7 +244,6 @@ impl Race {
             .iter()
             .map(|&slot| world.ships[slot].standing.kills)
             .collect();
-        let player = self.player_slot();
         oag_hud::kill_tags::ranked(&kills)
             .into_iter()
             .filter_map(|row| {
@@ -238,13 +264,12 @@ impl Race {
     /// (`FUN_0881d458`), and [`oag_race::Standing::distance`] is this
     /// engine's `craft+0xad0` with the same lap-1 wrap fix, in the same
     /// arc-length units. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
-    fn head_to_head(&self) -> Option<oag_hud::HeadToHead> {
+    fn head_to_head(&self, player: usize) -> Option<oag_hud::HeadToHead> {
         if self.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
         let course = self.sim.course.as_ref()?;
         let world = &self.sim.world;
-        let player = self.player_slot();
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;
         let gap = (world.ships[player].standing.distance(course)
@@ -252,189 +277,9 @@ impl Race {
         .abs();
         Some(oag_hud::HeadToHead {
             gap,
-            player_leads: self.player_place() == 1,
+            player_leads: self.places()[player] == 1,
         })
     }
-
-    /// Advances the shield bar's post-hit flash for the next [`Self::readout`].
-    ///
-    /// Called once a tick, from [`Self::tick`], **after every writer of the
-    /// pool has run** - the wall contact `oag_physics::step` itself applies,
-    /// the weapon damage `oag_weapons::projectile::step` applies (which does
-    /// not surface through `evaluated.shield`, unlike the contact case), and
-    /// the perfect-zone recharge. Sampling any earlier would flash a weapon
-    /// hit a tick late. Comparing the percentage itself, rather than keying
-    /// off one writer's own edge, is also what makes this catch every source
-    /// of a drop at once - the same thing the original's HUD-side comparison
-    /// does, since `Hud_UpdateEnergyBar` has no idea what dropped the pool
-    /// either.
-    pub(super) fn advance_shield_flash(&mut self) {
-        let ship = self.ship();
-        let current =
-            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
-        let (timer, prev) = shield_flash_step(
-            self.view.shield_flash_timer,
-            self.view.shield_flash_prev,
-            current,
-            self.sim.dt,
-        );
-        self.view.shield_flash_timer = timer;
-        self.view.shield_flash_prev = prev;
-    }
-
-    /// Advances the shield bar's blink accumulator for the next
-    /// [`Self::readout`].
-    ///
-    /// Called once a tick, from [`Self::tick`], **after both
-    /// [`Self::advance_shield_flash`] and [`Self::advance_absorb_bursts`]**
-    /// have run - the blink gate reads both of their outputs
-    /// ([`super::view::View::shield_flash_timer`] and
-    /// [`Self::absorb_window_active`]) for this same tick, and reading
-    /// either one stale would blink a tick early or late relative to the
-    /// state the bar itself is drawn from.
-    pub(super) fn advance_shield_blink(&mut self) {
-        let ship = self.ship();
-        let current =
-            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
-        let blinking = current <= oag_physics::damage::CRITICAL_PERCENT
-            || self.view.shield_flash_timer > 0.0
-            || self.absorb_window_active(self.player_slot());
-        self.view.shield_blink_timer =
-            shield_blink_step(self.view.shield_blink_timer, blinking, self.sim.dt);
-    }
-
-    /// Advances HD's twin of [`Self::advance_shield_flash`] and
-    /// [`Self::advance_shield_blink`] for the next [`Self::readout`].
-    ///
-    /// `Hud_UpdateShieldReadout` (`0x000866c8`) is the same machine as
-    /// Pulse's `Hud_UpdateEnergyBar` with one difference measured on the
-    /// running original: the post-hit timer arms on a drop of the
-    /// **truncated whole** percentage ([`shield_flash_step_whole`]). It then
-    /// blinks on `percent <= 20`, the running timer, or the absorb window -
-    /// `0x000cf490` is "within a second of `ship+0x6a80`", the stamp the pickup
-    /// handler writes as the absorb feedback starts (hud-readouts.md). The
-    /// second half of that condition, `ship+0x6958`, is not wired.
-    pub(super) fn advance_shield_flash_whole(&mut self) {
-        let ship = self.ship();
-        let current =
-            oag_physics::damage::percent(ship.physics.shield, ship.handling.dimensions.shield);
-        let (timer, prev) = shield_flash_step_whole(
-            self.view.shield_flash_timer_whole,
-            self.view.shield_flash_prev_whole,
-            current,
-            self.sim.dt,
-        );
-        self.view.shield_flash_timer_whole = timer;
-        self.view.shield_flash_prev_whole = prev;
-        let blinking = current <= oag_physics::damage::CRITICAL_PERCENT
-            || timer > 0.0
-            || self.absorb_window_active(self.player_slot());
-        self.view.shield_blink_timer_whole =
-            shield_blink_step(self.view.shield_blink_timer_whole, blinking, self.sim.dt);
-    }
-
-    /// Advances 2048's `EnergyBarDelay` trail for the next [`Self::readout`].
-    ///
-    /// Called once a tick, from [`Self::tick`]. **Not `dt`-scaled** -
-    /// `Hud_UpdateEnergyBar` applies a fixed `0.1` factor once per its own
-    /// update, and this project runs a fixed 60 Hz tick throughout
-    /// (`docs/architecture/determinism.md`), so a literal per-tick port is
-    /// the closest reproduction available without a recovered original
-    /// frame rate for this function specifically. See
-    /// [`oag_hud::Readout::energy_bar_delay_fraction`] for the formula
-    /// and the decompile it is read off.
-    pub(super) fn advance_energy_bar_delay(&mut self) {
-        let target = self.readout().shield_fraction();
-        self.view.energy_bar_delay_fraction +=
-            (target - self.view.energy_bar_delay_fraction) * ENERGY_BAR_DELAY_RATE;
-    }
-
-    /// Advances 2048's `ThrustBar` chase for the next [`Self::readout`].
-    ///
-    /// Called once a tick, from [`Self::tick`], with the fixed 60 Hz `dt`.
-    /// The rates and the clamp are the original's; the target (the ship's
-    /// thrust state, already `0..=100`) is **chosen, not measured** - see
-    /// [`oag_hud::Readout::thrust_chase_percent`].
-    pub(super) fn advance_thrust_chase(&mut self) {
-        let target = self.ship().physics.thrust.clamp(0.0, 100.0);
-        let dt = 1.0 / 60.0;
-        let value = self.view.thrust_chase_percent;
-        self.view.thrust_chase_percent = if value < target {
-            (value + THRUST_CHASE_RISE_PER_SECOND * dt).min(target)
-        } else {
-            (value - THRUST_CHASE_FALL_PER_SECOND * dt).max(target)
-        };
-    }
-}
-
-/// `Hud_UpdateEnergyBar`'s own `0.1` - see
-/// [`Race::advance_energy_bar_delay`].
-const ENERGY_BAR_DELAY_RATE: f32 = 0.1;
-
-/// 2048's `ThrustBar` rise rate: `100 * 1.4` percent per second, the
-/// `0x3fb33333` the HUD update multiplies its `dt * 100` by.
-const THRUST_CHASE_RISE_PER_SECOND: f32 = 140.0;
-
-/// 2048's `ThrustBar` fall rate, percent per second: the bare `dt * 100`.
-const THRUST_CHASE_FALL_PER_SECOND: f32 = 100.0;
-
-/// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
-/// `hud+0x118`/`hud+0x11c` pair.
-///
-/// **Ported literally as an up-counter that wraps, not rewritten as a
-/// down-counting timer.** The decompiled branch is `if (dropped ||
-/// timer_running) { timer += dt; if (timer >= 1.0) timer = 0.0; }` - so once
-/// the timer is already running, a *further* drop during the window changes
-/// nothing, because `timer_running` alone already satisfies the `||`.
-/// [shield.md]'s own prose calls this "re-armed by any further drop before it
-/// expires", but that describes the *outcome* under sustained contact (every
-/// tick re-tests the drop condition, so the window effectively never lapses
-/// while the pool keeps falling), not a literal reset - the branch itself
-/// never re-arms an already-running timer early. This follows the branch.
-///
-/// Returns `(next_timer, next_prev)`. `next_timer > 0.0` is "flashing this
-/// frame"; `next_prev` is this tick's percentage, threaded back in as next
-/// tick's "previous".
-///
-/// [shield.md]: ../../../../docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-0x0881c638-tints-the-bar-from-a-20-threshold-not-a-gradient
-fn shield_flash_step(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32) {
-    flash_step(timer, current, dt, current < prev)
-}
-
-/// [`shield_flash_step`] with HD's drop test: the percentages compared after
-/// truncation to whole numbers, as `Hud_UpdateShieldReadout`'s `fctiwz` pair
-/// does. A fall inside one whole percent arms nothing.
-fn shield_flash_step_whole(timer: f32, prev: f32, current: f32, dt: f32) -> (f32, f32) {
-    flash_step(timer, current, dt, current.trunc() < prev.trunc())
-}
-
-fn flash_step(timer: f32, current: f32, dt: f32, dropped: bool) -> (f32, f32) {
-    let mut timer = timer;
-    if dropped || timer > 0.0 {
-        timer += dt;
-        if timer >= 1.0 {
-            timer = 0.0;
-        }
-    }
-    (timer, current)
-}
-
-/// The shield bar's blink accumulator, one tick of `Hud_UpdateEnergyBar`'s
-/// own `hud+0x1dc`.
-///
-/// **Freezes rather than resets when `blinking` is false** - the decompiled
-/// branch only advances `hud+0x1dc` inside the blink condition at all, so a
-/// tick where nothing blinks leaves the accumulator exactly where it was,
-/// and the next blink resumes from that phase rather than starting fresh.
-/// Wraps to `0.0` once it exceeds `1.0`, the same up-counting shape
-/// [`shield_flash_step`] uses for `hud+0x11c`. See
-/// `docs/ghidra/functions/psp-pulse-usa/shield.md#hud_updateenergybar-the-absorb-flash-2026-09-25`.
-fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
-    if !blinking {
-        return timer;
-    }
-    let timer = timer + dt;
-    if timer > 1.0 { 0.0 } else { timer }
 }
 
 /// One telemetry line, for a log or a report.
@@ -457,140 +302,4 @@ pub fn describe(telemetry: &Telemetry) -> String {
             }
         },
     )
-}
-
-#[cfg(test)]
-mod shield_flash_tests {
-    use super::{shield_flash_step, shield_flash_step_whole};
-
-    /// One 60 Hz tick, the same fixed step [`super::Race`] runs at.
-    const DT: f32 = 1.0 / 60.0;
-
-    /// A drop arms the flash on the very tick it happens.
-    #[test]
-    fn a_drop_arms_the_flash_immediately() {
-        let (timer, prev) = shield_flash_step(0.0, 100.0, 60.0, DT);
-        assert!(timer > 0.0);
-        assert_eq!(prev, 60.0);
-    }
-
-    /// No drop, and no flash already running, leaves the timer at zero - a
-    /// rising or level percentage never arms it.
-    #[test]
-    fn holding_or_rising_does_not_arm_it() {
-        let (timer, _) = shield_flash_step(0.0, 60.0, 60.0, DT);
-        assert_eq!(timer, 0.0);
-        let (timer, _) = shield_flash_step(0.0, 60.0, 80.0, DT);
-        assert_eq!(timer, 0.0);
-    }
-
-    /// The window is roughly a second: still flashing at half a second in,
-    /// expired past 1.1 - bounds rather than an exact tick count, since
-    /// accumulating `1.0 / 60.0` sixty times in `f32` may land either side of
-    /// `1.0`.
-    #[test]
-    fn the_window_is_about_one_second() {
-        // Tick 0 is the drop itself; every tick after holds the percentage
-        // level, so only the timer's own "already running" arm keeps it
-        // going - exactly what a single isolated hit looks like.
-        let (mut timer, mut prev) = shield_flash_step(0.0, 100.0, 60.0, DT);
-        for _ in 0..29 {
-            (timer, prev) = shield_flash_step(timer, prev, prev, DT);
-        }
-        assert!(timer > 0.0, "still flashing half a second after the drop");
-
-        for _ in 0..40 {
-            (timer, prev) = shield_flash_step(timer, prev, prev, DT);
-        }
-        assert_eq!(
-            timer, 0.0,
-            "expired: 1.1s have passed since the drop with no further one"
-        );
-    }
-
-    /// HD arms on a drop of the truncated whole percentage: 60.9 to 60.2 is a
-    /// fall inside one whole percent and arms nothing, 60.2 to 59.9 crosses
-    /// one and does. Pulse's step arms on both. Measured on the running
-    /// original through the HUD's own timer, three reps each.
-    #[test]
-    fn hd_arms_only_on_a_whole_percent_drop() {
-        let (timer, _) = shield_flash_step_whole(0.0, 60.9, 60.2, DT);
-        assert_eq!(timer, 0.0, "inside one whole percent");
-        let (timer, _) = shield_flash_step_whole(0.0, 60.2, 59.9, DT);
-        assert!(timer > 0.0, "across one");
-        let (timer, _) = shield_flash_step(0.0, 60.9, 60.2, DT);
-        assert!(timer > 0.0, "Pulse's float compare arms on the same fall");
-        let (timer, _) = shield_flash_step_whole(0.0, 30.0, 40.0, DT);
-        assert_eq!(timer, 0.0, "a rise arms nothing");
-    }
-
-    /// A further drop mid-window changes nothing, per the branch rather than
-    /// the prose - see [`shield_flash_step`]'s own doc comment.
-    #[test]
-    fn a_further_drop_mid_window_does_not_reset_it() {
-        let (timer_a, prev_a) = shield_flash_step(0.0, 100.0, 60.0, DT);
-        let (timer_b, _) = shield_flash_step(timer_a, prev_a, 40.0, DT);
-        // Both branches of the `||` are satisfied on this second tick, and
-        // the accumulation is the same either way: one `dt` further on from
-        // `timer_a`, not reset to it.
-        assert_eq!(timer_b, timer_a + DT);
-    }
-}
-
-#[cfg(test)]
-mod shield_blink_tests {
-    use super::shield_blink_step;
-
-    /// One 60 Hz tick, the same fixed step [`super::Race`] runs at.
-    const DT: f32 = 1.0 / 60.0;
-
-    /// Not blinking: the accumulator does not move at all.
-    #[test]
-    fn not_blinking_leaves_the_timer_alone() {
-        assert_eq!(shield_blink_step(0.4, false, DT), 0.4);
-    }
-
-    /// Blinking: the accumulator advances by `dt`, same as the flash's own.
-    #[test]
-    fn blinking_advances_by_dt() {
-        assert_eq!(shield_blink_step(0.4, true, DT), 0.4 + DT);
-    }
-
-    /// Freezes rather than resets: a run that stops blinking mid-cycle and
-    /// starts again later resumes from where it left off, not from zero -
-    /// the discriminating behaviour against [`shield_flash_step`], which
-    /// this shares the up-counting shape with but not the reset rule.
-    #[test]
-    fn a_gap_in_blinking_does_not_reset_the_phase() {
-        let mut timer = 0.0;
-        for _ in 0..10 {
-            timer = shield_blink_step(timer, true, DT);
-        }
-        let frozen = timer;
-        for _ in 0..20 {
-            timer = shield_blink_step(timer, false, DT);
-        }
-        assert_eq!(timer, frozen, "not blinking must not move the accumulator");
-        timer = shield_blink_step(timer, true, DT);
-        assert_eq!(
-            timer,
-            frozen + DT,
-            "resumes from the frozen phase, not zero"
-        );
-    }
-
-    /// Wraps to zero once it exceeds one second, not at exactly one second -
-    /// `1.0 < accum`, not `<=`, in the decompile. A `0.3` step lands the
-    /// crossing well clear of `f32` rounding at the boundary, unlike
-    /// accumulating sixty `1.0 / 60.0` ticks would.
-    #[test]
-    fn wraps_past_one_second() {
-        let mut timer = 0.0;
-        for _ in 0..3 {
-            timer = shield_blink_step(timer, true, 0.3);
-        }
-        assert!((0.89..0.91).contains(&timer), "0.9s in: {timer}");
-        timer = shield_blink_step(timer, true, 0.3);
-        assert_eq!(timer, 0.0, "1.2s crosses 1.0 and wraps: {timer}");
-    }
 }

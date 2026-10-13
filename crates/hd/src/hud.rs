@@ -61,6 +61,29 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: layouts::SPEED_LAP,
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
+    split: Some(SPLIT),
+};
+
+/// The two-player split-screen HUD the disc authors, default skin: one 1920x1080
+/// layout per player, the second the first shifted down 540.
+///
+/// Measured 2026-10-13 on `hdfury-ps3-eu-dec.iso`: `splitscreen_hud_{0,1}.xml`
+/// compose to 16 files, 109 sprites, 3 fills and 63 labels each, with no
+/// include missing and nothing skipped, and player 1's widgets extend 540
+/// further down than player 0's. `crates/game/tests/split_hud_ground_truth.rs`
+/// re-derives both from the archives. Not in [`ROOTS`], which stays the
+/// single-screen set. Wo3 and 2097 skins, the Zone layout and the `vert_`
+/// left-and-right variants are shipped and not wired.
+pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
+    arcade: [
+        "/data/xml/splitscreen_hud/splitscreen_hud_0.xml",
+        "/data/xml/splitscreen_hud/splitscreen_hud_1.xml",
+    ],
+    elimination: [
+        "/data/xml/splitscreen_hud/splitscreen_elimination_hud_0.xml",
+        "/data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
+    ],
+    view_height: 540,
 };
 
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]
@@ -428,9 +451,9 @@ pub mod layouts {
 ///
 /// **Single-screen only.** The disc also ships a split-screen family -
 /// `splitscreen_hud/`, `splitscreenzone_hud/`, `duel_hud/duel_splitscreen_hud/`
-/// and a `vert_` variant of most of it - which is not enumerated here because
-/// nothing in this project draws two viewports. The one that would slip past a
-/// looser rule is `/data/xml/splitscreenzone_hud/zone_hud.xml`: the same
+/// and a `vert_` variant of most of it - which is not enumerated here: [`SPLIT`]
+/// names the two-player layouts a two-view race reads. The one that would slip
+/// past a looser rule is `/data/xml/splitscreenzone_hud/zone_hud.xml`: the same
 /// basename as [`layouts::ZONE`], one directory across.
 pub const ROOTS: &[&str] = &[
     layouts::ARCADE,

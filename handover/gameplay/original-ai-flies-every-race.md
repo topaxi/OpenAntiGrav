@@ -8,19 +8,19 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 
 ## Open
 
-- **A lagging human makes the original leader fall on `13_Track`.** Cause
-  found, not fixed: the formation throttle holds the leader at `held_thrust` 47
-  (speed 91 to 100) with the player far behind, and the authored jump (line
-  indices 19 to 49, the one the Novice chase in ai.md found) needs about 125 in
-  this engine; the leader lands short at idx 46 and the airborne reset puts it
-  back before the jump, 129 times from one slot. Parked player: about 208
-  respawns over the field in 9,000 ticks; `--autopilot` Skilled 62, Novice 113,
-  default skill 0 (12,000 ticks). Lane offset and corridor are normal and
-  the authored speed floor is absent (`unk_0x66` is authored on `06_Track`
-  only). `05_Track`: 4 parked (slot 7 at tick 1111, airborne at 190 over a long
-  drop), 1 with the default-skill autopilot (a reset volume on lap 4), none with
-  Skilled or Novice. This project's driver clears the jump at full throttle.
-  Unmeasured: whether the original game's leader falls there too.
+- **A lagging human makes the leader fall on `13_Track`: the original's does too
+  (measured 2026-10-13, PPSSPP, two boots; docs/gameplay/ai.md, "The original's
+  own field falls ...").** Falls at the authored jump in every capture. Speed at
+  spline row 19: falls 66 to 103.6, clears 101.8 and up; the leaders' held thrust
+  is 47.1 and their speed 89.6 to 103.6 when they fall (16 of 39 entries at 47.x),
+  this engine's 91 to 100. What clears is the speed pad just before the jump (pad
+  6, 45 units ahead of it, lateral -1.9 to -9.8): at held thrust 47, 20 of 20
+  on-pad entries cleared, 16 of 19 off-pad fell. The original's fall loops end
+  (13 in a row at skill level 0, at most 2 at level 2 before the finish); this
+  engine's slot 3 looped 129 times. **Hypothesis only:** our leader sits on the
+  pad's off side. Not measured here: our signed lateral at the pad and whether
+  our pad test boosts an AI craft there. `05_Track` (4 resets parked, 1 with the
+  default-skill autopilot, a reset volume on lap 4) was not captured on the original.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.
@@ -38,12 +38,15 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 
 ## Next Steps
 
-1. Decide with the maintainer: (a) accept it as the original's own behaviour
-   until a PPSSPP capture of a far-behind player on `13_Track` says otherwise
-   (the leader's speed and whether it clears idx 46), or (b) give the original
-   field a floor this project chooses (labelled chosen, not measured): never
-   hold a craft below the speed the next jump needs, taken from this project's
-   speed plan, which is then needed for the original too.
+1. Compare this engine with the capture: log the signed lateral (the `lat`
+   axis of `oag-trace track`) of the original-driver leader at spline row 3073
+   (pad 6) and each zone entry's speed, parked player, VENOM, seed 1. If it
+   sits at +1.4 to +2.6 (off the pad, where the original's crafts at +2.6 are
+   never boosted), the difference is the lane (wander/spread) or the pad test
+   for an AI craft, not the formation law or the jump; fix that, then re-count
+   respawns against the original's (13 in a row at most, 2 at level 2). Only if
+   it still loops, decide with the maintainer on a floor this project chooses
+   (labelled chosen, not measured).
 2. Decide what offers a route to the original field without the plan gate, then
    skip the plans on forked circuits too.
 3. Add a round-the-lap ground truth over every Pulse circuit for the original

@@ -632,7 +632,8 @@ pub(crate) struct Cli {
     #[arg(long, default_value_t = 60)]
     pub(crate) log_every: u32,
 
-    /// Keep handing the player this weapon whenever their pickup slot is empty.
+    /// Keep handing the player this weapon whenever their pickup slot is empty - and, with
+    /// `--players`, every other viewed slot, so each view has one to show.
     ///
     /// **A debug affordance, and worth saying why it exists.** A weapon can only
     /// be *seen* once something fires it, and `--race` holds the throttle

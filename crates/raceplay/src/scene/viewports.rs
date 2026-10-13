@@ -2,7 +2,7 @@
 //!
 //! One target, `N` rectangles of it ([`oag_render::viewport::layout`]), each drawn
 //! by an ordinary [`Scene::render`] from its own camera
-//! ([`Race::set_viewpoint`]). Four things make that more than a loop, and each
+//! ([`Race::set_viewpoint`]). Five things make that more than a loop, and each
 //! is a way to get a plausible picture that is wrong:
 //!
 //! - **One encoder and one submit per view.** `Scene::render` writes every
@@ -26,8 +26,19 @@
 //!   upscaler's frame record hold one camera's history, and `N` cameras a tick
 //!   would corrupt it. **Chosen, not measured.**
 //!
-//! Wipeout HD's and Omega's post chains encode into `view` per call and are not
-//! verified under a split; Pulse and Pure are what was checked.
+//! - **HD's and Omega's post chains run once, after the last view.** Both draw
+//!   the scene into a linear float target and then encode it into `view` with a
+//!   pass that *clears* `view`, sampling the linear target from its top-left
+//!   whatever the view's origin is. Run per view, each encode wiped every earlier
+//!   view (a black top view in a two-player HD race) and every later view was
+//!   graded from the first view's pixels. The views now only fill the linear
+//!   target, and [`Scene::encode_split_post`] runs the chain once over `area`,
+//!   which is what a single view passes: one exposure and one glow for the whole
+//!   picture. **Chosen, not measured**; glow bleeds a few pixels across the gap
+//!   between views. The boost zoom streak (HD's own ring) is not drawn under a
+//!   split and Omega's distortion offsets are not drawn: the first holds the
+//!   primary craft's pulse, the second reads a depth attachment only the last view
+//!   still has. Both open.
 
 use super::*;
 
@@ -97,6 +108,35 @@ impl Scene {
         }
         self.layer.set(Layer::Whole);
         race.reset_viewpoint();
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("race viewports post"),
+        });
+        if self.encode_split_post(device, queue, &mut encoder, view, area) {
+            stats.hd_bloom_encoded = self.hd.is_some();
+            queue.submit(Some(encoder.finish()));
+        }
         stats
+    }
+
+    /// HD's or Omega's chain, once, over the whole `area` the views were drawn
+    /// into. Returns whether a chain ran: Pulse, Pure and 2048 draw straight into
+    /// the caller's view and have nothing to do here.
+    fn encode_split_post(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        area: (f32, f32, f32, f32),
+    ) -> bool {
+        if self.hd.is_some() {
+            self.run_hd(queue, encoder, view, area, None, None);
+            true
+        } else if let Some(omega) = &self.omega {
+            self.run_omega(omega, device, queue, encoder, view, area, false);
+            true
+        } else {
+            false
+        }
     }
 }

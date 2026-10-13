@@ -16,7 +16,11 @@
 //!   matrices: four copies of one picture;
 //! - every view clearing the whole target, so only the last rectangle has
 //!   anything in it;
-//! - a view that follows the player's camera instead of its own craft.
+//! - a view that follows the player's camera instead of its own craft;
+//! - a post chain that runs once per view (HD's, Omega's, which 2048 shares with HD):
+//!   its encode pass clears the target and samples the linear scene from the
+//!   top-left, so the top view went black and a later one showed the first view's
+//!   picture.
 //!
 //! So the check is on pixels: each rectangle holds a picture, no two rectangles
 //! hold the same one, the gap between them is the clear colour, and `--players 1`
@@ -213,4 +217,67 @@ fn four_views_survive_a_multisample_resolve() {
         (w - col, h - half, col, half),
     ];
     distinct_views("four, msaa", &four, &quads);
+}
+
+/// Two views, top and bottom, each holding a picture of its own.
+fn two_up_draws_two_pictures(source: &Path, tag: &str) {
+    let scratch = std::env::temp_dir().join(format!("oag-split-{tag}-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let two = frame(source, &scratch, "two", Some(2), "off");
+    std::fs::remove_dir_all(&scratch).ok();
+    let (w, h) = SIZE;
+    let half = (h - 2) / 2;
+    distinct_views(tag, &two, &[(0, 0, w, half), (0, h - half, w, half)]);
+}
+
+/// HD runs its bloom chain over a linear float scene and encodes into the frame:
+/// per view, that wiped every earlier view.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu.iso and a GPU adapter"]
+fn hd_two_views_each_keep_their_picture() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu.iso") else {
+        return;
+    };
+    two_up_draws_two_pictures(&image, "hd two");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu.iso and a GPU adapter"]
+fn hd_four_views_each_keep_their_picture() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu.iso") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-split-hd-four-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let four = frame(&image, &scratch, "four", Some(4), "off");
+    std::fs::remove_dir_all(&scratch).ok();
+    let (w, h) = SIZE;
+    let (half, col) = ((h - 2) / 2, (w - 2) / 2);
+    let quads: [Rect; 4] = [
+        (0, 0, col, half),
+        (w - col, 0, col, half),
+        (0, h - half, col, half),
+        (w - col, h - half, col, half),
+    ];
+    distinct_views("hd four", &four, &quads);
+}
+
+/// Omega's tone map is the other chain that encodes into the frame per call.
+#[test]
+#[ignore = "needs data/extracted/ps4 and a GPU adapter"]
+fn omega_two_views_each_keep_their_picture() {
+    let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    two_up_draws_two_pictures(&source, "omega two");
+}
+
+/// 2048 draws through HD's chain, so it had the same black top view.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007 and a GPU adapter"]
+fn vita_2048_two_views_each_keep_their_picture() {
+    let Some(source) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    two_up_draws_two_pictures(&source, "2048 two");
 }

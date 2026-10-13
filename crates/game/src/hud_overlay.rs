@@ -6,7 +6,7 @@
 //! the first place. Nothing here decides anything - every widget, string and
 //! colour is already resolved by the time [`Overlay::draw`] runs.
 
-use oag_hud::{Assets, Context, Layout, Readout, draw_list};
+use oag_hud::{Assets, Context, Frame, Layout, Placement, Readout, draw_list};
 
 /// The stretch a title's HUD is drawn with: the player's `[graphics] hud_scale`
 /// for a raster HUD, plain linear for every other.
@@ -20,6 +20,48 @@ pub fn stretch_for(
     } else {
         oag_display::display::HudScale::Linear
     }
+}
+
+/// One view of a split screen: the layout it draws from, the slot's readout and
+/// where the HUD goes.
+#[derive(Debug)]
+pub struct ViewDraw<'a> {
+    /// The view's own context: the whole-screen layout, or the title's authored
+    /// layout for this player.
+    pub cx: Context<'a>,
+    /// What the view's slot reads.
+    pub readout: Readout,
+    /// Where the layout goes in the screen's grid.
+    pub placement: Placement,
+    /// Where the reticle goes, when it is not where the layout goes. An authored
+    /// split layout is whole-screen and the reticle is view-relative, so it moves
+    /// by the view's own offset. `None` draws it with the rest.
+    pub sight: Option<Placement>,
+}
+
+/// The draw list of a split screen: each view's HUD from its own `Readout`, moved
+/// to its [`Placement`], in one [`Frame`]. GPU-free, so a test can ask what every
+/// view shows.
+#[must_use]
+pub fn views_frame(views: &[ViewDraw<'_>]) -> Frame {
+    let mut frame = Frame::default();
+    for view in views {
+        let Some(sight_at) = &view.sight else {
+            frame.extend(draw_list(&view.cx, &view.readout).placed(&view.placement));
+            continue;
+        };
+        let mut readout = view.readout.clone();
+        let sight = readout.sight.take();
+        frame.extend(draw_list(&view.cx, &readout).placed(&view.placement));
+        if let Some(sight) = sight {
+            frame.sprites.extend(
+                oag_hud::sight_draws(&view.cx, &sight)
+                    .iter()
+                    .filter_map(|draw| oag_hud::place(draw, sight_at)),
+            );
+        }
+    }
+    frame
 }
 
 /// The HUD's three renderers and the data they draw.
@@ -57,6 +99,8 @@ pub struct Overlay {
     captions: crate::render::Renderer,
     /// Draws the per-craft rows, in the `Default` face.
     rows: crate::render::Renderer,
+    /// The authored split layouts, [`Assets::split`].
+    split: Option<oag_hud::SplitAssets>,
 }
 
 impl std::fmt::Debug for Overlay {
@@ -141,6 +185,7 @@ impl Overlay {
             values,
             captions,
             rows,
+            split: assets.split.clone(),
         }))
     }
 
@@ -148,6 +193,12 @@ impl Overlay {
     #[must_use]
     pub fn space(&self) -> oag_display::space::Space {
         self.space
+    }
+
+    /// The title's authored split-screen layouts, when this race has them.
+    #[must_use]
+    pub fn split(&self) -> Option<&oag_hud::SplitAssets> {
+        self.split.as_ref()
     }
 
     /// The context [`draw_list`] takes.
@@ -181,6 +232,46 @@ impl Overlay {
         viewport: (f32, f32, f32, f32),
     ) {
         let frame = draw_list(&self.context(), readout);
+        self.paint(device, queue, encoder, view, frame, viewport);
+    }
+
+    /// Draws one HUD per split-screen view, `readouts[i]` into view `i` - see
+    /// [`crate::hud_views::view_draws`] for where each goes - **in the passes one
+    /// HUD takes**.
+    ///
+    /// One list for the whole screen rather than a draw per view: the renderers
+    /// write their uniform and quad buffers with `queue.write_buffer`, which
+    /// lands before the submission's commands, so two draws recorded into one
+    /// encoder would both show the last one's numbers. See
+    /// `oag_raceplay::Scene::render_viewports` for the same trap in the scene.
+    pub fn draw_views(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        readouts: Vec<Readout>,
+        viewport: (f32, f32, f32, f32),
+    ) {
+        let frame = views_frame(&crate::hud_views::view_draws(
+            self.context(),
+            self.split.as_ref(),
+            readouts,
+            viewport,
+            self.space,
+        ));
+        self.paint(device, queue, encoder, view, frame, viewport);
+    }
+
+    fn paint(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        frame: Frame,
+        viewport: (f32, f32, f32, f32),
+    ) {
         if frame.is_empty() {
             return;
         }

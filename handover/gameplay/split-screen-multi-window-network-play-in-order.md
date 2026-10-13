@@ -155,8 +155,8 @@ What's missing beyond the shared prerequisite:
   here: the surface/window count stays 1, and split screen is purely "render
   N times into N sub-rects of the one surface," which doesn't touch the
   window-ownership boundary at all.
-- **Per-player HUD** in `oag-ui`, laid out per-viewport rather than
-  full-screen.
+- ~~**Per-player HUD** in `oag-ui`, laid out per-viewport rather than
+  full-screen.~~ **Done, 2026-10-13** (see below).
 - **Per-player pad assignment**, covered by the shared prerequisite above.
 - **A layout that scales to 8**, not just the original's 2/4-way splits -
   viewport count and arrangement (2-up, 4-up, up to 8-up) becomes a variable
@@ -171,10 +171,22 @@ scene per view, each in its own encoder and submit with only the first clearing.
 Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view is
 byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,
 no bloom/blur/jitter under a split and the hidden HUD are all **chosen, not
-measured**. **Still open from this list**: the per-player HUD (hidden while split),
+measured**. **2026-10-13, the per-player HUD landed**
+([split-screen.md](../../docs/rendering/split-screen.md#hud)): one `Readout` per
+viewed slot (`Race::readout_for`), the shield bars' state per slot, one HUD per view
+drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
+two-player split layouts for a two-view race. **Still open from this list**:
 per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
 origin), the 8-up frame budget, the results/end-race flow (still slot 0's, ends
-every view), and a check of HD's and Omega's post chains under a split.
+every view). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
+checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
+clears the frame), and on Omega and HD the last view was graded from the first view's
+pixels; the chain now runs once over the whole area after the last view
+([split-screen.md](../../docs/rendering/split-screen.md#drawing)). **Open from it**
+(all chosen, not measured): one shared exposure and glow for all views, HD's boost
+zoom streak and Omega's distortion offsets are not drawn under a split, and a
+race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
+from the primary's pulse (read from the code, not captured).
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives
@@ -648,7 +660,7 @@ a guess.
    `Controller` and `PlayerInputs` already did informally.
 2. **Split screen**: viewport/camera-region support in `oag-render`,
    per-player HUD in `oag-ui`. Lowest risk - no window-lifecycle changes.
-   **Viewports and cameras done, 2026-10-13** (see section 1); the per-player HUD,
+   **Viewports, cameras and the per-player HUD done, 2026-10-13** (see section 1);
    pad assignment and front-end entry remain.
 3. **Multi-window**: unwind `App`'s one-window-per-run assumption, per-window
    wgpu surfaces. Can run in parallel with (2) once (1) lands; ordered after

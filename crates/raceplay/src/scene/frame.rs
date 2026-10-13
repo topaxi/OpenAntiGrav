@@ -935,13 +935,30 @@ impl Scene {
         // downsample, the two blurs, the composite back over the linear
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
+        //
+        // A split-screen view runs neither chain: both encode into `view` with a
+        // clearing pass and sample the linear scene from its top-left, so one run
+        // per view would wipe every earlier view. `Scene::render_viewports` runs
+        // the chain once over the whole area after the last view instead.
+        let whole = self.layer.get() == super::viewports::Layer::Whole;
         if self.hd.is_some() {
-            self.run_hd(queue, encoder, view, viewport, race, hd_bloom_timestamps);
-            stats.hd_bloom_encoded = true;
+            if whole {
+                self.run_hd(
+                    queue,
+                    encoder,
+                    view,
+                    viewport,
+                    race.hd_zoom_frame(),
+                    hd_bloom_timestamps,
+                );
+                stats.hd_bloom_encoded = true;
+            }
         } else if let Some(omega) = &self.omega {
             // Omega's tone map: the executable's exposure and curve over the
             // linear scene, encoded into `view`. See `Self::omega`.
-            self.run_omega(omega, device, queue, encoder, view, viewport);
+            if whole {
+                self.run_omega(omega, device, queue, encoder, view, viewport, true);
+            }
         } else if (self.bloom.is_some() || self.ps2_bloom.is_some())
             && self.layer.get() == super::viewports::Layer::Whole
         {

@@ -55,6 +55,7 @@ pub mod kill_tags;
 mod lap_splits;
 pub mod messages;
 mod pickup;
+mod placement;
 mod runtime;
 mod shield_bar;
 mod sight_draw;
@@ -63,12 +64,14 @@ pub mod time_gap;
 mod time_trial_pace;
 mod widget;
 
-pub use assets::Assets;
+pub use assets::{Assets, SplitAssets};
 pub use compose::{Composed, compose};
 pub use draw::{Context, Frame, draw_list, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
 pub use pickup::pickup_icon_name;
+pub use placement::{Placement, place};
+pub use sight_draw::sight_draws;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
 pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
 
@@ -731,7 +734,7 @@ impl Readout {
     /// How full the shield bar is, `0..=1`.
     #[must_use]
     pub fn shield_fraction(&self) -> f32 {
-        fraction(self.shield, self.shield_max)
+        shield_fraction(self.shield, self.shield_max)
     }
 
     /// Whether the shield bar draws forced solid red this frame rather than
@@ -790,6 +793,13 @@ impl Readout {
         let phase = (self.shield_blink_phase * 8.0).floor() as i64;
         phase.rem_euclid(2) == 0
     }
+}
+
+/// How full a shield pool is, `0..=1`: [`Readout::shield_fraction`] for a pool
+/// and its maximum rather than a whole readout.
+#[must_use]
+pub fn shield_fraction(shield: f32, shield_max: f32) -> f32 {
+    fraction(shield, shield_max)
 }
 
 /// `value / full`, clamped, and zero rather than `NaN` when `full` is zero.

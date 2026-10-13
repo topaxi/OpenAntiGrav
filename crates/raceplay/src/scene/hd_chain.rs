@@ -124,7 +124,7 @@ impl BoostZoom {
 }
 
 impl Scene {
-    /// Wipeout HD's chain over this frame, with the zoom-streak ring's pulses (stepped
+    /// Wipeout HD's chain over this frame, with the zoom-streak ring's pulse (stepped
     /// once a tick; `None` draws none).
     pub(super) fn run_hd(
         &self,
@@ -132,13 +132,13 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
-        race: &Race,
+        zoom: Option<oag_post::hd_zoom::Frame>,
         timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) {
         let Some(hd) = &self.hd else {
             return;
         };
-        hd.set_zoom_frame(race.hd_zoom_frame());
+        hd.set_zoom_frame(zoom);
         hd.run(
             queue,
             encoder,

@@ -644,9 +644,157 @@ Those counts are from before the reset port, so they are mostly the loop.
 
 **The authored speed floor does not help here:** `unk_0x66` is authored only on
 `06_Track` ([track.md](../formats/track.md)), and reads 253 (no floor) at every
-sample of `13_Track`, `16_Track` and `05_Track`. **Whether the original game's
-leader also falls at this jump when the player is far behind is unmeasured**:
-that, and the original's flight across the gap, are the open half.
+sample of `13_Track`, `16_Track` and `05_Track`. **The original game's leader falls at
+this jump too with the player parked**, measured below: the first fall is
+faithful, and the loop was ours.
+
+**The original's own field falls at the `13_Track` jump too (2026-10-13, PPSSPP).**
+Pulse PSP USA, a fresh profile with the dev-unlock byte
+([ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md), `psp-drive.py menu
+--single-race --unlock --track-down 18`), Single Race, VENOM, Platinum Rush White
+(`13_Track`: the craft came up 5 units from `oag-trace track`'s row 1163, heading
+dot +0.95, three laps, lap length 4,536, start offset 1,846), eight craft, the
+player **parked on the grid, 8th, no button touched**. `scripts/psp-ai-track-log.py`
+stops at `0x088568b0` (once per tick) and reads every craft's body position,
+velocity, speed (`body+0x398`), the driver's thrust output (`driver+0x0c`),
+progress and place: 5,865 to 8,642 rows per run, race clock 0.8 to 172 s;
+`scripts/psp-ai-track-analyze.py` finds each craft's nearest spline row per row
+and calls a pass of rows 19 to 49 a **fall** when the position then jumps more than
+12 units within 3 s (the airborne reset). Entries after a craft's own `finished`
+flag are dropped (the thrust law has a finished branch): 146 remain. The fresh
+profile's `g_skill_level` is 0 (scale 0.9); runs at level 2 (written, then
+`restart`) are the ones comparable with this project's default race (`skill 3.00`;
+the scale was not re-read in these runs, the 2026-10-11 capture read 3.0 at level 2),
+and the leaders' held thrust there is **47.1**, as in this engine. Two boots of
+PPSSPP, five captures (a restart reseeds the field, a boot is the independent
+sample the rubric wants; both boots read the same profile directory):
+
+| Boot | Run | Skill level | Zone entries | Fell |
+| --- | --- | --- | ---: | ---: |
+| 1 | `lvl0-a` | 0 | 59 | 43 |
+| 1 | `lvl2-a` | 2 | 23 | 3 |
+| 1 | `lvl2-b` | 2 | 28 | 7 |
+| 1 | `lvl2-rail` (to 32 s) | 2 | 9 | 2 |
+| 2 | `lvl2-boot2` | 2 | 27 | 8 |
+
+At level 0 slot 5 fell **13 times in a row** (t 26 to 71 s, entry 93-97, thrust
+57.8, lane +5.3 to +8.1) and then cleared once its lane moved onto the pad, and
+from lap 2 six of the seven, held at thrust 31.1, fell at entry 66-80 again and
+again; level 0 was captured once (seen once).
+
+**At level 2, the leaders' own first pass falls in three of four captures.** The
+place-1 or place-2 craft at held thrust 47.1 fell on the first pass in
+`lvl2-a` (97.7), `lvl2-rail` (94.9 and 92.6) and `lvl2-boot2` (92.9, 92.3 and 94.6,
+all three place 1 or 2), and cleared on the pad in the others. **Of 39 pre-finish
+entries at held thrust 47.x, 16 fell, at 89.6 to 103.6, which is this engine's
+91 to 100 at `held_thrust` 47: the physics and the law agree.**
+
+**The split is speed at the lip.** Falls enter the zone (speed at spline row 19)
+at 66.0 to 103.6; clears at 101.8 and up (`body+0x398`), so the clearing speed
+is about 102 to 104 and not a sharp edge (one fall at 214.6, thrust 100.5, not
+analysed). Confidence **90** that the original's leader falls at this jump when
+the formation law holds it down (two boots, both skill levels, every capture
+shows it; a runtime trace on one binary); **75** for the clearing speed
+(an overlap of 1.8 in a few points, one build).
+
+**What lets a craft through is the speed pad before the jump.** `oag-trace pads`
+pad 6 (speed-up, centre (-573.9, 15.8, 247.8), progress 2,675.8) sits on spline
+row 3073, about 45 units before the zone, 6.5 units to the side the CSV's
+`lat_x/y/z` calls negative. Of 146 crossings 48 were boosted (+12 to +61 speed
+across it): all but two had a signed lateral offset of -9.8 to -1.9 (measured at
+the pad's row from `oag-trace track`'s `line` and `lat`); **none of the 90 at
++2.6 or more boosted except two under a pickup (258 and 206 u/s)**, and one at
++1.2 did (+61). Two crossings at -3.9 and -1.3 gained nothing (the first at 254
+u/s under a pickup). **At held thrust 47, all 20 entries that crossed the pad and were boosted
+cleared (entry 135-151, four more at 235-269 under a pickup); of the 19 that did
+not, 16 fell and 3 cleared (two under a pickup, one at +8.0 at 114.7).** A
+craft's lateral offset is its lane: the values seen are steps of about 2.5 (-9.4,
+-7.0, -4.6, -2.3, 0, +2.7, +5.3, +8.0, +10.6), and they move over a race. The jump
+itself: a faller flies the arc, comes down at the gap's near edge at spline row 45
+to 46 with its speed intact (90 to 100) and drops straight through (y 22 to -2),
+and the airborne reset puts it back near row 2,950 (about (-388, 7, 241), 190
+units before the pad), the same loop as this engine's. Confidence 70 (the pad's edge
+is inferred from crossings; the pad's box was not read).
+
+**The rail does not do it.** `Ai_SnapToLane`'s `Body_SetPosition` call
+(`0x088548dc`), 10,237 hits in the first 32 s of a level 2 run: the target is the
+craft's own position to a median 0.031 units (99th percentile 0.32, maximum 0.75),
+and the target's lateral equals the craft's to 0.1 at the pad and the jump. The
+rail holds the lane; it neither lifts nor slows a craft there. Confidence 80
+(one boot, one run).
+
+**Reading for this engine.** The behaviour is the original's own: a craft held
+below about 102 at the lip falls, and the original's leader, held at 47.1 by a
+parked player, arrives at 90 to 100. What differs is how long it keeps falling:
+the original's loops end (13 in a row at level 0; at level 2 at most 2 running
+before the finish, and a faller that drops places gets a higher thrust, 70 to 100
+and entry 104-124, which clears it), while this engine's slot 3 looped 129 times
+at 1.4 to 2.6 units off the line. **A hypothesis, not a finding:** that this
+engine's leader keeps a lane on the pad's off side (the original's crafts at
++2.6 are never boosted; +1.2 once) for the whole run. Our signed lateral at row
+3073, and whether our pad test boosts an AI craft there, were not measured:
+that is the next comparison. The setup differs in one more known place: this
+engine's default race runs the pack shuffle at level 1, the original's
+skill-scale-3.0 case at level 2. Tools: `scripts/psp-ai-track-log.py`,
+`scripts/psp-ai-track-analyze.py`. No screenshot shows the leader at the jump:
+the parked player's camera never frames it, and a player placed near row 3040
+by `psp-drive.py place` (40 frames) saw a tunnel wall and sparks from passing
+craft, never the gap.
+
+**What the original does after a fall, and its flight (2026-10-13, same captures).**
+*AI craft, 61 resets in the race captures.* A reset takes one or two ticks (0.017 to
+0.034 s between the last and first logged tick); the craft reappears **on the
+racing line** (z 240.7, y 7.3 to 7.4, grounded), x -372 to -395, line rows 2938 to
+2953, i.e. 256 to 301 units (median 279) **before the pad and the jump, not in the
+gap**, moving along the track at speed 66 to 70 (skill level 0) or 72.6 to 76.1
+(level 2), vy about 0. The same craft's repeat resets land within 0.06 units of
+one point whatever the fall row (38 to 61); different craft and laps differ by a
+few units. It is not a pose the craft held earlier (the nearest earlier sample is
+about 12 units away, passed 2.5 to 4.4 s before at 130 to 170 u/s), so the rule
+is the crumb ring below.
+Confidence 85 for the numbers; the rule is the crumb ring below. *The player in a Time Trial* (same mechanism, read live): the entity
+(`craft+0x1c4`) keeps an 8-slot ring of position crumbs (`entity+0x380+i*0x40`,
+position at `+0x30`, head `+0x780`, oldest `+0x784`, the latched speed `+0x78c`,
+a no-crumb flag byte `+0xb51`), and a reset puts the craft **on the oldest crumb,
+moved to the track-width midpoint and 5 up, moving along the line at
+`50 + 0.25 * latched speed`**, one frame later (0.97 to 1.03 frames between
+consecutive hits). **Natural drive-in falls, 5 of 5**
+(`scripts/psp-fall-drive.py`: the craft steered at the racing line by a pure-pursuit
+controller, throttle held only below a cap, the ring read every tick):
+
+| Cap | Speed at the lip (row 17-18) | Fell from row | Latch | Speed after | 50 + 0.25 x latch |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 85 | 83.4 | 68 | 84.0 | 71.0 | 71.0 |
+| 70 | 70.6 | 56 | 71.9 | 68.0 | 68.0 |
+| 60 | 60.2 | 49 | 59.1 | 64.8 | 64.8 |
+| 85, throttle off from row 3045 | 80.4 | 45 | 79.6 | 69.9 | 69.9 |
+| 100 | 98.1 | 38 | 100.0 | 75.0 | 75.0 |
+
+Every fall reappears at **(-388.6, 7.3, 240.8), line row 2949**, heading (-0.999,
+0.036, -0.025): the oldest crumb (-388.1, 3.3, 240.4) lifted to the midpoint. The
+ring just before each reset has head 4, oldest 5, flag 1, crumbs at rows 2935 to
+3032 about 14 rows (20 units) apart: it is **frozen on the last 8 crumbs laid
+before the no-crumb zone** (authored from row 3036 on `13_Track`), so the oldest is
+always row 2949 whatever the craft's speed, and only the speed after the reset
+varies, through the latch (the speed when the ring was last pushed, at row
+about 3032, a few tens of units before the lip). It is **not the nearest sample to
+the fall** and **not in the gap**: 280 to 300 units behind the fall. It is the same
+point the AI craft returns to (slot 1 at x -388.1 to -389.2, row 2950; the others a
+few units either side by lane and lap), and the AI numbers above fit the same law.
+The Time Trial start pose is (-404.4, 3.8, -312.1) (row about 1250), and the ring
+starts out holding it: a craft **teleported** into the gap before it has driven in
+reappears there (rows 1257 to 1379, with a few teleported tests at row 2975 from
+teleport-laid crumbs), which is why the teleported tests disagreed with the AI's
+point; they are not the natural rule. Confidence 90 (five natural falls, the law
+read from the executable first and every prediction held to 0.1 u/s; one boot).
+*Flight* (clears, line rows 18 to 44): the ramp climbs about 6.6 degrees (vy about
+0.115 of speed); liftoff at row 17 to 20; apex about 0.12 s later at row 27
+(y 22.56 for an entry-93 faller; the road is at 20.4); vy then falls at
+**-89 to -93 per second per second, steeper with speed (-89 at 109, -92 at 140,
+-95.5 at 161)**, pooled mean -86.6; a faller at entry 98 is 4.2 below the line at
+row 44 and one at 109 0.2 below (it clears). Confidence 60 (body vy between
+consecutive ticks, ground-clamp transients near liftoff included, grounded
+fraction not read).
 
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 
