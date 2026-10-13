@@ -301,6 +301,115 @@ incremental = false
 opt-level = 2
 debug = false
 
+# Crates reached only through a build-script or proc-macro edge, which `package."*"`
+# above would otherwise build at opt-level 2. They run once per build, so opt-level
+# 0 costs nothing at run time (bindgen included) and cut their compile from 356 to
+# 50 CPU-s, a cold build from 253 to 210 s (2026-10-13). Named one by one because
+# `package."*"` outranks `build-override`. The list is `cargo tree -e
+# normal,dev,build` minus `cargo tree -e normal,dev,no-proc-macro`; a crate that
+# drops out leaves a dead override cargo warns about, and a new proc macro simply
+# builds at 2.
+[profile.dev.package.atomig-macro]
+opt-level = 0
+[profile.dev.package.autocfg]
+opt-level = 0
+[profile.dev.package.bindgen]
+opt-level = 0
+[profile.dev.package.bytemuck_derive]
+opt-level = 0
+[profile.dev.package.cc]
+opt-level = 0
+[profile.dev.package.cexpr]
+opt-level = 0
+[profile.dev.package.cfg_aliases]
+opt-level = 0
+[profile.dev.package.cfg-expr]
+opt-level = 0
+[profile.dev.package.clang-sys]
+opt-level = 0
+[profile.dev.package.clap_derive]
+opt-level = 0
+[profile.dev.package.convert_case]
+opt-level = 0
+[profile.dev.package.derive_more-impl]
+opt-level = 0
+[profile.dev.package.displaydoc]
+opt-level = 0
+[profile.dev.package.document-features]
+opt-level = 0
+[profile.dev.package.find-msvc-tools]
+opt-level = 0
+[profile.dev.package.gltf-derive]
+opt-level = 0
+[profile.dev.package.heck]
+opt-level = 0
+[profile.dev.package.inflections]
+opt-level = 0
+[profile.dev.package.jobserver]
+opt-level = 0
+[profile.dev.package.litrs]
+opt-level = 0
+[profile.dev.package.logos-codegen]
+opt-level = 0
+[profile.dev.package.logos-derive]
+opt-level = 0
+[profile.dev.package.minimal-lexical]
+opt-level = 0
+[profile.dev.package.nasm-rs]
+opt-level = 0
+[profile.dev.package.num-derive]
+opt-level = 0
+[profile.dev.package.paste]
+opt-level = 0
+[profile.dev.package.pkg-config]
+opt-level = 0
+[profile.dev.package.proc-macro2]
+opt-level = 0
+[profile.dev.package.quick-xml]
+opt-level = 0
+[profile.dev.package.quote]
+opt-level = 0
+[profile.dev.package.rustc_version]
+opt-level = 0
+[profile.dev.package.rustversion]
+opt-level = 0
+[profile.dev.package.serde_derive]
+opt-level = 0
+[profile.dev.package.shlex]
+opt-level = 0
+[profile.dev.package.strum_macros]
+opt-level = 0
+[profile.dev.package.syn]
+opt-level = 0
+[profile.dev.package.synstructure]
+opt-level = 0
+[profile.dev.package.system-deps]
+opt-level = 0
+[profile.dev.package.target-lexicon]
+opt-level = 0
+[profile.dev.package.thiserror-impl]
+opt-level = 0
+[profile.dev.package.unicode-segmentation]
+opt-level = 0
+[profile.dev.package.unicode-xid]
+opt-level = 0
+[profile.dev.package.version_check]
+opt-level = 0
+[profile.dev.package.version-compare]
+opt-level = 0
+[profile.dev.package.wayland-scanner]
+opt-level = 0
+[profile.dev.package.wesl-macros]
+opt-level = 0
+[profile.dev.package.yoke-derive]
+opt-level = 0
+[profile.dev.package.zerocopy-derive]
+opt-level = 0
+[profile.dev.package.zerofrom-derive]
+opt-level = 0
+[profile.dev.package.zerovec-derive]
+opt-level = 0
+
 # The simulation, driven for thousands of ticks per behavioural test.
 [profile.dev.package.oag-core]
 opt-level = 2
@@ -412,3 +521,78 @@ opt-level = 2
 opt-level = 2
 [profile.dev.package.oag-post]
 opt-level = 2
+
+# What `just test`, `just test-affected`, `just check-schemas` and CI's test step
+# build with: every workspace crate dev names above goes back to opt-level 0, and
+# dependencies keep dev's `package."*"` (an inheriting profile takes dev's
+# package overrides with it, so each crate has to be named again here).
+#
+# `just test` skips every `#[ignore]`d ground-truth test, so the opt-level 2 those
+# crates carry for `just test-data` buys it seconds while costing it minutes of
+# build. Measured 2026-10-13, cold `cargo test --workspace --tests --no-run` with
+# kache off: dev 255 s wall and 2,026 CPU-s, this profile 172 s and 1,327 CPU-s
+# (the workspace's own units 870 -> 253 CPU-s). The test run itself goes from
+# about 9 s to 15 s. Opt-level 1 (222 s) was measured and is not worth it.
+# Opt-level keeps IEEE semantics, so the determinism tests' committed hashes
+# hold here as they do under dev and release.
+#
+# Everything else - `just test-data`, `cargo run` of the tools, `target/debug`
+# for the scripts - stays on dev. Running `just` and then `just test-data` on
+# one tree builds the workspace twice, once per profile, into
+# `target/quick` and `target/debug`.
+[profile.quick]
+inherits = "dev"
+[profile.quick.package.oag-core]
+opt-level = 0
+[profile.quick.package.oag-physics]
+opt-level = 0
+[profile.quick.package.oag-ai]
+opt-level = 0
+[profile.quick.package.oag-race]
+opt-level = 0
+[profile.quick.package.oag-gameplay]
+opt-level = 0
+[profile.quick.package.oag-weapons]
+opt-level = 0
+[profile.quick.package.oag-disc]
+opt-level = 0
+[profile.quick.package.oag-display]
+opt-level = 0
+[profile.quick.package.oag-formats]
+opt-level = 0
+[profile.quick.package.oag-assets]
+opt-level = 0
+[profile.quick.package.oag-video]
+opt-level = 0
+[profile.quick.package.oag-unity]
+opt-level = 0
+[profile.quick.package.oag-ballisticng]
+opt-level = 0
+[profile.quick.package.oag-tables]
+opt-level = 0
+[profile.quick.package.oag-texture]
+opt-level = 0
+[profile.quick.package.oag-vex]
+opt-level = 0
+[profile.quick.package.oag-pob]
+opt-level = 0
+[profile.quick.package.oag-rcs]
+opt-level = 0
+[profile.quick.package.oag-ui]
+opt-level = 0
+[profile.quick.package.oag-ui-screens]
+opt-level = 0
+[profile.quick.package.oag-hud]
+opt-level = 0
+[profile.quick.package.oag-raceplay]
+opt-level = 0
+[profile.quick.package.oag-game]
+opt-level = 0
+[profile.quick.package.oag-render]
+opt-level = 0
+[profile.quick.package.oag-fx]
+opt-level = 0
+[profile.quick.package.oag-mesh]
+opt-level = 0
+[profile.quick.package.oag-post]
+opt-level = 0

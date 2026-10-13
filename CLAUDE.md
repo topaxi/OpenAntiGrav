@@ -27,7 +27,7 @@ per-subsystem matrix, before assuming a subsystem exists.
 just              # fmt-check + lint + test + check-docs + check-deps + check-unused-deps + check-determinism + check-size + check-title-branching + check-title-reach + check-names + check-handover + check-status - the gate every commit must pass
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
-just test         # cargo nextest run --workspace
+just test         # cargo nextest run --workspace --tests --cargo-profile quick (our crates at opt-level 0, examples not built)
 just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
 just gate-affected # `just` with every check in full but only the tests a branch can reach (scripts/affected.py) - a drive member's gate
 just test-data-affected # `just test-data` narrowed the same way; the per-test ceiling holds, the suite ceiling is the full run's
@@ -51,6 +51,10 @@ just audit-leakage # asserts no tracked game content or reproduction (scripts/ch
 ```
 
 Single test: `cargo nextest run -p oag-core some_test_name` (nextest, not `cargo test`).
+`just test` builds with the `quick` profile (this workspace's crates at opt-level 0, into
+`target/quick`) and `just test-data` with `dev` (opt-level 2, `target/debug`), so a tree
+that runs both builds twice; pass `--cargo-profile quick` to a single plain test to reuse
+`just test`'s build, and leave it off for a ground-truth test.
 Ground-truth tests (in `crates/*/tests/*ground_truth*.rs`) are `#[ignore]`d because they
 need a real disc image under `data/images/`; they never run in CI, only via `just test-data`.
 
