@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+autotests = false
 
 [dependencies]
 oag-assets.workspace = true
@@ -22,5 +23,12 @@ symphonia.workspace = true
 # The Omega Collection's Wwise media is ATRAC9, decoded in process.
 atrac9dec.workspace = true
 
+[dev-dependencies]
+oag-testdata.workspace = true
+
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
