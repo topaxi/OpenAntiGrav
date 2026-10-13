@@ -40,8 +40,12 @@ census this page builds on.
 `data00`-`data04`) plus a mandatory day-one patch (four more, `data05`,
 `data07`, `data08`, `data09`) - and the patch **replaces** the front end
 wholesale rather than supplementing it: `skin.xml`, `mainmenu_definition.xml`,
-`racebox_definition.xml` and `cellmode_definition.xml` exist only in the
-patch's `data09.psarc`. `oag_omega::TITLE` makes `data09` the bulk (`data`)
+`racebox_definition.xml` and `cellmode_definition.xml` exist in three nested
+layers, the base `data00.psarc` (an older build; `skin.xml` 30,235 bytes) and the
+patch's `data08.psarc` (35,828) and `data09.psarc` (41,150, the newest), not only in
+`data09` as this page said until 2026-10-13 (re-read with the digest-matching
+reader, [`omega-frontend.md`](omega-frontend.md#the-census-front-end-content-is-in-four-of-nine-archives)).
+`oag_omega::TITLE` makes `data09` the bulk (`data`)
 candidate specifically so it is searched before the other eight - chosen to
 win the collision, not measured to be what a PS4 actually loads first. See
 `crates/omega/src/lib.rs`'s own `DATA_CANDIDATES` doc and

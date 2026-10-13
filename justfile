@@ -480,10 +480,11 @@ play *ARGS:
             # Omega ships as a base `.pkg` plus a mandatory day-one patch, two
             # sibling directories under `$src` - `omega-eu` and
             # `omega-eu-patch`. The patch is not optional: its own
-            # `uroot/data09.psarc` is the only archive carrying a `skin.xml`
-            # at all (`crates/omega/src/lib.rs`'s own `DATA_CANDIDATES` doc),
-            # so a base-only extract refuses to open rather than booting a
-            # front end with no menu XML in it.
+            # `uroot/data09.psarc` is the newest front end, the one this
+            # project's boot chain reads (`crates/omega/src/lib.rs`'s own
+            # `DATA_CANDIDATES` doc; `data00` and `data08` carry older
+            # `skin.xml` layers), so a base-only extract refuses to open
+            # rather than booting the base's older build.
             if ! find "$src" -maxdepth 3 -path '*/uroot/data09.psarc' 2>/dev/null | grep -q .; then
                 echo "$src has no */uroot/data09.psarc (the patch's front end)." >&2
                 if [ -f "data/images/omega-ps4-eu.pkg" ] || [ -f "data/images/omega-ps4-eu-patch.pkg" ]; then

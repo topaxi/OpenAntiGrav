@@ -2348,9 +2348,10 @@ The online screens are a different file (`multiplayer_definition.xml` in `DATA02
 `racebox_definition.xml` (`data09`, 15,805 bytes) has HD's `NumberOfPlayers` (y 420, with
 the padlock) and `SplitScreen` (y 470) lists with the same ids and English text, read with
 the digest-matching Rust reader (`cargo build -p oag-assets --example psarc_cat`). The
-earlier "neither list" came from `scripts/psarc.py`, which maps PS4 archive paths by
-position and returned a 5,475-byte `<PI_Grid>` file under that name; treat any Omega
-claim built on `just psarc` output as unchecked. Omega's join prompt differs:
+earlier "neither list" came from `scripts/psarc.py`, which mapped PS4 archive paths by
+position and returned a 5,475-byte `<PI_Grid>` file under that name; the script matches
+by digest now and the claim was re-read with it on 2026-10-13 (15,805 bytes, both lists present, pinned
+by `psarc_script_ground_truth`). Omega's join prompt differs:
 "PLAYER 2 PRESS OPTIONS TO JOIN". **2048: checked, differs** - its English table carries
 HD's split ids word for word (`RB_NUMP`, `RB_SPLSCR`, `FE_SHIPSEL_P1`/`P2`, `MAN_2_SPL`) but
 its touch front end has no `racebox_definition.xml` (`docs/formats/2048-frontend.md`).
