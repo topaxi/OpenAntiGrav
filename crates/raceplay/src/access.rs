@@ -388,7 +388,7 @@ impl Race {
     ///
     /// An accessor rather than a public field, because `weapons` is the whole
     /// table and only the blocks with a consumer should be reachable from
-    /// outside. Read by `crates/game/tests/missile_ground_truth.rs`, which links
+    /// outside. Read by `crates/raceplay/tests/missile_ground_truth.rs`, which links
     /// the library and so cannot see the field.
     #[must_use]
     pub fn missile_stats(&self) -> Option<oag_tables::weapons::MissileStats> {
@@ -402,7 +402,7 @@ impl Race {
     /// load or authors no LeachBeam.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/lock_sight_ground_truth.rs`, which asks it of **each**
+    /// `crates/raceplay/tests/lock_sight_ground_truth.rs`, which asks it of **each**
     /// title: whether a disc authors this block is what decides whether its
     /// reticle can be driven for the second lockable weapon at all, and the
     /// answer differs across the three.
@@ -418,7 +418,7 @@ impl Race {
     /// authors no Mine.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/mine_ground_truth.rs`.
+    /// `crates/raceplay/tests/mine_ground_truth.rs`.
     #[must_use]
     pub fn mine_stats(&self) -> Option<oag_tables::weapons::MineStats> {
         self.sim
@@ -431,7 +431,7 @@ impl Race {
     /// or authors no Quake.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/mine_ground_truth.rs`, which launches a wave over a
+    /// `crates/raceplay/tests/mine_ground_truth.rs`, which launches a wave over a
     /// laid mine.
     #[must_use]
     pub fn quake_stats(&self) -> Option<oag_tables::weapons::QuakeStats> {
@@ -445,7 +445,7 @@ impl Race {
     /// or authors no Shuriken.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/shuriken_ground_truth.rs`.
+    /// `crates/raceplay/tests/shuriken_ground_truth.rs`.
     #[must_use]
     pub fn shuriken_stats(&self) -> Option<oag_tables::weapons::ShurikenStats> {
         self.sim
@@ -458,7 +458,7 @@ impl Race {
     /// authors no Rocket.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/plasma_ground_truth.rs`, which compares the two
+    /// `crates/raceplay/tests/plasma_ground_truth.rs`, which compares the two
     /// blocks against each other to prove they are two rather than one read
     /// twice.
     #[must_use]
@@ -473,7 +473,7 @@ impl Race {
     /// authors no Plasma.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/plasma_ground_truth.rs`.
+    /// `crates/raceplay/tests/plasma_ground_truth.rs`.
     #[must_use]
     pub fn plasma_stats(&self) -> Option<oag_tables::weapons::PlasmaStats> {
         self.sim
@@ -486,7 +486,7 @@ impl Race {
     /// authors no Cannon.
     ///
     /// An accessor for [`Self::missile_stats`]'s reason. Read by
-    /// `crates/game/tests/cannon_ground_truth.rs`.
+    /// `crates/raceplay/tests/cannon_ground_truth.rs`.
     #[must_use]
     pub fn cannon_stats(&self) -> Option<oag_tables::weapons::CannonStats> {
         self.sim

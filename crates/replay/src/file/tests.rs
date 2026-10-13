@@ -3,7 +3,7 @@
 //! The toy is deliberately small but has the property that matters: its state
 //! depends on every input it is handed and on a seeded generator, so a changed
 //! input anywhere changes every hash after it. The disc-backed half - a real
-//! race on a real circuit - is `crates/game/tests/replay_ground_truth.rs`.
+//! race on a real circuit - is `crates/raceplay/tests/replay_ground_truth.rs`.
 
 use oag_core::{Rng, StateHasher};
 use oag_gameplay::input::{Button, Input};

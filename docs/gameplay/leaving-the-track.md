@@ -9,7 +9,7 @@ afterwards and, with the original's own rescue for a beached craft measured
 live, **ported** (see [the sunk craft](#the-one-divergence-the-original-recovers-a-craft-that-has-sunk-into-the-floor-and-ours-does-not)
 and [what landed](#what-landed-2026-09-29-branch-sunk-craft-2)).
 
-Every number below is reproducible from `crates/game/tests/falloff_survey_ground_truth.rs`
+Every number below is reproducible from `crates/raceplay/tests/falloff_survey_ground_truth.rs`
 and three files in `crates/trace/tests/` (all `#[ignore]`d, `OAG_SWEEP`-gated where
 they sweep, printing rather than asserting). Original-side comparisons exist for
 **Talon's Junction (`16_Track`) captures only**, plus a handful of live

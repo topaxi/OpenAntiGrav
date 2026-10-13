@@ -311,7 +311,7 @@ fn driving_backwards_over_the_line_invents_no_lap_time() {
 /// lap: the craft never left the near half of the one it is being credited
 /// for.
 ///
-/// This is the scenario `crates/game/tests/lap_times_ground_truth.rs` hit for
+/// This is the scenario `crates/raceplay/tests/lap_times_ground_truth.rs` hit for
 /// real: a corrected craft-pair narrowphase threw an opponent back across
 /// Talon's Junction's line in one tick, and its very next ordinary forward
 /// crossing - seconds later, nothing anomalous about it - was booked as a

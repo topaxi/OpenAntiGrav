@@ -1231,7 +1231,7 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
 Reproducers: `crates/vex/examples/omega_track_probe.rs`, `omega_col_probe.rs`;
 `crates/rcs/examples/omega_rcsmodel_probe.rs`, `omega_rcsmodel_census.rs`,
 `omega_materials_probe.rs`; and the ground-truth suite
-`crates/game/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
+`crates/raceplay/tests/omega_race_ground_truth.rs`, which skips (loudly, even under
 `OAG_REQUIRE_GAME_DATA`) on a short-read extraction.
 
 ## Zone flies one shared hull, `hdships\Zone` (2026-10-06, `zone-craft`)
@@ -1311,7 +1311,7 @@ Static only (no PS4 emulator): [ps4-omega-eu/ai-controls.md](../ghidra/functions
 Both `AIRaceStats`/`AIControlStats` sets ship and read, every `PI_Track` has its
 `stats.xml`, and the field finishes on Vineta K, Talon's Junction, Ubermall
 (Phantom) and Amphiseum reversed with no respawn
-(`crates/game/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
+(`crates/raceplay/tests/omega_original_ai_ground_truth.rs`). The 2048-lineage laws are
 not wired: this project does not read Omega's 2048 campaign.
 
 ## See also

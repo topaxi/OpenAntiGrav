@@ -349,7 +349,7 @@ Distance` (what selects a region is unlocated), `Fog Alternate Color`,
 `Fog sun colour`/`direction`, `Depth Fog Offset RecipRange` (0, 0.01 on every
 circuit), and everything `HDR and Bloom`-shaped (`BloomFactor`, `BloomGate`,
 `Exposure*`). Pinned per base circuit by
-[psp2_sky_fog_ground_truth.rs](../../crates/game/tests/psp2_sky_fog_ground_truth.rs).
+[psp2_sky_fog_ground_truth.rs](../../crates/raceplay/tests/psp2_sky_fog_ground_truth.rs).
 
 **Omega: ported.** Omega's `track.envsettings` carries the same
 `Lighting.Fog colour` bytes (altima: `[0.13, 0.11, 0.16]` at 0.0002, identical)

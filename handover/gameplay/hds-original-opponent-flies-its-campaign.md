@@ -12,7 +12,7 @@ Settled: `oag_ai::original::Laws` carries the branches (`Laws::PULSE` is Pulse),
 `oag_hd::race::ORIGINAL_DRIVER` holds HD's with provenance, raceplay resolves the
 halved-lookahead row off the disc's plugin definition, and HD's campaign skill
 comes off the circuit's own `stats.xml` (the Fury cell `grid8_3_1` resolves the
-`-0.07`/`3.48` HD logged). `crates/game/tests/hd_original_ai_ground_truth.rs`
+`-0.07`/`3.48` HD logged). `crates/raceplay/tests/hd_original_ai_ground_truth.rs`
 holds the figures.
 
 ## Open

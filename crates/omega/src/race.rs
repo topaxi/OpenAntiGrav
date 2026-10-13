@@ -119,7 +119,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
 /// Omega's `Data\plugins\teams\Definition.xml` declares each team's own
 /// directory as its `PI_Team` `location` - the five `*2048` teams point here
 /// and the fourteen HD-era ones at [`SHIP_DIR`] (read by
-/// `crates/game/tests/omega_2048_era_craft_ground_truth.rs` on every run), and
+/// `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs` on every run), and
 /// the ship-model loader's non-special-mode case builds `%s\ship.vex` off the
 /// craft entry's own directory (`Ship_LoadModelSet`, `0x01301ba0`, confidence
 /// 75, `docs/ghidra/functions/ps4-omega-eu/zone-craft.md`).

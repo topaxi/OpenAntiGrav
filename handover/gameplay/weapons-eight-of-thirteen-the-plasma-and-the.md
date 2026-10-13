@@ -174,7 +174,7 @@ behind-gated `Driver::wants_to_drop` for opponents, which is the forward
 weapon's rule with the cone, the curvature and the minimum range taken out.
 
 **Verified**: `just` green at **2,472**, and three disc-backed tests in the new
-`crates/game/tests/mine_ground_truth.rs`. Measured on `pulse-psp-usa.chd`: five
+`crates/raceplay/tests/mine_ground_truth.rs`. Measured on `pulse-psp-usa.chd`: five
 mines over 111.5 units of track at 100 units/s, the first 4.87 units behind the
 craft, a rival on one taking exactly the authored 5.0 damage inside the
 authored 3.0 trigger radius. The world hash moved once and it is the **stream,
@@ -749,7 +749,7 @@ and this engine rides *one*, centred on the projectile's own position - the
 Missile carries no located model or locator set here the way the Rocket's
 `Rocket.vex` does, so there is nowhere read to put a second one. The
 `WO_MISSILE_EXPLO` and `WO_MISSILE_BOUNCE` reasons in
-`crates/game/tests/psys_inventory_ground_truth.rs` were also stale ("the
+`crates/raceplay/tests/psys_inventory_ground_truth.rs` were also stale ("the
 Missile fires nothing yet" - it does) and are corrected to name the real gap:
 `Race::ignite_blast` reuses the Rocket's own explosion pair for every
 detonating projectile rather than reading which file each weapon authors.
@@ -1566,7 +1566,7 @@ for every impact regardless of `blast`, so the timeout now draws
 fixture (`crates/weapons/src/projectile/plasma/tests.rs`, mirroring the
 Missile's own `an_unguided_missile_detonates_when_its_three_seconds_are_up`
 pair) and one ground-truth test against a real disc
-(`crates/game/tests/plasma_ground_truth.rs`,
+(`crates/raceplay/tests/plasma_ground_truth.rs`,
 `a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it` -
 fired 10,000 units above the track so it cannot reach any real wall, since a
 bolt fired down `Talons Junction`'s own racing line hit one in 1.37 s during
@@ -1767,7 +1767,7 @@ test.** The release computation was gated on the weapon table being present
 unit test held the craft's velocity constant through the whole charge, so
 recomputing a constant every tick looks identical to computing it once - the
 bug was invisible to all of them.
-`crates/game/tests/plasma_ground_truth.rs`'s
+`crates/raceplay/tests/plasma_ground_truth.rs`'s
 `a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies`, fired one tick
 into an accelerating real race, caught it immediately: the bolt's speed one
 tick after the press read the craft's speed *at that tick*, not the
@@ -1783,7 +1783,7 @@ block on `projectile.charge <= 0.0` as well.
 discriminate - deliberately breaking the release-time gate reproduces the
 exact 156.3-vs-291.7 km/h mismatch the ground-truth run first surfaced, and
 both new unit tests fail the same way, before the fix restores them.
-`crates/game/tests/plasma_ground_truth.rs`'s
+`crates/raceplay/tests/plasma_ground_truth.rs`'s
 `a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies` is extended rather
 than reassigned: its existing charge-hold-magnitude assertion (fired one tick
 after the press, before any release can happen) is untouched and still
@@ -1976,7 +1976,7 @@ header to model vertices), `oag_render::ripple` (the bump, summing owners),
 own `t`, now `SplinePoint::progress`), and a `Scene::write_road` step before
 the weapon pads' tint, which adds the displacement back. Ground truth:
 `crates/vex/tests/quake_ground_truth.rs` and
-`crates/game/tests/quake_ripple_ground_truth.rs` (vertices median 0.37 units
+`crates/raceplay/tests/quake_ripple_ground_truth.rs` (vertices median 0.37 units
 from where the course locates them; every seam, driven and branch, 0.00 at
 p99 and 2.34 units at worst).
 

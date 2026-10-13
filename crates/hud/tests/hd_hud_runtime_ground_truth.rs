@@ -3,7 +3,7 @@
 //! the lap and place arcs it shows are authored where it looks for them.
 //!
 //! **`#[ignore]`d and never run in CI** - it needs the disc. See
-//! `crates/game/tests/hd_hud_ground_truth.rs`, whose composition this reuses.
+//! `crates/raceplay/tests/hd_hud_ground_truth.rs`, whose composition this reuses.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-hud --run-ignored all \

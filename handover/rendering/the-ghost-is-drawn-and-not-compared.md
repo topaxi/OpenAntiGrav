@@ -5,7 +5,7 @@ Landed 2026-09-23 under ADR-0055 (`docs/architecture/adr/0055-replays-are-inputs
 `<config dir>/oag/ghosts/`), and `oag_render::ghost` drawing Pulse's three
 `MeshNode_Ghost` passes off `docs/ghidra/functions/psp-pulse-usa/ghost.md`.
 Replays re-drive bit for bit on Pulse, Pure, HD and 2048
-(`crates/game/tests/replay_ground_truth.rs`); the ghost was seen ahead and
+(`crates/raceplay/tests/replay_ground_truth.rs`); the ghost was seen ahead and
 faded through on Pulse and Pure in headless captures (`--ghost`/`--record-ghost`).
 
 ## Open

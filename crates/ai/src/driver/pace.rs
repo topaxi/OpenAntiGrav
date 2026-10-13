@@ -102,7 +102,7 @@ pub(super) fn corner_target(
 /// `oag_title::craft_laws::CraftLaws`, measured on RPCS3), so HD's ceilings
 /// are `0.9` of the table below. A title with no `CraftLaws` flies Pulse's.
 /// `<Turning amount>` is **per team, constant across speed classes**,
-/// measured by `crates/game/tests/ai_clean_lap_board.rs`. On Pulse:
+/// measured by `crates/raceplay/tests/ai_clean_lap_board.rs`. On Pulse:
 ///
 /// | team | `amount` | ceiling | against `Tuning::max_turn_rate` 1.8 |
 /// | --- | ---: | ---: | ---: |

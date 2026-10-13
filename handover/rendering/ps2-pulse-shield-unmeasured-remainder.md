@@ -17,7 +17,7 @@ not animated". Three layers, found in order:
    false`. Evidence and the GS registers:
    `docs/ghidra/functions/ps2-pulse-eu/shield-pickup.md`. The method:
    `docs/reverse-engineering/pcsx2-debugger.md` "GS dumps". Pinned by
-   `crates/game/tests/ps2_shield_ground_truth.rs` and
+   `crates/raceplay/tests/ps2_shield_ground_truth.rs` and
    `oag_render::shield::tests::the_ps2_shell_is_never_tinted_and_the_other_palettes_are`.
 
 The first pass's open items are answered: the "lattice against rings" gap was the

@@ -17,7 +17,7 @@ though)."
   - HD: six `absorb` (`0x3ee`) locators from `Locators.vex`, fired as three
     mirrored pairs 0.2 s apart. See
     [absorb-feedback.md](../../docs/ghidra/functions/ps3-hdfury-eu/absorb-feedback.md).
-  - `crates/game/tests/absorb_ground_truth.rs` pins the stagger on Pulse and
+  - `crates/raceplay/tests/absorb_ground_truth.rs` pins the stagger on Pulse and
     on HD.
 - **The hull overlay, Pulse only: drawn** (`oag_fx::hull_overlay::DRAWN
   = true`, later on 2026-09-23). A real absorb on PPSSPP, instrumented with

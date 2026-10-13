@@ -4,7 +4,7 @@
 page to read, not this row. Player report on HD/Fury: "in a looping or wavy
 section the rockets disappear or go straight, instead of going with the floor."
 Measured on eight circuits across both titles with
-`crates/game/tests/rocket_floor_trace.rs`, and **Pulse broke the same way** -
+`crates/raceplay/tests/rocket_floor_trace.rs`, and **Pulse broke the same way** -
 52 of 120 rockets on Talon's Junction flew their whole 10 s cap without meeting
 anything, against 58 of 123 on HD's Anulpha Pass - so it was the shared
 geometry and HD was incidental. The cause was `WALL_FACING`: `nearest_hit`

@@ -54,7 +54,7 @@ a scratch directory, not kept.
   is seeded from the craft, and the probe-hit arm steers toward the ride point). A volley
   fired from the original's measured pose detonates at ticks 49/60/69 and 177/218/251 units
   against the original's 51/61/70 and 185/221/252
-  (`crates/game/tests/rocket_launch_ground_truth.rs`, disc-backed). Evidence and the arm's
+  (`crates/raceplay/tests/rocket_launch_ground_truth.rs`, disc-backed). Evidence and the arm's
   read in `rocket-visuals.md`'s 2026-10-01 second-pass section. **Still open**: (a) the
   original's first two or three updates are a probe miss (`Collision_SweepSegment` returns
   `0x7f` with the floor four units below, so the rocket flies 166.67 u/s and falls for them);

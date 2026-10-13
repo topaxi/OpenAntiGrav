@@ -70,7 +70,7 @@ Takes `(locatorOrObject, kind, ...)` and gates the whole body on a flag byte
   function needed no per-function TOC correction) to `0x008b3f6c`, which holds
   `0x007a1c68`, which is the string **`WO_SHIP_SPARK_DAMAGE_WEAPON`** -
   **not previously recorded anywhere in this repository.** It is not in
-  `crates/game/tests/psys_inventory_ground_truth.rs`'s HD notes, not in
+  `crates/raceplay/tests/psys_inventory_ground_truth.rs`'s HD notes, not in
   `hd-status.md`, not in the picked handover thread. Whether it is a `.pob`
   the disc actually ships (as opposed to a name only the executable
   references) is unchecked here - see Open.

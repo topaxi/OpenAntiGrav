@@ -15,7 +15,7 @@ forward 6 -> 8, `ai_dekonstruct_symptoms_ground_truth` 05 FLASH 1 -> 3) were
 attributed in lane `ai-loss-split`: 7 of the 10 extra deaths are weapon-dominant,
 3 wall-dominant at the old scrape spots, deaths over 160 more races 110 -> 110,
 a Cannon hit applies no impulse, and no AI change is owed. The ceilings stay.
-`crates/game/tests/ai_loss_attribution_board.rs` is the diagnostic
+`crates/raceplay/tests/ai_loss_attribution_board.rs` is the diagnostic
 (`OAG_SWEEP=1`, release, `--ignored --nocapture`).
 
 **2026-10-08 follow-up (lane `projectile-tilt`).** The maintainer asked whether

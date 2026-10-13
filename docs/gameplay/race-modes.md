@@ -339,7 +339,7 @@ type with two variants and no third "unknown" state. Pulse derives the Zone name
 from the race one; Pure and HD cannot, because their discs author no mapping
 between the two sets - asking what Vineta K's Zone variant is has no answer in
 the data. Evidence and per-claim confidence: [track](../formats/track.md), and
-the sweep is `crates/game/tests/zone_ground_truth.rs`.
+the sweep is `crates/raceplay/tests/zone_ground_truth.rs`.
 
 **Sixteen of Pulse's twenty-four circuits can be raced in Zone**, declared by
 `availableInZone="true"` and confirmed by probing all 24 by name - the attribute
@@ -899,7 +899,7 @@ Still open:
 
 The original's decision is `WeaponAi_DecideFireOrAbsorb` ([weapon-ai.md](../ghidra/functions/psp-pulse-usa/weapon-ai.md));
 its fire half is ported (below), its absorb half is not. Guarded by
-`crates/game/tests/eliminator_finish_ground_truth.rs`.
+`crates/raceplay/tests/eliminator_finish_ground_truth.rs`.
 
 ### Steering for weapon pads (2026-10-03)
 
@@ -997,7 +997,7 @@ once it is nearer than the steering lookahead (capped at three times; with 150/4
 
 The gap to the original's 85 s that remained here was the fire decision, ported in the next
 section. Guarded by
-`crates/game/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
+`crates/raceplay/tests/eliminator_pads_ground_truth.rs` (pickups per empty craft-minute over seeds 1
 to 6, one game-minute each: 7.20 with the steering, 5.48 without).
 
 ### Firing on the original's law (2026-10-03)
@@ -1028,7 +1028,7 @@ Eliminator row (see the next section). So the maintainer's rule (an unmeasured t
 law) needed no restated table: **every title runs `oag_ai::weapon_ai` on its own odds, inherited
 from Pulse and unmeasured on HD, Omega and 2048**, with no confidence score for those three. HD's
 and Omega's decision code is unread.
-`crates/game/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
+`crates/raceplay/tests/fire_law_inherit_ground_truth.rs` pins that a race on each of the three loads
 the table and runs `FireLaw::Original`. A title with no table would still have to run Pulse's
 odds; that case does not exist, so no cross-title read or restated constant was built for it.
 
@@ -1117,7 +1117,7 @@ spends per craft-minute moved from 0.097 to 0.122 (Rocket), 0.076 to 0.093 (Miss
 0.040 (LeachBeam) and 0.026 to 0.036 (Plasma), and a forward weapon is held 27 to 57 s rather than
 73 to 115 s. Shield per lap at the line 67.4 to 70.4, at the end of the run 49.7 to 52.4.
 
-Guarded by `crates/game/tests/opponent_fire_ground_truth.rs` (the law is the one a Pulse race
+Guarded by `crates/raceplay/tests/opponent_fire_ground_truth.rs` (the law is the one a Pulse race
 runs, and on seeds 1 and 2 a forward weapon is held less than half as long on it as on the old
 rule) and the `oag_ai::weapon_ai` unit tests.
 

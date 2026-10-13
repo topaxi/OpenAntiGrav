@@ -776,7 +776,7 @@ pub(super) fn zone_circuit_miss(
 /// `Zone_01`. An earlier draft of this line interpolated that helper and told
 /// every Pulse player that `Assegai\handlingstats.xml` was a ZoneMode file,
 /// which it is not. Naming the directory would need a fifth title field for
-/// something nothing reads; `crates/game/tests/zone_ground_truth.rs` carries
+/// something nothing reads; `crates/raceplay/tests/zone_ground_truth.rs` carries
 /// the three spellings as the evidence instead. `oag_gameplay::handling_for` needs a class
 /// and panics without one, which is the whole reason it is unread - see
 /// [`oag_title::ZoneCraft`] for what the shipped file does carry and why the

@@ -583,7 +583,7 @@ stuck at zero (`0x00`, `0x01`, `0x02` and `0x20` all appear across the
 sample, so the byte is genuinely varying and being read correctly), the
 `0x10` bit specifically just never comes up set in any batch checked. Pinned
 as a permanent regression check:
-`crates/game/tests/boost_plume_ground_truth.rs`'s
+`crates/raceplay/tests/boost_plume_ground_truth.rs`'s
 `every_psp_teams_boost_plume_batches_are_additive_blend` (all 8 PSP teams).
 
 **A caveat this measurement cannot resolve on its own**: a bit that is
@@ -819,7 +819,7 @@ is precisely the one column where the `v` alternation vanishes. So sampling the
 authored UVs returns a constant white and the plume collapses to flat vertex
 colour; every bit of the plume's structure comes from uvgen 2 replacing those
 coordinates. Pinned across all eight PSP teams by
-`crates/game/tests/boost_plume_ground_truth.rs`.
+`crates/raceplay/tests/boost_plume_ground_truth.rs`.
 
 ### The uvgen-2 equation, and which space each term is in
 

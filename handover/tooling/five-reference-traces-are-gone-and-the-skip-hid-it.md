@@ -113,7 +113,7 @@ status` showed it as a plain new file rather than ignored). Its provenance -
 which workstation, which recapture run - was not recorded by whoever produced
 it; this thread only confirms what the file itself demonstrates.
 
-Header matches `crates/game/tests/maglock_ground_truth.rs`'s expectations
+Header matches `crates/raceplay/tests/maglock_ground_truth.rs`'s expectations
 exactly (`omega_x`, `right_x`/`up_x`/`fwd_x`, `pos_x`, `vel_x`, `dt`), 3,140
 data rows. Verified with `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p
 oag-game --run-ignored all -E 'test(/^maglock_ground_truth::/)'`: both tests

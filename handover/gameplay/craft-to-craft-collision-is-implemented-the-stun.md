@@ -64,7 +64,7 @@ algorithm, found by sweeping poses rather than hand-picked. Confidence on
 `names.tsv` - a live measurement on the exact predicted chain, not an
 inference from static reading. **The correction has one traced consequence
 outside this crate**: it moves a full-grid race's trajectories enough to fail
-`crates/game/tests/opponent_weapons_ground_truth.rs`'s
+`crates/raceplay/tests/opponent_weapons_ground_truth.rs`'s
 `a_field_racing_with_real_pads_does_not_mine_itself_to_death`. Instrumented
 directly rather than guessed at: craft-craft contact never charges the
 shield pool in this engine at all (only wall scrape and weapon blasts do), and
@@ -78,7 +78,7 @@ in this specific race. Full numbers were in the thread that owned this finding
 (deleted 2026-09-10 as fully closed - both its questions, whether the kill
 reflects anything systematic and whether the single-seed regression floor was
 the right shape, were answered by `41ee19c2`'s multi-seed sweep, now pinned in
-`crates/game/tests/opponent_weapons_ground_truth.rs`'s own doc comment). Read
+`crates/raceplay/tests/opponent_weapons_ground_truth.rs`'s own doc comment). Read
 as a butterfly-effect consequence of a physics fix
 verified correct at instruction level, not a demonstrated bug here or in
 `crates/ai` - left for that test's and that crate's owners to weigh rather

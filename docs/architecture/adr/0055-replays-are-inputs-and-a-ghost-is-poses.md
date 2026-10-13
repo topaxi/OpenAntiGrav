@@ -88,7 +88,7 @@ section does not break older readers.
 
 **Sizes, measured.** A held throttle for 3,000 ticks encodes in under 40
 bytes (`codec::tests`): that is the keyboard end. The analog end is measured
-by `crates/game/tests/replay_ground_truth.rs`, which flies a Time Trial
+by `crates/raceplay/tests/replay_ground_truth.rs`, which flies a Time Trial
 through a pad whose stick moves nearly every tick. Over 7,200 ticks (two
 minutes) the input stream came to **6.3 to 6.9 bytes a tick** on all four
 titles: 48,818 bytes on Pulse, 45,070 on Pure, 49,594 on HD and 46,018 on
@@ -206,7 +206,7 @@ The ghost is not a ninth ship, and it does not occupy a grid slot. It lives
 in `oag_raceplay`, beside `RaceView`, never in `RaceSim` or `World`. It
 collides with nothing, and it cannot change a state hash. A race with a ghost
 hashes exactly like the same race without one, tick for tick.
-`crates/game/tests/replay_ground_truth.rs` asserts that on a real circuit.
+`crates/raceplay/tests/replay_ground_truth.rs` asserts that on a real circuit.
 Recording is optional state on the same side, off by default, so every
 existing test, trace and golden hash runs the same code path as before.
 

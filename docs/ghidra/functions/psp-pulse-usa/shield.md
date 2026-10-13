@@ -1226,7 +1226,7 @@ void Ship_PlayAbsorbFeedback(Entity *e) {                          // 0x08840640
 
 The port is `oag_raceplay::absorb::PULSE_ABSORB_BURST`. It plays one
 `WO_WEAPON_ABSORB` per locator through `psys::Stage::play_riding`, follows
-the locator while the emitters run, and lets go after. `crates/game/tests/absorb_ground_truth.rs` pins six
+the locator while the emitters run, and lets go after. `crates/raceplay/tests/absorb_ground_truth.rs` pins six
 bursts on Assegai, the second starting a tenth of a second in. Pure's twin
 (`FUN_08925e20`) loops eight times, per
 [`psp-pure-usa/rocket-and-collision-fx.md`](../psp-pure-usa/rocket-and-collision-fx.md).

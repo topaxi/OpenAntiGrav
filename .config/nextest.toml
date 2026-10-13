@@ -46,7 +46,7 @@ priority = 100
 # this, so no extra tool (`cargo-test-changed`, `cargo-difftests`) is needed:
 #
 #   cargo nextest run -E 'rdeps(oag-rcs)'          # oag-rcs and its dependents
-#   cargo nextest run -p oag-game ai_roll_ground_truth::  # one ground-truth file
+#   cargo nextest run -p oag-raceplay ai_roll_ground_truth::  # one ground-truth file
 #
 # A member's gate is a selection too, since 2026-10-07: `just gate-affected` and
 # `just test-data-affected` hand `cargo nextest` the packages

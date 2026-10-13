@@ -24,7 +24,7 @@ RECORDS) are the first such rows.
    (`Title::main_menu`) lists the rows the disc authors, by `idstring`, in the disc's
    order, with the `menu.toml` row each opens (`builds`) or `None` where nothing is
    built behind it. Ground truth reads every pressing and every archive that carries the
-   file and compares the whole list (`crates/game/tests/main_menu_ground_truth.rs`).
+   file and compares the whole list (`crates/raceplay/tests/main_menu_ground_truth.rs`).
 2. **Every row has a stable `id`.** `menu.toml`'s `main` page holds only the rows an
    original menu can have (`campaign`, `racebox`, `options`, `records`); a title shows the
    ones it `builds`. Ids are ours, never positions.

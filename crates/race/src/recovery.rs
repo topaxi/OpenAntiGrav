@@ -122,7 +122,7 @@ pub const RESCUE_TICKS: u32 = 90;
 /// rather than checked until this landed: `06_Track`, `14_Track` and `16_Track` -
 /// including the default circuit, and including the one the failure was reported
 /// on - author **no `Reset` geometry at all**, in either direction. See
-/// `crates/game/tests/off_track_rescue_ground_truth.rs`.
+/// `crates/raceplay/tests/off_track_rescue_ground_truth.rs`.
 ///
 /// It also sits just inside the one number in this crate that already means "too
 /// far off the spline to be trusted": `visibility::OFF_TRACK_HALF_WIDTHS`, three

@@ -579,7 +579,7 @@ three, `WO_DAMAGE_MILD` and `WO_DEBRIS_SPARKS` in two), but two are a second
 file **inside `DATA02` alone** whose internal name was never changed off the
 one it was copied from - `wo_ship_explosion_lightshafts.pob` still names
 itself `WO_SHIP_EXPLOSION`, and `stesparkstest.pob` still names itself
-`WO_SHIP_COLL_SPARK_DAMAGE`. `crates/game/tests/psys_inventory_ground_truth.rs`'s
+`WO_SHIP_COLL_SPARK_DAMAGE`. `crates/raceplay/tests/psys_inventory_ground_truth.rs`'s
 `mod hd` checks the distinct count against the disc as its own tripwire,
 separately from this corpus check, and prints which names those extra blobs
 belong to.
@@ -651,7 +651,7 @@ handover thread's Next Steps) rather than settled.
 
 Six of the 67 unwired names (82 total minus the 15 `RACE_EFFECTS` wires)
 this project owes a bucketing pass over are done - see
-`crates/game/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment;
+`crates/raceplay/tests/psys_inventory_ground_truth.rs`'s `mod hd` doc comment;
 the other 61 are unread.
 
 Every one of those 166 records passes the same invariants: the root's name

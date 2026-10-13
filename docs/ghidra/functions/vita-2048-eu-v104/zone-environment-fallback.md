@@ -638,7 +638,7 @@ race, since the last record's threshold is `0`.
 
 `oag_title::ZoneStages`, `oag_2048::race::ZONE_STAGES` and
 `ZoneGrade::show_zone`; checked against the real Vita package in
-`crates/game/tests/zone_grade_ground_truth.rs`.
+`crates/raceplay/tests/zone_grade_ground_truth.rs`.
 
 ## 2026-08-30, a sixth pass: 2048's own effectSettings schema registrar
 

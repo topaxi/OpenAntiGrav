@@ -2,7 +2,7 @@
 
 2026-10-12, `orig-ai-omega`. Evidence: [ps4-omega-eu/ai-controls.md](../../docs/ghidra/functions/ps4-omega-eu/ai-controls.md)
 (static map, both lineages, the coin), [gameplay/ai.md](../../docs/gameplay/ai.md),
-`crates/game/tests/omega_original_ai_ground_truth.rs`.
+`crates/raceplay/tests/omega_original_ai_ground_truth.rs`.
 
 ## Landed
 

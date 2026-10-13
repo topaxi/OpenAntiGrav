@@ -625,7 +625,7 @@ view matrix is the rigid inverse of `camera1`'s world transform:
 Every advert a Pulse manifest names carries exactly one camera with a one-key
 perspective curve: 19 distinct models over the 11 circuits that author a
 manifest, `(fov, aspect)` in `{(45.00, 0.5), (56.60, 2.0), (68.88, 2.0)}`
-(`crates/game/tests/billboard_adverts_ground_truth.rs`). The aspect-0.5 ones are
+(`crates/raceplay/tests/billboard_adverts_ground_truth.rs`). The aspect-0.5 ones are
 the portrait adverts.
 
 ### 3. The constructor's `.vex` arm builds exactly that (85, decompile)
@@ -740,7 +740,7 @@ Slot 3's own object names `TRIAKIS_PORTRAIT_01.mb` at `+0x2f0`, and slots 1, 2 a
 to 7 name their manifest models the same way. **Not seen**: the rotation over more
 than one draw (read from the code, 80), and a circuit with several colour slots,
 which is what De Konstruct (`05_Track`, blue, blue, grey, yellow) would show.
-`crates/game/tests/billboard_adverts_ground_truth.rs` pins the order against the
+`crates/raceplay/tests/billboard_adverts_ground_truth.rs` pins the order against the
 capture.
 
 Implemented as `oag_tables::billboard_pool` and wired in `oag_raceplay::adverts`.

@@ -277,7 +277,7 @@ load, `(882, 480)` on the mode card and again on the intro to start.
 `oag_2048::race::ORIGINAL_DRIVER` carries HD's four branches and 2048's four laws;
 `oag_2048::race::EVENT_AI_DEFAULTS` (an `oag_title::original_driver::EventAi`) resolves an event's skill, its two AI skills and the level
 over the constructor's defaults; a 2048 campaign event flies the original field
-(`RaceDefaults::original_opponent`). `crates/game/tests/vita_2048_original_ai_ground_truth.rs`
+(`RaceDefaults::original_opponent`). `crates/raceplay/tests/vita_2048_original_ai_ground_truth.rs`
 holds: the event's AI as read live, the reference racer's `63.0` and `74.0`, more than
 one throttle moving per tick, the `*2048.xml` set equal to the base set (all five
 classes; Super Phantom differs only in whitespace), and the field finishing one race

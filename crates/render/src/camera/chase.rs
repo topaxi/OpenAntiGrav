@@ -92,7 +92,7 @@
 //! not a shape that survives a wrong reading, and it simultaneously confirms the
 //! `lookat_*`/`pos_*` sign conventions, the first-order lag, the craft-frame
 //! spring split and where `oag_physics::hover::TARGET_GLOBAL_SCALE` belongs.
-//! `crates/game/tests/chase_camera_ground_truth.rs` is that comparison, kept as a
+//! `crates/raceplay/tests/chase_camera_ground_truth.rs` is that comparison, kept as a
 //! test rather than as a number in a comment.
 //!
 //! The fourth row is the one that was not expected, and it is why

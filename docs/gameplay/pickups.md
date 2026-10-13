@@ -432,7 +432,7 @@ wrong for at least eight of them.
 **`Shuriken` is the gap this makes visible rather than papers over.** It is
 in `IMPLEMENTED` and has no icon on Pure's disc - the title predates the
 weapon - so a Pure race that hands one out draws the backdrop grid and no
-icon inside it, which is what `crates/game/tests/pickup_icon_ground_truth.rs`
+icon inside it, which is what `crates/raceplay/tests/pickup_icon_ground_truth.rs`
 and `oag_hud::pickup_model_tests` both pin rather than leave to chance.
 
 Verified two ways: a ground-truth test against `pure-psp-usa.chd` confirms
@@ -627,7 +627,7 @@ alone: `Shuriken` is on it, and `SingleRace` - the only mode with weapon pads
 armed at all, per the table above - loads `RACE_ENTRY`, where `Shuriken`'s
 weight is zero in every class. So a `SingleRace` inventory slot can hold a
 Shuriken (it can be thrown once granted by a test or a script setting it
-directly - see `crates/game/tests/shuriken_ground_truth.rs`) but a weapon pad
+directly - see `crates/raceplay/tests/shuriken_ground_truth.rs`) but a weapon pad
 in this build can never *hand out* one: not because the pool excludes it, but
 because the odds do. **`Shuriken`'s presence in `IMPLEMENTED` was correct-but-unreachable until
 2026-09-08, when `Mode::Eliminator` landed and closed the gap this section
@@ -643,7 +643,7 @@ human="8"` (PSP), and a `SingleRace` pad still cannot. The reason it was
 held back - "a field the craft is in" with nothing to attach it to - was a
 misreading; see [repulser.md](../ghidra/functions/psp-pulse-usa/repulser.md).
 
-`crates/game/tests/shuriken_ground_truth.rs`'s own ground-truth test moved
+`crates/raceplay/tests/shuriken_ground_truth.rs`'s own ground-truth test moved
 onto `Mode::Eliminator` the same day, for the reason above - it is the mode
 the weapon is actually reachable in, and its own single remaining red
 (a thrown blade detonating on a nearby grid-mate rather than flying free, see

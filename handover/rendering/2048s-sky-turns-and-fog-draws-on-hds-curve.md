@@ -7,7 +7,7 @@ authored `Lighting.Sky rotation` and draw fog from the authored
 [envsettings.md](../../docs/formats/envsettings.md),
 [2048-status.md](../../docs/formats/2048-status.md),
 [omega-status.md](../../docs/formats/omega-status.md) and
-`crates/game/tests/psp2_sky_fog_ground_truth.rs` (two tests on each of the ten
+`crates/raceplay/tests/psp2_sky_fog_ground_truth.rs` (two tests on each of the ten
 base circuits). Omega: **ported**, same code branch, identical fog bytes, its
 own six-face sky cube and rotation.
 

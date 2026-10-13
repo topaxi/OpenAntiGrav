@@ -2502,7 +2502,7 @@ mag-floor probe, the two-sample axis blend with its fallback, the reposition, th
 velocity projection and the basis rewrite in the binary's own operation order.
 Nothing goes through an accumulator.
 
-`crates/game/tests/maglock_ground_truth.rs` then measures it against
+`crates/raceplay/tests/maglock_ground_truth.rs` then measures it against
 `data/traces/talons-junction-time-trial-lap-omega.csv`, one tick at a time from
 each recorded pose, over the inverted stretch. On the USA PSP disc:
 

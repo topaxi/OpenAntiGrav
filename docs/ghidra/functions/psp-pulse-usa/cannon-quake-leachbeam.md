@@ -1442,7 +1442,7 @@ road.** Barrier and bank spans author a "down" that is nearly horizontal -
 down exactly as their data says; the direction is always taken in the batch's
 own space, before its node's transform. (An earlier draft of this paragraph
 guessed the node transform flips those; `level_road_rises_in_world_space` in
-`crates/game/tests/quake_ripple_ground_truth.rs` shows it does not - only
+`crates/raceplay/tests/quake_ripple_ground_truth.rs` shows it does not - only
 spans authored level are held to rising.)
 
 The write is **incremental and exact**: each frame subtracts last frame's
@@ -1605,7 +1605,7 @@ renderer exists:
 - `oag_raceplay::SpanPlaces` maps every vertex onto the course through its
   path's own `t` - the control points' authored `progress`, now read into
   `oag_vex::track::SplinePoint::progress` - so that neighbouring spans meet
-  without a step. `crates/game/tests/quake_ripple_ground_truth.rs` holds every
+  without a step. `crates/raceplay/tests/quake_ripple_ground_truth.rs` holds every
   road vertex to a median 0.37 and p99 under 5.1 units of where it really is
   on the course, on all 24 files, and every seam in the table - driven paths
   and split branches alike - to 0.00 at p99 and 2.34 units at worst (at a

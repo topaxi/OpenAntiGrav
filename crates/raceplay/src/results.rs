@@ -262,7 +262,7 @@ impl Race {
                     finish_tick: ship.standing.finish_tick.map(oag_race::race_clock_ticks),
                     // The craft's own clock rather than `RaceState`'s, which
                     // only times slot 0 - the two agree there, which is what
-                    // `crates/game/tests/lap_times_ground_truth.rs` asserts.
+                    // `crates/raceplay/tests/lap_times_ground_truth.rs` asserts.
                     best_lap_ticks: ship.standing.best_lap_ticks,
                 }
             })

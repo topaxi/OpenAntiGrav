@@ -113,7 +113,7 @@ claim rests on the PS4 and Pulse (85).
 
 All 39 `data/ships/<hull>/locators.vex` carry exactly one `arc_anchor_point` node (class
 id `110`, on the centreline), and **match the Omega copies hull for hull**; the table and the
-`#[ignore]`d test (`crates/game/tests/magstrip_anchor_ground_truth.rs`) are on the Omega
+`#[ignore]`d test (`crates/raceplay/tests/magstrip_anchor_ground_truth.rs`) are on the Omega
 page.
 
 ## 2026-10-05, magstrip-hd-measure lane: HD's own arc pool, read and measured live

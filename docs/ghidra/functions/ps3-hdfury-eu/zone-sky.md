@@ -143,7 +143,7 @@ form of the
 maintainer's observation. It is not itself a flat fill: decoded, five of its
 six faces carry 445-628 distinct colours in the cyan-teal the Zone palette
 works in, and only face 3 (the nadir) is near-flat at 14. Asserted against the
-disc by `crates/game/tests/zone_sky_ground_truth.rs`, which races the *same*
+disc by `crates/raceplay/tests/zone_sky_ground_truth.rs`, which races the *same*
 circuit in both modes so the mode is the only variable, and leans on the size
 rather than on a picture comparison: **no `sky.gtf` on this disc is 64x64**, so
 a load that failed to swap cannot satisfy it. **Circuit skies are not all one

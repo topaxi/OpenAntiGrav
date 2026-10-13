@@ -437,7 +437,7 @@ alignment is read from the offsets, not from a store (65).
 
 ### `arc_anchor_point` census: every hull, both titles (conf 90)
 
-`crates/game/tests/magstrip_anchor_ground_truth.rs` (`#[ignore]`d) reads every `Locators.vex`
+`crates/raceplay/tests/magstrip_anchor_ground_truth.rs` (`#[ignore]`d) reads every `Locators.vex`
 through `oag_assets::Archives` and `oag_vex::vex::matrix::named_class_world_transforms`.
 HD: 39 copies (`data/ships/<hull>/locators.vex`); Omega: 38 copies
 (`Data/art/published/hdships/<hull>/Locators.vex`). **Every file carries exactly one node

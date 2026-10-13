@@ -265,7 +265,7 @@ names a fourth, harder setting either
 (`docs/ghidra/functions/ps3-hdfury-eu/race-campaign.md`'s `HARD ≡ ELITE`
 finding). Measured on the real disc, same seed, opponents alone on the
 circuit: `16_Track`'s `grid0_2_1` best-laps 51.3s at Easy and 43.0s at
-Hard - `crates/game/tests/campaign_skill_scale_ground_truth.rs`.
+Hard - `crates/raceplay/tests/campaign_skill_scale_ground_truth.rs`.
 
 Alongside them sit `AIPackSwapping1..3`, one per skill level, with
 `numAIPositionSwaps`, `numIntermediatePositions` and `intermediateOffsetSize`.
@@ -734,7 +734,7 @@ looped 129 times because this engine's reset put it back over the gap. That
 is fixed: see the reset comparison below.
 
 **The pad, measured in this engine (2026-10-13).**
-`the_pad_before_the_jump` (`crates/game/tests/novice_jump_ground_truth.rs`)
+`the_pad_before_the_jump` (`crates/raceplay/tests/novice_jump_ground_truth.rs`)
 covers the same parked-player field (seed 1, 9,000 ticks), every crossing of
 row 3073:
 - Pad 6's centre sits at lateral -6.42 from our line along our spline's
@@ -841,7 +841,7 @@ port).**
 
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 
-`the_jump_flown_tick_by_tick` in `crates/game/tests/novice_jump_ground_truth.rs`
+`the_jump_flown_tick_by_tick` in `crates/raceplay/tests/novice_jump_ground_truth.rs`
 logs every tick of each craft's first pass over line indices 10-70:
 - velocity along the line's tangent, sideways and vertically;
 - the forward-axis speed the earlier passes logged;
@@ -962,7 +962,7 @@ the split-screen multiplier, several humans' reference craft. HD's campaign
 skill comes off the circuit's own `stats.xml` in HD's archives, as the
 executable's `AI_ResolveSkillScale` reads it: the Fury cell `grid8_3_1` gives
 `-0.07` at Easy and `3.48` at Hard, the values the capture logged. On the
-disc (`crates/game/tests/hd_original_ai_ground_truth.rs`) the law reads the
+disc (`crates/raceplay/tests/hd_original_ai_ground_truth.rs`) the law reads the
 capture's `54.51` (the reference racer), `81.21` and `27.81` (the stops at
 Easy) and `104.58` (the upper stop at Hard), and the field laps Talon's
 Junction with no respawn and no wall contact. Omega flies the same laws in its
@@ -1038,7 +1038,7 @@ read its spread from the tick before. Ported as `oag_ai::original::Laws` fields 
 `event_ring_rate`, `coin_ordered_search`, `preferred_follows_choice`) carried by
 `oag_2048::race::ORIGINAL_DRIVER`, whose `event_ai` defaults
 (`oag_title::original_driver::EventAi`) resolve an event's values; **2048's campaign flies it**. On the disc
-(`crates/game/tests/vita_2048_original_ai_ground_truth.rs`) the reference racer reads
+(`crates/raceplay/tests/vita_2048_original_ai_ground_truth.rs`) the reference racer reads
 the capture's `63.0` and `74.0`, and the field finishes a race on nine of the ten
 circuits with the player parked (Arena with up to three respawns a craft). Sol loops
 every craft through respawns under this project's driver too; Super Phantom events
@@ -1069,7 +1069,7 @@ and `20_Track` (Amphiseum reversed), the base `AIRaceStats` set, ring rate `0.00
 One law is Omega's own: the lane search's coin (2048's search order and its
 `1/200` redraw), drawn and read whatever the lineage, where HD has none. It is
 `oag_omega::race::ORIGINAL_DRIVER`, and **Omega's campaign flies it**. On the disc
-(`crates/game/tests/omega_original_ai_ground_truth.rs`) the field finishes on
+(`crates/raceplay/tests/omega_original_ai_ground_truth.rs`) the field finishes on
 Vineta K, Talon's Junction, Ubermall (Phantom) and Amphiseum reversed with the
 player parked and no respawn, and a cell's skill comes off its circuit's
 `stats.xml` as HD's does. PS4 `rand()`'s width is chosen (HD's 30 bits), not
@@ -1283,7 +1283,7 @@ putting its own peak thirty samples early, so the yaw limit above was being
 applied to a curvature the driver could not see.
 
 `Tuning::curvature_span` caps the chord at **11 units**, measured by
-`sweep_curvature_span` in `crates/game/tests/ai_span_sweep.rs`; the field's own
+`sweep_curvature_span` in `crates/raceplay/tests/ai_span_sweep.rs`; the field's own
 docs carry the table and the criterion. Shield retained is the metric rather
 than lap time, because the failure is a craft that laps cleanly *while*
 grinding down a wall.
@@ -1792,7 +1792,7 @@ chance, a *raised* floor and a *longer* minimum airborne time.
 #### What it costs on the disc, measured
 
 One craft alone, 18,000 ticks, every forward circuit, each cell **arms /
-shield spent** out of a 95-unit pool. `crates/game/tests/ai_roll_ground_truth.rs`,
+shield spent** out of a 95-unit pool. `crates/raceplay/tests/ai_roll_ground_truth.rs`,
 `OAG_SWEEP=1`. **Re-measured 2026-09-07**, after `Tuning::curvature_span` and
 `Tuning::look_speed` moved (see the S-bend section above) - the original
 2026-09-06 table is superseded, not merely stale, since both knobs change how
@@ -1849,7 +1849,7 @@ mechanic fires in a real race** - see the full-grid measurement below.
 
 #### Does it fire on a full grid, not just in isolation?
 
-Everything above isolates one craft. `crates/game/tests/ai_roll_ground_truth.rs`'s
+Everything above isolates one craft. `crates/raceplay/tests/ai_roll_ground_truth.rs`'s
 `every_tier_of_a_full_grid_arms_no_fewer_rolls_than_the_one_below_*` per-seed tests and
 `an_ace_pilot_rolls_more_than_a_novice_pilot_in_the_same_race` run `09_Track` -
 the worst-case circuit above - with nothing switched off: seven opponents,
@@ -1908,7 +1908,7 @@ and that was not bisected. What follows is the record of the original chase.
 Flagged and left for later two sections up: a lone Novice craft respawns
 **221 to 349 times** on `13_Track` and never gets past lap 1-3 of 4. Followed
 up 2026-09-07, one circuit and one tier at a time, with
-`crates/game/tests/novice_respawn_ground_truth.rs`.
+`crates/raceplay/tests/novice_respawn_ground_truth.rs`.
 
 **It is one location, not many.** Bucketing every respawn's driver-line-index
 by 25-sample ranges, all 347 of 347 respawns in a fresh 18,000-tick run fired
@@ -2054,7 +2054,7 @@ since it trades against the grip calibration above.
 
 ### The jump-clearing failure: the mechanism, a real bug that turned out not to be it, and why this is where the chase stops
 
-Followed up further, same day, with `crates/game/tests/novice_jump_ground_truth.rs`.
+Followed up further, same day, with `crates/raceplay/tests/novice_jump_ground_truth.rs`.
 Three things came out of it: what `grip_believed`'s cliff is actually made of,
 a genuine bug the chase turned up that does **not** explain it (measured, not
 assumed - see below), and, once both were in hand, a precise answer to
@@ -2581,7 +2581,7 @@ lap, because that circuit's line runs above its own collision surface and the
 craft beaches. That is the open thread the section below records, not a gap in
 this one.
 
-`crates/game/tests/off_track_rescue_ground_truth.rs` carries all of it against
+`crates/raceplay/tests/off_track_rescue_ground_truth.rs` carries all of it against
 the disc; `race/tests/respawn.rs` pins the trigger, the control and the latch
 without needing one.
 
@@ -3171,7 +3171,7 @@ is its regression: on Talon's Junction a novice laps in 53.8s and an ace in
 42.3s.
 
 That single-track, single-class regression is now a board-wide one:
-`crates/game/tests/ai_clean_lap_gate.rs` freezes all 12 circuits x 4 speed
+`crates/raceplay/tests/ai_clean_lap_gate.rs` freezes all 12 circuits x 4 speed
 classes as 48 individual tests, each checking status (clean lap / no clean
 lap / eliminated), clean-lap time and wall-contact ticks against a committed
 baseline. It runs under `just test-data`, not `just` - see the file's own
@@ -3779,7 +3779,7 @@ the closed-loop harness, a replay, `oag-trace` - still gets the competent
 driver it always got.
 
 **Measured, on the five-seed harness** in
-`crates/game/tests/difficulty_ground_truth.rs`, leader distance averaged over
+`crates/raceplay/tests/difficulty_ground_truth.rs`, leader distance averaged over
 five seeds, before and after:
 
 | level | before | after | change |
@@ -3930,7 +3930,7 @@ taken was at `VENOM`**, and nothing in the harness measured wall contact at all
 standard the board is written against is the user's own: an Ace should lap
 every circuit, in every class, alone, without touching a wall.
 
-The harness is `crates/game/tests/ai_clean_lap_board.rs` - `#[ignore]`d,
+The harness is `crates/raceplay/tests/ai_clean_lap_board.rs` - `#[ignore]`d,
 `OAG_SWEEP`-gated, printing rather than asserting, for the reason `sweep_grip`
 and `sweep_curvature_span` both give. Forty-eight rows of five simulated
 minutes is 42 s of wall clock in release.
@@ -4340,7 +4340,7 @@ original timing there is.
 
 ### Plans that do not verify
 
-`crates/game/tests/speed_plan_ground_truth.rs` pins the exact set, at the
+`crates/raceplay/tests/speed_plan_ground_truth.rs` pins the exact set, at the
 title-default team: **91 of 96** layout-class plans verify clean (87 until
 `05_Track` forward's four did, [below](#de-konstruct-black-the-first-jump-is-a-magstrip)).
 Not: `06_Track` VENOM and RAPIER
@@ -4734,7 +4734,7 @@ now reads `1.5` rad/s, the yaw rate RPCS3 measures
 ([hd-handling-ground-truth.md](../physics/hd-handling-ground-truth.md)), where it read `1.667`.
 
 All movement comes from the plan simulating HD's own hover and steering. Measured by
-`crates/game/tests/hd_ai_craft_laws_ground_truth.rs` (HD/Fury EU, Venom, Ace, Single Race with
+`crates/raceplay/tests/hd_ai_craft_laws_ground_truth.rs` (HD/Fury EU, Venom, Ace, Single Race with
 weapons off, 12,000 ticks). Shield starts at 95. The only shield an opponent loses off a wall is
 a barrel roll's cost, 14.25 each (`roll_cost` 15 % of 95, `oag_physics::barrel_roll::arm`).
 
@@ -5015,7 +5015,7 @@ See [track.md](../formats/track.md#white-and-black). The maintainer's report ("t
 AI really struggles with de Konstruct Black") was therefore about the forward
 `05_Track`, which is the worse field measured below.
 
-**The report, measured** (`crates/game/tests/ai_dekonstruct_black_board.rs`,
+**The report, measured** (`crates/raceplay/tests/ai_dekonstruct_black_board.rs`,
 `OAG_SWEEP=1`: seven Aces plus the parked player slot, three seeds, 21 craft per
 cell, 18,000 ticks, weapons as the mode ships them). Craft **destroyed** of 21:
 
@@ -5085,7 +5085,7 @@ are of our own physics on the disc's own collision.
 `05_Track` forward's speed plan failed at all four classes, and the search
 reported walls at line samples 424-637 that the craft "touches at 15 u/s too".
 A per-tick probe of the plan's own drive (`oag_ai::plan::probe`, printed by
-`crates/game/tests/ai_plan_probe.rs`) showed the craft **50-77 units below the
+`crates/raceplay/tests/ai_plan_probe.rs`) showed the craft **50-77 units below the
 line** from sample 200 on. Casting straight down from the line finds the road
 3 units under it everywhere from 216, and a second floor 26-81 units further
 down from 216 to 576; casting up from the craft finds road 25-75 units overhead.
@@ -5260,7 +5260,7 @@ measured against the original).
 ### `look_speed`
 
 Swept by `sweep_look_speed` and `sweep_rate_gain` in
-`crates/game/tests/ai_look_sweep.rs`: a lone Ace, twelve forward circuits,
+`crates/raceplay/tests/ai_look_sweep.rs`: a lone Ace, twelve forward circuits,
 18,000 ticks each, against the two committed field fixtures (tuned through
 `Difficulty::tune` as `Race::start` does). `rate_gain` was swept first and
 ruled out: at `10.0` and `20.0` the loop is already saturated at full lock, and
@@ -5282,7 +5282,7 @@ columns (`13`, `07`, total) reproduce to the digit: a lone craft never touches
 the narrowphase. The two field columns are a single seed (`SEED = 1`) and moved:
 at `0.30` the corrected contact tie-break seats an opponent inside a Plasma
 blast, so `worst` reads `0.00`. Over 16 seeds
-(`crates/game/tests/weapon_floor_sweep.rs`, `sweep_worst_shield_over_seeds` and
+(`crates/raceplay/tests/weapon_floor_sweep.rs`, `sweep_worst_shield_over_seeds` and
 `sweep_lap_completion_over_seeds`):
 
 | value | mean-of-means shield | mean-of-worsts | seeds with a depleted craft | seeds with short opponent laps |
@@ -5364,7 +5364,7 @@ corner is averaged with the straights either side: `07_Track`'s tightest arc
 (about 50 units) reads 0.0155-0.0186 against a local 0.047, 2.5-3x under, with
 its peak thirty samples early.
 
-`sweep_curvature_span` in `crates/game/tests/ai_span_sweep.rs` reports two
+`sweep_curvature_span` in `crates/raceplay/tests/ai_span_sweep.rs` reports two
 boards. **Solo**: a lone Ace over twelve forward circuits, 18,000 ticks each,
 shield retained rather than lap time (`07_Track` banks 49.8 s while shedding
 34-35 shield on a wall). **Field**: the two committed field fixtures, with

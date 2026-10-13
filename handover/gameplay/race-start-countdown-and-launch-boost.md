@@ -670,7 +670,7 @@ In short:
   once placed they land over the open road as a stray ring/logo shape, a
   byte-for-byte match to the report. `oag_render::gantry::strip_fx350_art`
   drops every draw bound to that texture; fixed and tested
-  (`crates/game/tests/start_gantry_hd_mount_ground_truth.rs`). **The "no
+  (`crates/raceplay/tests/start_gantry_hd_mount_ground_truth.rs`). **The "no
   numbers" half is not fixed** - still the confidence-40 question above - but
   a live RPCS3 capture through an actual countdown (`scripts/rpcs3-drive.py
   capture`) now shows the board progressing from nothing to a lit `3` to `3`

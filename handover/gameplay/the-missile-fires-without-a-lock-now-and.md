@@ -80,11 +80,11 @@ it. The sight reads its target through `Hud_ResolveLockTarget` (`0x0883b358`) of
 the mirror at `weapon_record+0x1b4` instead.
 
 **Verified**: `just` green at **2,490**, and eight disc-backed tests. Five in
-`crates/game/tests/missile_ground_truth.rs` - the four that were there plus
+`crates/raceplay/tests/missile_ground_truth.rs` - the four that were there plus
 `a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself`, which fires
 from every slot on the shipped starting grid, proves at least one shot went up
 unguided, and proves none of them outlives three seconds on real geometry. Three
-new ones in `crates/game/tests/lock_sight_ground_truth.rs`: the layout authors
+new ones in `crates/raceplay/tests/lock_sight_ground_truth.rs`: the layout authors
 nine sight widgets over three models, the art decodes out of those models into
 the HUD sheet, and a Missile held on a real circuit locks a real craft after the
 recovered hold. **And it was looked at**: a `--race --opponents --give Missile`

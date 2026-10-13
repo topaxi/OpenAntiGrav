@@ -169,7 +169,7 @@ under the node name `collision_trackwall` - all **28** of them, which is 16
 forward circuits and the 12 `track_reversed.vex` that account for the rest of
 the census row above. Four measurements settle what it *is*, taken over all 28
 by
-[`hd_trackwall_ground_truth.rs`](../../crates/game/tests/hd_trackwall_ground_truth.rs):
+[`hd_trackwall_ground_truth.rs`](../../crates/raceplay/tests/hd_trackwall_ground_truth.rs):
 
 1. **Its payload is collision geometry.** All 28 carry the all-ones header word
    every [collision](collision.md) payload carries and parse to a clean end
@@ -441,7 +441,7 @@ invented plate, the same choice `CLAUDE.md` names for every other unrecovered
 surface. `Weapon Pad` draws fully on the same circuit (9 of 9, 4527
 triangles) and both classes draw fully on `12_sol_2`, so pad illumination
 (`oag_render::speedup_pad`, `oag_render::weapon_pad`) is exercised end to end
-by `crates/game/tests/hd_pad_illumination_ground_truth.rs` against
+by `crates/raceplay/tests/hd_pad_illumination_ground_truth.rs` against
 `12_sol_2` rather than the default track for the speed pad half.
 
 `Start Position` `0x3bc` is one 64-byte matrix per circuit, 28 of 28, with the
@@ -648,7 +648,7 @@ would have failed on all 76 Pulse files. The script is fixed and now reports
 
 **Confidence 90**, measured with `oag_vex::vex::class_world_transforms` on
 the disc and asserted in
-`crates/game/tests/livery_ground_truth.rs::an_hd_hull_takes_its_locators_from_the_file_beside_it`.
+`crates/raceplay/tests/livery_ground_truth.rs::an_hd_hull_takes_its_locators_from_the_file_beside_it`.
 
 Pulse and the PS2 port put every locator node in the hull's own `.vex`. HD
 splits a craft across a directory - `ship.vex`, `ship_lod.vex`,
@@ -675,7 +675,7 @@ set the recovered Pulse trigger expects.
 ## The roster is declared, and under HD's own plugin name - 2026-08-18
 
 **Confidence 90**, read off the disc and asserted in
-`crates/game/tests/hd_livery_ground_truth.rs` and
+`crates/raceplay/tests/hd_livery_ground_truth.rs` and
 `crates/game/tests/hd_boot_ground_truth.rs::the_menus_offer_the_twelve_teams_this_disc_declares`.
 
 HD declares its teams, circuits and soundtrack in one plugin definition, exactly
@@ -975,7 +975,7 @@ which variant's file.
 Evidence of the difference (HD EU, `Feisar`, class VENOM): `accelcap` 18.5 (HD),
 21.0 (`_c1`), 21.0 (`_n1`); engine `amount` 412 vs 418. All 12 teams differ
 between HD and each Fury variant in all four classes. Pinned by
-`crates/game/tests/hd_opponent_variant_ground_truth.rs` (disc-backed): the
+`crates/raceplay/tests/hd_opponent_variant_ground_truth.rs` (disc-backed): the
 opponent variant set per player pick, each opponent's `handling` equal to the one
 that team flies as the player, and HD against Fury differing.
 

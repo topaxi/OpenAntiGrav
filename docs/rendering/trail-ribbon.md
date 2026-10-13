@@ -132,7 +132,7 @@ averages 17 of 255 and the coverage map's averages 162**, so anything that
 treats the noise as the ribbon's coverage erases the trail. The one-texture
 path does exactly that - correctly, for a title whose one texture *is* the
 coverage - and the texture this loader hands it on HD is the noise.
-`crates/game/tests/hd_engine_flare_ground_truth.rs` pins the two apart by that
+`crates/raceplay/tests/hd_engine_flare_ground_truth.rs` pins the two apart by that
 same property.
 
 HD's program is unambiguous about the roles: unit 0's alpha displaces the `u`
@@ -299,7 +299,7 @@ else. **No sampled tick shows a plume-sized change**, so either the run never
 tripped the boost gate or the plume drew where the ribbon had already saturated
 to white. The draw path is the one that already draws Pulse's plume, and the
 model is asserted non-empty per craft by
-`crates/game/tests/hd_engine_flare_ground_truth.rs` - but *the `EF_Boost` draw
+`crates/raceplay/tests/hd_engine_flare_ground_truth.rs` - but *the `EF_Boost` draw
 itself is unconfirmed in a capture* and should be recorded that way.
 
 **The trigger's mechanism is read and its source is not.** `EF_Boost` is drawn

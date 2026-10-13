@@ -249,7 +249,7 @@ impl Pilot {
         trigger: Span::new(0.2, 0.5),
         // Rarely, with plenty in hand: about one roll a race across the twelve
         // circuits against the aggressive pilot's four
-        // (`crates/game/tests/ai_roll_ground_truth.rs`).
+        // (`crates/raceplay/tests/ai_roll_ground_truth.rs`).
         roll_chance: Span::new(0.15, 0.30),
         roll_floor: Span::new(0.45, 0.62),
         roll_airtime: Span::new(0.60, 0.85),

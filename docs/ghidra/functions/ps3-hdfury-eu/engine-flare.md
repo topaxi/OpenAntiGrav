@@ -234,7 +234,7 @@ both of them establish, not that the flare's own builder supplies it.
 
 **Drawn as of 2026-08-24.** `oag_mesh::mesh::Flame` reads `Speed` as a sixth
 authored number (2.0 on all fourteen craft and on all fourteen boost plumes -
-`crates/game/tests/hd_engine_flare_ground_truth.rs` pins it against the disc),
+`crates/raceplay/tests/hd_engine_flare_ground_truth.rs` pins it against the disc),
 `mesh_render::Scene` carries the clock the way the original binds it - one
 value splatted to four lanes - and `mesh.wgsl` takes both of the program's
 taps. This project's clock is the race tick over 60, the same one the trackside

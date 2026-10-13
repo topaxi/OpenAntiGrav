@@ -57,7 +57,7 @@ nearest the centreline. The fixed pairing below depends on that symmetry.
 Three hulls (Auricom, Harimau, Mirage) store the six out of name order.
 Collection follows file order, not names, so the pairs are by slot. Measured
 with a throwaway node lister over every `Locators.vex` extracted by
-`just psarc`. `crates/game/tests/absorb_ground_truth.rs` pins Feisar's count
+`just psarc`. `crates/raceplay/tests/absorb_ground_truth.rs` pins Feisar's count
 through the loader.
 
 Confidence **85**.

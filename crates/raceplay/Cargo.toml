@@ -79,11 +79,28 @@ perf-probe = ["oag-render/perf-probe"]
 workspace = true
 
 [dev-dependencies]
+oag-audio.workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
 pollster.workspace = true
 
 [[test]]
-name = "it"
-path = "tests/it.rs"
+name = "it_a_g"
+path = "tests/it_a_g.rs"
+
+[[test]]
+name = "it_h_l"
+path = "tests/it_h_l.rs"
+
+[[test]]
+name = "it_m_o"
+path = "tests/it_m_o.rs"
+
+[[test]]
+name = "it_p_r"
+path = "tests/it_p_r.rs"
+
+[[test]]
+name = "it_s_z"
+path = "tests/it_s_z.rs"

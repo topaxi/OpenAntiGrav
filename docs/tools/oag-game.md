@@ -481,7 +481,7 @@ Pinned by unit tests in `oag_physics::wall`, by two end-to-end tests in
 flown at a wall stays on the near side and turns round, one that a flight over open
 floor is bit-identical with and without a distant wall - and, against real track
 geometry, by
-[`wall_collision_ground_truth.rs`](../../crates/game/tests/wall_collision_ground_truth.rs).
+[`wall_collision_ground_truth.rs`](../../crates/raceplay/tests/wall_collision_ground_truth.rs).
 That last one is the only test that sees a shipped wall's own winding, scale and
 triangle density; the synthetic ones author all three. **It passes against the
 real disc**: the hull measures 5.5 x 3.5 x 13.0, read from the **ship's** own
@@ -536,7 +536,7 @@ them; `oag-view --collision` prints the per-class census for any track.
 **Confirmed against real disc data**, not only synthetically: flown into a real
 reset triangle on `03_Track`, the ship respawns 4.0 units from the nearest spline
 sample. See
-[`reset_zone_ground_truth.rs`](../../crates/game/tests/reset_zone_ground_truth.rs).
+[`reset_zone_ground_truth.rs`](../../crates/raceplay/tests/reset_zone_ground_truth.rs).
 
 ### The suspension was never the problem: the default track was
 

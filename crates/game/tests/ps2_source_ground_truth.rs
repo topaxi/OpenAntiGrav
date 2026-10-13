@@ -290,7 +290,7 @@ fn the_exhaust_textures_decode_off_both_discs() {
 /// PS2's layouts - authored in a 640x448 grid, `docs/ui/hud.md` - were drawn a
 /// third oversized and pushed off the right and bottom edges. The same defect
 /// on HD's 1920x1080 was four times worse and is pinned in
-/// `crates/game/tests/hd_hud_ground_truth.rs`; this is the two-pressing half of
+/// `crates/raceplay/tests/hd_hud_ground_truth.rs`; this is the two-pressing half of
 /// it, and it is the one a Pulse-only reader would have called a non-issue.
 ///
 /// Structural, like everything else in this file: it asserts which grid each

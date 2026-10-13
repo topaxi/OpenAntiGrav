@@ -119,7 +119,7 @@ TEST_LIMIT = 500
 BASELINE = {
     # Ratcheted down from 2,387 on 2026-09-02, when
     # `a_ship_spawns_on_the_track_and_flies_along_it` moved to
-    # `crates/game/tests/ship_spawn_ground_truth.rs`. The move was forced the
+    # `crates/raceplay/tests/ship_spawn_ground_truth.rs`. The move was forced the
     # right way round: a disc-backed fix needed twelve lines in a file already
     # at its ceiling, and a ceiling only ever lowers.
     "crates/game/tests/race_ground_truth.rs": 2266,

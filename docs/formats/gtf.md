@@ -386,7 +386,7 @@ Implemented as `oag_mesh::mesh::Texels`, chosen in
 ## What this was read for
 
 [The HUD](hd-hud.md). Its twelve textures are nine `DXT45`/`DXT23` atlases, and
-`crates/game/tests/hd_hud_ground_truth.rs` now checks each of the **1,029 HUD
+`crates/raceplay/tests/hd_hud_ground_truth.rs` now checks each of the **1,029 HUD
 sprites' source rectangles against the dimensions of the texture it names** -
 a check that tests both readings at once, since a layout misread puts a
 sub-rectangle outside its texture and a dimension misread fails to contain

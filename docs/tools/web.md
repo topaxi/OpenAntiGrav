@@ -338,7 +338,7 @@ WebGPU is required; there is no WebGL fallback (`adapter::BACKENDS` is
 `PRIMARY`, which includes the browser's WebGPU and excludes GL, for the reason
 that constant's own documentation gives). The picker page lists every disc it knows, with the formats it accepts and how
 far each gets; that table is checked against `docs/overview/status.md`,
-section 9, by `crates/game/tests/web_picker_table.rs`. WebGPU ships in Chrome and Edge 113+
+section 9, by `crates/raceplay/tests/web_picker_table.rs`. WebGPU ships in Chrome and Edge 113+
 (Windows, macOS, ChromeOS; Android 121+), Safari 26, and Firefox 141+ on Windows.
 Chromium on Linux still needs `--enable-unsafe-webgpu --enable-features=Vulkan`;
 Firefox on Linux needs `dom.webgpu.enabled` and `gfx.webgpu.ignore-blocklist`

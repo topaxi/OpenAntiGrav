@@ -1040,7 +1040,7 @@ no longer disagree.
   `commit` that reproduces `Environment_UpdateStageBlend`'s gate, applying
   the result to the same `mesh_render::Fog`/`Light` path `.envsettings`
   already drives. Checked end to end against `hdfury-ps3-eu-dec.iso` in
-  `crates/game/tests/zone_grade_ground_truth.rs`: a Zone race load carries
+  `crates/raceplay/tests/zone_grade_ground_truth.rs`: a Zone race load carries
   the fifteen-stage table, and `Sub Venom` fogs `[0, 1.305882, 1.8]` at
   density `0.0021` where `Start` authors none. **The trigger is still open**
   and is now the *only* thing between this and a race that escalates on its
