@@ -167,29 +167,6 @@ impl Session {
         self.handle_join(outcome);
     }
 
-    /// Hands the lobby that Start left to the race that is about to be built:
-    /// the views, the local players, and the devices on their slots
-    /// ([`oag_game::split_screen::seat`]). Called from the race build with the
-    /// stage it produced; `None` is an ordinary race and changes nothing.
-    ///
-    /// Takes the fields it touches rather than `&mut self`: the build holds a
-    /// borrow of the loading stage, which is a field of the session too.
-    pub(crate) fn seat_split_race(
-        lobby: &mut Option<oag_input::lobby::Lobby>,
-        controls: &mut oag_input::Controls,
-        race: &mut oag_raceplay::Race,
-    ) {
-        if let Some(lobby) = lobby.take() {
-            let connected = controls.connected_pads();
-            oag_game::split_screen::seat(race, &lobby, controls.assignment_mut(), &connected);
-        } else if let Some(humans) = controls.assignment().humans() {
-            // A race rebuilt without going back through the menus (the 2048
-            // end-of-race screen's restart): the devices are still seated, so the
-            // new race is the same split.
-            oag_game::split_screen::apply(race, humans);
-        }
-    }
-
     /// Back on the menus after a split-screen race: one cursor, any device
     /// drives it. Not while a race is parked behind the pause menu - resuming
     /// it needs the seats it left.

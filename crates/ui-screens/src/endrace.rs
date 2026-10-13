@@ -62,6 +62,7 @@ pub use crate::campaign::Layout;
 pub mod draw;
 pub mod hd;
 mod modes;
+mod people;
 pub mod photo;
 pub mod pointer;
 mod table;
@@ -74,6 +75,7 @@ pub use modes::{
     EliminationResults, EliminationRow, ZoneResults, elimination_results_draw_list,
     zone_results_draw_list,
 };
+pub use people::{PeopleResults, PersonName, PersonRow, people_results_draw_list};
 
 #[cfg(test)]
 mod tests;
@@ -136,6 +138,9 @@ pub enum Headline {
     Position(u8),
     /// No finishing position (a field of one) - `ER_SHIP_DES`.
     NoPosition,
+    /// Several people flew the race (a split screen): no one place is the race's,
+    /// so the headline says nothing and the table names every person.
+    Several,
     /// `Zone`/`Eliminator` on Wipeout HD/Fury, whose own populate for them is
     /// unread - drawing nothing rather than guessing a headline. Pulse's two
     /// have tables of their own ([`EliminationResults`], [`ZoneResults`]) with
@@ -297,6 +302,10 @@ pub struct FieldRow {
     /// Whether this is the player's own row - what
     /// [`hd::hd_results_draw_list`] repositions `GridHighlight` onto.
     pub player: bool,
+    /// The seat a person flew, 1-based, when several people did: `PLAYER 1` in the
+    /// name column. `None` for an opponent and for the one person of a
+    /// single-person race, whose row is only highlighted.
+    pub seat: Option<u8>,
 }
 
 /// Wipeout HD/Fury's own `EndRace Results`: the headline (the same

@@ -123,11 +123,13 @@ fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
                 place: 1,
                 time_ticks: Some(180),
                 player: true,
+                seat: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: None,
                 player: false,
+                seat: None,
             },
         ],
     };
@@ -161,6 +163,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
             place: 1,
             time_ticks: Some(180),
             player: true,
+            seat: None,
         }],
     };
     let strings = strings();
@@ -210,11 +213,13 @@ fn results_repositions_the_highlight_onto_the_player_s_row() {
                 place: 1,
                 time_ticks: Some(60),
                 player: false,
+                seat: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: Some(90),
                 player: true,
+                seat: None,
             },
         ],
     };
@@ -281,6 +286,7 @@ fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_pla
             place: 1,
             time_ticks: Some(60),
             player: true,
+            seat: None,
         }],
     };
     let strings = strings();
@@ -548,4 +554,53 @@ fn unnamed_loyalty_blocks_draw_as_blocks_with_their_label_inset() {
         "label inset into the block, not at its corner: {loyalty:?}"
     );
     assert!(at("TOTAL").is_some());
+}
+
+/// A race two people flew: both rows are named by their seat in the column the
+/// original fills with a name, both carry the one authored highlight, and the
+/// headline names no single place.
+#[test]
+fn a_two_person_race_names_and_highlights_each_person() {
+    let row = |place, seat: Option<u8>| FieldRow {
+        place,
+        time_ticks: Some(u64::from(place) * 600),
+        player: seat.is_some(),
+        seat,
+    };
+    let model = FieldResults {
+        loyalty: None,
+        headline: Headline::Several,
+        rows: vec![row(1, Some(1)), row(2, Some(2))],
+    };
+    let strings = StringTable::from_xml(
+        r#"<Strings>
+<Entry ID="IG_HUD_POS" String="POS"></Entry>
+<Entry ID="OAG_JOIN_PLAYER" String="PLAYER"></Entry>
+</Strings>"#,
+    );
+    let layers = hd_results_draw_list(
+        &model,
+        &results_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    );
+    let texts = texts(&layers);
+    for wanted in ["PLAYER 1", "PLAYER 2"] {
+        assert!(texts.contains(&wanted.to_string()), "{wanted}: {texts:?}");
+    }
+    assert!(
+        !texts.iter().any(|t| t.contains("PLACE")),
+        "no single place is the race's: {texts:?}"
+    );
+    let highlight = argb_to_rgba(0xff00_00ff);
+    let rows = layers
+        .body
+        .iter()
+        .filter(|draw| matches!(draw, Draw::Fill { color, .. } if *color == highlight))
+        .count();
+    assert_eq!(rows, 2, "one highlight per person's row");
 }

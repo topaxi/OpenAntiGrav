@@ -20,8 +20,8 @@
 use anyhow::Result;
 
 use oag_ui_screens::endrace::{
-    EliminationResults, EndRaceMenu, FieldResults, Headline, MenuOption, Results, Rewards,
-    TournamentResults, TournamentRow, ZoneResults,
+    EliminationResults, EndRaceMenu, FieldResults, Headline, MenuOption, PeopleResults, Results,
+    Rewards, TournamentResults, TournamentRow, ZoneResults,
 };
 
 use oag_game::render::Renderer;
@@ -59,6 +59,10 @@ pub(crate) enum ResultsModel {
     /// A Zone run's six statistics - Pulse only, off
     /// `EndRaceResults_PopulateZoneTable`. See [`oag_ui_screens::endrace::ZoneResults`].
     PulseZone(ZoneResults),
+    /// A race several people flew (split screen) - Pulse's own multiplayer table,
+    /// one row per craft with each person named. See
+    /// [`oag_ui_screens::endrace::PeopleResults`].
+    PulsePeople(PeopleResults),
     Hd(FieldResults),
 }
 
@@ -239,7 +243,8 @@ impl EndRaceRuntime {
             ResultsModel::Pulse(_)
             | ResultsModel::PulseTournament(_)
             | ResultsModel::PulseElimination(_)
-            | ResultsModel::PulseZone(_) => {
+            | ResultsModel::PulseZone(_)
+            | ResultsModel::PulsePeople(_) => {
                 oag_ui_screens::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
             }
             ResultsModel::Hd(_) => {
@@ -352,6 +357,18 @@ impl EndRaceRuntime {
                     &|src| sprites.get(src),
                 )
             }
+            (Which::Results, ResultsModel::PulsePeople(results)) => {
+                oag_ui_screens::endrace::people_results_draw_list(
+                    results,
+                    &self.screens.results,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Results, ResultsModel::Hd(results)) => {
                 oag_ui_screens::endrace::hd::hd_results_draw_list(
                     results,
@@ -393,7 +410,8 @@ impl EndRaceRuntime {
                 ResultsModel::Pulse(_)
                 | ResultsModel::PulseTournament(_)
                 | ResultsModel::PulseElimination(_)
-                | ResultsModel::PulseZone(_),
+                | ResultsModel::PulseZone(_)
+                | ResultsModel::PulsePeople(_),
             ) => oag_ui_screens::endrace::endrace_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,
@@ -526,35 +544,6 @@ pub(crate) fn menu_options(campaign: bool, tournament_next_leg: bool) -> Vec<Men
     } else {
         vec![leave, MenuOption::RaceAgain, MenuOption::ViewResultsAgain]
     }
-}
-
-/// Wipeout HD/Fury's own `EndRace Results`: the whole field, ordered by
-/// place, off the field's own `Board` - the same feed
-/// `oag_game::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is
-/// read at all. `board` is `None` only when `Session::build_endrace` is
-/// called before `Race::capture_results` has run, which does not happen -
-/// `build_endrace`'s own guard requires `stage.race.finished()` first, and
-/// that is the same tick `capture_results` takes the board on - so this
-/// draws an empty field rather than failing outright, on the same "an
-/// honest absence over a guess" reasoning as every other gap on this
-/// screen, not because the `None` case is expected to fire.
-#[must_use]
-pub(crate) fn hd_field_rows(
-    board: Option<&oag_raceplay::scoreboard::Board>,
-) -> Vec<oag_ui_screens::endrace::FieldRow> {
-    board
-        .map(|board| {
-            board
-                .rows
-                .iter()
-                .map(|row| oag_ui_screens::endrace::FieldRow {
-                    place: row.place,
-                    time_ticks: row.finish_tick,
-                    player: row.player,
-                })
-                .collect()
-        })
-        .unwrap_or_default()
 }
 
 /// Pulse's own Tournament standings, off this project's `oag_race::tournament`
@@ -759,8 +748,7 @@ pub(crate) fn results_table_takes_confirm(finished: bool, endrace_built: bool) -
 
 #[cfg(test)]
 mod tests {
-    use super::{LoyaltyInputs, hd_field_rows, loyalty_award, trophy_index};
-    use oag_raceplay::scoreboard::{Board, Row};
+    use super::{LoyaltyInputs, loyalty_award, trophy_index};
     use oag_tables::race_campaign::Medal;
 
     /// A campaign medal picks its own trophy; no cell, or no medal, picks
@@ -782,51 +770,6 @@ mod tests {
         let missing = [Medal::Gold];
         let silver = rewards(Some(Medal::Silver), true);
         assert_eq!(trophy_index(Some(&silver), missing), None);
-    }
-
-    /// `hd_field_rows` reads place/finish tick/player straight off the
-    /// field's own `Board`, in the board's own order - no reordering, no
-    /// renumbering, the same "the places are used exactly as assigned"
-    /// rule `Race::capture_results`'s own doc states for the board itself.
-    /// A craft still racing when the board was taken (`finish_tick: None`)
-    /// keeps that absence rather than a guessed time.
-    #[test]
-    fn hd_field_rows_reads_place_finish_tick_and_player_off_the_board_unchanged() {
-        let board = Board {
-            rows: vec![
-                Row {
-                    place: 1,
-                    slot: 2,
-                    laps_completed: 3,
-                    finish_tick: Some(1234),
-                    best_lap_ticks: Some(400),
-                    player: false,
-                },
-                Row {
-                    place: 2,
-                    slot: 0,
-                    laps_completed: 2,
-                    finish_tick: None,
-                    best_lap_ticks: Some(410),
-                    player: true,
-                },
-            ],
-            laps_target: Some(3),
-            tick: 1234,
-        };
-        let rows = hd_field_rows(Some(&board));
-        assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].place, 1);
-        assert_eq!(rows[0].time_ticks, Some(1234));
-        assert!(!rows[0].player);
-        assert_eq!(rows[1].place, 2);
-        assert_eq!(rows[1].time_ticks, None);
-        assert!(rows[1].player);
-    }
-
-    #[test]
-    fn hd_field_rows_is_empty_rather_than_panicking_with_no_board() {
-        assert!(hd_field_rows(None).is_empty());
     }
 
     /// The two live races

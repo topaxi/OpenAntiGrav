@@ -188,6 +188,18 @@ change, `Camera_SubmitScene`'s viewport count, see
   code reads the primary's `RaceView::sight`, so another person's fire does not wait
   for their lock (open).
 
+## The end of the race
+
+A person who crosses the line keeps their view until the last person does: the lap
+counter holds at the target, the clocks at their crossing, and the layout's last
+message line reads `FINISHED`. When the last person finishes one view is drawn
+(`Race::views_drawn`) under the end screens, which name every person (`PLAYER 1`,
+`PLAYER 2`) in Pulse's own multiplayer table or HD's grid, bank no loyalty and write
+no record. The authored data (the PS2's `EndRace Results Split`), the chosen
+rules and what is open are in [split-end-race.md](../ui/split-end-race.md).
+`--autopilot` flies every local seat, so `--players 2 --autopilot --mode single_race`
+reaches the end headless.
+
 ## Cost
 
 Draws submitted per frame on Pulse's default circuit, `--mode single_race`
@@ -292,7 +304,7 @@ back on the main menu.
 craft turns and slot 0's does not, and the same key on slot 0 does the reverse.
 A pad reading on slot 1 reaching slot 1's snapshot, and the lobby's and the
 assignment's rules, are `oag-input`'s unit tests. The session wiring (the
-`seat_split_race` call in the race build, the merge on returning to the menus, the
+`seat_for_launch` call in the race build, the merge on returning to the menus, the
 lobby dropping on Track Select's back, the front end's seat picks reaching
 `Options::seat_picks`) has no test of its own: it was **walked live on 2026-10-13**
 with two virtual pads (`scripts/uinput-pads.py`, below) on PSP and PS2 Pulse EU in an
@@ -377,8 +389,10 @@ does not exist: the race frames are that evidence.
   path runs end to end, but no second pad has been plugged in.
 - Per-team camera rigs, per-view bloom (an origin in `oag_post::bloom`), motion blur
   and the temporal upscaler under a split, and a check of HD's and Omega's chains.
-- The results scoreboard and the end-race flow still key on slot 0 and end every
-  view when slot 0 finishes.
+- ~~The results scoreboard and the end-race flow still key on slot 0 and end every
+  view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race". Open
+  from it: the PS2's authored `EndRace Results Split`, per-person rewards and
+  records, a live walk with two real pads.
 - Resolution holds its scale while split: the scene pass is not timed (timing one
   view of `N` would read as a cheap frame), so dynamic resolution gets no reading.
 - `--players N > 1` **changes `RaceSim::state_hash`**, because `World::controllers`

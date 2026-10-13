@@ -74,6 +74,25 @@ impl Race {
         self.view.viewpoints.count.max(1)
     }
 
+    /// How many views are drawn right now: [`Self::viewport_count`] while the race
+    /// runs, and **one once it is over** (every person has finished), so the end
+    /// screens sit over the one picture the single-player flow has - the
+    /// spectator camera of `Race End Photo` - and not over a split.
+    ///
+    /// **Chosen, not measured**: the original's split screen is not read. The split
+    /// itself ([`Self::viewport_count`]) is left alone, because it is also the
+    /// answer to "was this a split race" (no record, no ghost, restart keeps it),
+    /// and it picks the draw path: a split race keeps `Scene::render_viewports`,
+    /// with no blur, jitter or upscaler history, for its one last view too.
+    #[must_use]
+    pub fn views_drawn(&self) -> usize {
+        if self.finished() {
+            1
+        } else {
+            self.viewport_count()
+        }
+    }
+
     /// Splits the screen into `count` views, clamped to the grid that is fielded
     /// and to [`oag_render::viewport::MAX_VIEWPORTS`], and returns what it
     /// settled on. View `i` follows slot `i`. `1` turns the split off.

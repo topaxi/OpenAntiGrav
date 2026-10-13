@@ -90,6 +90,7 @@ pub fn results_draw_list(
         header_bar: true,
         boost_icon: true,
         highlight: totals.then_some(laps + 1),
+        also_highlight: 0,
     };
     table_layers(
         layout,
@@ -155,6 +156,7 @@ pub fn tournament_results_draw_list(
             .iter()
             .position(|row| row.player)
             .map(|index| index + 1),
+        also_highlight: 0,
     };
     table_layers(
         layout,
@@ -379,7 +381,7 @@ pub(super) fn headline_text(headline: Headline, strings: &StringTable) -> Option
         Headline::SpeedLap => "ER_SL_COM",
         Headline::NoPosition => "ER_SHIP_DES",
         Headline::Position(place) => ordinal_idstring(place)?,
-        Headline::Unresolved => return None,
+        Headline::Several | Headline::Unresolved => return None,
     };
     Some(strings.get_or_id(id).to_string())
 }

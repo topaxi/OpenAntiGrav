@@ -164,3 +164,82 @@ fn the_second_person_finishing_first_does_not_end_the_race() {
     race.sim.world.race[1].finished = true;
     assert!(!race.finished());
 }
+
+/// Two people on the straight, split in two, the first having crossed the line on
+/// `tick`: the view of the person who finished while the other is still racing.
+fn first_person_finished(tick: u64) -> Race {
+    let mut race = race_with_a_grid();
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert_eq!(race.set_viewport_count(2), 2);
+    finish(&mut race, 0, tick);
+    race.sim.world.race[0].finished = true;
+    race.tick(&PlayerInputs::none());
+    race
+}
+
+/// What a person's own view says after their crossing and before the race ends:
+/// the standing line, the lap counter held at the target and the clock held at
+/// that crossing. The other person's view, still racing, says none of it.
+#[test]
+fn a_person_who_has_finished_sees_it_while_the_other_races_on() {
+    let race = first_person_finished(5_000);
+    assert!(!race.finished(), "the second person is still racing");
+    assert_eq!(race.views_drawn(), 2, "the split stays until the race ends");
+
+    let line = |readout: &oag_hud::Readout| {
+        readout.messages[oag_hud::messages::SLOTS - 1]
+            .as_ref()
+            .map(|line| line.text.clone())
+    };
+    let finished = race.readout_for(0);
+    assert_eq!(line(&finished).as_deref(), Some("OAG_SPLIT_FINISHED"));
+    assert_eq!(
+        finished.race_ticks,
+        oag_race::race_clock_ticks(5_000),
+        "the clock is held at the crossing, not running on"
+    );
+    assert_eq!(line(&race.readout_for(1)), None, "still racing");
+}
+
+/// The line is a split's alone: with one person the HUD is hidden at the finish
+/// and nothing here may add a line to it.
+#[test]
+fn one_person_gets_no_finished_line() {
+    let mut race = race_with_a_grid();
+    finish(&mut race, 0, 5_000);
+    race.sim.world.race[0].finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(
+        race.readout_for(0).messages[oag_hud::messages::SLOTS - 1].is_none(),
+        "a one-person race changed its HUD"
+    );
+}
+
+/// The race ends with both people finished, and then one view is drawn over the
+/// end screens while the split itself stays what says a split raced: records, the
+/// ghost and a restart all read `viewport_count`.
+#[test]
+fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
+    let mut race = first_person_finished(5_000);
+    finish(&mut race, 1, 5_300);
+    race.sim.world.race[1].finished = true;
+    race.tick(&PlayerInputs::none());
+    assert!(race.finished());
+    assert_eq!(race.views_drawn(), 1);
+    assert_eq!(race.viewport_count(), 2);
+}
+
+/// A craft the autopilot flies is the primary's, and in a split every other local
+/// seat's, so a headless run can get both people over the line; an AI slot is not
+/// "taken" by it and a one-person race is flown as it always was.
+#[test]
+fn the_operators_autopilot_flies_every_local_seat_and_no_other() {
+    let mut race = race_with_a_grid();
+    race.set_autopilot(true);
+    assert!(race.flown_for_the_player(0));
+    assert!(!race.flown_for_the_player(1), "an AI slot");
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert!(race.flown_for_the_player(1), "a second local seat");
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Remote;
+    assert!(!race.flown_for_the_player(1), "somebody else's craft");
+}

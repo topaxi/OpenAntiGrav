@@ -195,11 +195,13 @@ fn a_race_lays_its_grid_out_as_the_executable_does() {
                 place: 1,
                 time_ticks: Some(6000),
                 player: false,
+                seat: None,
             },
             FieldRow {
                 place: 2,
                 time_ticks: None,
                 player: true,
+                seat: None,
             },
         ],
     };

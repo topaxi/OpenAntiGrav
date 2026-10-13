@@ -125,7 +125,11 @@ impl Race {
         // no lap counter - the widget is omitted rather than reading 1 of 3 on a
         // course that cannot tell.
         let counted = self.sim.course.is_some();
-        oag_hud::Readout {
+        // A person's view after their own crossing, while the others race on: the
+        // lap counter holds at the target, the clocks at the moment they finished,
+        // and a standing line says so. See `Self::finished_view`.
+        let finished = self.finished_view(slot);
+        let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             speed_full_kmh: oag_hud::DEFAULT_SPEED_FULL_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
@@ -134,7 +138,11 @@ impl Race {
             // after it stopped being true.)
             shield: ship.physics.shield,
             shield_max: ship.handling.dimensions.shield,
-            lap: if counted { race.lap } else { 0 },
+            lap: if counted {
+                finished.map_or(race.lap, |held| held.lap)
+            } else {
+                0
+            },
             // A speed lap and a Zone run have no lap target. Zero is what the HUD
             // already reads as "unknown" and it omits the "of N" half.
             laps: race.laps_target.filter(|_| counted).unwrap_or(0),
@@ -162,8 +170,13 @@ impl Race {
             // release. `oag_race::race_clock_ticks` has the measurement.
             // The gates and animations that need the raw tick read
             // `world.tick` themselves.
-            race_ticks: oag_race::race_clock_ticks(self.sim.world.tick),
-            lap_ticks: if counted {
+            race_ticks: finished.map_or_else(
+                || oag_race::race_clock_ticks(self.sim.world.tick),
+                |held| held.race_ticks,
+            ),
+            lap_ticks: if let Some(held) = finished {
+                held.lap_ticks
+            } else if counted {
                 race.lap_ticks(self.sim.world.tick)
             } else {
                 oag_race::race_clock_ticks(self.sim.world.tick)
@@ -226,7 +239,49 @@ impl Race {
                 .as_ref()
                 .filter(|_| primary)
                 .and_then(|split| split.display.line().cloned()),
+        };
+        if finished.is_some() {
+            readout.messages[oag_hud::messages::SLOTS - 1] = Some(oag_hud::messages::MessageLine {
+                text: FINISHED_LINE.to_string(),
+                color: [1.0; 4],
+                authored: true,
+                fades_border: false,
+            });
         }
+        readout
+    }
+
+    /// What a person's own view holds once their craft has crossed the line for the
+    /// last time and the race is not over: `None` for one person (whose finish ends
+    /// the race and hides the HUD), for a craft still racing, and for an AI craft.
+    ///
+    /// **Chosen, not measured.** The original has one player, and its HUD vanishes
+    /// at the finish, so what a split view shows between its own line and the
+    /// others' is ours: the lap counter held at the target, the clocks held at
+    /// that crossing, the place the field gives them (frozen at the finish tick,
+    /// see [`oag_race::Standing::finish_tick`]) and a standing line.
+    pub(super) fn finished_view(&self, slot: usize) -> Option<FinishedView> {
+        if self.viewport_count() <= 1 || !self.sim.world.person_flown(slot) {
+            return None;
+        }
+        let finish = self.sim.world.ships[slot].standing.finish_tick?;
+        let race = &self.sim.world.race[slot];
+        let target = race.laps_target?;
+        let laps = usize::try_from(target).unwrap_or(usize::MAX);
+        Some(FinishedView {
+            lap: target,
+            race_ticks: oag_race::race_clock_ticks(finish),
+            // The last lap's own time, from the splits the standing keeps; a race
+            // longer than they hold shows the best lap instead of inventing one.
+            lap_ticks: race
+                .lap_splits
+                .get(laps.saturating_sub(1))
+                .copied()
+                .flatten()
+                .map(u64::from)
+                .or_else(|| race.best_lap_ticks.map(u64::from))
+                .unwrap_or(0),
+        })
     }
 
     /// The Eliminator's kill column, top row first, in the order the original
@@ -280,6 +335,18 @@ impl Race {
             player_leads: self.places()[player] == 1,
         })
     }
+}
+
+/// The id of the line a finished person's view carries: our own text, in
+/// `assets/ui/strings/english.toml`.
+const FINISHED_LINE: &str = "OAG_SPLIT_FINISHED";
+
+/// A finished person's held readout, see [`Race::finished_view`].
+#[derive(Debug, Clone, Copy)]
+pub(super) struct FinishedView {
+    lap: u32,
+    race_ticks: u64,
+    lap_ticks: u64,
 }
 
 /// One telemetry line, for a log or a report.

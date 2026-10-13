@@ -268,8 +268,10 @@ modes `0xe`, `0xf`, `0x10`, `0x11` and `0x12`. It fills the same `table` with a
 (`%d`), the name at `+0x35`, and the finishing time at `+0x140` - `ER_DNF` for `-1`,
 `ER_RACING` for `0`, and otherwise the time through `FUN_08819878`. The player's row
 takes the highlight. `EndRaceResults_Update` calls it every frame in modes `0xe` and
-`0xf`, so the times fill in as other players finish. This build has no network play,
-so nothing draws it.
+`0xf`, so the times fill in as other players finish. This build has no network play;
+**it draws this table for a split-screen race instead** (2026-10-13, the gate and the
+`PLAYER n` names are ours, `oag_ui_screens::endrace::people_results_draw_list`,
+[split-end-race.md](../../../ui/split-end-race.md)).
 
 ## `EndRace Rewards`
 

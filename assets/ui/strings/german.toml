@@ -30,6 +30,7 @@ OAG_MENU_SPLIT_SCREEN = { text = "GETEILTER BILDSCHIRM", human = false }
 OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Bis zu acht Spieler an einem Bildschirm", human = false }
 OAG_JOIN_HINT = { text = "JEDER SPIELER DRÜCKT EINE TASTE ZUM BEITRETEN", human = false }
 OAG_JOIN_PLAYER = { text = "SPIELER", human = false }
+OAG_SPLIT_FINISHED = { text = "IM ZIEL", human = false }
 OAG_JOIN_EMPTY = { text = "TASTE DRÜCKEN", human = false }
 OAG_JOIN_KEYBOARD = { text = "TASTATUR", human = false }
 OAG_JOIN_PAD = { text = "GAMEPAD", human = false }

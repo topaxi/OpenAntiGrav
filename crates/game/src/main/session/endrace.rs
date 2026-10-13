@@ -8,8 +8,8 @@ use log::warn;
 use oag_ui_screens::endrace::{Event, MenuOption};
 
 use crate::race_stage::endrace::{
-    EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, hd_field_rows, headline,
-    loyalty_award, menu_options, to_campaign_medal, tournament_results, voice_for, zone_results,
+    EndRaceRuntime, LoyaltyInputs, ResultsModel, elimination_results, headline, loyalty_award,
+    menu_options, to_campaign_medal, tournament_results, voice_for, zone_results,
 };
 use crate::race_stage::endrace_touch::EndRace;
 use crate::race_stage::hd_loyalty::{HdRace, hd_award};
@@ -69,6 +69,12 @@ impl Session {
         // `shell` cannot survive past this point" idiom
         // `Session::open_campaign`'s own `title_ref` already uses.
         let title_ref = shell.title;
+        // Several people flew this race (a split screen): its results are nobody's
+        // record, so no loyalty is banked, no campaign medal is in play and
+        // nothing is announced; the table names every person. Chosen, not
+        // measured - the original's split screen is not read beyond the PS2's
+        // authored `EndRace Results Split`, `docs/ui/split-end-race.md`.
+        let split = stage.race.viewport_count() > 1;
         let board = stage.race.results().cloned();
         // The roster this race drew, slot 0 the player's - read off the race
         // rather than rebuilt, because the draw is seeded and only the race
@@ -183,7 +189,7 @@ impl Session {
         // (`oag_hd::loyalty`), not the Pulse `award` above, which only the
         // Pulse `Rewards` row below reads. `None` when this launch named no
         // team, which draws the block absent rather than inventing one.
-        let hd_loyalty = if is_hd {
+        let hd_loyalty = if is_hd && !split {
             team.clone().map(|team| {
                 let award = hd_award(HdRace {
                     mode,
@@ -208,7 +214,7 @@ impl Session {
         // either: no `Rewards` model means `EndRaceRuntime::advance` goes
         // Results -> Menu, the route HD's own `EndRaceMenuRedirect` authors.
         // Its loyalty is `hd_loyalty` above, on `Results`, not a Rewards row.
-        let rewards = if is_hd {
+        let rewards = if is_hd || split {
             None
         } else {
             // The loyalty row - `None` when this launch named no team at all
@@ -260,7 +266,12 @@ impl Session {
                 )
             });
 
-        let results = if let Some(tournament) = pulse_tournament {
+        let people = (split && !is_hd)
+            .then(|| oag_game::results_tables::people_rows(board.as_ref(), stage.race.slot_teams()))
+            .flatten();
+        let results = if let Some(people) = people {
+            ResultsModel::PulsePeople(people)
+        } else if let Some(tournament) = pulse_tournament {
             ResultsModel::PulseTournament(tournament)
         } else if !is_hd && mode == oag_race::Mode::Eliminator {
             let world = &stage.race.sim.world;
@@ -275,8 +286,12 @@ impl Session {
             ))
         } else if is_hd {
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
-                headline: headline(mode, observation.place),
-                rows: hd_field_rows(board.as_ref()),
+                headline: if split {
+                    oag_ui_screens::endrace::Headline::Several
+                } else {
+                    headline(mode, observation.place)
+                },
+                rows: oag_game::results_tables::field_rows(board.as_ref()),
                 loyalty: hd_loyalty,
             })
         } else {
@@ -301,9 +316,10 @@ impl Session {
             observation.place,
             campaign,
             observation.campaign_medal.map(to_campaign_medal),
-        );
+        )
+        .filter(|_| !split);
         let menu = oag_ui_screens::endrace::EndRaceMenu::new(
-            menu_options(campaign, self.tournament_has_next_leg()),
+            menu_options(campaign, !split && self.tournament_has_next_leg()),
             new_best_lap_ticks,
         );
 

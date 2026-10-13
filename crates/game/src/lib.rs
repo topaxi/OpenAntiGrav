@@ -66,6 +66,7 @@ pub mod race_capture;
 pub mod records;
 pub mod remix;
 pub mod render;
+pub mod results_tables;
 pub mod scoreboard;
 pub mod screen;
 pub mod settings;

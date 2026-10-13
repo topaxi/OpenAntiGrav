@@ -79,6 +79,13 @@ impl Board {
         self.rows.iter().find(|row| row.player)
     }
 
+    /// How many rows are a person's: one in a one-person race, one per seat in a
+    /// split screen. More than one is what makes a row's owner worth naming.
+    #[must_use]
+    pub fn persons(&self) -> usize {
+        self.rows.iter().filter(|row| row.player).count()
+    }
+
     /// Whether there is a *place* to show at all.
     ///
     /// **The HUD's own rule, deliberately the same one.** A place is a position

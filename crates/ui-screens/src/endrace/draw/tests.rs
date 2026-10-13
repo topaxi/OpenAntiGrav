@@ -465,3 +465,80 @@ fn placed() -> Option<oag_ui::frontend::Placed> {
         blend: None,
     })
 }
+
+/// A race two people flew: both are named by their seat and both rows carry the
+/// one authored highlight, an opponent is named by its team, a craft still racing
+/// reads `ER_RACING`, and the headline says nothing (`BigTopText` is the title).
+#[test]
+fn a_two_person_table_names_and_highlights_each_person() {
+    use crate::endrace::{PeopleResults, PersonName, PersonRow, people_results_draw_list};
+    let model = PeopleResults {
+        rows: vec![
+            PersonRow {
+                place: 1,
+                name: PersonName::Team(Some("Feisar".to_string())),
+                time_ticks: Some(180),
+                person: false,
+            },
+            PersonRow {
+                place: 2,
+                name: PersonName::Player(1),
+                time_ticks: Some(240),
+                person: true,
+            },
+            PersonRow {
+                place: 3,
+                name: PersonName::Player(2),
+                time_ticks: None,
+                person: true,
+            },
+        ],
+    };
+    let strings = StringTable::from_xml(
+        r#"<Strings>
+<Entry ID="ER_RES" String="RESULTS"></Entry>
+<Entry ID="PRO_POS" String="POS"></Entry>
+<Entry ID="PRO_NAME" String="NAME"></Entry>
+<Entry ID="PRO_TOT_TIME" String="TOTAL RACE TIME"></Entry>
+<Entry ID="ER_RACING" String="RACING"></Entry>
+<Entry ID="OAG_JOIN_PLAYER" String="PLAYER"></Entry>
+<Entry ID="Feisar" String="FEISAR"></Entry>
+</Strings>"#,
+    );
+    let layers = people_results_draw_list(
+        &model,
+        &results_layout(),
+        &skin(),
+        &Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| placed(),
+    );
+    let texts = texts(&layers);
+    for wanted in [
+        "POS",
+        "NAME",
+        "TOTAL RACE TIME",
+        "FEISAR",
+        "PLAYER 1",
+        "PLAYER 2",
+        "RACING",
+        "0.04.00",
+    ] {
+        assert!(texts.contains(&wanted.to_string()), "{wanted}: {texts:?}");
+    }
+    assert!(
+        !texts.contains(&"race complete!".to_string()),
+        "no headline: {texts:?}"
+    );
+    let highlights = layers
+        .body
+        .iter()
+        .filter(|draw| {
+            matches!(draw, Draw::Fill { rect, .. } if (rect[1] - 113.0).abs() < 0.5
+                || (rect[1] - 133.0).abs() < 0.5)
+        })
+        .count();
+    assert_eq!(highlights, 2, "one highlight per person's row");
+}
