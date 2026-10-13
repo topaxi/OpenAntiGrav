@@ -977,3 +977,69 @@ build, `--ai ours`, from the log timestamps: Pulse `16_Track` the reference plan
 3.4 s plus 1.8 s (a third), the adapted ones on threads. The adapt was not
 optimised in this pass. `pure_chain_walk` never reads a plan: its time is the
 campaign walk.
+
+## One integration-test binary per crate (2026-10-13)
+
+`just test` spends about 2 s running tests and minutes compiling them, and most
+of that compile was linking: every `tests/*.rs` file was its own test binary,
+533 of them, each linking its crate's whole dependency graph (269 units for
+`oag-game` alone, about 2 s each). Three changes:
+
+1. **One binary per crate.** Every crate with more than one `tests/*.rs` sets
+   `autotests = false` and names one `[[test]]`, `tests/it/main.rs`, which pulls
+   each file in by `#[path]`. No file moved and no test changed: a test is now
+   `<file>::<test>` in binary `it` rather than `<test>` in binary `<file>`, so
+   `cargo nextest run -p oag-vex wad_ground_truth::` selects one file's tests.
+   A shared helper (`tests/<name>/mod.rs`) is declared once at the root, and a
+   file's `mod <name>;` became `use crate::<name>;`. `oag-physics`,
+   `oag-gameplay` and `oag-ai` keep a binary per file, because CI runs their
+   determinism test by `--test determinism`.
+2. **`oag-game` is split five ways by first letter** (`it_a_g`, `it_h_l`,
+   `it_m_o`, `it_p_r`, `it_s_z`). As one binary it was 65-80 s of rustc and the
+   last unit of a cold build, and an edit to any test file rebuilt all 267
+   files. Five ranges cost about 70 CPU-s more in a cold build than one binary
+   (shared generic code is compiled once per binary). In return they build in
+   parallel, and an edit to one test file rebuilds a fifth of them.
+3. **`just test` passes `--tests`**, as do `test-affected`, `check-schemas` and
+   CI. Plain `cargo nextest run` also links every example and never runs them:
+   283 units, 216-249 CPU-s of a cold build. `just lint`'s `--all-targets`
+   still type-checks them.
+
+A new test file is compiled only once it is listed in its crate's
+`tests/it*/main.rs`. Each listing carries `every_test_file_is_listed`, which
+fails until the file is listed exactly once.
+
+**Measured.** Every build was cold, with no `kache` and a fresh build
+directory. Each one ran under the shared test lock with `jobs = 8`, at load
+6-14. A second agent's runs held the same machine between builds.
+
+| | before | one binary per crate | plus five `oag-game` binaries and `--tests` |
+| --- | --- | --- | --- |
+| cold `cargo test --no-run` wall | 308-323 s | 267 s | **254 s** |
+| user + sys CPU | 2,603-2,728 s | 2,161 s | **2,023 s** |
+| units built | 1,412 | 918 | 638 |
+| build directory | 24 GB | 7.6 GB | **3.6 GB** |
+| touch an `oag-game` test file | 2-3 s | 28 s | 8 s |
+| touch `oag-game/src/lib.rs` | 89-100 s | 47-48 s | **45 s** |
+| touch `oag-vex/src/lib.rs` | 133-158 s | 84-97 s | **88 s** |
+| touch `oag-core/src/lib.rs` | 132-152 s | 80-91 s | **83 s** |
+| `cargo nextest run --workspace` | 10.3-11.0 s | | 8.9-9.4 s |
+
+For the incremental rows the build was settled first, then one file was
+touched and rebuilt, and a rebuild with no change afterwards took under 2 s.
+Each range is the default run against the `--tests` run. Test counts were
+compared name by name with `cargo nextest list`, both default and
+`--run-ignored all`. Nothing went missing, and the only new tests are the 26
+listing guards.
+
+The one row that got worse is touching a single `oag-game` test file. Before,
+that rebuilt one small binary. Now it rebuilds a fifth of the crate's tests.
+
+**Left alone, with the reason.** The workspace builds `wesl`, `wgsl-parse`,
+`wgsl-types` and a `wgsl-in`-only `naga` twice, about 110 CPU-s. One copy is
+for the build scripts through `oag-shader-check`. The other is for
+`oag-shader-check`'s own unit tests. `cargo build -v` shows the only difference
+is `-C lto=off`: `[profile.dev] lto = "off"` reaches target units, and
+`build-override` cannot set `lto`. Dropping `lto = "off"` would put thin-local
+LTO back on every crate, which costs more than the duplicate. The linker is
+already `rust-lld`, the 1.90+ default on x86_64 Linux.
