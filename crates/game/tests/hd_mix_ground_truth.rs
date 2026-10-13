@@ -4,7 +4,7 @@
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it hd_mix_ground_truth:: --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game hd_mix_ground_truth:: --run-ignored all
 //! ```
 //!
 //! Every number asserted here was also read live off RPCS3's sound system

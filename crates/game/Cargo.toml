@@ -6,7 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+# One integration-test binary per first-letter range of `tests/*.rs` instead of one
+# per file; see any `tests/it_*/main.rs`.
 autotests = false
 default-run = "oag-game"
 
@@ -189,5 +190,21 @@ crate-type = ["cdylib"]
 required-features = ["web"]
 
 [[test]]
-name = "it"
-path = "tests/it/main.rs"
+name = "it_a_g"
+path = "tests/it_a_g/main.rs"
+
+[[test]]
+name = "it_h_l"
+path = "tests/it_h_l/main.rs"
+
+[[test]]
+name = "it_m_o"
+path = "tests/it_m_o/main.rs"
+
+[[test]]
+name = "it_p_r"
+path = "tests/it_p_r/main.rs"
+
+[[test]]
+name = "it_s_z"
+path = "tests/it_s_z/main.rs"

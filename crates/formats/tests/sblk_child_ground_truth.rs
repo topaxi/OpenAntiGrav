@@ -6,7 +6,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --test it sblk_child_ground_truth:: --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats sblk_child_ground_truth:: --run-ignored all
 //! ```
 //!
 //! # What this is for

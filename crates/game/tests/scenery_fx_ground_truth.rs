@@ -4,7 +4,7 @@
 //! project does not ship.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it scenery_fx_ground_truth:: --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game scenery_fx_ground_truth:: --run-ignored all
 //! ```
 //!
 //! `PsysNode_Init` (`0x089156a0`) spawns one instance per `ParticleSystem`

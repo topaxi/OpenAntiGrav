@@ -886,7 +886,7 @@ asserts every claim above against the disc.
 just psarc cat data/images/hdfury-ps3-eu-dec.iso \
     /data/plugins/frontend/definition.xml | grep -A3 PI_Music
 just play hd --race --hold cross --ticks 600
-cargo nextest run -p oag-game --test it hd_music_ground_truth:: --run-ignored all
+cargo nextest run -p oag-game hd_music_ground_truth:: --run-ignored all
 ```
 
 ## The AI netconfigs are dormant: HD's opponents use the classic controller

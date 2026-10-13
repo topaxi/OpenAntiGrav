@@ -4,7 +4,7 @@
 //! project does not ship.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it weather_ground_truth:: --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game weather_ground_truth:: --run-ignored all
 //! ```
 //!
 //! `TrackStartup_Parse`'s `LevelFx` branch builds `Weather_Construct`'s node

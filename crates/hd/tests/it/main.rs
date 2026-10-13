@@ -6,7 +6,8 @@
 //! this file as the only `[[test]]`. A test keeps its name behind its file's
 //! module: `cargo nextest run -p oag-hd <file>::` runs one file's tests.
 //!
-//! A new test file is only compiled once it is listed here.
+//! A new test file is only compiled once it is listed here, and
+//! `every_test_file_is_listed` below fails until it is.
 
 #[path = "../campaign_grids_ground_truth.rs"]
 mod campaign_grids_ground_truth;
@@ -21,19 +22,32 @@ mod hd_title_ground_truth;
 #[path = "../start_gantry_hd_ground_truth.rs"]
 mod start_gantry_hd_ground_truth;
 
-/// A `tests/*.rs` file missing from the list above compiles into nothing, and
-/// its tests stop running without a word.
+/// A `tests/*.rs` file missing from every `tests/it*/main.rs` compiles into
+/// nothing, and its tests stop running without a word.
 #[test]
 fn every_test_file_is_listed() {
-    let listing = include_str!("main.rs");
     let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    let mut listings = String::new();
+    for entry in std::fs::read_dir(&tests).expect("tests/ is readable") {
+        let path = entry.expect("tests/ entry").path();
+        let name = path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or_default();
+        if path.is_dir() && name.starts_with("it") {
+            listings += &std::fs::read_to_string(path.join("main.rs")).unwrap_or_default();
+        }
+    }
     for entry in std::fs::read_dir(&tests).expect("tests/ is readable") {
         let path = entry.expect("tests/ entry").path();
         if path.extension().is_some_and(|ext| ext == "rs") {
             let file = path.file_name().and_then(|f| f.to_str()).expect("UTF-8");
-            assert!(
-                listing.contains(&format!("#[path = \"../{file}\"]")),
-                "tests/{file} is not listed in tests/it/main.rs"
+            let listed = listings
+                .matches(&format!("#[path = \"../{file}\"]"))
+                .count();
+            assert_eq!(
+                listed, 1,
+                "tests/{file} is listed {listed} times in tests/it*/main.rs, not once"
             );
         }
     }

@@ -21,8 +21,9 @@
 # The ground-truth binaries are the ones that need `data/images`, and so the ones
 # that are `#[ignore]`d in the ordinary run. Under plain `just test` they are
 # skipped and this ordering costs nothing. Most crates link every `tests/*.rs`
-# into one `it` binary (see a crate's `tests/it/main.rs`), where a file's tests
-# sit behind its module, so the file name is matched in the test name too.
+# into one `it` binary or a few `it_*` ones (a crate's `tests/it*/main.rs`),
+# where a file's tests sit behind its module, so the file name is matched in
+# the test name too.
 [[profile.default.overrides]]
 filter = 'binary(~ground_truth) | test(~ground_truth::)'
 priority = 50
