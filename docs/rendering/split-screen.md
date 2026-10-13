@@ -522,11 +522,18 @@ depth clamp, so a draw wholly outside the box was clipped away whole before. Per
 view of a split culls to its own craft. Kept of the track's opaque draws: Pulse 465 of 1,737
 (ticks 300 and 1200), Pure 123 of 1,179, HD 286 to 287 of 1,835.
 
-- **Proof**: the same 26 stills `cmp` equal (the `mapped` ones are the claim). Unit test
+- **Proof**: the same 26 stills `cmp` equal (the `mapped` ones are the claim), plus 16 more `mapped`
+  stills at ticks 1200 and 2400 (Pulse, Pure, HD and Omega at one and two views) equal to main's.
+  Stills can only catch an over-cull (with no cull the pass draws main's whole circuit), so
+  they were checked to be sensitive: a throwaway build whose test sphere has radius 0 differs from
+  main on all four stills tried (9,595 pixels of Pulse's two views at tick 300), and `mapped`
+  differs from `off` by 25,057. **The cull being there** is the unit test
+  `the_mapped_depth_map_records_only_the_track_draws_in_its_box` (`tests/split_shadows.rs`): the
+  test circuit is one triangle at the origin, one view's box holds it and the other's clears it,
+  and the pass's own count (`FrameWork::track_ranges_in_depth_map`) must read 1 and 0; with the
+  cull replaced by "every range" the second reads 1 and the test fails. Also
   `only_the_draws_that_touch_the_light_box_are_kept` (inside, a sphere reaching in at the side,
-  outside, behind the far plane, an unbounded moving draw). It tests the selection, not the call
-  site in `render_depth_map`, which no GPU-free test reaches; the stills are what would show it
-  dropped.
+  outside, behind the far plane, an unbounded moving draw).
 - **Cost**, `mapped` tier, Pulse, tick 300, medians of three, before -> after. RX 7800 XT, K=1
   (60 Hz), load 1.0 to 1.4, CPU / pipelined ms: one view 1.11 / 1.14 -> 1.07 / 1.09, two 1.98 /
   2.01 -> 1.89 / 1.93, four 3.77 / 3.79 -> 3.62 / 3.64, eight 7.38 / 7.43 -> 7.05 / 7.05 (0.05 to

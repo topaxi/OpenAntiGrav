@@ -529,6 +529,10 @@ impl super::super::Scene {
                 .opaque_ranges_in(&oag_core::math::frustum::Frustum::from_view_projection(
                     fit.matrix(),
                 ));
+        self.frame_work.update(|w| FrameWork {
+            track_ranges_in_depth_map: in_box.len() as u32,
+            ..w
+        });
         let mut casters = vec![oag_render::shadow::map::Caster {
             ranges: &in_box,
             ..self.track.caster(oag_core::math::Mat4::IDENTITY)
