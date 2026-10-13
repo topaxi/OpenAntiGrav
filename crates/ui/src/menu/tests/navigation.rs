@@ -308,3 +308,18 @@ fn the_back_stack_restores_the_cursor() {
         "and re-entering restores the row inside it"
     );
 }
+
+/// A page pushed from the main menu (what a split-screen row does to reach the RACE page)
+/// backs out to the main menu; a page jumped to has no page under it, so BACK closes.
+#[test]
+fn a_pushed_page_backs_out_to_the_page_under_it_and_a_jumped_one_closes() {
+    let mut menu = Menu::new(built_in());
+    let main = menu.page().id.clone();
+    assert!(menu.push("race"));
+    assert_eq!(menu.page().id, "race");
+    assert!(menu.back().is_empty());
+    assert_eq!(menu.page().id, main);
+
+    assert!(menu.open("race"));
+    assert_eq!(menu.back(), vec![MenuEvent::Closed]);
+}

@@ -120,7 +120,7 @@ kind = "submenu"
 label = "RACEBOX"
 string_id = "OAG_MENU_RACEBOX"
 target = "race"
-subtitle = "Set up your own race"
+subtitle = "Set up your own race, split screen included"
 subtitle_string_id = "OAG_MENU_RACEBOX_SUBTITLE"
 
 

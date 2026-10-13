@@ -65,7 +65,7 @@ OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACE_CAMPAIGN = { text = "RACE CAMPAIGN", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "The story mode: work your way up the tournament grid", human = false }
 OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
-OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race, split screen included", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Mix tracks and ships across every title you own", human = false }
 OAG_MENU_SPLIT_SCREEN = { text = "SPLIT SCREEN", human = false }

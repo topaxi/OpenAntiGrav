@@ -41,7 +41,10 @@ impl Session {
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
-        if !stage.menu.open("race") {
+        // Pushed, not jumped to: BACK from the page lands on the main menu, as it does
+        // from the RACEBOX row (`Menu::open` replaces the stack, and BACK from a
+        // one-page stack closes the game).
+        if !stage.menu.push("race") {
             log::warn!("split screen: the menu has no RACE page to open");
             return;
         }
@@ -65,9 +68,7 @@ impl Session {
             return;
         }
         if let Stage::Menu(stage) = &self.stage
-            && stage.picker.is_none()
-            && stage.join.is_none()
-            && stage.menu.page().id != "race"
+            && has_left_race_box(&stage.menu.page().id, stage.picker.is_some(), stage.join.is_some())
         {
             self.split_race_box = false;
         }
@@ -226,5 +227,24 @@ impl Session {
         if self.controls.assignment().humans().is_some() && self.suspended_race.is_none() {
             self.controls.merge_devices();
         }
+    }
+}
+
+/// Whether the menu has left the split-screen race box: it is on some page but RACE, with
+/// none of the box's own screens (Track and Ship Select, the join screen) open over it.
+fn has_left_race_box(page: &str, picker_open: bool, join_open: bool) -> bool {
+    !picker_open && !join_open && page != "race"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_left_race_box;
+
+    #[test]
+    fn the_box_ends_on_the_main_page_and_not_under_its_own_screens() {
+        assert!(!has_left_race_box("race", false, false), "on the RACE page");
+        assert!(!has_left_race_box("main", true, false), "Track Select is open over it");
+        assert!(!has_left_race_box("main", false, true), "the join screen is open over it");
+        assert!(has_left_race_box("main", false, false), "BACK to the main menu ends it");
     }
 }
