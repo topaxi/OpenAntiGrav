@@ -2344,17 +2344,28 @@ seat; `SplitScreen = RB_VERT` cuts the race left and right and composes HD's `ve
 [split-screen.md](../rendering/split-screen.md), "Where the entry is, per title".
 
 The online screens are a different file (`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`,
-`Network Sync`). **Omega: checked, applies, not wired** (corrected 2026-10-13) - its real
+`Network Sync`). **Omega: ported** (2026-10-13, `split-entry-mirror-hd`) - its real
 `racebox_definition.xml` (`data09`, 15,805 bytes) has HD's `NumberOfPlayers` (y 420, with
 the padlock) and `SplitScreen` (y 470) lists with the same ids and English text, read with
-the digest-matching Rust reader (`cargo build -p oag-assets --example psarc_cat`). The
+the digest-matching Rust reader (`cargo build -p oag-assets --example psarc_cat`), and
+`oag_omega::frontend::FRONT_END` names it as `local_split`, so the same code puts both rows
+on Omega's RACE page (test `omega_race_box_offers_the_discs_own_players_and_cuts`). The
 earlier "neither list" came from `scripts/psarc.py`, which mapped PS4 archive paths by
 position and returned a 5,475-byte `<PI_Grid>` file under that name; the script matches
 by digest now and the claim was re-read with it on 2026-10-13 (15,805 bytes, both lists present, pinned
-by `psarc_script_ground_truth`). Omega's join prompt differs:
-"PLAYER 2 PRESS OPTIONS TO JOIN". **2048: checked, differs** - its English table carries
-HD's split ids word for word (`RB_NUMP`, `RB_SPLSCR`, `FE_SHIPSEL_P1`/`P2`, `MAN_2_SPL`) but
-its touch front end has no `racebox_definition.xml` (`docs/formats/2048-frontend.md`).
+by `psarc_script_ground_truth`). Omega's `NumPlayersPadlock` (970, 410) is the same widget as HD's trial-lock padlock; whether
+Omega's executable hides it the way `RaceBox_UpdateTrialPadlocks` does is **not checkable this
+lane** (no Ghidra access), so the lists are unlocked here as on HD. Omega's join prompt
+differs from HD's: `FE_GUEST_JOIN` is "PLAYER 2 PRESS OPTIONS TO JOIN" there. Omega's
+`team_selection_definition.xml` (`data09`) authors `Team Selection`, `Team Selection Player 1`
+and `Team Selection Player 2` like HD's (**ported**: `team_select` names it, and HD's reader
+parses Omega's copy with two additions, the honeycomb's `Scale` and a per-title ship directory
+for the team logos; Omega's one-player flow gains Ship Select). Omega's `vert_splitscreen_*` HUD files (`data00`) are wired for the vertical cut.
+**2048: ported as a borrow, chosen, not measured** - its touch front end has no
+`racebox_definition.xml` (`docs/formats/2048-frontend.md`) but its English table carries HD's
+split ids word for word (`RB_NUMP`, `RB_SPLSCR`, `RB_HORIZ`, `RB_VERT`, `FE_SHIPSEL_P1`/`P2`,
+`MAN_2_SPL`), so `oag_2048` names HD's lists as `LocalSplit::Borrowed` and its RACE page carries
+the same two rows.
 
 ## What could not be determined
 

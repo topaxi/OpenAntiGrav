@@ -75,9 +75,19 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
         "Data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
     ],
     view_height: 540,
-    // Omega ships HD's `vert_` files too (checked, not wired: its race box authors no cut
-    // to choose them by).
-    vertical: None,
+    // Omega ships HD's `vert_` files in `data00`, and its race box authors the cut that
+    // chooses them (`SplitScreen`, `RB_VERT`): the same four names, the same 960 column.
+    vertical: Some(oag_title::hud::VerticalLayouts {
+        arcade: [
+            "Data/xml/splitscreen_hud/vert_splitscreen_hud_0.xml",
+            "Data/xml/splitscreen_hud/vert_splitscreen_hud_1.xml",
+        ],
+        elimination: [
+            "Data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_0.xml",
+            "Data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_1.xml",
+        ],
+        view_width: 960,
+    }),
 };
 
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].

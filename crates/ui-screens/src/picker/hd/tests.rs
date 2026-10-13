@@ -52,6 +52,7 @@ fn layout_of(xml: &str) -> Layout {
         &strings(),
         FaceScales::default(),
         [1920.0, 1080.0],
+        r"Data\Ships",
     )
     .expect("both screens are there")
 }
@@ -127,7 +128,8 @@ fn a_file_missing_either_screen_reads_as_none() {
             &screens,
             &strings(),
             FaceScales::default(),
-            [1920.0, 1080.0]
+            [1920.0, 1080.0],
+            r"Data\Ships"
         )
         .is_none()
     );
@@ -226,7 +228,10 @@ fn a_livery_with_no_model_of_its_own_shows_no_stats() {
 
 #[test]
 fn the_logo_is_the_teams_own_front_end_texture() {
-    assert_eq!(logo_src("Feisar"), r"Data\Ships\Feisar\FE\Logo.gtf");
+    assert_eq!(
+        logo_src(r"Data\Ships", "Feisar"),
+        r"Data\Ships\Feisar\FE\Logo.gtf"
+    );
 }
 
 use super::hex::{HEX_SRC, LOCK_SRC, ModelCell, OUTLINE_SRC};
@@ -838,4 +843,18 @@ fn the_shared_kinetic_defaults_are_unchanged() {
     assert_eq!((MAX_FLING, FRICTION), (24.0, 2.0));
     let hex = crate::picker::pointer::hex_extent();
     assert!(hex.max_fling < MAX_FLING && hex.friction > FRICTION);
+}
+
+/// A honeycomb authored at `Scale="0.8"` (Omega's, nine rows) shrinks pitch and cell alike,
+/// and a grid with no scale is HD's, unchanged.
+#[test]
+fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
+    let full = hex::HexGrid::unauthored([100.0, 200.0], 5, 7);
+    let small = hex::HexGrid { scale: 0.8, ..full };
+    let (a, b) = (full.cells(0, 5, 0.0), small.cells(0, 5, 0.0));
+    assert_eq!(a.len(), b.len());
+    // The second row of the first column: one pitch below the first.
+    let pitch = |cells: &[hex::Cell]| cells[1].rect[1] - cells[0].rect[1];
+    assert!((pitch(&b) - 0.8 * pitch(&a)).abs() < 1e-3);
+    assert!((b[0].rect[2] - 0.8 * a[0].rect[2]).abs() < 1e-3);
 }

@@ -50,6 +50,9 @@ candidate specifically so it is searched before the other eight - chosen to
 win the collision, not measured to be what a PS4 actually loads first. See
 `crates/omega/src/lib.rs`'s own `DATA_CANDIDATES` doc and
 [`omega-frontend.md`](omega-frontend.md#load-order-is-not-settled).
+Omega's `racebox_definition.xml` is read for HD's two local-split lists only
+(`FrontEnd::local_split`, 2026-10-13: the RACE page's `NUMBER OF PLAYERS` and `SPLIT SCREEN`
+rows); its `Single Player` page is not walked.
 
 **The ship directory moved to 2048's scheme, not HD's.** `Data\art\published\hdships\<team>\`,
 lowercase ids (`ag_systems` confirmed present), not HD's `Data\Ships\<Team>\`.

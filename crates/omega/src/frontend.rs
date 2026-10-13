@@ -20,11 +20,10 @@
 //!   decodes to HD's `file2.gtf` exactly) and because without it the menu is
 //!   bare labels on a flat box, which the maintainer reported on 2026-10-06
 //!   as not rendering correctly. Labelled where it is declared.
-//! - **No race box.** `racebox_definition.xml` exists in `data09.psarc`, but
-//!   its dialect has not been checked against either the Pulse/Pure
-//!   `Selection_Definition.xml` shape `oag_ui_screens::picker::Layout::read` parses
-//!   or HD's own unread `<Model>`-widget one. `None`, a gap rather than a
-//!   measurement - see `docs/formats/omega-status.md`.
+//! - **No race box of its own pages.** `racebox_definition.xml` exists in `data09.psarc` and
+//!   is HD's dialect; only its local-split lists (`NumberOfPlayers`, `SplitScreen`) are read
+//!   ([`oag_title::FrontEnd::local_split`]). Its `Single Player` page is not walked, so
+//!   `race_box` stays `None` - see `docs/formats/omega-status.md`.
 //!
 //! [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 
@@ -234,10 +233,14 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // confirmed campaign cell races the RACE page's team (`settings.race.team`)
     // rather than opening a screen a player cannot read; measured 2026-09-30, the open item in
     // `docs/formats/omega-status.md`.
-    team_select: None,
+    // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's
+    // dialect: HD's reader parses them as they stand.
+    team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
-    local_split: None,
+    // The race box's own two split lists, read from `data09`'s copy (HD's `NumberOfPlayers`
+    // and `SplitScreen`, same ids and English text): see `names::RACEBOX_DEFINITION`.
+    local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     preview_meshes: false,
     ship_preview_hull: None,
     circuit_models: &CIRCUIT_MODELS,
@@ -286,6 +289,15 @@ pub mod names {
     /// `oag_assets`'s path folding resolves either spelling identically. Read
     /// off `data09.psarc`, confirmed present.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
+
+    /// The race box: `Single Player` (mode, class, weapons, difficulty, and the local split's
+    /// `NumberOfPlayers` and `SplitScreen` lists, HD's own at y 420 and 470). Present in
+    /// `data09.psarc` (15,805 bytes) at HD's path.
+    pub const RACEBOX_DEFINITION: &str = r"Data\Plugins\Frontend\Gui\racebox_definition.xml";
+
+    /// `Team Selection` and its two per-player copies, at HD's own path (`data09`, 14,480 bytes).
+    pub const TEAM_SELECTION_DEFINITION: &str =
+        r"Data\Plugins\Frontend\Gui\Team_Selection_Definition.xml";
 
     /// `Track Creation`, at HD's own path; `data08` and `data09` carry it, and
     /// the front end's `skin.xml` includes it as HD's does.

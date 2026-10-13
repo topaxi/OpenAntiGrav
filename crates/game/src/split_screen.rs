@@ -49,17 +49,6 @@ pub fn trim_menu(
     true
 }
 
-/// [`trim_menu`] for 2048's touch grid, which carries the entry as a tile.
-pub fn trim_tiles(
-    tiles: &mut Vec<oag_ui::frontend::ExtraTile>,
-    title: &oag_title::Title,
-    device: wgpu::DeviceType,
-) {
-    if !offered(title, device) {
-        tiles.retain(|tile| tile.launch != oag_ui::frontend::Launch::SplitScreen);
-    }
-}
-
 /// The view count `--players players` settles on for `title` on `device`: `players` where
 /// the split is [`offered`], else one, said in the log.
 #[must_use]

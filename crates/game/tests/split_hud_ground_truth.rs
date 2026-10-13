@@ -618,6 +618,71 @@ fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
     }
 }
 
+/// Omega's race box authors a cut, so its `vert_` family is wired the way HD's is: the same
+/// four roots compose to the same sprites and labels as HD's, the second of each pair one
+/// 960-wide column to the right of the first.
+#[test]
+#[ignore = "needs the HD image and the extracted PS4 package"]
+fn omega_wires_hds_vert_layouts_one_column_apart() {
+    let (Some(image), Some(ps4)) = (
+        oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso"),
+        oag_testdata::exact("data/extracted/ps4"),
+    ) else {
+        return;
+    };
+    // A vertically cut two-view Omega race reads them: the layouts it draws are the 960-wide
+    // columns, one view apart, where the horizontal cut's are the half-height rows.
+    let load = |cut| {
+        race::load(&race::Options {
+            source: ps4.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            views: 2,
+            cut,
+            ..race::Options::default()
+        })
+        .expect("loading Omega's race")
+    };
+    let vertical = load(oag_render::viewport::Cut::Vertical);
+    let horizontal = load(oag_render::viewport::Cut::Horizontal);
+    let columns = vertical.hud.split.as_ref().expect("the vert_ family");
+    let rows = horizontal
+        .hud
+        .split
+        .as_ref()
+        .expect("the horizontal family");
+    assert_eq!(columns.view, (960.0, 1080.0));
+    assert_eq!(columns.step, (960.0, 0.0));
+    assert_eq!(rows.view, (1920.0, 540.0));
+    let mut hd = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let mut omega = oag_omega::open(&ps4.display().to_string()).expect("Omega opens");
+    let hd_vert = oag_hd::hud::SPLIT
+        .vertical
+        .expect("HD names the vert_ family");
+    let vert = oag_omega::hud::SPLIT
+        .vertical
+        .expect("Omega names the vert_ family");
+    assert_eq!(vert.view_width, hd_vert.view_width);
+    for (ours, theirs) in [
+        (vert.arcade, hd_vert.arcade),
+        (vert.elimination, hd_vert.elimination),
+    ] {
+        let first = extent(&composed(&mut omega, ours[0]).layout);
+        let second = extent(&composed(&mut omega, ours[1]).layout);
+        assert_eq!(
+            first,
+            extent(&composed(&mut hd, theirs[0]).layout),
+            "{ours:?}: HD's own"
+        );
+        assert_eq!(first.0, second.0, "{ours:?}: the same sprites");
+        assert_eq!(
+            second.2 - first.2,
+            vert.view_width as f32,
+            "{ours:?}: one column apart"
+        );
+    }
+}
+
 /// Every name a split-HUD file writes is a widget its title authors, in some mode, or
 /// one of the assist indicator's, which this project splices in for the titles whose
 /// discs author none. A typo would otherwise draw nothing and say nothing, and a rule

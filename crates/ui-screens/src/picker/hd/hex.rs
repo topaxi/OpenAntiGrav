@@ -66,6 +66,8 @@ const HEX_CENTRE: [f32; 2] = [37.0, 31.5];
 const HEX_SIZE: [f32; 2] = [72.0 * HEX_SCALE, 62.0 * HEX_SCALE];
 /// Units per padlock texel, and per thumbnail texel.
 const LOCK_SCALE: f32 = 0.44;
+/// The width of HD's `Padlock.gtf`, in texels, which [`LOCK_SCALE`] was measured on.
+const LOCK_TEXELS: f32 = 256.0;
 const THUMB_SCALE: f32 = 1.0;
 /// How far a padlock's colour has faded toward `SelectedLockColFade` one
 /// and two columns from the selected one.
@@ -109,6 +111,10 @@ pub struct HexGrid {
     pub origin: [f32; 2],
     pub columns: usize,
     pub rows: usize,
+    /// The widget's own `Scale`, which shrinks the cell pitch and size alike: `1.0` where it
+    /// authors none (HD's `Team Selection`), `0.8` on Omega's, whose grid holds nine rows
+    /// where HD's holds seven.
+    pub scale: f32,
     pub hex: u32,
     pub hex_fade: u32,
     /// Columns out at which a cell has faded all the way to `hex_fade`; `0`
@@ -155,6 +161,7 @@ impl HexGrid {
             origin,
             columns,
             rows,
+            scale: 1.0,
             hex: HEX_COL,
             hex_fade: HEX_COL_FADE,
             fade_columns: 4,
@@ -186,7 +193,10 @@ impl HexGrid {
             let offset = column - centre as i64;
             let entry = (selected as i64 + offset).rem_euclid(count as i64) as usize;
             let toward = column + if pan < 0.0 { -1 } else { 1 };
-            let shift = PITCH[1] * 0.5 * (heave(column) * (1.0 - slide) + heave(toward) * slide);
+            let shift = PITCH[1]
+                * self.scale
+                * 0.5
+                * (heave(column) * (1.0 - slide) + heave(toward) * slide);
             let weight = if column < 0 || column >= self.columns as i64 {
                 slide
             } else if (pan > 0.0 && column == self.columns as i64 - 1) || (pan < 0.0 && column == 0)
@@ -197,17 +207,17 @@ impl HexGrid {
             };
             for row in 0..self.rows {
                 let (cx, cy) = (
-                    self.origin[0] + (column as f32 + pan) * PITCH[0],
-                    self.origin[1] + row as f32 * PITCH[1] + shift,
+                    self.origin[0] + (column as f32 + pan) * PITCH[0] * self.scale,
+                    self.origin[1] + row as f32 * PITCH[1] * self.scale + shift,
                 );
                 out.push(Cell {
                     entry,
                     row,
                     rect: [
-                        cx - HEX_SIZE[0] * 0.5,
-                        cy - HEX_SIZE[1] * 0.5,
-                        HEX_SIZE[0],
-                        HEX_SIZE[1],
+                        cx - HEX_SIZE[0] * self.scale * 0.5,
+                        cy - HEX_SIZE[1] * self.scale * 0.5,
+                        HEX_SIZE[0] * self.scale,
+                        HEX_SIZE[1] * self.scale,
                     ],
                     distance: offset.unsigned_abs() as usize,
                     weight,
@@ -294,12 +304,13 @@ pub(super) fn draw_cells(
         let first_draw = out.len();
         let chosen = cell.distance == 0;
         let (cx, cy) = centre(cell.rect);
+        let hex_scale = HEX_SCALE * grid.scale;
         if let Some(placed) = sprites(HEX_SRC) {
             let rect = [
-                cx - HEX_CENTRE[0] * HEX_SCALE,
-                cy - HEX_CENTRE[1] * HEX_SCALE,
-                placed.width as f32 * HEX_SCALE,
-                placed.height as f32 * HEX_SCALE,
+                cx - HEX_CENTRE[0] * hex_scale,
+                cy - HEX_CENTRE[1] * hex_scale,
+                placed.width as f32 * hex_scale,
+                placed.height as f32 * hex_scale,
             ];
             if chosen {
                 let red = argb_to_rgba(grid.selected_column);
@@ -326,6 +337,7 @@ pub(super) fn draw_cells(
                         ArtSize::PerTexel(scale) => scale,
                         ArtSize::Fit(units) => units / placed.width.max(placed.height) as f32,
                     };
+                    let scale = scale * grid.scale;
                     let (w, h) = (placed.width as f32 * scale, placed.height as f32 * scale);
                     let color = if chosen {
                         [1.0; 4]
@@ -337,10 +349,10 @@ pub(super) fn draw_cells(
             }
             Face::Lock => {
                 if let Some(placed) = sprites(LOCK_SRC) {
-                    let (w, h) = (
-                        placed.width as f32 * LOCK_SCALE,
-                        placed.height as f32 * LOCK_SCALE,
-                    );
+                    // `LOCK_SCALE` is per texel of HD's 256-wide padlock; a title that
+                    // ships it larger (Omega's is 512) draws it at the same size.
+                    let lock = LOCK_SCALE * grid.scale * LOCK_TEXELS / placed.width as f32;
+                    let (w, h) = (placed.width as f32 * lock, placed.height as f32 * lock);
                     let fade = LOCK_FADE[cell.distance.min(LOCK_FADE.len() - 1)];
                     out.push(sprite(
                         placed,
@@ -355,10 +367,10 @@ pub(super) fn draw_cells(
             && let Some(placed) = sprites(OUTLINE_SRC)
         {
             let rect = [
-                cx - HEX_CENTRE[0] * HEX_SCALE,
-                cy - HEX_CENTRE[1] * HEX_SCALE,
-                placed.width as f32 * HEX_SCALE,
-                placed.height as f32 * HEX_SCALE,
+                cx - HEX_CENTRE[0] * hex_scale,
+                cy - HEX_CENTRE[1] * hex_scale,
+                placed.width as f32 * hex_scale,
+                placed.height as f32 * hex_scale,
             ];
             out.push(sprite(placed, rect, ring));
         }

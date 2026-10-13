@@ -633,7 +633,7 @@ fn hd_reads_its_own_team_selection() {
     );
     // And every team's logo is on the sheet.
     for team in &shell.teams {
-        let src = oag_ui_screens::picker::hd::logo_src(&team.id);
+        let src = oag_ui_screens::picker::hd::logo_src(oag_hd::TITLE.race.ship_dir, &team.id);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
 
@@ -805,6 +805,106 @@ fn hd_race_box_offers_the_discs_own_players_and_cuts() {
             .map(|choice| choice.label.as_str())
             .collect::<Vec<_>>(),
         ["1", "2"]
+    );
+}
+
+/// Omega's own `racebox_definition.xml` (`data09`, 15,805 bytes) authors HD's two lists with the
+/// same ids at y 420 and 470, so Omega's race box reads the same rows as HD's. The words are
+/// Omega's own English table's. (An earlier "neither list" came from `scripts/psarc.py`'s
+/// positional mis-mapping of PS4 archives.)
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_race_box_offers_the_discs_own_players_and_cuts() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let shell = shell(&path);
+    let setup = &shell.race_setup;
+    assert_eq!(setup.players, ["1", "2"]);
+    assert_eq!(setup.cuts, ["RB_HORIZ", "RB_VERT"]);
+    let shown: Vec<(String, String)> = setup
+        .cut_choices(&shell.strings)
+        .into_iter()
+        .map(|choice| (choice.value, choice.label))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("RB_HORIZ".to_string(), "HORIZONTAL".to_string()),
+            ("RB_VERT".to_string(), "VERTICAL".to_string())
+        ]
+    );
+}
+
+/// Omega authors HD's `Team Selection` in HD's dialect with its own numbers, and the front end
+/// reads it as the ship screen: the same title, Omega's own `ShipModel` origin and honeycomb
+/// (nine rows at `Scale="0.8"` where HD's is seven at full size), and every team's logo found under
+/// Omega's own ship directory (`hdships`, not HD's `Data\Ships`). Dropping `team_select` from
+/// `oag_omega` fails the first line.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_reads_its_own_team_selection() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let shell = shell(&path);
+    let ship = shell.ship_select.as_ref().expect("Team Selection reads");
+    assert_eq!(ship.title, "SHIP SELECT");
+    let extra = ship.hd.as_deref().expect("HD's dialect");
+    let model = extra.ship_model.expect("ShipModel");
+    assert_eq!(model.origin, [960.0, 540.0]);
+    let grid = extra.hex.expect("the honeycomb");
+    assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
+    assert!(!shell.teams.is_empty());
+    for team in &shell.teams {
+        let src = oag_ui_screens::picker::hd::logo_src(oag_omega::TITLE.race.ship_dir, &team.id);
+        assert!(shell.sprites.get(&src).is_some(), "{src}");
+    }
+    assert!(
+        shell.ship_select_split.is_none(),
+        "Omega authors per-player screens as a sequence, not one shared page"
+    );
+}
+
+/// The lists 2048 borrows (`oag_title::LocalSplit::Borrowed`) are HD's own, which Omega authors
+/// identically: a borrowed constant that drifted from what the disc authors would fail here.
+/// 2048 has no race box, so its rows are the borrowed lists with 2048's own words for the
+/// ids (`RB_HORIZ` and `RB_VERT` are in its English table, the same text HD's carries).
+#[test]
+#[ignore = "needs the decrypted 2048 package in data/extracted/vita/ and an HD disc"]
+fn wipeout_2048_borrows_the_lists_hd_and_omega_author() {
+    let Some(hd_path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let Some(oag_title::LocalSplit::Borrowed(borrowed)) = oag_2048::TITLE
+        .front_end
+        .and_then(|front_end| front_end.local_split)
+    else {
+        panic!("2048 borrows HD's lists");
+    };
+    let hd = shell(&hd_path);
+    assert_eq!(hd.race_setup.players, borrowed.players);
+    assert_eq!(hd.race_setup.cuts, borrowed.cuts);
+
+    let shell = shell(&path);
+    let setup = &shell.race_setup;
+    assert_eq!(setup.players, borrowed.players);
+    assert_eq!(setup.cuts, borrowed.cuts);
+    let shown: Vec<(String, String)> = setup
+        .cut_choices(&shell.strings)
+        .into_iter()
+        .map(|choice| (choice.value, choice.label))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("RB_HORIZ".to_string(), "HORIZONTAL".to_string()),
+            ("RB_VERT".to_string(), "VERTICAL".to_string())
+        ],
+        "2048's own English table's words"
     );
 }
 
