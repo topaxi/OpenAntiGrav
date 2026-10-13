@@ -167,18 +167,14 @@ fn loose(relative: &str) -> Option<String> {
 fn the_script_reads_omegas_nine_archives_as_the_reader_does() {
     let mut entries = 0;
     let mut archives = 0;
-    for dir in ["omega-eu", "omega-eu-patch"] {
-        for name in [
-            "data00", "data01", "data02", "data03", "data04", "data05", "data07", "data08",
-            "data09",
-        ] {
-            let relative = format!("data/extracted/ps4/{dir}/uroot/{name}.psarc");
-            let Some(spec) = loose(&relative) else {
-                return;
-            };
-            entries += agree(&spec);
-            archives += 1;
-        }
+    let base = ["data00", "data01", "data02", "data03", "data04"].map(|n| ("omega-eu", n));
+    let patch = ["data05", "data07", "data08", "data09"].map(|n| ("omega-eu-patch", n));
+    for (dir, name) in base.into_iter().chain(patch) {
+        let Some(spec) = loose(&format!("data/extracted/ps4/{dir}/uroot/{name}.psarc")) else {
+            return;
+        };
+        entries += agree(&spec);
+        archives += 1;
     }
     assert_eq!(archives, 9, "five base and four patch archives");
     assert_eq!(entries, 46_005, "docs/formats/psarc.md's bijection total");

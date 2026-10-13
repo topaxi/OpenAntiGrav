@@ -81,7 +81,7 @@ patch's `data05`/`data07`/`data08`/`data09`:
 (The earlier table read 10 / 5 / 182 / 1,492 for `data00` and 9 / 5 / 182 / 1,786
 for `data08`: the short-read extraction's torn manifests.)
 
-**`data00` is a bootable front end, an older build.** It carries `skin.xml`
+**`data00` carries a front end of its own, an older build** (that it boots on its own was not tested). It carries `skin.xml`
 (30,235 bytes), `mainmenu_definition.xml` (9,797), `racebox_definition.xml`
 (15,784), `cellmode_definition.xml` (68,013), `campaign2048_definition.xml`
 (31,664), `team_selection_definition.xml` and `selection_definition.xml`; the
@@ -375,8 +375,9 @@ this project. Four copies of `cellmode_definition.xml` exist across the
 nine archives (corrected 2026-10-13, re-read whole): `data00`'s (68,013 bytes),
 `data07`'s (69,013), and `data08`'s and `data09`'s, which are **byte-identical**
 (69,457 bytes, five screens including `Grid Selection 2048`). `data07`'s older copy
-differs from them (the `FE_CAMPAIGNLIST` row is not `IsHidden`, and the flyer
-`Values` are in 1280x720 pixel units against 1920x1080 and `orthoScaleX/Y/Z`);
+differs from them (the `FE_CAMPAIGNLIST` row is not `IsHidden`; the flyer `Values`
+carry `OriginX` 640/960/1280, `OriginY` 450 and `orthoScale` 0.75 where `data09`'s
+carry `OriginX` 960, `OriginY` 540 and `orthoScaleX/Y/Z`);
 `data05.psarc` carries none.
 
 [`psarc-mount.md`](../ghidra/functions/ps4-omega-eu/psarc-mount.md)'s own
