@@ -31,6 +31,14 @@ craft now being Triakis, one reason per row in each file.
   slack). The verifying driver is neutral; the race's Ace spends a little character and the
   hull has no turn left to recover. A plan cannot fix it; the `tight` mark (wall within a unit)
   does not see it. Marking full-lock samples tight was tried: 123 ticks, not 0.
+- **Give our driver the player's Pilot Assist instead of a lane snap** (maintainer idea,
+  2026-10-13, not for now). `oag_physics::pilot_assist` (HD's and 2048's own law, the yaw
+  away from an approaching wall and the sideways push off a touched one, paid for in
+  throttle) could fly under this project's driver as a safety net, where the original
+  driver has `Ai_SnapToLane` moving the body directly. It stays inside the player's physics
+  (the 2026-09-29 decision that opponents obey the player's physics), so it may cover the
+  full-lock drift below and the hulls a plan cannot save. Chosen, not measured, if done:
+  which level (Normal per ship, Extreme global) and whether every opponent gets it.
 - **Race-start cost of adapted plans**: 2.5-10x main's CPU (release, `01_Track` VENOM 4.5 s
   against 0.4-0.9 s), +0.6-1.0 s wall on a 16-core host. Phones and the web will feel it.
 - **Read HD's live rival controller**: `AIControlStats.xml` is unread for HD and
