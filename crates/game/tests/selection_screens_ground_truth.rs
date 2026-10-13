@@ -808,6 +808,34 @@ fn hd_race_box_offers_the_discs_own_players_and_cuts() {
     );
 }
 
+/// Omega's own `racebox_definition.xml` (`data09`, 15,805 bytes) authors HD's two lists with the
+/// same ids at y 420 and 470, so Omega's race box reads the same rows as HD's. The words are
+/// Omega's own English table's. (An earlier "neither list" came from `scripts/psarc.py`'s
+/// positional mis-mapping of PS4 archives.)
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_race_box_offers_the_discs_own_players_and_cuts() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let shell = shell(&path);
+    let setup = &shell.race_setup;
+    assert_eq!(setup.players, ["1", "2"]);
+    assert_eq!(setup.cuts, ["RB_HORIZ", "RB_VERT"]);
+    let shown: Vec<(String, String)> = setup
+        .cut_choices(&shell.strings)
+        .into_iter()
+        .map(|choice| (choice.value, choice.label))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("RB_HORIZ".to_string(), "HORIZONTAL".to_string()),
+            ("RB_VERT".to_string(), "VERTICAL".to_string())
+        ]
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_weapons_row_offers_the_discs_own_two_states() {
