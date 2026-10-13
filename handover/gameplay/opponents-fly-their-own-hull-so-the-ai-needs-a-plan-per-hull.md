@@ -39,6 +39,18 @@ craft now being Triakis, one reason per row in each file.
   (the 2026-09-29 decision that opponents obey the player's physics), so it may cover the
   full-lock drift below and the hulls a plan cannot save. Chosen, not measured, if done:
   which level (Normal per ship, Extreme global) and whether every opponent gets it.
+- **Pilot Assist, the original's lane snap, or both, on our driver** (maintainer,
+  2026-10-13). They act at different moments: `Ai_SnapToLane` only in free flight (above
+  50 u/s, within 14 units of the surface, touching nothing; dropped on contact), Pilot Assist
+  near and on a wall. The snap holds the line, the assist recovers when it is lost anyway.
+  Expected effects, unmeasured: the assist covers the full-lock drift at a throttle cost;
+  the snap might let one reference plan serve every hull and remove most of the per-hull
+  plan cost at race start. Costs: the snap bypasses physics, which reverses the 2026-09-29
+  maintainer decision that opponents obey the player's physics, so it needs the
+  maintainer's ACK; both aids hide controller weaknesses from the gates (keep an aids-off
+  configuration so the driver itself stays measured); a single snap target flattens
+  overtaking unless each opponent snaps to its own lane offset, as the original's
+  preferred lane does.
 - **Race-start cost of adapted plans**: 2.5-10x main's CPU (release, `01_Track` VENOM 4.5 s
   against 0.4-0.9 s), +0.6-1.0 s wall on a 16-core host. Phones and the web will feel it.
 - **Read HD's live rival controller**: `AIControlStats.xml` is unread for HD and
@@ -56,3 +68,8 @@ craft now being Triakis, one reason per row in each file.
 2. The full-lock drift: verify a plan with the race's own driver spread (a few personality
    seeds) instead of the neutral driver alone, and measure on `02_Track` FLASH, an afternoon.
 3. Read `AIControlStats.xml` on HD: a decompile-and-read lane, an afternoon.
+4. The aids experiment: our driver in four configurations (none, Pilot Assist, lane snap,
+   both), each over the clean-lap gate, the de Konstruct board (23 seeds), the `02_Track`
+   FLASH drift case, and race-start time with one shared plan against per-hull plans. The
+   numbers decide which aid ships; the snap needs the maintainer's ACK either way. Half a
+   day to a day.
