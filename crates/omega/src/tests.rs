@@ -33,7 +33,7 @@ fn all_nine_archives_are_mounted_and_none_twice() {
     }
 }
 
-/// `data09` - the archive carrying the complete front end - is the *bulk*
+/// `data09` - the newest layer of the front end - is the *bulk*
 /// candidate, so it is searched before every other archive this title
 /// mounts. This is the whole of what makes the patch-ahead-of-base design
 /// work; a future edit that moved it into `extra` would compile fine and

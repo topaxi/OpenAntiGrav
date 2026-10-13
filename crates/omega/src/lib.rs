@@ -254,27 +254,31 @@ pub mod names {
 ///
 /// [`docs/formats/omega-frontend.md`]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/formats/omega-frontend.md
 pub mod archives {
-    /// Base package, archive 0: no front-end XML, but the game's own
-    /// non-front-end content (`ingame_definition.xml`, `manual_definition.xml`
-    /// and friends).
+    /// Base package, archive 0: an older build of the front end (42
+    /// `frontend/gui` files including `skin.xml`, `mainmenu_definition.xml` and
+    /// `racebox_definition.xml`) beside the game's own non-front-end content
+    /// (`ingame_definition.xml`, `manual_definition.xml` and friends).
     pub const DATA00: &str = "uroot/data00.psarc";
     /// Base package, archives 1-4: no front-end/language content at all.
     pub const DATA01: &str = "uroot/data01.psarc";
     pub const DATA02: &str = "uroot/data02.psarc";
     pub const DATA03: &str = "uroot/data03.psarc";
     pub const DATA04: &str = "uroot/data04.psarc";
-    /// Patch, archive 5: one stray front-end file among 1,205 entries.
+    /// Patch, archive 5: three front-end files among 8,205 entries.
     pub const DATA05: &str = "uroot/data05.psarc";
     /// Patch, archive 7: six entries total - a stale `cellmode_definition.xml`,
     /// two Korean font pairs, a `Zone` ship model fix.
     pub const DATA07: &str = "uroot/data07.psarc";
     /// Patch, archive 8: the bulk of front-end *assets* - fonts, `.gnf`
-    /// images, `.rcsmodel` flyers - and 9 XML files, a different and newer
-    /// set than `data00`'s own 10.
+    /// images, `.rcsmodel` flyers - and 43 `frontend/gui` XML files, a front
+    /// end of its own that `data09` supersedes (`skin.xml` and 23 language
+    /// tables differ; the rest of the plugin tree is identical bar three
+    /// `_demo` files).
     pub const DATA08: &str = "uroot/data08.psarc";
     /// Patch, archive 9: almost entirely front-end/language/plugin XML (91 of
-    /// 120 entries) and the **only** archive carrying the complete front-end
-    /// file set. No circuits, no ship models, no textures.
+    /// 120 entries): the newest and largest front-end file set (45
+    /// `frontend/gui` files; `data00` and `data08` carry older layers of the
+    /// same files). No circuits, no ship models, no textures.
     pub const DATA09: &str = "uroot/data09.psarc";
 
     /// All nine, in package-then-archive-number order.
@@ -283,17 +287,17 @@ pub mod archives {
     ];
 }
 
-/// The bulk archive's one candidate: `data09`, the patch's front-end-complete
+/// The bulk archive's one candidate: `data09`, the patch's newest front-end
 /// copy.
 ///
 /// **Not "the biggest archive" or "the base package", the way [`oag_hd`]'s
 /// and [`oag_2048`]'s own bulk candidates are - it is the one chosen to win a
 /// name collision.** [`oag_assets::Archives::holder_of`] checks `data` before
 /// `fe` before `extra`, so whichever archive fills this role is served first
-/// for any path more than one archive carries. `data09.psarc` is the only
-/// archive with the complete plugin/language set, reads clean far more often
-/// than the other four front-end-bearing archives (39 of 45 `frontend/gui`
-/// files clean from byte zero, against `data00`'s 8/10), and is the
+/// for any path more than one archive carries. `data09.psarc` holds the
+/// newest and largest plugin/language set (a superset of `data08`'s, which
+/// supersedes `data00`'s; corrected 2026-10-13: every archive reads whole, and
+/// `data00` and `data08` each carry a front end too), and is the
 /// highest-numbered patch archive - the same circumstantial shape
 /// `oag_hd::TITLE`'s own `DATA00` had before its RPCS3 capture confirmed it.
 /// **This is that shape of evidence again, not the capture: chosen, not
