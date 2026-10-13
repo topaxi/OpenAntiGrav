@@ -11,9 +11,10 @@ split screen"). Is the padlock on `NumberOfPlayers = 2` a progression unlock, a 
 else? Everything below is about that one row; the rest of the routine is read only as far as it shares the rule.
 
 **Answer, confidence 72: a trial-build restriction, not a progression unlock.** The padlock logic runs only
-while the content flag `g_FuryContentFlags` (`0x00b979fc`, a byte; the label is already in the database, it is
-not recovered here) is non-zero, and that flag is the one the front end reads to decide whether to draw the
-trial's own `TrialText` and the `PurchaseGameRedirect` (`FUN_0016cb40`, `0x0016cb40`). With it zero - the full
+while the byte at `0x00b979fc` is non-zero. The Ghidra database already labels it `g_FuryContentFlags`; that label is
+not recovered here, has no `names.tsv` row and its provenance is unknown, so **the trial reading rests on what
+`0x0016cb40` does with the byte, not on its name** ("Fury" could as easily mean expansion ownership): that function
+draws the trial's own `TrialText` and the `PurchaseGameRedirect` only while the byte is non-zero. With it zero - the full
 game - the routine returns before any padlock is shown or any entry refused, so **two players are available from
 the first launch**, with no save-game input. This build races a full game, so it offers two players unlocked.
 
@@ -37,8 +38,8 @@ widget table. Reading it:
    bit `4` on the matching padlock when the entry is one the trial locks.
 4. **The `NumberOfPlayers` row**: `FUN_00676958(list.value, 0, 10)` parses the list's current string as a
    base-10 integer, and when it is `2` the `NumPlayersPadlock` gets bit `4` set and the screen counts as locked
-   (`bVar3`). A locked screen shows the big `Padlock` over the icon and clears a bit of the confirm control
-   (`FUN_001da6d0`), which is what stops START.
+   (`bVar3`). A locked screen shows the big `Padlock` over the icon and changes a bit of the control at `+0xc0` of the
+   screen's second child (`FUN_001da6d0`); that this is what stops START is **inferred, not read**.
 
 ## Why the flag is the trial, not progress
 

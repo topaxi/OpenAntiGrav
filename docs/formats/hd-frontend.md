@@ -2326,8 +2326,9 @@ across every row (`Mode` 0-4 and 28-30, `Class` 5-8, `Weapons` 9-10, `Difficulty
 gates; that was wrong.
 
 **What the padlock is**: a trial-build lock, not a progression unlock. `RaceBox_UpdateTrialPadlocks` (`0x002497d8`)
-hides every padlock each frame and only shows one while the content flag `g_FuryContentFlags` (`0x00b979fc`, the
-byte the front end's `TrialText`/`PurchaseGameRedirect` widgets read) is non-zero; `NumPlayersPadlock` is shown when
+hides every padlock each frame and only shows one while the byte at `0x00b979fc` (labelled `g_FuryContentFlags` in
+the database, a label not recovered here; it is the byte the front end's `TrialText`/`PurchaseGameRedirect` widgets
+read, which is what the trial reading rests on) is non-zero; `NumPlayersPadlock` is shown when
 `NumberOfPlayers` parses to `2`. With the flag zero (the full game) nothing is locked, so two players are available
 from the first launch. Confidence 72; the flag's writer is not located. Evidence and what is unread:
 [racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md).

@@ -88,7 +88,7 @@ fn draws<'a>(
         hud.split.as_ref(),
         hud.split_hud.as_ref(),
         readouts,
-        oag_render::viewport::Cut::Horizontal,
+        race.cut(),
         VIEWPORT,
         hud.space,
     )
@@ -436,14 +436,27 @@ fn hd_draws_its_own_vert_layouts_in_a_vertically_cut_two_view_race() {
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_draws_a_reticle_in_its_authored_split_view() {
-    let Some(loaded) = hd_loaded(2) else {
+    hd_reticle_in_split_view(oag_render::viewport::Cut::Horizontal);
+}
+
+/// The same for the left-and-right cut, which reads the `vert_` layouts: the arcade one
+/// includes the whole-screen `HUD_sights.xml` (the horizontal one has `splitscreen_sights.xml`)
+/// and the reticle's view is 960x1080, so its centre could land in the wrong column.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_draws_a_reticle_in_its_authored_vertical_split_view() {
+    hd_reticle_in_split_view(oag_render::viewport::Cut::Vertical);
+}
+
+fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
+    let Some(loaded) = hd_loaded_cut(2, cut) else {
         return;
     };
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(hud.sight_screen());
     race.set_sight_dialect(hud.art.sights);
-    oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
+    oag_game::split_screen::apply(&mut race, 2, cut);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
