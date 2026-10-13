@@ -163,6 +163,9 @@ impl Race {
     /// else it is this tick's camera exactly.
     #[must_use]
     pub fn view(&self) -> Mat4 {
+        if let Some(view) = self.extra_view() {
+            return view;
+        }
         self.view_between(self.tick_view(), |previous| previous.view)
     }
 
@@ -186,6 +189,9 @@ impl Race {
     /// [`Self::view`] is, by the same alpha and on the same snaps.
     #[must_use]
     pub fn view_unshaken(&self) -> Mat4 {
+        if let Some(view) = self.extra_view() {
+            return view;
+        }
         self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken)
     }
 
@@ -223,7 +229,10 @@ impl Race {
     /// not reach.
     #[must_use]
     pub fn view_shake_rotation(&self) -> Mat4 {
-        if self.view.camera_override.is_some() || !self.view.shake.active() {
+        if self.extra_viewpoint().is_some()
+            || self.view.camera_override.is_some()
+            || !self.view.shake.active()
+        {
             return Mat4::IDENTITY;
         }
         self.view() * self.view_unshaken().inverse()
@@ -359,10 +368,11 @@ impl Race {
     pub fn visibility_sections(&self) -> (u8, u8) {
         // The player's, because this places the player's camera. An opponent
         // recovering across the circuit must not blank the shot.
-        if self.sim.respawn_cooldown[0] > 0 {
+        let slot = self.extra_viewpoint().unwrap_or(0);
+        if self.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
-        let ship = self.ship();
+        let ship = self.viewed_ship();
         // The simulation already located the craft this tick and left the
         // sample index in `Ship::segment`, so the craft's half is a table read
         // rather than a second scan of the whole track. Doing it again here
@@ -417,6 +427,9 @@ impl Race {
     /// inside a tube whose inside the original's mask leaves out.
     #[must_use]
     pub fn station_camera_section(&self) -> Option<u8> {
+        if self.extra_viewpoint().is_some() {
+            return None;
+        }
         self.drawn_craft_of_a_station_camera()
             .map(|slot| self.section_of_slot(slot))
     }
@@ -540,6 +553,9 @@ impl Race {
     /// `oag_mesh::mesh::LodGroups::child_at`.
     #[must_use]
     pub fn vertical_fov(&self, aspect: f32, setting: oag_display::display::Fov) -> f32 {
+        if let Some(fov) = self.extra_vertical_fov(aspect, setting) {
+            return fov;
+        }
         // An overridden fov stands in for the authored one and still passes
         // through the player's setting, whose default is identity; it exists to
         // match a captured frame's own field exactly, so it must sit at the

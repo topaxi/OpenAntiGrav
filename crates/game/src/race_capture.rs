@@ -46,6 +46,8 @@ pub struct CaptureOptions {
     pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--ai`. See [`crate::ai_choice`].
     pub ai_choice: crate::ai_choice::AiChoice,
+    /// `--players`: how many split-screen views. See [`crate::split_screen`].
+    pub players: u8,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
     /// See [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
@@ -395,6 +397,7 @@ pub fn capture(
         options.ai_choice,
         crate::ai_choice::Source::Free(difficulty),
     );
+    crate::split_screen::apply(&mut race, usize::from(options.players));
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
@@ -734,30 +737,48 @@ pub fn capture(
             );
         });
     }
-    let stats = scene.render(
-        &device,
-        &queue,
-        &mut encoder,
-        &view,
-        &race,
-        viewport,
-        options.fov,
-        options.frustum_culling,
-        options.pvs_culling,
-        options.anim_seconds,
-        // Honoured, and honest since the primer render above exists: with the
-        // setting on, this render is the second of two distinct cameras, so
-        // the smear a player sees is the smear the PNG shows. Off, the pass
-        // never observed a previous camera and encodes nothing.
-        options.motion_blur,
-        options.shadows,
-        camera_jitter,
-        &spectrum,
-        // Untimed, as the primer above is and for the same reason.
-        None,
-        None,
-        None,
-    );
+    // A split screen draws one scene per view, each submitted on its own: see
+    // `Scene::render_viewports`. One view is the call below, untouched.
+    let stats = if race.viewport_count() > 1 {
+        scene.render_viewports(
+            &device,
+            &queue,
+            &view,
+            &race,
+            viewport,
+            options.fov,
+            options.frustum_culling,
+            options.pvs_culling,
+            options.anim_seconds,
+            options.shadows,
+            &spectrum,
+        )
+    } else {
+        scene.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &race,
+            viewport,
+            options.fov,
+            options.frustum_culling,
+            options.pvs_culling,
+            options.anim_seconds,
+            // Honoured, and honest since the primer render above exists: with the
+            // setting on, this render is the second of two distinct cameras, so
+            // the smear a player sees is the smear the PNG shows. Off, the pass
+            // never observed a previous camera and encodes nothing.
+            options.motion_blur,
+            options.shadows,
+            camera_jitter,
+            &spectrum,
+            // Untimed, as the primer above is and for the same reason.
+            None,
+            None,
+            None,
+        )
+    };
     oag_gpu::perfprobe::report_frame(race.sim.world.tick);
     // What the captured frame submitted, so a `--pvs true` / `--pvs false`
     // pair (or `--lod`, or frustum culling) can be compared by count as well as

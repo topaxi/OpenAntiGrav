@@ -23,6 +23,8 @@
 //! - [`collision`] builds a debug view of the collision soup the physics world
 //!   is made of.
 //! - [`camera`] is the camera maths: orbit, free and the chase spring.
+//! - [`viewport`] cuts the target into one rectangle per local player for split
+//!   screen: rectangle maths only, every layout from one view to eight.
 //! - [`pvs`] places draw calls into the track's authored visibility sections,
 //!   and is the first tier of the two-tier cull the draw loop runs.
 //! - [`sparks`] is the collision-spark burst: an authored effect, not a
@@ -48,4 +50,5 @@ pub mod shield;
 pub mod shine;
 pub mod texgen;
 pub mod track;
+pub mod viewport;
 pub mod weapon_pad;
