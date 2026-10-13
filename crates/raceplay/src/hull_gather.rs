@@ -30,10 +30,12 @@ impl HullGather {
     /// The hulls projected from this tick's poses exactly: what a draw at alpha
     /// `1.0` shows.
     #[must_use]
-    pub fn at_tick(race: &Race, hulls: &[Option<Occluder>]) -> Self {
+    pub fn at_tick(race: &Race, hulls: &[Option<Occluder>], axis: Vec3) -> Self {
         let (vertices, slots) = if hulls.iter().any(Option::is_some) {
             let placements = race.shadow_placements_of(|slot| race.ship_tick_body(slot));
-            project(race, hulls, &placements, |slot| race.ship_tick_model(slot))
+            project(race, hulls, axis, &placements, |slot| {
+                race.ship_tick_model(slot)
+            })
         } else {
             (Vec::new(), Vec::new())
         };
@@ -50,12 +52,12 @@ impl HullGather {
     /// The hulls projected from the poses the race's draw alpha blends to: what
     /// the per-frame gather drew before the cache.
     #[must_use]
-    pub fn at_draw(race: &Race, hulls: &[Option<Occluder>]) -> Vec<GpuVertex> {
+    pub fn at_draw(race: &Race, hulls: &[Option<Occluder>], axis: Vec3) -> Vec<GpuVertex> {
         if !hulls.iter().any(Option::is_some) {
             return Vec::new();
         }
         let placements = race.shadow_placements();
-        project(race, hulls, &placements, |slot| {
+        project(race, hulls, axis, &placements, |slot| {
             race.ship_model_matrix_of(slot)
         })
         .0
@@ -117,6 +119,7 @@ fn lerp(a: &GpuVertex, b: &GpuVertex, alpha: f32) -> GpuVertex {
 fn project(
     race: &Race,
     hulls: &[Option<Occluder>],
+    axis: Vec3,
     placements: &[oag_render::shadow::Placement],
     model: impl Fn(usize) -> Mat4,
 ) -> (Vec<GpuVertex>, Vec<(usize, Range<usize>)>) {
@@ -131,7 +134,7 @@ fn project(
             &oag_render::shadow::Cast {
                 hull,
                 model: model(placement.silhouette),
-                axis: Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS),
+                axis,
                 contact: placement.contact,
                 normal: placement.normal,
                 strength: placement.strength,

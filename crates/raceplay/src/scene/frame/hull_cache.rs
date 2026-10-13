@@ -28,7 +28,7 @@
 //!   racing, a move past `SNAP_DISTANCE`: [`Race::ship_swept_from`]) draws its
 //!   current gather, which is where the per-frame gather put it too.
 
-use oag_core::math::Mat4;
+use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
 
 use crate::Race;
@@ -66,8 +66,8 @@ impl super::super::Scene {
     }
 
     /// The projected hulls the `original` tier draws this frame, at the race's
-    /// draw alpha.
-    pub(super) fn original_hulls(&self, race: &Race) -> Vec<GpuVertex> {
+    /// draw alpha, cast along `axis` (the title's own shadow direction).
+    pub(super) fn original_hulls(&self, race: &Race, axis: Vec3) -> Vec<GpuVertex> {
         let alpha = race.draw_alpha();
         let generation = race.pose_generations();
         let models: Vec<Mat4> = (0..usize::from(race.ship_count()))
@@ -88,7 +88,7 @@ impl super::super::Scene {
                 || cache.misses.is_multiple_of(SEED_EVERY);
             if !seed {
                 cache.misses += 1;
-                return self.live_hulls(race);
+                return self.live_hulls(race, axis);
             }
             cache.misses = if predecessor.is_some() {
                 0
@@ -97,7 +97,7 @@ impl super::super::Scene {
             };
             cache.previous = predecessor;
             self.count_gather();
-            cache.current = Some(HullGather::at_tick(race, &self.shadow_hulls));
+            cache.current = Some(HullGather::at_tick(race, &self.shadow_hulls, axis));
         }
         let HullCache {
             current: Some(current),
@@ -117,14 +117,14 @@ impl super::super::Scene {
             return blended;
         }
         drop(cache);
-        self.live_hulls(race)
+        self.live_hulls(race, axis)
     }
 
     /// The hulls projected from the poses this draw blends to, as the per-frame
     /// gather did.
-    fn live_hulls(&self, race: &Race) -> Vec<GpuVertex> {
+    fn live_hulls(&self, race: &Race, axis: Vec3) -> Vec<GpuVertex> {
         self.count_gather();
-        HullGather::at_draw(race, &self.shadow_hulls)
+        HullGather::at_draw(race, &self.shadow_hulls, axis)
     }
 
     fn count_gather(&self) {

@@ -169,7 +169,8 @@ impl super::super::Scene {
         if shadows == oag_display::display::Shadows::Original {
             // The quads are not drawn at all: the two tiers are alternatives,
             // not layers.
-            return (Vec::new(), self.original_hulls(race));
+            let axis = Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS);
+            return (Vec::new(), self.original_hulls(race, axis));
         }
         if shadows == oag_display::display::Shadows::Blob {
             (race.shadow_placements(), Vec::new())
