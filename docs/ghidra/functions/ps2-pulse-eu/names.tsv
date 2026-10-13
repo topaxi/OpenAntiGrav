@@ -235,3 +235,7 @@
 0x00165688	function	MagFloorFx_Construct	88	magfloor-fx.md
 0x001659a0	function	MagFloorFx_Update	88	magfloor-fx.md
 0x00165ce0	function	MagFloorFx_InitTint	85	magfloor-fx.md
+0x00128860	function	Race_CreatePlayer	78	grid-local-players.md
+0x00128be0	function	Race_CreateAiRacer	75	grid-local-players.md
+0x00128158	function	Race_PlaceGrid	82	grid-local-players.md
+0x00127ad0	function	Race_ComputeGridLayout	85	grid-local-players.md

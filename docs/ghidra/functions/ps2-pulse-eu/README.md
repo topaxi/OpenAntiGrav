@@ -32,6 +32,7 @@ form, and Ghidra's string search will return all three.
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
 | [Collision feedback](collision-shake.md) | The hull-spark trigger, the shield-bubble hit-flash, and a camera shake on impact - all three shared with the PSP, the shake mislabelled a sound cue there until this page's own read prompted correcting it |
 | [Anim Transform](anim-transform.md) | The scene-graph node the boost plume's anchors ride: one shared per-race clock, not a per-object timer, matching PSP's class field for field |
+| [Grid positions of local players](grid-local-players.md) | Two local players take slots 8 and 7, the AI slots 1 to 6; the grid spawn and placement routines |
 
 ## Renames
 
