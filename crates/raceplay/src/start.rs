@@ -544,6 +544,7 @@ impl Race {
                 chase_params,
                 chase_far: chase,
                 chase_close,
+                viewpoints: Default::default(),
                 internal_params: internal,
                 // The default rather than the settings file's value, for the reason
                 // `set_boost_fov_kick` gives: `Setup` is what a *headless* race

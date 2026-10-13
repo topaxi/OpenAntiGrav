@@ -696,6 +696,8 @@ impl Race {
         self.view
             .camera
             .advance(target, &self.view.chase_params, self.sim.dt);
+        // The split-screen views' own cameras, view-side: a no-op with one view.
+        self.advance_viewpoints();
         // After the chase camera and before the eye is read: behind the end-race panels the
         // spectator director's pose replaces it. A no-op until the player has finished.
         self.advance_finish_camera();

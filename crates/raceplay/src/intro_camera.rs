@@ -348,6 +348,12 @@ impl Race {
     /// the race after it.
     #[must_use]
     pub fn hud_shown(&self) -> bool {
+        // One full-screen HUD for slot 0 across several views would read as
+        // every player's: hidden while split, a per-player HUD being open work.
+        // Chosen, not measured. See `oag_game::split_screen`.
+        if self.viewport_count() > 1 {
+            return false;
+        }
         match &self.view.intro {
             Some(intro) if intro.playing() => false,
             Some(intro) if intro.finished() => self.sim.world.tick >= intro.hud_delay(),

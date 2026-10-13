@@ -77,6 +77,9 @@ pub struct RaceView {
     pub(super) chase_far: ChaseParams,
     /// `<ExternalCameraClose>`.
     pub(super) chase_close: ChaseParams,
+    /// The extra views of a split-screen race; empty and inert with one view.
+    /// See [`super::viewpoint`].
+    pub(super) viewpoints: super::viewpoint::Viewpoints,
     /// `<InternalCamera>`: the cockpit view, which has no spring and so no state
     /// of its own beside these five numbers.
     pub(super) internal_params: InternalParams,

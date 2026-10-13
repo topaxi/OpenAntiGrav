@@ -119,7 +119,7 @@ impl Scene {
             .and_then(|pvs| {
                 ChunkSet::around(
                     pvs,
-                    race.ship().physics.body.position,
+                    race.viewed_ship().physics.body.position,
                     race.camera_position(),
                 )
             });
@@ -721,12 +721,18 @@ impl Scene {
                         // and a frame starts with nothing glowing.
                         // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
                         // entire frame in and bloom everything.
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 0.0,
-                        }),
+                        // A split-screen view after the first keeps what the
+                        // earlier ones drew - see `Scene::render_viewports`.
+                        load: if self.keep_target.get() {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 0.0,
+                            })
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 }),

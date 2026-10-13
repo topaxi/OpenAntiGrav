@@ -27,6 +27,7 @@ mod queries;
 mod ribbons;
 mod scratch;
 mod shine;
+mod viewports;
 mod weapon_models;
 mod weapon_quads;
 mod wreck;
@@ -302,6 +303,9 @@ pub struct Scene {
     /// Whether [`Self::bloom`] or [`Self::ps2_bloom`] was prepared this frame and still owes its
     /// composite: [`Scene::composite_bloom`], after the HUD.
     bloom_pending: std::cell::Cell<bool>,
+    /// Whether the next [`Scene::render`] loads the target instead of clearing it:
+    /// every split-screen view after the first. See [`Scene::render_viewports`].
+    keep_target: std::cell::Cell<bool>,
     boost_zoom: hd_chain::BoostZoom,
     /// Wipeout HD's post chain: the linear float scene target the whole race
     /// draws into, the read `FunkLayerBloom` passes over it, and the encode
@@ -931,6 +935,7 @@ impl Scene {
             bloom,
             ps2_bloom,
             bloom_pending: std::cell::Cell::new(false),
+            keep_target: std::cell::Cell::new(false),
             boost_zoom: hd_chain::BoostZoom::new(caller_format),
             hd,
             omega,

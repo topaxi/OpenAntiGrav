@@ -68,6 +68,8 @@ pub(crate) struct App {
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--ai`: whose driver flies the opponents. See `oag_game::ai_choice`.
     pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
+    /// `--players`: split-screen views of a direct `--race`. See `oag_game::split_screen`.
+    pub(crate) players: u8,
     /// `--anim-seconds`: pins the trackside animation clock. See
     /// `Session::anim_seconds`.
     pub(crate) anim_seconds: Option<f32>,
@@ -298,6 +300,7 @@ impl App {
                     self.ai_choice,
                     oag_game::ai_choice::Source::Free(ai_difficulty),
                 );
+                oag_game::split_screen::apply(&mut race_stage.race, usize::from(self.players));
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {
