@@ -100,9 +100,11 @@ pub(super) fn menu_pointer(
 /// A selection screen answering the pointer, against the targets it just
 /// drew. See `oag_ui_screens::picker::pointer`.
 pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<picker::Event> {
+    let boundary = stage.partner.as_deref().map(|partner| partner.layout.panel[1] - 12.0);
     let Some(stage_picker) = stage.picker.as_mut() else {
         return Vec::new();
     };
+    let pointer = &in_half(pointer, boundary, false);
     if pointer.is_idle() {
         return Vec::new();
     }
@@ -113,6 +115,37 @@ pub(super) fn picker_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<pi
         &|src| stage_picker.placed(src),
     );
     stage_picker.model.pointer(pointer, &targets)
+}
+
+/// `pointer` as one half of a shared Ship Select sees it: a pointer on the
+/// other side of `boundary` (the second panel's top, less a margin) is idle, so
+/// the wheel and a hover act on the half under it alone. Whole when there is no
+/// boundary - an ordinary screen.
+fn in_half(pointer: &Pointer, boundary: Option<f32>, lower: bool) -> Pointer {
+    match (boundary, pointer.at) {
+        (Some(boundary), Some((_, y))) if (y >= boundary) != lower => Pointer::default(),
+        _ => *pointer,
+    }
+}
+
+/// The second seat's half of a shared Ship Select answering the pointer, the
+/// same way [`picker_pointer`] does the first's: each half's targets are its own
+/// widgets, so a click lands on one.
+pub(super) fn partner_pointer(stage: &mut MenuStage, pointer: &Pointer) -> Vec<picker::Event> {
+    let Some(partner) = stage.partner.as_deref_mut() else {
+        return Vec::new();
+    };
+    let pointer = &in_half(pointer, Some(partner.layout.panel[1] - 12.0), true);
+    if pointer.is_idle() {
+        return Vec::new();
+    }
+    let targets = picker::pointer::targets(
+        &partner.model,
+        &partner.layout,
+        &stage.skin,
+        &|src| partner.placed(src),
+    );
+    partner.model.pointer(pointer, &targets)
 }
 
 /// `Grid Selection`/`Cell Selection` answering the pointer, against the

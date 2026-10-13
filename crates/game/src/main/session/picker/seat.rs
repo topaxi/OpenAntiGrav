@@ -51,7 +51,11 @@ pub(crate) struct SeatChoice {
 /// (`Controls::device_presses`): the pad's own press events and the keyboard's
 /// newly pressed bits, so a press shorter than a tick still counts and two pads
 /// are told apart. A seat with no device in the lobby reads nothing.
-pub(super) fn input(lobby: Option<&Lobby>, seat: usize, presses: &[Press]) -> Input {
+pub(super) fn input<D: Copy + PartialEq>(
+    lobby: Option<&Lobby<D>>,
+    seat: usize,
+    presses: &[Press<D>],
+) -> Input {
     let device = lobby.and_then(|lobby| lobby.seats().get(seat)).copied();
     let mask = presses
         .iter()
@@ -109,11 +113,26 @@ impl Session {
         )
     }
 
-    /// `layout` titled for the seat, when the screen is a seat's.
+    /// The two halves of the source's own `Team SelectionSplit`, when this race
+    /// box has exactly two seats and the source authors one.
+    pub(super) fn pair_layouts(&self) -> Option<[Layout; 2]> {
+        if self.split_count() != 2 {
+            return None;
+        }
+        self.shell.as_ref()?.ship_select_split.clone()
+    }
+
+    /// `layout` titled for the seat, when the screen is a seat's - and, on a
+    /// shared page, told what to say under a seat that has confirmed.
     pub(super) fn seat_layout(&self, mut layout: Layout, seat: Option<(usize, usize)>) -> Layout {
         let (Some((index, _)), Some(shell)) = (seat, self.shell.as_ref()) else {
             return layout;
         };
+        if self.pair_layouts().is_some() {
+            // The authored page has one title and no per-seat one.
+            layout.ready = shell.strings.get("OAG_PICK_READY").unwrap_or("READY").to_string();
+            return layout;
+        }
         let number = index + 1;
         layout.title = match shell.strings.get(&format!("FE_SHIPSEL_P{number}")) {
             Some(authored) => authored.to_string(),
@@ -160,6 +179,105 @@ impl Session {
             return;
         }
         self.launch_from_settings();
+    }
+
+    /// A seat on the shared page confirmed (`partner` is the second seat): hold
+    /// its pick, and launch once both are held.
+    pub(super) fn confirm_shared(&mut self, partner: bool) {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let held = if partner {
+            stage.partner.as_deref_mut()
+        } else {
+            stage.picker.as_mut()
+        };
+        let Some(held) = held else {
+            return;
+        };
+        if held.model.is_locked() {
+            return;
+        }
+        held.model.lock();
+        let chosen = held.model.selected().map(|entry| entry.id.clone());
+        let livery = held
+            .model
+            .variant()
+            .map(|(id, _)| id.clone())
+            .unwrap_or_default();
+        let axis = held.livery_axis;
+        let both = stage.picker.as_ref().is_some_and(|p| p.model.is_locked())
+            && stage
+                .partner
+                .as_deref()
+                .is_some_and(|p| p.model.is_locked());
+        if let Some(id) = &chosen {
+            self.speak_name(Kind::Ship, id);
+        }
+        if partner {
+            if let Some(entry_id) = chosen {
+                let pick = self.seat_pick(&entry_id, &livery, axis);
+                self.split_picks = vec![SeatChoice {
+                    entry_id,
+                    livery,
+                    pick,
+                }];
+            }
+        } else {
+            self.settings.race.variant_chosen = true;
+        }
+        if both {
+            if let Stage::Menu(stage) = &mut self.stage {
+                stage.picker = None;
+                stage.partner = None;
+            }
+            self.launch_from_settings();
+        }
+    }
+
+    /// Back on a seat that had confirmed on the shared page: take the confirm back.
+    pub(super) fn unlock_shared(&mut self, partner: bool) {
+        let Stage::Menu(stage) = &mut self.stage else {
+            return;
+        };
+        let held = if partner {
+            stage.partner.as_deref_mut()
+        } else {
+            stage.picker.as_mut()
+        };
+        if let Some(held) = held {
+            held.model.unlock();
+        }
+        if partner {
+            self.split_picks.clear();
+        }
+    }
+
+    /// An event of the second seat on the shared page.
+    pub(crate) fn handle_partner(&mut self, event: oag_ui_screens::picker::Event) {
+        use oag_ui_screens::picker::Event;
+        self.play_navs([event.nav()]);
+        match event {
+            Event::Moved | Event::VariantChanged => {
+                if let Stage::Menu(stage) = &mut self.stage
+                    && let Some(partner) = stage.partner.as_deref_mut()
+                {
+                    partner.refresh_preview(&self.gpu);
+                }
+            }
+            Event::Confirmed => self.confirm_shared(true),
+            Event::Back => {
+                let locked = matches!(&self.stage, Stage::Menu(stage)
+                    if stage.partner.as_deref().is_some_and(|p| p.model.is_locked()));
+                if locked {
+                    self.unlock_shared(true);
+                } else {
+                    // An unconfirmed seat leaving takes the page back to Track
+                    // Select, for both people - the same as the first seat does.
+                    self.handle_picker(Event::Back);
+                }
+            }
+        }
     }
 
     /// Back from a later seat: forget its pick and return to the seat before.
@@ -218,5 +336,52 @@ impl Session {
         if let Some(options) = self.race_options.as_mut() {
             options.seat_picks.clear();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use oag_gameplay::input::Button;
+    use oag_input::lobby::Device;
+
+    fn press(device: Device<u8>, button: Button) -> Press<u8> {
+        Press {
+            device,
+            buttons: button.bit(),
+        }
+    }
+
+    fn lobby() -> Lobby<u8> {
+        let mut lobby = Lobby::new();
+        lobby.join(Device::Pad(7));
+        lobby.join(Device::Pad(9));
+        lobby
+    }
+
+    /// Two pads press at once: each seat's screen hears its own pad and not the
+    /// other's, which is what keeps one player's confirm off another's pick.
+    #[test]
+    fn a_seat_hears_only_its_own_device() {
+        let presses = [
+            press(Device::Pad(7), Button::Down),
+            press(Device::Pad(9), Button::Cross),
+        ];
+        let lobby = lobby();
+        let first = input(Some(&lobby), 0, &presses);
+        assert!(first.is_pressed(Button::Down) && !first.is_pressed(Button::Cross));
+        let second = input(Some(&lobby), 1, &presses);
+        assert!(second.is_pressed(Button::Cross) && !second.is_pressed(Button::Down));
+    }
+
+    /// A device with no seat, the keyboard here, and a seat past the lobby read
+    /// nothing at all.
+    #[test]
+    fn a_stranger_and_an_empty_seat_hear_nothing() {
+        let presses = [press(Device::Keyboard, Button::Cross)];
+        let lobby = lobby();
+        assert!(!input(Some(&lobby), 0, &presses).is_pressed(Button::Cross));
+        assert!(!input(Some(&lobby), 5, &presses).is_pressed(Button::Cross));
+        assert!(!input::<u8>(None, 0, &presses).is_pressed(Button::Cross));
     }
 }

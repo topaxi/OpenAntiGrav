@@ -36,6 +36,7 @@ mod body;
 pub mod hd;
 pub mod pointer;
 pub mod slideshow;
+mod split;
 
 /// The grid the selection screens are authored in on the PSP, which every
 /// number this module carries of its own was read against. A PS2 layout is
@@ -194,6 +195,9 @@ pub struct Picker {
     /// hex tile - see [`Self::pointer`]. `true` until a press says
     /// otherwise, so a drag whose touch-down was never seen still pans.
     grabbed: bool,
+    /// Whether this seat has confirmed on a split screen's shared Ship Select
+    /// and is waiting for the others - see [`Self::lock`].
+    locked: bool,
 }
 
 impl Picker {
@@ -221,6 +225,7 @@ impl Picker {
             columns: 0,
             scroll: oag_ui::kinetic::Kinetic::default(),
             grabbed: true,
+            locked: false,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -347,6 +352,24 @@ impl Picker {
         }
     }
 
+    /// Holds the selection: a seat on the shared split Ship Select that has
+    /// confirmed. Until [`Self::unlock`] the picker moves for nothing, and only
+    /// back is heard - which the caller reads as taking the confirm back.
+    pub fn lock(&mut self) {
+        self.locked = true;
+    }
+
+    /// Lets the selection move again.
+    pub fn unlock(&mut self) {
+        self.locked = false;
+    }
+
+    /// Whether [`Self::lock`] holds the selection.
+    #[must_use]
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
     /// Consumes this tick's presses and reports what they did.
     ///
     /// **Up/down wrap**, which is measured: the original's three-entry track
@@ -356,6 +379,12 @@ impl Picker {
     /// this build does not have. Cross or Start confirms; Circle backs out.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
+        if self.locked {
+            if input.take(Button::Circle) {
+                out.push(Event::Back);
+            }
+            return out;
+        }
         let (next, previous, next_variant, previous_variant) = if self.across {
             (Button::Right, Button::Left, Button::Down, Button::Up)
         } else {
@@ -456,6 +485,10 @@ pub struct Layout {
     /// [`hd::track::read`] built - `None` on every other. The track
     /// screen's counterpart to [`Self::hd`]; at most one is set.
     pub hd_track: Option<Box<hd::track::TrackScreen>>,
+    /// What a seat that has confirmed on a split screen's shared Ship Select
+    /// shows under its craft - empty draws nothing. Set by the composition
+    /// root, which owns the string table; see [`Picker::lock`].
+    pub ready: String,
 }
 
 impl Layout {
@@ -502,6 +535,20 @@ impl Layout {
         let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
         let mut screen = screens.by_name(name)?.clone();
         strip_player_suffix(&mut screen);
+        Self::from_screen(screen, name, kind, strings, faces, scale)
+    }
+
+    /// The layout of one authored `screen`, already reduced to the widgets of
+    /// the one picker it draws - [`Self::read`] for a whole screen, and
+    /// [`Self::read_split`] for each half of one.
+    fn from_screen(
+        mut screen: Screen,
+        name: &str,
+        kind: Kind,
+        strings: &StringTable,
+        faces: FaceScales,
+        scale: [f32; 2],
+    ) -> Option<Self> {
         for text in &mut screen.texts {
             if let Some(id) = text.idstring.as_deref()
                 && let Some(resolved) = strings.get(id)
@@ -599,6 +646,7 @@ impl Layout {
             scale,
             hd: None,
             hd_track: None,
+            ready: String::new(),
         })
     }
 

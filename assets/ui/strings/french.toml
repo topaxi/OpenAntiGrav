@@ -72,6 +72,7 @@ OAG_JOIN_EMPTY = { text = "APPUYEZ SUR UN BOUTON", human = false }
 OAG_JOIN_KEYBOARD = { text = "CLAVIER", human = false }
 OAG_JOIN_PAD = { text = "MANETTE", human = false }
 OAG_JOIN_START = { text = "DÉMARRER", human = false }
+OAG_PICK_READY = { text = "PRÊT", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
 OAG_MENU_QUIT = { text = "QUITTER", human = false }
 

@@ -515,6 +515,7 @@ impl Session {
                 // asking about a page that is no longer on screen.
                 prompt: None,
                 picker: None,
+                partner: None,
                 campaign: None,
                 pure_chain: None,
                 join: None,

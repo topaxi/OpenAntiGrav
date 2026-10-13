@@ -174,11 +174,11 @@ pub(super) fn apply_seat_picks(
     }
     let taken: Vec<String> = slot_teams[..humans].to_vec();
     spare.retain(|team| !taken.contains(team));
-    for slot in humans..slot_teams.len() {
-        if taken.contains(&slot_teams[slot])
+    for opponent in slot_teams.iter_mut().skip(humans) {
+        if taken.contains(opponent)
             && let Some(team) = spare.pop_front()
         {
-            slot_teams[slot] = team;
+            *opponent = team;
         }
     }
     report.push(format!(

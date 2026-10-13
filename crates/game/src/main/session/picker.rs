@@ -201,10 +201,17 @@ impl Session {
     pub(crate) fn open_ship_picker_for(&mut self, seat: usize) -> bool {
         // Read before `shell` is borrowed: it opens the disc.
         let locked_teams = self.pure_locked_teams();
+        let pair = self.pair_layouts();
         let Some(shell) = self.shell.as_ref() else {
             return false;
         };
-        let Some(layout) = shell.ship_select.clone() else {
+        // One page for both people on a source that authors it, else one
+        // screen per seat on the single-player layout.
+        let Some(layout) = pair
+            .as_ref()
+            .map(|halves| halves[seat.min(1)].clone())
+            .or_else(|| shell.ship_select.clone())
+        else {
             return false;
         };
         let title = shell.title;
@@ -353,8 +360,17 @@ impl Session {
                 self.settings.race.variant = id.clone();
             }
         }
-        let seat = self.seat_of_picker(seat);
-        self.open_picker(model, layout, axis, sources, None, seat)
+        let seat_info = self.seat_of_picker(seat);
+        let shared = pair.is_some();
+        if !self.open_picker(model, layout, axis, sources, None, seat_info) {
+            return false;
+        }
+        // The second half of a shared page opens with the first.
+        if shared && seat == 0 {
+            self.open_ship_picker_for(1)
+        } else {
+            true
+        }
     }
 
     /// The three info rows for a circuit: distance, lap record, race
@@ -403,6 +419,9 @@ impl Session {
         distances: Option<Distances>,
         seat: Option<(usize, usize)>,
     ) -> bool {
+        // The second seat of a page both people share is drawn beside the first.
+        let partner =
+            seat.is_some_and(|(index, _)| index == 1) && self.pair_layouts().is_some();
         let layout = self.seat_layout(layout, seat);
         let Some(options) = self.race_options.as_ref() else {
             return false;
@@ -474,7 +493,12 @@ impl Session {
         picker.seat = seat;
         picker.refresh_preview(&self.gpu);
         picker.refresh_info();
-        stage.picker = Some(picker);
+        if partner {
+            stage.partner = Some(Box::new(picker));
+        } else {
+            stage.picker = Some(picker);
+            stage.partner = None;
+        }
         true
     }
 
@@ -499,8 +523,23 @@ impl Session {
             None => picker.model.update(self.controls.buttons_mut()),
         };
         events.extend(super::pointer::picker_pointer(stage, pointer));
+        // The second seat of a shared page, on its own device.
+        let mut partner_events = Vec::new();
+        if let Some(partner) = stage.partner.as_deref_mut() {
+            partner.refresh_info();
+            let seat = partner.seat.map_or(1, |(seat, _)| seat);
+            partner_events = partner.model.update(&mut seat::input(
+                self.split_lobby.as_ref(),
+                seat,
+                self.controls.device_presses(),
+            ));
+            partner_events.extend(super::pointer::partner_pointer(stage, pointer));
+        }
         for event in events {
             self.handle_picker(event);
+        }
+        for event in partner_events {
+            self.handle_partner(event);
         }
     }
 
@@ -520,6 +559,13 @@ impl Session {
             .is_some_and(|shell| shell.title.campaign.flow.is_some());
         // A split-screen race box: Ship Select is one screen per seat.
         if let (Kind::Ship, Some((seat, count))) = (kind, picker.seat) {
+            if stage.partner.is_some() {
+                match event {
+                    Event::Confirmed => return self.confirm_shared(false),
+                    Event::Back if picker.model.is_locked() => return self.unlock_shared(false),
+                    _ => {}
+                }
+            }
             match event {
                 Event::Moved | Event::VariantChanged if seat > 0 => {
                     picker.refresh_preview(&self.gpu);
@@ -607,6 +653,7 @@ impl Session {
             }
             (Kind::Ship, Event::Back) => {
                 stage.picker = None;
+                stage.partner = None;
                 // Backing out of `Team Selection` on a campaign launch has
                 // no `Track Select` to return to - a cell picks its own
                 // track outright - so this reopens `Grid Selection` instead
