@@ -66,6 +66,8 @@ pub(crate) struct App {
     pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`. See the CLI field.
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--ai`: whose driver flies the opponents. See `oag_game::ai_choice`.
+    pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
     /// `--anim-seconds`: pins the trackside animation clock. See
     /// `Session::anim_seconds`.
     pub(crate) anim_seconds: Option<f32>,
@@ -260,7 +262,8 @@ impl App {
                 self.settings.audio.music_source,
                 &oag_source::cache::default_audio_cache_dir(),
             );
-            Stage::race(
+            let ai_difficulty = loaded.setup.difficulty;
+            let mut staged = Stage::race(
                 &gpu,
                 loaded,
                 framebuffer.allocation(),
@@ -286,7 +289,17 @@ impl App {
                 self.race_options
                     .as_ref()
                     .and_then(|options| options.track.as_deref()),
-            )?
+            )?;
+            // A direct `--race` is never a campaign launch, so this is the
+            // free case: the original driver unless `--ai ours`.
+            if let Stage::Race(race_stage) = &mut staged {
+                oag_game::ai_choice::apply(
+                    &mut race_stage.race,
+                    self.ai_choice,
+                    oag_game::ai_choice::Source::Free(ai_difficulty),
+                );
+            }
+            staged
         } else if let Some(shell) = self.boot_shell.take() {
             // **Always the loading screen**, where this used to be `--prefetch`
             // only. Every windowed boot now has something to wait for - the
@@ -431,6 +444,7 @@ impl App {
             autopilot: self.autopilot,
             autopilot_pilot: self.autopilot_pilot,
             autopilot_skill: self.autopilot_skill,
+            ai_choice: self.ai_choice,
             anim_seconds: self.anim_seconds,
             pvs_culling: self.pvs_culling,
             camera_jitter: self.camera_jitter,

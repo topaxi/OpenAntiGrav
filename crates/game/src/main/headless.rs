@@ -226,6 +226,7 @@ pub(crate) fn run_windowless(
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
+                ai_choice: cli.driver.ai,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -287,6 +288,22 @@ pub(crate) fn run_windowless(
         return Ok(());
     }
     unreachable!("every branch above returns")
+}
+
+/// The race `--trace-out` drives: started, with the opponents' AI chosen
+/// (`--ai`, the original driver by default; `oag_game::ai_choice`), the scheme
+/// and the pilot assist applied.
+fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race::Race {
+    let difficulty = loaded.setup.difficulty;
+    let mut race = race::Race::start(loaded.setup);
+    oag_game::ai_choice::apply(
+        &mut race,
+        cli.driver.ai,
+        oag_game::ai_choice::Source::Free(difficulty),
+    );
+    race.set_control_scheme(scheme);
+    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    race
 }
 
 /// Our per-tick state, in the capture's own columns, written to `path`.
@@ -357,9 +374,7 @@ pub(crate) fn write_trace(
     use oag_trace::trace::AngularReading;
     use oag_trace::{Flare, Frame, Trace};
 
-    let mut race = race::Race::start(loaded.setup);
-    race.set_control_scheme(scheme);
-    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    let mut race = started_race(loaded, cli, scheme);
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
@@ -580,6 +595,7 @@ pub(crate) fn run_race(
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
+                ai_choice: cli.driver.ai,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
@@ -705,6 +721,7 @@ pub(crate) fn run_race(
         autopilot: cli.driver.autopilot,
         autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
         autopilot_skill: cli.driver.autopilot_skill,
+        ai_choice: cli.driver.ai,
         anim_seconds: cli.anim_seconds,
         race: Some(loaded),
         race_options: Some(options),

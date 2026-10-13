@@ -44,6 +44,8 @@ pub struct CaptureOptions {
     pub autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`: a stated AI skill. See [`Race::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--ai`. See [`crate::ai_choice`].
+    pub ai_choice: crate::ai_choice::AiChoice,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
     /// See [`Race::force_shake`].
     pub force_shake: Option<(u32, f32)>,
@@ -385,6 +387,11 @@ pub fn capture(
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
+    crate::ai_choice::apply(
+        &mut race,
+        options.ai_choice,
+        crate::ai_choice::Source::Free(difficulty),
+    );
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);

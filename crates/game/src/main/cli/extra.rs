@@ -380,6 +380,14 @@ pub(crate) struct DriverArgs {
     /// restarting the race between them and losing the comparison.
     #[arg(long, value_name = "SKILL", requires = "autopilot")]
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+
+    /// Whose driver flies the opponents: `original` (the default), the
+    /// recovered original driver in every race that has opponents, or `ours`,
+    /// this project's own driver, everywhere. A developer's switch for testing
+    /// our driver; it is not a setting and no menu row reaches it. See
+    /// [`oag_game::ai_choice`].
+    #[arg(long, value_enum, default_value_t)]
+    pub(crate) ai: oag_game::ai_choice::AiChoice,
 }
 
 /// `--pilot-assist`'s value: a level's token, or `on` for Extreme as the switch spelled it.

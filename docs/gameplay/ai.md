@@ -376,10 +376,11 @@ units at the same time.
 
 ## The original driver, recovered (2026-10-11)
 
-The maintainer's decision of 2026-10-11 gives the campaign a third AI mode:
+The maintainer's decision of 2026-10-11 gave the campaign a third AI mode:
 **the original's own opponent, rubber banding included**, beside this project's
-driver (race box, remix, multiplayer) and this project's driver on the cell's
-`SkillScale` curve (already on main). This section is that mode's specification
+driver and this project's driver on the cell's `SkillScale` curve (already on
+main). Since 2026-10-13 it is not campaign-only: [it flies every race with
+opponents by default](#which-ai-flies-2026-10-13). This section is that mode's specification
 in words; the formulas, addresses and the live measurement are on
 [ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md). **Built
 2026-10-12** as `oag_ai::original` and flown by every Pulse campaign race; see
@@ -557,6 +558,60 @@ end (Grid 1, Moa Therma White, Medium) logged `original AI: the campaign's
 opponents fly the original driver, skill 2.90, level 1`, and it was that walk
 that found the first version keyed on a resolved skill, which Grid 1's cell
 does not author.
+
+### Which AI flies (2026-10-13)
+
+Until this project's own driver is solid, **every race with opponents flies the
+recovered original driver**, not only a campaign launch (maintainer's decision,
+2026-10-13). `oag_game::ai_choice` decides, once per race start, and the same
+rule serves a windowed session, a direct `--race`, a `--screenshot` capture and
+`--trace-out`:
+
+| Race | Flies | Skill scale | Level (pack shuffle) |
+| --- | --- | --- | --- |
+| Campaign cell | the original | the cell's resolved `AI_ResolveSkillScale`, else the race's ambient value | the cell's rung (Easy 0, Medium 1, Hard 2) |
+| 2048 campaign event with an `ai` block | the original | the event's `m_skillScale`, plus its two AI skills | the event's level |
+| 2048 campaign event with none (Elimination) | this project's driver | - | - |
+| Race box, remix, direct `--race` | the original | the ambient value the load resolved | from `[ai] difficulty`: Novice 0, Skilled 1, Elite 1 (the default), Ace 2 |
+| Time Trial, Speed Lap, Zone (no opponents) | nothing to fly | - | - |
+
+**The level mapping outside the campaign is chosen, not measured.** The
+original's level exists only as the campaign's three rungs; this project's four
+named difficulties have no counterpart, so the ends map to the ends and the
+default stays on Medium, the rung a campaign cell with none authored flies.
+
+**The switch back is a developer flag, `oag-game --ai ours`** (`--ai original`
+is the default). It is a run flag and not a setting: no menu row and no
+settings key, which keeps the 2026-10-11 rule that the AI is chosen by the build
+and the mode and never by a player. `--ai ours` overrides every race, the
+campaign's included, so this project's driver can be tested in the places the
+original now owns. Each race start logs one line saying which AI flies and why
+(`AI: the original driver flies the opponents, skill 3.00, level 1`, or
+`AI: this project's driver flies (--ai ours)`).
+
+**The fallback is unchanged.** `Race::use_original_ai` keeps this project's
+driver, with the reason logged, when the title and class have no tables that
+read or the track has no closed lap. The tables are read for every race of the
+five titles (their `original_opponent` flag), whatever the mode.
+
+**Measured when it became the default (2026-10-13), and not clean off
+`16_Track`.** A parked player, 9,000 ticks, single race, VENOM, seed 1, the
+seven opponents' respawns on Pulse PSP USA with the original driver: `01`, `02`,
+`03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track` none; `05_Track` 4 in
+total; `13_Track` about 200 (one slot 129). This project's driver, same runs: at
+most one respawn a track, none on `05` and `13`. HD's default track: none for
+either. Whether `13_Track` and `05_Track` are a mapping error in the port or
+circuits the original's driver also loses is open.
+
+**Not wired, said so:** the game has no second human in a race today
+(`World::human_slots` is slot 0 outside tests and the headless simulator), so
+the original field treats every slot from 1 as an opponent; a split-screen mode
+would have to filter humans out of `original_ai_begin_tick` first. The speed
+plan this project's driver learns at every race start (`Race::start`) is still
+built when the original flies: skipping it needs a `Setup` field and handling
+for `--autopilot`, which drives with the same plan, and for the fallback.
+Measured release cost of the field plan alone: Pulse `16_Track` 0.5 to 1.0 s of
+a 1.3 to 1.9 s headless start, HD's default track 3.0 to 3.7 s of 5.2 to 5.9 s.
 
 ### HD: the same driver, five gated branches (2026-10-12)
 

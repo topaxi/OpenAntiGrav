@@ -102,6 +102,8 @@ pub struct Options {
     pub autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`. See `crate::race_capture::CaptureOptions::autopilot_skill`.
     pub autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--ai`. See [`crate::ai_choice`].
+    pub ai_choice: crate::ai_choice::AiChoice,
     /// Image size.
     pub size: (u32, u32),
     /// Render one named screen straight out of the XML and stop.
@@ -450,6 +452,7 @@ pub fn run(
                 pilot_assist: options.pilot_assist,
                 autopilot_pilot: options.autopilot_pilot,
                 autopilot_skill: options.autopilot_skill,
+                ai_choice: options.ai_choice,
                 force_shake: None,
                 intro_ticks: 0,
                 force_wreck: None,

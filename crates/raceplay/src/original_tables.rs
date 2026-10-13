@@ -1,4 +1,4 @@
-//! What the campaign's original opponent (`crate::original_ai`) reads off the
+//! What the original opponent (`crate::original_ai`) reads off the
 //! disc for one race, in whichever shape the title ships its AI tables
 //! ([`oag_title::original_driver::AiTables`]):
 //!
@@ -9,10 +9,11 @@
 //!   (`docs/ghidra/functions/psp-pure-usa/ai-controls.md`): the cruise
 //!   throttle.
 //!
-//! Read only for a title whose campaign flies the original opponent
+//! Read only for a title that flies the original opponent
 //! (`oag_title::RaceDefaults::original_opponent`); `None`, said so in the
-//! loader report, when anything does not read, and the campaign keeps this
-//! project's driver.
+//! loader report, when anything does not read, and the race keeps this
+//! project's driver. Read for every race of such a title, whatever its mode:
+//! `oag_game::ai_choice` decides whether the opponents fly it.
 
 use oag_tables::ai_control_stats;
 use oag_tables::ai_race_stats::{self, ClassRace};
@@ -89,7 +90,7 @@ pub(super) fn read(
 ) -> Option<OriginalTables> {
     if !title.race.original_opponent {
         report.push(
-            "original AI: not wired for this title; its campaign keeps this project's driver"
+            "original AI: not wired for this title; its races keep this project's driver"
                 .to_string(),
         );
         return None;
@@ -124,7 +125,7 @@ pub(super) fn read(
         }
         Err(e) => {
             report.push(format!(
-                "original AI: {e}; the campaign keeps this project's driver"
+                "original AI: {e}; the race keeps this project's driver"
             ));
             None
         }

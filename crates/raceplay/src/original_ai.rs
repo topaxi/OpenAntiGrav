@@ -1,11 +1,16 @@
-//! The campaign's third AI mode: the original's own opponent
-//! (`oag_ai::original`), rubber banding included, flown on each craft's
-//! own team's physics (`Setup::opponent_handling`; the controller reads no
-//! handling, the step does). Chosen by the game mode and never by a player setting (the
-//! maintainer's rule, 2026-10-11): only a campaign launch switches it on,
-//! through [`Race::use_original_ai`]; race box, remix and multiplayer keep this
-//! project's driver. Evidence: `docs/gameplay/ai.md`, "The original driver,
-//! recovered".
+//! The original's own opponent (`oag_ai::original`), rubber banding included,
+//! flown on each craft's own team's physics (`Setup::opponent_handling`; the
+//! controller reads no handling, the step does): the AI every race with
+//! opponents flies by default (maintainer, 2026-10-13), until this project's
+//! own driver (`oag_ai::Driver`) is solid. It began as the campaign's third AI
+//! mode (2026-10-11), when only a campaign launch switched it on.
+//!
+//! **Still never a player setting** (the 2026-10-11 rule). What changed is who
+//! asks: the composition root (`oag_game::ai_choice`) calls
+//! [`Race::use_original_ai`] for every race that fields opponents, and the only
+//! way back to this project's driver is the developer flag `oag-game --ai
+//! ours`, a run flag and not a menu row or a settings key. Evidence:
+//! `docs/gameplay/ai.md`, "The original driver, recovered" and "Which AI flies".
 //!
 //! **Mapped, not measured**, and said so where each happens below: the
 //! original's own projected sample is this engine's nearest spline sample
@@ -44,11 +49,12 @@ fn contact_summary(wall: &oag_physics::WallResponse, right: Vec3) -> (i32, bool)
 
 impl Race {
     /// Flies every opponent with the original's own driver for the rest of
-    /// this race: the campaign's AI mode. `skill` is `AI_ResolveSkillScale`'s
-    /// campaign value (`Session::resolve_campaign_ai_skill_scale`), `None`
-    /// for a cell that authors none, which reads the race's ambient value
-    /// the load resolved; `level` the cell's integer rung, `0` Easy to `2`
-    /// Hard, which the pack shuffle reads.
+    /// this race. `skill` is `AI_ResolveSkillScale`'s campaign value
+    /// (`Session::resolve_campaign_ai_skill_scale`), `None` for a race with
+    /// none, which reads the race's ambient value the load resolved; `level`
+    /// the integer rung, `0` Easy to `2` Hard, which the pack shuffle reads: a
+    /// campaign cell's own, else the one `oag_game::ai_choice::free_level`
+    /// chooses from `[ai] difficulty` (chosen, not measured).
     ///
     /// `false`, with the reason logged, when the class's AI tables did not
     /// read or the track has no closed lap: the race keeps this project's
@@ -56,8 +62,8 @@ impl Race {
     pub fn use_original_ai(&mut self, skill: Option<f32>, level: usize) -> bool {
         let Some(tables) = self.sim.original_tables else {
             log::warn!(
-                "original AI: no tables for this title and class (see the loader report); \
-                 opponents keep this project's driver"
+                "AI: this project's driver flies (no original tables for this title and class; \
+                 see the loader report)"
             );
             return false;
         };
@@ -67,9 +73,7 @@ impl Race {
             .or(self.sim.finished_thrust.map(|thrust| thrust.skill))
             .unwrap_or(0.0);
         if self.sim.course.is_none() {
-            log::warn!(
-                "original AI: the track has no closed lap; opponents keep this project's driver"
-            );
+            log::warn!("AI: this project's driver flies (the track has no closed lap)");
             return false;
         }
         let count = self.sim.world.ship_count as usize;
@@ -86,9 +90,7 @@ impl Race {
             field: tables.field(skill, level.min(2), grid, self.sim.race_seed),
             contacts: [(0, false); MAX_SHIPS],
         }));
-        log::info!(
-            "original AI: the campaign's opponents fly the original driver, skill {skill:.2}, level {level}"
-        );
+        log::info!("AI: the original driver flies the opponents, skill {skill:.2}, level {level}");
         true
     }
 

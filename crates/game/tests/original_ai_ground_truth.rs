@@ -1,4 +1,4 @@
-//! The campaign's original opponent (`oag_ai::original`) flown on the disc.
+//! The original opponent (`oag_ai::original`) flown on the disc.
 //!
 //! The scenario is the live capture's on `ai-controls.md`, "Measured": Pulse
 //! PSP USA, Talon's Junction (`16_Track`), VENOM, a full grid, the player
@@ -160,8 +160,8 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
     }
 }
 
-/// Only a campaign launch switches it on: a race that never asks keeps this
-/// project's driver.
+/// A race whose start never asks (a direct `raceplay` caller, as the ground
+/// truths that measure this project's driver are) keeps this project's driver.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_race_that_does_not_ask_keeps_this_projects_driver() {
@@ -183,4 +183,83 @@ fn a_race_that_does_not_ask_keeps_this_projects_driver() {
     }
     assert!(!race.original_ai_active());
     assert!(race.original_ai_field().is_none());
+}
+
+/// Pulse PSP USA's `16_Track` single race, unstarted, for the choice tests.
+fn loaded_single_race() -> Option<oag_raceplay::Loaded> {
+    let image = oag_testdata::image("pulse-psp-usa.chd")?;
+    Some(
+        oag_raceplay::load(&oag_raceplay::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            track: Some(r"Data\Environments\16_Track\track.vex".to_string()),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("loading 16_Track"),
+    )
+}
+
+/// The default flies the original in a plain single race, which is no
+/// campaign launch (2026-10-13). This pins `ai_choice::apply`'s rule on a real
+/// race; the call sites that start a race through it are pinned separately
+/// (`--trace-out` in `main/headless/tests.rs`).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_single_race_flies_the_original_by_default() {
+    use oag_game::ai_choice::{AiChoice, Source, apply};
+    let Some(loaded) = loaded_single_race() else {
+        return;
+    };
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(apply(
+        &mut race,
+        AiChoice::default(),
+        Source::Free(oag_ai::Difficulty::default())
+    ));
+    assert!(race.original_ai_active());
+    for _ in 0..600 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.original_ai_field().is_some());
+}
+
+/// `--ai ours` keeps this project's driver in the same race.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn ai_ours_keeps_this_projects_driver() {
+    use oag_game::ai_choice::{AiChoice, Source, apply};
+    let Some(loaded) = loaded_single_race() else {
+        return;
+    };
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(!apply(
+        &mut race,
+        AiChoice::Ours,
+        Source::Free(oag_ai::Difficulty::default())
+    ));
+    assert!(!race.original_ai_active());
+}
+
+/// A race whose tables did not read keeps this project's driver and still
+/// runs: the fallback `use_original_ai` owns survives the new default.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_race_without_tables_falls_back_to_this_projects_driver() {
+    use oag_game::ai_choice::{AiChoice, Source, apply};
+    let Some(mut loaded) = loaded_single_race() else {
+        return;
+    };
+    loaded.setup.original_tables = None;
+    let mut race = oag_raceplay::Race::start(loaded.setup);
+    assert!(!apply(
+        &mut race,
+        AiChoice::Original,
+        Source::Free(oag_ai::Difficulty::default())
+    ));
+    for _ in 0..600 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(!race.original_ai_active());
 }
