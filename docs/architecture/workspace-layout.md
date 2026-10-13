@@ -1046,3 +1046,56 @@ is `-C lto=off`: `[profile.dev] lto = "off"` reaches target units, and
 `build-override` cannot set `lto`. Dropping `lto = "off"` would put thin-local
 LTO back on every crate, which costs more than the duplicate. The linker is
 already `rust-lld`, the 1.90+ default on x86_64 Linux.
+
+## The collision world's broadphase (2026-10-13)
+
+`just test-data` measured 822 s with one red, 12,535 s summed. Most of the work
+this day removed redundant walks. `ai_roll` raced each interior tier twice, and
+`replay` recorded each title three times. `pure_chain_walk` read 16 circuit
+entries once per event, 160 events per pressing. Nine BallisticNG and Unity
+tests each unpacked all 79 Workshop bundles. The PS2 track-texture claim loaded
+32 circuits that `spawn_heading` already loads.
+
+Then the profile. No `perf` is installed, and `ptrace_scope=1` stops a sampler
+from attaching to a sibling process, so the test ran as a child of gdb, which
+stopped it every quarter second.
+
+A de Konstruct race put 58% of its CPU in raycasts, most of that in
+`CollisionWorld`'s loop over its colliders. A circuit is about 200 colliders of
+at most 32 triangles each, and every ray asked every one.
+
+`CollisionWorld` now holds one `Bvh` over every triangle of every collider. The
+items are numbered so that ascending order is ascending collider, then ascending
+triangle, which is the scan's own order. A query gets exactly the triangles each
+collider's own walk would have produced, and the scan's two nearest-hit
+comparisons are kept apart. The answers are therefore the scan's by
+construction. The printed output of twelve sim ground truths is identical before
+and after.
+
+Isolated CPU-s, load 2-20:
+
+| test | before | collider-level BVH | one tree |
+| --- | ---: | ---: | ---: |
+| `ai_roll`, one seed's grid | 554 | 293 | 248 |
+| `speed_plan` | 93 | 57 | 46 |
+| `race_ground_truth`, lone craft | 41 | 24 | 20 |
+| `stall_rescue`, Ace | 37 | 21 | 16 |
+
+Full runs under the gate lock, `time` around nextest:
+
+| run | tests | suite | user + sys | summed |
+| --- | ---: | ---: | ---: | ---: |
+| `main` at `1fcfd1255` | 8,295 | 822 s, 1 red | | 12,535 s |
+| redundant walks removed | 8,276 | 738 s | 10,413 s | 11,181 s |
+| plus the collider-level BVH | 8,323 | 610 s | 8,380 s | 9,069 s |
+| plus one tree | 8,341 | 583 s | 8,063 s | 8,616 s |
+
+**It is still over the 450 s ceiling, and the tail is decode now.** In summed
+time: `omega_gnf` 972 s (BC7, plus the PSARC reads), `omega_wem` 429 s and
+`omega_music` 194 s (ATRAC9 in `atrac9dec`). In the simulation, a gdb sample of
+a 2048 field race puts most of the remaining time in **speed plan learning**,
+which every race that flies this project's driver pays again.
+
+A duration under full load runs 3-8x its isolated time on this laptop: a test
+that takes 13 s alone took 99-135 s in a full run. Compare isolated CPU, or
+`time`'s user + sys, not nextest durations.
