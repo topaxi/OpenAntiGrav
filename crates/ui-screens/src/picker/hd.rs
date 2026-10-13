@@ -211,6 +211,7 @@ pub fn read(
         hd: Some(Box::new(extra)),
         hd_track: None,
         ready: String::new(),
+        name_scale: 1.0,
     })
 }
 
