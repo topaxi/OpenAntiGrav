@@ -103,7 +103,6 @@ use oag_gameplay::MAX_SHIPS;
 use oag_mesh::mesh_render::SpuLight;
 
 use super::Race;
-use super::drawable::model_matrix_of;
 use oag_livery::engine_light::EngineLight;
 
 /// Seed for the engine light's jitter draws. Distinct from every other seed
@@ -210,7 +209,7 @@ impl Race {
                 let light = self.view.engine_lights.get(slot).copied().flatten()?;
                 let nozzle = self.nozzle_local_of(slot)?;
                 Some(record(
-                    model_matrix_of(&self.sim.world.ships[slot]),
+                    self.ship_model_matrix_of(slot),
                     nozzle,
                     light,
                     self.view.hd_trail_red[slot] > 0.5,

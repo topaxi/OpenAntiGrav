@@ -14,7 +14,9 @@
 //! [`Race::view`] and [`Race::view_unshaken`] (so every camera reader - the
 //! sky, the fog and PVS eye, the billboards' axes, the reticle - follows),
 //! the speed terms of [`Race::vertical_fov`], and [`Race::ship_model_matrix_of`]
-//! (the hull, its shield, flame, plume, shadow and exhaust nozzle). Then what
+//! (the hull, its shield, flame, plume, shadow map, exhaust nozzle and HD
+//! engine lights), and [`Race::body_between`] for what reads the body (the
+//! blob shadow's ray). Then what
 //! moves on its own: every projectile's body and billboard
 //! ([`Race::projectile_between`]), the replay ghost
 //! ([`Race::ghost_draw_matrix`]), the newest sample of each engine trail
@@ -152,6 +154,11 @@ struct CameraKey {
 #[derive(Debug, Clone, Copy)]
 struct ShipPose {
     model: Mat4,
+    /// The body's own pose, for what reads the body rather than the drawn
+    /// hull (the blob shadow's ray): the model matrix carries the barrel roll
+    /// and the model's yaw, the body neither.
+    position: Vec3,
+    orientation: Quat,
     key: ShipKey,
 }
 
@@ -250,9 +257,14 @@ impl Race {
                 boost_kick: self.view.boost_kick,
                 key: self.camera_key(),
             },
-            ships: std::array::from_fn(|slot| ShipPose {
-                model: model_matrix_of(&self.sim.world.ships[slot]),
-                key: self.ship_key(slot),
+            ships: std::array::from_fn(|slot| {
+                let ship = &self.sim.world.ships[slot];
+                ShipPose {
+                    model: model_matrix_of(ship),
+                    position: ship.physics.body.position,
+                    orientation: ship.physics.body.orientation,
+                    key: self.ship_key(slot),
+                }
             }),
         };
         self.view.poses.previous = Some(pose);
@@ -353,6 +365,26 @@ impl Race {
         let poses = &self.view.poses;
         let previous = poses.previous.as_ref()?;
         (poses.alpha < 1.0 && previous.world_tick + 1 == self.sim.world.tick).then_some(poses.alpha)
+    }
+
+    /// The craft in `slot`'s body at the draw alpha, for a draw that reads the
+    /// body rather than the hull's matrix: its position lerped and orientation
+    /// slerped from a tick ago, on the same snaps as
+    /// [`Self::ship_model_matrix_of`]. The tick's body itself, untouched,
+    /// outside a draw.
+    pub(super) fn body_between(&self, slot: usize) -> oag_physics::Body {
+        let mut body = self.sim.world.ships[slot].physics.body;
+        if let (Some(alpha), Some(previous)) = (self.ship_alpha(slot), &self.view.poses.previous) {
+            let from = previous.ships[slot];
+            if from.position.distance(body.position) <= SNAP_DISTANCE {
+                body.position = from.position.lerp(body.position, alpha);
+                body.orientation = from
+                    .orientation
+                    .normalize()
+                    .slerp(body.orientation.normalize(), alpha);
+            }
+        }
+        body
     }
 
     /// Where the newest sample of the engine trail in `slot` is drawn: the

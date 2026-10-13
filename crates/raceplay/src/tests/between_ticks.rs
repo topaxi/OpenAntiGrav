@@ -341,3 +341,19 @@ fn the_ghost_is_drawn_between_its_two_poses() {
         "ghost at {drawn}"
     );
 }
+
+#[test]
+fn the_body_a_blob_shadow_casts_from_is_the_drawn_one() {
+    let mut race = gliding_race();
+    let before = race.sim.world.ships[0].physics.body.position;
+    race.tick(&PlayerInputs::none());
+    let after = race.sim.world.ships[0].physics.body.position;
+    assert_eq!(race.body_between(0), race.sim.world.ships[0].physics.body);
+    race.set_draw_alpha(0.25);
+    let drawn = race.body_between(0).position;
+    assert!(
+        drawn.abs_diff_eq(before.lerp(after, 0.25), 1e-4),
+        "cast from {drawn}, not a quarter of {before} -> {after}"
+    );
+    assert!(drawn.abs_diff_eq(translation(race.ship_model_matrix_of(0)), 1e-4));
+}
