@@ -36,8 +36,9 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   | --- | --- |
   | `Race::view`, `Race::view_unshaken` | every camera reader: the sky, the fog and PVS eye, opaque sorting, billboard axes, the lock-on reticle, the LOD eye, the motion blur's shake term |
   | `Race::vertical_fov` (the speed widen and the boost kick) | the projection and the LOD switch |
-  | `Race::ship_model_matrix_of` | hull, shield shell and cockpit sphere, engine flame, boost plume, absorb overlays, wrecks, shine, both shadow tiers, the exhaust nozzle |
-  | `Race::projectile_between` (inside the weapon model matrices) and the billboard fallback | every live projectile body |
+  | `Race::ship_model_matrix_of` | hull, shield shell and cockpit sphere, engine flame, boost plume, absorb overlays, wrecks, shine, the shadow map's casters and blob silhouettes, the exhaust nozzle, HD's engine lights |
+  | `Race::body_between` | the blob shadow's ray, which reads the body's own pose (no barrel roll, no model yaw) |
+  | `Race::projectile_between` (inside the weapon model matrices) and the billboard fallback | every live projectile body, HD's rocket point lights |
   | `Race::ghost_draw_matrix` | the replay ghost |
   | `Race::trail_head_of` | the newest sample of the PSP ribbon and the HD tube, so the trail leaves the hull as drawn |
   | `Race::clock_seconds` | texture scroll, `Anim Transform` nodes, the flame surface's scroll |
@@ -125,3 +126,7 @@ they did. See that page's "Blur length" section.
   and are drawn where the tick left them.
 - The HD sprite flare's nozzle axis reads the body's forward at the tick, not
   the drawn hull's.
+- The lock-on reticle is projected inside the tick (`Race::update_sight`, a
+  stateful tracker), so it sits on the target as the tick left it while the
+  target and camera are drawn between ticks: off by a fraction of the
+  target's per-tick screen motion.

@@ -30,7 +30,12 @@ motion blur measures per drawn frame now, see
    (`cannon_muzzle_matrix`, a flash and so arguably stepped), the airbrake
    flap angles (`Race::airbrake_flaps`), the shield shell's swell. Each is
    a scalar or an axis a tick old; none has been seen to judder.
-4. **Seen only headlessly.** The 240 Hz proof is the ground truth test and a
+4. **The lock-on reticle is projected in the tick** (`Race::update_sight`
+   runs from `Race::tick` and feeds a stateful tracker,
+   `oag_race::sight`), so it draws where the tick left the target while the
+   target and the camera are drawn between ticks. Projecting the target at
+   draw time needs the tracker split from its projection.
+5. **Seen only headlessly.** The 240 Hz proof is the ground truth test and a
    `--draw-alpha` sequence; nobody has watched a windowed race on a 144 or
    240 Hz panel since. A player's look at one (`just play`, frame limit 240)
    is the check this thread cannot do from a member's Xvfb at 5-7 fps.
@@ -43,3 +48,29 @@ motion blur measures per drawn frame now, see
    continuous in alpha across a tick boundary. Two to three hours.
 3. Particle positions between ticks (item 2), if item 1's look says it is
    worth it. Half a day.
+
+## Survey (2026-10-13), for reference
+
+Every per-tick pose the race scene draws from, where the tick sets it, and
+what happened to it. "Landed" means it draws between ticks now.
+
+| Item | Set per tick in | Read per frame through | Kind | Status |
+| --- | --- | --- | --- | --- |
+| Camera view (chase spring, cockpit, flyby override, destroy and spectator cameras, impact shake) | `Race::tick`, `tick_intro`, `tick_cosmetics` | `Race::view`, `view_unshaken`, so every camera reader | continuous | landed |
+| Camera cut, view cycle, pose imposed or lifted | `camera_cuts`, `set_camera_view`, `camera_override` | snap keys | discrete | snaps |
+| FOV speed widen and boost kick | body velocity, `boost_kick` | `Race::vertical_fov` | continuous | landed |
+| Craft model matrix | physics | `Race::ship_model_matrix_of` | continuous | landed |
+| Craft respawn, active | `sim.respawns`, `ships[].active` | snap keys | discrete | snaps |
+| Blob shadow ray | body pose | `Race::shadow_placements` | continuous | landed (`body_between`) |
+| Exhaust flare sprite, HD sprite position | `nozzle_of` | exhaust gather | continuous | landed (nozzle on the blended hull) |
+| PSP ribbon, HD tube | samples pushed per tick | `extend_trail_vertices`, `Tube::extend_vertices` | per-tick history | head landed, body open (item 1) |
+| HD engine lights | `nozzle_local_of` on the hull | `hd_engine_lights` | continuous | landed |
+| Projectile bodies and billboards, HD rocket lights | `world.projectiles` | `*_model_matrices`, `projectile_sprites`, `hd_weapon_lights` | continuous | landed |
+| Replay ghost | `ghost_pose` (now, before) | `scene/ghost.rs` | continuous | landed |
+| Animation clock | `World::tick / 60` | `Race::clock_seconds` | continuous | landed |
+| Motion blur's previous pose | `MotionState` | `prev_mvp` | per frame | landed (per drawn frame) |
+| Lock-on reticle | `update_sight` in the tick | HUD | continuous | open (item 4) |
+| Airbrake flaps, shield swell, HD sprite axis, cannon flash | per tick | various | small scalars | open (item 3) |
+| Particles, sparks, smoke, mist, clouds | `stage.advance` | `upload_particles` and siblings | spawn discrete, motion continuous | open (item 2) |
+| HUD numbers, messages, sprite frames, countdown | per tick | HUD | discrete | stepped, correct |
+
