@@ -18,7 +18,10 @@ fn second_person_holding(weapon: Weapon, table: oag_tables::weapons::WeaponStats
     let mut race = race_with_a_grid();
     race.sim.weapons = Some(table);
     race.sim.world.controllers[1] = Controller::Local;
-    assert!(race.sim.world.person_flown(1), "slot 1 must be person-flown");
+    assert!(
+        race.sim.world.person_flown(1),
+        "slot 1 must be person-flown"
+    );
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
     }
@@ -67,7 +70,11 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
         .iter()
         .find(|p| p.kind == Some(Weapon::Plasma))
         .map(|p| p.owner);
-    assert_eq!(owner, Some(1), "slot 1's plasma charge is owned by {owner:?}");
+    assert_eq!(
+        owner,
+        Some(1),
+        "slot 1's plasma charge is owned by {owner:?}"
+    );
     let cue = race
         .drain_cues()
         .into_iter()
@@ -90,7 +97,10 @@ fn a_second_persons_shuriken_is_theirs() {
         .map(|p| p.owner)
         .collect();
     assert!(!owners.is_empty(), "slot 1's press threw nothing");
-    assert!(owners.iter().all(|&owner| owner == 1), "owned by {owners:?}");
+    assert!(
+        owners.iter().all(|&owner| owner == 1),
+        "owned by {owners:?}"
+    );
 }
 
 #[test]
@@ -150,5 +160,123 @@ fn the_missiles_reticle_hold_follows_the_primary_slot() {
         target_of(&race, 1),
         Some(None),
         "the primary's candidate was passed through before its reticle locked"
+    );
+}
+
+/// The rubber band reads the best-placed person; a lone person is that person
+/// wherever the AI stand.
+#[test]
+fn the_rubber_band_reads_the_best_placed_person() {
+    let mut race = race_with_a_grid();
+    let mut places = [8u8; oag_gameplay::MAX_SHIPS];
+    places[0] = 3;
+    places[1] = 1;
+    places[2] = 2;
+    assert_eq!(
+        race.rubber_band_reference(&places),
+        0,
+        "one person: the AI in first place is nobody to chase"
+    );
+    race.sim.world.controllers[1] = Controller::Local;
+    race.sim.world.controllers[2] = Controller::Local;
+    assert_eq!(race.rubber_band_reference(&places), 1);
+    places[0] = 1;
+    places[1] = 2;
+    assert_eq!(race.rubber_band_reference(&places), 0);
+    places[1] = 1;
+    assert_eq!(
+        race.rubber_band_reference(&places),
+        0,
+        "a tie takes the lowest slot"
+    );
+}
+
+/// The original field's round robin takes the craft no person flies, slot 0
+/// among them when a person flies elsewhere.
+#[test]
+fn the_original_fields_opponents_are_the_craft_nobody_flies() {
+    let mut race = race_with_a_grid();
+    let count = race.sim.world.ship_count as usize;
+    let (list, n) = race.ai_flown_slots();
+    assert_eq!(&list[..n], &(1..count).collect::<Vec<_>>()[..]);
+    race.sim.world.controllers[0] = Controller::Ai;
+    race.sim.world.controllers[2] = Controller::Local;
+    let (list, n) = race.ai_flown_slots();
+    let expected: Vec<usize> = (0..count).filter(|&s| s != 2).collect();
+    assert_eq!(&list[..n], &expected[..]);
+}
+
+/// A person's autopilot does not go shopping for weapon pads, whichever slot
+/// they fly; the same craft handed to the AI does.
+#[test]
+fn no_person_seeks_a_weapon_pad() {
+    let mut race = race_with_a_grid();
+    race.sim.pad_seeking = PadSeeking::Every;
+    race.sim.weapon_pad_line = vec![Some((6, 0.0))];
+    race.sim.weapon_pad_refresh_left = vec![0.0];
+    assert!(
+        race.pad_for(1).is_some(),
+        "the AI craft sees the pad: fixture is too weak"
+    );
+    race.sim.world.controllers[1] = Controller::Local;
+    assert!(
+        race.pad_for(1).is_none(),
+        "a second person was sent for a pad"
+    );
+}
+
+/// With slot 0 handed to the AI and a person in slot 1, slot 0's driver is
+/// seeded and placed on the line like any opponent's rather than left as the
+/// seedless default at index zero.
+#[test]
+fn an_ai_flown_slot_zero_gets_a_driver_of_its_own() {
+    let mut race = race_with_a_grid();
+    race.sim.world.controllers[0] = Controller::Ai;
+    race.sim.world.controllers[1] = Controller::Local;
+    assert_eq!(race.sim.world.ships[0].driver, oag_ai::Driver::default());
+    race.tick(&PlayerInputs::none());
+    let driver = race.sim.world.ships[0].driver;
+    assert_ne!(
+        driver.seed, 0,
+        "slot 0 still drives as the seedless default"
+    );
+    let line = &race.sim.racing_line;
+    let here = race.sim.world.ships[0].physics.body.position;
+    assert_eq!(
+        driver.index as usize,
+        line.nearest(here, 0, line.len()),
+        "slot 0's driver was not placed on the line"
+    );
+}
+
+/// The weapon AI's "the player is ahead" reads any person, not the primary
+/// alone: with persons in slots 0 and 1, slot 1 ahead of an AI craft in slot 2
+/// and slot 0 behind it, the gap handed to the fire law is slot 1's.
+#[test]
+fn the_weapon_ai_sees_a_second_person_ahead() {
+    let mut race = race_with_a_grid();
+    race.sim.weapons = Some(one_rocket_table());
+    race.sim.weapon_ai = Some(
+        oag_tables::weapons::ai::parse(
+            r#"<WeaponAIStats>
+                 <Rockets useAgainstPlayer="1.1" useAgainstAI="1.2" absorb="1.0"/>
+               </WeaponAIStats>"#,
+        )
+        .expect("the fixture table must parse"),
+    );
+    race.sim.world.controllers[1] = Controller::Local;
+    let progress = |race: &mut Race, slot: usize, at: f32| {
+        race.sim.world.ships[slot].standing.progress = Some(at);
+    };
+    progress(&mut race, 0, 10.0);
+    progress(&mut race, 2, 40.0);
+    progress(&mut race, 1, 70.0);
+    let situation = race
+        .fire_situation(2, Weapon::Rocket, true)
+        .expect("a rocket with odds and a course has a situation");
+    let gap = situation.player_gap.expect("two people are on the grid");
+    assert!(
+        gap > 0.0,
+        "the person ahead was not the one handed over: {gap}"
     );
 }

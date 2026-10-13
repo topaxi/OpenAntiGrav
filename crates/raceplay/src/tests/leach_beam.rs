@@ -355,7 +355,10 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     race.sim.weapons = Some(one_leach_beam_table());
     race.set_sight_dialect(oag_pulse::hud::ART.sights);
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
-    assert!(race.sim.world.person_flown(1), "slot 1 must be person-flown");
+    assert!(
+        race.sim.world.person_flown(1),
+        "slot 1 must be person-flown"
+    );
     let forward = race.sim.world.ships[0].physics.body.forward();
     let rival = race.sim.world.ships[0].physics.body.position;
     let shooter = rival - forward * 60.0;

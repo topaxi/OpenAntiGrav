@@ -457,9 +457,7 @@ impl Race {
                     // would hold is not recovered.
                     let primary = self.sim.world.primary_slot();
                     let target = self.sight_target(slot).filter(|_| {
-                        slot != primary
-                            || !self.view.sight.leach_law()
-                            || self.view.sight.locked()
+                        slot != primary || !self.view.sight.leach_law() || self.view.sight.locked()
                     });
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {

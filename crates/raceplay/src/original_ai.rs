@@ -119,20 +119,46 @@ impl Race {
     /// `AiManager_Update`'s head, once a tick before the opponents: which
     /// slot runs its thrust law and lane choice this tick.
     pub(super) fn original_ai_begin_tick(&mut self) -> Option<usize> {
+        let (list, n) = self.ai_flown_slots();
+        let ai = self.sim.original_ai.as_mut()?;
+        Some(ai.field.begin_tick(&list[..n]))
+    }
+
+    /// Every active craft no person flies, in slot order, and how many.
+    ///
+    /// With one person in slot 0 this is slots `1..count`, the list the round
+    /// robin always took; a person in another slot is left out as slot 0 is.
+    pub(super) fn ai_flown_slots(&self) -> ([usize; MAX_SHIPS], usize) {
         let count = self.sim.world.ship_count as usize;
-        let opponents: [usize; MAX_SHIPS] = std::array::from_fn(|i| i + 1);
-        let active = opponents[..count.saturating_sub(1)]
-            .iter()
-            .copied()
-            .filter(|&s| self.sim.world.ships[s].active);
         let mut list = [0usize; MAX_SHIPS];
         let mut n = 0;
-        for slot in active {
+        for slot in (0..count)
+            .filter(|&s| self.sim.world.ships[s].active && !self.sim.world.person_flown(s))
+        {
             list[n] = slot;
             n += 1;
         }
-        let ai = self.sim.original_ai.as_mut()?;
-        Some(ai.field.begin_tick(&list[..n]))
+        (list, n)
+    }
+
+    /// The craft the rubber band and the position-keyed tables read as "the
+    /// player": the best-placed person-flown slot, the lowest slot on a tie.
+    ///
+    /// The original has one player, and `AI_ComputeOpponentThrust` reads that
+    /// player's place, the gap to it and its ship state (ai-controls.md); how
+    /// it would treat two is not recovered. **Chosen, not measured, no
+    /// confidence score:** with several people in a race the field chases and
+    /// waits for the one in front, so the human who is leading is never
+    /// handed a field that has eased off because a trailing human is far
+    /// behind. One person flown - every race but a split-screen one - is that
+    /// person, and a race with nobody flown (the attract demo) is
+    /// [`oag_gameplay::World::primary_slot`], as before.
+    pub(super) fn rubber_band_reference(&self, places: &[u8; MAX_SHIPS]) -> usize {
+        let world = &self.sim.world;
+        (0..world.ship_count as usize)
+            .filter(|&slot| world.person_flown(slot))
+            .min_by_key(|&slot| (places[slot], slot))
+            .unwrap_or_else(|| world.primary_slot())
     }
 
     /// The track sample `index` steps along slot `slot`'s line, as the
@@ -250,7 +276,7 @@ impl Race {
         let body = ship.physics.body;
         let finished = ship.standing.finished();
         let grounded = ship.physics.grounded;
-        let player = self.sim.world.primary_slot();
+        let player = self.rubber_band_reference(places);
         let player_rubber_band_off =
             self.sim.world.ships[player].physics.craft_state != oag_physics::CraftState::Racing;
         let race_time = self
@@ -316,7 +342,7 @@ impl Race {
         let count = self.sim.world.ship_count as usize;
         let racers: [(f32, u8); MAX_SHIPS] =
             std::array::from_fn(|k| (self.sim.world.ships[k].standing.distance(course), places[k]));
-        let player = self.sim.world.primary_slot();
+        let player = self.rubber_band_reference(places);
         let standings = Standings {
             racers: &racers[..count],
             player,

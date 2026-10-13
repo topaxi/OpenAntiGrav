@@ -119,11 +119,11 @@ impl Race {
     /// for the far one. A pad still cooling down is skipped: its colour shows
     /// it, so a player can see it too.
     ///
-    /// **Opponents only.** The player's own craft is driven through the same
+    /// **Opponents only.** A person's craft is driven through the same
     /// `field_for` when its autopilot is on, and a player who handed over the
-    /// controls did not ask to go shopping.
+    /// controls did not ask to go shopping - whichever person-flown slot it is.
     pub(crate) fn pad_for(&self, slot: usize) -> Option<oag_ai::Pad> {
-        if slot == self.player_slot() {
+        if self.sim.world.person_flown(slot) {
             return None;
         }
         let ship = &self.sim.world.ships[slot];
