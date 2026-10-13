@@ -202,8 +202,25 @@ impl Pending {
             // `race::load_event`'s own 2048-campaign resolution sets this.
             // See `race::Options::grid_teams`.
             grid_teams: Vec::new(),
-            // The join screen's Ship Selects fill this at launch.
-            seat_picks: Vec::new(),
+            // The join screen's Ship Selects fill this at launch; `--seat-team`
+            // is the headless way.
+            seat_picks: self
+                .cli
+                .seat_team
+                .iter()
+                .map(|spec| match spec.split_once(':') {
+                    Some((team, skin)) => race::SeatPick {
+                        team: team.to_string(),
+                        hull_variant: None,
+                        skin: Some(skin.to_string()).filter(|skin| !skin.is_empty()),
+                    },
+                    None => race::SeatPick {
+                        team: spec.clone(),
+                        hull_variant: None,
+                        skin: None,
+                    },
+                })
+                .collect(),
             // See `race::Options::zone_model`: off until the Zone road shader is read.
             zone_model: false,
             hull_shine: !self.cli.no_hull_shine,
