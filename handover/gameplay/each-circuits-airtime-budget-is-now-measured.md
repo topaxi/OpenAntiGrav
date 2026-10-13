@@ -9,7 +9,7 @@ squeeze in a barrel roll)." No measurement of that existed - a prior pass
 `09_Track` in isolation. This thread is the table across all 24
 circuit-directions, and it settles the Moa Therma question decisively.
 
-New file: `crates/game/tests/airtime_budget_ground_truth.rs`
+New file: `crates/raceplay/tests/airtime_budget_ground_truth.rs`
 (measurement-only, `OAG_SWEEP`-gated, `#[ignore]`d - never runs in CI or
 `just test-data`; three tests, all print rather than assert). Full data and
 narrative: scratch report at
@@ -131,4 +131,4 @@ tiers) and belongs there rather than duplicated here.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-the AI barrel roll is gated on a minimum airborne duration, and on a full grid only **Ace** ever armed one. The cause is the track, not the propensity: **Moa Therma (`03_Track`) offers a longest airborne window of 11 ticks / 0.18 s** against Ace+`AGGRESSIVE`'s floor of 24 t / 0.40 s - 46 % of the minimum, in either direction, either speed class, any tier. That **agrees with the maintainer's own play report** ("very difficult if possible at all to squeeze in a barrel roll") and rules out a flight-model gap. The lockout is **directional, not a circuit property**: `09_Track` clears 31-36 t while its own reverse `25_Track` clears 103-104 t. Eleven of twenty-four circuit-directions clear nothing at any tier (03/19, 04/20, 07/23, 13/29, 16/32), and `25_Track` is the sole clean Novice candidate. **Nothing was tuned** - relaxing `roll_caution` is one constant across sixteen circuits with wildly different budgets, so it would make Ace roll constantly on a jump-heavy track and still change nothing on a flat one. The table is `crates/game/tests/airtime_budget_ground_truth.rs`; the design decision is the maintainer's
+the AI barrel roll is gated on a minimum airborne duration, and on a full grid only **Ace** ever armed one. The cause is the track, not the propensity: **Moa Therma (`03_Track`) offers a longest airborne window of 11 ticks / 0.18 s** against Ace+`AGGRESSIVE`'s floor of 24 t / 0.40 s - 46 % of the minimum, in either direction, either speed class, any tier. That **agrees with the maintainer's own play report** ("very difficult if possible at all to squeeze in a barrel roll") and rules out a flight-model gap. The lockout is **directional, not a circuit property**: `09_Track` clears 31-36 t while its own reverse `25_Track` clears 103-104 t. Eleven of twenty-four circuit-directions clear nothing at any tier (03/19, 04/20, 07/23, 13/29, 16/32), and `25_Track` is the sole clean Novice candidate. **Nothing was tuned** - relaxing `roll_caution` is one constant across sixteen circuits with wildly different budgets, so it would make Ace roll constantly on a jump-heavy track and still change nothing on a flat one. The table is `crates/raceplay/tests/airtime_budget_ground_truth.rs`; the design decision is the maintainer's

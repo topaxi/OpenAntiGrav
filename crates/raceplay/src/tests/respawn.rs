@@ -162,7 +162,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
 /// with a mechanism the original does not have" - and a sweep of every
 /// circuit at every difficulty afterwards found no cell reaching
 /// [`STALL_TICKS`] by sustained dwell any more (the closest, `07_Track` at
-/// novice, tops out at 46). `crates/game/tests/stall_rescue_ground_truth.rs`
+/// novice, tops out at 46). `crates/raceplay/tests/stall_rescue_ground_truth.rs`
 /// records that measurement and, separately, that `05_Track` and `07_Track`
 /// at novice still make almost no progress - a *bounce-in-place* failure the
 /// sustained-dwell counter cannot see by construction, and which is not

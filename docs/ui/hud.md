@@ -5,7 +5,7 @@
 project already had. Every rectangle, atlas sub-rectangle, colour, font role and
 alignment is read off the player's own disc. Implemented in
 [`oag_hud`](../../crates/hud/src/lib.rs); pinned against all five shipped
-layouts by `crates/game/tests/hud_layout_ground_truth.rs`.
+layouts by `crates/raceplay/tests/hud_layout_ground_truth.rs`.
 
 95 rather than higher because the *geometry* is read directly from shipped data
 and closes on independent counts, while **what drives each widget** - which are
@@ -69,7 +69,7 @@ nudges** (`LapTxt`'s `y`, `RearWarningMissileIcon`'s and
 byte-identical across consoles while the `<Item>` enclosing every one of them
 scales its own `OffsetX`/`OffsetY` correctly, dwarfing the nudge. See
 `oag_hud::inside_screen`'s doc comment for the full tally and
-`crates/game/tests/hud_layout_ground_truth.rs` for the check that runs against
+`crates/raceplay/tests/hud_layout_ground_truth.rs` for the check that runs against
 both grids.
 
 **The PS2 layout is now checked for a dropped `<Item>` offset, the same way the
@@ -355,7 +355,7 @@ read alone. `<Item>` offsets compose (`Layout::collect`'s `x = offset_x +
 OffsetX`), and the outer `<Item OffsetX="445" OffsetY="5">` around it
 composes to `(405, 5)` - measured, not argued:
 `postag_is_a_fixed_column_not_a_runtime_anchor` in
-`crates/game/tests/hud_layout_ground_truth.rs` pins `PosTag0` at `(405, 25)`
+`crates/raceplay/tests/hud_layout_ground_truth.rs` pins `PosTag0` at `(405, 25)`
 through `PosTag7` at `(405, 165)`, one column, twenty pixels a row, both on
 screen and evenly spaced by index - which eight independent per-craft
 anchors would have no reason to be. `Elimination_HUD.xml` corroborates at
@@ -398,7 +398,7 @@ and HD is what showed it:
   on the grounds that no shipped file nested one. Pulse nests none; HD nests
   them three deep and puts them on widgets as well as on `<Item>`. Composing is
   a strict no-op here - all nine assertions in
-  `crates/game/tests/hud_layout_ground_truth.rs` pass unchanged.
+  `crates/raceplay/tests/hud_layout_ground_truth.rs` pass unchanged.
 - **A nameless widget is drawn.** Both widget readers required a `name` and
   recorded the loss in `Layout::skipped` otherwise. Pulse names all of its;
   HD leaves 106 anonymous, mostly background panels behind a named readout.
@@ -651,7 +651,7 @@ That is exactly `oag_tables::weapons::Weapon::ALL`, misspellings (`LeachBeam`,
 `Repulser`) included, so the lookup is `format!("{}Icon", weapon.as_type())` -
 `oag_hud::pickup_icon_name` - and needs nothing recovered. Pinned against
 the shipped file for all thirteen by
-`crates/game/tests/hud_layout_ground_truth.rs`. The numeric ids are real
+`crates/raceplay/tests/hud_layout_ground_truth.rs`. The numeric ids are real
 (`0x0883b3b8` forces `6`) and simply are not needed.
 
 **The four layouts author three different pickup sets**, and the difference is

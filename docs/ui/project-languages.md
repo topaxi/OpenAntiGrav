@@ -148,13 +148,13 @@ Gaps measured 2026-10-06 (the disc's English id set against its German table):
 
 2048 and Omega check: checked, differs in outcome. Omega's German carries the four
 2048 ids, so Omega needs no namespace; 2048's wording matches Omega's.
-Ground truth: `crates/game/tests/german_ground_truth.rs`.
+Ground truth: `crates/raceplay/tests/german_ground_truth.rs`.
 
 ## Glyph coverage (measured 2026-10-06)
 
 Every face of every title's English plugin was read and checked for
 `ãõçáéíóúâêôàÃÕÇÁÉÍÓÚÂÊÔÀ`
-(`crates/game/tests/portuguese_br_ground_truth.rs`):
+(`crates/raceplay/tests/portuguese_br_ground_truth.rs`):
 
 | Title | Missing |
 | --- | --- |
@@ -201,7 +201,7 @@ Omega already ships its own Brazilian Portuguese. The 2048 USA release stands on
 EU release (`data/extracted/vita/PCSF00007`) stands on `English` and reads the same
 file id for id. Ground truth: `the_2048_disc_text_is_translated_...` (USA) and
 `the_2048_eu_release_reads_the_same_file_...` (EU) in
-`crates/game/tests/portuguese_br_ground_truth.rs`.
+`crates/raceplay/tests/portuguese_br_ground_truth.rs`.
 
 **The `º`/`ª` fallback is shared code** (`oag_ui::font::base_letter`), so it
 reaches every language on every title, not only Portuguese: any text with an

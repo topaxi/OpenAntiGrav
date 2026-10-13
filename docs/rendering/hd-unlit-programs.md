@@ -10,7 +10,7 @@ and neither program takes a light at all.
 Tools: `scripts/ps3-microcode.py fp-file`/`vp-file` for the listings,
 `crates/render/examples/hd_unlit_probe.rs` for the raw material state,
 vertex layout and winding, `crates/render/examples/hd_unlit_census.rs` for the
-disc-wide survey, and `crates/game/tests/hd_rim_glow_ground_truth.rs` for
+disc-wide survey, and `crates/raceplay/tests/hd_rim_glow_ground_truth.rs` for
 what is pinned.
 
 ## The variants the race resolves

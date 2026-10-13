@@ -201,7 +201,7 @@ for the original in full; the divergences that remain are these, each a choice:
   40 units where two routes diverge - a lap is 7,890 there and the gate needs
   half of one. Before this a craft on a detour that strayed past the reacquire
   distance could read a lap away (`park`: 4,388 units). See
-  `crates/game/tests/branch_progress_ground_truth.rs`.
+  `crates/raceplay/tests/branch_progress_ground_truth.rs`.
 - **The split table, the perfect-lap flag, the twenty fastest laps** and the
   profile statistics the original updates on a crossing are not modelled.
 

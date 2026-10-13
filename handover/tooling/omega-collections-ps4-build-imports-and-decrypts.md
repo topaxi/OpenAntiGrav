@@ -199,7 +199,7 @@ about a second, decompression-shaped problem on top of it.
   **Promoted 2026-09-29**: `data/extracted/ps4` is the corrected extraction (the
   short-read one was `data/extracted/ps4.bak`, deleted 2026-10-12), `omega_psarc_ground_truth` was
   re-measured on it (`psarc.md`, "Block data location and the short-read
-  extraction"), and `crates/game/tests/omega_race_ground_truth.rs` skips only
+  extraction"), and `crates/raceplay/tests/omega_race_ground_truth.rs` skips only
   on a short-read copy, `OAG_OMEGA_SOURCE=<dir>` overriding the directory.
 
 - **Block data location: closed - it was the extraction tool (2026-09-29).**

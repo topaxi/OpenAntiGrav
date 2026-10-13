@@ -922,7 +922,7 @@ page of `assets/ui/menu.toml` is as it was.
 ### The vanilla top level is each title's own
 
 `oag_title::Title::main_menu` lists the rows the disc authors, by `idstring`, in the
-disc's order, and the `menu.toml` row each opens. `crates/game/tests/main_menu_ground_truth.rs`
+disc's order, and the `menu.toml` row each opens. `crates/raceplay/tests/main_menu_ground_truth.rs`
 reads the file back on every pressing and every archive that carries it and compares the
 whole list (read 2026-10-12, all passing):
 

@@ -269,7 +269,7 @@ Pulse engine uses, and sets the mixer voice's gain and pitch.
 | layer unity gain | `0x400` | **chosen, not measured** |
 | opponents' voices | open only while audible | **chosen** (mixer has 32 voices; 8 craft x 9 layers is 72) |
 
-Proof: `crates/game/tests/sfx_xfade_ground_truth.rs` (ignored, needs the disc):
+Proof: `crates/raceplay/tests/sfx_xfade_ground_truth.rs` (ignored, needs the disc):
 all 13 tables resolve to looping cues (feisar 8 layers, the others 9), a goteki
 craft sweeps its layers as it accelerates, and its afterburner layer is silent
 without throttle and at full gain with it. The goteki layer levels read off the

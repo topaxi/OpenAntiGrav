@@ -12,61 +12,22 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
-mod in_parallel;
-
-mod absorb_ground_truth;
 mod absorb_mask_ground_truth;
-mod ai_clean_lap_board;
-mod ai_clean_lap_gate;
-mod ai_dekonstruct_black_board;
-mod ai_dekonstruct_black_ground_truth;
-mod ai_dekonstruct_symptoms_ground_truth;
-mod ai_fork_split_ground_truth;
-mod ai_look_sweep;
-mod ai_loss_attribution_board;
-mod ai_plan_probe;
-mod ai_roll_ground_truth;
-mod ai_span_sweep;
 mod ai_speed_plan_sweep;
-mod airtime_budget_ground_truth;
-mod asset_layers_ground_truth;
-mod billboard_adverts_ground_truth;
 mod bomb_orbit_ground_truth;
-mod boost_plume_ground_truth;
 mod boot_ground_truth;
 mod boot_legal_wrap_ground_truth;
-mod branch_progress_ground_truth;
 mod campaign_cell_class_census_ground_truth;
 mod campaign_medal;
 mod campaign_pointer_ground_truth;
-mod campaign_skill_scale_ground_truth;
-mod cannon_ground_truth;
-mod cannon_tilt_ground_truth;
-mod chase_camera_ground_truth;
-mod circuit_length_ground_truth;
 mod countdown_voice_ground_truth;
-mod craft_sticking_ground_truth;
-mod damage_fx_ground_truth;
-mod destroy_camera_ground_truth;
-mod difficulty_ground_truth;
 mod dlc_ground_truth;
-mod eliminator_finish_ground_truth;
-mod eliminator_pads_ground_truth;
 mod endrace_split_ground_truth;
 mod endrace_trophy_ground_truth;
 mod endrace_voice_ground_truth;
-mod falloff_survey_ground_truth;
-mod fire_law_inherit_ground_truth;
-mod font_border_ground_truth;
 mod font_roles_ground_truth;
-mod foreign_conventions_ground_truth;
-mod foreign_race_ground_truth;
 mod frontend_grid_ground_truth;
-mod gantry_mount_hd_circuits_ground_truth;
-mod german_ground_truth;
 mod glow_stamp_ground_truth;
-mod grid_stagger_ground_truth;
-mod grid_walk_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

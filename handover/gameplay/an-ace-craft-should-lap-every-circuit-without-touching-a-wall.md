@@ -18,7 +18,7 @@ team.
 
 ## Step 1 is done: wall contact is now a measured quantity
 
-`crates/game/tests/ai_clean_lap_board.rs` is the harness and
+`crates/raceplay/tests/ai_clean_lap_board.rs` is the harness and
 `Race::wall_contact_ticks_of` / `wall_inbound_ticks_of` /
 `wall_shield_charged_of` are what it reads. Three per-slot counters on
 `RaceSim`, on exactly the footing `rolls_armed`/`rolls_spent` already sit on:

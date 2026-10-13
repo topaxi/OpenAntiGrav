@@ -229,7 +229,7 @@ glyph and backdrop (+10 in y from 6.000 s) and the parked states stay
 hidden. Ours draws, per frame, only what stands on the mount's panel in
 both axes (`oag_render::gantry::panel::off_panel`, `PanelCull`); the
 countdown keeps the set the loader always removed. Pinned by
-`crates/game/tests/start_gantry_hd_laps_ground_truth.rs`.
+`crates/raceplay/tests/start_gantry_hd_laps_ground_truth.rs`.
 
 **One look-difference left:** our flag's checks read grey and white where the
 original's are black and white. The flag is drawn in front of the backing

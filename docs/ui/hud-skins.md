@@ -270,7 +270,7 @@ bites the rect shrinks with it.
 **A glyph's reach is cut to half its distance to the nearest other glyph's
 box. Chosen, not measured.** Extended in full, Pulse's PSP menu text came out
 garbled (every glyph drew a sliver of its neighbour; `menu-after.png` of the first attempt). The census,
-`crates/game/tests/font_border_ground_truth.rs` (English plugin of every
+`crates/raceplay/tests/font_border_ground_truth.rs` (English plugin of every
 title present, `just test-data`):
 
 | Title, role (font) | authored | drawn reach |

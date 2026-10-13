@@ -225,7 +225,7 @@ Its own four sprites are `LeachBeamSightBG`, `LeachBeamSightOuter`,
 `Sights::Concentric` carries one set of names and nothing has read which of the
 four is up when, so `oag_hud::sight_draw` draws nothing for a LeachBeam on
 that dialect rather than lending it `MissileSight*`. Both halves are pinned by
-`crates/game/tests/lock_sight_ground_truth.rs`.
+`crates/raceplay/tests/lock_sight_ground_truth.rs`.
 
 **Pure authors neither.** Its `Data\XML\weaponstats.xml` carries no
 `<Weapon type="LeachBeam">` and its `Data\XML\Arcade_HUD.xml` no
@@ -464,7 +464,7 @@ condition with the lock window folded in.
 
 ## The other two titles
 
-Measured 2026-08-26 and pinned by `crates/game/tests/lock_sight_ground_truth.rs`.
+Measured 2026-08-26 and pinned by `crates/raceplay/tests/lock_sight_ground_truth.rs`.
 **All three lock, and two dialects draw it.** The law on this page is engine code
 with no title in it; what differs is only what each disc authors.
 

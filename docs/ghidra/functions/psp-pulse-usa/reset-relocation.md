@@ -67,7 +67,7 @@ launch speed's input, not a hover height.
 `AiTrack_LocatePosition` keeps for the craft, and `+0x61` is `flags`
 ([track.md](../../../formats/track.md#locating-a-ship-on-the-track)). **So the disc decides where no crumb may
 be laid.** A census over every Pulse circuit (`the_flag_bit_zero_census` in
-`crates/game/tests/novice_jump_ground_truth.rs`) finds bit 0 on 8 of 24 track
+`crates/raceplay/tests/novice_jump_ground_truth.rs`) finds bit 0 on 8 of 24 track
 files. Seven of them bracket a run of racing-line samples with no surface
 under them:
 
@@ -174,7 +174,7 @@ So the ring, the gate and the launch are runtime-verified on one binary:
 the second binary the rubric asks for.
 
 **This project's port reproduces it.** `the_parked_field_is_put_back_where_the_original_puts_it`
-(`crates/game/tests/novice_jump_ground_truth.rs`, disc-backed) asserts that
+(`crates/raceplay/tests/novice_jump_ground_truth.rs`, disc-backed) asserts that
 every reset of the parked-player field lands at line rows 2936-2955 at
 `50 + 0.25 * latch` to 1e-3 u/s. Measured: rows 2939 and 2950, 73.6 u/s from a
 94.6 latch.

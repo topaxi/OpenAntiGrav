@@ -475,7 +475,7 @@ and 2048 have an unmeasured tick, so their `SequenceTick` is `Unknown` and
 
 **What changed in play** (Pulse; 18 of the 33 wired cues, checked headlessly by
 `crates/game/examples/sfx_timeline_render.rs` and pinned by
-`crates/game/tests/sfx_timeline_ground_truth.rs`):
+`crates/raceplay/tests/sfx_timeline_ground_truth.rs`):
 
 | Cue | Before | Now |
 | --- | --- | --- |
@@ -512,7 +512,7 @@ master tick at a time, with the four cue parameters and `0x22` guards, and
 | `~ROCKLOCK` | `[0x15, guard(p0 == 0), key-on +30, guard(p0 == 1), key-on +15, 0x16]` | one beep per 30 ticks (116 ms) seeking, per 15 (58 ms) once locked; a parameter change takes hold at the next pass |
 
 Evidence and confidence: [`sound.md`](../ghidra/functions/psp-pulse-usa/sound.md#cue-parameters-the-guard-operand-and-the-loop-back-flag-2026-09-30).
-Pinned by `crates/game/tests/sfx_repeating_ground_truth.rs` and rendered to a
+Pinned by `crates/raceplay/tests/sfx_repeating_ground_truth.rs` and rendered to a
 WAV with `OAG_RENDER_DIR`. **Not heard by a human yet**, and the phase of the
 master tick against the game tick is taken as zero (chosen, not measured). A
 title whose tick is not measured (Pure, 2048) keeps the one-shot path.

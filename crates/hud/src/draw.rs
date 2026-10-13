@@ -666,7 +666,7 @@ pub(super) fn top_edge(label: &Label, line_height: f32) -> f32 {
 /// among its own always-on set - the two retro skins' speed-lap layouts author
 /// it once - asserted by
 /// `an_always_on_name_is_authored_once_bar_the_one_that_is_not` in
-/// `crates/game/tests/hd_hud_ground_truth.rs`.
+/// `crates/raceplay/tests/hd_hud_ground_truth.rs`.
 ///
 /// **Confidence 70.** The frame is one state of one mode, and what the original
 /// keys the ghost row on is unread; if the row turns out to be drawn and merely

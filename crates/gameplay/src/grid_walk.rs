@@ -32,7 +32,7 @@
 //! 0.001 (it was 1.73), `16_Track` 0.043 (0.62), Metropia reversed 0.070 (1.13); headings
 //! to 0.001 degrees on `16_Track` and `01_Track`, where the tangent was 0.045 out and the
 //! `01_Track` slot-1 kink (0.22 degrees) was unexplained. See
-//! `crates/game/tests/grid_walk_ground_truth.rs`.
+//! `crates/raceplay/tests/grid_walk_ground_truth.rs`.
 
 use oag_core::math::{Quat, Vec3};
 use oag_vex::track::{AiTrack, Path, SplinePoint, basis};

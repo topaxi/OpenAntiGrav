@@ -1065,7 +1065,7 @@ credits the tripping craft alone, gated on `blastradius`, and
 `Race::advance_quake` (`crates/raceplay/src/weapons/single_instance.rs`) is
 the Quake trip - after the wave's own hits it retires every laid mine whose
 located progress is inside the wave's radius and ignites the effect with no
-craft credited (`crates/game/tests/mine_ground_truth.rs`,
+craft credited (`crates/raceplay/tests/mine_ground_truth.rs`,
 `a_quake_wave_under_a_mine_sets_it_off_quietly`). The original's `> 0.1`
 intensity threshold is not modelled: `Quake_SpanIntensityAt` is read off the
 deformation table this port does not build yet, so the radius stands in for

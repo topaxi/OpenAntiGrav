@@ -158,7 +158,7 @@ same `mesh_render::Fog`/`Light` path
 | One stage's palette, and the blend of two | `oag_tables::effectsettings::{StagePalette, EffectSettings::blended_palette}` |
 | The runtime stage state, and what it does to fog and rig | `oag_raceplay::zone_grade::{StageBlend, ZoneGrade}` |
 | Read at race load, applied per frame | `oag_raceplay::load::environment::staging`, `race/scene/frame.rs` |
-| Checked against the real image | `crates/game/tests/zone_grade_ground_truth.rs` |
+| Checked against the real image | `crates/raceplay/tests/zone_grade_ground_truth.rs` |
 | **What advances the stage during a race** | `oag_title::ZoneStages` / `oag_2048::race::ZONE_STAGES` - **2048 only**, and `None` on HD/Fury |
 
 **2026-08-30, later the same day: a 2048 Zone race now escalates on its own**,

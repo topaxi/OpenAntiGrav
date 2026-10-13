@@ -419,7 +419,7 @@ impl Spline {
 /// number is a lap length at all in the sense measured here; this build
 /// prints its own measurement rather than a stand-in, and the test pins the
 /// gap at under three per cent so a change in either direction is noticed.
-/// See `crates/game/tests/circuit_length_ground_truth.rs`.
+/// See `crates/raceplay/tests/circuit_length_ground_truth.rs`.
 ///
 /// # Errors
 ///

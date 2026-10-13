@@ -61,7 +61,7 @@ How "absent" was established, and how "never requested" was:
 **The fix is Pulse's table, not the list.** `crates/pulse/src/effects.rs` chains
 `Effects::without` for the seven, and scopes the PS2's engine flare with the new
 `EffectSpec::on` (`Platforms::Only(&[Platform::Ps2])`); the loader asks
-`Effects::names_on(platform)`. `crates/game/tests/psys_inventory_ground_truth.rs`
+`Effects::names_on(platform)`. `crates/raceplay/tests/psys_inventory_ground_truth.rs`
 (`pulse_psp_asks_for_nothing_its_archive_lacks`,
 `pulse_ps2_asks_for_nothing_its_archive_lacks`) fails by name if a name Pulse's table
 requests is not in that platform's archive, so re-adding one cannot go unnoticed.

@@ -149,7 +149,7 @@ impl Layout {
     /// Every one of the nine layouts shipped across the two PSP titles names at
     /// most one distinct texture, checked 2026-08-12 and still pinned by
     /// `the_layouts_name_at_most_one_texture` in
-    /// `crates/game/tests/hud_layout_ground_truth.rs`; HD's eighteen composed
+    /// `crates/raceplay/tests/hud_layout_ground_truth.rs`; HD's eighteen composed
     /// layouts name **twelve between them, up to six in one**. So this is a
     /// convenience for a caller that wants the layout's own first reference -
     /// a report line, a test - and nothing on the draw path reads it.

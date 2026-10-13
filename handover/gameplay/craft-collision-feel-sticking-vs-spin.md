@@ -47,7 +47,7 @@ separate, deliberate design property, not a bug in this fix:
 **neutral** personality (both zero) returns zero regardless of which channel
 is read - it never yields or covers, alongside or not. Two near-neutral
 personalities can still sit in continuous light contact. The acceptance
-test (`crates/game/tests/craft_sticking_ground_truth.rs`) documents this and
+test (`crates/raceplay/tests/craft_sticking_ground_truth.rs`) documents this and
 sets its bound as a regression tripwire (60 ticks - above the measured
 post-fix worst, below the pre-fix pathology), not a claim that 46 is the
 right number.

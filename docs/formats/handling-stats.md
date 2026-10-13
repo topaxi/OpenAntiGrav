@@ -566,7 +566,7 @@ grows nothing. Per-class *weapon speeds* need no fifth entry either - Pure
 authors a single class-independent `speed` per weapon, which `class_speeds`
 records as `class_independent` rather than inferring from four equal values.
 
-Pinned by `crates/game/tests/pure_race_ground_truth.rs`:
+Pinned by `crates/raceplay/tests/pure_race_ground_truth.rs`:
 `vector_loads_pures_own_tuning_and_not_venoms` asserts the resolved `Handling`
 **differs** from `VENOM`'s, which can only hold if the `VECTOR` block was
 reached; `a_pulse_source_has_no_fifth_rung_and_says_so` asserts a Pulse source

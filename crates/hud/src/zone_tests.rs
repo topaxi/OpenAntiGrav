@@ -4,7 +4,7 @@
 //! Its own file rather than more of [`super::tests`], which is at the
 //! 1,000-line ceiling `scripts/check-file-size.py` enforces - the same reason
 //! [`super::reticle_tests`] is one. Everything here is title-blind and needs no
-//! disc; `crates/game/tests/hd_hud_ground_truth.rs` is where the same rules meet
+//! disc; `crates/raceplay/tests/hd_hud_ground_truth.rs` is where the same rules meet
 //! HD's real layout and the reference frame.
 
 use super::draw::*;
@@ -73,7 +73,7 @@ fn a_rotation_is_read_in_either_spelling_and_reaches_the_draw() {
 /// before the first one.
 ///
 /// The arithmetic on its own, without a disc: the ladder is eleven widgets whose
-/// numbers are `zone + N`. `crates/game/tests/hd_hud_ground_truth.rs` is where
+/// numbers are `zone + N`. `crates/raceplay/tests/hd_hud_ground_truth.rs` is where
 /// the same rule is checked against HD's real layout and the reference frame.
 #[test]
 fn the_zone_ladder_counts_up_from_the_current_zone() {

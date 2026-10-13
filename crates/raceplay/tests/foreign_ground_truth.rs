@@ -1,6 +1,6 @@
 //! The foreign-track mapping on the Workshop tracks tagged `Original` (never
 //! `Port/Remake`): the conventions measured on Pulse's `16_Track` hold on the
-//! mapped output (`crates/game/tests/foreign_conventions_ground_truth.rs`),
+//! mapped output (`crates/raceplay/tests/foreign_conventions_ground_truth.rs`),
 //! and what is mapped is where the content put it. Disc-backed.
 
 use oag_core::math::Vec3;

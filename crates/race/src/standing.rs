@@ -75,7 +75,7 @@ pub struct Standing {
     ///
     /// Ticks and not seconds, exactly as [`RaceState::best_lap_ticks`] is, so the
     /// two are directly comparable - which is the invariant
-    /// `crates/game/tests/lap_times_ground_truth.rs` asserts of slot 0, where both
+    /// `crates/raceplay/tests/lap_times_ground_truth.rs` asserts of slot 0, where both
     /// clocks time the same craft.
     ///
     /// [`RaceState::best_lap_ticks`]: crate::RaceState::best_lap_ticks
@@ -210,7 +210,7 @@ impl Standing {
             // crossing sits past the far half, so a craft shoved over the line
             // would otherwise sit on `LapGate::Ready` and complete a lap of a
             // few ticks at its next crossing (found 2026-09-07 on
-            // `crates/game/tests/lap_times_ground_truth.rs`'s
+            // `crates/raceplay/tests/lap_times_ground_truth.rs`'s
             // `every_opponent_that_laps_has_a_lap_time`; pinned by
             // `an_immediate_re_crossing_after_a_backward_wrap_earns_no_lap`).
             self.reversed = self.reversed.saturating_add(1);

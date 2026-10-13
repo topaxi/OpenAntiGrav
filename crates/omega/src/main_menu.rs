@@ -3,7 +3,7 @@
 use oag_title::{Attached, MainMenu, Origin, main_menu::original};
 
 /// Omega's `MainMenu_Definition.xml` (`data09.psarc`): HD's five entries, in HD's order
-/// (`crates/game/tests/main_menu_ground_truth.rs`). Its front end is HD's carried forward.
+/// (`crates/raceplay/tests/main_menu_ground_truth.rs`). Its front end is HD's carried forward.
 pub const MAIN_MENU: &MainMenu = &MainMenu {
     rows: &[
         original("FE_RC", Some("campaign")),

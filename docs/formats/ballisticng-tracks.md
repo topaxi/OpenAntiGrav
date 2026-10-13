@@ -140,7 +140,7 @@ measurement below). Every constant is in `foreign::choice`:
 | Start slot | 154 units behind the lap line | `Course::START_LINE_ADVANCE`, so the engine's own rule lands on the authored line (section 52 on Lion's Den); the 8 authored grid slots are not used, the engine lays its own grid |
 
 **Conventions measured on Pulse's `16_Track`**
-(`crates/game/tests/foreign_conventions_ground_truth.rs`): a spline point's `pos`
+(`crates/raceplay/tests/foreign_conventions_ground_truth.rs`): a spline point's `pos`
 is on the floor (a ray from 3 above along `down` meets it at 3.04), `lateral = tangent x up`
 (`cross(tangent, down) . lateral = -1.000`), floor triangle normals point up
 (+1.000), `half_width_left/right` are the floor either side (20.3 and 20.7 mean),
@@ -162,7 +162,7 @@ on; the lap loop's jumps (Lion's Den: 111 units after section 79, 141 after sect
 No sky, fog, cloud, light rig, PVS, intro camera or track emitter of the host is borrowed.
 The floor and wall are drawn flat-shaded from their collision triangles.
 
-**Raced** (`crates/game/tests/foreign_race_ground_truth.rs`, Pulse VENOM, an AI craft
+**Raced** (`crates/raceplay/tests/foreign_race_ground_truth.rs`, Pulse VENOM, an AI craft
 alone for 18,000 ticks, Ace; a scratch sweep behind `OAG_SWEEP=1`): all 27 `Original`
 tracks load; 26 get round (lap counter at 3 or 4), 14 with a clean lap (13 of them with no
 respawn at all: Rheinland 46.1 s, Shiva's Dance 45.9 s, The Tir 53.0 s ... Desolata 122.9 s),

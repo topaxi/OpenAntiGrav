@@ -127,7 +127,7 @@ frames read at the HUD clock, the wave leaving a craft that stands on the grid.
   points the particle wave already rides, the track's up there, `oag_render::ripple::amplitude(age)`
   and `A.w = 60`. Ground truth: `crates/render/tests/hd_quake_lift.rs` (the GPU against the
   program's own arithmetic, one marked and one unmarked triangle, amplitude zero the identity) and
-  `crates/game/tests/quake_orientation_ground_truth.rs` (the flag on Talon's Junction's draws, and on
+  `crates/raceplay/tests/quake_orientation_ground_truth.rs` (the flag on Talon's Junction's draws, and on
   none of Pulse's).
 - **Pulse, Pure and the PS2 are pixel-identical** to `9d95d3936` with a Quake in flight (AE `0` at
   six, four and two ticks), and HD with no wave is too: nothing but a `StaticQuake` material

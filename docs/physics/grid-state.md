@@ -104,7 +104,7 @@ so a respawn after the start can never re-enter it.
 | Yaw at GO + 120 | `-0.42` | `-1.74` | `-0.375` |
 | z at GO + 120 | `-196.86` | `-198.70` | `-196.39` |
 
-(`crates/game/tests/start_pose_ground_truth.rs` pins the first, second and fourth
+(`crates/raceplay/tests/start_pose_ground_truth.rs` pins the first, second and fourth
 rows; the last two are from `ours-tt-16-gate.txt`.)
 
 ## What is still different at GO, and what is not this page's
@@ -154,7 +154,7 @@ a slot - which is the `19.82`, `19.74` and `19.67` the three circuits fitted sep
 The eight located records read live on Metropia match the chain to 0.0002 units. The
 chain, the scale and the heading are `oag_gameplay::grid_walk`; the account with every
 address is [grid.md](../ghidra/functions/psp-pulse-usa/grid.md#the-grid-walk-read-to-the-end-2026-10-02),
-and `crates/game/tests/grid_walk_ground_truth.rs` pins it (dropping the scale fails the
+and `crates/raceplay/tests/grid_walk_ground_truth.rs` pins it (dropping the scale fails the
 located-chain test, `01_Track`'s and Metropia's, and two of the unit tests). Side note from the old attempt that stands: the Time Trial's slot 1 on `16_Track`
 was 0.014 units from the original along the track "by luck"; it is 0.038 now, by the walk.
 

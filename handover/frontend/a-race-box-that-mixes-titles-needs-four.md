@@ -66,7 +66,7 @@ which is the whole of "offer it only if Pure's data is available": the union is
 built from the ladders of the titles actually mounted, and only Pure's names
 the rung.
 
-Pinned on real discs by `crates/game/tests/pure_race_ground_truth.rs` - the
+Pinned on real discs by `crates/raceplay/tests/pure_race_ground_truth.rs` - the
 Pure arm asserts `VECTOR`'s resolved `Handling` *differs* from `VENOM`'s, since
 "five rows are offered" would not have caught a row quietly loading Venom's
 numbers.

@@ -7606,7 +7606,7 @@ their shared authored value; none of the others has a matched frame.
 
 Port: `oag_mesh::mesh::sky_cube::build(.., tint)` and
 `oag_raceplay::load::environment::hd_sky_model`; test
-[hd_sky_tint_ground_truth.rs](../../../../crates/game/tests/hd_sky_tint_ground_truth.rs).
+[hd_sky_tint_ground_truth.rs](../../../../crates/raceplay/tests/hd_sky_tint_ground_truth.rs).
 **Other titles**: Wipeout 2048 draws an authored dome mesh
 (`skycube.rcsmodel`) and its `.EnvSettings` carry **no `Sky colour`** (read on
 altima, bridge and square: keys `Sky brightness` 1.2/2.0/1.2, `Sky height

@@ -5,7 +5,7 @@
 //! `tests/closed_loop_real_geometry.rs`'s own fixture, per ADR-0006. With no
 //! walls on a plane, "failure" here is the [`Course::off_line`] excursion: a
 //! craft that runs wide of the hairpin by more than that. The disc-backed half
-//! is `crates/game/tests/speed_plan_ground_truth.rs`.
+//! is `crates/raceplay/tests/speed_plan_ground_truth.rs`.
 
 use oag_core::math::{Quat, Vec3, sin_cos};
 use oag_physics::{

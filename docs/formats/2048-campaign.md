@@ -542,7 +542,7 @@ names but no prior pass had read at runtime:
   Auricom, two AG_Systems, exactly `SP.xml`'s own authored roster; a
   `--screenshot` of the same run shows `POS 1/8` and multiple opponent craft
   on Mall's own grid. Pinned end to end by
-  `crates/game/tests/vita_2048_campaign_grid_ground_truth.rs` (disc-backed,
+  `crates/raceplay/tests/vita_2048_campaign_grid_ground_truth.rs` (disc-backed,
   `#[ignore]`d) and by synthetic-fixture unit tests in
   `crates/2048/src/campaign/tests.rs` and
   `crates/raceplay/src/load/roster.rs`. One event, `"Pirhana P Ship

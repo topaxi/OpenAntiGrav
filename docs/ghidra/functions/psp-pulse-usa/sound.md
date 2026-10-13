@@ -1191,7 +1191,7 @@ the delay, not after it: the key-on already waiting still fires.
 
 **Modelled** by `oag_formats::sblk::runner::Runner` and played by
 `oag_sound::sfx::repeating::Playing`; the ground truth is
-`crates/game/tests/sfx_repeating_ground_truth.rs`. **Chosen, not measured (no
+`crates/raceplay/tests/sfx_repeating_ground_truth.rs`. **Chosen, not measured (no
 confidence score):** the phase of the master tick against the game tick is taken
 as zero, and a beep is started on the mixer with the sub-tick delay its authored
 tick implies.

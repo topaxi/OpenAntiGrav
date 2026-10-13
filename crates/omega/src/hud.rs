@@ -11,7 +11,7 @@
 //! ships the whole HD root set (`Data\XML\Arcade_HUD.xml`, `Elimination_HUD.xml`,
 //! `TimeTrial_HUD.xml`, `SpeedLap_HUD.xml`, `Zone_HUD.xml`), and each composes
 //! from the same file counts HD's does (17, 15, 14, 15, 5) with nothing missing
-//! and nothing skipped (`crates/game/tests/omega_hud_ground_truth.rs`).
+//! and nothing skipped (`crates/raceplay/tests/omega_hud_ground_truth.rs`).
 //!
 //! # Which set a race reads: measured for the single-player managers
 //!

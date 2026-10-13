@@ -188,7 +188,7 @@ pub struct RaceSim {
     /// carries - opponents that barrel-roll, which the original's never do -
     /// has to be *measurable* on the disc's own circuits, and the thing that
     /// would say it had gone wrong is a tier rolling itself down to single-digit
-    /// shield. See `crates/game/tests/ai_roll_ground_truth.rs`.
+    /// shield. See `crates/raceplay/tests/ai_roll_ground_truth.rs`.
     pub(super) rolls_armed: [u32; oag_gameplay::MAX_SHIPS],
     /// The shield those rolls cost, in pool units.
     pub(super) rolls_spent: [f32; oag_gameplay::MAX_SHIPS],
@@ -198,7 +198,7 @@ pub struct RaceSim {
     /// [`Self::rolls_armed`] is: bookkeeping, not state the race reads back. It
     /// exists because "an Ace should lap without wall contact" is the standard
     /// the AI is measured against and nothing in the harness could see wall
-    /// contact at all - see `crates/game/tests/ai_clean_lap_board.rs`.
+    /// contact at all - see `crates/raceplay/tests/ai_clean_lap_board.rs`.
     ///
     /// **A contact counted here is a contact with a non-hoverable surface by
     /// construction**, which is what makes this a wall count rather than a

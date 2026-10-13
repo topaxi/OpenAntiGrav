@@ -195,7 +195,7 @@ const TRIGGER_RATE: f32 = 0.05;
 /// Was `3.0`, under half the median 8.2 units a shift covers on `16_Track`.
 /// Twelve plus the craft's own room took the rammer ending up outside the
 /// corridor from 54 of 208 to 11 of 138; neither half does much alone. Sweep:
-/// `docs/gameplay/ai.md`, guarded by `crates/game/tests/ram_ground_truth.rs`.
+/// `docs/gameplay/ai.md`, guarded by `crates/raceplay/tests/ram_ground_truth.rs`.
 ///
 /// **Ours, and measured against one hull.** Reach scales with
 /// `handling.airbrake.sideshift / mass` (`450` against `1` on Pulse), which

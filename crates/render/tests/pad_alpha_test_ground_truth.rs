@@ -175,7 +175,7 @@ fn capture(model: &mesh::Model) -> Vec<u8> {
 /// them, or their `lightmap_texcoord` fell back to `[0.0, 0.0]` (which
 /// `mesh::rcs::emit` does silently), HD's pads would have gone from flat blue
 /// to near-black - and every attribute assertion in
-/// `crates/game/tests/hd_pad_illumination_ground_truth.rs` would still pass.
+/// `crates/raceplay/tests/hd_pad_illumination_ground_truth.rs` would still pass.
 ///
 /// Measured at this framing when the guard was written: **559 lit pixels**
 /// for the whole `12_sol_2` `Speedup Pad` model - ten plates seen from far

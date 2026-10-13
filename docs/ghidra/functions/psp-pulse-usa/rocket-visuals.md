@@ -719,7 +719,7 @@ indicator; ours shows the weapon, because `--give` refills the slot).
 Rows 1-3 each landed in their own commit, and row 4 resolved into two more laws the
 rows did not name. Method for the last: the craft is placed at the pose the original's
 volley was measured at and the volley fired through `projectile::fire_rocket`
-(`crates/game/tests/rocket_launch_ground_truth.rs`, disc-backed), because our own
+(`crates/raceplay/tests/rocket_launch_ground_truth.rs`, disc-backed), because our own
 standing start lands the craft at z -199.4 heading 1.7 degrees toward the -Z wall where
 the original's is at z -197.0, which alone moves the detonation by 30 ticks.
 

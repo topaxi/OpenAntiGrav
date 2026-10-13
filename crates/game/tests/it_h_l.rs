@@ -12,57 +12,32 @@
 //! A new test file is only compiled once it is listed in the range its first
 //! letter falls in, and `every_test_file_is_listed` below fails until it is.
 
-mod hd_ai_craft_laws_ground_truth;
 mod hd_behind_glass_frame_ground_truth;
 mod hd_bomb_blast_ground_truth;
 mod hd_boot_ground_truth;
 mod hd_campaign_ground_truth;
 mod hd_cell_select_ground_truth;
 mod hd_endrace_ground_truth;
-mod hd_engine_flare_ground_truth;
-mod hd_envsettings_carry_ground_truth;
-mod hd_flyby_ground_truth;
 mod hd_flyer_ground_truth;
 mod hd_fury_backdrop_ground_truth;
 mod hd_fury_ship_select_ground_truth;
-mod hd_grid_hover_ground_truth;
-mod hd_hud_ground_truth;
 mod hd_leach_ball_ground_truth;
 mod hd_leach_strip_ground_truth;
-mod hd_livery_ground_truth;
 mod hd_menu_ground_truth;
 mod hd_missile_blast_ground_truth;
-mod hd_mix_ground_truth;
 mod hd_movie_ground_truth;
 mod hd_music_ground_truth;
-mod hd_opponent_variant_ground_truth;
-mod hd_original_ai_ground_truth;
-mod hd_pad_illumination_ground_truth;
-mod hd_pickup_icon_ground_truth;
 mod hd_plasma_ball_ground_truth;
 mod hd_psn_campaign_ground_truth;
-mod hd_rim_glow_ground_truth;
-mod hd_rocket_smoke_ground_truth;
 mod hd_ship_preview_ground_truth;
-mod hd_sky_tint_ground_truth;
 mod hd_track_model_ground_truth;
-mod hd_trackwall_ground_truth;
 mod hd_weapon_scene_ground_truth;
-mod hud_layout_ground_truth;
 mod hud_scale_gate;
-mod intro_camera_ground_truth;
 mod ipf_ground_truth;
-mod language_offered_ground_truth;
 mod language_reload_ground_truth;
 mod lap_messages_ground_truth;
-mod lap_times_ground_truth;
-mod launch_boost_ground_truth;
 mod launcher_ground_truth;
-mod leach_energy_ground_truth;
-mod leach_tube_ground_truth;
-mod livery_ground_truth;
 mod loading_screen_ground_truth;
-mod lock_sight_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

@@ -180,7 +180,7 @@ record's three-point curve, replacing what came before. HD's law (`0x000babf8`, 
 is 2048's `AiStats_Load`: the header `950`, `80`, `0.002`, `23000`, `10`, then
 `AIControlStats.xml` and `AIRaceStats_{venom,flash,rapier,phantom,superphantom}.xml`, or the
 `*2048.xml` names when its flag is set. Census on the package pair (base plus patch), read by
-`crates/game/tests/omega_original_ai_ground_truth.rs`:
+`crates/raceplay/tests/omega_original_ai_ground_truth.rs`:
 
 | File | Ships | Reads |
 | --- | --- | --- |
@@ -202,7 +202,7 @@ campaign cell flies the original's field. The circuit id is looked up in the tit
 `track_plugin_definition` (`crate::load::original_laws`), which Omega's halved lookahead
 needed: its `plugin_definition` is the team file.
 
-`crates/game/tests/omega_original_ai_ground_truth.rs` holds the table census, both
+`crates/raceplay/tests/omega_original_ai_ground_truth.rs` holds the table census, both
 halved-lookahead rows resolved on the disc (and not for a Venom on Ubermall), the first
 cell's skill (`grid0_3_1`, Vineta K, Venom: `0.0`, `1.225`, `3.68` at Easy, Medium, Hard off
 its circuit's curve), and the field finishing on four circuits with the player parked and

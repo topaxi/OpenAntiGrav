@@ -4,7 +4,7 @@
 tree, `oag_fx::psys::Library` loads any `Data\Psys\<name>.POB` by name, and
 `psys::Stage` plays any number at once (`attach`/`follow`/`detach` for one riding
 a moving owner, `play` for a burst). **The mechanism is generic and finished;
-what is per-effect is the trigger.** `crates/game/tests/psys_inventory_ground_truth.rs`
+what is per-effect is the trigger.** `crates/raceplay/tests/psys_inventory_ground_truth.rs`
 is the authority on which bucket each disc effect is in and fails when one is
 unaccounted for; the table below is its reading on 2026-10-02.
 

@@ -487,7 +487,7 @@ the original; the lap states were not captured on PPSSPP. **PS2 Pulse runs
 the same clock** (every non-PS3 source takes `Clock::PULSE`), inherited from
 the PSP read and unread on its own executable; its between-laps `Board` was
 seen once at player size, matching the PSP's.
-`crates/game/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
+`crates/raceplay/tests/start_gantry_go_hold_ground_truth.rs` pins that the panel
 never leaves the aperture on Pulse's clock and does on the raw one.
 
 **The hexagon is answered, and it was not the gantry.** The green chevron
@@ -1710,7 +1710,7 @@ usable plane (width and height both land in the same order Pulse's own
 panels do, and thickness stays well under height on every circuit, so it is
 not fitting a blob), but the *centroid* it returns sits inside that
 structure's own volume rather than on a single flat backing surface the way
-Pulse's does. `crates/game/tests/start_gantry_hd_mount_ground_truth.rs`
+Pulse's does. `crates/raceplay/tests/start_gantry_hd_mount_ground_truth.rs`
 pins Talon's Junction's own numbers, thickness included, specifically so a
 future change that makes this read back near zero is treated as a
 regression to check by hand, not a fix.
@@ -1769,7 +1769,7 @@ move, matching
 own figure exactly, now reproduced through this project's own model builder
 rather than only the raw `.vex` track that section and
 `crates/hd/tests/start_gantry_hd_ground_truth.rs` already read directly.
-`crates/game/tests/start_gantry_hd_mount_ground_truth.rs`'s own third test
+`crates/raceplay/tests/start_gantry_hd_mount_ground_truth.rs`'s own third test
 pins this.
 
 ### Placement is confirmed correct; what was actually in the wrong place is borrowed slot-7 art
@@ -1820,7 +1820,7 @@ not decompiled or inferred.
 Rendered before and after, at `--ticks 5/120/180/240/300/400` on Talon's
 Junction: the ring cluster is gone at every tick and the gate/board region is
 pixel-identical to before the change (the fix only removes draws; it moves
-nothing). `crates/game/tests/start_gantry_hd_mount_ground_truth.rs`'s own
+nothing). `crates/raceplay/tests/start_gantry_hd_mount_ground_truth.rs`'s own
 second test now also asserts the report names `fx350_nomip.gtf` as stripped.
 
 ### The glyph walk stays unwired on HD, on purpose

@@ -711,7 +711,7 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // texture-env does - RGB and alpha alike, not RGB alone. Dropping the
     // vertex colour's own alpha here is what made the boost plume's baked
     // falloff vanish; see `every_psp_teams_boost_plume_vertex_alpha_is_bimodal`
-    // in `crates/game/tests/boost_plume_ground_truth.rs`.
+    // in `crates/raceplay/tests/boost_plume_ground_truth.rs`.
 
     // **The flame, when this model is one.** `flame_shading` is 1.0 only for a
     // craft's `engineflare` model, and then this replaces everything above

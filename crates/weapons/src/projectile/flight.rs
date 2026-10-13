@@ -78,7 +78,7 @@ impl Projectiles {
                 // stats->launchspeed` (`docs/ghidra/functions/psp-pulse-usa/plasma.md`,
                 // "the charge is real"). Without the `charge <= 0.0` guard the
                 // launch speed was recomputed every charging tick, which
-                // `crates/game/tests/plasma_ground_truth.rs`'s
+                // `crates/raceplay/tests/plasma_ground_truth.rs`'s
                 // `a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies` caught.
                 // `plasma` `None` (no weapon table) keeps the charging magnitude.
                 if let (Some(ship), Some(heading), Some(stats)) = (ship, heading, plasma)

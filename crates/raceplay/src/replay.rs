@@ -16,7 +16,7 @@
 //! [`oag_gameplay::World`], so nothing here can reach
 //! [`RaceSim::state_hash`]: a race with a ghost hashes exactly as it does
 //! without one, tick for tick, which
-//! `crates/game/tests/replay_ground_truth.rs` asserts on a real circuit. The
+//! `crates/raceplay/tests/replay_ground_truth.rs` asserts on a real circuit. The
 //! recorder *reads* the hash; it never writes anything the tick reads.
 //!
 //! **Off by default.** A race records nothing until

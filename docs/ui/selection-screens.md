@@ -195,7 +195,7 @@ this build already had changes appearance.
   rather than the racing line, most likely - or counts the two junction
   links differently. Unread; confidence 70 on what the screen's number is.
   Pinned at under three per cent in
-  `crates/game/tests/circuit_length_ground_truth.rs`, and drawn as this
+  `crates/raceplay/tests/circuit_length_ground_truth.rs`, and drawn as this
   build's own measurement rather than a stand-in. Until the worker has
   read a circuit its row shows `-`.
 - **Lap record / Race record are this build's own store**, keyed the way

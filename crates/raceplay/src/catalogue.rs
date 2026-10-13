@@ -161,7 +161,7 @@ pub struct Track {
     /// `PI_Track` entries were probed by name against `pulse-psp-usa.chd` and
     /// the attribute predicts the file **24 times out of 24** - the sixteen that
     /// declare it have their variant, the eight that do not have none.
-    /// `crates/game/tests/zone_ground_truth.rs` is that sweep.
+    /// `crates/raceplay/tests/zone_ground_truth.rs` is that sweep.
     ///
     /// `false` on a title that declares no such attribute anywhere, which is
     /// every title whose Zone circuits are separate - Pure marks its four

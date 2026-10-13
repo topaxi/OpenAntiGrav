@@ -339,7 +339,7 @@ The two known departures above were measured on one track's *forward* grid and
 called sub-unit. On a *reversed* grid the same straight-line formula is not
 sub-unit wrong, it is off the track: a sweep of every Wipeout HD circuit's grid,
 both directions, with opponents on
-(`crates/game/tests/hd_trackwall_ground_truth.rs`'s `every_hd_grid_in_data*_lands_on_the_track`)
+(`crates/raceplay/tests/hd_trackwall_ground_truth.rs`'s `every_hd_grid_in_data*_lands_on_the_track`)
 found **9 of 12 reversed grids** putting one or more of the eight slots off the
 collision mesh entirely - up to **145 units** from the driveable line on
 `tech_de_ra`'s reversed grid - against one forward grid over its envelope by a
@@ -394,7 +394,7 @@ the original.
 Relocating exactly where an opponent first meets trouble on `05_Track` - a
 circuit `docs/gameplay/ai.md` already measured as having 134 racing-line
 samples with no collision surface under them - moved
-`crates/game/tests/stall_rescue_ground_truth.rs`'s ground-truth craft onto a
+`crates/raceplay/tests/stall_rescue_ground_truth.rs`'s ground-truth craft onto a
 spot where it got wedged bouncing rather than sitting still: a tick-by-tick
 trace showed its position frozen for thousands of ticks while its speed
 oscillated between about 0.2 and 10 units/s, never staying below
@@ -830,7 +830,7 @@ on [race-progress.md](race-progress.md).
   above - inside the track's own bounds, not chased further.
 - **The stall rescue does not catch a craft bouncing in place.** Found while
   fixing the reversed grids, above, and not this page's subsystem - tracked
-  against `crates/game/tests/stall_rescue_ground_truth.rs`, not here.
+  against `crates/raceplay/tests/stall_rescue_ground_truth.rs`, not here.
   **Re-confirmed open 2026-09-02**: `oag_physics::hover::sweep` closed the
   *sustained*-stall shape of this failure disc-wide but not the bounce
   itself, which still reproduces on `05_Track` and `07_Track` at novice. See
@@ -1013,7 +1013,7 @@ against it, the left row their cross product (`0x0882bbb0`-`0x0882bc38`).
 ### Against the original
 
 Eight craft read at placement (`scripts/psp-grid-pose.py`), and the walk through
-`oag_gameplay::grid_walk` (`crates/game/tests/grid_walk_ground_truth.rs`), xz distance and
+`oag_gameplay::grid_walk` (`crates/raceplay/tests/grid_walk_ground_truth.rs`), xz distance and
 heading in degrees:
 
 | circuit | worst slot before | worst slot now | worst heading before | now |
