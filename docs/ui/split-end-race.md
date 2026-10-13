@@ -78,7 +78,8 @@ count) is in the executable and was **not read**.
   `Rewards Split` shows it: the authored panel is a loyalty row and bar per person, which has
   nothing to say unless it was earned. `Session::build_endrace` builds a `Rewards` per person
   (`medal: None, campaign: false`, so `NO MEDAL AWARDED` and no medal glyph, as a custom race's)
-  and saves the records once. **Chosen, not measured**, as is showing `Rewards Split` at all:
+  and saves the records once (two people on the same team, which Ship Select allows, bank two
+  awards to it). **Chosen, not measured**, as is showing `Rewards Split` at all:
   the one-person flow shows `Rewards` only after a campaign cell, and a split is never one, but
   `Results Split` authors the redirect to it as the file's only route and the panels exist for
   nothing else. **Still none for a split:** no campaign medal, no lap or race record, no

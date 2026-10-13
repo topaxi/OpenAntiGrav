@@ -107,4 +107,92 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         .filter_map(|row| row.seat)
         .collect();
     assert_eq!(seats.len(), 2, "both people are named on the HD grid too");
+
+    // The two-person screens' own feed: each person's laps off their own craft, the place the
+    // board gave them, and the speedup-pad tally for the first craft alone. This is the
+    // library half of `Session::build_endrace`'s split branch (the binary-crate half, the
+    // `ResultsModel::PulseSplit` choice and the loyalty banking, is verified by the live walk).
+    let boosts = race.run_stats().boosts_by_lap;
+    let people = oag_game::results_tables::split_people(board, &race.sim.world, &boosts);
+    assert_eq!(people.len(), 2, "two people, seat order");
+    assert_eq!((people[0].slot, people[1].slot), (0, 1));
+    let laps = board.laps_target.expect("a race with a lap target") as usize;
+    for person in &people {
+        assert_eq!(person.laps.len(), laps, "slot {}'s own splits", person.slot);
+        let row = board
+            .rows
+            .iter()
+            .find(|row| usize::from(row.slot) == person.slot);
+        assert_eq!(person.place, row.map(|row| row.place), "the board's place");
+        assert!(person.total_ticks > 0);
+    }
+    assert!(people[0].laps.iter().all(|lap| lap.boosts.is_some()));
+    assert!(
+        people[1].laps.iter().all(|lap| lap.boosts.is_none()),
+        "the tally is slot 0's"
+    );
+
+    // Drawn through the PSP's borrowed `Results Split`: each person's table is there with
+    // their headline, header row and totals row.
+    let source = image.display().to_string();
+    let mut archives = oag_source::title::open_source(&source, Vec::new(), Vec::new())
+        .expect("the disc opens")
+        .archives;
+    let space = oag_display::space::Space::PSP;
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &oag_ui::language::StringTable::default(),
+        oag_ui_screens::picker::FaceScales::default(),
+        [space.size.0, space.size.1],
+        &oag_hud::sprite::Sheet::default(),
+        &[],
+        oag_pulse::TITLE,
+    )
+    .expect("Pulse's EndRace screens read");
+    let layout = screens
+        .results_split
+        .as_ref()
+        .expect("the PSP borrows Results Split");
+    let results: Vec<_> = people
+        .iter()
+        .map(|person| {
+            person.results(oag_ui_screens::endrace::Headline::Position(
+                person.place.expect("a field of more than one"),
+            ))
+        })
+        .collect();
+    let skin = oag_ui::menu::Skin::new(oag_pulse::FRONT_END.menu.unwrap(), space, 22.0);
+    let layers = oag_ui_screens::endrace::split_results_draw_list(
+        &results,
+        layout,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &oag_ui::language::StringTable::default(),
+        None,
+        false,
+        &|_| None,
+    );
+    let texts: Vec<&str> = layers
+        .body
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    let count = |wanted: &str| texts.iter().filter(|text| **text == wanted).count();
+    assert_eq!(count("PRO_STATS_TOT"), 2, "a totals row each: {texts:?}");
+    assert_eq!(count("RC_LAP"), 2, "a header row each: {texts:?}");
+    for person in &people {
+        let id = format!(
+            "ER_{}",
+            ["1ST", "2ND", "3RD", "4TH", "5TH", "6TH", "7TH", "8TH"]
+                [usize::from(person.place.unwrap()) - 1]
+        );
+        assert!(
+            texts.iter().any(|text| *text == format!("{id}P")),
+            "slot {}'s headline {id}P in {texts:?}",
+            person.slot
+        );
+    }
 }
