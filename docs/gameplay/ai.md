@@ -621,8 +621,82 @@ volume on lap 4 (slot 3, tick 7401, idx 290, grounded at 96); parked, 4 in 9,000
 ticks (slot 7 at tick 1111, airborne at 190 over a long drop). **The authored
 speed floor does not help here:** `unk_0x66` is authored only on `06_Track`
 ([track.md](../formats/track.md)), and reads 253 (no floor) at every sample of
-`13_Track`, `16_Track` and `05_Track`. Whether the original game's leader also
-falls at this jump when the player is far behind is unmeasured.
+`13_Track`, `16_Track` and `05_Track`. **Whether the original game's leader also
+falls at this jump with the player parked: it does, measured below (2026-10-13).**
+
+**The original's own field falls at the `13_Track` jump too (2026-10-13, PPSSPP).**
+Pulse PSP USA, a fresh profile with the dev-unlock byte
+([ppsspp-debugger.md](../reverse-engineering/ppsspp-debugger.md), `psp-drive.py menu
+--single-race --unlock --track-down 18`), Single Race, VENOM, Platinum Rush White
+(`13_Track`: the craft came up 5 units from `oag-trace track`'s row 1163, heading
+dot +0.95, three laps, lap length 4,536, start offset 1,846), eight craft, the
+player **parked on the grid, 8th, no button touched**. `scripts/psp-ai-track-log.py`
+stops at `0x088568b0` (once per tick) and reads every craft's body position,
+velocity, speed (`body+0x398`), the driver's thrust output (`driver+0x0c`),
+progress and place: 7,859 to 8,642 rows per run, race clock 0.8 to 172 s;
+`scripts/psp-ai-track-analyze.py` finds each craft's nearest spline row per row
+and calls a pass of rows 19 to 49 a **fall** when the position then jumps more than
+12 units in one row (the airborne reset). The fresh profile's `g_skill_level` is 0
+(scale 0.9); runs at level 2 (written, then `restart`) are the ones comparable
+with this project's default race (`skill 3.00`; the scale was not re-read in these
+runs, the 2026-10-11 capture read 3.0 at level 2). Four independent restarts:
+
+| Run | Skill level | Zone entries | Fell | What it shows |
+| --- | --- | ---: | ---: | --- |
+| `lvl0-a` | 0 | 59 | 43 | slot 5 fell **13 times in a row** (t 26 to 71 s, entry 93-97, thrust 57.8, lane +5.3 to +8.1) then cleared once its lane moved onto the pad; from lap 2 (t 82 s on) six of the seven, held at thrust 31.1, fell at entry 66-80, again and again |
+| `lvl2-a` | 2 | 30 | 3 | the held thrust of the leaders is **47.1**, as in this engine |
+| `lvl2-b` | 2 | 28 | 7 | |
+| `lvl2-rail` | 2 | 9 (to 32 s) | 2 | place 1 (entry 94.9) and place 2 (92.6) both fell on the first pass, thrust 47.1 |
+
+**The split is sharp and it is speed.** Every fall but one entered the zone at
+66.0 to 101.8 (speed at spline row 19, `body+0x398`); every one of 71 clears at
+102.5 or more. The one exception is a fall at 214.6 (thrust 100.5, slot 1 of
+`lvl2-a`, a reset after a very fast pass), not analysed. **At the leaders' held
+thrust 47.x there were 25 entries: 8 fell, at 91.3 to 100.4**, which is this
+engine's 91 to 100 at `held_thrust` 47, so the physics and the law agree.
+**Confidence 90** that the original's leader falls at this jump when held down
+(four restarts, both skill levels, every capture shows it); **80** that the
+clearing speed is about 102 (one build, one machine, speed sampled each tick).
+
+**What lets a craft through is the speed pad before the jump.** `oag-trace pads`
+pad 6 (speed-up, centre (-573.9, 15.8, 247.8), progress 2,675.8) sits on spline
+row 3073, about 45 units before the zone, 6.5 units to the `lat` side the CSV's
+`lat_x/y/z` calls negative. Of 126 crossings in these captures 40 were boosted
+(+12 to +60 speed across it): every crossing with a signed lateral offset of
+-1.9 to -9.8 (measured at the pad's row from `oag-trace track`'s `line` and `lat`),
+and none at +2.6 or more (0.0 to -1.3 gave at most +3). **All 14 entries at held
+thrust 47 that crossed the pad boosted (entry 135-151, two more at 235-269 under a pickup, gain +15 to +32) cleared; 8 of the 11
+that did not, fell.** A craft's lateral offset is its lane: the values seen are
+steps of about 2.5 (-9.4, -7.0, -4.6, -2.3, 0, +2.7, +5.3, +8.0, +10.6), and they
+move over a race, which is why the original's falls end and ours did not (below).
+The jump itself: a faller flies the arc, comes down on the gap's near edge at
+spline row 45 to 46 with its speed intact (92 to 100) and drops straight through
+(y 22 to -2), then the airborne reset puts it back near row 2,950 (about
+(-388, 7, 241), 190 units before the pad), the same loop as this engine's. Confidence 75
+(the pad's edge is inferred from crossings, not read from its box).
+
+**The rail does not do it.** `Ai_SnapToLane`'s `Body_SetPosition` call
+(`0x088548dc`), 10,237 hits in the first 32 s of a level 2 run: the target is the
+craft's own position to a median 0.031 units (99th percentile 0.32, maximum 0.75),
+and the target's lateral equals the craft's to 0.1 at the pad and the jump. The
+rail holds the lane; it neither lifts nor slows a craft there. Confidence 80.
+
+**Reading for this engine.** The behaviour is the original's own: a craft held
+below about 102 at the lip falls, and the original's leader, held at 47.1 by a
+parked player, is held to 91-100. What the original has and this engine's run
+did not, as logged: its lanes change (the fall loop of `lvl0-a` slot 5 ended at 13
+falls; at level 2 no craft fell more than twice running, a faller drops places
+and its thrust rises to 70-100, entry 110-120), and some lanes sit on the
+pad's side. Ours looped 129 times from one slot at 1.4 to 2.6 units off the line
+with an unsigned offset: **whether that is the pad's off side (+2.6 is never
+boosted in the original, +1.2 once) is unmeasured** and is the next
+comparison: log our signed lateral at row 3073 and whether this engine's
+pad test boosts an AI craft there. The setup differs in one more known place:
+this engine's default race runs the pack shuffle at level 1, the original's
+skill-scale-3.0 case at level 2. Tools: `scripts/psp-ai-track-log.py`,
+`scripts/psp-ai-track-analyze.py`. No screenshot shows the leader at the jump:
+the parked player's camera never frames it, and a player placed beside it was
+hit by every passing craft.
 
 **More than one human keeps this project's driver, logged.** The game has no
 second human in a race today (`World::human_slots` is slot 0 outside tests and
