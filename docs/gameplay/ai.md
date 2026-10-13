@@ -611,7 +611,7 @@ and falls out of the gap; the airborne reset puts it back before the same jump,
 129 times. This project's driver clears the same jump at full throttle and about
 125, and a Novice-grip one fails it identically (347 respawns). Lane, corridor
 and steering are not involved: the craft is 1.4 to 2.6 units off the line
-inside bounds of about 6.5 to 10, and the rail does nothing unusual.
+inside bounds of about 6.5 to 10 (the rail's own output was not logged).
 **A racing player moves it:** an `--autopilot` player at its default skill gives
 zero respawns on `13_Track` in 12,000 ticks, but the Skilled autopilot gives 62
 (slot 3) and the Novice autopilot 113 (slots 3 and 5), so any player who is not

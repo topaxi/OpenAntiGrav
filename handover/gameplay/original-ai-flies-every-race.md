@@ -15,7 +15,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   this engine; the leader lands short at idx 46 and the airborne reset puts it
   back before the jump, 129 times from one slot. Parked player: about 208
   respawns over the field in 9,000 ticks; `--autopilot` Skilled 62, Novice 113,
-  default skill 0 (12,000 ticks). Lane, corridor and steering are normal and
+  default skill 0 (12,000 ticks). Lane offset and corridor are normal and
   the authored speed floor is absent (`unk_0x66` is authored on `06_Track`
   only). `05_Track`: 4 parked (slot 7 at tick 1111, airborne at 190 over a long
   drop), 1 with the default-skill autopilot (a reset volume on lap 4), none with
