@@ -342,3 +342,87 @@ fn a_point_with_no_road_under_it_stays_where_the_plane_put_it() {
     conform_to_floor(&mut out, 0, |_, _| None);
     assert!(out.iter().all(|v| (v.position[1] - planar[0]).abs() < 1e-6));
 }
+
+/// A flat quad as two triangles sharing the diagonal, wound the way `hull_triangles` emits.
+fn quad_of_two_triangles() -> Vec<GpuVertex> {
+    let at = |x: f32, z: f32| GpuVertex {
+        position: [x, 0.0, z],
+        normal: [0.0, 1.0, 0.0],
+        colour: [0.0, 0.0, 0.0, 0.5],
+        ..bytemuck::Zeroable::zeroed()
+    };
+    let (a, b, c, d) = (at(0.0, 0.0), at(4.0, 0.0), at(4.0, 4.0), at(0.0, 4.0));
+    vec![a, b, c, a, c, d]
+}
+
+/// What the function did before it remembered a point: one `floor` call per output vertex.
+fn conform_every_vertex(
+    vertices: &mut Vec<GpuVertex>,
+    mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
+) {
+    let coarse: Vec<GpuVertex> = vertices.drain(..).collect();
+    let mut place = |vertex: GpuVertex| {
+        let (at, normal) = (
+            Vec3::from_array(vertex.position),
+            Vec3::from_array(vertex.normal),
+        );
+        match floor(at, normal) {
+            Some(above) => GpuVertex {
+                position: (at + normal * (above + LIFT)).to_array(),
+                ..vertex
+            },
+            None => vertex,
+        }
+    };
+    let middle = |a: &GpuVertex, b: &GpuVertex| GpuVertex {
+        position: (Vec3::from_array(a.position).midpoint(Vec3::from_array(b.position))).to_array(),
+        ..*a
+    };
+    for t in coarse.chunks_exact(3) {
+        let (ab, bc, ca) = (
+            middle(&t[0], &t[1]),
+            middle(&t[1], &t[2]),
+            middle(&t[2], &t[0]),
+        );
+        for corners in [[t[0], ab, ca], [ab, t[1], bc], [ca, bc, t[2]], [ab, bc, ca]] {
+            vertices.extend(corners.map(&mut place));
+        }
+    }
+}
+
+#[test]
+fn a_point_shared_by_triangles_is_asked_of_the_road_once() {
+    let mut asked = 0;
+    let mut remembered = quad_of_two_triangles();
+    conform_to_floor(&mut remembered, 0, |at, normal| {
+        asked += 1;
+        ramp(at, normal)
+    });
+    let mut every = quad_of_two_triangles();
+    let mut asked_every = 0;
+    conform_every_vertex(&mut every, |at, normal| {
+        asked_every += 1;
+        ramp(at, normal)
+    });
+    // 24 output vertices, but the quad has only four corners and five edge
+    // midpoints (the shared diagonal's is one point, not two).
+    assert_eq!(asked_every, 24);
+    assert_eq!(asked, 9, "four corners and five edge midpoints");
+    let bits = |v: &[GpuVertex]| -> Vec<u8> { bytemuck::cast_slice(v).to_vec() };
+    assert_eq!(
+        bits(&remembered),
+        bits(&every),
+        "the same vertices, bit for bit"
+    );
+}
+
+#[test]
+fn a_remembered_point_keeps_the_road_it_was_given_and_a_missing_road_too() {
+    let mut remembered = quad_of_two_triangles();
+    let road = |at: Vec3, normal: Vec3| (at.x < 2.0).then(|| ramp(at, normal)).flatten();
+    conform_to_floor(&mut remembered, 0, road);
+    let mut every = quad_of_two_triangles();
+    conform_every_vertex(&mut every, road);
+    let bits = |v: &[GpuVertex]| -> Vec<u8> { bytemuck::cast_slice(v).to_vec() };
+    assert_eq!(bits(&remembered), bits(&every));
+}

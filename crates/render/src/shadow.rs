@@ -32,6 +32,8 @@
 //! a way a screenshot does not show, so the part that decides where a shadow
 //! goes is testable on a machine with no graphics driver.
 
+use std::collections::HashMap;
+
 use oag_core::math::{Mat4, Vec3};
 use oag_vex::shadow_occluder::Occluder;
 
@@ -349,10 +351,26 @@ pub fn conform_to_floor(
     mut floor: impl FnMut(Vec3, Vec3) -> Option<f32>,
 ) {
     let coarse: Vec<GpuVertex> = vertices.drain(first..).collect();
+    // One ray per distinct point: a triangle's corner and midpoints recur in
+    // the three or four small triangles it splits into, and the ear-clipped
+    // fan of a ring shares its corners and diagonals across neighbours.
+    // `floor` is asked about the exact bits of a position and a normal, so
+    // the answer for a repeat is the answer already had, bit for bit; the
+    // table is looked up, never walked, and lives for this one hull.
+    let mut asked: HashMap<[u32; 6], Option<f32>> = HashMap::with_capacity(coarse.len() * 2);
     let mut place = |vertex: GpuVertex| {
         let at = Vec3::from_array(vertex.position);
         let normal = Vec3::from_array(vertex.normal);
-        match floor(at, normal) {
+        let key = [
+            vertex.position[0].to_bits(),
+            vertex.position[1].to_bits(),
+            vertex.position[2].to_bits(),
+            vertex.normal[0].to_bits(),
+            vertex.normal[1].to_bits(),
+            vertex.normal[2].to_bits(),
+        ];
+        let height = *asked.entry(key).or_insert_with(|| floor(at, normal));
+        match height {
             Some(above) => GpuVertex {
                 position: (at + normal * (above + LIFT)).to_array(),
                 ..vertex
