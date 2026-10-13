@@ -668,7 +668,12 @@ loads is in [track.md](../formats/track.md#white-and-black), read off the disc's
 own definition and string table and confirmed by start position for four of
 them (2026-10-03, `pulse-variant-map`). The working scripts
 (`unlock.py`, `to_track_select.py`, `race_log.py`, a throwaway script, not kept) were
-scratch, under a scratch directory, not kept.
+scratch, under a scratch directory, not kept. **Since 2026-10-13 `psp-drive.py menu
+--unlock` writes the byte at `Main Menu`**, so `menu --single-race --unlock --track-down 18`
+walks a fresh profile to Platinum Rush White (`13_Track`, forward) in one run (105 s,
+the craft at (-542.8, 2.9, -292.9), 5 units from `oag-trace track` row 1163, heading
+dot +0.95 with the spline; the Black entry is `29_Track`, the same circuit reversed, so
+check the heading).
 
 **Zone was selectable on a used profile (2026-10-02, `zone-bloom`).** On a copy of
 a 70-run PPSSPP profile, `Racebox -> Custom Race -> RACE TYPE`, `right` x5, one

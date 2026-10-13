@@ -110,6 +110,9 @@ DESCRIPTION_TO_GREEN = 24.0
 TALONS_JUNCTION_START = (6.07, -50.07, -196.10)
 TALONS_JUNCTION_TOLERANCE = 40.0
 
+PROFILE_POINTER = 0x08B31774
+DEV_UNLOCK_BYTE = 0x45F
+
 
 def frame_of(dbg):
     """The emulator's own frame index, from the CPU cycle counter."""
@@ -515,6 +518,13 @@ def menu(args):
     expect(dbg, MAIN_MENU, "backing out with circle")
     print("at %r" % MAIN_MENU, file=sys.stderr)
 
+    if args.unlock:
+        # The dev-unlock byte of ppsspp-debugger.md ("Every circuit, not three"): set
+        # before Track Select builds its list, it opens all 24 circuits.
+        profile = dbg.read_u32(PROFILE_POINTER)
+        dbg.write(profile + DEV_UNLOCK_BYTE, b"\x01")
+        print("dev-unlock byte set (profile %#x)" % profile, file=sys.stderr)
+
     tap(dbg, "down")  # RACE CAMPAIGN -> RACEBOX
     tap(dbg, "cross", 1, wait=2.5)
     expect(dbg, RACEBOX, "entering Racebox")
@@ -895,6 +905,13 @@ def main():
         "6 ELIMINATOR. **ZONE is greyed on a fresh profile** and the press "
         "lands on a plain single race (an eight-craft grid, g_game_mode 3): "
         "check the race that comes up, not the index.",
+    )
+    p.add_argument(
+        "--unlock",
+        action="store_true",
+        help="set the dev-unlock byte at Main Menu so Track Select offers all 24 "
+        "circuits (ppsspp-debugger.md, 'Every circuit, not three'); then "
+        "--track-down 18 is Platinum Rush White (13_Track).",
     )
     p.add_argument(
         "--track-down",
