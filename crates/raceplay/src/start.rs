@@ -452,6 +452,11 @@ impl Race {
                 .and_then(|(index, _, _)| u32::try_from(index).ok())
                 .unwrap_or(0)
         });
+        // `Race_PlaceGrid` pushes each craft's grid pose onto its ring, so a
+        // reset before the craft has laid a crumb of its own puts it back there.
+        let breadcrumbs = std::array::from_fn(|slot| {
+            crate::breadcrumbs::Breadcrumbs::seeded(world.ships[slot].physics.body.position)
+        });
         let race = Self {
             sim: RaceSim {
                 racing_line: line,
@@ -492,6 +497,7 @@ impl Race {
                 respawn_disabled: [false; oag_gameplay::MAX_SHIPS],
                 respawns: [0; oag_gameplay::MAX_SHIPS],
                 last_respawn_cause: [None; oag_gameplay::MAX_SHIPS],
+                breadcrumbs,
                 weapons_on,
                 eliminator_kill_target: eliminator_kill_target
                     .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),

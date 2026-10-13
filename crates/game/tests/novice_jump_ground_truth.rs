@@ -419,6 +419,51 @@ fn parked_field() -> Option<(race::Setup, race::Race)> {
     Some((loaded.setup, race))
 }
 
+/// The original's reset puts a craft that falls into `13_Track`'s jump back on
+/// the road behind it, moving (`oag_raceplay`'s `breadcrumbs` module): the
+/// parked-player field never comes back over a sample with no surface or with
+/// the disc's no-crumb flag, leaves at no less than the reset's bare launch
+/// speed and down the line, and so falls a handful of times rather than in a
+/// loop. Under the old pose (at rest, on the sample nearest the fall) the same
+/// 9,000 ticks gave 389 respawns, every one back over the gap; 2 measured on
+/// 2026-10-13 after the port.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_parked_field_is_put_back_behind_the_jump_and_moving() {
+    let Some((_, mut race)) = parked_field() else {
+        return;
+    };
+    let mut seen = [0u32; 8];
+    for _ in 0..9_000 {
+        race.tick(&PlayerInputs::none());
+        for (slot, seen) in seen.iter_mut().enumerate().skip(1) {
+            if race.respawns_of(slot) == *seen {
+                continue;
+            }
+            *seen = race.respawns_of(slot);
+            let line = race.racing_line();
+            let ship = &race.sim.world.ships[slot];
+            let index = ship.driver.index as usize;
+            let flags = race.ai_sample(index).map_or(0, |sample| sample.flags);
+            assert!(
+                !line.is_unsupported(index) && flags & 1 == 0,
+                "slot {slot} was put back at line index {index} (flags {flags:#x})"
+            );
+            let velocity = ship.physics.body.linear_velocity;
+            let along = (line.point(index + 1) - line.point(index)).normalize();
+            assert!(
+                velocity.length() >= 50.0 - 1e-3 && velocity.dot(along) > 0.9 * velocity.length(),
+                "slot {slot} was put back moving {velocity:?}, the line runs {along:?}"
+            );
+        }
+    }
+    let total: u32 = seen.iter().sum();
+    assert!(
+        total < 20,
+        "{total} respawns: the parked field is falling in a loop"
+    );
+}
+
 /// Every respawn of the parked-player field over 9,000 ticks: which slot,
 /// which trigger, the line index it was lost at and the one it was put back
 /// on, and its speed the tick before. `OAG_FLIGHT_GRAVITY_SCALE` multiplies

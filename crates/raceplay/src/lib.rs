@@ -153,6 +153,7 @@ mod assets;
 pub mod between_ticks;
 mod blast_models;
 mod bomb_blast;
+mod breadcrumbs;
 mod camera;
 pub mod catalogue;
 pub mod countdown;

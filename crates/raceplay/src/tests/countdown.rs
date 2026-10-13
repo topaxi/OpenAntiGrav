@@ -76,6 +76,11 @@ fn an_untouched_pad_produces_no_thrust_through_or_past_the_gate() {
 #[test]
 fn opponents_are_held_at_the_line_through_the_gated_span() {
     let mut race = race_with_a_grid();
+    // This fixture has no floor, so every craft is airborne through the whole
+    // countdown and the airborne reset fires on it - which launches the craft
+    // down the track (`crate::breadcrumbs`), and a driver already moving at
+    // release eases its throttle. The gate is the claim here, not the rescue.
+    race.sim.respawn_disabled = [true; oag_gameplay::MAX_SHIPS];
     for tick in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
         for slot in 1..race.ship_count() as usize {

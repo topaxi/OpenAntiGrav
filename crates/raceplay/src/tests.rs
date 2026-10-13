@@ -119,6 +119,11 @@ fn model(slots: usize, decoded: usize) -> Model {
 /// A straight synthetic path, so the locator and the spawn can be tested with no
 /// disc image. Eight control points along `+x`, twelve units wide either side.
 fn straight_track() -> AiTrack {
+    straight_track_with_widths(12.0, 12.0)
+}
+
+/// [`straight_track`] with its own half-widths, left then right.
+pub(crate) fn straight_track_with_widths(left: f32, right: f32) -> AiTrack {
     let count = 8usize;
     let paths_at = track::HEADER_LEN + track::RESERVED_LEN;
     let junctions_at = paths_at + track::PATH_LEN;
@@ -139,8 +144,8 @@ fn straight_track() -> AiTrack {
         put(0x10, 1.0);
         put(0x24, -1.0);
         put(0x38, 1.0);
-        put(0x44, 12.0);
-        put(0x48, 12.0);
+        put(0x44, left);
+        put(0x48, right);
     }
     track::parse(&out).expect("the synthetic track must parse")
 }

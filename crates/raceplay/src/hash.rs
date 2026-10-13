@@ -85,6 +85,11 @@ impl RaceSim {
         for dwell in self.stalled_ticks {
             hasher.write_u32(dwell);
         }
+        // Where a reset puts each craft, and how fast: a crumb laid a tick
+        // apart is a reset somewhere else.
+        for crumbs in &self.breadcrumbs {
+            crumbs.hash_into(&mut hasher);
+        }
         // Not a dwell but the same argument: this is *where* the player's next
         // recovery puts them, so two machines that disagree on it produce
         // different races the moment one is needed. See [`RaceSim::last_on_track`].
