@@ -9,7 +9,7 @@
 //! alpha bytes only, and no disc content is stored.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-ui --run-ignored all \
 //!     -E 'test(/^prompt_glyphs_ground_truth::/)'
 //! ```
 

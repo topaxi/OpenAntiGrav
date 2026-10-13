@@ -324,7 +324,7 @@ shape, not by screen, and would have mis-fired on `Team`'s own
    shape Pulse's and HD's tracks use. See the top of this file and
    `docs/formats/2048-frontend.md`'s "frontend.bnk" bullet.
 4. ~~Once `front_end` is fillable, re-run
-   `crates/game/tests/vita_2048_hud_ground_truth.rs` and a fresh
+   `crates/hud/tests/vita_2048_hud_ground_truth.rs` and a fresh
    `just play 2048 --race` boot report~~ **Done 2026-09-20**, and the "real,
    free improvement" this step predicted did not fully land: wiring
    `front_end` does make the seventeen language plugins reachable (a

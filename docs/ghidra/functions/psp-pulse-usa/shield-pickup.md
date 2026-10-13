@@ -327,7 +327,7 @@ do that yet.
 (`extra` -> `extrashield`, none or `Ship` -> `shipshield`); the PS2 build still
 passes the literal `extra`. Pinned by
 `race::tests::load::the_psp_shield_shell_follows_the_players_hull_stem_and_the_ps2_one_does_not`
-and, on the disc, `crates/game/tests/psp_shield_model_ground_truth.rs`. One frame
+and, on the disc, `crates/livery/tests/psp_shield_model_ground_truth.rs`. One frame
 of ours (Concept hull, `--give shield --variant extra`, tick 40 and 70) against
 the same without the variant: the shell changes from the purple `grid`
 lattice to the pale-blue `extra` texture, scrolling. **No frame of the original's

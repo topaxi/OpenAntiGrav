@@ -27,7 +27,6 @@ mod hd_fury_backdrop_ground_truth;
 mod hd_fury_ship_select_ground_truth;
 mod hd_grid_hover_ground_truth;
 mod hd_hud_ground_truth;
-mod hd_hud_runtime_ground_truth;
 mod hd_leach_ball_ground_truth;
 mod hd_leach_strip_ground_truth;
 mod hd_livery_ground_truth;

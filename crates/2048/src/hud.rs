@@ -11,7 +11,7 @@
 //! and Duel included, which this build's [`oag_race::Mode`] has no rules for
 //! and never reads), plus one skin set each under `2048_hud\`, `2097_hud\` and
 //! `wo3_hud\`. All 26 compose with nothing missing and nothing skipped -
-//! `crates/game/tests/vita_2048_hud_ground_truth.rs`.
+//! `crates/hud/tests/vita_2048_hud_ground_truth.rs`.
 //!
 //! **Which skin a race reads is no longer a guess.** Two of this title's own
 //! race-manager constructors hard-code a `2048_hud\` path in their HUD
@@ -62,7 +62,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // the root/`wo3_hud`/`2097_hud` skins still author, unconverted. All
     // nineteen distinct references across all 26 composed layouts resolve
     // once this rule is applied -
-    // `crates/game/tests/vita_2048_hud_ground_truth.rs`. Confidence 90, on the
+    // `crates/hud/tests/vita_2048_hud_ground_truth.rs`. Confidence 90, on the
     // same terms as [`oag_hd::hud::texture_entry`]'s own row: every reference
     // this title's HUD carries resolves under it, none needed the literal
     // spelling.
@@ -464,7 +464,7 @@ pub mod layouts {
 /// `*_HUD.xml` - `Data\XML\SplitScreenZone_hud\Zone_HUD.xml` - excluded on the
 /// same terms [`oag_hd::hud::ROOTS`] excludes its own split-screen family:
 /// nothing in this project draws two viewports.
-/// `crates/game/tests/vita_2048_hud_ground_truth.rs` re-derives this from the
+/// `crates/hud/tests/vita_2048_hud_ground_truth.rs` re-derives this from the
 /// archive's own manifest rather than trusting it.
 pub const ROOTS: &[&str] = &[
     skins::played::ARCADE,

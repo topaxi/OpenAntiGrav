@@ -6,7 +6,7 @@
 //! `crates/game/tests/hd_hud_ground_truth.rs`, whose composition this reuses.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-hud --run-ignored all \
 //!     -E 'test(/^hd_hud_runtime_ground_truth::/)'
 //! ```
 
