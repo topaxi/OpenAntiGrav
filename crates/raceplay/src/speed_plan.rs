@@ -254,18 +254,17 @@ impl Race {
 
     /// Learns the ring's, each hull's and the routes' speed plans, once, if
     /// anything will read them ([`Self::needs_speed_plans`]). Called at the
-    /// head of [`Race::tick`], which is before any craft has moved, so the
-    /// plans are built from the same grid `Race::start` used to build them
-    /// from and are bit-identical to what it built. A caller that reads a plan
-    /// before its first tick (a diagnostic) calls this itself.
+    /// head of [`Race::tick`] and by [`Self::speed_plan`] and
+    /// [`Self::plan_of`]. On a race that has not ticked it is before any craft
+    /// has moved, so the plans are learned from the grid `Race::start` used to
+    /// learn them from and are bit-identical to what it built. (A player's
+    /// autopilot switched on mid-race would learn them from wherever slot 1
+    /// then is, and a caller that deactivates slots before the first tick
+    /// learns them without those hulls.)
     pub fn ensure_speed_plans(&mut self) {
-        if !self.sim.plans_built && self.needs_speed_plans() {
-            self.learn_speed_plans();
+        if self.sim.plans_built || !self.needs_speed_plans() {
+            return;
         }
-    }
-
-    /// [`Self::ensure_speed_plans`] without asking whether anything reads them.
-    pub(super) fn learn_speed_plans(&mut self) {
         self.sim.plans_built = true;
         self.sim.speed_plan = self.field_speed_plan();
         for (route, plan) in self
@@ -522,10 +521,13 @@ impl Race {
             .collect()
     }
 
-    /// The plan the field is following, if any. Read-only, for a diagnostic
-    /// that has to compare a craft's speed against the target it was given.
+    /// The plan the field is following, if any, learned first if nothing has
+    /// yet ([`Self::ensure_speed_plans`]). For a diagnostic that has to compare
+    /// a craft's speed against the target it was given; `None` where the
+    /// original driver flies a circuit without a fork.
     #[must_use]
-    pub fn speed_plan(&self) -> Option<&oag_ai::SpeedPlan> {
+    pub fn speed_plan(&mut self) -> Option<&oag_ai::SpeedPlan> {
+        self.ensure_speed_plans();
         self.sim.speed_plan.as_ref()
     }
 }

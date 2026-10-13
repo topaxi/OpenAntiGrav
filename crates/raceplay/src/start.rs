@@ -8,27 +8,16 @@ use super::*;
 use log::{debug, info, warn};
 
 impl Race {
-    /// Starts a race and learns its speed plans at once: [`Self::start_deferred`]
-    /// then [`Self::learn_speed_plans`]. What every caller that flies this
-    /// project's driver (the ground truths that measure it, the headless
-    /// simulator) wants, and what `start` always did.
-    #[must_use]
-    pub fn start(setup: Setup) -> Self {
-        let mut race = Self::start_deferred(setup);
-        race.learn_speed_plans();
-        race
-    }
-
-    /// Starts a race: one ship, on the racing line, at the start of the spline,
-    /// **without learning the speed plans**.
+    /// Starts a race: one ship, on the racing line, at the start of the spline.
     ///
-    /// The plans are this project's driver's (`oag_ai::plan`) and cost seconds
-    /// on a long circuit (HD's default: 3.0 to 3.7 s of a 5.2 to 5.9 s start,
-    /// release). The composition root, which decides whose driver flies only
-    /// after the race exists, starts here, calls [`Self::use_original_ai`], and
-    /// lets the head of [`Self::tick`] learn them
-    /// ([`Self::ensure_speed_plans`]) only if something will read them.
-    ///
+    /// **It does not learn the speed plans.** They are this project's driver's
+    /// (`oag_ai::plan`) and cost seconds a long circuit (HD's default: 3.0 to
+    /// 3.7 s of a 5.2 to 5.9 s start, release; the per-hull adapted plans and
+    /// the route plans on top). The head of [`Self::tick`] learns them
+    /// ([`Self::ensure_speed_plans`]) only if something will read them, after
+    /// the caller has had its say on whose driver flies
+    /// ([`Self::use_original_ai`]); [`Self::speed_plan`] and [`Self::plan_of`]
+    /// learn them first, so no reader sees a plan missing that was there.
     ///
     /// The mass is copied into the rigid body because the force law reads
     /// `handling.physical.mass` while the integrator reads `body.mass`. They are one
@@ -38,7 +27,7 @@ impl Race {
     /// The inertia is the title's box tensor (`crate::launch_hover::craft_inertia`, Pulse's
     /// [`box_inertia`] for `None`); see that function for why a derived tensor is used at all.
     #[must_use]
-    pub fn start_deferred(setup: Setup) -> Self {
+    pub fn start(setup: Setup) -> Self {
         let Setup {
             mode,
             eliminator_kill_target,

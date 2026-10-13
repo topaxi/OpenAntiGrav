@@ -632,13 +632,16 @@ handling with several humans is unread, and filtering slots out of
 (`Reason::MultipleHumans`) until it is answered.
 
 **The speed plan is learned only when something reads it (2026-10-13).** This
-project's driver follows a speed plan learned at the start (`oag_ai::plan`), and
-the original driver reads none. `Race::start_deferred` skips it and the head of
-`Race::tick` learns it (`Race::ensure_speed_plans`) when an opponent flies this
-project's driver (`--ai ours`, a fallback, multiplayer), when the player's
-autopilot is on, or when the circuit has a fork. `Race::start` learns it at once
-as before, so every ground truth that measures this project's driver is
-unchanged; a test proves the lazily learned plans equal `start`'s. **A fork
+project's driver follows a speed plan (`oag_ai::plan`), and the original driver
+reads none. `Race::start` no longer learns it: the head of `Race::tick` does
+(`Race::ensure_speed_plans`), when an opponent flies this project's driver
+(`--ai ours`, a fallback, several humans), when the player's autopilot is on, or
+when the circuit has a fork, and `Race::speed_plan` and `Race::plan_of` learn it
+first, so a reader never sees a plan missing that used to be there. (Until
+2026-10-14 `start` learned it at once, which made every race-starting test pay
+for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
+test shows the plans are the same whether asked for before the first tick or at
+it. **A fork
 always learns them**, though the original reads no plan: a route is offered to
 the coin only if its plan verified, and the route plans are learned on the ring
 plan's reference hull, so skipping them would change which way an original

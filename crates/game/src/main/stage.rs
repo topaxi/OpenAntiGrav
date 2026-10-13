@@ -597,7 +597,7 @@ impl Stage {
         // setup (`race::Loaded::started`).
         let mut race = match started {
             Some(race) => *race,
-            None => race::Race::start_deferred(setup),
+            None => race::Race::start(setup),
         };
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.

@@ -288,7 +288,7 @@ fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
     let Some(loaded) = loaded_on("16_Track") else {
         return;
     };
-    let mut race = oag_raceplay::Race::start_deferred(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup);
     assert!(race.use_original_ai(None, 1));
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
@@ -297,40 +297,37 @@ fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
     assert!(race.plan_of(1).is_none());
 }
 
-/// Whatever else flies, the plans a deferred start learns on its first tick
-/// are the ones `Race::start` learns at once: this project's driver (here via
-/// the fallback), the autopilot, and a circuit with a fork (the route plans
-/// gate which routes the coin offers, for the original field too).
+/// The plans are learned from the grid, however late the first reader asks:
+/// at once through `speed_plan()`, or at the head of the first tick. Whatever
+/// flies (our driver by default, the autopilot, the original on a circuit
+/// with a fork - the route plans gate which routes the coin offers for the
+/// original field too), both orders give the same ring, hull and route plans,
+/// and the plans exist where something reads them.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_deferred_start_learns_the_plans_start_learns() {
+fn the_plans_are_the_same_whether_asked_for_before_the_first_tick_or_at_it() {
     for (track, original, autopilot) in [
         ("16_Track", false, false),
         ("16_Track", true, true),
         ("05_Track", true, false),
     ] {
-        let (Some(eager), Some(deferred)) = (loaded_on(track), loaded_on(track)) else {
+        let (Some(first), Some(second)) = (loaded_on(track), loaded_on(track)) else {
             return;
         };
-        let eager = oag_raceplay::Race::start(eager.setup);
-        let mut lazy = oag_raceplay::Race::start_deferred(deferred.setup);
-        assert!(lazy.speed_plan().is_none(), "{track}: nothing learned yet");
-        if original {
-            assert!(lazy.use_original_ai(None, 1));
+        let mut asked = oag_raceplay::Race::start(first.setup);
+        let mut ticked = oag_raceplay::Race::start(second.setup);
+        for race in [&mut asked, &mut ticked] {
+            if original {
+                assert!(race.use_original_ai(None, 1));
+            }
+            race.set_autopilot(autopilot);
         }
-        lazy.set_autopilot(autopilot);
-        lazy.tick(&PlayerInputs::none());
-        assert!(
-            lazy.speed_plan().is_some(),
-            "{track} {original} {autopilot}"
-        );
-        assert_eq!(lazy.speed_plan(), eager.speed_plan(), "{track}");
+        assert!(asked.speed_plan().is_some(), "{track} {original} {autopilot}");
+        ticked.tick(&PlayerInputs::none());
+        assert!(ticked.speed_plan().is_some(), "{track} {original} {autopilot}");
+        assert_eq!(asked.speed_plan(), ticked.speed_plan(), "{track}");
         for slot in 1..8 {
-            assert_eq!(
-                lazy.plan_of(slot),
-                eager.plan_of(slot),
-                "{track} slot {slot}"
-            );
+            assert_eq!(asked.plan_of(slot), ticked.plan_of(slot), "{track} slot {slot}");
         }
     }
 }

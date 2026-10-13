@@ -154,7 +154,8 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
         race.tick(&PlayerInputs::none());
         let mut live = false;
         for (k, &slot) in slots.iter().enumerate() {
-            let ship = &race.sim.world.ships[slot];
+            // A copy: `plan_of` below borrows the race mutably.
+            let ship = race.sim.world.ships[slot];
             let body = &ship.physics.body;
             let speed = body.linear_velocity.dot(body.forward()).max(0.0);
             let index = ship.driver.index;
