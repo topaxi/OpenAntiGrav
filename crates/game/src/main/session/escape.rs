@@ -78,6 +78,9 @@ impl Session {
         // does not lose that write, only stops it from blocking the next
         // one.
         stage.result_saved = false;
+        // Its last tick is a trip through the menus ago: drawn as it stands
+        // until it steps again, rather than blended from a tick long past.
+        stage.race.settle_poses();
         // Same reasoning as `Session::launch_race`: the outgoing `MenuStage`'s
         // last picture, so a later `escape` does not flash black waiting for
         // the restarted feed's first frame.

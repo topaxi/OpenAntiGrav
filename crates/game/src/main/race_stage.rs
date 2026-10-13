@@ -170,12 +170,19 @@ impl RaceStage {
     // and a struct to carry them past one call site would name the grouping
     // without clarifying it - the same call this file already makes for
     // `Scene::new`.
+    ///
+    /// `alpha` is how far between the race's previous tick and its current
+    /// one the poses are drawn, `1.0` being the current tick exactly - see
+    /// [`race::between_ticks`]. It stays set for the HUD that follows, so the
+    /// reticle sits on the craft as drawn, and the caller puts `1.0` back once
+    /// the frame is drawn.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn render(
         &mut self,
         gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
+        alpha: f32,
         viewport: (f32, f32, f32, f32),
         fov: display::Fov,
         cull: bool,
@@ -203,6 +210,7 @@ impl RaceStage {
         if self.scene.sync_zone_grade(&self.race) {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
+        self.race.set_draw_alpha(alpha);
         // The scene and nothing else. The HUD used to follow it here, into the
         // same target; it composites at presentation resolution now - see
         // [`RaceStage::draw_hud`].
@@ -609,6 +617,9 @@ impl RaceStage {
             gpu,
             &mut encoder,
             target,
+            // The tick exactly: a warmup draws the grid pose once, to pay the
+            // pipeline compiles, and there is no previous tick to blend from.
+            1.0,
             viewport,
             fov,
             cull,

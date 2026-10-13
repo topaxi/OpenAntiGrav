@@ -330,6 +330,10 @@ impl Session {
                         &self.gpu,
                         &mut encoder,
                         scene_target,
+                        // The tick it was parked on, exactly: it is not
+                        // stepping, so a blend would rock the still picture
+                        // between its last two ticks.
+                        1.0,
                         inside,
                         self.settings.graphics.fov,
                         self.settings.graphics.frustum_culling,
@@ -387,6 +391,11 @@ impl Session {
                     &self.gpu,
                     &mut encoder,
                     scene_target,
+                    // **Between the last two ticks**, by how far the frame
+                    // clock is into the next one, so motion is smooth at any
+                    // frame rate - and the tick exactly while paused, when the
+                    // race is not stepping. See `race::between_ticks`.
+                    oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused),
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
@@ -590,6 +599,10 @@ impl Session {
             stage
                 .scene
                 .composite_bloom(&mut encoder, self.framebuffer.output(), rect);
+            // The scene and the HUD were drawn between ticks; whatever reads
+            // the race before the next draw - the next tick, the listener -
+            // reads the tick itself. See `RaceStage::render`.
+            stage.race.set_draw_alpha(1.0);
         }
         // A race parked behind the menus has no HUD; its glow still lands,
         // before the menu rows go on.
