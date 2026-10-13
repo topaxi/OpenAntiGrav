@@ -47,6 +47,7 @@ pub(crate) struct FrameWork {
     pub(crate) advert_cards: u32,
     /// How many of the track's opaque draws the latest `mapped` depth map recorded:
     /// those whose bounds touch that map's box, not the whole circuit.
+    #[cfg(test)]
     pub(crate) track_ranges_in_depth_map: u32,
 }
 
