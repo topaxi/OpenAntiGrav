@@ -617,6 +617,13 @@ pub fn capture(
         (rect.2 as u32, rect.3 as u32),
     );
 
+    // **One tick per drawn frame, so every frame is the tick exactly.** A
+    // capture draws at draw alpha 1.0, the picture it drew before
+    // `race::between_ticks` existed, bit for bit; only the window draws
+    // between ticks. Spelled out rather than left to the default so that
+    // changing it is a visible edit here.
+    race.set_draw_alpha(1.0);
+
     // The primer frame a motion blur capture needs: the scene at the
     // tick-before-last pose, drawn into the same target and then entirely
     // overwritten by the real frame's clear. Every pixel it produces is
