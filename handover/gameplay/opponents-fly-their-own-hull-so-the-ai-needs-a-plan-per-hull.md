@@ -1,45 +1,47 @@
 # Opponents fly their own team's handling, so the AI needs a speed plan per hull
 
-Every opponent on every title now flies its own team's `handlingstats.xml` for the race's class
-(`oag_raceplay::load::family::opponent_handling`, `Setup::opponent_handling`); before, every
-opponent flew the player's numbers (`start.rs`). HD/Fury opponents also fly the player's exact
-variant (`TeamVariants::opponents_match_player_variant`, static read, confidence 55:
-`docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`; a live RPCS3
-check is open). Campaign opponents (`original_ai`) take the same handling, the controller reads none.
-Facts: [`hd-status.md`](../../docs/formats/hd-status.md), "Opponents follow the player's hull family".
+Every opponent on every title flies its own team's `handlingstats.xml` for the race's class
+(`oag_raceplay::load::family::opponent_handling`, `Setup::opponent_handling`); HD/Fury opponents
+also fly the player's exact variant (`TeamVariants::opponents_match_player_variant`, static read,
+confidence 55: `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`). Campaign opponents
+(`original_ai`) take the same handling, the controller reads none. Facts:
+[`hd-status.md`](../../docs/formats/hd-status.md), "Opponents follow the player's hull family".
 
-The AI's speed plan was learned on one craft. It is now learned once on the **player's** craft
-(else the most agile AI hull whose plan verifies) and each opponent follows it at
-`min(1, own yaw ceiling / reference yaw ceiling)` (`oag_ai::Driver::plan_deficit`, chosen, not
-measured). That keeps every circuit's plan verifying and removes the Eliminated rows, but a hull
-unlike the reference still scrapes: the default grid's slot 1 is Triakis (6.0 wide, slowest turn)
-and 36 `ai_clean_lap_gate` rows, Black seed 1 (forward) and the stall test's launch tick were
-regenerated for it (commit message and `ai_clean_lap_gate.rs` give one reason per row).
+The AI follows a reference plan (the player's hull's, else the most agile verifying hull's), and
+every other hull on the grid re-learns it at race start (`oag_ai::SpeedPlan::adapt`), ring and
+routes, threaded natively; a hull whose copy does not verify follows the reference at
+`SpeedPlan::share_for`. Design, measurements, race-start cost and the shield table:
+[`ai.md`, "A plan per hull"](../../docs/gameplay/ai.md#a-plan-per-hull-2026-10-13). 13
+`ai_clean_lap_gate` rows, Black cells and the stall launch tick were regenerated for the slot-1
+craft now being Triakis, one reason per row in each file.
 
 ## Open
 
-- **A speed plan per hull, cached on disk.** Key: circuit + the hull stats the plan reads
-  (handling, dimensions, inertia, class) + a plan version. Built once ever, never at race start;
-  until a hull's own plan exists it borrows the cached plan of the most similar hull (turn rate,
-  width), and could be built race by race or in the background. Measured cost of building at
-  load: about 0.7 to 3.5 s per plan in debug, seven distinct hulls a grid, so a per-race build was
-  rejected. Per-hull plans were measured as the better fit before the shared one: Triakis' own plan
-  verified clean on most layouts but failed on `01`/`07`/`13`/`14_Track` jumps (OffLine after a
-  held run-up), which a retry with a lowerable hold did not fix, so the search itself needs work.
-- **Read HD's live rival controller.** `AIControlStats.xml` is unread for HD and
-  `docs/formats/hd-ai-netconfigs.md` says the `.nnt` networks are dormant; our AI could learn
-  from what the original's rival does with the same hulls.
-- **Contacts for wide hulls** (`02_Track` FLASH 0 to 328 on Triakis): the plan's tight flags come
-  from the reference hull; a per-craft clearance would be cheaper than a whole plan.
+- **Own-hull plans computed ahead of the race and bundled** (maintainer, 2026-10-13). A plan
+  searched from scratch per hull is the better plan where it verifies (`02_Track` RAPIER 0
+  contact ticks against 290 adapted; 12 gate rows red against 13) but costs 12-24x a race
+  start's CPU. Key it by title, circuit, class and the hull stats the plan reads, plus a plan
+  version; adapted plans stay the fallback for mods and custom tracks. **First** ask
+  `docs/overview/legal.md` whether a speed table derived from the disc may ship.
+- **The race driver drifts off a verified line at full lock** (`02_Track` FLASH, Triakis,
+  samples 1614-1636: 266 contact ticks on the adapted plan, 280 on its own, 87 with no line
+  slack). The verifying driver is neutral; the race's Ace spends a little character and the
+  hull has no turn left to recover. A plan cannot fix it; the `tight` mark (wall within a unit)
+  does not see it. Marking full-lock samples tight was tried: 123 ticks, not 0.
+- **Race-start cost of adapted plans**: 2.5-10x main's CPU (release, `01_Track` VENOM 4.5 s
+  against 0.4-0.9 s), +0.6-1.0 s wall on a 16-core host. Phones and the web will feel it.
+- **Read HD's live rival controller**: `AIControlStats.xml` is unread for HD and
+  `docs/formats/hd-ai-netconfigs.md` says the `.nnt` networks are dormant.
 - **Per-team handling on Pure, 2048 and Omega** was not exercised with a field; a team whose file
   fails to load keeps the player's handling and the load report says so.
-- **Shield with a field before and after** was measured on Pulse `01_Track`/`03_Track` and HD
-  Talons Junction, one seed each.
+- **Live RPCS3 check of the HD variant rule**, and a screenshot of an opponents' grid (the
+  `--camera-pose` frames showed no ships).
 
 ## Next Steps
 
-1. Build the per-hull plan cache (`oag_ai::plan` + a key in `oag_source`'s derived-cache directory),
-   2-3 days.
-2. Fall back to the nearest cached hull until a plan exists; measure `ai_clean_lap_gate` with the
-   default grid's slot 1 on its own plan, expect the 36 regenerated rows to come back down.
+1. The bundled-plans lane: the `legal.md` question, then an offline builder (an example over
+   every title, circuit, class and team) and a loader that prefers a bundled plan whose key
+   matches, a day or two.
+2. The full-lock drift: verify a plan with the race's own driver spread (a few personality
+   seeds) instead of the neutral driver alone, and measure on `02_Track` FLASH, an afternoon.
 3. Read `AIControlStats.xml` on HD: a decompile-and-read lane, an afternoon.
