@@ -984,9 +984,36 @@ a guess.
   blocks there. `Title::split_on_integrated_gpu` (Pulse, Pure) drops the row and tile on an
   integrated GPU and sends a windowed `--players N` to one view. Written up in
   [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
-  **Open from it**: Omega's racebox has HD's two lists (corrected 2026-10-13, `scripts/psarc.py` had read the wrong file) and they are not wired;
-  a real integrated adapter was not walked; Omega has no Ship Select in a split (join, Track
-  Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
+  **Open from it**: ~~Omega's racebox has HD's two lists and they are not wired~~ (done, see
+  `split-entry-mirror-hd` below); a real integrated adapter was not walked; ~~Omega has no Ship
+  Select in a split~~ (Omega does author `Team Selection Player 1`/`2`: see below).
+- **2026-10-13, `split-entry-mirror-hd`: Omega authors HD's rows, 2048 borrows them.** Omega's real
+  `racebox_definition.xml` (`data09`) has `NumberOfPlayers` and `SplitScreen`, so `oag_omega` names it
+  (`oag_title::LocalSplit::Authored`) and Omega's RACE page carries HD's two rows with the generic row
+  gone; its `vert_splitscreen_*` HUD files (`data00`) are wired for the vertical cut. 2048 has no race box:
+  `LocalSplit::Borrowed` in `oag_2048` holds HD's lists (chosen, not measured, labelled borrowed, the
+  words from 2048's own table, a disc-backed test holds them equal to HD's and Omega's), the rows sit
+  on the RACE page behind the RACEBOX tile, and the third `GameModeChoice` tile (`Launch::SplitScreen`,
+  `trim_tiles`) is removed. Walked windowed on an own Xvfb with two pads on both: rows, 2 players,
+  vertical, join, a left and right two-view race (Omega also through Track Select). Written up in
+  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
+  **Open from it**:
+  - **Omega's per-seat Ship Select**: `data09` authors `Team Selection`, `Team Selection Player 1`
+    and `Player 2` (read with the digest-matched Rust reader; HD's `picker::hd` parses it as it
+    stands). Wiring is `team_select: Some(Team_Selection_Definition.xml)` in `oag_omega::frontend`
+    (plus `names::TEAM_SELECTION_DEFINITION`), but it also opens Ship Select for one person and drops the
+    RACE page's TEAM, VARIANT and TRACK rows, so it changes Omega's one-player flow: a maintainer
+    decision, not taken here.
+  - **2048 seats pick no ship**: no per-player pair is authored (`Team_Definition.xml` is one touch screen).
+  - **HD guest join not used**: `FE_GUEST_JOIN` ("PLAYER 2 PRESS START TO JOIN" on HD, "PRESS OPTIONS TO
+    JOIN" on Omega) names a different button than our lobby's join press (confirm), so showing it on the
+    join screen would misdirect; left as our hint line.
+  - **`FE_OFF` on the greyed cut row, and making it unfocusable**: a greyed row is selectable and inert
+    on every page of the menu tree by design (`oag_ui::menu::pointer`/`nav`), so drawing the authored text
+    and skipping focus is a menu-wide change, left open.
+  - 2048's windowed placeholder skin clips the left glyphs of values wider than about nine characters
+    (`HORIZONTAL`, the TEAM value `Feisar2048\3`); the same clip is on `main` without this lane's
+    change, headless captures are not clipped.
 - **2026-10-13, `hd-authored-split-setup`: HD's own split setup is wired.** HD authors the local
   entry in RACEBOX itself (`NumberOfPlayers` 1 or 2, `SplitScreen` horizontal or vertical,
   [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)):

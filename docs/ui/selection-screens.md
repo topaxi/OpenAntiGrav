@@ -476,10 +476,11 @@ ignores everything but back.
 **Cross-title.** HD: **checked, applies, wired, untested** - the authored sequence is what
 the one-per-seat flow follows. The SPLIT SCREEN row is revealed under RACEBOX on HD
 (a correction of this page's earlier "no row"), and a windowed walk on 2026-10-13 went
-join, Track Select, `Ship Select - Player 1`, `Ship Select - Player 2`, race. Omega: **checked, not located** - its
-`team_selection_definition.xml` (`data00`, `data09`) holds the `PI_Team` rows and no
-`Team Selection Player` screen; where Omega authors its Ship Select screens is
-open. 2048: checked, string ids present, screens unread. Pure: authors no split screen
+join, Track Select, `Ship Select - Player 1`, `Ship Select - Player 2`, race. Omega: **checked, applies, not wired** (corrected 2026-10-13: the earlier "not located" came
+through `scripts/psarc.py`) - `data09`'s `team_selection_definition.xml` authors `Team
+Selection`, `Team Selection Player 1` and `Team Selection Player 2` like HD's, and HD's reader
+parses it as it stands; wiring it (`team_select` on `oag-omega`) also changes the one-player
+flow, so it waits for a decision. 2048: checked, string ids present, screens unread. Pure: authors no split screen
 (`docs/formats/race-setup.md`), so it takes the one-per-seat order, chosen. PSP Pulse:
 authors none either and **borrows the PS2's page for two seats** (above); three seats and more
 take the one-per-seat order.

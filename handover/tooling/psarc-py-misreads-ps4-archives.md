@@ -24,9 +24,10 @@ Rust reader, so this is a tooling bug, not a runtime one.
 ## Open
 
 - **Every Omega claim built on `just psarc` output is unchecked** until re-read with the
-  Rust reader. Worth a sweep of `docs/formats/omega-status.md` and the Omega rows of
-  `docs/formats/hd-frontend.md`, `docs/ui/selection-screens.md` (Omega's Ship Select
-  "not located") and `docs/rendering/split-screen.md`.
+  Rust reader. Re-read 2026-10-13 (`split-entry-mirror-hd`): the race box's split lists, the
+  Ship Select screens (`Team Selection Player 1`/`2` exist in `data09`) and Omega's rows of the
+  split-screen, selection-screens and campaign-screens pages. Still worth a sweep:
+  `docs/formats/omega-status.md` and the rest of `docs/formats/hd-frontend.md`'s Omega rows.
 - Fix or retire the script: match by digest as the Rust reader does, or make
   `just psarc cat` call the Rust example for PS4 archives and refuse positional lookup.
 

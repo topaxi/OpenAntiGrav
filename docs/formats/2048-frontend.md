@@ -848,16 +848,23 @@ tap opens this build's menus and walks into the `race` or `remix` page, so
 BACK returns to the menu root. See [menus.md](../architecture/menus.md)'s
 own section on them.
 
-**A third own tile, SPLIT SCREEN (2026-10-13).** 2048's front end authors no local
-split entry (the four tiles are single player, online, ad-hoc and cross-play), so a
-third tile under the other two, at `(16, 342)` (the left column, since the v1.04 grid
-sits right of x=228; the two above are at `(16, 110)` and `(16, 226)` now, the
-`(16, 432)` placement above is the older one), opens this build's join screen
-(`docs/rendering/split-screen.md`). **Chosen, not measured.** It follows the menu tree's
-`split_screen` row, so it is absent on an integrated GPU
-(`Title::split_on_integrated_gpu` is `false` for 2048). Walked 2026-10-13: tile (click), two
-pads join, START, a two-view race. Omega: **checked, differs** - Omega's front end is HD's
-strip, where the row is the revealed one under RACEBOX.
+**Split screen is HD's two race-box rows, borrowed (2026-10-13, `split-entry-mirror-hd`).**
+2048's front end authors no local split entry (the four tiles are single player, online,
+ad-hoc and cross-play) and has no `racebox_definition.xml`, so the RACE page behind this
+build's own RACEBOX tile carries `NUMBER OF PLAYERS` and `SPLIT SCREEN` as HD's race box does
+(`oag_title::LocalSplit::Borrowed`, lists `1`, `2` and `RB_HORIZ`, `RB_VERT`, with the words
+from 2048's own English table, which carries HD's ids word for word). START with two people
+opens the two-seat join screen and then the race. An earlier third tile on this grid
+(`(16, 342)`, opening the join screen with up to eight seats) is removed, as HD's generic row is
+once the authored rows exist. **Chosen, not measured**; the manual text `MAN_2_SPL` in the same
+table says "In Racebox, set the number of players to 2, and choose between vertical or
+horizontal split screen", which is the shape this takes. No Ship Select: `Team_Definition.xml`
+authors one touch `team` screen and no `Player 1`/`Player 2` pair (see
+[split-screen.md](../rendering/split-screen.md)). Omega: **checked, differs** (it authors the
+lists itself). It follows the menu tree's `split_screen` rows, so it is absent on an integrated
+GPU (`Title::split_on_integrated_gpu` is `false` for 2048). Walked windowed 2026-10-13 on an own
+Xvfb with two virtual pads: RACEBOX tile, the rows, two pads join, START, a left and right
+two-view race.
 
 **Reproduce.** With `data/extracted/vita/PCSF00007` in place:
 
