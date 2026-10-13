@@ -123,7 +123,8 @@ The second use of the fallback (2026-10-13): where each of a title's own HUD wid
 goes inside one view of a split screen, as a TOML file with a `[toml-schema]` header
 (`schemas/v1/split-hud.tosd`, [ADR-0064](adr/0064-project-toml-files-declare-a-toml-schema.md)),
 read by `oag_hud::split_hud`. The shipped files are `assets/fallback/Data/XML/SplitHud_Pulse.toml`
-(PSP and PS2, one file), `SplitHud_Pure.toml` and `SplitHud_HD.toml`, named per title in
+(PSP and PS2, one file), `SplitHud_Pure.toml`, `SplitHud_HD.toml` and `SplitHud_2048.toml`
+(2026-10-13, `split-hud-vertical`; 2048's disc layouts are authored for another grid), named per title in
 `oag_title::HudLayouts::split_layout`. They place the title's own widgets and draw no art
 of their own, and every number in them is **chosen, not measured**. Nothing on any disc
 carries these names, so the fallback is the only layer below the override that answers.
@@ -137,13 +138,15 @@ and how many widgets they place, and which source answers where.
 
 **How a modder overrides a split layout**: copy the shipped file for the title to
 `overrides/<title>/Data/XML/SplitHud_<Title>.toml` (`SplitHud_Pulse.toml` for
-`overrides/wipeout-pulse/`; Pure and HD likewise), keep its `[toml-schema]` header, edit
+`overrides/wipeout-pulse/`; Pure, HD and 2048 likewise), keep its `[toml-schema]` header, edit
 the groups, and start a race with two or more views. The player's file **replaces** the
 shipped one wholesale and beats HD's authored two-view layout; a count or view shape it
 has no layout for goes to the authored layout and then the whole-screen layout scaled,
 not to the shipped file. A file that does not parse (an unknown major is refused by name,
 as every other loader of ours does) is reported and the whole-screen layout is used.
-One view (a single race) reads none of this.
+A rule keyed `views = [2]` with `aspect = [0.0, 2.4]` (the shipped files' `tall`) is what a
+vertical cut of two views reads, in front of `strip`, so a mod that wants its own columns
+writes that rule. One view (a single race) reads none of this.
 
 ### Placement is chosen, not measured
 

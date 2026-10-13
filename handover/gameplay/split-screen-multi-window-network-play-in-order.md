@@ -278,8 +278,18 @@ file for both pressings), then the scaled whole-screen layout; one rule per view
 so three, five and seven views mix. Each view also has a scissor now. See
 [split-screen.md](../../docs/rendering/split-screen.md#hud) and
 [asset-layers.md](../../docs/architecture/asset-layers.md#a-split-screen-hud-layout-file).
-**Still open from it**: no file for 2048 or Omega (the scaled layout draws; Omega's
-two-view authored layout does draw), Time Trial and the Eliminator on Pure and HD and
+**2026-10-13, `split-hud-vertical`: vertical columns.** A two-view vertical cut reads a `tall`
+rule (`views = [2]`, `aspect = [0.0, 2.4]`) in `SplitHud_Pulse.toml` and `SplitHud_Pure.toml`
+(Pulse gains the Eliminator's kill column, Head2Head's bar and the Pilot Assist indicator; Pure's
+weapon grid is raised clear of the bottom edge) and 2048 has its own `SplitHud_2048.toml`, both
+cuts and every count, mirroring HD's arrangement (2048's horizontal pair changed with it,
+deliberately). HD's authored `vert_` layouts still answer HD. 2048's file checked against
+Omega: Omega's HUD vocabulary is HD's, so `SplitHud_HD.toml` applies there, not wired.
+**Still open from it**: PS2 Pulse's split HUD floats at 76% of the view (grid cells of 2.0 by
+1.607 pixels, `hud_views::grid_rect` assumes square ones, every PS2 split frame moves with the
+fix), Pure's weapon grid is still half clipped in rows, Pulse's strip kill column overlaps the
+speed bars, Omega's `Zone_HUDvert` and its non-authored cases, and a real display.
+**Still open before it**: Time Trial and the Eliminator on Pure and HD and
 HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
 than the PSP's in the same file, and nobody has judged the layouts on a real display.
 
