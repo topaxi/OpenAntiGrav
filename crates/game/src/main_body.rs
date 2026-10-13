@@ -628,6 +628,7 @@ fn run(cli: Cli) -> Result<()> {
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
     let players = cli.driver.players;
+    let split_cut = cli.driver.cut();
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
         cli.pick_language,
@@ -663,6 +664,7 @@ fn run(cli: Cli) -> Result<()> {
         autopilot_skill,
         ai_choice,
         players,
+        split_cut,
         anim_seconds,
         race: None,
         race_options,

@@ -49,7 +49,7 @@ fn race(craft: usize) -> Race {
 /// `None` is nobody touching anything.
 fn fly(keyboard_slot: Option<usize>) -> Race {
     let mut race = race(2);
-    split_screen::apply(&mut race, 2);
+    split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     let mut controls = Controls::without_pad();
     if let Some(slot) = keyboard_slot {
         controls.assignment_mut().assign_keyboard(slot);
@@ -101,7 +101,7 @@ fn a_three_seat_lobby_makes_a_three_way_split_with_each_device_on_its_slot() {
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
     assert_eq!(
-        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1]),
+        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1], oag_render::viewport::Cut::Horizontal),
         3
     );
 
@@ -125,7 +125,7 @@ fn a_lobby_of_one_changes_nothing() {
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
     assert_eq!(
-        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1]),
+        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1], oag_render::viewport::Cut::Horizontal),
         1
     );
     assert_eq!(race.viewport_count(), 1);
@@ -143,7 +143,7 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     let mut assignment = Assignment::<u32>::seated(3);
     assignment.claim_keyboard(0);
     assignment.assign_pad(5, 1);
-    split_screen::apply(&mut race, 3);
+    split_screen::apply(&mut race, 3, oag_render::viewport::Cut::Horizontal);
     let local = |race: &Race, slot: usize| race.sim.world.controllers[slot] == Controller::Local;
 
     assignment.reconcile(&[5]);
@@ -175,7 +175,7 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
 #[test]
 fn merged_devices_leave_the_controllers_alone() {
     let mut race = race(2);
-    split_screen::apply(&mut race, 2);
+    split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     let before = race.sim.state_hash();
     assert_eq!(
         split_screen::follow_devices(&mut race, &Assignment::<u32>::default()),
@@ -197,13 +197,13 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
     let mut lobby = None;
 
     let mut first = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut first);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut first, oag_render::viewport::Cut::Horizontal);
     assert_eq!(first.viewport_count(), 2);
     assert_eq!(controls.assignment().humans(), Some(2));
 
     // `RACE AGAIN`: no lobby, the seats are still held.
     let mut again = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut again);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut again, oag_render::viewport::Cut::Horizontal);
     assert_eq!(again.viewport_count(), 2, "the restart is the same split");
     assert_eq!(again.sim.world.controllers[0], Controller::Local);
     assert_eq!(again.sim.world.controllers[1], Controller::Local);
@@ -211,6 +211,6 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
     // Back on the menus (`Session::unseat_after_split_race`): the next race is one view.
     controls.merge_devices();
     let mut fresh = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut fresh);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut fresh, oag_render::viewport::Cut::Horizontal);
     assert_eq!(fresh.viewport_count(), 1);
 }

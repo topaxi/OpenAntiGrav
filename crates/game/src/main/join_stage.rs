@@ -24,6 +24,14 @@ impl JoinStage {
         }
     }
 
+    /// An empty lobby of exactly `people` seats, START refused until all are taken: the race
+    /// box's `NumberOfPlayers` is the head count.
+    pub(crate) fn for_people(labels: Labels, people: usize) -> Self {
+        let lobby = Lobby::with_capacity(people);
+        let screen = Join::new(labels, lobby.capacity()).requiring(lobby.capacity());
+        Self { lobby, screen }
+    }
+
     pub(crate) fn lobby(&self) -> &Lobby {
         &self.lobby
     }

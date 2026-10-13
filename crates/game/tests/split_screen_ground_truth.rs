@@ -377,7 +377,7 @@ fn the_flyby_plays_full_screen_and_the_split_starts_after_it() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    oag_game::split_screen::apply(&mut race, 2);
+    oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     assert_eq!(race.viewport_count(), 2, "a two-person split");
     assert_eq!(
         race.views_drawn(),

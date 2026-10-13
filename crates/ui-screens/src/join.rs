@@ -79,6 +79,9 @@ pub struct Join {
     seats: Vec<String>,
     /// The seats the grid has.
     capacity: usize,
+    /// The seats START needs filled: one, or all of them where the race box authored the
+    /// head count.
+    needs: usize,
     /// The row the pointer last moved onto.
     hover: Option<Row>,
 }
@@ -189,8 +192,23 @@ impl Join {
             labels,
             seats: Vec::new(),
             capacity,
+            needs: 1,
             hover: None,
         }
+    }
+
+    /// This screen with START refused until `seats` are taken: the race box authored the
+    /// head count (`NumberOfPlayers`), and a race for fewer would contradict it.
+    #[must_use]
+    pub fn requiring(mut self, seats: usize) -> Self {
+        self.needs = seats.clamp(1, self.capacity);
+        self
+    }
+
+    /// Whether START can begin the race now.
+    #[must_use]
+    pub fn can_start(&self) -> bool {
+        self.seats.len() >= self.needs
     }
 
     /// Who sits where now: one device name per seat.
@@ -255,7 +273,7 @@ impl Join {
             match row {
                 Row::Seat(n) => out.push(Event::Leave(n)),
                 Row::Empty => out.push(Event::Join),
-                Row::Start if !self.seats.is_empty() => out.push(Event::Start),
+                Row::Start if self.can_start() => out.push(Event::Start),
                 Row::Start => {}
                 Row::Back => out.push(Event::Back),
             }
@@ -357,7 +375,7 @@ impl Join {
                     )
                 }
                 Row::Start => {
-                    if self.seats.is_empty() {
+                    if !self.can_start() {
                         ink = dim(ink);
                     }
                     (self.labels.start.clone(), self.seats.len().to_string())

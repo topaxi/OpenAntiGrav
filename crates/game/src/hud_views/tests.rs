@@ -1,5 +1,6 @@
 use super::*;
 use oag_display::space::Space;
+use oag_render::viewport::Cut;
 
 const SCREEN: (f32, f32, f32, f32) = (0.0, 0.0, 1440.0, 816.0);
 
@@ -10,7 +11,7 @@ fn near(a: f32, b: f32) -> bool {
 
 #[test]
 fn one_view_is_the_identity() {
-    let placed = placements(1, SCREEN, Space::PSP);
+    let placed = placements(1, Cut::Horizontal, SCREEN, Space::PSP);
     assert_eq!(placed.len(), 1);
     let p = placed[0];
     assert!(near(p.scale, 1.0), "{p:?}");
@@ -20,7 +21,7 @@ fn one_view_is_the_identity() {
 
 #[test]
 fn four_views_are_four_quarter_size_huds_each_in_its_own_quadrant() {
-    let placed = placements(4, SCREEN, Space::PSP);
+    let placed = placements(4, Cut::Horizontal, SCREEN, Space::PSP);
     assert_eq!(placed.len(), 4);
     for (i, p) in placed.iter().enumerate() {
         assert!(near(p.scale, 0.5), "view {i}: {p:?}");
@@ -48,7 +49,7 @@ fn four_views_are_four_quarter_size_huds_each_in_its_own_quadrant() {
 
 #[test]
 fn two_views_fit_a_wide_strip_by_its_height_and_centre_the_hud() {
-    let placed = placements(2, SCREEN, Space::PSP);
+    let placed = placements(2, Cut::Horizontal, SCREEN, Space::PSP);
     // A strip is half the screen tall and as wide: the HUD is height-limited.
     for p in &placed {
         assert!(near(p.scale, 0.5), "{p:?}");
@@ -77,7 +78,7 @@ fn a_views_scissor_is_that_views_own_pixels() {
     for viewport in [SCREEN, (96.0, 0.0, 1248.0, 816.0)] {
         for space in [Space::PSP, Space::PS2, Space::of(oag_disc::Platform::Ps3)] {
             for count in 1..=8 {
-                for view in oag_render::viewport::layout(count, viewport) {
+                for view in oag_render::viewport::layout(count, viewport, Cut::Horizontal) {
                     let got = scissor_rect(grid_rect(view, viewport, space), viewport, space);
                     let want = [view.0, view.1, view.2, view.3];
                     for (got, want) in got.iter().zip(want) {
@@ -166,6 +167,7 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
         None,
         Some(&assets),
         one_view_each(4),
+        Cut::Horizontal,
         SCREEN,
         Space::PSP,
     );
@@ -182,7 +184,7 @@ fn a_split_hud_file_draws_each_group_into_its_own_view_with_a_span() {
         frame.spans
     );
     // Each view's lap is inside that view's rectangle.
-    let rects = oag_render::viewport::layout(4, SCREEN);
+    let rects = oag_render::viewport::layout(4, SCREEN, Cut::Horizontal);
     let per = 3.0;
     let texts: Vec<_> = frame
         .hud_text

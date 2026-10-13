@@ -545,7 +545,7 @@ pub fn load_shell(
         &screens,
         &mut report,
     );
-    let race_setup = screens::read_race_setup(&mut archives, front_end.race_setup, &mut report);
+    let race_setup = screens::read_race_setup(&mut archives, front_end, &mut report);
     let strings = load_strings(
         &mut archives,
         &languages,

@@ -50,6 +50,14 @@ pub(super) fn supply(
         oag_ui::menu::ValueSource::Weapons,
         &race_setup.weapon_choices(strings),
     );
+    model.supply(
+        oag_ui::menu::ValueSource::PlayerCounts,
+        &race_setup.player_choices(),
+    );
+    model.supply(
+        oag_ui::menu::ValueSource::SplitCuts,
+        &race_setup.cut_choices(strings),
+    );
 }
 
 #[cfg(test)]
@@ -76,6 +84,7 @@ mod tests {
                 ("FE_ON".into(), "On".into()),
                 ("FE_OFF".into(), "Off".into()),
             ],
+            ..Default::default()
         };
         let mut model = oag_ui::menu::Menu::new(definition);
         supply(&mut model, title, &[], &[], &setup, &strings);

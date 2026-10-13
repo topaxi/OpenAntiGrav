@@ -65,6 +65,7 @@ pub(super) fn load_hud(
     language_plugins: &[&str],
     preferred_language: Option<&str>,
     views: u8,
+    cut: oag_render::viewport::Cut,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let entry = hud_layout(title, mode);
@@ -113,7 +114,7 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
-    let split = split_assets(archives, title, mode, views, space, report);
+    let split = split_assets(archives, title, mode, views, cut, space, report);
     // The sheet packs the textures of every layout this race can draw, the
     // whole-screen one first so a race with no split packs what it always did.
     let sheet = match (&layout, &split) {
@@ -333,8 +334,9 @@ fn load_split_hud(
 /// The title's own two-player split-screen layouts for `mode`, when the race is
 /// loaded for exactly two views and the title ships them.
 ///
-/// **Two views only**: the authored family covers a top-and-bottom pair and
-/// nothing more, so any other count, and every mode the family has no layout
+/// **Two views only**: the authored family covers a pair, top and bottom or (for a
+/// vertical `cut`, on a title that ships the `vert_` twins) left and right, and nothing
+/// more, so any other count, and every mode the family has no layout
 /// for (Time Trial, Speed Lap, Zone: HD ships a Zone one that is not wired),
 /// keep the whole-screen layout scaled into each view. A layout that does not
 /// compose is reported and the whole-screen one is used instead, rather than a
@@ -344,13 +346,21 @@ fn split_assets(
     title: &'static oag_title::Title,
     mode: Mode,
     views: u8,
+    cut: oag_render::viewport::Cut,
     space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> Option<oag_hud::SplitAssets> {
     let authored = title.hud.split.filter(|_| views == 2)?;
+    let vertical = authored
+        .vertical
+        .filter(|_| cut.for_views(usize::from(views)) == oag_render::viewport::Cut::Vertical);
+    let (arcade, elimination) = vertical.map_or(
+        (authored.arcade, authored.elimination),
+        |vertical| (vertical.arcade, vertical.elimination),
+    );
     let roots = match mode {
-        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => authored.arcade,
-        Mode::Eliminator => authored.elimination,
+        Mode::SingleRace | Mode::Tournament | Mode::Head2Head => arcade,
+        Mode::Eliminator => elimination,
         Mode::TimeTrial | Mode::SpeedLap | Mode::Zone => return None,
     };
     let mut layouts = Vec::new();
@@ -371,9 +381,20 @@ fn split_assets(
         layouts.push(composed.layout);
     }
     let layouts: [oag_hud::Layout; 2] = layouts.try_into().ok()?;
+    let (view, step) = match vertical {
+        Some(vertical) => {
+            let width = vertical.view_width as f32;
+            ((width, space.size.1), (width, 0.0))
+        }
+        None => {
+            let height = authored.view_height as f32;
+            ((space.size.0, height), (0.0, height))
+        }
+    };
     Some(oag_hud::SplitAssets {
         layouts,
-        view: (space.size.0, authored.view_height as f32),
+        view,
+        step,
     })
 }
 

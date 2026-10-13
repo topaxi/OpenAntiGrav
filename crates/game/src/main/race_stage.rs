@@ -525,7 +525,11 @@ impl RaceStage {
                         encoder,
                         view,
                         progress,
-                        oag_game::hud_views::panel_viewport(self.race.views_drawn(), viewport),
+                        oag_game::hud_views::panel_viewport(
+                            self.race.views_drawn(),
+                            self.race.cut(),
+                            viewport,
+                        ),
                     );
                 }
                 if let Some(hud) = &mut self.hud

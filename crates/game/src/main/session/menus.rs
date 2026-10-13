@@ -242,6 +242,8 @@ impl Session {
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
+        model.supply(menu::ValueSource::PlayerCounts, &shell.player_counts);
+        model.supply(menu::ValueSource::SplitCuts, &shell.split_cuts);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
@@ -652,7 +654,13 @@ impl Session {
         }
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
-            menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
+                // On a title whose race box authors a head count, two people mean the
+                // seats are claimed first (`Session::open_authored_split`).
+                if !self.open_authored_split() {
+                    self.start_race_box();
+                }
+            }
             menu::MenuEvent::Fired(menu::Action::OpenSplitScreen) => self.open_split_screen(),
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for

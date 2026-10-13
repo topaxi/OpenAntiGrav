@@ -273,6 +273,7 @@ impl Overlay {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         readouts: Vec<Readout>,
+        cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) {
         let frame = views_frame(&crate::hud_views::view_draws(
@@ -280,6 +281,7 @@ impl Overlay {
             self.split.as_ref(),
             self.split_hud.as_ref(),
             readouts,
+            cut,
             viewport,
             self.space,
         ));

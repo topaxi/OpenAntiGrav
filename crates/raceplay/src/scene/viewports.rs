@@ -96,7 +96,7 @@ impl Scene {
         zone_spectrum: &[f32],
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
-        let rects = oag_render::viewport::layout(race.views_drawn(), area);
+        let rects = race.view_rects(area);
         let mut stats = SceneStats::default();
         for (slot, rect) in rects.into_iter().enumerate() {
             race.set_viewpoint(slot);

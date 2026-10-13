@@ -515,6 +515,13 @@ pub struct RaceSetup {
     /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
     /// row's label in the front end's own string table.
     pub weapons: Vec<(String, String)>,
+    /// The `NumberOfPlayers` list's entries, in order: `1` and `2` on Wipeout HD/Fury, whose
+    /// race box authors local split screen ([`oag_title::FrontEnd::local_split`]). Each is
+    /// both the stored value and the label (the entry authors a literal `string`).
+    pub players: Vec<String>,
+    /// The `SplitScreen` list's entries as string ids, in order: `RB_HORIZ`, `RB_VERT` on HD.
+    /// The id is the stored value; the label is the id in the front end's string table.
+    pub cuts: Vec<String>,
 }
 
 impl RaceSetup {
@@ -531,10 +538,70 @@ impl RaceSetup {
             .map(|(id, value)| oag_ui::menu::Choice::labelled(value, strings.get_or_id(id)))
             .collect()
     }
+
+    /// The `PLAYERS` row's options: the authored literals, stored and shown as spelled.
+    #[must_use]
+    pub fn player_choices(&self) -> Vec<oag_ui::menu::Choice> {
+        self.players
+            .iter()
+            .map(oag_ui::menu::Choice::plain)
+            .collect()
+    }
+
+    /// The `SPLIT SCREEN` row's options: stored as the disc's string id, shown as its text
+    /// in the language `strings` is for.
+    #[must_use]
+    pub fn cut_choices(
+        &self,
+        strings: &oag_ui::language::StringTable,
+    ) -> Vec<oag_ui::menu::Choice> {
+        self.cuts
+            .iter()
+            .map(|id| oag_ui::menu::Choice::labelled(id, strings.get_or_id(id)))
+            .collect()
+    }
 }
 
-/// The race box's `Single Player` lists off `name` - see [`RaceSetup`].
+/// The race box's `Single Player` lists - see [`RaceSetup`]: the `KILLS` and `WEAPONS` rows'
+/// off [`oag_title::FrontEnd::race_setup`], the local split's off
+/// [`oag_title::FrontEnd::local_split`]. Each is read only where the title names its file.
 pub(super) fn read_race_setup(
+    archives: &mut oag_assets::Archives,
+    front_end: &oag_title::FrontEnd,
+    report: &mut Vec<String>,
+) -> RaceSetup {
+    let mut setup = read_setup_lists(archives, front_end.race_setup, report);
+    if let Some(name) = front_end.local_split {
+        match read_xml(archives, name) {
+            Ok(xml) => {
+                setup.players = list_entries(&xml, "NumberOfPlayers")
+                    .into_iter()
+                    .map(|(string, _)| string)
+                    .collect();
+                setup.cuts = list_entries(&xml, "SplitScreen")
+                    .into_iter()
+                    .map(|(string, _)| string)
+                    .collect();
+                report.push(format!(
+                    "{name}: split setup NumberOfPlayers {:?}, SplitScreen {:?}",
+                    setup.players, setup.cuts
+                ));
+            }
+            Err(error) => report.push(format!(
+                "{name}: {error:#} - no PLAYERS or SPLIT SCREEN row values"
+            )),
+        }
+    }
+    setup
+}
+
+fn read_xml(archives: &mut oag_assets::Archives, name: &str) -> anyhow::Result<String> {
+    let blob = archives.read_name(name).map_err(anyhow::Error::from)?;
+    fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+}
+
+/// The `KILLS` and `WEAPONS` lists off `name`.
+fn read_setup_lists(
     archives: &mut oag_assets::Archives,
     name: Option<&str>,
     report: &mut Vec<String>,
@@ -558,6 +625,7 @@ pub(super) fn read_race_setup(
                 .into_iter()
                 .filter_map(|(string, value)| Some((string, value?)))
                 .collect(),
+            ..RaceSetup::default()
         },
         Err(error) => {
             report.push(format!(
@@ -620,6 +688,11 @@ fn list_entries(xml: &str, list: &str) -> Vec<(String, Option<String>)> {
     body.split('<')
         .filter_map(|tag| {
             let tag = &tag[..tag.find('>').unwrap_or(tag.len())];
+            // The row's own settings (`<Values idstring="RB_NUMP" x= ...>`): its
+            // `idstring` is the row's label, not one of its entries.
+            if tag.split_whitespace().next() == Some("Values") {
+                return None;
+            }
             let attribute = |key: &str| {
                 let rest = tag.split(&format!(" {key}=\"")).nth(1)?;
                 rest.split('"').next().map(str::to_string)
@@ -654,5 +727,29 @@ mod race_setup_tests {
             ]
         );
         assert!(list_entries("<List name=\"Mode\"/>", "Eliminations").is_empty());
+    }
+
+    /// HD's lists put the row's own `idstring` on a `Values` tag ahead of the entries: that is
+    /// the label, not an entry.
+    #[test]
+    fn a_rows_own_values_tag_is_not_one_of_its_entries() {
+        let xml = r#"<List name="NumberOfPlayers" global="NumberOfPlayers" default="1" delay="0.35">
+      <Values idstring="RB_NUMP" x="160" y="370" font="small"></Values>
+      <Entry string="1" intvalue="14"></Entry>
+      <Entry string="2" intvalue="15"></Entry>
+    </List>
+    <List name="SplitScreen" global="SplitScreen" default="RB_HORIZ">
+      <Values idstring="RB_SPLSCR" x="160" y="420" IDCantFocusString="FE_OFF"></Values>
+      <Entry idstring="RB_HORIZ" intvalue="18"></Entry>
+      <Entry idstring="RB_VERT" intvalue="19"></Entry>
+    </List>"#;
+        let ids = |list| -> Vec<String> {
+            list_entries(xml, list)
+                .into_iter()
+                .map(|(string, _)| string)
+                .collect()
+        };
+        assert_eq!(ids("NumberOfPlayers"), ["1", "2"]);
+        assert_eq!(ids("SplitScreen"), ["RB_HORIZ", "RB_VERT"]);
     }
 }

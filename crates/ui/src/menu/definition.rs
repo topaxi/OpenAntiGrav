@@ -504,7 +504,7 @@ impl Definition {
                         action: Action::OpenSplitScreen,
                         ..
                     }
-                )
+                ) && !is_authored_split_row(entry)
             });
         }
     }
@@ -618,6 +618,28 @@ impl Definition {
         // `Single Player` screen, which only a title with a
         // `FrontEnd::race_setup` file has: elsewhere the row would draw
         // permanently unusable, the reason the VARIANT row is dropped too.
+        // The local split's two rows are the disc's where the race box authors them
+        // ([`oag_title::FrontEnd::local_split`]), and then they are the entry: our generic
+        // SPLIT SCREEN row goes (the authored place wins). Everywhere else the rows go and
+        // the generic one stays.
+        let authors_split = title
+            .front_end
+            .is_some_and(|front_end| front_end.local_split.is_some());
+        for page in &mut self.pages {
+            page.retain_rows(|entry| {
+                if authors_split {
+                    !matches!(
+                        entry,
+                        Entry::Run {
+                            action: Action::OpenSplitScreen,
+                            ..
+                        }
+                    )
+                } else {
+                    !is_authored_split_row(entry)
+                }
+            });
+        }
         let reads_setup = title
             .front_end
             .is_some_and(|front_end| front_end.race_setup.is_some());
@@ -645,6 +667,15 @@ impl Definition {
             });
         }
     }
+}
+
+/// The race box's `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows, the two a title's authored
+/// local split adds.
+fn is_authored_split_row(entry: &Entry) -> bool {
+    matches!(
+        entry.setting(),
+        Some("race.players" | "race.split_cut")
+    )
 }
 
 /// Looks `string_id` up in `strings`, falling back to `literal` when it names

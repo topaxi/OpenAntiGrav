@@ -706,6 +706,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         language_plugins,
         options.language.as_deref(),
         options.views,
+        options.cut,
         &mut report,
     );
 
