@@ -28,10 +28,11 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
-    /// The generic SPLIT SCREEN row: opens the screen with nobody seated, cut top and bottom.
+    /// The generic SPLIT SCREEN row's (Omega, 2048): opens the screen with nobody seated, up
+    /// to the grid's eight, cut top and bottom.
     pub(crate) fn open_split_screen(&mut self) {
         self.split_cut = Cut::Horizontal;
-        self.open_join(("OAG_MENU_SPLIT_SCREEN", "SPLIT SCREEN"));
+        self.open_join(None, ("OAG_MENU_SPLIT_SCREEN", "SPLIT SCREEN"));
     }
 
     /// A main-menu split row fired: the RACE page opens as a split-screen race box, and the
@@ -55,10 +56,13 @@ impl Session {
     /// The split-screen race box's START: the join screen, titled by the row that opened
     /// the box.
     pub(crate) fn open_split_join(&mut self) {
-        self.open_join(match self.split_cut {
-            Cut::Vertical => ("OAG_MENU_SPLIT_VERTICAL", "SPLIT SCREEN VERTICAL"),
-            Cut::Horizontal => ("OAG_MENU_SPLIT_HORIZONTAL", "SPLIT SCREEN HORIZONTAL"),
-        });
+        self.open_join(
+            None,
+            match self.split_cut {
+                Cut::Vertical => ("OAG_MENU_SPLIT_VERTICAL", "SPLIT SCREEN VERTICAL"),
+                Cut::Horizontal => ("OAG_MENU_SPLIT_HORIZONTAL", "SPLIT SCREEN HORIZONTAL"),
+            },
+        );
     }
 
     /// Ends the split-screen race box once the menu is no longer on the RACE page, so a
@@ -74,8 +78,40 @@ impl Session {
         }
     }
 
-    /// Opens the screen with nobody seated, headed by the text of `title`.
-    fn open_join(&mut self, title: (&str, &str)) {
+    /// The head count the race box's `NUMBER OF PLAYERS` row holds
+    /// ([`oag_game::split_screen::authored_people`]).
+    pub(crate) fn authored_people(&self) -> usize {
+        self.shell.as_ref().map_or(1, |shell| {
+            oag_game::split_screen::authored_people(
+                shell.title,
+                &shell.player_counts,
+                &self.settings.race.players,
+            )
+        })
+    }
+
+    /// The cut the race box's `SPLIT SCREEN` row holds
+    /// ([`oag_game::split_screen::authored_cut`]).
+    fn authored_cut(&self) -> oag_render::viewport::Cut {
+        self.shell.as_ref().map_or(Default::default(), |shell| {
+            oag_game::split_screen::authored_cut(&shell.split_cuts, &self.settings.race.split_cut)
+        })
+    }
+
+    /// The race box's START with the `NUMBER OF PLAYERS` row on two: the join screen of
+    /// exactly that many seats first, which only claims the devices, and then Track Select
+    /// and each seat's Ship Select as the generic entry does. Returns whether it opened.
+    pub(crate) fn open_authored_split(&mut self) -> bool {
+        let people = self.authored_people();
+        if people < 2 {
+            return false;
+        }
+        self.open_join(Some(people), ("OAG_MENU_SPLIT_SCREEN", "SPLIT SCREEN"));
+        true
+    }
+    /// The screen, for `people` seats all of which must be taken, or the grid's, headed by
+    /// the text of `title`.
+    fn open_join(&mut self, people: Option<usize>, title: (&str, &str)) {
         let Some(shell) = self.shell.as_ref() else {
             return;
         };
@@ -91,7 +127,10 @@ impl Session {
             back: say("OAG_MENU_BACK", "BACK"),
         };
         if let Stage::Menu(stage) = &mut self.stage {
-            stage.join = Some(JoinStage::new(labels));
+            stage.join = Some(match people {
+                Some(people) => JoinStage::for_people(labels, people),
+                None => JoinStage::new(labels),
+            });
         }
     }
 
@@ -190,9 +229,17 @@ impl Session {
                 let Stage::Menu(stage) = &mut self.stage else {
                     return;
                 };
+                // The race box authored the head count: START waits for everyone.
+                if stage.join.as_ref().is_some_and(|open| !open.screen().can_start()) {
+                    self.play_navs(Some(Nav::Decline));
+                    return;
+                }
                 let Some(open) = stage.join.take() else {
                     return;
                 };
+                if self.authored_people() >= 2 {
+                    self.split_cut = self.authored_cut();
+                }
                 self.play_navs(Some(Nav::Accept));
                 if open.lobby().count() > 1 {
                     self.split_lobby = Some(open.lobby().clone());

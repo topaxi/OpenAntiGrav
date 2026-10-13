@@ -266,6 +266,7 @@ impl Overlay {
     /// lands before the submission's commands, so two draws recorded into one
     /// encoder would both show the last one's numbers. See
     /// `oag_raceplay::Scene::render_viewports` for the same trap in the scene.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_views(
         &mut self,
         device: &wgpu::Device,
@@ -273,6 +274,7 @@ impl Overlay {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         readouts: Vec<Readout>,
+        cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) {
         let frame = views_frame(&crate::hud_views::view_draws(
@@ -280,6 +282,7 @@ impl Overlay {
             self.split.as_ref(),
             self.split_hud.as_ref(),
             readouts,
+            cut,
             viewport,
             self.space,
         ));

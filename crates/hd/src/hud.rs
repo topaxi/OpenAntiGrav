@@ -73,8 +73,9 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
 /// include missing and nothing skipped, and player 1's widgets extend 540
 /// further down than player 0's. `crates/game/tests/split_hud_ground_truth.rs`
 /// re-derives both from the archives. Not in [`ROOTS`], which stays the
-/// single-screen set. Wo3 and 2097 skins, the Zone layout and the `vert_`
-/// left-and-right variants are shipped and not wired.
+/// single-screen set. The `vert_` left-and-right twins are
+/// [`oag_title::hud::VerticalLayouts`], read for a race cut vertically; Wo3 and 2097 skins
+/// and the Zone layout are shipped and not wired.
 pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
     arcade: [
         "/data/xml/splitscreen_hud/splitscreen_hud_0.xml",
@@ -85,6 +86,17 @@ pub const SPLIT: oag_title::hud::SplitLayouts = oag_title::hud::SplitLayouts {
         "/data/xml/splitscreen_hud/splitscreen_elimination_hud_1.xml",
     ],
     view_height: 540,
+    vertical: Some(oag_title::hud::VerticalLayouts {
+        arcade: [
+            "/data/xml/splitscreen_hud/vert_splitscreen_hud_0.xml",
+            "/data/xml/splitscreen_hud/vert_splitscreen_hud_1.xml",
+        ],
+        elimination: [
+            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_0.xml",
+            "/data/xml/splitscreen_hud/vert_splitscreen_elimination_hud_1.xml",
+        ],
+        view_width: 960,
+    }),
 };
 
 /// How HD's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

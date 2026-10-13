@@ -585,6 +585,16 @@ pub struct FrontEnd {
     /// `KILLS` row offers (see `oag_game::boot::kill_targets`). `None` on a
     /// title whose setup page is unread, which shows no kill target to pick.
     pub race_setup: Option<&'static str>,
+    /// The definition whose race box `Single Player` screen authors the local split
+    /// screen's two lists - `NumberOfPlayers` (the people, `1` and `2`) and `SplitScreen`
+    /// (`RB_HORIZ`, `RB_VERT`) - or `None` on a title whose race box authors neither.
+    /// Wipeout HD/Fury's `racebox_definition.xml`. A title that names it has the lists
+    /// as rows on its RACE page and no generic SPLIT SCREEN row (the authored place
+    /// wins); every other title keeps its own entry. Separate from [`Self::race_setup`]
+    /// on purpose: naming this must not switch on the `KILLS` and `WEAPONS` rows, which
+    /// HD's `Single Player` authors in a shape (`Slider`) that file's reader does not
+    /// read.
+    pub local_split: Option<&'static str>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///

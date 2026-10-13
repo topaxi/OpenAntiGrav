@@ -243,6 +243,8 @@ impl Session {
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
+        model.supply(menu::ValueSource::PlayerCounts, &shell.player_counts);
+        model.supply(menu::ValueSource::SplitCuts, &shell.split_cuts);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
@@ -564,7 +566,10 @@ impl Session {
             } else {
                 settings::web::WEB_ONLY_ROWS.contains(&key)
             };
-            if !model.seed(key, &value) && !dropped {
+            // An empty pick is "untouched": the row keeps its list's first entry, and the
+            // race box's split rows are dropped on every title that authors no such list.
+            let untouched = matches!(&value, menu::Value::Text(text) if text.is_empty());
+            if !model.seed(key, &value) && !dropped && !untouched {
                 warn!("nothing in the menus edits {key}");
             }
         }
@@ -657,7 +662,13 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::LaunchRace) if self.split_race_box => {
                 self.open_split_join();
             }
-            menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
+                // On a title whose race box authors a head count, two people mean the
+                // seats are claimed first (`Session::open_authored_split`).
+                if !self.open_authored_split() {
+                    self.start_race_box();
+                }
+            }
             menu::MenuEvent::Fired(menu::Action::OpenSplitScreen) => self.open_split_screen(),
             menu::MenuEvent::Fired(menu::Action::OpenSplitVertical) => {
                 self.open_split_race_box(Cut::Vertical);

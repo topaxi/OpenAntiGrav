@@ -304,6 +304,15 @@ pub enum ValueSource {
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
     /// list will not read; a title with no such list has the row dropped.
     Weapons,
+    /// The people the race box's `PLAYERS` row offers, off the disc's own
+    /// `NumberOfPlayers` list (`oag_game::boot::RaceSetup::players`). Empty only if the
+    /// list will not read; a title whose race box authors none has the row dropped
+    /// (`Definition::drop_rows_picked_on_screen`).
+    PlayerCounts,
+    /// The cuts the race box's `SPLIT SCREEN` row offers, off the disc's own `SplitScreen`
+    /// list: stored as its string id (`RB_HORIZ`, `RB_VERT`), shown as that id's text
+    /// (`oag_game::boot::RaceSetup::cut_choices`). Empty only if the list will not read.
+    SplitCuts,
     /// Every mod this run has, the built-in one first: its name as the label, its id as the
     /// value, and a mod that did not load listed dimmed with its error as the reason
     /// (`oag_game::mods::Listing`). The MODS page is read-only, so the row only moves the
@@ -340,6 +349,8 @@ impl ValueSource {
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
             Self::Weapons => "weapons",
+            Self::PlayerCounts => "player_counts",
+            Self::SplitCuts => "split_cuts",
             Self::Mods => "mods",
         }
     }
@@ -372,6 +383,8 @@ impl ValueSource {
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
             "weapons" => Some(Self::Weapons),
+            "player_counts" => Some(Self::PlayerCounts),
+            "split_cuts" => Some(Self::SplitCuts),
             "mods" => Some(Self::Mods),
             _ => None,
         }

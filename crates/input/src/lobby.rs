@@ -61,11 +61,16 @@ pub enum Outcome {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lobby<D = gilrs::GamepadId> {
     seats: Vec<Device<D>>,
+    /// How many seats there are: the grid's, or fewer where a race box authored a head count.
+    capacity: usize,
 }
 
 impl<D> Default for Lobby<D> {
     fn default() -> Self {
-        Self { seats: Vec::new() }
+        Self {
+            seats: Vec::new(),
+            capacity: oag_gameplay::MAX_PLAYERS,
+        }
     }
 }
 
@@ -74,6 +79,21 @@ impl<D: Copy + PartialEq> Lobby<D> {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// An empty lobby of `capacity` seats, at most the grid's.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            seats: Vec::new(),
+            capacity: capacity.clamp(1, oag_gameplay::MAX_PLAYERS),
+        }
+    }
+
+    /// How many seats there are.
+    #[must_use]
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 
     /// Whoever is seated, seat 0 first.
@@ -99,7 +119,7 @@ impl<D: Copy + PartialEq> Lobby<D> {
         if self.seat_of(device).is_some() {
             return Outcome::Nothing;
         }
-        if self.seats.len() >= oag_gameplay::MAX_PLAYERS {
+        if self.seats.len() >= self.capacity {
             return Outcome::Full;
         }
         self.seats.push(device);

@@ -43,16 +43,20 @@ the measurements are in
   through it. Runtime reach: `oag-view`'s PS3 model path (`crates/view`); the
   game's own loader holds its archives already.
 
+- **Every raycast walks one tree over the whole world** (2026-10-13). A
+  soup's own BVH landed first (`bd15f779d`), but `CollisionWorld` still asked
+  each of a circuit's ~200 colliders in turn, and that loop was most of a
+  race's and a speed plan's CPU. `CollisionWorld` now holds one `Bvh` over
+  every triangle, numbered so ascending order is the scan's order; same
+  answers by construction, and the printed output of twelve sim ground truths
+  is identical. Sim tests run about 2x faster in CPU (`ai_roll`'s grid 554 to
+  248 CPU-s), and the game ticks the same code. **Not measured in a race load
+  or in the game's frame time.** Measurements in
+  [`workspace-layout.md`](../../docs/architecture/workspace-layout.md),
+  "The collision world's broadphase".
+
 ## Open
 
-- **Race setup is a linear raycast.** `TriangleSoup::raycast_all` and `raycast`
-  scan every triangle per ray and were 95% of a 2048 `SingleRace` load and
-  `Race::start` (47 s in the test profile, opt-level 2, against 8 s for a
-  `Zone` load) and 53% of an `ai_roll` grid race; measured and written up in
-  `docs/architecture/workspace-layout.md`, "Re-profiling the 2048 and Omega
-  tail". A spatial index returning hits in the same order is the biggest load
-  and per-tick lever found so far. It is determinism-bound (`oag-physics`), so
-  it is a physics lane with a state-hash check, not a test change. 1-2 days.
 - **Archive walks that sniff by decompressing everything.** The test suite had
   this shape in a dozen places (`sblk`, `.vex`, `.pob` walks over `WADS2.WAD`);
   `crates/formats/tests/sblk_banks/` and `crates/vex/tests/wad_walk/` now sniff
@@ -67,5 +71,6 @@ the measurements are in
    after (the commit "Archive::peek decodes only the head of an LZSS entry"),
    and an HD and an Omega race load before and after the BC7 and PSARC changes
    (their commits name them), and record each under "Done". An hour.
-2. The spatial index for `TriangleSoup`, as its own physics lane. 1-2 days.
-3. Port the sniff into `oag-wad sounds`. 15 minutes.
+2. Port the sniff into `oag-wad sounds`. 15 minutes.
+3. Measure a race load and a frame's tick time before and after the world
+   broadphase (`24d715ff0`, `658d4654b`). 30 minutes.

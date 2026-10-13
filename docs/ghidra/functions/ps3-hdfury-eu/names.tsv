@@ -724,3 +724,4 @@
 0x002d2630	function	Quake_SampleSpan	75	quake.md
 0x002d3760	function	Quake_UpdateSpan	70	quake.md
 0x00ae98c0	data	g_quake	85	quake.md
+0x002497d8	function	RaceBox_UpdateTrialPadlocks	72	racebox-padlocks.md

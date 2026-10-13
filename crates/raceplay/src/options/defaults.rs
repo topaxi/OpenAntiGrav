@@ -47,6 +47,7 @@ impl Default for Options {
             collision: false,
             opponents: false,
             views: 1,
+            cut: oag_render::viewport::Cut::Horizontal,
             trail_sparks: false,
             seed: None,
             pose: None,

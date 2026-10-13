@@ -41,6 +41,19 @@ camera better than two tall slivers. View `i` follows grid slot `i`, left to rig
 then top to bottom. Every count tiles the area exactly (a unit test over 1 to 8
 and three odd sizes), and 1, 2, 4 and 8 are screenshot-verified on Pulse.
 
+**Two views can be cut left and right instead** (`oag_render::viewport::Cut::Vertical`,
+2026-10-13, `hd-authored-split-setup`): two full-height columns with the same 2 pixel gap.
+**The choice between the cuts is the disc's** (HD's `SplitScreen` list, below); the
+geometry is **chosen, not measured**. A cut means something for two views only: any other
+count is cut in rows whatever was asked (`Cut::for_views`). `Race::cut` and
+`Race::view_rects` are the one answer both the scene (`Scene::render_viewports`) and the HUD
+(`hud_views::view_draws`, `placements`, `panel_viewport`) read, so a vertical scene cannot
+get a horizontal HUD; the cut is view state, outside `RaceSim`, and the state hash does not
+hold it. `--split-cut horizontal|vertical` sets it for `--players 2` on the command line;
+on HD the race box's row sets it. A column is about 0.9 as wide as it is tall at 16:9, so
+`fit_vertical_fov` widens the vertical field exactly as it does for any narrow view, and the
+camera needs nothing else.
+
 **Field of view needs no new code.** The aspect comes from the view's rectangle and
 `oag_render::camera::fit_vertical_fov` already keeps the authored vertical field at
 or above the PSP's 16:9-ish shape and widens it below, so a wide strip sees more to
@@ -202,9 +215,19 @@ composed like any HD HUD (16 and 15 files, 109 and 108 sprites, no include missi
 nothing skipped). Both are authored in the whole 1920x1080 screen, and the `_1` is
 the `_0` moved down exactly 540: the extents of their widgets differ by 540 in y.
 So player `i` is a top-and-bottom half with its layout sitting in it, which is the
-shape `oag_render::viewport::layout` already cuts for two views. A `vert_` twin of
-each does the same with 960 in x for a left and right split, and the family covers
-two players, so it is shipped and not wired. The reticle is authored view-relative
+shape `oag_render::viewport::layout` cuts for two views. **The `vert_` twins are wired
+(2026-10-13)** for a left-and-right cut: `vert_splitscreen_hud_{0,1}.xml` (`DATA03`) and
+`vert_splitscreen_elimination_hud_{0,1}.xml` (`DATA00`), each pair one view (960) apart in x
+and the same height (`oag_title::hud::VerticalLayouts`, `oag_hd::hud::SPLIT.vertical`; the
+four compose with no include missing, 109 sprites each in the arcade pair, the layout
+reaching y 1,048 against the horizontal family's 734). `SplitAssets` carries the step to
+the next player (`step`, `region(slot)`): down one view's height for the rows, right one
+view's width for the columns, and the reticle's view is 960x1080. The arcade vertical
+file's own comment asks for "separate sights" and includes the whole-screen sights, so a
+vertical view's reticle is the arcade one placed into the column. Single Race, Tournament,
+Head2Head and the Eliminator read these on a vertical cut; Time Trial, Speed Lap and Zone
+(no authored pair) draw this project's `SplitHud_HD.toml` by view shape, as they do in rows.
+The family covers two players, so any other count never reads it. The reticle is authored view-relative
 (`splitscreen_sights.xml` places its models off screen and the runtime places
 them), so the race projects it into a 1920x540 view and the draw moves it down by
 the view's own offset. **2048 and Omega ship the same four files**
@@ -742,7 +765,8 @@ SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
 | Title | Where the entry is | Authored by the original? |
 | --- | --- | --- |
 | Pulse (both pressings), Pure | **SPLIT SCREEN VERTICAL and SPLIT SCREEN HORIZONTAL right after RACE CAMPAIGN** (Pure: after SINGLE PLAYER), then RACEBOX; no SPLIT SCREEN row under RACEBOX any more. See "The Pulse and Pure entry (2026-10-13, `split-entry-align`)" | **Pulse PS2: yes**, `MainMenu_Definition.xml` `Mode` lists `FE_RACE_CAM`, `FE_RACE_CAM_SS` ("SPLIT SCREEN VERTICAL"), `FE_RACE_CAM_SSH` ("SPLIT SCREEN HORIZONTAL"), `FE_RACEBOX`, ... with `FE_HELP_SS` ("Play in multiplayer split screen mode") as the help for both. **PSP Pulse: borrowed** from the PS2 pressing (its own assets). **Pure: borrowed** (no split screen of its own, so it mirrors Pulse). No confidence score on the borrowed placement |
-| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's real `racebox_definition.xml` (`data09`, 15,805 bytes) carries the same two lists (corrected 2026-10-13: the earlier "neither list" came from `scripts/psarc.py` mis-mapping PS4 paths; see [hd-frontend.md](../formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)); not wired either |
+| HD | **The race box's own rows, as the disc authors them** (2026-10-13, `hd-authored-split-setup`): on the RACE page after AI DIFFICULTY, `NUMBER OF PLAYERS` (`1`, `2`) then `SPLIT SCREEN` (`HORIZONTAL`, `VERTICAL`), read from `racebox_definition.xml`'s `NumberOfPlayers` and `SplitScreen` lists (`RB_NUMP`, `RB_SPLSCR`, `RB_HORIZ`, `RB_VERT`). The cut row is greyed while the count is one (the authored `IDCantFocusString="FE_OFF"`: this build greys it and keeps the stored cut, it does not draw `FE_OFF` over it). START with two people opens the join screen **for exactly two seats** and refuses START until both are taken (chosen: the authored count is the head count), then HD's Track Select, `Ship Select - Player 1` and `Player 2`, then the race in the chosen cut. **These rows replace our generic SPLIT SCREEN row on HD** (the authored place wins; `Definition::drop_rows_picked_on_screen`); the row stays on Pulse, Pure, Omega and 2048. Two people is the authored maximum, so HD has **no route to three or more** from the menus; `--players N` still cuts up to eight. On an integrated GPU HD offers no split, and the two rows go with the row (`Definition::drop_split_screen`). The padlock beside `NumberOfPlayers` is a trial-build lock, not a progression unlock: [racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md), confidence 72, so two players are unlocked here |
+| Omega | The generic row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join (up to eight), then Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread). Omega's real `racebox_definition.xml` (`data09`, 15,805 bytes) carries HD's `NumberOfPlayers` and `SplitScreen` lists (**checked, applies, not wired**, corrected 2026-10-13: an earlier "neither list" came from `scripts/psarc.py` mis-mapping PS4 paths, see [hd-frontend.md](../formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)), so wiring HD's rows on Omega is open and until then Omega keeps our entry. Omega ships HD's `vert_` files too (**checked, applies, not wired**) |
 | 2048 | A third extra tile, SPLIT SCREEN, under RACEBOX and REMIX in the left column of `GameModeChoice` (`oag_ui::frontend::EXTRA_TILES[2]`; click or pad); it opens the join screen, then the race (the placeholder menu has no Track or Ship Select of 2048's own) | **No.** The authored tiles are single player campaign, online campaign, ad-hoc and cross-play; 2048 ships a `SplitScreen_hud` family but its front end has no local entry. **Chosen, not measured** |
 
 HD's other multiplayer files (`multiplayer_definition.xml`, `DATA02`) are the online
@@ -793,10 +817,13 @@ CSplitV`/`H` -> `Team SelectionSplit`.
   START is also where HD's authored head count seats its people. Two people is the authored
   flow; three to eight is our extension.
 - **VERTICAL vs HORIZONTAL**: the row sets `Session::split_cut` (`oag_render::viewport::Cut`),
-  which `split_screen::seat_for_launch` hands to `Race::set_cut`; `Race::cut()` is `Vertical`
-  for exactly two views and `Horizontal` for any other count. **Open: the viewport layout
-  and the HUD still cut top and bottom** until the left-and-right layout lands
-  (`hd-authored-split-setup`); SPLIT SCREEN VERTICAL therefore draws top and bottom today.
+  the one HD's authored `SplitScreen` row and `--split-cut` set too; `Options::cut` and
+  `split_screen::seat_for_launch` carry it to the race. SPLIT SCREEN VERTICAL therefore draws two
+  full-height columns on Pulse and Pure, with the split HUD's tall-view layout from this
+  project's `SplitHud_Pulse.toml` fallback (headless stills at `--players 2 --split-cut vertical
+  --ticks 400` read on PSP Pulse, PS2 Pulse and Pure, 2026-10-13). Three or more people are cut in
+  rows whatever the row said (`Cut::for_views`). The generic SPLIT SCREEN row (Omega, 2048) is cut
+  top and bottom unless `--split-cut` says otherwise.
 
 ### Integrated GPUs (2026-10-13)
 
@@ -904,8 +931,8 @@ does not exist: the race frames are that evidence.
   `4` (the earlier views are black).~~ **Fixed by the once-over-the-area post chain
   (see "Drawing")**; seen again 2026-10-13 (`split-render-cost`): HD at two and four
   views, tick 300 and 1200, draws every view.
-- HD's Wo3 and 2097 skins, its Zone layout and the `vert_` left-and-right family are
-  shipped and not wired. 2048's authored two-view HUD is **checked, differs** (1920x1080
+- HD's Wo3 and 2097 skins and its Zone layout are shipped and not wired (and the Wo3 and
+  2097 `vert_` copies with them). 2048's authored two-view HUD is **checked, differs** (1920x1080
   files in a 960x544 HUD space, needs scaling first) and has no file of ours;
   Omega's other cases and 2048's draw the scaled whole-screen layout.
 - The split-HUD files were looked at in Single Race at every count, and in Zone and
@@ -920,11 +947,14 @@ does not exist: the race frames are that evidence.
   gates another person's fire.
 - ~~HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
   Select is unreachable by menu there.~~ **It always had one** (the `oag-extras` row,
-  revealed under RACEBOX); walked 2026-10-13, join to `Ship Select - Player 2`. Open
-  instead: HD authors `NumberOfPlayers` (1, 2) and `SplitScreen` (horizontal, vertical) lists
-  on its RACEBOX screen, not wired (see "Where the entry is, per title"); the vertical cut
-  has no layout in `oag_render::viewport`; and the join screen's hint line on HD and Omega is
-  small (0.6 of the row scale, under the rows).
+  revealed under RACEBOX); walked 2026-10-13, join to `Ship Select - Player 2`. 
+  **Done, 2026-10-13 (`hd-authored-split-setup`)**: HD's authored `NumberOfPlayers` and
+  `SplitScreen` rows are wired (see "Where the entry is, per title") and the vertical cut
+  exists. Open from it: the authored row draws `FE_OFF` when the cut cannot be focused (this
+  build greys the row and keeps the stored cut); the join screen's hint line on HD and Omega
+  is small (0.6 of the row scale, under the rows); the vertical cut is HD's alone, since no
+  other title authors a choice (`--split-cut` reaches every title and Pulse, Pure, Omega and
+  2048 draw their scaled or file layouts in the columns, not judged by eye).
 - **Omega has no Ship Select in a split**: the 2026-10-13 walk went join, Track Select,
   then the LOADING screen and the two-view race with both HUDs, and nobody picks a ship
   (Omega's own Ship Select is unread, so `open_ship_picker` finds none; the seats fly the

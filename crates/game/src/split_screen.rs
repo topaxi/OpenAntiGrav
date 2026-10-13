@@ -75,6 +75,37 @@ pub fn players_offered(title: &oag_title::Title, device: wgpu::DeviceType, playe
     1
 }
 
+/// The head count the race box's `NUMBER OF PLAYERS` row holds: `pick` read as the disc's
+/// own entry of `counts`, on a title whose race box authors the list
+/// ([`oag_title::FrontEnd::local_split`]); `1` for a pick the list does not hold and on every
+/// other title, where the generic SPLIT SCREEN row is the entry.
+#[must_use]
+pub fn authored_people(
+    title: &oag_title::Title,
+    counts: &[oag_ui::menu::Choice],
+    pick: &str,
+) -> usize {
+    let authored = title
+        .front_end
+        .is_some_and(|front_end| front_end.local_split.is_some());
+    if authored && counts.iter().any(|choice| choice.value == pick) {
+        pick.parse().unwrap_or(1)
+    } else {
+        1
+    }
+}
+
+/// The cut the race box's `SPLIT SCREEN` row holds: `RB_VERT` is left and right, and anything
+/// the disc's own list does not name is the horizontal cut it defaults to.
+#[must_use]
+pub fn authored_cut(cuts: &[oag_ui::menu::Choice], pick: &str) -> oag_render::viewport::Cut {
+    if pick == "RB_VERT" && cuts.iter().any(|choice| choice.value == pick) {
+        oag_render::viewport::Cut::Vertical
+    } else {
+        oag_render::viewport::Cut::Horizontal
+    }
+}
+
 /// Makes `race` an `players`-way split screen and returns the count it settled
 /// on, which is clamped to the craft fielded and to the grid's own cap. `1` -
 /// the default - leaves the race exactly as it was. `cut` is how two views are
@@ -83,8 +114,8 @@ pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) ->
     if players <= 1 {
         return 1;
     }
-    race.set_cut(cut);
     let count = race.set_viewport_count(players);
+    race.set_cut(cut);
     for slot in 0..count.min(MAX_PLAYERS) {
         race.sim.world.controllers[slot] = Controller::Local;
     }
@@ -95,8 +126,8 @@ pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) ->
     count
 }
 
-/// Makes `race` the split screen `lobby` asked for, cut the way `cut` says, and puts each
-/// device on the slot it joined: slots `0..seated` become local players and `assignment` is
+/// Makes `race` the split screen `lobby` asked for and puts each device on the
+/// slot it joined: slots `0..seated` become local players and `assignment` is
 /// [`Lobby::seat`]'s, with `connected` the pads plugged in now. Returns the views the race settled on.
 ///
 /// A lobby with one seat or none is an ordinary race: nothing changes, and the

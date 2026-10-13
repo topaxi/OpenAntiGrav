@@ -51,6 +51,8 @@ OAG_RACE_SPEED_CLASS = { text = "TEMPOKLASSE", human = false }
 OAG_RACE_WEAPONS = { text = "WAFFEN", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "KI-SCHWIERIGKEIT", human = false }
 OAG_RACE_KILLS = { text = "ABSCHÜSSE", human = false }
+OAG_RACE_PLAYERS = { text = "ANZAHL DER SPIELER", human = false }
+OAG_RACE_SPLIT_CUT = { text = "GETEILTER BILDSCHIRM", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "STRECKE", human = false }

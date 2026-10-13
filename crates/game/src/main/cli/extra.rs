@@ -398,6 +398,20 @@ pub(crate) struct DriverArgs {
     /// draws its own slot's HUD. See [`oag_game::split_screen`].
     #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=8))]
     pub(crate) players: u8,
+
+    /// Which way `--players 2` is cut: `horizontal` (one view above the other, the default)
+    /// or `vertical` (side by side). Means nothing for any other count. **Chosen, not
+    /// measured**; on Wipeout HD/Fury the race box's own `SPLIT SCREEN` row sets it. See
+    /// [`oag_render::viewport::Cut`].
+    #[arg(long, default_value = "horizontal", value_parser = ["horizontal", "vertical"])]
+    pub(crate) split_cut: String,
+}
+
+impl DriverArgs {
+    /// `--split-cut` as the type the renderer takes.
+    pub(crate) fn cut(&self) -> oag_render::viewport::Cut {
+        oag_render::viewport::Cut::parse(&self.split_cut).unwrap_or_default()
+    }
 }
 
 /// `--pilot-assist`'s value: a level's token, or `on` for Extreme as the switch spelled it.

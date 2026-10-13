@@ -586,10 +586,9 @@ pub(crate) struct Session {
     /// or the player backs out of the race box's screens (which drop it). `None`
     /// is an ordinary race.
     pub(crate) split_lobby: Option<oag_input::lobby::Lobby>,
-    /// Which way a split race is cut, as the row that opened it said: SPLIT SCREEN VERTICAL
-    /// is [`Cut::Vertical`], every other entry the horizontal cut. Kept across the race, so a
-    /// restart from the end screens, which skips the menus, is cut the same way. Read by
-    /// `oag_game::split_screen::seat_for_launch`; it means nothing for any count but two.
+    /// Which way a two-person race is cut: `--split-cut` at the start, then the race box's
+    /// `SPLIT SCREEN` row on a title that authors it, set when the join screen starts the
+    /// race. Kept across a restart from the end screens, which keeps the seats.
     pub(crate) split_cut: oag_render::viewport::Cut,
     /// Set while the RACE page is open as a split-screen race box (`Session::open_split_race_box`):
     /// its START goes through the join screen first. Cleared when the menu leaves that
@@ -735,6 +734,11 @@ pub(crate) struct Shell {
     /// The `WEAPONS` row's two states, valued by the disc's `On`/`Off` and
     /// labelled by its own `FE_ON`/`FE_OFF` strings.
     pub(crate) weapons: Vec<menu::Choice>,
+    /// The race box's `PLAYERS` row, off the disc's own `NumberOfPlayers` list. Empty on a
+    /// title whose race box authors none.
+    pub(crate) player_counts: Vec<menu::Choice>,
+    /// The race box's `SPLIT SCREEN` row, off the disc's own `SplitScreen` list.
+    pub(crate) split_cuts: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_hud::sprite::Sheet,
     /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
@@ -866,6 +870,8 @@ impl Shell {
                 .map(menu::Choice::plain)
                 .collect(),
             weapons: boot_shell.race_setup.weapon_choices(&boot_shell.strings),
+            player_counts: boot_shell.race_setup.player_choices(),
+            split_cuts: boot_shell.race_setup.cut_choices(&boot_shell.strings),
             // The disc's own names for its stylings, so the row offers what the
             // source has rather than a list this build holds.
             front_end_styles: boot_shell

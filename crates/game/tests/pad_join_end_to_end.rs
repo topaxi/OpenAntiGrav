@@ -272,3 +272,47 @@ fn the_cut_the_row_chose_reaches_the_race_for_two_views_only() {
         "an ordinary race is cut as it always was"
     );
 }
+/// The cut reaches the race through both ways a split is made: `apply` (the command line and
+/// a restart) and `seat` (the join screen's lobby). Two views cut vertically are columns,
+/// the same race cut horizontally is rows, and a lobby of one is no split at all.
+#[test]
+fn the_cut_reaches_the_race_through_apply_and_seat() {
+    use oag_render::viewport::Cut;
+    const AREA: (f32, f32, f32, f32) = (0.0, 0.0, 1920.0, 1080.0);
+    let mut by_apply = race(2);
+    assert_eq!(split_screen::apply(&mut by_apply, 2, Cut::Vertical), 2);
+    let columns = by_apply.view_rects(AREA);
+    assert!(
+        columns[1].0 > columns[0].0 && columns[0].3 == 1080.0,
+        "{columns:?}"
+    );
+
+    let mut lobby = Lobby::new();
+    lobby.join(Device::Keyboard);
+    lobby.join(Device::Pad(5));
+    let mut by_seat = race(2);
+    let mut assignment = Assignment::<u32>::default();
+    assert_eq!(
+        split_screen::seat(&mut by_seat, &lobby, &mut assignment, &[5], Cut::Vertical),
+        2
+    );
+    assert_eq!(
+        by_seat.view_rects(AREA),
+        columns,
+        "a lobby cuts as apply does"
+    );
+
+    let mut rows = race(2);
+    split_screen::apply(&mut rows, 2, Cut::Horizontal);
+    assert_eq!(rows.view_rects(AREA)[0].2, 1920.0);
+
+    let mut alone = race(2);
+    let mut one = Lobby::new();
+    one.join(Device::Keyboard);
+    let mut assignment = Assignment::<u32>::default();
+    assert_eq!(
+        split_screen::seat(&mut alone, &one, &mut assignment, &[], Cut::Vertical),
+        1
+    );
+    assert_eq!(alone.view_rects(AREA), vec![AREA], "one person is no split");
+}

@@ -107,6 +107,27 @@ pub struct SplitLayouts {
     /// player's layout is authored into. The reticle projects into a screen of
     /// this height and the layout's width.
     pub view_height: u32,
+    /// The left-and-right twins of the above, for a race cut vertically, `None` where the
+    /// title authors none.
+    pub vertical: Option<VerticalLayouts>,
+}
+
+/// A title's authored split-screen HUD for two players cut left and right: the `vert_`
+/// family beside [`SplitLayouts`].
+///
+/// HD authors each as the whole 1920x1080 screen with player `i`'s layout in the `i`th
+/// half of its width, the second the first moved right by exactly half the screen
+/// (`crates/game/tests/split_hud_ground_truth.rs`), so a layout is drawn at the identity over
+/// the screen and the view is the column it sits in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VerticalLayouts {
+    /// Single race, tournament and Head2Head, player 0 then player 1.
+    pub arcade: [&'static str; 2],
+    /// Eliminator, player 0 then player 1.
+    pub elimination: [&'static str; 2],
+    /// The width of one view in the layout's own grid: the half of the screen a player's
+    /// layout is authored into.
+    pub view_width: u32,
 }
 
 /// `reference` with its file extension replaced by `extension`.

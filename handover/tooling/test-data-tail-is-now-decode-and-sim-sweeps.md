@@ -6,7 +6,8 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 
 ## Open
 
-- **`oag_physics::collide::TriangleSoup::raycast_all` and `raycast` are brute force.** They take 53% of an `ai_roll` grid race in perf, and they dominate every simulation test and the game itself. A spatial index has to return hits in the same order, or the state hashes move, so this is a physics lane.
+- **The raycaster is no longer brute force (2026-10-13).** One BVH over every triangle of the world, same answers in the same order; see [`workspace-layout.md`](../../docs/architecture/workspace-layout.md), "The collision world's broadphase". After it, `just test-data` measured 8.4k CPU-s and 610 s against 10.4k and 738 s, and a gdb sample of a 2048 field race still puts most of its time in raycasts under **speed plan learning** (`ensure_speed_plans`: the field's plan, adapted hull plans, route plans), which every race that flies this project's driver pays again.
+- **The tail is decode now.** `omega_gnf` (972 s summed under load, BC7 plus the PSARC reads), `omega_wem` (495 s, ATRAC9 in the third-party `atrac9dec`, whose `floor` goes through `compiler_builtins`' soft float on the baseline x86-64 target) and `omega_music` (196 s).
 - **The remaining 2048 sweeps run their races in series.** That is `ai_fork_split_ground_truth` (125-133 s under load, now the slowest test in an `oag-game` selection), `magstrip_wire_2048_ground_truth`, `zone_airbrake_flaps_ground_truth` and `fire_law_inherit_ground_truth`. If their races are independent, `in_parallel::map` applies unchanged. Check that before using it, and diff the printed output against the serial run, as was done for `ai_roll` and `ram`.
 - **Decode floors:** BC7 is 87% of `omega_gnf_pixels`' CPU (`oag_texture::bcn::bc7`), and ATRAC9 dominates `omega_wem`. Both are real work in production crates already at opt-level 2.
 - **Selection granularity.** A lane in `oag-mesh`, `oag-render` or `oag-fx` selects `oag-game`, which is 55% of test time on its own. That holds because every one of its ~130 test binaries links the whole library.
@@ -14,4 +15,5 @@ The 2026-10-07 gate-speed lane did two things. It removed the HD render tests' p
 ## Next Steps
 
 1. Check `ai_fork_split_ground_truth` for independent races. If it has them, wrap them in `in_parallel::map` and diff the output.
-2. Open a physics lane for a raycast acceleration structure, with the determinism hashes as its gate.
+2. Speed plan learning, a sim lane: sample `ensure_speed_plans` on a Pulse and a 2048 field and find what a plan re-learns per hull that the reference plan already knows. The plans are learned in most of `oag-game`'s simulation tests, so a 2x here is roughly a fifth of `test-data`.
+3. `atrac9dec` at `opt-level = 3` in the test profile, measured on one `omega_wem` shard; a Cargo profile change, so agree it with whoever owns the profiles.
