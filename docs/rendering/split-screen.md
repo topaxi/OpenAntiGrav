@@ -547,7 +547,7 @@ SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
 | Title | Where the entry is | Authored by the original? |
 | --- | --- | --- |
 | Pulse, Pure | SPLIT SCREEN row after REMIX, under RACEBOX (the `oag-extras` mod) | PS2 Pulse authors `Team SelectionSplit` and the split cameras but no join step; the row is **chosen, not measured** |
-| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks the same path and shows both views with its HUD | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's `racebox_definition.xml` (`data09`, 5,475 bytes) carries neither list; where Omega authors local split, if it does, is unread |
+| HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's `racebox_definition.xml` (`data09`, 5,475 bytes) carries neither list; where Omega authors local split, if it does, is unread |
 | 2048 | A third extra tile, SPLIT SCREEN, under RACEBOX and REMIX in the left column of `GameModeChoice` (`oag_ui::frontend::EXTRA_TILES[2]`; click or pad); it opens the join screen, then the race (the placeholder menu has no Track or Ship Select of 2048's own) | **No.** The authored tiles are single player campaign, online campaign, ad-hoc and cross-play; 2048 ships a `SplitScreen_hud` family but its front end has no local entry. **Chosen, not measured** |
 
 HD's other multiplayer files (`multiplayer_definition.xml`, `DATA02`) are the online
@@ -695,9 +695,10 @@ does not exist: the race frames are that evidence.
   on its RACEBOX screen, not wired (see "Where the entry is, per title"); the vertical cut
   has no layout in `oag_render::viewport`; and the join screen's hint line on HD and Omega is
   small (0.6 of the row scale, under the rows).
-- Omega's Ship Select after the join: Omega walks Track Select and the race with both
-  views and HUDs; the per-seat Ship Select was not looked at on Omega (the walk's timing
-  skipped it), and where Omega authors its own is still unread.
+- **Omega has no Ship Select in a split**: the 2026-10-13 walk went join, Track Select,
+  then the LOADING screen and the two-view race with both HUDs, and nobody picks a ship
+  (Omega's own Ship Select is unread, so `open_ship_picker` finds none; the seats fly the
+  settings team and the draw's picks). Where Omega authors its Ship Select is still unread.
 - A seat past the second on the PS2 (the authored page holds two) and every other
   title take Ship Select in turn; a third and later seat's pick is the same
   machinery, but only two seats were walked live.

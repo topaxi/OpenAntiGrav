@@ -970,7 +970,7 @@ a guess.
   `SplitScreen` horizontal or vertical, [hd-frontend.md](../../docs/formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut))
   - not wired, and the vertical cut has no layout; Omega's racebox has neither list and
   where it authors local split is unread; a real integrated adapter was not walked; the
-  per-seat Ship Select was not looked at on Omega.
+  Omega has no Ship Select in a split (join, Track Select, loading, race; its own Ship Select is unread, so no seat picks a ship).
 
 ## Next Steps
 
