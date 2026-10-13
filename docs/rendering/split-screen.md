@@ -308,9 +308,9 @@ craft and shield uniform writes 0.3 ms, scenery clocks and adverts 0.1 ms, the r
 (`render_shadow_passes`), the shadow gather (`upload_shadow_geometry`; every view still
 uploads it with its own matrix), the scenery's animation clocks and the advert cards.
 Each is a function of the craft and the race clock, never the camera: the casters are fixed
-buffers and ranges, the `coverage` fit reads slot 0's model matrix, the sun-occlusion fit is
-each craft's own, the adverts draw through their own authored cameras. Every picture is
-byte-identical to before: 22 stills (six titles at one view, Pulse at two, four and eight,
+buffers and ranges, the coverage fit spans every craft (the `mapped` fit is per view since
+2026-10-13, below), the sun-occlusion fit is each craft's own, the adverts draw through their own authored cameras. Every picture was
+byte-identical to before the hoist (the `mapped` tier at two or more views has changed since, below): 22 stills (six titles at one view, Pulse at two, four and eight,
 Pure, HD, Omega, 2048 and Pulse PS2 at two, and the `mapped` and `original` shadow tiers on
 Pulse and HD) plus seven at tick 1200 (up to eight views) `cmp` equal, each pair taken with the
 shadow tier that reaches the hoisted code. **Not hoistable**, each reads the view's matrix,
@@ -458,9 +458,11 @@ three, ms:
 | 4 | 4.27 / 4.23 -> 4.56 / 4.66 | 4 to 6 | 9.74 -> 13.72 | 3 to 4 |
 | 8 | 8.19 / 8.02 -> 9.49 / 8.96 | 6 to 10 | 11.74 -> 18.86 | 4 to 5 |
 
-On the discrete card a redraw costs about 0.1 ms a view; on the iGPU **about 1 ms of GPU time a
-view past the first**, because the depth pass draws the whole circuit into every map (the track
-is one caster, not culled to the map's box). The `mapped` tier is opt-in and the iGPU split is
+On the discrete card a redraw costs about 0.1 to 0.2 ms a view; on the iGPU **1 to 1.6 ms of GPU
+time a view past the first**, because the depth pass draws the whole circuit into every map (the
+track is one caster, not culled to the map's box). The shared-map alternative costs what main's
+single map does (the "before" column), so that is the price of views two and up getting their
+shadows. The `mapped` tier is opt-in and the iGPU split is
 Pulse and Pure only, but eight views at 18.9 ms miss 60 Hz. **Open**: cull the track caster to
 the fit's box, which would also cheapen the single-view tier (about 1.5 ms of the iGPU's 7.35).
 
@@ -761,7 +763,7 @@ does not exist: the race frames are that evidence.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
   view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
   and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole
-  into every one of those maps, about 1 ms of iGPU time a view.
+  into every one of those maps, 1 to 1.6 ms of iGPU time a view.
 - `--players N > 1` **changes `RaceSim::state_hash`**, because `World::controllers`
   is hashed; the cameras, views and draw do not.
 - Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but

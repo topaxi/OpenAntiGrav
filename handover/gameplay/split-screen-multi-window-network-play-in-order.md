@@ -207,7 +207,7 @@ rendered frame): 47 of 49 stills `cmp` equal to main, the lerp within 0.053 worl
 view and 1.25 to 1.6 ms up to eight, a 60 Hz window neither gains nor loses
 ([split-screen.md](../../docs/rendering/split-screen.md#cost)). The `mapped` depth map is redrawn
 per view around that view's craft (view two's shadows are there where main's had none): about
-0.1 ms of CPU a view on the discrete card and **about 1 ms of iGPU time a view**. **Open from it**:
+0.1 ms of CPU a view on the discrete card and **1 to 1.6 ms of iGPU time a view**. **Open from it**:
 the floor rays (`conform_to_floor`, 1.7 ms a tick on an eight-craft grid, the whole gather) could be
 culled to the craft a view can see or answered from the collision grid's cell lookup; the track is
 drawn whole into every `mapped` map, so culling that caster to the map's box would cut the iGPU cost

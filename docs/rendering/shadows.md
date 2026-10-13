@@ -1009,7 +1009,7 @@ bridge.
    **In a split, each view redraws the map around its own craft** (2026-10-13), not
    around slot 0: the fit reads `Race::viewed_slot`, and a later view redraws only the
    depth map in its own encoder. A single-view race is unchanged. Cost: about 0.1 ms of
-   CPU a view on a discrete card, and about 1 ms of iGPU time a view because the whole
+   CPU a view on a discrete card, and 1 to 1.6 ms of iGPU time a view because the whole
    circuit is drawn into every map - see [split-screen.md](split-screen.md#cost).
 
    **Nothing in it is recovered.** The depth format, the 2048 resolution, the
