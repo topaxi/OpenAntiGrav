@@ -336,6 +336,7 @@ fn load_hd(
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
 ) -> Result<EndRaceScreens> {
+    let authored_grid = oag_hd::endrace::AUTHORED_GRID;
     let blob = archives
         .read_name(oag_hd::endrace::SCREEN_ENTRY)
         .with_context(|| format!("reading {}", oag_hd::endrace::SCREEN_ENTRY))?;
@@ -347,7 +348,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     )
     .context("EndRace Results is not on this screen")?;
     let rewards = Layout::read_authored(
@@ -356,7 +357,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     );
     let menu = Layout::read_authored(
         &screens,
@@ -364,7 +365,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     )
     .context("EndRace Menu is not on this screen")?;
     let podium = load_hd_podium(archives, strings, faces, grid, fallback_globals);
