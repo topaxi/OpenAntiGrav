@@ -946,3 +946,34 @@ never a normal one) now makes the build the first place a shader is checked.
 - **Cost**: a clean `cargo build -p oag-mesh -p oag-post` 62 s before and 41 s
   after on a loaded machine (the difference is noise; `naga` is already in the
   graph), and a build-script re-run is about 2 s either way.
+
+## The speed plans stopped being learned at every `Race::start` (2026-10-14)
+
+`just test-data` read 968 s on `main` against the 450 s ceiling, twice, on an
+idle machine, with summed test time 4,901 s the day before and 7,064 s then.
+The growth was in tests that only **start** a race: `Race::start` learned this
+project's driver's speed plan, hd-opponent-variant-2's per-hull adapted plans
+and the route plans, whether or not anything flew them (`spawn_heading`'s PS2
+test never ticks). `Race::start` now learns nothing; the head of
+`Race::tick`, `Race::speed_plan` and `Race::plan_of` learn the plans
+(`Race::ensure_speed_plans`) when an opponent flies this project's driver, the
+player's autopilot is on, or the circuit has a fork. See
+[ai.md](../gameplay/ai.md), "Which AI flies".
+
+Measured per test binary, back to back under the gate lock, load 0.7 to 3.6
+(sum of test times; slowest test):
+
+| Binary | before | after |
+| --- | --- | --- |
+| `spawn_heading_ground_truth` (12) | 527 s (122 s) | 174 s (52 s) |
+| `speed_plan_ground_truth` (8) | 355 s (51 s) | 100 s (18 s) |
+| `stall_rescue_ground_truth` (5) | 173 s (41 s) | 153 s (37 s) |
+| `pure_chain_walk_ground_truth` (4) | 118 s (103 s) | 117 s (102 s) |
+| `hd_opponent_variant_ground_truth` (4) | 115 s (75 s) | 88 s (63 s) |
+
+A test that ticks our driver still pays for the plans. One race's cost, release
+build, `--ai ours`, from the log timestamps: Pulse `16_Track` the reference plan
+1.1 s plus the per-hull adapted plans 0.45 s (a quarter), HD's default track
+3.4 s plus 1.8 s (a third), the adapted ones on threads. The adapt was not
+optimised in this pass. `pure_chain_walk` never reads a plan: its time is the
+campaign walk.

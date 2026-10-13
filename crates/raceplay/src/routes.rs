@@ -237,7 +237,8 @@ impl Race {
     /// The speed plan slot `slot`'s driver follows on its own line: the
     /// ring's, a route's, or none.
     #[must_use]
-    pub fn plan_of(&self, slot: usize) -> Option<&oag_ai::SpeedPlan> {
+    pub fn plan_of(&mut self, slot: usize) -> Option<&oag_ai::SpeedPlan> {
+        self.ensure_speed_plans();
         plan_for(
             &self.sim.routes,
             self.sim.speed_plan.as_ref(),

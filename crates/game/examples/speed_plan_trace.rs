@@ -45,7 +45,7 @@ fn main() {
     println!("tick\tlap\tindex\tspeed\ttarget\tpace\tcontact");
     for tick in 0..12_000u32 {
         race.tick(&PlayerInputs::none());
-        let ship = &race.sim.world.ships[1];
+        let ship = race.sim.world.ships[1];
         let body = &ship.physics.body;
         let speed = body.linear_velocity.dot(body.forward());
         let index = ship.driver.index as usize;

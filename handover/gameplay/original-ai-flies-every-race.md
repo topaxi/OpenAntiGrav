@@ -27,7 +27,7 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
   Skipping them for the original field means deciding what offers a route
   there (every route, or a rule of the original's own), which changes how an
   original opponent goes round a fork, so it was not done. Everything else
-  skips them: `Race::start_deferred`, `Race::ensure_speed_plans`.
+  skips them: `Race::start` no longer learns them, `Race::ensure_speed_plans` does.
 - **Races with more than one human keep this project's driver**
   (`ai_choice::Reason::MultipleHumans`): the original field's slot, place and
   rubber-band handling with several humans is unread.
