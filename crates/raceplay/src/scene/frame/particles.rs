@@ -47,7 +47,12 @@ impl super::super::Scene {
     /// reads that pass's depth attachment: the executable's pass 9 follows its
     /// scene pass the same way. A frame with no class 8 particle alive draws
     /// no pass and the composite samples a zero texture.
-    pub(super) fn run_omega(
+    ///
+    /// `distort` is false for the one run a split screen makes over all its views:
+    /// the offset pass reads the depth attachment, which holds the last view's
+    /// depth alone by then, so that run draws no offsets.
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::scene) fn run_omega(
         &self,
         omega: &oag_post::omega_tonemap::Chain,
         device: &wgpu::Device,
@@ -55,16 +60,21 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
+        distort: bool,
     ) {
         let depth = self.depth.size();
         let mut sparks = self.sparks.borrow_mut();
-        let offsets = sparks.encode_distort(
-            device,
-            encoder,
-            &self.attachment_views.depth,
-            (depth.width, depth.height),
-            viewport,
-        );
+        let offsets = if distort {
+            sparks.encode_distort(
+                device,
+                encoder,
+                &self.attachment_views.depth,
+                (depth.width, depth.height),
+                viewport,
+            )
+        } else {
+            None
+        };
         let rect = (viewport.2 as u32, viewport.3 as u32);
         omega.run(
             device,
