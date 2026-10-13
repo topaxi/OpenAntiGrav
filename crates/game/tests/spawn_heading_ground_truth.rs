@@ -115,13 +115,21 @@ fn image(name: &str) -> Option<PathBuf> {
 /// The second is read straight off the loaded setup rather than out of the
 /// spawn, so the census below measures the *disc* and the assertion above
 /// measures the *fix*, and neither can quietly become the other.
-fn agreement(source: &Path, track: &str) -> (Vec<f32>, f32) {
-    agreement_and_grid(source, track, false)
+fn agreement(source: &Path, track: &str, also: Option<Also>) -> (Vec<f32>, f32) {
+    agreement_and_grid(source, track, false, also)
 }
+
+/// Another claim made on the load a sweep already pays for.
+type Also = fn(&str, &race::Loaded);
 
 /// [`agreement`], and with `grid` also [`the_grid_lands_on_the_track`] on the
 /// same started race: one load serving both claims.
-fn agreement_and_grid(source: &Path, track: &str, grid: bool) -> (Vec<f32>, f32) {
+fn agreement_and_grid(
+    source: &Path,
+    track: &str,
+    grid: bool,
+    also: Option<Also>,
+) -> (Vec<f32>, f32) {
     let loaded = race::load(&race::Options {
         source: source.display().to_string(),
         class: "VENOM".to_string(),
@@ -130,6 +138,9 @@ fn agreement_and_grid(source: &Path, track: &str, grid: bool) -> (Vec<f32>, f32)
         ..race::Options::default()
     })
     .unwrap_or_else(|e| panic!("{track}: loading the race: {e:#}"));
+    if let Some(also) = also {
+        also(track, &loaded);
+    }
 
     let slot = loaded.setup.start_position;
     let spline = loaded.setup.spline.clone();
@@ -315,7 +326,7 @@ fn hd_craft_spawn_facing_their_circuit(file_kind: &str, slice: usize) {
     for (circuit, file) in &mine {
         seen += 1;
         let track = format!("/data/environments/{circuit}/{file}.vex");
-        let (craft, authored) = agreement_and_grid(&image, &track, true);
+        let (craft, authored) = agreement_and_grid(&image, &track, true, None);
         assert_eq!(craft.len(), 8, "{circuit}/{file} should field a full grid");
         for (slot, dot) in craft.iter().enumerate() {
             assert!(
@@ -426,7 +437,12 @@ fn every_reversed_hd_craft_slice_3_spawns_facing_the_way_its_circuit_runs() {
 /// and its own stale list - so a test per source asserts exactly what the loop
 /// did, and the PS2's 32 files on a 3.7 GB image no longer hold up the two PSP
 /// discs behind them.
-fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&str]) {
+fn a_source_is_swept_for_stale_slots(
+    name: &str,
+    count: usize,
+    known_stale: &[&str],
+    also: Option<Also>,
+) {
     let Some(image) = image(name) else { return };
 
     let (shell, _, _) = oag_game::boot::load_shell(&oag_game::boot::Options {
@@ -453,7 +469,7 @@ fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&s
     let mut stale = Vec::new();
     for track in &shell.tracks {
         let entry = track.entry_name();
-        let (craft, authored) = agreement(&image, &entry);
+        let (craft, authored) = agreement(&image, &entry, also);
         for (slot, dot) in craft.iter().enumerate() {
             assert!(
                 *dot > AGREES,
@@ -473,14 +489,14 @@ fn a_source_is_swept_for_stale_slots(name: &str, count: usize, known_stale: &[&s
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_psp_pulse_pressing_carries_no_stale_slot() {
-    a_source_is_swept_for_stale_slots("pulse-psp-eu.chd", 24, &[]);
+    a_source_is_swept_for_stale_slots("pulse-psp-eu.chd", 24, &[], None);
 }
 
 /// Pure's eight, none of them stale - see [`a_source_is_swept_for_stale_slots`].
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_pure_pressing_carries_no_stale_slot() {
-    a_source_is_swept_for_stale_slots("pure-psp-eu.chd", 8, &[]);
+    a_source_is_swept_for_stale_slots("pure-psp-eu.chd", 8, &[], None);
 }
 
 /// The PS2 pressing's 32, one of which is the stale slot that corroborates the
@@ -492,6 +508,49 @@ fn only_the_ps2_pressing_carries_a_stale_slot() {
         "pulse-ps2-eu.chd",
         32,
         &[r"Data\Environments\09_Track\track.vex"],
+        Some(every_ps2_track_s_texture_set_is_found_by_directory_position),
+    );
+}
+
+/// The archive-entry lookup is the same directory-position rule the ship uses,
+/// checked independently for every circuit's own
+/// `track.vex`/`track_reversed.vex` rather than extrapolated from the ship
+/// result (`ps2_source_ground_truth.rs`) - but finding the right *entry* is only
+/// half of it. 5 of the 32 `<n>_Track` models have a nested set with fewer
+/// entries than the model has `Texture` nodes, because two nodes there declare
+/// the same name and the set holds one entry per unique name; see
+/// `docs/formats/ps2-texture.md#the-original-never-suffers-this-collapse-it-resolves-every-texture-by-name-not-by-ordinal`.
+/// Resolving each node by its own declared name rather than by position in
+/// that set is what makes the duplicate harmless - a repeated name simply
+/// resolves to the one entry it always named - so **every slot on every one
+/// of the 32 models decodes**, no exceptions. Asserting the exact zero rather
+/// than "no more than a handful" is deliberate: a regression that broke the
+/// by-name lookup and fell back to position (or to nothing) would still pass
+/// a looser bound.
+///
+/// Made on [`only_the_ps2_pressing_carries_a_stale_slot`]'s load of each of the
+/// 32 circuit files rather than a second load of its own: a test of its own in
+/// `ps2_source_ground_truth.rs` until 2026-10-13, which loaded the same 32.
+fn every_ps2_track_s_texture_set_is_found_by_directory_position(
+    track: &str,
+    loaded: &race::Loaded,
+) {
+    let model = &loaded.track_model;
+    assert!(
+        !model.textures.is_empty(),
+        "{track}'s PS2 track model declares no texture slots at all, which \
+         contradicts docs/formats/ps2-texture.md's one-entry-per-Texture-node \
+         reading"
+    );
+    let decoded = model.textures.iter().filter(|t| t.is_some()).count();
+    assert_eq!(
+        decoded,
+        model.textures.len(),
+        "{track}: only {decoded} of {} texture slot(s) decoded; by-name \
+         resolution should fill every slot now, including the ones a \
+         duplicate Texture node name used to leave unbound; report was:\n{}",
+        model.textures.len(),
+        loaded.report.join("\n")
     );
 }
 
