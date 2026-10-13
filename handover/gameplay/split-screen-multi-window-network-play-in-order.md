@@ -223,10 +223,16 @@ a headless 2-person race reaches its end. **Found and not wired: the PS2 pressin
 `EndRace Results Split` and `EndRace Rewards Split`** (two stacked per-player lap tables
 and reward panels, `Player_0`/`Player_1`, two people only; its executable names them
 beside `Split ScreenV/H` and `Kill Game Multiplayer`), see
-[split-end-race.md](../../docs/ui/split-end-race.md). **Open from it**: wiring those
-screens for two people on a PS2 source, a windowed walk with two real pads, HD's podium
-for a split, per-person rewards and records.
-**Decided 2026-10-13 (maintainer)**: wiring the PS2's `EndRace Results Split` / `Rewards Split` is a follow-up lane, and where only the PS2 pressing authors a split screen the PSP pressing **borrows that design**, built from the PSP's own assets and labelled "borrowed from the PS2 pressing". So the follow-up wires both screens for Pulse on both pressings, plus `Team SelectionSplit` on the PSP (the PSP still takes one Ship Select per seat in turn). Its starting points: the PS2 table geometry fix below (`table_layers` row bands are the PSP's, so suffix- and `Item`-offset-aware `lap_slot` bands and `Line1_N` headlines are needed), the per-person trophy and loyalty question Rewards Split raises, and the screens' entry law, which is unread. Until Rewards Split lands, "a split banks no loyalty" is **chosen and provisional**.
+[split-end-race.md](../../docs/ui/split-end-race.md). **Follow-up lane, written to start
+cold** (maintainer 2026-10-13): wire `EndRace Results Split` / `Rewards Split` for Pulse
+on **both** pressings - the PSP borrows the PS2's design (640x448 numbers rescaled, PSP
+assets, labelled "borrowed from the PS2 pressing"), as it will `Team SelectionSplit`. The
+entry names, widget geometry, the `table_layers` changes (suffix- and Item-offset-aware
+`lap_slot`/row bands, per-person `Line1_N`; fix the PS2 highlight geometry first), the
+Rewards Split question and the unread entry law are in the doc's "Follow-up lane". The
+current "no loyalty on a split" rule is chosen and **provisional** until Rewards Split
+lands. **Also open**: a windowed walk with two real pads, HD's podium for a split,
+per-person records.
 
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track
