@@ -356,7 +356,7 @@ fn a_quarter_turned_sprite_is_bounded_where_it_lies() {
     let mut layout = Layout::from_xml(
         "<Screen><Image name=\"Bar\" x=\"-198\" y=\"503.5\" width=\"676\" height=\"153\" Src=\"a.mip\" U=\"0\" V=\"0\" TxtrWidth=\"1\" TxtrHeight=\"1\"/></Screen>",
     );
-    layout.sprites[0].rotation = 1.5708;
+    layout.sprites[0].rotation = std::f32::consts::FRAC_PI_2;
     let hud = SplitHud::parse(&file(
         "[[layout]]\n[[layout.group]]\nwidgets = [\"Bar\"]\nanchor = \"top-left\"\n",
     ))
