@@ -34,6 +34,11 @@ pub(crate) struct Gpu {
     instance: wgpu::Instance,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
+    /// The swapchain image this frame acquired ahead of its ticks, until the
+    /// draw takes it. See [`Gpu::acquire`]. **Declared before
+    /// [`Self::surface`]** because fields drop in declaration order, and an
+    /// image must not outlive the surface it came from.
+    held: Option<wgpu::SurfaceTexture>,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
     /// The present modes this surface actually has. See [`Gpu::present_mode`].
@@ -56,9 +61,6 @@ pub(crate) struct Gpu {
     /// re-requesting an adapter to ask it a second time, which is the same
     /// argument `offered` above already makes.
     pub(crate) temporal: bool,
-    /// The swapchain image this frame acquired ahead of its ticks, until the
-    /// draw takes it. See [`Gpu::acquire`].
-    held: Option<wgpu::SurfaceTexture>,
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -310,6 +312,9 @@ impl Gpu {
     /// the next `Resumed`; a surface over the old one is dead. Desktop never
     /// calls this: winit only raises those events on mobile and the web.
     pub(crate) fn recreate_surface(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        // Before the old surface is replaced below: an image of it must not
+        // outlive it.
+        self.held = None;
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes())

@@ -66,8 +66,9 @@ little to remove: the limiter already waits *before* a frame
 ## Next Steps
 
 1. Read the hoist's effect on a real display: the `frame timing` debug line
-   on a build before `b0ec1779a` and one after, `vsync = "on"`, a minute of
-   racing each. Ten minutes, maintainer.
+   on a build of `edc07a0c6` (the counter on the old order) and one of
+   `b0ec1779a` or later (the hoist), `vsync = "on"`, a minute of racing each.
+   Ten minutes, maintainer.
 2. When Mesa 26.3 is installed: check `vulkaninfo | rg anti_lag`, then check
    wgpu-hal 30 for a device-creation hook that takes extra extensions. 30 min.
 3. Build an input-to-photon probe (or use an external camera / LDAT-style
