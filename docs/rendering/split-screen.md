@@ -70,7 +70,7 @@ puts the player's back. Chosen, not measured:
 
 ## Drawing
 
-`Scene::render_viewports` calls the ordinary `Scene::render` once per view. Four
+`Scene::render_viewports` calls the ordinary `Scene::render` once per view. Five
 things make that more than a loop:
 
 1. **One encoder and one submit per view.** `Scene::render` writes every
@@ -95,7 +95,7 @@ things make that more than a loop:
    the view's origin is. Run once per view (as `Scene::render` first did), each
    encode wiped every earlier view and every later view was graded from the first
    view's pixels: a two-player HD race drew a black top view and the bottom view
-   showed player 1's picture. 2048 draws through HD's chain and had the same black
+   showed the first view's (slot 0's) picture. 2048 draws through HD's chain and had the same black
    view; Omega's tone map does not clear, so its bottom view showed the top view's
    picture twice. The views now only fill the linear target, and
    `Scene::encode_split_post` (`crates/raceplay/src/scene/viewports.rs`) runs the
@@ -105,7 +105,8 @@ things make that more than a loop:
    (it holds the primary craft's pulse) and Omega's distortion offsets are not drawn
    (the pass reads a depth attachment only the last view still has). Both open.
    `crates/game/tests/split_screen_ground_truth.rs` pins HD two and four views,
-   Omega and 2048 two views: every rectangle drawn, no two the same.
+   Omega and 2048 two views: every rectangle drawn, no two the same. 2048 and Omega
+   share the path: **ported**, each with its own test.
 
 ## HUD
 

@@ -2,7 +2,7 @@
 //!
 //! One target, `N` rectangles of it ([`oag_render::viewport::layout`]), each drawn
 //! by an ordinary [`Scene::render`] from its own camera
-//! ([`Race::set_viewpoint`]). Four things make that more than a loop, and each
+//! ([`Race::set_viewpoint`]). Five things make that more than a loop, and each
 //! is a way to get a plausible picture that is wrong:
 //!
 //! - **One encoder and one submit per view.** `Scene::render` writes every
