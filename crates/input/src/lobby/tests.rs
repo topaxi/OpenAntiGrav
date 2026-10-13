@@ -108,10 +108,59 @@ fn the_lobby_seats_the_assignment() {
     lobby.join(Device::Keyboard);
     lobby.join(Device::Pad(9));
     let mut assignment = Assignment::<u32>::default();
-    lobby.seat(&mut assignment);
+    lobby.seat(&mut assignment, &[5, 9, 1]);
     assert_eq!(assignment.humans(), Some(3));
     assert_eq!(assignment.slot_of(5), Some(0));
     assert_eq!(assignment.keyboard_slot(), 1);
     assert_eq!(assignment.slot_of(9), Some(2));
     assert_eq!(assignment.slot_of(1), None, "a pad that never joined");
+}
+
+/// The bug a seated race must not have: the keyboard player joined on slot 0, a
+/// second pad sits on the desk without having joined, and the first poll of the
+/// race must not hand that pad slot 0 (or any slot).
+#[test]
+fn a_pad_that_did_not_join_does_not_take_a_seat_when_the_race_starts() {
+    let mut lobby = Lobby::new();
+    lobby.join(Device::Keyboard);
+    lobby.join(Device::Pad(5));
+    let mut assignment = Assignment::<u32>::default();
+    lobby.seat(&mut assignment, &[5, 8]);
+
+    assignment.reconcile(&[5, 8]);
+    assert_eq!(assignment.slot_of(8), None, "a bystander took a seat");
+    assert_eq!(assignment.slot_of(5), Some(1));
+    assert_eq!(assignment.keyboard_slot(), 0);
+}
+
+/// A pad plugged in after the race started takes a free seat, never the one the
+/// keyboard player holds; a joined pad that drops and returns gets a seat back
+/// (the lowest no pad and no seated keyboard holds); and a benched pad that
+/// disconnects and comes back is a new pad.
+#[test]
+fn a_mid_race_pad_never_lands_on_the_keyboards_seat() {
+    let mut lobby = Lobby::new();
+    lobby.join(Device::Keyboard);
+    lobby.join(Device::Pad(5));
+    lobby.join(Device::Pad(6));
+    let mut assignment = Assignment::<u32>::default();
+    lobby.seat(&mut assignment, &[5, 6, 8]);
+
+    assignment.reconcile(&[5, 6, 8]);
+    assignment.reconcile(&[6, 8]);
+    assert_eq!(assignment.slot_of(5), None, "unplugged");
+    assignment.reconcile(&[6, 8, 5]);
+    assert_eq!(assignment.slot_of(5), Some(1), "back on the seat it left");
+    assert_eq!(assignment.slot_of(6), Some(2));
+
+    assignment.reconcile(&[5, 6]);
+    assignment.reconcile(&[5, 6, 8]);
+    assert_eq!(assignment.slot_of(8), None, "no seat is free for it");
+    assignment.reconcile(&[6]);
+    assignment.reconcile(&[6, 8]);
+    assert_eq!(
+        assignment.slot_of(8),
+        Some(1),
+        "unplugged and back, it is a new pad and takes the freed seat"
+    );
 }

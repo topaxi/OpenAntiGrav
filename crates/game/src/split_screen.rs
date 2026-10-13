@@ -45,7 +45,7 @@ pub fn apply(race: &mut Race, players: usize) -> usize {
 
 /// Makes `race` the split screen `lobby` asked for and puts each device on the
 /// slot it joined: slots `0..seated` become local players and `assignment` is
-/// [`Lobby::seat`]'s. Returns the views the race settled on.
+/// [`Lobby::seat`]'s, with `connected` the pads plugged in now. Returns the views the race settled on.
 ///
 /// A lobby with one seat or none is an ordinary race: nothing changes, and the
 /// assignment stays merged.
@@ -53,11 +53,12 @@ pub fn seat<D: Copy + PartialEq>(
     race: &mut Race,
     lobby: &Lobby<D>,
     assignment: &mut Assignment<D>,
+    connected: &[D],
 ) -> usize {
     if lobby.count() <= 1 {
         return 1;
     }
     let count = apply(race, lobby.count());
-    lobby.seat(assignment);
+    lobby.seat(assignment, connected);
     count
 }

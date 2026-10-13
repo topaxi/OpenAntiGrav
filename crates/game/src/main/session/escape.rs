@@ -208,6 +208,8 @@ impl Session {
         }
         if let Stage::Race(stage) = &mut self.stage
             && !stage.result_saved
+            // Not a split screen's: see the finish site in `Session::frame`.
+            && stage.race.viewport_count() <= 1
         {
             stage.result_saved = true;
             let key = stage.result_key.clone();

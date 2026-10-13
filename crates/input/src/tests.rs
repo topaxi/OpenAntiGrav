@@ -462,7 +462,7 @@ fn merging_undoes_a_seating() {
     let mut lobby = lobby::Lobby::new();
     lobby.join(lobby::Device::Keyboard);
     let mut controls = Controls::without_pad();
-    lobby.seat(controls.assignment_mut());
+    lobby.seat(controls.assignment_mut(), &[]);
     assert_eq!(controls.assignment().humans(), Some(1));
     assert_eq!(controls.keyboard_slot(), 0);
 

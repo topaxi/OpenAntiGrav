@@ -443,6 +443,14 @@ pub struct Assignment<D = gilrs::GamepadId> {
     keyboard: u8,
     /// What a pad with no entry above does.
     seating: Seating,
+    /// Whether the keyboard was seated on a slot of its own (by the join
+    /// screen) rather than left on slot 0 by default. A keyboard that holds its
+    /// slot keeps a pad that reconnects from landing on it.
+    keyboard_claimed: bool,
+    /// Pads that were connected when the seats were set and did not take one.
+    /// They stay out until they disconnect: a pad on the desk that nobody joined
+    /// with must not take a seat the moment the race starts.
+    benched: Vec<D>,
 }
 
 impl<D> Default for Assignment<D> {
@@ -451,6 +459,8 @@ impl<D> Default for Assignment<D> {
             pads: Vec::new(),
             keyboard: 0,
             seating: Seating::Merged,
+            keyboard_claimed: false,
+            benched: Vec::new(),
         }
     }
 }
@@ -468,6 +478,27 @@ impl<D: Copy + PartialEq> Assignment<D> {
             seating: Seating::Seated {
                 humans: u8::try_from(humans).unwrap_or(u8::MAX),
             },
+            keyboard_claimed: false,
+            benched: Vec::new(),
+        }
+    }
+
+    /// Seats the keyboard on `slot` **as a player**, which keeps a pad that
+    /// connects later from taking the same slot ([`Self::assign_keyboard`] alone
+    /// leaves the slot shared, as `--players` does on slot 0).
+    pub fn claim_keyboard(&mut self, slot: usize) {
+        self.assign_keyboard(slot);
+        self.keyboard_claimed = true;
+    }
+
+    /// Keeps every pad in `connected` out of the seats until it disconnects:
+    /// the pads that were plugged in when the join screen seated its players
+    /// and did not join.
+    pub fn bench(&mut self, connected: &[D]) {
+        for id in connected {
+            if !self.pads.iter().any(|(held, _)| held == id) && !self.benched.contains(id) {
+                self.benched.push(*id);
+            }
         }
     }
 
@@ -534,20 +565,25 @@ impl<D: Copy + PartialEq> Assignment<D> {
     /// are the same case.
     ///
     /// Merged, nothing changes. Seated, a pad that is gone loses its slot and
-    /// each new one takes the lowest slot below `humans` no pad holds; **a pad
-    /// that finds none drives nothing** (chosen, not measured: merging it into
-    /// slot 0 would put two people on one craft, the failure
-    /// [`Self::assign_pad`] refuses).
+    /// each new one takes the lowest slot below `humans` no pad holds (nor a
+    /// keyboard that [`Self::claim_keyboard`] seated); **a pad that finds none
+    /// drives nothing** (chosen, not measured: merging it into slot 0 would put
+    /// two people on one craft, the failure [`Self::assign_pad`] refuses). A
+    /// [benched](Self::bench) pad is left alone until it disconnects.
     pub fn reconcile(&mut self, connected: &[D]) {
         let Seating::Seated { humans } = self.seating else {
             return;
         };
         self.pads.retain(|(id, _)| connected.contains(id));
+        self.benched.retain(|id| connected.contains(id));
+        let (keyboard, claimed) = (self.keyboard, self.keyboard_claimed);
         for id in connected {
-            if self.pads.iter().any(|(held, _)| held == id) {
+            if self.pads.iter().any(|(held, _)| held == id) || self.benched.contains(id) {
                 continue;
             }
-            let free = (0..humans).find(|slot| self.pads.iter().all(|(_, held)| held != slot));
+            let free = (0..humans).find(|slot| {
+                self.pads.iter().all(|(_, held)| held != slot) && !(claimed && *slot == keyboard)
+            });
             if let Some(slot) = free {
                 self.pads.push((*id, slot));
             }

@@ -180,7 +180,13 @@ impl Session {
         race: &mut oag_raceplay::Race,
     ) {
         if let Some(lobby) = lobby.take() {
-            oag_game::split_screen::seat(race, &lobby, controls.assignment_mut());
+            let connected = controls.connected_pads();
+            oag_game::split_screen::seat(race, &lobby, controls.assignment_mut(), &connected);
+        } else if let Some(humans) = controls.assignment().humans() {
+            // A race rebuilt without going back through the menus (the 2048
+            // end-of-race screen's restart): the devices are still seated, so the
+            // new race is the same split.
+            oag_game::split_screen::apply(race, humans);
         }
     }
 

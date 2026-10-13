@@ -773,6 +773,9 @@ impl Session {
             if let Stage::Race(stage) = &mut self.stage
                 && stage.race.finished()
                 && !stage.result_saved
+                // A split screen's result is nobody's record: the results are
+                // slot 0's, which a second person was racing.
+                && stage.race.viewport_count() <= 1
             {
                 stage.result_saved = true;
                 let key = stage.result_key.clone();

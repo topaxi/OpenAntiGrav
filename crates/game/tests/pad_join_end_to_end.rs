@@ -100,7 +100,10 @@ fn a_three_seat_lobby_makes_a_three_way_split_with_each_device_on_its_slot() {
 
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
-    assert_eq!(split_screen::seat(&mut race, &lobby, &mut assignment), 3);
+    assert_eq!(
+        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1]),
+        3
+    );
 
     assert_eq!(race.viewport_count(), 3);
     for slot in 0..MAX_PLAYERS {
@@ -121,7 +124,10 @@ fn a_lobby_of_one_changes_nothing() {
     lobby.join(Device::Keyboard);
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
-    assert_eq!(split_screen::seat(&mut race, &lobby, &mut assignment), 1);
+    assert_eq!(
+        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1]),
+        1
+    );
     assert_eq!(race.viewport_count(), 1);
     assert_eq!(race.sim.world.human_slots().count(), 1);
     assert!(assignment.is_single_player());

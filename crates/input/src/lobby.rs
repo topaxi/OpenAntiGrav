@@ -141,14 +141,20 @@ impl<D: Copy + PartialEq> Lobby<D> {
     /// Makes `assignment` what this lobby says: [`Assignment::seated`] for the
     /// seated count, each pad on its seat, the keyboard on its own or on slot 0
     /// when it did not join (it still has to reach the pause key and the menus).
-    pub fn seat(&self, assignment: &mut Assignment<D>) {
+    ///
+    /// `connected` is every pad plugged in now: the ones that did not join are
+    /// benched ([`Assignment::bench`]), so a pad on the desk does not take a seat
+    /// the moment the race starts. Only a pad that connects after this, or one that
+    /// disconnects and comes back, is seated by [`Assignment::reconcile`].
+    pub fn seat(&self, assignment: &mut Assignment<D>, connected: &[D]) {
         *assignment = Assignment::seated(self.seats.len().max(1));
         for (slot, seat) in self.seats.iter().enumerate() {
             match seat {
-                Device::Keyboard => assignment.assign_keyboard(slot),
+                Device::Keyboard => assignment.claim_keyboard(slot),
                 Device::Pad(id) => assignment.assign_pad(*id, slot),
             }
         }
+        assignment.bench(connected);
     }
 }
 
