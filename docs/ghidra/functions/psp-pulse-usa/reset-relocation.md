@@ -2,9 +2,10 @@
 
 Functions in `PSP_GAME/SYSDIR/BOOT.BIN` (Pulse PSP, UCUS-98712), image base
 `0x08804000`. Read 2026-10-13 (lane `jump-13-flight`) in Ghidra with the
-Allegrex module, every claim below at instruction level unless marked. **No
-function here is renamed yet**; the proposed names and their confidence are in
-the table, for the next pass to apply with `names.tsv`.
+Allegrex module, every claim below at instruction level unless marked. Then
+**verified live** the same day by lane `pulse-13-capture` on PPSSPP, which
+read the ring every tick through nine resets ("Verified live" below). Names
+applied from [names.tsv](names.tsv).
 
 This answers where a craft put through `Ship_SetState(3)` comes back, which
 [shield.md](shield.md#state-3-is-the-reset-and-four-things-enter-it-2026-09-29)
@@ -14,13 +15,13 @@ fell**: it is the oldest of the craft's last seven grounded positions.
 
 ## The functions
 
-| Address | Proposed name | What it does | Confidence |
+| Address | Name | What it does | Confidence |
 | --- | --- | --- | --- |
-| `0x0883d960` | `Ship_PushResetCrumb` | Copies a 4x4 pose into slot `craft+0x780` of an 8-slot ring at `craft+0x380 + i * 0x40`, advances `+0x780` mod 8, and when it lands on `+0x784` advances that too | 84 |
-| `0x0883d9ec` | `Ship_LayResetCrumb` | Unless `craft+0xb51 & 1`, compares the pose's position (`+0x30..+0x38`) with the newest crumb's (`craft+0x370 + head * 0x40`, slot 7 when the head is 0) and pushes when any axis differs by more than `20.0` | 84 |
-| `0x0883ef30` | `Ship_TakeOldestResetCrumb` | Copies the crumb at `craft+0x784` out (w lanes forced to `0,0,0,1`) and sets `+0x780 = +0x784 + 1` mod 8 | 84 |
-| `0x0883ff6c` | `Ship_UpdateReset` | State 3's update ([shield.md](shield.md)): relocates once from the oldest crumb and launches | 84 |
-| `0x0883db20` | `Ship_PlaceAndLaunch` | `FUN_0884d9bc(body, pose)` copies the pose into the body; then `body+0x140 = pose.row2 * speed` | 80 |
+| `0x0883d960` | `Ship_PushResetCrumb` | Copies a 4x4 pose into slot `craft+0x780` of an 8-slot ring at `craft+0x380 + i * 0x40`, advances `+0x780` mod 8, and when it lands on `+0x784` advances that too | 90 |
+| `0x0883d9ec` | `Ship_LayResetCrumb` | Unless `craft+0xb51 & 1`, compares the pose's position (`+0x30..+0x38`) with the newest crumb's (`craft+0x370 + head * 0x40`, slot 7 when the head is 0) and pushes when any axis differs by more than `20.0` | 90 |
+| `0x0883ef30` | `Ship_TakeOldestResetCrumb` | Copies the crumb at `craft+0x784` out (w lanes forced to `0,0,0,1`) and sets `+0x780 = +0x784 + 1` mod 8 | 90 |
+| `0x0883ff6c` | `Ship_UpdateReset` | State 3's update ([shield.md](shield.md)): relocates once from the oldest crumb and launches | 90 |
+| `0x0883db20` | `Ship_PlaceAndLaunch` | `FUN_0884d9bc(body, pose)` copies the pose into the body; then `body+0x140 = pose.row2 * speed` | 92 |
 
 `0x0884d9bc` copies a 4x4 matrix from its second argument to its first. Ghidra
 shows it with one parameter. The call site passes the pose in `a1`, untouched
@@ -137,6 +138,50 @@ capture agrees with it to 0.1 u/s. The position cannot be compared: our
 sweep drives 600 ticks before placing the craft, and the original's ring
 history before its trial is unknown. Ours came back at sample 940 and the
 original at 50.
+
+## Verified live (2026-10-13, lane `pulse-13-capture`)
+
+PPSSPP, Pulse PSP USA, `13_Track`, VENOM. The ring was read on the entity
+(`craft+0x1c4`) every tick: crumbs at `+0x380 + i * 0x40 + 0x30`, head
+`+0x780`, oldest `+0x784`, latch `+0x78c`, flag byte `+0xb51`. The full tables
+are in [ai.md](../../../gameplay/ai.md), "What the original does after a
+fall". Every prediction of the reading above held:
+
+- **Nine resets, nine on the oldest crumb.** Four were placed or teleported;
+  five were natural drive-in falls in a Time Trial (a pure-pursuit driver at
+  speed caps of 60 to 100).
+- **The speed is exact.** `50 + 0.25 * latch` to 0.1 u/s on all nine. Each
+  natural fall's latch sits within 2 u/s of its speed at the lip (84.0/83.4,
+  71.9/70.6, 59.1/60.2, 79.6/80.4, 100.0/98.1). That fits the reading that the
+  latch is taken on every fully grounded frame, until the craft leaves the
+  ramp. The capture's notes read it as the speed at the ring's last push; the
+  instructions settle it the other way, since the store at `0x08841c2c` sits
+  in the grounded block, outside `Ship_LayResetCrumb` and its flag gate.
+- **On `13_Track` the ring freezes where the disc's no-crumb flag begins**,
+  row 3036, the same row this project's census finds (line index 3036). Every
+  natural fall reappeared at row 2949, (-388.6, 7.3, 240.8): the oldest crumb
+  (-388.1, 3.3, 240.4) moved to the midpoint and 5 up.
+- **The ring holds seven valid crumbs.** Before each reset the head is 4 and
+  the oldest 5: slot 4 is the stale one the next push writes, slot 5 is row
+  2949.
+- **The reset takes one frame** (0.97 to 1.03 frames between consecutive
+  `Ship_Update` hits). The heading is along the line.
+- **The AI resets in the race captures fit the same law.** They come back at
+  rows 2938-2953 at 72.6-76.1 u/s at skill level 2.
+
+So the ring, the gate and the launch are runtime-verified on one binary:
+**90** for the ring functions and **92** for the launch, each short of 95 by
+the second binary the rubric asks for.
+
+**This project's port reproduces it.** `the_parked_field_is_put_back_where_the_original_puts_it`
+(`crates/game/tests/novice_jump_ground_truth.rs`, disc-backed) asserts that
+every reset of the parked-player field lands at line rows 2936-2955 at
+`50 + 0.25 * latch` to 1e-3 u/s. Measured: rows 2939 and 2950, 73.6 u/s from a
+94.6 latch.
+
+**Not verified:** the width midpoint against the AI corridor (both put the
+craft on the line here, where the line is the centre), and the two 40-unit
+hops (the heading only shows the line direction).
 
 ## Ported, and what was not
 

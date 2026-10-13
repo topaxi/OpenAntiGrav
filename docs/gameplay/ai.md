@@ -713,7 +713,8 @@ craft's lateral offset is its lane: the values seen are steps of about 2.5 (-9.4
 itself: a faller flies the arc, comes down at the gap's near edge at spline row 45
 to 46 with its speed intact (90 to 100) and drops straight through (y 22 to -2),
 and the airborne reset puts it back near row 2,950 (about (-388, 7, 241), 190
-units before the pad), the same loop as this engine's. Confidence 70 (the pad's edge
+units before the pad). Until 2026-10-13 this engine put it back over the gap
+instead (see the reset comparison below). Confidence 70 (the pad's edge
 is inferred from crossings; the pad's box was not read).
 
 **The rail does not do it.** `Ai_SnapToLane`'s `Body_SetPosition` call
@@ -725,15 +726,30 @@ rail holds the lane; it neither lifts nor slows a craft there. Confidence 80
 
 **Reading for this engine.** The behaviour is the original's own: a craft held
 below about 102 at the lip falls, and the original's leader, held at 47.1 by a
-parked player, arrives at 90 to 100. What differs is how long it keeps falling:
-the original's loops end (13 in a row at level 0; at level 2 at most 2 running
-before the finish, and a faller that drops places gets a higher thrust, 70 to 100
-and entry 104-124, which clears it), while this engine's slot 3 looped 129 times
-at 1.4 to 2.6 units off the line. **A hypothesis, not a finding:** that this
-engine's leader keeps a lane on the pad's off side (the original's crafts at
-+2.6 are never boosted; +1.2 once) for the whole run. Our signed lateral at row
-3073, and whether our pad test boosts an AI craft there, were not measured:
-that is the next comparison. The setup differs in one more known place: this
+parked player, arrives at 90 to 100. What differed was how long it kept
+falling. The original's loops end: 13 in a row at level 0; at level 2 at most 2
+running before the finish, and a faller that drops places gets a higher
+thrust (70 to 100, entry 104-124), which clears it. This engine's slot 3
+looped 129 times because this engine's reset put it back over the gap. That
+is fixed: see the reset comparison below.
+
+**The pad, measured in this engine (2026-10-13).**
+`the_pad_before_the_jump` (`crates/game/tests/novice_jump_ground_truth.rs`)
+covers the same parked-player field (seed 1, 9,000 ticks), every crossing of
+row 3073:
+- Pad 6's centre sits at lateral -6.42 from our line along our spline's
+  `lateral`, the original's -6.5, so the two sign conventions agree.
+- **Our pad test boosts an AI craft, in the original's band.** All 13
+  crossings at -4.07 to -9.07 armed the pad and gained 25.8 to 36.1 u/s over
+  the next 20 ticks; the original gained +12 to +61 across it.
+- **None of the 16 at -0.01 to +9.16 did**; the original never boosted +2.6 or
+  more.
+- Our leaders' lanes move over the race as the original's do: slot 3 crossed
+  at +2.49 on its first lap at 98.8 u/s, off the pad, and fell. No on-pad
+  crossing fell.
+
+So the pad half of the hypothesis above is closed: the pad, its band and an
+opponent's boost all match. The setup differs in one more known place: this
 engine's default race runs the pack shuffle at level 1, the original's
 skill-scale-3.0 case at level 2. Tools: `scripts/psp-ai-track-log.py`,
 `scripts/psp-ai-track-analyze.py`. No screenshot shows the leader at the jump:
@@ -776,8 +792,10 @@ ring just before each reset has head 4, oldest 5, flag 1, crumbs at rows 2935 to
 3032 about 14 rows (20 units) apart: it is **frozen on the last 8 crumbs laid
 before the no-crumb zone** (authored from row 3036 on `13_Track`), so the oldest is
 always row 2949 whatever the craft's speed, and only the speed after the reset
-varies, through the latch (the speed when the ring was last pushed, at row
-about 3032, a few tens of units before the lip). It is **not the nearest sample to
+varies, through the latch: the speed on the craft's last fully grounded frame,
+at the ramp's top, as the store at `0x08841c2c` sits outside the push and its
+flag gate ([reset-relocation.md](../ghidra/functions/psp-pulse-usa/reset-relocation.md);
+the capture first read it as the speed at the last push, row 3032). It is **not the nearest sample to
 the fall** and **not in the gap**: 280 to 300 units behind the fall. It is the same
 point the AI craft returns to (slot 1 at x -388.1 to -389.2, row 2950; the others a
 few units either side by lane and lap), and the AI numbers above fit the same law.
@@ -795,6 +813,31 @@ read from the executable first and every prediction held to 0.1 u/s; one boot).
 row 44 and one at 109 0.2 below (it clears). Confidence 60 (body vy between
 consecutive ticks, ground-clamp transients near liftoff included, grounded
 fraction not read).
+
+**This engine against the original at this jump (2026-10-13, after the reset
+port).**
+
+| | the original | this engine |
+| --- | --- | --- |
+| leader held at thrust 47 falls with a parked player | yes, 16 of 39 entries | yes, slot 3 at 91.8 u/s |
+| speed that clears at the lip | about 102-104 | about 100 (103.9 just clears, 91.8 falls) |
+| air acceleration, clears, rows 18-44 | -89 to -93 u/s², confidence 60 | -95 - 0.25 * vy (`flight_gravity` 95) |
+| no-crumb zone starts | row 3036 | line index 3036 (the disc's `flags` bit 0) |
+| put back after a fall | row 2949 (natural falls), AI 2938-2953 | line index 2939 and 2950 |
+| speed put back at | 50 + 0.25 * latch, exact on 9 of 9 | the same, to 1e-3 (73.6 from a 94.6 latch) |
+| falls in a row | at most 2 at level 2 | 1 per slot, 2 in 9,000 ticks |
+| pad 6 boosts an opponent at | lateral -9.8 to -1.9 | -9.07 to -4.07 (none at -0.01 or more) |
+
+- **The first fall is faithful.** The original's own leader falls here: 63 of
+  146 pre-finish entries over all its captures.
+- **The respawn count was the reset pose, and it now matches.**
+  `the_parked_field_is_put_back_where_the_original_puts_it` holds it there.
+- **The air acceleration differs by 5-8 % near the apex**: -95 here against
+  -89 to -93 there, at confidence 60. At a jump this close to the edge that is
+  worth knowing, and it is **left open, not moved**. The register-level PSP
+  reading puts the air on `flight_gravity` alone (above), and the original's
+  number includes ground-clamp transients and no grounded fraction. A capture
+  of `craft+0x2b0` with body `vy` over a whole flight is what would settle it.
 
 ### The `13_Track` jump, flown tick by tick (2026-10-13)
 

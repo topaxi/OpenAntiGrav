@@ -24,7 +24,10 @@
 //! ```
 //!
 //! So a craft that falls into a gap comes back on the road it was last
-//! grounded on, about six crumbs (120 units or more) behind, moving. The disc
+//! grounded on, about six crumbs (120 units or more) behind, moving. Verified
+//! live on PPSSPP: nine resets of nine on the oldest crumb at that speed, and
+//! on `13_Track` row 2949 every time, where this port puts the parked field at
+//! 2939 and 2950. The disc
 //! decides where no crumb may be laid: `flags` bit 0 is authored around the
 //! gaps of 13, 10, 14, 25, 26, 29 and 30_Track, so a craft cannot be put back
 //! over the hole it fell into.

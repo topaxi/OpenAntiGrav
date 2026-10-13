@@ -31,9 +31,10 @@ Basilico Black is `01_Track`.
   width midpoint five up, launched at a quarter of the last grounded speed plus
   50 (`+0x78c` is that speed, settled). Still open from it:
   - the player's `min(5, shield - 1)` shield charge;
-  - the Eliminator's state-8 return, which reads the same ring;
-  - a runtime read of the ring (breakpoint `0x0883ff6c`), the one leg short of
-    95.
+  - the Eliminator's state-8 return, which reads the same ring.
+
+  The ring was read live by `pulse-13-capture` the same day: nine resets of
+  nine on the oldest crumb, speed exact. Names are applied at 90/92.
 - **The distance trigger** (`0x08841cec`: more than 200 units from `craft+0xaf0`
   for 0.5 s) is read, not ported; the invented `LostCircuit`/`OffTrack` dwells
   stand where it would. Porting it would retire two inventions and needs its
@@ -57,9 +58,8 @@ Basilico Black is `01_Track`.
 ## Next Steps
 
 1. ~~Port the reset state's relocation~~ (done 2026-10-13; the same-pose trial
-   now leaves at 53.6 u/s against the original's 53.5). Left: the player's
-   shield charge, and a PPSSPP read of `craft+0x780`/`+0x784`/`+0x78c` and the
-   crumbs at `+0x3b0 + i * 0x40` at a reset, to verify the ring.
+   now leaves at 53.6 u/s against the original's 53.5; the ring was verified
+   live). Left: the player's shield charge.
 2. ~~Read `+0x78c`~~: `|velocity|` latched on every fully grounded frame.
 3. Log a Vertica Single Race through the join at 1196 with the dev-unlock byte.
 4. Compare the original's `01_Track` grid from the log above against
