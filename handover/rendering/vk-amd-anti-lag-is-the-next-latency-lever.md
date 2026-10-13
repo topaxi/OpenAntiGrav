@@ -19,6 +19,19 @@ plus one images:
 **So the maintainer's own `smooth` setting is unchanged by it.** Chosen, not
 measured: no input-to-photon number exists for any mode.
 
+**2026-10-13, read from `vulkaninfo` on the workstation (RX 7800 XT, RADV, Mesa
+26.2.4, niri on Wayland) and wgpu 30.0.1: the hint is probably a no-op there.**
+wgpu-core clamps `desired_maximum_frame_latency` to the range
+`(min_image_count - 1)..=(max_image_count - 1)` that wgpu-hal reports
+(`wgpu-core/src/device/resource.rs`, `wgpu-hal/src/vulkan/swapchain/native.rs`).
+This driver reports `minImageCount` 4 on the base Wayland surface and 3 on the
+X11 one (per present mode: Fifo and Immediate 3, Mailbox 4). So a latency of 1
+becomes 2 on X11 and 3 on Wayland, the same as the old default, and Mailbox's 2
+becomes 3. Unverified: that wgpu-hal reads the base capabilities and not a
+per-mode query, and how deep Mesa's Wayland Fifo really queues (its present
+throttling may cap it below the image count). The fix for "one frame fewer" on
+this driver is not the hint but the present-time wait or the acquire order below.
+
 ## What VK_AMD_anti_lag would add
 
 The driver measures frame time and queuing delay and sleeps the app at
@@ -80,8 +93,24 @@ little to remove: the limiter already waits *before* a frame
   times the acquire inside `draw`, and the web build has no blocking acquire.
 - **Reach**: Vulkan on AMD only (RADV >= 26.3; AMD's Windows driver). A no-op
   elsewhere, so it must stay optional and detected, never required.
-- **Local Mesa is 26.2.4** (2026-10-09), so nothing here is testable on the
-  workstation yet; SteamOS's Mesa version is unchecked.
+- ~~**Local Mesa is 26.2.4** (2026-10-09), so nothing here is testable on the
+  workstation yet; SteamOS's Mesa version is unchecked.~~ **Corrected
+  2026-10-13: it is testable now.** Mesa 26.2.4 ships the implicit layer
+  `VK_LAYER_MESA_anti_lag`, and `vulkaninfo` lists `VK_AMD_anti_lag` revision 1
+  as a layer-device extension on the RX 7800 XT (and on the iGPU and llvmpipe).
+  That layer's algorithm is the basic one (submit-to-execution delay only); the
+  RADV-native pacing is 26.3. So the API wiring can be tried today and the
+  pacing quality compared when 26.3 lands. SteamOS's Mesa version is still
+  unchecked.
+- **Present modes on the workstation.** Wayland (niri) offers `Mailbox` and
+  `Fifo` only, so `off` resolves to `Mailbox` there, not `Immediate`; X11 (xcb,
+  xlib) offers all four. `smooth` gets `Mailbox` on both, so the workstation's
+  `smooth` is not exposed to the acquire-order cost. The Deck is still unchecked.
+- **Implicit layers are installed and will skew a measurement.** MangoHud,
+  vkBasalt, Steam's overlay, gamescope's WSI layer and lsfg-vk (a frame
+  generation layer that fails to load: "Failed to find 'vkGetInstanceProcAddr'
+  in layer liblsfg-vk-layer.so"). Disable them, or set
+  `VK_LOADER_LAYERS_DISABLE`, for any latency number.
 - **No latency measurement exists.** `perf::Meter` measures frame time, not
   input-to-photon. Measure before and after either change.
 
