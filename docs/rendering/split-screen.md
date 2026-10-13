@@ -89,7 +89,23 @@ things make that more than a loop:
    top-left of the target whatever the viewport's origin is, so a view elsewhere
    would glow from the first view's pixels. Skipped rather than drawn wrong.
 
-Wipeout HD's and Omega's post chains are not verified under a split.
+5. **HD's and Omega's post chains run once, after the last view.** Both draw the
+   scene into a linear float target and then *encode* it into the frame with a pass
+   that clears the whole frame, sampling the linear target from its top-left whatever
+   the view's origin is. Run once per view (as `Scene::render` first did), each
+   encode wiped every earlier view and every later view was graded from the first
+   view's pixels: a two-player HD race drew a black top view and the bottom view
+   showed player 1's picture. 2048 draws through HD's chain and had the same black
+   view; Omega's tone map does not clear, so its bottom view showed the top view's
+   picture twice. The views now only fill the linear target, and
+   `Scene::encode_split_post` (`crates/raceplay/src/scene/viewports.rs`) runs the
+   chain once over the whole area, which is exactly what one view passes.
+   **Chosen, not measured**: one exposure and one glow for the whole picture (glow
+   bleeds a few pixels across the 2 pixel gap); HD's boost zoom streak is not drawn
+   (it holds the primary craft's pulse) and Omega's distortion offsets are not drawn
+   (the pass reads a depth attachment only the last view still has). Both open.
+   `crates/game/tests/split_screen_ground_truth.rs` pins HD two and four views,
+   Omega and 2048 two views: every rectangle drawn, no two the same.
 
 ## HUD
 
