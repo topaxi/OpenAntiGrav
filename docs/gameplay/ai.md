@@ -627,9 +627,14 @@ falls at this jump when the player is far behind is unmeasured.
 **More than one human keeps this project's driver, logged.** The game has no
 second human in a race today (`World::human_slots` is slot 0 outside tests and
 the headless simulator). The original field's slot, place and rubber-band
-handling with several humans is unread, and filtering slots out of
-`original_ai_begin_tick` is a design question, so `ai_choice` declines
-(`Reason::MultipleHumans`) until it is answered.
+handling with several humans is unread, so `ai_choice` declines
+(`Reason::MultipleHumans`) until it is answered. The simulation side is ready
+since 2026-10-13, **chosen, not measured, no confidence score**: the round robin
+takes every active craft nobody flies (`original_ai_begin_tick`), and the rubber
+band, `PosBalancing` and Pure's zone multiplier read the best-placed person
+(`Race::rubber_band_reference`, lowest slot on a tie) where the original reads
+its one player. What stays open: `use_original_ai`'s grid numbers assume the
+person is slot 0, and no capture shows the original's field with two players.
 
 **The speed plan is learned only when something reads it (2026-10-13).** This
 project's driver follows a speed plan (`oag_ai::plan`), and the original driver

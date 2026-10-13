@@ -730,17 +730,42 @@ a guess.
   respawn delay and sample, `tick_wreck_voice`'s "is a player" test, the
   finish-line driver hand-over (`update_standings`), the Autopilot pickup's
   `locate_player_driver(slot)`, and the Eliminator's kill-target finish.
-  Simulation that **still names the primary** (open, each needs a decision for
-  two humans): `original_ai.rs` `Standings.player` (rubber band, one player),
-  `field/pad_seek.rs:126` and `field/fire_law.rs:119` (the AI's one "player" to
-  skip or watch), `speed_plan.rs:100` (the player's hull plan), `results.rs`
-  (`finished()` reads `primary_race`, the end of the race is the primary's), and
-  the LeachBeam's lock (`weapons.rs`, `Race::sight_target` reads `ships[0]`
-  through the view's one reticle: a second person-flown slot fires it unlocked
-  until each viewport has its own sight; the Missile's lock is the shared
-  per-slot one and needs nothing). Also: with slot 0 set to `Ai` and a human
-  elsewhere, `step_opponents` now drives slot 0 and its driver is unseeded
-  (windowed-search trap); no session builds that setup.
+  Moved to per person-flown slot afterwards (`per-slot-sim-leftovers`,
+  2026-10-13; every one is **chosen, not measured** where it says so, the
+  original having one player). The LeachBeam's lock is `Race::sight_target(slot)`,
+  a simulation quantity computed from the world for whichever slot fires, with
+  the reticle reading the primary's; a second person has no reticle, so no
+  Pulse hold on the lock (chosen). The fire arms of `spend_pickup` still wrote
+  a literal `0`: the Rocket, Plasma (and its cue), Shuriken, Quake and Repulser
+  now credit the slot that fired, and the Missile's reticle hold follows
+  `primary_slot()` rather than slot 0. Weapon pads: the `human` odds column and
+  the slot's own place now go to every person-flown slot (they went to slot 0),
+  and the pad refresh countdown runs on the primary slot, the first one
+  stepped. AI: the rubber band, the position-keyed tables and the Pure zone
+  multiplier read the best-placed person (`Race::rubber_band_reference`, lowest
+  slot on a tie, chosen); the original field's round robin is every active craft
+  nobody flies; pad seeking skips every person-flown slot; the weapon AI's
+  `player_gap` is the nearest person ahead, else the first person's gap
+  (chosen); the speed plan's reference hull tries the people's craft first, and
+  `build_player_speed_plan` builds the primary's (one plan per hull already
+  serves every person's autopilot, `adapt_hull_plans` walks every slot).
+  Results: `Race::finished` is every person-flown slot's own `race[slot].finished`
+  (line crossing and wreck are per slot, the Eliminator's kill target ends all
+  persons together), `runs_on_after_the_line` needs every person across the
+  line, and the board marks every person's row as the player's
+  (`scoreboard::Craft::person`; `Board::player()` is the best-placed one). Slot
+  0 handed to the AI with a person elsewhere gets a driver seeded from
+  `Driver::for_slot(race_seed, MAX_SHIPS)` and located on the line on the first
+  tick (`Race::seed_vacated_driver`; lazily, because `driver.index` is hashed).
+  **Still open:** `oag_game::ai_choice` still declines the original driver for
+  more than one human (`Reason::MultipleHumans`) - the sim sites above are ready
+  for it, but `use_original_ai`'s grid numbers assume the one person is slot 0
+  (opponent grid position `slot + 8 - count`), which a person in another slot
+  would shift; nobody has measured the original's field with two players, so
+  lifting the decline is a decision, not a fix. `Board.tick` is still "the
+  player's own last crossing" (now the tick the last person finished), and the
+  end-race screens read `Board::player()` for one row - per-person panels
+  belong to split screen's lane.
   View, stays primary for split screen's lane: `zoom.rs` boost pulse,
   `destroy_camera.rs`, `craft_flash.rs` (shake cancel, reset flash),
   `countdown.rs` cue slot, `hit_sparks.rs` shake, `intro_camera.rs` skip button,
