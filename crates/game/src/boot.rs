@@ -830,6 +830,9 @@ pub fn load_shell(
         menu_font.as_ref(),
         fonts::default_in_own_slot(menu_skin),
         space,
+        title
+            .front_end
+            .is_some_and(|front_end| front_end.borrows_ps2_split_screens),
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

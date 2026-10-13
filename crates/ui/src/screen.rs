@@ -291,6 +291,11 @@ pub struct Fill {
     /// the capture shows. Which of the pair is top and which bottom is
     /// unmeasured: no authored widget gives them different values.
     pub gradient: Option<[u32; 4]>,
+    /// The tag's own `OffsetX`/`OffsetY`, which [`Self::x`] and [`Self::y`] leave
+    /// out unless the file was read with [`Screens::fold_fill_offsets`]: a
+    /// colour-only `Image` used as a container (`EndRace Results`' `tablebg{r}`)
+    /// carries its position there, and its nested widgets already include it.
+    pub own_offset: (f32, f32),
     /// The wrapping `<Animation>`'s own `<Key>` timeline - empty for a widget
     /// the XML does not wrap this way. See [`RevealKey`].
     pub reveal: Vec<RevealKey>,

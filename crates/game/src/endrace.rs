@@ -31,12 +31,22 @@ pub mod touch;
 /// once per frame - `RaceStage::endrace_unavailable`.
 pub const SCREEN_ENTRY: &str = r"Data\Plugins\PI001\GUI\EndRace_Definition.xml";
 
+/// The grid the PSP's copy of the file is authored in, which a borrowed screen is built in.
+const PSP_GRID: [f32; 2] = [480.0, 272.0];
+
 /// Textures neither screen shares with `Skin.xml`'s own front-end sheet -
 /// `EndRace Rewards`' medal/loyalty icons and its hex-grid backdrop. See
 /// [`load`]'s own extension step.
 const EXTRA_TEXTURES: [&str; 2] = [
     r"Data\FE\Images\reward_icons.mip",
     r"Data\FE\Images\hex_bg.mip",
+];
+
+/// The two reward icons the PS2 file names in place of the PSP's one sheet
+/// (`MedalImg`, `LoyaltyImg`). Read quietly: a PSP pressing has neither, and says nothing.
+const PS2_REWARD_ICONS: [&str; 2] = [
+    r"Data\FE\Images\reward_icon_blank.mip",
+    r"Data\FE\Images\reward_icon_ship.mip",
 ];
 
 /// Everything a caller needs to draw and drive the EndRace screens this
@@ -63,6 +73,12 @@ pub struct EndRaceScreens {
     /// drawn only by `--menu-page endrace-podium`.
     pub podium: Option<Layout>,
     pub menu: Layout,
+    /// `EndRace Results Split`, the two-person table: the disc's own where the pressing
+    /// authors it (Pulse's PS2), else `None`. See
+    /// [`oag_ui_screens::endrace::split_results_draw_list`].
+    pub results_split: Option<Layout>,
+    /// `EndRace Rewards Split`, a panel per person, read the same way.
+    pub rewards_split: Option<Layout>,
     /// `Race End Photo`, the state a Pulse race sits in between the flag and
     /// `EndRace Results` - read off `InGame_Definition.xml`, not
     /// [`SCREEN_ENTRY`], so it is its own `Option`: a pressing whose copy
@@ -199,12 +215,50 @@ pub fn load(
         .context("EndRace Rewards is not on this screen")?;
     let menu = Layout::read(&screens, "EndRace Menu", strings, faces, grid)
         .context("EndRace Menu is not on this screen")?;
+    // The PS2 pressing authors the two-person screens; the PSP borrows its design, built
+    // from the PSP's own `EndRace Results`/`Rewards` (`oag_ui_screens::endrace::borrow`).
+    let authored = |name| Layout::read(&screens, name, strings, faces, grid);
+    let borrows = title
+        .front_end
+        .is_some_and(|front_end| front_end.borrows_ps2_split_screens);
+    let borrowed = |layout: Option<Layout>| {
+        (
+            layout.filter(|_| borrows),
+            if borrows {
+                "borrowed from the PS2 pressing (this pressing authors none, placement not measured on it)"
+            } else {
+                "not authored"
+            },
+        )
+    };
+    let (results_split, results_how) = match authored(oag_ui_screens::endrace::RESULTS_SPLIT) {
+        Some(layout) => (Some(layout), "read from the disc"),
+        None => borrowed(oag_ui_screens::endrace::borrow::results_split(
+            &results, PSP_GRID,
+        )),
+    };
+    let (rewards_split, rewards_how) = match authored(oag_ui_screens::endrace::REWARDS_SPLIT) {
+        Some(layout) => (Some(layout), "read from the disc"),
+        None => borrowed(oag_ui_screens::endrace::borrow::rewards_split(
+            &rewards, PSP_GRID,
+        )),
+    };
+    oag_raceplay::loader_log::lines([format!(
+        "endrace split screens: Results Split {results_how}; Rewards Split {rewards_how}"
+    )]);
 
+    // Through `read_image`: the PS2 pressing keeps these as `.pct` under the same stems.
     let mut blobs = Vec::new();
     for src in EXTRA_TEXTURES {
-        match archives.read_name(src) {
+        match oag_pulse::read_image(archives, src) {
             Ok(blob) => blobs.push((src.to_string(), blob)),
             Err(error) => log::warn!("{src}: {error:#} - the EndRace screens draw without it"),
+        }
+    }
+    for src in PS2_REWARD_ICONS {
+        match oag_pulse::read_image(archives, src) {
+            Ok(blob) => blobs.push((src.to_string(), blob)),
+            Err(error) => log::debug!("{src}: {error:#} - not on this pressing"),
         }
     }
     let mut report = Vec::new();
@@ -218,6 +272,8 @@ pub fn load(
         rewards: Some(rewards),
         podium: None,
         menu,
+        results_split,
+        rewards_split,
         photo,
         sprites,
         trophies,
@@ -280,6 +336,7 @@ fn load_hd(
     base: &Sheet,
     fallback_globals: &[(&str, &str)],
 ) -> Result<EndRaceScreens> {
+    let authored_grid = oag_hd::endrace::AUTHORED_GRID;
     let blob = archives
         .read_name(oag_hd::endrace::SCREEN_ENTRY)
         .with_context(|| format!("reading {}", oag_hd::endrace::SCREEN_ENTRY))?;
@@ -291,7 +348,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     )
     .context("EndRace Results is not on this screen")?;
     let rewards = Layout::read_authored(
@@ -300,7 +357,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     );
     let menu = Layout::read_authored(
         &screens,
@@ -308,7 +365,7 @@ fn load_hd(
         strings,
         faces,
         grid,
-        oag_hd::endrace::AUTHORED_GRID,
+        authored_grid,
     )
     .context("EndRace Menu is not on this screen")?;
     let podium = load_hd_podium(archives, strings, faces, grid, fallback_globals);
@@ -329,6 +386,8 @@ fn load_hd(
         rewards,
         podium,
         menu,
+        results_split: None,
+        rewards_split: None,
         photo: None,
         sprites,
         trophies: Vec::new(),

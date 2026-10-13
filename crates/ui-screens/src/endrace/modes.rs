@@ -17,7 +17,7 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 
 use super::Layout;
 use super::draw::ordinal_idstring;
-use super::table::{Shown, lap_slot, table_layers};
+use super::table::{LapCell, Shown, lap_cell, table_layers};
 
 /// One craft's row on the Eliminator table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,10 +182,10 @@ pub fn elimination_results_draw_list(
         backdrop,
         race_behind,
         sprites,
-        shown,
+        &[(None, shown)],
         &|text| {
             let name = text.name.as_deref().unwrap_or("");
-            let Some((row, column)) = lap_slot(name) else {
+            let Some(LapCell { row, column, .. }) = lap_cell(name) else {
                 return match name {
                     "Line1" => elimination_line1(model, strings),
                     _ => text.string.clone(),
@@ -247,10 +247,10 @@ pub fn zone_results_draw_list(
         backdrop,
         race_behind,
         sprites,
-        shown,
+        &[(None, shown)],
         &|text| {
             let name = text.name.as_deref().unwrap_or("");
-            let Some((row, column)) = lap_slot(name) else {
+            let Some(LapCell { row, column, .. }) = lap_cell(name) else {
                 return match name {
                     "Line1" => Some(strings.get_or_id("ER_ZONE_COM").to_string()),
                     _ => text.string.clone(),

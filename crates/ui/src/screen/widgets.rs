@@ -82,6 +82,10 @@ impl Screens {
             height: self.number(node.value("height")),
             color,
             gradient,
+            own_offset: (
+                self.number(node.value("OffsetX")).unwrap_or(0.0),
+                self.number(node.value("OffsetY")).unwrap_or(0.0),
+            ),
             reveal: Vec::new(),
             transition: 0.0,
         })

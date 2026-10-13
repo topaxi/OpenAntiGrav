@@ -22,7 +22,7 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 
 use super::Layout;
 use super::draw::format_ticks;
-use super::table::{Shown, lap_slot, table_layers};
+use super::table::{LapCell, Shown, lap_cell, table_layers};
 
 /// Whose row it is.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +66,7 @@ impl PeopleResults {
 
     /// A cell's text: the header row, a craft's place, name or time.
     fn cell(&self, name: &str, strings: &StringTable) -> Option<String> {
-        let (row, column) = lap_slot(name)?;
+        let LapCell { row, column, .. } = lap_cell(name)?;
         if row == 0 {
             let id = match column {
                 0 => "PRO_POS",
@@ -127,7 +127,7 @@ pub fn people_results_draw_list(
         backdrop,
         race_behind,
         sprites,
-        shown,
+        &[(None, shown)],
         &|text| {
             let name = text.name.as_deref().unwrap_or("");
             if name.starts_with("lap") {

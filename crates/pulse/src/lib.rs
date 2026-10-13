@@ -179,6 +179,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: Some(oag_title::EndRaceStyle::measured(
         oag_title::EndRaceDialect::Pulse,
     )),
+    borrows_ps2_split_screens: true,
 };
 
 /// The bulk archive's candidates, in the order they are tried.

@@ -26,7 +26,7 @@ mod video;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
-use menu_page::{menu_page, picker_kind, picker_page, picker_stills};
+use menu_page::{is_split_ship, menu_page, picker_kind, picker_page, picker_stills};
 use offscreen::{offscreen, read_back, touch_preview, write_png};
 use preview_pass::{PreviewRequest, draw_preview, open_for_previews};
 
@@ -221,6 +221,7 @@ pub fn run(
         fury_backdrop,
         track_select,
         ship_select,
+        ship_select_split,
         circuit_names,
         menu_font,
         title_font,
@@ -624,6 +625,8 @@ pub fn run(
                     &mut sprites,
                     options.menu_picker_seconds,
                 );
+                let measure =
+                    |text: &str| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text);
                 let (mut list, request) = picker_page(
                     kind,
                     &circuit_names,
@@ -637,11 +640,66 @@ pub fn run(
                     &skin,
                     &menu_frame,
                     &sprites,
-                    &|text| oag_ui::font::measure(menu_font.as_ref().unwrap_or(&font), text),
+                    &measure,
                     distance,
                     options.menu_picker_seconds,
                     options.menu_picker_step_seconds,
+                    false,
                 );
+                // The shared two-person page: the second half on the next team, the first
+                // half's craft the one 3D pass this still carries.
+                if is_split_ship(page)
+                    && let Some(halves) = ship_select_split.as_ref()
+                {
+                    let mut second = options.settings.clone();
+                    if let Some(at) = teams.iter().position(|team| team.id == second.race.team)
+                        && let Some(next) = teams.get((at + 1) % teams.len())
+                    {
+                        second.race.team = next.id.clone();
+                    }
+                    let (first_list, _) = picker_page(
+                        kind,
+                        &circuit_names,
+                        &halves[0],
+                        &options.settings,
+                        title,
+                        &tracks,
+                        &teams,
+                        &strings,
+                        None,
+                        &skin,
+                        &menu_frame,
+                        &sprites,
+                        &measure,
+                        distance,
+                        options.menu_picker_seconds,
+                        options.menu_picker_step_seconds,
+                        true,
+                    );
+                    let (mut second_list, _) = picker_page(
+                        kind,
+                        &circuit_names,
+                        &halves[1],
+                        &second,
+                        title,
+                        &tracks,
+                        &teams,
+                        &strings,
+                        None,
+                        &skin,
+                        &menu_frame,
+                        &sprites,
+                        &measure,
+                        distance,
+                        options.menu_picker_seconds,
+                        options.menu_picker_step_seconds,
+                        false,
+                    );
+                    // The second half is the base (it brings the screen's own backdrop and
+                    // bar), the first goes over it so that its title is the one on the bar.
+                    second_list.extend(first_list);
+                    list = second_list;
+                }
                 list.extend(stills);
                 // HD's ship screen's footer legend, as the live one draws it
                 // (`main::menu_stage::footer::hd_nav`).

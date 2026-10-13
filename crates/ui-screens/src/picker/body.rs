@@ -246,7 +246,7 @@ pub(super) fn body(
             Draw::Text {
                 x: layout.panel[0] + 14.0 * layout.scale[0],
                 y: layout.panel[1] + 3.0 * layout.scale[1],
-                scale: 1.0,
+                scale: layout.name_scale,
                 color,
                 border: None,
                 align: Align::Left,
@@ -262,7 +262,7 @@ pub(super) fn body(
         out.push(Draw::Text {
             x: layout.preview[0] + layout.preview[2] / 2.0,
             y: layout.preview[1] + layout.preview[3] - 18.0 * layout.scale[1],
-            scale: 1.0,
+            scale: layout.name_scale,
             color: [0.2, 0.68, 0.76, 1.0],
             border: None,
             align: Align::Centre,

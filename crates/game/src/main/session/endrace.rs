@@ -266,10 +266,66 @@ impl Session {
                 )
             });
 
-        let people = (split && !is_hd)
+        // Two people on a pressing that has `EndRace Results Split` (the disc's own on
+        // the PS2, borrowed on the PSP): a lap table and a rewards panel each. Any other
+        // count, or a title with no such screen, keeps the one table that names everyone.
+        let two_people = board.as_ref().filter(|board| {
+            split
+                && !is_hd
+                && board.persons() == 2
+                && screens.results_split.is_some()
+                && screens.rewards_split.is_some()
+        });
+        let mut split_rewards = Vec::new();
+        let split_results: Option<Vec<oag_ui_screens::endrace::Results>> =
+            two_people.map(|board| {
+                let world = &stage.race.sim.world;
+                oag_game::results_tables::split_people(board, world, &boosts)
+                    .into_iter()
+                    .map(|person| {
+                        // Each person banks their own team's loyalty, under the law a
+                        // one-person race does. Chosen: the PS2's authored Rewards Split
+                        // shows a loyalty row and bar per person, which has nothing to
+                        // show unless it was earned.
+                        let loyalty = stage.race.slot_teams().get(person.slot).map(|team| {
+                            let award = loyalty_award(LoyaltyInputs {
+                                mode,
+                                laps: person.laps_completed,
+                                perfect_laps: 0,
+                                kills: person.kills,
+                                zones: u32::from(person.zone),
+                                perfect_zones: 0,
+                                difficulty: None,
+                                suggested_ship: false,
+                            });
+                            let total = self.records.record_loyalty(&title, team, award);
+                            oag_ui_screens::endrace::Loyalty {
+                                team_name: strings.get_or_id(team).to_string(),
+                                award,
+                                total,
+                            }
+                        });
+                        split_rewards.push(oag_ui_screens::endrace::Rewards {
+                            medal: None,
+                            campaign: false,
+                            loyalty,
+                        });
+                        person.results(headline(mode, person.place))
+                    })
+                    .collect()
+            });
+        if split_results.is_some()
+            && let Err(e) = oag_game::records::save(&self.records)
+        {
+            warn!("could not save the loyalty totals: {e:#}");
+        }
+
+        let people = (split && !is_hd && split_results.is_none())
             .then(|| oag_game::results_tables::people_rows(board.as_ref(), stage.race.slot_teams()))
             .flatten();
-        let results = if let Some(people) = people {
+        let results = if let Some(split_results) = split_results {
+            ResultsModel::PulseSplit(split_results)
+        } else if let Some(people) = people {
             ResultsModel::PulsePeople(people)
         } else if let Some(tournament) = pulse_tournament {
             ResultsModel::PulseTournament(tournament)
@@ -334,6 +390,7 @@ impl Session {
             atlas,
             results,
             rewards,
+            split_rewards,
             menu,
             runs_on_after_the_end,
             self.anisotropy,
