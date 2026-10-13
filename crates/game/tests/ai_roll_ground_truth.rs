@@ -215,7 +215,7 @@ fn rolls_everywhere(
 /// `seed` is the world seed, which decides both the pickup stream and which
 /// character `oag_ai::pilot_for_slot` deals each slot - so two seeds are two
 /// different grids of the same tier, not the same race twice. See
-/// [`a_higher_tier_rolls_no_less`] for why that axis had to exist.
+/// [`every_higher_tier_rolls_no_less`] for why that axis had to exist.
 fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Vec<Rolls>> {
     let image = image()?;
     let loaded = race::load(&race::Options {
@@ -545,8 +545,8 @@ fn grid_armed_over_every_circuit(
     Some(armed)
 }
 
-/// One link of the tier chain at one seed: does a higher tier still roll more
-/// than the tier below it when they are actually racing a full grid?
+/// The tier chain at one seed: does each tier still roll no less than the
+/// tier below it when they are actually racing a full grid?
 ///
 /// # Why the sample is this large, and why it had to grow
 ///
@@ -588,115 +588,73 @@ fn grid_armed_over_every_circuit(
 /// The tier-to-tier ratios are roughly 4x, 2x and 2x against the 0-3 range the
 /// single-race version had to work in.
 ///
-/// # Why it is six tests rather than one, and why that is stronger
+/// # Why it is one test per seed
 ///
 /// The table above is the reason: **each seed reproduces the ordering on its
 /// own**, so the seed is a held-out check on the first rather than padding, and
 /// asserting per seed says more than asserting on their sum - a sum can hide
 /// one seed reordering under the other's margin. The tier chain
-/// `novice <= skilled <= elite <= ace` is likewise three independent pairwise
-/// comparisons, and three tests assert exactly the three things one chained
-/// loop did.
+/// `novice <= skilled <= elite <= ace` is three pairwise comparisons, and each
+/// is checked and reported on its own: a failure lists every link that broke.
 ///
-/// The reason to *want* that split is wall clock. `cargo nextest` parallelises
-/// across tests, one process each, so a four-tier by two-seed matrix inside one
-/// function runs on one core while eleven sit idle: it measured **525 s** on
-/// 2026-09-09 and was 89% of `just test-data`'s entire 587 s wall clock on its
-/// own. Two tiers at one seed is 24 grid races, about 131 s, and the six run
-/// side by side. Each interior tier is measured twice, so the CPU cost rises
-/// about 50% - which is the trade, and a good one on an otherwise idle machine.
-///
-/// **The 24 races of one test also run side by side** (`in_parallel::map`,
-/// 2026-10-07): they share nothing, and the totals and the printed table come
-/// back in circuit order, so every number is the serial loop's. One test was
-/// still 170-180 s under a member's load, and the tail of any `oag-game`
-/// selection in `just test-data-affected`.
+/// **It was six tests, one per (link, seed), from 2026-09-09 to 2026-10-13.**
+/// That split took the four-tier by two-seed matrix (525 s on one core) onto
+/// the test axis, at the price of racing each interior tier twice: 12 grids
+/// for 8 distinct ones. Once the races of a test ran side by side
+/// (`in_parallel::map`, 2026-10-07) the matrix no longer needed the test axis
+/// for its cores, and the suite became throughput-bound (2026-10-13: 12,535 s
+/// of test time over 822 s of wall clock on 16 slots), so the third of the
+/// work spent re-racing a tier was the cost that mattered. Each test now races
+/// its seed's four tiers once, 48 grid races side by side, and asserts the same
+/// three links on the same totals.
 ///
 /// **Still asserted loosely.** Non-decreasing tier to tier, not a strict `>`,
 /// and on the twelve-circuit total rather than any single slot's count. Read
 /// the printed table for the ordering a run actually produced, and
 /// `docs/gameplay/ai.md` for the numbers behind the tuning.
-fn a_higher_tier_rolls_no_less(seed: u64, lower: oag_ai::Difficulty, higher: oag_ai::Difficulty) {
+fn every_higher_tier_rolls_no_less(seed: u64) {
     let circuits = circuits();
     if circuits.is_empty() {
         return;
     }
-    let [easier, harder] =
-        <[Option<u32>; 2]>::try_from(in_parallel::map(&[lower, higher], 2, |&level| {
-            grid_armed_over_every_circuit(level, seed, &circuits)
-        }))
-        .expect("two tiers in, two totals out");
-    let (Some(easier), Some(harder)) = (easier, harder) else {
+    let tiers: Vec<oag_ai::Difficulty> = oag_ai::Difficulty::ALL
+        .iter()
+        .map(|&(_, level)| level)
+        .collect();
+    let armed = in_parallel::map(&tiers, tiers.len(), |&level| {
+        grid_armed_over_every_circuit(level, seed, &circuits)
+    });
+    let Some(armed) = armed.into_iter().collect::<Option<Vec<u32>>>() else {
         return;
     };
-    assert!(
-        harder >= easier,
-        "over every forward circuit at seed {seed:#010x}, {} armed {harder} \
-         rolls total against {}'s {easier}, which is a lower tier rolling more \
-         than a higher one, not less",
-        higher.name(),
-        lower.name()
-    );
+    let mut wrong = Vec::new();
+    for (pair, totals) in tiers.windows(2).zip(armed.windows(2)) {
+        let ([lower, higher], [easier, harder]) = (pair, totals) else {
+            unreachable!("windows of two");
+        };
+        if harder < easier {
+            wrong.push(format!(
+                "over every forward circuit at seed {seed:#010x}, {} armed {harder} \
+                 rolls total against {}'s {easier}, which is a lower tier rolling more \
+                 than a higher one, not less",
+                higher.name(),
+                lower.name()
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_skilled_arms_no_fewer_rolls_than_novice_at_the_default_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[0],
-        oag_ai::Difficulty::Novice,
-        oag_ai::Difficulty::Skilled,
-    );
+fn every_tier_of_a_full_grid_arms_no_fewer_rolls_than_the_one_below_at_the_default_seed() {
+    every_higher_tier_rolls_no_less(GRID_SEEDS[0]);
 }
 
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_skilled_arms_no_fewer_rolls_than_novice_at_the_held_out_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[1],
-        oag_ai::Difficulty::Novice,
-        oag_ai::Difficulty::Skilled,
-    );
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_elite_arms_no_fewer_rolls_than_skilled_at_the_default_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[0],
-        oag_ai::Difficulty::Skilled,
-        oag_ai::Difficulty::Elite,
-    );
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_elite_arms_no_fewer_rolls_than_skilled_at_the_held_out_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[1],
-        oag_ai::Difficulty::Skilled,
-        oag_ai::Difficulty::Elite,
-    );
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_ace_arms_no_fewer_rolls_than_elite_at_the_default_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[0],
-        oag_ai::Difficulty::Elite,
-        oag_ai::Difficulty::Ace,
-    );
-}
-
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn a_full_grid_of_ace_arms_no_fewer_rolls_than_elite_at_the_held_out_seed() {
-    a_higher_tier_rolls_no_less(
-        GRID_SEEDS[1],
-        oag_ai::Difficulty::Elite,
-        oag_ai::Difficulty::Ace,
-    );
+fn every_tier_of_a_full_grid_arms_no_fewer_rolls_than_the_one_below_at_the_held_out_seed() {
+    every_higher_tier_rolls_no_less(GRID_SEEDS[1]);
 }
 
 /// **Ace against the lower tiers, in the same race.** `race::Options`'s
