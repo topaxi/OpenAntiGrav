@@ -395,6 +395,7 @@ pub(super) fn selection_layouts(
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
     Option<oag_ui_screens::picker::Layout>,
+    Option<[oag_ui_screens::picker::Layout; 2]>,
 ) {
     let faces = oag_ui_screens::picker::FaceScales {
         default: menu_font.map_or(
@@ -448,12 +449,24 @@ pub(super) fn selection_layouts(
                 grid,
             )
         });
+    // Only a source that authors `Team SelectionSplit` has one.
+    let ship_select_split = race_box.and_then(|included| {
+        oag_ui_screens::picker::Layout::read_split(
+            included,
+            strings,
+            faces,
+            [space.size.0, space.size.1],
+        )
+    });
     report.push(format!(
-        "selection screens: track {}, ship {}",
+        "selection screens: track {}, ship {}, split ship {}",
         track_select.as_ref().map_or("unread", |_| "read"),
-        ship_select.as_ref().map_or("unread", |_| "read")
+        ship_select.as_ref().map_or("unread", |_| "read"),
+        ship_select_split
+            .as_ref()
+            .map_or("not authored", |_| "read"),
     ));
-    (track_select, ship_select)
+    (track_select, ship_select, ship_select_split)
 }
 
 /// `strings` with what the served table lacks filled in from `file`'s own

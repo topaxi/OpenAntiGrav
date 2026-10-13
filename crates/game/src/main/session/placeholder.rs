@@ -219,6 +219,7 @@ impl Session {
             // RACE page the way every title's did before the pickers.
             track_select: None,
             ship_select: None,
+            ship_select_split: None,
             team_details: Vec::new(),
             strings,
         });

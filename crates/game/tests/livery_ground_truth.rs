@@ -330,6 +330,7 @@ fn an_hd_hull_takes_its_locators_from_the_file_beside_it() {
         },
         None,
         None,
+        &[],
         &mut report,
     )
     .expect("the livery loads");

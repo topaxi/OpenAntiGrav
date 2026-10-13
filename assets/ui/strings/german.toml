@@ -34,6 +34,7 @@ OAG_JOIN_EMPTY = { text = "TASTE DRÜCKEN", human = false }
 OAG_JOIN_KEYBOARD = { text = "TASTATUR", human = false }
 OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
 OAG_JOIN_START = { text = "START", human = false }
+OAG_PICK_READY = { text = "BEREIT", human = false }
 OAG_MENU_RECORDS = { text = "REKORDE", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Deine Bestzeiten und Punktestände nach Strecke und Tempoklasse", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONEN", human = false }

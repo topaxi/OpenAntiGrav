@@ -492,6 +492,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) skin: Option<String>,
 
+    /// What a split-screen race's second and later people fly, one per flag in
+    /// seat order: `TEAM` or `TEAM:SKIN` (a `PI_ModelSkin` name). The headless
+    /// counterpart of picking on each seat's own Ship Select; with `--players N`,
+    /// `--seat-team B --seat-team C` puts the player on `--team`, slot 1 on `B`
+    /// and slot 2 on `C`. A team the source does not offer is the same case
+    /// `--team` has: the load reports it. Chosen, not measured.
+    #[arg(long = "seat-team", value_name = "TEAM[:SKIN]")]
+    pub(crate) seat_team: Vec<String>,
+
     /// A directory holding downloadable content: a pack's `.edat` files, or the
     /// `.zip` they were downloaded as. Repeatable.
     ///

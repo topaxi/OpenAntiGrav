@@ -255,7 +255,7 @@ impl Picker {
     /// happened, on the same [`Event`] terms as [`Self::update`].
     pub fn pointer(&mut self, pointer: &Pointer, targets: &[Target]) -> Vec<Event> {
         let mut out = Vec::new();
-        if pointer.is_idle() {
+        if pointer.is_idle() || self.locked {
             return out;
         }
         if pointer.scroll != 0 {

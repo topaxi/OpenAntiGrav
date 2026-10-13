@@ -256,6 +256,20 @@ pub(super) fn body(
             alpha,
         ));
     }
+    // A seat that has confirmed on the shared split screen says so under its
+    // craft, in the colour of the stat labels.
+    if picker.is_locked() && !layout.ready.is_empty() {
+        out.push(Draw::Text {
+            x: layout.preview[0] + layout.preview[2] / 2.0,
+            y: layout.preview[1] + layout.preview[3] - 18.0 * layout.scale[1],
+            scale: 1.0,
+            color: [0.2, 0.68, 0.76, 1.0],
+            border: None,
+            align: Align::Centre,
+            text: layout.ready.clone(),
+            wrap_width: None,
+        });
+    }
     out
 }
 

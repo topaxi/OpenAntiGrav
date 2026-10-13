@@ -108,6 +108,11 @@ pub(crate) struct MenuStage {
     /// tick's input whole while it is `Some`, and it is drawn instead of
     /// the rows rather than over them.
     pub(crate) picker: Option<crate::picker_stage::PickerStage>,
+    /// The second seat's Ship Select, drawn and ticked beside [`Self::picker`]
+    /// on a source whose split-screen Team Selection is one page for both
+    /// players (`Team SelectionSplit`, Pulse's PS2 pressing). `None` is every
+    /// other screen, where the seats take Ship Select in turn.
+    pub(crate) partner: Option<Box<crate::picker_stage::PickerStage>>,
     /// The Race Campaign's `Grid Selection`/`Cell Selection`, when one is
     /// open - the same "takes the tick whole, draws instead of the rows"
     /// shape [`Self::picker`] is. See `crate::campaign_stage` and
@@ -302,6 +307,13 @@ impl MenuStage {
             )]
             picker.model.tick(dt as f32);
         }
+        if let Some(partner) = &mut self.partner {
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "a tick is milliseconds; f32 holds it exactly"
+            )]
+            partner.model.tick(dt as f32);
+        }
     }
 
     /// Starts a page change, snapshotting the page being left.
@@ -479,6 +491,22 @@ impl MenuStage {
                 &|text| font::measure(&self.text_atlas, text),
             );
             layers.body.extend(picker.slideshow_draws());
+            // The other seat's half of a shared Ship Select.
+            if let Some(partner) = self.partner.as_mut() {
+                let other = oag_ui_screens::picker::draw_list(
+                    &partner.model,
+                    &partner.layout,
+                    &self.skin,
+                    &self.frame,
+                    None,
+                    true,
+                    &|src| partner.placed(src),
+                    &|text| font::measure(&self.text_atlas, text),
+                );
+                layers.chrome.extend(other.chrome);
+                layers.body.extend(other.body);
+                layers.body.extend(partner.slideshow_draws());
+            }
             layers.chrome.extend(footer::hd_nav(
                 &self.nav_legend,
                 &self.default_atlas,
@@ -518,6 +546,16 @@ impl MenuStage {
                 target_size,
                 self.skin.space(),
             );
+            if let Some(partner) = self.partner.as_mut() {
+                partner.draw_preview(
+                    gpu,
+                    encoder,
+                    view,
+                    viewport,
+                    target_size,
+                    self.skin.space(),
+                );
+            }
             return Ok(());
         }
         if self.pure_chain.is_some() {

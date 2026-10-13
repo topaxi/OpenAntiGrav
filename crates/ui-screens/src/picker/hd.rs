@@ -210,6 +210,7 @@ pub fn read(
         scale: [grid[0] / super::PSP_GRID[0], grid[1] / super::PSP_GRID[1]],
         hd: Some(Box::new(extra)),
         hd_track: None,
+        ready: String::new(),
     })
 }
 

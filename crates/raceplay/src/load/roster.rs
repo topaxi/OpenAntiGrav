@@ -146,6 +146,51 @@ fn apply_grid_teams(
     ));
 }
 
+/// Puts each seated person's team in their own slot and keeps every team on
+/// the grid once.
+///
+/// `picks[i]` is slot `i + 1`'s; slot `0` is the player's and untouched. The
+/// grid was drawn for one person ([`oag_livery::teams_for_slots`] keeps the
+/// player's team out of the opponents' and flies every other team once), so a
+/// seated person who took a team the draw gave an opponent would meet
+/// themselves: the opponent that held it takes a team a person's pick
+/// displaced instead. **A person may take the player's own team, or another
+/// person's**, and then two craft wear it - the draw never offered it to an
+/// opponent, so there is nobody to move (**chosen, not measured**). No picks is
+/// no change at all, and the draw's own report line stands.
+pub(super) fn apply_seat_picks(
+    slot_teams: &mut [String],
+    picks: &[crate::SeatPick],
+    report: &mut Vec<String>,
+) {
+    let humans = (1 + picks.len()).min(slot_teams.len());
+    if humans <= 1 {
+        return;
+    }
+    let mut spare: std::collections::VecDeque<String> =
+        slot_teams[1..humans].iter().cloned().collect();
+    for (offset, pick) in picks.iter().enumerate().take(humans - 1) {
+        slot_teams[offset + 1].clone_from(&pick.team);
+    }
+    let taken: Vec<String> = slot_teams[..humans].to_vec();
+    spare.retain(|team| !taken.contains(team));
+    for opponent in slot_teams.iter_mut().skip(humans) {
+        if taken.contains(opponent)
+            && let Some(team) = spare.pop_front()
+        {
+            *opponent = team;
+        }
+    }
+    report.push(format!(
+        "seat picks: slot(s) 1..{humans} fly {} (their own choice); the opponents keep every other team once",
+        picks
+            .iter()
+            .map(|pick| pick.team.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+}
+
 /// Everything the grid's own slot list decides: who flies where, what each
 /// one draws, and HD's per-slot trail flag.
 pub(super) struct Grid {
@@ -217,7 +262,36 @@ pub(super) fn grid(
     let pool = super::family::pool(craft_title.race, team, available);
     let mut slot_teams = oag_livery::teams_for_slots(team, &pool, oag_gameplay::MAX_SHIPS, seed);
     apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
-    super::family::follow_player(craft_title.race, &mut slot_teams, report);
+    apply_seat_picks(&mut slot_teams, &options.seat_picks, report);
+    super::family::follow_player(
+        craft_title.race,
+        &mut slot_teams,
+        options.seat_picks.len(),
+        report,
+    );
+    let seat_skins: Vec<Option<String>> = options
+        .seat_picks
+        .iter()
+        .map(|pick| {
+            super::skin::resolve(
+                archives,
+                craft_title,
+                &pick.team,
+                pick.skin.as_deref(),
+                options.mode,
+                report,
+            )
+        })
+        .collect();
+    let seat_paints: Vec<oag_livery::Paint<'_>> = options
+        .seat_picks
+        .iter()
+        .zip(&seat_skins)
+        .map(|(pick, skin)| oag_livery::Paint {
+            hull_variant: pick.hull_variant.as_deref(),
+            skin: skin.as_deref(),
+        })
+        .collect();
     let liveries = oag_livery::load(
         archives,
         &slot_teams,
@@ -240,6 +314,7 @@ pub(super) fn grid(
         },
         hull_variant,
         skin.as_deref(),
+        &seat_paints,
         report,
     )?;
     report.push(format!(
@@ -256,7 +331,57 @@ pub(super) fn grid(
 
 #[cfg(test)]
 mod tests {
-    use super::apply_grid_teams;
+    use super::{apply_grid_teams, apply_seat_picks};
+    use crate::SeatPick;
+
+    fn pick(team: &str) -> SeatPick {
+        SeatPick {
+            team: team.to_string(),
+            hull_variant: None,
+            skin: None,
+        }
+    }
+
+    /// The draw gave slot 3 the team a person then took: slot 3 takes the team
+    /// that person's slot held, so every team is still flown once.
+    #[test]
+    fn a_seat_pick_moves_the_opponent_that_held_it() {
+        let mut slot_teams = slots(&["p0", "a", "b", "c", "d"]);
+        let mut report = Vec::new();
+        apply_seat_picks(&mut slot_teams, &[pick("c")], &mut report);
+        assert_eq!(slot_teams, slots(&["p0", "c", "b", "a", "d"]));
+        assert!(report[0].contains("slot(s) 1..2 fly c"), "{}", report[0]);
+    }
+
+    /// A pick nobody held (a team the draw left off the grid) just lands.
+    #[test]
+    fn a_seat_pick_the_grid_never_held_just_lands() {
+        let mut slot_teams = slots(&["p0", "a", "b", "c"]);
+        apply_seat_picks(&mut slot_teams, &[pick("z")], &mut Vec::new());
+        assert_eq!(slot_teams, slots(&["p0", "z", "b", "c"]));
+    }
+
+    /// Two people may take the same team, and may take the player's.
+    #[test]
+    fn people_may_share_a_team_and_the_opponents_do_not_double_up() {
+        let mut slot_teams = slots(&["p0", "a", "b", "c", "d"]);
+        apply_seat_picks(&mut slot_teams, &[pick("p0"), pick("c")], &mut Vec::new());
+        assert_eq!(slot_teams, slots(&["p0", "p0", "c", "a", "d"]));
+        let mut both = slots(&["p0", "a", "b", "c"]);
+        apply_seat_picks(&mut both, &[pick("c"), pick("c")], &mut Vec::new());
+        assert_eq!(both[..3], slots(&["p0", "c", "c"])[..], "{both:?}");
+        assert!(!both[3..].contains(&"c".to_string()), "{both:?}");
+    }
+
+    /// One person is an ordinary race: no change, no report line.
+    #[test]
+    fn no_seat_picks_changes_nothing() {
+        let mut slot_teams = slots(&["p0", "a", "b"]);
+        let mut report = Vec::new();
+        apply_seat_picks(&mut slot_teams, &[], &mut report);
+        assert_eq!(slot_teams, slots(&["p0", "a", "b"]));
+        assert!(report.is_empty());
+    }
 
     fn slots(teams: &[&str]) -> Vec<String> {
         teams.iter().map(|t| (*t).to_string()).collect()

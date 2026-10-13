@@ -281,3 +281,78 @@ fn vita_2048_two_views_each_keep_their_picture() {
     };
     two_up_draws_two_pictures(&source, "2048 two");
 }
+
+/// **A seated person's pick reaches their own craft**, loaded off the real disc.
+///
+/// Slot 1 of a two-seat race flies the team the second person picked, in the
+/// paint they picked, with that team's own handling; slot 0 is exactly what it is
+/// with no second seat, and no team is flown twice by the opponents. Dropping
+/// `Options::seat_picks` from the load fails the first assertion; dropping the
+/// per-slot paint fails the texel one.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_seated_persons_pick_reaches_their_craft() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let options = |picks: Vec<oag_raceplay::SeatPick>| oag_raceplay::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        team: Some("Assegai".to_string()),
+        seat_picks: picks,
+        ..oag_raceplay::Options::default()
+    };
+    let pick = |skin: Option<&str>| oag_raceplay::SeatPick {
+        team: "Qirex".to_string(),
+        hull_variant: None,
+        skin: skin.map(str::to_string),
+    };
+    let alone = oag_raceplay::load(&options(Vec::new())).expect("the race of one");
+    let plain = oag_raceplay::load(&options(vec![pick(None)])).expect("the two-seat race");
+    let painted =
+        oag_raceplay::load(&options(vec![pick(Some("Alternative"))])).expect("the painted one");
+
+    // The pick lands in slot 1 and nowhere else, and the opponents keep every
+    // other team once.
+    assert_eq!(painted.setup.slot_teams[0], alone.setup.slot_teams[0]);
+    assert_eq!(painted.setup.slot_teams[1], "Qirex");
+    assert_eq!(
+        painted
+            .setup
+            .slot_teams
+            .iter()
+            .filter(|t| *t == "Qirex")
+            .count(),
+        1,
+        "{:?}",
+        painted.setup.slot_teams
+    );
+    let mut distinct = painted.setup.slot_teams.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), painted.setup.slot_teams.len());
+    assert_eq!(painted.liveries[1].team, "Qirex");
+
+    // Its own team's physics, not the player's.
+    let own = painted.setup.opponent_handling[1].expect("slot 1 has its own tuning");
+    assert_ne!(own, painted.setup.handling, "Qirex flies Qirex's tuning");
+
+    // Its paint: the texels move, and slot 0's do not.
+    let texels = |loaded: &oag_raceplay::Loaded, slot: usize| -> Vec<Vec<u8>> {
+        loaded.liveries[slot]
+            .hull
+            .textures
+            .iter()
+            .flatten()
+            .map(|texture| texture.rgba().map(<[u8]>::to_vec).unwrap_or_default())
+            .collect()
+    };
+    assert_ne!(
+        texels(&plain, 1),
+        texels(&painted, 1),
+        "the second person's skin repaints their hull"
+    );
+    assert_eq!(texels(&plain, 0), texels(&painted, 0));
+    assert_eq!(texels(&alone, 0), texels(&painted, 0));
+}

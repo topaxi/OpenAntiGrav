@@ -580,6 +580,10 @@ pub(crate) struct Session {
     /// or the player backs out of the race box's screens (which drop it). `None`
     /// is an ordinary race.
     pub(crate) split_lobby: Option<oag_input::lobby::Lobby>,
+    /// What the people seated after the first picked on their own Ship Select,
+    /// in seat order, until the launch moves them into
+    /// `oag_raceplay::Options::seat_picks`. Empty outside a split-screen race box.
+    pub(crate) split_picks: Vec<picker::SeatChoice>,
     /// Where the `Classic` circuits a Pure campaign event races are, by
     /// `PI_Track` name: the shell's catalogue lists only the ordinary ones.
     /// Filled when the list opens, read by `launch_campaign_cell`.
@@ -801,6 +805,8 @@ pub(crate) struct Shell {
     /// the RACE page.
     pub(crate) track_select: Option<oag_ui_screens::picker::Layout>,
     pub(crate) ship_select: Option<oag_ui_screens::picker::Layout>,
+    /// The two halves of `Team SelectionSplit`, where the source authors it.
+    pub(crate) ship_select_split: Option<[oag_ui_screens::picker::Layout; 2]>,
     /// Every team with what the ship picker shows for it - its ratings and
     /// its skins - where [`Self::teams`] is only the id and the label the
     /// RACE page's own row needs.
@@ -919,6 +925,7 @@ impl Shell {
             fury_backdrop: boot_shell.fury_backdrop.clone(),
             track_select: boot_shell.track_select.clone(),
             ship_select: boot_shell.ship_select.clone(),
+            ship_select_split: boot_shell.ship_select_split.clone(),
             team_details: boot_shell.teams.clone(),
         }
     }
