@@ -241,7 +241,7 @@ impl Race {
                         &ship.physics,
                         &stats,
                         &self.sim.class,
-                        0,
+                        slot as u8,
                     ) else {
                         return;
                     };
@@ -280,7 +280,7 @@ impl Race {
                     if !self.sim.world.projectiles.charge_up(
                         position,
                         velocity,
-                        0,
+                        slot as u8,
                         oag_weapons::projectile::plasma::CHARGE_SECONDS,
                     ) {
                         // Every slot was taken. Keep the pickup rather than
@@ -296,7 +296,7 @@ impl Race {
                     // `oag_sound::sfx::Cue::Plasma`'s own doc comment.
                     self.sim.cues.push(oag_sound::sfx::CueEvent::new(
                         oag_sound::sfx::Cue::Plasma,
-                        0,
+                        slot,
                     ));
                 }
                 oag_tables::weapons::Weapon::Shuriken => {
@@ -329,7 +329,7 @@ impl Race {
                         &stats,
                         &self.sim.class,
                         &mut self.sim.world.rng,
-                        0,
+                        slot as u8,
                     ) else {
                         return;
                     };
@@ -532,7 +532,7 @@ impl Race {
                         .map(|tangent| tangent.dot(ship.physics.body.forward()))
                         .unwrap_or(1.0);
                     self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
-                        0,
+                        slot as u8,
                         progress,
                         forward_dot_tangent,
                         &stats,
@@ -541,7 +541,7 @@ impl Race {
                 oag_tables::weapons::Weapon::Repulser => {
                     // `Weapon_FireRepulser` - see `Race::fire_repulser` for
                     // why a full pool still spends the pickup.
-                    if !self.fire_repulser(0) {
+                    if !self.fire_repulser(slot) {
                         return;
                     }
                 }
@@ -859,7 +859,7 @@ impl Race {
     /// `entity+0x860 & 1` is set, and that bit is written by `HudSight_Update`
     /// alone - the reticle, which this project has found no evidence runs for
     /// anything but the craft the HUD is drawn for. So the craft that owns the
-    /// reticle (`slot == 0`) additionally needs [`RaceView::sight`] to say
+    /// reticle (`slot == primary_slot()`) additionally needs [`RaceView::sight`] to say
     /// [`sight::Sight::locked`] - held on screen past [`sight::HOLD_SECONDS`] -
     /// before its candidate is passed through; every other slot's candidate is
     /// used as soon as `lock` finds one, exactly as before this gate landed.
@@ -912,7 +912,7 @@ impl Race {
         // "The lock test is shared; the hold is not" above. A press before the
         // brackets close still fires, same as an opponent's shot always does;
         // it just carries no candidate through.
-        let target = if slot == 0 {
+        let target = if slot == self.sim.world.primary_slot() {
             candidate.filter(|_| self.view.sight.locked())
         } else {
             candidate

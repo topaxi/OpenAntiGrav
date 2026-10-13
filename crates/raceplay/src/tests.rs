@@ -46,6 +46,7 @@ mod reconcile;
 mod repulser;
 pub(crate) mod respawn;
 mod run_stats;
+mod second_person;
 mod scene;
 mod scene_build;
 mod shield_flash;
