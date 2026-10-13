@@ -22,18 +22,15 @@ redundancy confirmed, **H** means a read-only sweep's lead, not yet verified.
 ## Open
 
 1. **The maintainer's call, left alone on purpose:**
-   - `replay_ground_truth` (167 s): `record(title)` runs three times per title,
-     once per property (about 55 s). Recommendation: keep the per-property
-     split and share the recording only if the tail allows one test per title
-     (each would then be record + three checks, about 40 s under load).
+   - ~~`replay_ground_truth`~~: one recording per title since 2026-10-13
+     (62 s to 51 s isolated).
    - `rcsmodel_decl` (7 walks), `rcsmodel_material` (4), `psp2_rcsmodel` (5),
      `rcsmodel_ground_truth` (3), about 100 s summed: those files keep one claim
      per test for legibility. Recommendation: the `gxp` pattern (one walk, each
      claim a named function with its doc comment) keeps that legibility in the
      source while losing it only in the test list.
-   - `ai_roll` full grids (587 s): 4 of 12 tier-by-seed grids recomputed (about
-     190 s), but sharing them puts four grids in one test, past the 300 s
-     ceiling under load. Recommendation: wait for the raycast spatial index.
+   - ~~`ai_roll` full grids~~: one test per seed races each tier once since
+     2026-10-13, and the world broadphase halved what is left.
 2. **`omega_gnf_ground_truth`, 781 s, still the largest binary.** Besides the
    per-block decode, its time is the size of what it writes: 2.1 G texels for
    `data03` alone, each a fresh `Vec<[u8; 4]>`, and the chain claim decodes a
