@@ -707,7 +707,11 @@ here:**
 - scaled by `0.80`, none.
 
 The PSP reading of that lane is register-level at confidence 90 and was not
-moved. What the original's craft does over this gap (liftoff speed, flight
+moved. Re-read for this pass (`0x08849b30`-`0x08849bcc`), it says the same:
+- `C600 = (+0xf8, +0xfc)`, `C610 = (table, viim 1)`, then the mass, then
+  `(grounded, vocp grounded)`;
+- so the class scale rides the grounded lane, and a craft in the air falls at
+  `flight_gravity` exactly, as this engine does. What the original's craft does over this gap (liftoff speed, flight
 time, drop) is what can move it.
 
 **More than one human keeps this project's driver, logged.** The game has no
