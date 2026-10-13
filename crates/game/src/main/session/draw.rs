@@ -127,6 +127,8 @@ impl Session {
         // return before this, and a frame that never drew is not a frame time
         // on any of these meters.
         let mut present_seconds = acquire_start.elapsed().as_secs_f32();
+        self.frame_timing
+            .acquired(acquire_start, web_time::Instant::now());
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());

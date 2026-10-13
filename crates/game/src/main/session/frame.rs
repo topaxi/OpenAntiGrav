@@ -275,6 +275,7 @@ impl Session {
             // however many people are racing.
             self.feed_touch();
             let inputs = self.controls.player_snapshots();
+            self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
             // The pad spoke: the drawn cursor goes until the mouse moves
             // again, the same rule a key press applies in `app.rs`. Read
@@ -807,6 +808,17 @@ impl Session {
         self.build_endrace();
 
         let presented = self.draw(now, frame_seconds)?;
+        if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
+            log::debug!(
+                "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \
+                 before the image was acquired ({} of {} sampling frame(s) before it)",
+                summary.frames,
+                summary.mean_wait * 1000.0,
+                summary.mean_lead * 1000.0,
+                summary.sampled_before,
+                summary.sampled,
+            );
+        }
         self.probe_end_frame(elapsed);
         // **What the `OUTSIDE` row is derived from**, and the anchor matters:
         // measured from `now`, which is the same instant `elapsed` above is

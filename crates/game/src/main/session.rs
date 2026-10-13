@@ -34,6 +34,8 @@ mod endrace;
 mod escape;
 #[path = "session/frame.rs"]
 mod frame;
+#[path = "session/frame_timing.rs"]
+pub(crate) mod frame_timing;
 #[path = "session/lifecycle.rs"]
 pub(crate) mod lifecycle;
 #[path = "session/language.rs"]
@@ -259,6 +261,10 @@ pub(crate) struct Session {
     /// happens inside the frame rather than in the limiter's own sleep, so
     /// without this a vsync-bound run reads as CPU-bound.
     pub(crate) present_cost: perf::Meter,
+    /// Where each window frame's input sample sat against its swapchain
+    /// acquire, summed a second at a time and logged at `debug`. See
+    /// [`frame_timing`].
+    pub(crate) frame_timing: frame_timing::FrameTiming,
     /// Whether the "this target is out of reach" line has already been said
     /// for the spell the controller is currently in.
     ///
