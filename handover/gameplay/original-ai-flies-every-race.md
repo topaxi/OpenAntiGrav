@@ -8,15 +8,17 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 
 ## Open
 
-- **The original field is not clean off `16_Track`.** A parked player, 9,000
-  ticks, `Mode::SingleRace`, VENOM, seed 1, per-slot respawns of the seven
-  opponents on Pulse PSP USA: `01`, `02`, `03`, `04`, `06`, `07`, `09`, `10`, `14`
-  and `16_Track` all 0; `05_Track` 4 in total (slots 1, 3, 6 and 7); `13_Track`
-  about 200 (slot 3 alone 129, six slots respawning by tick 9,000). This
-  project's driver on the same runs: at most one respawn a track, 0 on `05` and
-  `13`. Every other ground truth of the original driver flies `16_Track` (Pulse)
-  or its title's default circuit. HD's default track: 0 for both. Foreign
-  (Lion's Den): the original flies, respawns unmeasured.
+- **A lagging human makes the original leader fall on `13_Track`.** With a
+  parked player the leader is rubber-banded to about 91 and misses the jump at
+  idx 38 to 46 (hits the landing wall, falls, is reset in front of the same jump,
+  129 times; about 208 respawns over seven opponents in 9,000 ticks). With a
+  racing player (`--autopilot`) none in 12,000 ticks; `05_Track` has one, a
+  reset volume on lap 4 at idx 290 while grounded at speed 96. This project's
+  driver has at most one respawn a circuit. Unmeasured: whether the original
+  game's leader falls there too (a player parked on the grid at `13_Track`, or a
+  capture of the leader's speed at the jump), and whether the authored speed
+  floor at those samples (`PointAi::speed_floor`, read by the field) is set
+  where the leader needs it.
 - **A forked circuit still learns the speed plans** when the original flies:
   the route plans gate which routes the coin offers
   (`Race::steer_branching`) and are learned on the ring plan's reference hull.
@@ -34,13 +36,15 @@ are in [gameplay/ai.md](../../docs/gameplay/ai.md) ("Which AI flies").
 
 ## Next Steps
 
-1. Chase `13_Track` and `05_Track` on the original field: which slot, where it
-   leaves the line (`Race::respawns_of`, the same trace the `13_Track` Novice
-   chase used for ours). Either a mapping error in `original_ai.rs` (nearest
-   sample, contact list) or a track the original's own driver also loses on.
+1. Print `point_ai` (`speed_floor`) for `13_Track` idx 30 to 46 and the leader's
+   throttle there; then capture the original's leader on `13_Track` with a
+   parked player (PPSSPP) to see whether it clears the jump. If it does, the
+   difference is our jump physics or the floor mapping; if not, a rubber band
+   cap near jumps is this project's to choose.
 2. Decide what offers a route to the original field without the plan gate, then
    skip the plans on forked circuits too.
 3. Add a round-the-lap ground truth over every Pulse circuit for the original
-   field, next to `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`.
+   field, with a racing player (`--autopilot`), next to
+   `a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`.
 4. Read the original field with several humans (slot, place, rubber band), then
    lift `Reason::MultipleHumans`.

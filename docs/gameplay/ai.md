@@ -594,14 +594,24 @@ driver, with the reason logged, when the title and class have no tables that
 read or the track has no closed lap. The tables are read for every race of the
 five titles (their `original_opponent` flag), whatever the mode.
 
-**Measured when it became the default (2026-10-13), and not clean off
-`16_Track`.** A parked player, 9,000 ticks, single race, VENOM, seed 1, the
-seven opponents' respawns on Pulse PSP USA with the original driver: `01`, `02`,
-`03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track` none; `05_Track` 4 in
-total; `13_Track` about 200 (one slot 129). This project's driver, same runs: at
-most one respawn a track, none on `05` and `13`. HD's default track: none for
-either. Whether `13_Track` and `05_Track` are a mapping error in the port or
-circuits the original's driver also loses is open.
+**Measured when it became the default (2026-10-13): a parked player makes the
+original field fall on `13_Track`.** Seven opponents, single race, VENOM, seed 1,
+9,000 ticks, respawns per circuit with the original driver and a **parked**
+player: `01`, `02`, `03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track` none;
+`05_Track` 4 in total; `13_Track` about 200 (one slot 129). This project's
+driver, same runs: at most one respawn a track. The `13_Track` cause is found:
+the leading opponent is held back by the rubber band while the player sits on
+the grid (it ran at 91 to 92 with the whole lap ahead), arrives airborne at the
+jump at idx 38 to 46 too slow, hits the landing wall (speed 91 to 28, shield 100
+to 96), slides back and falls off the track, and the airborne reset puts it back
+before the same jump, 129 times. **With a racing player (`--autopilot`, 12,000
+ticks) the original field has no respawn on `13_Track` and one on `05_Track`**
+(slot 3 at tick 7401, grounded at speed 96, on lap 4 at idx 290, a reset volume
+rather than a fall). So the original's rubber band, working as recovered, can
+slow a leader below what this engine's jump needs once a human lags far behind.
+Whether the original game's leader also falls there is unmeasured: the original
+has an authored speed floor (`unk_0x66`, forced full throttle below a
+speed) that this port reads, and its jump physics may differ from ours.
 
 **More than one human keeps this project's driver, logged.** The game has no
 second human in a race today (`World::human_slots` is slot 0 outside tests and
