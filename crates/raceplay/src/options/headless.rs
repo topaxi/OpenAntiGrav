@@ -43,6 +43,7 @@ impl Setup {
             // rather than of slot 0 again.
             opponents: true,
             no_opponents: false,
+            people: 1,
             trail_sparks: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has

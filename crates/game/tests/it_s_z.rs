@@ -30,6 +30,7 @@ mod shuriken_ground_truth;
 mod spawn_heading_ground_truth;
 mod speed_plan_ground_truth;
 mod split_end_race_ground_truth;
+mod split_grid_ground_truth;
 mod split_hud_ground_truth;
 mod split_screen_ground_truth;
 mod stall_rescue_ground_truth;

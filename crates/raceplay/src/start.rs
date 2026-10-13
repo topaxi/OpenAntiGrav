@@ -38,6 +38,7 @@ impl Race {
             original_tables,
             opponents,
             no_opponents,
+            people,
             trail_sparks,
             seed,
             zone,
@@ -350,13 +351,20 @@ impl Race {
             // specifically - see `docs/ghidra/functions/psp-pulse-usa
             // /head2head.md`'s own "grid placement... is extrapolated" note.
             let pose_start = (GRID_SLOTS as usize - 1) - field_opponents as usize;
-            for (slot_index, pose) in poses
-                .iter()
-                .enumerate()
-                .take(GRID_SLOTS as usize - 1)
-                .skip(pose_start)
-            {
+            for slot_index in pose_start..GRID_SLOTS as usize - 1 {
                 let ship_index = slot_index - pose_start + 1;
+                // **Which grid row this craft starts on.** One person: the row it
+                // always had (`slot_index`). Two or more: the people take the back
+                // rows in order and the opponents the rows ahead of them, in their
+                // own order - `oag_gameplay::rank_from_back`, read off PS2 Pulse and
+                // HD. The craft's driver seed and pilot below stay keyed to
+                // `slot_index`, the craft's own, so nobody's character moves.
+                let rank = oag_gameplay::rank_from_back(
+                    ship_index,
+                    field_opponents as usize + 1,
+                    usize::from(people),
+                );
+                let pose = &poses[GRID_SLOTS as usize - 1 - rank];
                 // Its own team's tuning where the title's variant family gave
                 // it one (`load::family`), the player's otherwise.
                 let handling = opponent_handling
@@ -421,8 +429,25 @@ impl Race {
             // are about to race. A `*` marks a pilot that came from a file.
             debug!("pilots loaded: {}", roster.summary());
             debug!("ai difficulty: {}", difficulty.name());
-            let grid: Vec<String> = (pose_start + 1..GRID_SLOTS as usize)
-                .map(|slot| format!("{slot}:{}", pilot_names[slot]))
+            // Each opponent under the row it starts on, counted from the front (1 to 8),
+            // which with more than one person is no longer its own slot number.
+            let mut rows: Vec<(usize, &str)> = (1..=field_opponents as usize)
+                .map(|ship| {
+                    let rank = oag_gameplay::rank_from_back(
+                        ship,
+                        field_opponents as usize + 1,
+                        usize::from(people),
+                    );
+                    (
+                        GRID_SLOTS as usize - rank,
+                        pilot_names[pose_start + ship].as_str(),
+                    )
+                })
+                .collect();
+            rows.sort_unstable_by_key(|&(row, _)| row);
+            let grid: Vec<String> = rows
+                .iter()
+                .map(|(row, name)| format!("{row}:{name}"))
                 .collect();
             info!("pilots on the grid: {}", grid.join(" "));
         } else {
@@ -478,6 +503,7 @@ impl Race {
                 original_tables,
                 original_ai: None,
                 race_seed: seed,
+                people,
                 // `--autopilot-skill` sets this after `Self::start` returns - see
                 // `Self::set_autopilot_tuning`. Every race starts with the two
                 // tunings agreeing.

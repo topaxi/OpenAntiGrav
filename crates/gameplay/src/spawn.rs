@@ -373,6 +373,35 @@ pub const GRID_ROW_PITCH: f32 = 19.8;
 /// no unit test on an identity node could.
 pub const GRID_COLUMN_OFFSET: f32 = 20.0;
 
+/// Where in the field ship `ship` starts, counted from the back of the grid: `0` is the back
+/// row (slot 8 of a full grid), `1` the one before it, `ships - 1` the front.
+///
+/// **People take the back rows in order, the opponents fill the front.** Ship `k < people` is
+/// the `k`-th person and starts on rank `k`; the opponents (ships `people..ships`) keep their
+/// own order, front to back, on the ranks that are left. With one person this is the ordinary
+/// grid: ship 0 at the back and ship `s` on rank `ships - s`, so it changes nothing there.
+///
+/// **Read out of both originals** (confidence 85, decompile of two binaries that agree): the
+/// race manager that spawns a split-screen race puts the first person on racer `N - 1` and
+/// grid slot `N - 1` (the back), the second on racer `N - 2` and slot `N - 2`, and the AI on
+/// slots `0..N - 2`. PS2 Pulse `FUN_0012ad78`/`FUN_0012b880`; HD/Fury `FUN_00061770` (the
+/// `SPArcade` race manager) - `docs/ghidra/functions/ps3-hdfury-eu/grid-local-players.md`.
+/// Two people is what both ship; three to eight is **chosen, not measured** (the same law,
+/// continued: the next person takes the next row forward).
+///
+/// `people` is clamped to `1..=ships`, `ship` to the field.
+#[must_use]
+pub fn rank_from_back(ship: usize, ships: usize, people: usize) -> usize {
+    let ships = ships.max(1);
+    let people = people.clamp(1, ships);
+    let ship = ship.min(ships - 1);
+    if ship < people {
+        ship
+    } else {
+        ships - 1 - (ship - people)
+    }
+}
+
 /// The pose of one grid slot, given the track's authored `Start Position`.
 ///
 /// **The authored node is slot 8**, the back of the grid, and that is measured
@@ -804,5 +833,51 @@ mod grid_tests {
             grid_pose(node(), 99).position,
             grid_pose(node(), GRID_SLOTS).position
         );
+    }
+
+    /// One person is the ordinary grid: ship 0 at the back, ship `s` on the row `ships - s`.
+    #[test]
+    fn one_person_leaves_the_grid_as_it_always_was() {
+        for ships in 1..=8 {
+            assert_eq!(rank_from_back(0, ships, 1), 0);
+            for ship in 1..ships {
+                assert_eq!(
+                    rank_from_back(ship, ships, 1),
+                    ships - ship,
+                    "{ships} ships"
+                );
+            }
+        }
+    }
+
+    /// Two people - what PS2 Pulse and HD/Fury both ship - take the last two rows, the first
+    /// person on the very back, and the six opponents keep their order ahead of them.
+    #[test]
+    fn two_people_take_the_back_two_rows_in_order() {
+        let ranks: Vec<usize> = (0..8).map(|ship| rank_from_back(ship, 8, 2)).collect();
+        assert_eq!(ranks, [0, 1, 7, 6, 5, 4, 3, 2]);
+    }
+
+    /// Whatever the head count, the ranks are a permutation of the field: nobody shares a row
+    /// and no row is empty.
+    #[test]
+    fn every_head_count_is_a_permutation_of_the_field() {
+        for ships in 1..=8 {
+            for people in 0..=10 {
+                let mut ranks: Vec<usize> = (0..ships)
+                    .map(|ship| rank_from_back(ship, ships, people))
+                    .collect();
+                ranks.sort_unstable();
+                assert_eq!(ranks, (0..ships).collect::<Vec<_>>(), "{people} of {ships}");
+            }
+        }
+    }
+
+    /// People are clamped to the field: a field of two with eight "people" is two people.
+    #[test]
+    fn people_beyond_the_field_clamp() {
+        assert_eq!(rank_from_back(1, 2, 8), 1);
+        assert_eq!(rank_from_back(1, 2, 2), 1);
+        assert_eq!(rank_from_back(1, 2, 1), 1);
     }
 }

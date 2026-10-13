@@ -1065,3 +1065,19 @@ Tournament and Head to Head race types and the `TournamentLoad` dialog are not b
 RACE page's default MODE is whatever the profile holds, the PS2's split page opens on Arcade;
 (3) on the PS2 pressing in another language the rows read the project's translation, not the
 disc's own `FE_RACE_CAM_SS` text.
+
+## 2026-10-13, `split-grid-positions`: where the people start
+
+Two people start on slots 8 and 7 (person 1 the back), the AI on 1 to 6, as PS2 Pulse and HD/Fury
+both spawn them; done in `oag_gameplay::rank_from_back` / `Setup::people`, evidence in
+`docs/ghidra/functions/ps3-hdfury-eu/grid-local-players.md` and
+`docs/ghidra/functions/ps2-pulse-eu/grid-local-players.md`, summary in `docs/rendering/split-screen.md`.
+
+**Open:**
+- Confidence is 85 (decompile of two binaries that agree). A live check wants a second virtual
+  pad on RPCS3 (`scripts/rpcs3_pad.py` drives one) or PCSX2: join two players, read both crafts'
+  poses at the countdown and compare with the rows (HD race manager at `0x0095ae78`, ships at
+  `+0xe8`, slot array at `+0x2d78`).
+- Three to eight people are chosen, not measured (the next row forward each).
+- What sets the ship count `g_GameState[0]` for a split race is unread: the rule assumes it stays eight.
+- A launch whose `--players` is clamped after the load (an integrated GPU) keeps the people's rows.
