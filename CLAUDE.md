@@ -99,6 +99,15 @@ and BC7-decoded every Omega `.gnf`, two copies of one helper LZSS-decompressed a
    return unless `OAG_SWEEP` is set. It never runs in `just test-data`.
 4. Remove redundancy before splitting for the tail: every slice pays its own fixture load.
 
+**A new `tests/*.rs` file is a `mod` line in its crate's `tests/it*.rs`, not a binary of
+its own (2026-10-13).** Each crate links its integration tests into one binary
+(`tests/it.rs`); `oag-game` splits them into five by first letter (`tests/it_*.rs`).
+A file nobody lists is never compiled, and the crate's `every_test_file_is_listed` guard
+fails naming it. The exceptions are `oag-physics`, `oag-gameplay` and `oag-ai`, which keep
+a binary per file because CI runs `--test determinism` by name. Test names carry the
+module path, e.g. `oag-game::it_p_r ram_ground_truth::...`, so a nextest filter selects
+by `test(...)` rather than `binary(...)`.
+
 **Wall clock here is contended, so measure it on an idle machine or not at all.** The
 same tree measured 456 s, 402 s and 415 s at load averages of 21, 17 and 2, with four,
 two and one tests over the per-test ceiling and a *different* test each time. Two agents
@@ -116,7 +125,7 @@ selects the full suite by itself; a docs-only change selects no tests. `/oag-dri
 members gate with these, and the lead runs the full `just` and `test-data` once per merge
 batch - the only place the whole disc-backed suite runs, since CI has no images (see
 `.claude/skills/oag-drive/SKILL.md`, "Who runs which gate"). The selection is per
-package, and every `oag-game` test binary links the whole of `oag-game`, so a lane in
+package, and each of `oag-game`'s five test binaries links the whole of `oag-game`, so a lane in
 `oag-mesh`, `oag-render` or `oag-fx` still selects most of the suite's time: the savings
 land on lanes in the format, texture, UI and title crates.
 
