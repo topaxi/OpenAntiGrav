@@ -8,7 +8,9 @@
 
 mod bvh;
 
-use bvh::Bvh;
+use std::sync::OnceLock;
+
+use bvh::{Bvh, Indices};
 use oag_core::math::Vec3;
 
 /// What kind of surface a collider is.
@@ -529,13 +531,10 @@ impl Raycaster for TriangleSoup {
             return 0;
         }
 
-        let mut candidates = Vec::new();
-        self.broadphase
-            .visit(&segment, |index| candidates.push(index));
-        candidates.sort_unstable();
+        let candidates = Indices::overlapping(&self.broadphase, &segment);
 
         let mut found = 0;
-        for index in candidates {
+        for &index in candidates.as_slice() {
             if found == out.len() {
                 break;
             }
@@ -565,9 +564,20 @@ impl Raycaster for TriangleSoup {
 /// Ordered storage, not a map: iteration order feeds the nearest-hit comparison and so
 /// simulation state, and a `HashMap`'s order is unstable even between runs
 /// (`docs/architecture/determinism.md`).
+///
+/// # Broadphase
+///
+/// A circuit is a couple of hundred colliders of at most 32 triangles each (`05_Track`:
+/// 201), so a query that asked each collider in turn spent most of its time on colliders
+/// its segment's box does not reach. A [`Bvh`] over the colliders' own boxes hands the
+/// query only those whose box the segment's box overlaps - exactly the colliders whose own
+/// first reject in [`TriangleSoup::raycast`] would have passed - and they are asked in
+/// ascending index, the order the scan asked them in, so every answer is the scan's.
 #[derive(Debug, Clone, Default)]
 pub struct CollisionWorld {
     colliders: Vec<TriangleSoup>,
+    /// Built on the first query after the last [`Self::push`].
+    broadphase: OnceLock<Bvh>,
 }
 
 impl CollisionWorld {
@@ -580,12 +590,21 @@ impl CollisionWorld {
     /// Adds a collider, keeping the index it was built with.
     pub fn push(&mut self, collider: TriangleSoup) {
         self.colliders.push(collider);
+        self.broadphase = OnceLock::new();
     }
 
     /// The colliders, in query order.
     #[must_use]
     pub fn colliders(&self) -> &[TriangleSoup] {
         &self.colliders
+    }
+
+    /// The colliders whose box the segment's box overlaps, in ascending index.
+    fn reached_by(&self, ray: Ray) -> Indices {
+        let broadphase = self
+            .broadphase
+            .get_or_init(|| Bvh::build(self.colliders.iter().map(TriangleSoup::bounds).collect()));
+        Indices::overlapping(broadphase, &Aabb::from_segment(ray.origin, ray.end()))
     }
 }
 
@@ -596,7 +615,8 @@ impl Raycaster for CollisionWorld {
     fn raycast(&self, ray: Ray, skip: Option<u32>, include_reset: bool) -> Option<RaycastHit> {
         let mut nearest: Option<RaycastHit> = None;
 
-        for collider in &self.colliders {
+        for &index in self.reached_by(ray).as_slice() {
+            let collider = &self.colliders[index as usize];
             let Some(hit) = collider.raycast(ray, skip, include_reset) else {
                 continue;
             };
@@ -624,10 +644,11 @@ impl Raycaster for CollisionWorld {
         out: &mut [Option<RaycastHit>],
     ) -> usize {
         let mut found = 0;
-        for collider in &self.colliders {
+        for &index in self.reached_by(ray).as_slice() {
             if found == out.len() {
                 break;
             }
+            let collider = &self.colliders[index as usize];
             found += collider.raycast_all(ray, skip, include_reset, &mut out[found..]);
         }
         found
