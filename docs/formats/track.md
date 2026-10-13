@@ -1010,6 +1010,13 @@ verified**, and the consumer of that byte was not found. It is worth noting that
 either rare or authored per-track. Treat `gate` as an authoring-time construct
 until something proves otherwise.
 
+**Bit 0 of `flags` has a consumer (2026-10-13), and it is not lap counting.**
+`FUN_0883d9ec` lays no reset crumb while the craft's located record has it
+set. Eight of the 24 Pulse track files author it, and on seven of them the
+run brackets a pit the racing line crosses with no surface under it. So it
+keeps a reset from putting a craft back over the hole it fell into.
+Confidence 80; see [reset-relocation.md](../ghidra/functions/psp-pulse-usa/reset-relocation.md).
+
 ### Not determined
 
 - The `section` payload's `pad[6]` and its trailing variable-length data.

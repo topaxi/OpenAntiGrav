@@ -594,35 +594,121 @@ driver, with the reason logged, when the title and class have no tables that
 read or the track has no closed lap. The tables are read for every race of the
 five titles (their `original_opponent` flag), whatever the mode.
 
-**Measured when it became the default (2026-10-13): a parked player makes the
-original field fall on `13_Track`.** Seven opponents, single race, VENOM, seed 1,
-9,000 ticks, respawns per circuit with the original driver and a **parked**
-player: `01`, `02`, `03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track` none;
-`05_Track` 4 in total; `13_Track` about 200 (one slot 129). This project's
-driver, same runs: at most one respawn a track. The `13_Track` cause is found,
-and it is the jump `The 13_Track Novice pathology` above already chased:
-the authored jump at line indices 19-49, which a craft clears only above a
-speed this engine's physics sets. The leading opponent is throttled by the
-recovered formation law while the player sits on the grid (`held_thrust` 47,
-speed 91 to 100 over the whole stretch, place 3, the player 4,391 units
-behind), lifts off at idx 16 to 22 (grounded 0 from idx 22, y 22 to 17), comes
-down on the far face at idx 46 (speed 92 to 27, shield 100 to 96), slides back
-and falls out of the gap; the airborne reset puts it back before the same jump,
-129 times. This project's driver clears the same jump at full throttle and about
-125, and a Novice-grip one fails it identically (347 respawns). Lane, corridor
-and steering are not involved: the craft is 1.4 to 2.6 units off the line
-inside bounds of about 6.5 to 10 (the rail's own output was not logged).
-**A racing player moves it:** an `--autopilot` player at its default skill gives
-zero respawns on `13_Track` in 12,000 ticks, but the Skilled autopilot gives 62
-(slot 3) and the Novice autopilot 113 (slots 3 and 5), so any player who is not
-near the best lets the leader be held below the jump's speed. `05_Track` with
-the Novice and Skilled autopilot: none; with the default-skill one: one reset
-volume on lap 4 (slot 3, tick 7401, idx 290, grounded at 96); parked, 4 in 9,000
-ticks (slot 7 at tick 1111, airborne at 190 over a long drop). **The authored
-speed floor does not help here:** `unk_0x66` is authored only on `06_Track`
-([track.md](../formats/track.md)), and reads 253 (no floor) at every sample of
-`13_Track`, `16_Track` and `05_Track`. Whether the original game's leader also
-falls at this jump when the player is far behind is unmeasured.
+**Measured when it became the default (2026-10-13): a parked player made the
+original field fall on `13_Track`, and the repetition was this project's reset
+pose.** Seven opponents, single race, VENOM, seed 1, 9,000 ticks, original
+driver, the player **parked**. Respawns per circuit:
+- `01`, `02`, `03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track`: none;
+- `05_Track`: 4 in total;
+- `13_Track`: about 200 at first count (one slot 129), and 389 on the
+  re-count below.
+
+This project's driver, same runs: at most one respawn a track. **The
+`13_Track` count was two mechanisms, and only the first is about the jump**
+(see "The `13_Track` jump, flown tick by tick" below):
+1. **A first fall, once per slot.** The leading opponent is held by the
+   recovered formation law while the player sits on the grid (`held_thrust`
+   47, the player 4,391 units behind). Held there it reaches the gap at about
+   92 u/s, which this engine's airborne gravity does not carry across: it
+   needs about 100 (see the next section). Six of seven slots fell once each
+   in 9,000 ticks.
+2. **A loop, 383 of the 389.** `Race::respawn` put the craft back at rest on
+   the racing-line sample nearest its fall, which is over the gap, so it fell
+   again 45 ticks later until the run ended. That pose was a confidence-40
+   placeholder. The original's reset puts the craft on the oldest of its last
+   seven grounded positions, which the disc keeps off the gap, and launches it
+   ([reset-relocation.md](../ghidra/functions/psp-pulse-usa/reset-relocation.md)).
+   Ported 2026-10-13 for `Reset` contacts and the airborne clock: **389
+   respawns became 2**, both put back about 160 samples before the gap at
+   about 73 u/s, and neither fell again.
+
+So the formation throttle is not "the cause" of the respawns this section first
+reported. It explains why a parked player's leader reaches the gap slower than
+a racing field's, and so why one falls once.
+
+Lane, corridor and steering are not involved: the craft is 1.4 to 2.6 units off
+the line inside bounds of about 6.5 to 10 (the rail's own output was not
+logged). **A racing player moves it:**
+- an `--autopilot` player at its default skill gives zero respawns on
+  `13_Track` in 12,000 ticks;
+- the Skilled autopilot gives 62 (slot 3), and the Novice autopilot 113 (slots
+  3 and 5).
+
+Those counts are from before the reset port, so they are mostly the loop.
+`05_Track`:
+- with the Novice and Skilled autopilot, no respawns;
+- with the default-skill one, one reset volume on lap 4 (slot 3, tick 7401,
+  idx 290, grounded at 96);
+- parked, 4 in 9,000 ticks (slot 7 at tick 1111, airborne at 190 over a long
+  drop).
+
+**The authored speed floor does not help here:** `unk_0x66` is authored only on
+`06_Track` ([track.md](../formats/track.md)), and reads 253 (no floor) at every
+sample of `13_Track`, `16_Track` and `05_Track`. **Whether the original game's
+leader also falls at this jump when the player is far behind is unmeasured**:
+that, and the original's flight across the gap, are the open half.
+
+### The `13_Track` jump, flown tick by tick (2026-10-13)
+
+`the_jump_flown_tick_by_tick` in `crates/game/tests/novice_jump_ground_truth.rs`
+logs every tick of each craft's first pass over line indices 10-70:
+- velocity along the line's tangent, sideways and vertically;
+- the forward-axis speed the earlier passes logged;
+- attitude, ground contact and wall contact.
+
+`the_far_lip_face` casts rays at the gap. Both are `OAG_SWEEP` sweeps.
+
+**The gap is plain and level; no map error.**
+- The near floor ends at line index 18-19, y 17.68.
+- The far floor resumes at 49-50, y 17.92. The racing line runs about three
+  units above both.
+- Below is an authored `Reset` floor at y -4.07.
+- The far road's front face is `Wall`-tagged, with normal (0.99, 0.11, 0), from
+  y 15.2 to 17.7. Nothing stands proud of the far road.
+- The gap is about 45 units long, and the approach climbs at about 6.8
+  degrees.
+
+**Along-track speed survives the flight.** Slot 3 of the parked field:
+
+| tick | line idx | grounded | along the line | vertical | forward-axis speed | above the line |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1655 | 10 | 1.0 | 95.27 | +11.37 | 95.29 | +1.11 |
+| 1661 | 16 | 0.5 | 94.22 | +11.25 | 94.41 | +1.31 |
+| 1667 | 22 | 0.0 | 91.41 | +5.07 | 91.79 | +2.02 |
+| 1678 | 33 | 0.0 | 89.61 | -11.76 | 88.91 | +1.60 |
+| 1689 | 44 | 0.0 | 86.32 | -27.35 | 86.54 | -2.21 |
+| 1690 | 45 | 0.0 | -20.64 | -16.48 | -20.55 | -2.74, wall contact |
+
+The forward-axis speed and the speed along the line agree to within 1 %. Air
+drag costs about 5 u/s across the gap. Neither eats the progress: the craft
+covers about 1.5 line units a tick at 90 u/s. What fails is **height**:
+- Airborne the craft accelerates at `-95 - 0.25 * v_y` u/s²: VENOM's
+  `flight_gravity` 95 (mass 1) and the vertical damping
+  ([engine.md](../ghidra/functions/psp-pulse-usa/engine.md)).
+- At 92 u/s it reaches the far face 2.7 units below the line, so its hull hits
+  the face and the velocity reverses.
+
+Across the field:
+
+| slot | liftoff (u/s) | above the line at the far face |
+| --- | --- | --- |
+| 3 | 91.8 | -2.74, falls |
+| 6 | 103.9 | -0.32, clears |
+| 5 | 106.8 | -0.10, clears |
+| 4 | 109.0 | +0.37, clears |
+| 2, 7, 1 | 143-170 | +3.0 to +4.0, clear |
+
+The lone Novice craft on this project's driver lifts off at 109 and clears too.
+So this engine's threshold is about 100 u/s. **`flight_gravity` is knife-edge
+here:**
+- scaled by `0.85` (where the PS2 reading puts the class scale, see
+  [craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md)), the
+  pre-port field still made 254 respawns;
+- scaled by `0.80`, none.
+
+The PSP reading of that lane is register-level at confidence 90 and was not
+moved. What the original's craft does over this gap (liftoff speed, flight
+time, drop) is what can move it.
 
 **More than one human keeps this project's driver, logged.** The game has no
 second human in a race today (`World::human_slots` is slot 0 outside tests and
@@ -1616,6 +1702,13 @@ single craft (`elite`, one opponent) is destroyed outright (`0.0`, lap 3 of
 below the 10-shield floor `no_tier_rolls_itself_down_to_nothing` guards.
 
 ### The `13_Track` Novice pathology, chased
+
+**Stale since at least 2026-10-13.** Re-run on that date, unchanged
+(`where_the_novice_craft_respawns_on_13_track`), the lone Novice craft makes
+**0** respawns and 4 laps in 18,000 ticks. It lifts off at index 22 and lands
+at 47 every lap, and its liftoff speed is now about 109-111 where this section
+measured 87.85. Something in the driver or physics since 2026-09-07 moved it,
+and that was not bisected. What follows is the record of the original chase.
 
 Flagged and left for later two sections up: a lone Novice craft respawns
 **221 to 349 times** on `13_Track` and never gets past lap 1-3 of 4. Followed

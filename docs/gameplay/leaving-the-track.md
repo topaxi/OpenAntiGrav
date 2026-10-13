@@ -230,13 +230,18 @@ counts as airborne.
   1 alone (removing its one call reproduces the old hashes bit for bit).
 - **The airborne reset**, ported: `oag_race::recovery::AIRBORNE_RESET_SECONDS`
   (4.0) and `RespawnCause::Airborne`, for the player and for opponents, through
-  the same `Race::respawn` a `Reset` contact uses. Three recorded departures:
-  our respawn puts the craft at rest on the racing line (the original: corridor
-  midpoint, five up, launched at `+0x78c * 0.25 + 50`), charges the player no
-  shield (the original: up to 5), and the original's third trigger into the
-  same state - more than 200 units from its tracked spline position for 0.5 s
-  (`0x08841cec`) - is not ported; the invented `LostCircuit`/`OffTrack` dwells
-  stand where it would.
+  the same path a `Reset` contact takes. Three departures were recorded; the
+  first is closed since 2026-10-13. Both triggers now put the craft back the
+  original's way (`Race::reset`, [reset-relocation.md](../ghidra/functions/psp-pulse-usa/reset-relocation.md)):
+  - where: on the oldest of its last seven grounded positions, never one the
+    disc flags, at the track's width midpoint five up;
+  - how fast: a quarter of its last grounded speed plus 50.
+
+  Still open: the player is charged no shield (the original: up to 5), and the
+  original's third trigger into the same state - more than 200 units from its
+  tracked spline position for 0.5 s (`0x08841cec`) - is not ported; the
+  invented `LostCircuit`/`OffTrack` dwells stand where it would, on the old
+  at-rest racing-line pose.
 - **The AI no longer brakes for a bend over a gap** - chosen, not measured
   (maintainer decision: opponents obey the player's physics and drive smarter).
   The racing line carries a mask of samples with no track under them, and a
@@ -256,7 +261,16 @@ Measured on the landed tree, against `main` at `091bfe46`:
   20 u/s lands upside down and is reset by the airborne clock at tick **371**
   against the original's **372**. Only the relocation differs (ours: at rest on
   the line at sample 58; the original's: sample 50, 12.5 off the line, moving
-  at 53.5 u/s).
+  at 53.5 u/s). **Re-run 2026-10-13 with the relocation ported**
+  (`OAG_SHOVE_TRIAL=01_Track:10:L:0:20 OAG_COAST=1 OAG_TRIAL_TICKS=420` on
+  `shove_trial_trace`): the reset fires at tick 368 on this tree, the same with
+  the old pose, so the 371 above is drift in the tree since 2026-09-29. The
+  craft leaves at **53.6 u/s**, against the original's 53.5. That speed comes
+  from a latch that knew nothing of the capture: 14.3 u/s grounded, a quarter
+  of it plus 50. It comes back at sample 940, against the original's 50,
+  because the sweep drives 600 ticks before placing the craft and the oldest
+  crumb is from that drive. What the original's ring held before its trial was
+  not recorded.
 - **Regression gate** (`a_lone_craft_gets_round...`), all twelve clean both
   times. `01_Track`: `clean lap 43.6s laps 4 respawns 0` to `clean lap 37.1s
   laps 4 respawns 0 of 2836 lost at []`; `05_Track` 3 respawns `[524, 108, 620]`
