@@ -185,7 +185,8 @@ view, and a `scale` relative to the whole-screen HUD fitted to the view. It **on
 places the title's own widgets**; a widget no group names is not drawn in a split,
 which is how 5 to 8 views drop the secondary ones. Every number is chosen for
 legibility at the size a player sees a view, never measured. Offsets and scales carry
-no grid, so one file serves the PSP's 480x272 and the PS2's 640x448.
+no grid, so one file serves the PSP's 480x272 and the PS2's 640x448 (each view's rectangle
+is measured in the grid's own units on each axis, which differ on the PS2).
 
 What each shipped file draws (lap, place, the held weapon, speed and shield, time
 where there is room):
@@ -1034,14 +1035,15 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   and not by eye. The PS2 pressing draws its text smaller against its bars than the
   PSP does (that is how its whole-screen HUD is authored here, one file serves both),
   so its split HUD reads smaller; a per-platform scale is open.
-  **PS2 Pulse's split HUD also sits too high (found 2026-10-13, `split-hud-vertical`, open):**
+  **PS2 Pulse's split HUD sat too high (found and fixed 2026-10-13, `split-hud-vertical`):**
   its 640x448 grid is shown 16:9, so a grid unit is 2.0 pixels wide and 1.607 tall, and
-  `oag_game::hud_views::grid_rect` divides both axes by the width's, which makes a view's
-  height 20% short in grid rows: every bottom-anchored group floats at about 76% of the view
-  (the speed and shield bars end at y 275 of a 360-pixel row, and at 545 of a 720-pixel
-  column). PSP Pulse, Pure, HD, 2048 and Omega are 16:9 grids and unaffected. The fix is
-  per-axis units in `grid_rect` and `Piece::placement`; it moves every PS2 split frame, so it
-  is its own change.
+  `oag_game::hud_views` converted pixels to grid units with the width's number for both
+  axes, which made a view 20% short in grid rows: every bottom-anchored group floated at
+  about 76% of the view (the speed and shield bars ended at y 275 of a 360-pixel row, and at
+  545 of a 720-pixel column). `grid_of` now returns a number per axis and `grid_rect`,
+  `place_into` and `scissor_rect` use each axis' own; a grid shown as itself (PSP, HD, 2048,
+  Omega) takes one number for both, so those are byte-identical. Only PS2 Pulse's split frames
+  moved (not its single view, which never goes through these).
 - **Open from `split-hud-vertical`**: the weapon grid of Pure still hangs partly below a
   horizontal two-view row (and the lower rows of seven and eight views), the same defect the
   `tall` rule fixes for columns; the strip's kill column on Pulse overlaps the speed and

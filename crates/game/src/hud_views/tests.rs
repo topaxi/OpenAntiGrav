@@ -73,6 +73,68 @@ fn an_authored_regions_origin_lands_at_the_views_corner() {
     assert!((mapped_y - 540.0).abs() < 4.0, "{mapped_y} {p:?}");
 }
 
+/// The PS2's 640x448 grid is shown 16:9, so a grid unit is not square: 2.25 pixels wide and
+/// 1.82 tall on this screen. A view's rectangle in the grid has to use each axis' own number,
+/// or the whole screen comes out 362 rows tall of 448 and every group anchored at the bottom
+/// of a view sits a fifth of the way up it.
+#[test]
+fn a_non_square_grids_views_are_measured_in_each_axis_own_units() {
+    let whole = oag_render::viewport::layout(1, SCREEN, Cut::Horizontal)[0];
+    let grid = grid_rect(whole, SCREEN, Space::PS2);
+    assert!(
+        near(grid[2], 640.0) && near(grid[3], 448.0),
+        "the whole screen is the whole grid: {grid:?}"
+    );
+    for cut in [Cut::Horizontal, Cut::Vertical] {
+        let views = oag_render::viewport::layout(2, SCREEN, cut);
+        for view in &views {
+            let grid = grid_rect(*view, SCREEN, Space::PS2);
+            let (want_w, want_h) = match cut {
+                Cut::Horizontal => (640.0, 224.0),
+                Cut::Vertical => (320.0, 448.0),
+            };
+            assert!(
+                near(grid[2], want_w) && near(grid[3], want_h),
+                "{cut:?}: {grid:?} is not {want_w} by {want_h}"
+            );
+        }
+    }
+    // The whole-screen HUD placed into the whole screen is the identity, and its clip the grid.
+    let placed = place_into(whole, [0.0, 0.0, 640.0, 448.0], SCREEN, Space::PS2);
+    assert!(near(placed.scale, 1.0), "{placed:?}");
+    assert!(
+        near(placed.clip[2], 640.0) && near(placed.clip[3], 448.0),
+        "{placed:?}"
+    );
+}
+
+/// A file's bottom-anchored group lands at the bottom of its view on a non-square grid too:
+/// the group's lowest grid row, once placed, is the view's last row less the margin.
+#[test]
+fn a_piece_pinned_to_the_bottom_sits_at_the_bottom_of_a_ps2_view() {
+    let view = oag_render::viewport::layout(2, SCREEN, Cut::Horizontal)[1];
+    let rect = grid_rect(view, SCREEN, Space::PS2);
+    let piece = oag_hud::split_hud::Piece {
+        layout: oag_hud::Layout::default(),
+        source: [0.0, 400.0],
+        group: oag_hud::split_hud::Group {
+            widgets: vec![],
+            anchor: oag_hud::split_hud::Anchor::Bottom,
+            offset: [0.0, -0.04],
+            scale: 1.0,
+        },
+    };
+    let placed = piece.placement(rect, Space::PS2.size);
+    // In screen pixels, which is where the player looks: the grid is 1.82 pixels a row here.
+    let low_row = placed.scale * 400.0 + placed.offset[1];
+    let low = low_row * SCREEN.3 / Space::PS2.size.1;
+    let want = view.1 + view.3 * 0.96;
+    assert!(
+        (low - want).abs() < 2.0,
+        "{low} px is not {want} px, view {view:?}"
+    );
+}
+
 #[test]
 fn a_views_scissor_is_that_views_own_pixels() {
     for viewport in [SCREEN, (96.0, 0.0, 1248.0, 816.0)] {

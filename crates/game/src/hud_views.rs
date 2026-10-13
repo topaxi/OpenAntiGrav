@@ -73,9 +73,9 @@ pub fn place_into(
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> Placement {
-    let (hud_x, hud_y, pixels_per_grid) = grid_of(viewport, space);
+    let (hud_x, hud_y, per_x, per_y) = grid_of(viewport, space);
     let (x, y, w, h) = view;
-    let (region_w, region_h) = (region[2] * pixels_per_grid, region[3] * pixels_per_grid);
+    let (region_w, region_h) = (region[2] * per_x, region[3] * per_y);
     let scale = (w / region_w).min(h / region_h);
     // Centred in the view, then back from pixels to the grid the draws are in.
     let origin_x = x + (w - region_w * scale) * 0.5;
@@ -83,30 +83,45 @@ pub fn place_into(
     Placement {
         scale,
         offset: [
-            (origin_x - hud_x) / pixels_per_grid - scale * region[0],
-            (origin_y - hud_y) / pixels_per_grid - scale * region[1],
+            (origin_x - hud_x) / per_x - scale * region[0],
+            (origin_y - hud_y) / per_y - scale * region[1],
         ],
         clip: [
-            (x - hud_x) / pixels_per_grid,
-            (y - hud_y) / pixels_per_grid,
-            w / pixels_per_grid,
-            h / pixels_per_grid,
+            (x - hud_x) / per_x,
+            (y - hud_y) / per_y,
+            w / per_x,
+            h / per_y,
         ],
     }
 }
 
 /// Where the HUD's grid sits in the target: the pixel position of its origin and
-/// how many pixels one grid unit is.
-fn grid_of(viewport: (f32, f32, f32, f32), space: oag_display::space::Space) -> (f32, f32, f32) {
+/// how many pixels one grid unit is across and down.
+///
+/// **The two differ for a grid shown at another shape than its own**: the PS2's 640x448
+/// is shown 16:9, so a unit is 2.0 pixels wide and 1.607 tall at 1280x720. Every
+/// conversion between pixels and the grid takes the axis it is on; one number for both
+/// made a PS2 view 20% short in grid rows, and its bottom-anchored groups floated at
+/// about 76% of the view.
+fn grid_of(
+    viewport: (f32, f32, f32, f32),
+    space: oag_display::space::Space,
+) -> (f32, f32, f32, f32) {
     let (left, top, width, height) = viewport;
     let [fit_x, fit_y] =
         crate::render::letterbox_in((width as u32, height as u32), space.display_aspect);
     // The whole-screen HUD's rectangle in pixels, and its pixels per grid unit.
     let (hud_w, hud_h) = (width * fit_x, height * fit_y);
+    let per_x = hud_w / space.size.0;
+    // A grid shown as itself has square units; take the one number for both axes there, so
+    // two roundings of the same ratio cannot move a pixel on the 16:9 grids.
+    let square = (space.display_aspect - space.size.0 / space.size.1).abs() < 1e-3;
+    let per_y = if square { per_x } else { hud_h / space.size.1 };
     (
         left + (width - hud_w) * 0.5,
         top + (height - hud_h) * 0.5,
-        hud_w / space.size.0,
+        per_x,
+        per_y,
     )
 }
 
@@ -118,21 +133,21 @@ pub fn scissor_rect(
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> [u32; 4] {
-    let (hud_x, hud_y, per) = grid_of(viewport, space);
+    let (hud_x, hud_y, per_x, per_y) = grid_of(viewport, space);
     let edge = |low: f32, high: f32, from: f32, to: f32| {
         let start = (low.round()).clamp(from, to);
         let end = (high.round()).clamp(from, to);
         [start as u32, (end - start).max(0.0) as u32]
     };
     let [x, w] = edge(
-        hud_x + grid[0] * per,
-        hud_x + (grid[0] + grid[2]) * per,
+        hud_x + grid[0] * per_x,
+        hud_x + (grid[0] + grid[2]) * per_x,
         viewport.0,
         viewport.0 + viewport.2,
     );
     let [y, h] = edge(
-        hud_y + grid[1] * per,
-        hud_y + (grid[1] + grid[3]) * per,
+        hud_y + grid[1] * per_y,
+        hud_y + (grid[1] + grid[3]) * per_y,
         viewport.1,
         viewport.1 + viewport.3,
     );
@@ -145,12 +160,12 @@ fn grid_rect(
     viewport: (f32, f32, f32, f32),
     space: oag_display::space::Space,
 ) -> [f32; 4] {
-    let (hud_x, hud_y, per) = grid_of(viewport, space);
+    let (hud_x, hud_y, per_x, per_y) = grid_of(viewport, space);
     [
-        (view.0 - hud_x) / per,
-        (view.1 - hud_y) / per,
-        view.2 / per,
-        view.3 / per,
+        (view.0 - hud_x) / per_x,
+        (view.1 - hud_y) / per_y,
+        view.2 / per_x,
+        view.3 / per_y,
     ]
 }
 
