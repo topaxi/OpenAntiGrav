@@ -717,6 +717,36 @@ the parked player's camera never frames it, and a player placed near row 3040
 by `psp-drive.py place` (40 frames) saw a tunnel wall and sparks from passing
 craft, never the gap.
 
+**What the original does after a fall, and its flight (2026-10-13, same captures).**
+*AI craft, 61 resets in the race captures.* A reset takes one or two ticks (0.017 to
+0.034 s between the last and first logged tick); the craft reappears **on the
+racing line** (z 240.7, y 7.3 to 7.4, grounded), x -372 to -395, line rows 2938 to
+2953, i.e. 256 to 301 units (median 279) **before the pad and the jump, not in the
+gap**, moving along the track at speed 66 to 70 (skill level 0) or 72.6 to 76.1
+(level 2), vy about 0. The same craft's repeat resets land within 0.06 units of
+one point whatever the fall row (38 to 61); different craft and laps differ by a
+few units. It is not a pose the craft held earlier (the nearest earlier sample is
+about 12 units away, passed 2.5 to 4.4 s before at 130 to 170 u/s), so the rule
+is a point on the line about 280 units behind plus a separately set speed.
+Confidence 50 for the rule, 85 for the numbers. *The player in a Time Trial*,
+teleported into the gap with `scripts/psp-fall-log.py` (not a legitimate
+approach, so this may not be the natural rule): about one frame (0.98 to 1.1
+frames between hits), and it reappears **far behind, on the start straight**, line
+rows 1257 to 1379 ((-403.3, 7.5, -302.3), (-363.6, 7.8, -302.3), (-282.4, 8.0,
+-303.8), (-240.9, 8.6, -306.3), (-220.0, 8.0, -308.5)), drifting later across the
+session, **identical for falls at rows 25 and 35 and after sitting at rows 2500,
+1800 and 600**, so it is not the nearest line sample to the fall. Heading is
+15 to 27 degrees off the line tangent in two of five cases; speed 50 to 65 along
+the heading in four of nine, zero in the rest. Unresolved: what the rule keys on.
+*Flight* (clears, line rows 18 to 44): the ramp climbs about 6.6 degrees (vy about
+0.115 of speed); liftoff at row 17 to 20; apex about 0.12 s later at row 27
+(y 22.56 for an entry-93 faller; the road is at 20.4); vy then falls at
+**-89 to -93 per second per second, steeper with speed (-89 at 109, -92 at 140,
+-95.5 at 161)**, pooled mean -86.6; a faller at entry 98 is 4.2 below the line at
+row 44 and one at 109 0.2 below (it clears). Confidence 60 (body vy between
+consecutive ticks, ground-clamp transients near liftoff included, grounded
+fraction not read).
+
 **More than one human keeps this project's driver, logged.** The game has no
 second human in a race today (`World::human_slots` is slot 0 outside tests and
 the headless simulator). The original field's slot, place and rubber-band
