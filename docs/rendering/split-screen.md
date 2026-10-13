@@ -430,6 +430,11 @@ K = 4, because the iGPU is bound by its 4.8 to 7.3 ms of scene passes. Pure draw
 did not move on the iGPU (pipelined 4.58, 4.93, 5.65, 6.11 ms before; 4.65, 4.88, 5.46, 5.83 after,
 at one, two, four and eight views, load 9 to 26).
 
+*2048 and Omega* (the shared-lineage check): both draw through the same `original_hulls` and
+`render_shadow_passes` code, **ported**, nothing title-specific: their default tier is `off`
+and `original` draws no hull there (no authored occluder), so their stills at one and two views
+are `cmp` equal to main's, and the `mapped` redraw per view is the same code on every title.
+
 *Open from it:* the floor rays are the cost. Culling them to the craft any view can see
 (with eight craft and two or four views most hulls are projected for nothing) or answering them
 from the collision grid's own cell lookup would cut every refresh rate, keeps the picture exact,
