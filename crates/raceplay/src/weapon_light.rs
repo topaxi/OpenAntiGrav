@@ -194,8 +194,11 @@ impl Race {
             .projectiles
             .slots
             .iter()
-            .filter(|projectile| projectile.kind == Some(Weapon::Rocket))
-            .map(|projectile| rocket_record(projectile.position));
+            .enumerate()
+            .filter(|(_, projectile)| projectile.kind == Some(Weapon::Rocket))
+            .map(|(slot, projectile)| {
+                rocket_record(self.projectile_position_between(slot, projectile))
+            });
         let bombs = self
             .view
             .hd_bomb_blasts

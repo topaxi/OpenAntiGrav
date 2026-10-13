@@ -44,6 +44,9 @@ pub struct RaceView {
     /// `tests::cycling_the_camera_changes_no_simulation_state`.
     pub(super) camera_view: oag_display::display::CameraView,
     pub(super) camera: Chase,
+    /// The previous tick's draw poses and the alpha a draw blends them by.
+    /// See [`super::between_ticks`].
+    pub(super) poses: super::between_ticks::Poses,
     /// The player's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`Self::camera`] is - see
     /// `oag_render::camera::shake`'s module doc comment for what is confirmed

@@ -551,6 +551,7 @@ impl Race {
                 // with no screen. `set_camera_view` is what applies the player's.
                 camera_view,
                 camera,
+                poses: Default::default(),
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 intro: intro_camera

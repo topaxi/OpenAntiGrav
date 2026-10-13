@@ -178,6 +178,10 @@
   `[graphics] motion_blur` strength row
   ([ADR-0030](../architecture/adr/0030-velocity-buffer-motion-blur.md)) - an
   invented feature rather than a recovered one
+- [Drawing between ticks](between-ticks.md) - **built** 2026-10-13: the window
+  draws a race between its last two 60 Hz ticks, so motion is smooth at 144 or
+  240 Hz; captures still draw each tick exactly, byte for byte. A modern
+  addition, not a recovery
 - Modern display features: ultrawide, HDR, VRR, dynamic resolution, and
   FSR-class upscaling - see [modern features](../overview/modern-features.md)
   for the licensing picture and the pipeline prerequisites to design in from

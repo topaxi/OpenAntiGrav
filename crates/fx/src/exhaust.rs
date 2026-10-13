@@ -576,7 +576,7 @@ impl Exhaust {
     #[must_use]
     pub fn trail_vertices(&self, right: Vec3, up: Vec3) -> Vec<GpuVertex> {
         let mut out = Vec::with_capacity(TRAIL_VERTICES_PER_CRAFT);
-        self.extend_trail_vertices(&mut out, right, up);
+        self.extend_trail_vertices(&mut out, None, right, up);
         out
     }
 
@@ -586,12 +586,26 @@ impl Exhaust {
     /// returned by value is a 36 KiB allocation per craft per frame - eight of
     /// them on a full grid, and none of them living past the upload. See
     /// `race::Scene::scratch`.
-    pub fn extend_trail_vertices(&self, out: &mut Vec<GpuVertex>, right: Vec3, up: Vec3) {
+    ///
+    /// `head`, when given, stands in for the newest sample's position: the
+    /// nozzle where a frame drawn between two ticks puts it, so the ribbon
+    /// leaves the hull as drawn rather than a fraction of a tick ahead of it.
+    /// `None` draws the samples as recorded.
+    pub fn extend_trail_vertices(
+        &self,
+        out: &mut Vec<GpuVertex>,
+        head: Option<Vec3>,
+        right: Vec3,
+        up: Vec3,
+    ) {
         if !self.trail_ready() {
             return;
         }
         let ramps = self.layer_alphas();
-        let samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
+        let mut samples: Vec<(Vec3, Vec3)> = self.trail_samples().collect();
+        if let (Some(head), Some(newest)) = (head, samples.first_mut()) {
+            newest.0 = head;
+        }
         let width_scale = self.intensity * TRAIL_WIDTH_GAIN + TRAIL_WIDTH_BASE;
 
         out.reserve(TRAIL_VERTICES_PER_CRAFT);

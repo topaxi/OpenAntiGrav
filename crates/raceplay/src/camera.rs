@@ -157,9 +157,18 @@ impl Race {
     /// The shake turns the camera about its own up and forward as it stands in
     /// `base` this tick, in the original's own order and sense: see
     /// `oag_render::camera::shake`, measured against the running original.
+    ///
+    /// Inside the window's draw this is blended from the previous tick toward
+    /// this one by the draw alpha - see [`super::between_ticks`]. Everywhere
+    /// else it is this tick's camera exactly.
     #[must_use]
     pub fn view(&self) -> Mat4 {
-        let base = self.view_unshaken();
+        self.view_between(self.tick_view(), |previous| previous.view)
+    }
+
+    /// [`Self::view`] as this tick leaves it, never blended.
+    pub(super) fn tick_view(&self) -> Mat4 {
+        let base = self.tick_view_unshaken();
         if self.view.camera_override.is_some() {
             return base;
         }
@@ -173,9 +182,15 @@ impl Race {
     ///
     /// What [`Self::view_shake_rotation`] is measured against, and so what the
     /// motion blur takes the shake out of its velocities with: see
-    /// [`Self::shake_screen_motion`].
+    /// [`Self::shake_screen_motion`]. Blended inside a draw the way
+    /// [`Self::view`] is, by the same alpha and on the same snaps.
     #[must_use]
     pub fn view_unshaken(&self) -> Mat4 {
+        self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken)
+    }
+
+    /// [`Self::view_unshaken`] as this tick leaves it, never blended.
+    pub(super) fn tick_view_unshaken(&self) -> Mat4 {
         if let Some(over) = &self.view.camera_override {
             // A view matrix is the inverse of the camera's world transform.
             return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
@@ -559,8 +574,12 @@ impl Race {
         // and the term is exactly `0` - which is why matching a captured frame
         // still means passing `--camera-fov` computed from that frame's own
         // forward velocity.
-        let body = &self.ship().physics.body;
-        let forward_speed = body.forward().dot(body.linear_velocity);
+        // Both speed terms at the draw alpha, so the field widens smoothly
+        // between ticks along with the camera - see `super::between_ticks`.
+        let forward_speed = self
+            .camera_scalar_between(self.tick_forward_speed(), |previous| previous.forward_speed);
+        let boost_kick =
+            self.camera_scalar_between(self.view.boost_kick, |previous| previous.boost_kick);
         // The destroy camera zooms to frame the wreck, with no speed widen:
         // `FUN_08880c04` writes `g_camera_fov_degrees` from its own field.
         let widened_deg = match self.destroy_camera_now() {
@@ -574,10 +593,10 @@ impl Race {
         // The zero case returns the input untouched rather than through
         // `atan(tan(x))`, for the reason `Fov::apply` gives: every capture taken
         // before this effect existed has to stay bit-identical.
-        let kicked = if self.view.boost_kick == 0.0 {
+        let kicked = if boost_kick == 0.0 {
             authored
         } else {
-            let widen = 1.0 + self.view.boost_kick * self.view.boost_fov_kick.gain();
+            let widen = 1.0 + boost_kick * self.view.boost_fov_kick.gain();
             2.0 * ((authored * 0.5).tan() * widen).atan()
         };
         oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)

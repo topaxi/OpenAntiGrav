@@ -44,8 +44,8 @@ and Vulkan-only support - to inherit an upgrade that does not reach here.
 
 **Frame generation is deliberately out of scope.** FSR3 FG wants to interpose on
 presentation, which wgpu does not expose - and the simulation is fixed 60 Hz
-with unlocked-frame-rate presentation planned via state interpolation, so the
-renderer can produce real frames at any rate. Interpolated fake frames plus
+and the window [draws between ticks](../rendering/between-ticks.md) (since
+2026-10-13), so the renderer produces real frames at any rate. Interpolated fake frames plus
 their latency buy little for a racing game.
 
 **What is built.** FSR 1 (EASU then RCAS) is ported and shipped behind

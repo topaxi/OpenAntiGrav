@@ -41,10 +41,12 @@ The stereo lane takes these design constraints, so VR is additive:
    needs it anyway (a flat HUD sits at screen depth and fights the scene), and
    it is the step toward VR's in-world HUD panel.
 5. **The render rate is separate from the 60 Hz tick.** Stereo does not need
-   this. VR's 90-120 Hz needs the renderer to interpolate poses between
-   ticks. Confirmed absent on 2026-10-13 and queued at high priority as its
-   own thread, `the-renderer-does-not-interpolate-between-ticks.md` in this
-   directory. A VR prerequisite, not stereo scope.
+   this. VR's 90-120 Hz needs the renderer to draw poses between ticks, and
+   since 2026-10-13 it does: a renderer sets `Race::set_draw_alpha` from its
+   own frame clock before it draws and the race's camera and model accessors
+   blend the last two ticks (`docs/rendering/between-ticks.md`). A headset's
+   predicted display time maps onto the same alpha. What is still stepped is
+   `drawing-between-ticks-what-is-still-stepped.md` in this directory.
 
 Out of the stereo lane: OpenXR, head tracking, lens warp and reprojection
 (the runtime owns those), comfort options and a cockpit view.
@@ -72,5 +74,5 @@ in their executables and front-end data.
    `string_id` for each new menu row. An hour or two on top of step 1.
 3. RE pass on HD/Fury's stereo settings and Omega's VR settings, so the
    defaults are the originals' rather than chosen. Half a day each for a census.
-4. VR through OpenXR: render interpolation (constraint 5), runtime submission,
+4. VR through OpenXR: render interpolation (constraint 5, landed), runtime submission,
    comfort camera. A week or more; needs a headset to verify.
