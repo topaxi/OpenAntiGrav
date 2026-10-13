@@ -21,6 +21,54 @@
 location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
 version = "1.0.0"
 
+# Two views cut left and right: each one a tall column, about 0.9:1 at 16:9. Its own rule so
+# that the lower rows of seven and eight views, which share the shape, keep theirs. Keyed on
+# two views and any shape under 2.4:1, so a wider screen's columns read it too and a
+# horizontal pair never does. The corners of `portrait`, with the weapon grid raised: the
+# loader pins a model by its centre point alone, so the grid's lower half would hang below
+# the view at the usual offset.
+[[layout]]
+name = "tall"
+views = [2]
+aspect = [0.0, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedL", "SpeedR"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "bottom-left"
+offset = [0.03, -0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["CurrentTime*", "Score", "ScoreTxt"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["Position*", "Zone", "ZoneTxt"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
+anchor = "bottom"
+offset = [0.0, -0.1]
+scale = 1.4
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.2
+
+
 # Two views, or any strip wider than 2.4:1.
 [[layout]]
 name = "strip"

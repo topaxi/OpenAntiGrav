@@ -163,17 +163,17 @@ the first source that has a layout for the view's count, mode and shape wins:
 2. **The disc's authored layout**: HD, Omega (and 2048, unwired), two views, Single
    Race, Tournament, Head2Head or Eliminator (**measured**, below).
 3. **This project's file**, from the fallback layer: Pulse (PSP and PS2 pressings, one
-   file), Pure and HD ship one in `assets/fallback/Data/XML/SplitHud_*.toml`, **chosen,
+   file), Pure, HD and 2048 ship one in `assets/fallback/Data/XML/SplitHud_*.toml`, **chosen,
    not measured**.
 4. **The whole-screen layout scaled** uniformly to fit the view, aspect kept, centred:
-   the last resort, **chosen, not measured**. 2048 and Omega's non-authored cases are
-   still here (no file written for either yet).
+   the last resort, **chosen, not measured**. Omega's non-authored cases are still here
+   (no file written for it yet).
 
 | | Source | |
 | --- | --- | --- |
 | HD / Fury and Omega, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below); Omega **ported, looked at** |
-| Pulse (PSP, PS2), Pure and HD otherwise, any count 2 to 8 and every view shape | `SplitHud_Pulse.toml`, `SplitHud_Pure.toml`, `SplitHud_HD.toml` | **chosen, not measured** |
-| 2048; Omega's other cases | the whole-screen layout scaled to fit the view | **chosen, not measured** |
+| Pulse (PSP, PS2), Pure, HD otherwise and 2048, any count 2 to 8 and every view shape, both cuts of two views | `SplitHud_Pulse.toml`, `SplitHud_Pure.toml`, `SplitHud_HD.toml`, `SplitHud_2048.toml` | **chosen, not measured** |
+| Omega's other cases | the whole-screen layout scaled to fit the view | **chosen, not measured** |
 
 **The file** (`schemas/v1/split-hud.tosd`, `oag_hud::split_hud`) is a list of
 `[[layout]]` rules, each with `views`, `aspect` (a *view's* width over height, so
@@ -185,17 +185,75 @@ view, and a `scale` relative to the whole-screen HUD fitted to the view. It **on
 places the title's own widgets**; a widget no group names is not drawn in a split,
 which is how 5 to 8 views drop the secondary ones. Every number is chosen for
 legibility at the size a player sees a view, never measured. Offsets and scales carry
-no grid, so one file serves the PSP's 480x272 and the PS2's 640x448.
+no grid, so one file serves the PSP's 480x272 and the PS2's 640x448 (each view's rectangle
+is measured in the grid's own units on each axis, which differ on the PS2).
 
 What each shipped file draws (lap, place, the held weapon, speed and shield, time
 where there is room):
 
-| View shape (a view's width/height) | Where it occurs | Pulse and Pure | HD |
-| --- | --- | --- | --- |
-| 2.4 and wider (`strip`) | two views, the top of three | every group at its corner, larger | every group |
-| 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group |
-| 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group |
-| under 1.0 (`portrait`) | seven and eight views' lower rows | the same, larger | the same, larger |
+| View shape (a view's width/height) | Where it occurs | Pulse and Pure | HD | 2048 |
+| --- | --- | --- | --- | --- |
+| two views and under 2.4 (`tall`, a rule keyed on `views = [2]`) | a left-and-right cut: two columns, 0.89 at 16:9 | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time; Pulse also the Eliminator's kill column and the Pilot Assist indicator (Pure has no Eliminator and authors no kill widget) | none: the disc's `vert_` layouts answer, and its other modes' columns fall to `portrait` | every group |
+| 2.4 and wider (`strip`) | two views cut top and bottom, the top of three | every group at its corner, larger | every group | every group |
+| 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group | every group |
+| 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group | no kill column |
+| under 1.0 (`portrait`) | seven and eight views' lower rows | the same, larger | the same, larger | the same, larger |
+
+**The `tall` rule (2026-10-13, `split-hud-vertical`).** A vertical cut makes two columns of
+about 0.89:1, which `portrait` answered by shape because `portrait` is the only rule under
+1.0. `portrait` also serves the lower rows of seven and eight views, which are horizontal
+cuts and must not move, so a column has a rule of its own in front of `strip`: `views = [2]`,
+`aspect = [0.0, 2.4]`. The upper bound is not 1.0 because a wider screen's columns are
+squarer (1.19 at 21:9, 1.78 at 32:9), and a horizontal pair is 2.67 or wider on any screen
+4:3 or wider, so 2.4 still keeps the two cuts apart. (The side effect: a horizontal pair in a
+window narrower than 1.2:1, a squarish desktop window or a phone held upright (9:19.5 gives
+rows about 0.92 wide), now reads `tall`, where it read `landscape`, `square` or `portrait`
+before; each such view is a tall one, so the answer fits. Keying a rule on the cut would take
+a loader change.) Three or more views are always cut in rows (`Cut::for_views`), so the only
+other tall views are seven and eight views' lower rows, which stay on `portrait`. The
+`views` key is one every rule already has, so nothing in the loader changed. What `tall` does
+over `portrait`:
+
+- **Pulse**: the Eliminator's kill column (`PosTag*`, `KillsText`), which a row of eight has no
+  room for and which `portrait` never placed, so an Eliminator column showed lap and speed and
+  no kills; and the Pilot Assist indicator (`--pilot-assist extreme`), raised to the left over
+  the time readout, since at the bottom centre it lay on the shield and speed bars (seen and
+  moved). `HeadToHeadBar` is named too, as the horizontal rules name it, but **no frame drew
+  it**: Head2Head showed no bar in a row or a column at tick 900, so that claim is by name only.
+  Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
+  1280x720, at tick 900 to 1200.
+- **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
+  (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
+  and the lower third of it hung below the view and was cut by the scissor. The column rule
+  offsets it to `-0.1`, which clears the edge at the scale it draws.
+- **2048**: a whole file, below.
+- **HD**: nothing. Its authored `vert_` layouts answer Single Race, Tournament, Head2Head and
+  the Eliminator and its own Time Trial, Speed Lap and Zone columns still read `portrait`; the
+  reading of HD's file is untouched.
+
+**2048's file** (`SplitHud_2048.toml`, 2026-10-13): a mirror of HD's arrangement in 2048's own
+widgets, five rules (`tall`, `strip`, `landscape`, `square`, `portrait`) of seven groups, six in the smaller
+views. The lap
+and time column top left (`Lap*`, `TotalTime*`, `CurrentTime*`, `BestTime*`, `TargetTime*`, and
+`Score` and `TimeLimit*` for the Eliminator), the place top right, the shield
+(`EnergyBgFrame`, `EnergyBar*`) with the held weapon (`PickupBgFrame` and `PickupIcon`, which the
+runtime moves into the frame, see `oag_hud::dialect_2048::pickup_sprites_uv_rewrite`) and the
+Zone arc bottom left, the thrust and speed bars bottom right, the kill column right, the
+`Info` and `TimeDiff` text in the centre. The campaign's `Objective*` and `XP` widgets are not
+placed, since a split has neither. A reticle is the title's own `MissileSight*` and is drawn
+as in any other split. Looked at on 2048 (EU, patch 1.04) in Single Race, the Eliminator, Zone
+and Time Trial, cut both ways; a Zone race shows `ZONE` with no number and the Eliminator
+`SCORE` and `TIME` with no value at those ticks, which is what the whole-screen HUD draws there
+too, so it is the readout and not the file. **2048's two-view cut top and bottom is a deliberate
+change**: it drew the whole-screen layout scaled into each view and now reads `strip`.
+
+**Checked against Omega** (CLAUDE.md's 2048 and Omega rule): Omega's in-race HUD is **HD's
+vocabulary, not 2048's**: of the twelve widgets probed across the Arcade, Elimination, Zone and
+Time Trial layouts (`LapPanel`, `PositionPanel`, `ClockIcon`, `ZoneBG` present, `EnergyBgFrame`,
+`PickupBgFrame`, `ThrustBar`, `SpeedBar0`, `Laps` absent), Omega authors HD's, so
+`SplitHud_2048.toml` **checked, differs** for Omega, and `SplitHud_HD.toml` **checked, applies,
+not wired**: Omega names no `split_layout` yet (its `hud.rs` is another lane's today), and its
+cases without an authored layout still draw the scaled whole-screen layout.
 
 Each group is its own draw (`ViewDraw`): the layout is cut once at load into one
 sub-layout per group (`SplitHudAssets`), and the reticle, which is not a widget of any
@@ -243,7 +301,7 @@ HD's; a two-view Single Race on `data/extracted/ps4` (2026-10-13) draws each pla
 own lap panel, place, time and speed arc in its half, as HD's does. **2048: checked, differs** - the
 files are authored in HD's 1920x1080 while 2048's HUD space is the Vita's 960x544,
 so its copy would need scaling first (as `oag_hud::assist::splice` scales a
-fragment). The PS2 pressing of Pulse names only
+fragment); `SplitHud_2048.toml` places 2048's own widgets instead (below). The PS2 pressing of Pulse names only
 `Arcade_HUD.xml` and `TimeTrial_HUD.xml` as HUD paths in its executable and has no
 split layout file (**checked, differs**: its split is the camera's own aspect
 change, `Camera_SubmitScene`'s viewport count, see
@@ -254,7 +312,7 @@ change, `Camera_SubmitScene`'s viewport count, see
 - **The scaled whole-screen layout** for a case with no file and no authored layout:
   uniform scale to fit, aspect kept, centred. In a two-up strip (about 3.5:1) the HUD
   is height-limited and sits in the middle of the strip, so its corner widgets are not
-  at the strip's corners. Pulse, Pure and HD no longer reach it; 2048 and Omega's
+  at the strip's corners. Pulse, Pure, HD and 2048 no longer reach it; Omega's
   other cases do.
 - **One answer per screen for the intro**: the HUD shows for the primary's flyby and
   `hud_delay`, for every view, since the other views have no flyby. The
@@ -820,9 +878,10 @@ CSplitV`/`H` -> `Team SelectionSplit`.
 - **VERTICAL vs HORIZONTAL**: the row sets `Session::split_cut` (`oag_render::viewport::Cut`),
   the one HD's authored `SplitScreen` row and `--split-cut` set too; `Options::cut` and
   `split_screen::seat_for_launch` carry it to the race. SPLIT SCREEN VERTICAL therefore draws two
-  full-height columns on Pulse and Pure, with the split HUD's tall-view layout from this
-  project's `SplitHud_Pulse.toml` fallback (headless stills at `--players 2 --split-cut vertical
-  --ticks 400` read on PSP Pulse, PS2 Pulse and Pure, 2026-10-13). Three or more people are cut in
+  full-height columns on Pulse and Pure, with the split HUD's `tall` rule from this
+  project's `SplitHud_Pulse.toml` and `SplitHud_Pure.toml` fallbacks (headless stills at
+  `--players 2 --split-cut vertical --ticks 400` read on PSP Pulse, PS2 Pulse and Pure,
+  2026-10-13; judged again with the `tall` rule, `split-hud-vertical`, below). Three or more people are cut in
   rows whatever the row said (`Cut::for_views`). The generic SPLIT SCREEN row (Omega, 2048) is cut
   top and bottom unless `--split-cut` says otherwise.
 
@@ -969,15 +1028,32 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   views, tick 300 and 1200, draws every view.
 - HD's Wo3 and 2097 skins and its Zone layout are shipped and not wired (and the Wo3 and
   2097 `vert_` copies with them). 2048's authored two-view HUD is **checked, differs** (1920x1080
-  files in a 960x544 HUD space, needs scaling first) and has no file of ours;
-  Omega's other cases and 2048's draw the scaled whole-screen layout.
+  files in a 960x544 HUD space, needs scaling first); `SplitHud_2048.toml` draws in its place.
+  Omega's other cases draw the scaled whole-screen layout.
 - The split-HUD files were looked at in Single Race at every count, and in Zone and
   the Eliminator at four views on Pulse and Zone at four on HD; Time Trial and the
   Eliminator on Pure and HD, and every mode at five to eight views other than Single
   Race, were checked by name against the layouts (`the_shipped_split_files_name_only_widgets_their_titles_author`)
   and not by eye. The PS2 pressing draws its text smaller against its bars than the
   PSP does (that is how its whole-screen HUD is authored here, one file serves both),
-  so its split HUD reads smaller; a per-platform scale is open. HD's Eliminator
+  so its split HUD reads smaller; a per-platform scale is open.
+  **PS2 Pulse's split HUD sat too high (found and fixed 2026-10-13, `split-hud-vertical`):**
+  its 640x448 grid is shown 16:9, so a grid unit is 2.0 pixels wide and 1.607 tall, and
+  `oag_game::hud_views` converted pixels to grid units with the width's number for both
+  axes, which made a view 20% short in grid rows: every bottom-anchored group floated at
+  about 76% of the view (the speed and shield bars ended at y 275 of a 360-pixel row, and at
+  545 of a 720-pixel column). `grid_of` now returns a number per axis and `grid_rect`,
+  `place_into` and `scissor_rect` use each axis' own; a grid shown as itself (PSP, HD, 2048,
+  Omega) takes one number for both, so those are byte-identical. Only PS2 Pulse's split frames
+  moved (not its single view, which never goes through these).
+- **Open from `split-hud-vertical`**: the weapon grid of Pure still hangs partly below a
+  horizontal two-view row (and the lower rows of seven and eight views), the same defect the
+  `tall` rule fixes for columns; the strip's kill column on Pulse overlaps the speed and
+  shield bars at the right edge (a row is too short for eight lines and the bars); Zone's own
+  pale text (`speed class`, `zone`, `lap`) is hard to read over its white and cyan scenery in
+  both cuts and on the whole screen alike, which is the title's colour and not placement;
+  Omega's Zone vertical variant (`Zone_HUDvert`) and Omega's non-authored cases are unwired;
+  nobody has seen the columns on a real display. HD's Eliminator
   column, lap times and Zone ladder are placed by name and have not been judged on a
   real display. Per-person messages and records, and a lock that
   gates another person's fire.

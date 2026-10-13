@@ -23,6 +23,7 @@ fn shipped() -> Vec<(&'static str, &'static str)> {
         ("assets/fallback/Data/XML/SplitHud_Pulse.toml", "split-hud"),
         ("assets/fallback/Data/XML/SplitHud_Pure.toml", "split-hud"),
         ("assets/fallback/Data/XML/SplitHud_HD.toml", "split-hud"),
+        ("assets/fallback/Data/XML/SplitHud_2048.toml", "split-hud"),
     ]
 }
 
