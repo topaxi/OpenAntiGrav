@@ -21,6 +21,66 @@
 location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
 version = "1.0.0"
 
+# Two views cut left and right: each one a tall column, about 0.9:1 at 16:9. Its own rule so
+# that the lower rows of seven and eight views, which share the shape, keep theirs. Keyed on
+# two views and any shape under 2.4:1, so a wider screen's columns (1.2:1 at 21:9) read it
+# too, and a horizontal pair (2.7:1 or wider on a 4:3 screen or wider) never does. The same
+# corners as `portrait`, plus what a column has the room for and a row of eight does not: the
+# Eliminator's kill column, the Head2Head bar and the Pilot Assist indicator.
+[[layout]]
+name = "tall"
+views = [2]
+aspect = [0.0, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ShieldBar*"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.5
+
+[[layout.group]]
+widgets = ["Lap*"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["CurrentTime", "CurrentTimeTxt", "CountdownTime*", "Score", "ScoreTxt"]
+anchor = "bottom-left"
+offset = [0.03, -0.04]
+scale = 1.5
+
+[[layout.group]]
+widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.6
+
+[[layout.group]]
+widgets = ["PickupBackground", "ShieldIcon", "AutopilotIcon", "CannonIcon", "RocketIcon", "BombIcon", "QuakeIcon", "MineIcon", "PlasmaIcon", "MissileIcon", "TurboIcon", "LeachBeamIcon", "RepulserIcon", "ShurikenIcon", "SpeedClass", "SpeedClassTxt"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.4
+
+[[layout.group]]
+widgets = ["Info*", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.2
+
+[[layout.group]]
+widgets = ["AssistIndicatorBG", "AssistIndicatorMain", "AssistIndicatorLeft", "AssistIndicatorRight"]
+anchor = "bottom"
+offset = [0.0, -0.04]
+scale = 1.2
+
+[[layout.group]]
+widgets = ["KillsText", "PosTag*", "HeadToHeadBar"]
+anchor = "right"
+offset = [-0.03, 0.0]
+scale = 0.9
+
+
 # Two views, or any strip wider than 2.4:1: room to the sides, so the groups sit at the corners.
 [[layout]]
 name = "strip"
