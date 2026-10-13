@@ -10,6 +10,7 @@ use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::Placement;
 
 use crate::Race;
+use crate::scene::FrameWork;
 use crate::scene::motion::Snapshot;
 use crate::scene::viewports::Layer;
 
@@ -82,15 +83,18 @@ impl super::super::Scene {
         if self.layer.get() == Layer::Next {
             return;
         }
-        self.shadow_frames.set(self.shadow_frames.get() + 1);
+        self.frame_work.update(|w| FrameWork {
+            shadow_maps: w.shadow_maps + 1,
+            ..w
+        });
         self.render_shadow_map(queue, encoder, race, shadows);
         self.render_sun_occlusion(queue, encoder, race, shadows);
     }
 
-    /// How many frames have encoded the shadow maps.
+    /// What the camera-independent work has run so far.
     #[cfg(test)]
-    pub(crate) fn shadow_frames(&self) -> u32 {
-        self.shadow_frames.get()
+    pub(crate) fn frame_work(&self) -> FrameWork {
+        self.frame_work.get()
     }
 
     /// Gathers this frame's blob quads and projected hulls and uploads them with
@@ -112,6 +116,10 @@ impl super::super::Scene {
         let mut gathered = self.shadow_gathered.borrow_mut();
         if self.layer.get() != Layer::Next {
             *gathered = self.shadow_geometry(race, shadows);
+            self.frame_work.update(|w| FrameWork {
+                shadow_gathers: w.shadow_gathers + 1,
+                ..w
+            });
         }
         let (quads, hull_vertices) = &*gathered;
         self.shadow

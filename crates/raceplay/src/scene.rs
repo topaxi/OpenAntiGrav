@@ -37,6 +37,16 @@ use motion::Attachments;
 pub use motion::TemporalFrame;
 pub(super) use scratch::Scratch;
 
+/// Counts of the frame's camera-independent work, one each per frame that
+/// did it: a split screen's first view does it and later views must not.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FrameWork {
+    pub(crate) shadow_maps: u32,
+    pub(crate) shadow_gathers: u32,
+    pub(crate) scenery_clocks: u32,
+    pub(crate) advert_cards: u32,
+}
+
 /// The track and the ship on the GPU, drawn from a chase camera.
 #[derive(Debug)]
 pub struct Scene {
@@ -258,9 +268,9 @@ pub struct Scene {
     generated_silhouettes: usize,
     shadow_silhouette_count: usize,
     generated_silhouettes_said: std::cell::Cell<bool>,
-    /// How many frames have encoded the shadow maps - one per frame however many
-    /// views a split draws, which is what `tests/split_shadows.rs` holds.
-    shadow_frames: std::cell::Cell<u32>,
+    /// How often the camera-independent work ran, for `tests/split_shadows.rs`:
+    /// once a frame however many views a split draws.
+    frame_work: std::cell::Cell<FrameWork>,
     /// The blob quads and projected hulls [`Scene::shadow_geometry`] gathered for
     /// the frame in progress. A split screen gathers once, on its first view, and
     /// every later view uploads the same lists: where the craft cast is not a
@@ -1002,7 +1012,7 @@ impl Scene {
             shadow_silhouette_count,
             generated_silhouettes_said: std::cell::Cell::new(false),
             shadow_gathered: Default::default(),
-            shadow_frames: std::cell::Cell::new(0),
+            frame_work: Default::default(),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),

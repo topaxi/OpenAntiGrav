@@ -1,6 +1,7 @@
-//! A split screen encodes a frame's shadow maps once, however many views it
-//! draws: they are a function of the craft, not of the camera, so every later
-//! view samples what the first one drew.
+//! A split screen does a frame's camera-independent work once, however many
+//! views it draws: the shadow maps, the shadow gather, the scenery clocks and the
+//! advert cards are functions of the craft and the race clock, so every later view
+//! reads what the first one left.
 
 use super::scene_build::{bare_scene, test_gpu};
 use super::*;
@@ -25,11 +26,12 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
         .create_view(&Default::default())
 }
 
-/// Four views encode the shadow maps for the frame once, and the next frame
-/// once more. Drop the `Layer::Next` gate in `render_shadow_passes` and the
-/// first count reads four.
+/// Four views do the frame's shared work once, and the next frame once more.
+/// Drop any `Layer::Next` gate (`render_shadow_passes`, `upload_shadow_geometry`,
+/// the scenery clocks and the advert cards in `Scene::render`) and its count reads
+/// four for the first frame.
 #[test]
-fn four_views_encode_the_shadow_maps_once() {
+fn four_views_do_the_shared_work_once() {
     let Some((device, queue)) = test_gpu() else {
         return;
     };
@@ -52,10 +54,17 @@ fn four_views_encode_the_shadow_maps_once() {
             &[],
             &mut [],
         );
-        assert_eq!(
-            scene.shadow_frames(),
-            frame,
-            "frame {frame}: one shadow encode per frame, not one per view"
-        );
+        let work = scene.frame_work();
+        for (what, count) in [
+            ("shadow maps", work.shadow_maps),
+            ("shadow gather", work.shadow_gathers),
+            ("scenery clocks", work.scenery_clocks),
+            ("advert cards", work.advert_cards),
+        ] {
+            assert_eq!(
+                count, frame,
+                "frame {frame}: {what} once, not once per view"
+            );
+        }
     }
 }

@@ -284,6 +284,10 @@ impl Scene {
         let first_view = self.layer.get() != super::viewports::Layer::Next;
         if first_view {
             self.write_scenery_anims(queue, seconds);
+            self.frame_work.update(|w| super::FrameWork {
+                scenery_clocks: w.scenery_clocks + 1,
+                ..w
+            });
         }
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
@@ -294,6 +298,10 @@ impl Scene {
         }
         if first_view {
             crate::adverts::render(&self.adverts, queue, encoder, seconds, race, anim_seconds);
+            self.frame_work.update(|w| super::FrameWork {
+                advert_cards: w.advert_cards + 1,
+                ..w
+            });
         }
         let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
         let glass = (section_view, eye, seconds);
