@@ -594,6 +594,15 @@ driver, with the reason logged, when the title and class have no tables that
 read or the track has no closed lap. The tables are read for every race of the
 five titles (their `original_opponent` flag), whatever the mode.
 
+**Measured when it became the default (2026-10-13), and not clean off
+`16_Track`.** A parked player, 9,000 ticks, single race, VENOM, seed 1, the
+seven opponents' respawns on Pulse PSP USA with the original driver: `01`, `02`,
+`03`, `04`, `06`, `07`, `09`, `10`, `14` and `16_Track` none; `05_Track` 4 in
+total; `13_Track` about 200 (one slot 129). This project's driver, same runs: at
+most one respawn a track, none on `05` and `13`. HD's default track: none for
+either. Whether `13_Track` and `05_Track` are a mapping error in the port or
+circuits the original's driver also loses is open.
+
 **Not wired, said so:** the game has no second human in a race today
 (`World::human_slots` is slot 0 outside tests and the headless simulator), so
 the original field treats every slot from 1 as an opponent; a split-screen mode

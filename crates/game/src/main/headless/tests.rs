@@ -124,3 +124,36 @@ fn trace_out_drives_the_craft_from_its_input_script() {
         "the scripted and unscripted runs must diverge on the column the script drives"
     );
 }
+
+/// A single race loaded for the AI choice: `loaded()` above is a Time Trial,
+/// which fields no opponents.
+fn single_race() -> Option<race::Loaded> {
+    let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
+    Some(
+        race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            ..race::Options::default()
+        })
+        .expect("loading the race"),
+    )
+}
+
+/// `--trace-out` starts its race through the AI choice: with no flag the
+/// opponents fly the original driver (the clap default), with `--ai ours`
+/// this project's. This pins a real call site and the flag's default, which
+/// `ai_choice`'s own tests cannot.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd; run under `just test-data`"]
+fn trace_out_flies_the_original_driver_unless_told_otherwise() {
+    let (Some(by_default), Some(ours)) = (single_race(), single_race()) else {
+        return;
+    };
+    let default_cli = Cli::parse_from(["oag-game", "--race"]);
+    let race = super::started_race(by_default, &default_cli, ControlScheme::default());
+    assert!(race.original_ai_active());
+    let ours_cli = Cli::parse_from(["oag-game", "--race", "--ai", "ours"]);
+    let race = super::started_race(ours, &ours_cli, ControlScheme::default());
+    assert!(!race.original_ai_active());
+}

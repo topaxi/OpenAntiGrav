@@ -290,6 +290,22 @@ pub(crate) fn run_windowless(
     unreachable!("every branch above returns")
 }
 
+/// The race `--trace-out` drives: started, with the opponents' AI chosen
+/// (`--ai`, the original driver by default; `oag_game::ai_choice`), the scheme
+/// and the pilot assist applied.
+fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race::Race {
+    let difficulty = loaded.setup.difficulty;
+    let mut race = race::Race::start(loaded.setup);
+    oag_game::ai_choice::apply(
+        &mut race,
+        cli.driver.ai,
+        oag_game::ai_choice::Source::Free(difficulty),
+    );
+    race.set_control_scheme(scheme);
+    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    race
+}
+
 /// Our per-tick state, in the capture's own columns, written to `path`.
 ///
 /// # Driving the run
@@ -358,15 +374,7 @@ pub(crate) fn write_trace(
     use oag_trace::trace::AngularReading;
     use oag_trace::{Flare, Frame, Trace};
 
-    let difficulty = loaded.setup.difficulty;
-    let mut race = race::Race::start(loaded.setup);
-    oag_game::ai_choice::apply(
-        &mut race,
-        cli.driver.ai,
-        oag_game::ai_choice::Source::Free(difficulty),
-    );
-    race.set_control_scheme(scheme);
-    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    let mut race = started_race(loaded, cli, scheme);
 
     // Built from the world rather than from `Telemetry`, which carries a summary
     // for the console and not the columns a comparison needs.
