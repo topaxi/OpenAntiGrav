@@ -85,8 +85,10 @@ text widgets, nothing else - the same floating name tags
 **A split-screen family also ships** - `splitscreen_hud/`,
 `splitscreenzone_hud/`, `duel_hud/duel_splitscreen_hud/` and a `vert_` variant
 of most of it, inside the 312 archive entries with `hud` in their path - and is
-deliberately not
-enumerated, because nothing in this project draws two viewports. The one to know
+deliberately not in `ROOTS`, which is the single-screen set. A two-view race reads
+`splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml` as
+`oag_hd::hud::SPLIT`: whole-screen 1920x1080 layouts, the second the first moved
+down 540, see [split-screen.md](../rendering/split-screen.md#hud). The one to know
 about is `/data/xml/splitscreenzone_hud/zone_hud.xml`: same basename as the Zone
 root, one directory across, and a looser rule picks it up. The ground-truth test
 asserts it exists *and* is excluded, so the exclusion is a decision on the record

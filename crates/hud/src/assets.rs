@@ -60,9 +60,36 @@ pub struct Assets {
     /// see [`oag_title::HudArt`]. The texture row is spent by the time this
     /// exists: [`Self::sheet`] is already built.
     pub art: &'static oag_title::HudArt,
+    /// The title's authored two-player split-screen layouts for this mode, read
+    /// only when the race was loaded for a two-view split and the title ships
+    /// them ([`oag_title::hud::SplitLayouts`]). Their textures are in
+    /// [`Self::sheet`]. `None` for everything else, which draws the whole-screen
+    /// [`Self::layout`] scaled into each view instead.
+    pub split: Option<SplitAssets>,
+}
+
+/// A title's own split-screen HUD for two players: one layout per player.
+#[derive(Debug, Clone)]
+pub struct SplitAssets {
+    /// Player 0's layout, then player 1's, each authored for the whole screen
+    /// and sitting in its own half of it.
+    pub layouts: [Layout; 2],
+    /// One view's size in the layouts' grid: the width of the screen and the
+    /// half of its height a player's HUD sits in. The reticle projects into it.
+    pub view: (f32, f32),
 }
 
 impl Assets {
+    /// The screen the lock-on reticle projects into: the title's own grid, or one
+    /// view of it when the race was loaded with an authored two-player split
+    /// layout, whose reticle is view-relative.
+    #[must_use]
+    pub fn sight_screen(&self) -> (f32, f32) {
+        self.split
+            .as_ref()
+            .map_or(self.space.size, |split| split.view)
+    }
+
     /// The context [`super::draw_list`] takes, or `None` with no layout to draw.
     ///
     /// The same seven fields [`super::Overlay::context`] assembles, off a

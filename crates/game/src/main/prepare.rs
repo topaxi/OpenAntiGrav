@@ -216,6 +216,8 @@ impl Pending {
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
             opponents: self.cli.opponents || self.cli.driver.players > 1,
+            // The load reads a title's authored split HUD for two views.
+            views: self.cli.driver.players,
             trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,

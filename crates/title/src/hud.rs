@@ -73,6 +73,32 @@ pub struct HudLayouts {
     /// [`Self::time_trial`] for [`Self::speed_lap`] - a title fact stated
     /// once here rather than a `None` every caller would have to handle.
     pub elimination: &'static str,
+    /// The title's own two-player split-screen layouts, `None` where it ships
+    /// none (both PSP titles and the PS2 pressing).
+    pub split: Option<SplitLayouts>,
+}
+
+/// A title's authored two-player split-screen HUD: one root per player, for the
+/// two views of a top-and-bottom split.
+///
+/// **Authored for the whole screen, one layout per player.** HD's
+/// `splitscreen_hud_0.xml` and `_1.xml` are both 1920x1080 and the second is
+/// the first shifted down by half the screen height (measured: the widgets'
+/// extents differ by exactly 540 in y), so player `i`'s HUD is drawn with
+/// player `i`'s layout at the identity, over the whole screen, with the view
+/// being the half the layout sits in. The `vert_` family is the left and right
+/// split, which this engine's layout does not cut; and neither covers more than
+/// two players.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SplitLayouts {
+    /// Single race, tournament and Head2Head, player 0 then player 1.
+    pub arcade: [&'static str; 2],
+    /// Eliminator, player 0 then player 1.
+    pub elimination: [&'static str; 2],
+    /// The height of one view in the layout's own grid: the half of the screen a
+    /// player's layout is authored into. The reticle projects into a screen of
+    /// this height and the layout's width.
+    pub view_height: u32,
 }
 
 /// `reference` with its file extension replaced by `extension`.
