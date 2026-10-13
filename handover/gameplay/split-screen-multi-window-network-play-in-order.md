@@ -410,8 +410,8 @@ roughly 7 times the sim cost (an expectation from the input type); (2) the
 project targets phones (`oag-mobile`), where a replay budget that is fine on a
 desktop may not be; (3) the repo gaps already listed under Open: a replay
 re-fires view and audio effects, `RaceSim` clones the track, `TickClock` caps
-catch-up at 8 ticks, and a remote slot's input still reaches no craft (pinned by
-`crates/raceplay/src/tests/reconcile.rs:218`, which I did not run).
+catch-up at 8 ticks, and (closed 2026-10-13) a remote slot's input reaching no craft, which
+`crates/raceplay/src/tests/reconcile.rs` now pins the other way.
 
 ### Evidence
 
@@ -716,7 +716,13 @@ a guess.
   two humans): `original_ai.rs` `Standings.player` (rubber band, one player),
   `field/pad_seek.rs:126` and `field/fire_law.rs:119` (the AI's one "player" to
   skip or watch), `speed_plan.rs:100` (the player's hull plan), `results.rs`
-  (`finished()` reads `primary_race`, the end of the race is the primary's).
+  (`finished()` reads `primary_race`, the end of the race is the primary's), and
+  the LeachBeam's lock (`weapons.rs`, `Race::sight_target` reads `ships[0]`
+  through the view's one reticle: a second person-flown slot fires it unlocked
+  until each viewport has its own sight; the Missile's lock is the shared
+  per-slot one and needs nothing). Also: with slot 0 set to `Ai` and a human
+  elsewhere, `step_opponents` now drives slot 0 and its driver is unseeded
+  (windowed-search trap); no session builds that setup.
   View, stays primary for split screen's lane: `zoom.rs` boost pulse,
   `destroy_camera.rs`, `craft_flash.rs` (shake cancel, reset flash),
   `countdown.rs` cue slot, `hit_sparks.rs` shake, `intro_camera.rs` skip button,

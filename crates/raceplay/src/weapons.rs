@@ -446,9 +446,22 @@ impl Race {
                     // sighting; before that it passes `(0, -1)`, the unlocked arm.
                     // Wipeout HD's LeachBeam reticle is a different function, so it
                     // keeps firing off the window alone. An opponent has no reticle.
-                    let target = self.sight_target().filter(|_| {
-                        slot != 0 || !self.view.sight.leach_law() || self.view.sight.locked()
-                    });
+                    //
+                    // **A second person has no sight to read yet.**
+                    // [`Race::sight_target`] measures from `ships[0]` through the
+                    // view's one reticle, so another person-flown slot would be
+                    // handed slot 0's target (possibly itself). Fired unlocked
+                    // until split screen gives each viewport its own sight.
+                    let primary = self.sim.world.primary_slot();
+                    let target = if slot != primary && self.sim.world.person_flown(slot) {
+                        None
+                    } else {
+                        self.sight_target().filter(|_| {
+                            slot != primary
+                                || !self.view.sight.leach_law()
+                                || self.view.sight.locked()
+                        })
+                    };
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
                             self.sim.cues.push(oag_sound::sfx::CueEvent::new(

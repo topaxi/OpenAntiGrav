@@ -406,7 +406,7 @@ pub struct RaceSim {
     /// position" case in `Pads_TestCraft` and takes the single-point path. One
     /// per racer.
     pub(super) pad_previous_position: [Option<Vec3>; MAX_SHIPS],
-    /// Whether slot 0 is being driven by its own [`oag_ai::Driver`] instead of
+    /// Whether the primary slot is being driven by its own [`oag_ai::Driver`] instead of
     /// by the input snapshot. See [`Race::set_autopilot`].
     pub(super) autopilot: bool,
     /// One-shot sound cues this tick asked for, awaiting a drain.

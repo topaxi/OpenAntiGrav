@@ -96,7 +96,7 @@ impl Race {
     /// It replaces the mapped input snapshot outright rather than blending with
     /// it, so a run under autopilot is a run nobody is steering. It is flown with
     /// the *player's* recovery - [`Self::lost_off_the_track`], not the opponents'
-    /// [`Self::lost_off_the_circuit`] - because it is still slot 0 going through
+    /// [`Self::lost_off_the_circuit`] - because it is still a person's craft going through
     /// [`Self::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
@@ -157,8 +157,8 @@ impl Race {
         driver.branching = driver.branching.on_ring();
     }
 
-    /// Whether slot 0 is being flown for the player this tick, by any of four
-    /// routes.
+    /// Whether slot `slot` is being flown for its person this tick, by any of
+    /// four routes.
     ///
     /// The operator's `--autopilot` and the pickup are deliberately separate
     /// facts joined here rather than one flag: the first is a verification aid
