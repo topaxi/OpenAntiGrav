@@ -5,7 +5,7 @@
 put over a gap (or at the lip of a jump, at a chosen speed) falls and the game's reset shows
 as a row where the position jumps. Each row is one `Ship_Update` of the craft: CPU cycle
 counter (so a frame count gone between rows can be read), body position, forward row, velocity,
-body speed, and the craft words `0x2b0..0x2f0` (the grounded fraction at `+0x2b0`, throttle
+body speed, with `--ring` the entity's reset crumb ring (8 positions at `entity+0x380+i*0x40+0x30`, head and oldest at `+0x780`/`+0x784`, the latched speed at `+0x78c`, the no-crumb flag byte `+0xb51`), and the craft words `0x2b0..0x2f0` (the grounded fraction at `+0x2b0`, throttle
 `+0x2b8`, steer `+0x2c0`, cached speed `+0x2ec`).
 
     uv run --with websocket-client python3 scripts/psp-fall-log.py --port 45091 \
@@ -86,9 +86,21 @@ def run(args):
             vel = struct.unpack_from("<3f", raw, 0x140 - 0x20)
             speed = struct.unpack_from("<f", raw, 0x398 - 0x20)[0]
             words = struct.unpack("<16f", dbg.read(craft + 0x2B0, 0x40))
+            ring = None
+            if args.ring:
+                entity = dbg.read_u32(craft + 0x1C4)
+                blk = dbg.read(entity + 0x380, 0x200)
+                head, oldest = struct.unpack("<II", dbg.read(entity + 0x780, 8))
+                latch = struct.unpack("<f", dbg.read(entity + 0x78C, 4))[0]
+                ring = {
+                    "crumbs": [struct.unpack_from("<3f", blk, i * 0x40 + 0x30) for i in range(8)],
+                    "head": head, "oldest": oldest, "latch": latch,
+                    "flag": dbg.read_u8(entity + 0xB51),
+                }
             row = {
                 "cycles": dbg.call("cpu.status")["ticks"],
                 "pos": pos, "fwd": fwd, "vel": vel, "speed": speed,
+                "ring": ring,
                 "grounded": words[0], "throttle": words[2], "steer": words[4], "cached_speed": words[15],
             }
             out.write(json.dumps(row, separators=(",", ":")) + "\n")
@@ -112,6 +124,7 @@ def main():
     parser.add_argument("--tangent", type=vec, required=True, metavar="X,Y,Z")
     parser.add_argument("--up", type=vec, default=(0.0, 1.0, 0.0), metavar="X,Y,Z")
     parser.add_argument("--speed", type=float, default=0.0)
+    parser.add_argument("--ring", action="store_true", help="also log the entity's reset crumb ring (entity = craft+0x1c4)")
     parser.add_argument("--ticks", type=int, default=300)
     parser.add_argument("--out", type=Path, required=True)
     run(parser.parse_args())
