@@ -81,6 +81,15 @@ impl super::super::Scene {
         shadows: oag_display::display::Shadows,
     ) {
         if self.layer.get() == Layer::Next {
+            // The `mapped` tier's map is fitted on the craft the view follows, so
+            // it is the one pass a later view does itself. Each view is its own
+            // submission, and a queue write lands before the submission that
+            // follows it, so this view's fit and caster uniforms cannot reach an
+            // earlier view's draws.
+            if shadows == oag_display::display::Shadows::Mapped {
+                let mut map = self.shadow_map.borrow_mut();
+                self.render_depth_map(&mut map, queue, encoder, race);
+            }
             return;
         }
         self.frame_work.update(|w| FrameWork {
@@ -116,10 +125,6 @@ impl super::super::Scene {
         let mut gathered = self.shadow_gathered.borrow_mut();
         if self.layer.get() != Layer::Next {
             *gathered = self.shadow_geometry(race, shadows);
-            self.frame_work.update(|w| FrameWork {
-                shadow_gathers: w.shadow_gathers + 1,
-                ..w
-            });
         }
         let (quads, hull_vertices) = &*gathered;
         self.shadow
@@ -153,49 +158,24 @@ impl super::super::Scene {
                 self.shadow_silhouette_count
             );
         }
-        let placements = if shadows.draws() {
-            race.shadow_placements()
-        } else {
-            Vec::new()
-        };
         // The `original` tier draws the craft's own authored hull instead of a
-        // textured quad, projected onto the same surface the placement found.
-        // A slot whose model authors no hull contributes nothing rather than
+        // textured quad, projected onto the same surface the placement found:
+        // gathered once per tick and lerped between ticks, see `hull_cache`. A
+        // slot whose model authors no hull contributes nothing rather than
         // falling back to a blob: a tier that silently becomes another tier is
         // how a missing feature stops being noticed. See
         // `oag_render::shadow::hull_triangles`, and
         // `oag_pulse::shadow::AUTHORED_AXIS` for the direction.
-        let mut hull_vertices = Vec::new();
         if shadows == oag_display::display::Shadows::Original {
-            for placement in &placements {
-                let Some(Some(hull)) = self.shadow_hulls.get(placement.silhouette) else {
-                    continue;
-                };
-                let first = hull_vertices.len();
-                oag_render::shadow::hull_triangles(
-                    &oag_render::shadow::Cast {
-                        hull,
-                        model: race.ship_model_matrix_of(placement.silhouette),
-                        axis: Vec3::from_array(oag_pulse::shadow::AUTHORED_AXIS),
-                        contact: placement.contact,
-                        normal: placement.normal,
-                        strength: placement.strength,
-                    },
-                    &mut hull_vertices,
-                );
-                oag_render::shadow::conform_to_floor(&mut hull_vertices, first, |at, normal| {
-                    race.floor_above(at, normal)
-                });
-            }
+            // The quads are not drawn at all: the two tiers are alternatives,
+            // not layers.
+            return (Vec::new(), self.original_hulls(race));
         }
-        // At `original` the quads are not drawn at all: the two tiers are
-        // alternatives, not layers.
-        let quads: &[Placement] = if shadows == oag_display::display::Shadows::Blob {
-            &placements
+        if shadows == oag_display::display::Shadows::Blob {
+            (race.shadow_placements(), Vec::new())
         } else {
-            &[]
-        };
-        (quads.to_vec(), hull_vertices)
+            (Vec::new(), Vec::new())
+        }
     }
 }
 
@@ -503,6 +483,28 @@ impl super::super::Scene {
         (self.sun_occlusion.borrow().drawn(slot) > 0).then_some(slot)
     }
 
+    /// The craft the `mapped` map is fitted on: the one the view being drawn
+    /// follows in a split, and slot 0 for a race that is not split, as it always
+    /// was.
+    fn mapped_slot(&self, race: &Race) -> usize {
+        if self.layer.get() == Layer::Whole {
+            0
+        } else {
+            race.viewed_slot()
+        }
+    }
+
+    /// The `mapped` tier's fit around the craft in `slot`.
+    pub(crate) fn mapped_fit_for(&self, race: &Race, slot: usize) -> oag_render::shadow::map::Fit {
+        mapped_fit(race.ship_model_matrix_of(slot), mapped_light(&self.light))
+    }
+
+    /// The projection the `mapped` depth map was last drawn with.
+    #[cfg(test)]
+    pub(crate) fn mapped_matrix(&self) -> Mat4 {
+        self.shadow_map.borrow().depth_matrix()
+    }
+
     /// The `mapped` tier's own pass: **everything** casts, into a depth map.
     ///
     /// The track goes in first and the craft after it, which is the whole
@@ -524,7 +526,7 @@ impl super::super::Scene {
             }
             casters.push(self.ships[slot].caster(race.ship_model_matrix_of(slot)));
         }
-        let fit = mapped_fit(race.ship_model_matrix_of(0), mapped_light(&self.light));
+        let fit = self.mapped_fit_for(race, self.mapped_slot(race));
         // The coverage map stays cleared while this tier is on: two maps are
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.

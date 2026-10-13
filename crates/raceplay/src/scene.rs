@@ -279,6 +279,9 @@ pub struct Scene {
         Vec<oag_render::shadow::Placement>,
         Vec<oag_mesh::mesh::GpuVertex>,
     )>,
+    /// The last two ticks' projected hulls, so the `original` tier gathers once
+    /// per tick rather than once per drawn frame. See `frame/hull_cache.rs`.
+    hull_cache: std::cell::RefCell<frame::HullCache>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -1012,6 +1015,7 @@ impl Scene {
             shadow_silhouette_count,
             generated_silhouettes_said: std::cell::Cell::new(false),
             shadow_gathered: Default::default(),
+            hull_cache: Default::default(),
             frame_work: Default::default(),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,

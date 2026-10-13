@@ -16,6 +16,10 @@
 //!   blur chain and HD's bloom chain - and reports each, so what is left of
 //!   the total is the passes nothing times (the shadow maps above all).
 //!
+//! `OAG_RENDER_BENCH_FRAMES_PER_TICK` says how many benched frames share a tick
+//! ([`TickPacer`]); read it before comparing a number with one from before the
+//! shadow gather was cached per tick.
+//!
 //! Neither touches the frame the capture writes out: both record into
 //! encoders of their own.
 //!
@@ -29,6 +33,40 @@
 //! one wait at the end), which is the number a frame budget is read against.
 
 use oag_gpu::timing::{Half, PassTimer};
+
+/// `OAG_RENDER_BENCH_FRAMES_PER_TICK=K`: how many benched frames share one
+/// simulation tick, `1` by default.
+///
+/// The bench re-draws one captured tick over and over, and the shadow gather is
+/// cached per tick, so left alone it would hit the cache on every frame but the
+/// first and report a cost no player sees. At `1` every frame is a fresh tick (a
+/// 60 Hz window, and the cost before the cache); `4` is a 240 Hz window; a very
+/// large number is the upper bound where the cache never misses.
+pub(super) struct TickPacer {
+    frames_per_tick: u64,
+    frame: std::cell::Cell<u64>,
+}
+
+impl TickPacer {
+    pub(super) fn from_env() -> Self {
+        Self {
+            frames_per_tick: std::env::var("OAG_RENDER_BENCH_FRAMES_PER_TICK")
+                .ok()
+                .and_then(|text| text.parse().ok())
+                .filter(|&k| k > 0)
+                .unwrap_or(1),
+            frame: std::cell::Cell::new(0),
+        }
+    }
+
+    /// Called before each benched frame: whether it starts a new tick, so the
+    /// per-tick caches must forget the last one.
+    pub(super) fn starts_tick(&self) -> bool {
+        let frame = self.frame.get();
+        self.frame.set(frame + 1);
+        frame % self.frames_per_tick == 0
+    }
+}
 
 /// The timestamp pairs one recording is handed - all `None` on the CPU bench
 /// and on a device without timestamps.

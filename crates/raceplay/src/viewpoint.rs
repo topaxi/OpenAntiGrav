@@ -170,10 +170,17 @@ impl Race {
         self.view.viewpoints.drawing.get().map(usize::from)
     }
 
+    /// The slot of the craft the view being drawn follows: the player's, or the
+    /// extra slot.
+    #[must_use]
+    pub fn viewed_slot(&self) -> usize {
+        self.extra_viewpoint().unwrap_or_else(|| self.player_slot())
+    }
+
     /// The craft the view being drawn follows: the player's, or the extra slot.
     #[must_use]
     pub fn viewed_ship(&self) -> &Ship {
-        &self.sim.world.ships[self.extra_viewpoint().unwrap_or_else(|| self.player_slot())]
+        &self.sim.world.ships[self.viewed_slot()]
     }
 
     /// An extra view's blended camera, `None` for the player's own.

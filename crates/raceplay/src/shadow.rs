@@ -39,6 +39,17 @@ impl Race {
     /// shadow at its last known height.
     #[must_use]
     pub fn shadow_placements(&self) -> Vec<Placement> {
+        self.shadow_placements_of(|slot| self.body_between(slot))
+    }
+
+    /// [`Self::shadow_placements`] with the craft's body read through `body`
+    /// instead of the draw alpha: `ship_tick_body` for the placements of this tick
+    /// exactly, which is what a cache of the hull gather is built from.
+    #[must_use]
+    pub fn shadow_placements_of(
+        &self,
+        body: impl Fn(usize) -> oag_physics::Body,
+    ) -> Vec<Placement> {
         let mut out = Vec::with_capacity(self.sim.world.ship_count as usize);
         for slot in 0..self.sim.world.ship_count as usize {
             let ship = &self.sim.world.ships[slot];
@@ -47,7 +58,7 @@ impl Race {
             }
             // The body as this draw places it, so the blob stays under a hull
             // drawn between ticks - see `between_ticks`.
-            let body = &self.body_between(slot);
+            let body = &body(slot);
             let up = body.up();
             // The craft's own hover target - the height its spring holds it
             // at, and so the height its shadow is full strength at. The disc's

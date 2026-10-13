@@ -716,8 +716,12 @@ pub fn capture(
     // `perf-probe` and cannot rot between the runs that use it.
     if cfg!(feature = "perf-probe") {
         let split = race.viewport_count() > 1;
+        let pacer = bench::TickPacer::from_env();
         if !split {
             bench::run(&device, &queue, |encoder, timestamps| {
+                if pacer.starts_tick() {
+                    scene.forget_shadow_gathers();
+                }
                 scene.render(
                     &device,
                     &queue,
@@ -747,6 +751,9 @@ pub fn capture(
             &adapter.get_info(),
             race.views_drawn(),
             |timers| {
+                if pacer.starts_tick() {
+                    scene.forget_shadow_gathers();
+                }
                 if split {
                     scene.render_viewports(
                         &device,
