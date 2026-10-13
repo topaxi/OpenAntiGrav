@@ -33,6 +33,7 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::screen::{Fill, Image, Screen, Screens, Text};
 
 mod body;
+pub mod borrow;
 pub mod hd;
 pub mod pointer;
 pub mod slideshow;
@@ -489,6 +490,10 @@ pub struct Layout {
     /// shows under its craft - empty draws nothing. Set by the composition
     /// root, which owns the string table; see [`Picker::lock`].
     pub ready: String,
+    /// The scale the team's name and the `READY` line draw at: `1.0`, the menu face as
+    /// authored. A layout borrowed from the PS2 pressing for a smaller grid draws them
+    /// smaller, as its stat rows are ([`borrow`]).
+    pub name_scale: f32,
 }
 
 impl Layout {
@@ -647,6 +652,7 @@ impl Layout {
             hd: None,
             hd_track: None,
             ready: String::new(),
+            name_scale: 1.0,
         })
     }
 

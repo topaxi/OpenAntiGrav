@@ -788,3 +788,37 @@ fn the_weapons_row_offers_the_discs_own_two_states() {
         ]
     );
 }
+
+/// The shared two-person ship page: authored on Pulse's PS2 pressing, **borrowed** by its PSP
+/// pressings (the maintainer's rule that anything for Pulse is the same on both), and not
+/// built for a title that does not borrow (Pure's PSP). Dropping the title's flag, or the
+/// loader's fallback, fails the PSP half.
+#[test]
+#[ignore = "needs disc images in data/images/"]
+fn pulses_psp_pressings_borrow_the_split_ship_page_and_pure_does_not() {
+    for (name, expected) in [
+        ("pulse-ps2-eu.chd", true),
+        ("pulse-psp-usa.chd", true),
+        ("pulse-psp-eu.chd", true),
+        ("pure-psp-usa.chd", false),
+    ] {
+        let Some(path) = oag_testdata::image(&format!("data/images/{name}")) else {
+            continue;
+        };
+        let shell = shell(&path);
+        match (&shell.ship_select_split, expected) {
+            (Some([first, second]), true) => {
+                assert!(first.panel[1] < second.panel[1], "{name}: the halves stack");
+                assert!(
+                    shell.report.iter().any(|line| line.contains("split ship")),
+                    "{name}: the loader reports what it did"
+                );
+            }
+            (None, false) => {}
+            (split, _) => panic!(
+                "{name}: expected a page {expected}, got {}",
+                split.is_some()
+            ),
+        }
+    }
+}

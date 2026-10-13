@@ -77,7 +77,7 @@ puts the player's back. Chosen, not measured:
 
 ## Drawing
 
-`Scene::render_viewports` calls the ordinary `Scene::render` once per view. Five
+`Scene::render_viewports` calls the ordinary `Scene::render` once per view. Six
 things make that more than a loop:
 
 1. **One encoder and one submit per view.** `Scene::render` writes every
@@ -96,7 +96,14 @@ things make that more than a loop:
    top-left of the target whatever the viewport's origin is, so a view elsewhere
    would glow from the first view's pixels. Skipped rather than drawn wrong.
 
-5. **HD's and Omega's post chains run once, after the last view.** Both draw the
+5. **What does not depend on the camera is done once, by the first view**
+   (`Layer::Next` skips it, 2026-10-13, `split-render-cost`): the two shadow maps, the
+   shadow geometry's gather (each view still uploads it with its own matrix), the
+   scenery's animation clocks and the advert cards. They are functions of the craft
+   and the race clock, so every picture is byte-identical to doing them per view, and
+   they were more than half of a view's CPU on Pulse. See "Cost".
+
+6. **HD's and Omega's post chains run once, after the last view.** Both draw the
    scene into a linear float target and then *encode* it into the frame with a pass
    that clears the whole frame, sampling the linear target from its top-left whatever
    the view's origin is. Run once per view (as `Scene::render` first did), each
@@ -249,27 +256,224 @@ A person who crosses the line keeps their view until the last person does: the l
 counter holds at the target, the clocks at their crossing, and the layout's last
 message line reads `FINISHED`. When the last person finishes one view is drawn
 (`Race::views_drawn`) under the end screens, which name every person (`PLAYER 1`,
-`PLAYER 2`) in Pulse's own multiplayer table or HD's grid, bank no loyalty and write
-no record. The authored data (the PS2's `EndRace Results Split`), the chosen
-rules and what is open are in [split-end-race.md](../ui/split-end-race.md).
+`PLAYER 2`) in Pulse's own multiplayer table or HD's grid, and write no record. With two
+people on Pulse the end screens are `EndRace Results Split` and `EndRace Rewards Split` (the
+PS2's own, borrowed by the PSP) and each person banks their own team's loyalty; any other
+split banks none. The authored data, the chosen rules and what is open are in
+[split-end-race.md](../ui/split-end-race.md).
 `--autopilot` flies every local seat, so `--players 2 --autopilot --mode single_race`
 reaches the end headless.
 
 ## Cost
 
-Draws submitted per frame on Pulse's default circuit, `--mode single_race`
-(frame counts from the capture's own `frame at tick` line, not a GPU time):
+Measured on the workstation (AMD Radeon RX 7800 XT, RADV, Vulkan, a release build with
+`--features perf-probe`), headless at 1280x720 on Pulse's default circuit,
+`--mode single_race`, tick 300 and tick 1800, median of 60 frames per run and of 3 runs.
+The load average is the machine's, not this process's: the numbers are a floor under
+contention, which is why every row carries it.
 
-| Views | Tick 300 | Tick 1800 |
-| ---: | ---: | ---: |
-| 1 | 465 draws, 31,970 triangles | 276, 25,007 |
-| 2 | 955, 63,916 | 1,254, 89,572 |
-| 4 | 2,738, 177,383 | 2,430, 185,365 |
-| 8 | 6,507, 415,226 | 7,172, 552,440 |
+**How to measure.** `OAG_RENDER_BENCH=N` and `OAG_RENDER_GPU_BENCH=N` on a
+`--screenshot --players N` run of a `perf-probe` build (`crates/game/src/race_capture/bench.rs`;
+a split race goes through `run_split`). It prints, per run:
 
-Cost scales with the views' own content: the player's view at the start line is a
-cheap one and the others are in the open, so four views cost 5 to 9 times one.
-There is no 8-up frame budget yet.
+- `render_viewports CPU (record + submit)`: one whole frame's CPU cost, the GPU idled first;
+- `render_viewports submit-to-idle`: the same plus the wait for the GPU, serialised;
+- `sum of N scene pass(es), GPU`: the timestamp pairs of each view's scene pass, summed;
+- `pipelined per frame`: frames submitted back to back with one wait at the end, which is
+  the cost a frame budget is read against (it hides the smaller of CPU and GPU behind the larger);
+- with `OAG_RENDER_PERF=1`, the last CPU run's per-phase spans and allocations.
+
+
+The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
+reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
+eight views, and `--pvs false` 7,923 at tick 1800, so the old figures were most likely taken
+with the visibility partition off; the cause is not known. The draws column below is the
+`frame at tick` line of the same capture, at the default culling.
+
+**Verdict, on the discrete GPU: a split is CPU-bound.** Before the hoist below, Pulse at
+eight views cost 19 ms of CPU per frame (over the 16.7 ms of 60 Hz) while the eight scene
+passes together cost 1.1 ms on the GPU, about 0.13 ms each. The pipelined cost followed the
+CPU number to the decimal, so the GPU hid entirely behind the recording. There, lowering the
+render scale buys nothing and dynamic resolution has nothing to act on; the lever is what the
+CPU does per view. **That does not carry to a weaker GPU**: see the Raphael iGPU table below,
+where the scene passes cost 4 to 7 ms and the same split is GPU-bound at one and two views.
+
+**Where a view's CPU went** (Pulse, two views, per view, `OAG_RENDER_PERF=1`): the shadow
+geometry's gather 1.2 to 1.6 ms (a hull projection that casts a ray per vertex onto the
+floor, on Pulse's default `original` tier), `encoder.finish` 0.4 ms (the recorded commands are
+encoded there, not where they are recorded; it looks proportional to the draw count: 1.1 ms of HD's
+1.9 ms per view at twice Pulse's draws), the
+craft and shield uniform writes 0.3 ms, scenery clocks and adverts 0.1 ms, the rest under
+0.1 ms each. Recording the draws themselves is 0.04 ms.
+
+**What the first view now does alone** (`Layer::Next` skips it): the two shadow maps
+(`render_shadow_passes`), the shadow gather (`upload_shadow_geometry`; every view still
+uploads it with its own matrix), the scenery's animation clocks and the advert cards.
+Each is a function of the craft and the race clock, never the camera: the casters are fixed
+buffers and ranges, the `mapped` fit reads slot 0's model matrix, the sun-occlusion fit is
+each craft's own, the adverts draw through their own authored cameras. Every picture is
+byte-identical to before: 22 stills (six titles at one view, Pulse at two, four and eight,
+Pure, HD, Omega, 2048 and Pulse PS2 at two, and the `mapped` and `original` shadow tiers on
+Pulse and HD) plus seven at tick 1200 (up to eight views) `cmp` equal, each pair taken with the
+shadow tier that reaches the hoisted code. **Not hoistable**, each reads the view's matrix,
+eye, fog sample or LOD: the scene uniform (`ship_scene` carries the eye's fog and the
+refraction matrix), craft, shield, flame and pad uniform writes, `select_lod`, behind-glass,
+particles, clouds, exhaust and the per-view sort.
+
+Three runs each, the median of each run's median, before (main `1fcfd1255`) then after
+the hoist, taken one binary after the other. The machine drifts by 10 to 20 percent over
+minutes under other lanes' builds, so a row is only comparable inside itself, never against
+another row's wall time: the load column is the 1-minute load average at each run's start.
+
+| Title | Views | Tick | Draws | CPU ms before -> after | Pipelined ms before -> after | GPU scene passes ms | Load (before / after) |
+| --- | ---: | ---: | ---: | --- | --- | ---: | --- |
+| pulse | 1 | 300 | 478 | 2.41 -> 2.78 | 2.47 -> 2.86 | 0.23 | 6 9 10 / 6 6 7 |
+| pulse | 2 | 300 | 964 | 4.81 -> 3.63 | 4.80 -> 3.71 | 0.36 | 6 9 10 / 6 6 7 |
+| pulse | 4 | 300 | 1887 | 9.64 -> 5.71 | 9.77 -> 5.78 | 0.62 | 7 8 9 / 6 7 7 |
+| pulse | 8 | 300 | 3762 | 19.14 -> 9.42 | 19.12 -> 9.48 | 1.06 | 7 8 9 / 5 7 7 |
+| pulse | 1 | 1800 | 569 | 2.63 -> 3.07 | 2.60 -> 3.00 | 0.25 | 9 8 9 / 8 8 7 |
+| pulse | 2 | 1800 | 1019 | 4.99 -> 3.89 | 5.00 -> 3.98 | 0.35 | 8 9 9 / 8 8 6 |
+| pulse | 4 | 1800 | 1755 | 9.85 -> 5.84 | 10.52 -> 5.73 | 0.55 | 8 9 9 / 8 7 6 |
+| pulse | 8 | 1800 | 3700 | 19.17 -> 9.57 | 19.68 -> 9.36 | 1.07 | 9 8 8 / 8 7 6 |
+| 2048 | 2 | 300 | 1494 | 1.82 -> 1.97 | 1.85 -> 2.09 | 0.34 | 7 / 8 |
+| hd | 1 | 300 | 904 | 1.86 -> 2.38 | 1.96 -> 2.31 | 0.57 | 7 6 6 / 7 6 6 |
+| hd | 2 | 300 | 1811 | 3.81 -> 3.55 | 3.75 -> 3.34 | 0.81 | 7 6 6 / 6 6 8 |
+| hd | 4 | 300 | 3479 | 7.48 -> 5.30 | 7.47 -> 5.23 | 1.39 | 6 6 6 / 6 7 9 |
+| omega | 2 | 300 | 2436 | 1.20 -> 1.56 | 1.10 -> 1.25 | 1.11 | 6 / 8 |
+| pure | 2 | 300 | 722 | 0.75 -> 0.75 | 0.79 -> 0.84 | 0.24 | 7 6 6 / 7 7 6 |
+| pure | 4 | 300 | 1429 | 1.53 -> 1.51 | 1.55 -> 1.57 | 0.32 | 7 6 6 / 7 7 6 |
+| pure | 8 | 300 | 2867 | 3.03 -> 2.99 | 3.12 -> 3.17 | 0.48 | 7 6 6 / 7 7 6 |
+
+`GPU scene passes` is the sum of the views' scene passes after the hoist (the hoist does not
+move it). The one-view rows are an unchanged code path and read 15 percent apart from drift alone: an
+interleaved A/B (the two binaries alternating, six rounds each) gives Pulse one view 2.70 to
+3.23 ms before against 2.67 to 3.37 after, and HD one view 2.27 to 2.39 against 2.04 to
+2.46, the same population. The same alternating A/B for the split rows, the median of each
+binary's runs, with the load average read at the start of each run:
+
+| Title | Views | Rounds | CPU ms before | CPU ms after | Pipelined ms before | Pipelined ms after | Load during the runs |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Pulse | 2 | 5 | 4.85 | 3.21 | 4.80 | 3.23 | 6 to 8 |
+| Pulse | 4 | 2 | 9.45 | 4.84 | 9.58 | 4.90 | 6 |
+| Pulse | 8 | 4 | 20.08 | 11.26 | 21.27 | 9.09 | 4 to 13 |
+
+At eight views the quiet runs (load 4 to 5) read 18.2 to 20.9 ms before and 8.1 ms after; the
+machine was shared with other lanes' builds for the rest, which is the spread. Earlier
+alternating runs without the per-run load (uptime readings of 7 to 14 around them) agree:
+Pulse two, four and eight views 5.81, 11.39 and 22.59 ms of CPU before against 3.74, 5.78
+and 9.76 after, and HD four views 8.16 against 5.43.
+
+**2048 and Omega** (the shared-lineage check): the hoist is title-agnostic, so both ran it
+(**ported**, nothing title-specific to port). Pictures are `cmp` equal at two and four views
+(Omega) and two and four views (2048), and each was timed once at two views (table above;
+single runs, so only the order of magnitude: 1.2 to 2.0 ms of CPU, which is the GPU's
+business more than the CPU's on Omega, whose scene passes cost 1.1 ms).
+
+**Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
+2048 and Omega stay off integrated GPUs in a split):
+
+1. Build the bench binary on the Deck (desktop mode, repo checked out, the two images under
+   `data/images/`): `cargo build --release -p oag-game --features perf-probe`. Plugged in,
+   nothing else open.
+2. For N in 1, 2, 4, 8, three runs each, from the repo root:
+   ```sh
+   mkdir -p /tmp/oag-bench; for n in 1 2 4 8; do for rep in 1 2 3; do
+     echo "== pulse n=$n rep=$rep load=$(cut -d' ' -f1 /proc/loadavg)"
+     XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+     OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 \
+       ./target/release/oag-game data/images/pulse-psp-eu.chd --race --no-audio --mode single_race \
+         --players $n --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+       | grep -E '^bench (split|render_viewports CPU|sum of|pipelined)|frame at tick'
+   done; done | tee /tmp/oag-bench/pulse.txt
+   ```
+   Then the same with `pure-psp-eu.chd` for Pure. The private `XDG_*` directories keep it off
+   the Deck's own settings and saves; nothing makes a sound or opens a window.
+3. Read, per run, the median (microseconds): `bench split: ... on <adapter>` must name the
+   Deck's GPU (an AMD RADV device), not llvmpipe; **`pipelined per frame` is the number to hold
+   under 16.7 ms (60 Hz) or 25 ms (40 Hz)**; `render_viewports CPU` is the CPU's share;
+   `sum of N scene pass(es), GPU` is the GPU's. If `pipelined` sits near `CPU` and far above
+   the GPU sum, the split is CPU-bound there too; if the GPU sum approaches `pipelined`, the
+   Deck's GPU is the limit and a lower render scale would help.
+4. Send the medians of the three runs per N with the load averages.
+
+**The Ryzen 9 7900's own Raphael iGPU (RDNA2, 2 CUs, selected with
+`[graphics] renderer = "vulkan: AMD Ryzen 9 7900 12-Core Processor (RADV RAPHAEL_MENDOCINO)"`).
+An APU proxy, weaker than the Deck's GPU and paired with a far stronger CPU, so it brackets the
+Deck from one side and says nothing about its number.** Same runs, tick 300, three each, medians,
+load average 8 to 12:
+
+| Title | Views | Draws | GPU scene passes ms | CPU ms before -> after | Pipelined ms before -> after | Bound by (after) |
+| --- | ---: | ---: | ---: | --- | --- | --- |
+| Pulse | 1 | 478 | 4.25 | 3.14 -> 2.84 | 4.86 -> 4.76 | GPU |
+| Pulse | 2 | 964 | 4.88 | 5.69 -> 4.00 | 5.98 -> 5.48 | GPU |
+| Pulse | 4 | 1887 | 6.53 | 11.25 -> 5.97 | 11.03 -> 7.49 | both |
+| Pulse | 8 | 3762 | 7.07 | 22.08 -> 9.37 | 22.27 -> 9.65 | CPU |
+| Pure | 1 | 363 | 5.07 | 0.74 (unchanged path) | 4.49 | GPU |
+| Pure | 2 | 722 | 5.49 | 1.36 | 4.84 | GPU |
+| Pure | 4 | 1429 | 6.20 | 2.37 | 5.36 | GPU |
+| Pure | 8 | 2867 | 6.61 | 4.49 | 6.23 | GPU |
+
+Pure was run after the hoist only (it draws no shadows, so the hoist does not touch it: 0.75 ms
+before and after on the discrete card). Its four rows were taken at a load average of 86 to 163,
+another lane's test run, so its CPU column is inflated by contention; the GPU sum and the
+pipelined column, which are what the iGPU is bound by, were steady across the three runs
+(for example 4.99, 5.07 and 5.09 ms of scene pass at one view). The adapter was confirmed from
+the bench's own `bench split: N view(s) on AMD Ryzen 9 7900 12-Core Processor (RADV
+RAPHAEL_MENDOCINO) (IntegratedGpu, Vulkan)` line; the setting reaches the headless capture path.
+
+So on an APU the same split flips: the scene passes cost 4 to 7 ms, the hoist is worth
+the most at four and eight views where the CPU was the limit, and at one to two views (and
+Pure at any count) the GPU is the limit, where a lower render scale would help and the CPU
+work does not matter. Eight views hold 16.7 ms on this machine either way: Pulse at 9.7 ms
+and Pure at 6.2 ms pipelined, 1280x720 in all.
+
+**Product rule (decided by the maintainer, not a proposal here): split screen on an
+integrated GPU is offered for Pulse and Pure only; HD, 2048 and Omega stay off it.** What the
+Raphael numbers say about the two that are offered: the GPU cost is set by the pixels and barely
+by the view count (Pulse 4.3 ms at one view, 7.1 at eight; Pure 5.1 to 6.6), because the views
+share one frame's pixels, so **no view-count cap is implied at 720p**: every count up to eight
+holds 60 Hz with 7 ms or more to spare. What the iGPU's budget is made of is resolution: a
+frame is about 4.3 ms of scene pass (Pulse) at 1280x720, so the same split at 1920x1080 would
+be roughly 2.25 times that by pixel count (an estimate, not measured), still under 16.7 ms. If a
+slower APU or a larger window ever pushes a split over, render scale is the lever for these two
+titles and a detail budget (draw distance, LOD) is the second; neither is needed on the
+evidence here.
+
+**Next steps, ranked by what the numbers say** (recommendations; none is built):
+
+1. **The shadow gather, at any view count.** Still the largest single CPU item on Pulse's
+   default tier (1.2 to 1.6 ms a frame, half of one view's cost): a ray per hull vertex onto
+   the floor, redone every rendered frame though the craft moves once per 60 Hz tick. Caching
+   it per tick, or per craft, is a view-independent win that also helps one view; it needs a
+   check that the picture at an interpolated draw alpha does not move.
+2. **The Deck number decides the next lever, and it is the maintainer's to take.** The
+   workstation's discrete card is CPU-bound and the Raphael iGPU is GPU-bound at one and two
+   views (and Pure at every count) and CPU-bound at eight on Pulse; the Deck pairs a stronger GPU than Raphael's with a weaker CPU,
+   so it can land on either side.
+   - **If the Deck reads CPU-bound** (`pipelined` near `CPU`): a per-view draw-distance and LOD
+     rule tied to the view count, which belongs to the graphics-settings cascade design thread.
+     `encoder.finish` is the largest per-view cost left (0.4 ms on Pulse, 1.1 ms
+     of HD's 1.9 ms) and looks proportional to the draws a view submits.
+   - **If it reads GPU-bound** (the scene-pass sum near `pipelined`): resolution is the lever, and
+     `Scene::render_viewports`' per-view timers already exist, so summing them into dynamic
+     resolution's reading for a split is small; it holds its scale while split today.
+3. **Per-view uniform slices** in one buffer with dynamic offsets, so the views stop
+   overwriting each other's `queue.write_buffer` data. By itself it saves little (one
+   encoder and submit instead of N: about 0.1 ms a view), but it is the prerequisite for
+   the item below, and it lets the craft, shield and pad uniform writes (0.3 ms a view
+   today) move out of the per-view path.
+4. **Recording the views on several threads** (wgpu encoders are `Send`), after item 3.
+   The views are independent once they stop sharing uniform buffers; on a CPU-bound split
+   this divides the per-view CPU by the cores used. The largest change and the largest
+   possible gain; do it only if items 1 and 2 leave the Deck short.
+5. Per-view bloom and the other effects the split omits are a picture question, not a cost
+   one, and cost the GPU little on the workstation.
+
+**Limits of these numbers.** The bench re-renders one static frame (the race held at tick 300
+or 1800), so it does not see tick-to-tick variation; every view carries an unexplained 0.5 to
+1.3 ms of extra CPU on its first spans after the GPU is idled, in both binaries, which was
+not chased (the pipelined numbers, with no idle in between, agree with the CPU ones); a
+`perf-probe` build adds marks inside the pass that can shift small spans.
 
 ## Who plays which slot (chosen, not measured)
 
@@ -414,9 +618,10 @@ does not exist: the race frames are that evidence.
 - **A launch must set `race::Options::views`** (the CLI's `--players` does, in
   `prepare.rs`) for any race that will call `split_screen::apply(.., 2)`: without it
   HD reads no authored layout and the reticle projects into the full screen.
-- **HD draws only the last view's scene** in a `--screenshot` of `--players 2` or
-  `4` (the earlier views are black), on `main` as well: the post chain writes
-  `view` per call and was never verified under a split. The HUDs are drawn.
+- ~~**HD draws only the last view's scene** in a `--screenshot` of `--players 2` or
+  `4` (the earlier views are black).~~ **Fixed by the once-over-the-area post chain
+  (see "Drawing")**; seen again 2026-10-13 (`split-render-cost`): HD at two and four
+  views, tick 300 and 1200, draws every view.
 - HD's Wo3 and 2097 skins, its Zone layout and the `vert_` left-and-right family are
   shipped and not wired. 2048's authored two-view HUD is **checked, differs** (1920x1080
   files in a 960x544 HUD space, needs scaling first) and has no file of ours;
@@ -450,11 +655,18 @@ does not exist: the race frames are that evidence.
 - Per-team camera rigs, per-view bloom (an origin in `oag_post::bloom`), motion blur
   and the temporal upscaler under a split, and a check of HD's and Omega's chains.
 - ~~The results scoreboard and the end-race flow still key on slot 0 and end every
-  view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race". Open
-  from it: the PS2's authored `EndRace Results Split`, per-person rewards and
-  records, a live walk with two real pads.
+  view when slot 0 finishes.~~ **Done, 2026-10-13**: see "The end of the race", with
+  `EndRace Results Split` and per-person rewards for two people on Pulse. Open from it:
+  per-person records, a live walk with two real pads.
 - Resolution holds its scale while split: the scene pass is not timed (timing one
   view of `N` would read as a cheap frame), so dynamic resolution gets no reading.
+  The render bench does time every view (`Scene::render_viewports`' `view_timers`);
+  it also shows resolution would not help a split here: the GPU is not the limit
+  (see "Cost").
+- **The `mapped` shadow tier follows slot 0 only** (`mapped_fit(ship_model_matrix_of(0))`,
+  a 140 unit box ahead of the first craft): in a split, views two and up get a map that
+  covers their craft only when it is near the first. Read from the code, not looked at;
+  unchanged by the hoist below.
 - `--players N > 1` **changes `RaceSim::state_hash`**, because `World::controllers`
   is hashed; the cameras, views and draw do not.
 - Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but

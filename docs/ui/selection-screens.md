@@ -440,6 +440,23 @@ module, `oag_ui_screens::picker::split`):
   device. A seat confirms to **hold** its pick (`READY`, new string
   `OAG_PICK_READY`) and the race starts when both hold; back takes a hold back,
   and back on a seat that holds nothing returns both to Track Select.
+- **Pulse's PSP pressings, exactly two seats: the PS2's page, borrowed (2026-10-13).** The
+  PSP authors no `Team SelectionSplit`; the maintainer's rule is that anything for Pulse is
+  the same on both pressings, so `oag_ui_screens::picker::borrow` builds the page from the
+  PS2's numbers (`PS2_SETS`: each player's arrows, counter and stat block, the shape of one
+  set written once) rescaled into the PSP's 480x272 grid, with the PSP's own sprites, and
+  reads it back through `Layout::read_split`, the function that reads the PS2's. The loader's
+  report says `split ship borrowed from the PS2 pressing (placement not measured on it)`.
+  **Borrowed, not measured on the PSP: no confidence score.** `FrontEnd::borrows_ps2_split_screens`
+  is true for Pulse alone, so Pure's PSP pressings keep the sequence below. **Chosen for the
+  smaller grid:** the PSP's faces are as tall in 272 rows as the PS2's in 448, so the stat rows'
+  text and the team's name are drawn at the grid ratio (`Layout::name_scale`, the text `scale`)
+  to keep the PS2's room for them (stat rows are 16 apart in the PS2's grid, 9.7 in the PSP's).
+  Pinned by `crates/ui-screens/tests/split_selection_ground_truth.rs::the_borrowed_page_is_the_ps2_authored_one`
+  (the numbers in the PS2's own grid read back as the file's two halves, widget for widget; a
+  changed number fails it) and `crates/game/tests/selection_screens_ground_truth.rs`. Stills:
+  `--menu-page ship-select-split` (both halves; the 3D craft is the one pass a still carries,
+  so only the first half's is drawn, at the single page's rect) on either pressing.
 - **Every other source and every other count** gets one Ship Select per seat in
   seat order (HD's authored order; chosen elsewhere). Each opens for its seat,
   titled by the source's own `FE_SHIPSEL_P<n>` when its table has one and by
@@ -462,9 +479,10 @@ the race box is reachable there only from `--players` (which has no Ship Select)
 and no test or walk exercised it. Omega: **checked, not located** - its
 `team_selection_definition.xml` (`data00`, `data09`) holds the `PI_Team` rows and no
 `Team Selection Player` screen; where Omega authors its Ship Select screens is
-open. 2048: checked, string ids present, screens unread. Pure and PSP Pulse:
-neither authors a split screen (`docs/formats/race-setup.md`), so they take the
-one-per-seat order, chosen.
+open. 2048: checked, string ids present, screens unread. Pure: authors no split screen
+(`docs/formats/race-setup.md`), so it takes the one-per-seat order, chosen. PSP Pulse:
+authors none either and **borrows the PS2's page for two seats** (above); three seats and more
+take the one-per-seat order.
 
 ## The flow
 

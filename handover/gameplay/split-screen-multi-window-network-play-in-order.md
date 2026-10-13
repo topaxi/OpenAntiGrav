@@ -177,7 +177,7 @@ viewed slot (`Race::readout_for`), the shield bars' state per slot, one HUD per 
 drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
 two-player split layouts for a two-view race. **Still open from this list**:
 per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
-origin), the 8-up frame budget. ~~The results/end-race flow (still slot 0's, ends
+origin), the 8-up frame budget (measured, `split-render-cost` below: 9.4 ms of CPU on the workstation, Deck unmeasured). ~~The results/end-race flow (still slot 0's, ends
 every view)~~ **2026-10-13, `split-screen-end-race`: done** (below, and
 [split-end-race.md](../../docs/ui/split-end-race.md)). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
 checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
@@ -188,6 +188,22 @@ pixels; the chain now runs once over the whole area after the last view
 zoom streak and Omega's distortion offsets are not drawn under a split, and a
 race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
 from the primary's pulse (read from the code, not captured).
+**2026-10-13, `split-render-cost`: a split is CPU-bound on a discrete GPU, and the first cut is in.**
+Measured on the RX 7800 XT (RADV, release, 1280x720; the tables and how to rerun them are in
+[split-screen.md](../../docs/rendering/split-screen.md#cost)): Pulse at eight views cost
+19 ms of CPU a frame and 1.1 ms of GPU scene passes, so the GPU was never the limit there.
+The Raphael iGPU proxy flips it at one and two views (GPU-bound, 4 to 5 ms of scene passes). The shadow gather, both shadow maps, the scenery
+clocks and the advert cards were redone per view though they do not depend on the camera;
+the first view now does them alone (`Layer::Next` skips them) and eight views cost 9.4 ms.
+Pictures are byte-identical (29 stills). **Open from it**: the Steam Deck number, which
+decides whether the next lever is a per-view draw budget (CPU) or render scale (GPU); steps
+in the doc, the maintainer runs them. The shadow gather is still the largest single CPU item
+at any view count (a ray per hull vertex, redone every rendered frame instead of every
+tick), `encoder.finish` looks proportional to the draw count (the lever for per-view LOD and draw
+distance, see `handover/rendering/graphics-settings-resolve-from-intent-and-context.md`),
+and per-view uniform slices are the prerequisite for recording views on several threads.
+The `mapped` shadow tier follows slot 0 only, so views two and up are not covered unless
+near it (read from the code, not looked at).
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives
@@ -219,20 +235,23 @@ driver flying their craft); when the last person finishes one view is drawn
 built-in table's `P1`/`P2` for Pure and 2048 (whose touch pages summarise one racer). A
 split banks no loyalty, builds no `Rewards`, plays no results voice; restart keeps the
 seats and quit unseats (already the case). `--autopilot` now flies every local seat so
-a headless 2-person race reaches its end. **Found and not wired: the PS2 pressing authors
+a headless 2-person race reaches its end. **Found, and wired the same day (below): the PS2 pressing authors
 `EndRace Results Split` and `EndRace Rewards Split`** (two stacked per-player lap tables
 and reward panels, `Player_0`/`Player_1`, two people only; its executable names them
 beside `Split ScreenV/H` and `Kill Game Multiplayer`), see
-[split-end-race.md](../../docs/ui/split-end-race.md). **Follow-up lane, written to start
-cold** (maintainer 2026-10-13): wire `EndRace Results Split` / `Rewards Split` for Pulse
-on **both** pressings - the PSP borrows the PS2's design (640x448 numbers rescaled, PSP
-assets, labelled "borrowed from the PS2 pressing"), as it will `Team SelectionSplit`. The
-entry names, widget geometry, the `table_layers` changes (suffix- and Item-offset-aware
-`lap_slot`/row bands, per-person `Line1_N`; fix the PS2 highlight geometry first), the
-Rewards Split question and the unread entry law are in the doc's "Follow-up lane". The
-current "no loyalty on a split" rule is chosen and **provisional** until Rewards Split
-lands. **Also open**: a windowed walk with two real pads, HD's podium for a split,
-per-person records.
+[split-end-race.md](../../docs/ui/split-end-race.md).
+**2026-10-13, `pulse-split-pages`: Pulse's two-person screens, both pressings.** `EndRace
+Results Split`, `EndRace Rewards Split` and `Team SelectionSplit` are wired for Pulse on
+the PS2 (the disc's own) and the PSP (the PS2's design, **borrowed**, built from the PSP's
+own assets and labelled so in the loader report; `FrontEnd::borrows_ps2_split_screens`,
+Pulse alone). The geometry bug is fixed (the grid reads each file's own rows). With two people
+each banks their own team's loyalty and `Rewards Split` shows it (chosen). Written up in
+[split-end-race.md](../../docs/ui/split-end-race.md) and
+[selection-screens.md](../../docs/ui/selection-screens.md). **Still open from it**: the PS2
+executable's entry law for these screens (not in a Ghidra project here), the PS2's highlight
+placement (chosen), a live walk on the PS2 pressing and with real pads, the second person's
+speedup-pad column (the race keeps the tally for the first craft), HD's podium for a split,
+per-person records and ghosts, and a still of the shared Ship Select with both crafts.
 **2026-10-13, `split-hud-layout-toml`: the split HUD is data.** A title's split-screen
 layout is `schemas/v1/split-hud.tosd` files (`oag_hud::split_hud`): override, then the
 disc's authored layout (HD and, newly, Omega: ported, and a two-view frame looked at), then ours through

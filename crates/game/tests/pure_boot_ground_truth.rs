@@ -598,6 +598,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    own_offset: (0.0, 0.0),
                     reveal: Vec::new(),
                     transition: 0.0,
                 },
@@ -609,6 +610,7 @@ fn the_memory_stick_warnings_two_stripes_keep_their_own_rects() {
                     height: Some(1.0),
                     color,
                     gradient: None,
+                    own_offset: (0.0, 0.0),
                     reveal: Vec::new(),
                     transition: 0.0,
                 },
@@ -667,6 +669,7 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
                     height: Some(height),
                     color,
                     gradient: None,
+                    own_offset: (0.0, 0.0),
                     reveal,
                     transition: 0.0,
                 }
@@ -679,6 +682,7 @@ fn title_screens_frame_lines_keep_their_own_rects_and_share_one_colour() {
             height: Some(272.0),
             color: 0xffff_ffff,
             gradient: None,
+            own_offset: (0.0, 0.0),
             reveal: Vec::new(),
             transition: 0.0,
         };

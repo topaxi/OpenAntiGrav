@@ -391,6 +391,7 @@ pub(super) fn selection_layouts(
     menu_font: Option<&oag_ui::font::Atlas>,
     native_default: bool,
     space: oag_display::space::Space,
+    borrows_ps2_split: bool,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
@@ -449,22 +450,35 @@ pub(super) fn selection_layouts(
                 grid,
             )
         });
-    // Only a source that authors `Team SelectionSplit` has one.
-    let ship_select_split = race_box.and_then(|included| {
-        oag_ui_screens::picker::Layout::read_split(
-            included,
-            strings,
-            faces,
-            [space.size.0, space.size.1],
-        )
+    // A source that authors `Team SelectionSplit` has one (Pulse's PS2 pressing); a title
+    // whose pressings borrow the PS2's design builds it from the PS2's numbers on the
+    // pressing's own grid when this one authors none.
+    let grid = [space.size.0, space.size.1];
+    let authored = race_box.and_then(|included| {
+        oag_ui_screens::picker::Layout::read_split(included, strings, faces, grid)
+    });
+    let borrowed = authored.is_none() && borrows_ps2_split;
+    let ship_select_split = authored.or_else(|| {
+        borrowed
+            .then(|| {
+                oag_ui_screens::picker::borrow::read_borrowed(
+                    &race_box?.globals,
+                    strings,
+                    faces,
+                    grid,
+                )
+            })
+            .flatten()
     });
     report.push(format!(
         "selection screens: track {}, ship {}, split ship {}",
         track_select.as_ref().map_or("unread", |_| "read"),
         ship_select.as_ref().map_or("unread", |_| "read"),
-        ship_select_split
-            .as_ref()
-            .map_or("not authored", |_| "read"),
+        match (&ship_select_split, borrowed) {
+            (Some(_), true) => "borrowed from the PS2 pressing (placement not measured on it)",
+            (Some(_), false) => "read",
+            (None, _) => "not authored",
+        },
     ));
     (track_select, ship_select, ship_select_split)
 }

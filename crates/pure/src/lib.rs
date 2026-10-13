@@ -273,6 +273,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,
     endrace_style: None,
+    borrows_ps2_split_screens: false,
 };
 
 pub mod campaign;

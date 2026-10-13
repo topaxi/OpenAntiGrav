@@ -489,6 +489,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: Some(oag_title::EndRaceStyle::measured(
         oag_title::EndRaceDialect::Touch,
     )),
+    borrows_ps2_split_screens: false,
 };
 
 #[cfg(test)]

@@ -669,12 +669,21 @@ fn prompt_draws(
     }
 }
 
+/// Whether a `--menu-page` name asks for the shared two-person ship page
+/// (`Team SelectionSplit`) rather than one player's.
+#[must_use]
+pub(super) fn is_split_ship(page: &str) -> bool {
+    matches!(page, "ship-select-split" | "ship_select_split")
+}
+
 /// Which selection screen a `--menu-page` name asks for, if either.
 #[must_use]
 pub(super) fn picker_kind(page: &str) -> Option<oag_ui_screens::picker::Kind> {
     match page {
         "track-select" | "track_select" => Some(oag_ui_screens::picker::Kind::Track),
-        "ship-select" | "ship_select" => Some(oag_ui_screens::picker::Kind::Ship),
+        "ship-select" | "ship_select" | "ship-select-split" | "ship_select_split" => {
+            Some(oag_ui_screens::picker::Kind::Ship)
+        }
         _ => None,
     }
 }
@@ -714,6 +723,9 @@ pub(super) fn picker_page(
     // `--menu-picker-step-seconds` - seconds since a selection step, for the
     // craft's swap on a title that draws the race hull.
     step_seconds: Option<f32>,
+    // Draw over what is already on screen rather than over the screen's own backdrop: the
+    // second half of the shared two-person page.
+    over: bool,
 ) -> (Vec<oag_ui::frontend::Draw>, Option<PreviewRequest>) {
     use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
     let mut grid_columns = 0;
@@ -880,7 +892,7 @@ pub(super) fn picker_page(
         skin,
         frame,
         backdrop,
-        false,
+        over,
         &|src| sprites.get(src),
         measure,
     );

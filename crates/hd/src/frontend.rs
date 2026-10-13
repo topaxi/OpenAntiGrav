@@ -424,6 +424,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     endrace_style: Some(oag_title::EndRaceStyle::measured(
         oag_title::EndRaceDialect::Field,
     )),
+    borrows_ps2_split_screens: false,
 };
 
 /// The sixteen plugins that carry a language, named rather than numbered.

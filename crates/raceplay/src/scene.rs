@@ -37,6 +37,16 @@ use motion::Attachments;
 pub use motion::TemporalFrame;
 pub(super) use scratch::Scratch;
 
+/// Counts of the frame's camera-independent work, one each per frame that
+/// did it: a split screen's first view does it and later views must not.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct FrameWork {
+    pub(crate) shadow_maps: u32,
+    pub(crate) shadow_gathers: u32,
+    pub(crate) scenery_clocks: u32,
+    pub(crate) advert_cards: u32,
+}
+
 /// The track and the ship on the GPU, drawn from a chase camera.
 #[derive(Debug)]
 pub struct Scene {
@@ -258,6 +268,17 @@ pub struct Scene {
     generated_silhouettes: usize,
     shadow_silhouette_count: usize,
     generated_silhouettes_said: std::cell::Cell<bool>,
+    /// How often the camera-independent work ran, for `tests/split_shadows.rs`:
+    /// once a frame however many views a split draws.
+    frame_work: std::cell::Cell<FrameWork>,
+    /// The blob quads and projected hulls [`Scene::shadow_geometry`] gathered for
+    /// the frame in progress. A split screen gathers once, on its first view, and
+    /// every later view uploads the same lists: where the craft cast is not a
+    /// property of the camera. See `Scene::upload_shadow_geometry`.
+    shadow_gathered: std::cell::RefCell<(
+        Vec<oag_render::shadow::Placement>,
+        Vec<oag_mesh::mesh::GpuVertex>,
+    )>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -990,6 +1011,8 @@ impl Scene {
             generated_silhouettes,
             shadow_silhouette_count,
             generated_silhouettes_said: std::cell::Cell::new(false),
+            shadow_gathered: Default::default(),
+            frame_work: Default::default(),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),

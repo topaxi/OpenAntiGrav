@@ -126,7 +126,7 @@ walk (`results-01.png` -> `results-02.png` -> `results-03.png`).
 | `RewardLine2` | `idstring="ER_LOY"` template | overwritten to `"<team> Loyalty:"` (`"%s %s"` of the team's own localised name and `ER_LOY`) | 78 |
 | `RewardLoyaltyActive` | `string="line 2"` (generic placeholder) | a two-role scrolling ticker - this race's own loyalty award, then a cycle of "why" reason strings - see below | 78 |
 | `loyaltynum` | `string="0"` | the **team's persistent total** loyalty, not this race's award - see below | 78 |
-| `loyaltybar`/`loyaltybg` | a fixed-size fill bar, `124x10` | fill width in **pixels** and U extent in texels = `total * 0.00124` (the `100000` cap is the authored `124`) | 88 |
+| `loyaltybar`/`loyaltybg` | a fixed-size fill bar, `124x10` (the PS2 file authors `165x16`) | fill width in **pixels** and U extent in texels = `total * 0.00124` (the `100000` cap is the authored `124`; read as `total / 100000` of the authored width, so 165 on the PS2, **unmeasured** there) | 88 |
 | `ContinueButton` etc. | as `EndRace Results` | direct | 90 |
 | `EndRaceRewardsMenuRedirect` | `<Default goto="Race End Save">` | fires once the ticker has scrolled past `reasonCount * 0.5 + 1.5` seconds | 75 - decompiled |
 
@@ -314,9 +314,21 @@ with its own `Line1_N`, `table_N`, `tablebg{r}_N` (`OffsetY` 152 + 25 (r - 1), h
 (`PlayerRW_0` at -52 and `PlayerRW_1` at 176, each a trophy panel, `MedalImg_N`,
 `LoyaltyImg_N`, `RewardLine1_N`/`RewardLine2_N`, `loyaltynum_N` and the bar), whose
 redirect goes to `Race End Save`; the ordinary `EndRace Menu` follows, with
-`IG_PAUSE_QUIT` going to `Kill Game Multiplayer`. Two people only. **Not drawn by this
-build**; what enters it is in the executable and unread. See
-[split-end-race.md](../ui/split-end-race.md).
+`IG_PAUSE_QUIT` going to `Kill Game Multiplayer`. Two people only. **Drawn by this build
+since 2026-10-13, on both Pulse pressings** (the PSP borrows the design); what enters it is in
+the executable and unread. See [split-end-race.md](../ui/split-end-race.md).
+
+Numbers, all in the 640x448 space (`oag_ui_screens::endrace::borrow::PS2_TABLE`, pinned to the
+file by a disc test): `Line1_N` at (320, 106) inside the `Item`; `zonetopline` 150, 2 thick;
+`tablebg1` `OffsetY` 152 then every 25, its fill `[0, 28)` and a later row's `[2, 25)` with
+the two fading rules at 25; `topbarcenter_N` at 124, 41 high; the cells at x 187, 293, 427,
+the header row at 131 and the laps from 154; `boostimg_N` at (427, 127) 16x20;
+`tablehighlight_N` 25 high. `topbarcenter_0` is authored **twice** (the second `<Image>` is
+never closed, so it nests the lap cells); it is opaque, so drawing it twice shows nothing.
+The one-person table is kept beside the two under `<Item name="TableSingle">` and is hidden
+here. `Rewards Split`'s panel is the single `EndRace Rewards` panel (its `BGgradient` at
+91, `MedalImg` 43x53, the bar 165 wide) at `OffsetY` -52 and 176, each with an
+`ER_REWARD` header at 64.
 
 ## What is not determined
 

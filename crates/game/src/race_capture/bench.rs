@@ -18,6 +18,15 @@
 //!
 //! Neither touches the frame the capture writes out: both record into
 //! encoders of their own.
+//!
+//! **A split race is benched by [`run_split`] instead, on the same two
+//! variables**, because `Scene::render_viewports` submits its own command
+//! buffers and so cannot be recorded into a throwaway encoder. There
+//! `OAG_RENDER_BENCH` is the CPU cost of the whole call (recording and
+//! submitting, the GPU idled before each call, so it is the CPU-bound number),
+//! and `OAG_RENDER_GPU_BENCH` adds the wait for the GPU, each view's scene pass
+//! by timestamp, and the pipelined cost per frame (frames submitted back to back,
+//! one wait at the end), which is the number a frame budget is read against.
 
 use oag_gpu::timing::{Half, PassTimer};
 
@@ -165,4 +174,116 @@ fn report(what: &str, samples: &mut [f64]) {
         samples[samples.len() / 10],
         samples[samples.len() * 9 / 10],
     );
+}
+
+/// The split-screen counterpart of [`run`]: `frame` draws the whole split race
+/// (it submits its own work) and is handed one timer per view to bracket the
+/// view's scene pass with.
+pub(super) fn run_split(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    adapter: &wgpu::AdapterInfo,
+    views: usize,
+    mut frame: impl FnMut(&mut [Option<PassTimer>]),
+) {
+    let (cpu, gpu) = (runs("OAG_RENDER_BENCH"), runs("OAG_RENDER_GPU_BENCH"));
+    if cpu.is_none() && gpu.is_none() {
+        return;
+    }
+    println!(
+        "bench split: {views} view(s) on {} ({:?}, {:?})",
+        adapter.name, adapter.device_type, adapter.backend
+    );
+    let idle = || {
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
+    };
+    if let Some(runs) = cpu {
+        let mut samples = Vec::with_capacity(runs);
+        for run in 0..runs + runs / 10 {
+            idle();
+            // The last run's per-phase CPU spans, when `OAG_RENDER_PERF` is set.
+            let last = run + 1 == runs + runs / 10;
+            if last {
+                oag_gpu::perfprobe::reset();
+            }
+            let start = web_time::Instant::now();
+            frame(&mut []);
+            let micros = start.elapsed().as_secs_f64() * 1e6;
+            if last {
+                oag_gpu::perfprobe::report_frame(0);
+            }
+            if run >= runs / 10 {
+                samples.push(micros);
+            }
+        }
+        idle();
+        report("render_viewports CPU (record + submit)", &mut samples);
+    }
+    if let Some(runs) = gpu {
+        let warmup = runs / 10;
+        let mut timers: Vec<Option<PassTimer>> =
+            (0..views).map(|_| PassTimer::new(device, queue)).collect();
+        let mut total = Vec::with_capacity(runs);
+        let mut passes = Vec::with_capacity(runs);
+        let mut per_view: Vec<Vec<f64>> = vec![Vec::new(); views];
+        for run in 0..warmup + runs {
+            idle();
+            for timer in timers.iter_mut().flatten() {
+                timer.begin(run as u64);
+            }
+            let start = web_time::Instant::now();
+            frame(&mut timers);
+            idle();
+            let elapsed = start.elapsed().as_secs_f64() * 1e6;
+            let mut sum = 0.0;
+            let mut timed = 0;
+            for (timer, span) in timers.iter_mut().zip(&mut per_view) {
+                idle();
+                if let Some(reading) = timer.as_mut().and_then(|t| t.read(device)) {
+                    let micros = f64::from(reading.seconds) * 1e6;
+                    sum += micros;
+                    timed += 1;
+                    if run >= warmup {
+                        span.push(micros);
+                    }
+                }
+            }
+            if run >= warmup {
+                total.push(elapsed);
+                if timed == views {
+                    passes.push(sum);
+                }
+            }
+        }
+        report(
+            "render_viewports submit-to-idle (serialised: CPU + GPU)",
+            &mut total,
+        );
+        if passes.is_empty() {
+            println!("bench split scene passes: not timed (no timestamps on this device)");
+        } else {
+            report(&format!("sum of {views} scene pass(es), GPU"), &mut passes);
+            for (view, span) in per_view.iter_mut().enumerate() {
+                if !span.is_empty() {
+                    report(&format!("  view {view} scene pass, GPU"), span);
+                }
+            }
+        }
+        // Back to back with one wait at the end: CPU recording overlaps the
+        // GPU, so this is the larger of the two costs plus what neither hides.
+        let mut piped = Vec::new();
+        for _ in 0..5 {
+            idle();
+            let start = web_time::Instant::now();
+            for _ in 0..runs {
+                frame(&mut []);
+            }
+            idle();
+            piped.push(start.elapsed().as_secs_f64() * 1e6 / runs as f64);
+        }
+        report(
+            &format!("pipelined per frame ({runs} frames back to back, 5 rounds)"),
+            &mut piped,
+        );
+    }
 }

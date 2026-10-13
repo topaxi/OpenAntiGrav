@@ -96,3 +96,72 @@ fn the_two_halves_are_the_same_screen_twice() {
     assert!(first.preview[1] + first.preview[3] <= second.preview[1]);
     assert!(first.preview[3] > 50.0 && second.preview[3] > 50.0);
 }
+
+/// A layout's widgets as comparable text, sorted: what a half draws, name and rect.
+fn widgets(layout: &Layout) -> Vec<String> {
+    let screen = &layout.screen;
+    let mut lines: Vec<String> = screen
+        .fills
+        .iter()
+        .map(|f| {
+            format!(
+                "fill {:?} {} {} {:?} {:?} {:#x}",
+                f.name, f.x, f.y, f.width, f.height, f.color
+            )
+        })
+        .chain(screen.images.iter().map(|i| {
+            format!(
+                "image {:?} {} {} {:?} {:?} {:?} {:?} {:?}",
+                i.name, i.x, i.y, i.width, i.height, i.src, i.texture_width, i.texture_height
+            )
+        }))
+        .chain(screen.texts.iter().map(|t| {
+            format!(
+                "text {:?} {} {} {:?} {:?}",
+                t.name, t.x, t.y, t.string, t.idstring
+            )
+        }))
+        .collect();
+    lines.sort();
+    lines
+}
+
+/// The PSP borrows this page, built from the numbers in `oag_ui_screens::picker::borrow`.
+/// Expressed in the PS2's own grid, they read back as the same two halves the file does:
+/// widget for widget, and the same panel and craft rect. Dropping a number from the table,
+/// or a widget from its template, fails this.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_borrowed_page_is_the_ps2_authored_one() {
+    let Some(screens) = screens() else {
+        return;
+    };
+    let strings = oag_ui::language::StringTable::default();
+    let authored = Layout::read_split(&screens, &strings, FaceScales::default(), [640.0, 448.0])
+        .expect("the PS2 pressing authors Team SelectionSplit");
+    let borrowed = oag_ui_screens::picker::borrow::read_borrowed(
+        &screens.globals,
+        &strings,
+        FaceScales::default(),
+        [640.0, 448.0],
+    )
+    .expect("the numbers read back as a split page");
+    for half in 0..2 {
+        assert_eq!(
+            authored[half].panel, borrowed[half].panel,
+            "half {half}'s panel"
+        );
+        assert_eq!(
+            authored[half].preview, borrowed[half].preview,
+            "half {half}'s craft"
+        );
+        let (a, b) = (widgets(&authored[half]), widgets(&borrowed[half]));
+        assert!(a.len() > 40, "a real half has widgets: {}", a.len());
+        let missing: Vec<_> = a.iter().filter(|line| !b.contains(line)).collect();
+        let extra: Vec<_> = b.iter().filter(|line| !a.contains(line)).collect();
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "half {half}: the file has and the borrowed lacks {missing:#?}; the borrowed has and the file lacks {extra:#?}"
+        );
+    }
+}
