@@ -42,6 +42,21 @@ little to remove: the limiter already waits *before* a frame
 - **Where "input sampling" is.** The simulation ticks at a fixed 60 Hz inside
   a faster render loop; the call must sit right before the frame's
   `InputSnapshot` is built, which the loop does not yet treat as one point.
+- **Hoist the swapchain acquire to before the tick loop** (maintainer,
+  2026-10-13), a vendor-neutral latency win that needs no extension. Input is
+  sampled once per tick in the frame's tick loop (`player_snapshots`), and the
+  swapchain is acquired afterwards, as the first call in `Session::draw`
+  (`crates/game/src/main/session/draw.rs`, `get_current_texture`). Under a
+  blocking present mode (`Vsync::On`, or `smooth` falling back to Fifo) the
+  acquire waits for a free image, so input sampled before that wait is up to a
+  frame old when drawn. Move the acquire above the frame's `now`/elapsed read
+  in `crates/game/src/main/session/frame.rs` (before `self.clock.advance`), so
+  the wait counts toward this frame's elapsed and the ticks, the input and the
+  draw alpha all describe the moment after it. The between-ticks draw keeps
+  this easy: its alpha is read only in the race's render call, after the
+  acquire, and nothing between the advance and the acquire depends on it
+  (checked 2026-10-13; see `drawing-between-ticks-what-is-still-stepped.md`).
+  This is also the natural place for `VK_ANTI_LAG_STAGE_INPUT_AMD` above.
 - **Reach**: Vulkan on AMD only (RADV >= 26.3; AMD's Windows driver). A no-op
   elsewhere, so it must stay optional and detected, never required.
 - **Local Mesa is 26.2.4** (2026-10-09), so nothing here is testable on the
@@ -51,9 +66,11 @@ little to remove: the limiter already waits *before* a frame
 
 ## Next Steps
 
-1. When Mesa 26.3 is installed: check `vulkaninfo | rg anti_lag`, then check
+1. Hoist the swapchain acquire (Open, above), measured with step 3's probe
+   if it exists by then. An hour or two; any GPU.
+2. When Mesa 26.3 is installed: check `vulkaninfo | rg anti_lag`, then check
    wgpu-hal 30 for a device-creation hook that takes extra extensions. 30 min.
-2. Build an input-to-photon probe (or use an external camera / LDAT-style
+3. Build an input-to-photon probe (or use an external camera / LDAT-style
    reading) so the effect is a number. Half a day.
-3. Wire `vkAntiLagUpdateAMD` behind detection, `smooth` and `on` first. About
+4. Wire `vkAntiLagUpdateAMD` behind detection, `smooth` and `on` first. About
    a day if wgpu-hal allows the extension, longer if it needs a fork or patch.
