@@ -25,6 +25,7 @@
 //! `docs/architecture/adr/0019-atrac3plus-out-of-process.md`.
 
 pub mod adapter;
+pub mod ai_choice;
 pub mod boot;
 pub mod campaign;
 pub mod capture;

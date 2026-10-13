@@ -624,6 +624,7 @@ fn run(cli: Cli) -> Result<()> {
     let give = give_weapon(cli.give.as_deref())?;
     let autopilot_pilot = autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?;
     let autopilot_skill = cli.driver.autopilot_skill;
+    let ai_choice = cli.driver.ai;
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
         cli.pick_language,
@@ -657,6 +658,7 @@ fn run(cli: Cli) -> Result<()> {
         autopilot,
         autopilot_pilot,
         autopilot_skill,
+        ai_choice,
         anim_seconds,
         race: None,
         race_options,

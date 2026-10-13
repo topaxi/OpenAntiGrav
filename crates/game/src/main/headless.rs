@@ -226,6 +226,7 @@ pub(crate) fn run_windowless(
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
+                ai_choice: cli.driver.ai,
                 path,
                 until: cli.until.clone(),
                 ticks: cli.ticks,
@@ -357,7 +358,13 @@ pub(crate) fn write_trace(
     use oag_trace::trace::AngularReading;
     use oag_trace::{Flare, Frame, Trace};
 
+    let difficulty = loaded.setup.difficulty;
     let mut race = race::Race::start(loaded.setup);
+    oag_game::ai_choice::apply(
+        &mut race,
+        cli.driver.ai,
+        oag_game::ai_choice::Source::Free(difficulty),
+    );
     race.set_control_scheme(scheme);
     race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
 
@@ -580,6 +587,7 @@ pub(crate) fn run_race(
                 pilot_assist: cli.driver.pilot_assist.unwrap_or_default(),
                 autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
                 autopilot_skill: cli.driver.autopilot_skill,
+                ai_choice: cli.driver.ai,
                 force_shake: crate::args::force_shake(cli.force_shake.as_deref())?,
                 intro_ticks: cli.intro.intro_ticks,
                 force_wreck: crate::args::force_at_slot(cli.wreck.force_wreck.as_deref(), "wreck")?,
@@ -705,6 +713,7 @@ pub(crate) fn run_race(
         autopilot: cli.driver.autopilot,
         autopilot_pilot: autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?,
         autopilot_skill: cli.driver.autopilot_skill,
+        ai_choice: cli.driver.ai,
         anim_seconds: cli.anim_seconds,
         race: Some(loaded),
         race_options: Some(options),

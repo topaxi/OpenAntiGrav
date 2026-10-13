@@ -351,6 +351,8 @@ pub(crate) struct Session {
     pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
     /// `--autopilot-skill`, carried the same way. See `race::Race::set_autopilot_tuning`.
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
+    /// `--ai`, carried the same way. See `oag_game::ai_choice`.
+    pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
     pub(crate) anisotropy: Anisotropy,
     /// The control scheme every race this session starts is driven with.
     ///

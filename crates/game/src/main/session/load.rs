@@ -540,10 +540,8 @@ impl Session {
         // both take `&self` as a whole.
         let pvs_culling = self.pvs_culling();
         let render_profile = self.render_profile();
-        let original_opponent = self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| shell.title.race.original_opponent);
+        let ai_choice = self.ai_choice;
+        let ai_difficulty = crate::args::resolve_difficulty(&self.settings);
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -596,40 +594,27 @@ impl Session {
                     // `AI_ResolveSkillScale` is its one source too.
                     race_stage.race.set_finished_thrust_skill(scale);
                 }
-                // **The campaign's opponents are the original's own** (the
-                // maintainer's AI mode 3): keyed on the campaign cell, the
-                // mode, and never a setting. The cell's resolved scale when it
-                // has one, else the race's ambient `AI_ResolveSkillScale`
-                // value the load already took (a cell authoring no skill);
-                // the cell's rung is the integer difficulty the pack shuffle
-                // reads, which `CellSelection_CommitSelection` writes to the
-                // original's `g_skill_level`. A class with no tables keeps
-                // this project's driver.
-                if race_stage.campaign_cell.is_some() {
-                    race_stage.race.use_original_ai(
-                        race_stage.campaign_ai_skill_scale,
-                        race_stage.campaign_difficulty.map_or(1, rung_level),
-                    );
-                } else if let Some(ai) = race_stage
-                    .campaign_2048_event
-                    .as_ref()
-                    .and_then(|event| event.ai)
-                    && original_opponent
-                {
-                    // A 2048 campaign event: its own `m_skillScale` and level
-                    // (`oag_title::original_driver::EventAi`), then the two AI skills the
-                    // ring rate follows. A Speed Lap or Zone event has no
-                    // opponents and nothing here changes; an Elimination
-                    // event carries no `ai` and keeps this project's driver.
-                    if race_stage
-                        .race
-                        .use_original_ai(Some(ai.skill_scale), ai.level)
-                    {
-                        race_stage
-                            .race
-                            .set_original_event_ai_skills(ai.pad_tracking, ai.weapon_avoidance);
+                // **Whose driver flies the opponents** (`oag_game::ai_choice`):
+                // the original's, in every race with opponents, unless
+                // `--ai ours`. A campaign cell brings its resolved scale (else
+                // the race's ambient `AI_ResolveSkillScale` value the load
+                // already took) and the rung the pack shuffle reads, which
+                // `CellSelection_CommitSelection` writes to the original's
+                // `g_skill_level`; a 2048 event brings its own `m_skillScale`
+                // and level and the two AI skills the ring rate follows; any
+                // other race takes its `[ai] difficulty` as the rung. A class
+                // with no tables keeps this project's driver.
+                let source = if race_stage.campaign_cell.is_some() {
+                    oag_game::ai_choice::Source::Campaign {
+                        skill: race_stage.campaign_ai_skill_scale,
+                        level: race_stage.campaign_difficulty.map_or(1, rung_level),
                     }
-                }
+                } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
+                    oag_game::ai_choice::Source::Event2048(event.ai)
+                } else {
+                    oag_game::ai_choice::Source::Free(ai_difficulty)
+                };
+                oag_game::ai_choice::apply(&mut race_stage.race, ai_choice, source);
             }
             if let Some(probe) = self.load_probe.as_mut() {
                 probe.span("race-build thread: build_race_stage", built.build);
