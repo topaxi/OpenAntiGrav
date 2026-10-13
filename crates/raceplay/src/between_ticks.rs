@@ -14,9 +14,14 @@
 //! [`Race::view`] and [`Race::view_unshaken`] (so every camera reader - the
 //! sky, the fog and PVS eye, the billboards' axes, the reticle - follows),
 //! the speed terms of [`Race::vertical_fov`], and [`Race::ship_model_matrix_of`]
-//! (the hull, its shield, flame, plume, shadow and exhaust nozzle). What the
-//! originals step - HUD numbers, sprite frames, particle spawns - stays
-//! stepped.
+//! (the hull, its shield, flame, plume, shadow and exhaust nozzle). Then what
+//! moves on its own: every projectile's body and billboard
+//! ([`Race::projectile_between`]), the replay ghost
+//! ([`Race::ghost_draw_matrix`]), the newest sample of each engine trail
+//! ([`Race::trail_head_of`], so the ribbon leaves the hull as drawn), and the
+//! animation clock texture scroll and `Anim Transform` nodes ride
+//! ([`Race::clock_seconds`]). What the originals step - HUD numbers, sprite
+//! frames, particle spawns and the particles themselves - stays stepped.
 //!
 //! # Captured in the tick, not at render time
 //!
@@ -70,6 +75,10 @@ pub(super) struct Poses {
     /// The poses as they stood before the latest tick, `None` before the
     /// first and after [`Race::settle_poses`].
     previous: Option<TickPose>,
+    /// Each projectile slot's pose on the same tick, `None` for a free slot.
+    /// Beside [`Self::previous`] rather than in it so the 128 slots are one
+    /// buffer reused tick after tick.
+    projectiles: Vec<Option<ProjectilePose>>,
     /// How far between [`Self::previous`] and the current tick a draw is:
     /// `1.0` is the current tick exactly, and is the value outside a draw.
     alpha: f32,
@@ -79,6 +88,7 @@ impl Default for Poses {
     fn default() -> Self {
         Self {
             previous: None,
+            projectiles: Vec::new(),
             alpha: 1.0,
         }
     }
@@ -87,8 +97,33 @@ impl Default for Poses {
 /// One tick's draw poses.
 #[derive(Debug, Clone, Copy)]
 struct TickPose {
+    /// [`World::tick`] as it stood, so a reader keyed on it can tell whether
+    /// the latest tick path stepped the world (the flyby and the cosmetic
+    /// ticks do not).
+    world_tick: u64,
     camera: CameraPose,
     ships: [ShipPose; MAX_SHIPS],
+}
+
+/// One projectile slot's draw pose, and what says it is still the same shot
+/// a tick later: a slot freed and refilled inside one tick holds a fresh
+/// lifetime and a different owner or kind as often as not.
+#[derive(Debug, Clone, Copy)]
+struct ProjectilePose {
+    kind: oag_tables::weapons::Weapon,
+    owner: u8,
+    lifetime: f32,
+    age: f32,
+    matrix: Mat4,
+}
+
+impl ProjectilePose {
+    fn same_shot(&self, now: &oag_weapons::projectile::Projectile) -> bool {
+        now.kind == Some(self.kind)
+            && now.owner == self.owner
+            && now.lifetime <= self.lifetime
+            && now.age >= self.age
+    }
 }
 
 /// One tick's camera, as the readers [`Race::view_between`] and
@@ -199,6 +234,7 @@ impl Race {
     /// whose last tick is long past.
     pub fn settle_poses(&mut self) {
         self.view.poses.previous = None;
+        self.view.poses.projectiles.clear();
     }
 
     /// Keeps this tick's draw poses as the previous ones, before the tick
@@ -206,6 +242,7 @@ impl Race {
     pub(super) fn capture_poses(&mut self) {
         self.view.poses.alpha = 1.0;
         let pose = TickPose {
+            world_tick: self.sim.world.tick,
             camera: CameraPose {
                 view: self.tick_view(),
                 unshaken: self.tick_view_unshaken(),
@@ -219,6 +256,21 @@ impl Race {
             }),
         };
         self.view.poses.previous = Some(pose);
+        let mut projectiles = std::mem::take(&mut self.view.poses.projectiles);
+        projectiles.clear();
+        projectiles.extend(self.sim.world.projectiles.slots.iter().enumerate().map(
+            |(slot, projectile)| {
+                let kind = projectile.kind?;
+                Some(ProjectilePose {
+                    kind,
+                    owner: projectile.owner,
+                    lifetime: projectile.lifetime,
+                    age: projectile.age,
+                    matrix: self.projectile_matrix(kind, slot, projectile),
+                })
+            },
+        ));
+        self.view.poses.projectiles = projectiles;
     }
 
     fn camera_key(&self) -> CameraKey {
@@ -277,12 +329,115 @@ impl Race {
     /// The craft in `slot`'s model matrix at the draw alpha, `current` being
     /// this tick's.
     pub(super) fn ship_between(&self, slot: usize, current: Mat4) -> Mat4 {
-        let poses = &self.view.poses;
-        match poses.previous.as_ref().map(|previous| previous.ships[slot]) {
-            Some(previous) if poses.alpha < 1.0 && previous.key == self.ship_key(slot) => {
-                blend_transform(previous.model, current, poses.alpha)
+        match (self.ship_alpha(slot), &self.view.poses.previous) {
+            (Some(alpha), Some(previous)) => {
+                blend_transform(previous.ships[slot].model, current, alpha)
             }
             _ => current,
+        }
+    }
+
+    /// The alpha to blend by when the craft in `slot` is swept this draw,
+    /// `None` when it is drawn at this tick.
+    fn ship_alpha(&self, slot: usize) -> Option<f32> {
+        let poses = &self.view.poses;
+        let previous = poses.previous.as_ref()?;
+        (poses.alpha < 1.0 && previous.ships[slot].key == self.ship_key(slot))
+            .then_some(poses.alpha)
+    }
+
+    /// The alpha to blend by when the latest tick path stepped the world by
+    /// exactly one tick, `None` otherwise - a flyby or cosmetic tick holds the
+    /// world still, and a reader keyed on [`World::tick`] must hold with it.
+    fn world_alpha(&self) -> Option<f32> {
+        let poses = &self.view.poses;
+        let previous = poses.previous.as_ref()?;
+        (poses.alpha < 1.0 && previous.world_tick + 1 == self.sim.world.tick).then_some(poses.alpha)
+    }
+
+    /// Where the newest sample of the engine trail in `slot` is drawn: the
+    /// nozzle as this draw places the hull, while that is between ticks, and
+    /// `None` when the hull is drawn at this tick and the recorded sample is
+    /// already where the nozzle is. See `oag_fx::exhaust::Exhaust::extend_trail_vertices`.
+    #[must_use]
+    pub fn trail_head_of(&self, slot: usize) -> Option<Vec3> {
+        self.ship_alpha(slot)?;
+        self.nozzle_of(slot)
+    }
+
+    /// One live projectile's model matrix at the draw alpha, `current` being
+    /// this tick's. Drawn at this tick when the slot held nothing, or a
+    /// different shot, a tick ago.
+    pub(super) fn projectile_between(
+        &self,
+        slot: usize,
+        projectile: &oag_weapons::projectile::Projectile,
+        current: Mat4,
+    ) -> Mat4 {
+        match self.projectile_previous(slot, projectile) {
+            Some((previous, alpha)) => blend_transform(previous.matrix, current, alpha),
+            None => current,
+        }
+    }
+
+    /// One live projectile's position at the draw alpha, for the billboard
+    /// drawn where a projectile has no model.
+    pub(super) fn projectile_position_between(
+        &self,
+        slot: usize,
+        projectile: &oag_weapons::projectile::Projectile,
+    ) -> Vec3 {
+        match self.projectile_previous(slot, projectile) {
+            Some((previous, alpha))
+                if previous
+                    .matrix
+                    .w_axis
+                    .truncate()
+                    .distance(projectile.position)
+                    <= SNAP_DISTANCE =>
+            {
+                previous
+                    .matrix
+                    .w_axis
+                    .truncate()
+                    .lerp(projectile.position, alpha)
+            }
+            _ => projectile.position,
+        }
+    }
+
+    fn projectile_previous(
+        &self,
+        slot: usize,
+        projectile: &oag_weapons::projectile::Projectile,
+    ) -> Option<(ProjectilePose, f32)> {
+        let poses = &self.view.poses;
+        poses.previous.as_ref()?;
+        let previous = poses.projectiles.get(slot).copied().flatten()?;
+        (poses.alpha < 1.0 && previous.same_shot(projectile)).then_some((previous, poses.alpha))
+    }
+
+    /// The replay ghost's model matrix at the draw alpha: its pose a tick ago
+    /// blended toward `now`, while the world is stepping.
+    #[must_use]
+    pub fn ghost_draw_matrix(&self, now: &oag_replay::Pose, before: &oag_replay::Pose) -> Mat4 {
+        let current = Self::ghost_model_matrix(now);
+        match self.world_alpha() {
+            Some(alpha) => blend_transform(Self::ghost_model_matrix(before), current, alpha),
+            None => current,
+        }
+    }
+
+    /// The race clock in seconds, at the draw alpha: what texture scroll,
+    /// `Anim Transform` nodes and the flame surface ride. Exactly
+    /// `World::tick / 60` outside a draw and whenever the latest tick path did
+    /// not step the world.
+    #[must_use]
+    pub fn clock_seconds(&self) -> f32 {
+        let tick = self.sim.world.tick as f32;
+        match self.world_alpha() {
+            Some(alpha) => (tick - (1.0 - alpha)) / 60.0,
+            None => tick / 60.0,
         }
     }
 

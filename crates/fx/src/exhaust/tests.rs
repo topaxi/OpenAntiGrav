@@ -574,3 +574,33 @@ fn the_ribbon_stamps_one_truncated_byte_per_segment() {
     assert_eq!(byte(1.0, 2), 89.0);
     assert_eq!(byte(0.162, 0), 18.0);
 }
+
+/// A frame drawn between two ticks hands in the nozzle as it draws it: the
+/// newest sample moves there and every older segment stays as recorded.
+#[test]
+fn a_head_moves_only_the_newest_sample() {
+    let mut e = Exhaust::new();
+    for k in 0..TRAIL_SAMPLES {
+        e.push_trail(Vec3::new(0.0, 0.0, -(k as f32) * 3.0), -Vec3::Z);
+    }
+    let positions = |head: Option<Vec3>| {
+        let mut out = Vec::new();
+        e.extend_trail_vertices(&mut out, head, Vec3::X, Vec3::Y);
+        out.iter().map(|v| v.position).collect::<Vec<_>>()
+    };
+    let recorded = positions(None);
+    assert_eq!(
+        recorded,
+        e.trail_vertices(Vec3::X, Vec3::Y)
+            .iter()
+            .map(|v| v.position)
+            .collect::<Vec<_>>()
+    );
+    let headed = positions(Some(Vec3::new(0.0, 0.0, -25.5)));
+    let per_segment = TRAIL_FINS * 6;
+    assert_ne!(recorded[..per_segment], headed[..per_segment]);
+    assert_eq!(
+        recorded[per_segment..2 * per_segment],
+        headed[per_segment..2 * per_segment]
+    );
+}

@@ -2,6 +2,7 @@
 //! reaches no simulation state.
 
 use super::*;
+use crate::CannonDraw;
 use crate::between_ticks::{SNAP_DISTANCE, blend_transform, blend_view, frame_alpha};
 use oag_gameplay::PlayerInputs;
 
@@ -243,4 +244,100 @@ fn a_draw_alpha_reaches_no_state_hash() {
             "a draw alpha moved the hash at tick {tick}"
         );
     }
+}
+
+#[test]
+fn a_projectile_in_flight_is_drawn_between_its_ticks() {
+    let mut race = super::cannon_draw::one_round(2);
+    let slot = race
+        .sim
+        .world
+        .projectiles
+        .slots
+        .iter()
+        .position(|p| p.kind.is_some())
+        .expect("one round in flight");
+    let before = race.sim.world.projectiles.slots[slot].position;
+    race.sim.world.ships[0].physics.body.position = Vec3::ZERO;
+    race.tick(&PlayerInputs::none());
+    let after = race.sim.world.projectiles.slots[slot].position;
+    assert!(before.distance(after) > 0.5, "the round did not fly");
+    let rounds = |race: &Race| race.cannon_model_matrices(&CannonDraw::default());
+    race.set_draw_alpha(0.5);
+    let drawn = translation(rounds(&race)[0]);
+    assert!(
+        drawn.abs_diff_eq(before.lerp(after, 0.5), 1e-3),
+        "drawn at {drawn}, not halfway along {before} -> {after}"
+    );
+    race.set_draw_alpha(1.0);
+    assert_eq!(translation(rounds(&race)[0]), after);
+
+    // The slot refilled inside the tick: a new shot, drawn where it is.
+    race.tick(&PlayerInputs::none());
+    race.sim.world.projectiles.slots[slot].lifetime += 1.0;
+    race.set_draw_alpha(0.5);
+    assert_eq!(
+        translation(rounds(&race)[0]),
+        race.sim.world.projectiles.slots[slot].position
+    );
+}
+
+#[test]
+fn the_trail_head_follows_the_drawn_nozzle_and_only_between_ticks() {
+    let mut race = gliding_race();
+    race.view.nozzles = vec![Some(Vec3::new(0.0, 0.0, 4.0)); MAX_SHIPS];
+    race.tick(&PlayerInputs::none());
+    assert_eq!(
+        race.trail_head_of(0),
+        None,
+        "a tick-exact draw keeps the sample"
+    );
+    race.set_draw_alpha(0.5);
+    assert_eq!(race.trail_head_of(0), race.nozzle_of(0));
+    assert_ne!(
+        race.nozzle_of(0),
+        Some(
+            crate::drawable::model_matrix_of(&race.sim.world.ships[0])
+                .transform_point3(Vec3::new(0.0, 0.0, 4.0))
+        ),
+        "the nozzle is not on the blended hull"
+    );
+}
+
+#[test]
+fn the_clock_runs_between_ticks_only_while_the_world_steps() {
+    let mut race = gliding_race();
+    race.tick(&PlayerInputs::none());
+    let tick = race.sim.world.tick as f32;
+    assert_eq!(race.clock_seconds(), tick / 60.0);
+    race.set_draw_alpha(0.25);
+    assert!((race.clock_seconds() - (tick - 0.75) / 60.0).abs() < 1e-6);
+    // A cosmetic tick holds the world still, and the clock holds with it.
+    race.tick_cosmetics();
+    race.set_draw_alpha(0.25);
+    assert_eq!(race.clock_seconds(), tick / 60.0);
+}
+
+#[test]
+fn the_ghost_is_drawn_between_its_two_poses() {
+    let mut race = gliding_race();
+    race.tick(&PlayerInputs::none());
+    let before = oag_replay::Pose {
+        position: Vec3::new(0.0, 0.0, 0.0),
+        rotation: Quat::IDENTITY,
+    };
+    let now = oag_replay::Pose {
+        position: Vec3::new(4.0, 0.0, 0.0),
+        rotation: Quat::IDENTITY,
+    };
+    assert_eq!(
+        race.ghost_draw_matrix(&now, &before),
+        Race::ghost_model_matrix(&now)
+    );
+    race.set_draw_alpha(0.5);
+    let drawn = translation(race.ghost_draw_matrix(&now, &before));
+    assert!(
+        drawn.abs_diff_eq(Vec3::new(2.0, 0.0, 0.0), 1e-4),
+        "ghost at {drawn}"
+    );
 }

@@ -311,16 +311,18 @@ impl Tube {
     #[must_use]
     pub fn vertices(&self, brightness: f32, speed01: f32, red_mix: f32) -> Vec<GpuVertex> {
         let mut out = Vec::with_capacity(VERTICES_PER_CRAFT);
-        self.extend_vertices(&mut out, brightness, speed01, red_mix);
+        self.extend_vertices(&mut out, None, brightness, speed01, red_mix);
         out
     }
 
     /// [`Self::vertices`], appended to a list the caller owns - the form the
     /// renderer uses, for the reason
-    /// [`crate::exhaust::Exhaust::extend_trail_vertices`] gives.
+    /// [`crate::exhaust::Exhaust::extend_trail_vertices`] gives. `head` stands
+    /// in for the newest sample's position on the same terms as that one's.
     pub fn extend_vertices(
         &self,
         out: &mut Vec<GpuVertex>,
+        head: Option<Vec3>,
         brightness: f32,
         speed01: f32,
         red_mix: f32,
@@ -328,7 +330,10 @@ impl Tube {
         if !self.ready() {
             return;
         }
-        let samples = self.samples();
+        let mut samples = self.samples();
+        if let Some(head) = head {
+            samples[0].position = head;
+        }
         let head_u = u_head(speed01);
 
         // Per-ring attributes, shared by the three fins.

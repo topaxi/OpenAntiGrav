@@ -503,6 +503,7 @@ impl Race {
         );
         self.view.hd_trail[slot].extend_vertices(
             out,
+            self.trail_head_of(slot),
             brightness,
             s01,
             self.view.hd_trail_red[slot],

@@ -105,7 +105,7 @@ impl Scene {
         }
         Some(oag_render::ghost::Frame {
             view_projection,
-            model: Race::ghost_model_matrix(&now),
+            model: race.ghost_draw_matrix(&now, &before),
             prev_mvp: prev_vp * Race::ghost_model_matrix(&before),
             fade: oag_render::ghost::fade(distance),
             offsets: offsets.1,
@@ -137,7 +137,7 @@ impl Scene {
         pass: &mut wgpu::RenderPass<'_>,
         stats: &mut SceneStats,
     ) {
-        let (Some(pipeline), Some(ghost), Some((now, _))) = (
+        let (Some(pipeline), Some(ghost), Some((now, before))) = (
             self.ghost.pipeline.as_ref(),
             race.ghost(),
             race.ghost_pose(),
@@ -150,7 +150,7 @@ impl Scene {
         let distance = (race.ship().physics.body.position - now.position).length();
         let drawn = pipeline.draw(
             pass,
-            &drawable.ghost_hull(Race::ghost_model_matrix(&now), eye),
+            &drawable.ghost_hull(race.ghost_draw_matrix(&now, &before), eye),
             oag_render::ghost::fade(distance),
         );
         stats.draws_submitted += drawn;
