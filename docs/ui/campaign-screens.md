@@ -3836,12 +3836,7 @@ no red (**chosen**, no frame shows a lower variant). Tests:
 Not done: the preview's pose (`hull_orbit`) is still the one fitted to the classic
 Feisar frame, so the Fury hulls, which are shaped differently, sit a little off the
 reference's framing (**chosen, not measured**). The `_n1` bars have no reference
-frame. Omega: **checked, applies, not wired**: this build wires no Ship Select for it
-(`team_select`, `team_variants` and `ship_preview_hull` are `None` in `oag-omega`; its
-`data09` does author the screens, see [selection-screens.md](selection-screens.md)),
-so neither the variant preview nor the red has a screen to draw on; its
-`Team_Selection_Definition.xml` is HD's, and `HD_Blue` exists in its `Fury_Colours`
-(`0xffac0717`). Hull directories of Omega's ships were not censused.
+frame. Omega: **ported, partly** (2026-10-13): `team_select` is wired on `oag-omega` and its `data09` copy of `Team_Selection_Definition.xml` is HD's dialect, but `team_variants` and `ship_preview_hull` are `None` there, so neither the variant preview nor the red has a model to draw on; `HD_Blue` exists in its `Fury_Colours` (`0xffac0717`). Hull directories of Omega's ships were not censused.
 
 ### The layout scale: the original is not drawn 1:1, 2026-10-08
 

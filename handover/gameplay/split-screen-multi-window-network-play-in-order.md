@@ -998,12 +998,11 @@ a guess.
   vertical, join, a left and right two-view race (Omega also through Track Select). Written up in
   [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
   **Open from it**:
-  - **Omega's per-seat Ship Select**: `data09` authors `Team Selection`, `Team Selection Player 1`
-    and `Player 2` (read with the digest-matched Rust reader; HD's `picker::hd` parses it as it
-    stands). Wiring is `team_select: Some(Team_Selection_Definition.xml)` in `oag_omega::frontend`
-    (plus `names::TEAM_SELECTION_DEFINITION`), but it also opens Ship Select for one person and drops the
-    RACE page's TEAM, VARIANT and TRACK rows, so it changes Omega's one-player flow: a maintainer
-    decision, not taken here.
+  - **Omega's Ship Select is wired and bare** (maintainer's decision, `team_select` on `oag-omega`, one
+    person and each seat): the screen draws padlocks in every model cell (no `team_variants` for the
+    HD and 2048 rosters Omega mixes), an empty ship model preview (`preview_meshes`,
+    `ship_preview_hull` unset) and empty statistics bars. Next: Omega's roster and variants table,
+    the hull preview, and ratings per team model.
   - **2048 seats pick no ship**: no per-player pair is authored (`Team_Definition.xml` is one touch screen).
   - **HD guest join not used**: `FE_GUEST_JOIN` ("PLAYER 2 PRESS START TO JOIN" on HD, "PRESS OPTIONS TO
     JOIN" on Omega) names a different button than our lobby's join press (confirm), so showing it on the

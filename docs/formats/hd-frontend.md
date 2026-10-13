@@ -2356,9 +2356,9 @@ Omega's executable hides it the way `RaceBox_UpdateTrialPadlocks` does is **not 
 lane** (no Ghidra access), so the lists are unlocked here as on HD. Omega's join prompt
 differs from HD's: `FE_GUEST_JOIN` is "PLAYER 2 PRESS OPTIONS TO JOIN" there. Omega's
 `team_selection_definition.xml` (`data09`) authors `Team Selection`, `Team Selection Player 1`
-and `Team Selection Player 2` like HD's (**checked, applies, not wired**: `team_select` is
-`None`, and wiring it changes the one-player flow; HD's reader parses Omega's copy as it
-stands). Omega's `vert_splitscreen_*` HUD files (`data00`) are wired for the vertical cut.
+and `Team Selection Player 2` like HD's (**ported**: `team_select` names it, and HD's reader
+parses Omega's copy with two additions, the honeycomb's `Scale` and a per-title ship directory
+for the team logos; Omega's one-player flow gains Ship Select). Omega's `vert_splitscreen_*` HUD files (`data00`) are wired for the vertical cut.
 **2048: ported as a borrow, chosen, not measured** - its touch front end has no
 `racebox_definition.xml` (`docs/formats/2048-frontend.md`) but its English table carries HD's
 split ids word for word (`RB_NUMP`, `RB_SPLSCR`, `RB_HORIZ`, `RB_VERT`, `FE_SHIPSEL_P1`/`P2`,
