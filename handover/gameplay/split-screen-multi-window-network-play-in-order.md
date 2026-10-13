@@ -174,7 +174,8 @@ no bloom/blur/jitter under a split and the hidden HUD are all **chosen, not
 measured**. **Still open from this list**: the per-player HUD (hidden while split),
 the pad-to-slot UI and a front-end entry (the PS2's `Team SelectionSplit`), per-team
 camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport origin),
-the 8-up frame budget, and a check of HD's and Omega's post chains under a split.
+the 8-up frame budget, the results/end-race flow (still slot 0's, ends every view),
+and a check of HD's and Omega's post chains under a split.
 A second human slot only steers once the remote-slot-input work lands: until then
 view `i > 0` shows the grid's driver flying slot `i`.
 

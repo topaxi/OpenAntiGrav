@@ -428,6 +428,17 @@ impl Session {
                 if let Some(start) = start {
                     debug!("first race frame: encoded in {:?}", start.elapsed());
                 }
+                // A split screen draws one scene per view, each in a pass of its
+                // own, and times none of them: the claim above was never written
+                // into and has to be given back, as the blur and HD-bloom ones
+                // are below. Timing one view of `N` would read as a cheap frame
+                // and send the render scale up, so **resolution holds its scale
+                // while split** - chosen, not measured.
+                if stage.race.viewport_count() > 1
+                    && let Some(timer) = self.pass_timer.as_mut()
+                {
+                    timer.abandon();
+                }
                 (Some(stats), None)
             }
         };

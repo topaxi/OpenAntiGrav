@@ -87,7 +87,8 @@ Wipeout HD's and Omega's post chains are not verified under a split.
 
 ## HUD
 
-The full-screen HUD is **hidden while split** (`Race::hud_shown` is false): one HUD
+The full-screen HUD and the track panel over the pre-race flyby are **hidden while
+split** (`Race::hud_shown` and `Race::track_panel_progress`): one HUD
 for slot 0 across four views reads as every player's. The countdown, which is part
 of the HUD draw, goes with it - the gantry's own `GO` board is still in the scene.
 
@@ -118,6 +119,12 @@ There is no 8-up frame budget yet.
   and `Track CreationSplit` screens): `--players` is a command-line switch only.
 - Per-team camera rigs, per-view bloom (an origin in `oag_post::bloom`), motion blur
   and the temporal upscaler under a split, and a check of HD's and Omega's chains.
-- Pulse PS2, Pure and the other titles are the same code path and unchecked; the
-  2048 and Omega check is **checked, applies, not wired**: the viewport and camera
-  code knows no title, and only Pulse's frames were looked at.
+- The results scoreboard and the end-race flow still key on slot 0 and end every
+  view when slot 0 finishes.
+- Resolution holds its scale while split: the scene pass is not timed (timing one
+  view of `N` would read as a cheap frame), so dynamic resolution gets no reading.
+- `--players N > 1` **changes `RaceSim::state_hash`**, because `World::controllers`
+  is hashed; the cameras, views and draw do not.
+- Not a 2048 or Omega finding: the viewport and camera code is title-agnostic, but
+  only Pulse's frames were looked at, so Pure, Pulse PS2, HD, 2048 and Omega are
+  unchecked under a split.
