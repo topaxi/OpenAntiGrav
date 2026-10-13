@@ -71,8 +71,11 @@ below).
 - **Fixed timestep, always.** The simulation never sees a variable delta. A
   variable timestep makes physics frame-rate dependent, which breaks every form
   of verification.
-- Rendering interpolates between the last two states using
-  `TickClock::interpolation_alpha`.
+- The window draws a race between its last two ticks by
+  `TickClock::interpolation_alpha`, from a pose history the race keeps outside
+  `World` and outside the state hash, so nothing drawn can reach the
+  simulation; captures and traces draw each tick exactly. See
+  [drawing between ticks](../rendering/between-ticks.md).
 - The accumulator carries integer nanoseconds, not a float. That bounds the
   drift rather than removing it: `1_000_000_000 / 60` truncates, so the clock
   gains one tick every 4.8 days of continuous simulation. The figure is pinned

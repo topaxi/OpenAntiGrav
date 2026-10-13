@@ -99,7 +99,7 @@ target and the UI composites over it afterwards, so the seam this design only
 *demonstrated* is now exposed. Camera jitter followed on the same day
 ([ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)),
 and it is this design's `prev_mvp` that constrained where the offset could go:
-the same phase has to reach the previous tick's matrix, or the jitter lands in
+the same phase has to reach the previous frame's matrix, or the jitter lands in
 every motion vector this buffer writes.
 
 That last row deserves precision rather than a tick. This design inserts its
@@ -126,29 +126,36 @@ unconditionally available to FSR 3.1, which is half the reason for choosing the
 expensive tier. The cost is one `Rg16Float` write per fragment.
 
 **The setting is strength, not technique.** `off | low | medium | high`, mapping
-to a shutter fraction of the tick. Offering `camera` and `full` as user-facing
+to a shutter fraction of the drawn frame's travel (a tick, in a capture). Offering `camera` and `full` as user-facing
 values would ship a value with no implementation behind it, which
 `crates/display/src/display.rs` and ADR-0013 both refuse: *a row for infrastructure
 that is not there is worse than no row*. It also means that if the cheap tier is
 ever shipped first as a stepping stone, it can be replaced underneath the same
 row without a settings migration.
 
-**Blur length keys off `race.world.tick`, not the frame.** This is the
-non-obvious one. The simulation is fixed 60 Hz
-([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)) and there
-is no render-side interpolation - `TickClock::interpolation_alpha` exists in
-`crates/core/src/tick.rs` and has no callers outside its own tests. So above 60
-fps, consecutive frames render *identical* simulation state. Caching the
-previous transforms per frame would therefore produce zero blur on a duplicate
-frame and full blur on the next: a visible amplitude pulse that gets worse the
-faster the machine is. Caching per tick makes the blur a constant 1/60 s of
-motion at any frame rate.
+**Blur length keys off the tick and the draw alpha together, not the tick
+alone.** The simulation is fixed 60 Hz
+([ADR-0007](../architecture/adr/0007-fixed-timestep-vs-original.md)). Until
+2026-10-13 nothing drew between ticks, so above 60 fps consecutive frames
+rendered *identical* state, and caching the previous transforms per frame
+would have produced zero blur on a duplicate frame and full blur on the next:
+an amplitude pulse that got worse the faster the machine was. So the cache was
+promoted per tick, making the blur a constant 1/60 s of motion at any frame
+rate.
 
-> **When state interpolation lands** - [modern
-> features](../overview/modern-features.md) plans it for unlocked frame rate -
-> this must be revisited. The previous transform should then be the previous
-> *interpolated* camera and the shutter a fraction of the real frame delta.
-> Tick-keying is correct only while every frame within a tick is identical.
+The window now [draws between ticks](between-ticks.md): each frame has its own
+draw alpha and its own poses. Kept per tick, every frame inside a tick would
+measure a different fraction of a tick against one fixed previous pose, and
+the blur length would pulse at the frame rate. So the snapshot is promoted
+whenever the tick **or the draw alpha** changes (`MotionState`'s `FrameKey`):
+
+- In the window every frame promotes, the velocity is the travel across the
+  real frame delta, and the shutter is a fraction of that, as a camera's
+  would be. At 240 Hz the smear is a quarter of what it was at 60.
+- A frame drawn at a tick exactly - every capture, a paused race, the warmup -
+  has alpha `1.0`, so for those the key is the tick alone and they promote
+  per tick as before, drawing exactly what they drew. A paused race keeps the
+  smear of its last promotion, as it did.
 
 **The chain runs after bloom, inside `Scene::render`.** Both halves of that are
 load-bearing and both look wrong at a glance:
@@ -208,13 +215,14 @@ it off - the asset viewer's `crates/view/src/orbit.rs` and
 missing velocity write is invisible in the final image, so the call sites need
 to say which they mean rather than passing a bare `false`.
 
-**Previous transforms.** `Scene` caches last tick's view-projection and
-per-ship model matrices, updated only when `race.world.tick` changes.
+**Previous transforms.** `Scene` caches the previous drawn frame's
+view-projection and per-ship model matrices, promoted when the motion tick or
+the draw alpha changes (see "Blur length" above).
 `Scene::render` takes `&self`, but the struct already holds its exhaust and
 spark pipelines in a `RefCell`, so this needs no signature change. Static
-geometry keeps passing identity; the sky passes last tick's camera translation,
-which cancels against last tick's view-projection and correctly leaves it with
-rotation-only velocity.
+geometry keeps passing identity; the sky passes the previous frame's camera
+translation, which cancels against that frame's view-projection and leaves it
+with rotation-only velocity.
 
 **Post chain**, as `oag_post::motion_blur`, following the shape every
 other pass in that module already has: `new(device, format) -> Result<Self>`,
