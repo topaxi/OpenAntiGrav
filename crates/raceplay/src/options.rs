@@ -381,6 +381,10 @@ pub struct Setup {
     pub opponents: bool,
     /// See [`Options::no_driver_for_class`]: the grid is left empty.
     pub no_opponents: bool,
+    /// How many people fly this race at once: [`Options::views`], at least one. Only the
+    /// starting grid reads it - two or more people take the back of the grid in order
+    /// ([`Race::start`]); one person, the default, changes nothing.
+    pub people: u8,
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
     pub trail_sparks: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].

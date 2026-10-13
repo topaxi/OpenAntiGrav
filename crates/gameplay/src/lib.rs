@@ -30,5 +30,6 @@ pub use hash::hash_world;
 pub use input::{InputSnapshot, PlayerInputs};
 pub use spawn::{
     GRID_COLUMN_OFFSET, GRID_ROW_PITCH, GRID_SLOTS, Pose, grid_pose, orientation_on_sample,
+    rank_from_back,
 };
 pub use world::{Controller, MAX_PLAYERS, MAX_SHIPS, Ship, World, damage_rules};

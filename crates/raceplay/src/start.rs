@@ -38,6 +38,7 @@ impl Race {
             original_tables,
             opponents,
             no_opponents,
+            people,
             trail_sparks,
             seed,
             zone,
@@ -350,13 +351,20 @@ impl Race {
             // specifically - see `docs/ghidra/functions/psp-pulse-usa
             // /head2head.md`'s own "grid placement... is extrapolated" note.
             let pose_start = (GRID_SLOTS as usize - 1) - field_opponents as usize;
-            for (slot_index, pose) in poses
-                .iter()
-                .enumerate()
-                .take(GRID_SLOTS as usize - 1)
-                .skip(pose_start)
-            {
+            for slot_index in pose_start..GRID_SLOTS as usize - 1 {
                 let ship_index = slot_index - pose_start + 1;
+                // **Which grid row this craft starts on.** One person: the row it
+                // always had (`slot_index`). Two or more: the people take the back
+                // rows in order and the opponents the rows ahead of them, in their
+                // own order - `oag_gameplay::rank_from_back`, read off PS2 Pulse and
+                // HD. The craft's driver seed and pilot below stay keyed to
+                // `slot_index`, the craft's own, so nobody's character moves.
+                let rank = oag_gameplay::rank_from_back(
+                    ship_index,
+                    field_opponents as usize + 1,
+                    usize::from(people),
+                );
+                let pose = &poses[GRID_SLOTS as usize - 1 - rank];
                 // Its own team's tuning where the title's variant family gave
                 // it one (`load::family`), the player's otherwise.
                 let handling = opponent_handling

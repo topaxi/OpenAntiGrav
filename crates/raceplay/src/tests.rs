@@ -41,6 +41,7 @@ mod message_cue;
 mod mode_override;
 mod models;
 mod pads;
+mod people_grid;
 mod perfect_start;
 mod reconcile;
 mod repulser;
@@ -179,6 +180,7 @@ fn setup(handling: Handling) -> Setup {
         class: "VENOM".to_string(),
         opponents: false,
         no_opponents: false,
+        people: 1,
         seed: SEED,
         // A time trial does not read it, and these tests never run a Zone
         // race: the numbers are the disc's and there is no disc here.
