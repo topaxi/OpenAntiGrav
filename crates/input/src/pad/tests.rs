@@ -284,18 +284,18 @@ fn a_held_shoulder_wins_over_a_lighter_brake_under_the_old_mapping() {
 /// it did when every pad was merged into one stream.
 #[test]
 fn every_device_drives_slot_zero_until_something_says_otherwise() {
-    let assignment = Assignment::default();
+    let assignment = Assignment::<u32>::default();
     assert!(assignment.is_single_player());
-    assert_eq!(assignment.keyboard_slot(), Assignment::DEFAULT_SLOT);
+    assert_eq!(assignment.keyboard_slot(), super::DEFAULT_SLOT);
 }
 
 /// A slot past the grid is refused rather than clamped: clamping would put two
 /// people on one craft, which reads as a physics bug rather than a settings one.
 #[test]
 fn a_slot_past_the_grid_is_refused() {
-    let mut assignment = Assignment::default();
+    let mut assignment = Assignment::<u32>::default();
     assignment.assign_keyboard(oag_gameplay::MAX_PLAYERS);
-    assert_eq!(assignment.keyboard_slot(), Assignment::DEFAULT_SLOT);
+    assert_eq!(assignment.keyboard_slot(), super::DEFAULT_SLOT);
 
     assignment.assign_keyboard(oag_gameplay::MAX_PLAYERS - 1);
     assert_eq!(assignment.keyboard_slot(), oag_gameplay::MAX_PLAYERS - 1);
@@ -324,5 +324,80 @@ fn a_pad_that_was_never_opened_reads_as_eight_resting_slots() {
     for (slot, state) in players.iter().enumerate() {
         assert_eq!(*state, PadState::default(), "slot {slot}");
     }
-    assert_eq!(pad.poll(), players[Assignment::DEFAULT_SLOT]);
+    assert_eq!(pad.poll(), players[super::DEFAULT_SLOT]);
+}
+
+type Seated = Assignment<u32>;
+
+/// Merged is the old behaviour and stays inert: reconciling against any set of
+/// pads neither seats nor drops one, and an unknown pad drives slot 0.
+#[test]
+fn the_merged_default_ignores_reconcile() {
+    let mut assignment = Seated::default();
+    assignment.reconcile(&[4, 5, 6]);
+    assert!(assignment.is_single_player());
+    for pad in [4, 5, 6, 99] {
+        assert_eq!(assignment.slot_of(pad), Some(DEFAULT_SLOT));
+    }
+}
+
+/// `--players 3` with three pads: the first pad on slot 0 beside the keyboard,
+/// the others on the next slots in connection order.
+#[test]
+fn seated_pads_take_slots_in_connection_order() {
+    let mut assignment = Seated::seated(3);
+    assignment.reconcile(&[20, 10, 30]);
+    assert_eq!(assignment.slot_of(20), Some(0));
+    assert_eq!(assignment.slot_of(10), Some(1));
+    assert_eq!(assignment.slot_of(30), Some(2));
+    assert_eq!(assignment.keyboard_slot(), 0);
+    assert!(!assignment.is_single_player());
+}
+
+/// A pad past the human count drives nothing, rather than sharing a craft.
+#[test]
+fn a_pad_past_the_human_count_drives_nothing() {
+    let mut assignment = Seated::seated(2);
+    assignment.reconcile(&[1, 2, 3]);
+    assert_eq!(assignment.slot_of(3), None);
+    assert_eq!(assignment.slot_of(2), Some(1));
+}
+
+/// A pad that appears between two polls takes the lowest slot no pad holds, and
+/// one that goes away frees its slot for the next arrival.
+#[test]
+fn a_mid_race_pad_takes_the_lowest_free_slot_and_a_lost_pad_frees_one() {
+    let mut assignment = Seated::seated(3);
+    assignment.reconcile(&[1]);
+    assert_eq!(assignment.slot_of(1), Some(0));
+
+    assignment.reconcile(&[1, 2, 3]);
+    assert_eq!(assignment.slot_of(2), Some(1));
+    assert_eq!(assignment.slot_of(3), Some(2));
+
+    assignment.reconcile(&[1, 3]);
+    assert_eq!(assignment.slot_of(2), None, "unplugged");
+    assert_eq!(assignment.slot_of(3), Some(2), "the others keep theirs");
+
+    assignment.reconcile(&[1, 3, 4]);
+    assert_eq!(assignment.slot_of(4), Some(1), "takes the slot 2 left");
+}
+
+/// An explicit assignment (the join screen's) is kept, and the pads that were
+/// not named fill what is free.
+#[test]
+fn explicit_seats_survive_a_reconcile() {
+    let mut assignment = Seated::seated(3);
+    assignment.assign_pad(7, 2);
+    assignment.reconcile(&[7, 8]);
+    assert_eq!(assignment.slot_of(7), Some(2));
+    assert_eq!(assignment.slot_of(8), Some(0));
+}
+
+/// The humans count is held to the grid, and at least one.
+#[test]
+fn the_human_count_is_held_to_the_grid() {
+    assert_eq!(Seated::seated(0).humans(), Some(1));
+    assert_eq!(Seated::seated(99).humans(), Some(oag_gameplay::MAX_PLAYERS));
+    assert_eq!(Seated::default().humans(), None);
 }

@@ -270,7 +270,7 @@ fn the_default_assignment_puts_everything_in_slot_zero() {
     controls.set_key(&Key::Character("q".into()), true);
 
     let inputs = controls.player_snapshots();
-    let slot_zero = inputs.get(pad::Assignment::DEFAULT_SLOT);
+    let slot_zero = inputs.get(pad::DEFAULT_SLOT);
     assert_eq!(slot_zero.stick_x, -1.0);
     assert_eq!(slot_zero.airbrake_left, 1.0);
     assert!(slot_zero.buttons.is_held(Button::Left));
@@ -397,4 +397,78 @@ fn an_android_press_shorter_than_a_tick_still_counts_as_the_pad_speaking() {
     assert!(controls.pad_spoke());
     controls.snapshot();
     assert!(!controls.pad_spoke(), "and only for the tick it landed in");
+}
+
+/// What the join screen reads: the keyboard's newly pressed keys are a press by
+/// the keyboard device, once, and a held key is not pressed again.
+#[test]
+fn a_key_going_down_is_one_press_by_the_keyboard() {
+    let mut controls = Controls::without_pad();
+    controls.set_key(&Key::Named(NamedKey::Space), true);
+    controls.player_snapshots();
+    assert_eq!(
+        controls.device_presses(),
+        &[lobby::Press {
+            device: lobby::Device::Keyboard,
+            buttons: Button::Start.bit(),
+        }]
+    );
+    controls.player_snapshots();
+    assert!(
+        controls.device_presses().is_empty(),
+        "a held key is not pressed twice"
+    );
+}
+
+/// A click reaches the game as a tap, which is the keyboard speaking: it must be
+/// a press even when the key is up again by the time the tick reads it.
+#[test]
+fn a_tap_shorter_than_a_tick_is_a_press() {
+    let mut controls = Controls::without_pad();
+    controls.tap(Button::Cross);
+    controls.player_snapshots();
+    assert_eq!(controls.device_presses().len(), 1);
+    assert_eq!(controls.device_presses()[0].buttons, Button::Cross.bit());
+}
+
+/// The point of the lane at the boundary a race reads: with two people seated, a
+/// reading on pad 2's slot steers slot 1's snapshot and leaves slot 0's alone,
+/// and the keyboard still steers slot 0.
+#[test]
+fn a_second_pads_stick_reaches_the_second_slots_snapshot() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.set_key(&Key::Named(NamedKey::ArrowLeft), true);
+
+    let mut pads = [pad::PadState::default(); oag_gameplay::MAX_PLAYERS];
+    pads[1] = pad::PadState {
+        stick_x: 0.8,
+        held: Button::Cross.bit(),
+        ..pad::PadState::default()
+    };
+    let inputs = controls.merge_players(pads);
+    assert_eq!(inputs.get(0).stick_x, -1.0, "the keyboard drives slot 0");
+    assert_eq!(inputs.get(1).stick_x, 0.8);
+    assert!(inputs.get(1).buttons.is_held(Button::Cross));
+    assert!(!inputs.get(0).buttons.is_held(Button::Cross));
+}
+
+/// Seating a lobby that holds only the keyboard seats one person, and merging
+/// afterwards undoes any seating: the menus have one cursor and every device
+/// drives it. (A lobby with a pad in it needs a `GamepadId`, which no test can
+/// make; `lobby`'s own tests cover those over a stand-in id.)
+#[test]
+fn merging_undoes_a_seating() {
+    let mut lobby = lobby::Lobby::new();
+    lobby.join(lobby::Device::Keyboard);
+    let mut controls = Controls::without_pad();
+    controls.seat(&lobby);
+    assert_eq!(controls.assignment().humans(), Some(1));
+    assert_eq!(controls.keyboard_slot(), 0);
+
+    controls.seat_default(3);
+    assert_eq!(controls.assignment().humans(), Some(3));
+    controls.merge_devices();
+    assert_eq!(controls.assignment().humans(), None);
+    assert!(controls.assignment().is_single_player());
 }
