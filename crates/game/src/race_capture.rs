@@ -620,11 +620,8 @@ pub fn capture(
         (rect.2 as u32, rect.3 as u32),
     );
 
-    // **One tick per drawn frame, so every frame is the tick exactly.** A
-    // capture draws at draw alpha 1.0, the picture it drew before
-    // `race::between_ticks` existed, bit for bit; only the window draws
-    // between ticks, and `--draw-alpha` (its default 1.0) asks for one such
-    // frame at the end. Spelled out rather than left to the default.
+    // One tick per drawn frame, each the tick exactly (draw alpha 1.0), bit
+    // for bit what a capture drew before `race::between_ticks`.
     race.set_draw_alpha(1.0);
 
     // The primer frame a motion blur capture needs: the scene at the
@@ -700,8 +697,7 @@ pub fn capture(
         scene.rebind_zone_art(&device, &queue);
     }
     let spectrum = spectrum::zone_spectrum(options, audio);
-    // The captured frame, and only it, at `--draw-alpha`: the primer above
-    // drew its tick exactly, and every tick since put 1.0 back.
+    // The captured frame alone at `--draw-alpha`, default 1.0.
     race.set_draw_alpha(options.draw_alpha);
     oag_gpu::perfprobe::reset();
     oag_gpu::perfprobe::mark("frame-start");
