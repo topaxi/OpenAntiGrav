@@ -92,12 +92,19 @@ impl Race {
         })
     }
 
-    /// The plan for the **player's** craft, driven from slot 1's grid pose: the
-    /// first candidate [`Self::field_speed_plan`] learns on, and what the speed
-    /// plan ground truth asks of every layout.
+    /// The plan for the **primary person's** craft, driven from slot 1's grid
+    /// pose: the first candidate [`Self::field_speed_plan`] learns on, and what
+    /// the speed plan ground truth asks of every layout.
+    ///
+    /// One plan, not one per person: a plan belongs to a hull, not to a slot.
+    /// [`Self::adapt_hull_plans`] gives every distinct hull on the grid its own
+    /// copy, a second person's included (it walks slots `0..ship_count`, not
+    /// the opponents), so a second person's autopilot follows a plan for their
+    /// own hull; this is the diagnostic that builds the first candidate's from
+    /// scratch.
     #[must_use]
     pub fn build_player_speed_plan(&self) -> (oag_ai::SpeedPlan, oag_ai::plan::Report) {
-        let player = self.sim.world.ships[0].handling;
+        let player = self.sim.world.ships[self.sim.world.primary_slot()].handling;
         Self::with_plan_course_on(
             &self.sim,
             &self.sim.racing_line,
@@ -281,7 +288,7 @@ impl Race {
     /// The plan the field drives, or `None`: the **reference** every other
     /// hull's plans are re-learned from ([`Self::adapt_hull_plans`]).
     ///
-    /// The player's craft where its plan verifies clean (two laps from the grid
+    /// A person's craft where its plan verifies clean (two laps from the grid
     /// with no wall touched and no rescue), else the AI slot with the most
     /// agile hull (`oag_ai::hull_yaw_ceiling`, highest first, slot order
     /// breaking a tie) whose plan does; a layout none of them solves keeps the
@@ -297,9 +304,13 @@ impl Race {
             let ship = &race.sim.world.ships[slot];
             oag_ai::hull_yaw_ceiling(&ship.handling, &ship.physics.body)
         };
-        let mut candidates: Vec<usize> = vec![0];
-        let mut opponents: Vec<usize> = (1..usize::from(self.sim.world.ship_count))
-            .filter(|&slot| self.sim.world.ships[slot].active)
+        // The people's craft first, in slot order; with one person in slot 0
+        // that is `[0]` and then slots `1..` as it always was.
+        let mut candidates: Vec<usize> = (0..usize::from(self.sim.world.ship_count))
+            .filter(|&slot| self.sim.world.person_flown(slot))
+            .collect();
+        let mut opponents: Vec<usize> = (0..usize::from(self.sim.world.ship_count))
+            .filter(|&slot| self.sim.world.ships[slot].active && !self.sim.world.person_flown(slot))
             .collect();
         opponents.sort_by(|&a, &b| yaw(self, b).total_cmp(&yaw(self, a)).then(a.cmp(&b)));
         candidates.extend(opponents);

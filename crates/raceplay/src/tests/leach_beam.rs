@@ -338,3 +338,62 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
         "HD keeps firing off the window alone"
     );
 }
+
+/// A second person's LeachBeam locks on what is in front of *their* craft.
+///
+/// `Race::sight_target` used to measure from `ships[0]` and read slot 0's
+/// held weapon, so slot 1 pressing fire with a rival dead ahead of it got the
+/// unlocked arm (slot 0 held nothing, and had it held one, the window would
+/// have been slot 0's). Here slot 0 is the rival, parked 60 units ahead of
+/// slot 1 and holding nothing, so the only way the beam locks is by slot 1's
+/// own window finding it. The press comes five ticks in, long before the Pulse
+/// reticle's hold would close - the second person has no reticle, so no hold
+/// (**chosen, not measured**).
+#[test]
+fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
+    let mut race = race_with_a_grid();
+    race.sim.weapons = Some(one_leach_beam_table());
+    race.set_sight_dialect(oag_pulse::hud::ART.sights);
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+    assert!(
+        race.sim.world.person_flown(1),
+        "slot 1 must be person-flown"
+    );
+    let forward = race.sim.world.ships[0].physics.body.forward();
+    let rival = race.sim.world.ships[0].physics.body.position;
+    let shooter = rival - forward * 60.0;
+    race.sim.world.ships[1].physics.body.orientation =
+        race.sim.world.ships[0].physics.body.orientation;
+    race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
+    assert_eq!(
+        race.sight_target(1),
+        None,
+        "nothing is in front of slot 1 before the rival is parked"
+    );
+    let mut buttons = Buttons::new();
+    buttons.tick(0);
+    for tick in 0..=5 {
+        race.sim.world.ships[0].physics.body.position = rival;
+        race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
+        race.sim.world.ships[1].physics.body.position = shooter;
+        race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+        if tick == 0 {
+            assert_eq!(
+                race.sight_target(1),
+                Some(0),
+                "slot 1's own window does not find the rival ahead of it"
+            );
+        }
+        let mut inputs = PlayerInputs::none();
+        inputs.set(1, buttons.tick(if tick == 5 { SQUARE } else { 0 }));
+        race.tick(&inputs);
+    }
+    let beam = race.sim.world.leach_beam.expect("slot 1's press must fire");
+    assert_eq!(beam.owner, 1);
+    assert_eq!(
+        beam.kind,
+        oag_weapons::projectile::leach_beam::Kind::Locked,
+        "slot 1 fired its LeachBeam unlocked with a rival dead ahead"
+    );
+    assert_eq!(beam.target, 0, "the beam locked on the wrong craft");
+}

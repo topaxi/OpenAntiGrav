@@ -136,6 +136,32 @@ impl Race {
         }
     }
 
+    /// Gives slot 0 a driver of its own when it is flown by the AI.
+    ///
+    /// `Race::start` seeds a `Driver` for every opponent slot and none for
+    /// slot 0, which has always been a person's. With a person in another slot
+    /// and slot 0 set to `Ai`, [`Self::step_opponents`] drives slot 0 and its
+    /// driver would still be [`oag_ai::Driver::default`]: the plain
+    /// line-follower with its line index at zero, which steers at the piece of
+    /// line it thinks it is on (the windowed-search trap
+    /// [`Self::set_autopilot`] spells out). So the first tick that finds slot 0
+    /// AI-flown and its driver untouched seeds one the way an opponent's is -
+    /// a seed derived from the race seed and a slot number, the craft located
+    /// on the line - here, not at spawn, because `driver.index` is hashed and
+    /// seeding it at spawn would move every one-person race's hash. **Chosen,
+    /// not measured:** the number is [`MAX_SHIPS`], past every grid slot, so
+    /// slot 0's character never repeats an opponent's (slot 0 itself would
+    /// give the seedless default), and the pilot stays the neutral
+    /// [`oag_ai::Pilot::BALANCED`] `Race::start` leaves in `ai_pilots[0]`.
+    pub(super) fn seed_vacated_driver(&mut self, slot: usize) {
+        if slot != 0 || self.sim.world.ships[0].driver != oag_ai::Driver::default() {
+            return;
+        }
+        self.sim.world.ships[0].driver =
+            oag_ai::Driver::for_slot(self.sim.race_seed, MAX_SHIPS as u32);
+        self.locate_player_driver(0);
+    }
+
     /// Puts slot `slot`'s driver where that craft actually is.
     ///
     /// Shared by the operator's flag above and by the **Autopilot pickup**,
@@ -363,6 +389,7 @@ impl Race {
             if !self.sim.world.ships[slot].active || self.sim.world.person_flown(slot) {
                 continue;
             }
+            self.seed_vacated_driver(slot);
 
             // **A wrecked opponent stops driving, and is still stepped.** A single
             // race runs with `Damage` on - see `oag_gameplay::damage_rules` - so

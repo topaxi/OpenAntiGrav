@@ -84,17 +84,29 @@ impl RunStats {
 impl Race {
     /// Whether the race has reached its finish condition.
     ///
-    /// **The player's own condition**, which is what ends the event: the lap
+    /// **Every person's own condition**, which is what ends the event: the lap
     /// counter sets it when they cross the line for the last time. An opponent
     /// crossing ahead of them finishes *that craft* - it takes a
     /// [`oag_race::Standing::finish_tick`] and stops being ordered by distance -
     /// and does not end the race.
     ///
+    /// **With several people, the race ends when each has finished**
+    /// (**chosen, not measured**: the original has one player). A person's
+    /// race ends by crossing the line, by their craft's wreck outside the
+    /// Eliminator, or - in the Eliminator, for all of them at once - by the
+    /// kill target; so a person who finishes first sees the race run on, their
+    /// craft flown by the driver ([`Race::flown_for_the_player`]), until the
+    /// last person is done. With one person this is that person's flag, as it
+    /// always was.
+    ///
     /// A speed lap and a Zone run have no lap target, so this stays `false` for
     /// them however long they run. See [`oag_race::Mode::laps_target`].
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.sim.world.primary_race().finished
+        let world = &self.sim.world;
+        (0..oag_gameplay::MAX_PLAYERS)
+            .filter(|&slot| world.person_flown(slot))
+            .all(|slot| world.race[slot].finished)
     }
 
     /// Whether the world goes on being stepped under the end-race screens: the
@@ -110,7 +122,10 @@ impl Race {
     /// would be an invention. See `docs/gameplay/after-the-finish.md`.
     #[must_use]
     pub fn runs_on_after_the_line(&self) -> bool {
-        self.finished() && self.sim.world.ships[self.player_slot()].standing.finished()
+        self.finished()
+            && (0..oag_gameplay::MAX_PLAYERS)
+                .filter(|&slot| self.sim.world.person_flown(slot))
+                .all(|slot| self.sim.world.ships[slot].standing.finished())
     }
 
     /// Whether the player's wreck in a **Single Race** is what ended the race: the
@@ -238,6 +253,7 @@ impl Race {
                 let ship = &self.sim.world.ships[slot];
                 Craft {
                     slot: u8::try_from(slot).unwrap_or(u8::MAX),
+                    person: self.sim.world.person_flown(slot),
                     place: places[slot],
                     lap: ship.standing.lap,
                     // The racing clock: the board prints this as the craft's

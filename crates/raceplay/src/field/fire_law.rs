@@ -101,7 +101,12 @@ impl Race {
     /// What `WeaponAi_ScanTraffic` (`0x08850d70`) and
     /// `WeaponAi_FindTargetInPath` (`0x08850edc`) measure, for `slot` holding
     /// `weapon`. `None` without a course, or without a row of odds for it.
-    fn fire_situation(&self, slot: usize, weapon: Weapon, aimed: bool) -> Option<Situation> {
+    pub(crate) fn fire_situation(
+        &self,
+        slot: usize,
+        weapon: Weapon,
+        aimed: bool,
+    ) -> Option<Situation> {
         let odds = self.sim.weapon_ai.as_ref()?.get(weapon)?;
         let course = self.sim.course.as_ref()?;
         let length = course.length();
@@ -116,8 +121,8 @@ impl Race {
                 continue;
             }
             let gap = fold(them.standing.distance(course) - my_distance, length);
-            if other == self.player_slot() {
-                player_gap = Some(gap);
+            if self.sim.world.person_flown(other) {
+                player_gap = nearer_person(player_gap, gap);
             }
             if gap > 0.0 && gap_ahead.is_none_or(|best| gap < best) {
                 gap_ahead = Some(gap);
@@ -188,4 +193,21 @@ fn fold(mut gap: f32, length: f32) -> f32 {
         gap += length;
     }
     gap
+}
+
+/// Which of several people's gaps stands for "the player" in
+/// `Situation::player_gap`, given the one already held and the next.
+///
+/// The original has one player and reads its gap only for "is the player
+/// ahead and inside `PLAYER_AHEAD`" (`oag_ai::weapon_ai::Situation::fire_chance`).
+/// With several people, **chosen, not measured:** the nearest one ahead, so
+/// any person inside the range counts as the player being in reach, and when
+/// nobody is ahead the first gap stands. One person gives exactly that
+/// person's gap, signed as it was.
+fn nearer_person(held: Option<f32>, gap: f32) -> Option<f32> {
+    match held {
+        None => Some(gap),
+        Some(held) if gap > 0.0 && (held <= 0.0 || gap < held) => Some(gap),
+        kept => kept,
+    }
 }

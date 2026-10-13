@@ -5,6 +5,7 @@ use super::*;
 fn finisher(slot: u8, place: u8, tick: u64) -> Craft {
     Craft {
         slot,
+        person: slot == 0,
         place,
         lap: 4,
         finish_tick: Some(tick),
@@ -15,6 +16,7 @@ fn finisher(slot: u8, place: u8, tick: u64) -> Craft {
 fn racer(slot: u8, place: u8, lap: u32) -> Craft {
     Craft {
         slot,
+        person: slot == 0,
         place,
         lap,
         finish_tick: None,

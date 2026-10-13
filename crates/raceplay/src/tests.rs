@@ -48,6 +48,7 @@ pub(crate) mod respawn;
 mod run_stats;
 mod scene;
 mod scene_build;
+mod second_person;
 mod shield_flash;
 mod spawn;
 mod spectator_press;

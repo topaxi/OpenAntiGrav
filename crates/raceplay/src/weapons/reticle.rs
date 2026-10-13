@@ -48,10 +48,13 @@ impl Race {
     /// read". This uses "the held weapon locks, and something is lockable",
     /// which is what the weapon plays like.
     pub(crate) fn update_sight(&mut self) {
-        if let Some(held) = self.sight_held() {
+        // The reticle is the primary person's; every other person-flown slot
+        // reads the same lock through [`Race::sight_target`] without one.
+        let primary = self.sim.world.primary_slot();
+        if let Some(held) = self.sight_held(primary) {
             self.view.sight.set_held(held);
         }
-        let target = self.sight_target();
+        let target = self.sight_target(primary);
         let projected = target.and_then(|slot| {
             let world = self.sim.world.ships[slot as usize].physics.body.position;
             // **The title's own virtual screen, not the window's.** The original
@@ -78,15 +81,15 @@ impl Race {
         self.view.sight_state = self.view.sight.update(self.sim.dt, projected);
     }
 
-    /// Which of the two lockable weapons the player is holding, or `None`.
+    /// Which of the two lockable weapons `slot` is holding, or `None`.
     ///
     /// **`None` for a weapon this title's table does not author**, not only for
     /// one that cannot lock: Pure ships no `<Weapon type="LeachBeam">` and no
     /// `leachbeam_sight_*` widgets, so a LeachBeam there has no window to run
     /// and gets no reticle rather than borrowing the Missile's.
-    pub(crate) fn sight_held(&self) -> Option<sight::Held> {
+    pub(crate) fn sight_held(&self, slot: usize) -> Option<sight::Held> {
         let stats = self.sim.weapons.as_ref()?;
-        match self.sim.world.ships[0].pickup.weapon? {
+        match self.sim.world.ships[slot].pickup.weapon? {
             oag_tables::weapons::Weapon::Missile => stats.missile().map(|_| sight::Held::Missile),
             oag_tables::weapons::Weapon::LeachBeam => {
                 stats.leach_beam().map(|_| sight::Held::LeachBeam)
@@ -95,11 +98,15 @@ impl Race {
         }
     }
 
-    /// Which craft the reticle is over, or `None`.
+    /// Which craft `slot`'s lock is over, or `None`: the answer
+    /// `Ship_AcquireLock` would give for the weapon `slot` holds.
     ///
-    /// Split out so the choice can be asserted without a camera. Returns
-    /// `None` whenever the player is holding something that does not lock,
-    /// which is every weapon but the Missile and the LeachBeam.
+    /// **A per-slot simulation quantity**, computed from the world alone for
+    /// whichever person-flown slot asks (the LeachBeam's fire path asks for
+    /// its own shooter), with the reticle reading the primary's. Split out so
+    /// the choice can be asserted without a camera. Returns `None` whenever
+    /// `slot` is holding something that does not lock, which is every weapon
+    /// but the Missile and the LeachBeam.
     ///
     /// # The two arms differ by their window and by where they measure from
     ///
@@ -114,11 +121,11 @@ impl Race {
     /// projectile would be putting a number where the disc authors none. The
     /// two origins are a hull's length apart against a window that starts ten
     /// units out, so nothing visible turns on it.
-    pub(crate) fn sight_target(&self) -> Option<u8> {
-        let held = self.sight_held()?;
+    pub(crate) fn sight_target(&self, slot: usize) -> Option<u8> {
+        let held = self.sight_held(slot)?;
         let stats = self.sim.weapons.as_ref()?;
         let count = self.sim.world.ship_count as usize;
-        let ship = &self.sim.world.ships[0];
+        let ship = &self.sim.world.ships[slot];
         let (origin, min, max) = match held {
             sight::Held::Missile => {
                 let missile = stats.missile()?;
@@ -144,7 +151,7 @@ impl Race {
         };
         oag_weapons::projectile::missile::lock_window(
             &self.sim.world.ships[..count],
-            0,
+            slot as u8,
             origin,
             ship.physics.body.forward(),
             min,

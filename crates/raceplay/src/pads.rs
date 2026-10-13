@@ -221,8 +221,11 @@ impl Race {
         // `update` method on every pad, every tick.
         // **Once a tick, not once a craft.** The timer belongs to the pad, so
         // the first craft through it is the one that runs the countdown and the
-        // other seven read what it left. Slot 0 is stepped first, every tick.
-        if slot == 0 {
+        // other seven read what it left. The primary slot is stepped first,
+        // every tick: the player step runs before the opponents', lowest
+        // person first, and the primary is always a person - slot 0 unless
+        // slot 0 is handed to the AI.
+        if slot == self.sim.world.primary_slot() {
             for left in &mut self.sim.weapon_pad_refresh_left {
                 *left = (*left - self.sim.dt).max(0.0);
             }
@@ -272,15 +275,16 @@ impl Race {
         let Some(table) = oag_weapons::pickup::table_for(weapons, &self.sim.class) else {
             return;
         };
-        // **The `human` column for slot 0 and the `ai` column for the rest**, and
+        // **The `human` column for a person's craft and the `ai` column for the rest**, and
         // the player's is blended with `front`/`back` by their place - which is
         // the original's own arrangement, recovered from `WeaponPickup_Grant`
         // (`0x08861d20`). The AI's column is spent flat, so an opponent's odds do
         // not depend on where it is; the rubber-banding is aimed at the player.
         // See `docs/gameplay/pickups.md`.
-        let who = if slot == 0 {
+        // **Whichever slot a person flies**: their own place, their own column.
+        let who = if self.sim.world.person_flown(slot) {
             oag_weapons::pickup::Driver::Human {
-                place: self.player_place(),
+                place: self.places()[slot],
                 field: self.sim.world.ship_count,
             }
         } else {
