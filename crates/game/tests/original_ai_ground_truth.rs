@@ -263,3 +263,74 @@ fn a_race_without_tables_falls_back_to_this_projects_driver() {
     }
     assert!(!race.original_ai_active());
 }
+
+fn loaded_on(track: &str) -> Option<oag_raceplay::Loaded> {
+    let image = oag_testdata::image("pulse-psp-usa.chd")?;
+    Some(
+        oag_raceplay::load(&oag_raceplay::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::SingleRace,
+            track: Some(format!(r"Data\Environments\{track}\track.vex")),
+            seed: Some(1),
+            ..oag_raceplay::Options::default()
+        })
+        .expect("loading the circuit"),
+    )
+}
+
+/// An opponent field flown by the original driver reads no speed plan, so a
+/// circuit without a fork does not learn one (HD's default start spent 3.0 to
+/// 3.7 s on it).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
+    let Some(loaded) = loaded_on("16_Track") else {
+        return;
+    };
+    let mut race = oag_raceplay::Race::start_deferred(loaded.setup);
+    assert!(race.use_original_ai(None, 1));
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.speed_plan().is_none());
+    assert!(race.plan_of(1).is_none());
+}
+
+/// Whatever else flies, the plans a deferred start learns on its first tick
+/// are the ones `Race::start` learns at once: this project's driver (here via
+/// the fallback), the autopilot, and a circuit with a fork (the route plans
+/// gate which routes the coin offers, for the original field too).
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_deferred_start_learns_the_plans_start_learns() {
+    for (track, original, autopilot) in [
+        ("16_Track", false, false),
+        ("16_Track", true, true),
+        ("05_Track", true, false),
+    ] {
+        let (Some(eager), Some(deferred)) = (loaded_on(track), loaded_on(track)) else {
+            return;
+        };
+        let eager = oag_raceplay::Race::start(eager.setup);
+        let mut lazy = oag_raceplay::Race::start_deferred(deferred.setup);
+        assert!(lazy.speed_plan().is_none(), "{track}: nothing learned yet");
+        if original {
+            assert!(lazy.use_original_ai(None, 1));
+        }
+        lazy.set_autopilot(autopilot);
+        lazy.tick(&PlayerInputs::none());
+        assert!(
+            lazy.speed_plan().is_some(),
+            "{track} {original} {autopilot}"
+        );
+        assert_eq!(lazy.speed_plan(), eager.speed_plan(), "{track}");
+        for slot in 1..8 {
+            assert_eq!(
+                lazy.plan_of(slot),
+                eager.plan_of(slot),
+                "{track} slot {slot}"
+            );
+        }
+    }
+}

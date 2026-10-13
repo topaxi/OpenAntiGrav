@@ -389,7 +389,7 @@ pub fn capture(
     // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
-    let mut race = Race::start(setup);
+    let mut race = Race::start_deferred(setup);
     crate::ai_choice::apply(
         &mut race,
         options.ai_choice,

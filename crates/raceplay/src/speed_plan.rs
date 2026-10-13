@@ -236,6 +236,49 @@ impl Race {
         f(&course, &craft)
     }
 
+    /// Whether anything in this race will read the speed plans: an opponent on
+    /// this project's driver (`--ai ours`, a fallback from
+    /// [`Race::use_original_ai`], a mode the original does not fly), the
+    /// player's autopilot, or a circuit with forks.
+    ///
+    /// **Forks always build them**, though the original driver reads no plan:
+    /// a route is offered to the coin only when its plan verified
+    /// ([`Race::steer_branching`]), and the route plans are learned on the
+    /// ring plan's reference hull, so skipping them would change which way an
+    /// original opponent goes round a fork. A circuit without one pays nothing
+    /// (HD's default track: 3.0 to 3.7 s of a 5.2 to 5.9 s start).
+    fn needs_speed_plans(&self) -> bool {
+        self.sim.world.ship_count >= 2
+            && (self.sim.original_ai.is_none() || self.sim.autopilot || !self.sim.routes.is_empty())
+    }
+
+    /// Learns the ring's, each hull's and the routes' speed plans, once, if
+    /// anything will read them ([`Self::needs_speed_plans`]). Called at the
+    /// head of [`Race::tick`], which is before any craft has moved, so the
+    /// plans are built from the same grid `Race::start` used to build them
+    /// from and are bit-identical to what it built. A caller that reads a plan
+    /// before its first tick (a diagnostic) calls this itself.
+    pub fn ensure_speed_plans(&mut self) {
+        if !self.sim.plans_built && self.needs_speed_plans() {
+            self.learn_speed_plans();
+        }
+    }
+
+    /// [`Self::ensure_speed_plans`] without asking whether anything reads them.
+    pub(super) fn learn_speed_plans(&mut self) {
+        self.sim.plans_built = true;
+        self.sim.speed_plan = self.field_speed_plan();
+        for (route, plan) in self
+            .route_speed_plans()
+            .into_iter()
+            .enumerate()
+            .collect::<Vec<_>>()
+        {
+            self.sim.routes[route].plan = plan;
+        }
+        self.adapt_hull_plans();
+    }
+
     /// The plan the field drives, or `None`: the **reference** every other
     /// hull's plans are re-learned from ([`Self::adapt_hull_plans`]).
     ///

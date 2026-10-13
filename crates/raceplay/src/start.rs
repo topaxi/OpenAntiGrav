@@ -8,7 +8,27 @@ use super::*;
 use log::{debug, info, warn};
 
 impl Race {
-    /// Starts a race: one ship, on the racing line, at the start of the spline.
+    /// Starts a race and learns its speed plans at once: [`Self::start_deferred`]
+    /// then [`Self::learn_speed_plans`]. What every caller that flies this
+    /// project's driver (the ground truths that measure it, the headless
+    /// simulator) wants, and what `start` always did.
+    #[must_use]
+    pub fn start(setup: Setup) -> Self {
+        let mut race = Self::start_deferred(setup);
+        race.learn_speed_plans();
+        race
+    }
+
+    /// Starts a race: one ship, on the racing line, at the start of the spline,
+    /// **without learning the speed plans**.
+    ///
+    /// The plans are this project's driver's (`oag_ai::plan`) and cost seconds
+    /// on a long circuit (HD's default: 3.0 to 3.7 s of a 5.2 to 5.9 s start,
+    /// release). The composition root, which decides whose driver flies only
+    /// after the race exists, starts here, calls [`Self::use_original_ai`], and
+    /// lets the head of [`Self::tick`] learn them
+    /// ([`Self::ensure_speed_plans`]) only if something will read them.
+    ///
     ///
     /// The mass is copied into the rigid body because the force law reads
     /// `handling.physical.mass` while the integrator reads `body.mass`. They are one
@@ -18,7 +38,7 @@ impl Race {
     /// The inertia is the title's box tensor (`crate::launch_hover::craft_inertia`, Pulse's
     /// [`box_inertia`] for `None`); see that function for why a derived tensor is used at all.
     #[must_use]
-    pub fn start(setup: Setup) -> Self {
+    pub fn start_deferred(setup: Setup) -> Self {
         let Setup {
             mode,
             eliminator_kill_target,
@@ -440,7 +460,7 @@ impl Race {
             &collision,
             handling.antigrav.ride_height,
         );
-        let mut race = Self {
+        let race = Self {
             sim: RaceSim {
                 racing_line: line,
                 ai_order: order,
@@ -448,6 +468,7 @@ impl Race {
                 // Built below, once the field is seated: see
                 // `Race::field_speed_plan`.
                 speed_plan: None,
+                plans_built: false,
                 plan_reference: None,
                 hull_plans: Vec::new(),
                 ship_plan: [None; oag_gameplay::MAX_SHIPS],
@@ -708,16 +729,6 @@ impl Race {
         // original never holds anything in the pickup slot through the
         // countdown; granting it at tick 0 put a HUD icon on screen during
         // those 272 ticks that the disc never draws.
-        race.sim.speed_plan = race.field_speed_plan();
-        for (route, plan) in race
-            .route_speed_plans()
-            .into_iter()
-            .enumerate()
-            .collect::<Vec<_>>()
-        {
-            race.sim.routes[route].plan = plan;
-        }
-        race.adapt_hull_plans();
         race
     }
 }

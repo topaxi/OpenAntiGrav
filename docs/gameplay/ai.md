@@ -603,15 +603,29 @@ most one respawn a track, none on `05` and `13`. HD's default track: none for
 either. Whether `13_Track` and `05_Track` are a mapping error in the port or
 circuits the original's driver also loses is open.
 
-**Not wired, said so:** the game has no second human in a race today
-(`World::human_slots` is slot 0 outside tests and the headless simulator), so
-the original field treats every slot from 1 as an opponent; a split-screen mode
-would have to filter humans out of `original_ai_begin_tick` first. The speed
-plan this project's driver learns at every race start (`Race::start`) is still
-built when the original flies: skipping it needs a `Setup` field and handling
-for `--autopilot`, which drives with the same plan, and for the fallback.
-Measured release cost of the field plan alone: Pulse `16_Track` 0.5 to 1.0 s of
-a 1.3 to 1.9 s headless start, HD's default track 3.0 to 3.7 s of 5.2 to 5.9 s.
+**More than one human keeps this project's driver, logged.** The game has no
+second human in a race today (`World::human_slots` is slot 0 outside tests and
+the headless simulator). The original field's slot, place and rubber-band
+handling with several humans is unread, and filtering slots out of
+`original_ai_begin_tick` is a design question, so `ai_choice` declines
+(`Reason::MultipleHumans`) until it is answered.
+
+**The speed plan is learned only when something reads it (2026-10-13).** This
+project's driver follows a speed plan learned at the start (`oag_ai::plan`), and
+the original driver reads none. `Race::start_deferred` skips it and the head of
+`Race::tick` learns it (`Race::ensure_speed_plans`) when an opponent flies this
+project's driver (`--ai ours`, a fallback, multiplayer), when the player's
+autopilot is on, or when the circuit has a fork. `Race::start` learns it at once
+as before, so every ground truth that measures this project's driver is
+unchanged; a test proves the lazily learned plans equal `start`'s. **A fork
+always learns them**, though the original reads no plan: a route is offered to
+the coin only if its plan verified, and the route plans are learned on the ring
+plan's reference hull, so skipping them would change which way an original
+opponent goes round a fork. That cost stays on forked circuits (Pulse `05_Track`,
+`07_Track` and others) and is open. Release start (`--race --ticks 1`, load 10 to
+20, three runs each), `--ai ours` (the old cost) against `--ai original`:
+Pulse `16_Track` 2.4 to 2.9 s against 0.65 s, HD's default track 6.7 to 8.1 s
+against 1.5 s.
 
 ### HD: the same driver, five gated branches (2026-10-12)
 
