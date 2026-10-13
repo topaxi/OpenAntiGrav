@@ -9,7 +9,8 @@
 ## Frame structure
 
 Rendering and simulation are decoupled. The simulation runs at a fixed rate; the
-renderer runs as fast as the display allows and interpolates.
+renderer runs as fast as the display allows and draws between the last two
+ticks.
 
 ```
 loop {
@@ -18,19 +19,29 @@ loop {
 
     ticks = clock.advance(elapsed_nanos)      // 0, 1, or several
     for _ in 0..ticks {
-        previous = world.clone()               // for interpolation
-        world.tick(&input_snapshot)
+        race.tick(&input_snapshot)             // first keeps this tick's draw poses
     }
 
-    alpha = clock.interpolation_alpha()
-    renderer.draw(&previous, &world, alpha)
+    alpha = if paused { 1.0 } else { clock.interpolation_alpha() }
+    race.set_draw_alpha(alpha)                 // the draw reads poses blended by it
+    renderer.draw(&race)
+    race.set_draw_alpha(1.0)
 }
 ```
+
+`World` is never cloned for this: each tick path copies only the poses a draw
+reads (the camera, every craft, every projectile) into `RaceView`, outside the
+state hash, and the race's camera and model-matrix accessors blend them with
+the current tick's. Captures and traces advance one tick per drawn frame and
+draw at `1.0`, the tick exactly. See [drawing between
+ticks](../rendering/between-ticks.md) for what is blended, what stays stepped
+and the snaps on a cut or a respawn.
 
 Three consequences worth stating explicitly:
 
 - **`ticks` can be zero.** On a 144 Hz display with a 60 Hz simulation, most
-  frames simulate nothing and only interpolate.
+  frames simulate nothing and only draw a new point between the same two
+  ticks.
 - **`ticks` can be several,** after a stall. `TickClock` caps the burst at eight
   so one long pause does not cascade into a freeze.
 - **`world.tick` takes an input snapshot, not the input system.** That is what

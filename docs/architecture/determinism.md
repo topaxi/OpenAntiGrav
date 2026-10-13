@@ -71,8 +71,11 @@ below).
 - **Fixed timestep, always.** The simulation never sees a variable delta. A
   variable timestep makes physics frame-rate dependent, which breaks every form
   of verification.
-- Rendering interpolates between the last two states using
-  `TickClock::interpolation_alpha`.
+- The window draws a race between its last two ticks by
+  `TickClock::interpolation_alpha`, from a pose history the race keeps outside
+  `World` and outside the state hash, so nothing drawn can reach the
+  simulation; captures and traces draw each tick exactly. See
+  [drawing between ticks](../rendering/between-ticks.md).
 - The accumulator carries integer nanoseconds, not a float. That bounds the
   drift rather than removing it: `1_000_000_000 / 60` truncates, so the clock
   gains one tick every 4.8 days of continuous simulation. The figure is pinned
@@ -117,7 +120,22 @@ catch-up when a frame overruns.
 So 60 Hz is the rate the original was *authored against*, not the rate it
 *steps at*. We fix the step anyway, deliberately, because determinism is worth
 more to this project than frame-for-frame agreement under load. That decision
-and its costs are [ADR-0007](adr/0007-fixed-timestep-vs-original.md).
+and its costs are [ADR-0007](adr/0007-fixed-timestep-vs-original.md). A fixed
+tick is also what any lockstep or rollback netcode requires; see
+[networking](../networking/README.md).
+
+### The other titles
+
+None of the originals ticks at a fixed rate. Confidence is as on each cited page.
+
+| Title | What it runs at | Page |
+| --- | --- | --- |
+| Pulse (PSP) | Variable `dt` clamped to `[0, 0.067]`; one vblank (~59.94 Hz) racing, two in menus. Measured | [frame pacing](../psp/frame-pacing.md) |
+| Pulse (PS2) | PAL is 50 Hz interlaced, and a first-boot screen asks whether the TV does 60 Hz. No race tick rate is recorded as a number; one capture note says the physics tick runs at half PCSX2's verified-frame rate | [craft update](../ghidra/functions/ps2-pulse-eu/craft-update.md), [disc layout](../ps2/pulse-disc-layout.md) |
+| Pure (PSP) | Variable: `dt * 60` read `1.0112` on a sample | [AI controls](../ghidra/functions/psp-pure-usa/ai-controls.md) |
+| HD / Fury (PS3) | Variable `dt` with a 60 Hz sub-step, `(int)(dt * 59.9999924)` steps a frame; the craft clock advances by each frame's own delta | [shield](../ghidra/functions/ps3-hdfury-eu/shield.md), [HD handling](../physics/hd-handling-ground-truth.md) |
+| 2048 (Vita) | A race runs at 30 fps | [AI controls](../ghidra/functions/vita-2048-eu-v104/ai-controls.md) |
+| Omega (PS4) | Not measured | - |
 
 Two rules follow, and they are easy to get wrong:
 

@@ -6,21 +6,24 @@
 
 use super::super::*;
 
-/// The previous tick's camera and model matrices - what every drawable's
-/// `prev_mvp` is measured against, and therefore what the velocity buffer
-/// means.
+/// The previous drawn frame's camera and model matrices - what every
+/// drawable's `prev_mvp` is measured against, and therefore what the velocity
+/// buffer means.
 ///
-/// Keyed by the simulation tick, not the frame, which is the design's
-/// non-obvious decision (`docs/rendering/motion-blur.md`): frames can outrun
-/// the fixed 60 Hz simulation, and consecutive frames of one tick re-render
-/// identical state. Snapshotting per frame would make those repeats read as
-/// zero motion and pulse the blur off; promoting the snapshot only when the
-/// tick advances makes every frame of a tick measure the same one-tick
-/// travel. A camera or craft that genuinely holds still simply snapshots
-/// equal matrices - zero velocity with no special case.
+/// Keyed by the simulation tick **and** the draw alpha the frame was drawn
+/// at (`docs/rendering/motion-blur.md`). A frame that draws a tick exactly -
+/// every capture, a paused race, the warmup - has alpha `1.0`, so for those
+/// the key is the tick alone: repeats of one tick keep measuring the same
+/// one-tick travel instead of reading as zero motion and pulsing the blur
+/// off, which is why this was tick-keyed before the window drew between ticks.
+/// The window now draws each frame at its own alpha (`crate::between_ticks`),
+/// so every frame is a new pose and promotes: the velocity is the travel
+/// across the real frame delta, and the shutter a fraction of it. A camera or
+/// craft that genuinely holds still simply snapshots equal matrices - zero
+/// velocity with no special case.
 #[derive(Debug)]
 pub(super) struct MotionState {
-    tick: u64,
+    key: FrameKey,
     /// [`Race::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
     /// read the jump as motion.
     cuts: u32,
@@ -83,6 +86,23 @@ impl Snapshot {
     }
 }
 
+/// What a frame's poses are a function of: [`Race::motion_tick`] and the bits
+/// of [`Race::draw_alpha`]. Two frames with the same key draw the same poses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FrameKey {
+    tick: u64,
+    alpha: u32,
+}
+
+impl FrameKey {
+    fn of(race: &Race) -> Self {
+        Self {
+            tick: race.motion_tick(),
+            alpha: race.draw_alpha().to_bits(),
+        }
+    }
+}
+
 impl MotionState {
     /// Folds this frame in and returns the snapshot to measure against.
     pub(super) fn advance(
@@ -99,17 +119,17 @@ impl MotionState {
             None => {
                 let now = Snapshot::take(race, cannon, view_projection, drawn);
                 *state = Some(Self {
-                    tick: race.motion_tick(),
+                    key: FrameKey::of(race),
                     cuts: race.camera_cuts(),
                     prev: now.clone(),
                     cur: now.clone(),
                 });
                 now
             }
-            Some(state) if state.tick != race.motion_tick() => {
+            Some(state) if state.key != FrameKey::of(race) => {
                 let now = Snapshot::take(race, cannon, view_projection, drawn);
                 state.prev = std::mem::replace(&mut state.cur, now);
-                state.tick = race.motion_tick();
+                state.key = FrameKey::of(race);
                 // **A cut is not motion.** On the tick the picture jumps to another shot - a
                 // flyby cut, the flyby ending, the destroy or spectator camera, a respawn - the
                 // camera's "previous" is taken from the new shot, so the blur measures no camera
@@ -124,8 +144,9 @@ impl MotionState {
                 }
                 state.prev.clone()
             }
-            // The same tick re-rendered - a frame rate above 60 Hz - keeps
-            // measuring against the same previous tick.
+            // The same tick re-rendered at the same alpha - a capture's
+            // bench repeat, a paused race above 60 Hz - keeps measuring
+            // against the same previous pose.
             Some(state) => state.prev.clone(),
         }
     }
@@ -499,5 +520,24 @@ mod advance_tests {
             at(0.0),
             "one tick re-rendered keeps its previous"
         );
+    }
+
+    #[test]
+    fn frames_drawn_between_ticks_measure_against_the_frame_before() {
+        let cell = std::cell::RefCell::new(None);
+        let mut race = race();
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        race.set_draw_alpha(0.25);
+        MotionState::advance(&cell, &race, &CannonDraw::default(), at(0.0), 1);
+        race.set_draw_alpha(0.5);
+        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), at(1.0), 1);
+        assert_eq!(
+            prev.view_projection,
+            at(0.0),
+            "a new alpha inside one tick is a new frame to measure from"
+        );
+        race.set_draw_alpha(0.75);
+        let prev = MotionState::advance(&cell, &race, &CannonDraw::default(), at(2.0), 1);
+        assert_eq!(prev.view_projection, at(1.0));
     }
 }

@@ -696,7 +696,7 @@ impl Race {
         modelled: impl Fn(oag_tables::weapons::Weapon) -> bool,
     ) -> Vec<oag_mesh::mesh::GpuVertex> {
         let mut vertices = Vec::new();
-        for projectile in &self.sim.world.projectiles.slots {
+        for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             let Some(kind) = projectile.kind else {
                 continue;
             };
@@ -704,7 +704,7 @@ impl Race {
                 continue;
             }
             vertices.extend(exhaust::sprite(
-                projectile.position,
+                self.projectile_position_between(slot, projectile),
                 right,
                 up,
                 PROJECTILE_SPRITE_HALF_SIZE,
@@ -864,60 +864,76 @@ impl Race {
             .enumerate()
             .filter(|(_, projectile)| projectile.kind == Some(kind))
             .map(|(slot, projectile)| {
-                let forward = projectile.velocity.normalize_or_zero();
-                if forward == Vec3::ZERO {
-                    // Every weapon that reaches this branch lays rather than
-                    // flies (`oag_weapons::projectile::mine::at_rest`). On
-                    // Pulse the pose is the executable's own, measured - see
-                    // `laid`; elsewhere `orientation` is the frozen pose it
-                    // landed with, chosen, not measured.
-                    return laid::matrix(
-                        slot,
-                        projectile,
-                        self.view.pulse_laid_pose,
-                        self.view.laid_pose_scaled,
-                    );
-                }
-                // `surface` is the normal the projectile rides - the
-                // original's own `n` (`rocket+0x100`), seeded to world up at
-                // spawn. It, then world up, then any perpendicular, so a
-                // projectile flying along one of them still gets a basis.
-                if kind == oag_tables::weapons::Weapon::Shuriken {
-                    // `Shuriken_Update` (`0x08877bdc`) keeps the carried
-                    // normal exact as row 1 and flattens the velocity
-                    // against it (`vdot`/`vscl`/`vsub`, `0x08877f6c`), so a
-                    // blade lies in its surface even when it flies off it.
-                    let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
-                    let flat = forward - up * forward.dot(up);
-                    if let Some(front) = flat.try_normalize() {
-                        let side = up.cross(front);
-                        return Mat4::from_cols(
-                            side.extend(0.0),
-                            up.extend(0.0),
-                            front.extend(0.0),
-                            projectile.position.extend(1.0),
-                        );
-                    }
-                }
-                let reference = [projectile.surface, Vec3::Y]
-                    .into_iter()
-                    .find(|axis| forward.dot(*axis).abs() < 0.999)
-                    .unwrap_or_else(|| forward.any_orthonormal_vector());
-                // `reference x forward`, then `forward x side`: a rotation
-                // (determinant `+1`), mapping the model's own `+X` onto
-                // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
-                // `vcrsp.t` at `0x0885d988`). The other order is a
-                // reflection, and drew every one of these mirrored until
-                // 2026-09-24.
-                let side = reference.cross(forward).normalize_or_zero();
-                let up = forward.cross(side);
-                Mat4::from_cols(
-                    side.extend(0.0),
-                    up.extend(0.0),
-                    forward.extend(0.0),
-                    projectile.position.extend(1.0),
+                self.projectile_between(
+                    slot,
+                    projectile,
+                    self.projectile_matrix(kind, slot, projectile),
                 )
             })
             .collect()
+    }
+
+    /// One live projectile's model matrix as this tick leaves it, never
+    /// blended: [`Self::projectile_model_matrices`]'s per-slot body, shared
+    /// with the pose history in `between_ticks`.
+    pub(crate) fn projectile_matrix(
+        &self,
+        kind: oag_tables::weapons::Weapon,
+        slot: usize,
+        projectile: &oag_weapons::projectile::Projectile,
+    ) -> Mat4 {
+        let forward = projectile.velocity.normalize_or_zero();
+        if forward == Vec3::ZERO {
+            // Every weapon that reaches this branch lays rather than
+            // flies (`oag_weapons::projectile::mine::at_rest`). On
+            // Pulse the pose is the executable's own, measured - see
+            // `laid`; elsewhere `orientation` is the frozen pose it
+            // landed with, chosen, not measured.
+            return laid::matrix(
+                slot,
+                projectile,
+                self.view.pulse_laid_pose,
+                self.view.laid_pose_scaled,
+            );
+        }
+        // `surface` is the normal the projectile rides - the
+        // original's own `n` (`rocket+0x100`), seeded to world up at
+        // spawn. It, then world up, then any perpendicular, so a
+        // projectile flying along one of them still gets a basis.
+        if kind == oag_tables::weapons::Weapon::Shuriken {
+            // `Shuriken_Update` (`0x08877bdc`) keeps the carried
+            // normal exact as row 1 and flattens the velocity
+            // against it (`vdot`/`vscl`/`vsub`, `0x08877f6c`), so a
+            // blade lies in its surface even when it flies off it.
+            let up = projectile.surface.try_normalize().unwrap_or(Vec3::Y);
+            let flat = forward - up * forward.dot(up);
+            if let Some(front) = flat.try_normalize() {
+                let side = up.cross(front);
+                return Mat4::from_cols(
+                    side.extend(0.0),
+                    up.extend(0.0),
+                    front.extend(0.0),
+                    projectile.position.extend(1.0),
+                );
+            }
+        }
+        let reference = [projectile.surface, Vec3::Y]
+            .into_iter()
+            .find(|axis| forward.dot(*axis).abs() < 0.999)
+            .unwrap_or_else(|| forward.any_orthonormal_vector());
+        // `reference x forward`, then `forward x side`: a rotation
+        // (determinant `+1`), mapping the model's own `+X` onto
+        // `up x forward` - `Rocket_Update`'s own row 0 (`n x f`,
+        // `vcrsp.t` at `0x0885d988`). The other order is a
+        // reflection, and drew every one of these mirrored until
+        // 2026-09-24.
+        let side = reference.cross(forward).normalize_or_zero();
+        let up = forward.cross(side);
+        Mat4::from_cols(
+            side.extend(0.0),
+            up.extend(0.0),
+            forward.extend(0.0),
+            projectile.position.extend(1.0),
+        )
     }
 }

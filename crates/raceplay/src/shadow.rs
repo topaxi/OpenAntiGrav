@@ -45,7 +45,9 @@ impl Race {
             if !ship.active {
                 continue;
             }
-            let body = &ship.physics.body;
+            // The body as this draw places it, so the blob stays under a hull
+            // drawn between ticks - see `between_ticks`.
+            let body = &self.body_between(slot);
             let up = body.up();
             // The craft's own hover target - the height its spring holds it
             // at, and so the height its shadow is full strength at. The disc's

@@ -7,7 +7,7 @@ use oag_gameplay::PlayerInputs;
 
 /// A race with one live Cannon round fired from slot 0's own left side,
 /// `ticks` ticks after the shot, the shooter pinned at the origin.
-fn one_round(ticks: usize) -> Race {
+pub(super) fn one_round(ticks: usize) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());

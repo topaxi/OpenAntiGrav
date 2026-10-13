@@ -159,6 +159,8 @@ impl Race {
     /// opponents flying on, shots in flight, the engines' trails) is left
     /// standing as before.
     pub fn tick_cosmetics(&mut self) {
+        // Before the destroy camera eases - see `between_ticks`.
+        self.capture_poses();
         let dt = self.sim.dt;
         self.view.shake.advance(dt);
         self.advance_bomb_blast_models(dt);

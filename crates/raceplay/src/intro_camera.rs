@@ -295,6 +295,8 @@ impl Race {
     /// One flyby tick, in place of [`Race::tick`]. `skip_held` is whether the player holds
     /// [`Button::Cross`].
     pub fn tick_intro(&mut self, inputs: &PlayerInputs) {
+        // Before the flyby moves the camera - see `between_ticks`.
+        self.capture_poses();
         let held = inputs
             .get(self.sim.world.primary_slot())
             .buttons

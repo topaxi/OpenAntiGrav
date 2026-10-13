@@ -143,7 +143,7 @@ impl Scene {
         // to cover trackside objects *moving* as well as surfaces scrolling. A
         // still-frame comparison wants a chosen time, not a freeze; a stale
         // `false` in a settings file wants nothing at all.
-        let seconds = anim_seconds.unwrap_or(race.sim.world.tick as f32 / 60.0);
+        let seconds = anim_seconds.unwrap_or_else(|| race.clock_seconds());
         self.anim_clock.set(seconds);
         // Fog, sampled where the eye is. `oag_vex::fog::sample` reimplements
         // `FogCube_Sample`: the camera is transformed into the volume's space,
@@ -644,7 +644,7 @@ impl Scene {
             if race.hd_trail_active() {
                 race.extend_hd_trail_vertices(trail, slot);
             } else {
-                exhaust.extend_trail_vertices(trail, right, up);
+                exhaust.extend_trail_vertices(trail, race.trail_head_of(slot), right, up);
             }
         }
         // Only the billboard *fallback*, per kind: a body whose own model did
