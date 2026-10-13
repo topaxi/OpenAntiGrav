@@ -836,6 +836,48 @@ fn omega_race_box_offers_the_discs_own_players_and_cuts() {
     );
 }
 
+/// The lists 2048 borrows (`oag_title::LocalSplit::Borrowed`) are HD's own, which Omega authors
+/// identically: a borrowed constant that drifted from what the disc authors would fail here.
+/// 2048 has no race box, so its rows are the borrowed lists with 2048's own words for the
+/// ids (`RB_HORIZ` and `RB_VERT` are in its English table, the same text HD's carries).
+#[test]
+#[ignore = "needs the decrypted 2048 package in data/extracted/vita/ and an HD disc"]
+fn wipeout_2048_borrows_the_lists_hd_and_omega_author() {
+    let Some(hd_path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let Some(oag_title::LocalSplit::Borrowed(borrowed)) = oag_2048::TITLE
+        .front_end
+        .and_then(|front_end| front_end.local_split)
+    else {
+        panic!("2048 borrows HD's lists");
+    };
+    let hd = shell(&hd_path);
+    assert_eq!(hd.race_setup.players, borrowed.players);
+    assert_eq!(hd.race_setup.cuts, borrowed.cuts);
+
+    let shell = shell(&path);
+    let setup = &shell.race_setup;
+    assert_eq!(setup.players, borrowed.players);
+    assert_eq!(setup.cuts, borrowed.cuts);
+    let shown: Vec<(String, String)> = setup
+        .cut_choices(&shell.strings)
+        .into_iter()
+        .map(|choice| (choice.value, choice.label))
+        .collect();
+    assert_eq!(
+        shown,
+        [
+            ("RB_HORIZ".to_string(), "HORIZONTAL".to_string()),
+            ("RB_VERT".to_string(), "VERTICAL".to_string())
+        ],
+        "2048's own English table's words"
+    );
+}
+
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn the_weapons_row_offers_the_discs_own_two_states() {

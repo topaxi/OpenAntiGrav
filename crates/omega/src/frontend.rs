@@ -238,7 +238,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_setup: None,
     // The race box's own two split lists, read from `data09`'s copy (HD's `NumberOfPlayers`
     // and `SplitScreen`, same ids and English text): see `names::RACEBOX_DEFINITION`.
-    local_split: Some(names::RACEBOX_DEFINITION),
+    local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     preview_meshes: false,
     ship_preview_hull: None,
     circuit_models: &CIRCUIT_MODELS,

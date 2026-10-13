@@ -409,7 +409,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_setup: None,
     // The race box's own two split lists, read from `DATA00`'s copy (the same file in
     // `DATA05` and `DATA06`): see `names::RACEBOX_DEFINITION`.
-    local_split: Some(names::RACEBOX_DEFINITION),
+    local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
     // which HD's `screen.xml`s name and no HD archive carries. The craft the
     // original draws on `Team Selection` is the race hull, named here, and

@@ -49,7 +49,7 @@ impl Session {
         self.stalled = true;
         info!("disc image: {source}");
 
-        let mut prepared = {
+        let prepared = {
             let Some(pending) = self.pending.as_ref() else {
                 return Ok(());
             };
@@ -66,13 +66,6 @@ impl Session {
             }
         };
         self.pending = None;
-        // 2048's grid carries the split entry as a tile, which the menu tree's own trim
-        // (`drop_split_screen_row`) does not reach.
-        oag_game::split_screen::trim_tiles(
-            &mut prepared.boot_shell.extra_tiles,
-            prepared.shell.title,
-            self.gpu.device_type,
-        );
         self.cli_foreign_track = prepared.race_options.foreign_track.clone();
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;

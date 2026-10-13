@@ -96,10 +96,6 @@ pub enum Launch {
     RaceBox,
     /// This build's own RACE REMIX page (ADR-0034).
     Remix,
-    /// This build's split-screen join screen (`oag_ui_screens::join`). 2048 authors no
-    /// local split in its front end (its `GameModeChoice` tiles are single player, online,
-    /// ad-hoc and cross-play), so the entry is ours, **chosen, not measured**.
-    SplitScreen,
 }
 
 /// One of this build's own tiles on `GameModeChoice`, in the terms the
@@ -111,16 +107,12 @@ pub struct ExtraTile {
     pub launch: Launch,
 }
 
-/// Where the three extra tiles sit, in the order [`Frontend::set_extra_tiles`]
+/// Where the two extra tiles sit, in the order [`Frontend::set_extra_tiles`]
 /// was given them. **Chosen, not measured** - see the module docs. The
 /// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's
 /// three columns that start at x=228.
-pub const EXTRA_TILES: [[f32; 4]; 3] = [
-    [16.0, 110.0, 122.0, 96.0],
-    [16.0, 226.0, 122.0, 96.0],
-    [16.0, 342.0, 122.0, 96.0],
-];
+pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 110.0, 122.0, 96.0], [16.0, 226.0, 122.0, 96.0]];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
 /// been chosen, and what a confirmed tap asked the composition root for.

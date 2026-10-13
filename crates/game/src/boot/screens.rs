@@ -571,8 +571,8 @@ pub(super) fn read_race_setup(
     report: &mut Vec<String>,
 ) -> RaceSetup {
     let mut setup = read_setup_lists(archives, front_end.race_setup, report);
-    if let Some(name) = front_end.local_split {
-        match read_xml(archives, name) {
+    match front_end.local_split {
+        Some(oag_title::LocalSplit::Authored(name)) => match read_xml(archives, name) {
             Ok(xml) => {
                 setup.players = list_entries(&xml, "NumberOfPlayers")
                     .into_iter()
@@ -590,7 +590,17 @@ pub(super) fn read_race_setup(
             Err(error) => report.push(format!(
                 "{name}: {error:#} - no PLAYERS or SPLIT SCREEN row values"
             )),
+        },
+        Some(oag_title::LocalSplit::Borrowed(borrowed)) => {
+            setup.players = borrowed.players.iter().map(ToString::to_string).collect();
+            setup.cuts = borrowed.cuts.iter().map(ToString::to_string).collect();
+            report.push(format!(
+                "split setup borrowed from {} (this title authors none): NumberOfPlayers {:?}, \
+                 SplitScreen {:?}",
+                borrowed.from, setup.players, setup.cuts
+            ));
         }
+        None => {}
     }
     setup
 }
