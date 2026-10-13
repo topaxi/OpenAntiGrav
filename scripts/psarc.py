@@ -101,7 +101,15 @@ class Reader:
                 continue
             chunk = self.f.read(n)
             # A block is stored raw whenever deflating it would not have paid.
-            out += zlib.decompress(chunk) if chunk[:1] == b"\x78" else chunk
+            # A short raw block can still begin with 0x78 by coincidence; a
+            # real zlib stream always inflates, so a failed inflate means the
+            # bytes were raw (as oag_formats::psarc::Directory::read_entry does).
+            if chunk[:1] == b"\x78":
+                try:
+                    chunk = zlib.decompress(chunk)
+                except zlib.error:
+                    pass
+            out += chunk
         return bytes(out[: e["size"]])
 
     def _read_manifest(self):
