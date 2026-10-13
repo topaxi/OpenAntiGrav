@@ -347,7 +347,9 @@ fn hd_draws_a_reticle_in_its_authored_split_view() {
 }
 
 /// `(sprites, labels, widest, lowest)` of a composed layout's sprites.
-fn extent(layout: &oag_hud::Layout) -> (usize, usize, f32, f32) {
+type Extent = (usize, usize, f32, f32);
+
+fn extent(layout: &oag_hud::Layout) -> Extent {
     let mut wide = 0.0_f32;
     let mut low = 0.0_f32;
     for sprite in &layout.sprites {
@@ -377,7 +379,7 @@ fn composed(archives: &mut oag_assets::Archives, root: &str) -> oag_hud::Compose
 #[test]
 #[ignore = "needs the HD image and the extracted Vita and PS4 packages"]
 fn hd_2048_and_omega_ship_the_same_split_layouts_540_apart() {
-    let mut found: Vec<(&str, [(usize, usize, f32, f32); 4])> = Vec::new();
+    let mut found: Vec<(&str, [Extent; 4])> = Vec::new();
     let hd_roots: Vec<String> = oag_hd::hud::SPLIT
         .arcade
         .iter()
