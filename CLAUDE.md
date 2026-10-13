@@ -28,7 +28,7 @@ just              # fmt-check + lint + test + check-docs + check-deps + check-un
 just fmt          # cargo fmt --all
 just lint         # cargo clippy --workspace --all-targets -- -D warnings
 just test         # cargo nextest run --workspace --tests --cargo-profile quick (our crates at opt-level 0, examples not built)
-just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated
+just test-data    # also runs #[ignore]d ground-truth tests that need data/images/ populated; skips test binaries that passed unchanged, `--full` runs all
 just gate-affected # `just` with every check in full but only the tests a branch can reach (scripts/affected.py) - a drive member's gate
 just test-data-affected # `just test-data` narrowed the same way; the per-test ceiling holds, the suite ceiling is the full run's
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
@@ -63,6 +63,25 @@ need a real disc image under `data/images/`; they never run in CI, only via `jus
 fails when the suite exceeds 450s or any single test exceeds 300s.** Both are durations
 *under load*: a test competing with 5,800 others for the cores reports well over its
 isolated cost, so these gate gross regressions rather than drift.
+
+**`just test-data` skips a test binary that passed unchanged (2026-10-13).**
+`scripts/test-data.py` records every test binary whose tests all passed in
+`target/test-data-pass.json`, with a hash of its bytes, its package's executables, its
+crate's `tests/*.rs`, `data/` (size and mtime), the repository files tests read
+(`REPO_INPUTS`) and the environment variables crates read. The next run skips any binary
+whose hash still matches, and says so: every skipped binary is listed by name before and
+after the run, in the log as well as the terminal (`test-data: PARTIAL RUN: SKIPPED ...`),
+and none is ever counted as passed. **`just test-data --full`** (or
+`OAG_TEST_DATA_FULL=1`) runs everything and is what the suite ceiling is judged on: on a
+run with skips, `check-test-budget` holds each test that ran to its own ceiling and leaves
+the total alone. It builds with `OAG_GIT_HASH=test-data` so the commit hash `oag-game`
+embeds does not change every binary per commit; `oag-game` recompiles once (about 45 s)
+when a plain dev build such as `just play` and `just test-data` alternate. Measured on
+2026-10-13: no change 2.6 s; a string change in `oag-game` reran its 7 binaries (1,936
+tests, 387 s at load 15-23); a string change in `oag-texture` relinked 31 crates but only
+8 binaries changed bytes (`oag-texture::it` and `oag-game`'s 7), 435 s. A rebuild of
+unchanged source is byte-identical, so a change the optimiser discards skips everything.
+`oag-game`'s own binaries are most of what any run still pays.
 
 When it fires, **stop and re-profile the tail before adding more tests** - that is what
 the ceiling is for, and it is not a formality to baseline past:
