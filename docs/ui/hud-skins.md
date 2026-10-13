@@ -135,7 +135,7 @@ compared. Confidence 40.
 | `wo3_hud` | 56 files, reachable | 68 files, reachable | 58 files, **not reachable** | the same five |
 | `2048_hud` | - | 148 files (incl. `_hd`, `_vr`, `_vr_ext`, split-screen variants) | 82 files, **the played HUD** | all, plus detonator, zombie, zone battle, checkpoint |
 | `duel_hud` | 10 | 20 | 10 | Duel (no retro variant) |
-| `splitscreen_hud`, `splitscreenzone_hud` | 31, 10 | 31, 16 | 31, 16 | two-viewport play, which this build has no mode for |
+| `splitscreen_hud`, `splitscreenzone_hud` | 31, 10 | 31, 16 | 31, 16 | two-viewport play: HD's `splitscreen_hud` is read for a two-view race, see [split-screen.md](../rendering/split-screen.md#hud); the rest not wired |
 
 Counts are archive entries from the lead's listings
  and HD's PSARC listings; Omega counts are

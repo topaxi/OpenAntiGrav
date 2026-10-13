@@ -3,14 +3,17 @@
 `oag-game --race --players N` (1 to 8, default 1) draws one race as `N` views of
 one window: one `RaceSim`, one 60 Hz tick, `N` cameras. **An enhancement of this
 project's, not a recovery**: the PS2 front end authors split-screen race rows
-(`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`) and the HUD sets carry `splitscreen_hud`
-variants, but no capture of the original's split screen has been read, so every
-choice below is **chosen, not measured** and carries no confidence score.
+(`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`) and HD, 2048 and Omega ship `splitscreen_hud`
+layouts (see "HUD" below), but no capture of the original's split screen has been
+read, so every choice below is **chosen, not measured** and carries no confidence
+score, except where a section says it is the disc's own data.
 
 Code: `crates/render/src/viewport.rs` (layout), `crates/raceplay/src/viewpoint.rs`
 (cameras), `crates/raceplay/src/scene/viewports.rs` (drawing),
-`crates/game/src/split_screen.rs` (the flag). Tests: the three modules' unit tests
-and the disc-backed `crates/game/tests/split_screen_ground_truth.rs`.
+`crates/game/src/split_screen.rs` (the flag), `crates/game/src/hud_views.rs` and
+`crates/raceplay/src/slot_hud.rs` (the per-view HUD). Tests: the modules' unit
+tests and the disc-backed `crates/game/tests/split_screen_ground_truth.rs` and
+`split_hud_ground_truth.rs`.
 
 ## Layout (chosen, not measured)
 
@@ -87,10 +90,74 @@ Wipeout HD's and Omega's post chains are not verified under a split.
 
 ## HUD
 
-The full-screen HUD and the track panel over the pre-race flyby are **hidden while
-split** (`Race::hud_shown` and `Race::track_panel_progress`): one HUD
-for slot 0 across four views reads as every player's. The countdown, which is part
-of the HUD draw, goes with it - the gantry's own `GO` board is still in the scene.
+**One HUD per view, from that view's slot.** `Race::readout_for(slot)` builds the
+`Readout` of the view that follows `slot` (lap, place, lap times, speed, shield,
+held weapon, the Eliminator column, Head2Head's gap, wrong way); `readout()` is
+`readout_for` of the primary slot, so one view is what it always was. The bars that
+animate from the shield (flash and blink, HD's whole-percent twin, 2048's lagging
+bar and thrust chase, the Pilot Assist indicator) live per slot in
+`crates/raceplay/src/slot_hud.rs` and advance for every viewed slot, for no other
+slot, and for the primary exactly as before.
+
+`oag_game::hud_views::draw` draws every view's HUD in **one** list, painted in the
+passes one HUD takes. The scene needs a submit per view because
+`queue.write_buffer` lands before the submission; the HUD renderers write their
+uniform and quad buffers the same way, so one draw per view in one encoder would
+show every view the last one's numbers. Each view's draw list is moved into its
+rectangle by an `oag_hud::Placement` and anything outside the view is dropped, so
+a layout that authors a widget off-screen cannot paint over a neighbour.
+
+Where the layout comes from, per title and view count:
+
+| | Source | |
+| --- | --- | --- |
+| HD / Fury, two views, Single Race, Tournament, Head2Head or Eliminator | the disc's own `splitscreen_hud` layouts, one per player | **measured** (below) |
+| everything else (any other count, mode or title) | the title's whole-screen layout, scaled uniformly to fit the view, aspect kept, centred | **chosen, not measured** |
+
+**The authored layouts** (HD, `oag_hd::hud::SPLIT`). `/data/xml/splitscreen_hud/`
+holds `splitscreen_hud_{0,1}.xml` and `splitscreen_elimination_hud_{0,1}.xml`,
+composed like any HD HUD (16 and 15 files, 109 and 108 sprites, no include missing,
+nothing skipped). Both are authored in the whole 1920x1080 screen, and the `_1` is
+the `_0` moved down exactly 540: the extents of their widgets differ by 540 in y.
+So player `i` is a top-and-bottom half with its layout sitting in it, which is the
+shape `oag_render::viewport::layout` already cuts for two views. A `vert_` twin of
+each does the same with 960 in x for a left and right split, and the family covers
+two players, so it is shipped and not wired. The reticle is authored view-relative
+(`splitscreen_sights.xml` places its models off screen and the runtime places
+them), so the race projects it into a 1920x540 view and the draw moves it down by
+the view's own offset. 2048 (`data.psarc`, `Data\XML\SplitScreen_hud`) and Omega
+(`data00.psarc`, `Data/xml/splitscreen_hud`) ship the same family under the same
+names (**checked, applies, not wired**: their `SPLIT` is a data row each, and
+neither title's split race has been looked at). The PS2 pressing of Pulse names only
+`Arcade_HUD.xml` and `TimeTrial_HUD.xml` as HUD paths in its executable and has no
+split layout file (**checked, differs**: its split is the camera's own aspect
+change, `Camera_SubmitScene`'s viewport count, see
+[aspect-ratio.md](../ps2/aspect-ratio.md)); Pure and the PSP Pulse author none.
+
+**Chosen, not measured:**
+
+- **The scaled whole-screen layout** for every case with no authored one: uniform
+  scale to fit, aspect kept, centred. In a two-up strip (about 3.5:1) the HUD is
+  height-limited and sits in the middle of the strip, so its corner widgets are not
+  at the strip's corners. The layout source for those cases is meant to be data
+  (a TOML layout per view count and aspect through the fallback layer); this is the
+  stand-in until it exists.
+- **One answer per screen for the intro**: the HUD shows for the primary's flyby and
+  `hud_delay`, for every view, since the other views have no flyby. The
+  track-description panel draws into the first view's rectangle.
+- **The countdown** (the HUD overlay's fallback, drawn only where the circuit has no
+  gantry) is drawn once, centred on the screen. The gantry's own count is in the
+  scene and so in every view.
+- **No message lines, split gap or time-trial pace on a view that is not the
+  primary's.** They compare laps against the primary's stored best and push a
+  `MESSAGE` cue; per-person records are not read yet. The Zone colour grade is one
+  per scene, so every view reads the primary's speed class.
+- **The reticle of a view that is not the primary's is display only.** It is
+  projected through that slot's own chase camera and field of view
+  (`SlotHud::sight`, fed by `Race::sight_target(slot)`) at the title's HUD aspect, so
+  a narrow view sees a slightly wider vertical field than it assumes. The weapons
+  code reads the primary's `RaceView::sight`, so another person's fire does not wait
+  for their lock (open).
 
 ## Cost
 
@@ -110,7 +177,12 @@ There is no 8-up frame budget yet.
 
 ## Open
 
-- A per-player HUD laid out per view (the next piece of work).
+- A split HUD layout as data (a TOML layout per title, view count and aspect, with
+  the authored one first), for Pulse, Pure, the PS2 and the counts and aspects the
+  authored family does not cover. HD's Wo3 and 2097 skins, its Zone layout and
+  the `vert_` left-and-right family are shipped and not wired; 2048 and Omega's are
+  the same data and not wired. Per-person messages and records, and a lock that
+  gates another person's fire.
 - Slot `i > 0` is still flown by the grid's driver: only `World::primary_slot` is
   stepped from a snapshot, which is the remote-slot-input lane's work. Marking the
   slots `Controller::Local` is the declaration `--players` makes; the views already
