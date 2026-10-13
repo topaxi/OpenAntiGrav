@@ -27,6 +27,7 @@ impl Default for Options {
             // Empty is "no override anywhere" - see the field's own doc
             // comment. Only `race::load_event` ever sets this.
             grid_teams: Vec::new(),
+            seat_picks: Vec::new(),
             zone_model: false,
             hull_shine: true,
             hull_wreck: true,

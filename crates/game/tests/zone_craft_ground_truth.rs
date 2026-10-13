@@ -128,6 +128,7 @@ fn omega_zone_hull_wears_the_livery_its_definition_names() {
             },
             None,
             None,
+            &[],
             &mut report,
         )
         .expect("the Zone hull loads");

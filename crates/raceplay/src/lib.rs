@@ -235,7 +235,9 @@ pub use hud::{hud_layout, splice_assist_indicator};
 pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{export_track, load, load_event};
 pub(crate) use oag_title::Trigger;
-pub use options::{CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, Setup};
+pub use options::{
+    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup,
+};
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
 pub use results::RunStats;

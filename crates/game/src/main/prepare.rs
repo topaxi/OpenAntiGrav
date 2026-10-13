@@ -202,6 +202,8 @@ impl Pending {
             // `race::load_event`'s own 2048-campaign resolution sets this.
             // See `race::Options::grid_teams`.
             grid_teams: Vec::new(),
+            // The join screen's Ship Selects fill this at launch.
+            seat_picks: Vec::new(),
             // See `race::Options::zone_model`: off until the Zone road shader is read.
             zone_model: false,
             hull_shine: !self.cli.no_hull_shine,

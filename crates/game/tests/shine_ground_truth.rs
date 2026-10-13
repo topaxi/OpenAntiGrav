@@ -55,6 +55,7 @@ fn load(shine: bool) -> Option<Vec<livery::Livery>> {
         },
         None,
         None,
+        &[],
         &mut report,
     )
     .expect("the liveries load");
