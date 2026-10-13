@@ -21,11 +21,14 @@ OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACE_CAMPAIGN = { text = "CAMPANHA DE CORRIDA", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "O modo história: suba na grade do torneio", human = false }
 OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
-OAG_MENU_RACEBOX_SUBTITLE = { text = "Monte sua própria corrida, com tela dividida incluída", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Monte sua própria corrida", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Misture pistas e naves de todos os títulos que você tem", human = false }
 OAG_MENU_SPLIT_SCREEN = { text = "TELA DIVIDIDA", human = false }
 OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Até oito jogadores em uma só tela", human = false }
+OAG_MENU_SPLIT_VERTICAL = { text = "TELA DIVIDIDA VERTICAL", human = false }
+OAG_MENU_SPLIT_HORIZONTAL = { text = "TELA DIVIDIDA HORIZONTAL", human = false }
+OAG_MENU_SPLIT_HELP = { text = "Jogue no modo multijogador de tela dividida", human = false }
 OAG_JOIN_HINT = { text = "CADA JOGADOR APERTA UM BOTÃO PARA ENTRAR", human = false }
 OAG_JOIN_PLAYER = { text = "JOGADOR", human = false }
 OAG_SPLIT_FINISHED = { text = "CHEGOU", human = false }

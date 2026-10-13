@@ -74,7 +74,7 @@ pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
-pub use main_menu::{Attached, MainMenu, OriginalRow};
+pub use main_menu::{Attached, Borrowed, MainMenu, OriginalRow};
 pub use menu::{
     HelpText, ListBlocks, MenuBlocks, MenuList, MenuSettings, MenuSkin, MenuStrip, StripBlocks,
 };

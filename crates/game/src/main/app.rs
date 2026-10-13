@@ -303,7 +303,11 @@ impl App {
                 let players = self.race_title.map_or(self.players, |title| {
                     oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
                 });
-                oag_game::split_screen::apply(&mut race_stage.race, usize::from(players));
+                oag_game::split_screen::apply(
+                    &mut race_stage.race,
+                    usize::from(players),
+                    oag_render::viewport::Cut::Horizontal,
+                );
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {
@@ -513,6 +517,8 @@ impl App {
             campaign_cursor: crate::campaign_stage::CellCursor::default(),
             pure_chain_class: 0,
             split_lobby: None,
+            split_cut: oag_render::viewport::Cut::Horizontal,
+            split_race_box: false,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,

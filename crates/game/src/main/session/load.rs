@@ -614,6 +614,7 @@ impl Session {
                     &mut self.split_lobby,
                     &mut self.controls,
                     &mut race_stage.race,
+                    self.split_cut,
                 );
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();

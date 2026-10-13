@@ -66,6 +66,9 @@ OAG_MENU_RACEBOX = { text = "COURSE", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_SPLIT_SCREEN = { text = "ÉCRAN PARTAGÉ", human = false }
 OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Jusqu'à huit joueurs sur un seul écran", human = false }
+OAG_MENU_SPLIT_VERTICAL = { text = "ÉCRAN PARTAGÉ VERTICAL", human = false }
+OAG_MENU_SPLIT_HORIZONTAL = { text = "ÉCRAN PARTAGÉ HORIZONTAL", human = false }
+OAG_MENU_SPLIT_HELP = { text = "Jouer en mode multijoueur à écran partagé", human = false }
 OAG_JOIN_HINT = { text = "CHAQUE JOUEUR APPUIE SUR UN BOUTON POUR REJOINDRE", human = false }
 OAG_JOIN_PLAYER = { text = "JOUEUR", human = false }
 OAG_SPLIT_FINISHED = { text = "TERMINÉ", human = false }

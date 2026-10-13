@@ -397,7 +397,11 @@ pub fn capture(
         options.ai_choice,
         crate::ai_choice::Source::Free(difficulty),
     );
-    crate::split_screen::apply(&mut race, usize::from(options.players));
+    crate::split_screen::apply(
+        &mut race,
+        usize::from(options.players),
+        oag_render::viewport::Cut::Horizontal,
+    );
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);

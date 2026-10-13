@@ -14,6 +14,7 @@ pub const MAIN_MENU: &MainMenu = &MainMenu {
         original("FE_OPT_PLUS", Some("options")),
         original("FE_RECORDS", Some("records")),
     ],
+    borrowed: &[],
     updated_rows: None,
     attached: Attached::Revealed,
     origin: Origin::Measured,

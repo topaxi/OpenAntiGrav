@@ -81,6 +81,30 @@ fn built_in() -> Definition {
         .expect("the built-in menu must parse")
 }
 
+/// HD's main menu the way the game builds it: its own four rows and the extras around them,
+/// without the split rows Pulse and Pure show. The strip and reveal tests model HD's front
+/// end, so they read this and not the title-less tree, which keeps every vanilla row.
+fn built_in_hd() -> Definition {
+    let extras = oag_mod::extras::builtin().unwrap();
+    let text = extras.menu().unwrap().unwrap_or_default();
+    let english = crate::strings::project_table(None);
+    Definition::build(
+        crate::menu::BUILT_IN,
+        &english,
+        &english,
+        Some(For {
+            title: oag_hd::TITLE,
+            updated: false,
+        }),
+        &[ModMenu {
+            id: oag_mod::extras::ID,
+            text: &text,
+        }],
+    )
+    .expect("HD's menu must build")
+    .0
+}
+
 /// One tick with `buttons` newly down, which is what the edges above read.
 fn press(menu: &mut Menu, buttons: &[Button]) -> Vec<MenuEvent> {
     let mut input = Input::new();

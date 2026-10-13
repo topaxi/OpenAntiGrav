@@ -43,7 +43,7 @@ fn split_race(players: usize) -> Option<(race::Race, oag_hud::Assets)> {
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(hud.space.size);
-    oag_game::split_screen::apply(&mut race, players);
+    oag_game::split_screen::apply(&mut race, players, oag_render::viewport::Cut::Horizontal);
     Some((race, hud))
 }
 
@@ -302,7 +302,7 @@ fn hd_draws_a_reticle_in_its_authored_split_view() {
     let mut race = race::Race::start(loaded.setup);
     race.set_sight_screen(hud.sight_screen());
     race.set_sight_dialect(hud.art.sights);
-    oag_game::split_screen::apply(&mut race, 2);
+    oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }

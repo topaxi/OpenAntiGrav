@@ -44,7 +44,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    oag_game::split_screen::apply(&mut race, 2);
+    oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     race.set_autopilot(true);
 
     // Between the first person's line and the second's: the finished person's view

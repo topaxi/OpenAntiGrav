@@ -38,6 +38,25 @@ pub const GAP: f32 = 2.0;
 /// `Scene::render`'s `viewport` already takes.
 pub type Rect = (f32, f32, f32, f32);
 
+/// Which way two views are cut.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Cut {
+    /// One view above the other, each at full width. What every split was before the cut
+    /// was a choice, and what any count but two is.
+    #[default]
+    Horizontal,
+    /// One view beside the other, each at full height. Two views only.
+    Vertical,
+}
+
+impl Cut {
+    /// The cut `count` views are actually drawn in: this one for two, rows for any other.
+    #[must_use]
+    pub fn for_views(self, count: usize) -> Self {
+        if count == 2 { self } else { Self::Horizontal }
+    }
+}
+
 /// How many views sit in the top row and in the bottom row for `count` views.
 ///
 /// `count` is clamped to `1..=MAX_VIEWPORTS`. One view is a single row of one

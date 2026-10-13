@@ -56,6 +56,9 @@ pub(super) struct Viewpoints {
     /// Indexed by slot. Slot 0 stays `None`: the player's camera is
     /// `RaceView::camera`.
     cams: [Option<Cam>; MAX_SHIPS],
+    /// Which way two views are cut. Read through [`Race::cut`], which ignores it for
+    /// any other count.
+    cut: oag_render::viewport::Cut,
 }
 
 impl Viewpoints {
@@ -96,6 +99,20 @@ impl Race {
         } else {
             self.viewport_count()
         }
+    }
+
+    /// Which way the screen is cut: the one answer the scene's view rectangles and the HUD's
+    /// placements read. Only two views can be cut left and right
+    /// ([`oag_render::viewport::Cut::for_views`]).
+    #[must_use]
+    pub fn cut(&self) -> oag_render::viewport::Cut {
+        self.view.viewpoints.cut.for_views(self.viewport_count())
+    }
+
+    /// Chooses the cut for a two-view race. A view-side choice like the cameras: no tick
+    /// reads it and the state hash does not hold it.
+    pub fn set_cut(&mut self, cut: oag_render::viewport::Cut) {
+        self.view.viewpoints.cut = cut;
     }
 
     /// Splits the screen into `count` views, clamped to the grid that is fielded

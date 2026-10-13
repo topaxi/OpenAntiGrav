@@ -113,11 +113,13 @@ fn pulses_psp_main_menu_is_the_seven_rows_on_both_pressings() {
 }
 
 /// Checked, differs: the PS2 pressing authors two more rows after the first
-/// (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, nothing behind them here) and neither the
-/// multiplayer nor the website row. The rows this build builds keep their order.
+/// (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`) and neither the multiplayer nor the website
+/// row. Those two are `Title::main_menu`'s [`oag_title::Borrowed`] rows, which the PSP
+/// borrows, so the list this build shows is the PS2's order exactly: the PS2 disc's list,
+/// each id read as the row it builds, equals `MainMenu::built`.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulses_ps2_main_menu_keeps_the_built_rows_in_order() {
+fn pulses_ps2_main_menu_puts_the_borrowed_rows_where_the_disc_does() {
     let Some(image) = image("pulse-ps2-eu.chd") else {
         return;
     };
@@ -136,22 +138,68 @@ fn pulses_ps2_main_menu_keeps_the_built_rows_in_order() {
             "FE_EXTRAS"
         ]
     );
-    let built: Vec<&str> = oag_pulse::TITLE
-        .main_menu
-        .rows
-        .iter()
-        .filter(|row| row.builds.is_some())
-        .map(|row| row.disc_id)
-        .collect();
-    let kept: Vec<&str> = ps2
-        .iter()
-        .map(String::as_str)
-        .filter(|id| built.contains(id))
-        .collect();
+    let menu = oag_pulse::TITLE.main_menu;
+    let opens = |id: &str| {
+        menu.rows
+            .iter()
+            .find(|row| row.disc_id == id)
+            .and_then(|row| row.builds)
+            .or_else(|| {
+                menu.borrowed
+                    .iter()
+                    .find(|row| row.disc_id == id)
+                    .map(|row| row.builds)
+            })
+    };
+    let from_disc: Vec<&str> = ps2.iter().filter_map(|id| opens(id)).collect();
+    let built: Vec<&str> = menu.built(false).collect();
     assert_eq!(
-        kept, built,
-        "the built rows, in the PSP's order, on the PS2"
+        built, from_disc,
+        "what this build shows, in the PS2 disc's order"
     );
+    assert_eq!(
+        built,
+        [
+            "campaign",
+            "split_vertical",
+            "split_horizontal",
+            "racebox",
+            "options"
+        ]
+    );
+}
+
+/// The wording of the two rows and their help is the PS2's own, `Data\Plugins\PI012`'s
+/// English table: `assets/ui/strings/english.toml` carries it, so the PSP and Pure (which
+/// ship no such string) show the same words.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_split_rows_words_are_the_ps2_discs_own() {
+    let Some(image) = image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+    let table = oag_ui::language::StringTable::from_xml(
+        &fexml::text(
+            &archives
+                .read_name(r"Data\Plugins\PI012\entries.xml")
+                .expect("PI012 is the PS2 disc's English plugin"),
+        )
+        .expect("text"),
+    );
+    let ours = oag_ui::strings::project_table(None);
+    for (disc, project) in [
+        ("FE_RACE_CAM_SS", "OAG_MENU_SPLIT_VERTICAL"),
+        ("FE_RACE_CAM_SSH", "OAG_MENU_SPLIT_HORIZONTAL"),
+        ("FE_HELP_SS", "OAG_MENU_SPLIT_HELP"),
+    ] {
+        assert_eq!(
+            ours.get(project),
+            table.get(disc),
+            "{project} against the disc's {disc}"
+        );
+        assert!(table.get(disc).is_some(), "{disc} is on the disc");
+    }
 }
 
 /// The EU disc authors five rows; the USA disc the same four without `Teasers`

@@ -510,6 +510,7 @@ impl Session {
                 Stage::Menu(stage) => {
                     stage.tick(dt);
                     self.unseat_after_split_race();
+                    self.sync_split_race_box();
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
