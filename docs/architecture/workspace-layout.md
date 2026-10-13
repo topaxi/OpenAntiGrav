@@ -986,8 +986,11 @@ of that compile was linking: every `tests/*.rs` file was its own test binary,
 `oag-game` alone, about 2 s each). Three changes:
 
 1. **One binary per crate.** Every crate with more than one `tests/*.rs` sets
-   `autotests = false` and names one `[[test]]`, `tests/it/main.rs`, which pulls
-   each file in by `#[path]`. No file moved and no test changed: a test is now
+   `autotests = false` and names one `[[test]]`, `tests/it.rs`, which declares
+   each file as a module (`mod wad_ground_truth;`). As a crate root in
+   `tests/`, it finds every file where it already was, so no file moved and no
+   test changed (`cargo shear` follows a plain `mod`; it does not follow a
+   `#[path]`, which an earlier attempt used). A test is now
    `<file>::<test>` in binary `it` rather than `<test>` in binary `<file>`, so
    `cargo nextest run -p oag-vex wad_ground_truth::` selects one file's tests.
    A shared helper (`tests/<name>/mod.rs`) is declared once at the root, and a
@@ -1006,7 +1009,7 @@ of that compile was linking: every `tests/*.rs` file was its own test binary,
    still type-checks them.
 
 A new test file is compiled only once it is listed in its crate's
-`tests/it*/main.rs`. Each listing carries `every_test_file_is_listed`, which
+`tests/it*.rs`. Each listing carries `every_test_file_is_listed`, which
 fails until the file is listed exactly once.
 
 **Measured.** Every build was cold, with no `kache` and a fresh build

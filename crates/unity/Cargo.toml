@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
 autotests = false
 publish = false
 
@@ -30,4 +30,4 @@ workspace = true
 
 [[test]]
 name = "it"
-path = "tests/it/main.rs"
+path = "tests/it.rs"
