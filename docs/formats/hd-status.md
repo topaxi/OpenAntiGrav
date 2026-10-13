@@ -949,6 +949,45 @@ PPSSPP-shaped - a websocket debugger, a breakpoint on `Ship_UpdateCraft`, a
 per-tick offset table - with no RPCS3 equivalent. That is a milestone, not a
 task.
 
+## Opponents follow the player's hull family - 2026-10-12
+
+Every opponent flies the **player's exact variant** (confidence 55, static read
+of the executable: `docs/ghidra/functions/ps3-hdfury-eu/opponent-handling.md`;
+`Ship_Construct` `0x000ddd58`, AI spawner `0x00058e38`, race manager
+`0x00061770`; a live RPCS3 check is still open). Player on the HD hull (unsuffixed
+team directory): all HD; on `_c1`: all `_c1`; on `_n1`: all `_n1`; each in its own
+team's directory and handling file. The player's own team never appears on the
+grid in any variant (the pool drops it by base team). The rule is data,
+`oag_title::TeamVariants::opponents_match_player_variant`
+(`oag_hd::race::TEAM_VARIANTS`), and the rewrite is `oag_raceplay::load::family`,
+with no title name in it.
+
+What the game did before: the roster draw took the 12 base ids from
+`Data\Plugins\frontend\definition.xml`, so every opponent was an HD hull whatever
+the player flew, and a player on `Feisar_c1` could face `Feisar`. Worse, and for
+every title: `start.rs` gave **every opponent the player's handling**
+(`opponent.handling = handling`), so no opponent ever flew its own team's
+numbers. Now every title loads each AI slot's own `handlingstats.xml` for the
+race's class (maintainer decision 2026-10-12); a slot whose file will not load keeps
+the player's handling and the load report says so. HD's variant rule then picks
+which variant's file.
+
+Evidence of the difference (HD EU, `Feisar`, class VENOM): `accelcap` 18.5 (HD),
+21.0 (`_c1`), 21.0 (`_n1`); engine `amount` 412 vs 418. All 12 teams differ
+between HD and each Fury variant in all four classes. Pinned by
+`crates/game/tests/hd_opponent_variant_ground_truth.rs` (disc-backed): the
+opponent variant set per player pick, each opponent's `handling` equal to the one
+that team flies as the player, and HD against Fury differing.
+
+Not read live: the entrant table at `g_GameState + 0x134` that decides the variant
+is inferred. Campaign grids (`grid_teams`) are mapped onto the player's variant too,
+after the authored override.
+
+Cross-title check: 2048's HD-derived guest roster ships the same suffix scheme
+(`oag_2048::race::GUEST_TEAM_VARIANTS`) - **checked, applies, not wired**; Omega's
+and 2048's own rosters are numbered levels, a different shape - **checked,
+differs**, both declare no families so they are unchanged.
+
 ## Traps
 
 - **The byte-order pass is wide, not hard, and its failures are silent.** The

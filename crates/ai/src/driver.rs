@@ -305,14 +305,19 @@ impl Driver {
         // less grip.
         let followed = ctx.plan.filter(|plan| plan.len() == line.len());
         let target = match followed {
-            Some(plan) => planned::target(
-                plan,
-                index,
-                speed,
-                tuning,
-                &personality,
-                line.takeoff_within(index, planned::RUN_UP_REACH),
-            ),
+            Some(plan) => {
+                let run_up = line.takeoff_within(index, planned::RUN_UP_REACH);
+                let target = planned::target(plan, index, speed, tuning, &personality, run_up);
+                // A plan learned on a quicker-turning hull is followed at the
+                // share this one can carry (`SpeedPlan::share_for`), in corners
+                // only: the speed a gap needs is the gap's, whatever the hull
+                // turns at.
+                if run_up {
+                    target
+                } else {
+                    target * plan.share_for(ctx.yaw_ceiling)
+                }
+            }
             None => corner_target(curvature, tuning, &personality, ctx.yaw_ceiling),
         };
         // Every tick, saturated or not - see [`track_peak_curvature`]'s own doc.

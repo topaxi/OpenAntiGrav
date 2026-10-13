@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 
 use crate::{Context, Driver, Line, Tuning};
 
+mod adapt;
 mod brake;
 mod clearance;
 mod harden;
@@ -132,6 +133,11 @@ pub struct SpeedPlan {
     tight: Vec<bool>,
     /// The braking the backward pass was built with.
     decel: Decel,
+    /// The yaw ceiling ([`crate::hull_yaw_ceiling`]) of the hull the plan was
+    /// learned on, `None` for [`Self::unlimited`]. A slower-turning hull that
+    /// follows the plan anyway follows it at the ratio of the two: see
+    /// [`Self::share_for`].
+    yaw: Option<f32>,
 }
 
 /// What a build did, for a loader report and for the tests.
@@ -227,6 +233,7 @@ impl SpeedPlan {
             pace: vec![f32::INFINITY; n],
             tight: vec![false; n],
             decel: Decel::FALLBACK,
+            yaw: None,
         }
     }
 
@@ -317,6 +324,25 @@ impl SpeedPlan {
     #[must_use]
     pub fn decel(&self) -> &Decel {
         &self.decel
+    }
+
+    /// The yaw ceiling of the hull the plan was learned on, if any.
+    #[must_use]
+    pub fn learned_yaw(&self) -> Option<f32> {
+        self.yaw
+    }
+
+    /// The share of this plan's speeds a hull with yaw ceiling `yaw` follows
+    /// it at: one for the hull it was learned on or any that turns as well,
+    /// the ratio of the two ceilings for one that turns slower. Applies only
+    /// where a craft follows a plan learned on another hull, which
+    /// [`Self::adapt`] did not make its own. **Chosen, not measured.**
+    #[must_use]
+    pub fn share_for(&self, yaw: Option<f32>) -> f32 {
+        match (self.yaw, yaw) {
+            (Some(learned), Some(own)) if learned > 0.0 && own < learned => own / learned,
+            _ => 1.0,
+        }
     }
 
     /// The lowest target over the stretch a craft at `speed` covers in
@@ -610,6 +636,7 @@ impl SpeedPlan {
         let (decel, steps) = brake::calibrate(course, craft, tuning, yaw);
         report.steps += steps;
         plan.decel = decel;
+        plan.yaw = Some(yaw);
         plan.derive_targets();
 
         for _ in 0..MAX_PASSES {

@@ -138,15 +138,21 @@ pub(super) fn route_lines(
 }
 
 /// The speed plan for a driver on `route`: the ring's for `0`, else that
-/// route's own.
+/// route's own, and of either its own hull's copy (`hull`, see
+/// [`Race::adapt_hull_plans`]) where one was made, else the reference's.
 pub(super) fn plan_for<'a>(
     routes: &'a [RouteLine],
     ring: Option<&'a oag_ai::SpeedPlan>,
+    hull: Option<&'a super::speed_plan::HullPlans>,
     route: u16,
 ) -> Option<&'a oag_ai::SpeedPlan> {
     match route.checked_sub(1) {
-        None => ring,
-        Some(k) => routes.get(usize::from(k)).and_then(|r| r.plan.as_ref()),
+        None => hull.and_then(|h| h.ring.as_ref()).or(ring),
+        Some(k) => {
+            let k = usize::from(k);
+            hull.and_then(|h| h.routes.get(k).and_then(Option::as_ref))
+                .or_else(|| routes.get(k).and_then(|r| r.plan.as_ref()))
+        }
     }
 }
 
@@ -235,6 +241,7 @@ impl Race {
         plan_for(
             &self.sim.routes,
             self.sim.speed_plan.as_ref(),
+            super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
             self.sim.world.ships[slot].driver.branching.route,
         )
     }

@@ -486,6 +486,10 @@ pub struct Setup {
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
     pub handling: Handling,
+    /// Each grid slot's own tuning where it flies a different team's file than
+    /// the player, on every title; `None`, or an empty list, is the player's [`Self::handling`], as every opponent
+    /// flew before.
+    pub opponent_handling: Vec<Option<Handling>>,
     /// How far and how fast the airbrake flaps move, from the same document.
     ///
     /// Separate from [`Self::handling`] because it is per *team* rather than

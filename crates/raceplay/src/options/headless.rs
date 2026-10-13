@@ -98,6 +98,7 @@ impl Setup {
             slot_teams: Vec::new(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
+            opponent_handling: Vec::new(),
             // Zero travel at zero speed: the flaps neither open nor move.
             airbrake_graphics: oag_gameplay::AirbrakeGraphics {
                 amount: 0.0,
