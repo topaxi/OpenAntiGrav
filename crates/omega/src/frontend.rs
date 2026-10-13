@@ -233,7 +233,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // confirmed campaign cell races the RACE page's team (`settings.race.team`)
     // rather than opening a screen a player cannot read; measured 2026-09-30, the open item in
     // `docs/formats/omega-status.md`.
-    team_select: None,
+    // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's
+    // dialect: HD's reader parses them as they stand.
+    team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
     // The race box's own two split lists, read from `data09`'s copy (HD's `NumberOfPlayers`
@@ -292,6 +294,10 @@ pub mod names {
     /// `NumberOfPlayers` and `SplitScreen` lists, HD's own at y 420 and 470). Present in
     /// `data09.psarc` (15,805 bytes) at HD's path.
     pub const RACEBOX_DEFINITION: &str = r"Data\Plugins\Frontend\Gui\racebox_definition.xml";
+
+    /// `Team Selection` and its two per-player copies, at HD's own path (`data09`, 14,480 bytes).
+    pub const TEAM_SELECTION_DEFINITION: &str =
+        r"Data\Plugins\Frontend\Gui\Team_Selection_Definition.xml";
 
     /// `Track Creation`, at HD's own path; `data08` and `data09` carry it, and
     /// the front end's `skin.xml` includes it as HD's does.

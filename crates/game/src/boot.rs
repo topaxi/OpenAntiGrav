@@ -651,7 +651,7 @@ pub fn load_shell(
         ]);
         block_textures.extend(campaign2048::card_textures(&campaign_events));
     }
-    let logos = screens::team_logos(team_box.is_some(), &teams);
+    let logos = screens::team_logos(team_box.is_some(), title.race.ship_dir, &teams);
     block_textures.extend(logos.iter().map(String::as_str));
     let emblems = screens::track_emblems(track_box.is_some(), &tracks);
     block_textures.extend(emblems.iter().map(String::as_str));
@@ -833,6 +833,7 @@ pub fn load_shell(
         title
             .front_end
             .is_some_and(|front_end| front_end.borrows_ps2_split_screens),
+        title.race.ship_dir,
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

@@ -131,6 +131,9 @@ pub struct TeamScreen {
     /// the selected team's own `FE\Logo.gtf` at runtime, which is the only
     /// per-team texture of that name on the disc (twelve, one per team).
     pub logo: Option<[f32; 4]>,
+    /// The title's ship directory the logo's file sits under (`Data\Ships` on HD,
+    /// `Data\art\published\hdships` on Omega), see [`logo_src`].
+    pub logo_dir: String,
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
@@ -158,6 +161,7 @@ pub fn read(
     strings: &StringTable,
     faces: FaceScales,
     grid: [f32; 2],
+    ship_dir: &str,
 ) -> Option<Layout> {
     let parent = screens.by_name(TOP_LEVEL)?;
     let child = screens.by_name(SCREEN)?;
@@ -188,7 +192,10 @@ pub fn read(
 
     let root = parse(xml);
     let top = find_screen(&root, TOP_LEVEL)?;
-    let mut extra = TeamScreen::default();
+    let mut extra = TeamScreen {
+        logo_dir: ship_dir.to_string(),
+        ..TeamScreen::default()
+    };
     walk(top, (0.0, 0.0), screens, strings, &mut extra);
     extra.bonus = screens.resolve(BONUS_GLOBAL).and_then(parse_argb);
 
@@ -294,6 +301,7 @@ fn walk(
                     origin: [x, y],
                     columns: count("columns"),
                     rows: count("rows"),
+                    scale: number(child, "Scale").unwrap_or(1.0),
                     hex: colour("HexCol").unwrap_or(0x6480_8080),
                     hex_fade: colour("HexColFade").unwrap_or(0x3280_8080),
                     fade_columns: 0,
@@ -368,7 +376,7 @@ pub(super) fn body(
         return out;
     };
     if let Some(rect) = extra.logo
-        && let Some(placed) = sprites(&logo_src(&entry.id))
+        && let Some(placed) = sprites(&logo_src(&extra.logo_dir, &entry.id))
     {
         out.push(Draw::Sprite {
             rect,
@@ -459,12 +467,12 @@ fn base_stats(picker: &Picker) -> Option<Stats> {
     }
 }
 
-/// `Data\Ships\<team>\FE\Logo.gtf` - the texture the `Logo` widget shows for
-/// `team`. Named by no widget; see [`TeamScreen::logo`]. `pub` so the boot
-/// can put all twelve on the sheet.
+/// `<ship_dir>\<team>\FE\Logo.gtf` - the texture the `Logo` widget shows for
+/// `team`, under the title's ship directory (`Data\Ships` on HD). Named by no widget; see
+/// [`TeamScreen::logo`]. `pub` so the boot can put every team's on the sheet.
 #[must_use]
-pub fn logo_src(team: &str) -> String {
-    format!(r"Data\Ships\{team}\FE\Logo.gtf")
+pub fn logo_src(ship_dir: &str, team: &str) -> String {
+    format!(r"{ship_dir}\{team}\FE\Logo.gtf")
 }
 
 /// One statistics block: the box, its label, and - where `value` is known -

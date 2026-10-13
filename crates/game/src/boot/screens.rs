@@ -145,13 +145,17 @@ fn load_hd_selection(
 /// name alongside what the screens name, since the `Logo` widget authors no
 /// `src` and the `HexSelection` widget names no art at all. See
 /// `oag_ui_screens::picker::hd::logo_src` and `picker::hd::hex`.
-pub(super) fn team_logos(team_box: bool, teams: &[oag_raceplay::catalogue::Team]) -> Vec<String> {
+pub(super) fn team_logos(
+    team_box: bool,
+    ship_dir: &str,
+    teams: &[oag_raceplay::catalogue::Team],
+) -> Vec<String> {
     if !team_box {
         return Vec::new();
     }
     let mut out: Vec<String> = teams
         .iter()
-        .map(|team| oag_ui_screens::picker::hd::logo_src(&team.id))
+        .map(|team| oag_ui_screens::picker::hd::logo_src(ship_dir, &team.id))
         .collect();
     out.extend(teams.iter().flat_map(|team| {
         team.models.iter().filter_map(|model| {
@@ -392,6 +396,7 @@ pub(super) fn selection_layouts(
     native_default: bool,
     space: oag_display::space::Space,
     borrows_ps2_split: bool,
+    ship_dir: &str,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
@@ -448,6 +453,7 @@ pub(super) fn selection_layouts(
                 &strings,
                 faces,
                 grid,
+                ship_dir,
             )
         });
     // A source that authors `Team SelectionSplit` has one (Pulse's PS2 pressing); a title
