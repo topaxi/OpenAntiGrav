@@ -7,9 +7,9 @@ A craft that falls is put back on the oldest of its last seven grounded
 positions, a few hundred units before where it fell, at
 `50 + 0.25 * last grounded speed`. On `13_Track` this matches the original
 (row 2949 against our 2939/2950, speed exact) and took the parked field from
-389 respawns to 2. Seven disc-backed tests went red with it, and the lead
-chose to keep the port and leave them red under this thread (option C). With
-the old pose all seven pass.
+389 respawns to 2. The port was kept (lead, 2026-10-13). Seven disc-backed
+tests are red with it and are named here; with the old pose all seven pass.
+Whether to re-baseline them or chase a cause is the decision below.
 
 The old pose put a craft back at rest on the sample nearest its fall, often
 past the jump, which skipped part of the lap. The new one sends it back before
