@@ -1,11 +1,11 @@
 //! The broadphase in front of [`super::TriangleSoup`]'s narrowphase.
 //!
-//! A bounding-volume hierarchy over the soup's triangle boxes. It is an acceleration only:
-//! [`Bvh::visit`] reports exactly the triangles whose own box overlaps the query box, the
-//! same set the linear scan's per-triangle reject passed, so the narrowphase sees the same
-//! candidates and the caller restores the scan's ascending-index order. Built once, from
-//! data alone, with a total order on every comparison, so the tree is identical on every
-//! platform.
+//! A bounding-volume hierarchy over the soup's triangle boxes, and the same tree over a
+//! world's collider boxes. It is an acceleration only: [`Bvh::visit`] reports exactly the
+//! items whose own box overlaps the query box, the same set the linear scan's per-item
+//! reject passed, so the narrowphase sees the same candidates and the caller restores the
+//! scan's ascending-index order. Built once, from data alone, with a total order on every
+//! comparison, so the tree is identical on every platform.
 
 use super::Aabb;
 use oag_core::math::Vec3;
@@ -76,6 +76,52 @@ impl Bvh {
                     }
                 }
             }
+        }
+    }
+}
+
+/// Item indices a query collected, sorted ascending: the linear scan's order. Held inline
+/// up to [`Indices::INLINE`], so the common query allocates nothing.
+pub(super) struct Indices {
+    inline: [u32; Self::INLINE],
+    len: usize,
+    spill: Vec<u32>,
+}
+
+impl Indices {
+    const INLINE: usize = 64;
+
+    /// Every item of `bvh` whose box overlaps `query`, ascending.
+    pub(super) fn overlapping(bvh: &Bvh, query: &Aabb) -> Self {
+        let mut out = Self {
+            inline: [0; Self::INLINE],
+            len: 0,
+            spill: Vec::new(),
+        };
+        bvh.visit(query, |index| {
+            if out.len < Self::INLINE {
+                out.inline[out.len] = index;
+                out.len += 1;
+            } else {
+                if out.spill.is_empty() {
+                    out.spill.extend_from_slice(&out.inline);
+                }
+                out.spill.push(index);
+            }
+        });
+        if out.spill.is_empty() {
+            out.inline[..out.len].sort_unstable();
+        } else {
+            out.spill.sort_unstable();
+        }
+        out
+    }
+
+    pub(super) fn as_slice(&self) -> &[u32] {
+        if self.spill.is_empty() {
+            &self.inline[..self.len]
+        } else {
+            &self.spill
         }
     }
 }
