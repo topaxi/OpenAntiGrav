@@ -519,7 +519,20 @@ impl super::super::Scene {
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
     ) -> usize {
-        let mut casters = vec![self.track.caster(oag_core::math::Mat4::IDENTITY)];
+        let fit = self.mapped_fit_for(race, self.mapped_slot(race));
+        // The track is the whole circuit and the map covers a box of
+        // `MAPPED_RADIUS` around one craft, so only the draws that touch that
+        // box are recorded: the rest lie wholly outside it and the pass would
+        // clip every triangle. Per map, so each view of a split draws its own.
+        let in_box =
+            self.track
+                .opaque_ranges_in(&oag_core::math::frustum::Frustum::from_view_projection(
+                    fit.matrix(),
+                ));
+        let mut casters = vec![oag_render::shadow::map::Caster {
+            ranges: &in_box,
+            ..self.track.caster(oag_core::math::Mat4::IDENTITY)
+        }];
         let drawn = usize::from(race.ship_count());
         for slot in 0..drawn.min(self.ships.len()) {
             if !race.ship_active(slot) {
@@ -527,7 +540,6 @@ impl super::super::Scene {
             }
             casters.push(self.ships[slot].caster(race.ship_model_matrix_of(slot)));
         }
-        let fit = self.mapped_fit_for(race, self.mapped_slot(race));
         // The coverage map stays cleared while this tier is on: two maps are
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.
