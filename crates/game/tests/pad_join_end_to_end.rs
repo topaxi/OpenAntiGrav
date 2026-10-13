@@ -101,7 +101,13 @@ fn a_three_seat_lobby_makes_a_three_way_split_with_each_device_on_its_slot() {
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
     assert_eq!(
-        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1], oag_render::viewport::Cut::Horizontal),
+        split_screen::seat(
+            &mut race,
+            &lobby,
+            &mut assignment,
+            &[5, 9, 1],
+            oag_render::viewport::Cut::Horizontal
+        ),
         3
     );
 
@@ -125,7 +131,13 @@ fn a_lobby_of_one_changes_nothing() {
     let mut race = race(3);
     let mut assignment = Assignment::<u32>::default();
     assert_eq!(
-        split_screen::seat(&mut race, &lobby, &mut assignment, &[5, 9, 1], oag_render::viewport::Cut::Horizontal),
+        split_screen::seat(
+            &mut race,
+            &lobby,
+            &mut assignment,
+            &[5, 9, 1],
+            oag_render::viewport::Cut::Horizontal
+        ),
         1
     );
     assert_eq!(race.viewport_count(), 1);
@@ -197,13 +209,23 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
     let mut lobby = None;
 
     let mut first = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut first, oag_render::viewport::Cut::Horizontal);
+    split_screen::seat_for_launch(
+        &mut lobby,
+        &mut controls,
+        &mut first,
+        oag_render::viewport::Cut::Horizontal,
+    );
     assert_eq!(first.viewport_count(), 2);
     assert_eq!(controls.assignment().humans(), Some(2));
 
     // `RACE AGAIN`: no lobby, the seats are still held.
     let mut again = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut again, oag_render::viewport::Cut::Horizontal);
+    split_screen::seat_for_launch(
+        &mut lobby,
+        &mut controls,
+        &mut again,
+        oag_render::viewport::Cut::Horizontal,
+    );
     assert_eq!(again.viewport_count(), 2, "the restart is the same split");
     assert_eq!(again.sim.world.controllers[0], Controller::Local);
     assert_eq!(again.sim.world.controllers[1], Controller::Local);
@@ -211,6 +233,56 @@ fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
     // Back on the menus (`Session::unseat_after_split_race`): the next race is one view.
     controls.merge_devices();
     let mut fresh = race(2);
-    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut fresh, oag_render::viewport::Cut::Horizontal);
+    split_screen::seat_for_launch(
+        &mut lobby,
+        &mut controls,
+        &mut fresh,
+        oag_render::viewport::Cut::Horizontal,
+    );
     assert_eq!(fresh.viewport_count(), 1);
+}
+
+/// The cut reaches the race through both ways a split is made: `apply` (the command line and
+/// a restart) and `seat` (the join screen's lobby). Two views cut vertically are columns,
+/// the same race cut horizontally is rows, and a lobby of one is no split at all.
+#[test]
+fn the_cut_reaches_the_race_through_apply_and_seat() {
+    use oag_render::viewport::Cut;
+    const AREA: (f32, f32, f32, f32) = (0.0, 0.0, 1920.0, 1080.0);
+    let mut by_apply = race(2);
+    assert_eq!(split_screen::apply(&mut by_apply, 2, Cut::Vertical), 2);
+    let columns = by_apply.view_rects(AREA);
+    assert!(
+        columns[1].0 > columns[0].0 && columns[0].3 == 1080.0,
+        "{columns:?}"
+    );
+
+    let mut lobby = Lobby::new();
+    lobby.join(Device::Keyboard);
+    lobby.join(Device::Pad(5));
+    let mut by_seat = race(2);
+    let mut assignment = Assignment::<u32>::default();
+    assert_eq!(
+        split_screen::seat(&mut by_seat, &lobby, &mut assignment, &[5], Cut::Vertical),
+        2
+    );
+    assert_eq!(
+        by_seat.view_rects(AREA),
+        columns,
+        "a lobby cuts as apply does"
+    );
+
+    let mut rows = race(2);
+    split_screen::apply(&mut rows, 2, Cut::Horizontal);
+    assert_eq!(rows.view_rects(AREA)[0].2, 1920.0);
+
+    let mut alone = race(2);
+    let mut one = Lobby::new();
+    one.join(Device::Keyboard);
+    let mut assignment = Assignment::<u32>::default();
+    assert_eq!(
+        split_screen::seat(&mut alone, &one, &mut assignment, &[], Cut::Vertical),
+        1
+    );
+    assert_eq!(alone.view_rects(AREA), vec![AREA], "one person is no split");
 }

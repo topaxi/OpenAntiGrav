@@ -157,7 +157,11 @@ mod tests {
     #[test]
     fn one_view_is_the_area_itself() {
         assert_eq!(layout(1, AREA, Cut::Horizontal), vec![AREA]);
-        assert_eq!(layout(0, AREA, Cut::Horizontal), vec![AREA], "zero clamps to one");
+        assert_eq!(
+            layout(0, AREA, Cut::Horizontal),
+            vec![AREA],
+            "zero clamps to one"
+        );
         let offset = (96.0, 0.0, 1248.0, 816.0);
         assert_eq!(
             layout(1, offset, Cut::Horizontal),
@@ -229,13 +233,22 @@ mod tests {
     #[test]
     fn two_views_cut_vertically_are_two_full_height_columns() {
         let views = layout(2, AREA, Cut::Vertical);
-        assert_eq!(views, [(0.0, 0.0, 719.0, 816.0), (721.0, 0.0, 719.0, 816.0)]);
+        assert_eq!(
+            views,
+            [(0.0, 0.0, 719.0, 816.0), (721.0, 0.0, 719.0, 816.0)]
+        );
         let letterboxed = layout(2, (96.0, 0.0, 1249.0, 817.0), Cut::Vertical);
-        assert_eq!(letterboxed[0].0, 96.0, "the first column starts at the area");
+        assert_eq!(
+            letterboxed[0].0, 96.0,
+            "the first column starts at the area"
+        );
         let right = letterboxed[1].0 + letterboxed[1].2;
         assert_eq!(right, 96.0 + 1249.0, "the second reaches the right edge");
         assert!(!overlap(letterboxed[0], letterboxed[1]));
-        assert_eq!(letterboxed[1].0 - (letterboxed[0].0 + letterboxed[0].2), GAP);
+        assert_eq!(
+            letterboxed[1].0 - (letterboxed[0].0 + letterboxed[0].2),
+            GAP
+        );
     }
 
     #[test]

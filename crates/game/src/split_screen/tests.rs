@@ -155,7 +155,12 @@ fn the_authored_rows_replace_the_generic_row_on_hd_and_nowhere_else() {
         assert_eq!(has_split_row(&definition), !authors, "{}", title.name);
         let settings = settings_on_race(&definition);
         for key in AUTHORED_ROWS {
-            assert_eq!(settings.iter().any(|s| s == key), authors, "{key} on {}", title.name);
+            assert_eq!(
+                settings.iter().any(|s| s == key),
+                authors,
+                "{key} on {}",
+                title.name
+            );
         }
     }
 }
@@ -168,12 +173,73 @@ fn an_integrated_gpu_takes_hds_authored_rows_too() {
     for device in ALL {
         let mut definition = built(hd);
         definition.drop_rows_picked_on_screen(hd);
-        assert!(settings_on_race(&definition).iter().any(|s| s == "race.players"));
+        assert!(
+            settings_on_race(&definition)
+                .iter()
+                .any(|s| s == "race.players")
+        );
         let dropped = trim_menu(&mut definition, hd, device);
         assert_eq!(dropped, device == DeviceType::IntegratedGpu, "{device:?}");
         let settings = settings_on_race(&definition);
         for key in AUTHORED_ROWS {
-            assert_eq!(settings.iter().any(|s| s == key), !dropped, "{key} on {device:?}");
+            assert_eq!(
+                settings.iter().any(|s| s == key),
+                !dropped,
+                "{key} on {device:?}"
+            );
         }
     }
+}
+
+fn choices(values: &[&str]) -> Vec<oag_ui::menu::Choice> {
+    values
+        .iter()
+        .map(|v| oag_ui::menu::Choice::plain(*v))
+        .collect()
+}
+
+/// Two people is the race box's pick of `2`, on the title that authors the list and nowhere
+/// else; a pick the disc's list does not hold, and an empty one, is one person.
+#[test]
+fn the_head_count_is_the_authored_pick_on_hd_alone() {
+    let counts = choices(&["1", "2"]);
+    for (title, _) in titles() {
+        let authored = title.name == oag_hd::TITLE.name;
+        assert_eq!(
+            authored_people(title, &counts, "2"),
+            if authored { 2 } else { 1 },
+            "{}",
+            title.name
+        );
+        assert_eq!(authored_people(title, &counts, "1"), 1, "{}", title.name);
+    }
+    assert_eq!(
+        authored_people(oag_hd::TITLE, &counts, ""),
+        1,
+        "untouched is one"
+    );
+    assert_eq!(
+        authored_people(oag_hd::TITLE, &counts, "3"),
+        1,
+        "not on the disc's list"
+    );
+    assert_eq!(authored_people(oag_hd::TITLE, &[], "2"), 1, "no list read");
+}
+
+#[test]
+fn the_cut_is_vertical_only_for_the_discs_own_vertical_entry() {
+    use oag_render::viewport::Cut;
+    let cuts = choices(&["RB_HORIZ", "RB_VERT"]);
+    assert_eq!(authored_cut(&cuts, "RB_VERT"), Cut::Vertical);
+    assert_eq!(authored_cut(&cuts, "RB_HORIZ"), Cut::Horizontal);
+    assert_eq!(
+        authored_cut(&cuts, ""),
+        Cut::Horizontal,
+        "untouched is the authored default"
+    );
+    assert_eq!(
+        authored_cut(&[], "RB_VERT"),
+        Cut::Horizontal,
+        "no list read"
+    );
 }

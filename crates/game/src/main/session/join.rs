@@ -21,39 +21,24 @@ use crate::stage::Stage;
 use super::Session;
 
 impl Session {
-    /// The head count the race box's `NUMBER OF PLAYERS` row holds, on a title whose race
-    /// box authors one ([`oag_title::FrontEnd::local_split`]): `1` when it holds one, when
-    /// the pick is not among the disc's own entries, and on every other title.
+    /// The head count the race box's `NUMBER OF PLAYERS` row holds
+    /// ([`oag_game::split_screen::authored_people`]).
     pub(crate) fn authored_people(&self) -> usize {
-        let Some(shell) = self.shell.as_ref() else {
-            return 1;
-        };
-        let people = self.settings.race.players.parse::<usize>().unwrap_or(1);
-        let authored = shell
-            .title
-            .front_end
-            .is_some_and(|front_end| front_end.local_split.is_some())
-            && shell
-                .player_counts
-                .iter()
-                .any(|choice| choice.value == self.settings.race.players);
-        if authored { people } else { 1 }
+        self.shell.as_ref().map_or(1, |shell| {
+            oag_game::split_screen::authored_people(
+                shell.title,
+                &shell.player_counts,
+                &self.settings.race.players,
+            )
+        })
     }
 
-    /// The cut the race box's `SPLIT SCREEN` row holds, `RB_VERT` being the left-and-right
-    /// one; horizontal for anything else the disc's list does not name.
+    /// The cut the race box's `SPLIT SCREEN` row holds
+    /// ([`oag_game::split_screen::authored_cut`]).
     fn authored_cut(&self) -> oag_render::viewport::Cut {
-        let named = self.shell.as_ref().is_some_and(|shell| {
-            shell
-                .split_cuts
-                .iter()
-                .any(|choice| choice.value == self.settings.race.split_cut)
-        });
-        if named && self.settings.race.split_cut == "RB_VERT" {
-            oag_render::viewport::Cut::Vertical
-        } else {
-            oag_render::viewport::Cut::Horizontal
-        }
+        self.shell.as_ref().map_or(Default::default(), |shell| {
+            oag_game::split_screen::authored_cut(&shell.split_cuts, &self.settings.race.split_cut)
+        })
     }
 
     /// The race box's START with the `NUMBER OF PLAYERS` row on two: the join screen of

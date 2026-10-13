@@ -109,3 +109,39 @@ fn the_hud_gate_is_the_same_split_or_not() {
     race.set_viewport_count(1);
     assert!(race.hud_shown());
 }
+
+/// The cut is one answer for the scene and the HUD: two views beside each other when it is
+/// vertical, rows for any other count whatever was asked, and no state the hash holds.
+#[test]
+fn the_cut_is_one_answer_for_every_view_rectangle_and_is_not_simulation() {
+    use oag_render::viewport::Cut;
+    const AREA: (f32, f32, f32, f32) = (0.0, 0.0, 1920.0, 1080.0);
+    let mut race = race_with_a_grid();
+    race.set_viewport_count(2);
+    assert_eq!(race.cut(), Cut::Horizontal, "rows until a cut is chosen");
+    let rows = race.view_rects(AREA);
+    assert_eq!(rows[0].2, 1920.0, "full width");
+    let hash = race.sim.state_hash();
+
+    race.set_cut(Cut::Vertical);
+    assert_eq!(race.cut(), Cut::Vertical);
+    let columns = race.view_rects(AREA);
+    assert_eq!(columns.len(), 2);
+    assert_eq!(columns[0].3, 1080.0, "full height");
+    assert!(columns[1].0 > columns[0].0, "side by side");
+    assert_eq!(race.sim.state_hash(), hash, "the cut is a view, not state");
+
+    race.set_viewport_count(4);
+    assert_eq!(
+        race.cut(),
+        Cut::Horizontal,
+        "four views are quadrants whatever the cut"
+    );
+    assert_eq!(race.view_rects(AREA).len(), 4);
+    race.set_viewport_count(1);
+    assert_eq!(
+        race.view_rects(AREA),
+        vec![AREA],
+        "one view is the area itself"
+    );
+}

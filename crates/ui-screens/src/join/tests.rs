@@ -260,3 +260,45 @@ fn on_the_psp_grid_the_device_column_is_where_it_was() {
     let (width, _) = skin.space().size;
     assert!((right_aligned_x(&screen(1), &skin) - (width - skin.menu_x())).abs() < f32::EPSILON);
 }
+
+/// Where the race box authored the head count, START waits for every seat: a click on it
+/// with one of two seated does nothing, and with both it starts.
+#[test]
+fn start_waits_for_every_seat_when_the_head_count_is_authored() {
+    let skin = skin();
+    let two = |seated: usize| {
+        let mut join = Join::new(labels(), 2).requiring(2);
+        join.set_seats((0..seated).map(|n| format!("PAD {n}")).collect());
+        join
+    };
+    let mut one = two(1);
+    assert!(!one.can_start());
+    let start = one
+        .rows()
+        .iter()
+        .position(|row| *row == Row::Start)
+        .unwrap();
+    assert!(
+        !one.pointer(&click(centre(&skin, start)), &skin)
+            .contains(&Event::Start),
+        "one of two is not a race"
+    );
+    let mut both = two(2);
+    assert!(both.can_start());
+    assert_eq!(
+        both.rows(),
+        [Row::Seat(0), Row::Seat(1), Row::Start, Row::Back]
+    );
+    let start = both
+        .rows()
+        .iter()
+        .position(|row| *row == Row::Start)
+        .unwrap();
+    assert!(
+        both.pointer(&click(centre(&skin, start)), &skin)
+            .contains(&Event::Start)
+    );
+    // The generic screen is unchanged: one seat is enough.
+    assert!(screen(1).can_start());
+    assert!(!screen(0).can_start());
+}

@@ -672,10 +672,7 @@ impl Definition {
 /// The race box's `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows, the two a title's authored
 /// local split adds.
 fn is_authored_split_row(entry: &Entry) -> bool {
-    matches!(
-        entry.setting(),
-        Some("race.players" | "race.split_cut")
-    )
+    matches!(entry.setting(), Some("race.players" | "race.split_cut"))
 }
 
 /// Looks `string_id` up in `strings`, falling back to `literal` when it names

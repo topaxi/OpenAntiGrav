@@ -354,10 +354,10 @@ fn split_assets(
     let vertical = authored
         .vertical
         .filter(|_| cut.for_views(usize::from(views)) == oag_render::viewport::Cut::Vertical);
-    let (arcade, elimination) = vertical.map_or(
-        (authored.arcade, authored.elimination),
-        |vertical| (vertical.arcade, vertical.elimination),
-    );
+    let (arcade, elimination) = vertical
+        .map_or((authored.arcade, authored.elimination), |vertical| {
+            (vertical.arcade, vertical.elimination)
+        });
     let roots = match mode {
         Mode::SingleRace | Mode::Tournament | Mode::Head2Head => arcade,
         Mode::Eliminator => elimination,
