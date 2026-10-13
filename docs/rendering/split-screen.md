@@ -712,10 +712,10 @@ the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
   drives the one menu cursor; a race parked behind the pause menu keeps its
   seats.
 
-**The join screen** is the second way to seat people. Entry: a SPLIT SCREEN row
-under RACEBOX in the built-in `oag-extras` mod (an action, `split_screen`), on
-every title that shows the extras, and a tile on 2048's grid (see "Where the entry is,
-per title"). `oag_input::lobby::Lobby` is the model:
+**The join screen** is the second way to seat people. Entry: the PS2 pressing's two
+SPLIT SCREEN rows on Pulse and Pure, a SPLIT SCREEN row under RACEBOX in the built-in
+`oag-extras` mod (an action, `split_screen`) on HD and Omega, and a tile on 2048's grid
+(see "Where the entry is, per title"). `oag_input::lobby::Lobby` is the model:
 
 | Device | Press | Does |
 | --- | --- | --- |
@@ -741,7 +741,7 @@ SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
 
 | Title | Where the entry is | Authored by the original? |
 | --- | --- | --- |
-| Pulse, Pure | SPLIT SCREEN row after REMIX, under RACEBOX (the `oag-extras` mod) | PS2 Pulse authors `Team SelectionSplit` and the split cameras but no join step; the row is **chosen, not measured** |
+| Pulse (both pressings), Pure | **SPLIT SCREEN VERTICAL and SPLIT SCREEN HORIZONTAL right after RACE CAMPAIGN** (Pure: after SINGLE PLAYER), then RACEBOX; no SPLIT SCREEN row under RACEBOX any more. See "The Pulse and Pure entry (2026-10-13, `split-entry-align`)" | **Pulse PS2: yes**, `MainMenu_Definition.xml` `Mode` lists `FE_RACE_CAM`, `FE_RACE_CAM_SS` ("SPLIT SCREEN VERTICAL"), `FE_RACE_CAM_SSH` ("SPLIT SCREEN HORIZONTAL"), `FE_RACEBOX`, ... with `FE_HELP_SS` ("Play in multiplayer split screen mode") as the help for both. **PSP Pulse: borrowed** from the PS2 pressing (its own assets). **Pure: borrowed** (no split screen of its own, so it mirrors Pulse). No confidence score on the borrowed placement |
 | HD, Omega | The same row, **revealed under RACEBOX while RACEBOX has focus** (the strip has no room for more tabs, `oag_title::Attached::Revealed`). Join, then HD's Track Select, then `Ship Select - Player 1` and `Player 2` (HD's authored `Team Selection Player 1`/`Player 2` sequence), then the race. Omega walks join, Track Select, loading and a two-view race with its HUD; it has **no Ship Select** (unread) | HD authors local split **inside RACEBOX**, not in the main menu: `racebox_definition.xml`'s `Single Player` screen has a `NumberOfPlayers` list (`RB_NUMP`, entries `1` and `2`, unlock ids 14 and 15, a padlock image beside it) and a `SplitScreen` list (`RB_SPLSCR`, `RB_HORIZ`/`RB_VERT`, ids 18 and 19). Two people at most, and a horizontal or vertical cut. **Not wired** (open): this build's join screen takes up to eight people and cuts top and bottom only. Omega's real `racebox_definition.xml` (`data09`, 15,805 bytes) carries the same two lists (corrected 2026-10-13: the earlier "neither list" came from `scripts/psarc.py` mis-mapping PS4 paths; see [hd-frontend.md](../formats/hd-frontend.md#racebox-authors-local-split-screen-a-players-list-and-a-cut)); not wired either |
 | 2048 | A third extra tile, SPLIT SCREEN, under RACEBOX and REMIX in the left column of `GameModeChoice` (`oag_ui::frontend::EXTRA_TILES[2]`; click or pad); it opens the join screen, then the race (the placeholder menu has no Track or Ship Select of 2048's own) | **No.** The authored tiles are single player campaign, online campaign, ad-hoc and cross-play; 2048 ships a `SplitScreen_hud` family but its front end has no local entry. **Chosen, not measured** |
 
@@ -763,6 +763,41 @@ goes under the rows there, and also on a skin whose row origin is ours (2048's
 placeholder menu), where it overlapped the title. Pulse and Pure are unchanged (their
 rows and title share one margin; a test pins the right edge).
 
+### The Pulse and Pure entry (2026-10-13, `split-entry-align`)
+
+The path, walked windowed on PS2 Pulse, PSP Pulse and Pure (Xvfb, lavapipe, two virtual
+pads): **main menu row -> RACE page -> START -> join screen -> Track Select -> Ship Select
+per seat -> a two-view race.** The PS2's own path is row -> `TournamentLoad` -> `Split
+ScreenV`/`Split ScreenH` (on-screen title RACEBOX) -> `Track CreationSplit` or `Tournament
+CSplitV`/`H` -> `Team SelectionSplit`.
+
+- **The rows** are `Title::main_menu`'s `borrowed` list (`oag_title::Borrowed`): data on the
+  title, the same two rows for both Pulse pressings and for Pure, so the PSP's ground-truth
+  list of seven rows stays the disc's own. `pulses_ps2_main_menu_puts_the_borrowed_rows_where_the_disc_does`
+  reads the PS2 disc and asserts this build's order equals the disc's, which is what proves
+  the placement. The words are the PS2's English (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`,
+  `FE_HELP_SS`) carried in `english.toml` under `OAG_MENU_SPLIT_VERTICAL`, `_HORIZONTAL` and
+  `_HELP`, pinned to the disc by `the_split_rows_words_are_the_ps2_discs_own`. The build skips
+  the generic `oag-extras` SPLIT SCREEN row on these titles (the title claims its id);
+  HD, Omega and 2048 are unchanged and keep it.
+- **The settings page is our RACE page**, the PS2's `Split ScreenV`/`H` rows being mode, class,
+  weapons, difficulty and eliminations, which MODE, SPEED CLASS, WEAPONS, AI DIFFICULTY and KILLS
+  match. **Differs, not built**: the PS2's `Mode` list is `Arcade`, `Tournament`, `Head2Head`;
+  ours is this build's race modes, so Tournament and Head to Head are missing, and the
+  `TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves
+  by itself). Time Trial, Speed Lap and Zone stay reachable as split races (a split fields
+  opponents whatever the mode), **chosen, not measured**. `GSDisableEntriesBitField` is not applied.
+- **The join step is ours**, labelled: the PS2 seats two pads in port order, we need a device
+  claim and seat up to eight. It sits **after** the settings page (the race box's START opens
+  it), not before, because `handle_menu` drops a lobby on any settings change; seating at
+  START is also where HD's authored head count seats its people. Two people is the authored
+  flow; three to eight is our extension.
+- **VERTICAL vs HORIZONTAL**: the row sets `Session::split_cut` (`oag_render::viewport::Cut`),
+  which `split_screen::seat_for_launch` hands to `Race::set_cut`; `Race::cut()` is `Vertical`
+  for exactly two views and `Horizontal` for any other count. **Open: the viewport layout
+  and the HUD still cut top and bottom** until the left-and-right layout lands
+  (`hd-authored-split-setup`); SPLIT SCREEN VERTICAL therefore draws top and bottom today.
+
 ### Integrated GPUs (2026-10-13)
 
 The maintainer's product rule (see "Cost"): on an integrated GPU a split is offered for
@@ -772,8 +807,8 @@ HD, 2048 and Omega: data on the title, no title-name branch), read by
 a discrete, virtual, software (lavapipe) or unknown adapter offers every title. Where it
 acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
 
-- **The menus**: `Definition::drop_split_screen` removes the row (and `trim_tiles` the 2048
-  tile) when a `Shell` is installed (`Session::drop_split_screen_row`, from the windowed
+- **The menus**: `Definition::drop_split_screen` removes every split entry (the generic row, the
+  two Pulse and Pure rows; and `trim_tiles` the 2048 tile) when a `Shell` is installed (`Session::drop_split_screen_row`, from the windowed
   boot and from 2048's placeholder route; a language reload clones the trimmed
   definition). REMIX and every other row stay.
 - **A windowed `--race --players N`** on such a title logs `--players N: split screen is

@@ -1087,6 +1087,8 @@ differs sits around it:
   says so in three `<!-- Was goto=Racebox -->` comments. Confidence 95.
 - **Split screen is the real addition** - `FE_RACE_CAM_SS` and
   `FE_RACE_CAM_SSH` route to `Split ScreenV` / `Split ScreenH`. Confidence 95.
+  Wired 2026-10-13 as the main-menu rows SPLIT SCREEN VERTICAL / HORIZONTAL on both Pulse
+  pressings and Pure (borrowed), see [split screen](../rendering/split-screen.md#the-pulse-and-pure-entry-2026-10-13-split-entry-align).
   Its `Team SelectionSplit` is both players' Ship Selects on one page, top and bottom,
   read and followed since 2026-10-13: see
   [the split screen's Team Selection](../ui/selection-screens.md#the-split-screens-team-selection-2026-10-13).
