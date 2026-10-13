@@ -50,7 +50,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     zone: skins::played::ZONE,
     elimination: skins::played::ELIMINATION,
     split: None,
-    split_layout: None,
+    split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
 };
 
 /// How 2048's HUD sprites reach the screen, as [`oag_title::Title::hud_art`]

@@ -1,0 +1,255 @@
+# This project's split-screen HUD for Wipeout 2048: where each group of the title's own
+# widgets goes inside one view, for every view count and shape (two views cut either way,
+# three to eight). The disc's own `SplitScreen_hud` layouts are authored in HD's 1920x1080
+# against this title's 960x544 HUD space and are not wired, so until they are scaled this
+# file is the whole of 2048's split HUD. Read by oag_hud::split_hud through the fallback
+# asset layer (docs/architecture/asset-layers.md); a file of the same name in
+# overrides/wipeout-2048/Data/XML/ replaces it.
+#
+# CHOSEN, NOT MEASURED. Every anchor, offset and scale below is this project's choice, made
+# for legibility at the size a player sees a view, mirroring the arrangement of
+# SplitHud_HD.toml: the lap and time column top left, the place top right, the held
+# weapon and the shield bottom left (where 2048's own HUD holds the held weapon), the
+# thrust bar bottom right. The campaign's objectives and the XP award are not placed: a split has
+# neither. It places 2048's own widgets and draws no art of its own. A
+# widget no group names is not drawn in a split, which is how five to eight views drop
+# the secondary ones.
+#
+# Units: `offset` is a fraction of the view's width and height from the view's own
+# `anchor` point; `scale` 1.0 is the whole-screen HUD scaled to fit the view.
+#
+# The first layout whose `views`, `aspect` (a view's width over height, [min, max)) and
+# `modes` all fit the view answers it.
+
+[toml-schema]
+location = "https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd"
+version = "1.0.0"
+
+# Two views cut left and right: each a tall column (about 0.9:1 at 16:9), so the groups sit at its corners and larger.
+# Keyed on two views and any shape under 2.4:1 so a wider screen's columns, which are squarer, still read it.
+[[layout]]
+name = "tall"
+views = [2]
+aspect = [0.0, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*", "PilotAssist"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["EnergyBgFrame", "EnergyBg", "EnergyBar*", "EnergyText", "PickupBgFrame", "PickupIcon", "DenyPickup", "ZoneSpeedLogo", "ZoneCounterBG", "ZoneLight*", "Ghost*"]
+anchor = "bottom-left"
+offset = [0.03, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Lap*", "TotalTime*", "CurrentTime*", "BestTime*", "TargetTime*", "ScoreParent", "ScoreTxt", "Score", "TimeLimit*", "ZoneParent", "ZoneNumber"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PositionsParent", "PositionTxt", "Position"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PosTag*", "PlaceString*"]
+anchor = "right"
+offset = [-0.03, 0.0]
+scale = 1.17
+
+[[layout.group]]
+widgets = ["PickupText", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.3
+
+
+# Two views cut top and bottom, or any strip wider than 2.4:1: room to the sides, so the groups sit at the corners.
+[[layout]]
+name = "strip"
+aspect = [2.4, 99.0]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*", "PilotAssist"]
+anchor = "bottom-right"
+offset = [-0.012, -0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["EnergyBgFrame", "EnergyBg", "EnergyBar*", "EnergyText", "PickupBgFrame", "PickupIcon", "DenyPickup", "ZoneSpeedLogo", "ZoneCounterBG", "ZoneLight*", "Ghost*"]
+anchor = "bottom-left"
+offset = [0.012, -0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["Lap*", "TotalTime*", "CurrentTime*", "BestTime*", "TargetTime*", "ScoreParent", "ScoreTxt", "Score", "TimeLimit*", "ZoneParent", "ZoneNumber"]
+anchor = "top-left"
+offset = [0.012, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["PositionsParent", "PositionTxt", "Position"]
+anchor = "top-right"
+offset = [-0.012, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["PosTag*", "PlaceString*"]
+anchor = "right"
+offset = [-0.012, 0.0]
+scale = 0.85
+
+[[layout.group]]
+widgets = ["PickupText", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 0.95
+
+
+# A little wider than tall to a little wider than the screen: four views, the larger views of three or five.
+[[layout]]
+name = "landscape"
+aspect = [1.4, 2.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*", "PilotAssist"]
+anchor = "bottom-right"
+offset = [-0.015, -0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["EnergyBgFrame", "EnergyBg", "EnergyBar*", "EnergyText", "PickupBgFrame", "PickupIcon", "DenyPickup", "ZoneSpeedLogo", "ZoneCounterBG", "ZoneLight*", "Ghost*"]
+anchor = "bottom-left"
+offset = [0.015, -0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["Lap*", "TotalTime*", "CurrentTime*", "BestTime*", "TargetTime*", "ScoreParent", "ScoreTxt", "Score", "TimeLimit*", "ZoneParent", "ZoneNumber"]
+anchor = "top-left"
+offset = [0.015, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["PositionsParent", "PositionTxt", "Position"]
+anchor = "top-right"
+offset = [-0.015, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["PosTag*", "PlaceString*"]
+anchor = "right"
+offset = [-0.015, 0.0]
+scale = 0.9
+
+[[layout.group]]
+widgets = ["PickupText", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.0
+
+
+# Squarer and smaller views: the small views of five to seven. No kill column.
+[[layout]]
+name = "square"
+aspect = [1.0, 1.4]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*", "PilotAssist"]
+anchor = "bottom-right"
+offset = [-0.02, -0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["EnergyBgFrame", "EnergyBg", "EnergyBar*", "EnergyText", "PickupBgFrame", "PickupIcon", "DenyPickup", "ZoneSpeedLogo", "ZoneCounterBG", "ZoneLight*", "Ghost*"]
+anchor = "bottom-left"
+offset = [0.02, -0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["Lap*", "TotalTime*", "CurrentTime*", "BestTime*", "TargetTime*", "ScoreParent", "ScoreTxt", "Score", "TimeLimit*", "ZoneParent", "ZoneNumber"]
+anchor = "top-left"
+offset = [0.02, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["PositionsParent", "PositionTxt", "Position"]
+anchor = "top-right"
+offset = [-0.02, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["PickupText", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.1
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.1
+
+
+# Taller than wide: the small views of seven and eight.
+[[layout]]
+name = "portrait"
+aspect = [0.0, 1.0]
+
+[[layout.group]]
+widgets = ["SpeedBar*", "ThrustBar*", "PilotAssist"]
+anchor = "bottom-right"
+offset = [-0.03, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["EnergyBgFrame", "EnergyBg", "EnergyBar*", "EnergyText", "PickupBgFrame", "PickupIcon", "DenyPickup", "ZoneSpeedLogo", "ZoneCounterBG", "ZoneLight*", "Ghost*"]
+anchor = "bottom-left"
+offset = [0.03, -0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Lap*", "TotalTime*", "CurrentTime*", "BestTime*", "TargetTime*", "ScoreParent", "ScoreTxt", "Score", "TimeLimit*", "ZoneParent", "ZoneNumber"]
+anchor = "top-left"
+offset = [0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PositionsParent", "PositionTxt", "Position"]
+anchor = "top-right"
+offset = [-0.03, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["PickupText", "SubWeapon"]
+anchor = "top"
+offset = [0.0, 0.04]
+scale = 1.3
+
+[[layout.group]]
+widgets = ["Info", "Info2nd", "Info1", "Info2", "Info3", "Info4", "TimeDiff*", "WrongWay"]
+anchor = "centre"
+offset = [0.0, 0.0]
+scale = 1.3
