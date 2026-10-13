@@ -633,7 +633,9 @@ since 2026-10-13, **chosen, not measured, no confidence score**: the round robin
 takes every active craft nobody flies (`original_ai_begin_tick`), and the rubber
 band, `PosBalancing` and Pure's zone multiplier read the best-placed person
 (`Race::rubber_band_reference`, lowest slot on a tie) where the original reads
-its one player. What stays open: `use_original_ai`'s grid numbers assume the
+its one player (`AiManager_SnapshotRacers`, `0x088352c0`, refreshes the single
+player record `DAT_08b34410`/`DAT_08b34418` the thrust law reads, confidence per
+[ai-controls.md](../ghidra/functions/psp-pulse-usa/ai-controls.md)). What stays open: `use_original_ai`'s grid numbers assume the
 person is slot 0, and no capture shows the original's field with two players.
 
 **The speed plan is learned only when something reads it (2026-10-13).** This

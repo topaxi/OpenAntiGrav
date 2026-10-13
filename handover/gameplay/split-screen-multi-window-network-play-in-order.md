@@ -757,6 +757,16 @@ a guess.
   0 handed to the AI with a person elsewhere gets a driver seeded from
   `Driver::for_slot(race_seed, MAX_SHIPS)` and located on the line on the first
   tick (`Race::seed_vacated_driver`; lazily, because `driver.index` is hashed).
+  **Unanswered, with addresses:** how the original ends a two-player race.
+  `Race_FinishAllCrafts` (`0x08824e10`), reached only through `FUN_0882461c`
+  from `FUN_088dfb90` in the `GriefReport_*` screen code, is the one multiplayer
+  finish path found (`race-finish.md`), and it never ran live in Single Race or
+  Time Trial, so `Race::finished` ("every person is done") is chosen, not
+  measured. The AI's single player is `AiManager_SnapshotRacers` (`0x088352c0`).
+  **Player-visible now:** `--players N` (`oag_game::split_screen`) marks every
+  viewed slot `Controller::Local`, so a split-screen race reaches the end-race
+  screens only once the last person has finished, the first finisher's craft
+  flying on under the driver meanwhile.
   **Still open:** `oag_game::ai_choice` still declines the original driver for
   more than one human (`Reason::MultipleHumans`) - the sim sites above are ready
   for it, but `use_original_ai`'s grid numbers assume the one person is slot 0
