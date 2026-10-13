@@ -97,9 +97,15 @@ impl Layout {
     fn new(skin: &Skin) -> Self {
         let (width, _) = skin.space().size;
         let text_x = skin.menu_x();
+        // The right column ends at the same margin the screen title starts at. The
+        // rows' own left edge is that margin on the PSP titles, where mirroring it
+        // is the same thing; on HD and Omega the rows start well right of the title
+        // (800 against 194 on a 1920 grid), and mirroring the row edge left 320
+        // units between the two columns, so a name and its seat drew over each other.
+        let margin = text_x.min(skin.title_at().0);
         Self {
             text_x,
-            right_x: width - text_x,
+            right_x: width - margin,
             line: skin.row_pitch(),
             scale: skin.row_scale(),
             rows_y: skin.first_row_y(),

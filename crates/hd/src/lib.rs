@@ -70,6 +70,7 @@ pub mod race;
 /// Wipeout HD / Fury, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout HD",
+    split_on_integrated_gpu: false,
     archives: ArchiveCandidates {
         patch: &[],
         data: DATA_CANDIDATES,

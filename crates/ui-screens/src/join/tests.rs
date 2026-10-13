@@ -147,3 +147,50 @@ fn the_body_names_every_seat_and_its_device() {
         );
     }
 }
+
+fn right_aligned_x(join: &Join, skin: &Skin) -> f32 {
+    join.body(skin)
+        .into_iter()
+        .find_map(|draw| match draw {
+            Draw::Text {
+                x,
+                align: Align::Right,
+                ..
+            } => Some(x),
+            _ => None,
+        })
+        .expect("a seated row has a device column")
+}
+
+/// HD's rows start at 800 on a 1920 grid and its title at 194. Mirroring the rows'
+/// edge put the device column 320 units from the name, so "PLAYER 1" and a pad's
+/// name drew over each other; the column ends at the title's margin instead. Omega's
+/// skin carries HD's numbers to the digit (`oag_omega::frontend::MENU_SKIN`).
+#[test]
+fn on_hds_grid_the_device_column_clears_the_player_names() {
+    let skin = Skin::new(
+        oag_hd::frontend::FRONT_END.menu.unwrap(),
+        oag_display::space::Space::HD,
+        33.0,
+    );
+    let right = right_aligned_x(&screen(2), &skin);
+    let (title_x, _, _) = skin.title_at();
+    assert!(
+        (right - (1920.0 - title_x)).abs() < f32::EPSILON,
+        "ends at the title's margin, got {right}"
+    );
+    // A 33-unit face at 20 characters is roughly 400 units; the old gap was 320.
+    assert!(
+        right - skin.menu_x() > 800.0,
+        "{} units between the columns",
+        right - skin.menu_x()
+    );
+}
+
+/// The PSP titles' rows and title share a margin, so mirroring it is what it always was.
+#[test]
+fn on_the_psp_grid_the_device_column_is_where_it_was() {
+    let skin = skin();
+    let (width, _) = skin.space().size;
+    assert!((right_aligned_x(&screen(1), &skin) - (width - skin.menu_x())).abs() < f32::EPSILON);
+}
