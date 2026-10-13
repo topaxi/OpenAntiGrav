@@ -11,7 +11,7 @@
 #
 #   - every `target` names a page in this file;
 #   - every `action` is one the game handles: launch_race, launch_remix, quit,
-#     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign;
+#     save_pilot, new_pilot, rename_pilot, delete_pilot, open_campaign, split_screen;
 #   - every `button` is an abstract button name;
 #   - every page is reachable from `root`.
 #

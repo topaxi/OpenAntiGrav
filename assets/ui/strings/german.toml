@@ -26,6 +26,14 @@ OAG_MENU_RACEBOX = { text = "RENNBOX", human = false }
 OAG_MENU_RACEBOX_SUBTITLE = { text = "Stelle dein eigenes Rennen zusammen, auch im Splitscreen", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Kombiniere Strecken und Schiffe aus allen Titeln, die du besitzt", human = false }
+OAG_MENU_SPLIT_SCREEN = { text = "GETEILTER BILDSCHIRM", human = false }
+OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Bis zu acht Spieler an einem Bildschirm", human = false }
+OAG_JOIN_HINT = { text = "JEDER SPIELER DRÜCKT EINE TASTE ZUM BEITRETEN", human = false }
+OAG_JOIN_PLAYER = { text = "SPIELER", human = false }
+OAG_JOIN_EMPTY = { text = "TASTE DRÜCKEN", human = false }
+OAG_JOIN_KEYBOARD = { text = "TASTATUR", human = false }
+OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
+OAG_JOIN_START = { text = "START", human = false }
 OAG_MENU_RECORDS = { text = "REKORDE", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Deine Bestzeiten und Punktestände nach Strecke und Tempoklasse", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONEN", human = false }

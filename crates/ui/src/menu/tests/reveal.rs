@@ -44,12 +44,19 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
         drawn(&menu),
         ["RACE CAMPAIGN", "RACEBOX", "OPTIONS", "RECORDS"]
     );
-    // On RACEBOX, REMIX shows under it.
+    // On RACEBOX, REMIX and SPLIT SCREEN show under it.
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "racebox");
     assert_eq!(
         drawn(&menu),
-        ["RACE CAMPAIGN", "RACEBOX", "REMIX", "OPTIONS", "RECORDS"]
+        [
+            "RACE CAMPAIGN",
+            "RACEBOX",
+            "REMIX",
+            "SPLIT SCREEN",
+            "OPTIONS",
+            "RECORDS"
+        ]
     );
     assert_eq!(menu.tabs().last().map(|t| t.depth), Some(0));
     assert_eq!(menu.tabs()[2].depth, 1, "REMIX hangs one tab below RACEBOX");
@@ -74,9 +81,11 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     press(&mut menu, &[Button::Right]);
     press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "remix");
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(id(&menu), "split_screen");
     // The end of a family is an end: no wrap into the next row.
     press(&mut menu, &[Button::Down]);
-    assert_eq!(id(&menu), "remix");
+    assert_eq!(id(&menu), "split_screen");
     // Right from an attached row goes to the next top-level row, not its sibling.
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "options");
@@ -211,6 +220,7 @@ fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
             "RACE CAMPAIGN",
             "RACEBOX",
             "REMIX",
+            "SPLIT SCREEN",
             "OPTIONS",
             "MODS",
             "QUIT",

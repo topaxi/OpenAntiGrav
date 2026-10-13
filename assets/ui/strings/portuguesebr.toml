@@ -24,6 +24,14 @@ OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
 OAG_MENU_RACEBOX_SUBTITLE = { text = "Monte sua própria corrida, com tela dividida incluída", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Misture pistas e naves de todos os títulos que você tem", human = false }
+OAG_MENU_SPLIT_SCREEN = { text = "TELA DIVIDIDA", human = false }
+OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Até oito jogadores em uma só tela", human = false }
+OAG_JOIN_HINT = { text = "CADA JOGADOR APERTA UM BOTÃO PARA ENTRAR", human = false }
+OAG_JOIN_PLAYER = { text = "JOGADOR", human = false }
+OAG_JOIN_EMPTY = { text = "APERTE UM BOTÃO", human = false }
+OAG_JOIN_KEYBOARD = { text = "TECLADO", human = false }
+OAG_JOIN_PAD = { text = "CONTROLE", human = false }
+OAG_JOIN_START = { text = "INICIAR", human = false }
 OAG_MENU_RECORDS = { text = "RECORDES", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Seus melhores tempos e pontuações, por pista e classe", human = false }
 OAG_MENU_OPTIONS = { text = "OPÇÕES", human = false }

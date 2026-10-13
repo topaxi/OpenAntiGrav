@@ -172,12 +172,21 @@ Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view
 byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,
 no bloom/blur/jitter under a split and the hidden HUD are all **chosen, not
 measured**. **Still open from this list**: the per-player HUD (hidden while split),
-the pad-to-slot UI and a front-end entry (the PS2's `Team SelectionSplit`), per-team
-camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport origin),
-the 8-up frame budget, the results/end-race flow (still slot 0's, ends every view),
-and a check of HD's and Omega's post chains under a split.
-A second human slot only steers once the remote-slot-input work lands: until then
-view `i > 0` shows the grid's driver flying slot `i`.
+per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
+origin), the 8-up frame budget, the results/end-race flow (still slot 0's, ends
+every view), and a check of HD's and Omega's post chains under a split.
+**2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
+`oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
+lowest free human slot, a lost pad frees its slot, a pad past the humans drives
+nothing), `--players N` seats the keyboard and first pad on slot 0 and the rest in
+connection order, and a SPLIT SCREEN row under RACEBOX (oag-extras) opens a "press a
+button to join" screen (`oag_ui_screens::join`, `oag_input::lobby`) whose START goes
+on to Track and Ship Select with the seated count. All **chosen, not measured**; the
+PS2's authored flow is a camera choice (`FE_RACE_CAM_SS`) and a per-player team
+pick, not a device join. See [split-screen.md](../../docs/rendering/split-screen.md).
+A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: a second player's own ship pick (only slot 0 picks a team, the PS2's
+`Team SelectionSplit` has a set per player), and two real pads on real hardware (the
+rules are unit-tested over stand-in ids, the keyboard path runs end to end).
 
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track

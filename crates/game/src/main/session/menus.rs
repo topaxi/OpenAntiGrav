@@ -517,6 +517,7 @@ impl Session {
                 picker: None,
                 campaign: None,
                 pure_chain: None,
+                join: None,
                 styled,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),
@@ -622,25 +623,36 @@ impl Session {
         }
     }
 
+    /// The RACE page's START, and the join screen's: through the race box's own
+    /// screens first - Track Select, then Ship Select - and only straight to
+    /// the race on a title that authors neither. See `session::picker`. Wipeout
+    /// HD/Fury authors both, in files of their own
+    /// (`oag_title::FrontEnd::track_select`/`team_select`), and takes the same
+    /// path: `Track Creation` redirects to `Team Selection` by default. Zone
+    /// skips the ship screen either way, since it forces its own hull.
+    pub(crate) fn start_race_box(&mut self) {
+        let zone = self.race_mode() == oag_race::Mode::Zone;
+        if self.open_track_picker() || (!zone && self.open_ship_picker()) {
+            return;
+        }
+        self.launch_from_settings();
+    }
+
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
+        // A split-screen lobby is for the race box the join screen opened and no
+        // other: any menu event that is not the screen's own entry means the
+        // player is doing something else.
+        if !matches!(
+            event,
+            menu::MenuEvent::Fired(menu::Action::OpenSplitScreen)
+        ) {
+            self.split_lobby = None;
+        }
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
-            menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
-                // Through the race box's own screens first - Track Select,
-                // then Ship Select - and only straight to the race on a title
-                // that authors neither. See `session::picker`. Wipeout
-                // HD/Fury authors both, in files of their own
-                // (`oag_title::FrontEnd::track_select`/`team_select`), and
-                // takes the same path: `Track Creation` redirects to `Team
-                // Selection` by default. Zone skips the ship screen either
-                // way, since it forces its own hull.
-                let zone = self.race_mode() == oag_race::Mode::Zone;
-                if self.open_track_picker() || (!zone && self.open_ship_picker()) {
-                    return;
-                }
-                self.launch_from_settings();
-            }
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
+            menu::MenuEvent::Fired(menu::Action::OpenSplitScreen) => self.open_split_screen(),
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for
             // `LaunchRace` above. `Self::launch_remix` builds `race::Options`
@@ -815,6 +827,12 @@ impl Session {
                 .as_deref()
                 .unwrap_or("this source's own default circuit")
         );
+        // The join screen's players need a grid to race against, the way
+        // `--players N` forces one (`Session::prepare`): a Time Trial fields
+        // nobody, and `split_screen::apply` would settle on one view.
+        if self.split_lobby.is_some() {
+            race_options.opponents = true;
+        }
         // Back before the load, which reads it.
         self.race_options = Some(race_options);
         self.finish_launch();

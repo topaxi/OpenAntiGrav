@@ -9,8 +9,11 @@ choice below is **chosen, not measured** and carries no confidence score.
 
 Code: `crates/render/src/viewport.rs` (layout), `crates/raceplay/src/viewpoint.rs`
 (cameras), `crates/raceplay/src/scene/viewports.rs` (drawing),
-`crates/game/src/split_screen.rs` (the flag). Tests: the three modules' unit tests
-and the disc-backed `crates/game/tests/split_screen_ground_truth.rs`.
+`crates/game/src/split_screen.rs` (the flag and the lobby), `crates/input/src/lobby.rs`
+and `crates/input/src/pad.rs` (who plays which slot), `crates/ui-screens/src/join.rs`
+and `crates/game/src/main/session/join.rs` (the join screen). Tests: the modules'
+unit tests, `crates/game/tests/pad_join_end_to_end.rs` and the disc-backed
+`crates/game/tests/split_screen_ground_truth.rs`.
 
 ## Layout (chosen, not measured)
 
@@ -108,15 +111,108 @@ Cost scales with the views' own content: the player's view at the start line is 
 cheap one and the others are in the open, so four views cost 5 to 9 times one.
 There is no 8-up frame budget yet.
 
+## Who plays which slot (chosen, not measured)
+
+Every rule here is ours. The PS2 build takes its players from the pads in port
+order and has no join step to read; its authored flow (`FE_RACE_CAM_SS` and
+`FE_RACE_CAM_SSH` route to `Split ScreenV`/`Split ScreenH`, and `Team SelectionSplit`
+carries both players' widget sets, `docs/formats/race-setup.md`) is a camera choice
+and a per-player team pick, not a device join, so it is not what the entry below
+follows. Confidence scores do not apply.
+
+**The assignment** is `oag_input::pad::Assignment`, generic over the pad's id so
+the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
+
+- `Seating::Merged` is the default and the old behaviour exactly: every pad and
+  the keyboard drive slot 0, a pad with no entry of its own too.
+- `Assignment::seated(n)` is a split screen of `n` people. The keyboard drives
+  slot 0. A pad nobody assigned takes the lowest of slots `0..n` no other pad
+  holds, in the order the backend lists them, so the first pad shares slot 0 with
+  the keyboard and the next pads take slots 1, 2, and so on.
+- It runs on every poll (`Assignment::reconcile`), not on connect events: a pad
+  plugged in mid-race takes the lowest free slot, and a pad that went away frees
+  its slot, whose craft then flies on an empty input.
+- **A pad past `n`, with no slot free, drives nothing.** Merging it into slot 0
+  would put two people on one craft.
+- **A local slot with no device on it is flown by the grid's driver** (chosen, not
+  measured; `split_screen::follow_devices`, once a tick in the windowed session). A
+  race ends when every person-flown slot has finished, so a slot nobody can steer -
+  a pad unplugged mid-race, or `--players 4` on a machine with one pad - would hold
+  the end-of-race screens for ever. The slot goes back to `Controller::Ai` and returns
+  to `Local` when a pad takes it again; remote slots are never touched. It writes
+  `World::controllers` from outside the tick, so a replay or a network client would
+  have to carry it as an input (open). Headless captures never run it.
+- **A keyboard that did not join still drives slot 0**, merged with that seat's
+  pad: it has to reach the pause key and the menus. A keyboard that did join holds
+  its seat, so no pad that connects later takes it.
+- **A pad plugged in when the join screen seats its players, and not joined, is
+  benched** until it disconnects (`Assignment::bench`): a pad on the desk does
+  not take a seat the instant the race starts.
+- `--players N` seats the default way (`Controls::seat_default`). Leaving a split
+  race for the menus merges again (`Controls::merge_devices`), so any device
+  drives the one menu cursor; a race parked behind the pause menu keeps its
+  seats.
+
+**The join screen** is the second way to seat people. Entry: a SPLIT SCREEN row
+under RACEBOX in the built-in `oag-extras` mod (an action, `split_screen`), on
+every title that shows the extras. `oag_input::lobby::Lobby` is the model:
+
+| Device | Press | Does |
+| --- | --- | --- |
+| no seat | confirm (cross) | takes the next seat |
+| seated | back (circle) | gives its seat up, the later seats move down |
+| no seat | back (circle) | leaves the screen |
+| seated | start | begins, with the seated count |
+
+Seat `i` flies slot `i`, so the seated slots are always `0..count`. A pad that
+disconnects while the screen is open loses its seat. The keyboard, the mouse and
+touch are one device (a click arrives as a keyboard tap): a click on the empty
+row joins it, a click on a taken seat gives that seat up, START and BACK are
+rows, and the secondary button backs out. Escape is the keyboard pressing back.
+Per-device presses come from the backend's own press events for pads
+(`Pad::take_presses`, so a press shorter than a tick counts and two pads are told
+apart before either has a slot) and from the keyboard's newly pressed bits
+(`Controls::device_presses`).
+
+A split screen writes **no result and no ghost** (`records.toml` and the ghost
+store are for the one person the result is about), and it **fields opponents
+whatever the mode**, so Time Trial, Speed Lap and Zone are reachable as split races
+from the menus. Restarting a race from the 2048 end-of-race screen, which skips the
+menus, keeps the split.
+
+START goes on to the race box's own Track Select and Ship Select, as the RACE
+page's START does; backing out of Track Select drops the lobby. The race build
+drains it (`split_screen::seat`): slots `0..count` become local, the screen is
+cut into `count` views and each device goes on the slot it joined. One seat, or
+none, is an ordinary race and changes nothing. A split race fields opponents
+whatever the mode, as `--players` does, because a split of one craft is one view.
+
+`--menu-page join[:N]` draws the screen with `N` seats taken (the keyboard first,
+then pads named `GAMEPAD n`), off the same labels and string table as the live one.
+Verified on Pulse (EU): the row between REMIX and OPTIONS, the screen empty, with
+one seat and with three, START opening Track Select, and Escape from Track Select
+back on the main menu.
+
+**What is checked.** `crates/game/tests/pad_join_end_to_end.rs` runs the real
+`Controls` -> `Race::tick` path with the keyboard assigned to slot 1: slot 1's
+craft turns and slot 0's does not, and the same key on slot 0 does the reverse.
+A pad reading on slot 1 reaching slot 1's snapshot, and the lobby's and the
+assignment's rules, are `oag-input`'s unit tests. Not checked, and the lead's to run with two pads: the
+session wiring has no test of its own (the `seat_split_race` call in the race
+build, the merge on returning to the menus, the lobby dropping on Track Select's
+back), and the windowed walk only reached Track Select with the keyboard seated
+alone. To run: `just play data/images/pulse-psp-eu.chd --no-audio`, SPLIT SCREEN,
+press cross on each pad, START, pick a track and ship, and steer each pad; then
+leave the race and check a pad moves the menu cursor again.
+
 ## Open
 
 - A per-player HUD laid out per view (the next piece of work).
-- Slot `i > 0` is still flown by the grid's driver: only `World::primary_slot` is
-  stepped from a snapshot, which is the remote-slot-input lane's work. Marking the
-  slots `Controller::Local` is the declaration `--players` makes; the views already
-  show them flying.
-- Pad to slot assignment UI, and the front-end entry (the PS2's `Team SelectionSplit`
-  and `Track CreationSplit` screens): `--players` is a command-line switch only.
+- A second player's ship choice: the join screen goes on to one Track Select and
+  one Ship Select, so only slot 0 picks a team (the PS2's `Team SelectionSplit`
+  carries a set per player).
+- Two real pads: the assignment is unit-tested over stand-in ids and the keyboard
+  path runs end to end, but no second pad has been plugged in.
 - Per-team camera rigs, per-view bloom (an origin in `oag_post::bloom`), motion blur
   and the temporal upscaler under a split, and a check of HD's and Omega's chains.
 - The results scoreboard and the end-race flow still key on slot 0 and end every

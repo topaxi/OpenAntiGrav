@@ -571,6 +571,10 @@ impl Session {
                 // `RaceStage::campaign_cell`'s own doc. `.take()` leaves
                 // `self.campaign_cell` empty for whatever races next.
                 race_stage.campaign_cell = self.campaign_cell.take();
+                // The join screen's players: the views, the local slots and the
+                // devices on them. Drained here, with the cell, for the same
+                // reason - this is where a launch and a live stage meet.
+                Self::seat_split_race(&mut self.split_lobby, &mut self.controls, &mut race_stage.race);
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
                 // Applied here, once, before the stage ever ticks - see

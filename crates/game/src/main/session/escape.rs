@@ -208,6 +208,8 @@ impl Session {
         }
         if let Stage::Race(stage) = &mut self.stage
             && !stage.result_saved
+            // Not a split screen's: see the finish site in `Session::frame`.
+            && stage.race.viewport_count() <= 1
         {
             stage.result_saved = true;
             let key = stage.result_key.clone();
@@ -251,6 +253,11 @@ impl Session {
         // back to `Grid Selection`, which steps back to the menus.
         if matches!(&self.stage, Stage::Menu(stage) if stage.campaign.is_some()) {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
+            return;
+        }
+        // The split-screen join screen: escape is the keyboard pressing back.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.join.is_some()) {
+            self.escape_join();
             return;
         }
         // Wipeout Pure's campaign list, same rule.

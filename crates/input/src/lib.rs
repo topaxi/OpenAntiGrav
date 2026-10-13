@@ -14,6 +14,7 @@
 pub mod android;
 pub mod bindings;
 pub mod keys;
+pub mod lobby;
 pub mod pad;
 pub mod prompt;
 pub mod touch;
@@ -236,6 +237,11 @@ pub struct Controls {
     /// What the on-screen racing controls hold this tick. See [`touch`]. Not
     /// a pad: it never counts toward [`Self::pad_spoke`].
     touch: Reading,
+    /// Who pressed what since the last [`Self::player_snapshots`], for the join
+    /// screen. See [`Self::device_presses`].
+    presses: Vec<lobby::Press>,
+    /// The keyboard's bits as of the last tick, to find the ones that went down.
+    last_keys: u32,
 }
 
 impl Controls {
@@ -261,6 +267,8 @@ impl Controls {
             android: android::AndroidPad::default(),
             android_spoke: false,
             touch: Reading::default(),
+            presses: Vec::new(),
+            last_keys: 0,
         }
     }
 
@@ -281,6 +289,42 @@ impl Controls {
     #[must_use]
     pub fn keyboard_slot(&self) -> usize {
         self.pad.assignment().keyboard_slot()
+    }
+
+    /// Who pressed which buttons in the last [`Self::player_snapshots`]: each pad
+    /// that did, off its own press events, and the keyboard (which is also the
+    /// mouse and touch, whose clicks arrive as [`Self::tap`]s) when a key went
+    /// down. What the join screen reads, because before anyone has joined every
+    /// device is merged into slot 0 and the snapshots cannot say which pad pressed.
+    #[must_use]
+    pub fn device_presses(&self) -> &[lobby::Press] {
+        &self.presses
+    }
+
+    /// The real pads connected now, in the order the backend lists them.
+    #[must_use]
+    pub fn connected_pads(&self) -> Vec<gilrs::GamepadId> {
+        self.pad.connected()
+    }
+
+    /// The backend's name for a pad.
+    #[must_use]
+    pub fn pad_name(&self, id: gilrs::GamepadId) -> Option<String> {
+        self.pad.name_of(id)
+    }
+
+    /// Seats `humans` people the default way - keyboard and first pad on slot 0,
+    /// each further pad on the next slot - for a race that was not set up on the
+    /// join screen (`--players N`). See [`pad::Assignment::seated`].
+    pub fn seat_default(&mut self, humans: usize) {
+        *self.pad.assignment_mut() = pad::Assignment::seated(humans);
+    }
+
+    /// Back to every device on slot 0, which is what the menus need: one cursor,
+    /// driven by any device. Called when a split-screen race hands back to the
+    /// front end.
+    pub fn merge_devices(&mut self) {
+        *self.pad.assignment_mut() = pad::Assignment::default();
     }
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
@@ -418,6 +462,15 @@ impl Controls {
     /// are `InputSnapshot::default`.
     pub fn player_snapshots(&mut self) -> oag_gameplay::PlayerInputs {
         let mut pads = self.pad.poll_players();
+        self.presses = self
+            .pad
+            .take_presses()
+            .into_iter()
+            .map(|(id, buttons)| lobby::Press {
+                device: lobby::Device::Pad(id),
+                buttons,
+            })
+            .collect();
         let android = pad::resolve(self.android.reading(), self.pad.triggers());
         if android != pad::PadState::default() {
             let slot = self.keyboard_slot();
@@ -462,6 +515,13 @@ impl Controls {
         // on the first and leave nothing for the rest.
         let keyboard_slot = self.keyboard_slot();
         let keyboard_keys = self.keyboard.held_mask() | self.keyboard.take_taps();
+        let pressed = keyboard_keys & !std::mem::replace(&mut self.last_keys, keyboard_keys);
+        if pressed != 0 {
+            self.presses.push(lobby::Press {
+                device: lobby::Device::Keyboard,
+                buttons: pressed,
+            });
+        }
         let mut pads = pads;
         if self.touch != Reading::default() {
             let touch = pad::resolve(self.touch, self.pad.triggers());

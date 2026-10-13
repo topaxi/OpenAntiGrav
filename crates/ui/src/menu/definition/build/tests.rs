@@ -60,6 +60,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "campaign",
         "racebox",
         "racebox>remix",
+        "racebox>split_screen",
         "options",
         "options>records",
         "options>mods",
@@ -72,6 +73,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         "campaign",
         "racebox",
         "racebox>remix",
+        "racebox>split_screen",
         "options",
         "options>mods",
         "options>quit",
@@ -86,6 +88,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         [
             "racebox",
             "racebox>remix",
+            "racebox>split_screen",
             "options",
             "options>records",
             "options>mods",
@@ -102,6 +105,7 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
             "campaign",
             "racebox",
             "racebox>remix",
+            "racebox>split_screen",
             "options",
             "options>mods",
             "options>quit",
@@ -117,7 +121,15 @@ fn a_mod_row_goes_after_a_sibling_or_at_the_end_of_its_parents_rows() {
         &row("id = \"a\"\nparent = \"racebox\"\n"),
     )
     .unwrap();
-    assert_eq!(rows[1..4], ["racebox", "racebox>remix", "racebox>a"]);
+    assert_eq!(
+        rows[1..5],
+        [
+            "racebox",
+            "racebox>remix",
+            "racebox>split_screen",
+            "racebox>a"
+        ]
+    );
 
     let rows = main_rows(
         Some(oag_hd::TITLE),

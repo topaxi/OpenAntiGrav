@@ -68,6 +68,14 @@ OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
 OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race, split screen included", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Mix tracks and ships across every title you own", human = false }
+OAG_MENU_SPLIT_SCREEN = { text = "SPLIT SCREEN", human = false }
+OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Up to eight people on one screen", human = false }
+OAG_JOIN_HINT = { text = "EACH PLAYER PRESSES A BUTTON TO JOIN", human = false }
+OAG_JOIN_PLAYER = { text = "PLAYER", human = false }
+OAG_JOIN_EMPTY = { text = "PRESS A BUTTON", human = false }
+OAG_JOIN_KEYBOARD = { text = "KEYBOARD", human = false }
+OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
+OAG_JOIN_START = { text = "START", human = false }
 OAG_MENU_RECORDS = { text = "RECORDS", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Your best times and scores, by track and class", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }

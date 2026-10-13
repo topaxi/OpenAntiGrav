@@ -46,6 +46,11 @@ pub(crate) fn arm(
 /// call, and it beats the stored file. Logged, never fatal - the
 /// `records.toml` contract.
 pub(crate) fn save(race: &mut race::Race, key: &records::Key) {
+    // A split screen's lap is slot 0's, in a race a second person was in: not a
+    // ghost anybody should race against.
+    if race.viewport_count() > 1 {
+        return;
+    }
     let Some(replay) = race.take_new_best_ghost() else {
         return;
     };

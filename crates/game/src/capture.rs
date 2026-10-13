@@ -15,6 +15,7 @@ mod campaign_page;
 mod card;
 mod endrace_page;
 mod endrace_touch_page;
+mod join_page;
 mod loading;
 mod menu_page;
 mod offscreen;
@@ -737,6 +738,14 @@ pub fn run(
                     &records,
                 )?;
                 flyer_shot = shot;
+                (backdrop, video_format, list, space)
+            } else if let Some(seated) = join_page::seats(page) {
+                // The split-screen join screen - see `crate::main::session::join`
+                // for the live flow.
+                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let (list, clip) =
+                    join_page::capture(seated, &strings, frame, &skin, &menu_frame, footer);
+                ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some(answers) = pure_chain_page::answers(page) {
                 // Wipeout Pure's SINGLE PLAYER screens - see

@@ -381,6 +381,29 @@ fn deadzone(value: f32) -> f32 {
     scaled.min(1.0) * value.signum()
 }
 
+/// Where a device with no assignment of its own goes under [`Seating::Merged`].
+///
+/// Slot 0: the human slot in `oag_gameplay::World::SINGLE_PLAYER`, and the one a
+/// race has until something enables a second.
+pub const DEFAULT_SLOT: usize = 0;
+
+/// Whether a pad nobody assigned drives slot 0 or drives nothing.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Seating {
+    /// Every device without a slot of its own drives [`DEFAULT_SLOT`]:
+    /// the single merged stream this module was until 2026-09-16, and still the
+    /// default.
+    #[default]
+    Merged,
+    /// `humans` slots, `0..humans`, are people. A pad nobody assigned **takes the
+    /// lowest of them no other pad holds** when [`Assignment::reconcile`] first
+    /// sees it, and drives nothing when none is free. **Chosen, not measured.**
+    Seated {
+        /// How many slots are people.
+        humans: u8,
+    },
+}
+
 /// Which grid slot each device drives.
 ///
 /// **This replaces "every pad is one logical stream", which is what this module
@@ -391,41 +414,116 @@ fn deadzone(value: f32) -> f32 {
 /// screen, a second window and a remote client each need two devices to mean
 /// two craft, and a merge cannot express that at all.
 ///
-/// **The default is the old behaviour exactly.** Every pad and the keyboard map
-/// to slot 0, so a Deck with a pad in its dock still steers from either, and a
-/// single-pad session is identical to what it was. Assigning a device anywhere
-/// else is an explicit call; nothing does it yet.
+/// **The default is the old behaviour exactly** ([`Seating::Merged`]). Every pad
+/// and the keyboard map to slot 0, so a Deck with a pad in its dock still
+/// steers from either, and a single-pad session is identical to what it was.
+/// A split-screen race replaces it with [`Self::seated`]: the keyboard and the
+/// first pad on slot 0, each further pad on the next slot, in the order
+/// [`Self::reconcile`] meets them. A pad that connects mid-race takes the lowest
+/// slot no pad holds, and one that goes away frees its slot - the craft keeps
+/// flying on an empty input until another pad takes it.
 ///
 /// **A `Vec` of pairs rather than a map**, for the reason
 /// `docs/architecture/determinism.md` gives: which slot a device drives decides
 /// which craft an input steers, so it reaches simulation state, and a
 /// `HashMap`'s iteration order is not stable between processes. At most eight
 /// devices matter, so a linear scan is not worth a hash anyway.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Assignment {
+///
+/// **Generic over the pad's id** so the rules above are testable: `gilrs`'s
+/// `GamepadId` has no public constructor, so a test cannot make two of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Assignment<D = gilrs::GamepadId> {
     /// Pads that have been given a slot of their own, in assignment order.
     ///
-    /// A pad not in here drives [`Self::DEFAULT_SLOT`], which is what keeps an
-    /// unconfigured session working the way it always did.
-    pads: Vec<(gilrs::GamepadId, u8)>,
+    /// Under [`Seating::Merged`] a pad not in here drives [`DEFAULT_SLOT`],
+    /// which is what keeps an unconfigured session working the way it always
+    /// did.
+    pads: Vec<(D, u8)>,
     /// Which slot the keyboard drives. Slot 0 until something says otherwise.
     keyboard: u8,
+    /// What a pad with no entry above does.
+    seating: Seating,
+    /// Whether the keyboard was seated on a slot of its own (by the join
+    /// screen) rather than left on slot 0 by default. A keyboard that holds its
+    /// slot keeps a pad that reconnects from landing on it.
+    keyboard_claimed: bool,
+    /// Pads that were connected when the seats were set and did not take one.
+    /// They stay out until they disconnect: a pad on the desk that nobody joined
+    /// with must not take a seat the moment the race starts.
+    benched: Vec<D>,
 }
 
-impl Assignment {
-    /// Where a device with no assignment of its own goes.
-    ///
-    /// Slot 0: the human slot in `oag_gameplay::World::SINGLE_PLAYER`, and the
-    /// one a race has until something enables a second.
-    pub const DEFAULT_SLOT: usize = 0;
+impl<D> Default for Assignment<D> {
+    fn default() -> Self {
+        Self {
+            pads: Vec::new(),
+            keyboard: 0,
+            seating: Seating::Merged,
+            keyboard_claimed: false,
+            benched: Vec::new(),
+        }
+    }
+}
 
-    /// Which slot `id` drives.
+impl<D: Copy + PartialEq> Assignment<D> {
+    /// `humans` people, slots `0..humans`, the keyboard on slot 0 and no pad
+    /// seated yet: [`Self::reconcile`] seats them as it meets them. `humans` is
+    /// held to `1..=MAX_PLAYERS`.
     #[must_use]
-    pub fn slot_of(&self, id: gilrs::GamepadId) -> usize {
-        self.pads
+    pub fn seated(humans: usize) -> Self {
+        let humans = humans.clamp(1, oag_gameplay::MAX_PLAYERS);
+        Self {
+            pads: Vec::new(),
+            keyboard: 0,
+            seating: Seating::Seated {
+                humans: u8::try_from(humans).unwrap_or(u8::MAX),
+            },
+            keyboard_claimed: false,
+            benched: Vec::new(),
+        }
+    }
+
+    /// Seats the keyboard on `slot` **as a player**, which keeps a pad that
+    /// connects later from taking the same slot ([`Self::assign_keyboard`] alone
+    /// leaves the slot shared, as `--players` does on slot 0).
+    pub fn claim_keyboard(&mut self, slot: usize) {
+        self.assign_keyboard(slot);
+        self.keyboard_claimed = true;
+    }
+
+    /// Keeps every pad in `connected` out of the seats until it disconnects:
+    /// the pads that were plugged in when the join screen seated its players
+    /// and did not join.
+    pub fn bench(&mut self, connected: &[D]) {
+        for id in connected {
+            if !self.pads.iter().any(|(held, _)| held == id) && !self.benched.contains(id) {
+                self.benched.push(*id);
+            }
+        }
+    }
+
+    /// How many slots are people under [`Seating::Seated`], or `None` merged.
+    #[must_use]
+    pub fn humans(&self) -> Option<usize> {
+        match self.seating {
+            Seating::Merged => None,
+            Seating::Seated { humans } => Some(usize::from(humans)),
+        }
+    }
+
+    /// Which slot `id` drives, or `None` when it drives nothing - only possible
+    /// seated, for a pad that found no free slot.
+    #[must_use]
+    pub fn slot_of(&self, id: D) -> Option<usize> {
+        let own = self
+            .pads
             .iter()
             .find(|(candidate, _)| *candidate == id)
-            .map_or(Self::DEFAULT_SLOT, |(_, slot)| usize::from(*slot))
+            .map(|(_, slot)| usize::from(*slot));
+        match self.seating {
+            Seating::Merged => own.or(Some(DEFAULT_SLOT)),
+            Seating::Seated { .. } => own,
+        }
     }
 
     /// Puts `id` on `slot`, replacing whatever it drove before.
@@ -433,7 +531,7 @@ impl Assignment {
     /// A slot past the grid is ignored rather than clamped: clamping would
     /// silently put two people on one craft, which is harder to notice than a
     /// pad that did not take.
-    pub fn assign_pad(&mut self, id: gilrs::GamepadId, slot: usize) {
+    pub fn assign_pad(&mut self, id: D, slot: usize) {
         let Ok(slot) = u8::try_from(slot) else {
             return;
         };
@@ -461,17 +559,57 @@ impl Assignment {
         }
     }
 
-    /// Whether every device still drives [`Self::DEFAULT_SLOT`].
+    /// Brings the table in line with the pads connected right now, in the order
+    /// the backend lists them. Run on every poll rather than on connect events,
+    /// so a pad plugged in between two polls and one that was never announced
+    /// are the same case.
+    ///
+    /// Merged, nothing changes. Seated, a pad that is gone loses its slot and
+    /// each new one takes the lowest slot below `humans` no pad holds (nor a
+    /// keyboard that [`Self::claim_keyboard`] seated); **a pad that finds none
+    /// drives nothing** (chosen, not measured: merging it into slot 0 would put
+    /// two people on one craft, the failure [`Self::assign_pad`] refuses). A
+    /// [benched](Self::bench) pad is left alone until it disconnects.
+    pub fn reconcile(&mut self, connected: &[D]) {
+        let Seating::Seated { humans } = self.seating else {
+            return;
+        };
+        self.pads.retain(|(id, _)| connected.contains(id));
+        self.benched.retain(|id| connected.contains(id));
+        let (keyboard, claimed) = (self.keyboard, self.keyboard_claimed);
+        for id in connected {
+            if self.pads.iter().any(|(held, _)| held == id) || self.benched.contains(id) {
+                continue;
+            }
+            let free = (0..humans).find(|slot| {
+                self.pads.iter().all(|(_, held)| held != slot) && !(claimed && *slot == keyboard)
+            });
+            if let Some(slot) = free {
+                self.pads.push((*id, slot));
+            }
+        }
+    }
+
+    /// Whether something is on `slot` right now: the keyboard, which is always
+    /// plugged in, or a pad [`Self::reconcile`] has seated there. What a race asks
+    /// to know which of its local slots still have a person at them.
+    #[must_use]
+    pub fn drives(&self, slot: usize) -> bool {
+        self.keyboard_slot() == slot || self.pads.iter().any(|(_, held)| usize::from(*held) == slot)
+    }
+
+    /// Whether every device still drives [`DEFAULT_SLOT`].
     ///
     /// What a caller asks to know it is in the single-player case - the one
     /// where a merged read and a per-slot read are the same thing.
     #[must_use]
     pub fn is_single_player(&self) -> bool {
-        self.keyboard_slot() == Self::DEFAULT_SLOT
+        self.seating == Seating::Merged
+            && self.keyboard_slot() == DEFAULT_SLOT
             && self
                 .pads
                 .iter()
-                .all(|(_, slot)| usize::from(*slot) == Self::DEFAULT_SLOT)
+                .all(|(_, slot)| usize::from(*slot) == DEFAULT_SLOT)
     }
 }
 
@@ -497,6 +635,11 @@ pub struct Pad {
     /// The family (`None` when unknown) of the real pad last pressed since
     /// [`Self::take_activity`]; the outer `None` is no activity.
     active: Option<Option<crate::prompt::PromptFamily>>,
+    /// Which real pad pressed which bound buttons since [`Self::take_presses`],
+    /// off the backend's own press events - so a press shorter than a tick still
+    /// counts, and the join screen can tell two pads apart before either has a
+    /// slot.
+    presses: Vec<(gilrs::GamepadId, u32)>,
 }
 
 impl std::fmt::Debug for Pad {
@@ -525,6 +668,7 @@ impl Pad {
                 assignment: Assignment::default(),
                 launch: crate::prompt::Launch::from_process(),
                 active: None,
+                presses: Vec::new(),
             },
             Err(e) => {
                 warn!("no gamepad support ({e}); keyboard only");
@@ -534,6 +678,7 @@ impl Pad {
                     assignment: Assignment::default(),
                     launch: crate::prompt::Launch::default(),
                     active: None,
+                    presses: Vec::new(),
                 }
             }
         }
@@ -553,6 +698,7 @@ impl Pad {
             assignment: Assignment::default(),
             launch: crate::prompt::Launch::default(),
             active: None,
+            presses: Vec::new(),
         }
     }
 
@@ -657,13 +803,32 @@ impl Pad {
         let triggers = self.triggers;
         let mut readings = [Reading::default(); oag_gameplay::MAX_PLAYERS];
         if let Some(gilrs) = &mut self.gilrs {
-            while gilrs.next_event().is_some() {}
+            while let Some(event) = gilrs.next_event() {
+                if let gilrs::EventType::ButtonPressed(button, _) = event.event
+                    && let Some(bit) = map_button(button).map(Button::bit)
+                    && is_real_pad(&gilrs.gamepad(event.id))
+                {
+                    match self.presses.iter_mut().find(|(id, _)| *id == event.id) {
+                        Some((_, bits)) => *bits |= bit,
+                        None => self.presses.push((event.id, bit)),
+                    }
+                }
+            }
+
+            let connected: Vec<gilrs::GamepadId> = gilrs
+                .gamepads()
+                .filter(|(_, pad)| pad.is_connected() && is_real_pad(pad))
+                .map(|(id, _)| id)
+                .collect();
+            self.assignment.reconcile(&connected);
 
             for (id, pad) in gilrs.gamepads() {
                 if !is_real_pad(&pad) {
                     continue;
                 }
-                let slot = self.assignment.slot_of(id);
+                let Some(slot) = self.assignment.slot_of(id) else {
+                    continue;
+                };
                 let Some(reading) = readings.get_mut(slot) else {
                     continue;
                 };
@@ -691,6 +856,32 @@ impl Pad {
         readings.map(|reading| resolve(reading, triggers))
     }
 
+    /// The bound buttons each real pad pressed since the last call, and clears
+    /// them. What the join screen reads: it has to know *which* pad pressed
+    /// confirm, and before anyone has joined every pad is merged into slot 0.
+    pub fn take_presses(&mut self) -> Vec<(gilrs::GamepadId, u32)> {
+        std::mem::take(&mut self.presses)
+    }
+
+    /// The real pads connected now, in the order the backend lists them.
+    #[must_use]
+    pub fn connected(&self) -> Vec<gilrs::GamepadId> {
+        self.gilrs.as_ref().map_or_else(Vec::new, |gilrs| {
+            gilrs
+                .gamepads()
+                .filter(|(_, pad)| pad.is_connected() && is_real_pad(pad))
+                .map(|(id, _)| id)
+                .collect()
+        })
+    }
+
+    /// The name the backend gives `id`, or `None` when it is gone.
+    #[must_use]
+    pub fn name_of(&self, id: gilrs::GamepadId) -> Option<String> {
+        let pad = self.gilrs.as_ref()?.connected_gamepad(id)?;
+        Some(pad.name().to_string())
+    }
+
     /// What slot 0's pads contribute, which under the default assignment is
     /// every pad on the machine.
     ///
@@ -698,7 +889,7 @@ impl Pad {
     /// front end has one cursor and one menu no matter how many people are
     /// racing.
     pub fn poll(&mut self) -> PadState {
-        self.poll_players()[Assignment::DEFAULT_SLOT]
+        self.poll_players()[DEFAULT_SLOT]
     }
 }
 

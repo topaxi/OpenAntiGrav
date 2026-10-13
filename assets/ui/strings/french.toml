@@ -64,6 +64,14 @@
 OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACEBOX = { text = "COURSE", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
+OAG_MENU_SPLIT_SCREEN = { text = "ÉCRAN PARTAGÉ", human = false }
+OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Jusqu'à huit joueurs sur un seul écran", human = false }
+OAG_JOIN_HINT = { text = "CHAQUE JOUEUR APPUIE SUR UN BOUTON POUR REJOINDRE", human = false }
+OAG_JOIN_PLAYER = { text = "JOUEUR", human = false }
+OAG_JOIN_EMPTY = { text = "APPUYEZ SUR UN BOUTON", human = false }
+OAG_JOIN_KEYBOARD = { text = "CLAVIER", human = false }
+OAG_JOIN_PAD = { text = "MANETTE", human = false }
+OAG_JOIN_START = { text = "DÉMARRER", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
 OAG_MENU_QUIT = { text = "QUITTER", human = false }
 

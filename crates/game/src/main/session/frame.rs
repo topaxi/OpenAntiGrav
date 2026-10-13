@@ -502,6 +502,10 @@ impl Session {
                 }
                 Stage::Menu(stage) => {
                     stage.tick(dt);
+                    self.unseat_after_split_race();
+                    let Stage::Menu(stage) = &mut self.stage else {
+                        continue;
+                    };
                     // A selection screen takes the tick whole, the way a
                     // modal prompt does below: the rows behind it are a
                     // picture. Confirming may hand the window to a loading
@@ -524,6 +528,15 @@ impl Session {
                     // Wipeout Pure's campaign list, same shape.
                     if stage.pure_chain.is_some() {
                         self.tick_pure_chain(&grid);
+                        continue;
+                    }
+                    // The split-screen join screen, same shape. Starting it hands
+                    // the window to the race box's screens, and possibly a load.
+                    if stage.join.is_some() {
+                        self.tick_join(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
                         continue;
                     }
                     // Snapshotted *before* the input is consumed, because the
@@ -722,6 +735,12 @@ impl Session {
                     // default every device is on slot 0, so this is the one
                     // snapshot the single-argument signature used to take, in
                     // the slot it used to go to.
+                    // A local slot nobody is on flies as the AI, or the race
+                    // never ends: see `split_screen::follow_devices`.
+                    oag_game::split_screen::follow_devices(
+                        &mut stage.race,
+                        self.controls.assignment(),
+                    );
                     stage.race.tick(&inputs);
                     stage.tick_messages();
                     // Immediately after the tick and inside this loop, so a cue
@@ -760,6 +779,9 @@ impl Session {
             if let Stage::Race(stage) = &mut self.stage
                 && stage.race.finished()
                 && !stage.result_saved
+                // A split screen's result is nobody's record: the results are
+                // slot 0's, which a second person was racing.
+                && stage.race.viewport_count() <= 1
             {
                 stage.result_saved = true;
                 let key = stage.result_key.clone();

@@ -52,6 +52,8 @@ mod pointer;
 mod pose;
 #[path = "main/prepare.rs"]
 mod prepare;
+#[path = "main/join_stage.rs"]
+mod join_stage;
 #[path = "main/pure_chain_stage.rs"]
 mod pure_chain_stage;
 #[path = "main/race_build.rs"]
