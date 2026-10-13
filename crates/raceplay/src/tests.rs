@@ -15,6 +15,7 @@ use super::*;
 use oag_vex::track;
 
 mod autopilot;
+mod between_ticks;
 mod camera;
 mod cannon_draw;
 mod countdown;

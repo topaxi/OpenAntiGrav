@@ -959,7 +959,7 @@ impl Race {
     #[must_use]
     pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
         let local = self.nozzle_local_of(slot)?;
-        Some(model_matrix_of(&self.sim.world.ships[slot]).transform_point3(local))
+        Some(self.ship_model_matrix_of(slot).transform_point3(local))
     }
 
     /// The `engine_flare` locator in **model space** - the pivot a transform
