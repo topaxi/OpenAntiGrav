@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_pad_ne_ground_truth)'
+//!     -E 'test(/^hd_pad_ne_ground_truth::/)'
 //! ```
 //!
 //! # What each test would catch being dropped

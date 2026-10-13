@@ -545,3 +545,21 @@ mod zone_ground_truth;
 mod zone_sky_ground_truth;
 #[path = "../zone_start_ground_truth.rs"]
 mod zone_start_ground_truth;
+
+/// A `tests/*.rs` file missing from the list above compiles into nothing, and
+/// its tests stop running without a word.
+#[test]
+fn every_test_file_is_listed() {
+    let listing = include_str!("main.rs");
+    let tests = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    for entry in std::fs::read_dir(&tests).expect("tests/ is readable") {
+        let path = entry.expect("tests/ entry").path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            let file = path.file_name().and_then(|f| f.to_str()).expect("UTF-8");
+            assert!(
+                listing.contains(&format!("#[path = \"../{file}\"]")),
+                "tests/{file} is not listed in tests/it/main.rs"
+            );
+        }
+    }
+}

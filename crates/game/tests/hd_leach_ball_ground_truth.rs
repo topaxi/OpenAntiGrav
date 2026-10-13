@@ -5,7 +5,7 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test hd_leach_ball_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it hd_leach_ball_ground_truth:: --run-ignored all
 //! ```
 //!
 //! # What only a frame can say here

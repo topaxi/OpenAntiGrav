@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(roster_declared_ground_truth)'
+//!     -E 'test(/^roster_declared_ground_truth::/)'
 //! ```
 //!
 //! # What this is for

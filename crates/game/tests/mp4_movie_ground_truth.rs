@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(mp4_movie_ground_truth)'
+//!     -E 'test(/^mp4_movie_ground_truth::/)'
 //! ```
 //!
 //! # Why 90 frames, not the whole 2,984

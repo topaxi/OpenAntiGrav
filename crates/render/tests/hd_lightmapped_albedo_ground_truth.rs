@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_lightmapped_albedo_ground_truth)'
+//!     -E 'test(/^hd_lightmapped_albedo_ground_truth::/)'
 //! ```
 //!
 //! Vineta K's `d_s_n_customr` wet floor names `ds_dualparaboloid_c` (512x256,

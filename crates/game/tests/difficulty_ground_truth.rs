@@ -4,7 +4,7 @@
 //! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! cargo nextest run -p oag-game --run-ignored all -E 'binary(difficulty_ground_truth)'
+//! cargo nextest run -p oag-game --run-ignored all -E 'test(/^difficulty_ground_truth::/)'
 //! ```
 //!
 //! **The only place the scale can be checked.** `oag-ai`'s own tests assert the

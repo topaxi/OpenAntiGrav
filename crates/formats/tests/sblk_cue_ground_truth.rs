@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use oag_disc::DiscImage;
 use oag_formats::sblk::{self, Bank};
 
-mod sblk_banks;
+use crate::sblk_banks;
 use sblk_banks::banks_in;
 
 /// The PSP archives that hold sound banks.

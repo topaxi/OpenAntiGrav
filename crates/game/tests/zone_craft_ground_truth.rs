@@ -3,7 +3,7 @@
 //!
 //! **`#[ignore]`d and never run in CI**: needs the extracted packages under
 //! `data/extracted/`. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'binary(zone_craft_ground_truth)'`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all -E 'test(/^zone_craft_ground_truth::/)'`.
 //!
 //! The law is [`oag_title::ZoneCraft::OwnShipAt`], read off both executables'
 //! ship-model loader (`docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`,

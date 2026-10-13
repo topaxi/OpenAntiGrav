@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(scenery_animation_ground_truth)'
+//!     -E 'test(/^scenery_animation_ground_truth::/)'
 //! ```
 //!
 //! # What this is for

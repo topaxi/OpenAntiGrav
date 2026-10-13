@@ -9,7 +9,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test sfx_weapon_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it sfx_weapon_ground_truth:: --run-ignored all
 //! ```
 
 use std::path::PathBuf;

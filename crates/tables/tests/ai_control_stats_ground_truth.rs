@@ -14,7 +14,7 @@
 //! page is `docs/ghidra/functions/psp-pulse-usa/ai-controls.md`; the cross-title
 //! result is `docs/formats/ai-tables.md`.
 
-mod common;
+use crate::common;
 
 use common::{base_name, control_outcome, outcomes, psarc_ai_files};
 use oag_tables::ai_control_stats::{self, Controller};

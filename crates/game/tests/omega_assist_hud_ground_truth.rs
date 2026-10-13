@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_assist_hud_ground_truth)'
+//!     -E 'test(/^omega_assist_hud_ground_truth::/)'
 //! ```
 //!
 //! What this fails on: dropping `oag_omega::hud::ART.assist` (the sprites stop

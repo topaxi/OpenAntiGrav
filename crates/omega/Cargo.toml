@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+autotests = false
 
 # A title package is tables, and this one is thin on purpose: it holds what
 # `docs/formats/omega-frontend.md` and `docs/formats/omega-status.md` measured
@@ -23,3 +25,7 @@ oag-2048.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

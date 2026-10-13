@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_water_ground_truth)'
+//!     -E 'test(/^hd_water_ground_truth::/)'
 //! ```
 //!
 //! The census this pins (`hd_water_census.rs`, `hd_water_reach.rs`, 28 circuit

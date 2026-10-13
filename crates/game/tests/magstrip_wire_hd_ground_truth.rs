@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(magstrip_wire_hd_ground_truth)'
+//!     -E 'test(/^magstrip_wire_hd_ground_truth::/)'
 //! ```
 //!
 //! What it pins that the unit tests in `oag-raceplay` cannot: that HD's own

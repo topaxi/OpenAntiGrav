@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_weapon_pad_glow_ground_truth)'
+//!     -E 'test(/^hd_weapon_pad_glow_ground_truth::/)'
 //! ```
 //!
 //! The original recolours each pad's `_ne`-gated constant from the pad's own

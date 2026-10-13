@@ -4,7 +4,7 @@
 //! does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! cargo nextest run -p oag-game --run-ignored all -E 'binary(off_track_rescue_ground_truth)'
+//! cargo nextest run -p oag-game --run-ignored all -E 'test(/^off_track_rescue_ground_truth::/)'
 //! ```
 //!
 //! # Why this needs a disc

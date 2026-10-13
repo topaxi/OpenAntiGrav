@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(leach_tube_ground_truth)'
+//!     -E 'test(/^leach_tube_ground_truth::/)'
 //! ```
 //!
 //! `LeachBeam_KeepInTrack` bends the chain so it does not cut a corner through

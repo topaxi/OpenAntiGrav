@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(psp2_airbrake_flaps_ground_truth)'
+//!     -E 'test(/^psp2_airbrake_flaps_ground_truth::/)'
 //! ```
 //!
 //! A flap is a node-bound mesh named `Airbrake_Left`/`Airbrake_Right` whose

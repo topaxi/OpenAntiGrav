@@ -6,7 +6,7 @@
 //! `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test psp_shield_model_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it psp_shield_model_ground_truth:: --run-ignored all
 //! ```
 //!
 //! # What only real data can say here

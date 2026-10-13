@@ -9,7 +9,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(reset_zone_ground_truth)'
+//!     -E 'test(/^reset_zone_ground_truth::/)'
 //! ```
 //!
 //! # Why a real track is the only place this can be checked

@@ -1,7 +1,7 @@
 //! Damaged real bundles: one LZ4HC ship and one LZMA track, with bytes flipped
 //! and the file cut short, must come back as results and never panic or hang.
 
-mod common;
+use crate::common;
 
 use oag_unity::assets::Assets;
 use oag_unity::bundle::Bundle;

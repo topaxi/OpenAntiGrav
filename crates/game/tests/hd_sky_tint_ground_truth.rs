@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!     --run-ignored all -E 'binary(hd_sky_tint_ground_truth)'
+//!     --run-ignored all -E 'test(/^hd_sky_tint_ground_truth::/)'
 //! ```
 //!
 //! The original's sky draw carries `Lighting.Sky colour` as the cube's vertex

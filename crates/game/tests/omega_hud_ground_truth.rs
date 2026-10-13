@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_hud_ground_truth)'
+//!     -E 'test(/^omega_hud_ground_truth::/)'
 //! ```
 //!
 //! What this fails on: pointing `oag_omega::hud` back at the unread placeholder

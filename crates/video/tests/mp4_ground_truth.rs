@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-video --run-ignored all \
-//!     -E 'binary(mp4_ground_truth)'
+//!     -E 'test(/^mp4_ground_truth::/)'
 //! ```
 //!
 //! # Container only - no transcode here

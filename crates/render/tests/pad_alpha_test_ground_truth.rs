@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(pad_alpha_test_ground_truth)'
+//!     -E 'test(/^pad_alpha_test_ground_truth::/)'
 //! ```
 //!
 //! # The regression this pins

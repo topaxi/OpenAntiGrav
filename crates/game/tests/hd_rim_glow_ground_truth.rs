@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_rim_glow_ground_truth)'
+//!     -E 'test(/^hd_rim_glow_ground_truth::/)'
 //! ```
 //!
 //! What `docs/rendering/hd-unlit-programs.md` claims of the disc, pinned:

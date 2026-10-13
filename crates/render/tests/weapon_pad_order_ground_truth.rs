@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(weapon_pad_order_ground_truth)'
+//!     -E 'test(/^weapon_pad_order_ground_truth::/)'
 //! ```
 
 use std::path::PathBuf;

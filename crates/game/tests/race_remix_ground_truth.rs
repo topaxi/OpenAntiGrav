@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run --release -p oag-game \
-//!     --run-ignored all -E 'binary(race_remix_ground_truth)'
+//!     --run-ignored all -E 'test(/^race_remix_ground_truth::/)'
 //! ```
 //!
 //! Two properties, each its own test:

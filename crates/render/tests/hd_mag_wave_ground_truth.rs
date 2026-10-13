@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_mag_wave_ground_truth)'
+//!     -E 'test(/^hd_mag_wave_ground_truth::/)'
 //! ```
 //!
 //! The law is on `docs/formats/rcsmaterial.md`, "The magstrip floor scrolls a

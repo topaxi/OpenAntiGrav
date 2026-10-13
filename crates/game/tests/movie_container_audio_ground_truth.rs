@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(movie_container_audio_ground_truth)'
+//!     -E 'test(/^movie_container_audio_ground_truth::/)'
 //! ```
 //!
 //! # Why `--no-video`'s own path, not the full transcode

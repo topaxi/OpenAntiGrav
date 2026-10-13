@@ -4,7 +4,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_track_model_ground_truth)'
+//!     -E 'test(/^hd_track_model_ground_truth::/)'
 //! ```
 
 fn open() -> Option<(oag_assets::Archives, &'static oag_title::Title)> {

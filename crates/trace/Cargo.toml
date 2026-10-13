@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+autotests = false
 
 [[bin]]
 name = "oag-trace"
@@ -42,3 +44,7 @@ thiserror.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

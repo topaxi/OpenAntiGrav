@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_airbrake_flaps_ground_truth)'
+//!     -E 'test(/^hd_airbrake_flaps_ground_truth::/)'
 //! ```
 //!
 //! HD's `Ship.vex` authors the same `Airbrake` tree Pulse does and the

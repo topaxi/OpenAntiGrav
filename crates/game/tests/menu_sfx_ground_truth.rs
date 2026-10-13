@@ -1,7 +1,7 @@
 //! The front end's navigation sounds, off real discs.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content. Run with
-//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test menu_sfx_ground_truth --run-ignored all`.
+//! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it menu_sfx_ground_truth:: --run-ignored all`.
 //!
 //! Two questions only a disc can answer. Does each title's `frontend.bnk`
 //! resolve to the four cues the menus raise, with the waveform counts the bank

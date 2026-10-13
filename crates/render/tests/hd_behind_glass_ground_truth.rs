@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_behind_glass_ground_truth)'
+//!     -E 'test(/^hd_behind_glass_ground_truth::/)'
 //! ```
 //!
 //! The measurement (`docs/ghidra/functions/ps3-hdfury-eu/visibility.md`,

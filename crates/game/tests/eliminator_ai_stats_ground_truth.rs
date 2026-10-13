@@ -6,7 +6,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(eliminator_ai_stats_ground_truth)'
+//!     -E 'test(/^eliminator_ai_stats_ground_truth::/)'
 //! ```
 //!
 //! The census is every copy of the table in every archive a title's

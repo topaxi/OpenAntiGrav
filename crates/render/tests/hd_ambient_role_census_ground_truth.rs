@@ -10,7 +10,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_ambient_role_census_ground_truth)'
+//!     -E 'test(/^hd_ambient_role_census_ground_truth::/)'
 //! ```
 //!
 //! # What this pins

@@ -6,7 +6,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --test sblk_child_ground_truth --run-ignored all
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-formats --test it sblk_child_ground_truth:: --run-ignored all
 //! ```
 //!
 //! # What this is for
@@ -26,7 +26,7 @@ use std::path::PathBuf;
 use oag_disc::DiscImage;
 use oag_formats::sblk::Bank;
 
-mod sblk_banks;
+use crate::sblk_banks;
 use sblk_banks::banks_in;
 
 /// The PSP, PS2 and Pure discs, with the archives that hold banks on each.

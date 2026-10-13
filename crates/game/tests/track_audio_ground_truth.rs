@@ -6,7 +6,7 @@
 //! ```sh
 //! just test-data
 //! # or only this file:
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test track_audio_ground_truth \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it track_audio_ground_truth:: \
 //!   --run-ignored all --no-capture
 //! ```
 //!

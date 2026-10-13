@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+autotests = false
 
 # A title package is tables. This one is thinner than `oag-pulse` for the same
 # reason `oag-pure` is: it holds what `docs/formats/hd-status.md` and
@@ -37,3 +39,7 @@ oag-ui-screens.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

@@ -8,7 +8,7 @@
 //! just test-data
 //! # or only this file:
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(font_roles_ground_truth)'
+//!     -E 'test(/^font_roles_ground_truth::/)'
 //! ```
 //!
 //! # What this is for

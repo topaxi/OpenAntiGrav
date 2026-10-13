@@ -2,7 +2,7 @@
 //! the directory `OAG_UNITY_EXPORT` names, so a person can look at them. Passes
 //! without writing anything when the variable is unset.
 
-mod common;
+use crate::common;
 
 use oag_unity::assets::Assets;
 use oag_unity::bundle::Bundle;

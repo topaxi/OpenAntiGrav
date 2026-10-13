@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(race_load_read_memo_ground_truth)'
+//!     -E 'test(/^race_load_read_memo_ground_truth::/)'
 //! ```
 //!
 //! An HD race load reads each material's `.rcsmaterial` once per pass that

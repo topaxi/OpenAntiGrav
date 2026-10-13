@@ -35,7 +35,7 @@ use oag_vex::vex::{
 };
 use oag_vex::{collision, mesh_coverage, track_coverage};
 
-mod wad_walk;
+use crate::wad_walk;
 
 fn image(name: &str) -> Option<PathBuf> {
     oag_testdata::image(name)

@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all \
-//!     -E 'binary(hd_hull_colour_factor_ground_truth)'
+//!     -E 'test(/^hd_hull_colour_factor_ground_truth::/)'
 //! ```
 //!
 //! `diffuse_vcol`'s lit block multiplies `f[TC0]` (the vertex program's

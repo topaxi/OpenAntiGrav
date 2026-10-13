@@ -8,7 +8,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_psn_campaign_ground_truth)'
+//!     -E 'test(/^hd_psn_campaign_ground_truth::/)'
 //! ```
 
 use oag_hud::sprite::Sheet;

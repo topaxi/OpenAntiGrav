@@ -4,7 +4,7 @@
 //! the HD, Pulse and Pure images.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test pilot_assist_levels_ground_truth --run-ignored all --no-capture
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --test it pilot_assist_levels_ground_truth:: --run-ignored all --no-capture
 //! ```
 
 use oag_core::buttons::{Button, Input};

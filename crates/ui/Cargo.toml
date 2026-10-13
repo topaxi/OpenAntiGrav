@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it/main.rs`.
+autotests = false
 
 # `oag_render`, `wgpu`, `winit` and `oag_input` are all legal here in principle -
 # menus draw, so this crate may one day link a renderer directly - but nothing
@@ -57,3 +59,7 @@ workspace = true
 oag-omega.workspace = true
 oag-schema = { workspace = true, features = ["validate"] }
 oag-testdata.workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"

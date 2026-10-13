@@ -7,7 +7,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(omega_lightmap_ground_truth)'
+//!     -E 'test(/^omega_lightmap_ground_truth::/)'
 //! ```
 //!
 //! The law itself (`pow(lightmap, power) * scale + bias`, no constant ambient)

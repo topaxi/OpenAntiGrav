@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
-//!     -E 'binary(hd_flyer_ground_truth)'
+//!     -E 'test(/^hd_flyer_ground_truth::/)'
 //! ```
 //!
 //! What `docs/ui/campaign-screens.md`'s "The flyer behind `Grid Selection`"
