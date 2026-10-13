@@ -11,7 +11,8 @@ positions, at `50 + 0.25 * last grounded speed`.
 - At `13_Track` our crafts need no more speed than the original's: clearing at
   about 100 against 102-104, and a 98 u/s lip speed fell in the original too.
 
-The maintainer chose to keep the port and re-baseline what it moved. The
+**The seven tests it moved are re-baselined under option A (maintainer,
+2026-10-13)**: the port stays, and each bound was raised to its measured value. The
 numbers are in [ai.md](../../docs/gameplay/ai.md#after-a-reset-the-relaunch-falls-short-2026-10-13).
 On `05_Track` a reset sends a craft back 50-100 samples before the first jump.
 It reaches sample 150 at 107-117 u/s, where the jump needs about 120. Six rows
@@ -30,6 +31,10 @@ test now asks for one lap.
 - Lion's Den on Pulse physics: its start jump is not cleared at any speed seen.
 
 ## Next Steps
+
+These are what would restore the old bounds: `05_Track` RAPIER contact
+ticks 0, field dead stops VENOM 1 / FLASH 3 / PHANTOM 1, lone RAPIER 0, RAPIER
+seed 2 forward 1 destroyed, Lion's Den 2 laps.
 
 1. Capture whether the original's relaunched craft clears `05_Track`'s first
    jump, and its lip speed: `scripts/psp-fall-drive.py` (pure-pursuit at a
