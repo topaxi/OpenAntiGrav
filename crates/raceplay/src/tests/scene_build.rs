@@ -73,30 +73,30 @@ fn livery() -> Livery {
     }
 }
 
-/// **Every drawable in a weapon pool shares one pipeline set.**
-///
-/// A pool is `MAX_PROJECTILES` drawables of one model, and each asks
-/// `mesh_render::build` for the same pipelines. With the build cache open the
-/// first compiles them and the other 127 reuse them; without it each compiles
-/// its own, which measured about 7 MiB of resident memory per drawable - 8.4 GiB
-/// for a Pulse race, on the `--screenshot` path that never opened the cache.
-/// Fails if `Scene::new` stops opening it, whichever caller it comes from.
-#[test]
-fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
+/// A device on whichever adapter this machine has, or `None` (said, not
+/// failed) where there is none.
+pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
-        return;
+        return None;
     };
-    let Ok((device, queue)) = pollster::block_on(adapter.request_device(
-        &mesh_render::device_descriptor("scene build test", &adapter),
-    )) else {
+    let Ok(pair) = pollster::block_on(adapter.request_device(&mesh_render::device_descriptor(
+        "scene build test",
+        &adapter,
+    ))) else {
         eprintln!("no GPU device: skipping");
-        return;
+        return None;
     };
-    let scene = Scene::new(
-        &device,
-        &queue,
+    Some(pair)
+}
+
+/// A scene over one triangle for a circuit and for every pool: enough to be
+/// drawn, nothing a picture could be judged by.
+pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
+    Scene::new(
+        device,
+        queue,
         triangle(),
         &[livery()],
         None,
@@ -136,7 +136,23 @@ fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
         Vec::new(),
         Default::default(),
     )
-    .expect("the scene builds");
+    .expect("the scene builds")
+}
+
+/// **Every drawable in a weapon pool shares one pipeline set.**
+///
+/// A pool is `MAX_PROJECTILES` drawables of one model, and each asks
+/// `mesh_render::build` for the same pipelines. With the build cache open the
+/// first compiles them and the other 127 reuse them; without it each compiles
+/// its own, which measured about 7 MiB of resident memory per drawable - 8.4 GiB
+/// for a Pulse race, on the `--screenshot` path that never opened the cache.
+/// Fails if `Scene::new` stops opening it, whichever caller it comes from.
+#[test]
+fn a_weapon_pool_of_drawables_shares_one_set_of_gpu_resources() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&device, &queue);
 
     for (pool, (slots, shared)) in scene.weapon_pool_sharing().into_iter().enumerate() {
         assert_eq!(

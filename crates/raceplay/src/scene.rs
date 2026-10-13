@@ -258,6 +258,17 @@ pub struct Scene {
     generated_silhouettes: usize,
     shadow_silhouette_count: usize,
     generated_silhouettes_said: std::cell::Cell<bool>,
+    /// How many frames have encoded the shadow maps - one per frame however many
+    /// views a split draws, which is what `tests/split_shadows.rs` holds.
+    shadow_frames: std::cell::Cell<u32>,
+    /// The blob quads and projected hulls [`Scene::shadow_geometry`] gathered for
+    /// the frame in progress. A split screen gathers once, on its first view, and
+    /// every later view uploads the same lists: where the craft cast is not a
+    /// property of the camera. See `Scene::upload_shadow_geometry`.
+    shadow_gathered: std::cell::RefCell<(
+        Vec<oag_render::shadow::Placement>,
+        Vec<oag_mesh::mesh::GpuVertex>,
+    )>,
     /// The `original` tier's two per-craft maps on Wipeout HD: the track
     /// under the craft drawn from the sun as its own baked sun-occlusion mask,
     /// and the craft's own depth from the sun, which together gate the hull's
@@ -990,6 +1001,8 @@ impl Scene {
             generated_silhouettes,
             shadow_silhouette_count,
             generated_silhouettes_said: std::cell::Cell::new(false),
+            shadow_gathered: Default::default(),
+            shadow_frames: std::cell::Cell::new(0),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),

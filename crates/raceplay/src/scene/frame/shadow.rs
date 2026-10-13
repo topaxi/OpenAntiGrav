@@ -11,6 +11,7 @@ use oag_render::shadow::Placement;
 
 use crate::Race;
 use crate::scene::motion::Snapshot;
+use crate::scene::viewports::Layer;
 
 /// How dark a fully covered texel of the shadow map draws the track.
 ///
@@ -59,6 +60,65 @@ const MAPPED_RADIUS: f32 = 70.0;
 const FIT_MARGIN: f32 = 6.0;
 
 impl super::super::Scene {
+    /// Both shadow maps, once for a frame, ahead of its first view.
+    ///
+    /// **A split screen's later views do not redraw them** ([`Layer::Next`]): the
+    /// maps are a function of the craft (their model matrices and the circuit's
+    /// own sun or fixed light axis), never of the camera. The casters are fixed
+    /// buffers and ranges (`Drawable::caster` draws `opaque_ranges`, which no
+    /// `LodGroup` switch touches), the player-led fit reads slot 0's model
+    /// matrix, which blends by the draw alpha and not by the viewpoint, and the
+    /// occlusion fit is each craft's own. The scene uniform's shadow block and
+    /// the per-craft layer choice are CPU state that outlives the call, so a later
+    /// view reads what the first view drew; its picture is the one it drew when it
+    /// redrew them.
+    pub(super) fn render_shadow_passes(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        race: &Race,
+        shadows: oag_display::display::Shadows,
+    ) {
+        if self.layer.get() == Layer::Next {
+            return;
+        }
+        self.shadow_frames.set(self.shadow_frames.get() + 1);
+        self.render_shadow_map(queue, encoder, race, shadows);
+        self.render_sun_occlusion(queue, encoder, race, shadows);
+    }
+
+    /// How many frames have encoded the shadow maps.
+    #[cfg(test)]
+    pub(crate) fn shadow_frames(&self) -> u32 {
+        self.shadow_frames.get()
+    }
+
+    /// Gathers this frame's blob quads and projected hulls and uploads them with
+    /// the view's camera matrix.
+    ///
+    /// The gather (`race.shadow_placements`, and for the `original` tier a hull
+    /// projection that casts a ray per vertex onto the floor) is a function of
+    /// the craft and the circuit alone, so a split screen does it on its first
+    /// view and every later view uploads what was gathered; only the matrix
+    /// differs. Measured: it was about half of a view's CPU on Pulse's default
+    /// tier.
+    pub(super) fn upload_shadow_geometry(
+        &self,
+        queue: &wgpu::Queue,
+        vp: &[[f32; 4]; 4],
+        race: &Race,
+        shadows: oag_display::display::Shadows,
+    ) {
+        let mut gathered = self.shadow_gathered.borrow_mut();
+        if self.layer.get() != Layer::Next {
+            *gathered = self.shadow_geometry(race, shadows);
+        }
+        let (quads, hull_vertices) = &*gathered;
+        self.shadow
+            .borrow_mut()
+            .upload(queue, vp, quads, hull_vertices);
+    }
+
     /// The quads and the projected hulls this frame draws, for the tier the
     /// caller is on.
     ///

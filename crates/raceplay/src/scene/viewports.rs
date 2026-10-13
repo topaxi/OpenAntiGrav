@@ -16,6 +16,14 @@
 //!   overlap and nothing reads one view's depth in another. Under MSAA the
 //!   resolve rewrites the whole target from the multisampled attachment, which
 //!   is why the colour attachment's load is switched, not only the resolve's.
+//! - **What does not depend on the camera is done once, by the first view.** The
+//!   two shadow maps, the shadow geometry's gather (`Scene::upload_shadow_geometry`
+//!   keeps the lists; each view uploads them with its own matrix), the scenery's
+//!   animation clocks and the advert cards are functions of the craft and the race
+//!   clock, so a later view ([`Layer::Next`]) reads what the first left in the
+//!   buffers and textures. Measured on Pulse, the gather alone was half of a view's
+//!   CPU, and a split is CPU-bound (`docs/rendering/split-screen.md`, "Cost"). The
+//!   picture of every view is byte-identical to drawing it all per view.
 //! - **No Pulse bloom under a split.** `oag_post::bloom` reads the glow mask from
 //!   the top-left of the target whatever the viewport's origin is (its `prepare`
 //!   takes the size and ignores the origin), so a view anywhere else would glow
@@ -62,6 +70,10 @@ impl Scene {
     /// so everything the caller has already encoded must be submitted before
     /// this, and the caller's own encoder after it.
     ///
+    /// `view_timers` brackets each view's scene pass, one claimed timer per view
+    /// (the caller `begin`s them); empty everywhere but the render bench, which
+    /// is the only caller that reads them. A view past the slice's end is untimed.
+    ///
     /// For a race that was never split ([`Race::viewport_count`] of one) this is
     /// not the call to make: use [`Scene::render`], which is what keeps a race
     /// without a split exactly as it was.
@@ -79,6 +91,7 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
+        view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let rects = oag_render::viewport::layout(race.views_drawn(), area);
         let mut stats = SceneStats::default();
@@ -89,26 +102,37 @@ impl Scene {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race viewport"),
             });
-            stats.add(self.render(
-                device,
-                queue,
-                &mut encoder,
-                view,
-                race,
-                rect,
-                fov,
-                cull,
-                pvs_cull,
-                anim_seconds,
-                oag_display::display::MotionBlur::Off,
-                shadows,
-                None,
-                zone_spectrum,
-                None,
-                None,
-                None,
-            ));
-            queue.submit(Some(encoder.finish()));
+            let mut timer = view_timers.get_mut(slot).and_then(Option::as_mut);
+            stats.add(
+                self.render(
+                    device,
+                    queue,
+                    &mut encoder,
+                    view,
+                    race,
+                    rect,
+                    fov,
+                    cull,
+                    pvs_cull,
+                    anim_seconds,
+                    oag_display::display::MotionBlur::Off,
+                    shadows,
+                    None,
+                    zone_spectrum,
+                    timer
+                        .as_deref()
+                        .and_then(oag_gpu::timing::PassTimer::writes),
+                    None,
+                    None,
+                ),
+            );
+            if let Some(timer) = timer.as_deref_mut() {
+                timer.resolve(&mut encoder);
+            }
+            let commands = encoder.finish();
+            oag_gpu::perfprobe::mark("encoder-finish");
+            queue.submit(Some(commands));
+            oag_gpu::perfprobe::mark("submit");
         }
         self.layer.set(Layer::Whole);
         race.reset_viewpoint();

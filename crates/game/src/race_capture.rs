@@ -715,27 +715,86 @@ pub fn capture(
     // rather than `#[cfg]`, so the harness still type-checks without
     // `perf-probe` and cannot rot between the runs that use it.
     if cfg!(feature = "perf-probe") {
-        bench::run(&device, &queue, |encoder, timestamps| {
-            scene.render(
-                &device,
-                &queue,
-                encoder,
-                &view,
-                &race,
-                viewport,
-                options.fov,
-                options.frustum_culling,
-                options.pvs_culling,
-                options.anim_seconds,
-                options.motion_blur,
-                options.shadows,
-                camera_jitter,
-                &spectrum,
-                timestamps.scene,
-                timestamps.blur,
-                timestamps.bloom,
-            );
-        });
+        let split = race.viewport_count() > 1;
+        if !split {
+            bench::run(&device, &queue, |encoder, timestamps| {
+                scene.render(
+                    &device,
+                    &queue,
+                    encoder,
+                    &view,
+                    &race,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.motion_blur,
+                    options.shadows,
+                    camera_jitter,
+                    &spectrum,
+                    timestamps.scene,
+                    timestamps.blur,
+                    timestamps.bloom,
+                );
+            });
+        }
+        // The whole frame as the window submits it, one view or many: what
+        // `bench::run` leaves out (finishing and submitting the encoder).
+        bench::run_split(
+            &device,
+            &queue,
+            &adapter.get_info(),
+            race.views_drawn(),
+            |timers| {
+                if split {
+                    scene.render_viewports(
+                        &device,
+                        &queue,
+                        &view,
+                        &race,
+                        viewport,
+                        options.fov,
+                        options.frustum_culling,
+                        options.pvs_culling,
+                        options.anim_seconds,
+                        options.shadows,
+                        &spectrum,
+                        timers,
+                    );
+                    return;
+                }
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race bench frame"),
+                });
+                let mut timer = timers.first_mut().and_then(Option::as_mut);
+                scene.render(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &view,
+                    &race,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.motion_blur,
+                    options.shadows,
+                    camera_jitter,
+                    &spectrum,
+                    timer
+                        .as_deref()
+                        .and_then(oag_gpu::timing::PassTimer::writes),
+                    None,
+                    None,
+                );
+                if let Some(timer) = timer.as_deref_mut() {
+                    timer.resolve(&mut encoder);
+                }
+                queue.submit(Some(encoder.finish()));
+            },
+        );
     }
     // A split screen draws one scene per view, each submitted on its own: see
     // `Scene::render_viewports`. One view is the call below, untouched.
@@ -752,6 +811,7 @@ pub fn capture(
             options.anim_seconds,
             options.shadows,
             &spectrum,
+            &mut [],
         )
     } else {
         scene.render(
