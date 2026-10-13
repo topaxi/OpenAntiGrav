@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use log::{info, warn};
+use log::{debug, info, warn};
 
 use oag_game::{adapter, settings};
 
@@ -56,6 +56,9 @@ pub(crate) struct Gpu {
     /// re-requesting an adapter to ask it a second time, which is the same
     /// argument `offered` above already makes.
     pub(crate) temporal: bool,
+    /// The swapchain image this frame acquired ahead of its ticks, until the
+    /// draw takes it. See [`Gpu::acquire`].
+    held: Option<wgpu::SurfaceTexture>,
 }
 
 /// What one adapter has to hand over before it can be drawn with.
@@ -292,9 +295,10 @@ impl Gpu {
             offered,
             adapters,
             in_use,
+            held: None,
         };
         gpu.apply_vsync(settings.vsync);
-        gpu.surface.configure(&gpu.device, &gpu.config);
+        gpu.configure();
         Ok(gpu)
     }
 
@@ -321,8 +325,56 @@ impl Gpu {
         self.surface = surface;
         self.config.width = size.width.max(1);
         self.config.height = size.height.max(1);
-        self.surface.configure(&self.device, &self.config);
+        self.configure();
         Ok(())
+    }
+
+    /// Acquires the next swapchain image and holds it for this frame's draw,
+    /// answering whether there is one.
+    ///
+    /// **Called at the top of the frame, before the clock is read** (see
+    /// `Session::frame`): under a blocking present mode this is where the
+    /// loop waits for a free image, and waiting before the ticks means the
+    /// ticks, the input they sample and the draw alpha all describe the moment
+    /// after the wait rather than a frame before it.
+    ///
+    /// An image still held from a frame that never drew is let go first. A
+    /// surface that is `Outdated` or `Lost` is reconfigured and the frame
+    /// draws nothing; any other refusal (a timeout, an occluded or minimised
+    /// window) skips the frame the same way.
+    pub(crate) fn acquire(&mut self) -> bool {
+        self.held = None;
+        match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                self.held = Some(frame);
+                true
+            }
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                self.configure();
+                false
+            }
+            other => {
+                debug!("skipping frame: {other:?}");
+                false
+            }
+        }
+    }
+
+    /// The image [`Self::acquire`] took for this frame, `None` when it got
+    /// none or a reconfigure since let it go.
+    pub(crate) fn take_acquired(&mut self) -> Option<wgpu::SurfaceTexture> {
+        self.held.take()
+    }
+
+    /// Configures the surface with [`Self::config`], letting go of any image
+    /// still held first: a surface cannot be configured with an image of its
+    /// old swapchain outstanding. Every configure goes through here - a
+    /// settings change that reconfigures mid-frame (vsync) costs that frame its
+    /// draw, which the caller already counts as a stall.
+    pub(crate) fn configure(&mut self) {
+        self.held = None;
+        self.surface.configure(&self.device, &self.config);
     }
 
     /// The best present mode this surface offers for a vsync setting.
@@ -346,7 +398,7 @@ impl Gpu {
     /// Puts `vsync` into effect.
     pub(crate) fn set_vsync(&mut self, vsync: perf::Vsync) {
         self.apply_vsync(vsync);
-        self.surface.configure(&self.device, &self.config);
+        self.configure();
     }
 
     /// The present mode and queue depth `vsync` asks for, into the config.

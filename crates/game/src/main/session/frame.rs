@@ -170,6 +170,23 @@ impl Session {
         // *next* frame's measurement instead, past the point that flag is read.
         self.advance_race_build();
 
+        // **The swapchain image first, then the clock.** Under a blocking
+        // present mode (`Vsync::On`, or `smooth` falling back to Fifo) the
+        // acquire is where the loop waits for a free image. Taken here, that
+        // wait counts toward this frame's `elapsed`, so the ticks below, the
+        // input they sample (`player_snapshots` polls the pads) and the draw
+        // alpha all describe the moment after it; taken in `Session::draw`, as
+        // it was until 2026-10-13, everything drawn was a wait older. After
+        // every stage change above, which may resize; `Session::draw` takes
+        // the image, or draws nothing if there is none. See `Gpu::acquire`.
+        let acquire_start = web_time::Instant::now();
+        let acquired = self.gpu.acquire();
+        let acquire_wait = acquire_start.elapsed();
+        if acquired {
+            self.frame_timing
+                .acquired(acquire_start, acquire_start + acquire_wait);
+        }
+
         // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
         // whatever the window is doing. The clock's own catch-up cap is what keeps
         // the race load above from being paid back as a burst of ticks.
@@ -807,7 +824,7 @@ impl Session {
         // reopened its disc image once a frame and warned once a frame.
         self.build_endrace();
 
-        let presented = self.draw(now, frame_seconds)?;
+        let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
         if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
             log::debug!(
                 "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \
@@ -821,13 +838,16 @@ impl Session {
         }
         self.probe_end_frame(elapsed);
         // **What the `OUTSIDE` row is derived from**, and the anchor matters:
-        // measured from `now`, which is the same instant `elapsed` above is
-        // taken from, so this frame's body and the gap after it partition the
-        // interval between one frame's `now` and the next exactly. What lands
-        // in the gap is the frame limiter's `ControlFlow::WaitUntil` (see
-        // `App::about_to_wait`), the event loop, and the handful of cheap
-        // calls this function makes before it reads the clock at all - which
-        // is why the row is not called `SLEEP`.
+        // measured from `acquire_start`, the first thing this frame times, so
+        // this frame's body (the acquire's wait included, as `present_cost`
+        // includes it, which keeps `CPU = frame - present` free of either
+        // swapchain wait) and the gap after it partition the interval between
+        // one frame's acquire and the next. `elapsed` is read a wait later, at
+        // `now`; over the meters' window of frames the two intervals average
+        // the same. What lands in the gap is the frame limiter's
+        // `ControlFlow::WaitUntil` (see `App::about_to_wait`), the event loop,
+        // and the handful of cheap calls this function makes before the
+        // acquire - which is why the row is not called `SLEEP`.
         //
         // Recorded after the draw rather than around it, so the reading covers
         // the whole frame - ticks, stage update and draw together - which is
@@ -837,7 +857,7 @@ impl Session {
         // texture recorded nothing on `present_cost`, and recording it here
         // would leave the two meters averaging different sets of frames.
         if frame_seconds.is_some() && presented {
-            self.cpu_cost.record(now.elapsed().as_secs_f32());
+            self.cpu_cost.record(acquire_start.elapsed().as_secs_f32());
         }
         Ok(())
     }

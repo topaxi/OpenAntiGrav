@@ -955,9 +955,7 @@ impl Session {
         }
         self.gpu.config.width = width;
         self.gpu.config.height = height;
-        self.gpu
-            .surface
-            .configure(&self.gpu.device, &self.gpu.config);
+        self.gpu.configure();
         // The depth attachment follows the *framebuffer*, not the window, and
         // `frame` resizes both together - so a resize only has to invalidate,
         // which configuring the surface above already did.

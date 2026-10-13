@@ -76,12 +76,15 @@ impl Session {
         )
     }
 
-    /// Acquires the surface, draws whatever stage is on screen, and presents.
+    /// Draws whatever stage is on screen into the image [`Session::frame`]
+    /// acquired before its ticks ([`crate::gpu::Gpu::acquire`]), and presents.
     ///
-    /// Returns whether it got that far. A surface that is `Outdated`, `Lost`
-    /// or otherwise unavailable is reconfigured and the frame abandoned -
-    /// which is a frame nothing measured, and the caller's cue not to record
-    /// one either. Without that, `Session::cpu_cost` would carry frames
+    /// Returns whether it got that far. No image - a surface that was
+    /// `Outdated`, `Lost` or otherwise unavailable at the acquire, or a
+    /// reconfigure since that let it go - abandons the frame, which is a
+    /// frame nothing measured, and the caller's cue not to record one either.
+    /// `acquire_wait` is how long that acquire blocked, the first half of the
+    /// `PRESENT` row. Without that, `Session::cpu_cost` would carry frames
     /// `Session::present_cost` does not and the `CPU` row - the difference
     /// between their two means - would be a subtraction across two different
     /// populations of frames after every window resize.
@@ -95,40 +98,25 @@ impl Session {
         &mut self,
         now: web_time::Instant,
         frame_seconds: Option<f32>,
+        acquire_wait: f32,
     ) -> Result<bool> {
+        let Some(frame) = self.gpu.take_acquired() else {
+            return Ok(false);
+        };
         // Recomputed rather than threaded through from `Session::frame`:
         // `loading_progress` is a plain read of settled state, nothing
         // between the two call sites changes its answer, and passing it
         // instead would be a parameter earning its keep only on the one
         // stage (`Stage::Loading`) that reads it.
         let (phase, progress) = self.loading_progress();
-        // The first of the two swapchain calls that are allowed to block, and
-        // the reason `PRESENT` is a row of its own: with `Vsync::On` this is
-        // where the wait for the refresh lands, and a loop waiting here looks
-        // exactly like a loop doing too much work in the frame time alone.
-        // See `perf::CpuCost`.
-        let acquire_start = web_time::Instant::now();
-        let frame = match self.gpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.gpu
-                    .surface
-                    .configure(&self.gpu.device, &self.gpu.config);
-                return Ok(false);
-            }
-            other => {
-                debug!("skipping frame: {other:?}");
-                return Ok(false);
-            }
-        };
-
-        // Only the frames that got a texture are measured: the arms above
-        // return before this, and a frame that never drew is not a frame time
-        // on any of these meters.
-        let mut present_seconds = acquire_start.elapsed().as_secs_f32();
-        self.frame_timing
-            .acquired(acquire_start, web_time::Instant::now());
+        // Only the frames that got an image are measured: the early return
+        // above comes before this, and a frame that never drew is not a frame
+        // time on any of these meters. The acquire's own wait is the first of
+        // the two swapchain calls that are allowed to block, and the reason
+        // `PRESENT` is a row of its own: with `Vsync::On` it is where the wait
+        // for the refresh lands, and a loop waiting there looks exactly like a
+        // loop doing too much work in the frame time alone. See `perf::CpuCost`.
+        let mut present_seconds = acquire_wait;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
