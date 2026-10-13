@@ -102,7 +102,7 @@ impl Scene {
             let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race viewport"),
             });
-            let mut timer = view_timers.get_mut(slot).and_then(Option::as_mut);
+            let timer = view_timers.get_mut(slot).and_then(Option::as_mut);
             stats.add(
                 self.render(
                     device,
@@ -126,7 +126,7 @@ impl Scene {
                     None,
                 ),
             );
-            if let Some(timer) = timer.as_deref_mut() {
+            if let Some(timer) = timer {
                 timer.resolve(&mut encoder);
             }
             let commands = encoder.finish();

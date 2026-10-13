@@ -767,7 +767,7 @@ pub fn capture(
                 let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                     label: Some("race bench frame"),
                 });
-                let mut timer = timers.first_mut().and_then(Option::as_mut);
+                let timer = timers.first_mut().and_then(Option::as_mut);
                 scene.render(
                     &device,
                     &queue,
@@ -789,7 +789,7 @@ pub fn capture(
                     None,
                     None,
                 );
-                if let Some(timer) = timer.as_deref_mut() {
+                if let Some(timer) = timer {
                     timer.resolve(&mut encoder);
                 }
                 queue.submit(Some(encoder.finish()));
