@@ -1006,6 +1006,12 @@ bridge.
    authored path rather than above it, with `original` still the one to prefer
    there.
 
+   **In a split, each view redraws the map around its own craft** (2026-10-13), not
+   around slot 0: the fit reads `Race::viewed_slot`, and a later view redraws only the
+   depth map in its own encoder. A single-view race is unchanged. Cost: about 0.1 ms of
+   CPU a view on a discrete card, and about 1 ms of iGPU time a view because the whole
+   circuit is drawn into every map - see [split-screen.md](split-screen.md#cost).
+
    **Nothing in it is recovered.** The depth format, the 2048 resolution, the
    single cascade and its fit, the four-tap comparison, the slope-scaled bias,
    the darkness - all this project's. The one thing it takes from a title is
@@ -1144,8 +1150,13 @@ whether PPSSPP's software renderer shows the same blink, and Pulse's stencil
 volume is depth-tested against the visible road, so it plausibly cannot bury
 at all. The plume covers most of the shadow at the default chase camera, so
 the blink reads as a flicker at the craft's tail rather than a shape; the
-frames are in the lane's scratch report. `Race::floor_above` runs about 300
-casts per craft per frame at `original`; not profiled.
+frames are in the lane's scratch report. `Race::floor_above` runs about 240
+casts per craft per frame at `original`, and is **the whole cost of the hull
+gather**: on Pulse's eight-craft Single Race grid (release build, 300 ticks)
+the placement rays took 10 us a tick, `hull_triangles` 20 us and
+`conform_to_floor` 1,722 us. The gather is taken once per tick and lerped between
+ticks now - see [split-screen.md](split-screen.md#cost), "The shadow gather per
+tick"; cheapening the floor rays themselves is open.
 
 ## Constraints this touches
 

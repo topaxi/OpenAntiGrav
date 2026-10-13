@@ -63,16 +63,16 @@ const FIT_MARGIN: f32 = 6.0;
 impl super::super::Scene {
     /// Both shadow maps, once for a frame, ahead of its first view.
     ///
-    /// **A split screen's later views do not redraw them** ([`Layer::Next`]): the
-    /// maps are a function of the craft (their model matrices and the circuit's
-    /// own sun or fixed light axis), never of the camera. The casters are fixed
-    /// buffers and ranges (`Drawable::caster` draws `opaque_ranges`, which no
-    /// `LodGroup` switch touches), the player-led fit reads slot 0's model
-    /// matrix, which blends by the draw alpha and not by the viewpoint, and the
-    /// occlusion fit is each craft's own. The scene uniform's shadow block and
-    /// the per-craft layer choice are CPU state that outlives the call, so a later
-    /// view reads what the first view drew; its picture is the one it drew when it
-    /// redrew them.
+    /// **A split screen's later views do not redraw them** ([`Layer::Next`]), bar
+    /// one: the maps are a function of the craft (their model matrices and the
+    /// circuit's own sun or fixed light axis), never of the camera. The casters
+    /// are fixed buffers and ranges (`Drawable::caster` draws `opaque_ranges`,
+    /// which no `LodGroup` switch touches) and the occlusion fit is each craft's
+    /// own. The scene uniform's shadow block and the per-craft layer choice are CPU
+    /// state that outlives the call, so a later view reads what the first view
+    /// drew; its picture is the one it drew when it redrew them. **The `mapped`
+    /// tier's depth map is fitted on the craft its view follows**, so each later
+    /// view redraws that one, alone.
     pub(super) fn render_shadow_passes(
         &self,
         queue: &wgpu::Queue,
@@ -530,7 +530,10 @@ impl super::super::Scene {
         // The coverage map stays cleared while this tier is on: two maps are
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.
-        map.render(queue, encoder, &default_fit(), &[]);
+        // A later view of a split finds it already cleared by the first view's.
+        if self.layer.get() != Layer::Next {
+            map.render(queue, encoder, &default_fit(), &[]);
+        }
         map.render_depth(queue, encoder, &fit, &casters);
         casters.len()
     }

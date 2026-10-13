@@ -50,6 +50,14 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   Positions lerp, rotations slerp along the shorter arc (glam's `Quat::slerp`),
   scales lerp; a view matrix is blended as the camera transform it inverts, so
   the eye moves in a straight line and turns about itself.
+- **The `original` tier's hulls are gathered per tick and lerped.** The gather (a floor ray per
+  hull vertex, about 1.7 ms a frame on Pulse's eight-craft grid) used to run every drawn frame
+  from the blended pose. It is now taken at each tick's own poses (`Race::pose_generations` keys
+  the cache, `Race::ship_tick_model` and `ship_tick_body` read the tick exactly) and a draw
+  between ticks lerps the projected vertices of the last two by the alpha, skipping a craft
+  whose blend `Race::ship_swept_from` says is skipped. At alpha `1.0` it is the tick's gather
+  untouched. See "Chosen, not measured" below and
+  [split-screen.md](split-screen.md#cost) for the size of the difference.
 - **Stays stepped**, because it is discrete in the originals too: HUD numbers,
   message lines, sprite frames, particle spawns and the particles themselves,
   flashes and washes, the shield's flicker, the cannon muzzle flash.
@@ -109,6 +117,9 @@ alpha `1.0` the accessor returned the tick's body position bit for bit.
   newest tick avoids the latency but overshoots a wall hit by up to a tick.
 - **Slerp, not nlerp.** A handful of matrices a frame; slerp keeps the angular
   speed even across the tick.
+- **The shadow hulls lerp between two ticks' projections** rather than projecting from the
+  blended pose: median 0.0006 world units apart, p99 0.053, worst 0.237 over three 60-tick
+  Zone windows (`hull_gather_ground_truth`), against a craft some 13 units long.
 - **`SNAP_DISTANCE` = 64 units**: about ten times a craft's top speed per tick
   and well under any respawn or camera cut.
 

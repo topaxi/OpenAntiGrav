@@ -61,6 +61,10 @@
 //!   neither; nothing about this was measured against them.
 //! - **Slerp, not nlerp.** A handful of matrices a frame, and slerp keeps the
 //!   angular speed even across the tick.
+//! - **The shadow hulls lerp between two ticks' projections** instead of
+//!   projecting from the blended pose, so a gather costs once a tick and not once
+//!   a frame (`scene/frame/hull_cache.rs`). Within a world unit's few hundredths
+//!   of the live gather on a real lap; see `docs/rendering/split-screen.md`.
 //! - **[`SNAP_DISTANCE`]'s value.**
 
 use super::*;
