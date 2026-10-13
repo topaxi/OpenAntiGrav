@@ -248,6 +248,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // measured 2026-09-30, the open item in `docs/formats/omega-status.md`.
     endrace_entry: None,
     endrace_style: None,
+    borrows_ps2_split_screens: false,
 };
 
 /// Screen names, spelled exactly as `data09.psarc`'s `skin.xml` spells them -

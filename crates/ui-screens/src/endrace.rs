@@ -59,23 +59,27 @@ use oag_gameplay::input::{Button, Input};
 
 pub use crate::campaign::Layout;
 
+pub mod borrow;
 pub mod draw;
 pub mod hd;
 mod modes;
 mod people;
 pub mod photo;
 pub mod pointer;
+mod split;
 mod table;
 pub mod touch;
 
 pub use draw::{
-    endrace_menu_draw_list, results_draw_list, rewards_draw_list, tournament_results_draw_list,
+    endrace_menu_draw_list, results_draw_list, rewards_draw_list, split_rewards_draw_list,
+    tournament_results_draw_list,
 };
 pub use modes::{
     EliminationResults, EliminationRow, ZoneResults, elimination_results_draw_list,
     zone_results_draw_list,
 };
 pub use people::{PeopleResults, PersonName, PersonRow, people_results_draw_list};
+pub use split::{RESULTS_SPLIT, REWARDS_SPLIT, split_results_draw_list};
 
 #[cfg(test)]
 mod tests;

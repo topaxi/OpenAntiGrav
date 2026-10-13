@@ -63,6 +63,9 @@ pub(crate) enum ResultsModel {
     /// one row per craft with each person named. See
     /// [`oag_ui_screens::endrace::PeopleResults`].
     PulsePeople(PeopleResults),
+    /// A race two people flew, on a pressing that authors (or borrows) `EndRace Results
+    /// Split`: one lap table each, `Vec` index = seat. See [`oag_ui_screens::endrace::split`].
+    PulseSplit(Vec<Results>),
     Hd(FieldResults),
 }
 
@@ -80,6 +83,9 @@ pub(crate) struct EndRaceRuntime {
     renderer: Renderer,
     results: ResultsModel,
     rewards: Option<Rewards>,
+    /// `EndRace Rewards Split`'s panels, one per person, when [`ResultsModel::PulseSplit`]
+    /// is the model: the screen follows `Results Split` as the file's redirect says.
+    split_rewards: Vec<Rewards>,
     menu: EndRaceMenu,
     flow: Flow,
     /// `EndRace Rewards`' trophy for this race's medal, when a campaign
@@ -126,6 +132,7 @@ impl EndRaceRuntime {
         atlas: oag_ui::font::Atlas,
         results: ResultsModel,
         rewards: Option<Rewards>,
+        split_rewards: Vec<Rewards>,
         menu: EndRaceMenu,
         runs_on_after_the_end: bool,
         anisotropy: oag_mesh::mesh_render::Anisotropy,
@@ -169,6 +176,7 @@ impl EndRaceRuntime {
             renderer,
             results,
             rewards,
+            split_rewards,
             menu,
             flow,
             trophy,
@@ -210,7 +218,7 @@ impl EndRaceRuntime {
             .rewards
             .as_ref()
             .is_some_and(|rewards| rewards.campaign);
-        self.flow.advance(campaign);
+        self.flow.advance(campaign || !self.split_rewards.is_empty());
     }
 
     /// `VIEW RESULTS AGAIN` - back to `Results`, the identical
@@ -244,7 +252,8 @@ impl EndRaceRuntime {
             | ResultsModel::PulseTournament(_)
             | ResultsModel::PulseElimination(_)
             | ResultsModel::PulseZone(_)
-            | ResultsModel::PulsePeople(_) => {
+            | ResultsModel::PulsePeople(_)
+            | ResultsModel::PulseSplit(_) => {
                 oag_ui_screens::endrace::pointer::menu_targets(&self.menu, &self.screens.menu)
             }
             ResultsModel::Hd(_) => {
@@ -369,6 +378,21 @@ impl EndRaceRuntime {
                     &|src| sprites.get(src),
                 )
             }
+            (Which::Results, ResultsModel::PulseSplit(people)) => {
+                let Some(layout) = &self.screens.results_split else {
+                    return;
+                };
+                oag_ui_screens::endrace::split_results_draw_list(
+                    people,
+                    layout,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Results, ResultsModel::Hd(results)) => {
                 oag_ui_screens::endrace::hd::hd_results_draw_list(
                     results,
@@ -387,6 +411,21 @@ impl EndRaceRuntime {
             // always true on the title this arm ever actually reaches
             // (Pulse; HD never builds a `Rewards` at all).
             (Which::Photo, _) => return,
+            (Which::Rewards, _) if !self.split_rewards.is_empty() => {
+                let Some(layout) = &self.screens.rewards_split else {
+                    return;
+                };
+                oag_ui_screens::endrace::split_rewards_draw_list(
+                    &self.split_rewards,
+                    layout,
+                    &self.skin,
+                    &self.frame,
+                    &self.strings,
+                    None,
+                    true,
+                    &|src| sprites.get(src),
+                )
+            }
             (Which::Rewards, _) => {
                 let Some(rewards) = &self.rewards else {
                     return;
@@ -411,7 +450,8 @@ impl EndRaceRuntime {
                 | ResultsModel::PulseTournament(_)
                 | ResultsModel::PulseElimination(_)
                 | ResultsModel::PulseZone(_)
-                | ResultsModel::PulsePeople(_),
+                | ResultsModel::PulsePeople(_)
+                | ResultsModel::PulseSplit(_),
             ) => oag_ui_screens::endrace::endrace_menu_draw_list(
                 &self.menu,
                 &self.screens.menu,

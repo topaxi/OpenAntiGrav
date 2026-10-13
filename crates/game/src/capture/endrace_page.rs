@@ -61,6 +61,11 @@ pub(super) enum EndRaceKind {
     /// the function a race builds its own with: **chosen numbers**, no race
     /// behind it.
     PeopleResults,
+    /// `EndRace Results Split`: a lap table for each of two people. **Chosen numbers**.
+    SplitResults,
+    /// `EndRace Rewards Split`: a panel for each of two people, no medal, a loyalty row
+    /// each. **Chosen numbers**.
+    SplitRewards,
     /// A Zone race's `EndRace Results` - `EndRaceResults_PopulateZoneTable`
     /// (`0x088db574`). **Chosen numbers**, not measured: no Zone frame is
     /// reachable, and two of the six statistics draw blank on purpose, as this
@@ -103,6 +108,8 @@ pub(super) fn endrace_kind(page: &str) -> Option<EndRaceKind> {
         }
         "endrace-results-zone" | "endrace_results_zone" => Some(EndRaceKind::ZoneResults),
         "endrace-results-people" | "endrace_results_people" => Some(EndRaceKind::PeopleResults),
+        "endrace-results-split" | "endrace_results_split" => Some(EndRaceKind::SplitResults),
+        "endrace-rewards-split" | "endrace_rewards_split" => Some(EndRaceKind::SplitRewards),
         other => super::endrace_touch_page::touch_kind(other).map(EndRaceKind::Touch),
     }
 }
@@ -456,6 +463,77 @@ fn endrace_page(
                 &|src| sprites.get(src),
             )
         }
+        EndRaceKind::SplitResults => {
+            let lap = |lap, seconds, boosts| oag_ui_screens::endrace::LapSplit {
+                lap,
+                ticks: seconds_to_ticks(seconds),
+                boosts,
+            };
+            let person = |place, laps: Vec<oag_ui_screens::endrace::LapSplit>| {
+                oag_ui_screens::endrace::Results {
+                    headline: oag_ui_screens::endrace::Headline::Position(place),
+                    total_ticks: laps.iter().map(|split| u64::from(split.ticks)).sum(),
+                    laps,
+                }
+            };
+            let people = [
+                person(
+                    5,
+                    vec![
+                        lap(1, 92.49, Some(6)),
+                        lap(2, 49.34, Some(9)),
+                        lap(3, 49.93, Some(10)),
+                    ],
+                ),
+                person(
+                    7,
+                    vec![
+                        lap(1, 95.02, None),
+                        lap(2, 50.11, None),
+                        lap(3, 50.87, None),
+                    ],
+                ),
+            ];
+            let layout = screens
+                .results_split
+                .as_ref()
+                .context("this source has no EndRace Results Split")?;
+            oag_ui_screens::endrace::split_results_draw_list(
+                &people,
+                layout,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
+        EndRaceKind::SplitRewards => {
+            let panel = |team: &str, award, total| oag_ui_screens::endrace::Rewards {
+                medal: None,
+                campaign: false,
+                loyalty: Some(oag_ui_screens::endrace::Loyalty {
+                    team_name: team.to_string(),
+                    award,
+                    total,
+                }),
+            };
+            let layout = screens
+                .rewards_split
+                .as_ref()
+                .context("this source has no EndRace Rewards Split")?;
+            oag_ui_screens::endrace::split_rewards_draw_list(
+                &[panel("Assegai", 90, 90), panel("Feisar", 90, 41_300)],
+                layout,
+                skin,
+                frame,
+                strings,
+                backdrop,
+                false,
+                &|src| sprites.get(src),
+            )
+        }
         EndRaceKind::ZoneResults => {
             let model = oag_ui_screens::endrace::ZoneResults {
                 zones_cleared: 7,
@@ -670,6 +748,9 @@ fn hd_endrace_page(
             anyhow::bail!(
                 "Wipeout HD/Fury's own EndRace Results authors no Zone or Eliminator table"
             )
+        }
+        EndRaceKind::SplitResults | EndRaceKind::SplitRewards => {
+            anyhow::bail!("EndRace Results Split and Rewards Split are Pulse's; HD authors none")
         }
         // Tournament is Pulse-only in this build so far - `tournament_next_leg`
         // never reaches this arm true, but the field still has to be bound.

@@ -201,6 +201,72 @@ pub fn rewards_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
+    rewards_layers(
+        std::slice::from_ref(model),
+        layout,
+        skin,
+        frame,
+        strings,
+        backdrop,
+        race_behind,
+        sprites,
+    )
+}
+
+/// `EndRace Rewards Split`'s draw list: one panel per person, `models[n]` on the
+/// widgets suffixed `_n` (`PlayerRW_0`, `PlayerRW_1`). See [`super::split`].
+#[must_use]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same eight facts a menu page or a picker takes"
+)]
+pub fn split_rewards_draw_list(
+    models: &[Rewards],
+    layout: &Layout,
+    skin: &Skin,
+    frame: &Frame,
+    strings: &StringTable,
+    backdrop: Option<Picture>,
+    race_behind: bool,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Layers {
+    rewards_layers(
+        models,
+        layout,
+        skin,
+        frame,
+        strings,
+        backdrop,
+        race_behind,
+        sprites,
+    )
+}
+
+/// What a widget in a screen of several people's panels belongs to, given the owner
+/// of the one before it: a `_n` name starts person `n`'s widgets, an unsuffixed name
+/// belongs to none, and an anonymous widget is nested in whatever named widget came
+/// before it in document order (a panel's own rules, `Results Split`'s tile).
+fn owner_after(name: Option<&str>, previous: Option<u8>) -> Option<u8> {
+    match name {
+        Some(name) => super::table::split_suffix(name).1,
+        None => previous,
+    }
+}
+
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the same eight facts a menu page or a picker takes"
+)]
+fn rewards_layers(
+    models: &[Rewards],
+    layout: &Layout,
+    skin: &Skin,
+    frame: &Frame,
+    strings: &StringTable,
+    backdrop: Option<Picture>,
+    race_behind: bool,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+) -> Layers {
     let mut layers = Layers {
         backdrop: frame.backdrops(
             skin.space(),
@@ -212,11 +278,22 @@ pub fn rewards_draw_list(
     };
     let screen = &layout.screen;
     let mut out = Vec::new();
+    let panel = |owner: Option<u8>| models.get(usize::from(owner.unwrap_or(0)));
+    let mut owner = None;
     for fill in &screen.fills {
-        out.push(fill_draw(fill));
+        owner = owner_after(fill.name.as_deref(), owner);
+        if panel(owner).is_some() {
+            out.push(fill_draw(fill));
+        }
     }
+    owner = None;
     for image in &screen.images {
-        let name = image.name.as_deref().unwrap_or("");
+        owner = owner_after(image.name.as_deref(), owner);
+        let Some(model) = panel(owner) else { continue };
+        let name = image
+            .name
+            .as_deref()
+            .map_or("", |name| super::table::split_suffix(name).0);
         // The loyalty row's own icon, drawn only alongside the row's own
         // text - see the module doc.
         if name == "LoyaltyImg" && model.loyalty.is_none() {
@@ -235,23 +312,25 @@ pub fn rewards_draw_list(
         }
         if name == "loyaltybar" {
             if let (Some(loyalty), Some(placed)) = (&model.loyalty, sprites(&image.src)) {
-                // `loyaltybar`'s fill is `total * 0.00124` **pixels**, not a
-                // fraction: `EndRaceRewards_Update` (`0x088dd2b8`) writes it
-                // into the widget's width (`+0x9c`) and its U extent
+                // `loyaltybar`'s fill is `total / 100000` of the authored width, in
+                // **pixels**, not a fraction: `EndRaceRewards_Update` (`0x088dd2b8`)
+                // writes it into the widget's width (`+0x9c`) and its U extent
                 // (`+0xc4`) alike, between `FUN_088a6a9c` and `FUN_088a68ec`
                 // (the texel-space denormalise and renormalise pair), and
                 // `FEScreen_SetStatBar` (`0x088ea780`) does the same with
                 // `fullWidth * value / max`. `Loyalty_AccumulateTotal`'s
-                // `100000` ceiling lands on `124`, the authored width, so the
-                // bar only fills at the cap; a total of 90 is `0.11` pixels
-                // wide and only `loyaltybg` shows (the reference frame).
-                // The total is capped at `100000`, well inside `f32`'s
-                // exact-integer range, so this cast loses nothing.
+                // `100000` ceiling lands on the authored width (124 on the PSP,
+                // 165 on the PS2), so the bar only fills at the cap; a total of 90
+                // is a fraction of a pixel and only `loyaltybg` shows (the
+                // reference frame). The PSP's `0.00124` a point was that 124
+                // written as a constant, which left a PS2 bar 25% short. The total
+                // is capped at `100000`, well inside `f32`'s exact-integer range,
+                // so this cast loses nothing.
                 #[allow(
                     clippy::cast_precision_loss,
                     reason = "total is capped at 100_000, exact in f32"
                 )]
-                let width = loyalty.total as f32 * LOYALTY_BAR_PIXELS_PER_POINT;
+                let width = loyalty.total as f32 * (image.width.unwrap_or(0.0) / LOYALTY_CAP);
                 out.push(loyalty_bar_draw(image, placed, width));
             }
             continue;
@@ -261,8 +340,14 @@ pub fn rewards_draw_list(
         };
         out.push(image_draw(image, placed));
     }
+    owner = None;
     for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
+        owner = owner_after(text.name.as_deref(), owner);
+        let Some(model) = panel(owner) else { continue };
+        let name = text
+            .name
+            .as_deref()
+            .map_or("", |name| super::table::split_suffix(name).0);
         let content =
             match name {
                 "RewardLine1" => Some(medal_award_text(model.medal, strings)),
@@ -419,7 +504,7 @@ pub(super) fn medal_award_text(
 
 /// A `lap{n}.{c}` cell's own content - the header row, a real lap, the
 /// totals row, or nothing (column 2, and any row past the totals one).
-fn lap_cell_text(
+pub(super) fn lap_cell_text(
     name: &str,
     model: &Results,
     strings: &StringTable,
@@ -539,10 +624,9 @@ pub(super) fn image_draw(image: &Image, placed: Placed) -> Draw {
     sprite_draw(image, placed, image.x, image.y, image.color)
 }
 
-/// Pixels of `loyaltybar` per loyalty point, `EndRaceRewards_Update`'s
-/// `0.00124` literal: `100000` points (the ceiling) is the authored
-/// `124`-pixel width, which is the only reason it looks like a fraction.
-const LOYALTY_BAR_PIXELS_PER_POINT: f32 = 0.00124;
+/// The loyalty total `loyaltybar` is full at (`Loyalty_AccumulateTotal`'s ceiling): the
+/// bar is `total / LOYALTY_CAP` of its authored width.
+const LOYALTY_CAP: f32 = 100_000.0;
 
 /// `loyaltybar`'s own draw: `width` pixels on screen *and* `width` texels of
 /// the sheet, because the original writes the one number into both the

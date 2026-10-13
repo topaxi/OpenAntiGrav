@@ -55,7 +55,7 @@ pub(super) type Suffix = Option<u8>;
 
 /// A widget name without its `_N` person suffix, and the suffix: `tablebg2_1` is
 /// `("tablebg2", Some(1))`, `tablebg2` is `("tablebg2", None)`.
-fn split_suffix(name: &str) -> (&str, Suffix) {
+pub(super) fn split_suffix(name: &str) -> (&str, Suffix) {
     match name.rsplit_once('_') {
         Some((stem, number)) => match number.parse() {
             Ok(number) => (stem, Some(number)),

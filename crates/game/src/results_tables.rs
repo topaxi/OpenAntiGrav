@@ -10,7 +10,9 @@
 //! (`docs/ui/split-end-race.md`).
 
 use oag_raceplay::scoreboard::Board;
-use oag_ui_screens::endrace::{FieldRow, PeopleResults, PersonName, PersonRow};
+use oag_ui_screens::endrace::{
+    FieldRow, Headline, LapSplit, PeopleResults, PersonName, PersonRow, Results,
+};
 
 /// Wipeout HD/Fury's whole field, ordered by place - the same feed
 /// `crate::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is read at
@@ -57,6 +59,72 @@ pub fn people_rows(board: Option<&Board>, roster: &[String]) -> Option<PeopleRes
             })
             .collect(),
     })
+}
+
+/// One person of a two-person race, as `EndRace Results Split` and `Rewards Split` read
+/// them: their craft's own laps and the numbers the loyalty law takes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitPerson {
+    /// The grid slot they flew.
+    pub slot: usize,
+    /// Their place in the field, `None` where the race has no place to show.
+    pub place: Option<u8>,
+    /// Their craft's own splits ([`oag_race::Standing::lap_splits`]).
+    pub laps: Vec<LapSplit>,
+    /// Their finishing tick, or the race's last where they had not finished.
+    pub total_ticks: u64,
+    pub laps_completed: u32,
+    pub kills: u32,
+    pub zone: u16,
+}
+
+impl SplitPerson {
+    /// The lap table's model, headed by `headline`.
+    #[must_use]
+    pub fn results(&self, headline: Headline) -> Results {
+        Results {
+            headline,
+            laps: self.laps.clone(),
+            total_ticks: self.total_ticks,
+        }
+    }
+}
+
+/// Each person of `board`, seat order (slot order), for a race exactly two flew.
+/// `boosts` is the speedup-pad tally the race keeps for the first person's craft alone
+/// ([`oag_raceplay::RunStats`]); the second person's column is left blank.
+#[must_use]
+pub fn split_people(
+    board: &Board,
+    world: &oag_gameplay::World,
+    boosts: &[u32; oag_race::MAX_RECORDED_LAPS],
+) -> Vec<SplitPerson> {
+    let mut seats: Vec<_> = board.rows.iter().filter(|row| row.player).collect();
+    seats.sort_by_key(|row| row.slot);
+    seats
+        .into_iter()
+        .map(|row| {
+            let slot = usize::from(row.slot);
+            let standing = &world.ships[slot].standing;
+            SplitPerson {
+                slot,
+                place: board.shows_place().then_some(row.place),
+                laps: (0..oag_race::MAX_RECORDED_LAPS)
+                    .filter_map(|index| {
+                        standing.lap_splits[index].map(|ticks| LapSplit {
+                            lap: (index + 1) as u32,
+                            ticks,
+                            boosts: (slot == 0).then_some(boosts[index]),
+                        })
+                    })
+                    .collect(),
+                total_ticks: row.finish_tick.unwrap_or(board.tick),
+                laps_completed: row.laps_completed,
+                kills: standing.kills,
+                zone: world.race[slot].zone,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

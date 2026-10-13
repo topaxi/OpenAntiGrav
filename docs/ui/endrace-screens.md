@@ -217,7 +217,7 @@ where the frames show the mixed-case default face - the shared-table font gap
 | `MedalImg` under an earned trophy | **No - settled 2026-09-30, confidence 80** | a live gold-medal run (campaign `grid0_3_2`, one lap, 1.19.84, `Gold medal awarded`) shows only the gold trophy in the medal square and **no static hex glyph under it**; the trophy **spins** about its vertical axis (seven frames 0.9 s apart, edge-on to full face and back, about a 6 s period) where this build holds its first frame - `StartPaused` and the animation stay **chosen, not measured** here |
 | trophy (`TrophyPanel`, `g_trophy`/`s_trophy`/`b_trophy`) | **Yes, 2026-09-28**, on a campaign race that earned a medal | the medal's own model, `oag_game::endrace::Trophy`, drawn with the disc's `Mode3D` camera - see "The trophy" below |
 | `RewardLine2`/`RewardLoyaltyActive`/`loyaltynum` (the loyalty row) | **Yes, 2026-09-14** | `Race_ComputeLoyaltyAward`/`Loyalty_AccumulateTotal` landed in main (confidence 95/90) - see [`oag_ui_screens::endrace::Loyalty`](../../crates/ui-screens/src/endrace.rs) and `crate::race_stage::endrace::loyalty_award`. `None` (nothing draws) only when a launch names no team at all |
-| `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar` is `total * 0.00124` **pixels** wide and as many texels of the sheet (not a fraction of the authored width; the `100000` cap is the authored `124`), so a total of 90 shows only `loyaltybg`, as the reference frame does - see [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
+| `loyaltybg`/`loyaltybar` | Yes, alongside the row | `loyaltybar` is `total / 100000` of its authored width in **pixels** (124 on the PSP, so `total * 0.00124`; the PS2 file authors 165, an unmeasured reading) and as many texels of the sheet (not a fraction of the width at 90 points; the `100000` cap is the authored width), so a total of 90 shows only `loyaltybg`, as the reference frame does - see [The loyalty bar](#the-loyalty-bar-is-pixels-not-a-fraction) |
 | `LoyaltyImg` | Yes, alongside the row | |
 | `BigPos` | **No** | a finishing-position figure this model carries no place for - would need threading a `place` into `Rewards` that nothing else on this screen needs |
 | `ContinueButton` etc. | Yes | direct |
@@ -716,3 +716,28 @@ DISPLAY=:1 WAYLAND_DISPLAY= XDG_CONFIG_HOME=<isolated> \
 # flyer) -> Cell Selection (click the selected hex) -> let the race run to the
 # flag -> screenshot EndRace Results, click Menu, screenshot EndRace Menu
 ```
+
+## The table's rows are the file's own, not the PSP's (2026-10-13)
+
+`table::Grid` (`crates/ui-screens/src/endrace/table.rs`) reads every table's geometry off
+its own `tablebg{r}` wrappers instead of carrying the PSP file's constants (first row 92,
+pitch 20, highlight `0x5d + 0x14 (row - 1)`). A wrapper is a colour-only `<Image
+OffsetY=...>`; the screen reader leaves its own `OffsetY` out of the fill's `y`
+(`Fill::own_offset` keeps it), so the row's top is `fill.y + own_offset.1`. Row `r`'s band
+(its tile and two rules, anonymous widgets collected flat) runs from its top to the next
+row's, and which table a widget belongs to is read from document order, since two tables of
+`Results Split` overlap in `y`. The highlight is the row's fill top (row 1's one pitch above
+row 2's), which is the PSP's literal exactly; **on the PS2 it is chosen, not measured** (its
+executable is not in a Ghidra project and the populate's placement is unread).
+
+What it fixed: on the PS2 the `EndRace Results` table authors `tablebg1` at 152 (under an
+`<Item OffsetY="-10">`) with a 32.94 pitch, so every row backing and the highlight sat in the
+PSP's rows - an Eliminator race's eighth place was highlighted on row 4, `endrace-results-people`'s
+persons (5th, 7th) on rows 2 and 3. PSP stills are byte-identical; the PS2 Results,
+Eliminator, People, Zone and Tournament stills moved (the fix), and the PS2 Rewards still by
+nine pixels (the loyalty bar's tip, above). Pinned by
+`crates/game/tests/endrace_split_ground_truth.rs::a_tables_rows_and_highlight_are_where_its_own_file_puts_them`
+and `crates/ui-screens/src/endrace/table/tests.rs`. **The PS2 pressing's WAD has no
+`hex_bg.mip`, `reward_icons.mip`, `reward_icon_blank.mip` or `reward_icon_ship.mip` under those
+names** (the loader's report says so), so its row tiles and its reward icons draw nothing;
+where the PS2 keeps them is open.

@@ -39,7 +39,7 @@ pub(crate) fn voice_for(
         ),
         ResultsModel::Pulse(_) | ResultsModel::PulseZone(_) => (race_place, None),
         // Several people: nobody's place is "the" place, so nothing is announced.
-        ResultsModel::PulsePeople(_) => return None,
+        ResultsModel::PulsePeople(_) | ResultsModel::PulseSplit(_) => return None,
     };
     Some(Voice::new(
         law?,

@@ -645,6 +645,15 @@ pub struct FrontEnd {
     /// (Pure) or read and not wired (Omega), neither of which is a
     /// measurement that the title ships no such screen.
     pub endrace_style: Option<EndRaceStyle>,
+    /// Whether this title, on a pressing that authors no two-person screens of its own,
+    /// **borrows the PS2 pressing's design** for `Team SelectionSplit`, `EndRace Results
+    /// Split` and `EndRace Rewards Split`, built from the pressing's own assets with the
+    /// PS2's numbers rescaled into its grid. `true` for Pulse alone: the maintainer's rule
+    /// (2026-10-13) is that anything for Pulse is the same on both pressings, and only
+    /// the PS2 authors a split screen. **Chosen, not measured** on the pressings that
+    /// borrow it. `false` elsewhere: no title but Pulse has a PS2 pressing read, and the
+    /// ones with a split screen of their own author it.
+    pub borrows_ps2_split_screens: bool,
 }
 
 /// One circuit's front-end model, see [`FrontEnd::circuit_models`].
