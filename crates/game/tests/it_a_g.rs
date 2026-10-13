@@ -50,7 +50,6 @@ mod damage_fx_ground_truth;
 mod destroy_camera_ground_truth;
 mod difficulty_ground_truth;
 mod dlc_ground_truth;
-mod eliminator_ai_stats_ground_truth;
 mod eliminator_finish_ground_truth;
 mod eliminator_pads_ground_truth;
 mod endrace_split_ground_truth;

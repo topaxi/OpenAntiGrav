@@ -12,6 +12,8 @@
 mod menu_layout_ground_truth;
 mod menu_schema;
 mod menu_skin;
+mod prompt_glyphs_ground_truth;
+mod pure_frame_ground_truth;
 mod text_display_type_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

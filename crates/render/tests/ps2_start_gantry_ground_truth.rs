@@ -85,8 +85,8 @@ fn gantry() -> Option<(Vec<u8>, mesh::Ps2TextureSet)> {
 ///
 /// The same extraction `start_gantry_ground_truth.rs::glyphs` does on PSP's
 /// disc, duplicated rather than shared across crates: that test lives in
-/// `oag-vex`'s own test binary, and this one additionally needs `oag-game`'s
-/// archive and PS2 texture-set types.
+/// `oag-vex`'s own test binary, and this one additionally needs the archive
+/// and PS2 texture-set types `oag-render` depends on.
 #[derive(Debug)]
 struct Glyph {
     uv: [f32; 2],

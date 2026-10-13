@@ -654,7 +654,7 @@ HD were re-captured the same way and are unchanged: both still resolve
 `"HUD"`/`"HUDSmall"` to `PulseHud.fnt`/`small.fnt` as before.
 
 Pinned by two tests in
-`crates/game/tests/vita_2048_hud_ground_truth.rs`:
+`crates/hud/tests/vita_2048_hud_ground_truth.rs`:
 `the_resolved_hud_font_is_2048_huds_own_face_not_a_leftover_or_the_fallback`,
 which also asserts the regression this axis closes - resolving the shared
 literal `"HUD"` against 2048's own plugins still finds `korean`'s leftover

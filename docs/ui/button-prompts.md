@@ -32,7 +32,7 @@ forced gives that). An unknown token is reported and `auto` used.
 
 | Thing | Status | Evidence |
 | --- | --- | --- |
-| Pulse's `ε γ δ β Λ Ν` are cross, circle, square, triangle, L, R | **measured** | the rendered cells of `pulse_text.fnt`, `Pulse_14.fnt`, `Pulse_20.fnt` on the EU disc, read as pictures (`oag-tools --example prompt_glyph_probe`); pinned by hash in `crates/game/tests/prompt_glyphs_ground_truth.rs` |
+| Pulse's `ε γ δ β Λ Ν` are cross, circle, square, triangle, L, R | **measured** | the rendered cells of `pulse_text.fnt`, `Pulse_14.fnt`, `Pulse_20.fnt` on the EU disc, read as pictures (`oag-tools --example prompt_glyph_probe`); pinned by hash in `crates/ui/tests/prompt_glyphs_ground_truth.rs` |
 | HD's `ε γ δ` in `PS_BUTTONS.fnt` are cross, circle, square | **measured** | the same probe on the HD EU disc |
 | HD's `Δ Γ Β Α` | **left alone** | four arrow-like navigation marks; the action each stands for was not established, so they draw as the disc draws them |
 | Which PromptFont glyph stands for a control on a pad | **chosen, not measured** | `crates/game/src/prompts.rs`; PromptFont ships no Nintendo-coloured face glyphs, so lettered discs stand in |

@@ -266,7 +266,7 @@ were enough to lose all three images with no error and no picture, just
 silence. `collect_widgets` now recurses through an anonymous `Screen` the
 same way it already did the other two, closing that gap for every title
 `oag_game` reads, not only Pulse's. See `crates/game/src/screen.rs`'s own
-`collect_widgets` doc, and `crates/game/tests/pulse_frame_ground_truth.rs`,
+`collect_widgets` doc, and `crates/hud/tests/pulse_frame_ground_truth.rs`,
 which pins all three widgets' coordinates and sub-rects against the disc.
 
 Wired through `oag_pulse::FRONT_END::menu_frame` (`oag_title::FrontEnd`'s
@@ -322,7 +322,7 @@ the opposite direction from Pulse's brightening. `Some(0xFF16AED1)`,
 confidence 65: one capture, effect rather than source, same basis as this
 title's other pixel measurements.
 
-See `crates/game/tests/pure_frame_ground_truth.rs` for the frame's own
+See `crates/ui/tests/pure_frame_ground_truth.rs` for the frame's own
 widgets pinned against the disc, and `crates/game/tests/menu_skin.rs`'s
 `pures_main_menu_capture_measured_its_background_and_its_selected_row` for
 the two colours.

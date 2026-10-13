@@ -6,6 +6,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
+autotests = false
 
 [dependencies]
 # `Instant` that is std's own on native and `performance.now()` on the web,
@@ -38,3 +39,7 @@ oag-shader-check.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

@@ -23,6 +23,7 @@ oag-ui.workspace = true
 workspace = true
 
 [dev-dependencies]
+oag-ai.workspace = true
 oag-assets.workspace = true
 oag-testdata.workspace = true
 

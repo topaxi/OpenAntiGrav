@@ -516,7 +516,7 @@ pub struct HudArt {
     /// roots the played skin (`oag_2048::hud::skins::PLAYED`) actually
     /// carries finds zero `font="HUDSmall"` widgets in any of them** - every
     /// label in that skin is `font="HUD"`
-    /// (`crates/game/tests/vita_2048_hud_ground_truth.rs`'s
+    /// (`crates/hud/tests/vita_2048_hud_ground_truth.rs`'s
     /// `the_played_skins_layouts_author_no_hudsmall_widget_at_all`), so no
     /// widget the played HUD draws will ever ask this build to resolve a
     /// caption role in the first place - the gap costs nothing real. A

@@ -5,7 +5,7 @@
 //! project does not ship. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
-//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-source --run-ignored all \
 //!     -E 'test(/^eliminator_ai_stats_ground_truth::/)'
 //! ```
 //!

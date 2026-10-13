@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod endrace_screens_ground_truth;
+mod menu_remix_ai_ground_truth;
 mod race_end_photo_ground_truth;
 mod split_selection_ground_truth;
 mod tag_entry_ground_truth;
