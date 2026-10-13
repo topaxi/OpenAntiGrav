@@ -21,7 +21,7 @@
 //! a positive deflection about the hinge's local X raises the flap and flares
 //! it outward, on both sides of every team, in world space.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh;

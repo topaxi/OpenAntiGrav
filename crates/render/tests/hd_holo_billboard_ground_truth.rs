@@ -16,7 +16,7 @@
 //! `scanlinebillboard` is another program and stays refused.
 //! `crates/render/examples/hd_holo_billboard_census.rs` lists every slot.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

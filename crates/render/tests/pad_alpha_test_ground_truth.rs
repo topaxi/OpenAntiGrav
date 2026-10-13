@@ -41,7 +41,7 @@
 //! test forced off. A cutout that keeps every fragment is the regression, and
 //! only the comparison sees it.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::Path;
 

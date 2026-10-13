@@ -14,7 +14,7 @@
 //! entry 1. Binding entry 0 drew the floor black with the reflection map's
 //! pattern. Dropping the declared-sampler filter in `skin::picks` fails this.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 

@@ -12,7 +12,7 @@
 //! two circuits that author `dc_lightcone` reach it with the values their own
 //! records carry (`crates/render/examples/hd_light_cone_census.rs`).
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

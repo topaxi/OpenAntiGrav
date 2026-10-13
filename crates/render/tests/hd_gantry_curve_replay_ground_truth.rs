@@ -36,7 +36,7 @@
 //! authors and what the shader table should hold - it does not, and was
 //! never meant to, assert that all four are visible.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

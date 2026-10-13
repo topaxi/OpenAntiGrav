@@ -33,7 +33,7 @@
 //! hulls), and that every drawn `track_wall.rcsmaterial` slot's own bound
 //! albedo texture is *not* the `EmissiveTexture` entry.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

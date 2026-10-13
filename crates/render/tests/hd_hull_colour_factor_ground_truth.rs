@@ -13,7 +13,7 @@
 //! baked light, which drew `feisar_c1`'s rear housing about 3x too bright.
 //! See `docs/rendering/hd-ship-materials.md`, "Finding 3, resolved".
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 

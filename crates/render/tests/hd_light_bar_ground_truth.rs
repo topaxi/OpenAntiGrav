@@ -15,7 +15,7 @@
 //! `ds_pit`/`ds_wall`, the azure panels of the original's start line). The
 //! scene bound none of it, so those panels drew dark.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

@@ -38,7 +38,7 @@
 //! is what `Drawable::tint_weapon_pads` needs to cycle a
 //! pad's ready/cooling colour at all.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

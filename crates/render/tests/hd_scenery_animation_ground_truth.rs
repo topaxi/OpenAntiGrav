@@ -41,7 +41,7 @@
 //!    GPU draws at the anchor's origin - worse than the defect this fixed.
 //!    Only two frames of pixels answer it.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

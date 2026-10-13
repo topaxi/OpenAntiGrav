@@ -14,7 +14,7 @@
 //! behind a write to `H2.w`, which `Program::accumulates` used to read as
 //! taking the sample away, so the arch strips drew the honeycomb alone.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh::{self, slots};
 

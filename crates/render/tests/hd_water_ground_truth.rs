@@ -15,7 +15,7 @@
 //! `sebenco_ice` (Sebenco Climb, both directions) is the only one that patches
 //! the three authored water colours.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use archive_cache::Reads;
 use oag_assets::Container;

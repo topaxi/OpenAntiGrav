@@ -42,7 +42,7 @@
 //!    first (`aux_traced`) attempt regressed; all three still carry
 //!    `ADD_SECOND` on Talon's Junction after this fix.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

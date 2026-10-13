@@ -12,7 +12,7 @@
 //! `#[ignore]`d: needs the PS3 disc image.
 //! `OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-render --run-ignored all -E 'binary(hd_original_speed_pad_ground_truth)'`
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::Path;
 

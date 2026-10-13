@@ -28,7 +28,7 @@
 //! counts move, that is either a resolver regression or a genuine change to
 //! chase, and this is where it would show first.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::PathBuf;
 

@@ -14,7 +14,7 @@
 //! shader: the offscreen capture helper has no scene clock, so the build is
 //! what a disc-backed test can pin.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::collections::BTreeSet;
 

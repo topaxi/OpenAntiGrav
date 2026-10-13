@@ -28,7 +28,7 @@
 //!    coverage.
 //! 3. **It reaches the frame**, and it moves: two clocks are two pictures.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

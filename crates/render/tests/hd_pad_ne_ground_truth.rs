@@ -23,7 +23,7 @@
 //!   vertex normal alone draw - which is what dropping the lightmap, or
 //!   mis-decoding the normal, does and a pixel count does not show.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::Path;
 

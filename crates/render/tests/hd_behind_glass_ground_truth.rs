@@ -18,7 +18,7 @@
 //! own target instead (`mesh::rcs::build_scene_views`), split by the fog bit
 //! `0x20` the same capture ties to the alternate fog pair.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use oag_mesh::mesh;
 use oag_rcs::rcsmodel;

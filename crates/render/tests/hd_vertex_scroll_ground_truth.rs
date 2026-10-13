@@ -11,7 +11,7 @@
 //! the texture coordinate". The reach below is pinned per circuit so a change
 //! that switched on a family nobody read, or dropped the wiring, moves a number.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

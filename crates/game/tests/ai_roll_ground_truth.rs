@@ -34,7 +34,7 @@
 //! ignored tests, and a run of that length in that suite is how a suite stops
 //! being run.
 
-mod in_parallel;
+use crate::in_parallel;
 
 use std::path::PathBuf;
 

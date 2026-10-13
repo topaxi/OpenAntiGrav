@@ -32,7 +32,7 @@
 //! pins that every drawn material resolves and every drawn chunk is covered,
 //! so the regression this fixed cannot silently return.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::path::{Path, PathBuf};
 

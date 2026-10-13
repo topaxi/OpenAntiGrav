@@ -14,7 +14,7 @@
 //! glow table deduplicates by value, so without this every pad of one material
 //! would share an entry and a recolour could not tell two pads apart.
 
-mod archive_cache;
+use crate::archive_cache;
 
 use std::collections::HashSet;
 
