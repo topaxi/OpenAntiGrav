@@ -192,7 +192,7 @@ where there is room):
 
 | View shape (a view's width/height) | Where it occurs | Pulse and Pure | HD | 2048 |
 | --- | --- | --- | --- | --- |
-| two views and under 2.4 (`tall`, a rule keyed on `views = [2]`) | a left-and-right cut: two columns, 0.89 at 16:9 | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time; Pulse also the Eliminator's kill column, the Head2Head bar and the Pilot Assist indicator | none: the disc's `vert_` layouts answer, and its other modes' columns fall to `portrait` | every group |
+| two views and under 2.4 (`tall`, a rule keyed on `views = [2]`) | a left-and-right cut: two columns, 0.89 at 16:9 | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time; Pulse also the Eliminator's kill column and the Pilot Assist indicator (Pure has no Eliminator and authors no kill widget) | none: the disc's `vert_` layouts answer, and its other modes' columns fall to `portrait` | every group |
 | 2.4 and wider (`strip`) | two views cut top and bottom, the top of three | every group at its corner, larger | every group | every group |
 | 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group | every group |
 | 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group | no kill column |
@@ -204,17 +204,23 @@ about 0.89:1, which `portrait` answered by shape because `portrait` is the only 
 cuts and must not move, so a column has a rule of its own in front of `strip`: `views = [2]`,
 `aspect = [0.0, 2.4]`. The upper bound is not 1.0 because a wider screen's columns are
 squarer (1.19 at 21:9, 1.78 at 32:9), and a horizontal pair is 2.67 or wider on any screen
-4:3 or wider, so 2.4 still keeps the two cuts apart. (A phone held upright cuts its two
-views in rows that are about 1.1 wide; they read `tall` too, which is the right answer for a
-view that size.) Three or more views are always cut in rows (`Cut::for_views`), so the only
+4:3 or wider, so 2.4 still keeps the two cuts apart. (The side effect: a horizontal pair in a
+window narrower than 1.2:1, a squarish desktop window or a phone held upright (9:19.5 gives
+rows about 0.92 wide), now reads `tall`, where it read `landscape`, `square` or `portrait`
+before; each such view is a tall one, so the answer fits. Keying a rule on the cut would take
+a loader change.) Three or more views are always cut in rows (`Cut::for_views`), so the only
 other tall views are seven and eight views' lower rows, which stay on `portrait`. The
 `views` key is one every rule already has, so nothing in the loader changed. What `tall` does
 over `portrait`:
 
-- **Pulse**: the Eliminator's kill column (`PosTag*`, `KillsText`), the Head2Head bar and the
-  Pilot Assist indicator, which a row of eight has no room for and which `portrait` never
-  placed, so an Eliminator column showed lap and speed and no kills. Looked at on PSP Pulse in
-  Single Race, Zone, Time Trial and the Eliminator, 1280x720, at tick 900 to 1200.
+- **Pulse**: the Eliminator's kill column (`PosTag*`, `KillsText`), which a row of eight has no
+  room for and which `portrait` never placed, so an Eliminator column showed lap and speed and
+  no kills; and the Pilot Assist indicator (`--pilot-assist extreme`), raised to the left over
+  the time readout, since at the bottom centre it lay on the shield and speed bars (seen and
+  moved). `HeadToHeadBar` is named too, as the horizontal rules name it, but **no frame drew
+  it**: Head2Head showed no bar in a row or a column at tick 900, so that claim is by name only.
+  Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
+  1280x720, at tick 900 to 1200.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule

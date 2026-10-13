@@ -280,7 +280,7 @@ so three, five and seven views mix. Each view also has a scissor now. See
 [asset-layers.md](../../docs/architecture/asset-layers.md#a-split-screen-hud-layout-file).
 **2026-10-13, `split-hud-vertical`: vertical columns.** A two-view vertical cut reads a `tall`
 rule (`views = [2]`, `aspect = [0.0, 2.4]`) in `SplitHud_Pulse.toml` and `SplitHud_Pure.toml`
-(Pulse gains the Eliminator's kill column, Head2Head's bar and the Pilot Assist indicator; Pure's
+(Pulse gains the Eliminator's kill column and the Pilot Assist indicator, Head2Head's bar is named and not seen drawing; Pure's
 weapon grid is raised clear of the bottom edge) and 2048 has its own `SplitHud_2048.toml`, both
 cuts and every count, mirroring HD's arrangement (2048's horizontal pair changed with it,
 deliberately). HD's authored `vert_` layouts still answer HD. 2048's file checked against
