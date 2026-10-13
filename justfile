@@ -116,8 +116,13 @@ lint:
 # and leaves out the examples, which plain `cargo nextest run` also links but
 # never runs: 283 of them, about 216 CPU-s of a cold build (2026-10-13).
 # `just lint`'s `--all-targets` still type-checks every example.
+#
+# `--cargo-profile quick` builds the workspace at opt-level 0 (Cargo.toml's
+# `[profile.quick]`): nothing here runs a ground-truth test, so the opt-level 2
+# `just test-data` needs would only cost build time. Its artefacts land in
+# `target/quick`, beside dev's `target/debug`.
 test:
-    cargo nextest run --workspace --tests
+    cargo nextest run --workspace --tests --cargo-profile quick
 
 # Behavioural / ground-truth tests that need data/images populated.
 #
@@ -167,8 +172,8 @@ test-affected:
     selection=$(python3 scripts/affected.py)
     case "$selection" in
         none) echo "test-affected: no package selected, nothing to run" ;;
-        full) cargo nextest run --workspace --tests ;;
-        *) cargo nextest run $selection --tests ;;
+        full) cargo nextest run --workspace --tests --cargo-profile quick ;;
+        *) cargo nextest run $selection --tests --cargo-profile quick ;;
     esac
 
 # `just test-data`, narrowed the same way. A full selection is `just test-data`

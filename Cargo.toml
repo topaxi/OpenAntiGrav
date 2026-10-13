@@ -412,3 +412,78 @@ opt-level = 2
 opt-level = 2
 [profile.dev.package.oag-post]
 opt-level = 2
+
+# What `just test`, `just test-affected`, `just check-schemas` and CI's test step
+# build with: every workspace crate dev names above goes back to opt-level 0, and
+# dependencies keep dev's `package."*"` (an inheriting profile takes dev's
+# package overrides with it, so each crate has to be named again here).
+#
+# `just test` skips every `#[ignore]`d ground-truth test, so the opt-level 2 those
+# crates carry for `just test-data` buys it seconds while costing it minutes of
+# build. Measured 2026-10-13, cold `cargo test --workspace --tests --no-run` with
+# kache off: dev 255 s wall and 2,026 CPU-s, this profile 172 s and 1,327 CPU-s
+# (the workspace's own units 870 -> 253 CPU-s). The test run itself goes from
+# about 9 s to 15 s. Opt-level 1 (222 s) was measured and is not worth it.
+# Opt-level keeps IEEE semantics, so the determinism tests' committed hashes
+# hold here as they do under dev and release.
+#
+# Everything else - `just test-data`, `cargo run` of the tools, `target/debug`
+# for the scripts - stays on dev. Running `just` and then `just test-data` on
+# one tree builds the workspace twice, once per profile, into
+# `target/quick` and `target/debug`.
+[profile.quick]
+inherits = "dev"
+[profile.quick.package.oag-core]
+opt-level = 0
+[profile.quick.package.oag-physics]
+opt-level = 0
+[profile.quick.package.oag-ai]
+opt-level = 0
+[profile.quick.package.oag-race]
+opt-level = 0
+[profile.quick.package.oag-gameplay]
+opt-level = 0
+[profile.quick.package.oag-weapons]
+opt-level = 0
+[profile.quick.package.oag-disc]
+opt-level = 0
+[profile.quick.package.oag-display]
+opt-level = 0
+[profile.quick.package.oag-formats]
+opt-level = 0
+[profile.quick.package.oag-assets]
+opt-level = 0
+[profile.quick.package.oag-video]
+opt-level = 0
+[profile.quick.package.oag-unity]
+opt-level = 0
+[profile.quick.package.oag-ballisticng]
+opt-level = 0
+[profile.quick.package.oag-tables]
+opt-level = 0
+[profile.quick.package.oag-texture]
+opt-level = 0
+[profile.quick.package.oag-vex]
+opt-level = 0
+[profile.quick.package.oag-pob]
+opt-level = 0
+[profile.quick.package.oag-rcs]
+opt-level = 0
+[profile.quick.package.oag-ui]
+opt-level = 0
+[profile.quick.package.oag-ui-screens]
+opt-level = 0
+[profile.quick.package.oag-hud]
+opt-level = 0
+[profile.quick.package.oag-raceplay]
+opt-level = 0
+[profile.quick.package.oag-game]
+opt-level = 0
+[profile.quick.package.oag-render]
+opt-level = 0
+[profile.quick.package.oag-fx]
+opt-level = 0
+[profile.quick.package.oag-mesh]
+opt-level = 0
+[profile.quick.package.oag-post]
+opt-level = 0

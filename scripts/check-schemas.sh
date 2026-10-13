@@ -4,7 +4,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-cargo nextest run --workspace --tests --no-tests=fail \
+cargo nextest run --workspace --tests --cargo-profile quick --no-tests=fail \
   -E 'package(oag-schema) | binary(/schema/) | (binary(/^it/) & test(/^[a-z0-9_]*schema[a-z0-9_]*::/))' --status-level fail
 
 dist=$(mktemp -d)
