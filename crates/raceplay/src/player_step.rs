@@ -154,6 +154,7 @@ impl Race {
         // measurement one tick, under a dwell of [`PLAYER_RESCUE_TICKS`].
         let spline_distance = nearest.map(|(_, _, distance)| distance);
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
+        let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
         // The neighbour is the next entry in table order, which at the end of a
         // path is the *next path's* first sample rather than the geometric
         // successor through a junction. The original follows the junction graph;
@@ -250,6 +251,7 @@ impl Race {
             &self.sim.collision,
             self.sim.dt,
         );
+        self.lay_crumb(slot, crumb_flags);
         // The contact half of the same edge as the blast one, and the one a
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this
@@ -281,19 +283,25 @@ impl Race {
         let reset = self.reset_zone_touched(slot, &step.env, step.before);
         let airborne = self.airborne_too_long(slot);
         if alive && (off_the_track || airborne || reset) {
-            self.sim.last_respawn_cause[slot] = Some(if off_the_track {
+            let cause = if off_the_track {
                 respawn::RespawnCause::OffTrack
             } else if airborne {
                 respawn::RespawnCause::Airborne
             } else {
                 respawn::RespawnCause::ResetZone
-            });
+            };
+            self.sim.last_respawn_cause[slot] = Some(cause);
             // The last sample the craft was *on the track* at, which for a reset
             // contact is where it was a tick or two ago and for the off-track
             // trigger is where it left. The nearest sample to wherever the
             // craft is now would be that same place for the first and a
             // sample on some other part of the circuit for the second.
-            self.respawn(slot, Some(self.sim.last_on_track[slot] as usize));
+            let last_on_track = Some(self.sim.last_on_track[slot] as usize);
+            if cause.is_the_originals() {
+                self.reset(slot, last_on_track);
+            } else {
+                self.respawn(slot, last_on_track);
+            }
         } else if self.sim.respawn_cooldown[slot] == 0 {
             // Clear of the trigger with the cooldown expired: whatever run of
             // back-to-back respawns was happening is over.

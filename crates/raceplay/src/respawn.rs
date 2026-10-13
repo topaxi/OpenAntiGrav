@@ -40,6 +40,14 @@ pub enum RespawnCause {
 }
 
 impl RespawnCause {
+    /// Whether the original has this trigger, and so puts the craft back
+    /// through its reset state's relocation ([`Race::reset`]) rather than this
+    /// project's racing-line pose ([`Race::respawn`]).
+    #[must_use]
+    pub fn is_the_originals(self) -> bool {
+        matches!(self, Self::ResetZone | Self::Airborne)
+    }
+
     /// A short lowercase label for a survey line.
     #[must_use]
     pub fn label(self) -> &'static str {
@@ -237,28 +245,24 @@ impl Race {
                 > oag_race::recovery::AIRBORNE_RESET_SECONDS
     }
 
-    /// Puts the ship back on the track after a `Reset` contact.
+    /// Puts the ship back at rest on the racing line, at the spline sample
+    /// `sample_index`: this project's own rescues (`LostCircuit`, `Beneath`,
+    /// `Stalled`, `OffTrack`) and the Eliminator's return.
     ///
     /// # This pose is a guess, not a reading
     ///
-    /// `docs/ghidra/functions/psp-pulse-usa/collision.md` records **that** a `Reset`
-    /// contact respawns the ship, at confidence 86. **Where it respawns it is not
-    /// recorded anywhere**, and searching the RE tree for it found nothing - which
-    /// is itself the finding. So this reuses the initial spawn: the racing line at
-    /// [`spawn_height`], on the spline sample nearest where the ship was before
-    /// the tick that triggered the reset.
-    ///
-    /// Confidence **40**. That is deliberately low, and the number matters: this
-    /// is a placeholder chosen because it reuses code that is already correct for
-    /// the race start, not because anything says the original does it. The likelier
-    /// real mechanism is a last-passed checkpoint or track section - [`Ship::segment`]
-    /// is the field that would hold it, and nothing populates it meaningfully today.
-    /// Whoever recovers that should replace this outright rather than tune it.
+    /// It reuses the initial spawn, the racing line at [`spawn_height`], because
+    /// that code was already correct for the race start. Confidence **40**: the
+    /// triggers that use it are invented and stand in for the original's
+    /// distance trigger (`0x08841cec`), which enters the same reset state as a
+    /// `Reset` contact and would relocate the way [`Self::reset`] does. Moving
+    /// them over is left open because their rescues are measured against this
+    /// pose. The Eliminator's own return (`Ship_UpdateRespawn`, state 8) reads
+    /// the same crumb ring and is not ported either.
     ///
     /// The velocity, orientation and every control state go to zero, because
     /// [`Ship::place_at`] resets the whole physics state and keeps only mass and
-    /// inertia. Whether the original preserves any speed through a respawn is also
-    /// unrecorded.
+    /// inertia.
     pub(super) fn respawn(&mut self, slot: usize, sample_index: Option<usize>) {
         // **The fallback is the lap's first sample, not the table's.** They are
         // the same on every circuit the disc ships, and this arm fires exactly
@@ -273,10 +277,49 @@ impl Race {
             return;
         };
 
-        let ship = &mut self.sim.world.ships[slot];
-        let height = spawn_height(&ship.handling);
+        let height = spawn_height(&self.sim.world.ships[slot].handling);
         let pose = Pose::from_sample(&sample, sample.racing_line, height);
+        self.put_back(slot, pose, Vec3::ZERO);
+    }
+
+    /// After this tick's step: lay a crumb where the craft now is and latch
+    /// its speed, on the terms [`crate::breadcrumbs::Breadcrumbs::lay`] reads.
+    /// `flags` is the spline record the craft was located on this tick, `None`
+    /// on a track with nothing to locate on.
+    pub(super) fn lay_crumb(&mut self, slot: usize, flags: Option<u8>) {
+        let physics = &self.sim.world.ships[slot].physics;
+        self.sim.breadcrumbs[slot].lay(
+            physics.body.position,
+            physics.body.linear_velocity.length(),
+            physics.grounded,
+            flags.unwrap_or(0),
+        );
+    }
+
+    /// Puts the ship back the way the original's reset state does, after a
+    /// `Reset` contact or the airborne clock: on the oldest of its grounded
+    /// crumbs, at the track's width midpoint five up, launched down the track
+    /// at a quarter of its last grounded speed plus 50. See
+    /// [`crate::breadcrumbs`], which holds the reading.
+    ///
+    /// Falls back to [`Self::respawn`] at `sample_index` on a track with no
+    /// samples to locate on.
+    pub(super) fn reset(&mut self, slot: usize, sample_index: Option<usize>) {
+        let crumbs = &mut self.sim.breadcrumbs[slot];
+        let speed = crumbs.launch_speed();
+        let crumb = crumbs.take_oldest();
+        match crate::breadcrumbs::relocate(&self.sim.spline, crumb, speed) {
+            Some(relocation) => self.put_back(slot, relocation.pose, relocation.velocity),
+            None => self.respawn(slot, sample_index),
+        }
+    }
+
+    /// What every way back shares: the pose and the launch velocity, the
+    /// driver told where it now is, and the respawn bookkeeping.
+    fn put_back(&mut self, slot: usize, pose: Pose, velocity: Vec3) {
+        let ship = &mut self.sim.world.ships[slot];
         ship.place_at(pose);
+        ship.physics.body.linear_velocity = velocity;
 
         // **The driver has to be told where it has been put.** `Driver::drive`
         // locates a craft in a 48-sample window around its last index, so a

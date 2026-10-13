@@ -17,6 +17,7 @@ An unencrypted ELF, so no decryption step is needed. See
 | [Collision](collision.md) | Triangle soup, sweep and prune, surface types |
 | [Rigid body](rigid-body.md) | Construction, force application, the integrator, the contact resolver |
 | [Contact response](contact-response.md) | Where the contact friction comes from, and the frame order that hides it |
+| [Reset relocation](reset-relocation.md) | Where a reset puts a craft back: the ring of grounded positions, the no-crumb flag the disc authors around pits, and the launch speed |
 | [Camera views](camera.md) | The player-selectable in-race views and how SELECT cycles them |
 | [Engine, brakes, steering, pitch](engine.md) | The craft update frame, every control force term, and the complete handling parameter block |
 | [Video and the Movie widget](frontend-video.md) | Intro sequence, sceMpeg playback, XML-driven playback, the START skip |

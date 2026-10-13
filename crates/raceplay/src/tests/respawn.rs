@@ -60,16 +60,26 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
 
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
+        if race.respawns() > 0 {
+            break;
+        }
     }
 
     assert_eq!(race.respawns(), 1, "the reset plane never triggered");
 
     let body = race.sim.world.ships[0].physics.body;
-    // Back on the track: near a spline sample, above it, and stopped.
+    // Back on the track: near a spline sample, above it, and launched down
+    // it, read on the tick it was put back. Never fully grounded here, so no
+    // speed was latched and the launch is the reset's bare `50`
+    // (`crate::breadcrumbs`); the straight runs `+x`.
     let distance = race.spline().distance_to(body.position).expect("a sample");
     assert!(distance < 20.0, "respawned {distance} from the spline");
     assert!(body.position.y > 0.0, "respawned at {:?}", body.position);
-    assert_eq!(body.linear_velocity, Vec3::ZERO);
+    assert!(
+        (body.linear_velocity - Vec3::new(50.0, 0.0, 0.0)).length() < 1e-3,
+        "launched at {:?}",
+        body.linear_velocity
+    );
 }
 
 /// Nothing but `Reset` geometry may respawn a ship. The same plane in the same

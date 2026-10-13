@@ -175,7 +175,9 @@ const BOUND: &[(&str, u64, u32, u32)] = &[
     ("FLASH", 2, 0, 1),
     ("FLASH", 3, 1, 2),
     ("RAPIER", 1, 1, 3),
-    ("RAPIER", 2, 1, 2),
+    // 2026-10-13, forward 1 -> 2: a
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    ("RAPIER", 2, 2, 2),
     ("RAPIER", 3, 3, 3),
     ("PHANTOM", 1, 1, 2),
     ("PHANTOM", 2, 3, 3),

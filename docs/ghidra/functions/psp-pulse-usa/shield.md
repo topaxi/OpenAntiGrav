@@ -629,8 +629,11 @@ saves the current state to `+0x40`, zeroes `+0x79c`, and **for the player**
 
 **The state-3 update, `FUN_0883ff6c`**: `+0x79c -= dt`; while it is under `0.3`
 it relocates the craft - `AiTrack_LocatePosition(500.0, track, craft+0xaf0,
-..)` from `+0xaf0`, five units up, facing forty units down the tangent, then
-`FUN_0883db20(+0x78c * 0.25 + 50, craft, pose)` - and once it reaches `0`
+..)` from the **oldest of the craft's grounded crumbs**, five units up, facing
+two forty-unit hops down the track, then `FUN_0883db20(+0x78c * 0.25 + 50,
+craft, pose)` (corrected 2026-10-13, read to the instruction on
+[reset-relocation.md](reset-relocation.md): the position comes from a ring of
+grounded positions, not from where the craft fell) - and once it reaches `0`
 returns to the saved state and, if `+0x44 > 0`, calls
 `Ship_Damage(+0x44, craft, 0, 0, 0)`. So **a reset costs the player up to five
 shield** and costs an AI craft nothing. Since `+0x79c` starts at `0`, the
@@ -648,16 +651,19 @@ craft rights itself (30) or lands upright (45). **What the `53.5` means** is
 read but not settled: it matches `FUN_0883db20`'s first argument if `+0x78c`
 was `14`, and `+0x78c` is written from `body+0x398` in `FUN_088418e0`, which
 reads as a launch speed - not the "hover height" `Ship_UpdateRespawn`'s row
-above calls the same expression. Confidence **50** on that reading; nothing
-renamed.
+above calls the same expression. **Settled 2026-10-13**: `+0x78c` is latched
+from `body+0x398` (`|velocity|`) on every fully grounded frame, so the launch is
+a quarter of the last grounded speed plus 50 ([reset-relocation.md](reset-relocation.md),
+confidence 84).
 
 **Ported** (the airborne trigger only): `oag_race::recovery::AIRBORNE_RESET_SECONDS`
-and `RespawnCause::Airborne`, through the same `Race::respawn` a `Reset`
-contact uses. Three departures, recorded rather than fixed: that respawn puts
-the craft at rest on the racing line rather than at the corridor midpoint at
-`FUN_0883db20`'s speed, charges the player no shield, and the `200`-unit
-distance trigger at `0x08841cec` is not ported - this project's invented
-`LostCircuit`/`OffTrack` dwells stand where it would.
+and `RespawnCause::Airborne`. Since 2026-10-13 both it and a `Reset` contact
+put the craft back through the original's relocation (`Race::reset`,
+`crates/raceplay/src/breadcrumbs.rs`; [reset-relocation.md](reset-relocation.md)).
+Two departures remain, recorded rather than fixed: no shield charge for the
+player, and the `200`-unit distance trigger at `0x08841cec` is not ported -
+this project's invented `LostCircuit`/`OffTrack` dwells stand where it would,
+and they keep the old at-rest racing-line pose.
 
 ## The runtime leg, and what it did not reach
 

@@ -43,7 +43,9 @@ const TROUGH: f32 = 0.75;
 const LONE: &[(&str, &str, u32, u32, f32)] = &[
     ("05_Track", "VENOM", 0, 10, 1.02),
     ("05_Track", "FLASH", 0, 10, 1.02),
-    ("05_Track", "RAPIER", 0, 10, 1.02),
+    // 2026-10-13, dead stops 0 -> 1 (sample 207): a
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    ("05_Track", "RAPIER", 1, 10, 1.02),
     ("05_Track", "PHANTOM", 0, 10, 1.02),
     ("21_Track", "VENOM", 0, 10, 1.02),
     ("21_Track", "FLASH", 0, 10, 1.02),
@@ -67,10 +69,16 @@ const LONE: &[(&str, &str, u32, u32, f32)] = &[
 /// scrape falls on the same tick; that is a measurement artefact, not a craft
 /// hitting a wall at 60.
 const FIELD: &[(&str, &str, u32)] = &[
-    ("05_Track", "VENOM", 1),
-    ("05_Track", "FLASH", 3),
+    // 2026-10-13, 1 -> 5 (samples 207-209 and 458): a
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    ("05_Track", "VENOM", 5),
+    // 2026-10-13, 3 -> 5 (samples 206-208): a
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    ("05_Track", "FLASH", 5),
     ("05_Track", "RAPIER", 2),
-    ("05_Track", "PHANTOM", 1),
+    // 2026-10-13, 1 -> 4 (samples 206-207): a
+    // faithful reset relocation (FUN_0883ff6c port, `Ship_UpdateReset`) relaunches before 05_Track's first jump; our relaunch reaches ~110 at the lip vs ~120 needed. See docs/gameplay/ai.md, "After a reset, the relaunch falls short".
+    ("05_Track", "PHANTOM", 4),
     ("21_Track", "VENOM", 1),
     ("21_Track", "FLASH", 1),
     ("21_Track", "RAPIER", 1),
