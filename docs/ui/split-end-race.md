@@ -86,6 +86,13 @@ count) is in the executable and was **not read**.
   source: per-player lap tables and per-player rewards, the authored flow. Needs
   `lap{r}.{c}_{N}` cells and `<Item>` offsets read by `table_layers` (its row bands
   are the single table's), a per-player headline `Line1_N`, and the entry law.
+- **On a PS2 source every `EndRace Results` table's highlight is misplaced**, split or
+  not: `table::highlight_y`, `row_of` and `with_row_offset` carry the PSP file's row
+  geometry (first row 92, pitch 20) and the PS2 file authors its own (`tablebg1` at
+  152, pitch 32.94 in 640x448). Seen on `--menu-page endrace-results-eliminator` (the
+  eighth-placed row is highlighted on row 4) and on `endrace-results-people`
+  (persons 5th and 7th highlighted on rows 2 and 3). The names and times are right.
+  Found, not fixed: it is the same geometry the PS2 Split screens need.
 - A live walk with two real pads: the end screens were checked through stills of
   the real draw functions and a headless race driven to its end, not through a
   windowed session with two devices.
