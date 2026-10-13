@@ -266,6 +266,7 @@ impl Overlay {
     /// lands before the submission's commands, so two draws recorded into one
     /// encoder would both show the last one's numbers. See
     /// `oag_raceplay::Scene::render_viewports` for the same trap in the scene.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw_views(
         &mut self,
         device: &wgpu::Device,

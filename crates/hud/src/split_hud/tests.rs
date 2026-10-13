@@ -275,7 +275,23 @@ fn authored() -> crate::SplitAssets {
     crate::SplitAssets {
         layouts: [Layout::default(), Layout::default()],
         view: (1920.0, 540.0),
+        step: (0.0, 540.0),
     }
+}
+
+/// A player's view in the layouts' grid sits one step on from the one before: down for the
+/// rows, right for the columns.
+#[test]
+fn a_players_region_is_one_step_on_from_the_last() {
+    let rows = authored();
+    assert_eq!(rows.region(0), [0.0, 0.0, 1920.0, 540.0]);
+    assert_eq!(rows.region(1), [0.0, 540.0, 1920.0, 540.0]);
+    let columns = crate::SplitAssets {
+        view: (960.0, 1080.0),
+        step: (960.0, 0.0),
+        ..authored()
+    };
+    assert_eq!(columns.region(1), [960.0, 0.0, 960.0, 1080.0]);
 }
 
 fn is(source: &Source<'_>) -> &'static str {

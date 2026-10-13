@@ -48,6 +48,16 @@ pub const fn hud_layout(title: &'static oag_title::Title, mode: Mode) -> &'stati
     }
 }
 
+/// How many views a race is cut into and which way, as the HUD load needs them
+/// ([`Options::views`](crate::Options::views), [`Options::cut`](crate::Options::cut)).
+#[derive(Debug, Clone, Copy)]
+pub(super) struct SplitViews {
+    /// The views drawn; `0` and `1` are no split.
+    pub(super) count: u8,
+    /// Which way two of them are cut.
+    pub(super) cut: oag_render::viewport::Cut,
+}
+
 /// Reads the HUD's layout, atlas, fonts and strings.
 ///
 /// Every piece degrades on its own and says so. The report matters more here than
@@ -64,8 +74,7 @@ pub(super) fn load_hud(
     mode: Mode,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
-    views: u8,
-    cut: oag_render::viewport::Cut,
+    views: SplitViews,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
     let entry = hud_layout(title, mode);
@@ -114,6 +123,7 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
+    let SplitViews { count: views, cut } = views;
     let split = split_assets(archives, title, mode, views, cut, space, report);
     // The sheet packs the textures of every layout this race can draw, the
     // whole-screen one first so a race with no split packs what it always did.

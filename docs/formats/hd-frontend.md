@@ -2305,27 +2305,47 @@ verification against a real disc-driven HD race.
 
 ## RACEBOX authors local split screen: a players list and a cut
 
-(2026-10-13, `split-entry-hd-2048-omega`; read straight out of `DATA00.PSARC`, same file in
-`DATA05` and `DATA06`.) `racebox_definition.xml`'s `Single Player` screen carries, beside
-MODE, DIFFICULTY and the weapon settings:
+(2026-10-13, `split-entry-hd-2048-omega`, wired the same day by `hd-authored-split-setup`; read straight
+out of `DATA00.PSARC`, same file in `DATA05` and `DATA06`.) `racebox_definition.xml`'s `Single Player` screen
+carries, beside MODE, CLASS, WEAPONS and DIFFICULTY (each with a `*Padlock` image at `x=970`, one row apart):
 
 | Widget | Strings | Entries |
 | --- | --- | --- |
-| `<List name="NumberOfPlayers" global="NumberOfPlayers" default="1">` at `y=370`, with a `NumPlayersPadlock` image at `(970, 360)` | `RB_NUMP` | `1` (`intvalue 14`), `2` (`intvalue 15`) |
-| `<List name="SplitScreen" global="SplitScreen" default="RB_HORIZ">` at `y=420`, `IDCantFocusString="FE_OFF"` | `RB_SPLSCR` | `RB_HORIZ` (18), `RB_VERT` (19) |
+| `<List name="NumberOfPlayers" global="NumberOfPlayers" default="1">` at `y=370`, with a `NumPlayersPadlock` image at `(970, 360)` | `RB_NUMP` (`NUMBER OF PLAYERS`) | `1` (`intvalue 14`), `2` (`intvalue 15`) |
+| `<List name="SplitScreen" global="SplitScreen" default="RB_HORIZ">` at `y=420`, `IDCantFocusString="FE_OFF"` | `RB_SPLSCR` (`SPLIT SCREEN`) | `RB_HORIZ` (`HORIZONTAL`, 18), `RB_VERT` (`VERTICAL`, 19) |
 
-So HD's local multiplayer is **two people**, picked on the RACEBOX page, with a horizontal
-or vertical cut that cannot be focused while the count is one, and the padlock and
-`intvalue`s read as unlock gates. The race then goes `Track Creation`, `Team Selection`
-for player one and again for player two (the `Team Selection Player 1`/`2` sequence the
-per-seat Ship Select follows). Not wired here: this build opens the join screen from a
-chosen SPLIT SCREEN row instead (`docs/rendering/split-screen.md`, "Where the entry is,
-per title"). Confidence 85 for the reading (the XML as shipped; the unlock meaning of the
-ids is inferred from the padlock, not seen). The online screens are a different file
-(`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`, `Network Sync`).
-**Omega: checked, differs** - its `racebox_definition.xml` (`data09`) has neither list and
-no other front-end file read names a local split row. **2048: not checkable here** - its
-touch front end has no RACEBOX screen (`docs/formats/2048-frontend.md`).
+So HD's local multiplayer is **two people**, picked on the RACEBOX page, with a horizontal or vertical cut that
+cannot be focused while the count is one (the cant-focus text is `FE_OFF`). The race then goes `Track Creation`,
+`Team Selection` for player one and again for player two (the `Team Selection Player 1`/`2` sequence the
+per-seat Ship Select follows). Confidence 85 for the reading (the XML as shipped).
+
+**What the `intvalue`s are** (correction, same day): not unlock ids. The file's own comment above the lists says the
+`intvalue` "is indicative of the index in the array of images to display adjacent to the list", and the numbers run
+across every row (`Mode` 0-4 and 28-30, `Class` 5-8, `Weapons` 9-10, `Difficulty` 11-13, `NumberOfPlayers` 14-15,
+`SplitScreen` 18-19): they pick what the preview `BigIcon` shows. An earlier reading here took 14 and 15 for unlock
+gates; that was wrong.
+
+**What the padlock is**: a trial-build lock, not a progression unlock. `RaceBox_UpdateTrialPadlocks` (`0x002497d8`)
+hides every padlock each frame and only shows one while the content flag `g_FuryContentFlags` (`0x00b979fc`, the
+byte the front end's `TrialText`/`PurchaseGameRedirect` widgets read) is non-zero; `NumPlayersPadlock` is shown when
+`NumberOfPlayers` parses to `2`. With the flag zero (the full game) nothing is locked, so two players are available
+from the first launch. Confidence 72; the flag's writer is not located. Evidence and what is unread:
+[racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md).
+
+**Wired, 2026-10-13** (`FrontEnd::local_split`, `oag_game::boot::RaceSetup::{players, cuts}`; the readers skip the
+row's own `<Values idstring="RB_NUMP">` tag, which is the label, not an entry): the RACE page carries both as rows
+after AI DIFFICULTY in the authored order, with the disc's words; the cut row is `disabled_by` the count being one
+(greyed, still drawing its stored cut: the `FE_OFF` text is **not** drawn, as Pulse's `FE_NA` over a greyed difficulty
+is not); START with two people claims two devices on a two-seat join screen, then HD's own Track and Ship Select per
+seat; `SplitScreen = RB_VERT` cuts the race left and right and composes HD's `vert_splitscreen_*` HUD layouts. HD's
+`Eliminations` is a `<Slider>`, not a list, so naming this file does not switch on the `KILLS` row
+(`local_split` is a field of its own beside `race_setup`). See
+[split-screen.md](../rendering/split-screen.md), "Where the entry is, per title".
+
+The online screens are a different file (`multiplayer_definition.xml` in `DATA02`: `Join Game`, `Lobby`,
+`Network Sync`). **Omega: checked, differs** - its `racebox_definition.xml` (`data09`) has neither list and no other
+front-end file read names a local split row, so it keeps the generic row. **2048: not checkable here** - its touch
+front end has no RACEBOX screen (`docs/formats/2048-frontend.md`).
 
 ## What could not be determined
 

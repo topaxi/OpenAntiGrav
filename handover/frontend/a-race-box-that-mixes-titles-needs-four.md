@@ -133,7 +133,9 @@ keying off the widget name will not find the saved value.
   5/10/15/20/25 - a *kill count*. HD authors an `aSlider` min 200 max 600 step
   20 - a *score* target - and it is disabled (see the `a`-prefix note in the
   HD/2048 thread). Same widget name, different quantity. **Do not unify them.**
-- **NumberOfPlayers / SplitScreen** on HD, and the whole split-screen leg on
+- ~~**NumberOfPlayers / SplitScreen** on HD~~ **Wired, 2026-10-13** (`hd-authored-split-setup`):
+  the RACE page carries both rows as authored on HD
+  ([split-screen.md](../../docs/rendering/split-screen.md)). Open: the whole split-screen leg on
   PS2.
 
 ### 4. Laps: nobody offers it, and that is the finding

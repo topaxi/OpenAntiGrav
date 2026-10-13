@@ -705,8 +705,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         language_plugins,
         options.language.as_deref(),
-        options.views,
-        options.cut,
+        crate::hud::SplitViews {
+            count: options.views,
+            cut: options.cut,
+        },
         &mut report,
     );
 
