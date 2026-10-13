@@ -134,6 +134,12 @@ the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
   its slot, whose craft then flies on an empty input.
 - **A pad past `n`, with no slot free, drives nothing.** Merging it into slot 0
   would put two people on one craft.
+- **A keyboard that did not join still drives slot 0**, merged with that seat's
+  pad: it has to reach the pause key and the menus. A keyboard that did join holds
+  its seat, so no pad that connects later takes it.
+- **A pad plugged in when the join screen seats its players, and not joined, is
+  benched** until it disconnects (`Assignment::bench`): a pad on the desk does
+  not take a seat the instant the race starts.
 - `--players N` seats the default way (`Controls::seat_default`). Leaving a split
   race for the menus merges again (`Controls::merge_devices`), so any device
   drives the one menu cursor; a race parked behind the pause menu keeps its
@@ -160,6 +166,12 @@ Per-device presses come from the backend's own press events for pads
 apart before either has a slot) and from the keyboard's newly pressed bits
 (`Controls::device_presses`).
 
+A split screen writes **no result and no ghost** (`records.toml` and the ghost
+store are for the one person the result is about), and it **fields opponents
+whatever the mode**, so Time Trial, Speed Lap and Zone are reachable as split races
+from the menus. Restarting a race from the 2048 end-of-race screen, which skips the
+menus, keeps the split.
+
 START goes on to the race box's own Track Select and Ship Select, as the RACE
 page's START does; backing out of Track Select drops the lobby. The race build
 drains it (`split_screen::seat`): slots `0..count` become local, the screen is
@@ -177,9 +189,13 @@ back on the main menu.
 `Controls` -> `Race::tick` path with the keyboard assigned to slot 1: slot 1's
 craft turns and slot 0's does not, and the same key on slot 0 does the reverse.
 A pad reading on slot 1 reaching slot 1's snapshot, and the lobby's and the
-assignment's rules, are `oag-input`'s unit tests. Not checked: two real pads on
-real hardware (no pad on the test host), and the windowed flow with a second
-device.
+assignment's rules, are `oag-input`'s unit tests. Not checked, and the lead's to run with two pads: the
+session wiring has no test of its own (the `seat_split_race` call in the race
+build, the merge on returning to the menus, the lobby dropping on Track Select's
+back), and the windowed walk only reached Track Select with the keyboard seated
+alone. To run: `just play data/images/pulse-psp-eu.chd --no-audio`, SPLIT SCREEN,
+press cross on each pad, START, pick a track and ship, and steer each pad; then
+leave the race and check a pad moves the menu cursor again.
 
 ## Open
 
