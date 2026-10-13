@@ -37,7 +37,7 @@ The situations cost different things, so each rule touches different settings:
 | --- | --- | --- | --- |
 | Steam Deck on a TV | Output pixels only; scene cost is the same | Hold the render resolution, upscale to the output (FSR is in the tree) | Effects, LOD |
 | Android power saving | Time and energy per frame matter more | Frame cap, render scale, effects, in proportion | Nothing in particular |
-| Split screen | Draw calls (8 views: 6,507 draws against 465 for one), not pixels | Draw distance, LOD, effects per view | Resolution; each view already has fewer pixels |
+| Split screen | Measured 2026-10-13 (`split-render-cost`): on the discrete workstation card CPU per view (eight views 9.4 ms of CPU against 1.1 ms of GPU scene passes); on the Raphael iGPU proxy the GPU at one and two views (4 to 5 ms of scene passes) and the CPU at eight. **The Deck is unmeasured and is the deciding number** | Draw distance, LOD and effects per view cut the draws `encoder.finish` compiles (CPU); render scale cuts GPU time | Whichever of the two the Deck's `pipelined` number is not bound by |
 
 ## What already exists
 
@@ -93,7 +93,14 @@ Questions to answer:
 ## Priority 3: everything beyond
 
 - Split screen's hard-coded rule moved into the cascade, plus per-view LOD and
-  draw distance against the 8-up frame budget (unmeasured).
+  draw distance against the 8-up frame budget. **Measured 2026-10-13
+  (`split-render-cost`, [split-screen.md](../../docs/rendering/split-screen.md#cost)):**
+  the workstation holds eight views at 9.4 ms of CPU, and the budget binds on weaker
+  hardware. Which lever pays depends on the device: draw distance and LOD cut the CPU's
+  `encoder.finish` (0.4 ms a view on Pulse, 1.1 ms on HD) and matter when `pipelined` sits
+  near the CPU number; render scale matters when it sits near the GPU's scene-pass sum,
+  which the Raphael iGPU shows at one and two views. The Deck decides; its steps are in the
+  doc and the maintainer runs them.
 - High-refresh panels: a frame-rate target that follows the display.
 - Thermal throttling on any device, and iOS.
 - The `original` setting value (offered only on titles whose original had the

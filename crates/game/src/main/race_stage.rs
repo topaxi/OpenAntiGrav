@@ -228,6 +228,7 @@ impl RaceStage {
                 anim_seconds,
                 shadows,
                 zone_spectrum,
+                &mut [],
             );
         }
         // The scene and nothing else. The HUD used to follow it here, into the

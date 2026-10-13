@@ -177,7 +177,7 @@ viewed slot (`Race::readout_for`), the shield bars' state per slot, one HUD per 
 drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
 two-player split layouts for a two-view race. **Still open from this list**:
 per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
-origin), the 8-up frame budget. ~~The results/end-race flow (still slot 0's, ends
+origin), the 8-up frame budget (measured, `split-render-cost` below: 9.4 ms of CPU on the workstation, Deck unmeasured). ~~The results/end-race flow (still slot 0's, ends
 every view)~~ **2026-10-13, `split-screen-end-race`: done** (below, and
 [split-end-race.md](../../docs/ui/split-end-race.md)). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
 checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
@@ -188,6 +188,22 @@ pixels; the chain now runs once over the whole area after the last view
 zoom streak and Omega's distortion offsets are not drawn under a split, and a
 race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
 from the primary's pulse (read from the code, not captured).
+**2026-10-13, `split-render-cost`: a split is CPU-bound on a discrete GPU, and the first cut is in.**
+Measured on the RX 7800 XT (RADV, release, 1280x720; the tables and how to rerun them are in
+[split-screen.md](../../docs/rendering/split-screen.md#cost)): Pulse at eight views cost
+19 ms of CPU a frame and 1.1 ms of GPU scene passes, so the GPU was never the limit there.
+The Raphael iGPU proxy flips it at one and two views (GPU-bound, 4 to 5 ms of scene passes). The shadow gather, both shadow maps, the scenery
+clocks and the advert cards were redone per view though they do not depend on the camera;
+the first view now does them alone (`Layer::Next` skips them) and eight views cost 9.4 ms.
+Pictures are byte-identical (29 stills). **Open from it**: the Steam Deck number, which
+decides whether the next lever is a per-view draw budget (CPU) or render scale (GPU); steps
+in the doc, the maintainer runs them. The shadow gather is still the largest single CPU item
+at any view count (a ray per hull vertex, redone every rendered frame instead of every
+tick), `encoder.finish` looks proportional to the draw count (the lever for per-view LOD and draw
+distance, see `handover/rendering/graphics-settings-resolve-from-intent-and-context.md`),
+and per-view uniform slices are the prerequisite for recording views on several threads.
+The `mapped` shadow tier follows slot 0 only, so views two and up are not covered unless
+near it (read from the code, not looked at).
 **2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
 `oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
 lowest free human slot, a lost pad frees its slot, a pad past the humans drives

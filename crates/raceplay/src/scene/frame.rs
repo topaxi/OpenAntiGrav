@@ -191,8 +191,7 @@ impl Scene {
         // casters in it, so a pass encoded after this block would leave the
         // first frame - which is the only frame a `--screenshot` capture
         // draws - reading an empty map at zero strength.
-        self.render_shadow_map(queue, encoder, race, shadows);
-        self.render_sun_occlusion(queue, encoder, race, shadows);
+        self.render_shadow_passes(queue, encoder, race, shadows);
         let scene = mesh_render::Scene {
             fog: fog.with_texture_detail(race.texture_detail()),
             // Pulse's hull lights reach the craft alone - see `ship_scene`.
@@ -278,7 +277,18 @@ impl Scene {
         };
         self.write_ship_scenes(queue, &ship_scene);
         let weapon_scene = Self::weapon_scene(&scene);
-        self.write_scenery_anims(queue, seconds);
+        // The scenery's clocks and the advert cards are functions of the race
+        // clock and nothing the camera decides: a split screen runs them with its
+        // first view, and the later views draw with what they left in the
+        // buffers and the card textures. See `Scene::render_viewports`.
+        let first_view = self.layer.get() != super::viewports::Layer::Next;
+        if first_view {
+            self.write_scenery_anims(queue, seconds);
+            self.frame_work.update(|w| super::FrameWork {
+                scenery_clocks: w.scenery_clocks + 1,
+                ..w
+            });
+        }
         // The gantry's own clock: started so the title's `GO` edge lands on the
         // release and held on `GO` (`race::gantry::Clock`); it clamps itself.
         if let Some(gantry) = &self.gantry {
@@ -286,7 +296,13 @@ impl Scene {
             let clock = anim_seconds.unwrap_or_else(|| gantry.clock_seconds(race));
             gantry.write(queue, view_projection, prev_vp, clock);
         }
-        crate::adverts::render(&self.adverts, queue, encoder, seconds, race, anim_seconds);
+        if first_view {
+            crate::adverts::render(&self.adverts, queue, encoder, seconds, race, anim_seconds);
+            self.frame_work.update(|w| super::FrameWork {
+                advert_cards: w.advert_cards + 1,
+                ..w
+            });
+        }
         let (set, chunks) = (visible_set.as_ref(), chunk_set.as_ref());
         let glass = (section_view, eye, seconds);
         let behind_glass =
@@ -681,10 +697,7 @@ impl Scene {
         self.upload_ribbons(race, queue, &vp);
 
         // Both shadow tiers' geometry - its own file, see `frame/shadow.rs`.
-        let (quads, hull_vertices) = self.shadow_geometry(race, shadows);
-        self.shadow
-            .borrow_mut()
-            .upload(queue, &vp, &quads, &hull_vertices);
+        self.upload_shadow_geometry(queue, &vp, race, shadows);
         oag_gpu::perfprobe::mark("shadow-gather");
 
         oag_gpu::perfprobe::mark("psys-gather");
