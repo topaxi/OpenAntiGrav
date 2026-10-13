@@ -173,7 +173,9 @@ pub struct Group {
 }
 
 impl Group {
-    fn matches(&self, name: &str) -> bool {
+    /// Whether `name` is one of the widgets this group names.
+    #[must_use]
+    pub fn matches(&self, name: &str) -> bool {
         self.widgets.iter().any(|pattern| {
             pattern
                 .strip_suffix('*')

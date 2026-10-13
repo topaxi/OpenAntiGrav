@@ -84,3 +84,18 @@ fn circuit_models_are_looked_up_by_omega_folder() {
         "one row each"
     );
 }
+
+/// Omega draws the two-player HUD its own disc ships, the way HD does: dropping the
+/// row would put its two views back on the whole-screen layout scaled to fit.
+#[test]
+fn the_two_player_hud_is_the_one_the_disc_authors() {
+    let split = TITLE.hud.split.expect("the split row");
+    assert_eq!(split.view_height, 540);
+    for root in split.arcade.iter().chain(&split.elimination) {
+        assert!(
+            root.starts_with("Data/xml/splitscreen_hud/splitscreen_"),
+            "{root}"
+        );
+    }
+    assert_eq!(split.arcade.len() + split.elimination.len(), 4);
+}
