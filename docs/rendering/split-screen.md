@@ -303,7 +303,7 @@ back on the main menu.
 craft turns and slot 0's does not, and the same key on slot 0 does the reverse.
 A pad reading on slot 1 reaching slot 1's snapshot, and the lobby's and the
 assignment's rules, are `oag-input`'s unit tests. Not checked, and the lead's to run with two pads: the
-session wiring has no test of its own (the `seat_split_race` call in the race
+session wiring has no test of its own (the `seat_for_launch` call in the race
 build, the merge on returning to the menus, the lobby dropping on Track Select's
 back), and the windowed walk only reached Track Select with the keyboard seated
 alone. To run: `just play data/images/pulse-psp-eu.chd --no-audio`, SPLIT SCREEN,

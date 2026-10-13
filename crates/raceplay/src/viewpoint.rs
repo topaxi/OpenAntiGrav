@@ -81,7 +81,9 @@ impl Race {
     ///
     /// **Chosen, not measured**: the original's split screen is not read. The split
     /// itself ([`Self::viewport_count`]) is left alone, because it is also the
-    /// answer to "was this a split race" (no record, no ghost, restart keeps it).
+    /// answer to "was this a split race" (no record, no ghost, restart keeps it),
+    /// and it picks the draw path: a split race keeps `Scene::render_viewports`,
+    /// with no blur, jitter or upscaler history, for its one last view too.
     #[must_use]
     pub fn views_drawn(&self) -> usize {
         if self.finished() {

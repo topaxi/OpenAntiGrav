@@ -50,7 +50,7 @@ count) is in the executable and was **not read**.
    single place is the headline. Pure and a source with no `EndRace_Definition.xml`
    keep the built-in table, which names `P1`, `P2`.
 4. **`EndRace Menu`** as on any race: `RETURN TO MENU`, `RACE AGAIN` and `VIEW RESULTS AGAIN`.
-   `RACE AGAIN` rebuilds the race with the same seats (`Session::seat_split_race`
+   `RACE AGAIN` rebuilds the race with the same seats (`split_screen::seat_for_launch`
    reads `Controls::assignment().humans()`); leaving unseats (`unseat_after_split_race`).
 
 ## What is chosen, not measured

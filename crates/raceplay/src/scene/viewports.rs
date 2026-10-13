@@ -54,13 +54,17 @@ pub(super) enum Layer {
 }
 
 impl Scene {
-    /// Draws `race` into the rectangles `race.viewport_count()` cuts `area` into,
-    /// and returns the sum of what each drew. Submits its own command buffers,
+    /// Draws `race` into the rectangles `race.views_drawn()` cuts `area` into,
+    /// and returns the sum of what each drew. **That is one view once the race is
+    /// over**: the end screens sit over the spectator camera, and it is drawn
+    /// here, with no blur, jitter or upscaler history, rather than by
+    /// [`Scene::render`], whose history this path never wrote. Submits its own command buffers,
     /// so everything the caller has already encoded must be submitted before
     /// this, and the caller's own encoder after it.
     ///
-    /// With one view this is not the call to make: use [`Scene::render`], which
-    /// is what keeps a race without a split exactly as it was.
+    /// For a race that was never split ([`Race::viewport_count`] of one) this is
+    /// not the call to make: use [`Scene::render`], which is what keeps a race
+    /// without a split exactly as it was.
     #[allow(clippy::too_many_arguments)]
     pub fn render_viewports(
         &self,
@@ -76,7 +80,7 @@ impl Scene {
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
     ) -> SceneStats {
-        let rects = oag_render::viewport::layout(race.viewport_count(), area);
+        let rects = oag_render::viewport::layout(race.views_drawn(), area);
         let mut stats = SceneStats::default();
         for (slot, rect) in rects.into_iter().enumerate() {
             race.set_viewpoint(slot);

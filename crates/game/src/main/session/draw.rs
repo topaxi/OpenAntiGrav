@@ -434,7 +434,7 @@ impl Session {
                 // are below. Timing one view of `N` would read as a cheap frame
                 // and send the render scale up, so **resolution holds its scale
                 // while split** - chosen, not measured.
-                if stage.race.views_drawn() > 1
+                if stage.race.viewport_count() > 1
                     && let Some(timer) = self.pass_timer.as_mut()
                 {
                     timer.abandon();

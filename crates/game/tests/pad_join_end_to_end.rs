@@ -183,3 +183,34 @@ fn merged_devices_leave_the_controllers_alone() {
     );
     assert_eq!(race.sim.state_hash(), before);
 }
+
+/// A restart from the end screens skips the menus: the seats the first race left
+/// are the split of the second, and leaving for the menus is what lets the next
+/// launch be one view again. This is the function the race build calls
+/// (`Session`'s load, `split_screen::seat_for_launch`).
+#[test]
+fn a_restart_rebuilds_the_same_split_and_a_visit_to_the_menus_ends_it() {
+    let mut controls = Controls::without_pad();
+    // `--players 2` seats the devices without a lobby; the join screen's own seating is
+    // `split_screen::seat`, tested above over stand-in pad ids.
+    controls.seat_default(2);
+    let mut lobby = None;
+
+    let mut first = race(2);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut first);
+    assert_eq!(first.viewport_count(), 2);
+    assert_eq!(controls.assignment().humans(), Some(2));
+
+    // `RACE AGAIN`: no lobby, the seats are still held.
+    let mut again = race(2);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut again);
+    assert_eq!(again.viewport_count(), 2, "the restart is the same split");
+    assert_eq!(again.sim.world.controllers[0], Controller::Local);
+    assert_eq!(again.sim.world.controllers[1], Controller::Local);
+
+    // Back on the menus (`Session::unseat_after_split_race`): the next race is one view.
+    controls.merge_devices();
+    let mut fresh = race(2);
+    split_screen::seat_for_launch(&mut lobby, &mut controls, &mut fresh);
+    assert_eq!(fresh.viewport_count(), 1);
+}

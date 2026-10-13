@@ -576,7 +576,7 @@ pub(crate) struct Session {
     /// `PureClass::ALL`, so reopening it lands where the player was.
     pub(crate) pure_chain_class: usize,
     /// The split-screen lobby Start left, from the join screen's START until the
-    /// race it asked for is built (`Session::seat_split_race`, which drains it)
+    /// race it asked for is built (`oag_game::split_screen::seat_for_launch`, which drains it)
     /// or the player backs out of the race box's screens (which drop it). `None`
     /// is an ordinary race.
     pub(crate) split_lobby: Option<oag_input::lobby::Lobby>,

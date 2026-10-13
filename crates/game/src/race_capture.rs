@@ -739,7 +739,7 @@ pub fn capture(
     }
     // A split screen draws one scene per view, each submitted on its own: see
     // `Scene::render_viewports`. One view is the call below, untouched.
-    let stats = if race.views_drawn() > 1 {
+    let stats = if race.viewport_count() > 1 {
         scene.render_viewports(
             &device,
             &queue,

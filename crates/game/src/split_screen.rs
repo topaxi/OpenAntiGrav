@@ -61,6 +61,26 @@ pub fn seat<D: Copy + PartialEq>(
     count
 }
 
+/// Hands the seats to the race a launch has just built: the join screen's lobby if
+/// Start left one ([`seat`]), else the seats the last race kept - a restart from the
+/// end screens skips the menus, so the devices are still seated and the new race is
+/// the same split ([`apply`]). With neither it is an ordinary race and nothing
+/// changes. Leaving a split race for the menus merges the devices
+/// ([`Controls::merge_devices`]), which is what makes the next launch one view
+/// again.
+pub fn seat_for_launch(
+    lobby: &mut Option<oag_input::lobby::Lobby>,
+    controls: &mut oag_input::Controls,
+    race: &mut Race,
+) {
+    if let Some(lobby) = lobby.take() {
+        let connected = controls.connected_pads();
+        seat(race, &lobby, controls.assignment_mut(), &connected);
+    } else if let Some(humans) = controls.assignment().humans() {
+        apply(race, humans);
+    }
+}
+
 /// Keeps `race`'s local slots to the ones a device is on: a slot below the seated
 /// count with nothing driving it is flown by the grid's driver
 /// ([`Controller::Ai`]), and goes back to [`Controller::Local`] when a device

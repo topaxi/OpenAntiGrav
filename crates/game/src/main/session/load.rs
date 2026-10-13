@@ -436,7 +436,7 @@ impl Session {
             .then(oag_source::title::borrowed_zoom_ring);
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
-        // before `seat_split_race` cuts the screen. See `race::Options::views`.
+        // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
         if let Some(seats) = self
             .split_lobby
             .as_ref()
@@ -585,7 +585,11 @@ impl Session {
                 // The join screen's players: the views, the local slots and the
                 // devices on them. Drained here, with the cell, for the same
                 // reason - this is where a launch and a live stage meet.
-                Self::seat_split_race(&mut self.split_lobby, &mut self.controls, &mut race_stage.race);
+                oag_game::split_screen::seat_for_launch(
+                    &mut self.split_lobby,
+                    &mut self.controls,
+                    &mut race_stage.race,
+                );
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
                 // Applied here, once, before the stage ever ticks - see
