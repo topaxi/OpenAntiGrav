@@ -42,9 +42,9 @@ The stereo lane takes these design constraints, so VR is additive:
    it is the step toward VR's in-world HUD panel.
 5. **The render rate is separate from the 60 Hz tick.** Stereo does not need
    this. VR's 90-120 Hz needs the renderer to interpolate poses between
-   ticks. A search on 2026-10-13 found no render-side tick interpolation in
-   `crates/`; confirm that before VR starts and treat it as a VR prerequisite,
-   not stereo scope.
+   ticks. Confirmed absent on 2026-10-13 and queued at high priority as its
+   own thread, `the-renderer-does-not-interpolate-between-ticks.md` in this
+   directory. A VR prerequisite, not stereo scope.
 
 Out of the stereo lane: OpenXR, head tracking, lens warp and reprojection
 (the runtime owns those), comfort options and a cockpit view.
