@@ -93,7 +93,7 @@ of the HUD draw, goes with it - the gantry's own `GO` board is still in the scen
 
 ## Cost
 
-Draws submitted per frame on Pulse's Talon's Junction, `--mode single_race`
+Draws submitted per frame on Pulse's default circuit, `--mode single_race`
 (frame counts from the capture's own `frame at tick` line, not a GPU time):
 
 | Views | Tick 300 | Tick 1800 |
