@@ -69,6 +69,7 @@ pub mod scoreboard;
 pub mod screen;
 pub mod settings;
 pub mod sound;
+pub mod split_screen;
 pub mod track_panel;
 pub mod unlock;
 

@@ -163,6 +163,22 @@ What's missing beyond the shared prerequisite:
   the viewport/camera-region support above needs to handle, not a fixed
   quadrant layout.
 
+**2026-10-13: the viewport half landed**, `--players N` (1 to 8) on a direct
+`--race`, written up in [split-screen.md](../../docs/rendering/split-screen.md):
+`oag_render::viewport` lays out 1 to 8 views, `oag_raceplay` keeps a view-side chase
+camera per extra view (`Race::set_viewpoint`) and `Scene::render_viewports` draws one
+scene per view, each in its own encoder and submit with only the first clearing.
+Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view is
+byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,
+no bloom/blur/jitter under a split and the hidden HUD are all **chosen, not
+measured**. **Still open from this list**: the per-player HUD (hidden while split),
+the pad-to-slot UI and a front-end entry (the PS2's `Team SelectionSplit`), per-team
+camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport origin),
+the 8-up frame budget, the results/end-race flow (still slot 0's, ends every view),
+and a check of HD's and Omega's post chains under a split.
+A second human slot only steers once the remote-slot-input work lands: until then
+view `i > 0` shows the grid's driver flying slot `i`.
+
 Split screen is also the one feature with existing authored data to check
 against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track
 CreationSplit` screens and a `MP_Screen.xml` slideshow that this project's
@@ -623,6 +639,8 @@ a guess.
    `Controller` and `PlayerInputs` already did informally.
 2. **Split screen**: viewport/camera-region support in `oag-render`,
    per-player HUD in `oag-ui`. Lowest risk - no window-lifecycle changes.
+   **Viewports and cameras done, 2026-10-13** (see section 1); the per-player HUD,
+   pad assignment and front-end entry remain.
 3. **Multi-window**: unwind `App`'s one-window-per-run assumption, per-window
    wgpu surfaces. Can run in parallel with (2) once (1) lands; ordered after
    split screen here only because it's more invasive to `oag-game`'s current

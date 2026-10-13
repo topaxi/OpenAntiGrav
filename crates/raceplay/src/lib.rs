@@ -216,6 +216,7 @@ mod tick;
 pub mod tournament;
 pub mod track_panel;
 mod view;
+mod viewpoint;
 mod visibility;
 mod weapon_light;
 mod weapons;

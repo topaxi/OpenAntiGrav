@@ -211,6 +211,25 @@ impl RaceStage {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
         self.race.set_draw_alpha(alpha);
+        // A split screen draws one scene per view, each submitted on its own, so
+        // `encoder` keeps only what the caller records after it: see
+        // `Scene::render_viewports`. No timers, blur or jitter - the views
+        // share one camera history that `N` cameras would corrupt.
+        if self.race.viewport_count() > 1 {
+            return self.scene.render_viewports(
+                gpu.device(),
+                gpu.queue(),
+                view,
+                &self.race,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+            );
+        }
         // The scene and nothing else. The HUD used to follow it here, into the
         // same target; it composites at presentation resolution now - see
         // [`RaceStage::draw_hud`].

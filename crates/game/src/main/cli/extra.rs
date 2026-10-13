@@ -388,6 +388,16 @@ pub(crate) struct DriverArgs {
     /// [`oag_game::ai_choice`].
     #[arg(long, value_enum, default_value_t)]
     pub(crate) ai: oag_game::ai_choice::AiChoice,
+
+    /// Split screen: this many local players in one window, each with their own
+    /// view of the one race (1 to 8, default 1 = no split).
+    ///
+    /// Slots `0..N` become local players and the screen is cut into `N` views,
+    /// two stacked top and bottom, four as quadrants, up to eight - **chosen, not
+    /// measured**. The race starts with `N` craft on the grid at least. The
+    /// full-screen HUD is hidden while split. See [`oag_game::split_screen`].
+    #[arg(long, default_value_t = 1, value_parser = clap::value_parser!(u8).range(1..=8))]
+    pub(crate) players: u8,
 }
 
 /// `--pilot-assist`'s value: a level's token, or `on` for Extreme as the switch spelled it.

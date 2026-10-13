@@ -119,7 +119,7 @@ impl Scene {
             .and_then(|pvs| {
                 ChunkSet::around(
                     pvs,
-                    race.ship().physics.body.position,
+                    race.viewed_ship().physics.body.position,
                     race.camera_position(),
                 )
             });
@@ -721,12 +721,18 @@ impl Scene {
                         // and a frame starts with nothing glowing.
                         // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
                         // entire frame in and bloom everything.
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 0.0,
-                        }),
+                        // A split-screen view after the first keeps what the
+                        // earlier ones drew - see `Scene::render_viewports`.
+                        load: if self.layer.get() == super::viewports::Layer::Next {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 0.0,
+                            })
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 }),
@@ -936,7 +942,9 @@ impl Scene {
             // Omega's tone map: the executable's exposure and curve over the
             // linear scene, encoded into `view`. See `Self::omega`.
             self.run_omega(omega, device, queue, encoder, view, viewport);
-        } else if self.bloom.is_some() || self.ps2_bloom.is_some() {
+        } else if (self.bloom.is_some() || self.ps2_bloom.is_some())
+            && self.layer.get() == super::viewports::Layer::Whole
+        {
             // The recovered post-process, reading the alpha channel the scene
             // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and
             // adding a blurred copy of the masked colour back over the frame.

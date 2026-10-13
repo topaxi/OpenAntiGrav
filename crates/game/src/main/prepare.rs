@@ -215,7 +215,7 @@ impl Pending {
             // uses. Same shape as the scheme: an unrecognised token is reported
             // and the default is used rather than failing the boot.
             difficulty: resolve_difficulty(&self.settings),
-            opponents: self.cli.opponents,
+            opponents: self.cli.opponents || self.cli.driver.players > 1,
             trail_sparks: self.cli.trail_sparks,
             seed: self.cli.seed,
             pose: self.pose,

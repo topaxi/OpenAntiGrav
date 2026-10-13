@@ -55,6 +55,7 @@ mod spline;
 mod thrust_chase;
 mod title_effects;
 mod trail_hits;
+mod viewpoint;
 mod weapons;
 mod wreck_contact;
 mod wreck_finished;

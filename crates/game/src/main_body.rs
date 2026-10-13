@@ -625,6 +625,7 @@ fn run(cli: Cli) -> Result<()> {
     let autopilot_pilot = autopilot_pilot(cli.driver.autopilot_pilot.as_deref())?;
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
+    let players = cli.driver.players;
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
         cli.pick_language,
@@ -659,6 +660,7 @@ fn run(cli: Cli) -> Result<()> {
         autopilot_pilot,
         autopilot_skill,
         ai_choice,
+        players,
         anim_seconds,
         race: None,
         race_options,
