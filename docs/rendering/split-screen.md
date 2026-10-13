@@ -922,6 +922,36 @@ Qirex and EG-X on PSP (live, both views); the PS2 pair's AG Systems is the headl
 at the view's edge). Both seats confirming launches at once, so a "both done" still
 does not exist: the race frames are that evidence.
 
+## Where the people start on the grid (measured on two originals, 2026-10-13)
+
+**Two people start on the last two rows: person 1 on the back row (slot 8), person 2 on the row
+before it (slot 7), the six opponents ahead on slots 1 to 6.** Before this the second person got an
+opponent's place at the *front* of the grid and the first the back (reported from play).
+Confidence **85**, decompile of two binaries that agree (decompile only; no two-pad run on an
+emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` race manager
+`FUN_00061770` each spawn the AI on racers `0..N-3`, person 1 on racer and slot `N-1`, person 2 on
+`N-2`, where slot `N-1` is the back row (`docs/ghidra/functions/ps3-hdfury-eu/grid-local-players.md`,
+`docs/ghidra/functions/ps2-pulse-eu/grid-local-players.md`). The field stays eight craft.
+
+- **Pulse PSP and Pure** have no local split in the original and take PS2 Pulse's rule; **Omega and
+  2048** take HD's (both ship the same `SPArcade_RaceManager`, found by string, **checked, applies,
+  not decompiled**). All five are the same code path in ours: `oag_gameplay::rank_from_back`, fed
+  `Setup::people` (`Options::views`, the head count the launch seats).
+- **Three to eight people are chosen, not measured**: the originals ship two. The law is continued
+  - person `k` on the `k`-th row from the back - and the opponents keep their own order ahead.
+- **One person is untouched**: ship 0 at the back and ship `s` on the row `8 - s`, bit for bit
+  (`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`, all twelve
+  clean before and after; no golden changed).
+- A craft keeps its own pilot and driver seed when it changes row, so nobody's character moves.
+- If the head count at launch is higher than the devices that turn up (an unplugged pad, an
+  integrated GPU clamping `--players`), the rows are still the people's and the vacant ones are flown by
+  the grid's driver (`follow_devices`).
+
+Tests: `oag-gameplay` `spawn::grid_tests` (the rank law, a permutation at every head count),
+`oag-raceplay` `tests::people_grid` (the order, the same eight places at every head count, each person
+on an opponent's former row), `oag-game` `split_grid_ground_truth` (Pulse PSP, Pulse PS2, Pure and HD
+discs, one and two people).
+
 ## Open
 
 - **A launch must set `race::Options::views`** (the CLI's `--players` does, in

@@ -1178,3 +1178,10 @@ uv run --with websocket-client python3 scripts/psp-drive.py --port <port> menu -
 #   block = stats + [0x08b31040]*0x80 + 0x94 (32 floats, engine.md's order)
 cargo run -p oag-tools --bin oag-wad -- cat "data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad" 'Data\Ships\Feisar\handlingstats.xml'
 ```
+
+## Local split-screen players (2026-10-13, lane `split-grid-positions`)
+
+The PSP has one person, so `Race_SpawnGrid`'s local player is the last racer on the last slot. The
+PS2 build and HD/Fury, which do ship two local players, spawn them on the last two slots (person 1 on
+slot 8, person 2 on slot 7, the AI ahead): [PS2 Pulse](../ps2-pulse-eu/grid-local-players.md),
+[HD/Fury](../ps3-hdfury-eu/grid-local-players.md). Our Pulse PSP and Pure borrow it.
