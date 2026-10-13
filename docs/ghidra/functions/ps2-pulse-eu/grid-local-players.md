@@ -10,8 +10,9 @@ PCSX2 run was made for this page. The same question on HD, with the full account
 to 6** - the same as HD/Fury. Confidence **85**, decompile only, two independent race-manager constructors
 that agree and a second binary that agrees.
 
-`FUN_0012ad78` and `FUN_0012b880` (two race modes; six more callers of `FUN_00128860` have the same
-shape) branch on `*(DAT_002e0cc8 + 0xc7c)`, the split-screen setting (`0` one view, `1` and `2` two views):
+`FUN_0012ad78` and `FUN_0012b880` (two race modes decompiled; six more callers of `FUN_00128860` exist and were **not decompiled**)
+branch on `*(DAT_002e0cc8 + 0xc7c)`, which reads as the split-screen setting (`0` one person, `1` and `2` two:
+**inferred** from the branch structure, the writer was not read):
 
 ```c
 // N = DAT_002dab08, the ships on the grid

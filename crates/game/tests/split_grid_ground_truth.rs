@@ -34,11 +34,14 @@ fn grid_of(image: &str, people: u8) -> Option<Vec<usize>> {
     Some(back_to_front(&race::Race::start(loaded.setup)))
 }
 
-const TITLES: [&str; 4] = [
+/// 2048 is not here: the only 2048 source this checkout has is a PFS-encrypted `.pkg`, which
+/// cannot be read in place, and a DLC `.vpk`, which carries no base game to race on.
+const TITLES: [&str; 5] = [
     "data/images/pulse-psp-usa.chd",
     "data/images/pulse-ps2-eu.chd",
     "data/images/pure-psp-eu.chd",
     "data/images/hdfury-ps3-eu-dec.iso",
+    "data/images/omega-ps4-eu.pkg",
 ];
 
 /// One person starts last with the opponents ahead, on every title: the grid every earlier

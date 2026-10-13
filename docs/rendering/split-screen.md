@@ -943,14 +943,18 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
   (`race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`, all twelve
   clean before and after; no golden changed).
 - A craft keeps its own pilot and driver seed when it changes row, so nobody's character moves.
+  The laws that key on the grid *row* follow the new row: the original AI's `8 - grid` formation slot
+  and `GridPlace<N>` start stats take `rank_from_back` (`Race::use_original_ai`, campaign only, so one
+  person there today), and the `pilots on the grid` log line lists the rows.
 - If the head count at launch is higher than the devices that turn up (an unplugged pad, an
   integrated GPU clamping `--players`), the rows are still the people's and the vacant ones are flown by
   the grid's driver (`follow_devices`).
 
 Tests: `oag-gameplay` `spawn::grid_tests` (the rank law, a permutation at every head count),
 `oag-raceplay` `tests::people_grid` (the order, the same eight places at every head count, each person
-on an opponent's former row), `oag-game` `split_grid_ground_truth` (Pulse PSP, Pulse PS2, Pure and HD
-discs, one and two people).
+on an opponent's former row), `oag-game` `split_grid_ground_truth` (Pulse PSP, Pulse PS2, Pure PSP,
+HD and Omega, one and two people; 2048 is not tested: its only source here is a PFS-encrypted `.pkg` that
+cannot be read in place, plus a DLC `.vpk` with no base game).
 
 ## Open
 

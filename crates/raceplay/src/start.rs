@@ -429,8 +429,25 @@ impl Race {
             // are about to race. A `*` marks a pilot that came from a file.
             debug!("pilots loaded: {}", roster.summary());
             debug!("ai difficulty: {}", difficulty.name());
-            let grid: Vec<String> = (pose_start + 1..GRID_SLOTS as usize)
-                .map(|slot| format!("{slot}:{}", pilot_names[slot]))
+            // Each opponent under the row it starts on, counted from the front (1 to 8),
+            // which with more than one person is no longer its own slot number.
+            let mut rows: Vec<(usize, &str)> = (1..=field_opponents as usize)
+                .map(|ship| {
+                    let rank = oag_gameplay::rank_from_back(
+                        ship,
+                        field_opponents as usize + 1,
+                        usize::from(people),
+                    );
+                    (
+                        GRID_SLOTS as usize - rank,
+                        pilot_names[pose_start + ship].as_str(),
+                    )
+                })
+                .collect();
+            rows.sort_unstable_by_key(|&(row, _)| row);
+            let grid: Vec<String> = rows
+                .iter()
+                .map(|(row, name)| format!("{row}:{name}"))
                 .collect();
             info!("pilots on the grid: {}", grid.join(" "));
         } else {
@@ -486,6 +503,7 @@ impl Race {
                 original_tables,
                 original_ai: None,
                 race_seed: seed,
+                people,
                 // `--autopilot-skill` sets this after `Self::start` returns - see
                 // `Self::set_autopilot_tuning`. Every race starts with the two
                 // tunings agreeing.

@@ -68,6 +68,9 @@ pub struct RaceSim {
     pub(super) original_ai: Option<Box<super::original_ai::OriginalAi>>,
     /// The race seed, for the original field's own generator.
     pub(super) race_seed: u64,
+    /// How many people the grid was laid out for ([`Setup::people`](super::Setup::people)):
+    /// the rows `rank_from_back` gave the craft, which the original field's grid positions follow.
+    pub(super) people: u8,
     pub(super) collision: CollisionWorld,
     pub(super) spline: Spline,
     /// The authored racing line, as the opponents' drivers want it.

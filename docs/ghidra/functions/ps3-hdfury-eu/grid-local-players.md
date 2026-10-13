@@ -13,8 +13,8 @@ single-player grid is [`../psp-pulse-usa/grid.md`](../psp-pulse-usa/grid.md).
 race, the same shape in a second binary (PS2 Pulse), and the single-player half of the same code matches a
 live measurement (the player last on a full grid). Not watched with two pads on a running HD.
 
-The race manager's constructor (`SPArcade`, `0x00061770`, and its twin `0x000623a8`, `Elimination` and
-`Nitro` the same shape) spawns by the number of local players, `byte(g_GameState + 0xe4)`:
+The race manager's constructor (`SPArcade`, `0x00061770`, and its twin `0x000623a8`; `SPElimination` and `SPNitro` have three
+`Race_CreatePlayer` call sites each, the same count, and were **not decompiled**) spawns by the number of local players, `byte(g_GameState + 0xe4)`:
 
 ```c
 // N = g_GameState[0], the ships on the grid (8 on a full one)

@@ -77,14 +77,13 @@ impl Race {
             return false;
         }
         let count = self.sim.world.ship_count as usize;
-        // The player sits last on the grid and opponent slot `s` at grid
-        // position `s + 8 - count` (`Race::start` seats them from the back).
+        // The grid position (1 front, 8 back) each craft starts on, which is the row
+        // `rank_from_back` gave it: the player last with the opponents seated from the
+        // back, or - with several people - the people on the last rows.
+        let people = usize::from(self.sim.people);
         let grid: [u8; MAX_SHIPS] = std::array::from_fn(|slot| {
-            if slot == 0 {
-                MAX_SHIPS as u8
-            } else {
-                (slot + MAX_SHIPS).saturating_sub(count).clamp(1, MAX_SHIPS) as u8
-            }
+            let rank = oag_gameplay::rank_from_back(slot, count, people);
+            MAX_SHIPS.saturating_sub(rank).clamp(1, MAX_SHIPS) as u8
         });
         self.sim.original_ai = Some(Box::new(OriginalAi {
             field: tables.field(skill, level.min(2), grid, self.sim.race_seed),
