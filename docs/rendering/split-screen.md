@@ -406,13 +406,36 @@ load average 8 to 12:
 | Pulse | 2 | 964 | 4.88 | 5.69 -> 4.00 | 5.98 -> 5.48 | GPU |
 | Pulse | 4 | 1887 | 6.53 | 11.25 -> 5.97 | 11.03 -> 7.49 | both |
 | Pulse | 8 | 3762 | 7.07 | 22.08 -> 9.37 | 22.27 -> 9.65 | CPU |
-| Pure | 2 | 722 | 4.90 | not run before | 4.85 | GPU |
-| Pure | 8 | 2867 | 5.67 | not run before | 6.05 | GPU |
+| Pure | 1 | 363 | 5.07 | 0.74 (unchanged path) | 4.49 | GPU |
+| Pure | 2 | 722 | 5.49 | 1.36 | 4.84 | GPU |
+| Pure | 4 | 1429 | 6.20 | 2.37 | 5.36 | GPU |
+| Pure | 8 | 2867 | 6.61 | 4.49 | 6.23 | GPU |
+
+Pure was run after the hoist only (it draws no shadows, so the hoist does not touch it: 0.75 ms
+before and after on the discrete card). Its four rows were taken at a load average of 86 to 163,
+another lane's test run, so its CPU column is inflated by contention; the GPU sum and the
+pipelined column, which are what the iGPU is bound by, were steady across the three runs
+(for example 4.99, 5.07 and 5.09 ms of scene pass at one view). The adapter was confirmed from
+the bench's own `bench split: N view(s) on AMD Ryzen 9 7900 12-Core Processor (RADV
+RAPHAEL_MENDOCINO) (IntegratedGpu, Vulkan)` line; the setting reaches the headless capture path.
 
 So on an APU the same split flips: the scene passes cost 4 to 7 ms, the hoist is worth
 the most at four and eight views where the CPU was the limit, and at one to two views (and
 Pure at any count) the GPU is the limit, where a lower render scale would help and the CPU
-work does not matter. Eight views hold 16.7 ms on this machine either way.
+work does not matter. Eight views hold 16.7 ms on this machine either way: Pulse at 9.7 ms
+and Pure at 6.2 ms pipelined, 1280x720 in all.
+
+**Product rule (decided by the maintainer, not a proposal here): split screen on an
+integrated GPU is offered for Pulse and Pure only; HD, 2048 and Omega stay off it.** What the
+Raphael numbers say about the two that are offered: the GPU cost is set by the pixels and barely
+by the view count (Pulse 4.3 ms at one view, 7.1 at eight; Pure 5.1 to 6.6), because the views
+share one frame's pixels, so **no view-count cap is implied at 720p**: every count up to eight
+holds 60 Hz with 7 ms or more to spare. What the iGPU's budget is made of is resolution: a
+frame is about 4.3 ms of scene pass (Pulse) at 1280x720, so the same split at 1920x1080 would
+be roughly 2.25 times that by pixel count (an estimate, not measured), still under 16.7 ms. If a
+slower APU or a larger window ever pushes a split over, render scale is the lever for these two
+titles and a detail budget (draw distance, LOD) is the second; neither is needed on the
+evidence here.
 
 **Next steps, ranked by what the numbers say** (recommendations; none is built):
 
@@ -423,7 +446,7 @@ work does not matter. Eight views hold 16.7 ms on this machine either way.
    check that the picture at an interpolated draw alpha does not move.
 2. **The Deck number decides the next lever, and it is the maintainer's to take.** The
    workstation's discrete card is CPU-bound and the Raphael iGPU is GPU-bound at one and two
-   views and CPU-bound at eight; the Deck pairs a stronger GPU than Raphael's with a weaker CPU,
+   views (and Pure at every count) and CPU-bound at eight on Pulse; the Deck pairs a stronger GPU than Raphael's with a weaker CPU,
    so it can land on either side.
    - **If the Deck reads CPU-bound** (`pipelined` near `CPU`): a per-view draw-distance and LOD
      rule tied to the view count, which belongs to the graphics-settings cascade design thread.
