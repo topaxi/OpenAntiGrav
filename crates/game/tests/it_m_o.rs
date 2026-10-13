@@ -55,7 +55,6 @@ mod omega_original_ai_ground_truth;
 mod omega_pvs_placement_ground_truth;
 mod omega_race_ground_truth;
 mod omega_track_model_ground_truth;
-mod omega_wem_ground_truth;
 mod opponent_fire_ground_truth;
 mod opponent_weapons_ground_truth;
 mod original_ai_ground_truth;

@@ -200,7 +200,7 @@ symphonia = { version = "0.6", default-features = false, features = ["mp3"] }
 # and single-author, so it was measured before it was taken: on a stereo voice
 # clip it and FFmpeg's independent decoder agree to within one least-significant
 # bit on 99.75% of samples, up to polarity (one is the negation of the other),
-# and `crates/game/tests/omega_wem_ground_truth.rs` decodes every `.wem` on the
+# and `crates/music/tests/omega_wem_ground_truth.rs` decodes every `.wem` on the
 # Omega archives with it. Its own README rates multi-channel "partial"; the
 # four- and eight-channel files are measured there too.
 atrac9dec = "0.9"

@@ -13,7 +13,7 @@ Reader: [`oag_formats::wwise`](../../crates/formats/src/wwise.rs) (banks) and
 header). Decoder: [`oag_music::wem`](../../crates/music/src/wem.rs), over the
 [`atrac9dec`](https://crates.io/crates/atrac9dec) crate.
 Ground truth: `crates/formats/tests/wwise_ground_truth.rs` (banks) and
-`crates/game/tests/omega_wem_ground_truth.rs` (media, the decoder, and a cue
+`crates/music/tests/omega_wem_ground_truth.rs` (media, the decoder, and a cue
 played through the mixer).
 
 **This is not the PSP's `.bnk`.** [`sblk`](../../crates/formats/src/sblk.rs) is

@@ -2763,6 +2763,7 @@ dependencies = [
  "oag-core",
  "oag-formats",
  "oag-tables",
+ "oag-testdata",
  "oag-title",
  "symphonia",
 ]
