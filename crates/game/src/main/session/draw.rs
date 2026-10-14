@@ -507,7 +507,12 @@ impl Session {
         // ever replaces the last single view's, and the overlay went on naming it. Only on a
         // frame that had a scene - a menu frame says nothing about the chain.
         if has_scene && !scene_stats.is_some_and(|stats| stats.blur_encoded) {
-            self.blur_cost.idle(self.frame_index);
+            if self.blur_cost.idle(self.frame_index) {
+                debug!(
+                    "motion blur chain not drawn on frame {}: its cost is no longer reported",
+                    self.frame_index
+                );
+            }
         }
         // The same rule for the HD/Fury bloom chain: `false` on Pulse, Pure,
         // or an HD circuit with no `HDR and Bloom` block, all of which claim a
@@ -520,7 +525,12 @@ impl Session {
             timer.abandon();
         }
         if has_scene && !scene_stats.is_some_and(|stats| stats.hd_bloom_encoded) {
-            self.hd_bloom_cost.idle(self.frame_index);
+            if self.hd_bloom_cost.idle(self.frame_index) {
+                debug!(
+                    "hd bloom chain not drawn on frame {}: its cost is no longer reported",
+                    self.frame_index
+                );
+            }
         }
 
         // Only sampled under `Dev`, which is the one tier that shows it - a

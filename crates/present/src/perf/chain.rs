@@ -36,9 +36,13 @@ impl ChainCost {
 
     /// The chain was not drawn on `frame` (it is off, or the view has none):
     /// forget what it cost and refuse every reading up to this frame.
-    pub fn idle(&mut self, frame: u64) {
+    ///
+    /// Returns whether a reading was being reported, so a caller can log the edge.
+    pub fn idle(&mut self, frame: u64) -> bool {
+        let reported = !self.meter.is_empty();
         self.meter.clear();
         self.floor = self.floor.max(frame);
+        reported
     }
 
     /// A load or stall on `frame`, whose readings are a load and not a cost.
@@ -76,8 +80,9 @@ mod tests {
             cost.record(frame, 0.030);
         }
         // A split begins on frame 11: nothing is encoded from here on.
-        cost.idle(11);
+        assert!(cost.idle(11));
         assert_eq!(mean_ms(&cost), None);
+        assert!(!cost.idle(12), "already idle: no second edge");
     }
 
     #[test]
