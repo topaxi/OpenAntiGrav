@@ -118,7 +118,9 @@ impl Race {
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
                 if self.sim.world.controllers[slot].is_human() {
                     let lap = self.sim.world.race[slot].lap;
-                    self.view.run_stats.count_boost(lap);
+                    if self.draws() {
+                        self.view.run_stats.count_boost(lap);
+                    }
                 }
                 // Zone mode only. `Ship_ApplySpeedupPad` raises its flag under
                 // the mode selector `zone-mode.md` identifies.
@@ -146,7 +148,7 @@ impl Race {
                 // as an opponent's plume rather than as the player's - the
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
-                self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+                self.boost_plume(slot);
                 self.fire_zoom_boost(slot);
                 // The sound is on the same edge and from the same branch:
                 // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",

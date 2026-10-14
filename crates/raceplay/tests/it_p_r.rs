@@ -28,6 +28,7 @@ mod pulse_variant_titles_ground_truth;
 mod pure_race_ground_truth;
 mod quake_orientation_ground_truth;
 mod quake_ripple_ground_truth;
+mod quiet_replay_ground_truth;
 mod race_finish_ground_truth;
 mod race_load_read_memo_ground_truth;
 mod ram_ground_truth;

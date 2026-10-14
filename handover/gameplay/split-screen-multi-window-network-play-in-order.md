@@ -484,7 +484,8 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 
 ## 3a. Remote craft: interpolate or roll back (2026-10-13)
 
-**Status: MEASURE. Not decided.** Written up from a design discussion between
+**Status: MEASURE. Not decided.** (2026-10-14: M2 and M3 measured on the
+desktop, S24 and M1/M4 still open.) Written up from a design discussion between
 the maintainer and Claude. The options, outcomes, evidence and survey below are
 the record; the recommendation at the end is Claude's and is meant to be
 argued with. The network-protocol ADR waits on the measurements. The permanent
@@ -600,12 +601,22 @@ what any of those games do.
    weapons on the desktop and on the Galaxy S24. Budget is rollbacks per second
    times window ticks times that cost. Runs on the existing loopback in
    `crates/raceplay/src/tests/reconcile.rs`.
+   **Desktop done 2026-10-14**, S24 open: 60 us per sim-only tick against 65 us
+   for `Race::tick` (8 craft, 12 Pulse circuits, `dev` profile, loaded
+   machine); a 6 tick rollback including the restore is 0.42 ms, 2.5 percent of
+   a frame. Method, spread and load in `docs/networking/README.md`,
+   "Reconciliation cost".
 3. **M3, snapshot cost.** `RaceSim` clone with and without the immutable track
    half, in milliseconds and bytes.
+   **Desktop done 2026-10-14:** 63 us and 1.7 MiB whole, of which the track half
+   is 47 us and 0.74 MiB. A snapshot costs as much as a tick, so a per-tick
+   snapshot doubles sim CPU and the split is worth taking only for a design that
+   does that; whole-struct clone stands until then. S24 open.
 4. **M4, what a correction looks like.** A scripted contact scene with the
    renderer-side smoothing, judged by eye.
 
-M2 and M3 are roughly half a day on the existing loopback. M1 and M4 waited on the
+M2 and M3 were roughly half a day on the existing loopback (desktop half done
+2026-10-14). M1 and M4 waited on the
 remote-slot input path, which landed 2026-10-13 (`Race::tick` steps every
 person-flown slot), so both are unblocked.
 Proposed pass condition, number chosen arbitrarily and open to challenge: a
@@ -805,22 +816,44 @@ a guess.
   client prediction, reconciliation) section 3 describes - that one still has
   a real open design question in it (remote-player prediction, below) and
   shouldn't be written until that's resolved.
-- **A reconciliation replay re-fires every view and audio side effect, not
-  just the cues - and that is a bigger gap than section 3's cue note made it
-  sound.** Measured while building the loopback test, 2026-09-21.
-  `Race::tick` (`crates/raceplay/src/tick.rs`) advances the chase camera,
-  `sparks_rng`, `shake_rng` and `stage_rng`, the exhausts, trail hits, shield
-  flashes, airbrake flaps and `boost_kick` in the same body as the
-  simulation, and pushes `sim.cues`. None of it reaches
-  `RaceSim::state_hash`, so it cannot desync a race and the loopback test is
-  unaffected - but a real client replaying forty ticks to correct a
-  misprediction would re-shake its camera and re-raise forty ticks of sound
-  every time the server contradicted it. The fix is a sim-only tick path, or
-  a suppression flag `Race::tick` honours; **the sim/view field split that
-  landed 2026-09-09 is what makes either tractable**, since the two halves
-  are already separated by type. This is the largest unscoped piece of
-  networking work currently known, and it is worth doing before the transport
-  rather than after: it changes what a client calls per tick.
+- ~~**A reconciliation replay re-fires every view and audio side effect, not
+  just the cues.**~~ **Landed 2026-10-14** (lane `reconcile-quiet-tick`):
+  `Race::tick_sim_only` (`crates/raceplay/src/reconcile.rs`) is the replay step.
+  It is a mode on the one `Race::tick` body (`Race::quiet`, read through
+  `draws()`) and not a second entry point, because the view writes sit inside
+  the sim's helpers (shield flash, pad plume, respawn trail, run statistics) and
+  a second body would be a 700-line copy. The cues, announcements and class
+  announcements are dropped by truncating the three queues to their entry
+  length. Pinned by `tests::reconcile::a_quiet_replay_reaches_the_hash_of_a_normal_one`
+  (two people, every tick, every slot), `a_quiet_replay_leaves_the_view_alone`
+  (the whole `RaceView` as text, unchanged, against a control that moves),
+  `a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue`,
+  and the disc-backed `quiet_replay_ground_truth` (eight craft, weapons in every
+  hand, a real circuit). The loopback's three replays now go through it.
+  **Still open from it:**
+  - **The sim reads the reticle, so "hash always equal" and "camera
+    untouched" cannot both hold - the lead has to choose.** The primary's Missile and LeachBeam take
+    their target only once `RaceView::sight` reports a lock
+    (`weapons.rs`, `view.sight.locked()` and `leach_law()`), and that lock is
+    advanced from the chase camera's projection (`update_sight`). The sim-only
+    tick therefore still runs `update_sight` while the primary holds a lock
+    weapon, and nothing else of the view. Two consequences: a replay that holds
+    a lock weapon is only as exact as the reticle state it starts from, and a
+    client and a server whose cameras differ can disagree about a lock without
+    any misprediction. Removing the gate makes
+    `quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile`
+    fail, as do the moving-pack and lock-forms-inside-the-window variants; all
+    three are equal with it, which is evidence and not proof (the reticle's
+    hold and previous point are not advanced on ticks where no lock weapon is
+    held). The fix is a sim-side lock that does not read the camera; a gameplay
+    change with its own hash consequences, not done here.
+  - **A recording does not hear a replayed tick.** `record_tick` is skipped, so
+    a client recording a race keeps the inputs it first predicted.
+  - **`restore_sim` restores undrained cues too.** `sim.cues` is part of the
+    clone; a client that drained cues after the snapshot tick would hear them
+    again once the snapshot is put back.
+  - `capture_results` and `wreck_ended_tick` still run in a sim-only tick,
+    because the caller reads them back.
 - ~~**A remote slot's input still reaches no craft and no hash, so nothing can
   mispredict one yet.**~~ **Landed 2026-10-13** (lane `remote-slot-input`).
   `Race::tick` runs the player step for every slot `World::person_flown` names
@@ -922,7 +955,16 @@ a guess.
   burst is longer than that whenever the round trip exceeds 133 ms. The
   loopback test loops directly and never touches the clock, so this is not a
   bug today - it is a trap for the first client that drives a replay through
-  `TickClock` instead.
+  `TickClock` instead. **2026-10-14: checked against the quiet path, it does
+  not bite and `oag-core` stays as it is.** A replay is a count of ticks owed
+  (the ticks between the snapshot and now), not elapsed time, so it is a plain
+  loop of `tick_sim_only` calls and never an `advance`. Going through the clock
+  would be wrong twice: it would cap at 8 and discard the rest, and its
+  `tick` counter counts ticks it granted, so replayed ticks would be counted a
+  second time. Even at the cap the replay is cheap (8 ticks is about 0.5 ms
+  measured, `docs/networking/README.md`), so the cap is a correctness
+  hazard and not a CPU one. The live tick after the replay is what goes through
+  the clock.
 - Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
   tick) - not decided, needed before the crate is created. Section 3b has the
@@ -1070,10 +1112,10 @@ a guess.
   question once that ADR is written. **The loopback proof that gated this is
   done** (2026-09-21, see "Recommended order" step 4), so the only thing
   still ahead of the transport decision is the remote-player question above.
-- Give a reconciliation replay a tick path that does not re-fire the camera,
-  the particles and the sound cues - see the Open entry added 2026-09-21.
-  Worth doing before the transport rather than after: it changes what a
-  client calls per tick, and therefore what the protocol is built on.
+- ~~Give a reconciliation replay a tick path that does not re-fire the camera,
+  the particles and the sound cues.~~ **Done 2026-10-14**, `Race::tick_sim_only`;
+  see the Open entry. What it leaves: the reticle lock the sim reads from the
+  view, and a recording that does not hear a replay.
 - Before writing that ADR, resolve the remote-player prediction question
   flagged in section 3 (interpolation vs. rollback-with-predicted-inputs) -
   it changes the protocol shape, not just a tuning parameter.
@@ -1081,9 +1123,11 @@ a guess.
   their outcomes, the Rocket League slides, the racing-game survey, the four
   measurements and Claude's recommendation, which is open to challenge. The ADR
   waits on the numbers.
-- Run section 3a's measurements: M2 (replay cost per tick, desktop and Galaxy
-  S24) and M3 (snapshot cost) first on the existing loopback, about half a day;
-  M1 and M4 after the remote-slot input path lands.
+- Run section 3a's measurements: ~~M2 (replay cost per tick) and M3 (snapshot
+  cost) on the desktop~~ **done 2026-10-14**. **Open: M2 and M3 on the Galaxy
+  S24** (build the sweep `reconcile_cost_sweep` into the APK's test path or run
+  `oag-headless-sim` there and time `tick` against a quiet tick), then M1 and M4,
+  which the remote-slot input path unblocked.
 - ~~Check `BOOT.BIN`'s import table for `sceUtilityLoadNetModule`/
   `sceNetInet*`/`sceNetAdhoc*` NIDs to confirm or correct
   `docs/networking/README.md`'s "no online play" reading before citing it

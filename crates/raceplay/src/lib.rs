@@ -617,6 +617,10 @@ pub struct Race {
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
     /// [`replay`].
     replay: replay::ReplayState,
+    /// Set for the length of [`Race::tick_sim_only`] and nowhere else. Neither
+    /// half's state: it is the caller's statement that this tick is a replay
+    /// whose picture and sound already happened. Read through [`Race::draws`].
+    quiet: bool,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.

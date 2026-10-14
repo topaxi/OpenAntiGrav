@@ -105,7 +105,7 @@ impl Race {
         }
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
-                self.view.shield[slot].hit();
+                self.shield_hit(slot);
             }
         }
         self.throw_hit_sparks(&hits, false);

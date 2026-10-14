@@ -68,7 +68,9 @@ impl Race {
             &mut hits,
         );
         for (slot, hit) in hits.iter().enumerate() {
-            if hit.absorbed {
+            // `self.quiet` rather than `shield_hit`: `course` above borrows
+            // `self.sim` for the whole function.
+            if hit.absorbed && !self.quiet {
                 self.view.shield[slot].hit();
             }
         }
@@ -158,10 +160,8 @@ impl Race {
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
         // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
-        if report.absorbed
-            && let Some(shell) = self.view.shield.get_mut(beam.target as usize)
-        {
-            shell.hit();
+        if report.absorbed {
+            self.shield_hit(beam.target as usize);
         }
         // A drain that got through sparks the target's hull with the
         // LeachBeam's own variant, once per locator per 0.8 s like every

@@ -11,7 +11,7 @@ use oag_gameplay::PlayerInputs;
 use oag_sound::sfx::Cue;
 
 /// A race whose ship is inside a speed pad from the first tick.
-fn grid_on_a_speed_pad() -> Race {
+pub(super) fn grid_on_a_speed_pad() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();

@@ -408,7 +408,7 @@ impl Race {
             // And its own plume, the same reuse the player's Turbo makes of it -
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
-            self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+            self.boost_plume(slot);
         } else if weapon == oag_tables::weapons::Weapon::Rocket {
             // **The `if` is inside the arm, not `&&`ed onto its condition**, and
             // that is the whole of finding an opponent that never fired. As an

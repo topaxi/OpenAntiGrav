@@ -48,7 +48,9 @@ impl Race {
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         self.ensure_speed_plans();
         // Before anything moves: the poses a draw blends from. See `between_ticks`.
-        self.capture_poses();
+        if self.draws() {
+            self.capture_poses();
+        }
         // Decays every tick regardless of contact, like `Camera_ArmShake`'s own
         // `shake_timer`, and **first**: the original arms the shake while it
         // updates the craft and reads the full `0.6` s timer in the same
@@ -58,13 +60,15 @@ impl Race {
         // one tick - where advancing at the end of the tick would show the
         // impact frame already one tick in. Measured 2026-09-30, see
         // `oag_render::camera::shake`.
-        self.view.shake.advance(self.sim.dt);
-        self.view.messages.advance();
-        if self.view.messages.just_shown() {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Message,
-                0,
-            ));
+        if self.draws() {
+            self.view.shake.advance(self.sim.dt);
+            self.view.messages.advance();
+            if self.view.messages.just_shown() {
+                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
+                    oag_sound::sfx::Cue::Message,
+                    0,
+                ));
+            }
         }
         // Before anything steps, so the perfect start's edge is a change
         // across this tick - see `race::perfect_start`.
@@ -206,7 +210,7 @@ impl Race {
         );
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
-                self.view.shield[slot].hit();
+                self.shield_hit(slot);
             }
             if hit.landed {
                 self.note_weapon_hit(slot);
@@ -214,10 +218,14 @@ impl Race {
         }
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
-        self.throw_hit_sparks(&hits, false);
+        if self.draws() {
+            self.throw_hit_sparks(&hits, false);
+        }
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
-        self.advance_projectile_flares();
+        if self.draws() {
+            self.advance_projectile_flares();
+        }
         for (slot, impact) in impacts
             .iter()
             .enumerate()
@@ -231,12 +239,14 @@ impl Race {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
             self.credit_blast(impact, &hits);
-            self.ignite_blast(
-                impact.kind,
-                impact.point,
-                impact.struck.map(usize::from),
-                orientations_before[slot],
-            );
+            if self.draws() {
+                self.ignite_blast(
+                    impact.kind,
+                    impact.point,
+                    impact.struck.map(usize::from),
+                    orientations_before[slot],
+                );
+            }
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
             // craft hit and clears the bolt's own emitter before
             // `Plasmas_Update`'s pass-two teardown would otherwise play
@@ -290,7 +300,9 @@ impl Race {
             // HD's Cannon throws its own spark on the craft it strikes, from
             // the weapon's side - see `Race::throw_weapon_spark`. A no-op
             // unless the title built weapon anchors (HD only).
-            if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck) {
+            if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck)
+                && self.draws()
+            {
                 self.throw_weapon_spark(usize::from(struck), impact.point);
             }
             if let Some((wall, ship)) = hit_cues {
@@ -304,12 +316,14 @@ impl Race {
         // in the pool at `age == 0.0` when this ages every slot - the same
         // one-tick order `advance_projectile_flares` above takes relative to
         // a freshly-placed flare. See `blast_models` module doc comment.
-        self.advance_plasma_blast_models(self.sim.dt);
-        // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
-        self.advance_bomb_blast_models(self.sim.dt);
-        self.advance_mag_floor_fx();
-        self.advance_magstrip_wake();
-        self.ignite_missile_bounces(&bounces_before);
+        if self.draws() {
+            self.advance_plasma_blast_models(self.sim.dt);
+            // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
+            self.advance_bomb_blast_models(self.sim.dt);
+            self.advance_mag_floor_fx();
+            self.advance_magstrip_wake();
+            self.ignite_missile_bounces(&bounces_before);
+        }
         // The same `bounces_before`/after edge the visual bounce above reads,
         // for the two weapons' own bounce cues - `Cue::MissileHitWall`
         // (`MISSILEEXPWALL`, on every bounce, not the projectile's final
@@ -344,15 +358,17 @@ impl Race {
         }
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
-        self.advance_engine_flares();
-        self.advance_absorb_bursts();
-        self.advance_hit_sparks();
-        self.advance_damage_smoke();
-        self.advance_wreck_fx();
-        self.view
-            .stage
-            .advance(self.sim.dt, &mut self.view.stage_rng);
-        self.advance_scenery_fx(self.sim.dt);
+        if self.draws() {
+            self.advance_engine_flares();
+            self.advance_absorb_bursts();
+            self.advance_hit_sparks();
+            self.advance_damage_smoke();
+            self.advance_wreck_fx();
+            self.view
+                .stage
+                .advance(self.sim.dt, &mut self.view.stage_rng);
+            self.advance_scenery_fx(self.sim.dt);
+        }
 
         for (slot, step) in steps.iter().enumerate() {
             if let Some(step) = step {
@@ -379,8 +395,10 @@ impl Race {
         // left mid-explosion for the lap counter to read. See
         // `crate::eliminator`.
         self.tick_destroyed_craft();
-        self.advance_craft_flashes();
-        self.advance_destroy_camera();
+        if self.draws() {
+            self.advance_craft_flashes();
+            self.advance_destroy_camera();
+        }
 
         self.sim.world.tick += 1;
 
@@ -438,27 +456,35 @@ impl Race {
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
         self.update_standings();
-        self.tick_split_gap();
+        if self.draws() {
+            self.tick_split_gap();
+        }
 
         // **After the standings**, so the wave's own proximity test reads
         // every craft's freshest `Standing::progress` rather than last
         // tick's. See `Race::advance_quake`'s own doc comment.
         self.advance_quake();
-        self.advance_quake_visual();
+        if self.draws() {
+            self.advance_quake_visual();
+        }
 
         // Beside the Quake and for the same reason: both are single-instance
         // weapons that read every craft's freshest state rather than last
         // tick's. See `Race::advance_leach_beam`.
         self.advance_leach_beam();
-        self.advance_leach_beam_visual();
-        self.advance_leach_beam_ribbon();
-        self.advance_leach_strip();
-        self.advance_rocket_smoke();
+        if self.draws() {
+            self.advance_leach_beam_visual();
+            self.advance_leach_beam_ribbon();
+            self.advance_leach_strip();
+            self.advance_rocket_smoke();
+        }
 
         // Beside them for the same reason: a Repulser's wave sweep reads every
         // craft's ring index from this tick. See `Race::advance_repulsers`.
         self.advance_repulsers();
-        self.advance_repulser_visual();
+        if self.draws() {
+            self.advance_repulser_visual();
+        }
 
         // **After the standings**, so the last crossing is in the table this
         // reads, and a no-op on every tick but the one the race ends on. It
@@ -467,107 +493,114 @@ impl Race {
         // [`Race::capture_results`].
         self.capture_results();
 
-        let target = target_of(&self.sim.world.ships[0]);
-        self.view
-            .camera
-            .advance(target, &self.view.chase_params, self.sim.dt);
-        // The split-screen views' own cameras, view-side: a no-op with one view.
-        self.advance_viewpoints();
-        // After the chase camera and before the eye is read: behind the end-race panels the
-        // spectator director's pose replaces it. A no-op until the player has finished.
-        self.advance_finish_camera();
-        // After the camera, so the flash's falloff measures from this tick's eye.
-        let eye = self.camera_position();
-        if let Some(flash) = &mut self.view.screen_flash {
-            flash.advance(self.sim.dt, eye);
-        }
+        if self.draws() {
+            let target = target_of(&self.sim.world.ships[0]);
+            self.view
+                .camera
+                .advance(target, &self.view.chase_params, self.sim.dt);
+            // The split-screen views' own cameras, view-side: a no-op with one view.
+            self.advance_viewpoints();
+            // After the chase camera and before the eye is read: behind the end-race panels the
+            // spectator director's pose replaces it. A no-op until the player has finished.
+            self.advance_finish_camera();
+            // After the camera, so the flash's falloff measures from this tick's eye.
+            let eye = self.camera_position();
+            if let Some(flash) = &mut self.view.screen_flash {
+                flash.advance(self.sim.dt, eye);
+            }
 
-        // Advanced here, on the fixed tick, and not in the frame loop. That is
-        // what makes the headless `capture` path - which calls only `tick` -
-        // produce the same flare at the same tick count as the window does, and
-        // it is the same reason the chase camera is advanced from here.
-        // The perfect start arms the flare the way a pad does, so before the
-        // exhausts take this tick's step, as the pad's arming is.
-        self.fire_perfect_starts(&launch_grades);
-        self.advance_exhausts();
-        // After the trails have taken this tick's sample, so a craft is tested
-        // against the ribbon as it stands now rather than one tick stale.
-        self.advance_trail_hits();
-        // Same argument, and after `step`/`step_opponents` so a shell that lost
-        // its last tick of protection this frame starts fading this frame.
-        self.advance_shields();
+            // Advanced here, on the fixed tick, and not in the frame loop. That is
+            // what makes the headless `capture` path - which calls only `tick` -
+            // produce the same flare at the same tick count as the window does, and
+            // it is the same reason the chase camera is advanced from here.
+            // The perfect start arms the flare the way a pad does, so before the
+            // exhausts take this tick's step, as the pad's arming is.
+            self.fire_perfect_starts(&launch_grades);
+            self.advance_exhausts();
+            // After the trails have taken this tick's sample, so a craft is tested
+            // against the ribbon as it stands now rather than one tick stale.
+            self.advance_trail_hits();
+            // Same argument, and after `step`/`step_opponents` so a shell that lost
+            // its last tick of protection this frame starts fading this frame.
+            self.advance_shields();
 
-        // Open while the boost's own timer runs, close once it has expired, both
-        // as an exponential approach so neither edge is a step. Driven from
-        // `pad_timer` rather than from the exhaust, because the exhaust's boost
-        // is a `max` that other things may one day also arm and this must follow
-        // the pad specifically.
-        if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
-            let boosting = self.sim.world.ships[0].physics.pad_timer > 0.0;
-            let (target, rate) = if boosting {
-                (1.0, BOOST_FOV_OPEN_RATE)
-            } else {
-                (0.0, BOOST_FOV_CLOSE_RATE)
-            };
-            self.view.boost_kick += (target - self.view.boost_kick) * rate * self.sim.dt;
-            // Snapped, so a closed kick is *exactly* zero and `projection` takes
-            // its bit-identical path rather than an `atan(tan(x))` round trip
-            // that never quite settles.
-            if !boosting && self.view.boost_kick < 1.0e-3 {
-                self.view.boost_kick = 0.0;
+            // Open while the boost's own timer runs, close once it has expired, both
+            // as an exponential approach so neither edge is a step. Driven from
+            // `pad_timer` rather than from the exhaust, because the exhaust's boost
+            // is a `max` that other things may one day also arm and this must follow
+            // the pad specifically.
+            if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
+                let boosting = self.sim.world.ships[0].physics.pad_timer > 0.0;
+                let (target, rate) = if boosting {
+                    (1.0, BOOST_FOV_OPEN_RATE)
+                } else {
+                    (0.0, BOOST_FOV_CLOSE_RATE)
+                };
+                self.view.boost_kick += (target - self.view.boost_kick) * rate * self.sim.dt;
+                // Snapped, so a closed kick is *exactly* zero and `projection` takes
+                // its bit-identical path rather than an `atan(tan(x))` round trip
+                // that never quite settles.
+                if !boosting && self.view.boost_kick < 1.0e-3 {
+                    self.view.boost_kick = 0.0;
+                }
+            }
+
+            // The flaps, on the fixed tick beside the camera and the exhaust, and
+            // for the same reason: a headless capture calls only `tick`, so an
+            // animation advanced in the frame loop would be at a different angle in
+            // a screenshot than in a window at the same tick count.
+            //
+            // Two rates, not one. `up_speed` and `down_speed` are authored beside
+            // each other in `<AirbrakeGraphics>` and are *not* the force law's
+            // `gain`/`falloff`, so a flap deploys and returns at its own pace while
+            // the airbrake it depicts ramps at another. The state it chases is the
+            // ramped `airbrake_left`/`airbrake_right` on `0..=100` rather than the
+            // raw input, so a flap follows the airbrake the ship actually has.
+            //
+            // **The rates are on the airbrake's own `0..=100` scale**, per second,
+            // which is why `self.view.flaps` holds a level rather than an angle. Not
+            // read out of the binary - no consumer of `<AirbrakeGraphics>` was
+            // located - but not a coin flip either: every team authors
+            // `up_speed = 500` against a `down_speed` of 80 to 120, and on this
+            // reading that is a flap that snaps out in 0.2 s and folds back over
+            // about a second, which is what an airbrake does. Read as *fractions*
+            // of full deflection per second instead, 500 would be full travel in
+            // two milliseconds and the parameter would not be worth authoring.
+            // It is also the convention `<Airbrake gain/falloff>` already uses on
+            // the same scale, one element away.
+            let ship = &self.sim.world.ships[0].physics;
+            for (flap, level) in self
+                .view
+                .flaps
+                .iter_mut()
+                .zip([ship.airbrake_left, ship.airbrake_right])
+            {
+                let target = level.clamp(0.0, 100.0);
+                let (rate, rising) = if target > *flap {
+                    (self.view.flap_graphics.up_speed, true)
+                } else {
+                    (self.view.flap_graphics.down_speed, false)
+                };
+                let step = rate * self.sim.dt;
+                *flap = if rising {
+                    (*flap + step).min(target)
+                } else {
+                    (*flap - step).max(target)
+                };
             }
         }
-
-        // The flaps, on the fixed tick beside the camera and the exhaust, and
-        // for the same reason: a headless capture calls only `tick`, so an
-        // animation advanced in the frame loop would be at a different angle in
-        // a screenshot than in a window at the same tick count.
-        //
-        // Two rates, not one. `up_speed` and `down_speed` are authored beside
-        // each other in `<AirbrakeGraphics>` and are *not* the force law's
-        // `gain`/`falloff`, so a flap deploys and returns at its own pace while
-        // the airbrake it depicts ramps at another. The state it chases is the
-        // ramped `airbrake_left`/`airbrake_right` on `0..=100` rather than the
-        // raw input, so a flap follows the airbrake the ship actually has.
-        //
-        // **The rates are on the airbrake's own `0..=100` scale**, per second,
-        // which is why `self.view.flaps` holds a level rather than an angle. Not
-        // read out of the binary - no consumer of `<AirbrakeGraphics>` was
-        // located - but not a coin flip either: every team authors
-        // `up_speed = 500` against a `down_speed` of 80 to 120, and on this
-        // reading that is a flap that snaps out in 0.2 s and folds back over
-        // about a second, which is what an airbrake does. Read as *fractions*
-        // of full deflection per second instead, 500 would be full travel in
-        // two milliseconds and the parameter would not be worth authoring.
-        // It is also the convention `<Airbrake gain/falloff>` already uses on
-        // the same scale, one element away.
-        let ship = &self.sim.world.ships[0].physics;
-        for (flap, level) in self
-            .view
-            .flaps
-            .iter_mut()
-            .zip([ship.airbrake_left, ship.airbrake_right])
-        {
-            let target = level.clamp(0.0, 100.0);
-            let (rate, rising) = if target > *flap {
-                (self.view.flap_graphics.up_speed, true)
-            } else {
-                (self.view.flap_graphics.down_speed, false)
-            };
-            let step = rate * self.sim.dt;
-            *flap = if rising {
-                (*flap + step).min(target)
-            } else {
-                (*flap - step).max(target)
-            };
-        }
-
         // The lock-on reticle, on the fixed tick beside the camera and the
         // exhaust and for the same reason: a headless capture calls only
         // `tick`, so a reticle advanced in the frame loop would be at a
         // different extent in a screenshot than in a window at the same tick
         // count. **After the camera**, because it projects through it.
-        self.update_sight();
+        //
+        // **Kept in a sim-only tick, but only while the primary holds a lock
+        // weapon**: `spend_pickup` reads the reticle's lock back (see
+        // `Race::tick_sim_only`), and nothing else does.
+        if self.draws() || self.sight_held(primary).is_some() {
+            self.update_sight();
+        }
 
         // After every writer of the shield pool this tick has run - the wall
         // contact above, the weapon damage inside `projectile::step`, and the
@@ -575,8 +608,36 @@ impl Race {
         // the tick it lands rather than one late; and after
         // `advance_absorb_bursts`, which the blink reads. Every bar of every
         // viewed slot: see `Self::advance_slot_huds`.
-        self.advance_slot_huds();
+        if self.draws() {
+            self.advance_slot_huds();
+        }
 
+        if self.draws() {
+            self.advance_contact_fx(&evaluated);
+        } else {
+            // Its cooldown is sim state; the cue it would push is dropped.
+            let shielded = self.sim.world.ships[0].physics.shield_pickup_timer > 0.0;
+            self.raise_contact_cue(0, evaluated.wall.impact, shielded);
+        }
+
+        // Last, after every write this tick makes: the recording stores the
+        // inputs this tick was handed and the state it arrived at, and reads
+        // the player's lap edge the rules above just produced. A no-op unless
+        // `start_recording` was called - see `race::replay`.
+        if self.draws() {
+            self.record_tick(inputs);
+        }
+        Evaluations::new(&steps, primary)
+    }
+
+    /// The collision sparks, the shake a hit arms, and the two contact sounds,
+    /// for the primary craft's wall contact this tick.
+    ///
+    /// Everything [`Race::tick`] draws or sounds on a wall contact, in one place
+    /// so [`Race::tick_sim_only`] can skip it whole. The one piece of
+    /// simulation state in it is `contact_cue_cooldown`, which the sim-only
+    /// path advances itself.
+    fn advance_contact_fx(&mut self, evaluated: &Evaluated) {
         // Cooldown-gated, not edge-triggered - see `Self::sparks_cooldown`'s
         // doc comment for why a sustained scrape must re-fire periodically
         // rather than spawn once and go silent.
@@ -737,12 +798,5 @@ impl Race {
                 .sparks
                 .advance(effect, self.sim.dt, anchor, up, &mut self.view.sparks_rng);
         }
-
-        // Last, after every write this tick makes: the recording stores the
-        // inputs this tick was handed and the state it arrived at, and reads
-        // the player's lap edge the rules above just produced. A no-op unless
-        // `start_recording` was called - see `race::replay`.
-        self.record_tick(inputs);
-        Evaluations::new(&steps, primary)
     }
 }
