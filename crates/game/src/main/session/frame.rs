@@ -19,7 +19,6 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
-use super::pause;
 use super::pointer;
 
 impl Session {
@@ -371,7 +370,7 @@ impl Session {
             // A click on a paused race is slot 0's Start, through the same owner
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
-                let click = pointer.clicked && matches!(self.pause, pause::State::Paused { .. });
+                let click = pointer.clicked && matches!(self.pause, oag_game::pause::State::Paused { .. });
                 let presses = self.controls.take_presses(Button::Start) | u8::from(click);
                 self.step_pause(presses);
             }
@@ -385,7 +384,7 @@ impl Session {
             // Only the player who paused leaves, as for Start above.
             if matches!(self.stage, Stage::Race(_))
                 && self.paused()
-                && pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
+                && oag_game::pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
             {
                 self.escape();
                 // The remaining steps this frame owed belong to whatever is on
@@ -708,7 +707,7 @@ impl Session {
                     // the secondary button is circle everywhere else on
                     // screen, so it is here too. Not through the resume
                     // countdown, which nobody leaves.
-                    if pointer.back && matches!(self.pause, pause::State::Paused { .. }) {
+                    if pointer.back && matches!(self.pause, oag_game::pause::State::Paused { .. }) {
                         self.controls.tap(Button::Circle);
                     }
                     // Same shape as the finished arm above and for the same

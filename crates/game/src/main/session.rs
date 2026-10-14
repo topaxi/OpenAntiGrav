@@ -317,7 +317,7 @@ pub(crate) struct Session {
     /// deliberately no pause screen behind it, only the line under it - see
     /// `session::pause`, which owns the rules and the one gate
     /// (`pause::State::ticks`).
-    pub(crate) pause: pause::State,
+    pub(crate) pause: oag_game::pause::State,
     /// The session's wall clock in seconds, read once a frame: what a pause's
     /// owner timeout and the resume countdown are measured on. A race that is
     /// frozen has no ticks to count, so this is not simulation time and is never

@@ -444,7 +444,7 @@ impl App {
             cursor_sheet,
             cursor_title: None,
             stalled: true,
-            pause: crate::session::pause::State::Running,
+            pause: oag_game::pause::State::Running,
             wall: 0.0,
             go_at: None,
             wall_origin: web_time::Instant::now(),

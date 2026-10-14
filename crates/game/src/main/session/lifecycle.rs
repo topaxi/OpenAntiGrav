@@ -14,7 +14,7 @@ use log::info;
 
 use crate::stage::Stage;
 
-use super::{Session, pause};
+use super::Session;
 
 /// A window event that may pause a race.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,7 +67,7 @@ impl Session {
     /// Applies [`decide`] to the live session.
     pub(crate) fn window_away(&mut self, away: Away) {
         let running = matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-            && !matches!(self.pause, pause::State::Paused { .. });
+            && !matches!(self.pause, oag_game::pause::State::Paused { .. });
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,
@@ -83,8 +83,8 @@ impl Session {
                 // a player already holds one, which stays theirs. A resume
                 // countdown under way gives way to the same unowned pause
                 // (chosen): a window that was away has not seen it.
-                if !matches!(self.pause, pause::State::Paused { .. }) {
-                    self.pause = pause::State::unowned(self.wall);
+                if !matches!(self.pause, oag_game::pause::State::Paused { .. }) {
+                    self.pause = oag_game::pause::State::unowned(self.wall);
                 }
             }
         }

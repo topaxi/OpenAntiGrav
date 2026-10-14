@@ -294,4 +294,9 @@ ids = [
     # Cell Selection's refusal lines, new with them; no translation pass yet.
     "OAG_CAMPAIGN_MODE_UNSUPPORTED",
     "OAG_CAMPAIGN_TRACK_UNAVAILABLE",
+    # The line under a split race's pause, new 2026-10-14; no translation pass yet.
+    "OAG_PAUSE_OWNED",
+    "OAG_PAUSE_OPEN",
+    "OAG_PAUSE_OPEN_UNOWNED",
+    "OAG_PAUSE_RESUMING",
 ]

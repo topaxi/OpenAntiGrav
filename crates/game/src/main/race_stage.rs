@@ -35,6 +35,12 @@ pub(crate) struct RaceStage {
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `oag_game::hud_countdown`.
     pub(crate) countdown: Option<oag_game::hud_countdown::Countdown>,
+    /// The countdown art's own clock in seconds while a resume counts down (and
+    /// `GO` lingers after it), set by the session each frame; `None` otherwise.
+    /// The art is drawn on this clock through the same model the start uses, and
+    /// over the gantry's circuits too, since a gantry stands at the start line and
+    /// a resume happens wherever the race was paused. See `session::pause`.
+    pub(crate) resume_art: Option<f32>,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
@@ -562,19 +568,38 @@ impl RaceStage {
                     // of the original, and what `race::gantry` now draws -
                     // so this overlay is the fallback for a circuit that
                     // stands no gantry, not a second countdown beside one.
-                    if let Some(countdown) = &mut self.countdown
-                        && !self.scene.draws_gantry()
-                        && oag_race::RaceState::thrust_gated(self.race.sim.world.tick)
-                    {
-                        countdown.draw(
-                            gpu.device(),
-                            gpu.queue(),
-                            encoder,
-                            view,
-                            self.race.sim.world.tick as f32 / 60.0,
+                    //
+                    // **A resume countdown draws the same art on its own clock,
+                    // wherever on the track the race was paused.**
+                    let start_line = (!self.scene.draws_gantry()
+                        && oag_race::RaceState::thrust_gated(self.race.sim.world.tick))
+                    .then_some(self.race.sim.world.tick as f32 / 60.0);
+                    // The start's is one picture over the whole screen; a resume's is
+                    // one per view of a split, each centred as it would be alone
+                    // (chosen: a split's seam is no place for a digit).
+                    let rects = if self.resume_art.is_some() {
+                        oag_render::viewport::layout(
+                            self.race.viewport_count(),
                             viewport,
-                            target_size,
-                        );
+                            self.race.cut(),
+                        )
+                    } else {
+                        vec![viewport]
+                    };
+                    if let Some(countdown) = &mut self.countdown
+                        && let Some(seconds) = self.resume_art.or(start_line)
+                    {
+                        for rect in rects {
+                            countdown.draw(
+                                gpu.device(),
+                                gpu.queue(),
+                                encoder,
+                                view,
+                                seconds,
+                                rect,
+                                target_size,
+                            );
+                        }
                     }
                 }
             }

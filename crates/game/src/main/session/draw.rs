@@ -277,6 +277,7 @@ impl Session {
         // see the timers below and in `Session::finish_race_loading`.
         let timing_first_race_frame =
             self.race_ready_at.is_some() && matches!(self.stage, Stage::Race(_));
+        let resume_art = oag_game::pause::art_seconds(self.pause, self.go_at, self.wall);
         let (scene_stats, video_label) = match &mut self.stage {
             Stage::Launcher(stage) => {
                 stage.render(&self.gpu, &mut encoder, ui_target, rect);
@@ -368,6 +369,7 @@ impl Session {
                 // per-frame ballistics and belongs on this side of the seam
                 // for the same reason its state does: it is one hold for the
                 // frame, not one per drawable that reads it.
+                stage.resume_art = resume_art;
                 let spectrum = self.audio.output().spectrum().levels();
                 let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
                 // Every frame, so the MODEL DETAIL, TEXTURE DETAIL and BLUR
@@ -819,6 +821,8 @@ impl Session {
             (surface.0 as f32, surface.1 as f32),
             overlay_space.size.1 / surface.1.max(1) as f32,
         ));
+        // The line under a split race's pause: who paused and when it is anyone's.
+        list.extend(self.pause_line(overlay_space.size));
         // The TOUCH CONTROLS page's picture of the overlay, over its rows.
         if let Stage::Menu(stage) = &self.stage
             && let Some(art) = oag_game::touch_controls::art::Art::from_sheet(&self.cursor_sheet)

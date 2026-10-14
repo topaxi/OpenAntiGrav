@@ -1,41 +1,40 @@
 # Pause in multiplayer: a local timeout, and what online does instead
 
-2026-10-13, maintainer's request. A design note, nothing built beyond the local
-rule below. Network play itself is unbuilt (see
+2026-10-13, maintainer's request. A design note; the local rule is built, the online part is open. Network play itself is unbuilt (see
 [the split-screen and network thread](split-screen-multi-window-network-play-in-order.md),
 sections 3 to 3b, and [`docs/networking/README.md`](../../docs/networking/README.md)).
 
 ## What exists (local split screen)
 
 Any seated player's Start pauses the race, and the pause belongs to them: only
-their Start resumes and only their Circle leaves the race. A pause nobody pressed
-for (the window losing focus) is anyone's to lift. Code: `session::pause` in
-`crates/game/src/main/session/pause.rs`, with `Controls::take_presses`. Written up
-in [`docs/rendering/split-screen.md`](../../docs/rendering/split-screen.md),
+their Start (or a click, which is slot 0's Start) resumes and only their Circle
+leaves the race. A pause nobody pressed for (the window losing focus) is anyone's
+to lift. Code: `oag_game::pause` (the pure rule) and `session::pause` in
+`crates/game/src/main/session/pause.rs` (the session glue and the line). Written
+up in [`docs/rendering/split-screen.md`](../../docs/rendering/split-screen.md),
 "Who plays which slot".
 
-## Open: a local timeout
+Landed 2026-10-14 (`pause-timeout`, all chosen, not measured):
 
-The owner rule can strand the other players: the owner walks away, or their pad's
-battery dies. Proposal: **after a timeout, the pause becomes anyone's** (the
-owner becomes `None` in `pause::Paused`), so any seated player can resume or leave.
+- ~~**A local timeout**~~: the owner's claim lapses 30 s after the pause itself,
+  a fixed value, no setting, wall clock in the session and not hashed.
+- ~~**A disconnected owner**~~ lifts the claim at once (`present_seats`).
+- ~~**Showing it**~~: a line under the pause, `PLAYER 2 PAUSED - ANYONE CAN RESUME
+  IN 0:25`, then `ANYONE CAN RESUME`.
+- ~~**A resume countdown**~~: `3`, `2`, `1`, `GO` for 3 s in a race with more than
+  one person, the race frozen through it (hash test), Start during it re-pauses.
+  Single-player resume is unchanged; widening it is one flag (`Table::countdown`).
 
-Decisions still owed, none measured:
+## Open: the local rule's edges
 
-- **The timeout**: a fixed value (somewhere around 30 to 60 s), a setting, or both.
-  Leaning: a fixed default, no setting until someone asks.
-- **What starts the clock**: the pause itself, or the owner's last input. The first
-  is simpler and predictable.
-- **Whether to show it**: a line under the pause ("Player 2 paused - anyone can
-  resume in 0:25"). Without it the rule looks like a bug when another player's Start
-  suddenly works.
-- **A disconnected owner**: their pad dropping (`split_screen::follow_devices` already
-  turns a deviceless seat to AI) could lift the owner at once rather than waiting.
-- Wall clock, not ticks: the race is frozen, so the timer cannot count simulation
-  ticks; it lives in the session, outside `RaceSim`, and is not hashed.
-
-Small: the pure function gains a "now" and a "paused at", plus tests. Half a day
-with the on-screen line.
+- The countdown art is Pulse's `Cockpit_321GO.vex` only. HD, Pure, 2048 and Omega
+  author no screen-space countdown, so they show the line `RESUMING` and nothing
+  else; a countdown drawn off HD's `321go` billboards or 2048's `321Go_2048.vex`
+  would be new art placement work. 2048 and Omega were not run.
+- The art sits at the widget's authored spot (63% down, centred), per view of a
+  split, so it lands over the craft in a short view. Not tuned.
+- No resume row exists (the pause draws no menu), so "click the resume row" is
+  "click anywhere on a paused race".
 
 ## Open: online
 
@@ -79,8 +78,6 @@ Constraints whatever is chosen:
 
 ## Next Steps
 
-- Local timeout: decide the value and whether to show it, then extend
-  `session::pause` with tests. The `pause-timeout` lane also carries the
-  `3 2 1 GO` resume countdown decided above.
 - Online: pick between the options above when the protocol ADR is written; until
-  then nothing online should assume a race can be paused.
+  then nothing online should assume a race can be paused. A resume countdown
+  online is a server event on the same tick for every client, like the pause.
