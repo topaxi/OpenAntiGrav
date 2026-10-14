@@ -174,6 +174,78 @@ impl Scene {
         )
     }
 
+    /// Window `window` of a multi-window race, whatever it holds: nothing for a window with
+    /// no seat, [`Scene::render_view`] for one seat (recorded into `encoder`, which the caller
+    /// submits before it draws another window) and [`Scene::render_window_views`] for several
+    /// (which submits its own buffers, so `encoder` keeps only what the caller records after
+    /// it). The one place that choice is made; the window's frame loop and the headless
+    /// capture both draw through it.
+    ///
+    /// `view_timers` brackets each of the window's seats' scene passes, as
+    /// [`Scene::render_viewports`]'s does: empty everywhere but the render bench.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_window(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        race: &Race,
+        window: usize,
+        area: (f32, f32, f32, f32),
+        fov: oag_display::display::Fov,
+        cull: bool,
+        pvs_cull: bool,
+        anim_seconds: Option<f32>,
+        shadows: oag_display::display::Shadows,
+        zone_spectrum: &[f32],
+        view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
+    ) -> SceneStats {
+        match race.window_drawn(window).as_slice() {
+            [] => SceneStats::default(),
+            &[slot] => {
+                let timer = view_timers.first_mut().and_then(Option::as_mut);
+                let stats = self.render_view(
+                    device,
+                    queue,
+                    encoder,
+                    view,
+                    race,
+                    slot,
+                    area,
+                    fov,
+                    cull,
+                    pvs_cull,
+                    anim_seconds,
+                    shadows,
+                    zone_spectrum,
+                    timer
+                        .as_deref()
+                        .and_then(oag_gpu::timing::PassTimer::writes),
+                );
+                if let Some(timer) = timer {
+                    timer.resolve(encoder);
+                }
+                stats
+            }
+            _ => self.render_window_views(
+                device,
+                queue,
+                view,
+                race,
+                window,
+                area,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+                view_timers,
+            ),
+        }
+    }
+
     /// Draws window `window`'s views ([`Race::window_drawn`]) into the rectangles its cut
     /// divides `area` into ([`Race::window_rects`]): a window that holds several seats, cut
     /// up the way a split screen cuts its views. The same sequence as
@@ -195,6 +267,7 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
+        view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let slots = race.window_drawn(window);
         let rects = race.window_rects(window, area);
@@ -212,7 +285,7 @@ impl Scene {
             anim_seconds,
             shadows,
             zone_spectrum,
-            &mut [],
+            view_timers,
         )
     }
 

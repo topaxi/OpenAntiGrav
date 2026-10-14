@@ -193,6 +193,7 @@ fn a_window_of_several_seats_does_the_shared_work_once_and_leaves_the_viewpoint(
             None,
             Shadows::Original,
             &[],
+            &mut [],
         );
         assert_eq!(race.extra_viewpoint(), None, "the player's view is back");
         assert_eq!(

@@ -744,7 +744,7 @@ pub fn capture(
     if cfg!(feature = "perf-probe") {
         let split = race.viewport_count() > 1;
         let pacer = bench::TickPacer::from_env();
-        if !split {
+        if !split && !race.windowed() {
             bench::run(&device, &queue, |encoder, timestamps| {
                 if pacer.starts_tick() {
                     scene.forget_shadow_gathers();
@@ -772,14 +772,55 @@ pub fn capture(
         }
         // The whole frame as the window submits it, one view or many: what
         // `bench::run` leaves out (finishing and submitting the encoder).
+        // A windowed race is benched window by window, each its own encoder and submission
+        // as the window's frame loop makes them (the scene side of the chain: the resolve,
+        // HUD and composite are the same per window whatever this lane changes).
+        let windowed = race.windowed();
+        let seats: Vec<usize> = (0..race.windows().len())
+            .map(|window| race.window_drawn(window).len())
+            .collect();
+        let bench_views = if windowed {
+            seats.iter().sum()
+        } else {
+            race.views_drawn()
+        };
         bench::run_split(
             &device,
             &queue,
             &adapter.get_info(),
-            race.views_drawn(),
+            bench_views,
             |timers| {
                 if pacer.starts_tick() {
                     scene.forget_shadow_gathers();
+                }
+                if windowed {
+                    let mut rest = &mut *timers;
+                    for (window, &count) in seats.iter().enumerate() {
+                        let (own, tail) = rest.split_at_mut(count.min(rest.len()));
+                        rest = tail;
+                        let mut encoder =
+                            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                label: Some("race bench window"),
+                            });
+                        scene.render_window(
+                            &device,
+                            &queue,
+                            &mut encoder,
+                            &view,
+                            &race,
+                            window,
+                            viewport,
+                            options.fov,
+                            options.frustum_culling,
+                            options.pvs_culling,
+                            options.anim_seconds,
+                            options.shadows,
+                            &spectrum,
+                            own,
+                        );
+                        queue.submit(Some(encoder.finish()));
+                    }
+                    return;
                 }
                 if split {
                     scene.render_viewports(
@@ -847,41 +888,27 @@ pub fn capture(
         // A split screen draws one scene per view, each submitted on its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
         let stats = if let Some(index) = window {
-            // One window of a multi-window race: its seats cut up in it, the same calls the
+            // One window of a multi-window race: its seats cut up in it, the same call the
             // window makes for each of its windows (a window of one seat is the whole frame).
-            match race.window_drawn(index).as_slice() {
-                [] => continue,
-                &[slot] => scene.render_view(
-                    &device,
-                    &queue,
-                    &mut encoder,
-                    &view,
-                    &race,
-                    slot,
-                    viewport,
-                    options.fov,
-                    options.frustum_culling,
-                    options.pvs_culling,
-                    options.anim_seconds,
-                    options.shadows,
-                    &spectrum,
-                    None,
-                ),
-                _ => scene.render_window_views(
-                    &device,
-                    &queue,
-                    &view,
-                    &race,
-                    index,
-                    viewport,
-                    options.fov,
-                    options.frustum_culling,
-                    options.pvs_culling,
-                    options.anim_seconds,
-                    options.shadows,
-                    &spectrum,
-                ),
+            if race.window_drawn(index).is_empty() {
+                continue;
             }
+            scene.render_window(
+                &device,
+                &queue,
+                &mut encoder,
+                &view,
+                &race,
+                index,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.shadows,
+                &spectrum,
+                &mut [],
+            )
         } else if race.viewport_count() > 1 {
             scene.render_viewports(
                 &device,

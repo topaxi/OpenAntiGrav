@@ -307,39 +307,22 @@ impl RaceStage {
         if self.scene.sync_zone_grade(&self.race) {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
-        match self.race.window_drawn(window).as_slice() {
-            [] => oag_present::perf::SceneStats::default(),
-            &[slot] => self.scene.render_view(
-                gpu.device(),
-                gpu.queue(),
-                encoder,
-                view,
-                &self.race,
-                slot,
-                viewport,
-                fov,
-                cull,
-                pvs_cull,
-                anim_seconds,
-                shadows,
-                zone_spectrum,
-                None,
-            ),
-            _ => self.scene.render_window_views(
-                gpu.device(),
-                gpu.queue(),
-                view,
-                &self.race,
-                window,
-                viewport,
-                fov,
-                cull,
-                pvs_cull,
-                anim_seconds,
-                shadows,
-                zone_spectrum,
-            ),
-        }
+        self.scene.render_window(
+            gpu.device(),
+            gpu.queue(),
+            encoder,
+            view,
+            &self.race,
+            window,
+            viewport,
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            shadows,
+            zone_spectrum,
+            &mut [],
+        )
     }
 
     /// What a temporal upscaler needs from this frame, or `None` when nothing
