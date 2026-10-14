@@ -324,8 +324,13 @@ closing a window hands every seat it held to the AI (`Assignment::unseat` and th
 `follow_devices`); focus is "away" only when no window has it; further windows present with
 `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies. Single-window and split frames are
 byte-identical to `main` (12 of 12 `--screenshot` pairs, re-run after the seat lists).
-**Still open from it** (all in the doc's "Open"): **the layout picker menu** (windows and seats per
-window, chosen per screen, and the per-window cut there); a keyboard per window; the pause overlay and
+**The layout screen landed 2026-10-14 (lane `window-layout-picker`)**: after the join screen's START
+on a desktop build, WINDOW LAYOUT chooses the windows (1 to the head count, 8 at most), the seats per
+window, a two-seat window's cut, each window's monitor and windowed or fullscreen, with a preview of
+boxes per window; pad, keyboard and pointer; remembered in `[race] window_seats`/`window_monitors`
+and re-validated against the monitors present; skipped on wasm, Android and iOS (see
+`docs/rendering/multi-window.md`, "The layout screen"). **Still open from it** (all in the doc's
+"Open"): a keyboard per window; the pause overlay and
 the end screens on every window; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
 **pacing on real displays** (cannot be measured under Xvfb: the
@@ -512,7 +517,7 @@ end, the pause menu and the pointer; a seat window closing hands its slot to the
 (`Assignment::unseat` and the existing `follow_devices`); focus is "away" only when no window has it;
 seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies.
 Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
-**Still open from it** (all in the doc's "Open"): a menu row for the window count; a keyboard per
+**Still open from it** (all in the doc's "Open"): ~~a menu row for the window count~~ (the layout screen, below in section 2's newer block); a keyboard per
 window; the pause overlay and the end screens on every window; `--window-monitor` and remembered
 placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
 work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the

@@ -1009,7 +1009,7 @@ cut into `count` views and each device goes on the slot it joined. One seat, or
 none, is an ordinary race and changes nothing. A split race fields opponents
 whatever the mode, as `--players` does, because a split of one craft is one view.
 
-`--menu-page join[:N]` draws the screen with `N` seats taken (the keyboard first,
+On a desktop build the screen's START opens the **window layout screen** first (how many OS windows the people are dealt across, [multi-window.md](multi-window.md#the-layout-screen)); one window is the split screen below, as ever. `--menu-page join[:N]` draws the screen with `N` seats taken (the keyboard first,
 then pads named `GAMEPAD n`), off the same labels and string table as the live one.
 Verified on Pulse (EU): the row between REMIX and OPTIONS, the screen empty, with
 one seat and with three, START opening Track Select, and Escape from Track Select

@@ -39,7 +39,7 @@ impl Session {
         allow(dead_code)
     )]
     pub(crate) fn screens_to_open(&mut self) -> Option<u8> {
-        if self.windows_wanted < 2 || !self.screens.is_empty() {
+        if self.windows_wanted < 2 {
             return None;
         }
         let title = self
@@ -56,28 +56,26 @@ impl Session {
             );
             return None;
         }
-        Some(wanted)
+        // Windows are already open for as many (a layout the picker chose after a race on
+        // another one): nothing to add.
+        (usize::from(wanted) > 1 + self.screens.len()).then_some(wanted)
     }
 
-    /// Opens windows 2 to `count` on the one device, each with a framebuffer of its own
-    /// at window 1's allocation. Window `k` shows the seats the layout gives it. A window
+    /// Opens the windows after the ones already open, up to `count` in all, on the one
+    /// device, each with a framebuffer of its own at window 1's allocation. Window `k` shows the seats the layout gives it. A window
     /// that cannot open is said and skipped (and leaves the layout, so the windows after it
     /// keep their seats): the run goes on with the windows it has.
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(crate) fn open_screens(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, count: u8) {
         use anyhow::Context;
 
-        use crate::hints;
-
         self.screens_opened = true;
-        let table = strings::project_table(self.settings.language.as_deref());
-        let app = hints::title(&table);
-        let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER").to_string();
         let monitors: Vec<_> = event_loop.available_monitors().collect();
         let size = self.settings.display.window_size;
         let origin = self.gpu.output.window.outer_position().ok();
         let scale = self.gpu.output.window.scale_factor();
         if self.windows_fullscreen
+            && self.window_monitors.is_empty()
             && let Some(monitor) = monitors.first()
         {
             self.gpu
@@ -87,33 +85,22 @@ impl Session {
                     monitor.clone(),
                 ))));
         }
-        for _ in 1..usize::from(count) {
+        for _ in 1 + self.screens.len()..usize::from(count) {
             // The place in the layout: window 1 and the windows already open come before it.
             let window = 1 + self.screens.len();
-            let monitor = self
-                .windows_fullscreen
-                .then(|| monitors.get(window % monitors.len().max(1)).cloned())
-                .flatten();
-            let (first, held) = self.planned_seats(window);
-            let title = format!("{app} - {}", windows::label(&word, first, held));
-            // Beside window 1 where the platform lets a program say so (X11); the
-            // compositor places it otherwise (Wayland), which is why this is a request
-            // and not a layout.
-            let position = origin.map(|origin| {
-                let step = f64::from(size.width) * scale;
-                winit::dpi::PhysicalPosition::new(
-                    origin.x + (step * window as f64) as i32 + 16 * window as i32,
-                    origin.y,
-                )
-            });
+            let (monitor, position) = self.seat_placement(window, &monitors, origin, scale);
+            let title = self.window_title(window);
             let opened = self
                 .gpu
                 .open_output(
                     event_loop,
                     &title,
                     winit::dpi::LogicalSize::new(size.width, size.height),
-                    monitor,
-                    position,
+                    crate::gpu::Placement {
+                        monitor,
+                        fullscreen: self.windows_fullscreen,
+                        position,
+                    },
                     crate::window::seat_present_modes(),
                 )
                 .and_then(|output| {
@@ -151,6 +138,92 @@ impl Session {
         }
     }
 
+    /// Where window `window` (from 1 for the first further window) goes: the monitor it is
+    /// asked to sit on and the position it is asked for.
+    ///
+    /// A layout the picker chose names a monitor per window (`window_monitors`): a name this
+    /// machine no longer has is the first monitor. A windowed window is centred on its
+    /// monitor and stepped aside for each window already there; fullscreen needs no
+    /// position. With no choice (`--windows`) a window sits beside window 1, or on the
+    /// platform's `window`-th monitor when `--windows-fullscreen`. **Chosen, not measured**,
+    /// and a request the compositor may refuse (Wayland places a plain window itself).
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    fn seat_placement(
+        &self,
+        window: usize,
+        monitors: &[winit::monitor::MonitorHandle],
+        origin: Option<winit::dpi::PhysicalPosition<i32>>,
+        scale: f64,
+    ) -> (
+        Option<winit::monitor::MonitorHandle>,
+        Option<winit::dpi::PhysicalPosition<i32>>,
+    ) {
+        let size = self.settings.display.window_size;
+        let names = crate::window::monitor_names(monitors);
+        let chosen = |index: usize| {
+            self.window_monitors.get(index).map(|name| {
+                names
+                    .iter()
+                    .position(|candidate| candidate == name)
+                    .unwrap_or(0)
+            })
+        };
+        if let Some(index) = chosen(window - 1) {
+            let Some(monitor) = monitors.get(index) else {
+                return (None, None);
+            };
+            if self.windows_fullscreen {
+                return (Some(monitor.clone()), None);
+            }
+            // Window 1 is on the monitor the DISPLAY page names, the first one by default.
+            // A window for that same monitor goes beside window 1 as a `--windows` one does,
+            // rather than on top of it; one for another monitor is centred there and stepped
+            // aside for each window already on it.
+            let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
+            if first != index {
+                let aside = (0..window - 1)
+                    .filter(|&other| chosen(other) == Some(index))
+                    .count();
+                let mut at = crate::window::centred_on(monitor, size);
+                at.x += 48 * aside as i32;
+                at.y += 32 * aside as i32;
+                return (Some(monitor.clone()), Some(at));
+            }
+        }
+        let monitor = self
+            .windows_fullscreen
+            .then(|| monitors.get(window % monitors.len().max(1)).cloned())
+            .flatten();
+        // Beside window 1 where the platform lets a program say so (X11); the compositor
+        // places it otherwise (Wayland), which is why this is a request and not a layout.
+        let position = origin.map(|origin| {
+            let step = f64::from(size.width) * scale;
+            winit::dpi::PhysicalPosition::new(
+                origin.x + (step * window as f64) as i32 + 16 * window as i32,
+                origin.y,
+            )
+        });
+        (monitor, position)
+    }
+
+    /// What window `window` (0 is window 1) is called: the game's name and the seats it is
+    /// planned to hold (`PLAYER 5 - 6`).
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    pub(super) fn window_title(&self, window: usize) -> String {
+        let table = strings::project_table(self.settings.language.as_deref());
+        let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
+        let (first, held) = self.planned_seats(window);
+        format!("{} - {}", crate::hints::title(&table), windows::label(word, first, held))
+    }
+
+    /// How many windows a race launched now is laid out across: the windows open, or the ones
+    /// asked for and not yet opened. The event loop opens a window on its next pass
+    /// ([`Self::screens_to_open`]), so a launch in the same frame as the layout screen's START
+    /// (a title with neither Track nor Ship Select) must still count them.
+    pub(crate) fn open_windows(&self) -> usize {
+        (1 + self.screens.len()).max(usize::from(self.windows_wanted))
+    }
+
     /// The seats window `window` (0 is window 1) is planned to hold before a race has dealt
     /// them: the first slot and how many, from the layout the command line asked for (one
     /// person per window when it spelled none). What a holding frame and a window's title say.
@@ -168,7 +241,8 @@ impl Session {
     }
 
     /// Seats everyone the windows are planned for a race launched from the menus, when nobody
-    /// was seated otherwise: the join screen's lobby and a restart's kept seats (both of which
+    /// was seated otherwise: a layout the layout screen chose (that was for its split race), the
+    /// join screen's lobby and a restart's kept seats (both of which
     /// say how many people race) win, and so does a campaign race, which is one person's and
     /// keeps its records. Otherwise the keyboard and the first pad take slot 0 and each
     /// further pad the next slot, as `--players N` seats them, and the grid fields opponents
@@ -177,6 +251,7 @@ impl Session {
         let people = self.planned_people();
         if self.screens.is_empty()
             || people < 2
+            || self.window_layout_chosen
             || self.split_lobby.is_some()
             || self.controls.assignment().humans().is_some()
             || self.campaign_cell.is_some()

@@ -18,3 +18,4 @@ pub mod prompt;
 pub mod pure_chain;
 pub mod tag_entry;
 pub mod track_panel;
+pub mod window_layout;

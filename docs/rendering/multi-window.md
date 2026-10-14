@@ -24,7 +24,7 @@ oag-game --race --windows 2 --windows-fullscreen # each window borderless on a m
 oag-game --race --window-seats 4,2 --screenshot shot.png --ticks 300   # headless: shot-window1.png, shot-window2.png
 ```
 
-**The flags.**
+**The flags.** (The layout screen, below, writes the same layout.)
 
 - `--windows N` (2 to 8): N windows, the people dealt across them as evenly as they divide
   (`split_screen::deal`: 3 over 2 is `2,1`, 6 over 4 is `2,2,1,1`, 2 over 4 is `1,1,0,0` - a window
@@ -122,6 +122,78 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
 - **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
   scenery clocks, advert cards) once per window rather than once, because each window is a whole
   frame. A split shares it between views. Measured below.
+
+## The layout screen
+
+**Chosen, not measured, all of it.** After the join screen's START (two or more people seated, a
+desktop build, a title that offers a split on this adapter), the **WINDOW LAYOUT** screen opens
+before Track and Ship Select; its START goes on to the race box exactly as the join screen's did,
+and its BACK returns to the join screen with everybody still seated. It is `oag_ui_screens::window_layout`
+(model, drawing, pad, keyboard and pointer) over the join screen's rows, on the title's own menu
+skin and font (HD's and Omega's row blocks where the title draws them), driven by
+`session/window_layout.rs`.
+
+| Row | What it does |
+| --- | --- |
+| WINDOWS | 1 to the head count (8 at most). 1 is today's split screen in one window. A new window takes one seat from the fullest window and the next monitor; a window that goes hands its seats to the one before it |
+| WINDOW MODE | WINDOWED or FULLSCREEN: the DISPLAY page's own `display.window_mode`, applied (with window 1's monitor) at START and only when it changed, so the two pages never disagree. Seat windows follow it (`windows_fullscreen`) |
+| WINDOW | Which window the rows below edit (more than one window only); a click on a box in the preview picks it too |
+| SEATS | How many seats that window holds, shown as `PLAYER 1 - 3`. Moving one takes from or gives to the next window; every window keeps one seat, and the seats add up to the people |
+| CUT | HORIZONTAL or VERTICAL, **only for a window of exactly two seats** (the one count a cut means anything for). With one window and two people it is the split screen's own cut |
+| MONITOR | Which monitor that window sits on, from winit's list (`Window::available_monitors`, names as the DISPLAY page spells them). Only when the machine has more than one. Window 1's is the DISPLAY page's `display.monitor` |
+
+The preview is a box per window (16:9), its seats cut up by `oag_render::viewport::layout`
+(`split_screen::seat_cells`, so it is the picture a window draws), numbered by seat, the edited window
+lit, with the window's monitor under it. **Input**: up and down move the cursor, left and right change
+the value under it, confirm steps it on (and acts on START and BACK), START goes on, circle or Escape
+goes back; the pointer hovers rows, a click steps a value or acts, the wheel over a row changes it, a
+click on a preview box picks that window, the secondary button goes back (a touch tap is a click).
+
+**What START writes is what `--window-seats` writes**: `Session::window_layout` (one `WindowSeats` per
+window, `split_screen::layout_of`), `windows_wanted` so the event loop opens the windows on its next pass
+(`Session::screens_to_open`, which now also tops up windows already open; windows past the chosen count
+are dropped with no seat handed to anyone, they only had holding frames), `window_monitors` (each further
+window's monitor, by name) and window 1's cut. One window clears the layout, so the race is the split it
+always was. A window for the monitor window 1 is on goes beside window 1 (a request: X11 honours it,
+Wayland places it); a window for another monitor is centred on it, stepped aside for each window already
+there; `--windows-fullscreen` or WINDOW MODE FULLSCREEN puts it borderless on its monitor.
+
+**A chosen layout is for its split race only.** `Session::window_layout_chosen` keeps the menu race
+seating (`seat_the_windows`, which seats everyone a `--windows` layout plans for) from reading it: a later
+one-person race from RACEBOX stays one person in window 1, and the windows still open show their holding
+frames. A restart from the end screens keeps the seats and so the layout. A race parked behind the pause
+menu keeps its seats (existing behaviour, `unseat_after_split_race`), so a race started from that menu is
+still the split; walked on Pulse. Choosing fewer windows while a race is parked closes the dropped windows
+through `close_screen` (their seats go to the AI and they leave the parked race's layout); with no parked
+race they only had holding frames and are dropped as they are. A launch in the same frame as START (a
+title with neither Track nor Ship Select) counts the windows asked for, not only those already open
+(`Session::open_windows`).
+
+**Remembered with no save slot**, as the RACE page's choices are: `[race] window_seats` (the
+`--window-seats` spelling, `"3,1"`, `"4,2v"`, empty for one window) and `window_monitors` (names) in
+`settings.toml`. The screen starts from the layout this run already has (`--windows`), else the remembered
+one, else one window; it is **re-validated each time it opens**: another head count is dealt anew over the
+same windows keeping each cut and monitor (`Picker::new`), more windows than people is cut down, and a
+monitor that is gone is monitor 1. The command line still wins for its own run.
+
+**Where it is not offered.** The browser, Android and iOS get the one surface the platform makes (the
+opener is compiled out), so the screen is **skipped** there and the join screen's START goes straight on.
+On an integrated GPU the HD, 2048 and Omega splits are not offered at all
+(`Title::split_on_integrated_gpu`), so neither the join screen nor this one is reachable; Pulse and Pure,
+which the rule exempts, get the screen with every window count.
+
+`--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]` draws it as a still (4 people, 1
+window, 1 monitor, the first window by default); the monitors are made up (`MONITOR n`), the rest is the
+live screen's. **Looked at**: Pulse EU, Pure EU, HD EU, Omega EU and 2048 (Vita) stills at 1440x816 with
+2 to 8 windows and 1 to 2 monitors; and live under Xvfb with software Vulkan, one keyboard and three
+virtual pads (`scripts/uinput-pads.py`, `OAG_PADS=3`): four people joined, WINDOWS 2 seated them 3 and 1
+(window 1 one seat over two, window 2 whole), START opened window 2 (`PLAYER 4`) while Track and Ship
+Select ran, the race logged `multi-window: 2 window(s) holding 3, 1` and each window drew its own
+craft; a second run laid 2 and 2 with a vertical cut chosen by mouse clicks (window 1 stacked, window 2 side
+by side); a fresh process re-opened on the remembered 3 and 1; `--windows 2` then WINDOWS 1 closed window 2
+and wrote an empty `window_seats`. **Not exercised**: more than one real monitor (Xvfb's RandR keeps one,
+`xrandr --setmonitor` is not kept), FULLSCREEN, and a monitor that has gone since the layout was saved
+(the clamp is a unit test); Wayland placement.
 
 ## Windows
 
@@ -252,11 +324,14 @@ Omega capture (below) ran.
   (`run_omega` per window): *checked, applies, works*. **2048**: same code path, no 2048 capture was
   taken here: *checked, applies, not captured*.
 
+- **The layout screen** is title-blind (the title's skin, font and row blocks only): *checked, applies*
+  on Pulse, Pure, HD, Omega and 2048, each looked at as a still. Omega's light page inks its text black,
+  so the preview's unselected seat numbers are drawn white there (`window_layout::legible`); 2048's
+  placeholder menu leaves no room under the title, so the hint goes under the rows as the join screen's
+  does. Only the live walk above ran on Pulse; the others share the code and were not walked.
+
 ## Open
 
-- **The layout picker**: a menu to choose the windows and the seats per window, per screen, and a
-  per-window cut chosen there. This cut has the two flags only (`--windows`, `--window-seats`); the
-  model (`Race::windows`, `WindowSeats`) is what a picker would write.
 - **The authored two-player HUD when the layout mixes counts**: the load packs the title's authored
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
@@ -264,7 +339,7 @@ Omega capture (below) ran.
 - **A keyboard per window**: the keyboard seat follows the focused window, so two people can share one
   machine with a keyboard each (or a keyboard and a pad). Today the keyboard is slot 0's.
 - **The pause overlay on every window**, and the end screens on a seat's own window.
-- **`--window-monitor`** (a monitor per window by name) and remembering the windows' places.
+- **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera
   (a `MotionState` and a temporal record per window) and a timer per window.
 - **Camera-independent work once per frame** across windows, as `render_viewports` does for a split.

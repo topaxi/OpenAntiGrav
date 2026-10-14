@@ -92,6 +92,16 @@ pub struct Race {
     /// default (`RB_HORIZ`).
     #[serde(default)]
     pub split_cut: String,
+    /// The windows the layout screen last chose, spelled as `--window-seats` spells them
+    /// (`"3,1"`, `"4,2v"`), or empty for one window, which is a split screen in the one.
+    /// What the screen starts from next time; another head count is dealt anew from it
+    /// ([`oag_ui_screens::window_layout::Picker::new`]). **Chosen, not measured.**
+    #[serde(default)]
+    pub window_seats: String,
+    /// The monitor of each further window of [`Self::window_seats`], by the name the platform
+    /// gives it, window 2 first. A name this machine no longer has is its first monitor.
+    #[serde(default)]
+    pub window_monitors: Vec<String>,
 }
 
 /// Time trial: the mode the RACE page opens on, and the one the reference
@@ -125,6 +135,8 @@ impl Default for Race {
             weapons: String::new(),
             players: String::new(),
             split_cut: String::new(),
+            window_seats: String::new(),
+            window_monitors: Vec::new(),
         }
     }
 }

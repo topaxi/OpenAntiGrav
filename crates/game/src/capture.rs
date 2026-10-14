@@ -23,6 +23,7 @@ mod presented;
 mod preview_pass;
 mod pure_chain_page;
 mod video;
+mod window_layout_page;
 use campaign_page::{campaign_kind, campaign_page};
 use endrace_page::endrace_kind;
 pub use loading::{LoadingOptions, draw_wave, loading};
@@ -805,6 +806,20 @@ pub fn run(
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) =
                     join_page::capture(seated, &strings, frame, &skin, &menu_frame, footer);
+                ticker_clip = clip;
+                (backdrop, video_format, list, space)
+            } else if let Some(request) = window_layout_page::request(page) {
+                // The window layout screen, after the join screen - see
+                // `crate::main::session::window_layout` for the live flow.
+                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let (list, clip) = window_layout_page::capture(
+                    &request,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    footer,
+                );
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some(answers) = pure_chain_page::answers(page) {

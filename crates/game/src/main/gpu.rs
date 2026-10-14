@@ -101,6 +101,15 @@ pub(crate) struct BroughtUp {
     temporal: bool,
 }
 
+/// Where a further window is asked to open: the monitor, whether it covers all of it
+/// (borderless) or is a window on it, and the position a windowed one is asked for.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub(crate) struct Placement {
+    pub(crate) monitor: Option<winit::monitor::MonitorHandle>,
+    pub(crate) fullscreen: bool,
+    pub(crate) position: Option<winit::dpi::PhysicalPosition<i32>>,
+}
+
 impl Gpu {
     /// Everything downstream of picking an adapter, so it can be *re*-run.
     ///
@@ -368,17 +377,23 @@ impl Gpu {
     ///
     /// `modes` is the chain [`Output::apply_modes`] walks, the first one the surface
     /// offers. A seat window asks for a mode that does not block
-    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop.
+    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop. `monitor` is
+    /// where the window goes (borderless over all of it when `fullscreen`, else a window on
+    /// it, unless `position` says where).
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(crate) fn open_output(
         &self,
         event_loop: &ActiveEventLoop,
         title: &str,
         size: winit::dpi::LogicalSize<u32>,
-        monitor: Option<winit::monitor::MonitorHandle>,
-        position: Option<winit::dpi::PhysicalPosition<i32>>,
+        placement: Placement,
         modes: &[wgpu::PresentMode],
     ) -> Result<Output> {
+        let Placement {
+            monitor,
+            fullscreen,
+            position,
+        } = placement;
         let mut attributes = Window::default_attributes()
             .with_title(title)
             .with_inner_size(size)
@@ -386,6 +401,7 @@ impl Gpu {
             .with_fullscreen(
                 monitor
                     .clone()
+                    .filter(|_| fullscreen)
                     .map(|monitor| winit::window::Fullscreen::Borderless(Some(monitor))),
             );
         #[cfg(target_os = "linux")]

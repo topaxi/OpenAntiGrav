@@ -68,6 +68,8 @@ mod pilot_editor;
 mod custom_tracks;
 #[path = "session/join.rs"]
 mod join;
+#[path = "session/window_layout.rs"]
+mod window_layout;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]
@@ -624,6 +626,19 @@ pub(crate) struct Session {
         allow(dead_code)
     )]
     pub(crate) windows_fullscreen: bool,
+    /// Whether [`Self::window_layout`] is the layout screen's choice for the split race it started
+    /// (rather than `--windows`/`--window-seats`, which seat everyone a menu race fields): a
+    /// later one-person race from the menus stays one person in window 1
+    /// ([`Session::seat_the_windows`]), whatever windows are still open.
+    pub(crate) window_layout_chosen: bool,
+    /// The monitor each further window was chosen to sit on, by name, window 2 first: the
+    /// layout screen's choice (`Session::apply_window_layout`). Empty for a `--windows` run,
+    /// whose windows sit beside window 1.
+    #[cfg_attr(
+        any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
+        allow(dead_code)
+    )]
+    pub(crate) window_monitors: Vec<String>,
     /// Which of the run's windows have focus. Used only while there are seats: with one
     /// window a lost focus is acted on at once, as it always was.
     pub(crate) focus: crate::windows::Focus,

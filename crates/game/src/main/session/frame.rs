@@ -538,6 +538,14 @@ impl Session {
                         self.tick_pure_chain(&grid);
                         continue;
                     }
+                    // The window layout screen, after the join screen: same shape.
+                    if stage.layout.is_some() {
+                        self.tick_window_layout(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
                     // The split-screen join screen, same shape. Starting it hands
                     // the window to the race box's screens, and possibly a load.
                     if stage.join.is_some() {

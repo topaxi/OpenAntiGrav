@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Two virtual Xbox-360-shaped gamepads on uinput, driven by commands on stdin.
+"""Virtual Xbox-360-shaped gamepads on uinput (two, or `OAG_PADS=N` up to eight), driven by commands on stdin.
 
 For walking the split-screen front end (join screen, Track and Ship Select, a race)
 with two real pad devices and no hardware. gilrs sees them like any pad, so
@@ -10,7 +10,7 @@ with two real pad devices and no hardware. gilrs sees them like any pad, so
         uv run --with evdev python3 scripts/uinput-pads.py < cmd &
     echo 'a press cross' > cmd                # then drive it from the shell
 
-Commands, one per line: `a|b press BUTTON`, `a|b hold BUTTON SECONDS`, `sleep SECONDS`,
+Commands, one per line: `a|b|c|... press BUTTON`, `a|b|c|... hold BUTTON SECONDS`, `sleep SECONDS`,
 `shot PATH` (an ImageMagick `import` of the Xvfb root named by `$DISPLAY`) and `quit`.
 BUTTON is one of cross circle square triangle start select up down left right.
 
@@ -60,9 +60,10 @@ def make(name):
 
 
 def main():
+    count = min(8, max(1, int(os.environ.get("OAG_PADS", "2"))))
     pads = {
-        "a": make("OAG test pad A (Microsoft X-Box 360 pad)"),
-        "b": make("OAG test pad B (Microsoft X-Box 360 pad)"),
+        letter: make(f"OAG test pad {letter.upper()} (Microsoft X-Box 360 pad)")
+        for letter in "abcdefgh"[:count]
     }
     time.sleep(1.5)
     for line in sys.stdin:

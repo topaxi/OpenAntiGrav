@@ -554,6 +554,8 @@ impl App {
             windows_wanted,
             window_layout: self.window_layout.clone(),
             windows_fullscreen: self.windows_fullscreen,
+            window_monitors: Vec::new(),
+            window_layout_chosen: false,
             focus: crate::windows::Focus::default(),
             split_race_box: false,
             split_picks: Vec::new(),
