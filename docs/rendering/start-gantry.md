@@ -1723,7 +1723,7 @@ render geometry" - correct, and the reason is the same one
 gives above: `321Go_StartFinish.vex`'s own `Mesh` payloads are a bounding box
 and a hash, and the real vertices are in `321go_startfinish.rcsmodel` beside
 it. `load` now detects an external PS3 `.vex`
-(`oag_mesh::mesh::geometry_is_external`) and builds through
+(`oag_vex::vex::geometry_is_external`) and builds through
 `oag_mesh::mesh::rcs::build` with that sibling - the same function a craft's
 own livery loads through, not `build_scene`: the gantry has no world-baked
 second pass of its own to justify `build_scene`'s extra skip, the identical

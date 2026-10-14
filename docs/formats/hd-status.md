@@ -719,7 +719,7 @@ A race on this disc fielded eight identical craft in the player's livery. Both
 causes produce that picture and neither raised an error:
 
 1. **`race::load` and `boot::definitions` asked for Pulse's path.** The read
-   missed, the roster came back empty, and `livery::teams_for_slots` gave every
+   missed, the roster came back empty, and `oag_race::roster::teams_for_slots` gave every
    slot the player's team - which is exactly what a working grid looks like on a
    source that genuinely declares one team.
 2. **With the path fixed, `race::load` still called `fexml::expand`.** That

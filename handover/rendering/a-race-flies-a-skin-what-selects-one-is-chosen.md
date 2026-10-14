@@ -35,7 +35,7 @@ should look like and not what garbage looks like.
 
 - **What selects a skin is this project's choice, and is labelled so with no
   confidence score.** The player names it and it lands on slot 0 alone - the
-  same footing [`livery::teams_for_slots`](../../crates/livery/src/lib.rs)
+  same footing [`oag_race::roster::teams_for_slots`](../../crates/race/src/roster.rs)
   stands on. **No unlock is checked either**, because what `loyalty`
   accumulates is untraced.
 

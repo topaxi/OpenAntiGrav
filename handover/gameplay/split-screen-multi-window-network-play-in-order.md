@@ -1384,9 +1384,9 @@ a guess.
 - **Server in the nightly release, and real certificates** (planned 2026-10-14, not started; deferred
   when the drive wound down). One lane, after the lean server split lands:
   1. A portable `oag-server` asset in the nightly release (`.github/workflows/release.yml`, which
-     `nightly.yml` calls): a static musl build if the lean split dropped `alsa-sys`, else
-     `scripts/build-server-portable.sh` (zig, glibc 2.35). Verify with local builds and `act`, never
-     a push.
+     `nightly.yml` calls): `scripts/build-server-portable.sh musl` (static, needs the musl Rust
+     target and `zig` on the runner; the lean split dropped `alsa-sys`, 2026-10-14). Verify with
+     local builds and `act`, never a push.
   2. `oag-server --cert <pem> --key <pem>` for a publicly trusted certificate (Let's Encrypt), read
      once at start: one race per process (`docs/networking/README.md`, "Hosting model") lives
      minutes, so no reload; a future reset-and-wait loop re-reads at each reset.
@@ -1523,40 +1523,17 @@ and give a winner. A split's place is ranked over the craft in the race.
 server's. Numbers and the steps are in `docs/networking/README.md`, "Running a server
 on another machine"; `scripts/build-server-portable.sh` builds a binary for an older
 glibc and `crates/net/tests/server_libs.rs` pins that the server needs libc and libm
-only. A musl static build fails on `alsa-sys` (no cross `pkg-config`).
+only. ~~A musl static build fails on `alsa-sys` (no cross `pkg-config`).~~
 
-**Open: a server that does not link the render side at all.** Deferred by the lead
-(the lap/hit path in `oag-raceplay` was being edited). Today the server links wgpu,
-winit, cpal, `oag-render`, `oag-fx` and `oag-audio` through `oag-raceplay` and relies
-on the linker dropping them. Surveyed, not coded (2026-10-14):
-- `oag-raceplay` is 71,000 lines; `Race::tick` writes `self.view` 570 times in 52
-  files, interleaved with the simulation (`reconcile.rs` says a second tick body
-  would be a 700-line copy). `Setup` is not a clean sim half: it carries
-  `oag_render::shield::Palette`, models' anchors, `oag_sound` banks and announcers,
-  and `load()` (800 lines) builds meshes and the HUD in the same pass as the
-  handling and the collision soup.
-- The plan sized: a default-on `view` feature on `oag-raceplay` that makes
-  `oag-fx`, `oag-gpu`, `oag-hud`, `oag-input`, `oag-mesh`, `oag-post`, `oag-present`,
-  `oag-render`, `oag-sound`, `oag-ui`, `oag-ui-screens`, `oag-livery`, `wgpu` and
-  `winit` optional (`oag-net` takes `default-features = false`); view-only modules
-  gated at the `mod` line in `lib.rs` (about 45 of them: `effects`, `camera`,
-  `scene`, `weapons::visuals`, ...); `Setup`'s view fields and `Loaded` gated; a
-  sim-only `load` path whose `Setup` is bit-identical to the full one (hull-derived
-  numbers that reach spawn height or inertia must be checked); `cfg` at the mixed
-  statements in `tick.rs`, `absorb.rs`, `access.rs`, `weapons/`.
-- Three types the simulation uses live in render-side crates and must move or be
-  split first: `oag_sound::sfx::{Cue, CueEvent}` (`RaceSim::cues`; the module also
-  imports `oag_audio`), `oag_render::camera::chase::{ChaseParams, anchor,
-  look_at_point}` (`RaceSim::lock_rig`, the lock-on projection in `lock.rs`;
-  pure `oag_core` maths) and `oag_fx::beam::TubeFrame` (`Spline::tube_frame`, a view
-  method). Cheapest for the first two: a feature on `oag-audio` (cpal optional) and
-  on `oag-render` (wgpu modules optional), which moves nothing, at the price of
-  `oag-render` and `oag-audio` staying in the tree in lean form.
-- Proof: the lean `oag-server` against a full `oag-game --connect --net-bot` client,
-  900 ticks at the 100 ms shim, 0 bad hashes (in-process `oag-net` tests share one
-  feature set and cannot catch a divergent lean load); `just check-deps` or
-  `scripts/check-dependency-rules.py` running `cargo tree -p oag-net -e normal` and
-  failing on any of wgpu, winit, cpal (feature unification hides the lean build from
-  `--workspace` runs, so the guard must name the package); the racing ground truth
-  `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
-  quoted before and after. Its own lane, after `perfect-lap-bug` lands.
+~~**Open: a server that does not link the render side at all.**~~ **Landed
+2026-10-14 (`server-lean`).** `oag-raceplay` has a default-on `view` feature;
+`oag-server` builds without it and links no renderer, window, audio or UI crate
+(rule 6 of `just check-deps`, a lean `cargo clippy -p oag-net` in `just lint`),
+and `scripts/build-server-portable.sh musl` links it fully static. What moved, what
+was gated, the proofs (lean server against the full game: 0 bad hashes at the
+100 ms shim, a whole race with the board equal, fingerprints equal on three
+titles, a 12-capture screenshot set byte-identical) and the before/after sizes
+and build times are in `docs/architecture/workspace-layout.md`, "The lean race".
+Left open: the lean configuration is compiled by `just lint` only, so a view use
+added without a `cfg` fails there rather than in `cargo build`; and the `client`
+feature makes `oag-net`'s own tests link the view (they exercise the client).
