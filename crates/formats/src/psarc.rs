@@ -537,7 +537,6 @@ fn inflate_block_into(
 }
 
 /// Splits the manifest's text into paths.
-/// Splits the manifest's text into paths.
 ///
 /// The delimiter is read off the manifest's own bytes, not the header's
 /// version: `omega-ps4-eu`'s five 1.4 archives are NUL-delimited, but Vita
