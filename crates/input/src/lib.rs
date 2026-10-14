@@ -71,6 +71,12 @@ impl Keyboard {
         let Some(button) = self.bindings.resolve(key) else {
             return;
         };
+        self.press(button, pressed);
+    }
+
+    /// [`Self::set_key`] for a key already resolved to its button: what a seat other than
+    /// the first receives, resolved through the first keyboard's live table.
+    pub fn press(&mut self, button: Button, pressed: bool) {
         let bit = button.bit();
         if pressed {
             if self.let_go & bit != 0 {
@@ -265,6 +271,25 @@ pub struct Controls {
     presses: Vec<lobby::Press>,
     /// The keyboard's bits as of the last tick, to find the ones that went down.
     last_keys: u32,
+    /// The keyboard seats after the first ([`pad::Assignment::keyboard_seats`]): the keys each
+    /// one holds, by slot. Resolved through [`Self::keyboard`]'s table, which a rebind changes.
+    more_keys: Vec<SeatKeys>,
+    /// Physical keyboards the platform has told apart, in the order they were first heard.
+    /// See [`Self::keyboard_id`].
+    devices: Vec<winit::event::DeviceId>,
+    /// Keyboards that have pressed a bound key since the last seating, in a race dealt across
+    /// windows. See [`Self::device_key`].
+    speakers: Vec<(pad::KeyboardId, Vec<usize>)>,
+    /// Whether race keys now come per physical keyboard rather than per window. See
+    /// [`Self::per_device_keys`].
+    per_device: bool,
+}
+
+/// What a keyboard seat after the first holds.
+#[derive(Debug, Clone, Default)]
+struct SeatKeys {
+    slot: usize,
+    keys: Keyboard,
 }
 
 impl Controls {
@@ -292,6 +317,10 @@ impl Controls {
             touch: Reading::default(),
             presses: Vec::new(),
             last_keys: 0,
+            more_keys: Vec::new(),
+            devices: Vec::new(),
+            speakers: Vec::new(),
+            per_device: false,
         }
     }
 
@@ -341,6 +370,7 @@ impl Controls {
     /// join screen (`--players N`). See [`pad::Assignment::seated`].
     pub fn seat_default(&mut self, humans: usize) {
         *self.pad.assignment_mut() = pad::Assignment::seated(humans);
+        self.forget_keyboards();
     }
 
     /// Back to every device on slot 0, which is what the menus need: one cursor,
@@ -348,32 +378,158 @@ impl Controls {
     /// front end.
     pub fn merge_devices(&mut self) {
         *self.pad.assignment_mut() = pad::Assignment::default();
+        self.forget_keyboards();
     }
 
-    /// Moves the keyboard onto `slot` and lets go of every key, in one call: what a
-    /// multi-window race does when the focus moves to another window. The release is
-    /// part of the move so a key held in the window the focus left cannot read as held
-    /// (or as a fresh press) on the seat it arrives at. Nothing happens when the
-    /// keyboard is on `slot` already.
-    pub fn keyboard_to(&mut self, slot: usize) {
-        if slot == self.keyboard_slot() || slot >= oag_gameplay::MAX_PLAYERS {
-            return;
-        }
-        self.pad.assignment_mut().assign_keyboard(slot);
-        self.let_go();
+    /// Forgets which physical keyboards have spoken and every seat after the first: a new
+    /// seating starts the claims over.
+    fn forget_keyboards(&mut self) {
+        self.more_keys.clear();
+        self.speakers.clear();
+        self.per_device = false;
+    }
+
+    /// Every keyboard, the first included.
+    fn each_keyboard(&mut self) -> impl Iterator<Item = &mut Keyboard> {
+        std::iter::once(&mut self.keyboard).chain(self.more_keys.iter_mut().map(|seat| &mut seat.keys))
     }
 
     /// Lets go of every key the way a move to another seat does ([`Keyboard::let_go`]): what
-    /// is held stays released until it is pressed again. What a window losing the focus does
-    /// in a race dealt across windows.
+    /// is held stays released until it is pressed again. What the whole run losing the focus
+    /// does in a race dealt across windows.
     pub fn let_go(&mut self) {
-        self.keyboard.let_go();
+        self.each_keyboard().for_each(Keyboard::let_go);
         self.release_all();
+    }
+
+    /// [`Self::let_go`] for the keyboard seats in `window` (the seats of the window that lost
+    /// the focus) that take the window's keys. A keyboard bound to its physical device keeps
+    /// its keys: the raw events it listens to do not follow a window's focus.
+    pub fn let_go_window(&mut self, window: &[usize]) {
+        let shared: Vec<usize> = self
+            .pad
+            .assignment()
+            .keyboard_seats()
+            .into_iter()
+            .filter(|(binding, slot)| *binding == pad::Binding::Shared && window.contains(slot))
+            .map(|(_, slot)| slot)
+            .collect();
+        for slot in shared {
+            self.keyboard_at(slot).let_go();
+        }
+    }
+
+    /// [`Self::let_go`] for the keyboard seats after the first only: what the race parked behind
+    /// window 1's menu does, where the first keyboard is the menu's and the others' keys
+    /// (which the menu does not read) would otherwise come back held when the race resumes.
+    pub fn let_go_extra_seats(&mut self) {
+        self.more_keys.iter_mut().for_each(|seat| seat.keys.let_go());
     }
 
     /// See [`Keyboard::forget_let_go`].
     pub fn forget_let_go(&mut self) {
-        self.keyboard.forget_let_go();
+        self.each_keyboard().for_each(Keyboard::forget_let_go);
+    }
+
+    /// The keyboard that flies `slot`: the first, or a later seat's, made on first use.
+    fn keyboard_at(&mut self, slot: usize) -> &mut Keyboard {
+        if slot == self.keyboard_slot() {
+            return &mut self.keyboard;
+        }
+        let at = match self.more_keys.iter().position(|seat| seat.slot == slot) {
+            Some(at) => at,
+            None => {
+                self.more_keys.push(SeatKeys {
+                    slot,
+                    ..SeatKeys::default()
+                });
+                self.more_keys.len() - 1
+            }
+        };
+        &mut self.more_keys[at].keys
+    }
+
+    /// The id for a physical keyboard the platform reported, numbered in the order they are first
+    /// heard from.
+    pub fn keyboard_id(&mut self, device: winit::event::DeviceId) -> pad::KeyboardId {
+        let at = self.devices.iter().position(|seen| *seen == device).unwrap_or_else(|| {
+            self.devices.push(device);
+            self.devices.len() - 1
+        });
+        pad::KeyboardId(u32::try_from(at).unwrap_or(u32::MAX))
+    }
+
+    /// A key going down or coming up on a window whose seats are `window`, in a race dealt
+    /// across windows: it goes to that window's keyboard seat, a press that finds none claims
+    /// the window's free seat, and in a window that holds no keyboard seat and has none to
+    /// claim it is dropped. See [`pad::Assignment::route_key`].
+    pub fn window_key(&mut self, window: &[usize], key: &Key, pressed: bool) {
+        self.route(None, window, &[], key, pressed);
+    }
+
+    /// A key going down or coming up on physical keyboard `device`, in a race dealt across
+    /// windows, with `window` the seats of the window in focus (a raw key event names no
+    /// window) and `race` every seat of the race. **Inert until a second keyboard has pressed a bound key**: with one keyboard
+    /// the window's own events carry the keys ([`Self::window_key`]) and a single keyboard
+    /// may move between windows. From then on ([`Self::per_device_keys`]) each keyboard is
+    /// bound to the seat it first pressed in and keeps it whichever window has the focus.
+    pub fn device_key(
+        &mut self,
+        device: pad::KeyboardId,
+        window: &[usize],
+        race: &[usize],
+        key: &Key,
+        pressed: bool,
+    ) {
+        if pressed && !self.per_device && self.keyboard.bindings().resolve(key).is_some() {
+            match self.speakers.iter_mut().find(|(id, _)| *id == device) {
+                Some((_, last)) => *last = window.to_vec(),
+                None => self.speakers.push((device, window.to_vec())),
+            }
+            if self.speakers.len() >= 2 {
+                // The keyboards that spoke before keep the seats the window events gave them: each
+                // is bound where it last pressed, ahead of the one that just spoke.
+                self.per_device = true;
+                self.let_go();
+                let earlier: Vec<_> = self.speakers.clone();
+                for (id, last) in earlier.into_iter().filter(|(id, _)| *id != device) {
+                    self.pad.assignment_mut().route_key(Some(id), &last, race, true);
+                }
+            }
+        }
+        if self.per_device {
+            self.route(Some(device), window, race, key, pressed);
+        }
+    }
+
+    /// Whether race keys come from [`Self::device_key`] now: the window's own key events are
+    /// then the same presses twice, and a windowed race drops them.
+    #[must_use]
+    pub fn per_device_keys(&self) -> bool {
+        self.per_device
+    }
+
+    fn route(
+        &mut self,
+        device: Option<pad::KeyboardId>,
+        window: &[usize],
+        race: &[usize],
+        key: &Key,
+        pressed: bool,
+    ) {
+        let Some(button) = self.keyboard.bindings().resolve(key) else {
+            return;
+        };
+        if pressed {
+            self.prompt.note_key();
+        }
+        if let Some(slot) = self
+            .pad
+            .assignment_mut()
+            .route_key(device, window, race, pressed)
+        {
+            self.keyboard_at(slot).press(button, pressed);
+        }
     }
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
@@ -409,7 +565,7 @@ impl Controls {
     /// The pad is deliberately not released: it is read fresh every tick, and a
     /// pad keeps reporting its own state whether or not the window has focus.
     pub fn release_all(&mut self) {
-        self.keyboard.release_all();
+        self.each_keyboard().for_each(Keyboard::release_all);
         self.android.release_all();
         self.touch = Reading::default();
     }
@@ -577,12 +733,20 @@ impl Controls {
             pads[keyboard_slot] = pad::merge_states(pads[keyboard_slot], touch);
         }
 
+        // A seat after the first that the assignment no longer has (a window closed, a new
+        // seating) is gone with its keys.
+        let seats = self.pad.assignment().keyboard_seats();
+        self.more_keys
+            .retain(|seat| seats.iter().any(|(_, slot)| *slot == seat.slot));
         let mut inputs = oag_gameplay::PlayerInputs::none();
         for (slot, pad) in pads.into_iter().enumerate() {
             let keys = if slot == keyboard_slot {
                 keyboard_keys
             } else {
-                0
+                self.more_keys
+                    .iter_mut()
+                    .find(|seat| seat.slot == slot)
+                    .map_or(0, |seat| seat.keys.held_mask() | seat.keys.take_taps())
             };
             inputs.set(slot, self.merge(slot, keys, pad));
         }

@@ -292,7 +292,10 @@ impl Session {
             // the one slot the keyboard drives; it has one menu and one cursor
             // however many people are racing.
             self.feed_touch();
-            self.sync_keyboard_seat();
+            self.sync_keyboard_reach();
+            if self.windowed_race() && !self.keys_by_window() {
+                self.controls.let_go_extra_seats();
+            }
             let inputs = self.controls.player_snapshots();
             self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());

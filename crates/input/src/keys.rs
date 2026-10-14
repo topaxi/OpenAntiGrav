@@ -22,7 +22,7 @@
 //! `Vec<&'static str>` in [`bound_keys`]'s signature true, rather than a
 //! `String` a rebind would have to allocate.
 
-use winit::keyboard::{Key, NamedKey};
+use winit::keyboard::{Key, KeyCode, NamedKey, PhysicalKey};
 
 use oag_gameplay::input::Button;
 
@@ -71,6 +71,42 @@ pub(crate) fn key_matches(candidate: &Key, key: &Key) -> bool {
     match (candidate, key) {
         (Key::Character(a), Key::Character(b)) => a.eq_ignore_ascii_case(b.as_str()),
         _ => candidate == key,
+    }
+}
+
+/// The key a physical key stands for, by its place on a QWERTY board: what a raw key event
+/// (`DeviceEvent::Key`, which names no layout) is read as. `None` for a key no candidate
+/// uses. **A limit, chosen**: a layout whose letters sit elsewhere (AZERTY puts `Z` where
+/// QWERTY has `W`) reads by position here and by letter on a window's key event, and a
+/// rebind to a key whose letter moved follows the letter only on the window path. `Y` and
+/// `Z` are both bound to the same button, so QWERTZ agrees either way.
+#[must_use]
+pub fn key_at(physical: PhysicalKey) -> Option<Key> {
+    let PhysicalKey::Code(code) = physical else {
+        return None;
+    };
+    let letter = |c: &str| Some(Key::Character(c.into()));
+    match code {
+        KeyCode::ArrowUp => Some(Key::Named(NamedKey::ArrowUp)),
+        KeyCode::ArrowDown => Some(Key::Named(NamedKey::ArrowDown)),
+        KeyCode::ArrowLeft => Some(Key::Named(NamedKey::ArrowLeft)),
+        KeyCode::ArrowRight => Some(Key::Named(NamedKey::ArrowRight)),
+        KeyCode::Enter | KeyCode::NumpadEnter => Some(Key::Named(NamedKey::Enter)),
+        KeyCode::Backspace => Some(Key::Named(NamedKey::Backspace)),
+        KeyCode::Space => Some(Key::Named(NamedKey::Space)),
+        KeyCode::Tab => Some(Key::Named(NamedKey::Tab)),
+        KeyCode::KeyW => letter("w"),
+        KeyCode::KeyA => letter("a"),
+        KeyCode::KeyS => letter("s"),
+        KeyCode::KeyD => letter("d"),
+        KeyCode::KeyX => letter("x"),
+        KeyCode::KeyZ => letter("z"),
+        KeyCode::KeyY => letter("y"),
+        KeyCode::KeyC => letter("c"),
+        KeyCode::KeyV => letter("v"),
+        KeyCode::KeyQ => letter("q"),
+        KeyCode::KeyE => letter("e"),
+        _ => None,
     }
 }
 
@@ -148,6 +184,43 @@ mod tests {
     /// `candidates` would leave the Controls page quietly wrong; this catches
     /// the case where a whole button ends up with nothing to show, which is the
     /// version of that mistake a player would notice.
+    /// A raw key event names a physical key, so every candidate must be reachable from one or a
+    /// per-keyboard seat could not press it.
+    #[test]
+    fn every_candidate_is_reachable_from_a_physical_key() {
+        let codes = [
+            KeyCode::ArrowUp,
+            KeyCode::ArrowDown,
+            KeyCode::ArrowLeft,
+            KeyCode::ArrowRight,
+            KeyCode::Enter,
+            KeyCode::Backspace,
+            KeyCode::Space,
+            KeyCode::Tab,
+            KeyCode::KeyW,
+            KeyCode::KeyA,
+            KeyCode::KeyS,
+            KeyCode::KeyD,
+            KeyCode::KeyX,
+            KeyCode::KeyZ,
+            KeyCode::KeyY,
+            KeyCode::KeyC,
+            KeyCode::KeyV,
+            KeyCode::KeyQ,
+            KeyCode::KeyE,
+        ];
+        let mut reached: Vec<&str> = codes
+            .iter()
+            .filter_map(|code| key_at(PhysicalKey::Code(*code)))
+            .filter_map(|key| name_for(&key))
+            .collect();
+        let mut all: Vec<&str> = candidates().iter().map(|(name, _)| *name).collect();
+        reached.sort_unstable();
+        all.sort_unstable();
+        assert_eq!(reached, all);
+        assert_eq!(key_at(PhysicalKey::Code(KeyCode::F1)), None);
+    }
+
     #[test]
     fn every_mapped_button_has_a_key_to_show_for_it() {
         let mut mapped: Vec<Button> = candidates()

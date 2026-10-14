@@ -352,51 +352,101 @@ impl Session {
         )
     }
 
-    /// Puts the keyboard on the seat of the window that has the focus: **a keyboard per
-    /// window, chosen, not measured.** Only in a race that is dealt across windows (a single
-    /// window, the front end and a race of one window are untouched). The keyboard drives the
-    /// first seat of the focused window ([`windows::keyboard_seat`]; it stays where it is when
-    /// that seat is in the window already), every window's first seat counts as driven
-    /// meanwhile (`Assignment::set_keyboard_reach`) so the others are not handed to the AI,
-    /// and a held key is let go as the keyboard moves (`Controls::keyboard_to`). Idempotent:
-    /// run on a focus gain and once a frame, for a race that starts or a window that closes
-    /// under a window that already has the focus.
-    pub(crate) fn sync_keyboard_seat(&mut self) {
+    /// Every window's seats, window 1 first, for a race dealt across windows (on screen or
+    /// parked behind the pause menu), or none.
+    fn window_seats(&self) -> Vec<Vec<usize>> {
         let race = match &self.stage {
             Stage::Race(stage) => Some(&stage.race),
             Stage::Menu(_) => self.suspended_race.as_ref().map(|stage| &stage.race),
             _ => None,
         };
-        let seats: Vec<Vec<usize>> = match race {
+        match race {
             Some(race) if self.screens_opened && race.windowed() => race
                 .windows()
                 .iter()
                 .map(|window| window.seats.clone())
                 .collect(),
             _ => Vec::new(),
+        }
+    }
+
+    /// Whether the race on screen reads its keys per window: dealt across windows and not
+    /// parked behind a menu, which window 1's keyboard (the first seat's) drives.
+    pub(crate) fn keys_by_window(&self) -> bool {
+        self.screens_opened && matches!(&self.stage, Stage::Race(stage) if stage.race.windowed())
+    }
+
+    /// The index of window `id` among the run's windows (window 1 is 0), if it is one.
+    pub(crate) fn window_index(&self, id: winit::window::WindowId) -> Option<usize> {
+        let ids = self.screen_ids();
+        let primary = self.gpu.output.window.id();
+        windows::which(id, primary, &ids).map(|which| match which {
+            windows::Which::Primary => 0,
+            windows::Which::Screen(index) => index + 1,
+        })
+    }
+
+    /// A key reported on window `id`, in a race dealt across windows: **a keyboard seat per
+    /// window, chosen, not measured.** It goes to the keyboard seat of the window it arrived on;
+    /// a press in a window that holds none claims the window's free seat, and a window with no
+    /// keyboard seat and nothing to claim ignores it (`Controls::window_key`). Dropped once a
+    /// second physical keyboard has spoken, because the raw events carry the keys then
+    /// ([`Self::device_key`]) and these are the same presses again.
+    pub(crate) fn window_key(&mut self, id: winit::window::WindowId, key: &winit::keyboard::Key, pressed: bool) {
+        if self.controls.per_device_keys() {
+            return;
+        }
+        let Some(window) = self.window_index(id) else {
+            return;
         };
+        let seats = self.window_seats().get(window).cloned().unwrap_or_default();
+        self.controls.window_key(&seats, key, pressed);
+    }
+
+    /// A raw key event from physical keyboard `device`, which names no window: read against the
+    /// window with the focus. Only a platform that reports the keyboard sends any (X11, Windows).
+    pub(crate) fn device_key(
+        &mut self,
+        device: winit::event::DeviceId,
+        physical: winit::keyboard::PhysicalKey,
+        pressed: bool,
+    ) {
+        if !self.keys_by_window() {
+            return;
+        }
+        let Some(key) = oag_input::keys::key_at(physical) else {
+            return;
+        };
+        let Some(focused) = self.focus.current().and_then(|id| self.window_index(id)) else {
+            return;
+        };
+        let all = self.window_seats();
+        let window = all.get(focused).cloned().unwrap_or_default();
+        let race: Vec<usize> = all.iter().flatten().copied().collect();
+        let id = self.controls.keyboard_id(device);
+        self.controls.device_key(id, &window, &race, &key, pressed);
+    }
+
+    /// A window lost the focus: the keys its keyboard seat held are let go, and stay released
+    /// until seen to come up (`Controls::let_go_window`).
+    pub(crate) fn window_lost_focus(&mut self, id: winit::window::WindowId) {
+        let Some(window) = self.window_index(id) else {
+            return;
+        };
+        let seats = self.window_seats().get(window).cloned().unwrap_or_default();
+        self.controls.let_go_window(&seats);
+    }
+
+    /// Every window's first seat counts as driven (`Assignment::set_keyboard_reach`): a window
+    /// is shown to a person, so a seat nobody has pressed a key at yet idles rather than being
+    /// handed to the AI. **Chosen, not measured**; kept from the keyboard-follows-focus rule it
+    /// replaces. Once a frame, for a race that starts or a window that closes.
+    pub(crate) fn sync_keyboard_reach(&mut self) {
+        let seats = self.window_seats();
         let views: Vec<&[usize]> = seats.iter().map(Vec::as_slice).collect();
         self.controls
             .assignment_mut()
             .set_keyboard_reach(&windows::first_seats(views.iter().copied()));
-        let ids = self.screen_ids();
-        let primary = self.gpu.output.window.id();
-        let focused = self
-            .focus
-            .current()
-            .and_then(|id| windows::which(id, primary, &ids))
-            .map(|which| match which {
-                windows::Which::Primary => 0,
-                windows::Which::Screen(index) => index + 1,
-            });
-        if let Some(slot) =
-            windows::keyboard_seat(focused, &views, self.controls.keyboard_slot())
-        {
-            if slot != self.controls.keyboard_slot() {
-                info!("window keyboard: the keyboard is now on slot {slot}");
-            }
-            self.controls.keyboard_to(slot);
-        }
     }
 
     /// A left click landed on further window `window` (1-based index of the run's windows,
