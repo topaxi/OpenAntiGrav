@@ -20,6 +20,16 @@ Architecture, measurements, hosting and limits:
 
 ## Open
 
+- **No gate or CI job builds the browser target** (found 2026-10-14). `net-local`'s `--connect`
+  code reached `oag_web` (which `include!`s `main_body.rs`) and broke the web build for a day
+  unnoticed; fixed in place by native-only `cfg`s. A `cargo check` of the `oag_web` example for
+  `wasm32-unknown-unknown` (the flags in `scripts/build-web.sh`) in `just` or CI would catch the
+  next one.
+- **The web build carries the desktop CLI** (maintainer, 2026-10-14: "cli shouldn't even be in
+  the wasm build"). `web.rs` runs `run(Cli::parse_from(["oag-game", path]))`, so clap and every
+  desktop-only flag (`--connect`, `--screenshot`, ...) compile into the module. Split `run` from
+  `Cli`: a plain launch-options struct the desktop builds from clap and the web from its page.
+  Deferred at the drive's wind-down, not queued.
 - **Defaults and options (2026-10-09, web-defaults lane)**: first-run values
   (60 fps, anisotropy off, shadows off) and the 720-line cap are chosen, not
   measured; dynamic resolution is not on. Untried: the fullscreen row in a
