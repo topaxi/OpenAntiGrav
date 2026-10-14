@@ -2,7 +2,7 @@
 
 2026-10-14. `FUN_0154dd80` in the base `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`,
 image base `0x01000000`) is the one function that names `WOHD_Colours` (six
-`LEA`s) and `Fury_Colours` (six), and one of the two writers of the byte at
+`LEA`s) and `Fury_Colours` (six), and the only function Ghidra finds writing (twice) the byte at
 `0x01a7d348` that the rest of the front end reads (23 readers) to ask which
 style it draws. **Left unnamed**: it also lays out the boot dialog
 (`HDDBootDialog`, `ProfileSaveIcon`, `GhostSaveIcon`) and picks the legal line
@@ -27,7 +27,9 @@ empty string. The values are copied in place, which is why the template's
 `<Variable>`s author `name=` and **no `global=`**: they are never registered as
 globals themselves. `HD_SubGrey` is not in the list - all three blocks carry it
 with `global=`, a registration, and its value is the same (`0xff646464`) in the
-two blocks the boot can pick.
+two blocks the boot can pick. **How the original's registry treats three
+registrations of one name is unread**: this build keeps the last, `0xff646464`; a
+registry that kept the first would hold `HD_Colours`' `0xff767476`.
 
 `skin.xml`'s own comment on the base block says the same in prose: *"THESE
 COLOURS ARE IGNORED AND OVERWRITTEN by the WOHD_Colours and Fury_Colours

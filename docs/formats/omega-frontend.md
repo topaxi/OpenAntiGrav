@@ -206,7 +206,8 @@ Only a name the file already declares is overwritten.
 `0xFF010001`.** `WOHD_Colours` agrees with `HD_Colours` on `HD_Blue`
 (`0xffee0707`), `HD_LightGrey` (`0xFFDEDEDE`), `HD_White`, `HD_BG`
 (`0xffffffff`) and `HD_transBG` (`0xe0ffffff`), and `HD_SubGrey` stays
-`0xff646464` (pinned in `omega_colour_template_ground_truth`). What that moves
+`0xff646464` (this build's last-registration-wins reading of three `global=`
+declarations, not read off the executable; pinned in `omega_colour_template_ground_truth`). What that moves
 on screen is everything tinted `HD_Grey`: the frame's two rules and title mark,
 every screen title and the tabs and rows of the menus (black where they were
 mid grey), and the Ship Select statistics bars, whose fill is `HD_Grey` over an
@@ -219,7 +220,7 @@ string `HD_Colours` and neither template name, and its colours are baked per
 archive, so `BootProfile::colour_template` is `None` there and every HD still is
 byte-identical. 2048: *checked, differs* - `NEWGUI/Skin.xml` carries one
 `HD_Colours` block, inherited verbatim, and its `eboot.elf` the same one string.
-**Open**: the same branch sets bits `6` of the `bgAnim` widget's flags on
+**Open**: the same branch sets bits `0x2|0x4` (`|= 6`) of the `bgAnim` widget's flags on
 `FE Screen` (and the Fury branch clears them); what they do to the
 `BackgroundAnim` this build draws behind Omega's menus is unread and unwired.
 

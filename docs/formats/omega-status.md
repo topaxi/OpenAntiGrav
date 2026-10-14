@@ -337,8 +337,8 @@ block's `AlwaysSolidColor` (`0xff646464`). Until 2026-10-14 (`omega-colour-templ
 to `0xFF646464`, the value in the skin's first colour block (`HD_Colours`), whose own comment says it is *"IGNORED AND OVERWRITTEN by
 the WOHD_Colours and Fury_Colours templates"*, so the two halves were one grey. Omega's boot copies `WOHD_Colours` over that block
 (always: the selector compares `"HD"` with itself, see [omega-frontend.md](omega-frontend.md#the-colour-skin-switch-is-restructured-not-just-copied)),
-`HD_Grey` is `0xFF010001`, and the left half is near black over the grey remainder, a visible bar (walked: the rating, the nobble and the
-three digits now sit on a two-tone bar). The same change moved every Omega screen's `HD_Grey`-tinted chrome from mid grey to near black. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
+`HD_Grey` is `0xFF010001`, and the left half is near black over the grey remainder, a visible bar (seen in a headless still and in a windowed boot-to-Ship-Select run on Xvfb:
+the rating, the nobble and the three digits now sit on a two-tone bar). The same change moved every Omega screen's `HD_Grey`-tinted chrome from mid grey to near black. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
 `length` are authored per model and no block of this screen shows them: drawn nowhere.
 
 **The craft.** `ship_preview_hull` is `"ship.vex"` and the hull is the team's race hull, a PS4 `.rcsmodel` (8-byte pointers, `.gnf`
