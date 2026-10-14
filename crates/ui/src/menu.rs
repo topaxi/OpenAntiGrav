@@ -110,10 +110,6 @@ pub fn cap_modes(modes: &[Choice], people: usize, reason: impl Fn(usize) -> Stri
         .iter()
         .map(|choice| {
             let most = oag_race::Mode::from_name(&choice.value)
-                .or_else(|| {
-                    (choice.value == oag_race::Mode::Head2Head.name())
-                        .then_some(oag_race::Mode::Head2Head)
-                })
                 .and_then(oag_race::Mode::max_people)
                 .map(usize::from);
             match most {

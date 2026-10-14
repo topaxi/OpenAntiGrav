@@ -766,6 +766,14 @@ impl Session {
         if let Some(mode) = oag_race::Mode::from_name(&self.settings.race.mode) {
             race_options.mode = mode;
         }
+        // **A stored mode that takes fewer people than are seated does not launch.** Head to
+        // Head is two craft ([`oag_race::Mode::max_people`], chosen, not measured), and the
+        // MODE row only dims it ([`oag_ui::menu::cap_modes`]): a stored pick survives the
+        // join screen, so a third person can reach START with it. The race falls back to a
+        // Single Race, the mode whose field the people fill, and says so in the log; the
+        // stored setting is left alone, so the pick returns with fewer people.
+        let seated = self.split_lobby.as_ref().map_or(1, oag_input::lobby::Lobby::count);
+        race_options.mode = mode_for_people(race_options.mode, seated);
         // The WEAPONS row's pick, for a single race only.
         race_options.weapons_override = self.settings.race.weapons_override(race_options.mode);
         // The KILLS row's pick, for an Eliminator only.
@@ -983,5 +991,40 @@ mod tests {
             resolve_race_page_class(None, "vector").as_deref(),
             Some("vector")
         );
+    }
+}
+
+/// `mode`, or a Single Race when more people are seated than the mode takes
+/// ([`oag_race::Mode::max_people`]), logging the fall-back.
+pub(crate) fn mode_for_people(mode: oag_race::Mode, seated: usize) -> oag_race::Mode {
+    match mode.max_people() {
+        Some(most) if seated > usize::from(most) => {
+            warn!(
+                "{} takes at most {most} people and {seated} are seated: racing a Single Race \
+                 instead",
+                mode.name()
+            );
+            oag_race::Mode::SingleRace
+        }
+        _ => mode,
+    }
+}
+
+#[cfg(test)]
+mod people_cap_tests {
+    use super::mode_for_people;
+    use oag_race::Mode;
+
+    /// Head to Head with three people seated does not launch as Head to Head; with two or one,
+    /// and every other mode at any head count, nothing changes.
+    #[test]
+    fn head_to_head_with_three_people_falls_back_to_a_single_race() {
+        assert_eq!(mode_for_people(Mode::Head2Head, 3), Mode::SingleRace);
+        assert_eq!(mode_for_people(Mode::Head2Head, 8), Mode::SingleRace);
+        assert_eq!(mode_for_people(Mode::Head2Head, 2), Mode::Head2Head);
+        assert_eq!(mode_for_people(Mode::Head2Head, 1), Mode::Head2Head);
+        for mode in [Mode::TimeTrial, Mode::Zone, Mode::SingleRace, Mode::Eliminator] {
+            assert_eq!(mode_for_people(mode, 4), mode);
+        }
     }
 }

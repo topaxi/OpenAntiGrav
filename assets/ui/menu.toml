@@ -245,7 +245,7 @@ string_id = "OAG_RACE_WEAPONS"
 setting = "race.weapons"
 values_from = "weapons"
 pinned = [
-    { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"], shows = "Off" },
+    { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"], shows = "Off" },
     { setting = "race.mode", value = "eliminator", shows = "On" },
 ]
 
@@ -255,7 +255,7 @@ label = "AI DIFFICULTY"
 string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
 values = ["novice", "skilled", "elite", "ace"]
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"] }
 
 # The race box's `KILLS` row: the values are the disc's own `Eliminations` list
 # (`oag_game::boot::screens::read_race_setup`); a title that reads none has the
@@ -269,7 +269,7 @@ label = "KILLS"
 string_id = "OAG_RACE_KILLS"
 setting = "race.kill_target"
 values_from = "kill_targets"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "single_race", "head_to_head"] }
 
 [[page.entry]]
 kind = "choice"
@@ -354,7 +354,7 @@ label = "AI DIFFICULTY"
 string_id = "OAG_RACE_AI_DIFFICULTY"
 setting = "ai.difficulty"
 values_from = "remix_ai_difficulty"
-disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone"] }
+disabled_by = { setting = "race.mode", values = ["time_trial", "speed_lap", "zone", "head_to_head"] }
 # A class no controller covers races without opponents (`oag_ai::coverage`:
 # this project's driver is verified on Pulse's four and Pure's VECTOR; the
 # original's driver only in the campaign). The list below is the classes the

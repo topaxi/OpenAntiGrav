@@ -90,8 +90,7 @@ impl Session {
     }
 
     /// The MODE row's options with every mode that takes fewer people than are seated marked
-    /// unusable ([`oag_ui::menu::cap_modes`]). Head to Head is the one today (`Mode::max_people`),
-    /// and is not in `Mode::ALL` yet, so the row has none to mark until `h2h-port-titles` adds it.
+    /// unusable ([`oag_ui::menu::cap_modes`]). Head to Head is the one today (`Mode::max_people`).
     pub(crate) fn resupply_race_modes(&mut self) {
         let people = self.split_lobby.as_ref().map_or(1, Lobby::count);
         let Some(shell) = self.shell.as_ref() else {
