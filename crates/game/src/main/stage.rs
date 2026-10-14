@@ -644,6 +644,7 @@ impl Stage {
             scoreboard,
             countdown,
             resume_art: None,
+            resume_go: String::new(),
             track_panel,
             result_key,
             record_target,

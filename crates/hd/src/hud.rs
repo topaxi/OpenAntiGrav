@@ -213,6 +213,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // `Hud_UpdateAssistIndicator` (`0x00089c90`) binds these four at
     // `hud+0x5a0`..`+0x5ac`; `/data/xml/hud_assist_indicator.xml` nests each `*Big`
     // arrow under its small one. See `docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md`.
+    resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: Some(oag_title::hud::AssistIndicator {
         background: "AssistIndicatorBG",
         main: "AssistIndicatorMain",

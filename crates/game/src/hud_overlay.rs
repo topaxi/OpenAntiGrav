@@ -223,6 +223,13 @@ impl Overlay {
         self.split.as_ref()
     }
 
+    /// How this title draws a resume countdown. See
+    /// [`oag_title::hud::ResumeCountdown`].
+    #[must_use]
+    pub fn resume_countdown(&self) -> oag_title::hud::ResumeCountdown {
+        self.art.resume_countdown
+    }
+
     /// The context [`draw_list`] takes.
     #[must_use]
     pub fn context(&self) -> Context<'_> {
@@ -244,6 +251,12 @@ impl Overlay {
     /// `HUD` renderer, captions through the `HUDSmall` one, then per-craft rows
     /// through the `Default` one. The sprites go with the
     /// values because they share a renderer and the sprite sheet is bound in both.
+    ///
+    /// `countdown` is the word of a resume countdown drawn as text
+    /// ([`crate::hud_views::countdown_frame`]), put in the same frame as the HUD:
+    /// the renderers write their buffers with `queue.write_buffer`, so a second
+    /// pass in this encoder would overwrite the HUD's own text.
+    #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
         device: &wgpu::Device,
@@ -251,9 +264,20 @@ impl Overlay {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         readout: &Readout,
+        countdown: Option<&str>,
         viewport: (f32, f32, f32, f32),
     ) {
-        let frame = draw_list(&self.context(), readout);
+        let mut frame = draw_list(&self.context(), readout);
+        if let Some(text) = countdown {
+            frame.extend(crate::hud_views::countdown_frame(
+                &self.context(),
+                text,
+                1,
+                oag_render::viewport::Cut::default(),
+                viewport,
+                self.space,
+            ));
+        }
         self.paint(device, queue, encoder, view, frame, viewport);
     }
 
@@ -274,10 +298,12 @@ impl Overlay {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         readouts: Vec<Readout>,
+        countdown: Option<&str>,
         cut: oag_render::viewport::Cut,
         viewport: (f32, f32, f32, f32),
     ) {
-        let frame = views_frame(&crate::hud_views::view_draws(
+        let count = readouts.len();
+        let mut frame = views_frame(&crate::hud_views::view_draws(
             self.context(),
             self.split.as_ref(),
             self.split_hud.as_ref(),
@@ -286,6 +312,16 @@ impl Overlay {
             viewport,
             self.space,
         ));
+        if let Some(text) = countdown {
+            frame.extend(crate::hud_views::countdown_frame(
+                &self.context(),
+                text,
+                count,
+                cut,
+                viewport,
+                self.space,
+            ));
+        }
         self.paint(device, queue, encoder, view, frame, viewport);
     }
 

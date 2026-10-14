@@ -367,3 +367,8 @@ OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
 OAG_PAUSE_OWNED = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME IN %s", human = false }
 OAG_PAUSE_OPEN = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }
+
+# The last word of a split race's resume countdown, drawn where a title authors
+# no countdown art - `crates/game/src/pause.rs`. The digits are numerals and need
+# no string. **Chosen, not measured**.
+OAG_COUNTDOWN_GO = { text = "GO", human = false }

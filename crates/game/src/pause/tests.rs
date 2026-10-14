@@ -264,3 +264,39 @@ fn the_seats_present_follow_the_assignment() {
         "unplugging the second empties its seat"
     );
 }
+
+#[test]
+fn the_count_goes_three_two_one_go_a_second_apart() {
+    let at = |elapsed: f32| Count::at(ART_CLOCK_START + elapsed);
+    assert_eq!(at(0.0), Count::Three);
+    assert_eq!(at(0.999), Count::Three);
+    assert_eq!(at(1.0), Count::Two);
+    assert_eq!(at(1.999), Count::Two);
+    assert_eq!(at(2.0), Count::One);
+    assert_eq!(at(2.999), Count::One);
+    assert_eq!(at(3.0), Count::Go, "GO lands as the countdown runs out");
+    assert_eq!(at(3.0 + GO_LINGER as f32), Count::Go);
+}
+
+#[test]
+fn the_count_follows_the_art_clock_through_a_resume_and_the_linger() {
+    let counting = State::Resuming { since: 10.0 };
+    let word = |state, go_at, now| {
+        art_seconds(state, go_at, now).map(|art| Count::at(art).text("GO").to_string())
+    };
+    assert_eq!(word(counting, None, 10.0).as_deref(), Some("3"));
+    assert_eq!(word(counting, None, 11.5).as_deref(), Some("2"));
+    assert_eq!(word(counting, None, 12.5).as_deref(), Some("1"));
+    assert_eq!(
+        word(State::Running, Some(13.0), 13.5).as_deref(),
+        Some("GO")
+    );
+    assert_eq!(word(State::Running, Some(13.0), 13.0 + GO_LINGER), None);
+}
+
+#[test]
+fn a_split_lifts_the_count_off_the_craft() {
+    assert!(anchor_y(2) < 0.5 && anchor_y(2) < anchor_y(1));
+    assert!((anchor_y(1) - 171.0 / 272.0).abs() < 1e-6, "authored");
+    assert_eq!(anchor_y(1), anchor_y(0));
+}

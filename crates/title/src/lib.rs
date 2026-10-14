@@ -71,7 +71,7 @@ pub use effects::{
     ShieldPalettes, Trigger,
 };
 pub use endrace::{EndRaceDialect, EndRaceStyle};
-pub use hud::{HudArt, HudLayouts, ZoneSpeedClasses};
+pub use hud::{HudArt, HudLayouts, ResumeCountdown, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
 pub use main_menu::{Attached, Borrowed, MainMenu, OriginalRow};

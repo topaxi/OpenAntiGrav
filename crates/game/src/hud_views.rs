@@ -19,7 +19,7 @@
 //! the HUD renderer's buffers are written once.
 
 use crate::hud_overlay::ViewDraw;
-use oag_hud::{Context, Placement, Readout};
+use oag_hud::{Context, Placement, Readout, Span};
 use oag_raceplay::{Race, Scene};
 
 /// The HUD readout of the view that follows `slot`: the race's own
@@ -275,9 +275,58 @@ pub fn panel_viewport(
     oag_render::viewport::layout(count, viewport, cut)[0]
 }
 
+/// How tall a countdown digit is, as a fraction of the HUD's grid height fitted into
+/// the view. **Chosen**, to read at a glance across a short view.
+const COUNTDOWN_HEIGHT: f32 = 0.2;
+
+/// The resume countdown's word as text in the title's `HUD` face, one per view,
+/// each centred across its view and `crate::pause::anchor_y(count)` of the way down
+/// it, clipped to it. **Chosen, not measured**: where a title authors no countdown
+/// art (`oag_title::hud::ResumeCountdown::Text`).
+///
+/// Sized from the whole-screen HUD fitted into the view ([`place_into`]'s scale), so
+/// a view shows the same-sized digit whatever its shape; placed from the view itself,
+/// so a tall narrow view's digit is not pushed off its fit region's letterbox. A
+/// [`Frame`] to be [`Frame::extend`]ed onto the HUD's own, never painted alone.
+#[must_use]
+pub fn countdown_frame(
+    cx: &Context<'_>,
+    text: &str,
+    count: usize,
+    cut: oag_render::viewport::Cut,
+    viewport: (f32, f32, f32, f32),
+    space: oag_display::space::Space,
+) -> oag_hud::Frame {
+    let whole = [0.0, 0.0, space.size.0, space.size.1];
+    let mut frame = oag_hud::Frame::default();
+    for view in oag_render::viewport::layout(count, viewport, cut) {
+        let fit = place_into(view, whole, viewport, space).scale;
+        let scale = fit * COUNTDOWN_HEIGHT * space.size.1 / cx.hud_line_height;
+        let [x, y, width, height] = grid_rect(view, viewport, space);
+        frame.hud_text.push(oag_ui::frontend::Draw::Text {
+            x: x + width * 0.5,
+            y: y + height * crate::pause::anchor_y(count) - cx.hud_line_height * scale * 0.5,
+            scale,
+            color: [1.0, 1.0, 1.0, 1.0],
+            border: Some(cx.default_border),
+            align: oag_ui::frontend::Align::Centre,
+            text: text.to_string(),
+            wrap_width: None,
+        });
+        frame.spans.push(Span {
+            clip: [x, y, width, height],
+            start: [frame.sprites.len(), frame.hud_text.len() - 1, 0, 0],
+        });
+    }
+    frame
+}
+
 /// Draws the race HUD over `view`: one HUD, or one per view of a split screen.
 ///
-/// With one view this is `overlay.draw` on the slot's readout, untouched.
+/// With one view this is `overlay.draw` on the slot's readout, untouched. `countdown`
+/// is the resume countdown's word when the title draws it as text
+/// ([`countdown_frame`]); `None` adds nothing, so a frame without one is the HUD
+/// as it always was.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     overlay: &mut crate::hud_overlay::Overlay,
@@ -289,18 +338,28 @@ pub fn draw(
     scene: &Scene,
     campaign: Option<&oag_tables::race_campaign::Cell>,
     record_target: Option<&oag_hud::RecordTarget>,
+    countdown: Option<&str>,
     viewport: (f32, f32, f32, f32),
 ) {
     let count = race.viewport_count();
     if count <= 1 {
         let readout = readout(race, scene, race.player_slot(), campaign, record_target);
-        overlay.draw(device, queue, encoder, view, &readout, viewport);
+        overlay.draw(device, queue, encoder, view, &readout, countdown, viewport);
         return;
     }
     let readouts: Vec<Readout> = (0..count)
         .map(|slot| readout(race, scene, slot, campaign, record_target))
         .collect();
-    overlay.draw_views(device, queue, encoder, view, readouts, race.cut(), viewport);
+    overlay.draw_views(
+        device,
+        queue,
+        encoder,
+        view,
+        readouts,
+        countdown,
+        race.cut(),
+        viewport,
+    );
 }
 
 #[cfg(test)]

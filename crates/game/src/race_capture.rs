@@ -978,6 +978,7 @@ pub fn capture(
                     &scene,
                     None,
                     record_target.as_ref(),
+                    None,
                     hud_viewport,
                 );
                 // The countdown, on the same terms `RaceStage::draw_hud` draws
@@ -998,6 +999,7 @@ pub fn capture(
                             &mut encoder,
                             &hud_view,
                             race.sim.world.tick as f32 / 60.0,
+                            None,
                             hud_viewport,
                             (width, height),
                         ),

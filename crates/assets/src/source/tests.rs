@@ -183,6 +183,7 @@ const TITLE: &Title = &Title {
         message_slots: false,
         lap_hud: None,
         runtime: None,
+        resume_countdown: oag_title::hud::ResumeCountdown::Text,
         assist: None,
     },
     // Unread here for the fourth and fifth time, and the same reason both

@@ -41,6 +41,9 @@ pub(crate) struct RaceStage {
     /// over the gantry's circuits too, since a gantry stands at the start line and
     /// a resume happens wherever the race was paused. See `session::pause`.
     pub(crate) resume_art: Option<f32>,
+    /// The language's `GO`, while [`Self::resume_art`] is up on a title that draws the
+    /// count as text; set by the session when a countdown begins, empty otherwise.
+    pub(crate) resume_go: String,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
@@ -541,6 +544,19 @@ impl RaceStage {
                 if let Some(hud) = &mut self.hud
                     && self.race.hud_shown()
                 {
+                    // A title with no countdown art says the count in its own HUD face
+                    // (`oag_title::hud::ResumeCountdown::Text`), inside the HUD's own
+                    // frame so it is not overwritten by it.
+                    let word = self
+                        .resume_art
+                        .filter(|_| {
+                            hud.resume_countdown() == oag_title::hud::ResumeCountdown::Text
+                        })
+                        .map(|seconds| {
+                            oag_game::pause::Count::at(seconds)
+                                .text(&self.resume_go)
+                                .to_string()
+                        });
                     oag_game::hud_views::draw(
                         hud,
                         gpu.device(),
@@ -551,6 +567,7 @@ impl RaceStage {
                         &self.scene,
                         self.campaign_cell.as_ref(),
                         self.record_target.as_ref(),
+                        word.as_deref(),
                         viewport,
                     );
                     // The countdown, for exactly the measured start-line gate's
@@ -577,15 +594,15 @@ impl RaceStage {
                     // The start's is one picture over the whole screen; a resume's is
                     // one per view of a split, each centred as it would be alone
                     // (chosen: a split's seam is no place for a digit).
+                    let views = self.race.viewport_count();
                     let rects = if self.resume_art.is_some() {
-                        oag_render::viewport::layout(
-                            self.race.viewport_count(),
-                            viewport,
-                            self.race.cut(),
-                        )
+                        oag_render::viewport::layout(views, viewport, self.race.cut())
                     } else {
                         vec![viewport]
                     };
+                    // Only a resume is placed here; the start's is the authored one.
+                    let anchor = (self.resume_art.is_some() && views > 1)
+                        .then(|| [0.5, oag_game::pause::anchor_y(views)]);
                     if let Some(countdown) = &mut self.countdown
                         && let Some(seconds) = self.resume_art.or(start_line)
                     {
@@ -596,6 +613,7 @@ impl RaceStage {
                                 encoder,
                                 view,
                                 seconds,
+                                anchor,
                                 rect,
                                 target_size,
                             );

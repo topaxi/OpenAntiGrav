@@ -298,4 +298,6 @@ ids = [
     "OAG_PAUSE_OWNED",
     "OAG_PAUSE_OPEN",
     "OAG_PAUSE_OPEN_UNOWNED",
+    # The resume countdown's last word, new 2026-10-14; no translation pass yet.
+    "OAG_COUNTDOWN_GO",
 ]

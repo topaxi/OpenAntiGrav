@@ -296,6 +296,12 @@ impl Countdown {
     /// surface, and this pass's own depth attachment has to match `view`'s
     /// size rather than the (possibly smaller) rectangle drawn into, or the
     /// two attachments disagree and the pass is invalid.
+    ///
+    /// `anchor` is `None` to put the widget where it authors itself and stretch the
+    /// 480x272 grid over `viewport`, exactly as the start-line countdown always has;
+    /// `Some([across, down])` to centre it that fraction of the way across and down
+    /// `viewport` with one scale on both axes, which is how a resume countdown sits
+    /// in a view of a split (see `crate::pause::anchor_y`).
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
@@ -304,6 +310,7 @@ impl Countdown {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seconds: f32,
+        anchor: Option<[f32; 2]>,
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
@@ -331,12 +338,28 @@ impl Countdown {
         // the model was authored with, so culling and the glyphs' own
         // right-way-up both come out correct. Don't "simplify" this back to
         // a mirrored projection.
-        let view_projection = camera::orthographic(0.0, SCREEN.0, 0.0, SCREEN.1, 1.0, 2000.0);
-        let model_matrix = Mat4::from_translation(Vec3::new(
-            self.position[0],
-            SCREEN.1 - self.position[1],
-            -70.0,
-        ));
+        let (view_projection, model_matrix) = match anchor {
+            None => (
+                camera::orthographic(0.0, SCREEN.0, 0.0, SCREEN.1, 1.0, 2000.0),
+                Mat4::from_translation(Vec3::new(
+                    self.position[0],
+                    SCREEN.1 - self.position[1],
+                    -70.0,
+                )),
+            ),
+            // One model unit is `unit` pixels on both axes, so a view that is not
+            // 480:272 (a split's is 16:4.5, or 8:9) does not stretch the glyph, and
+            // the grid is cut to the viewport rather than the viewport to the grid,
+            // so the anchor is a fraction of the view itself. **Chosen.**
+            Some([across, down]) => {
+                let unit = (viewport.2 / SCREEN.0).min(viewport.3 / SCREEN.1);
+                let (width, height) = (viewport.2 / unit, viewport.3 / unit);
+                (
+                    camera::orthographic(0.0, width, 0.0, height, 1.0, 2000.0),
+                    Mat4::from_translation(Vec3::new(across * width, (1.0 - down) * height, -70.0)),
+                )
+            }
+        };
         write_uniforms_raw(queue, &self.uniform_buffer, view_projection, model_matrix);
 
         queue.write_buffer(

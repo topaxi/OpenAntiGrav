@@ -17,6 +17,18 @@ const LINE_WIDTH: f32 = 0.9;
 /// The band behind it, so it reads over any frame.
 const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 
+/// The project's text for `id` in `language`, or its English where the language file
+/// leaves it untranslated (French names it under `[untranslated]`): a gap draws a
+/// word, never the id.
+pub(crate) fn say(language: Option<&str>, id: &str) -> String {
+    let own = oag_ui::strings::project_table(language);
+    let english = oag_ui::strings::project_table(None);
+    own.get(id)
+        .or_else(|| english.get(id))
+        .unwrap_or(id)
+        .to_string()
+}
+
 impl super::Session {
     /// The line under the pause as a draw list in the overlay grid `grid`
     /// (width, height), or nothing: in a race with one person, while the race
@@ -35,11 +47,11 @@ impl super::Session {
         let Some(line) = line(self.pause, self.wall, table) else {
             return Vec::new();
         };
-        let table = oag_ui::strings::project_table(self.settings.language.as_deref());
+        let language = self.settings.language.as_deref();
         let text = |id: &str, fills: &[String]| {
-            fills.iter().fold(table.get_or_id(id).to_string(), |text, fill| {
-                text.replacen("%s", fill, 1)
-            })
+            fills
+                .iter()
+                .fold(say(language, id), |text, fill| text.replacen("%s", fill, 1))
         };
         let number = |slot: usize| (slot + 1).to_string();
         let text = match line {

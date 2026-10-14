@@ -141,6 +141,7 @@ fn draw_and_catch_validation(
         &mut encoder,
         view,
         0.0,
+        None,
         viewport,
         target_size,
     );
