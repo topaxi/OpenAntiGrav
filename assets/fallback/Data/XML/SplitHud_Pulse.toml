@@ -132,7 +132,13 @@ offset = [0.0, -0.04]
 scale = 1.2
 
 [[layout.group]]
-widgets = ["KillsText", "PosTag*", "HeadToHeadBar"]
+widgets = ["KillsText", "PosTag*"]
+anchor = "top-right"
+offset = [-0.012, 0.04]
+scale = 1.0
+
+[[layout.group]]
+widgets = ["HeadToHeadBar"]
 anchor = "right"
 offset = [-0.012, 0.0]
 scale = 1.2
@@ -187,7 +193,13 @@ offset = [0.0, -0.04]
 scale = 1.0
 
 [[layout.group]]
-widgets = ["KillsText", "PosTag*", "HeadToHeadBar"]
+widgets = ["KillsText", "PosTag*"]
+anchor = "top-right"
+offset = [-0.015, 0.04]
+scale = 0.95
+
+[[layout.group]]
+widgets = ["HeadToHeadBar"]
 anchor = "right"
 offset = [-0.015, 0.0]
 scale = 0.95

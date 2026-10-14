@@ -14,6 +14,13 @@
 # Units: `offset` is a fraction of the view's width and height from the view's own
 # `anchor` point; `scale` 1.0 is the whole-screen HUD scaled to fit the view.
 #
+# The weapon grid is a model, which the loader bounds by its centre point alone, so each
+# rule's offset is what clears it: half the grid's height at that rule's scale and its
+# widest view, plus the 0.04 the corner groups sit in from the bottom edge. The grid is about
+# 39 units tall on the 272-unit screen (read off a render: 67 pixels at scale 1.3 in a
+# 358-pixel row), so a view of width over height `a` shows it 39 * scale * min(a / 1.765, 1) /
+# 272 of its height. Chosen, not measured.
+#
 # The first layout whose `views`, `aspect` (a view's width over height, [min, max)) and
 # `modes` all fit the view answers it.
 
@@ -101,7 +108,7 @@ scale = 1.3
 [[layout.group]]
 widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
 anchor = "bottom"
-offset = [0.0, -0.04]
+offset = [0.0, -0.135]
 scale = 1.3
 
 [[layout.group]]
@@ -144,7 +151,7 @@ scale = 1.1
 [[layout.group]]
 widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
 anchor = "bottom"
-offset = [0.0, -0.04]
+offset = [0.0, -0.115]
 scale = 1.0
 
 [[layout.group]]
@@ -186,7 +193,7 @@ scale = 1.3
 [[layout.group]]
 widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
 anchor = "bottom"
-offset = [0.0, -0.04]
+offset = [0.0, -0.11]
 scale = 1.2
 
 [[layout.group]]
@@ -228,7 +235,7 @@ scale = 1.6
 [[layout.group]]
 widgets = ["ROCKET_icon", "MISSILE_icon", "QUAKE_icon", "DISRUPTOR_icon", "TURBO_icon", "SHIELD_icon", "AUTOPILOT_icon", "PLASMA_icon", "MINE_icon", "BOMB_icon", "weapon_icon_grid"]
 anchor = "bottom"
-offset = [0.0, -0.04]
+offset = [0.0, -0.1]
 scale = 1.4
 
 [[layout.group]]

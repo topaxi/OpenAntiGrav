@@ -287,8 +287,10 @@ deliberately). HD's authored `vert_` layouts still answer HD. 2048's file checke
 Omega: Omega's HUD vocabulary is HD's, so `SplitHud_HD.toml` applies there, not wired.
 PS2 Pulse's split HUD, which floated at 76% of the view because the grid's cells are 2.0 by
 1.607 pixels and `hud_views` assumed square ones, is fixed (per-axis units; PSP, Pure, HD and
-2048 byte-identical, PS2 splits moved on purpose). **Still open from it**: Pure's weapon grid
-is still half clipped in rows, Pulse's strip kill column overlaps the speed bars, Omega's
+2048 byte-identical, PS2 splits moved on purpose). ~~Pure's weapon grid
+is still half clipped in rows, Pulse's strip kill column overlaps the speed bars~~ (both fixed
+2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's `tall` still clips
+the grid on a 32:9 column). **Still open from it**: Omega's
 `Zone_HUDvert` and its non-authored cases, and a real display.
 **Still open before it**: Time Trial and the Eliminator on Pure and HD and
 HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller

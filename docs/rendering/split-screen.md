@@ -1046,10 +1046,38 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   `place_into` and `scissor_rect` use each axis' own; a grid shown as itself (PSP, HD, 2048,
   Omega) takes one number for both, so those are byte-identical. Only PS2 Pulse's split frames
   moved (not its single view, which never goes through these).
-- **Open from `split-hud-vertical`**: the weapon grid of Pure still hangs partly below a
+- **Pure's weapon grid clipped in every horizontal rule, and Pulse's kill column on the bars
+  (found by `split-hud-vertical`, fixed 2026-10-14, `split-hud-fixes`; chosen, not measured, both
+  are `SplitHud_*.toml` data, no title branch).**
+  *Pure*: the grid is a model and the loader pins a model by its centre, so `bottom` at `-0.04`
+  left the lower half of it below the view in `strip` (two rows, the top of three), `landscape`
+  (four views), `square` and `portrait` (seven and eight): scissored off, seen in every
+  split of two to eight views. It is about 39 units tall on the 272-unit screen (read off a
+  render: 67 pixels at scale 1.3 in a 358-pixel row), so a view shows it `39 * scale *
+  min(width / height / 1.765, 1) / 272` of its height. Each rule's offset is now half that at
+  the widest view the rule answers, plus the 0.04 the corner groups keep from the edge:
+  `strip` -0.135, `landscape` -0.115, `square` -0.11, `portrait` -0.1 (and `tall`'s -0.1,
+  unchanged, clears a column at 21:9's 1.19; a 32:9 column, 1.78, would still clip it).
+  *Pulse*: in a row the kill column (title and eight lines) is 0.61 of the view's height at
+  scale 1.0, centred at the right edge it ran across the bars (about 0.2 tall at the bottom
+  right), and in four views it touched them. `strip` and `landscape` now hang the column from
+  the top right corner (`KillsText`, `PosTag*` at `top-right`, offset y 0.04) at scale 1.0
+  and 0.95, ending 0.07 (rows) to 0.14 (four views) of the view above the bars; `HeadToHeadBar` is its own
+  group again at the old place and scale, so that row did not move (no frame has drawn it).
+  Pulse's Eliminator draws no place readout in a row, so the top-right corner is free. The
+  Eliminator's column cannot be both whole and large in a row; the original's own split
+  screen has not been read, so what it does is unknown. Looked at on PSP and PS2 Pulse
+  (Eliminator, 2 to 5 views) and Pure (Single Race, `--give rocket`, 2 to 8 views),
+  1280x720 at ticks 300 and 1200; `crates/hud/tests/split_hud_schema.rs` holds the arithmetic
+  (`pures_every_rule_raises_the_weapon_grid_clear_of_the_bottom_edge`,
+  `pulses_kill_column_stops_above_the_bars_in_a_row`). A one-view race, a vertical pair, HD,
+  2048 and Omega are byte-identical (their files and the `tall` rules were not touched).
+- ~~**Open from `split-hud-vertical`**: the weapon grid of Pure still hangs partly below a
   horizontal two-view row (and the lower rows of seven and eight views), the same defect the
   `tall` rule fixes for columns; the strip's kill column on Pulse overlaps the speed and
-  shield bars at the right edge (a row is too short for eight lines and the bars); Zone's own
+  shield bars at the right edge (a row is too short for eight lines and the bars)~~ **Both
+  done, 2026-10-14 (`split-hud-fixes`), above.** One piece is left: `tall` still clips Pure's grid
+  on a 32:9 column (1.78). Still open from `split-hud-vertical`: Zone's own
   pale text (`speed class`, `zone`, `lap`) is hard to read over its white and cyan scenery in
   both cuts and on the whole screen alike, which is the title's colour and not placement;
   Omega's Zone vertical variant (`Zone_HUDvert`) and Omega's non-authored cases are unwired;
