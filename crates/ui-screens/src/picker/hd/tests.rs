@@ -52,7 +52,6 @@ fn layout_of(xml: &str) -> Layout {
         &strings(),
         FaceScales::default(),
         [1920.0, 1080.0],
-        r"Data\Ships",
     )
     .expect("both screens are there")
 }
@@ -130,7 +129,6 @@ fn a_file_missing_either_screen_reads_as_none() {
             &strings(),
             FaceScales::default(),
             [1920.0, 1080.0],
-            r"Data\Ships"
         )
         .is_none()
     );
