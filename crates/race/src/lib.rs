@@ -29,6 +29,7 @@
 //! Running them before would count a lap against last tick's position, which is
 //! one tick of error on a quantity whose whole job is to be exact at one instant.
 
+pub mod chase_rig;
 pub mod course;
 pub mod mode;
 pub mod recovery;

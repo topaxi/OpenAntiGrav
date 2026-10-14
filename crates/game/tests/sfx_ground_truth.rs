@@ -28,8 +28,9 @@
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
-use oag_sound::sfx::{Banks, Cue};
+use oag_sound::sfx::{Banks, CueTables};
 
 /// The discs this runs against, and what each is called in a failure message.
 const DISCS: [(&str, &str); 5] = [
@@ -256,7 +257,7 @@ fn every_wired_cue_resolves_on_every_psp_and_ps2_disc() {
 /// for the correction that cue's reading needed once this test ran against a
 /// real disc rather than `oag-wad sounds` alone. Bank presence only, the
 /// same caveat as every addition above: each cue's own doc comment in
-/// `oag_sound::sfx::Cue` cites `psp-pulse-usa` evidence alone, and
+/// `oag_gameplay::cue::Cue` cites `psp-pulse-usa` evidence alone, and
 /// nothing here has looked at HD's own dispatch for any of the six weapons.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

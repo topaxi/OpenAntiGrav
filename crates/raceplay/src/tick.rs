@@ -71,8 +71,8 @@ impl Race {
                 }
             }
             if shown {
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::Message,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::Message,
                     0,
                 ));
             }
@@ -270,7 +270,7 @@ impl Race {
             // wall hit or the 10 s timeout (`struck: None` either way) plays
             // `PlasmaHitWall` as before. See
             // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
-            // is the third ending" section and `oag_sound::sfx::Cue::PlasmaHitShip`'s
+            // is the third ending" section and `oag_gameplay::cue::Cue::PlasmaHitShip`'s
             // own doc comment.
             //
             // The Rocket and the Cannon share the same wall/craft split, each
@@ -284,16 +284,16 @@ impl Race {
             use oag_tables::weapons::Weapon;
             let hit_cues = match impact.kind {
                 Weapon::Plasma => Some((
-                    oag_sound::sfx::Cue::PlasmaHitWall,
-                    oag_sound::sfx::Cue::PlasmaHitShip,
+                    oag_gameplay::cue::Cue::PlasmaHitWall,
+                    oag_gameplay::cue::Cue::PlasmaHitShip,
                 )),
                 Weapon::Rocket => Some((
-                    oag_sound::sfx::Cue::RocketHitWall,
-                    oag_sound::sfx::Cue::RocketHitShip,
+                    oag_gameplay::cue::Cue::RocketHitWall,
+                    oag_gameplay::cue::Cue::RocketHitShip,
                 )),
                 Weapon::Cannon => Some((
-                    oag_sound::sfx::Cue::CannonHitWall,
-                    oag_sound::sfx::Cue::CannonHitShip,
+                    oag_gameplay::cue::Cue::CannonHitWall,
+                    oag_gameplay::cue::Cue::CannonHitShip,
                 )),
                 _ => None,
             };
@@ -307,7 +307,7 @@ impl Race {
             if let Some(cue) = weapons::missile_ending_cue(impact) {
                 self.sim
                     .cues
-                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_gameplay::cue::CueEvent::at_point(cue, impact.point));
             }
             // HD's Cannon throws its own spark on the craft it strikes, from
             // the weapon's side - see `Race::throw_weapon_spark`. A no-op
@@ -321,7 +321,7 @@ impl Race {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
                     .cues
-                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_gameplay::cue::CueEvent::at_point(cue, impact.point));
             }
         }
         // After the loop above, so a Plasma detonated this tick is already
@@ -353,15 +353,15 @@ impl Race {
             }
             match projectile.kind {
                 Some(oag_tables::weapons::Weapon::Missile) => {
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
-                        oag_sound::sfx::Cue::MissileHitWall,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
+                        oag_gameplay::cue::Cue::MissileHitWall,
                         projectile.position,
                     ));
                 }
                 // On the blade's own emitter - see `Cue::ShurikenHit`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
-                        oag_sound::sfx::Cue::ShurikenHit,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
+                        oag_gameplay::cue::Cue::ShurikenHit,
                         projectile.position,
                     ));
                 }
@@ -680,8 +680,8 @@ impl Race {
         // level the edge starts. The level half is `Race::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
         if shielded && !self.view.shield_was_up {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::ShieldActive,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::ShieldActive,
                 0,
             ));
         }

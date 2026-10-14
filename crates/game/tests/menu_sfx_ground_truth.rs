@@ -12,8 +12,9 @@
 
 use std::path::{Path, PathBuf};
 
+use oag_gameplay::cue::Cue;
 use oag_gameplay::input::{Button, Input};
-use oag_sound::sfx::{Cue, MenuSfx};
+use oag_sound::sfx::{CueTables, MenuSfx};
 use oag_ui::menu::Menu;
 
 fn image(name: &str) -> Option<PathBuf> {

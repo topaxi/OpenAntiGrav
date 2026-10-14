@@ -5,7 +5,7 @@
 use super::*;
 use crate::eliminator::LAP_REFILL_FRACTION;
 use oag_gameplay::PlayerInputs;
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 
 fn eliminator() -> Race {
     race_with_weapon_table(Mode::Eliminator, enveloping_pad(), 1.0, one_mine_table())

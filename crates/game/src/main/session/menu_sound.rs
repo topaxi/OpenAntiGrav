@@ -118,7 +118,7 @@ impl Session {
     /// Starts one of the end-of-race voice lines
     /// ([`oag_game::endrace_voice`]) on the front-end sound path. Silent on a
     /// title whose results bank did not load.
-    pub(crate) fn play_voice(&mut self, cue: oag_sound::sfx::Cue) {
+    pub(crate) fn play_voice(&mut self, cue: oag_gameplay::cue::Cue) {
         let Some(sfx) = self
             .shell
             .as_mut()

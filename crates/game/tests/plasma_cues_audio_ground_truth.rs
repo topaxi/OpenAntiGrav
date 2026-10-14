@@ -47,9 +47,10 @@
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_gameplay::input::{Button, Input};
 use oag_raceplay as race;
-use oag_sound::sfx::Cue;
+use oag_sound::sfx::CueTables;
 use oag_tables::weapons::Weapon;
 
 /// Past the start-line countdown - see `plasma_ground_truth.rs`'s own doc

@@ -165,8 +165,8 @@ impl Race {
                 // layer decides how to place it now. See
                 // `oag_sound::sfx::Placement::CraftUnlessPlayer`, which
                 // carries the one hypothesis that split rides on.
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::SpeedupPad,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::SpeedupPad,
                     slot,
                 ));
             }

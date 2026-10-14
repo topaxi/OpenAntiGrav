@@ -15,7 +15,8 @@ use std::path::PathBuf;
 
 use oag_audio::{Bus, Mixer};
 use oag_core::Rng;
-use oag_sound::sfx::{Banks, Cue, Playing, VoicePlace};
+use oag_gameplay::cue::Cue;
+use oag_sound::sfx::{Banks, CueTables, Playing, VoicePlace};
 
 const RATE: u32 = 44_100;
 const TICK: f64 = 1.0 / 60.0;

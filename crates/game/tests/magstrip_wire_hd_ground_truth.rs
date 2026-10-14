@@ -19,8 +19,8 @@
 //! changes the rendered audio only inside the strip.
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
-use oag_sound::sfx::Cue;
 
 const TICKS: u64 = 2400;
 const FRAMES_PER_TICK: usize = (oag_sound::DUMP_SAMPLE_RATE / 60) as usize;

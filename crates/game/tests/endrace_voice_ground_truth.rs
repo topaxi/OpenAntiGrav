@@ -11,7 +11,8 @@
 use std::path::{Path, PathBuf};
 
 use oag_game::endrace_voice::{Screen, Voice};
-use oag_sound::sfx::{Cue, MenuSfx};
+use oag_gameplay::cue::Cue;
+use oag_sound::sfx::{CueTables, MenuSfx};
 use oag_tables::race_campaign::Medal;
 
 fn image(name: &str) -> Option<PathBuf> {

@@ -161,8 +161,8 @@ impl Race {
                     // cue, and the one a perfect start calls. So the fired Turbo
                     // draws the pad's boost plume by the original's own path,
                     // not by a reuse of ours. See `perfect-start.md`.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Turbo,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Turbo,
                         slot,
                     ));
                     self.boost_plume(slot);
@@ -221,8 +221,8 @@ impl Race {
                     // `Ship_FireHeldWeapon`'s own switch plays it
                     // unconditionally on a held-id-0 press, with no test of
                     // whether the volley actually gets anywhere.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Rocket,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Rocket,
                         slot,
                     ));
                     let ship = &self.sim.world.ships[slot];
@@ -293,9 +293,9 @@ impl Race {
                     // decompiled directly to confirm this runs before the
                     // bolt's own emitter even exists, so the cue belongs at
                     // the press rather than at release. See
-                    // `oag_sound::sfx::Cue::Plasma`'s own doc comment.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Plasma,
+                    // `oag_gameplay::cue::Cue::Plasma`'s own doc comment.
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Plasma,
                         slot,
                     ));
                 }
@@ -345,8 +345,8 @@ impl Race {
                     }
                     // `Shuriken_Init` plays `SHURIKEN` on the firing craft's
                     // emitter before it builds the blade's own.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::ShurikenLaunch,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::ShurikenLaunch,
                         slot,
                     ));
                 }
@@ -461,8 +461,8 @@ impl Race {
                     });
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
-                            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                                oag_sound::sfx::Cue::Leach,
+                            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                                oag_gameplay::cue::Cue::Leach,
                                 slot,
                             ));
                             oag_weapons::projectile::leach_beam::Beam::locked(
@@ -472,8 +472,8 @@ impl Race {
                         // `LeachBeam_InitUnlocked` plays `LEACHFAIL` on the
                         // shooter's emitter - see `Cue::LeachFail`.
                         None => {
-                            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                                oag_sound::sfx::Cue::LeachFail,
+                            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                                oag_gameplay::cue::Cue::LeachFail,
                                 slot,
                             ));
                             oag_weapons::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
@@ -493,8 +493,8 @@ impl Race {
                     // own switch plays it unconditionally on a held-id-2
                     // press, with no test of whether a wave is already
                     // travelling.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::QuakeLaunch,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::QuakeLaunch,
                         slot,
                     ));
                     // **The busy check - matching `Weapon_FireQuake`'s
@@ -661,8 +661,8 @@ impl Race {
             // doc comment. Both weapons share this loop because they are one
             // mechanism in this engine, but the cue is the Mine's alone.
             if weapon == oag_tables::weapons::Weapon::Mine {
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::MineLaunch,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::MineLaunch,
                     slot,
                 ));
             }
@@ -827,8 +827,8 @@ impl Race {
             ship.physics.body.up(),
             0.0,
         ) {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Cannon,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Cannon,
                 slot,
             ));
         }
@@ -930,8 +930,8 @@ impl Race {
         // covers both, matching `Missile_Init`'s own single call site. See
         // `Cue::Missile`'s own doc comment.
         if fired {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Missile,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Missile,
                 slot,
             ));
         }
@@ -949,8 +949,8 @@ impl Race {
 /// has not read.
 pub(super) fn missile_ending_cue(
     impact: &oag_weapons::projectile::Impact,
-) -> Option<oag_sound::sfx::Cue> {
-    use oag_sound::sfx::Cue;
+) -> Option<oag_gameplay::cue::Cue> {
+    use oag_gameplay::cue::Cue;
     if impact.kind != oag_tables::weapons::Weapon::Missile {
         return None;
     }

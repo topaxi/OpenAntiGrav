@@ -128,13 +128,14 @@ use oag_mesh::mesh_render;
 use oag_mesh::mesh_render::Anisotropy;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling};
 use oag_present::perf::SceneStats;
+use oag_race::chase_rig::{ChaseParams, Target};
 use oag_race::recovery::{
     BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
     RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
 };
 use oag_race::sight;
 use oag_race::{Course, Mode, RaceState};
-use oag_render::camera::chase::{Chase, ChaseParams, Target};
+use oag_render::camera::chase::Chase;
 use oag_render::camera::internal::InternalParams;
 use oag_render::collision as render_collision;
 use oag_render::pvs::{

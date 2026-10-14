@@ -46,8 +46,8 @@ impl Race {
             return;
         }
         *cooldown = oag_fx::sparks::COLLISION_COOLDOWN;
-        self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-            oag_sound::sfx::Cue::Collision,
+        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            oag_gameplay::cue::Cue::Collision,
             slot,
         ));
     }
@@ -63,13 +63,13 @@ impl Race {
     /// a race that is never drained grows it by at most a handful of entries a
     /// second, all of them fixed-size - but the composition root does drain it,
     /// and a headless test that does not is bounded by its own tick count.
-    pub fn drain_cues(&mut self) -> Vec<oag_sound::sfx::CueEvent> {
+    pub fn drain_cues(&mut self) -> Vec<oag_gameplay::cue::CueEvent> {
         std::mem::take(&mut self.sim.cues)
     }
 
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
-    pub fn pending_cues(&self) -> &[oag_sound::sfx::CueEvent] {
+    pub fn pending_cues(&self) -> &[oag_gameplay::cue::CueEvent] {
         &self.sim.cues
     }
 

@@ -19,8 +19,8 @@
 //! `arc_anchor_point`, that both `.gxt` decode, and that both `.POB` parse.
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
-use oag_sound::sfx::Cue;
 
 /// Altima, the default circuit, has no surface-3 triangle at all; `tower` has
 /// 1,542 (`vita_colcorpus`, 2026-10-05), the most of any base-package circuit.

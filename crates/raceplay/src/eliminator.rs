@@ -443,8 +443,8 @@ impl Race {
             *timer -= self.sim.dt;
             if *timer <= 0.0 {
                 *timer = -1.0;
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::ContElim,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::ContElim,
                     self.sim.world.primary_slot(),
                 ));
             }

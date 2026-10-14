@@ -2,7 +2,7 @@
 //! screen order [`Flow`] walks and the [`Speaker`] reading it each tick, the
 //! two halves `EndRaceRuntime::voice_tick` joins.
 
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 use oag_tables::race_campaign::Medal;
 use oag_ui_screens::endrace::{FieldResults, Headline, Results};
 

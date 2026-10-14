@@ -14,6 +14,7 @@ use oag_audio::Sound;
 use oag_core::Rng;
 use oag_formats::sblk;
 
+use super::CueTables;
 use super::layers::{self, CueVoice, Program, Timeline};
 use super::{BankName, Cue};
 

@@ -3215,6 +3215,7 @@ dependencies = [
  "oag-post",
  "oag-pulse",
  "oag-pure",
+ "oag-race",
  "oag-rcs",
  "oag-shader-check",
  "oag-tables",

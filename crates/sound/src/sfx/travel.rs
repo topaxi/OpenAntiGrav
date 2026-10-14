@@ -15,6 +15,7 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_weapons::projectile::{MAX_PROJECTILES, Projectile};
 
+use super::CueTables;
 use super::{Banks, Cue};
 
 /// One weapon's held voices, one per projectile slot, `None` where it does not

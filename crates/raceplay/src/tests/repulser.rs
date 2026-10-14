@@ -3,7 +3,7 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 
 /// Two craft on the fixture's straight, the target `ahead` units down the
 /// firer's nose, both held still. The button is pressed on tick 1.

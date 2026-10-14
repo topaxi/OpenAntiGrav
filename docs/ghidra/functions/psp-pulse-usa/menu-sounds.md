@@ -250,7 +250,7 @@ more optional path in `FrontEndSounds`, one more `BankName`.
 
 ## Wired by this lane
 
-`oag_sound::sfx::Cue::MenuUpDown`, `MenuLeftRight`, `MenuAccept`, `MenuDecline` (bank `BankName::Frontend`, named by
+`oag_gameplay::cue::Cue::MenuUpDown`, `MenuLeftRight`, `MenuAccept`, `MenuDecline` (bank `BankName::Frontend`, named by
 `oag_title::SoundBanks::frontend`, `Some` on Pulse and Pure only) and `oag_ui::menu::nav::Nav`, which the main menu,
 the selection screens, the campaign screens and the EndRace menu raise. Chosen, not measured, and scored nowhere:
 pointer hover and click use the pad's cues (hover sounds once per row change); `LEFTRIGHT` on confirming a toggle (the original has no confirm-steps-
