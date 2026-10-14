@@ -605,7 +605,7 @@ pub fn load_shell(
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
         &mut archives,
-        &title.race,
+        title.race,
         definition,
         &documents,
         &mut report,
