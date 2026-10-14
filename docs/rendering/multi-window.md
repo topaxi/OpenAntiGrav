@@ -113,8 +113,12 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   one-per-view rule, per window): one over the whole of a one-seat window. Looked at under
   Xvfb in a `--race --windows 2` race, Start on window 1 to pause and again to resume: window 2 froze on
   its frame (timer unchanged across the pause and the countdown), drew the countdown art beside its
-  craft while window 1 did, and ran again when the countdown ended. **Open:** the pause line on every
-  window.
+  craft while window 1 did, and ran again when the countdown ended. A title with no countdown art
+  (Pure, HD, 2048, Omega) says the count as text in its `HUD` face in the same places, with the split
+  placement per window's own views (30% down each view of a window of several seats; the authored
+  63% in a window of one, `pause::anchor_y`), see [split-screen.md](split-screen.md). Looked at on
+  HD under Xvfb, `--window-seats 2,1` (the one-seat window is the whole-screen case) and `2,2` (four
+  views in two windows): `3`, `2`, `GO` in every view. **Open:** the pause line on every window.
 - **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
   scenery clocks, advert cards) once per window rather than once, because each window is a whole
   frame. A split shares it between views. Measured below.
