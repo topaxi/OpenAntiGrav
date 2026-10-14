@@ -15,7 +15,10 @@ fn a_script_hands_each_step_out_once_in_time_order() {
     assert!(script.due(0.5, None).is_empty());
     assert_eq!(script.due(1.0, None), vec![Step::Tap(Button::Down)]);
     assert!(script.due(3.0, None).is_empty());
-    assert_eq!(script.due(99.0, None), vec![Step::Tap(Button::Right), Step::Quit]);
+    assert_eq!(
+        script.due(99.0, None),
+        vec![Step::Tap(Button::Right), Step::Quit]
+    );
     assert!(script.due(100.0, None).is_empty());
 }
 

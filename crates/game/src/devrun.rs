@@ -79,14 +79,14 @@ impl Script {
                 return Err(format!("{entry:?}: time must be zero or more"));
             }
             let what = what.trim();
-            let step = if what.eq_ignore_ascii_case("quit") {
-                Step::Quit
-            } else {
-                Step::Tap(
-                    oag_core::buttons::button_from_name(what)
-                        .ok_or_else(|| format!("{entry:?}: {what:?} is not a button name or quit"))?,
-                )
-            };
+            let step =
+                if what.eq_ignore_ascii_case("quit") {
+                    Step::Quit
+                } else {
+                    Step::Tap(oag_core::buttons::button_from_name(what).ok_or_else(|| {
+                        format!("{entry:?}: {what:?} is not a button name or quit")
+                    })?)
+                };
             steps.push((at, relative, step, false));
         }
         steps.sort_by(|a, b| a.0.total_cmp(&b.0));
