@@ -462,12 +462,19 @@ impl Session {
             .map(oag_input::lobby::Lobby::count)
             .or_else(|| self.controls.assignment().humans())
         {
-            // A window each shows the whole-screen HUD, which is what one view packs.
-            options.views = if self.seats_cover(seats) {
-                1
+            // With windows, the load is told what the windows' layout needs: a window each
+            // shows the whole-screen HUD, which is what one view packs.
+            options.views = u8::try_from(if self.screens.is_empty() {
+                seats
             } else {
-                u8::try_from(seats).unwrap_or(u8::MAX)
-            };
+                oag_game::split_screen::views_for(&oag_game::split_screen::layout_for(
+                    Some(&self.window_layout),
+                    seats,
+                    1 + self.screens.len(),
+                    self.split_cut,
+                ))
+            })
+            .unwrap_or(u8::MAX);
         }
         // Which way two views are cut: the load reads the left-and-right HUD for a vertical
         // cut, and `split_screen::seat_for_launch` cuts the screen the same way.
@@ -581,7 +588,8 @@ impl Session {
         let ai_choice = self.ai_choice;
         let cut = self.split_cut;
         let ai_difficulty = crate::args::resolve_difficulty(&self.settings);
-        let open_windows = self.open_slots();
+        let open_windows = 1 + self.screens.len();
+        let wanted_layout = self.window_layout.clone();
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -620,10 +628,16 @@ impl Session {
                     &mut race_stage.race,
                     cut,
                 );
-                // Every person has a window of their own: show them as windows, not as
-                // views cut up inside window 1. Otherwise the split is window 1's, as ever.
-                if crate::windows::covers(&open_windows, race_stage.race.viewport_count()) {
-                    race_stage.race.set_windowed(true);
+                // Several windows are open: deal the people across them, window 1 first, each
+                // window cutting its own seats. With one window the split is its, as ever.
+                if open_windows > 1 {
+                    let layout = oag_game::split_screen::layout_for(
+                        Some(&wanted_layout),
+                        race_stage.race.viewport_count(),
+                        open_windows,
+                        cut,
+                    );
+                    oag_game::split_screen::deal_windows(&mut race_stage.race, &layout);
                 }
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();

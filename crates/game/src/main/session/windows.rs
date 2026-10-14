@@ -1,13 +1,15 @@
-//! A `--windows N` run's further windows: opening them, closing them, and drawing them.
+//! A `--windows` / `--window-seats` run's further windows: opening them, closing them, and
+//! drawing them.
 //!
 //! The design is `docs/rendering/multi-window.md`. Window 1 is drawn by
-//! [`Session::draw`] as ever; [`Session::draw_seats`] runs after it and draws each seat.
-//! A seat of a race that is windowed draws the same chain as window 1 - scene, resolve,
-//! HUD, bloom, grade - on a framebuffer of its own, **recorded into an encoder of its own
-//! and submitted before the next window**, because a queue write lands before the
-//! submission that follows it (`Scene::render_viewports` has the long form): two windows
-//! in one submission would draw with the last window's uniforms. Anything else gets a
-//! holding frame.
+//! [`Session::draw`] as ever; [`Session::draw_screens`] runs after it and draws each further
+//! window. A further window of a race that is windowed draws the same chain as window 1 -
+//! scene, resolve, HUD, bloom, grade - on a framebuffer of its own, **recorded into an
+//! encoder of its own and submitted before the next window**, because a queue write lands
+//! before the submission that follows it (`Scene::render_viewports` has the long form): two
+//! windows in one submission would draw with the last window's uniforms. What a window draws
+//! is the seats the race gives it (`Race::windows`): one whole-screen view, or several cut up
+//! like a split screen. Anything else gets a holding frame.
 
 use anyhow::Result;
 use log::{info, warn};
@@ -19,7 +21,7 @@ use oag_ui::frontend::{Align, Draw};
 use oag_ui::strings;
 
 use crate::stage::Stage;
-use crate::windows::{self, Seat};
+use crate::windows::{self, Screen};
 
 use super::Session;
 
@@ -28,7 +30,7 @@ const HOLD_TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
 const HOLD_SCALE: f32 = 3.0;
 
 impl Session {
-    /// How many windows to open now, or `None`: `--windows` asked for them, none are open
+    /// How many windows to open now, or `None`: `--windows` or `--window-seats` asked for them, none are open
     /// yet, the title is known, and the title offers a split on this adapter - the same
     /// rule `--players` follows ([`oag_game::split_screen::offered`]). A refusal is said
     /// once and ends the request.
@@ -36,8 +38,8 @@ impl Session {
         any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
         allow(dead_code)
     )]
-    pub(crate) fn seats_to_open(&mut self) -> Option<u8> {
-        if self.windows_wanted < 2 || !self.seats.is_empty() {
+    pub(crate) fn screens_to_open(&mut self) -> Option<u8> {
+        if self.windows_wanted < 2 || !self.screens.is_empty() {
             return None;
         }
         let title = self
@@ -58,15 +60,16 @@ impl Session {
     }
 
     /// Opens windows 2 to `count` on the one device, each with a framebuffer of its own
-    /// at window 1's allocation. Window `k` shows slot `k`. A window that cannot open is
-    /// said and skipped: the run goes on with the windows it has.
+    /// at window 1's allocation. Window `k` shows the seats the layout gives it. A window
+    /// that cannot open is said and skipped (and leaves the layout, so the windows after it
+    /// keep their seats): the run goes on with the windows it has.
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-    pub(crate) fn open_seats(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, count: u8) {
+    pub(crate) fn open_screens(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, count: u8) {
         use anyhow::Context;
 
         use crate::hints;
 
-        self.seats_opened = true;
+        self.screens_opened = true;
         let table = strings::project_table(self.settings.language.as_deref());
         let app = hints::title(&table);
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER").to_string();
@@ -84,19 +87,22 @@ impl Session {
                     monitor.clone(),
                 ))));
         }
-        for slot in 1..usize::from(count) {
+        for _ in 1..usize::from(count) {
+            // The place in the layout: window 1 and the windows already open come before it.
+            let window = 1 + self.screens.len();
             let monitor = self
                 .windows_fullscreen
-                .then(|| monitors.get(slot % monitors.len().max(1)).cloned())
+                .then(|| monitors.get(window % monitors.len().max(1)).cloned())
                 .flatten();
-            let title = windows::title(&app, &word, slot + 1);
+            let (first, held) = self.planned_seats(window);
+            let title = format!("{app} - {}", windows::label(&word, first, held));
             // Beside window 1 where the platform lets a program say so (X11); the
             // compositor places it otherwise (Wayland), which is why this is a request
             // and not a layout.
             let position = origin.map(|origin| {
                 let step = f64::from(size.width) * scale;
                 winit::dpi::PhysicalPosition::new(
-                    origin.x + (step * slot as f64) as i32 + 16 * slot as i32,
+                    origin.x + (step * window as f64) as i32 + 16 * window as i32,
                     origin.y,
                 )
             });
@@ -117,47 +123,60 @@ impl Session {
                         self.framebuffer.allocation(),
                     )
                     .context("building a further window's upscale pipeline")?;
-                    Ok(Seat {
+                    Ok(Screen {
                         output,
                         framebuffer,
-                        slot,
                         acquire: perf::Meter::new(),
                         present: perf::Meter::new(),
                     })
                 });
             match opened {
-                Ok(seat) => {
+                Ok(screen) => {
                     info!(
-                        "window {}: {title} on slot {slot} ({}x{})",
-                        slot + 1,
-                        seat.output.config.width,
-                        seat.output.config.height,
+                        "window {}: {title} ({}x{})",
+                        window + 1,
+                        screen.output.config.width,
+                        screen.output.config.height,
                     );
-                    self.seats.push(seat);
+                    self.screens.push(screen);
                 }
-                Err(e) => warn!("window {}: {e:#}", slot + 1),
+                Err(e) => {
+                    warn!("window {}: {e:#}", window + 1);
+                    // Its seats go to the windows that did open, dealt anew at the launch.
+                    if window < self.window_layout.len() {
+                        self.window_layout.remove(window);
+                    }
+                }
             }
         }
     }
 
-    /// How many people a `--windows` race seats: window 1's and one for each seat window open
-    /// from slot 1 without a gap. A window closed in the middle ends the run of windows,
-    /// so slots past it are not seated (nothing would show them).
-    fn people_in_windows(&self) -> usize {
-        1 + (1..)
-            .take_while(|slot| self.seats.iter().any(|seat| seat.slot == *slot))
-            .count()
+    /// The seats window `window` (0 is window 1) is planned to hold before a race has dealt
+    /// them: the first slot and how many, from the layout the command line asked for (one
+    /// person per window when it spelled none). What a holding frame and a window's title say.
+    pub(crate) fn planned_seats(&self, window: usize) -> (usize, usize) {
+        let counts = |index: usize| self.window_layout.get(index).map_or(1, |seats| seats.count);
+        ((0..window).map(counts).sum(), counts(window))
     }
 
-    /// Seats everyone who has a window for a race launched from the menus, when nobody was
-    /// seated otherwise: the join screen's lobby and a restart's kept seats (both of which
-    /// say how many people race) win, and so does a campaign race, which is one person's
-    /// and keeps its records. Otherwise the keyboard and the first pad take slot 0 and
-    /// each further pad the next slot, as `--players N` seats them, and the grid fields
-    /// opponents for the others to race. **Chosen, not measured.**
+    /// How many people the open windows are planned to seat: the layout's counts over window 1
+    /// and the further windows still open.
+    fn planned_people(&self) -> usize {
+        (0..=self.screens.len())
+            .map(|window| self.planned_seats(window).1)
+            .sum()
+    }
+
+    /// Seats everyone the windows are planned for a race launched from the menus, when nobody
+    /// was seated otherwise: the join screen's lobby and a restart's kept seats (both of which
+    /// say how many people race) win, and so does a campaign race, which is one person's and
+    /// keeps its records. Otherwise the keyboard and the first pad take slot 0 and each
+    /// further pad the next slot, as `--players N` seats them, and the grid fields opponents
+    /// for the others to race. **Chosen, not measured.**
     pub(crate) fn seat_the_windows(&mut self, options: &mut oag_raceplay::Options) {
-        let people = self.people_in_windows();
-        if people < 2
+        let people = self.planned_people();
+        if self.screens.is_empty()
+            || people < 2
             || self.split_lobby.is_some()
             || self.controls.assignment().humans().is_some()
             || self.campaign_cell.is_some()
@@ -169,59 +188,68 @@ impl Session {
         options.opponents = true;
     }
 
-    /// The ids of the seat windows, in seat order.
-    pub(crate) fn seat_ids(&self) -> Vec<winit::window::WindowId> {
-        self.seats.iter().map(|seat| seat.output.window.id()).collect()
+    /// The ids of the further windows, in layout order (window 2 first).
+    pub(crate) fn screen_ids(&self) -> Vec<winit::window::WindowId> {
+        self.screens
+            .iter()
+            .map(|screen| screen.output.window.id())
+            .collect()
     }
 
-    /// Closes seat `index`: the window goes, and so does the person at it - that slot is
-    /// flown by the AI from the next tick (`split_screen::follow_devices` reads
-    /// `Assignment::drives`).
-    pub(crate) fn close_seat(&mut self, index: usize) {
-        if index >= self.seats.len() {
+    /// Closes further window `index` (window `index + 2`): the window goes, and so does every
+    /// person at it - their slots are flown by the AI from the next tick
+    /// (`split_screen::follow_devices` reads `Assignment::drives`). The window leaves the race's
+    /// layout and the planned one, so the windows after it keep their seats.
+    pub(crate) fn close_screen(&mut self, index: usize) {
+        if index >= self.screens.len() {
             return;
         }
-        let seat = self.seats.remove(index);
-        self.focus.forget(seat.output.window.id());
-        self.controls.assignment_mut().unseat(seat.slot);
-        info!(
-            "window {} closed: slot {} is flown by the AI",
-            seat.slot + 1,
-            seat.slot
-        );
+        let window = index + 1;
+        let screen = self.screens.remove(index);
+        self.focus.forget(screen.output.window.id());
+        let race = match &mut self.stage {
+            Stage::Race(stage) => Some(&mut stage.race),
+            _ => self.suspended_race.as_mut().map(|stage| &mut stage.race),
+        };
+        let mut slots = Vec::new();
+        if let Some(race) = race {
+            slots = race
+                .windows()
+                .get(window)
+                .map(|views| views.seats.clone())
+                .unwrap_or_default();
+            race.remove_window(window);
+        }
+        for slot in &slots {
+            self.controls.assignment_mut().unseat(*slot);
+        }
+        if window < self.window_layout.len() {
+            self.window_layout.remove(window);
+        }
+        info!("window {} closed: slot(s) {slots:?} flown by the AI", window + 1);
     }
 
-    /// Seat `index` was resized to `size`: its surface follows; its framebuffer follows on
-    /// the next draw. A window with no area (minimised) is left alone, and **never pauses
-    /// the race**: only window 1 does that.
-    pub(crate) fn resize_seat(&mut self, index: usize, size: winit::dpi::PhysicalSize<u32>) {
-        let Some(seat) = self.seats.get_mut(index) else {
+    /// Further window `index` was resized to `size`: its surface follows; its framebuffer
+    /// follows on the next draw. A window with no area (minimised) is left alone, and
+    /// **never pauses the race**: only window 1 does that.
+    pub(crate) fn resize_screen(&mut self, index: usize, size: winit::dpi::PhysicalSize<u32>) {
+        let Some(screen) = self.screens.get_mut(index) else {
             return;
         };
         if size.width == 0 || size.height == 0 {
             return;
         }
-        seat.output.config.width = size.width;
-        seat.output.config.height = size.height;
-        seat.output.configure(&self.gpu.device);
+        screen.output.config.width = size.width;
+        screen.output.config.height = size.height;
+        screen.output.configure(&self.gpu.device);
     }
 
-    /// Whether a race of `people` is shown as windows. See [`windows::covers`].
-    pub(crate) fn seats_cover(&self, people: usize) -> bool {
-        windows::covers(&self.open_slots(), people)
-    }
-
-    /// The slots the open seat windows show.
-    pub(crate) fn open_slots(&self) -> Vec<usize> {
-        self.seats.iter().map(|seat| seat.slot).collect()
-    }
-
-    /// The render target seat windows of the given sizes want, for the allocation they
+    /// The render target the further windows of their sizes want, for the allocation they
     /// share with window 1 ([`windows::shared_allocation`]).
-    pub(super) fn seat_targets(&self) -> Vec<(u32, u32)> {
-        self.seats
+    pub(super) fn screen_targets(&self) -> Vec<(u32, u32)> {
+        self.screens
             .iter()
-            .map(|seat| self.target_for(seat.output.size()))
+            .map(|screen| self.target_for(screen.output.size()))
             .collect()
     }
 
@@ -235,7 +263,7 @@ impl Session {
         )
     }
 
-    /// Whether the race on screen (or parked behind the pause menu) is shown as windows.
+    /// Whether the race on screen (or parked behind the pause menu) is dealt across windows.
     pub(super) fn windowed_race(&self) -> bool {
         match &self.stage {
             Stage::Race(stage) => stage.race.windowed(),
@@ -247,21 +275,21 @@ impl Session {
         }
     }
 
-    /// Draws every seat once, after window 1's frame. Each seat that fails to draw is said
-    /// once per failure and does not end the run.
-    pub(crate) fn draw_seats(&mut self) {
-        if self.seats.is_empty() {
+    /// Draws every further window once, after window 1's frame. A window that fails to draw is
+    /// said once per failure and does not end the run.
+    pub(crate) fn draw_screens(&mut self) {
+        if self.screens.is_empty() {
             return;
         }
-        // Out of `self` for the loop: drawing a seat borrows the stage, the devices and the
-        // settings beside it, none of which are the seats.
-        let mut seats = std::mem::take(&mut self.seats);
-        for seat in &mut seats {
-            if let Err(e) = self.draw_seat(seat) {
-                warn!("window {}: {e:#}", seat.slot + 1);
+        // Out of `self` for the loop: drawing a window borrows the stage, the devices and the
+        // settings beside it, none of which are the windows.
+        let mut screens = std::mem::take(&mut self.screens);
+        for (index, screen) in screens.iter_mut().enumerate() {
+            if let Err(e) = self.draw_screen(index + 1, screen) {
+                warn!("window {}: {e:#}", index + 2);
             }
         }
-        self.seats = seats;
+        self.screens = screens;
         if self.frame_index.is_multiple_of(windows::PACING_LOG_FRAMES) {
             self.log_pacing();
         }
@@ -276,27 +304,28 @@ impl Session {
             self.meter.stats().map_or(f32::NAN, |stats| stats.mean_ms),
             ms(&self.present_cost),
         );
-        for seat in &self.seats {
+        for (index, screen) in self.screens.iter().enumerate() {
             line += &format!(
                 ", window {} acquire {:.2} ms present {:.2} ms ({:?})",
-                seat.slot + 1,
-                ms(&seat.acquire),
-                ms(&seat.present),
-                seat.output.config.present_mode,
+                index + 2,
+                ms(&screen.acquire),
+                ms(&screen.present),
+                screen.output.config.present_mode,
             );
         }
         info!("{line}");
     }
 
-    /// One seat's frame: the race from its slot's camera when the race is windowed, a
-    /// holding frame otherwise.
-    fn draw_seat(&mut self, seat: &mut Seat) -> Result<()> {
+    /// Window `window`'s frame (window 1 is 0, so this is 1 or more): the race's views of the
+    /// seats the race gives it when the race is windowed and the window has some, a holding
+    /// frame otherwise.
+    fn draw_screen(&mut self, window: usize, screen: &mut Screen) -> Result<()> {
         let waited = web_time::Instant::now();
-        if !seat.output.acquire(&self.gpu.device) {
+        if !screen.output.acquire(&self.gpu.device) {
             return Ok(());
         }
-        seat.acquire.record(waited.elapsed().as_secs_f32());
-        let Some(frame) = seat.output.take_acquired() else {
+        screen.acquire.record(waited.elapsed().as_secs_f32());
+        let Some(frame) = screen.output.take_acquired() else {
             return Ok(());
         };
         let view = frame
@@ -306,40 +335,52 @@ impl Session {
             .gpu
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("seat frame"),
+                label: Some("window frame"),
             });
-        if self.windowed_race() {
-            self.encode_seat_race(seat, &mut encoder, &view);
+        if self.window_has_seats(window) {
+            self.encode_screen_race(window, screen, &mut encoder, &view);
         } else {
-            self.encode_holding(seat, &mut encoder, &view);
+            self.encode_holding(window, screen, &mut encoder, &view);
         }
         self.gpu.queue.submit(Some(encoder.finish()));
         let presenting = web_time::Instant::now();
         self.gpu.queue.present(frame);
-        seat.present.record(presenting.elapsed().as_secs_f32());
+        screen.present.record(presenting.elapsed().as_secs_f32());
         Ok(())
     }
 
-    /// Slot `seat.slot`'s view of the race through the whole of window 1's chain: scene,
+    /// Whether the race on screen (or parked behind the pause menu) gives window `window`
+    /// something to draw.
+    fn window_has_seats(&self, window: usize) -> bool {
+        let race = match &self.stage {
+            Stage::Race(stage) => Some(&stage.race),
+            Stage::Menu(_) => self.suspended_race.as_ref().map(|stage| &stage.race),
+            _ => None,
+        };
+        race.is_some_and(|race| race.windowed() && !race.window_drawn(window).is_empty())
+    }
+
+    /// Window `window`'s views of the race through the whole of window 1's chain: scene,
     /// resolve, HUD, bloom, grade. No upscaler history, blur or jitter (**chosen, not
     /// measured**: the windows alternate cameras every frame, and each history holds one),
     /// so FSR 3.1 takes the rung down, as it does on a menu frame.
-    fn encode_seat_race(
+    fn encode_screen_race(
         &mut self,
-        seat: &mut Seat,
+        window: usize,
+        screen: &mut Screen,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
         let profile = self.render_profile();
-        let surface = seat.output.size();
+        let surface = screen.output.size();
         let rect = display::viewport(surface, self.settings.display.aspect);
         let wanted = self.target_for(surface);
         let device = &self.gpu.device;
-        seat.framebuffer.resize_output(device, surface);
+        screen.framebuffer.resize_output(device, surface);
         // Window 1's allocation, the scene's own; this window's extent inside it.
-        seat.framebuffer.resize(device, self.framebuffer.allocation());
-        seat.framebuffer.set_extent(wanted);
-        let extent = seat.framebuffer.extent();
+        screen.framebuffer.resize(device, self.framebuffer.allocation());
+        screen.framebuffer.set_extent(wanted);
+        let extent = screen.framebuffer.extent();
         let inside = (0.0, 0.0, extent.0 as f32, extent.1 as f32);
         let alpha = match &self.stage {
             Stage::Race(_) => oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused()),
@@ -355,11 +396,11 @@ impl Session {
             return;
         };
         stage.race.set_draw_alpha(alpha);
-        stage.render_seat(
+        stage.render_window(
             &self.gpu,
             encoder,
-            seat.framebuffer.view(),
-            seat.slot,
+            screen.framebuffer.view(),
+            window,
             inside,
             self.settings.graphics.fov,
             self.settings.graphics.frustum_culling,
@@ -374,7 +415,7 @@ impl Session {
             brightness: self.settings.display.brightness,
             gamma: self.settings.display.gamma,
         };
-        let _ = seat.framebuffer.resolve_scene(
+        let _ = screen.framebuffer.resolve_scene(
             &self.gpu.device,
             &self.gpu.queue,
             encoder,
@@ -383,21 +424,22 @@ impl Session {
             None,
             None,
         );
-        stage.draw_slot_hud(
+        stage.draw_window_hud(
             &self.gpu,
             encoder,
-            seat.framebuffer.output(),
+            screen.framebuffer.output(),
             rect,
-            seat.framebuffer.output_size(),
-            seat.slot,
+            screen.framebuffer.output_size(),
+            window,
         );
         stage
             .scene
-            .composite_bloom(encoder, seat.framebuffer.output(), rect);
+            .composite_bloom(encoder, screen.framebuffer.output(), rect);
         stage.race.set_draw_alpha(1.0);
-        seat.framebuffer
+        screen
+            .framebuffer
             .set_screen_filter(&self.gpu.device, preset.as_ref());
-        seat.framebuffer.composite(
+        screen.framebuffer.composite(
             &self.gpu.device,
             &self.gpu.queue,
             encoder,
@@ -413,19 +455,21 @@ impl Session {
         );
     }
 
-    /// The frame a seat shows when the race is not drawing for it - the front end, a race of
-    /// one person, a race in the middle of loading: black, and the join screen's own word
-    /// for a person and the seat's number. **Chosen, not measured**: the original has no
-    /// second window.
+    /// The frame a window shows when the race is not drawing for it - the front end, a race of
+    /// one person, a race in the middle of loading: black, and the join screen's own word for
+    /// a person and the seats it is planned to hold. **Chosen, not measured**: the original has
+    /// no second window.
     fn encode_holding(
         &mut self,
-        seat: &Seat,
+        window: usize,
+        screen: &Screen,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
     ) {
         let table = strings::project_table(self.settings.language.as_deref());
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
-        let surface = seat.output.size();
+        let (first, held) = self.planned_seats(window);
+        let surface = screen.output.size();
         let space = perf::grid(surface);
         self.overlay.set_space(space);
         let list = [Draw::Text {
@@ -435,7 +479,7 @@ impl Session {
             color: HOLD_TEXT,
             border: None,
             align: Align::Centre,
-            text: format!("{word} {}", seat.slot + 1),
+            text: windows::label(word, first, held),
             wrap_width: None,
         }];
         self.overlay.render(

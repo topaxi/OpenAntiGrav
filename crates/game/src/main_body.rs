@@ -630,7 +630,7 @@ fn run(cli: Cli) -> Result<()> {
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
     let players = cli.driver.players;
-    let windows = cli.driver.window_count()?;
+    let window_layout = cli.driver.window_layout()?;
     let windows_fullscreen = cli.driver.windows_fullscreen;
     let split_cut = cli.driver.cut();
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
@@ -668,7 +668,7 @@ fn run(cli: Cli) -> Result<()> {
         autopilot_skill,
         ai_choice,
         players,
-        windows,
+        window_layout,
         windows_fullscreen,
         split_cut,
         anim_seconds,

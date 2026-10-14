@@ -147,7 +147,7 @@ impl Session {
         // the largest any window wants; each window draws into its own extent of it.
         let windowed = self.windowed_race();
         let wanted = if windowed {
-            windows::shared_allocation(own_wanted, self.seat_targets())
+            windows::shared_allocation(own_wanted, self.screen_targets())
         } else {
             own_wanted
         };

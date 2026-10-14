@@ -260,3 +260,86 @@ fn the_cut_is_vertical_only_for_the_discs_own_vertical_entry() {
         "no list read"
     );
 }
+
+fn counts(layout: &[WindowSeats]) -> Vec<usize> {
+    layout.iter().map(|window| window.count).collect()
+}
+
+/// `--windows N --players P` deals P people across N windows as evenly as it divides, the
+/// first windows taking the remainder; a window nobody is dealt shows a holding frame.
+#[test]
+fn people_are_dealt_across_windows_evenly() {
+    let cut = oag_render::viewport::Cut::Horizontal;
+    assert_eq!(counts(&deal(2, 2, cut)), [1, 1]);
+    assert_eq!(counts(&deal(8, 2, cut)), [4, 4]);
+    assert_eq!(counts(&deal(6, 4, cut)), [2, 2, 1, 1]);
+    assert_eq!(counts(&deal(3, 2, cut)), [2, 1]);
+    assert_eq!(counts(&deal(2, 4, cut)), [1, 1, 0, 0]);
+    assert_eq!(
+        counts(&deal(12, 2, cut)),
+        [4, 4],
+        "the grid shows eight at most"
+    );
+    assert_eq!(counts(&deal(5, 0, cut)), [5], "no windows is one");
+}
+
+/// `--window-seats 4,2v`: a count per window, `h`/`v` for how two are cut, the default cut
+/// otherwise; everything else is refused by name.
+#[test]
+fn window_seats_are_a_count_per_window_with_an_optional_cut() {
+    use oag_render::viewport::Cut;
+    let layout = parse_window_seats("4,2v", Cut::Horizontal).unwrap();
+    assert_eq!(counts(&layout), [4, 2]);
+    assert_eq!(layout[0].cut, Cut::Horizontal, "the default");
+    assert_eq!(layout[1].cut, Cut::Vertical);
+    assert_eq!(
+        parse_window_seats(" 2H , 2 ", Cut::Vertical).unwrap()[0].cut,
+        Cut::Horizontal
+    );
+    for (bad, why) in [
+        ("4", "one window is --players"),
+        ("4,x", "not a seat count"),
+        ("4,0", "holds 1 to 8"),
+        ("4,9", "holds 1 to 8"),
+        ("5,4", "at most 8"),
+        ("", "not a seat count"),
+        ("2q,2", "not a seat count"),
+    ] {
+        let error = parse_window_seats(bad, Cut::Horizontal).unwrap_err();
+        assert!(error.contains(why), "{bad:?}: {error}");
+    }
+}
+
+/// A launch whose head count is what `--window-seats` spelled keeps the spelling; any other head
+/// count (the join screen seated different people) is dealt across the windows that are open.
+#[test]
+fn a_launch_keeps_the_spelled_layout_only_for_the_head_count_it_spelled() {
+    use oag_render::viewport::Cut;
+    let wanted = parse_window_seats("4,2v", Cut::Horizontal).unwrap();
+    let kept = layout_for(Some(&wanted), 6, 2, Cut::Horizontal);
+    assert_eq!(kept, wanted);
+    assert_eq!(
+        counts(&layout_for(Some(&wanted), 3, 2, Cut::Horizontal)),
+        [2, 1]
+    );
+    assert_eq!(
+        counts(&layout_for(Some(&wanted), 4, 1, Cut::Horizontal)),
+        [4]
+    );
+    assert_eq!(
+        counts(&layout_for(None, 2, 2, Cut::Horizontal)),
+        [1, 1],
+        "nothing spelled is dealt"
+    );
+}
+
+/// What the load is told: two when any window holds exactly two (that window may use the title's
+/// authored two-player HUD), else the biggest window; one for a window each.
+#[test]
+fn the_load_is_told_two_views_when_any_window_holds_two() {
+    use oag_render::viewport::Cut;
+    let layout = |text: &str| parse_window_seats(text, Cut::Horizontal).unwrap();
+    assert_eq!(views_for(&layout("4,2")), 2);
+    assert_eq!(views_for(&layout("4,3")), 4);
+    assert_eq!(views_for(&layout("1,1")), 1);
+}

@@ -601,20 +601,23 @@ pub(crate) struct Session {
     /// race. Kept across a restart from the end screens, which keeps the seats.
     pub(crate) split_cut: oag_render::viewport::Cut,
     /// The windows after the first of a `--windows N` run (`crate::windows`): empty until
-    /// [`Session::open_seats`] has opened them, and then one per seat still open.
-    pub(crate) seats: Vec<crate::windows::Seat>,
+    /// [`Session::open_screens`] has opened them, and then one per seat still open.
+    pub(crate) screens: Vec<crate::windows::Screen>,
     /// Whether this run has opened seats: from then on an event for a window that is
     /// neither window 1 nor an open seat is dropped, and a lost focus means every window's.
     /// Stays set when the last seat closes, so a late event of a closed window is still
     /// not window 1's. Never set on a run with one window.
-    pub(crate) seats_opened: bool,
+    pub(crate) screens_opened: bool,
     /// How many windows `--windows` asked for, in all, until the seats are opened (or
-    /// refused for the title); `0` for a run with one window. See [`Session::seats_to_open`].
+    /// refused for the title); `0` for a run with one window. See [`Session::screens_to_open`].
     #[cfg_attr(
         any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
         allow(dead_code)
     )]
     pub(crate) windows_wanted: u8,
+    /// What `--windows` / `--window-seats` asked for, kept for the run: a race the menus launch is
+    /// laid out by it ([`oag_game::split_screen::layout_for`]). Empty for one window.
+    pub(crate) window_layout: Vec<oag_game::split_screen::WindowSeats>,
     /// `--windows-fullscreen`: each window borderless fullscreen on a monitor of its own.
     #[cfg_attr(
         any(target_arch = "wasm32", target_os = "android", target_os = "ios"),

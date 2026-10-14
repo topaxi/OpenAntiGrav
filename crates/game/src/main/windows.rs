@@ -4,10 +4,13 @@
 //! view `i` filling window `i`. The design is `docs/rendering/multi-window.md`.
 //!
 //! Window 1 is [`Gpu::output`](crate::gpu::Gpu) and the front end's, exactly as in a run
-//! with one window; every further window is a [`Seat`]: an [`Output`] on the same device
-//! and a [`Framebuffer`] of its own, drawing the view of one grid slot. This module is the
-//! parts that need no GPU - which window an event is for, when "no window has focus" is
-//! true, and what a seat window is called - and the seat itself.
+//! with one window; every further window is a [`Screen`]: an [`Output`] on the same device
+//! and a [`Framebuffer`] of its own. **A window holds a list of seats**: which grid slots it
+//! shows, and how it cuts them, are `oag_raceplay::Race::windows` (window `i` of the race is
+//! window `i` of the run), and inside a window the seats are cut exactly as a split screen
+//! cuts its views. This module is the parts that need no GPU - which window an event is for,
+//! when "no window has focus" is true, and what a further window is called - and the screen
+//! itself.
 //!
 //! **Chosen, not measured**, all of it: the original has no multi-window mode.
 
@@ -22,16 +25,13 @@ use winit::window::WindowId;
 use crate::gpu::Output;
 
 /// A further window of a multi-window race, and what it draws with.
-pub(crate) struct Seat {
+pub(crate) struct Screen {
     pub(crate) output: Output,
     /// This window's own scene target, presentation target and post chain, at its own
     /// size. The scene target's *allocation* is window 1's (the scene's depth and
     /// multisample attachments are sized to one allocation and a pass wants equal
     /// sizes), its *extent* is this window's own.
     pub(crate) framebuffer: Framebuffer,
-    /// The grid slot this window shows. Window `k` (counting window 1 as 0) shows slot
-    /// `k`, so the slot is stable when an earlier window closes.
-    pub(crate) slot: usize,
     /// How long this window's swapchain acquire blocked, and its present took, per frame.
     /// Logged every [`PACING_LOG_FRAMES`] frames: the pacing measurement.
     pub(crate) acquire: perf::Meter,
@@ -46,16 +46,16 @@ pub(crate) const PACING_LOG_FRAMES: u64 = 600;
 pub(crate) enum Which {
     /// Window 1: the front end's, and the one whose close ends the run.
     Primary,
-    /// The seat at this index of the open seats.
-    Seat(usize),
+    /// The further window at this index of the open ones.
+    Screen(usize),
 }
 
-/// Routes `id` to a window: window 1, a seat, or nobody (a window already closed).
-pub(crate) fn which(id: WindowId, primary: WindowId, seats: &[WindowId]) -> Option<Which> {
+/// Routes `id` to a window: window 1, a further window, or nobody (a window already closed).
+pub(crate) fn which(id: WindowId, primary: WindowId, screens: &[WindowId]) -> Option<Which> {
     if id == primary {
         Some(Which::Primary)
     } else {
-        seats.iter().position(|seat| *seat == id).map(Which::Seat)
+        screens.iter().position(|screen| *screen == id).map(Which::Screen)
     }
 }
 
@@ -64,8 +64,9 @@ pub(crate) fn which(id: WindowId, primary: WindowId, seats: &[WindowId]) -> Opti
 pub(crate) enum Closed {
     /// Window 1: the run ends, as it always did.
     Quit,
-    /// A seat window: that seat is flown by the AI from now on and the window goes.
-    Seat(usize),
+    /// A further window: every seat it held is flown by the AI from now on and the window
+    /// goes.
+    Screen(usize),
     /// A window this run already let go of (winit reports `Destroyed` after the close).
     Nothing,
 }
@@ -73,10 +74,10 @@ pub(crate) enum Closed {
 /// The decision a close request or a destroyed window comes to. Both mean the same
 /// thing: under X11 with no window manager a window is destroyed outright, and winit
 /// reports `Destroyed` rather than `CloseRequested`.
-pub(crate) fn closed(id: WindowId, primary: WindowId, seats: &[WindowId]) -> Closed {
-    match which(id, primary, seats) {
+pub(crate) fn closed(id: WindowId, primary: WindowId, screens: &[WindowId]) -> Closed {
+    match which(id, primary, screens) {
         Some(Which::Primary) => Closed::Quit,
-        Some(Which::Seat(index)) => Closed::Seat(index),
+        Some(Which::Screen(index)) => Closed::Screen(index),
         None => Closed::Nothing,
     }
 }
@@ -136,31 +137,27 @@ impl Focus {
     }
 }
 
-/// Whether every slot `1..people` has a window among `open`, the slots of the open seats:
-/// when a race of `people` is shown as windows rather than cut up inside window 1.
-pub(crate) fn covers(open: &[usize], people: usize) -> bool {
-    people > 1 && (1..people).all(|slot| open.contains(&slot))
-}
-
-/// The title of the window of seat `player` (1-based): the app's title and the join
-/// screen's own word for a person.
-#[cfg_attr(
-    any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
-    allow(dead_code)
-)]
-pub(crate) fn title(app: &str, player_word: &str, player: usize) -> String {
-    format!("{app} - {player_word} {player}")
-}
-
 /// The render target a window of `size` wants, at the profile's render scale: the
 /// largest of these over the open windows is the one allocation they share.
 pub(crate) fn shared_allocation(
     own: (u32, u32),
-    seats: impl IntoIterator<Item = (u32, u32)>,
+    screens: impl IntoIterator<Item = (u32, u32)>,
 ) -> (u32, u32) {
-    seats
+    screens
         .into_iter()
         .fold(own, |all, wanted| (all.0.max(wanted.0), all.1.max(wanted.1)))
+}
+
+/// What a window holding `count` seats from slot `first` is called: the join screen's own word
+/// for a person and the seats' numbers, `PLAYER 3` for one and `PLAYER 3 - 4` for several. A
+/// window with nobody to show is the word alone. Its title is the app's name and this, and a
+/// holding frame draws it.
+pub(crate) fn label(word: &str, first: usize, count: usize) -> String {
+    match count {
+        0 => word.to_string(),
+        1 => format!("{word} {}", first + 1),
+        _ => format!("{word} {} - {}", first + 1, first + count),
+    }
 }
 
 #[cfg(test)]

@@ -456,7 +456,7 @@ pub fn run(
                 autopilot_skill: options.autopilot_skill,
                 ai_choice: options.ai_choice,
                 players: 1,
-                windows: false,
+                window_layout: Vec::new(),
                 cut: oag_render::viewport::Cut::Horizontal,
                 force_shake: None,
                 intro_ticks: 0,

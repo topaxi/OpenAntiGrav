@@ -858,7 +858,7 @@ impl Session {
         let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
         // The further windows of a `--windows` run, once window 1's frame is submitted: each
         // seat is its own submission. A no-op with one window.
-        self.draw_seats();
+        self.draw_screens();
         if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
             log::debug!(
                 "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \

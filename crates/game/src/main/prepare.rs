@@ -237,10 +237,11 @@ impl Pending {
             opponents: self.cli.opponents || self.cli.driver.people() > 1,
             // The load reads a title's authored split HUD for two views. Windows are not
             // views: each shows the whole-screen HUD, which is the sheet one view packs.
-            views: if self.cli.driver.windows.is_some() {
-                1
-            } else {
-                self.cli.driver.players
+            views: match self.cli.driver.window_layout() {
+                Ok(layout) if !layout.is_empty() => {
+                    u8::try_from(oag_game::split_screen::views_for(&layout)).unwrap_or(u8::MAX)
+                }
+                _ => self.cli.driver.players,
             },
             cut: self.cli.driver.cut(),
             trail_sparks: self.cli.trail_sparks,

@@ -217,14 +217,14 @@ impl RaceStage {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
         self.race.set_draw_alpha(alpha);
-        // A multi-window race draws one view per window: this window shows the player's
-        // own. See `Scene::render_view`; the other windows are `Self::render_seat`.
+        // A multi-window race deals its views across the windows: this is window 1's. See
+        // `Self::render_window`, which the other windows call too.
         if self.race.windowed() {
-            return self.render_seat(
+            return self.render_window(
                 gpu,
                 encoder,
                 view,
-                self.race.player_slot(),
+                0,
                 viewport,
                 fov,
                 cull,
@@ -278,17 +278,19 @@ impl RaceStage {
         )
     }
 
-    /// Slot `slot`'s view drawn full-frame into `view`, recorded into `encoder`: one window
-    /// of a multi-window race (`Scene::render_view`). The caller submits `encoder` before
-    /// the next window draws, and has set the draw alpha. No timers: dynamic resolution
-    /// holds its scale while there is more than one window, as it does for a split.
+    /// Window `window`'s views of a multi-window race drawn into `view`: the one seat it holds
+    /// full-frame (`Scene::render_view`, recorded into `encoder`), or several cut up inside it
+    /// as a split screen cuts its views (`Scene::render_window_views`, which submits its own
+    /// command buffers first). The caller submits `encoder` before the next window draws, and
+    /// has set the draw alpha. No timers: dynamic resolution holds its scale while the race has
+    /// more than one view, as it does for a split. A window with no seats draws nothing.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn render_seat(
+    pub(crate) fn render_window(
         &mut self,
         gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        slot: usize,
+        window: usize,
         viewport: (f32, f32, f32, f32),
         fov: display::Fov,
         cull: bool,
@@ -302,22 +304,39 @@ impl RaceStage {
         if self.scene.sync_zone_grade(&self.race) {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
-        self.scene.render_view(
-            gpu.device(),
-            gpu.queue(),
-            encoder,
-            view,
-            &self.race,
-            slot,
-            viewport,
-            fov,
-            cull,
-            pvs_cull,
-            anim_seconds,
-            shadows,
-            zone_spectrum,
-            None,
-        )
+        match self.race.window_drawn(window).as_slice() {
+            [] => oag_present::perf::SceneStats::default(),
+            &[slot] => self.scene.render_view(
+                gpu.device(),
+                gpu.queue(),
+                encoder,
+                view,
+                &self.race,
+                slot,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+                None,
+            ),
+            _ => self.scene.render_window_views(
+                gpu.device(),
+                gpu.queue(),
+                view,
+                &self.race,
+                window,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+            ),
+        }
     }
 
     /// What a temporal upscaler needs from this frame, or `None` when nothing
@@ -597,30 +616,23 @@ impl RaceStage {
                         ),
                     );
                 }
-                self.draw_slot_hud(
-                    gpu,
-                    encoder,
-                    view,
-                    viewport,
-                    target_size,
-                    self.race.player_slot(),
-                );
+                self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
             }
         }
     }
 
-    /// The race HUD of slot `slot` over `view`, and the start-line countdown: everything
-    /// [`Self::draw_hud`] draws while the race runs, for the craft a window shows. A
-    /// multi-window race's further windows call this alone, because the track panel, the
-    /// results and the end screens belong to window 1.
-    pub(crate) fn draw_slot_hud(
+    /// The race HUD of window `window` over `view`, and the start-line countdown: everything
+    /// [`Self::draw_hud`] draws while the race runs, for the seats a window shows. A multi-window
+    /// race's further windows call this alone, because the track panel, the results and the
+    /// end screens belong to window 1. `window` is not read when the race is not windowed.
+    pub(crate) fn draw_window_hud(
         &mut self,
         gpu: &impl GpuContext,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
-        slot: usize,
+        window: usize,
     ) {
         if let Some(hud) = &mut self.hud
             && self.race.hud_shown()
@@ -633,7 +645,7 @@ impl RaceStage {
                 view,
                 &self.race,
                 &self.scene,
-                slot,
+                window,
                 self.campaign_cell.as_ref(),
                 self.record_target.as_ref(),
                 viewport,

@@ -19,7 +19,7 @@ use tick::advance_one_tick;
 
 /// Where window `window`'s picture goes: `path` itself for a race that is not windowed, and
 /// `path` with `-window<N>` before its extension (`shot.png` -> `shot-window2.png`) for the
-/// window showing slot `N - 1`.
+/// window `N`, counting window 1 as 1.
 fn window_path(path: &std::path::Path, window: Option<usize>) -> std::path::PathBuf {
     let Some(slot) = window else {
         return path.to_path_buf();
@@ -65,9 +65,10 @@ pub struct CaptureOptions {
     pub ai_choice: crate::ai_choice::AiChoice,
     /// `--players`: how many split-screen views. See [`crate::split_screen`].
     pub players: u8,
-    /// `--windows`: the `players` people are shown a window each rather than cut up in one
-    /// picture, and the capture writes one PNG per window. See [`windows`].
-    pub windows: bool,
+    /// `--windows` / `--window-seats`: the people dealt across windows, each cut up inside its
+    /// own, and the capture writes one PNG per window. Empty is one picture, `players` views.
+    /// See [`crate::split_screen::apply_windows`].
+    pub window_layout: Vec<crate::split_screen::WindowSeats>,
     /// `--split-cut`: which way two views are cut.
     pub cut: oag_render::viewport::Cut,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
@@ -419,9 +420,10 @@ pub fn capture(
         options.ai_choice,
         crate::ai_choice::Source::Free(difficulty),
     );
-    crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
-    if options.windows && race.viewport_count() > 1 {
-        race.set_windowed(true);
+    if options.window_layout.is_empty() {
+        crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
+    } else {
+        crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
@@ -831,7 +833,7 @@ pub fn capture(
     // A `--windows` race is one picture per window, each its own frame: the loop is the
     // windows, and a race with none is the one pass it always was.
     let windows: Vec<Option<usize>> = if race.windowed() {
-        (0..race.viewport_count()).map(Some).collect()
+        (0..race.windows().len()).map(Some).collect()
     } else {
         vec![None]
     };
@@ -844,25 +846,42 @@ pub fn capture(
         });
         // A split screen draws one scene per view, each submitted on its own: see
         // `Scene::render_viewports`. One view is the call below, untouched.
-        let stats = if let Some(slot) = window {
-            // One window of a `--windows` race: that slot's view of the whole frame, the same
-            // call the window makes for each of its windows.
-            scene.render_view(
-                &device,
-                &queue,
-                &mut encoder,
-                &view,
-                &race,
-                slot,
-                viewport,
-                options.fov,
-                options.frustum_culling,
-                options.pvs_culling,
-                options.anim_seconds,
-                options.shadows,
-                &spectrum,
-                None,
-            )
+        let stats = if let Some(index) = window {
+            // One window of a multi-window race: its seats cut up in it, the same calls the
+            // window makes for each of its windows (a window of one seat is the whole frame).
+            match race.window_drawn(index).as_slice() {
+                [] => continue,
+                &[slot] => scene.render_view(
+                    &device,
+                    &queue,
+                    &mut encoder,
+                    &view,
+                    &race,
+                    slot,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.shadows,
+                    &spectrum,
+                    None,
+                ),
+                _ => scene.render_window_views(
+                    &device,
+                    &queue,
+                    &view,
+                    &race,
+                    index,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.shadows,
+                    &spectrum,
+                ),
+            }
         } else if race.viewport_count() > 1 {
             scene.render_viewports(
                 &device,
@@ -985,7 +1004,7 @@ pub fn capture(
         if let (Some(assets), Some(progress), true) = (
             track_panel.clone(),
             race.track_panel_progress(),
-            window.is_none_or(|slot| slot == race.player_slot()),
+            window.is_none_or(|index| index == 0),
         ) {
             crate::track_panel::draw_once(
                 &device,
@@ -1001,7 +1020,7 @@ pub fn capture(
         let scale = options.hud_scale;
         match race
             .results()
-            .filter(|_| window.is_none_or(|slot| slot == race.player_slot()))
+            .filter(|_| window.is_none_or(|index| index == 0))
         {
             Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
                 Ok(mut overlay) => {
@@ -1039,7 +1058,7 @@ pub fn capture(
                         &hud_view,
                         &race,
                         &scene,
-                        window.unwrap_or_else(|| race.player_slot()),
+                        window.unwrap_or(0),
                         None,
                         record_target.as_ref(),
                         hud_viewport,

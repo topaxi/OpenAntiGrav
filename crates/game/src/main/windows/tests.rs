@@ -8,8 +8,8 @@ fn id(n: u64) -> WindowId {
 fn an_event_is_routed_to_its_own_window() {
     let seats = [id(2), id(3)];
     assert_eq!(which(id(1), id(1), &seats), Some(Which::Primary));
-    assert_eq!(which(id(2), id(1), &seats), Some(Which::Seat(0)));
-    assert_eq!(which(id(3), id(1), &seats), Some(Which::Seat(1)));
+    assert_eq!(which(id(2), id(1), &seats), Some(Which::Screen(0)));
+    assert_eq!(which(id(3), id(1), &seats), Some(Which::Screen(1)));
     assert_eq!(which(id(9), id(1), &seats), None, "a window already closed");
 }
 
@@ -20,7 +20,7 @@ fn an_event_is_routed_to_its_own_window() {
 fn closing_window_one_quits_and_closing_a_seat_hands_it_to_the_ai() {
     let seats = [id(2), id(3)];
     assert_eq!(closed(id(1), id(1), &seats), Closed::Quit);
-    assert_eq!(closed(id(3), id(1), &seats), Closed::Seat(1));
+    assert_eq!(closed(id(3), id(1), &seats), Closed::Screen(1));
     assert_eq!(closed(id(7), id(1), &seats), Closed::Nothing);
 }
 
@@ -72,18 +72,12 @@ fn the_windows_share_the_largest_allocation_any_of_them_wants() {
     );
 }
 
+/// A window is named for the seats it holds: one number for one seat, a range for several, and
+/// just the word for a window nobody sits at yet.
 #[test]
-fn a_seat_window_is_named_for_its_player() {
-    assert_eq!(title("OpenAntiGrav", "PLAYER", 2), "OpenAntiGrav - PLAYER 2");
-}
-
-/// A race is shown as windows only when each person past the first has one; a gap (a
-/// closed window) or too few windows leaves it cut up in window 1.
-#[test]
-fn a_race_is_windowed_only_when_every_person_has_a_window() {
-    assert!(covers(&[1, 2], 3));
-    assert!(covers(&[1, 2, 3], 3), "a spare window is a holding frame");
-    assert!(!covers(&[1], 3), "too few windows");
-    assert!(!covers(&[2], 2), "slot 1 has none");
-    assert!(!covers(&[1, 2], 1), "one person is no multi-window race");
+fn a_window_is_named_for_its_seats() {
+    assert_eq!(label("PLAYER", 1, 1), "PLAYER 2");
+    assert_eq!(label("PLAYER", 4, 2), "PLAYER 5 - 6");
+    assert_eq!(label("PLAYER", 0, 4), "PLAYER 1 - 4");
+    assert_eq!(label("PLAYER", 6, 0), "PLAYER");
 }

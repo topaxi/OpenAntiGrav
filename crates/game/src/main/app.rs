@@ -71,8 +71,9 @@ pub(crate) struct App {
     pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
     /// `--players`: split-screen views of a direct `--race`. See `oag_game::split_screen`.
     pub(crate) players: u8,
-    /// `--windows`: how many OS windows, `1` for the one. See `crate::windows`.
-    pub(crate) windows: u8,
+    /// `--windows` / `--window-seats`: the people dealt across the OS windows, window 1 first;
+    /// empty for the one window. See `crate::windows`.
+    pub(crate) window_layout: Vec<oag_game::split_screen::WindowSeats>,
     /// `--windows-fullscreen`.
     pub(crate) windows_fullscreen: bool,
     /// `--split-cut`: which way two views are cut.
@@ -236,7 +237,11 @@ impl App {
         let mut music_place = oag_game::music_state::Run::default();
         // Windows beyond the first: a front-end run asks for them here and opens them once
         // its title is known; a `--race` run sets this where it seats its views, below.
-        let mut windows_wanted = if self.race.is_none() { self.windows } else { 0 };
+        let mut windows_wanted = if self.race.is_none() {
+            u8::try_from(self.window_layout.len()).unwrap_or(u8::MAX)
+        } else {
+            0
+        };
         let stage = if let Some(launcher) = self.launcher.take() {
             // Before both of the others, because it is what comes before both:
             // nothing has been opened yet and the two branches below are about
@@ -313,17 +318,24 @@ impl App {
                 let players = self.race_title.map_or(self.players, |title| {
                     oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
                 });
-                let views = oag_game::split_screen::apply(
-                    &mut race_stage.race,
-                    usize::from(players),
-                    self.split_cut,
-                );
-                // `--windows N`: those views are a window each. The windows themselves
-                // open on the first pass of the event loop (`Session::seats_to_open`),
-                // when the title is known to offer them.
-                if self.windows > 1 && views > 1 {
-                    race_stage.race.set_windowed(true);
-                    windows_wanted = self.windows;
+                // `--windows` / `--window-seats`: the people are dealt across windows, each cut
+                // up inside its own. The windows themselves open on the first pass of the event
+                // loop (`Session::screens_to_open`), when the title is known to offer them.
+                let windowed = players > 1 && !self.window_layout.is_empty();
+                let views = if windowed {
+                    oag_game::split_screen::apply_windows(
+                        &mut race_stage.race,
+                        &self.window_layout,
+                    )
+                } else {
+                    oag_game::split_screen::apply(
+                        &mut race_stage.race,
+                        usize::from(players),
+                        self.split_cut,
+                    )
+                };
+                if windowed && views > 1 {
+                    windows_wanted = u8::try_from(self.window_layout.len()).unwrap_or(u8::MAX);
                 }
             }
             staged
@@ -537,9 +549,10 @@ impl App {
             pure_chain_class: 0,
             split_lobby: None,
             split_cut: self.split_cut,
-            seats: Vec::new(),
-            seats_opened: false,
+            screens: Vec::new(),
+            screens_opened: false,
             windows_wanted,
+            window_layout: self.window_layout.clone(),
             windows_fullscreen: self.windows_fullscreen,
             focus: crate::windows::Focus::default(),
             split_race_box: false,
@@ -667,8 +680,8 @@ impl ApplicationHandler for App {
         // window has the focus, so its events go the way window 1's do; a seat window's
         // own life (resize, close, focus) is handled here; the rest of what a seat
         // receives is not for it (the front end, the pointer and drops are window 1's).
-        if session.seats_opened {
-            let ids = session.seat_ids();
+        if session.screens_opened {
+            let ids = session.screen_ids();
             let primary = session.gpu.output.window.id();
             let Some(which) = windows::which(id, primary, &ids) else {
                 // A window this run let go of: whatever it still has to say (a late
@@ -676,10 +689,10 @@ impl ApplicationHandler for App {
                 return;
             };
             let is_seat = which != windows::Which::Primary;
-            if let (WindowEvent::CloseRequested | WindowEvent::Destroyed, windows::Closed::Seat(index)) =
+            if let (WindowEvent::CloseRequested | WindowEvent::Destroyed, windows::Closed::Screen(index)) =
                 (&event, windows::closed(id, primary, &ids))
             {
-                session.close_seat(index);
+                session.close_screen(index);
                 return;
             }
             match &event {
@@ -693,7 +706,7 @@ impl ApplicationHandler for App {
                 }
                 WindowEvent::Resized(size) if is_seat => {
                     if let Some(index) = ids.iter().position(|seat| *seat == id) {
-                        session.resize_seat(index, *size);
+                        session.resize_screen(index, *size);
                     }
                     return;
                 }
@@ -876,10 +889,10 @@ impl ApplicationHandler for App {
         // known on, and the focus decision across all of them.
         if let Some(session) = self.state.as_mut() {
             #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-            if let Some(count) = session.seats_to_open() {
-                session.open_seats(event_loop, count);
+            if let Some(count) = session.screens_to_open() {
+                session.open_screens(event_loop, count);
             }
-            if session.seats_opened && session.focus.away(web_time::Instant::now()) {
+            if session.screens_opened && session.focus.away(web_time::Instant::now()) {
                 session.window_away(Away::FocusLost);
             }
         }
