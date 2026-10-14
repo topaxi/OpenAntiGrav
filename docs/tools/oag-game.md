@@ -34,6 +34,8 @@ From the menus, MULTIPLAYER (one row on every title) leads to a page whose LOCAL
 presses a button to take a seat, START begins with the seated count, and
 `--menu-page join[:N]` draws it as a still with `N` seats taken. LAN and ONLINE are greyed ("Coming later"). On a desktop its START opens the window layout screen (windows, seats per window, cut, monitor, windowed or fullscreen; [multi-window](../rendering/multi-window.md#the-layout-screen)), drawn by `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]`. Its START opens the seat assignment screen (who sits in which pane, [multi-window](../rendering/multi-window.md#the-seat-assignment-screen)) when there are two or more windows, drawn by `--menu-page seat-assign[:SEATS[:ORDER[:UNCONFIRMED]]]`.
 
+`OAG_RENDER_BENCH_RACE=<path stem>` on a `--race --autopilot --screenshot x.png` run plays the whole race headless and writes a per-frame CPU/GPU/frame-time CSV and a JSON summary instead of a screenshot; `just bench-render` is the matrix over the titles and takes the gate lock - see [render bench](render-bench.md).
+
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
 and right airbrakes, C and V are square and triangle.
 

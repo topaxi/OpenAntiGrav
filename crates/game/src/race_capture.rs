@@ -13,6 +13,7 @@ use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+mod race_bench;
 mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
@@ -355,6 +356,7 @@ pub fn capture(
     audio: &mut oag_sound::Audio,
 ) -> Result<()> {
     let (width, height) = options.size;
+    let title_name = loaded.title.name;
     let Loaded {
         shadows,
         shadow_hulls,
@@ -463,10 +465,16 @@ pub fn capture(
     // delta against the previous tick, so the primer frame below has to be
     // rendered at the tick-before-last pose before that tick runs. Every
     // other capture drives all its ticks here, exactly as before.
-    let deferred_tick = (options.motion_blur != oag_display::display::MotionBlur::Off
+    let race_bench = race_bench::requested();
+    let deferred_tick = (race_bench.is_none()
+        && options.motion_blur != oag_display::display::MotionBlur::Off
         && options.ticks > 0)
         .then(|| options.ticks - 1);
-    let driven = deferred_tick.unwrap_or(options.ticks);
+    let driven = if race_bench.is_some() {
+        0
+    } else {
+        deferred_tick.unwrap_or(options.ticks)
+    };
     let mut finished_early = false;
     for tick in 0..driven {
         advance_one_tick(&mut race, &mut held, audio, options, tick);
@@ -660,6 +668,28 @@ pub fn capture(
     // One tick per drawn frame, each the tick exactly (draw alpha 1.0), bit
     // for bit what a capture drew before `race::between_ticks`.
     race.set_draw_alpha(1.0);
+
+    // A whole-race bench drives the race itself from tick 0 and writes its own
+    // result files, so nothing below (primer, final frame, HUD) runs for it.
+    if let Some(stem) = race_bench {
+        return race_bench::run(
+            &stem,
+            race_bench::Rig {
+                device: &device,
+                queue: &queue,
+                adapter: adapter.get_info(),
+                scene: &mut scene,
+                race: &mut race,
+                view: &view,
+                viewport,
+                camera_jitter,
+                held: &mut held,
+                audio,
+                options,
+                title: title_name,
+            },
+        );
+    }
 
     // The primer frame a motion blur capture needs: the scene at the
     // tick-before-last pose, drawn into the same target and then entirely

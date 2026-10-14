@@ -144,6 +144,15 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   `test-data` once per merge batch. Run the full pair yourself only when your
   brief says so.
 
+  **A render bench takes the same lock.** `just bench-render` (whole-race
+  rendering benchmark, `docs/tools/render-bench.md`) holds
+  `$HOME/.cache/oag/gate.lock` itself for the runs, so it measures on a quiet
+  machine and never overlaps a suite; do not wrap it in `flock` again, and never
+  run it from inside a gate or a gate inside it (the same lock twice is a
+  deadlock). `OAG_BENCH_NO_LOCK=1` is for a human on an idle machine, not a
+  member. Its numbers are relative: quote the load average the result file
+  records.
+
   Then check the exit status (`${pipestatus[1]}` in zsh, `${PIPESTATUS[0]}`
   in bash) **in the same Bash call as the pipeline**: each tool call is a
   fresh shell, so a separate `echo` prints blank (two members

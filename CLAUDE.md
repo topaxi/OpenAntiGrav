@@ -45,6 +45,7 @@ just check-status # docs/overview/status.md's RE-coverage table matches names.ts
 just check-strings # every menu.toml row/title has a string_id and its english.toml text, ratchet over pre-existing debt (scripts/check-strings.py)
 just check-test-budget # no test-data suite over 450s and no single test over 300s, ratchet (scripts/check-test-budget.py)
 just blender-fixtures # rebuild the Blender add-on's committed fixtures headless and fail on a diff; needs Blender 4.2+, not in the gate (scripts/blender-fixtures.sh)
+just bench-render [title...] # whole-race rendering benchmark, one fixed race per title, per-frame CPU/GPU/frame metrics to data/bench/; takes the SAME gate lock as the test suites for the runs (`OAG_BENCH_NO_LOCK=1` for an idle machine), never run it inside a gate; `just bench-compare A B` for deltas (docs/tools/render-bench.md)
 just build        # cargo build --workspace
 just docs         # cargo doc --workspace --no-deps --document-private-items
 just audit-leakage # asserts no tracked game content or reproduction (scripts/check-leakage.py)
