@@ -175,3 +175,7 @@
 0x0886b06c	function	Exhaust_UpdateEngineSound	88	../psp-pure-usa/exhaust-sound.md
 0x0886b340	function	ExhaustFlare_OnSpeedupPad	88	../psp-pure-usa/exhaust-sound.md
 0x088b73c4	function	Widget_CreateFromElement	80	title-screen.md
+
+# 2026-10-14 (mp-collision-re): the MPTimeTrial constructor and the craft-pair dispatch. See mp-time-trial-collision.md.
+0x08815c34	function	MPTimeTrial_Construct	80	mp-time-trial-collision.md
+0x08824c68	function	Collision_DispatchPair	80	mp-time-trial-collision.md

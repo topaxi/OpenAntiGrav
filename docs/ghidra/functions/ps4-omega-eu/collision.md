@@ -55,3 +55,11 @@ whether a matching invariant exists somewhere else in this function past
 the disassembled window, and the rest of `ps3-hdfury-eu/collision.md`'s own
 roster (`Collision_AllocateBuffers`, `Collision_AddObject`,
 `Collision_ProcessPairs`) on this binary.
+
+## Update, 2026-10-14 (`mp-collision-re`): `0x01393610` is the collision world constructor
+
+The tag candidate above now has code evidence: it is the only function that stores `1` to
+`collision + 0x8890`, the byte `MPTimeTrialRaceManager_Construct` clears and the pair pass
+`0x0131ca50` reads in six places, and it clears the `0x200 * 0x40` contact array those tests append
+to. Named at 76, with the pair pass, in
+[mp-time-trial-collision.md](mp-time-trial-collision.md).

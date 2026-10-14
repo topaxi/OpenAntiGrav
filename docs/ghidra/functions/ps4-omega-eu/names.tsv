@@ -127,3 +127,8 @@
 0x0147e8e0	function	CampaignCell_ParseValues	72	ai-controls.md
 0x015a0f90	function	GameMode_SetCurrent	70	ai-controls.md
 0x01926700	data	g_GameModeNames	84	ai-controls.md
+
+# 2026-10-14 (mp-collision-re): the collision world and the byte MPTimeTrial clears. See mp-time-trial-collision.md.
+0x01393610	function	Collision_Construct	76	mp-time-trial-collision.md
+0x0131ca50	function	Collision_ProcessPairs	74	mp-time-trial-collision.md
+0x012539b0	function	Collision_TestObbSphere	72	mp-time-trial-collision.md
