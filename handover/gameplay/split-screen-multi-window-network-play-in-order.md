@@ -1382,7 +1382,7 @@ a guess.
 ## Next Steps
 
 - **Server in the nightly release, and real certificates** (planned 2026-10-14, not started; deferred
-  when the drive wound down). One lane, after the lean server split lands:
+  when the drive wound down). One lane; the lean server split it waited on landed 2026-10-14:
   1. A portable `oag-server` asset in the nightly release (`.github/workflows/release.yml`, which
      `nightly.yml` calls): `scripts/build-server-portable.sh musl` (static, needs the musl Rust
      target and `zig` on the runner; the lean split dropped `alsa-sys`, 2026-10-14). Verify with
