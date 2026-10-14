@@ -22,10 +22,20 @@ use oag_sound::{self as audio, Audio, MusicSource};
 
 const SECONDS: u32 = 20;
 
-fn scratch(label: &str) -> PathBuf {
+/// A per-process cache directory, removed on drop so a failed assert does not
+/// leave its decoded music (about 120 MB) in the temp directory.
+struct Scratch(PathBuf);
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn scratch(label: &str) -> Scratch {
     let dir = std::env::temp_dir().join(format!("oag-music-resume-{}-{label}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    dir
+    Scratch(dir)
 }
 
 /// A null output that renders on the tick clock: `--dump-audio`'s, whose WAV is
@@ -55,7 +65,8 @@ fn resumes_at(label: &str, image: Option<PathBuf>) {
         return;
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
-    let cache = scratch(label);
+    let scratch = scratch(label);
+    let cache = scratch.0.clone();
     let file = cache.join("music.toml");
     let title = format!("title-{label}");
 
@@ -169,7 +180,8 @@ fn a_saved_place_from_another_soundtrack_is_refused() {
         return;
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
-    let mut audio = open_audio(&scratch("stale"));
+    let scratch = scratch("stale");
+    let mut audio = open_audio(&scratch.0);
     let stale = audio::RaceMusicState {
         index: 2,
         second: 5,
@@ -194,7 +206,8 @@ fn a_run_restores_saves_and_quits(label: &str, image: &str) {
         return;
     };
     let discs = audio::MusicDiscs::survey(&image.display().to_string(), &GameLibrary);
-    let cache = scratch(&format!("run-{label}"));
+    let scratch = scratch(&format!("run-{label}"));
+    let cache = scratch.0.clone();
     let file = cache.join("music.toml");
     let title = format!("title-run-{label}");
 
