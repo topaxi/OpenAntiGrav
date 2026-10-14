@@ -31,6 +31,7 @@ pub mod campaign;
 pub mod capture;
 pub mod cursor;
 pub mod custom_tracks;
+pub mod devrun;
 pub mod endrace;
 pub mod endrace_voice;
 pub mod flyer;

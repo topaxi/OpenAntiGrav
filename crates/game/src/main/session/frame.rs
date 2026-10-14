@@ -30,6 +30,7 @@ impl Session {
         // `--measure-race-load`'s clock and its `LAUNCH RACE`, first so the
         // frame it times is all of this one. A no-op on every other run.
         self.probe_begin_frame();
+        self.dev_frame();
         self.refresh_prompts();
         self.poll_custom_tracks();
         // Whatever the audio callback could not render while this thread held

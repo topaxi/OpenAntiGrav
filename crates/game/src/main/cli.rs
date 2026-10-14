@@ -987,6 +987,9 @@ pub(crate) struct Cli {
     pub(crate) wreck: extra::WreckArgs,
     #[command(flatten)]
     pub(crate) intro: extra::IntroArgs,
+    /// `--preseat`, `--script` and `--frame-log` - see [`extra::DevArgs`].
+    #[command(flatten)]
+    pub(crate) dev: extra::DevArgs,
     /// `--connect` and its companions - see [`extra::NetArgs`].
     #[command(flatten)]
     pub(crate) net: extra::NetArgs,

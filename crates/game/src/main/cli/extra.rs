@@ -569,3 +569,47 @@ impl NetArgs {
         }
     }
 }
+
+/// Switches for measuring the front end without a person at it (`oag_game::devrun`).
+#[derive(clap::Args, Debug)]
+pub(crate) struct DevArgs {
+    /// With `--players`, `--windows` or `--window-seats` and no `--race`: seat those people
+    /// on placeholder keyboard devices (no pads, no virtual input) and open the WINDOW LAYOUT
+    /// screen as soon as the menus are up, pre-filled from the flags.
+    ///
+    /// **Explicit, not implied by the flags** (chosen, not measured): `--windows 2` has always
+    /// opened its windows and waited for a person at the join screen. Real pads can still
+    /// take a free seat on the join screen after BACK; with every seat dealt they cannot
+    /// until a seat is freed. Pair with `--no-intro` to reach the menus sooner.
+    #[arg(long)]
+    pub(crate) preseat: bool,
+
+    /// A timed button script for a windowed run: `SECONDS:BUTTON,...`, e.g.
+    /// `5:down,5.5:down,6:right,12:quit`. Buttons are the `--press` names; `quit` ends the run.
+    ///
+    /// Seconds count from the first frame. Each entry is one tap. Unlike `--press` it needs no
+    /// `--screenshot`. Dev only.
+    #[arg(long, value_name = "SCRIPT")]
+    pub(crate) script: Option<String>,
+
+    /// Log one line a second on every stage, menus included: stage, fps, frame/CPU/GPU/present
+    /// time, target rate, window, surface and render size. `OAG_FRAME_LOG=1` does the same.
+    /// To the terminal and the log file. Dev only.
+    #[arg(long)]
+    pub(crate) frame_log: bool,
+}
+
+impl DevArgs {
+    /// What a run carries of these switches. `people` is `DriverArgs::people`.
+    pub(crate) fn dev(&self, people: u8) -> anyhow::Result<oag_game::devrun::Dev> {
+        Ok(oag_game::devrun::Dev {
+            preseat: (self.preseat && people > 1).then_some(usize::from(people)),
+            script: match &self.script {
+                Some(text) => oag_game::devrun::Script::parse(text)
+                    .map_err(|why| anyhow::anyhow!("--script: {why}"))?,
+                None => oag_game::devrun::Script::default(),
+            },
+            frame_log: self.frame_log || std::env::var_os("OAG_FRAME_LOG").is_some_and(|v| v != "0"),
+        })
+    }
+}

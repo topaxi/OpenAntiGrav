@@ -561,6 +561,15 @@ impl Controls {
         }
     }
 
+    /// A button going down or up with no key behind it: what a timed script
+    /// (`oag_game::devrun`) taps. The keyboard's own slot, as a key press is.
+    pub fn press_button(&mut self, button: Button, pressed: bool) {
+        if pressed {
+            self.window_pressed |= button.bit();
+        }
+        self.keyboard.press(button, pressed);
+    }
+
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
         if pressed {

@@ -683,6 +683,7 @@ fn run(cli: Cli) -> Result<()> {
         measure_race_load: cli.measure.measure_race_load,
         give,
         no_intro: cli.intro.no_intro,
+        dev: cli.dev.dev(cli.driver.people())?,
         net: None,
         net_bot: cli.net.net_bot,
         prompt_style: cli
