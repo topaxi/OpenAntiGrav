@@ -222,6 +222,7 @@ fn setup(handling: Handling) -> Setup {
         original_tables: None,
         intro_camera: None,
         slot_teams: Vec::new(),
+        sight: Sighting::default(),
         trail_sparks: false,
         spark_anchors: Vec::new(),
         collision: CollisionWorld::new(),
@@ -397,7 +398,14 @@ fn enveloping_pad() -> Vec<oag_vex::pads::PadVolume> {
 /// whole grid layout is offsets from one, and `Race::start` refuses to guess
 /// at it. Faces along `+x`, which is the direction `straight_track` runs.
 pub(super) fn race_with_a_grid() -> Race {
+    race_with_a_grid_sighted(Sighting::default())
+}
+
+/// [`race_with_a_grid`] with the title's reticle `sight` handed to `Race::start`
+/// the way a load hands it.
+pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     let mut setup = setup(hulled_handling());
+    setup.sight = sight;
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
@@ -410,6 +418,23 @@ pub(super) fn race_with_a_grid() -> Race {
     // - and the opponent-rescue tests built on it assert that slot 0 was *not*
     // recovered, which is worth nothing if slot 0's recovery is switched off.
     Race::start(setup)
+}
+
+/// The reticle a title's sight dialect gives a race, as a load builds it.
+pub(super) fn sighting_of(sights: &oag_title::hud::Sights) -> Sighting {
+    Sighting {
+        leach_law: sights.runs_leach_law(),
+        ..Sighting::default()
+    }
+}
+
+/// Pulse's reticle (`pulse`) or Wipeout HD's, for a test that compares the two.
+pub(super) fn title_sighting(pulse: bool) -> Sighting {
+    sighting_of(if pulse {
+        oag_pulse::hud::ART.sights
+    } else {
+        oag_hd::hud::ART.sights
+    })
 }
 
 /// A weapon table with one Turbo in it, weighted for a human.

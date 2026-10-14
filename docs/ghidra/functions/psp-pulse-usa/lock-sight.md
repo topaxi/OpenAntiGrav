@@ -206,7 +206,7 @@ numbers above do not depend on it.
 (`Sight::set_leach_law` is left off for the concentric dialect).
 
 **Implemented** in `oag_race::sight::leach` and switched on by
-`oag_raceplay::Race::set_sight_dialect` for a title whose brackets carry a
+`oag_raceplay::Race::start` (from `Setup::sight`, `Sights::runs_leach_law`) for a title whose brackets carry a
 LeachBeam set (`Sights::Brackets { leach: Some(..) }`, which is Pulse); pinned on a
 real circuit by `a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit` (the lock
 0.25 to 0.6 s after the first sighting and the arrowheads turning - it fails

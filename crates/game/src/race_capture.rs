@@ -429,8 +429,6 @@ pub fn capture(
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
     race.set_texture_detail(options.texture_detail);
-    race.set_sight_screen(hud.sight_screen());
-    race.set_sight_dialect(hud.art.sights);
     race.watch_laps(
         &hud,
         options

@@ -509,6 +509,8 @@ pub struct Setup {
     /// turns one into the name a player reads at draw time. Empty where a
     /// caller builds a `Setup` by hand.
     pub slot_teams: Vec<String>,
+    /// The lock-on's grids and law, which [`Race::start`] applies. See [`Sighting`].
+    pub sight: Sighting,
     /// Every collidable triangle of the track.
     pub collision: CollisionWorld,
     /// The force law's parameter set for one team in one speed class.
@@ -1004,6 +1006,10 @@ pub struct Campaign2048Progress {
 
 /// [`Setup::headless`]: the disc-free minimum, for the headless-sim binary.
 mod headless;
+
+/// [`Sighting`]: the reticle's grids and law.
+mod sighting;
+pub use sighting::Sighting;
 
 /// `weapons_on` for [`Options`] and [`Setup`].
 mod weapons;

@@ -107,6 +107,7 @@ impl Race {
             destroy_stations,
             intro_camera,
             slot_teams,
+            sight,
             ..
         } = setup;
 
@@ -528,7 +529,7 @@ impl Race {
                 eliminator_kill_target: eliminator_kill_target
                     .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
                 last_damager: [None; oag_gameplay::MAX_SHIPS],
-                locks: [oag_race::sight::Sight::default(); oag_gameplay::MAX_SHIPS],
+                locks: [sight.lock_sight(); oag_gameplay::MAX_SHIPS],
                 lock_rig: chase,
                 last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
                 respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
@@ -726,11 +727,14 @@ impl Race {
                 // `<Misc>` loads (see `Readout::shield_fraction`'s own
                 // zero-guard), and a full-pool reading would arm the flash on a
                 // false "drop" from 100% to whatever the first real tick measures.
-                huds: Default::default(),
+                huds: std::array::from_fn(|_| crate::slot_hud::SlotHud {
+                    sight: sight.view_sight(),
+                    ..Default::default()
+                }),
                 messages: oag_hud::messages::MessageBoard::default(),
                 lap_watch: None,
                 split_gap: None,
-                sight: sight::Sight::default(),
+                sight: sight.view_sight(),
                 sight_state: sight::State::Absent,
                 sight_fov: oag_display::display::Fov::AUTHORED,
                 model_detail: oag_mesh::mesh::ModelDetail::default(),

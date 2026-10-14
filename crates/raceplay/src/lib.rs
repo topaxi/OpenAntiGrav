@@ -240,7 +240,7 @@ pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{export_track, load, load_event};
 pub(crate) use oag_title::Trigger;
 pub use options::{
-    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup,
+    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup, Sighting,
 };
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;

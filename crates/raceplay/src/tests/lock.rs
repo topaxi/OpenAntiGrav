@@ -10,16 +10,11 @@ use oag_tables::weapons::Weapon;
 /// A race with slot 1 parked `distance` ahead of slot 0 and `side` to its right,
 /// slot 0 holding `weapon` under `pulse`'s reticle dialect or Wipeout HD's.
 fn parked_race(weapon: Weapon, pulse: bool, distance: f32, side: f32) -> (Race, Vec3) {
-    let mut race = race_with_a_grid();
+    let mut race = race_with_a_grid_sighted(title_sighting(pulse));
     race.sim.weapons = Some(match weapon {
         Weapon::LeachBeam => one_leach_beam_table(),
         _ => one_missile_table(),
     });
-    if pulse {
-        race.set_sight_dialect(oag_pulse::hud::ART.sights);
-    } else {
-        race.set_sight_dialect(oag_hd::hud::ART.sights);
-    }
     let body = race.sim.world.ships[0].physics.body;
     let at = body.position + body.forward() * distance + body.right() * side;
     race.sim.world.ships[0].pickup.weapon = Some(weapon);
@@ -153,9 +148,8 @@ fn the_lock_is_hashed_while_a_lock_weapon_is_held() {
 /// their own lock has closed the beam fires unlocked, and after it, locked.
 #[test]
 fn a_second_persons_early_leach_press_fires_unlocked() {
-    let mut race = race_with_a_grid();
+    let mut race = race_with_a_grid_sighted(title_sighting(true));
     race.sim.weapons = Some(one_leach_beam_table());
-    race.set_sight_dialect(oag_pulse::hud::ART.sights);
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     let forward = race.sim.world.ships[0].physics.body.forward();
     let rival = race.sim.world.ships[0].physics.body.position;
@@ -271,4 +265,32 @@ fn the_primarys_missile_is_guided_by_the_sim_lock_whatever_the_camera_shows() {
         None,
         "a press inside the hold was guided"
     );
+}
+
+/// `Race::start` applies the load's reticle with no further call, and keeps the
+/// simulation's grid apart from the view's: a race loaded for an authored split
+/// draws its reticle in one view, but its hashed locks stay in the title's whole
+/// space, so a server with no screen agrees with the client.
+#[test]
+fn a_race_starts_with_the_loads_reticle_and_the_locks_ignore_the_split_view() {
+    let race = race_with_a_grid_sighted(Sighting {
+        lock_screen: [1920.0, 1080.0],
+        view_screen: [1920.0, 540.0],
+        leach_law: true,
+    });
+    assert_eq!(race.sight().screen(), [1920.0, 540.0]);
+    assert!(
+        race.view
+            .huds
+            .iter()
+            .all(|hud| hud.sight.screen() == [1920.0, 540.0])
+    );
+    assert!(
+        race.sim
+            .locks
+            .iter()
+            .all(|lock| lock.screen() == [1920.0, 1080.0])
+    );
+    let unset = race_with_a_grid();
+    assert_eq!(unset.sim.locks[0].screen(), oag_race::sight::SCREEN);
 }

@@ -155,8 +155,17 @@ Missile, the Pulse LeachBeam and Wipeout HD's LeachBeam, as before the change; o
 Missile's agrees on 96% of ticks, differing in twelve windows of 1 to 37 ticks (the
 sim lock is held 146 ticks more and re-forms less often, since the real camera's eye
 lag makes the old reticle drop after a target switch or in a bend).
-`set_sight_screen` and `set_sight_dialect` are configuration the lock reads, so a
-server calls them as a client does. Opponents have no lock (their shot takes the
+The grid and the law are configuration the lock reads. Since 2026-10-14 they are
+`Setup::sight` (`oag_raceplay::Sighting`), taken from the title's HUD at load and
+applied by `Race::start`, so a server or a replay player is correct with no extra
+call; the former `set_sight_screen` and `set_sight_dialect` setters are gone (a
+race started without them ran Pulse's LeachBeam under the Missile's law, locking
+at 48 ticks instead of 20). The simulation's locks are in the title's whole HUD
+space (`Sighting::lock_screen`) and never in a split view: the view grid
+(`view_screen`) is a fact about this machine's display, and the locks are hashed.
+That moves one thing: a race loaded for an authored two-view split used to run its
+locks in one view's grid and now runs them in the whole space (single-view races
+are identical, by construction and by every lock and race ground truth). Opponents have no lock (their shot takes the
 window's candidate at once), unchanged. Pinned by `tests::lock` (the camera cannot
 move the lock, a quiet replay locks exactly as a normal tick does) and the
 `quiet_replay_ground_truth` tests, which hold with no exception.

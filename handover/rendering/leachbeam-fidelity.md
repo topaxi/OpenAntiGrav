@@ -68,7 +68,7 @@ the original's jagged lightning, and the shooter's hull lights and pulses.
   whole figure spinning (`2.0` rad/s seeking, `4.0` locked), opening at `1.5x` and
   gone about `0.24` s after the shot with the beam still live, the fade in the
   colour's alpha byte. Ported (`oag_race::sight::leach`, switched on for the Pulse
-  dialect by `Race::set_sight_dialect`) and replayed against 298 frames read off
+  dialect by `Setup::sight`, which `Race::start` applies) and replayed against 298 frames read off
   PPSSPP (error under `1e-5`). Open on it: no frame pair of the arrowheads (the
   pinned-target capture presents stale frames, so their art and size are unverified
   here), and Wipeout HD's own `Hud_UpdateLeachBeamSight` keeps the Missile's law.
