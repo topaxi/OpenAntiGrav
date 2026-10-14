@@ -75,3 +75,14 @@ fn head_to_head_across_two_windows_seats_both_people_at_the_back() {
     };
     assert_eq!(rows, [8, 7]);
 }
+
+/// A Time Trial across two windows is the Multiplayer Time Trial too: both people on the back
+/// rows with no AI beside them (the hatch is on for any race of several people).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn time_trial_across_two_windows_seats_both_people_at_the_back() {
+    let Some(rows) = seat_rows("time_trial", &["--window-seats", "1,1"]) else {
+        return;
+    };
+    assert_eq!(rows, [8, 7]);
+}

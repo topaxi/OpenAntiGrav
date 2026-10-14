@@ -139,3 +139,58 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
     }
     assert_eq!(named.len(), 2, "nobody but the two people: {named:?}");
 }
+
+/// Two windows of one seat each (`--window-seats 1,1`) are the same race: two craft, both flown
+/// by a person, craft that pass through each other, and `viewport_count() > 1`, which is what
+/// the records gate and the end board's people table key on, so the run writes no record and
+/// the board names both people. Fails if `apply_windows` left the second slot an AI craft or
+/// the view count at one.
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn two_windows_are_the_multiplayer_time_trial_too() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let build = |mode| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode,
+            // What `--window-seats 1,1` sets: a view of one per window, two people.
+            views: 1,
+            people: 2,
+            opponents: true,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let mut race = race::Race::start(loaded.setup);
+        let layout = oag_game::split_screen::deal(2, 2, oag_render::viewport::Cut::Horizontal);
+        assert_eq!(oag_game::split_screen::apply_windows(&mut race, &layout), 2);
+        race
+    };
+    let mut race = build(oag_race::Mode::TimeTrial);
+    let world = &race.sim.world;
+    assert_eq!(world.ship_count, 2, "two craft");
+    assert_eq!(world.human_slots().count(), 2, "both flown by a person");
+    assert!(race.windowed());
+    assert_eq!(race.people(), 2);
+    assert_eq!(race.viewport_count(), 2, "the views the records gate reads");
+
+    let apart = |race: &mut race::Race| {
+        let there = race.sim.world.ships[0].physics.body.position;
+        race.sim.world.ships[1].physics.body.position = there + Vec3::new(0.0, 0.0, 1.0);
+        for _ in 0..10 {
+            race.tick(&PlayerInputs::none());
+        }
+        let world = &race.sim.world;
+        world.ships[0]
+            .physics
+            .body
+            .position
+            .distance(world.ships[1].physics.body.position)
+    };
+    let through = apart(&mut race);
+    let bounced = apart(&mut build(oag_race::Mode::Head2Head));
+    assert!(through < 1.5, "pushed apart across windows: {through}");
+    assert!(bounced > through + 0.5, "{bounced} against {through}");
+}
