@@ -2342,7 +2342,14 @@ read, which is what the trial reading rests on) is non-zero; `NumPlayersPadlock`
 from the first launch. Confidence 72; the flag's writer is not located. Evidence and what is unread:
 [racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md).
 
-**Wired, 2026-10-13** (`FrontEnd::local_split`, `oag_game::boot::RaceSetup::{players, cuts}`; the readers skip the
+**Superseded 2026-10-14 (`mp-menu-flow`): the two rows below are gone from the RACE page, on HD,
+Omega and 2048 alike.** Split screen is the MULTIPLAYER row's LOCAL MULTIPLAYER flow (join, window
+layout, RACE page, Track and Ship Select; [split-screen.md](../rendering/split-screen.md), "Where the
+entry is, per title"); `FrontEnd::local_split` and `RaceSetup::{players, cuts}` were removed. What
+the disc authors is unchanged and recorded here as evidence, and `FE_GUEST_JOIN` ("PLAYER 2 PRESS
+START TO JOIN", the line asking the second person to join) is what the join screen says for seat 2.
+
+**Wired, 2026-10-13, now removed** (`FrontEnd::local_split`, `oag_game::boot::RaceSetup::{players, cuts}`; the readers skip the
 row's own `<Values idstring="RB_NUMP">` tag, which is the label, not an entry): the RACE page carries both as rows
 after AI DIFFICULTY in the authored order, with the disc's words; the cut row is `disabled_by` the count being one
 (greyed, still drawing its stored cut: the `FE_OFF` text is **not** drawn, as Pulse's `FE_NA` over a greyed difficulty

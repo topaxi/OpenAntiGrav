@@ -855,7 +855,12 @@ tap opens this build's menus and walks into the `race` or `remix` page, so
 BACK returns to the menu root. See [menus.md](../architecture/menus.md)'s
 own section on them.
 
-**Split screen is HD's two race-box rows, borrowed (2026-10-13, `split-entry-mirror-hd`).**
+**Superseded 2026-10-14 (`mp-menu-flow`): split screen is the MULTIPLAYER tile** (a third tile under
+RACEBOX and REMIX at `(16, 342)`, `Launch::Multiplayer`, opening the MULTIPLAYER page whose LOCAL
+MULTIPLAYER row runs the join, layout and RACE page flow; **checked against Omega**: the same
+extras row, **ported**). The borrowed race-box rows below are removed.
+
+**Split screen was HD's two race-box rows, borrowed (2026-10-13, `split-entry-mirror-hd`).**
 2048's front end authors no local split entry (the four tiles are single player, online,
 ad-hoc and cross-play) and has no `racebox_definition.xml`, so the RACE page behind this
 build's own RACEBOX tile carries `NUMBER OF PLAYERS` and `SPLIT SCREEN` as HD's race box does

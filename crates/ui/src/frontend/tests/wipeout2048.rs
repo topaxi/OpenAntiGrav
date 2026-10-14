@@ -453,6 +453,38 @@ fn the_extra_tiles_come_after_the_authored_ones_and_launch_this_builds_pages() {
     assert_eq!(frontend.launch(), Some(&Launch::Remix));
 }
 
+/// MULTIPLAYER is the third tile of this build's, below RACEBOX and REMIX: the grid's pad steps
+/// reach it after the other two and confirming it asks for the MULTIPLAYER page.
+#[test]
+fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
+    let mut frontend = boot(0);
+    frontend.set_extra_tiles(
+        [
+            ("RACEBOX", Launch::RaceBox),
+            ("REMIX", Launch::Remix),
+            ("MULTIPLAYER", Launch::Multiplayer),
+        ]
+        .map(|(label, launch)| ExtraTile {
+            label: label.to_string(),
+            launch,
+        })
+        .to_vec(),
+    );
+    let mut input = Input::new();
+    reach_the_grid(&mut frontend, &mut input);
+    for _ in 0..5 {
+        press(&mut frontend, &mut input, Button::Right);
+    }
+    let list = frontend.draw_list();
+    assert!(list.iter().any(|draw| matches!(
+        draw,
+        Draw::Text { text, .. } if text == "MULTIPLAYER"
+    )));
+    press(&mut frontend, &mut input, Button::Cross);
+    assert!(frontend.is_finished());
+    assert_eq!(frontend.launch(), Some(&Launch::Multiplayer));
+}
+
 #[test]
 fn a_click_on_the_race_box_tile_asks_for_the_race_box() {
     let mut frontend = boot(0);

@@ -352,3 +352,24 @@ fn an_unusable_option_is_listed_dimmed_with_its_reason_and_can_be_left() {
     press(&mut menu, &[Button::Left]);
     assert!(!note(&drawn(&menu)), "stepping back clears it");
 }
+
+/// The MODE row marks a mode that takes fewer people than are seated, and only that one: Head to
+/// Head (two craft) is dimmed with its reason for three people and left alone for two or one, and
+/// every other mode, and a token no mode answers to, is untouched. Dropping the call that applies
+/// `Mode::max_people` leaves every mode usable here.
+#[test]
+fn a_mode_that_takes_fewer_people_than_are_seated_is_marked_unusable() {
+    let modes = vec![
+        Choice::labelled("single_race", "SINGLE RACE"),
+        Choice::labelled("head_to_head", "HEAD TO HEAD"),
+        Choice::labelled("from_a_newer_build", "?"),
+    ];
+    let reason = |most: usize| format!("{most} AT MOST");
+    for people in [1, 2] {
+        assert_eq!(cap_modes(&modes, people, reason), modes, "{people} seated");
+    }
+    let capped = cap_modes(&modes, 3, reason);
+    assert_eq!(capped[0], modes[0]);
+    assert_eq!(capped[1].unavailable.as_deref(), Some("2 AT MOST"));
+    assert_eq!(capped[2], modes[2]);
+}

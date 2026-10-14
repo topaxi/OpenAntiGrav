@@ -521,7 +521,15 @@ Omega capture (below) ran.
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
-- **A second keyboard cannot join from the join screen** (2026-10-14, `keyboard-seats`): every live proof seated through `--race`, `--windows` or `seat_default`, where a press claims a free seat. On the menu path the join screen's lobby has one keyboard device (`lobby::Device::Keyboard`, read off window events that carry no keyboard identity) and `Lobby::seat` sets the head count to the number who joined, so a keyboard and a pad joined leave a second keyboard no seat, and a lone keyboard with a two-window layout chosen leaves the seating merged (window 2 AI-flown, its keys ignored). Wiring it: `Device::Keyboard` carries a source (`KeyboardId` from raw events on X11 and Windows, the window a key arrived on for Wayland seats, the layout screen's holding frames taking presses) and the join screen shows a row per keyboard; it touches `oag-ui-screens`'s join, `oag_input::lobby` and the head count.
+- ~~**A second keyboard cannot join from the join screen** (2026-10-14, `keyboard-seats`)~~ **Done on X11 and
+  Windows, 2026-10-14 (`mp-menu-flow`)**: `lobby::Device::Keys(KeyboardId)` is a physical keyboard named by the raw key
+  events (`Controls::lobby_key`, fed by `Session::device_key` while the join screen is open), the join screen shows a seat
+  per keyboard (`KEYBOARD 2`), a raw press is one device and not also the window's anonymous keyboard (the dedupe in
+  `Controls::player_snapshots`), and the seated keyboards fly their seats from the first tick of the race, also in one
+  window (`Controls::sync_device_keys`, `Assignment::claim_keyboard_device`). **Open: Wayland and macOS**, where winit names
+  no keyboard: the windows open only after the layout screen, so a second keyboard there can only claim a seat by a press
+  in its own window (this page, "Who sits where"), never as a join row. A single-window race with two keyboards on
+  X11 is covered by unit tests only (a plain Xvfb has one XTEST keyboard).
 - **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera

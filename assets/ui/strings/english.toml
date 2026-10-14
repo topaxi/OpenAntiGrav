@@ -78,6 +78,7 @@ OAG_MP_LOCAL_SUBTITLE = { text = "Up to eight people on this machine, on one scr
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
 OAG_MP_COMING_LATER = { text = "Coming later", human = false }
+OAG_MP_MODE_CAPPED = { text = "For %d people at most", human = false }
 OAG_JOIN_HINT = { text = "EACH PLAYER PRESSES A BUTTON TO JOIN", human = false }
 OAG_JOIN_PLAYER = { text = "PLAYER", human = false }
 OAG_SPLIT_FINISHED = { text = "FINISHED", human = false }

@@ -4,7 +4,8 @@ categories: [gameplay]
 
 # The multiplayer menu flow: one MULTIPLAYER entry, local now, LAN and online greyed
 
-2026-10-14, planned with the maintainer. Nothing built yet. Replaces the per-title split
+2026-10-14, planned with the maintainer. **Landed the same day (`mp-menu-flow`): steps 1 to 4 and 6 to 8**; step 5, seat
+assignment, is `mp-seat-assign` (the hook is `Session::assign_seats`, between layout and settings). Replaces the per-title split
 entries (Pulse and Pure's two SPLIT SCREEN rows, HD/Omega/2048's race-box NUMBER OF PLAYERS
 and SPLIT SCREEN rows) with one flow on every title.
 
@@ -46,9 +47,25 @@ and SPLIT SCREEN rows) with one flow on every title.
 **Quick paths**: race again and change track from the end screens skip 3 to 5. A fresh entry
 pre-fills every step, so it is OK, OK, OK.
 
+## Landed (`mp-menu-flow`, 2026-10-14)
+
+Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title". What exists now:
+
+- A MULTIPLAYER row on all five titles (Pulse `FE_MP`, worded `MULTIPLAYER & SHARING` from the disc; Pure's
+  `Multiplayer`; the built-in extras for HD and Omega; a third tile on 2048's grid) and its page: LOCAL
+  MULTIPLAYER, and LAN and ONLINE as `Action::ComingLater` rows (dimmed, focusable, the line says `Coming later`,
+  every shipped language with `human = false`).
+- The old entries are gone: Pulse and Pure's borrowed SPLIT SCREEN rows, the extras' SPLIT SCREEN row, the
+  race-box `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows and their settings, `FrontEnd::local_split`.
+- Join (confirm or START joins, START needs two, devices seated earlier this session are seated again,
+  seat 2 says the title's `FE_GUEST_JOIN` on HD and Omega), a row per keyboard where the platform names
+  keyboards (X11 and Windows), layout, the RACE page (the mode row marks a mode `Mode::max_people` caps),
+  Track and Ship Select per seat. RETURN TO MENU after a multiplayer race lands on the RACE page with the
+  same people seated (**chosen**); race again was already seatless.
+
 ## Lanes
 
-- `mp-menu-flow`: steps 1 to 4 and 6 to 8. About 1.5 days.
+- ~~`mp-menu-flow`: steps 1 to 4 and 6 to 8.~~ **Landed 2026-10-14.**
 - `mp-seat-assign`: step 5. About 1 day, after `mp-menu-flow` merges (both edit the session
   flow).
 - Not before `h2h-port-titles` adds Head to Head to the mode list, or coordinate: both touch
@@ -56,10 +73,21 @@ pre-fills every step, so it is OK, OK, OK.
 
 ## Open
 
-- **A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).
+- ~~**A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).~~ **Done on X11 and
+  Windows** (`Device::Keys`, a row per keyboard); **open on Wayland and macOS**, which name no keyboard, so a join *row* is
+  impossible there (the windows open only after the layout): a second Wayland keyboard still claims a seat by a
+  press in its window. Original finding:
   The windowed-race path (`--windows`, `--window-seats`) routes keyboards per seat (Wayland
   seats by window, X11/Windows by raw device). The join screen still treats the keyboard as one
   device, so `mp-menu-flow`'s join step should take its design: `lobby::Device::Keyboard`
   carries a source, and the join screen shows a row per keyboard. Details in
   `docs/rendering/multi-window.md`'s Open list.
 - Whether the CLI (`--players`, `--window-seats`) gains a way to skip into the flow at a step.
+- **RETURN TO MENU re-enters the flow's RACE page after a multiplayer race** (chosen, no maintainer answer yet to "change
+  track" as an end-screen option): the disc's end menu has no CHANGE TRACK and HD's blocks sit at authored y values, so
+  none was added. BACK from that page lands on the MULTIPLAYER page (not on layout or join).
+- The mode row's cap (`oag_ui::menu::cap_modes`) is unit-tested over a synthetic Head to Head and shows nothing on
+  screen until `h2h-port-titles` adds the mode; that lane should also settle what a stored Head to Head does when three
+  people are seated (the row dims, `launch_from_settings` does not yet refuse).
+- The cut on the web and phones (no layout screen) is the remembered layout's first window, else horizontal; nothing there can
+  choose a vertical split.

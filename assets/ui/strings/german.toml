@@ -36,6 +36,7 @@ OAG_MP_LOCAL_SUBTITLE = { text = "Bis zu acht Spieler an diesem Gerät, auf eine
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
 OAG_MP_COMING_LATER = { text = "Kommt später", human = false }
+OAG_MP_MODE_CAPPED = { text = "Für höchstens %d Spieler", human = false }
 OAG_JOIN_HINT = { text = "JEDER SPIELER DRÜCKT EINE TASTE ZUM BEITRETEN", human = false }
 OAG_JOIN_PLAYER = { text = "SPIELER", human = false }
 OAG_SPLIT_FINISHED = { text = "IM ZIEL", human = false }

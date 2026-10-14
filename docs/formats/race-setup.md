@@ -1088,7 +1088,8 @@ differs sits around it:
 - **Split screen is the real addition** - `FE_RACE_CAM_SS` and
   `FE_RACE_CAM_SSH` route to `Split ScreenV` / `Split ScreenH`. Confidence 95.
   Wired 2026-10-13 as the main-menu rows SPLIT SCREEN VERTICAL / HORIZONTAL on both Pulse
-  pressings and Pure (borrowed), see [split screen](../rendering/split-screen.md#the-pulse-and-pure-entry-2026-10-13-split-entry-align).
+  pressings and Pure (borrowed); **replaced 2026-10-14 (`mp-menu-flow`) by the one MULTIPLAYER
+  row** whose LOCAL MULTIPLAYER page runs the flow, see [split screen](../rendering/split-screen.md#where-the-entry-is-per-title-2026-10-14-mp-menu-flow).
   Its `Team SelectionSplit` is both players' Ship Selects on one page, top and bottom,
   read and followed since 2026-10-13: see
   [the split screen's Team Selection](../ui/selection-screens.md#the-split-screens-team-selection-2026-10-13).

@@ -74,6 +74,7 @@ OAG_MP_LOCAL_SUBTITLE = { text = "Jusqu'à huit joueurs sur cette machine, sur u
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "EN LIGNE", human = false }
 OAG_MP_COMING_LATER = { text = "Bientôt disponible", human = false }
+OAG_MP_MODE_CAPPED = { text = "Pour %d joueurs au plus", human = false }
 OAG_JOIN_HINT = { text = "CHAQUE JOUEUR APPUIE SUR UN BOUTON POUR REJOINDRE", human = false }
 OAG_JOIN_PLAYER = { text = "JOUEUR", human = false }
 OAG_SPLIT_FINISHED = { text = "TERMINÉ", human = false }

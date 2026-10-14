@@ -34,6 +34,7 @@ OAG_MP_LOCAL_SUBTITLE = { text = "Até oito pessoas neste computador, em uma tel
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
 OAG_MP_COMING_LATER = { text = "Em breve", human = false }
+OAG_MP_MODE_CAPPED = { text = "Para no máximo %d pessoas", human = false }
 OAG_JOIN_HINT = { text = "CADA JOGADOR APERTA UM BOTÃO PARA ENTRAR", human = false }
 OAG_JOIN_PLAYER = { text = "JOGADOR", human = false }
 OAG_SPLIT_FINISHED = { text = "CHEGOU", human = false }
