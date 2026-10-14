@@ -803,7 +803,8 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   new pause (the 30 s runs from there); Circle and a click do nothing through it; a window
   that loses focus during it gives way to an unowned pause. A resume while the race is
   still counting down its own start (`thrust_gated`, or the flyby) is immediate, so two
-  countdowns never overlap. A single-player resume is unchanged: no countdown.
+  countdowns never overlap. **Multiplayer only, the maintainer's decision (2026-10-14):** a
+  single-player resume stays instant, with no countdown.
 - **The countdown's art is the title's own**: Pulse's `Cockpit_321GO.vex` overlay, played
   on its own clock started 0.6 s in so that its `GO` (lit from 3.6 s, the texel-grid
   derivation in [`start-gantry.md`](start-gantry.md)) lands as the 3 s run out, drawn once
