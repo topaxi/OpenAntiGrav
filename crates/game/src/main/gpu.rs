@@ -253,7 +253,7 @@ impl Gpu {
         let surface = instance
             .create_surface(window.clone())
             .context("creating the surface")?;
-        let size = window.inner_size();
+        let size = crate::window::surface_size(&window);
 
         let brought = match Self::bring_up(&instance, &surface, size, renderer) {
             Ok(brought) => brought,
@@ -330,7 +330,7 @@ impl Gpu {
             .instance
             .create_surface(window.clone())
             .context("recreating the surface")?;
-        let size = window.inner_size();
+        let size = crate::window::surface_size(&window);
         self.output.window = window;
         self.output.surface = surface;
         self.output.config.width = size.width.max(1);
@@ -364,7 +364,7 @@ impl Gpu {
             .instance
             .create_surface(window.clone())
             .context("creating a further surface")?;
-        let inner = window.inner_size();
+        let inner = crate::window::surface_size(&window);
         let mut config = surface
             .get_default_config(&self.adapter, inner.width.max(1), inner.height.max(1))
             .context("the surface is not supported by this adapter")?;

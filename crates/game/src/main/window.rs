@@ -187,6 +187,34 @@ pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
 }
 
 /// [`attributes`] with the compositor decided by the caller.
+/// `inner` held to the monitor's size under gamescope, and untouched elsewhere. winit's X11
+/// backend reports a freshly fullscreened window as the monitor's size times its scale, so under
+/// gamescope's scale of 6 a 3840x2160 output reads 23040x12960 until the first `Resized`
+/// corrects it (measured on a Steam Deck, 2026-10-14). A surface configured from that first
+/// reading asked the driver for 6x the pixels and relied on the device limit to catch it.
+pub(crate) fn held_to_monitor(
+    inner: winit::dpi::PhysicalSize<u32>,
+    gamescope: bool,
+    monitor: Option<(u32, u32)>,
+) -> winit::dpi::PhysicalSize<u32> {
+    match monitor {
+        Some((w, h)) if gamescope && w > 0 && h > 0 => {
+            winit::dpi::PhysicalSize::new(inner.width.min(w), inner.height.min(h))
+        }
+        _ => inner,
+    }
+}
+
+/// [`held_to_monitor`] for a live window: the size a surface over it is configured with.
+pub(crate) fn surface_size(window: &winit::window::Window) -> winit::dpi::PhysicalSize<u32> {
+    let monitor = window.current_monitor();
+    held_to_monitor(
+        window.inner_size(),
+        under_gamescope_cached(monitor.as_ref()),
+        monitor.map(|m| (m.size().width, m.size().height)),
+    )
+}
+
 fn attributes_in(look: Look<'_>, gamescope: bool) -> winit::window::WindowAttributes {
     let Look {
         title,
@@ -236,14 +264,17 @@ pub(crate) fn log_geometry(
     monitors: &[winit::monitor::MonitorHandle],
     requested: display::Size,
 ) {
-    let inner = window.inner_size();
+    let inner = surface_size(window);
+    let raw = window.inner_size();
     info!(
-        "{label}: requested {}x{} logical, scale {}, inner {}x{}, fullscreen {}",
+        "{label}: requested {}x{} logical, scale {}, inner {}x{} (winit reports {}x{}), fullscreen {}",
         requested.width,
         requested.height,
         window.scale_factor(),
         inner.width,
         inner.height,
+        raw.width,
+        raw.height,
         window.fullscreen().is_some(),
     );
     for monitor in monitors {
@@ -466,6 +497,16 @@ mod tests {
         assert_eq!(px(request_size(size, true, Some((1280, 800)))), (1280, 800, true));
         assert_eq!(px(request_size(size, true, None)), (2560, 1440, true));
         assert_eq!(effective_scale(6.0, true), 1.0);
+        let six = winit::dpi::PhysicalSize::new(23040, 12960);
+        let held = |gs, m| {
+            let s = held_to_monitor(six, gs, m);
+            (s.width, s.height)
+        };
+        assert_eq!(held(true, Some((3840, 2160))), (3840, 2160));
+        assert_eq!(held(false, Some((3840, 2160))), (23040, 12960));
+        assert_eq!(held(true, None), (23040, 12960));
+        let ok = winit::dpi::PhysicalSize::new(1280, 800);
+        assert_eq!(held_to_monitor(ok, true, Some((3840, 2160))), ok);
         assert_eq!(effective_scale(2.0, false), 2.0);
     }
 
