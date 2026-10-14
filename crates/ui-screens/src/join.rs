@@ -292,7 +292,7 @@ impl Join {
         let at = self
             .hover
             .and_then(|row| rows.iter().position(|r| *r == row))
-            .map_or(if by > 0 { rows.len() - 1 } else { 0 }, |at| at);
+            .unwrap_or(if by > 0 { rows.len() - 1 } else { 0 });
         let len = rows.len() as i32;
         let next = (at as i32 + by).rem_euclid(len) as usize;
         self.hover = Some(rows[next]);
