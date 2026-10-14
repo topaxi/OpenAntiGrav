@@ -56,6 +56,8 @@ pub struct NetPlay {
     due: Cell<Option<Instant>>,
     /// The stats since the last log line, and when it was printed.
     log: RefCell<(Stats, Instant)>,
+    /// Whether the board has been printed at the end.
+    board_printed: Cell<bool>,
 }
 
 impl std::fmt::Debug for NetPlay {
@@ -111,6 +113,7 @@ impl NetPlay {
             bot: args.bot,
             due: Cell::new(None),
             log: RefCell::new((Stats::default(), Instant::now())),
+            board_printed: Cell::new(false),
         })
     }
 
@@ -209,6 +212,9 @@ impl NetPlay {
         let own = self.own_input(race, device);
         let ticks = self.client.borrow_mut().step(race, &own);
         self.log_second(race);
+        if self.over().is_some() && !self.board_printed.replace(true) {
+            print_board(race);
+        }
         ticks
     }
 
@@ -287,6 +293,26 @@ impl NetPlay {
             s.slowed_down,
             s.stalls,
             s.resends,
+        );
+    }
+}
+
+/// The board as this client has it when the server ends the race, in the
+/// server's own `board` lines' shape, so the two logs compare line for line.
+fn print_board(race: &Race) {
+    let Some(board) = race.results() else {
+        println!("net: the race ended with no board on this client");
+        return;
+    };
+    for (place, row) in board.rows.iter().enumerate() {
+        println!(
+            "board {}: slot {}{} laps {} finish tick {:?} best lap ticks {:?}",
+            place + 1,
+            row.slot,
+            if row.player { " (person)" } else { "" },
+            row.laps_completed,
+            row.finish_tick,
+            row.best_lap_ticks
         );
     }
 }

@@ -144,6 +144,8 @@ pub struct Client {
     last_adjust: u32,
     resend_asked: Option<u32>,
     bot: Option<oag_ai::Driver>,
+    /// Whether the results board has been taken from the confirmed state.
+    board_confirmed: bool,
     stats: Stats,
 }
 
@@ -181,6 +183,7 @@ impl Client {
             last_adjust: 0,
             resend_asked: None,
             bot: None,
+            board_confirmed: false,
             stats: Stats::default(),
         }
     }
@@ -434,6 +437,12 @@ impl Client {
             self.stats.confirmed += 1;
         }
         self.pending.retain(|&t, _| t >= self.confirmed_tick);
+        // The board is the server's: taken again from the confirmed state the first
+        // time it is finished (the prediction finished first and took its own).
+        if !self.board_confirmed && race.finished() {
+            race.recapture_results();
+            self.board_confirmed = true;
+        }
         let confirmed = std::mem::replace(&mut race.sim, present);
         let now = self.confirmed_tick;
         while self.own.front().is_some_and(|(t, _, _)| *t < now) {

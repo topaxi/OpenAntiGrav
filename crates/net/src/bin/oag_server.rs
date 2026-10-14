@@ -15,7 +15,7 @@
 //! ```sh
 //! cargo run -p oag-net --bin oag-server -- --people 1
 //! # prints: cert-hash <64 hex digits>; then, in another terminal:
-//! cargo run -p oag-game -- --connect 127.0.0.1:4433 --cert-hash <64 hex digits>
+//! cargo run -p oag-game -- <the same image> --connect 127.0.0.1:4433 --cert-hash <64 hex digits>
 //! ```
 //!
 //! See `docs/networking/README.md`, "Running a local server".
@@ -168,6 +168,7 @@ fn main() -> Result<()> {
         };
         if let Some(reason) = over {
             println!("tick {tick}: {reason}");
+            print_board(&host);
             host.end(reason);
             break;
         }
@@ -199,4 +200,22 @@ fn log_second(host: &mut Host, tick: u32) {
         })
         .collect();
     println!("tick {tick:>6} hash {hash:#018x} | {}", seats.join(" | "));
+}
+
+/// The server's results, the race's truth, one line a craft.
+fn print_board(host: &Host) {
+    let Some(board) = host.race().results() else {
+        return;
+    };
+    for (place, row) in board.rows.iter().enumerate() {
+        println!(
+            "board {}: slot {}{} laps {} finish tick {:?} best lap ticks {:?}",
+            place + 1,
+            row.slot,
+            if row.player { " (person)" } else { "" },
+            row.laps_completed,
+            row.finish_tick,
+            row.best_lap_ticks
+        );
+    }
 }

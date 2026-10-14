@@ -478,8 +478,10 @@ cargo run -p oag-net --bin oag-server -- --image data/images/pulse-psp-eu.chd \
   --track 'Data\Environments\01_Track\track.vex' --people 1 --hash-out /tmp/oag.hash
 # prints: listening on 127.0.0.1:4433, then: cert-hash <64 hex digits>
 
-# 2. The client, in a second terminal: the game, straight into the server's race.
-cargo run -p oag-game -- --connect 127.0.0.1:4433 --cert-hash @/tmp/oag.hash
+# 2. The client, in a second terminal: the game, straight into the server's race,
+#    from the same image (a different pressing is refused at the join).
+cargo run -p oag-game -- data/images/pulse-psp-eu.chd --connect 127.0.0.1:4433 \
+  --cert-hash @/tmp/oag.hash
 ```
 
 `--cert-hash` takes the 64 hex digits the server printed, or `@FILE` for the file
@@ -502,7 +504,8 @@ pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's
 is `Controller::Remote` on every peer, the client's own included, because the
 controllers are hashed; which craft is this machine's is view-side
 (`Race::set_seat`). The menus' LAN and ONLINE rows stay greyed. Start and focus loss
-do not pause a network race.
+do not pause a network race, and it writes no record and no ghost (its inputs are
+predictions corrected by a server, under the server's settings).
 
 ### Measured on localhost (2026-10-14)
 
@@ -520,13 +523,41 @@ state hash matched the server's.
 | 100 ms, 5% | 0 | 1,462 / 0 | 26 (1.0 a second) | 287 | 4.29 | 1.31 | 11 ticks |
 | 100 ms, 5% | 1 | 1,465 / 0 | 27 (1.1 a second) | 297 | 7.12 | 1.58 | 11 ticks |
 
-The server's side of every run: each seat's input arrived in time on every tick
+**A whole race** (3 laps, both people and the AI over the line, the server ending
+on "every person has finished" at tick 6,617 and 6,607):
+
+| Round trip | Client | Hash ok / bad | Corrections | Ticks replayed | Largest pop | Final board |
+| --- | --- | --- | --- | --- | --- | --- |
+| none | 0 | 6,600 / 0 | 100 (0.9 a second) | 300 | 1.49 | the server's, line for line |
+| none | 1 | 6,613 / 0 | 105 (1.0 a second) | 282 | 1.85 | the server's, line for line |
+| 100 ms | 0 | 6,553 / 0 | 160 (1.5 a second) | 1,462 | 4.37 | the server's, line for line |
+| 100 ms | 1 | 6,555 / 0 | 121 (1.1 a second) | 1,146 | 7.23 | the server's, line for line |
+
+**The board is the server's.** A client's prediction finishes a few ticks before its
+confirmed copy of the server's state does, and the board used to be taken there: on
+the first whole race the two clients' boards differed from each other by one tick
+in a person's time. The board is now taken again from the confirmed state when that
+finishes (`Race::recapture_results`), and both clients print the server's board
+exactly (compared line by line against `oag-server`'s own `board` lines).
+
+At 100 ms the first two seconds are not clean: the clients start 50 ms after the
+server's start and their first inputs arrive late (the server repeats the last
+input, 36 to 44 late inputs a second for the first two seconds) until the lead
+controller has run them ahead; that is inside the 272-tick countdown, where only
+the held throttle matters. From then on every input arrived in time.
+
+The server's side of the shorter runs: each seat's input arrived in time on every tick
 (none repeated, none late) with a lead of 2 to 5 ticks; at 5 percent loss the
 eight-tick redundancy covered every gap and no client needed a resend. One person
 alone needs no corrections at all (900 ticks, 0 corrections): the AI is the same
 on both ends and the client knows its own input. A windowed client on Xvfb with
 software Vulkan (20 to 25 frames a second) kept pace: 2,540 confirmed ticks, hash ok on
-every one. The corrections are the other person's craft guessed on its last input
+every one. A windowed client with a copy of the maintainer's own settings (render
+1280x720, motion blur, the performance overlay) ran at 10 frames a second there,
+fell behind while its pipelines compiled, took the server's state (the client's
+"server ahead" path) and caught up, and then ran slightly slower than real time: the
+server repeated 10 to 16 of its inputs a second. Software Vulkan, not the protocol;
+a real GPU is the test. The corrections are the other person's craft guessed on its last input
 for a window of 2 to 11 ticks, crossing the 1-unit threshold about once a second;
 they agree with section "Remote-input predictability" (ai1, threshold 1: 0.6 to 0.8
 a second).

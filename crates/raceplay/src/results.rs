@@ -234,6 +234,18 @@ impl Race {
     ///
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
+    /// Takes the board again from the simulation as it is now, replacing the one
+    /// taken at the finish. A network client's: its board was taken on the tick
+    /// its *prediction* finished, and the server's confirmed state is the race's
+    /// truth, so the board is taken once more when that finishes. A no-op until
+    /// the race in `self.sim` is finished.
+    pub fn recapture_results(&mut self) {
+        if self.finished() {
+            self.view.results = None;
+            self.capture_results();
+        }
+    }
+
     pub(super) fn capture_results(&mut self) {
         if !self.finished() || self.view.results.is_some() {
             return;
