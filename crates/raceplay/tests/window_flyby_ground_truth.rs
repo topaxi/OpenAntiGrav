@@ -6,7 +6,8 @@
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay window_flyby_ground_truth:: --run-ignored all
 //! ```
 
-use oag_gameplay::PlayerInputs;
+use oag_gameplay::input::{Button, Input, InputSnapshot};
+use oag_gameplay::{Controller, PlayerInputs};
 use oag_raceplay::{self as race, WindowViews};
 use oag_render::viewport::Cut;
 
@@ -103,4 +104,45 @@ fn a_skip_ends_the_flyby_in_every_window_at_once() {
     }
     assert_eq!(race.window_drawn(0), vec![0]);
     assert_eq!(race.window_drawn(1), vec![1], "window 2 shows its own seat");
+}
+
+/// Window 2's person holds Cross and nobody else does: the flyby ends in the lock's ticks, as
+/// the primary's held Cross ends it, and does not play out. Fails on the build where
+/// `tick_intro` read the primary slot alone (window 2's keyboard or pad could not skip).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn a_second_persons_held_cross_skips_the_flyby() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::SingleRace,
+        views: 2,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    assert_eq!(race.set_viewport_count(2), 2);
+    race.set_windows(vec![seats(&[0]), seats(&[1])]);
+    race.sim.world.controllers[1] = Controller::Local;
+    assert!(race.begin_intro());
+    let mut buttons = Input::EMPTY;
+    buttons.begin_frame(Button::Cross.bit());
+    let mut held = PlayerInputs::none();
+    held.set(
+        1,
+        InputSnapshot {
+            buttons,
+            ..InputSnapshot::EMPTY
+        },
+    );
+    let mut ticks = 0;
+    while race.in_intro() {
+        race.tick_intro(&held);
+        ticks += 1;
+        assert!(ticks < 3000, "window 2's held Cross did not end the flyby");
+    }
+    assert_eq!(ticks, oag_pulse::pre_race::PRE_RACE.lock_ticks.value + 1);
 }

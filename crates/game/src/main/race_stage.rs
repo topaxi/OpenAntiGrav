@@ -603,31 +603,69 @@ impl RaceStage {
                 viewport,
             ),
             None => {
-                if let (Some(panel), Some(progress)) =
-                    (&mut self.track_panel, self.race.track_panel_progress())
-                {
-                    panel.draw(
-                        gpu.device(),
-                        gpu.queue(),
-                        encoder,
-                        view,
-                        progress,
-                        oag_game::hud_views::panel_viewport(
-                            self.race.views_drawn(),
-                            self.race.cut(),
-                            viewport,
-                        ),
-                    );
-                }
+                self.draw_track_panel(
+                    gpu,
+                    encoder,
+                    view,
+                    viewport,
+                    self.race.views_drawn(),
+                    self.race.cut(),
+                );
                 self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
             }
         }
     }
 
+    /// The track panel over `view`, laid out against the first of `count` views cut `cut` in
+    /// `viewport`: the circuit's name and blurb while the flyby plays, then fading behind the
+    /// chase view. Nothing when there is no panel to draw or it is not on screen.
+    pub(crate) fn draw_track_panel(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        count: usize,
+        cut: oag_render::viewport::Cut,
+    ) {
+        if let (Some(panel), Some(progress)) =
+            (&mut self.track_panel, self.race.track_panel_progress())
+        {
+            panel.draw(
+                gpu.device(),
+                gpu.queue(),
+                encoder,
+                view,
+                progress,
+                oag_game::hud_views::panel_viewport(count, cut, viewport),
+            );
+        }
+    }
+
+    /// The track panel on window `window` of a multi-window race, past window 1 (which
+    /// [`Self::draw_hud`] draws): laid out for that window's own views, so it fits that window's
+    /// size and aspect. A window with no seat to show draws none.
+    pub(crate) fn draw_window_track_panel(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        window: usize,
+    ) {
+        let count = self.race.window_drawn(window).len();
+        if count == 0 {
+            return;
+        }
+        let cut = self.race.window_cut(window);
+        self.draw_track_panel(gpu, encoder, view, viewport, count, cut);
+    }
+
     /// The race HUD of window `window` over `view`, and the start-line countdown: everything
     /// [`Self::draw_hud`] draws while the race runs, for the seats a window shows. A multi-window
-    /// race's further windows call this alone, because the track panel, the results and the
-    /// end screens belong to window 1. `window` is not read when the race is not windowed.
+    /// race's further windows call this beside [`Self::draw_window_track_panel`], because the
+    /// results and the end screens belong to window 1. `window` is not read when the race is not
+    /// windowed.
     pub(crate) fn draw_window_hud(
         &mut self,
         gpu: &impl GpuContext,
