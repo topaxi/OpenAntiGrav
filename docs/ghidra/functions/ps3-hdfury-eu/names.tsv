@@ -728,3 +728,8 @@
 0x0005cb40	function	Race_CreatePlayer	80	grid-local-players.md
 0x00058600	function	Race_PlaceGrid	78	grid-local-players.md
 0x00057ae0	function	Race_ComputeGridLayout	72	grid-local-players.md
+
+# 2026-10-14 (mp-collision-re): the (3, 3) craft pair and the byte MPTimeTrial clears. See mp-time-trial-collision.md.
+0x00035760	function	Collision_TestObbObb	82	mp-time-trial-collision.md
+0x0003a320	function	Collision_ConstructObb	80	mp-time-trial-collision.md
+0x0003a1a8	function	Collision_SetObbHalfExtents	78	mp-time-trial-collision.md

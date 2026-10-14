@@ -163,3 +163,7 @@
 0x812b0d52	function	GameModeBase_Apply	80	ai-controls.md
 0x81965b58	data	g_CurrentGameMode	85	ai-controls.md
 0x81150730	function	Hud_UpdateMessages	85	hud-message-triggers.md
+
+# 2026-10-14 (mp-collision-re): the MPTimeTrial class that is still compiled in. See mp-time-trial-collision.md.
+0x8116385c	function	MPTimeTrialRaceManager_Construct	80	mp-time-trial-collision.md
+0x8115f3de	function	RaceManager_ConstructByMode	76	mp-time-trial-collision.md

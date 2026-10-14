@@ -507,3 +507,13 @@ enough to be the obvious next names to land on this page.
   had to be checked individually and exactly the case the safe-tail shortcut
   does not cover. A reader who applies the shortcut outside its range will
   reproduce this false lead.
+
+## Correction, 2026-10-14 (`mp-collision-re`): the `(3, 3)` gate byte is `collision + 0x17778`, and `0x00035760` is a box-box test
+
+Two statements above were read short. The flag the `(3, 3)` case tests is at
+`collision + 0x17778`, not `+0x7778`: both `Collision_Construct` and the reader add `0x10000`
+first (`addis r29,r25,0x1` at `0x00034ad4`; `3d3e0001` before `88097778` at `0x00038b04`).
+`0x00035760` is not "not a geometry test": it is a 15-axis separating-axis test of two oriented
+boxes over the half-extents at `+0x190`, `+0x194`, `+0x198`, named `Collision_TestObbObb`
+there. The byte is the one HD's `MPTimeTrial` race manager clears; evidence and the other
+writers are in [mp-time-trial-collision.md](mp-time-trial-collision.md).

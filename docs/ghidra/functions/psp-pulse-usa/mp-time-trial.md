@@ -1,8 +1,8 @@
-# Multiplayer Time Trial (mode 17), and no multiplayer Speed Lap (2026-10-14, `h2h-re`)
+# Multiplayer Time Trial (mode 17), and no multiplayer Speed Lap (2026-10-14, `h2h-re`; collision and board order `mp-collision-re`)
 
 **Binary:** `pulse-psp` `BOOT.BIN` (USA), image base `0x08804000`. Static only: no ad-hoc
 capture path exists here (two PPSSPP instances on an ad-hoc link were not tried), so
-nothing on this page is above 84.
+nothing on this page is above 88, and that only for the collision byte, which four other binaries agree on.
 
 ## Answer
 
@@ -18,10 +18,53 @@ Trial. There is **no multiplayer Speed Lap**.
 | How it is offered | the ad-hoc `Multiplayer` menu (`Multiplayer_Definition.xml` in `Data.wad`, global `MultiplayerMode`): `Create Single Race`, `Create Tournament`, `Create Time Trial`, `Join Game`. `Create Time Trial` has `Max Players` `2`..`8` (default 8) and `Downloaded Ships` `Allowed`/`Disallowed`, then `Team Selection` | the XML as shipped | 90 |
 | Same grid spot or separate rows | **separate**: `MPTimeTrial_Construct` calls `Race_SpawnGrid` (`0x088247e0`), the same call `MPRace_Construct` makes, which gives each racer its own slot through `g_grid_orders` ([grid.md](grid.md)). Which slots a field of N takes was not measured | decompile | 75 |
 | Ghosts or solid craft | **ordinary craft**: the racers are the craft `Race_SpawnGrid` spawns (no ghost object is built), and the race loads `MPTag_HUD.xml` (`FUN_0881b86c`), the name tags drawn over the other players' craft, as `MPRace_Construct` does. Whether they are drawn translucent was **not determined**: no mode test was looked for in the craft draw path | decompile | 60 |
-| Craft-to-craft collision | **off**. The collision world's constructor (`FUN_088151bc`, stores itself at `0x08ab0824`) sets its byte `+0x5464` to `1`; `MPTimeTrial_Construct` clears it (`sb zero, 0x5464(a0)` at `0x08822e34`), the only other writer. `Collision_DispatchPair` (`0x08816ff0`) runs `Collision_BoxAgainstBox` for a pair of type-3 (craft) bodies only when the byte is set; craft against the track mesh is untouched | three `search_instructions` hits on `0x5464(`, all read | 82 |
+| Craft-to-craft collision | **off**. The collision world's constructor (`FUN_088151bc`, stores itself at `0x08ab0824`) sets its byte `+0x5464` to `1`; `MPTimeTrial_Construct` clears it (`sb zero, 0x5464(a0)` at `0x08822e34`), the only other writer. `Collision_DispatchPair` (`0x08816eac`; its one reader is `lbu a0, 0x5464(s2)` at `0x08816ff0`) runs `Collision_BoxAgainstBox` for a pair of type-3 (craft) bodies only when the byte is set; craft against the track mesh is untouched. **Raised 82 to 88 on 2026-10-14**: Pure (USA and EU), HD, Omega and 2048 each have the same three parts (a constructor that sets a world byte, the `MPTimeTrial` constructor that clears it, a pair gate that reads it), found independently in each binary: [HD](../ps3-hdfury-eu/mp-time-trial-collision.md), [Pure](../psp-pure-usa/mp-time-trial-collision.md), [Omega](../ps4-omega-eu/mp-time-trial-collision.md), [2048](../vita-2048-eu-v104/mp-time-trial-collision.md). Not 95: no run | 88 |
 | Weapons | off and locked: mode 17 is in `Race_ReadSetupOptions`' default-off and no-override sets (`5, 9, 10, 15, 17`), [state-machine.md](state-machine.md) | decompile | 85 |
 | HUD | `Arcade_HUD.xml` (not `TimeTrial_HUD.xml`) with HUD flags `1, 2, 4, 8, 0x10, 0x40, 0x100`: the clock is shown (`PlayerStatus_Update` `0x0883b3b8` keeps a clock target in modes 5, 7, 10 and 17, [hud.md](../../../ui/hud.md)), `0x40` draws the place digits (`POS n / m`), and the per-craft place list (`0x800`) is **not** set. `MPRace_Construct` sets `0x800` (except in Head2Head) and `0x2000`; MP Time Trial sets neither (`0x2000`'s meaning unread) | decompile, both constructors side by side | 80 |
-| Ranking | the profile record is the **total race time** (`Race_RecordResult` `0x0880ae54`, `case 2` / `0xe` = modes 5 and 17: keeps the lower `param_2`, `0` or `-1` meaning unset). The in-race place is the race-order place every race shows. How the end-of-race board orders the players (finish order or time) was **not read** | decompile | 75 for the record, unread for the board |
+| Ranking | the profile record is the **total race time** (`Race_RecordResult` `0x0880ae54`, `case 2` / `0xe` = modes 5 and 17: keeps the lower `param_2`, `0` or `-1` meaning unset). The in-race place is the race-order place every race shows. **The end board orders the players by race place, which is total time** (read 2026-10-14, [below](#the-end-board-order)) | 75 for the record, 76 for the board |
+
+## The end board order
+
+Read 2026-10-14, static. The ad-hoc results table is `EndRaceResults_PopulateMultiplayerTable`
+(`0x088d9588`, [endrace-screens.md](endrace-screens.md)): row `i` is record `i` of the array at
+`+0xe4`, stride `0x110`, with the place column simply the row number `i + 1`, the name at record
+`+0x35`, the player flag at `+0x34` and the time at record `+0x140` (`ER_DNF` for `-1`,
+`ER_RACING` for `0`, otherwise the time). So the board's order is the order the records were
+**filled** in, not a sort in the table code.
+
+**Who fills the records.** `0x0882ad3c` (named `Race_BuildMultiplayerResults`) writes
+`mgr + 0x7d8 + 0x110 * row` fields `+0x34`, `+0x35`, `+0x138`, `+0x13c` and `+0x140` (the
+absolute offsets `0x80c`, `0x80d`, `0x910`, `0x914`, `0x918` in its body: `0x7d8 + 0x34` is
+`0x80c` and `0x7d8 + 0x140` is `0x918`, so the two sides of the table agree). It is called every
+frame once the manager's state is above 2 by `FUN_088244a8` (`0x088245e0`), the common update that **both**
+`MPTimeTrial`'s (`0x0882314c`) and `MPRace`'s (`0x08822348`) per-state function call first. For
+every mode except `0x12` (Elimination, which sorts by kills):
+
+1. each craft gets its total race time, `Craft_TotalRaceTime` (`0x08826b18`), as a float key, and
+   the keys are sorted ascending (`FUN_088265cc` compares `+4` as floats, smaller first; the
+   default element `FUN_08826c74` is index `-1`, key `1,000,000`);
+2. each craft, in that order, goes to the row `mgr + 0x58 + 4 * craftId` holds, or, when that
+   is `-1`, to its race place `craft + 0xbd4 - 1` (`+0xbd4` is index plus one, distinct per
+   craft, [race-progress.md](race-progress.md));
+3. the record gets the name, kills and deaths, and `+0x140` is `Craft_TotalRaceTime` when the
+   craft has finished (`craft + 0x912` set), `-2` while still racing and `-1` when destroyed or
+   retired (`Ship_State` 6 or 7).
+
+`Race_UpdatePositions` (`0x08827f0c`) keys finished craft by total time in centiseconds, so the
+race place is finishing order, which is total-time order from the common start. **The board is
+ranked by total race time; a person still racing sits below every finisher.** Not found: the
+writer of `mgr + 0x58` (the latched place), and what a tie in centiseconds does to the row (the
+rows are distinct places, so two equal times do not share a row). Confidence 76: both ends of the
+record layout and the whole fill are read, no run, and one input (`+0x58`) is unread.
+
+This agrees with the port (`oag_race::places`, finishing tick, the same order) and needs no change.
+
+**One difference from `MPRace`, observed.** The two update functions differ only in the racing
+state's handler: `MPTimeTrial`'s (`0x08823270`) first tests the player's byte `+0x911` and, when it
+is set, stores `4` to `*(player + 0x4c) + 0x1bc`; `MPRace`'s (`0x0882246c`) does not. The
+finish-wait handlers (`0x08823300`, `0x088224dc`) are identical. What `+0x911` and the stored `4`
+are was not determined (a controller mode on the player's control object, a guess), so the port
+takes no rule from it.
 
 ## No multiplayer Speed Lap
 
@@ -61,33 +104,43 @@ at tick 1200 (each shows the clock, the lap and `POS 1 / 2` and `POS 2 / 2`, one
 at the tick two craft overlap under the autopilot (Pulse 362, 1.8 units apart; HD 1435, 2.6):
 Pulse's hull draws inside the other's, HD's two hulls visibly interpenetrate.
 
-**2048 / Omega / HD cross-check (CLAUDE.md), read 2026-10-14 off the shipped data:**
+**2048 / Omega / HD / Pure cross-check (CLAUDE.md), 2026-10-14, static:**
 
-- **HD: checked, applies, not wired.** The executable has an `MPTimeTrial` race manager
-  (mode 19, `0x00040f00`; [mode-manager.md](../ps3-hdfury-eu/mode-manager.md)), and
-  `multiplayer_definition.xml` (`DATA02`) offers `Create Single Race`, `Create Tournament`,
-  `Create Time Trial`, `Join Game`, with `Max Players` 2 to 8 on `Create Time Trial`: Pulse
-  PSP's file shape, so the online mode is in HD's code and data. Its constructor was not read
-  (does it also clear a craft-pair byte? unknown), and there is no online play here. The local
-  split is Pulse's rule on HD's authored arcade split layout, **chosen**.
-- **Omega: checked, applies, not wired.** `multiplayer_definition.xml` (`data09`) is
-  **byte-identical** to HD's (18,226 bytes, `diff` empty), `Create Time Trial` included.
-  Whether Omega's executable carries an `MPTimeTrial` class was not looked for here.
-- **2048: checked, differs.** No multiplayer Time Trial: `MP.xml` is a season ladder of XP and
-  par-time levels (`MP_S12_E02` and siblings, [2048-campaign.md](../../../formats/2048-campaign.md)),
-  its executable names six `GameMode_*` classes and none is a Time Trial or a multiplayer one
-  ([head2head.md](../ps3-hdfury-eu/head2head.md#census-pure-2048-omega)), and no
-  `multiplayer_definition.xml` is listed in its archives. Which mode each MP level runs was not
-  read. The local split borrows HD's, **chosen**.
-- **Pure: checked, applies, not wired.** Its executable's race managers include `MPTimeTrial`
-  beside `MPArcade` and `MPTournament` (string census, [head2head.md](../ps3-hdfury-eu/head2head.md#census-pure-2048-omega),
-  85); the constructor was not read, so Pulse's rules are assumed for the local split,
-  **chosen**.
+- **HD: ported (the law), not wired (online).** The `MPTimeTrial` race manager (`0x00041248`,
+  mode 19) clears `collision + 0x17778`, which `Collision_ProcessPairs` reads only in the box-box
+  case; craft against the track is not gated
+  ([../ps3-hdfury-eu/mp-time-trial-collision.md](../ps3-hdfury-eu/mp-time-trial-collision.md), 84).
+  `multiplayer_definition.xml` (`DATA02`) offers `Create Time Trial`, 2 to 8 players, Pulse's file
+  shape. No online play here; the local split is Pulse's rule on HD's authored arcade split
+  layout, **chosen**, and it now agrees with the original's collision.
+- **Omega: ported (the law), not wired (online).** `multiplayer_definition.xml` (`data09`) is
+  byte-identical to HD's. `MPTimeTrialRaceManager_Construct` (`0x0127ecd0`) clears
+  `collision + 0x8890`; **checked, differs in width**: the byte also gates box-against-sphere and
+  a third dynamic pair, not box-box alone, which changes nothing here because weapons are off
+  ([../ps4-omega-eu/mp-time-trial-collision.md](../ps4-omega-eu/mp-time-trial-collision.md), 74).
+- **2048: corrected, was "checked, differs".** The executable still carries
+  `Backend/General/MPTimeTrial_RaceManager.cpp`; its constructor `FUN_8116385c` clears the same
+  kind of byte (`+0x7448`) and the by-mode factory builds it for mode id `0x13`. What 2048 does
+  not have is a way in that was found: no `multiplayer_definition.xml`, and `MP.xml` is a season
+  ladder of XP and par-time levels ([2048-campaign.md](../../../formats/2048-campaign.md)). So the
+  class exists and its reachability is **not shown**
+  ([../vita-2048-eu-v104/mp-time-trial-collision.md](../vita-2048-eu-v104/mp-time-trial-collision.md), 74).
+  The local split borrows HD's, **chosen**.
+- **Pure: ported (the law), not wired (online).** `MPTimeTrial_Construct` (USA `0x08815e1c`, EU
+  `0x08815c34`) clears `world + 0x3664`, and `Collision_DispatchPair` runs `Collision_BoxAgainstBox`
+  only when it is set, the same as Pulse
+  ([../psp-pure-usa/mp-time-trial-collision.md](../psp-pure-usa/mp-time-trial-collision.md), 82;
+  [EU](../psp-pure-eu/mp-time-trial-collision.md), 80). Pulse's rules for the local split are
+  now the original's own on Pure too, no longer assumed.
+
+No title keeps craft collision on in its Time Trial, so no port follow-up note
+is needed.
 
 ## Next address to try
 
 - Translucency: the craft draw call for a non-local racer, checked for a `g_game_mode == 0x11`
   test (start from the `MPTag_HUD.xml` owner `FUN_0881b86c` and the craft render pass).
-- The end-of-race order: `MPTimeTrial_Construct`'s vtable at `0x08ac8054` (its finish
-  method), against `MPRace_Construct`'s at `0x08ac7e54`.
+- The latched place `mgr + 0x58` and whether a tied centisecond total shares a row
+  ([the board](#the-end-board-order)); and what `player + 0x911` and the `+0x1bc = 4` store in
+  `MPTimeTrial`'s racing state are.
 - A live check needs two PPSSPP instances on one ad-hoc link.
