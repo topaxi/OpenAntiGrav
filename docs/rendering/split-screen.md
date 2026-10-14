@@ -811,12 +811,34 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   per view of a split and over the gantry circuits too (a gantry stands at the start line,
   not where the race was paused); `GO` stays 1.5 s after the race moves. The start voice's
   `ready` is raised as the countdown starts and `go` as it ends, on titles that voice their
-  start (`Race::raise_start_cue`; Pulse only). **No other title has screen-space art**:
+  start (`Race::raise_start_cue`; Pulse only).
+- **Where a title authors no countdown art, the count is text in its own `HUD` face**
+  (2026-10-14, **chosen, not measured**; the original has no resume countdown at all).
   Pure authors `Ready_GO.vex` and no `Cockpit321Go`, HD's `hud_ready_go.xml` is disabled
-  (`aMode3D`), so HD, Pure, 2048 and Omega draw nothing during the countdown, by
-  design: no stand-in for art the title does not author (checked live on HD, which holds
-  the frozen race for 3 s with nothing on screen but the race; 2048 and Omega were not
-  run).
+  (`aMode3D`), and 2048 and Omega carry neither, so those four draw `3`, `2`, `1` a second
+  apart and then `GO` (`pause::Count`), per view, in the face the title's HUD values use
+  (`HudArt::hud_font_role`). Which of art and text a title gets is data:
+  `oag_title::hud::HudArt::resume_countdown` (`Authored` on Pulse, both pressings share
+  `ART`; `Text` on the other four), not a `title.name` test. A title marked `Authored`
+  whose model did not load draws nothing and says so in the loader report, never a font
+  stand-in. `GO` is a string (`OAG_COUNTDOWN_GO`: `GO`, `LOS`, `VAI`; French is under
+  `[untranslated]` and shows the English, as the pause line does now too: it used to
+  show the raw string id for any untranslated id). The text goes into the HUD's own
+  `Frame` (`hud_views::countdown_frame`, one `Span` per view so each view's scissor
+  keeps its digit), because a second pass in the same encoder would be overwritten by the
+  HUD's `write_buffer`. Its height is `COUNTDOWN_HEIGHT` (30% of the HUD grid fitted into
+  the view, so about 13 to 18% of the view's height for a digit). The glyph census
+  (`resume_countdown_ground_truth`): `3`, `2`, `1` and `GO` are all in the loaded `HUD`
+  face of Pure, HD, 2048 and Omega (an absent glyph draws nothing, silently).
+- **Placement** (chosen): a view of a split shows the count `pause::SPLIT_ANCHOR_Y` (30%)
+  of the way down it, centred across it, because the authored place (171 of 272, 63%)
+  is over the craft in a short strip; a screen of one view keeps the authored 63%
+  (`pause::anchor_y`). Pulse's art takes the same anchor and, in a split, a single scale
+  on both axes, `pause::SPLIT_ART_SCALE` (2.2, chosen) times as authored, which is about
+  5% of a short strip's height otherwise: it used to be stretched over each view by the
+  480x272 grid, twice as wide as tall in a horizontal strip. The start-line countdown, which is drawn through the
+  same model, keeps the stretched authored placement, so single-player frames are
+  byte-identical (checked on all five titles, headless).
 - **A click on a paused race is slot 0's Start**, through the same owner rule, so a mouse
   cannot lift player 2's pause inside their 30 s. The whole window is the target: there is
   no resume row, since the pause draws no menu.

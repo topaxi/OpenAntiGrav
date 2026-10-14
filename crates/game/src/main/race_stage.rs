@@ -602,7 +602,11 @@ impl RaceStage {
                     };
                     // Only a resume is placed here; the start's is the authored one.
                     let anchor = (self.resume_art.is_some() && views > 1)
-                        .then(|| [0.5, oag_game::pause::anchor_y(views)]);
+                        .then(|| oag_game::hud_countdown::Anchor {
+                            across: 0.5,
+                            down: oag_game::pause::anchor_y(views),
+                            scale: oag_game::pause::SPLIT_ART_SCALE,
+                        });
                     if let Some(countdown) = &mut self.countdown
                         && let Some(seconds) = self.resume_art.or(start_line)
                     {

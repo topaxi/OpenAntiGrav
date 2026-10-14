@@ -32,6 +32,7 @@ mod race_end_photo_load_ground_truth;
 mod race_ground_truth;
 mod race_remix_ground_truth;
 mod record_readout_ground_truth;
+mod resume_countdown_ground_truth;
 mod roster_declared_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

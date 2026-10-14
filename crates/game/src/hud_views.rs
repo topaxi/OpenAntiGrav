@@ -277,7 +277,7 @@ pub fn panel_viewport(
 
 /// How tall a countdown digit is, as a fraction of the HUD's grid height fitted into
 /// the view. **Chosen**, to read at a glance across a short view.
-const COUNTDOWN_HEIGHT: f32 = 0.2;
+const COUNTDOWN_HEIGHT: f32 = 0.3;
 
 /// The resume countdown's word as text in the title's `HUD` face, one per view,
 /// each centred across its view and `crate::pause::anchor_y(count)` of the way down

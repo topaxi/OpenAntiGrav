@@ -49,6 +49,10 @@ pub const GO_LINGER: f64 = 1.5;
 /// view shows track and gantry.
 pub const SPLIT_ANCHOR_Y: f32 = 0.30;
 
+/// How much larger than authored Pulse's countdown art is drawn in a view of a split.
+/// **Chosen**: at the authored size it is about 5% of a short strip's height.
+pub const SPLIT_ART_SCALE: f32 = 2.2;
+
 /// Where the title's countdown art sits on a screen of one view, as a fraction of
 /// its height: `Cockpit_321GO`'s authored `(0, 0)` plus `OriginY 35` on the PSP's
 /// 480x272 grid, 171 down (`oag_game::hud_countdown`). The text a title with no art

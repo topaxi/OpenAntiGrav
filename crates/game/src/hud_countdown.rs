@@ -132,6 +132,18 @@ use oag_mesh::mesh_render::{
 
 use oag_display::space::SCREEN;
 
+/// Where a resume countdown sits in a view of a split. **Chosen, not measured.**
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Anchor {
+    /// Fraction of the way across the view the widget's centre is.
+    pub across: f32,
+    /// Fraction of the way down.
+    pub down: f32,
+    /// The authored size times this: the grid is fitted to a short strip by its
+    /// height, so the art as authored is a few percent of the view.
+    pub scale: f32,
+}
+
 /// The GPU half of the countdown overlay: one model, one small pass with its
 /// own depth buffer, drawn after the HUD's ordinary sprite pass.
 pub struct Countdown {
@@ -299,9 +311,9 @@ impl Countdown {
     ///
     /// `anchor` is `None` to put the widget where it authors itself and stretch the
     /// 480x272 grid over `viewport`, exactly as the start-line countdown always has;
-    /// `Some([across, down])` to centre it that fraction of the way across and down
-    /// `viewport` with one scale on both axes, which is how a resume countdown sits
-    /// in a view of a split (see `crate::pause::anchor_y`).
+    /// `Some` to centre it at an [`Anchor`] of `viewport` with one scale on both
+    /// axes, which is how a resume countdown sits in a view of a split (see
+    /// `crate::pause::anchor_y`).
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &mut self,
@@ -310,7 +322,7 @@ impl Countdown {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         seconds: f32,
-        anchor: Option<[f32; 2]>,
+        anchor: Option<Anchor>,
         viewport: (f32, f32, f32, f32),
         target_size: (u32, u32),
     ) {
@@ -351,12 +363,17 @@ impl Countdown {
             // 480:272 (a split's is 16:4.5, or 8:9) does not stretch the glyph, and
             // the grid is cut to the viewport rather than the viewport to the grid,
             // so the anchor is a fraction of the view itself. **Chosen.**
-            Some([across, down]) => {
+            Some(Anchor {
+                across,
+                down,
+                scale,
+            }) => {
                 let unit = (viewport.2 / SCREEN.0).min(viewport.3 / SCREEN.1);
                 let (width, height) = (viewport.2 / unit, viewport.3 / unit);
                 (
                     camera::orthographic(0.0, width, 0.0, height, 1.0, 2000.0),
-                    Mat4::from_translation(Vec3::new(across * width, (1.0 - down) * height, -70.0)),
+                    Mat4::from_translation(Vec3::new(across * width, (1.0 - down) * height, -70.0))
+                        * Mat4::from_scale(Vec3::splat(scale)),
                 )
             }
         };
