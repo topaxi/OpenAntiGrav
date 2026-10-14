@@ -530,6 +530,10 @@ impl Session {
     /// stage: the model is gone by now, which is what lets this run with
     /// `&mut self` and no borrow of the stage still live.
     pub(crate) fn finish_prompt(&mut self, finished: Finished) {
+        if finished.purpose == Purpose::LanAddress {
+            self.lan_address_entered(&finished.text);
+            return;
+        }
         let Some(dir) = pilots::directory() else {
             error!("no config directory on this platform, so nothing can be written");
             return;
@@ -574,6 +578,19 @@ impl Session {
                 // better to land on than the top.
                 self.reload_pilot_roster(None);
             }
+            Purpose::LanAddress => {}
+        }
+    }
+
+    /// Whether a desk key may type `c` into the open prompt: its own grid's alphabet, so
+    /// the desk and the grid cannot build different text.
+    pub(crate) fn typing_accepts(&self, c: char) -> bool {
+        match &self.stage {
+            Stage::Menu(stage) => stage
+                .prompt
+                .as_ref()
+                .map_or_else(|| oag_ui_screens::prompt::accepts(c), |prompt| prompt.accepts(c)),
+            _ => oag_ui_screens::prompt::accepts(c),
         }
     }
 

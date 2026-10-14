@@ -34,6 +34,28 @@ OAG_MP_LOCAL_SUBTITLE = { text = "Até oito pessoas neste computador, em uma tel
 OAG_MP_LAN = { text = "LAN", human = false }
 OAG_MP_ONLINE = { text = "ONLINE", human = false }
 OAG_MP_COMING_LATER = { text = "Em breve", human = false }
+OAG_MP_LAN_SUBTITLE = { text = "Hospede uma corrida na sua rede ou entre em uma", human = false }
+OAG_LAN_HOST = { text = "CRIAR JOGO", human = false }
+OAG_LAN_HOST_SUBTITLE = { text = "Escolha a corrida e espere os outros entrarem", human = false }
+OAG_LAN_JOIN = { text = "ENTRAR NO JOGO", human = false }
+OAG_LAN_JOIN_SUBTITLE = { text = "Encontre um jogo na sua rede", human = false }
+OAG_LAN_LOBBY_TITLE = { text = "SALA LAN", human = false }
+OAG_LAN_LOBBY_HINT = { text = "OS OUTROS ENTRAM EM ENTRAR NO JOGO, DEPOIS VOCÊ COMEÇA", human = false }
+OAG_LAN_WAITING = { text = "AGUARDANDO JOGADORES", human = false }
+OAG_LAN_YOU = { text = "VOCÊ", human = false }
+OAG_LAN_START = { text = "INICIAR CORRIDA", human = false }
+OAG_LAN_JOINLIST_TITLE = { text = "ENTRAR NO JOGO", human = false }
+OAG_LAN_JOINLIST_HINT = { text = "ESCOLHA UM JOGO NA SUA REDE", human = false }
+OAG_LAN_SEARCHING = { text = "PROCURANDO...", human = false }
+OAG_LAN_ADDRESS = { text = "DIGITAR UM ENDEREÇO", human = false }
+OAG_LAN_ADDRESS_TITLE = { text = "ENDEREÇO DO ANFITRIÃO", human = false }
+OAG_LAN_ADDRESS_HINT = { text = "ENDEREÇO DO COMPUTADOR ANFITRIÃO, ex. 192.168.1.20", human = false }
+OAG_LAN_WAIT_TITLE = { text = "ENTROU", human = false }
+OAG_LAN_WAIT_HINT = { text = "AGUARDANDO O ANFITRIÃO INICIAR A CORRIDA", human = false }
+OAG_LAN_OTHER_TITLE = { text = "OUTRO JOGO", human = false }
+OAG_LAN_PEOPLE = { text = "JOGADORES", human = false }
+OAG_LAN_NOT_HERE = { text = "ISTO JOGA %s, NÃO ESTE DISCO", human = false }
+OAG_LAN_FAILED = { text = "NÃO FOI POSSÍVEL ENTRAR", human = false }
 OAG_MP_MODE_CAPPED = { text = "Para no máximo %d pessoas", human = false }
 OAG_JOIN_HINT = { text = "CADA JOGADOR APERTA UM BOTÃO PARA ENTRAR", human = false }
 OAG_JOIN_PLAYER = { text = "JOGADOR", human = false }

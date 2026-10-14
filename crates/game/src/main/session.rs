@@ -68,6 +68,12 @@ mod pilot_editor;
 mod custom_tracks;
 #[path = "session/join.rs"]
 mod join;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "session/lan.rs"]
+mod lan;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/lan_web.rs"]
+mod lan;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
 #[path = "session/seat_assign.rs"]
@@ -662,6 +668,9 @@ pub(crate) struct Session {
     /// the page's changes and the Track and Ship Select that follow. Cleared, with the lobby,
     /// when the menu leaves the page (`Session::sync_multiplayer`).
     pub(crate) multiplayer: bool,
+    /// LAN play, from HOST GAME or JOIN GAME until the menus reopen after the race
+    /// (`session::lan`). It owns the in-process host and the connection while they run.
+    pub(crate) lan: Option<lan::Lan>,
     /// Who sits in each pane of the layout, the panes counted across the windows from 0: the
     /// seat assignment screen's answer, kept for the race, a race again and a RETURN TO MENU
     /// race until the flow ends ([`Session::sync_multiplayer`]). Empty deals the slots in

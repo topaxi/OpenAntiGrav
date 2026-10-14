@@ -482,6 +482,12 @@ impl Session {
         // Which way two views are cut: the load reads the left-and-right HUD for a vertical
         // cut, and `split_screen::seat_for_launch` cuts the screen the same way.
         options.cut = self.split_cut;
+        // A LAN race is the host's: its circuit, ship, mode and head count replace the
+        // pages', one local view (`NetPlay::race_options`).
+        if let Some(net) = &self.net {
+            options = net.race_options(options)?;
+            self.race_options = Some(options.clone());
+        }
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see
         // `oag_raceplay::catalogue::label`. `None` on a run whose source offered
@@ -605,6 +611,7 @@ impl Session {
             };
             stage.build = None;
             let mut result = built.stage;
+            let mut join_error = None;
             if let Ok(race_stage) = &mut result {
                 // A resize that landed while the build ran: the scene was
                 // sized for a framebuffer that no longer exists, and
@@ -622,76 +629,89 @@ impl Session {
                 // `RaceStage::campaign_cell`'s own doc. `.take()` leaves
                 // `self.campaign_cell` empty for whatever races next.
                 race_stage.campaign_cell = self.campaign_cell.take();
-                // The join screen's players: the views, the local slots and the
-                // devices on them. Drained here, with the cell, for the same
-                // reason - this is where a launch and a live stage meet.
-                oag_game::split_screen::seat_for_launch(
-                    &mut self.split_lobby,
-                    &mut self.controls,
-                    &mut race_stage.race,
-                    cut,
-                );
-                // Several windows are open: deal the people across them, window 1 first, each
-                // window cutting its own seats. With one window the split is its, as ever,
-                // unless the seat assignment ran (`pane_people`): its answer says who sits in
-                // which view, which only `deal_windows` carries out.
-                if oag_game::split_screen::deals_the_panes(open_windows, &self.pane_people) {
-                    let layout = oag_game::split_screen::layout_for(
-                        Some(&wanted_layout),
-                        race_stage.race.viewport_count(),
-                        open_windows,
+                // A LAN race is the host's: its start state is what this machine proves
+                // before it says it is ready, and its AI, seats and views are the server's
+                // (`NetPlay::begin_join`), so none of the local launch below applies.
+                if let Some(net) = &self.net {
+                    let title = self.shell.as_ref().map_or("", |shell| shell.title.name);
+                    if let Err(e) = net.begin_join(&mut race_stage.race, title) {
+                        join_error = Some(e);
+                    }
+                } else {
+                    // The join screen's players: the views, the local slots and the
+                    // devices on them. Drained here, with the cell, for the same
+                    // reason - this is where a launch and a live stage meet.
+                    oag_game::split_screen::seat_for_launch(
+                        &mut self.split_lobby,
+                        &mut self.controls,
+                        &mut race_stage.race,
                         cut,
                     );
-                    oag_game::split_screen::deal_windows(
-                        &mut race_stage.race,
-                        &layout,
-                        &self.pane_people,
-                    );
-                }
-                race_stage.campaign_difficulty = self.campaign_difficulty.take();
-                race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
-                // Applied here, once, before the stage ever ticks - see
-                // `Session::campaign_ai_skill_scale`'s own doc.
-                // `oag_ai::Difficulty::tune_at_scale` is the continuous
-                // generalisation of `Setup::difficulty`'s own discrete
-                // `tune()`, which `race::Race::start` already ran once with
-                // whatever ambient difficulty the RACE page had selected -
-                // this overrides it with the campaign's own resolved
-                // position rather than adding to it, the same "replaces,
-                // not adds" shape `AI_ResolveSkillScale`'s own campaign
-                // branch has.
-                if let Some(scale) = race_stage.campaign_ai_skill_scale {
-                    race_stage
-                        .race
-                        .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
-                            scale,
-                            &oag_ai::Tuning::default(),
-                        ));
-                    // The finished player's thrust reads the same scale:
-                    // `AI_ResolveSkillScale` is its one source too.
-                    race_stage.race.set_finished_thrust_skill(scale);
-                }
-                // **Whose driver flies the opponents** (`oag_game::ai_choice`):
-                // the original's, in every race with opponents, unless
-                // `--ai ours`. A campaign cell brings its resolved scale (else
-                // the race's ambient `AI_ResolveSkillScale` value the load
-                // already took) and the rung the pack shuffle reads, which
-                // `CellSelection_CommitSelection` writes to the original's
-                // `g_skill_level`; a 2048 event brings its own `m_skillScale`
-                // and level and the two AI skills the ring rate follows; any
-                // other race takes its `[ai] difficulty` as the rung. A class
-                // with no tables keeps this project's driver.
-                let source = if race_stage.campaign_cell.is_some() {
-                    oag_game::ai_choice::Source::Campaign {
-                        skill: race_stage.campaign_ai_skill_scale,
-                        level: race_stage.campaign_difficulty.map_or(1, rung_level),
+                    // Several windows are open: deal the people across them, window 1 first, each
+                    // window cutting its own seats. With one window the split is its, as ever,
+                    // unless the seat assignment ran (`pane_people`): its answer says who sits in
+                    // which view, which only `deal_windows` carries out.
+                    if oag_game::split_screen::deals_the_panes(open_windows, &self.pane_people) {
+                        let layout = oag_game::split_screen::layout_for(
+                            Some(&wanted_layout),
+                            race_stage.race.viewport_count(),
+                            open_windows,
+                            cut,
+                        );
+                        oag_game::split_screen::deal_windows(
+                            &mut race_stage.race,
+                            &layout,
+                            &self.pane_people,
+                        );
                     }
-                } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
-                    oag_game::ai_choice::Source::Event2048(event.ai)
-                } else {
-                    oag_game::ai_choice::Source::Free(ai_difficulty)
-                };
-                oag_game::ai_choice::apply(&mut race_stage.race, ai_choice, source);
+                    race_stage.campaign_difficulty = self.campaign_difficulty.take();
+                    race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
+                    // Applied here, once, before the stage ever ticks - see
+                    // `Session::campaign_ai_skill_scale`'s own doc.
+                    // `oag_ai::Difficulty::tune_at_scale` is the continuous
+                    // generalisation of `Setup::difficulty`'s own discrete
+                    // `tune()`, which `race::Race::start` already ran once with
+                    // whatever ambient difficulty the RACE page had selected -
+                    // this overrides it with the campaign's own resolved
+                    // position rather than adding to it, the same "replaces,
+                    // not adds" shape `AI_ResolveSkillScale`'s own campaign
+                    // branch has.
+                    if let Some(scale) = race_stage.campaign_ai_skill_scale {
+                        race_stage
+                            .race
+                            .set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
+                                scale,
+                                &oag_ai::Tuning::default(),
+                            ));
+                        // The finished player's thrust reads the same scale:
+                        // `AI_ResolveSkillScale` is its one source too.
+                        race_stage.race.set_finished_thrust_skill(scale);
+                    }
+                    // **Whose driver flies the opponents** (`oag_game::ai_choice`):
+                    // the original's, in every race with opponents, unless
+                    // `--ai ours`. A campaign cell brings its resolved scale (else
+                    // the race's ambient `AI_ResolveSkillScale` value the load
+                    // already took) and the rung the pack shuffle reads, which
+                    // `CellSelection_CommitSelection` writes to the original's
+                    // `g_skill_level`; a 2048 event brings its own `m_skillScale`
+                    // and level and the two AI skills the ring rate follows; any
+                    // other race takes its `[ai] difficulty` as the rung. A class
+                    // with no tables keeps this project's driver.
+                    let source = if race_stage.campaign_cell.is_some() {
+                        oag_game::ai_choice::Source::Campaign {
+                            skill: race_stage.campaign_ai_skill_scale,
+                            level: race_stage.campaign_difficulty.map_or(1, rung_level),
+                        }
+                    } else if let Some(event) = race_stage.campaign_2048_event.as_ref() {
+                        oag_game::ai_choice::Source::Event2048(event.ai)
+                    } else {
+                        oag_game::ai_choice::Source::Free(ai_difficulty)
+                    };
+                    oag_game::ai_choice::apply(&mut race_stage.race, ai_choice, source);
+                }
+            }
+            if let Some(e) = join_error {
+                result = Err(RaceBuildError::Load(e));
             }
             if let Some(probe) = self.load_probe.as_mut() {
                 probe.span("race-build thread: build_race_stage", built.build);
@@ -774,6 +794,21 @@ impl Session {
     /// would not build - not something to carry on from, exactly as before
     /// this moved to [`Self::advance_race_build`].
     fn finish_race_loading(&mut self) -> Result<()> {
+        // A LAN race starts when the host says so, with every seat loaded: the loading screen
+        // stays up until then (`NetPlay::poll_start`).
+        if let Some(net) = &self.net
+            && matches!(&self.stage, Stage::Loading(stage)
+                if stage.screen.is_done() && stage.built_race.as_ref().is_some_and(Result::is_ok))
+        {
+            match net.poll_start() {
+                Ok(true) => {}
+                Ok(false) => return Ok(()),
+                Err(e) => {
+                    error!("cannot start a race: {e:#}");
+                    return self.open_menus();
+                }
+            }
+        }
         let Some((built, music)) = (match &mut self.stage {
             Stage::Loading(stage) if stage.screen.is_done() => stage
                 .built_race
@@ -788,7 +823,7 @@ impl Session {
                 // Begun here, at the hand-over, so no frame is drawn with the chase camera and
                 // the HUD before the flyby's first tick. A race resumed from the menus
                 // (`escape.rs`) is not a new one and does not come through here.
-                if !self.no_intro {
+                if !self.no_intro && self.net.is_none() {
                     race_stage.race.begin_intro();
                 }
                 race_stage

@@ -328,3 +328,49 @@ fn a_button_row_shows_no_value() {
         "no value beside START or BACK"
     );
 }
+
+/// LAN's host list is this screen as a list: no START row, a row says what the caller named it
+/// rather than "PLAYER n", a confirm on a host answers with its index, and the cursor a pad
+/// moves is the highlight the pointer sets.
+#[test]
+fn a_list_has_no_start_names_its_own_rows_and_answers_a_confirm_with_the_index() {
+    let mut list = Join::new(labels(), 8).as_list();
+    list.set_seats(vec!["VINETA K".into(), "PHANTOM".into()]);
+    list.set_row_labels(vec!["ADA".into(), "BOB".into()]);
+    assert_eq!(
+        list.rows(),
+        [Row::Seat(0), Row::Seat(1), Row::Empty, Row::Back],
+        "hosts, the typed address, back; never START"
+    );
+    let skin = skin();
+    let frame = Frame::default();
+    let text: Vec<String> = list
+        .body(&skin, &frame)
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        text.contains(&"ADA".to_string()) && text.contains(&"BOB".to_string()),
+        "{text:?}"
+    );
+    assert!(!text.iter().any(|t| t.starts_with("PLAYER")), "{text:?}");
+    assert_eq!(list.confirm(), None, "nothing is highlighted yet");
+    list.step(1);
+    list.step(1);
+    assert_eq!(list.confirm(), Some(Event::Leave(1)), "the second host");
+    list.step(1);
+    assert_eq!(list.confirm(), Some(Event::Join), "the typed address");
+    list.step(1);
+    assert_eq!(list.confirm(), Some(Event::Back));
+    list.step(1);
+    assert_eq!(list.confirm(), Some(Event::Leave(0)), "it wraps");
+    list.step(-1);
+    assert_eq!(list.confirm(), Some(Event::Back), "and wraps the other way");
+    // The click on a host is the same answer as a confirm on it.
+    let mut pointer = click(centre(&skin, 1));
+    pointer.back = false;
+    assert_eq!(list.pointer(&pointer, &skin).last(), Some(&Event::Leave(1)));
+}

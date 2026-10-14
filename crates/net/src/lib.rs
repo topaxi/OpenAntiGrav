@@ -11,6 +11,10 @@
 //!   in-process pair and a latency and loss shim.
 //! - `wt`: [`link::Link`] over WebTransport, native only.
 //! - [`race`]: the one way the server and a client build the same race.
+//! - [`discovery`]: finding a LAN host (a UDP query and its answer).
+//! - [`lobby`]: the connections waiting for a LAN host's START.
+//! - [`serve`]: the race phase of a server, shared by `oag-server` and a hosting game.
+//! - `lan`: a game hosting a race in-process, native only.
 //! - [`host`]: the authoritative race and each person's input buffer.
 //! - [`client`]: prediction, the confirmed timeline and the threshold correction.
 //!
@@ -19,9 +23,14 @@
 //! `InputSnapshot` per slot per tick, the same as from a pad.
 
 pub mod client;
+pub mod discovery;
 pub mod host;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod lan;
 pub mod link;
+pub mod lobby;
 pub mod race;
+pub mod serve;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;

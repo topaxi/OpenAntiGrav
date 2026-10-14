@@ -32,6 +32,9 @@ pub(crate) enum Purpose {
         /// Whose file.
         name: String,
     },
+    /// Ask the LAN host list's browser to look at the address typed
+    /// (`session::lan`).
+    LanAddress,
 }
 
 /// Which text-entry or confirm model is on screen.
@@ -85,6 +88,15 @@ impl Prompt {
         Self {
             purpose,
             model: Model::Confirm(confirm),
+        }
+    }
+
+    /// Whether a desk key may type `c` into this prompt: the grid's own alphabet, so the two
+    /// input paths cannot build different text.
+    pub(crate) fn accepts(&self, c: char) -> bool {
+        match &self.model {
+            Model::Keyboard(keyboard) => keyboard.accepts(c),
+            _ => oag_ui_screens::prompt::accepts(c),
         }
     }
 

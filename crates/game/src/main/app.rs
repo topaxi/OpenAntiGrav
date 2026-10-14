@@ -570,6 +570,7 @@ impl App {
             focus: crate::windows::Focus::default(),
             seat_clicks: 0,
             multiplayer: false,
+            lan: None,
             pane_people: Vec::new(),
             mp_devices: Vec::new(),
             split_picks: Vec::new(),
@@ -891,10 +892,11 @@ impl ApplicationHandler for App {
                         session.request_paste();
                         return;
                     }
-                    let typed = crate::typing::decide(
+                    let typed = crate::typing::decide_with(
                         &event.logical_key,
                         event.state == ElementState::Pressed,
                         event.repeat,
+                        |c| session.typing_accepts(c),
                     );
                     if session.typed(typed) {
                         return;

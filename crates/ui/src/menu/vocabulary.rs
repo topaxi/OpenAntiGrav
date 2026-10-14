@@ -66,6 +66,12 @@ pub enum Action {
     /// ONLINE). It is inert: drawn dimmed, focusable so its subtitle can say so, and refusing
     /// the confirm with the decline cue ([`super::Menu::is_disabled`]).
     ComingLater,
+    /// The LAN page's HOST GAME row: the RACE page, Track Select and Ship Select, then a lobby
+    /// that waits for the others - `crate::main::session::lan` in `oag-game`.
+    HostLan,
+    /// The LAN page's JOIN GAME row: the list of hosts discovery finds, and a typed address
+    /// for the ones it does not.
+    JoinLan,
 }
 
 impl Action {
@@ -83,6 +89,8 @@ impl Action {
             Self::OpenCampaign => "open_campaign",
             Self::OpenMultiplayerLocal => "multiplayer_local",
             Self::ComingLater => "coming_later",
+            Self::HostLan => "lan_host",
+            Self::JoinLan => "lan_join",
         }
     }
 
@@ -100,13 +108,15 @@ impl Action {
             "open_campaign" => Some(Self::OpenCampaign),
             "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
             "coming_later" => Some(Self::ComingLater),
+            "lan_host" => Some(Self::HostLan),
+            "lan_join" => Some(Self::JoinLan),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 10] {
+    pub fn all() -> [Self; 12] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -118,6 +128,8 @@ impl Action {
             Self::OpenCampaign,
             Self::OpenMultiplayerLocal,
             Self::ComingLater,
+            Self::HostLan,
+            Self::JoinLan,
         ]
     }
 }

@@ -119,7 +119,7 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
         actions,
         [
             Some(Action::OpenMultiplayerLocal),
-            Some(Action::ComingLater),
+            None,
             Some(Action::ComingLater),
             None
         ]
@@ -129,22 +129,46 @@ fn the_multiplayer_page_has_local_and_two_rows_for_later() {
         press(&mut menu, &[Button::Cross]),
         [MenuEvent::Fired(Action::OpenMultiplayerLocal)]
     );
-    for (row, name) in [(1, "LAN"), (2, "ONLINE")] {
-        press(&mut menu, &[Button::Down]);
-        assert_eq!(menu.selected(), row);
-        let entry = &menu.page().entries[row];
-        assert_eq!(entry.label(), name);
-        assert!(menu.is_disabled(entry), "{name} is dimmed");
-        assert_eq!(
-            menu.page().subtitles[row].as_deref(),
-            Some("Coming later"),
-            "{name} says so"
-        );
-        menu.take_nav();
-        assert!(
-            press(&mut menu, &[Button::Cross]).is_empty(),
-            "{name} fires nothing"
-        );
-        assert_eq!(menu.take_nav(), [Nav::Decline]);
-    }
+    // LAN opens its own page, whose rows are the two LAN actions.
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(menu.selected(), 1);
+    assert_eq!(menu.page().entries[1].label(), "LAN");
+    assert!(
+        !menu.is_disabled(&menu.page().entries[1]),
+        "LAN is real now"
+    );
+    assert!(
+        press(&mut menu, &[Button::Cross]).is_empty(),
+        "it opens a page"
+    );
+    assert_eq!(menu.page().id, "lan");
+    let lan: Vec<Option<Action>> = menu
+        .page()
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Run { action, .. } => Some(*action),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        lan,
+        [Some(Action::HostLan), Some(Action::JoinLan), None],
+        "HOST GAME and JOIN GAME"
+    );
+    press(&mut menu, &[Button::Circle]);
+    assert_eq!(menu.page().id, "multiplayer");
+    // ONLINE is still for later: dimmed, focusable so the line can say so, refusing the confirm.
+    press(&mut menu, &[Button::Down]);
+    assert_eq!(menu.selected(), 2);
+    let entry = &menu.page().entries[2];
+    assert_eq!(entry.label(), "ONLINE");
+    assert!(menu.is_disabled(entry), "ONLINE is dimmed");
+    assert_eq!(menu.page().subtitles[2].as_deref(), Some("Coming later"));
+    menu.take_nav();
+    assert!(
+        press(&mut menu, &[Button::Cross]).is_empty(),
+        "ONLINE fires nothing"
+    );
+    assert_eq!(menu.take_nav(), [Nav::Decline]);
 }

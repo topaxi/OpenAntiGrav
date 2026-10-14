@@ -24,14 +24,10 @@ use std::net::SocketAddr;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use oag_net::host::{Host, Phase};
+use oag_net::host::Host;
+use oag_net::serve::Pace;
 use oag_net::wire::RaceParams;
-use web_time::{Duration, Instant};
-
-/// The tick, from the engine's one rate.
-fn dt() -> Duration {
-    Duration::from_secs_f64(f64::from(oag_core::tick::TickRate::DEFAULT.dt()))
-}
+use web_time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(about = "The headless authoritative race server (WebTransport)")]
@@ -133,89 +129,20 @@ fn main() -> Result<()> {
         host.poll();
         std::thread::sleep(Duration::from_millis(5));
     }
-    host.start(cli.lead_ticks);
-    println!("every seat is ready: {:?}", host.seat_names());
-
-    let dt = dt();
-    let started = Instant::now() + dt * u32::from(cli.lead_ticks);
-    let mut last_log = 0;
-    loop {
-        // A late connection is refused by name rather than left hanging.
-        while let Some(link) = listener.accept() {
-            host.join(Box::new(link));
-        }
-        host.poll();
-        let due = started + dt * host.tick_number();
-        let now = Instant::now();
-        if now < due {
-            std::thread::sleep((due - now).min(Duration::from_millis(2)));
-            continue;
-        }
-        host.tick();
-        let tick = host.tick_number();
-        if tick - last_log >= 60 {
-            last_log = tick;
-            log_second(&mut host, tick);
-        }
-        let over = if host.finished() {
-            Some("every person has finished")
-        } else if host.deserted() {
-            Some("every person has left")
-        } else if cli.max_ticks.is_some_and(|max| tick >= max) {
-            Some("--max-ticks reached")
-        } else {
-            None
-        };
-        if let Some(reason) = over {
-            println!("tick {tick}: {reason}");
-            print_board(&host);
-            host.end(reason);
-            break;
-        }
-    }
-    // Let the end and the last ticks reach the clients before the process goes.
-    let linger = Instant::now();
-    while linger.elapsed() < Duration::from_secs(1) && host.phase() == Phase::Over {
-        host.poll();
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    Ok(())
-}
-
-/// One line a second: per seat, the ticks its input arrived in time, the ticks
-/// the last input was repeated, inputs that came too late, and how many ticks
-/// ahead its input is arriving.
-fn log_second(host: &mut Host, tick: u32) {
-    let hash = host.history().last().map_or(0, |record| record.hash);
-    let seats: Vec<String> = host
-        .take_counts()
-        .iter()
-        .enumerate()
-        .map(|(slot, counts)| match counts {
-            Some(c) => format!(
-                "seat {slot}: fresh {} repeated {} late {} lead {}",
-                c.fresh, c.repeated, c.late, c.lead
-            ),
-            None => format!("seat {slot}: empty"),
-        })
-        .collect();
-    println!("tick {tick:>6} hash {hash:#018x} | {}", seats.join(" | "));
-}
-
-/// The server's results, the race's truth, one line a craft.
-fn print_board(host: &Host) {
-    let Some(board) = host.race().results() else {
-        return;
+    let pace = Pace {
+        lead_ticks: cli.lead_ticks,
+        max_ticks: cli.max_ticks,
     };
-    for (place, row) in board.rows.iter().enumerate() {
-        println!(
-            "board {}: slot {}{} laps {} finish tick {:?} best lap ticks {:?}",
-            place + 1,
-            row.slot,
-            if row.player { " (person)" } else { "" },
-            row.laps_completed,
-            row.finish_tick,
-            row.best_lap_ticks
-        );
-    }
+    oag_net::serve::run(
+        &mut host,
+        pace,
+        &mut || {
+            listener
+                .accept()
+                .map(|link| Box::new(link) as Box<dyn oag_net::link::Link>)
+        },
+        &|| false,
+        &mut |line| println!("{line}"),
+    );
+    Ok(())
 }

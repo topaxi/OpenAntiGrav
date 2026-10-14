@@ -251,30 +251,11 @@ impl Host {
             };
             let reason = match message {
                 Ok(Control::Hello { protocol, name }) if protocol == PROTOCOL => {
-                    match self.seats.iter().position(Option::is_none) {
-                        Some(slot) if self.phase == Phase::Lobby => {
-                            log::info!("net: {name:?} takes seat {slot}");
-                            link.send_control(&Control::Welcome {
-                                seat: u8::try_from(slot).unwrap_or(0),
-                                params: self.params.clone(),
-                                fingerprint: self.fingerprint,
-                            });
-                            self.seats[slot] = Some(Seat {
-                                link,
-                                name,
-                                ready: false,
-                                inputs: BTreeMap::new(),
-                                last: Held::default(),
-                                edges: Input::new(),
-                                newest: None,
-                                left: None,
-                                counts: SeatCounts::default(),
-                            });
-                            continue;
-                        }
-                        Some(_) => "the race has started".to_string(),
-                        None => "every seat is taken".to_string(),
+                    // `seat` has already sent a refusal its reason by name.
+                    if let Err(why) = self.seat(link, name) {
+                        log::warn!("net: refused a connection: {why}");
                     }
+                    continue;
                 }
                 Ok(Control::Hello { protocol, .. }) => {
                     format!("this server speaks protocol {PROTOCOL}, you speak {protocol}")
@@ -286,6 +267,46 @@ impl Host {
             link.send_control(&Control::Reject { reason });
         }
         self.joining = still;
+    }
+
+    /// Seats `link`, whose hello (`name`) the caller has already read, in the first empty
+    /// seat and welcomes it. A lobby that holds its welcomes until the head count is known
+    /// ([`crate::lobby::Lobby`]) seats through this; [`Self::poll`] does the same for a link
+    /// that says hello to the host itself. A link that cannot be seated is sent a reject
+    /// naming why, and `Err` says the same.
+    ///
+    /// # Errors
+    ///
+    /// The race has started, or every seat is taken.
+    pub fn seat(&mut self, mut link: Box<dyn Link>, name: String) -> Result<usize, String> {
+        let reason = match self.seats.iter().position(Option::is_none) {
+            Some(slot) if self.phase == Phase::Lobby => {
+                log::info!("net: {name:?} takes seat {slot}");
+                link.send_control(&Control::Welcome {
+                    seat: u8::try_from(slot).unwrap_or(0),
+                    params: self.params.clone(),
+                    fingerprint: self.fingerprint,
+                });
+                self.seats[slot] = Some(Seat {
+                    link,
+                    name,
+                    ready: false,
+                    inputs: BTreeMap::new(),
+                    last: Held::default(),
+                    edges: Input::new(),
+                    newest: None,
+                    left: None,
+                    counts: SeatCounts::default(),
+                });
+                return Ok(slot);
+            }
+            Some(_) => "the race has started".to_string(),
+            None => "every seat is taken".to_string(),
+        };
+        link.send_control(&Control::Reject {
+            reason: reason.clone(),
+        });
+        Err(reason)
     }
 
     /// Tells every seat the race clock starts; the first [`Self::tick`] should run

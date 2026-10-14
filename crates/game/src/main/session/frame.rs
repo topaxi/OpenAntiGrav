@@ -520,6 +520,7 @@ impl Session {
                     stage.tick(dt);
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
+                    self.sync_lan();
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
@@ -558,6 +559,15 @@ impl Session {
                     // The window layout screen, after the join screen: same shape.
                     if stage.layout.is_some() {
                         self.tick_window_layout(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // LAN's lobby and host list take the tick whole too, except while the typed
+                    // address keyboard is over them: that goes through the prompt below.
+                    if stage.lan.is_some() && stage.prompt.is_none() {
+                        self.tick_lan(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {
                             break;
                         }

@@ -25,7 +25,7 @@
 
 use winit::keyboard::{Key, NamedKey};
 
-use oag_ui_screens::prompt::{Edit, accepts};
+use oag_ui_screens::prompt::Edit;
 
 /// What `app.rs` should do about one keyboard event while a keyboard prompt
 /// is open.
@@ -53,7 +53,19 @@ pub(crate) enum Typed {
 /// reaches `Session::escape`, which cancels an open prompt before it does
 /// anything else - so cancelling is one rule in one place rather than two
 /// that can disagree.
+#[cfg(test)]
 pub(crate) fn decide(key: &Key, pressed: bool, repeat: bool) -> Typed {
+    decide_with(key, pressed, repeat, oag_ui_screens::prompt::accepts)
+}
+
+/// [`decide`] for a keyboard whose alphabet is `accepts`: an address entry types `.` and `:`,
+/// a pilot's name does not.
+pub(crate) fn decide_with(
+    key: &Key,
+    pressed: bool,
+    repeat: bool,
+    accepts: impl Fn(char) -> bool,
+) -> Typed {
     if !pressed {
         return Typed::Ignore;
     }
