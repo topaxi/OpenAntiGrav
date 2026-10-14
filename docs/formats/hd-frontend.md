@@ -1206,6 +1206,12 @@ resolve to whichever archive was served instead of being pinned to one.
 
 ### The FE Style switch is live, works, and is not an archive swap - confirmed by capture
 
+*Omega's counterpart is read (2026-10-14): its boot screen copies a named
+`<Screen>` of override values over the base `HD_Colours` block and always takes
+the HD-style one - [`omega-frontend.md`](omega-frontend.md#the-colour-skin-switch-is-restructured-not-just-copied).
+HD's own `EBOOT.elf` carries no `WOHD_Colours`/`Fury_Colours` string, so that
+code is not HD's, and the question this section leaves open stays open here.*
+
 **2026-09-01, `scripts/rpcs3-drive.py`, RPCS3 booted the real disc.** The
 previous section's open question - "what is not read is the code that chooses"
 - is now answered for the practical case: **"Menu Style" (the on-disc label
@@ -1719,8 +1725,11 @@ to `0xFF969696` (the draw lists read `150,150,150`), not `TitleColor`'s
 `0xFF646464`, and RPCS3's `Main Menu`, `Grid Selection` and `Cell Selection` titles
 all draw `150,150,150`. `oag_hd::frontend::MENU_SKIN.title` now carries
 `0xFF969696`; `Language Selection`'s own title, which authors `TitleColor` itself, is
-the screen that still reads 100. Omega's skin shares the front end and keeps
-`0xFF646464`: checked, applies, not wired (no PS4 capture).
+the screen that still reads 100. Omega's skin shares the front end: **ported 2026-10-14**
+(`omega-colour-template`) - its `HD_Grey` resolves to `WOHD_Colours`' `0xFF010001`
+(see [omega-frontend.md](omega-frontend.md#the-colour-skin-switch-is-restructured-not-just-copied)),
+and `oag_omega::frontend::MENU_SKIN.title` is `None`, so the title draws in the
+frame's own `HD_Grey`-tinted ink rather than `TitleColor`'s `0xFF646464` (no PS4 capture).
 
 `TitleColor` is authored `0xFF646464` in all six copies, and `Language
 Selection`'s own title text consumes it:

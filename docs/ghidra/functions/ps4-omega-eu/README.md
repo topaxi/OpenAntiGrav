@@ -89,6 +89,9 @@ unnamed rather than forced.
   tag technique: real on the PS3↔PS4 pair only one time out of two probes,
   and pure noise on the Vita↔PS4 pair even seeded from a confirmed match.
 
+- [fe-style-colours.md](fe-style-colours.md) - which `<Screen>` of `skin.xml`'s
+  colour blocks overwrites `HD_Colours` (the boot always takes `WOHD_Colours`);
+  no names applied.
 - [plasma.md](plasma.md) - `PlasmaManager_Update` and the Plasma's whole
   per-tick state machine: a hardcoded 1.0 s wind-up (`charge_time` authored
   and unread, calibrated), a 6.0 probe with world-vertical fall, the

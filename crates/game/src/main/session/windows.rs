@@ -382,8 +382,13 @@ impl Session {
         screen.framebuffer.set_extent(wanted);
         let extent = screen.framebuffer.extent();
         let inside = (0.0, 0.0, extent.0 as f32, extent.1 as f32);
+        // The tick exactly while the race is held for any reason - paused and counting a
+        // resume down alike (`pause::State::frozen`, the gate `Session::draw` reads for window
+        // 1) - and between the last two ticks while it runs.
         let alpha = match &self.stage {
-            Stage::Race(_) => oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused()),
+            Stage::Race(_) => {
+                oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.pause.frozen())
+            }
             _ => 1.0,
         };
         let pvs_culling = self.pvs_culling();

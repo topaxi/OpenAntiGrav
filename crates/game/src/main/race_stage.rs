@@ -673,8 +673,11 @@ impl RaceStage {
             .then_some(self.race.sim.world.tick as f32 / 60.0);
             // The start's is one picture over the whole screen; a resume's is
             // one per view of a split, each centred as it would be alone
-            // (chosen: a split's seam is no place for a digit).
-            let rects = if self.resume_art.is_some() {
+            // (chosen: a split's seam is no place for a digit). **Not in a
+            // multi-window race, where a window is one view**: each window draws
+            // its own one picture over the whole of it, not the race's views
+            // cut up inside every window.
+            let rects = if self.resume_art.is_some() && !self.race.windowed() {
                 oag_render::viewport::layout(
                     self.race.viewport_count(),
                     viewport,

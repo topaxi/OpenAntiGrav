@@ -351,6 +351,8 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_backdrop_parent: None,
     picker_from_loaded_faces: true,
     fallback_globals: &[],
+    // Its skins are baked per archive: no template block to overwrite from.
+    colour_template: None,
     // No src-less widget found on this title yet.
     fallback_images: &[],
 };

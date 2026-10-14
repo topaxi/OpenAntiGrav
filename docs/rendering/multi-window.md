@@ -105,8 +105,16 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   craft's chase camera from the first tick. Once every person has finished, the window that holds
   the player shows the end screens over the spectator camera (`Race::window_drawn` is the player alone,
   as `views_drawn` is one in a split) and the other windows keep their chase cameras and HUD.
-- **Pause.** The pause menu and the pause overlay are on window 1. Every window shows the frozen race
-  behind it. **Open:** the pause overlay on every window.
+- **Pause and the resume countdown** (`oag_game::pause`, a multiplayer race only). The race is held
+  for the whole `pause::State::frozen` - `Paused` and `Resuming` alike, the gate `Session::draw` reads
+  for window 1 - so every window draws the tick exactly (no between-ticks blend) while held and blends
+  again once it runs. The pause line ("PLAYER 1 PAUSED - ANYONE CAN RESUME IN 0:28") is on window 1.
+  **The resume countdown is drawn in every window**, one picture over the whole of each window (a window
+  is one view; the split's one-per-view rule is for a split and is not applied here). Looked at under
+  Xvfb in a `--race --windows 2` race, Start on window 1 to pause and again to resume: window 2 froze on
+  its frame (timer unchanged across the pause and the countdown), drew the countdown art beside its
+  craft while window 1 did, and ran again when the countdown ended. **Open:** the pause line on every
+  window.
 - **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
   scenery clocks, advert cards) once per window rather than once, because each window is a whole
   frame. A split shares it between views. Measured below.
