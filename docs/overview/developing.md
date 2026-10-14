@@ -35,6 +35,9 @@ of the working rules (written for an AI agent, readable by anyone).
 - **Python 3**, which the gate's `check-*` scripts under `scripts/` run on.
 - **System libraries** for the audio, gamepad and graphics crates. The table is
   in [installing](installing.md#build-it-yourself).
+- **GStreamer development libraries**, only for `just play` and its siblings: on
+  Linux they build `oag-game` with the `native-video` feature. A plain
+  `cargo build` does not need them.
 
 ```sh
 cargo install cargo-nextest cargo-shear just --locked
@@ -62,9 +65,9 @@ list.
   required for PSP work, not optional. See
   [Allegrex and the VFPU](../psp/allegrex-vfpu.md).
 - **Emulators**, which behavioural verification is measured against: PPSSPP
-  (PSP; the Arch package installs `PPSSPPSDL`), PCSX2 (PS2) and RPCS3 (PS3). Vita
-  and PS4 findings are read statically; see
-  [capture notes for Vita3K](../reverse-engineering/vita3k-capture.md). Recipes:
+  (PSP; the Arch package installs `PPSSPPSDL`), PCSX2 (PS2), RPCS3 (PS3) and Vita3K
+  (Vita; [capture notes](../reverse-engineering/vita3k-capture.md)). PS4 has no
+  emulator here, so Omega is read statically. Recipes:
   [emulator recipes](../reverse-engineering/emulator-recipes.md).
 - **[`uv`](https://docs.astral.sh/uv/)** runs the Python scripts that drive a live
   emulator (`just trace`, `just drive`, `just autopilot`, `just scripted-emu`).
@@ -73,7 +76,8 @@ list.
 ### Optional
 
 - **`ffmpeg`** transcodes each disc's intro movie the first time it boots, into
-  `data/cache/` (gitignored). Without it the boot still runs and shows no picture.
+  `data/cache/` (gitignored). Without it the intro is skipped and movies show no
+  picture; everything else works.
 - **ImageMagick** (`magick`) is only for `just frame-compare`.
 
 ## A first session
@@ -113,13 +117,18 @@ just view data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/Data.wad \
 just view data/images/pulse-psp-eu.chd:PSP_GAME/USRDIR/FEData.wad
 ```
 
-Play it. `just play` alone boots the EU Pulse disc; a keyword picks another
-(`usa`, `ps2`, `pure`, `2048`, `omega`; the recipe in the `justfile` lists them):
+Play it. `just play` alone boots the EU Pulse disc, so the image copied above is
+the one it finds:
 
 ```sh
 just play                  # intro, menus, then a race
-just play usa --race       # skip straight to a race on the USA disc
+just play --race           # skip straight to a race
 ```
+
+A keyword (`usa`, `ps2`, `pure`) or a path (`just play data/images/<file>`) picks
+another disc. `2048` and `omega` read an unpacked package under `data/extracted/`
+instead of a file in `data/images/`; the recipe in the `justfile` says what it
+expects and where [`data/README.md`](../../data/README.md) explains the unpacking.
 
 Keyboard: WASD or the arrow keys steer, X or Return thrusts, Q and E are the
 airbrakes, Escape backs out one level. Tool pages: [oag-unpack](../tools/oag-unpack.md),
@@ -148,7 +157,7 @@ rewrites it, and `just check-status` fails when it is stale.
 ## Where things live
 
 ```
-crates/       about 50 Rust crates, listed in Cargo.toml's `members`
+crates/       about 50 Rust crates, see Cargo.toml
 docs/         the primary deliverable, see docs/README.md
 assets/       this project's own UI layouts, strings, shaders and fallback art
 schemas/      the TOML Schemas every shipped TOML file names

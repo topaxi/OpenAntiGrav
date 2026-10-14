@@ -18,7 +18,7 @@ As of 2026-10-14. Per-subsystem detail and the evidence behind every cell:
 
 | Title | Platform | What works today |
 | --- | --- | --- |
-| **Wipeout Pulse** | PSP, PS2 | Reference title. Front end to race, every race mode, campaign with medals and unlocks, records and ghosts. Physics and weapons are checked against the original; full-race tick parity is not claimed yet |
+| **Wipeout Pulse** | PSP, PS2 | Reference title. Front end to race, every race mode, campaign with medals and unlocks, records and ghosts. Physics and several weapons are checked against the original; Zone is partial and full-race tick parity is not claimed yet |
 | Wipeout Pure | PSP | Boots through its own front end into Time Trial, Single Race and Zone on Pure's own data and HUD; campaign partial |
 | Wipeout HD / Fury | PS3 | Front end, then races to the flag on HD's own circuits with its own end-of-race screens; campaign walks, partial |
 | Wipeout 2048 | Vita | Races and draws textured; campaign events launch (Single Race, Speed Lap, Eliminator) |
@@ -58,8 +58,8 @@ names do not matter; the game reads the ID out of the file.
 
 Check what was found without opening a window:
 `oag-game --dry-run --no-audio --no-video`. Linux is the only system the program
-has run on natively. Windows was run under Wine; Mac, iOS and Android have never
-run on real hardware.
+has run on natively. Windows was run under Wine, and Mac and iOS have never run on
+real hardware; Android's state is in [installing](docs/overview/installing.md).
 
 ## Features
 
