@@ -80,9 +80,11 @@ later, which made the first page a new contributor reads the most wrong one
 (finding I5 of that day's review).
 
 Where it actually stands: **M0-M4 (foundation, asset archaeology, binary
-understanding, the verification harness on both Pulse pressings, playable
-core) are complete**, and **M5 (full race), M6 (rendering fidelity) and M7
-(shell) are in flight**. A race runs, with lap timing, opponents, pickups and three
-single-ship modes; three titles' discs open, and Pure and HD both reach a front
-end. Directories for subsystems that do not exist yet contain a scope statement
-rather than speculation.
+understanding, the verification harness, playable core) are complete**. **M5
+(full race), M6 (rendering fidelity), M7 (shell and polish) and M8 (beyond
+Pulse) are in progress.** Pulse is the reference. Pure, HD/Fury, 2048 and Omega
+run on the same engine at different depths. For what each title does and does
+not do yet, see [`overview/status.md`](overview/status.md), the cross-title
+matrix; for the milestones and their exit criteria, see
+[`overview/roadmap.md`](overview/roadmap.md). Directories for subsystems that do
+not exist yet contain a scope statement rather than speculation.

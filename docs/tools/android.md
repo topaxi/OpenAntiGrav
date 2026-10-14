@@ -3,8 +3,10 @@
 A first pass: `oag-game` as an arm64 NativeActivity app, written to open a window,
 bring up wgpu on Vulkan and reach the front end, reading the player's own disc
 images from the app's files directory. It has been built, linked, packaged, run on Waydroid and driven through a race
-with touch. It has **not** run on a phone yet. Lifecycle polish is open;
-"Known gaps" lists it.
+with touch. It has run on a phone: a Galaxy S24 (EU) took the install, the
+reinstall with kept data and the audio fallback ("Install on a phone" and
+"Startup on a phone" below). Touch feel, the Xclipse 940 GPU path and rotation
+are still untested. Lifecycle polish is open; "Known gaps" lists it.
 
 ## Build
 
