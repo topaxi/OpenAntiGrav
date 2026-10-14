@@ -117,6 +117,10 @@ pub fn parse_hash(text: &str) -> Result<[u8; 32]> {
     Ok(hash)
 }
 
+/// How long a link may go without sending before it sends a keep-alive. Chosen: well inside
+/// QUIC's default idle timeout.
+const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(5);
+
 enum Out {
     Datagram(Vec<u8>),
     Reliable(Vec<u8>),
@@ -169,6 +173,8 @@ impl WtLink {
         rt.spawn(async move {
             loop {
                 match reader.read_datagram().await {
+                    // The keep-alive of the other end's writer.
+                    Ok(bytes) if bytes.is_empty() => {}
                     Ok(bytes) => {
                         if datagram_in.send(bytes.to_vec()).is_err() {
                             break;
@@ -210,7 +216,17 @@ impl WtLink {
         let writer = session;
         rt.spawn(async move {
             let mut send = send;
-            while let Some(message) = outgoing.recv().await {
+            loop {
+                // A lobby can sit for minutes with nothing to say, and QUIC closes a quiet
+                // connection: an empty datagram is the keep-alive (the other end drops it).
+                let message = tokio::select! {
+                    message = outgoing.recv() => message,
+                    () = tokio::time::sleep(KEEP_ALIVE) => {
+                        let _ = writer.send_datagram(Vec::new().into());
+                        continue;
+                    }
+                };
+                let Some(message) = message else { break };
                 match message {
                     // A datagram that will not go (too large, congestion) is lost,
                     // which the protocol's redundancy covers.

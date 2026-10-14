@@ -67,6 +67,36 @@ impl Labels {
     }
 }
 
+impl Labels {
+    /// The words of LAN play's host lobby (the screen in its lobby form).
+    #[must_use]
+    pub fn read_lan_lobby(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_LAN_LOBBY_TITLE", "LAN LOBBY"),
+            hint: say(
+                "OAG_LAN_LOBBY_HINT",
+                "THE OTHERS JOIN FROM JOIN GAME, THEN YOU START",
+            ),
+            empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            start: say("OAG_LAN_START", "START RACE"),
+            ..Self::read(strings)
+        }
+    }
+
+    /// The words of LAN play's host list (the screen in its list form).
+    #[must_use]
+    pub fn read_lan_list(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_LAN_JOINLIST_TITLE", "JOIN GAME"),
+            hint: say("OAG_LAN_JOINLIST_HINT", "CHOOSE A GAME ON YOUR NETWORK"),
+            empty: say("OAG_LAN_ADDRESS", "TYPE AN ADDRESS"),
+            ..Self::read(strings)
+        }
+    }
+}
+
 /// One line of the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Row {
@@ -246,6 +276,12 @@ impl Join {
     /// the seat's own text).
     pub fn set_row_labels(&mut self, labels: Vec<String>) {
         self.row_labels = labels;
+    }
+
+    /// Whether this is the list form ([`Self::as_list`]).
+    #[must_use]
+    pub fn is_list(&self) -> bool {
+        self.listing
     }
 
     /// Moves the cursor one row down (`1`) or up (`-1`), starting on the first row, and

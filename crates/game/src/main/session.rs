@@ -387,6 +387,8 @@ pub(crate) struct Session {
     /// `--connect`: the race is stepped through the server's protocol instead of
     /// `Race::tick`. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
+    /// `--net-bot`, carried so a LAN race started from the menus is flown by the driver too.
+    pub(crate) net_bot: bool,
     /// `--autopilot`, carried the same way and applied to every race this
     /// session starts - including one launched from the menus, which is how
     /// the results table is reached without driving. See

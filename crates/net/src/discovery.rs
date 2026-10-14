@@ -195,6 +195,30 @@ impl Browser {
         self.asked = None;
     }
 
+    /// Records an answer. A host answers once for each leg of a round that reached it (the
+    /// broadcast and the loopback or a typed address), each from a different source address:
+    /// the same certificate and port are one host, listed once at its first address that is
+    /// not loopback.
+    fn hear(&mut self, from: SocketAddr, advert: Advert, now: Instant) {
+        let found = Found {
+            addr: SocketAddr::new(from.ip(), advert.port),
+            advert,
+        };
+        let same =
+            |f: &Found| f.advert.hash == found.advert.hash && f.advert.port == found.advert.port;
+        match self.found.iter_mut().find(|(f, _)| same(f)) {
+            Some((known, at)) => {
+                let better = known.addr.ip().is_loopback() && !found.addr.ip().is_loopback();
+                if better {
+                    known.addr = found.addr;
+                }
+                known.advert = found.advert;
+                *at = now;
+            }
+            None => self.found.push((found, now)),
+        }
+    }
+
     /// Asks when a round is due, reads every answer, forgets hosts that went quiet; the
     /// hosts now known, in the order they were first heard. Call once a frame.
     pub fn poll(&mut self) -> Vec<Found> {
@@ -218,14 +242,7 @@ impl Browser {
             let Some(advert) = Advert::decode(&buf[..len]) else {
                 continue;
             };
-            let found = Found {
-                addr: SocketAddr::new(from.ip(), advert.port),
-                advert,
-            };
-            match self.found.iter_mut().find(|(f, _)| f.addr == found.addr) {
-                Some(slot) => *slot = (found, now),
-                None => self.found.push((found, now)),
-            }
+            self.hear(from, advert, now);
         }
         self.found
             .retain(|(_, at)| now.duration_since(*at) < FORGET_AFTER);
@@ -257,6 +274,29 @@ mod tests {
         bytes.truncate(bytes.len() - 3);
         assert_eq!(Advert::decode(&bytes), None, "a cut-short reply");
         assert_eq!(Advert::decode(b"GET / HTTP/1.1"), None);
+    }
+
+    /// A host that answers on two legs from two addresses is one host, at the address that is
+    /// not loopback.
+    #[test]
+    fn one_host_heard_on_two_addresses_is_listed_once_at_the_lan_one() {
+        let mut browser = Browser::on(1).expect("browser");
+        let now = Instant::now();
+        let lan = SocketAddr::new(Ipv4Addr::new(192, 168, 1, 20).into(), PORT);
+        let local = SocketAddr::new(Ipv4Addr::LOCALHOST.into(), PORT);
+        browser.hear(local, advert(), now);
+        browser.hear(lan, advert(), now);
+        browser.hear(local, advert(), now);
+        assert_eq!(browser.found.len(), 1);
+        assert_eq!(browser.found[0].0.addr, SocketAddr::new(lan.ip(), 5555));
+        let mut other = advert();
+        other.hash = [8; 32];
+        browser.hear(lan, other, now);
+        assert_eq!(
+            browser.found.len(),
+            2,
+            "another certificate is another host"
+        );
     }
 
     /// The real sockets on loopback: a responder on a test port, a browser that finds it

@@ -39,6 +39,7 @@ OAG_MP_COMING_LATER = { text = "Kommt später", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Ein Rennen im Netzwerk ausrichten oder beitreten", human = false }
 OAG_LAN_HOST = { text = "SPIEL AUSRICHTEN", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Das Rennen wählen und auf die anderen warten", human = false }
+OAG_LAN_MODE_ONLY = { text = "Ein Netzwerkrennen ist ein Einzelrennen", human = false }
 OAG_LAN_JOIN = { text = "SPIEL BEITRETEN", human = false }
 OAG_LAN_JOIN_SUBTITLE = { text = "Ein Spiel im Netzwerk finden", human = false }
 OAG_LAN_LOBBY_TITLE = { text = "LAN-LOBBY", human = false }
@@ -52,10 +53,8 @@ OAG_LAN_SEARCHING = { text = "SUCHE...", human = false }
 OAG_LAN_ADDRESS = { text = "ADRESSE EINGEBEN", human = false }
 OAG_LAN_ADDRESS_TITLE = { text = "HOST-ADRESSE", human = false }
 OAG_LAN_ADDRESS_HINT = { text = "ADRESSE DES HOST-COMPUTERS, z. B. 192.168.1.20", human = false }
-OAG_LAN_WAIT_TITLE = { text = "BEIGETRETEN", human = false }
+OAG_LAN_CONNECTING = { text = "VERBINDE...", human = false }
 OAG_LAN_WAIT_HINT = { text = "WARTE, BIS DER HOST DAS RENNEN STARTET", human = false }
-OAG_LAN_OTHER_TITLE = { text = "ANDERES SPIEL", human = false }
-OAG_LAN_PEOPLE = { text = "SPIELER", human = false }
 OAG_LAN_NOT_HERE = { text = "DAS SPIELT %s, NICHT DIESE DISC", human = false }
 OAG_LAN_FAILED = { text = "BEITRITT FEHLGESCHLAGEN", human = false }
 OAG_MP_MODE_CAPPED = { text = "Für höchstens %d Spieler", human = false }

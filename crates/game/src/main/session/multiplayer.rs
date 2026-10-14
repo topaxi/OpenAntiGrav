@@ -93,9 +93,29 @@ impl Session {
             .get("OAG_MP_MODE_CAPPED")
             .unwrap_or("For %d people at most")
             .to_string();
-        let modes = oag_ui::menu::cap_modes(&shell.modes, people, |most| {
-            reason.replace("%d", &most.to_string())
-        });
+        let modes = if self.lan_hosting_settings() {
+            // A hosted race is a Single Race (`session::lan`): the other modes show why not.
+            let only = shell
+                .strings
+                .get("OAG_LAN_MODE_ONLY")
+                .unwrap_or("A network race is a Single Race")
+                .to_string();
+            shell
+                .modes
+                .iter()
+                .map(|choice| {
+                    if choice.value == oag_race::Mode::SingleRace.name() {
+                        choice.clone()
+                    } else {
+                        choice.clone().unusable(only.clone())
+                    }
+                })
+                .collect()
+        } else {
+            oag_ui::menu::cap_modes(&shell.modes, people, |most| {
+                reason.replace("%d", &most.to_string())
+            })
+        };
         if let Stage::Menu(stage) = &mut self.stage {
             stage.menu.supply(oag_ui::menu::ValueSource::RaceModes, &modes);
         }

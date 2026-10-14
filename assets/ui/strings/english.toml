@@ -81,6 +81,7 @@ OAG_MP_COMING_LATER = { text = "Coming later", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Host a race on your network, or join one", human = false }
 OAG_LAN_HOST = { text = "HOST GAME", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choose the race, then wait for the others to join", human = false }
+OAG_LAN_MODE_ONLY = { text = "A network race is a Single Race", human = false }
 OAG_LAN_JOIN = { text = "JOIN GAME", human = false }
 OAG_LAN_JOIN_SUBTITLE = { text = "Find a game on your network", human = false }
 OAG_LAN_LOBBY_TITLE = { text = "LAN LOBBY", human = false }
@@ -94,10 +95,8 @@ OAG_LAN_SEARCHING = { text = "SEARCHING...", human = false }
 OAG_LAN_ADDRESS = { text = "TYPE AN ADDRESS", human = false }
 OAG_LAN_ADDRESS_TITLE = { text = "HOST ADDRESS", human = false }
 OAG_LAN_ADDRESS_HINT = { text = "THE HOST COMPUTER'S ADDRESS, e.g. 192.168.1.20", human = false }
-OAG_LAN_WAIT_TITLE = { text = "JOINED", human = false }
+OAG_LAN_CONNECTING = { text = "CONNECTING...", human = false }
 OAG_LAN_WAIT_HINT = { text = "WAITING FOR THE HOST TO START THE RACE", human = false }
-OAG_LAN_OTHER_TITLE = { text = "OTHER GAME", human = false }
-OAG_LAN_PEOPLE = { text = "PLAYERS", human = false }
 OAG_LAN_NOT_HERE = { text = "THIS PLAYS %s, NOT THIS DISC", human = false }
 OAG_LAN_FAILED = { text = "COULD NOT JOIN", human = false }
 OAG_MP_MODE_CAPPED = { text = "For %d people at most", human = false }

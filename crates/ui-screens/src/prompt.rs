@@ -104,10 +104,11 @@ pub enum Key {
 /// parameter, and it is cheap to make one then rather than to guess now.
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-_";
 
-/// The alphabet of an address (a host name or an IPv4 or IPv6 literal with a port): digits,
-/// the separators and the letters a host name is made of. **Ours, chosen**: LAN play's
-/// manual address entry ([`Keyboard::with_keys`]).
-pub const ADDRESS_KEYS: &str = "0123456789.:-abcdefghijklmnopqrstuvwxyz";
+/// The alphabet of an address (a host name or an IPv4 address): digits, the dot and the hyphen
+/// and the letters a host name is made of. 38 characters, so with the two special keys the
+/// grid is the same four rows as a pilot's. **Ours, chosen**: LAN play's manual address entry
+/// ([`Keyboard::with_keys`]); an IPv6 literal cannot be typed on it.
+pub const ADDRESS_KEYS: &str = "0123456789.-abcdefghijklmnopqrstuvwxyz";
 
 /// How many cells a row of the grid holds.
 ///

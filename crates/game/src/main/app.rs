@@ -61,6 +61,9 @@ pub(crate) struct App {
     /// `--connect`: the race is a server's. Joined once the race is built, then
     /// handed to the session. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
+    /// `--net-bot`: fly this machine's craft with the player's own driver in a network race,
+    /// `--connect` or a LAN one from the menus.
+    pub(crate) net_bot: bool,
     /// `--prompt-style`, parsed. See `session::prompts`.
     pub(crate) prompt_style: Option<oag_input::prompt::PromptStyle>,
     /// `--autopilot`: whether the player's craft is flown for them. A
@@ -499,6 +502,7 @@ impl App {
             give: self.give,
             no_intro: self.no_intro,
             net: self.net.take(),
+            net_bot: self.net_bot,
             prompt: oag_game::prompts::PromptState {
                 style_override: self.prompt_style,
                 family_logged: None,

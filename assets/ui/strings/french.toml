@@ -77,6 +77,7 @@ OAG_MP_COMING_LATER = { text = "Bientôt disponible", human = false }
 OAG_MP_LAN_SUBTITLE = { text = "Héberger une course sur votre réseau ou en rejoindre une", human = false }
 OAG_LAN_HOST = { text = "HÉBERGER", human = false }
 OAG_LAN_HOST_SUBTITLE = { text = "Choisir la course, puis attendre les autres", human = false }
+OAG_LAN_MODE_ONLY = { text = "Une course en réseau est une course simple", human = false }
 OAG_LAN_JOIN = { text = "REJOINDRE", human = false }
 OAG_LAN_JOIN_SUBTITLE = { text = "Trouver une partie sur votre réseau", human = false }
 OAG_LAN_LOBBY_TITLE = { text = "SALON LAN", human = false }
@@ -90,10 +91,8 @@ OAG_LAN_SEARCHING = { text = "RECHERCHE...", human = false }
 OAG_LAN_ADDRESS = { text = "SAISIR UNE ADRESSE", human = false }
 OAG_LAN_ADDRESS_TITLE = { text = "ADRESSE DE L'HÔTE", human = false }
 OAG_LAN_ADDRESS_HINT = { text = "ADRESSE DE L'ORDINATEUR HÔTE, p. ex. 192.168.1.20", human = false }
-OAG_LAN_WAIT_TITLE = { text = "REJOINT", human = false }
+OAG_LAN_CONNECTING = { text = "CONNEXION...", human = false }
 OAG_LAN_WAIT_HINT = { text = "EN ATTENTE DU LANCEMENT PAR L'HÔTE", human = false }
-OAG_LAN_OTHER_TITLE = { text = "AUTRE JEU", human = false }
-OAG_LAN_PEOPLE = { text = "JOUEURS", human = false }
 OAG_LAN_NOT_HERE = { text = "CELA JOUE À %s, PAS À CE DISQUE", human = false }
 OAG_LAN_FAILED = { text = "IMPOSSIBLE DE REJOINDRE", human = false }
 OAG_MP_MODE_CAPPED = { text = "Pour %d joueurs au plus", human = false }

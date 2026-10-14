@@ -67,6 +67,9 @@ enum Step {
     },
 }
 
+/// How many hosts the list holds before TYPE AN ADDRESS stops showing. **Chosen.**
+pub(crate) const HOSTS_SHOWN: usize = 16;
+
 /// Who this machine says it is: the login name, else "player". **Chosen.**
 fn player_name() -> String {
     std::env::var("USER")
@@ -85,20 +88,6 @@ impl Session {
             .to_string()
     }
 
-    fn lan_labels(&self, title: (&str, &str), hint: (&str, &str), empty: (&str, &str)) -> Labels {
-        Labels {
-            title: self.lan_say(title.0, title.1),
-            hint: self.lan_say(hint.0, hint.1),
-            player: self.lan_say("OAG_JOIN_PLAYER", "PLAYER"),
-            empty: self.lan_say(empty.0, empty.1),
-            guest: None,
-            keyboard: self.lan_say("OAG_JOIN_KEYBOARD", "KEYBOARD"),
-            pad: self.lan_say("OAG_JOIN_PAD", "GAMEPAD"),
-            start: self.lan_say("OAG_LAN_START", "START RACE"),
-            back: self.lan_say("OAG_MENU_BACK", "BACK"),
-        }
-    }
-
     /// HOST GAME: the RACE page, pushed over the LAN page so BACK returns there.
     pub(crate) fn open_lan_host(&mut self) {
         let Stage::Menu(stage) = &mut self.stage else {
@@ -111,6 +100,7 @@ impl Session {
         self.lan = Some(Lan {
             step: Step::Settings,
         });
+        self.resupply_race_modes();
     }
 
     /// Whether the RACE page is HOST GAME's settings step, whose launch opens the lobby
@@ -135,6 +125,7 @@ impl Session {
         };
         if stage.menu.page().id != "race" && stage.picker.is_none() && stage.lan.is_none() {
             self.lan = None;
+            self.resupply_race_modes();
         }
     }
 
@@ -200,7 +191,7 @@ impl Session {
             oag_net::wt::hex(&hosted.hash()),
             if hosted.announcing() { "on" } else { "off" }
         );
-        let own = Pending::new(Box::new(own_link), &name, false, "this machine");
+        let own = Pending::new(Box::new(own_link), &name, self.net_bot, "this machine");
         self.lan = Some(Lan {
             step: Step::Lobby {
                 hosted,
@@ -208,14 +199,10 @@ impl Session {
                 started: false,
             },
         });
-        let labels = self.lan_labels(
-            ("OAG_LAN_LOBBY_TITLE", "LAN LOBBY"),
-            (
-                "OAG_LAN_LOBBY_HINT",
-                "THE OTHERS JOIN FROM JOIN GAME, THEN YOU START",
-            ),
-            ("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
-        );
+        let Some(shell) = self.shell.as_ref() else {
+            return;
+        };
+        let labels = Labels::read_lan_lobby(&shell.strings);
         self.show_lan_screen(Join::new(labels, oag_gameplay::MAX_PLAYERS));
     }
 
@@ -238,15 +225,25 @@ impl Session {
     }
 
     fn show_browse_screen(&mut self, hint: Option<String>) {
-        let labels = self.lan_labels(
-            ("OAG_LAN_JOINLIST_TITLE", "JOIN GAME"),
-            ("OAG_LAN_JOINLIST_HINT", "CHOOSE A GAME ON YOUR NETWORK"),
-            ("OAG_LAN_ADDRESS", "TYPE AN ADDRESS"),
-        );
-        let mut screen = Join::new(labels, 0).as_list();
+        let Some(shell) = self.shell.as_ref() else {
+            return;
+        };
+        let labels = Labels::read_lan_list(&shell.strings);
+        let mut screen = Join::new(labels, HOSTS_SHOWN).as_list();
         if let Some(hint) = hint {
             screen.set_hint(hint);
         }
+        self.show_lan_screen(screen);
+    }
+
+    /// The screen while connecting and waiting for the host: the list's title and `hint`, and
+    /// nothing to choose but BACK.
+    fn show_waiting_screen(&mut self, hint: String) {
+        let Some(shell) = self.shell.as_ref() else {
+            return;
+        };
+        let mut screen = Join::new(Labels::read_lan_list(&shell.strings), 0).as_list();
+        screen.set_hint(hint);
         self.show_lan_screen(screen);
     }
 
@@ -263,6 +260,7 @@ impl Session {
         if let Stage::Menu(stage) = &mut self.stage {
             stage.lan = None;
         }
+        self.resupply_race_modes();
     }
 
     /// One tick of the open LAN screen: the pad and keys move and confirm, the pointer
@@ -287,8 +285,16 @@ impl Session {
         if presses & Button::Up.bit() != 0 {
             screen.step(-1);
         }
-        if presses & (Button::Cross.bit() | Button::Start.bit()) != 0 {
+        if presses & Button::Cross.bit() != 0 {
             events.extend(screen.confirm());
+        }
+        // START is START in the lobby wherever the cursor is, and a confirm in the list.
+        if presses & Button::Start.bit() != 0 {
+            if screen.is_list() {
+                events.extend(screen.confirm());
+            } else if screen.can_start() {
+                events.push(Event::Start);
+            }
         }
         if presses & Button::Circle.bit() != 0 {
             events.push(Event::Back);
@@ -441,6 +447,7 @@ impl Session {
                 to: host,
             },
         });
+        self.show_waiting_screen(self.lan_say("OAG_LAN_CONNECTING", "CONNECTING..."));
         self.play_navs(Some(Nav::Accept));
     }
 
@@ -523,7 +530,7 @@ impl Session {
                             let pending = Pending::new(
                                 Box::new(link),
                                 &player_name(),
-                                false,
+                                self.net_bot,
                                 &to.addr.to_string(),
                             );
                             (
@@ -594,6 +601,7 @@ impl Session {
             }
         };
         self.lan = Some(Lan { step });
+        let mine = self.shell.as_ref().map_or("", |shell| shell.title.name);
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(screen) = stage.lan.as_mut()
         {
@@ -604,11 +612,11 @@ impl Session {
                         found
                             .iter()
                             .map(|host| {
-                                format!(
-                                    "{} {}",
-                                    host.advert.track.to_uppercase(),
-                                    host.advert.people
-                                )
+                                // A host on another title says which, since it cannot be joined.
+                                let other = (host.advert.title != mine)
+                                    .then(|| format!("{}: ", host.advert.title.to_uppercase()))
+                                    .unwrap_or_default();
+                                format!("{other}{} ({})", host.advert.track.to_uppercase(), host.advert.people)
                             })
                             .collect(),
                     );
