@@ -62,8 +62,15 @@ impl Race {
         // `oag_render::camera::shake`.
         if self.draws() {
             self.view.shake.advance(self.sim.dt);
-            self.view.messages.advance();
-            if self.view.messages.just_shown() {
+            let mut shown = false;
+            for slot in 0..MAX_SHIPS {
+                if self.sim.world.person_flown(slot) {
+                    let board = &mut self.view.huds[slot].messages;
+                    board.advance();
+                    shown |= board.just_shown();
+                }
+            }
+            if shown {
                 self.sim.cues.push(oag_sound::sfx::CueEvent::new(
                     oag_sound::sfx::Cue::Message,
                     0,

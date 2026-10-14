@@ -112,8 +112,9 @@ impl Race {
     /// split-screen race draws one per viewed slot. Every number comes off that
     /// slot's craft and race state; the bars animate from that slot's
     /// [`SlotHud`](super::slot_hud::SlotHud). **Primary only**, and left empty for
-    /// any other slot: the message lines and the split gap, which compare laps
-    /// against the primary's stored best and raise the `MESSAGE` cue. The Zone
+    /// any other slot: the split gap, which compares laps against the primary's
+    /// stored best. The message lines are per slot (`SlotHud::messages`), each
+    /// person's own. The Zone
     /// colour grade the caller fills in is one per scene.
     #[must_use]
     pub fn readout_for(&self, slot: usize) -> oag_hud::Readout {
@@ -228,11 +229,7 @@ impl Race {
             } else {
                 0
             },
-            messages: if primary {
-                self.view.messages.lines()
-            } else {
-                Default::default()
-            },
+            messages: hud.messages.lines(),
             time_gap: self
                 .view
                 .split_gap

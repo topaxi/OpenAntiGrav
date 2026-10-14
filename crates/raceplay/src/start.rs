@@ -772,8 +772,7 @@ impl Race {
                     sight: sight.view_sight(),
                     ..Default::default()
                 }),
-                messages: oag_hud::messages::MessageBoard::default(),
-                lap_watch: None,
+                pair_spoil: [false; MAX_SHIPS],
                 split_gap: None,
                 sight: sight.view_sight(),
                 sight_state: sight::State::Absent,

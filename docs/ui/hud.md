@@ -1182,9 +1182,12 @@ into). Pure: unchanged - no `ER_GMA` in its table, so neither line draws.
 recovered trigger (unplayed even on the end-of-race screen) and stay silent.
 Time Trial raises nothing mid-race: its medal is at the finish. Eliminator
 (kills against gold) would take the same hook and was not asked for. The
-other eight events the original raises in these lines (`IG_HUD_PLAP`,
-`NEWLAP_REC`, `FIN_LAP`, `PERF_ZONE`, `NEW_ZONE_RECORD`, ...) have no recovered
-trigger and stay unraised. A capture aid, `--force-medal TICK:TIER`, shows the
+lap-crossing lines (`IG_HUD_PLAP`, `NEWLAP_REC`, `FIN_LAP`) are raised since
+2026-10-14 by `oag_raceplay::lap_messages::LapWatch`, **one per person on this
+machine**: each slot's own wall scrapes (the original's `craft+0x860 & 0x20`),
+rival bumps and laps, shown in that slot's own view (`SlotHud::messages`), see
+[split-screen.md](../rendering/split-screen.md). The other events (`PERF_ZONE`,
+`NEW_ZONE_RECORD`, ...) have no recovered trigger and stay unraised. A capture aid, `--force-medal TICK:TIER`, shows the
 line on any `--race` capture; the real trigger needs a campaign cell, which a
 headless run cannot reach.
 

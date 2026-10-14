@@ -913,12 +913,16 @@ impl Race {
                     &mut ship_b.physics,
                     &b_size,
                 );
-                #[cfg(test)]
                 if touched.is_some() {
+                    for slot in [a, b] {
+                        self.view.pair_spoil[slot] |=
+                            self.sim.world.ships[slot].physics.craft_state
+                                == oag_physics::CraftState::Racing
+                                && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0;
+                    }
+                    #[cfg(test)]
                     self.pair_contacts.push((a, b));
                 }
-                #[cfg(not(test))]
-                let _ = touched;
             }
         }
     }
