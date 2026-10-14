@@ -453,6 +453,28 @@ impl DriverArgs {
     /// run with one window. **An error where a window cannot be opened** - the browser, Android
     /// and iOS have the one surface the platform gives - rather than a flag silently ignored.
     pub(crate) fn window_layout(&self) -> anyhow::Result<Vec<oag_game::split_screen::WindowSeats>> {
+        Ok(crate::window::one_window_under_gamescope(
+            self.requested_layout()?,
+            crate::window::under_gamescope(None),
+        ))
+    }
+
+    /// The one log line that says `--windows` or `--window-seats` was folded into a single window
+    /// because gamescope shows one window at a time; `None` when nothing was folded. The caller
+    /// logs it once, since [`Self::window_layout`] is asked for several times.
+    pub(crate) fn gamescope_fold_note(&self) -> Option<String> {
+        let requested = self.requested_layout().ok()?;
+        let seats: usize = requested.iter().map(|window| window.count).sum();
+        (requested.len() >= 2 && crate::window::under_gamescope(None)).then(|| {
+            format!(
+                "gamescope shows one window at a time: the {} requested windows are folded into one window holding all {seats} seats",
+                requested.len()
+            )
+        })
+    }
+
+    /// The layout as the command line asks for it, before any compositor folds it.
+    fn requested_layout(&self) -> anyhow::Result<Vec<oag_game::split_screen::WindowSeats>> {
         use oag_game::split_screen::{deal, parse_window_seats};
         let layout = match (&self.window_seats, self.windows) {
             (Some(text), _) => parse_window_seats(text, self.cut())
@@ -472,10 +494,7 @@ impl DriverArgs {
                 "--windows and --window-seats need a desktop: this platform has the one window it gives"
             );
         }
-        Ok(crate::window::one_window_under_gamescope(
-            layout,
-            crate::window::under_gamescope(None),
-        ))
+        Ok(layout)
     }
 
     /// How many people the run seats at the start: the windows' seats, or `--players`.

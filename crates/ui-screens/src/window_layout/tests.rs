@@ -20,6 +20,7 @@ fn labels() -> Labels {
         mode: say("MODE"),
         windowed: say("WINDOWED"),
         fullscreen: say("FULLSCREEN"),
+        one_window: say("ONE WINDOW ONLY"),
         start: say("START"),
         back: say("BACK"),
     }
@@ -346,4 +347,75 @@ fn every_row_has_words_and_the_screen_draws_in_both_grids() {
         let layers = draw_list(&picker, &skin, &frame, None, false, &cells);
         assert!(!layers.flatten().is_empty());
     }
+}
+
+#[test]
+fn one_window_only_locks_the_count_and_mode_and_drops_the_monitor_row() {
+    let mut picker = Picker::new(labels(), 4, Vec::new(), names(2), false).one_window_only(true);
+    assert_eq!(seats(&picker), vec![4]);
+    assert!(!picker.rows().contains(&Row::Monitor));
+    assert!(picker.rows().contains(&Row::Windows) && picker.rows().contains(&Row::Mode));
+    // Right on WINDOWS and on MODE changes nothing.
+    assert!(picker.update(&mut tick(&[Button::Right])).is_empty());
+    assert_eq!(picker.windows().len(), 1);
+    let mut down = tick(&[Button::Down]);
+    picker.update(&mut down);
+    assert_eq!(picker.selected(), Row::Mode);
+    assert!(picker.update(&mut tick(&[Button::Cross])).is_empty());
+    assert_eq!(picker.value(Row::Mode), "FULLSCREEN");
+    assert_eq!(picker.value(Row::Windows), "1");
+}
+
+#[test]
+fn one_window_only_deals_an_existing_layout_into_one_window_and_keeps_the_cut() {
+    let two = vec![
+        Window {
+            seats: 1,
+            vertical: false,
+            monitor: 1,
+        },
+        Window {
+            seats: 1,
+            vertical: false,
+            monitor: 0,
+        },
+    ];
+    let mut picker = Picker::new(labels(), 2, two, names(2), false).one_window_only(true);
+    assert_eq!(seats(&picker), vec![2]);
+    assert_eq!(picker.windows()[0].monitor, 0);
+    // The cut row still works.
+    let at = picker
+        .rows()
+        .iter()
+        .position(|row| *row == Row::Cut)
+        .unwrap();
+    for _ in 0..at {
+        picker.update(&mut tick(&[Button::Down]));
+    }
+    assert_eq!(
+        picker.update(&mut tick(&[Button::Right])),
+        vec![Event::Changed]
+    );
+    assert!(picker.windows()[0].vertical);
+}
+
+#[test]
+fn one_window_only_says_why_in_place_of_the_hint() {
+    let skin = skin(oag_display::space::Space::PSP);
+    let frame = Frame::default();
+    let texts = |picker: &Picker| -> Vec<String> {
+        picker
+            .body(&skin, &frame)
+            .into_iter()
+            .filter_map(|d| match d {
+                Draw::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    let free = Picker::new(labels(), 2, Vec::new(), names(1), false);
+    let locked = free.clone().one_window_only(true);
+    assert!(texts(&free).contains(&"HOW MANY WINDOWS".to_string()));
+    assert!(texts(&locked).contains(&"ONE WINDOW ONLY".to_string()));
+    assert!(!texts(&locked).contains(&"HOW MANY WINDOWS".to_string()));
 }

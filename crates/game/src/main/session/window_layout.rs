@@ -48,13 +48,20 @@ impl Session {
             };
             let labels = Labels::read(&shell.strings);
             let monitors = self.monitor_names();
+            let one_window = crate::window::under_gamescope(
+                self.gpu.output.window.current_monitor().as_ref(),
+            );
+            if one_window {
+                log::info!("window layout: one window only (gamescope shows one window at a time)");
+            }
             let picker = Picker::new(
                 labels,
                 join.lobby().count(),
                 self.starting_windows(join.lobby().count(), &monitors),
                 monitors,
                 self.starting_fullscreen(),
-            );
+            )
+            .one_window_only(one_window);
             if let Stage::Menu(stage) = &mut self.stage {
                 stage.layout = Some(WindowLayoutStage::new(join, picker));
             }

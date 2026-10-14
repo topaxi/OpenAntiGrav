@@ -245,12 +245,14 @@ impl Session {
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
-        let monitors: Vec<menu::Choice> = display::Monitor::offered(&monitor_names(
-            &self.gpu.output.window.available_monitors().collect::<Vec<_>>(),
-        ))
-        .into_iter()
-        .map(menu::Choice::plain)
-        .collect();
+        let monitors = crate::window::monitor_choices(
+            &monitor_names(&self.gpu.output.window.available_monitors().collect::<Vec<_>>()),
+            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref()),
+            shell
+                .strings
+                .get("OAG_DISPLAY_MONITOR_GAMESCOPE")
+                .unwrap_or("GAMESCOPE SHOWS ONE DISPLAY"),
+        );
         model.supply(menu::ValueSource::Monitors, &monitors);
         // Kept from startup rather than enumerated, unlike the monitors above,
         // and the difference is what a fresh answer would be worth. A screen

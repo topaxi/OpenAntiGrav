@@ -1,5 +1,6 @@
-//! The window layout screen as a still: `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]`
-//! (4 people, 1 window, 1 monitor, the first window by default).
+//! The window layout screen as a still: `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED[:ONE]]]]]`
+//! (4 people, 1 window, 1 monitor, the first window, free by default; `ONE` of 1 draws the screen as
+//! it is under gamescope, locked to one window).
 //!
 //! Nobody presses anything in a still, so the choice is made up from the page's own numbers
 //! and the monitors are called `MONITOR n`. That is the only invented part; the rows, the
@@ -16,9 +17,10 @@ pub(super) struct Request {
     windows: usize,
     monitors: usize,
     edited: usize,
+    one_window: bool,
 }
 
-/// Parses `window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]`.
+/// Parses `window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED[:ONE]]]]]`.
 #[must_use]
 pub(super) fn request(page: &str) -> Option<Request> {
     let rest = page.strip_prefix("window-layout")?;
@@ -33,6 +35,7 @@ pub(super) fn request(page: &str) -> Option<Request> {
         windows: next(1),
         monitors: next(1),
         edited: next(0),
+        one_window: next(0) == 1,
     };
     (rest.is_empty() || rest.starts_with(':')).then_some(request)
 }
@@ -59,7 +62,8 @@ pub(super) fn capture(
         Vec::new(),
         monitors,
         false,
-    );
+    )
+    .one_window_only(request.one_window);
     picker.set_window_count(request.windows);
     for _ in 0..request.edited {
         picker.pick_next_window();
@@ -90,7 +94,8 @@ mod tests {
                 people: 4,
                 windows: 1,
                 monitors: 1,
-                edited: 0
+                edited: 0,
+                one_window: false
             })
         );
         assert_eq!(
@@ -99,9 +104,11 @@ mod tests {
                 people: 6,
                 windows: 3,
                 monitors: 2,
-                edited: 1
+                edited: 1,
+                one_window: false
             })
         );
+        assert!(request("window-layout:2:1:2:0:1").unwrap().one_window);
         assert_eq!(request("window-layoutx"), None);
         assert_eq!(request("join:4"), None);
     }
