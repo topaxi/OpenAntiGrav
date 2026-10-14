@@ -467,6 +467,34 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
   different content, logged as an error, never a misprediction. The join refuses a
   client whose race starts at a different tick-0 hash.
 
+## Hosting model
+
+**Chosen, not measured.** Direction from the maintainer discussion of 2026-10-14.
+Nothing of it is built yet.
+
+1. **One race per `oag-server` process.** Each process runs one match: one canonical
+   `RaceSim`, one 60 Hz tick loop, one set of clients. This is the usual shape for
+   authoritative real-time games (Unreal and Source dedicated servers, Rocket League),
+   and fleet managers such as Agones, AWS GameLift, Edgegap and Hathora allocate one
+   process per match from a warm pool. Why:
+   - A crash or desync ends one match, not every match on the host.
+   - Matches share no state, so nothing has to be locked or cleaned up between them.
+   - Capacity grows by adding processes.
+   - A rolling update drains the old matches and starts new ones on the new build.
+   - The OS schedules each match's tick as its own work, with no shared loop.
+2. **The alternative, not chosen: many rooms in one process.** Colyseus, Nakama and MMO
+   shards work this way. It loads shared assets once, but the isolation between rooms
+   has to be built by hand. Our tick is cheap (6 rollback ticks cost 0.42 ms on the
+   desktop, see above), so the cost that matters is the disc image and track load.
+   A warm pooled process pays that once, which removes most of the reason to share.
+3. **Planned shape, none of it built.**
+   - A warm process loads the image and the track at start, then waits for a match.
+   - A reset-and-wait loop returns a finished race to waiting instead of exiting. This
+     gives pooling without a fleet manager.
+   - A separate small lobby or matchmaker starts or reuses servers and gives each client
+     the address and the certificate hash. No lobby exists yet.
+   - LAN stays a listen server inside the client (decision 3 above).
+
 ## Running a local server
 
 From a checkout with a Pulse image in `data/images/` (any title works; the server
