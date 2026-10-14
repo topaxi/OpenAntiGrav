@@ -42,6 +42,7 @@ mod lock;
 mod message_cue;
 mod mode_override;
 mod models;
+mod multiplayer_time_trial;
 mod pads;
 mod people_grid;
 mod perfect_start;

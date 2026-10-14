@@ -991,7 +991,9 @@ CSplitV`/`H` -> `Team SelectionSplit`.
   ours is this build's race modes, so Tournament and Head to Head are missing, and the
   `TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves
   by itself). Time Trial, Speed Lap and Zone stay reachable as split races (a split fields
-  opponents whatever the mode), **chosen, not measured**. `GSDisableEntriesBitField` is not applied.
+  opponents whatever the mode, **except a Time Trial of two or more people**, which fields the
+  people only and is Pulse PSP's Multiplayer Time Trial: [mp-time-trial.md](../ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port)),
+  **chosen, not measured**. `GSDisableEntriesBitField` is not applied.
 - **The join step is ours**, labelled: the PS2 seats two pads in port order, we need a device
   claim and seat up to eight. It sits **after** the settings page (the race box's START opens
   it), not before, because `handle_menu` drops a lobby on any settings change; seating at
@@ -1032,8 +1034,9 @@ acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
 
 A split screen writes **no result and no ghost** (`records.toml` and the ghost
 store are for the one person the result is about), and it **fields opponents
-whatever the mode**, so Time Trial, Speed Lap and Zone are reachable as split races
-from the menus. Restarting a race from the 2048 end-of-race screen, which skips the
+whatever the mode** (a Time Trial of several people being the one exception: it fields the
+people only, with craft that pass through each other, [mp-time-trial.md](../ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port)),
+so Time Trial, Speed Lap and Zone are reachable as split races from the menus. Restarting a race from the 2048 end-of-race screen, which skips the
 menus, keeps the split.
 
 START goes on to the race box's own Track Select and Ship Select, as the RACE
