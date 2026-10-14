@@ -4,7 +4,7 @@
 //! the display the window is going onto, which the settings menu asks again
 //! every time it is changed - see `Session::apply_window`.
 
-use log::warn;
+use log::{info, warn};
 use oag_display::display;
 use oag_game::icon;
 use oag_present::perf;
@@ -40,6 +40,95 @@ pub(crate) fn window_icon() -> winit::window::Icon {
     } = icon::rasterize(64);
     winit::window::Icon::from_rgba(pixels, width, height)
         .expect("assets/icons/64x64.svg rasterizes to a 64x64 buffer, which from_rgba accepts")
+}
+
+/// What the session says about the compositor, as plain data so the decision is testable.
+pub(crate) struct Signals<'a> {
+    /// `GAMESCOPE_WAYLAND_DISPLAY` is set: gamescope's own session (a game launched by Steam on
+    /// a Deck or a Linux box in gaming mode).
+    pub(crate) gamescope_display: bool,
+    /// `XDG_CURRENT_DESKTOP`.
+    pub(crate) desktop: Option<&'a str>,
+    /// The name winit reports for the monitor the window is on.
+    pub(crate) monitor: Option<&'a str>,
+}
+
+/// Whether the window is being opened under gamescope, by gamescope's own signals and never by
+/// the machine being a Deck. The monitor name is the one that still holds for a launch with a
+/// bare environment over ssh, which is how the problem was first seen.
+pub(crate) fn is_gamescope(signals: &Signals<'_>) -> bool {
+    signals.gamescope_display
+        || signals.desktop.is_some_and(|d| d.eq_ignore_ascii_case("gamescope"))
+        || signals.monitor.is_some_and(|m| m.eq_ignore_ascii_case("gamescope"))
+}
+
+/// [`is_gamescope`] over this process's environment and the given monitor.
+pub(crate) fn under_gamescope(monitor: Option<&winit::monitor::MonitorHandle>) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        let desktop = std::env::var("XDG_CURRENT_DESKTOP").ok();
+        let name = monitor.and_then(|m| m.name());
+        is_gamescope(&Signals {
+            gamescope_display: std::env::var_os("GAMESCOPE_WAYLAND_DISPLAY").is_some(),
+            desktop: desktop.as_deref(),
+            monitor: name.as_deref(),
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = monitor;
+        false
+    }
+}
+
+/// The scale to turn a logical size into pixels with. Under gamescope it is 1, whatever winit
+/// reports: gamescope's game Xwayland advertises its 3840x2160 screen as 100mm x 160mm, which
+/// winit's X11 backend reads as a scale of 6, so a 1440x816 window opened as 8640x4896 pixels
+/// (measured on a Steam Deck, 2026-10-14; `docs/tools/packaging.md`, "Under gamescope").
+pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
+    if gamescope { 1.0 } else { reported }
+}
+
+/// The mode a window is opened in. Under gamescope a window frame means nothing (gamescope draws
+/// one window per output and no decoration), so `Windowed` is opened as `Borderless`, filling the
+/// output; the saved setting is left alone, so the same file still means windowed on a desktop
+/// (maintainer decision, 2026-10-14).
+pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> display::WindowMode {
+    if gamescope { display::WindowMode::Borderless } else { mode }
+}
+
+/// The windows a multi-window layout opens. Under gamescope it is one: every window of a client
+/// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck,
+/// 2026-10-14; `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
+/// that could not be seen are cut up in the one window instead, as a split screen is. Window 1
+/// keeps its cut. **Chosen, not measured.**
+pub(crate) fn one_window_under_gamescope(
+    layout: Vec<oag_game::split_screen::WindowSeats>,
+    gamescope: bool,
+) -> Vec<oag_game::split_screen::WindowSeats> {
+    if !gamescope || layout.len() < 2 {
+        return layout;
+    }
+    let count = layout.iter().map(|window| window.count).sum();
+    vec![oag_game::split_screen::WindowSeats { count, cut: layout[0].cut }]
+}
+
+/// The size asked of winit for a window of `size`: logical on a desktop, which is what the
+/// setting means there, and physical pixels under gamescope, held to the monitor so a saved size
+/// larger than the output cannot ask for more pixels than gamescope displays.
+pub(crate) fn request_size(
+    size: display::Size,
+    gamescope: bool,
+    monitor: Option<(u32, u32)>,
+) -> winit::dpi::Size {
+    if !gamescope {
+        return winit::dpi::LogicalSize::new(size.width, size.height).into();
+    }
+    let (width, height) = match monitor {
+        Some((w, h)) if w > 0 && h > 0 => (size.width.min(w), size.height.min(h)),
+        _ => (size.width, size.height),
+    };
+    winit::dpi::PhysicalSize::new(width, height).into()
 }
 
 /// What winit is asked for, for a mode and a chosen screen.
@@ -86,6 +175,12 @@ pub(crate) struct Look<'a> {
 /// creation (`with_position`), which X11 and Windows honour and Wayland has no protocol for - the
 /// compositor places the window there.
 pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
+    let gamescope = under_gamescope(look.monitor.as_ref());
+    attributes_in(look, gamescope)
+}
+
+/// [`attributes`] with the compositor decided by the caller.
+fn attributes_in(look: Look<'_>, gamescope: bool) -> winit::window::WindowAttributes {
     let Look {
         title,
         size,
@@ -93,10 +188,15 @@ pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
         monitor,
         position,
     } = look;
+    let mode = effective_mode(mode, gamescope);
     let borderless = mode == display::WindowMode::Borderless;
     let mut attributes = winit::window::Window::default_attributes()
         .with_title(title)
-        .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
+        .with_inner_size(request_size(
+            size,
+            gamescope,
+            monitor.as_ref().map(|m| (m.size().width, m.size().height)),
+        ))
         .with_resizable(borderless)
         .with_window_icon(Some(window_icon()))
         .with_fullscreen(fullscreen(mode, monitor.clone()));
@@ -119,6 +219,36 @@ pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
         }
     }
     attributes
+}
+
+/// Logs what the window system reported for a freshly created window: every monitor's size and
+/// scale, the window's own scale and inner size, and the requested one.
+pub(crate) fn log_geometry(
+    label: &str,
+    window: &winit::window::Window,
+    monitors: &[winit::monitor::MonitorHandle],
+    requested: display::Size,
+) {
+    let inner = window.inner_size();
+    info!(
+        "{label}: requested {}x{} logical, scale {}, inner {}x{}, fullscreen {}",
+        requested.width,
+        requested.height,
+        window.scale_factor(),
+        inner.width,
+        inner.height,
+        window.fullscreen().is_some(),
+    );
+    for monitor in monitors {
+        let size = monitor.size();
+        info!(
+            "{label}: monitor {:?} {}x{} scale {}",
+            monitor.name(),
+            size.width,
+            size.height,
+            monitor.scale_factor(),
+        );
+    }
 }
 
 /// What each monitor is called on the menu and in the settings file.
@@ -180,7 +310,7 @@ pub(crate) fn centred_on(
     monitor: &winit::monitor::MonitorHandle,
     size: display::Size,
 ) -> winit::dpi::PhysicalPosition<i32> {
-    let scale = monitor.scale_factor();
+    let scale = effective_scale(monitor.scale_factor(), under_gamescope(Some(monitor)));
     let physical = |value: u32| (f64::from(value) * scale).round().max(0.0) as u32;
     let origin = monitor.position();
     let area = monitor.size();
@@ -276,6 +406,71 @@ mod tests {
     /// Every window, the first and the further ones alike, is built by [`attributes`]: a windowed
     /// one is fixed size (a tiling compositor floats it, as it floats window 1) and a borderless
     /// one is resizable and fullscreen.
+    fn px(size: winit::dpi::Size) -> (u32, u32, bool) {
+        match size {
+            winit::dpi::Size::Physical(p) => (p.width, p.height, true),
+            winit::dpi::Size::Logical(l) => (l.width as u32, l.height as u32, false),
+        }
+    }
+
+    #[test]
+    fn gamescope_is_told_by_its_own_signals() {
+        let none = Signals { gamescope_display: false, desktop: Some("GNOME"), monitor: Some("DP-1") };
+        assert!(!is_gamescope(&none));
+        assert!(is_gamescope(&Signals { gamescope_display: true, ..none }));
+        assert!(is_gamescope(&Signals { desktop: Some("gamescope"), ..none }));
+        assert!(is_gamescope(&Signals { monitor: Some("gamescope"), ..none }));
+    }
+
+    #[test]
+    fn under_gamescope_a_size_is_physical_pixels_held_to_the_output() {
+        let size = display::Size { width: 2560, height: 1440 };
+        assert_eq!(px(request_size(size, false, Some((3840, 2160)))), (2560, 1440, false));
+        assert_eq!(px(request_size(size, true, Some((3840, 2160)))), (2560, 1440, true));
+        assert_eq!(px(request_size(size, true, Some((1280, 800)))), (1280, 800, true));
+        assert_eq!(px(request_size(size, true, None)), (2560, 1440, true));
+        assert_eq!(effective_scale(6.0, true), 1.0);
+        assert_eq!(effective_scale(2.0, false), 2.0);
+    }
+
+    #[test]
+    fn a_window_built_under_gamescope_asks_for_pixels_and_a_desktop_one_for_logical() {
+        let under = attributes_in(look(display::WindowMode::Windowed), true);
+        assert_eq!(px(under.inner_size.unwrap()), (1440, 816, true));
+        let desktop = attributes_in(look(display::WindowMode::Windowed), false);
+        assert_eq!(px(desktop.inner_size.unwrap()), (1440, 816, false));
+    }
+
+    #[test]
+    fn under_gamescope_windowed_opens_borderless_and_a_desktop_keeps_the_setting() {
+        use display::WindowMode::{Borderless, Windowed};
+        assert_eq!(effective_mode(Windowed, true), Borderless);
+        assert_eq!(effective_mode(Borderless, true), Borderless);
+        assert_eq!(effective_mode(Windowed, false), Windowed);
+        assert_eq!(effective_mode(Borderless, false), Borderless);
+        let under = attributes_in(look(Windowed), true);
+        assert!(under.resizable);
+        assert!(matches!(under.fullscreen, Some(winit::window::Fullscreen::Borderless(None))));
+        let desktop = attributes_in(look(Windowed), false);
+        assert!(!desktop.resizable && desktop.fullscreen.is_none());
+    }
+
+    #[test]
+    fn under_gamescope_the_windows_of_a_layout_become_one_window_holding_every_seat() {
+        use oag_game::split_screen::WindowSeats;
+        use oag_render::viewport::Cut;
+        let two = |count, cut| WindowSeats { count, cut };
+        let layout = vec![two(4, Cut::Horizontal), two(2, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(layout.clone(), false), layout);
+        assert_eq!(
+            one_window_under_gamescope(layout, true),
+            vec![two(6, Cut::Horizontal)]
+        );
+        let single = vec![two(3, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(single.clone(), true), single);
+        assert!(one_window_under_gamescope(Vec::new(), true).is_empty());
+    }
+
     #[test]
     fn a_windowed_window_is_fixed_size_and_a_borderless_one_is_resizable_and_fullscreen() {
         let windowed = attributes(look(display::WindowMode::Windowed));

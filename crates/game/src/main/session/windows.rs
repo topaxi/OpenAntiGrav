@@ -61,12 +61,16 @@ impl Session {
         let monitors: Vec<_> = event_loop.available_monitors().collect();
         let size = self.settings.display.window_size;
         let origin = self.gpu.output.window.outer_position().ok();
-        let scale = self.gpu.output.window.scale_factor();
+        let scale = crate::window::effective_scale(
+            self.gpu.output.window.scale_factor(),
+            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref()),
+        );
         let mode = self.seat_mode();
         // `--windows-fullscreen` (the profile's own WINDOW MODE already did this for window 1):
         // window 1 goes borderless on the monitor the profile names, like the others.
         if self.windows_fullscreen
             && self.settings.display.window_mode != display::WindowMode::Borderless
+            && !crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref())
         {
             let names = crate::window::monitor_names(&monitors);
             let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
@@ -133,8 +137,11 @@ impl Session {
     /// WINDOW MODE, or `--windows-fullscreen` / the layout screen's FULLSCREEN for the run.
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     fn seat_mode(&self) -> display::WindowMode {
+        let gamescope =
+            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref());
         if self.windows_fullscreen
-            || self.settings.display.window_mode == display::WindowMode::Borderless
+            || crate::window::effective_mode(self.settings.display.window_mode, gamescope)
+                == display::WindowMode::Borderless
         {
             display::WindowMode::Borderless
         } else {

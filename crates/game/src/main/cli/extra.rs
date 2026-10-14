@@ -472,7 +472,10 @@ impl DriverArgs {
                 "--windows and --window-seats need a desktop: this platform has the one window it gives"
             );
         }
-        Ok(layout)
+        Ok(crate::window::one_window_under_gamescope(
+            layout,
+            crate::window::under_gamescope(None),
+        ))
     }
 
     /// How many people the run seats at the start: the windows' seats, or `--players`.

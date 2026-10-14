@@ -770,6 +770,7 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => event_loop.exit(),
 
             WindowEvent::Resized(size) => {
+                log::debug!("window resized to {}x{}", size.width, size.height);
                 let hidden = size.width == 0 || size.height == 0;
                 if hidden != self.occluded {
                     self.occluded = hidden;

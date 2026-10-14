@@ -80,11 +80,15 @@ impl Session {
             self.gpu.output.window.available_monitors().collect(),
             &wanted.monitor,
         );
+        let mode = crate::window::effective_mode(
+            wanted.window_mode,
+            crate::window::under_gamescope(monitor.as_ref()),
+        );
         self.gpu
             .output
             .window
-            .set_fullscreen(fullscreen(wanted.window_mode, monitor.clone()));
-        let windowed = wanted.window_mode == display::WindowMode::Windowed;
+            .set_fullscreen(fullscreen(mode, monitor.clone()));
+        let windowed = mode == display::WindowMode::Windowed;
         self.gpu.output.window.set_resizable(!windowed);
         if windowed {
             let size = wanted.window_size;
@@ -92,7 +96,11 @@ impl Session {
                 .gpu
                 .output
                 .window
-                .request_inner_size(winit::dpi::LogicalSize::new(size.width, size.height));
+                .request_inner_size(crate::window::request_size(
+                    size,
+                    crate::window::under_gamescope(monitor.as_ref()),
+                    monitor.as_ref().map(|m| (m.size().width, m.size().height)),
+                ));
             // Moved before it is resized as far as the compositor is concerned,
             // both being requests it may reorder or drop; the position is
             // computed from the size the settings hold rather than the one the

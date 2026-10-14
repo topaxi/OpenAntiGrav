@@ -231,6 +231,12 @@ impl Gpu {
                 .create_window(attributes)
                 .context("creating the window")?,
         );
+        crate::window::log_geometry(
+            "window",
+            &window,
+            &event_loop.available_monitors().collect::<Vec<_>>(),
+            settings.window_size,
+        );
         // The window system's own cursor is never shown over the game. The
         // menus answer a pointer, and draw their own in the title's own
         // palette - `oag_game::cursor`, painted by `Session::draw` - because
