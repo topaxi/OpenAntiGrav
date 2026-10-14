@@ -92,6 +92,7 @@ OAG_LAN_ADDRESS = { text = "SAISIR UNE ADRESSE", human = false }
 OAG_LAN_ADDRESS_TITLE = { text = "ADRESSE DE L'HÔTE", human = false }
 OAG_LAN_ADDRESS_HINT = { text = "ADRESSE DE L'ORDINATEUR HÔTE, p. ex. 192.168.1.20", human = false }
 OAG_LAN_CONNECTING = { text = "CONNEXION...", human = false }
+OAG_LAN_STARTING = { text = "DÉMARRAGE...", human = false }
 OAG_LAN_WAIT_HINT = { text = "EN ATTENTE DU LANCEMENT PAR L'HÔTE", human = false }
 OAG_LAN_NOT_HERE = { text = "CELA JOUE À %s, PAS À CE DISQUE", human = false }
 OAG_LAN_FAILED = { text = "IMPOSSIBLE DE REJOINDRE", human = false }

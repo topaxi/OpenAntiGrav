@@ -486,7 +486,11 @@ impl Session {
         // pages', one local view (`NetPlay::race_options`).
         if let Some(net) = &self.net {
             options = net.race_options(options)?;
-            self.race_options = Some(options.clone());
+            // Only the circuit goes back (the build request reads it): the server's seed and
+            // grid must not leak into the next local race's options.
+            if let Some(stored) = self.race_options.as_mut() {
+                stored.track.clone_from(&options.track);
+            }
         }
         // The RACE page's own row for this circuit, which is the disc's
         // localised name rather than the `PI_Track` id - see

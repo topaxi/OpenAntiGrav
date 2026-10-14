@@ -156,19 +156,7 @@ impl Session {
                 options.mode.name()
             );
         }
-        let params = oag_net::wire::RaceParams {
-            title: title.clone(),
-            track: options.track.clone().unwrap_or_default(),
-            team: options.team.clone().unwrap_or_default(),
-            class: options.class.clone(),
-            mode: oag_race::Mode::SingleRace.name().to_string(),
-            difficulty: options.difficulty.name().to_string(),
-            scheme: self.scheme.name().to_string(),
-            seed: seed(),
-            people: 1,
-            opponents: options.opponents,
-            weapons: false,
-        };
+        let params = lan_params(&title, &options, self.scheme, seed());
         let name = player_name();
         let config = Config {
             source: options.source.clone(),
@@ -330,11 +318,12 @@ impl Session {
                 {
                     *started = true;
                     hosted.start();
+                    let starting = self.lan_say("OAG_LAN_STARTING", "STARTING...");
                     self.play_navs(Some(Nav::Accept));
                     if let Stage::Menu(stage) = &mut self.stage
                         && let Some(screen) = stage.lan.as_mut()
                     {
-                        screen.set_hint("STARTING...".into());
+                        screen.set_hint(starting);
                     }
                 }
             }
@@ -495,7 +484,7 @@ impl Session {
                     self.end_lan();
                     return;
                 }
-                let hint = started.then(|| "STARTING...".to_string());
+                let hint = started.then(|| self.lan_say("OAG_LAN_STARTING", "STARTING..."));
                 (
                     Step::Lobby {
                         hosted,
@@ -678,4 +667,49 @@ fn seed() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(1, |since| since.as_nanos() as u64 & 0xFFFF_FFFF)
+}
+
+/// The race a LAN host offers, from the pages' options: the title's own name (what a joiner's
+/// disc is checked against), the circuit and ship picked, a Single Race whatever the mode row
+/// said, weapons off, the host alone until START fixes the head count.
+fn lan_params(
+    title: &str,
+    options: &oag_raceplay::Options,
+    scheme: oag_gameplay::ControlScheme,
+    seed: u64,
+) -> oag_net::wire::RaceParams {
+    oag_net::wire::RaceParams {
+        title: title.to_string(),
+        track: options.track.clone().unwrap_or_default(),
+        team: options.team.clone().unwrap_or_default(),
+        class: options.class.clone(),
+        mode: oag_race::Mode::SingleRace.name().to_string(),
+        difficulty: options.difficulty.name().to_string(),
+        scheme: scheme.name().to_string(),
+        seed,
+        people: 1,
+        opponents: options.opponents,
+        weapons: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_hosted_race_is_a_single_race_with_weapons_off_named_for_the_title() {
+        let options = oag_raceplay::Options {
+            mode: oag_race::Mode::TimeTrial,
+            track: Some("circuit".into()),
+            team: Some("assegai".into()),
+            ..oag_raceplay::Options::default()
+        };
+        let params = lan_params("Wipeout Pulse", &options, oag_gameplay::ControlScheme::Veteran, 9);
+        assert_eq!(params.title, "Wipeout Pulse");
+        assert_eq!(params.mode, "single_race", "the pages' Time Trial becomes a Single Race");
+        assert!(!params.weapons);
+        assert_eq!((params.track.as_str(), params.team.as_str()), ("circuit", "assegai"));
+        assert_eq!((params.people, params.seed), (1, 9));
+    }
 }

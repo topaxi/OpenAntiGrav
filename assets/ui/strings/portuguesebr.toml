@@ -52,6 +52,7 @@ OAG_LAN_ADDRESS = { text = "DIGITAR UM ENDEREÇO", human = false }
 OAG_LAN_ADDRESS_TITLE = { text = "ENDEREÇO DO ANFITRIÃO", human = false }
 OAG_LAN_ADDRESS_HINT = { text = "ENDEREÇO DO COMPUTADOR ANFITRIÃO, ex. 192.168.1.20", human = false }
 OAG_LAN_CONNECTING = { text = "CONECTANDO...", human = false }
+OAG_LAN_STARTING = { text = "INICIANDO...", human = false }
 OAG_LAN_WAIT_HINT = { text = "AGUARDANDO O ANFITRIÃO INICIAR A CORRIDA", human = false }
 OAG_LAN_NOT_HERE = { text = "ISTO JOGA %s, NÃO ESTE DISCO", human = false }
 OAG_LAN_FAILED = { text = "NÃO FOI POSSÍVEL ENTRAR", human = false }

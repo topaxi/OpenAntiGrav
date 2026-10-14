@@ -153,6 +153,9 @@ fn a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets() {
         ada.poll_welcome().expect("no refusal").is_none(),
         "a welcome came before START"
     );
+    // Idle past QUIC's 30 s idle timeout: only the keep-alive keeps the joiner connected.
+    std::thread::sleep(std::time::Duration::from_secs(35));
+    // (A joiner that dropped makes the welcome below fail with the link's close reason.)
     hosted.start();
 
     let mut welcomes = Vec::new();
