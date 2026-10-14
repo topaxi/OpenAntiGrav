@@ -446,6 +446,12 @@ mod tests {
         server.send_datagram(vec![4]);
         assert_eq!(wait(|| client.recv_datagram()), vec![4]);
         assert!(client.max_datagram() >= 1_200, "{}", client.max_datagram());
+        // The overlay's counters: a link that fell back to the default `None` would
+        // show a blank RTT and zero rates.
+        let path = client.path().expect("a WebTransport link keeps counters");
+        assert!(path.rtt.is_some(), "{path:?}");
+        assert!(path.tx_bytes > 0 && path.rx_bytes > 0, "{path:?}");
+        assert!(path.tx_datagrams > 0 && path.rx_datagrams > 0, "{path:?}");
     }
 
     #[test]

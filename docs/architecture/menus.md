@@ -1880,12 +1880,13 @@ wanted is not an overlay.
 
 It is **window-only**. `--screenshot` runs the sequence as fast as it can with
 nothing presenting, so a frame time from it would be a real measurement of
-something nobody is asking about.
+something nobody is asking about. (The one exception is the network block below,
+which a headless `--connect` capture draws on its own.)
 
 ### The network block (`dev` tier, network races only)
 
 A `--connect` race adds a block of rows under the frame-time panel at the `dev`
-tier (`[graphics] perf_overlay = "dev"`; there is no menu value for `dev`):
+tier (`GRAPHICS -> PERFORMANCE OVERLAY -> dev`, or `[graphics] perf_overlay = "dev"`):
 QUIC's smoothed round trip, **CONF** (the time from sending a tick's input to
 that tick coming back confirmed, which is the round trip plus the server's input
 buffer and the number that moves under `--net-shim`), jitter (the mean change

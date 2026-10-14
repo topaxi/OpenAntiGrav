@@ -61,7 +61,8 @@
 //!
 //! It is **window-only**. `--screenshot` runs the sequence as fast as it can
 //! with no presentation at all, so a frame time from it would be a real
-//! measurement of something nobody is asking about.
+//! measurement of something nobody is asking about. The one exception is
+//! [`net`], which a headless `--connect` capture draws by itself.
 
 use serde::{Deserialize, Serialize};
 

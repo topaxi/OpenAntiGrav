@@ -75,7 +75,7 @@ pub struct Readout {
 }
 
 fn kib(bytes_s: f32) -> String {
-    format!("{:.1}", bytes_s / 1024.0)
+    format!("{:.1}", bytes_s / 1000.0)
 }
 
 fn ms(value: Option<f32>) -> String {
