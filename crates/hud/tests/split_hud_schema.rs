@@ -114,10 +114,17 @@ fn a_vertical_two_view_split_reads_the_tall_rule_and_no_other_view_does() {
             Mode::TimeTrial,
         ] {
             // 16:9 columns (0.89), 21:9 (1.19) and 32:9 (1.78): a wider screen's columns.
+            // Pure splits the rule at 1.4 so its weapon grid can sit lower on a screen
+            // wider than 21:9 (`tall-wide`); 16:9 and 21:9 still read `tall`.
             for aspect in [0.89, 1.19, 1.78] {
+                let rule = if title == "Pure" && aspect > 1.4 {
+                    "tall-wide"
+                } else {
+                    "tall"
+                };
                 assert_eq!(
                     answer(&file, mode, 2, aspect),
-                    "tall",
+                    rule,
                     "{title} {mode:?} {aspect}"
                 );
             }
@@ -157,15 +164,16 @@ fn hd_has_no_tall_rule_for_its_authored_two_view_split_to_lose_to() {
 /// and the scissor cuts it. Every rule raises it by more than that: the grid is about 39
 /// units tall on the 272-unit screen (read off a render, 67 pixels at scale 1.3 in a
 /// 358-pixel row), so a view of width over height `a` shows it `39 * scale * min(a / 1.765,
-/// one) / 272` of its height. `a` is the widest view the rule answers, except for `tall`,
-/// which answers up to 2.4 and is checked only to a 21:9 screen's column (1.19): a 32:9
-/// column (1.78) would still clip the grid, and that is listed as open in
-/// `docs/rendering/split-screen.md`, not fixed here.
+/// one) / 272` of its height. `a` is the widest view the rule answers, so every aspect a
+/// two-view column can take is covered: `tall` to 1.4 and `tall-wide` from there to 2.4
+/// (the grid stops growing at 1.765, so 2.4 is the worst case). `tall-wide` also keeps the
+/// 0.04 the corner groups sit in from the bottom edge.
 #[test]
 fn pures_every_rule_raises_the_weapon_grid_clear_of_the_bottom_edge() {
     let file = shipped("Pure");
     for (name, widest) in [
-        ("tall", 1.19_f32),
+        ("tall", 1.4_f32),
+        ("tall-wide", 2.4),
         ("strip", 99.0),
         ("landscape", 2.4),
         ("square", 1.4),
@@ -184,6 +192,22 @@ fn pures_every_rule_raises_the_weapon_grid_clear_of_the_bottom_edge() {
             grid.offset[1]
         );
     }
+    let wide = file
+        .rules
+        .iter()
+        .find(|rule| rule.name == "tall-wide")
+        .unwrap();
+    let grid = wide
+        .groups
+        .iter()
+        .find(|group| group.widgets.iter().any(|w| w == "weapon_icon_grid"))
+        .unwrap();
+    let half = 0.5 * 39.0 * grid.scale / 272.0;
+    assert!(
+        -grid.offset[1] >= half + 0.04 - 0.001,
+        "tall-wide: offset {} leaves the grid closer to the edge than the corner groups",
+        grid.offset[1]
+    );
 }
 
 /// The kill column is the Eliminator's, and a column has the room for it.

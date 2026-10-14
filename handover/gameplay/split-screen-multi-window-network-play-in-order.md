@@ -289,8 +289,10 @@ PS2 Pulse's split HUD, which floated at 76% of the view because the grid's cells
 1.607 pixels and `hud_views` assumed square ones, is fixed (per-axis units; PSP, Pure, HD and
 2048 byte-identical, PS2 splits moved on purpose). ~~Pure's weapon grid
 is still half clipped in rows, Pulse's strip kill column overlaps the speed bars~~ (both fixed
-2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's `tall` still clips
-the grid on a 32:9 column). **Still open from it**: Omega's
+2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's grid on a 32:9
+column too, `pure-tall-32x9`: a `tall-wide` rule from 1.4 up, `-0.14`, chosen, not measured).
+A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
+never draws (one view draws it); Tournament is campaign-only. **Still open from it**: Omega's
 `Zone_HUDvert` and its non-authored cases, and a real display.
 **Still open before it**: Time Trial and the Eliminator on Pure and HD and
 HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
@@ -1100,7 +1102,8 @@ Pulse (both pressings) and Pure show SPLIT SCREEN VERTICAL and HORIZONTAL after 
 campaign row; the RACEBOX SPLIT SCREEN row is gone there (see `docs/rendering/split-screen.md`,
 "The Pulse and Pure entry"). The row's choice feeds `Session::split_cut`, so
 VERTICAL draws left and right (merged with `hd-authored-split-setup`). **Open**: (1) the PS2's
-Tournament and Head to Head race types and the `TournamentLoad` dialog are not built; (2) the
+Tournament and Head to Head race types and the `TournamentLoad` dialog are not built (a split
+`--mode head_to_head` race today fields seven opponents and reads as a Single Race); (2) the
 RACE page's default MODE is whatever the profile holds, the PS2's split page opens on Arcade;
 (3) on the PS2 pressing in another language the rows read the project's translation, not the
 disc's own `FE_RACE_CAM_SS` text.
