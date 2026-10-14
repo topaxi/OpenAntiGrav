@@ -345,6 +345,7 @@ fn each_window_keeps_the_history_of_its_own_camera() {
     let mut last = [None; 2];
     for frame in 0..4_u32 {
         race.tick(&oag_gameplay::PlayerInputs::none());
+        #[allow(clippy::needless_range_loop)]
         for window in 0..2 {
             draw_window_with(
                 gpu,

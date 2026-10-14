@@ -155,6 +155,9 @@ pub(crate) fn assemble(
     })
 }
 
+/// Records one ring's reading in a frame's [`Seen`].
+type Setter = fn(&mut Seen, f32);
+
 /// How many frames a window's cost waits for the others' before the frame is dropped.
 const MAX_LAG: u64 = 4;
 
@@ -278,7 +281,7 @@ impl Rings {
     /// before (a load) is dropped, as window 1's are.
     pub(crate) fn drain(&mut self, device: &wgpu::Device, stall_frame: u64) {
         let mut readings = [None; oag_gpu::timing::PassTimer::SLOTS];
-        let fields: [(&mut Option<oag_gpu::timing::PassTimer>, fn(&mut Seen, f32)); 5] = [
+        let fields: [(&mut Option<oag_gpu::timing::PassTimer>, Setter); 5] = [
             (&mut self.pass, |seen, seconds| seen.scene = Some(seconds)),
             (&mut self.blur, |seen, seconds| seen.blur = Some(seconds)),
             (&mut self.hd_bloom, |seen, seconds| {
