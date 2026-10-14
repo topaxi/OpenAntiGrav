@@ -394,6 +394,42 @@ fn explicit_seats_survive_a_reconcile() {
     assert_eq!(assignment.slot_of(8), Some(0));
 }
 
+/// A closed window gives up its seat: the pad on it drives nothing, the slot is no
+/// longer driven, and neither a reconnect nor a new pad takes it back. The race flies
+/// an undriven local slot as the AI (`split_screen::follow_devices`).
+#[test]
+fn an_unseated_slot_is_driven_by_nothing_and_stays_that_way() {
+    let mut assignment = Seated::seated(3);
+    assignment.reconcile(&[1, 2, 3]);
+    assert!(assignment.drives(1));
+
+    assignment.unseat(1);
+    assert!(!assignment.drives(1), "nobody drives the closed slot");
+    assert_eq!(assignment.slot_of(2), None, "its pad drives nothing");
+    assert_eq!(assignment.slot_of(3), Some(2), "the others keep theirs");
+
+    assignment.reconcile(&[1, 2, 3, 4]);
+    assert_eq!(assignment.slot_of(2), None, "a benched pad stays out");
+    assert_eq!(
+        assignment.slot_of(4),
+        None,
+        "and no new pad takes a closed slot"
+    );
+    assert!(!assignment.drives(1));
+}
+
+/// A keyboard that was seated on the closed slot goes back to the default one, so
+/// it still steers something.
+#[test]
+fn an_unseated_keyboard_goes_back_to_the_default_slot() {
+    let mut assignment = Seated::seated(2);
+    assignment.claim_keyboard(1);
+    assert!(assignment.drives(1));
+    assignment.unseat(1);
+    assert_eq!(assignment.keyboard_slot(), DEFAULT_SLOT);
+    assert!(!assignment.drives(1));
+}
+
 /// The humans count is held to the grid, and at least one.
 #[test]
 fn the_human_count_is_held_to_the_grid() {

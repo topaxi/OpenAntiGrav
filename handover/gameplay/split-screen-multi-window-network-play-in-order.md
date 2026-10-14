@@ -308,6 +308,23 @@ screen flow for enabling split screen is already partly RE'd.
 
 ## 2. Multi-window - same simulation, different rendering/app-lifecycle risk
 
+**First cut landed 2026-10-14 (lane `multi-window`), `--windows N`, desktop only.** Design,
+verification and the pacing command are in `docs/rendering/multi-window.md` and
+[ADR-0067](../../docs/architecture/adr/0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md).
+What is built: `Gpu` split into the device and an `Output` (window and surface); a `Seat` per further
+window with its own `Framebuffer`; every window runs the whole single-window chain, one encoder and
+one submission each (`Scene::render_view`, `Layer::Window`, `Race::windowed`); window 1 keeps the front
+end, the pause menu and the pointer; a seat window closing hands its slot to the AI
+(`Assignment::unseat` and the existing `follow_devices`); focus is "away" only when no window has it;
+seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies.
+Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
+**Still open from it** (all in the doc's "Open"): a menu row for the window count; a keyboard per
+window; the pause overlay and the end screens on every window; `--window-monitor` and remembered
+placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
+work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the
+`RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
+doc); monitor hot-plug.
+
 Same process, same machine, one `RaceSim`, one tick - but up to 8 *OS windows*
 instead of up to 8 viewports in one window (each player's view full-screen in
 their own window, e.g. for a multi-monitor local setup). Simulation-side,

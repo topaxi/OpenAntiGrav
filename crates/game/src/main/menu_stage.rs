@@ -755,7 +755,7 @@ impl MenuStage {
             oag_game::flyer::render_list(
                 &mut self.renderer,
                 load,
-                (&gpu.device, &gpu.queue, gpu.config.format),
+                (&gpu.device, &gpu.queue, gpu.output.config.format),
                 encoder,
                 view,
                 (&list, split),

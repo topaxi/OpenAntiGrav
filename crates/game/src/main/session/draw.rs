@@ -29,6 +29,7 @@ use oag_present::upscale;
 use oag_display::display;
 
 use crate::stage::Stage;
+use crate::windows;
 
 use super::Session;
 
@@ -55,7 +56,7 @@ impl Session {
     /// every render scale, which is not what a row spelled `50` beside a row
     /// spelled `100` says.
     fn drs_limits(&self) -> drs::Limits {
-        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
         // Off the **render profile**, like the ceiling it pairs with: a target
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.
@@ -100,7 +101,7 @@ impl Session {
         frame_seconds: Option<f32>,
         acquire_wait: f32,
     ) -> Result<bool> {
-        let Some(frame) = self.gpu.take_acquired() else {
+        let Some(frame) = self.gpu.output.take_acquired() else {
             return Ok(false);
         };
         // Recomputed rather than threaded through from `Session::frame`:
@@ -129,25 +130,34 @@ impl Session {
         // Where the game goes on the surface, and how many pixels it is drawn
         // with. One rectangle for every stage, so a change moves the whole game
         // rather than only what happens to be on screen.
-        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
         // The presentation target follows the *surface*, not the render scale -
         // it is where the resolved frame and the UI meet, so it is sized in the
         // pixels a player actually has. Cheap when nothing moved; a window
         // resize is the only thing that reallocates it.
         self.framebuffer
-            .resize_output(&self.gpu.device, self.gpu.size());
-        let wanted = oag_game::settings::web::render_target(
+            .resize_output(&self.gpu.device, self.gpu.output.size());
+        let own_wanted = oag_game::settings::web::render_target(
             rect,
             self.render_profile().render_scale,
             self.gpu.device.limits().max_texture_dimension_2d,
         );
+        // **A multi-window race shares one scene allocation** (the scene's depth and
+        // multisample attachments are one size, and a pass wants its attachments equal),
+        // the largest any window wants; each window draws into its own extent of it.
+        let windowed = self.windowed_race();
+        let wanted = if windowed {
+            windows::shared_allocation(own_wanted, self.seat_targets())
+        } else {
+            own_wanted
+        };
         if self.framebuffer.resize(&self.gpu.device, wanted) {
             log::info!(
                 "render target {}x{} for a {}x{} surface",
                 wanted.0,
                 wanted.1,
-                self.gpu.size().0,
-                self.gpu.size().1
+                self.gpu.output.size().0,
+                self.gpu.output.size().1
             );
             // A depth attachment whose size does not match the colour one is a
             // validation error, so the race's has to follow - and now that is
@@ -161,7 +171,7 @@ impl Session {
                 Stage::Race(stage) => {
                     stage.scene.resize(
                         &self.gpu.device,
-                        self.gpu.config.format,
+                        self.gpu.output.config.format,
                         self.framebuffer.allocation(),
                     );
                 }
@@ -169,7 +179,7 @@ impl Session {
                     if let Some(Ok(built)) = stage.built_race.as_mut() {
                         built.scene.resize(
                             &self.gpu.device,
-                            self.gpu.config.format,
+                            self.gpu.output.config.format,
                             self.framebuffer.allocation(),
                         );
                     }
@@ -186,7 +196,7 @@ impl Session {
             if let Some(stage) = self.suspended_race.as_mut() {
                 stage.scene.resize(
                     &self.gpu.device,
-                    self.gpu.config.format,
+                    self.gpu.output.config.format,
                     self.framebuffer.allocation(),
                 );
             }
@@ -203,7 +213,14 @@ impl Session {
         // Off, and on every capture path, `drs::Controller::extent` is the
         // allocation and this is inert.
         let drs_limits = self.drs_limits();
-        self.framebuffer.set_extent(self.drs.extent(drs_limits));
+        // Resolution holds its scale while there is more than one window, as it does for a
+        // split (the controller times one scene pass), so a windowed race draws exactly the
+        // extent this window wants.
+        self.framebuffer.set_extent(if windowed {
+            own_wanted
+        } else {
+            self.drs.extent(drs_limits)
+        });
 
         // **Two targets, and which one a stage draws into is whether it has a
         // scene**, per [ADR-0038](../../../../../docs/architecture/adr/0038-a-stage-with-no-scene-draws-at-presentation-resolution.md).
@@ -504,8 +521,10 @@ impl Session {
             // an unsupported adapter does. Read *after* the stage rendered
             // above, which is what makes it this frame's camera rather than the
             // previous one's.
+            // None while windowed: the temporal record holds one camera, and the windows
+            // alternate cameras every frame.
             let temporal = match &self.stage {
-                Stage::Race(stage) if self.gpu.temporal => stage.temporal(),
+                Stage::Race(stage) if self.gpu.temporal && !windowed => stage.temporal(),
                 _ => None,
             };
 
@@ -581,13 +600,13 @@ impl Session {
         // this target already did, above - **except the menus**, which draw
         // here instead. See the block below.
         if let Stage::Race(stage) = &mut self.stage {
-            // `Framebuffer::output_size`, not `self.gpu.size()`: the two
+            // `Framebuffer::output_size`, not `self.gpu.output.size()`: the two
             // usually agree, since `resize_output` above just asked for
             // exactly that, but not always - a failed reallocation there
             // keeps the previous, smaller target and only warns, so reading
             // the size back off the framebuffer is what stays correct on
             // that path too. `RaceStage::draw_hud`'s `target_size` has to be
-            // `view`'s real size rather than assumed from `gpu.config`
+            // `view`'s real size rather than assumed from `gpu.output.config`
             // internally - see its own doc.
             stage.draw_hud(
                 &self.gpu,
@@ -715,15 +734,7 @@ impl Session {
         // row count rather than the window's. Off the menu shell when this
         // run has one; the `--race` route has none, so a race's HUD answers
         // instead, and a run with neither reads as the PSP's.
-        let native = match (&self.shell, &self.stage) {
-            (Some(shell), _) => shell.space,
-            (None, Stage::Race(stage)) => stage
-                .hud
-                .as_ref()
-                .map_or(oag_display::space::Space::PSP, |hud| hud.space()),
-            (None, _) => oag_display::space::Space::PSP,
-        }
-        .size;
+        let native = self.native_size();
         self.framebuffer.composite(
             &self.gpu.device,
             &self.gpu.queue,
@@ -769,7 +780,7 @@ impl Session {
         // **The whole window, not `rect`**: the panels belong on the glass's
         // own corners, so the overlay gets a full-surface viewport and a grid
         // as wide as the window's aspect (`perf::grid`), with no letterbox.
-        let surface = self.gpu.size();
+        let surface = self.gpu.output.size();
         let overlay_space = perf::grid(surface);
         let overlay_rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         self.overlay.set_space(overlay_space);
@@ -919,6 +930,22 @@ impl Session {
             );
         }
         Ok(true)
+    }
+
+    /// The title's own grid, for a screen-filter preset that wants the original panel's
+    /// row count rather than the window's. Off the menu shell when this run has one;
+    /// the `--race` route has none, so a race's HUD answers instead, and a run with
+    /// neither reads as the PSP's.
+    pub(super) fn native_size(&self) -> (f32, f32) {
+        match (&self.shell, &self.stage) {
+            (Some(shell), _) => shell.space,
+            (None, Stage::Race(stage)) => stage
+                .hud
+                .as_ref()
+                .map_or(oag_display::space::Space::PSP, |hud| hud.space()),
+            (None, _) => oag_display::space::Space::PSP,
+        }
+        .size
     }
 
     /// Whether the stage on screen answers a pointer, which is when one is

@@ -77,18 +77,20 @@ impl Session {
     fn apply_native_window(&mut self) {
         let wanted = self.settings.display.clone();
         let monitor = choose_monitor(
-            self.gpu.window.available_monitors().collect(),
+            self.gpu.output.window.available_monitors().collect(),
             &wanted.monitor,
         );
         self.gpu
+            .output
             .window
             .set_fullscreen(fullscreen(wanted.window_mode, monitor.clone()));
         let windowed = wanted.window_mode == display::WindowMode::Windowed;
-        self.gpu.window.set_resizable(!windowed);
+        self.gpu.output.window.set_resizable(!windowed);
         if windowed {
             let size = wanted.window_size;
             let _ = self
                 .gpu
+                .output
                 .window
                 .request_inner_size(winit::dpi::LogicalSize::new(size.width, size.height));
             // Moved before it is resized as far as the compositor is concerned,
@@ -97,6 +99,7 @@ impl Session {
             // window currently has, so the two do not have to agree yet.
             if let Some(monitor) = &monitor {
                 self.gpu
+                    .output
                     .window
                     .set_outer_position(centred_on(monitor, size));
             }
@@ -520,7 +523,7 @@ impl Session {
                     // player who turns vsync off and sees nothing change will
                     // assume it is broken, and the frame limiter that comes
                     // with it would then look broken too.
-                    self.gpu.set_vsync(vsync);
+                    self.gpu.output.set_vsync(&self.gpu.device, vsync);
                     // The frames either side of a surface reconfigure are not
                     // frames anyone is going to present at that rate.
                     self.stalled = true;

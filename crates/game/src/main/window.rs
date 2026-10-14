@@ -155,6 +155,19 @@ pub(crate) fn present_modes(vsync: perf::Vsync) -> &'static [wgpu::PresentMode] 
     }
 }
 
+/// What a further window of a multi-window race asks the surface for, best first.
+///
+/// **A mode that does not block**, whatever the VSYNC row says: the frame loop is
+/// paced by window 1, and a second `Fifo` surface acquired from the same thread would
+/// make the loop wait on that display's vblank as well, in turn. `Mailbox` keeps a
+/// seat tear-free without waiting; `Immediate` tears but never waits; `Fifo` is what
+/// is left when the surface offers neither, and the log says so. **Chosen, not
+/// measured** on real displays - see `docs/rendering/multi-window.md`, "Pacing".
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub(crate) fn seat_present_modes() -> &'static [wgpu::PresentMode] {
+    &[wgpu::PresentMode::Mailbox, wgpu::PresentMode::Immediate]
+}
+
 /// How many frames the CPU may queue ahead of the display, for the mode
 /// [`present_modes`] resolved to.
 ///

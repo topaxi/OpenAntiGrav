@@ -17,6 +17,23 @@ mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
 
+/// Where window `window`'s picture goes: `path` itself for a race that is not windowed, and
+/// `path` with `-window<N>` before its extension (`shot.png` -> `shot-window2.png`) for the
+/// window showing slot `N - 1`.
+fn window_path(path: &std::path::Path, window: Option<usize>) -> std::path::PathBuf {
+    let Some(slot) = window else {
+        return path.to_path_buf();
+    };
+    let stem = path
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    let name = match path.extension() {
+        Some(extension) => format!("{stem}-window{}.{}", slot + 1, extension.to_string_lossy()),
+        None => format!("{stem}-window{}", slot + 1),
+    };
+    path.with_file_name(name)
+}
+
 /// What a headless capture should do before it draws.
 #[derive(Debug, Clone)]
 pub struct CaptureOptions {
@@ -48,6 +65,9 @@ pub struct CaptureOptions {
     pub ai_choice: crate::ai_choice::AiChoice,
     /// `--players`: how many split-screen views. See [`crate::split_screen`].
     pub players: u8,
+    /// `--windows`: the `players` people are shown a window each rather than cut up in one
+    /// picture, and the capture writes one PNG per window. See [`windows`].
+    pub windows: bool,
     /// `--split-cut`: which way two views are cut.
     pub cut: oag_render::viewport::Cut,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
@@ -400,6 +420,9 @@ pub fn capture(
         crate::ai_choice::Source::Free(difficulty),
     );
     crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
+    if options.windows && race.viewport_count() > 1 {
+        race.set_windowed(true);
+    }
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
     race.set_model_detail(options.model_detail);
@@ -596,7 +619,7 @@ pub fn capture(
         mapped_at_creation: false,
     });
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+    let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("race capture"),
     });
     // Shaped the same way a window is, so a screenshot frames what a player
@@ -805,292 +828,334 @@ pub fn capture(
             },
         );
     }
-    // A split screen draws one scene per view, each submitted on its own: see
-    // `Scene::render_viewports`. One view is the call below, untouched.
-    let stats = if race.viewport_count() > 1 {
-        scene.render_viewports(
-            &device,
-            &queue,
-            &view,
-            &race,
-            viewport,
-            options.fov,
-            options.frustum_culling,
-            options.pvs_culling,
-            options.anim_seconds,
-            options.shadows,
-            &spectrum,
-            &mut [],
-        )
+    // A `--windows` race is one picture per window, each its own frame: the loop is the
+    // windows, and a race with none is the one pass it always was.
+    let windows: Vec<Option<usize>> = if race.windowed() {
+        (0..race.viewport_count()).map(Some).collect()
     } else {
-        scene.render(
-            &device,
-            &queue,
-            &mut encoder,
-            &view,
-            &race,
-            viewport,
-            options.fov,
-            options.frustum_culling,
-            options.pvs_culling,
-            options.anim_seconds,
-            // Honoured, and honest since the primer render above exists: with the
-            // setting on, this render is the second of two distinct cameras, so
-            // the smear a player sees is the smear the PNG shows. Off, the pass
-            // never observed a previous camera and encodes nothing.
-            options.motion_blur,
-            options.shadows,
-            camera_jitter,
-            &spectrum,
-            // Untimed, as the primer above is and for the same reason.
-            None,
-            None,
-            None,
-        )
+        vec![None]
     };
-    oag_gpu::perfprobe::report_frame(race.sim.world.tick);
-    // What the captured frame submitted, so a `--pvs true` / `--pvs false`
-    // pair (or `--lod`, or frustum culling) can be compared by count as well as
-    // by picture. The overlay's own figures, which a screenshot cannot show
-    // without drawing them into the picture being compared.
-    // `info`, and kept there: `wreck_ground_truth` reads this line out of the
-    // log, and a `--pvs` comparison reads it by eye.
-    log::info!(
-        "frame at tick {}: {} draw(s) submitted, {} culled, {} triangle(s)",
-        race.sim.world.tick,
-        stats.draws_submitted,
-        stats.draws_culled,
-        stats.triangles,
-    );
+    let mut first_encoder = Some(encoder);
+    for window in windows {
+        let mut encoder = first_encoder.take().unwrap_or_else(|| {
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("race capture window"),
+            })
+        });
+        // A split screen draws one scene per view, each submitted on its own: see
+        // `Scene::render_viewports`. One view is the call below, untouched.
+        let stats = if let Some(slot) = window {
+            // One window of a `--windows` race: that slot's view of the whole frame, the same
+            // call the window makes for each of its windows.
+            scene.render_view(
+                &device,
+                &queue,
+                &mut encoder,
+                &view,
+                &race,
+                slot,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.shadows,
+                &spectrum,
+                None,
+            )
+        } else if race.viewport_count() > 1 {
+            scene.render_viewports(
+                &device,
+                &queue,
+                &view,
+                &race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.shadows,
+                &spectrum,
+                &mut [],
+            )
+        } else {
+            scene.render(
+                &device,
+                &queue,
+                &mut encoder,
+                &view,
+                &race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                // Honoured, and honest since the primer render above exists: with the
+                // setting on, this render is the second of two distinct cameras, so
+                // the smear a player sees is the smear the PNG shows. Off, the pass
+                // never observed a previous camera and encodes nothing.
+                options.motion_blur,
+                options.shadows,
+                camera_jitter,
+                &spectrum,
+                // Untimed, as the primer above is and for the same reason.
+                None,
+                None,
+                None,
+            )
+        };
+        oag_gpu::perfprobe::report_frame(race.sim.world.tick);
+        // What the captured frame submitted, so a `--pvs true` / `--pvs false`
+        // pair (or `--lod`, or frustum culling) can be compared by count as well as
+        // by picture. The overlay's own figures, which a screenshot cannot show
+        // without drawing them into the picture being compared.
+        // `info`, and kept there: `wreck_ground_truth` reads this line out of the
+        // log, and a `--pvs` comparison reads it by eye.
+        log::info!(
+            "frame at tick {}: {} draw(s) submitted, {} culled, {} triangle(s)",
+            race.sim.world.tick,
+            stats.draws_submitted,
+            stats.draws_culled,
+            stats.triangles,
+        );
 
-    // The HUD, into the same target. Without this a race screenshot would show
-    // the track and no HUD at all, because unlike the front end's capture this
-    // path has no `Framebuffer` and so no overlay pass of its own - which would
-    // make `--screenshot` useless for the one thing it is most wanted for.
-    //
-    // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
-    // `--presented` capture and the window alike - so `Renderer::new`'s fork of
-    // the sprite sheet's texture format on `format.is_srgb()` now always takes
-    // the raw side, and the HUD's art reaches all three the same way. It used
-    // to differ: an ordinary capture was raw while the window and `--presented`
-    // were sRGB, which is exactly the disagreement the ADR removed (measured at
-    // up to `73/255` on the plume). Text and fills go through the R8 coverage
-    // atlas and were unaffected either way. See `docs/ui/hud.md`.
-    //
-    // **Or the results table, once the race has one**: a capture past the last
-    // crossing shows a finished race, and the board replaces the HUD as in the
-    // window - see `crate::scoreboard`.
-    // The upscaler and the blit, through exactly the calls the window's frame
-    // loop makes - and in the same order, which is the point. Presented, the
-    // scene resolves into the presentation target *first* and the HUD goes on
-    // afterwards at presentation size, per
-    // [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md);
-    // the grade comes last, in `composite`, so the HUD is inside it.
-    if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
-        framebuffer.resize_output(&device, (width, height));
-        // **A `--presented` capture is the one place an upscaler's output can
-        // be looked at**, which is what this flag exists for - so the temporal
-        // path has to be reachable here too, not just from the window.
-        let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
-            |(depth, velocity, frame)| oag_present::upscale::Temporal {
-                depth,
-                velocity,
-                sample_count: scene.sample_count(),
-                camera: frame.camera,
-                jitter: frame.jitter,
-                phase_count: frame.phase_count,
-                reset: frame.reset,
+        // The HUD, into the same target. Without this a race screenshot would show
+        // the track and no HUD at all, because unlike the front end's capture this
+        // path has no `Framebuffer` and so no overlay pass of its own - which would
+        // make `--screenshot` useless for the one thing it is most wanted for.
+        //
+        // **Every path is `Rgba8Unorm` since ADR-0020** - this capture, a
+        // `--presented` capture and the window alike - so `Renderer::new`'s fork of
+        // the sprite sheet's texture format on `format.is_srgb()` now always takes
+        // the raw side, and the HUD's art reaches all three the same way. It used
+        // to differ: an ordinary capture was raw while the window and `--presented`
+        // were sRGB, which is exactly the disagreement the ADR removed (measured at
+        // up to `73/255` on the plume). Text and fills go through the R8 coverage
+        // atlas and were unaffected either way. See `docs/ui/hud.md`.
+        //
+        // **Or the results table, once the race has one**: a capture past the last
+        // crossing shows a finished race, and the board replaces the HUD as in the
+        // window - see `crate::scoreboard`.
+        // The upscaler and the blit, through exactly the calls the window's frame
+        // loop makes - and in the same order, which is the point. Presented, the
+        // scene resolves into the presentation target *first* and the HUD goes on
+        // afterwards at presentation size, per
+        // [ADR-0036](../../../docs/architecture/adr/0036-ui-composites-at-presentation-resolution.md);
+        // the grade comes last, in `composite`, so the HUD is inside it.
+        if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+            framebuffer.resize_output(&device, (width, height));
+            // **A `--presented` capture is the one place an upscaler's output can
+            // be looked at**, which is what this flag exists for - so the temporal
+            // path has to be reachable here too, not just from the window.
+            let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
+                |(depth, velocity, frame)| oag_present::upscale::Temporal {
+                    depth,
+                    velocity,
+                    sample_count: scene.sample_count(),
+                    camera: frame.camera,
+                    jitter: frame.jitter,
+                    phase_count: frame.phase_count,
+                    reset: frame.reset,
+                },
+            );
+            // No timer to abandon a claim on: a capture has no frame loop to pace
+            // and no `PassTimer` to pace it with - that is per-window state the
+            // session owns. The `false` this can return on a build failure is
+            // exactly the picture already carrying on down the ladder; nothing
+            // here claimed a slot for it to give back.
+            let _ = framebuffer.resolve_scene(
+                &device,
+                &queue,
+                &mut encoder,
+                rect,
+                &state.presentation,
+                temporal,
+                None,
+            );
+        }
+        // Where the HUD goes: the presentation target at the aspect rectangle when
+        // presented, else the native-size capture texture the scene drew into, so an
+        // ordinary `--screenshot` is byte-for-byte what it was.
+        let (hud_view, hud_viewport) = match framebuffer.as_ref() {
+            Some(framebuffer) => (framebuffer.output().clone(), rect),
+            None => (view.clone(), viewport),
+        };
+        // The track-description panel, over the flyby and fading out behind the chase view - the
+        // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there.
+        if let (Some(assets), Some(progress), true) = (
+            track_panel.clone(),
+            race.track_panel_progress(),
+            window.is_none_or(|slot| slot == race.player_slot()),
+        ) {
+            crate::track_panel::draw_once(
+                &device,
+                &queue,
+                format,
+                assets,
+                &mut encoder,
+                &hud_view,
+                progress,
+                crate::hud_views::panel_viewport(race.views_drawn(), race.cut(), hud_viewport),
+            );
+        }
+        let scale = options.hud_scale;
+        match race
+            .results()
+            .filter(|_| window.is_none_or(|slot| slot == race.player_slot()))
+        {
+            Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
+                Ok(mut overlay) => {
+                    let observation = describe::observation(&race);
+                    // A split's result is nobody's record (slot 0's was a race a second
+                    // person was in): no personal-best lines, as the window draws none.
+                    let personal_best = (race.viewport_count() <= 1).then(|| {
+                        crate::records::PersonalBest::compare(
+                            options.previous_best.as_ref(),
+                            &observation,
+                        )
+                    });
+                    overlay.draw(
+                        &device,
+                        &queue,
+                        &mut encoder,
+                        &hud_view,
+                        board,
+                        personal_best.as_ref(),
+                        hud_viewport,
+                    );
+                }
+                Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
             },
-        );
-        // No timer to abandon a claim on: a capture has no frame loop to pace
-        // and no `PassTimer` to pace it with - that is per-window state the
-        // session owns. The `false` this can return on a build failure is
-        // exactly the picture already carrying on down the ladder; nothing
-        // here claimed a slot for it to give back.
-        let _ = framebuffer.resolve_scene(
-            &device,
-            &queue,
-            &mut encoder,
-            rect,
-            &state.presentation,
-            temporal,
-            None,
-        );
-    }
-    // Where the HUD goes: the presentation target at the aspect rectangle when
-    // presented, else the native-size capture texture the scene drew into, so an
-    // ordinary `--screenshot` is byte-for-byte what it was.
-    let (hud_view, hud_viewport) = match framebuffer.as_ref() {
-        Some(framebuffer) => (framebuffer.output().clone(), rect),
-        None => (view.clone(), viewport),
-    };
-    // The track-description panel, over the flyby and fading out behind the chase view - the
-    // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there.
-    if let (Some(assets), Some(progress)) = (track_panel, race.track_panel_progress()) {
-        crate::track_panel::draw_once(
-            &device,
-            &queue,
-            format,
-            assets,
-            &mut encoder,
-            &hud_view,
-            progress,
-            crate::hud_views::panel_viewport(race.views_drawn(), race.cut(), hud_viewport),
-        );
-    }
-    let scale = options.hud_scale;
-    match race.results() {
-        Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
-            Ok(mut overlay) => {
-                let observation = describe::observation(&race);
-                // A split's result is nobody's record (slot 0's was a race a second
-                // person was in): no personal-best lines, as the window draws none.
-                let personal_best = (race.viewport_count() <= 1).then(|| {
-                    crate::records::PersonalBest::compare(
-                        options.previous_best.as_ref(),
-                        &observation,
-                    )
-                });
-                overlay.draw(
-                    &device,
-                    &queue,
-                    &mut encoder,
-                    &hud_view,
-                    board,
-                    personal_best.as_ref(),
-                    hud_viewport,
-                );
-            }
-            Err(why) => warn!("the scoreboard did not build ({why}); capturing without one"),
-        },
-        None if !race.hud_shown() => {}
-        None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale) {
-            Ok(Some(mut overlay)) => {
-                // No campaign cell on this path (`campaign_medal: None` above):
-                // no ladder, so `RECORD`.
-                crate::hud_views::draw(
-                    &mut overlay,
-                    &device,
-                    &queue,
-                    &mut encoder,
-                    &hud_view,
-                    &race,
-                    &scene,
-                    None,
-                    record_target.as_ref(),
-                    hud_viewport,
-                );
-                // The countdown, on the same terms `RaceStage::draw_hud` draws
-                // it on - see `oag_hud::countdown`,
-                // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
-                // which stands this overlay down where the circuit's own gantry
-                // is already showing the count.
-                if let (Some((model, widget)), true) = (
-                    countdown_model,
-                    RaceState::thrust_gated(race.sim.world.tick) && !scene.draws_gantry(),
-                ) {
-                    match crate::hud_countdown::Countdown::new(
-                        &device, &queue, format, model, &widget,
+            None if !race.hud_shown() => {}
+            None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale) {
+                Ok(Some(mut overlay)) => {
+                    // No campaign cell on this path (`campaign_medal: None` above):
+                    // no ladder, so `RECORD`.
+                    crate::hud_views::draw(
+                        &mut overlay,
+                        &device,
+                        &queue,
+                        &mut encoder,
+                        &hud_view,
+                        &race,
+                        &scene,
+                        window.unwrap_or_else(|| race.player_slot()),
+                        None,
+                        record_target.as_ref(),
+                        hud_viewport,
+                    );
+                    // The countdown, on the same terms `RaceStage::draw_hud` draws
+                    // it on - see `oag_hud::countdown`,
+                    // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
+                    // which stands this overlay down where the circuit's own gantry
+                    // is already showing the count.
+                    if let (Some((model, widget)), true) = (
+                        countdown_model.clone(),
+                        RaceState::thrust_gated(race.sim.world.tick) && !scene.draws_gantry(),
                     ) {
-                        Ok(mut countdown) => countdown.draw(
-                            &device,
-                            &queue,
-                            &mut encoder,
-                            &hud_view,
-                            race.sim.world.tick as f32 / 60.0,
-                            hud_viewport,
-                            (width, height),
-                        ),
-                        Err(why) => {
-                            warn!(
-                                "the countdown overlay did not build ({why}); capturing without one"
-                            );
+                        match crate::hud_countdown::Countdown::new(
+                            &device, &queue, format, model, &widget,
+                        ) {
+                            Ok(mut countdown) => countdown.draw(
+                                &device,
+                                &queue,
+                                &mut encoder,
+                                &hud_view,
+                                race.sim.world.tick as f32 / 60.0,
+                                hud_viewport,
+                                (width, height),
+                            ),
+                            Err(why) => {
+                                warn!(
+                                    "the countdown overlay did not build ({why}); capturing without one"
+                                );
+                            }
                         }
                     }
                 }
-            }
-            Ok(None) => warn!("no HUD layout: capturing without one"),
-            Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
-        },
-    }
-    if let Some(demo) = options.touch_demo {
-        crate::touch_controls::draw_pose(
-            demo,
-            (&device, &queue, format),
-            &mut encoder,
-            &hud_view,
-            (width, height),
-        )?;
-    }
-    // Pulse's bloom (PSP, and the PS2 by inheritance) over the HUD, as the
-    // window adds it: see `Scene::composite_bloom`.
-    let hud_rect = (
-        hud_viewport.0,
-        hud_viewport.1,
-        hud_viewport.2,
-        hud_viewport.3,
-    );
-    scene.composite_bloom(&mut encoder, &hud_view, hud_rect);
-    if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
-        framebuffer.set_screen_filter(&device, options.screen_filter.as_ref());
-        framebuffer.composite(
-            &device,
-            &queue,
-            &mut encoder,
-            &surface,
-            oag_present::upscale::Composite {
-                brightness: state.presentation.brightness,
-                gamma: state.presentation.gamma,
-                screen: oag_present::upscale::ScreenFrame {
-                    native: hud.space.size,
-                    strength: options.screen_filter_strength,
+                Ok(None) => warn!("no HUD layout: capturing without one"),
+                Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
+            },
+        }
+        if let Some(demo) = options.touch_demo {
+            crate::touch_controls::draw_pose(
+                demo,
+                (&device, &queue, format),
+                &mut encoder,
+                &hud_view,
+                (width, height),
+            )?;
+        }
+        // Pulse's bloom (PSP, and the PS2 by inheritance) over the HUD, as the
+        // window adds it: see `Scene::composite_bloom`.
+        let hud_rect = (
+            hud_viewport.0,
+            hud_viewport.1,
+            hud_viewport.2,
+            hud_viewport.3,
+        );
+        scene.composite_bloom(&mut encoder, &hud_view, hud_rect);
+        if let (Some(framebuffer), Some(state)) = (framebuffer.as_mut(), presented) {
+            framebuffer.set_screen_filter(&device, options.screen_filter.as_ref());
+            framebuffer.composite(
+                &device,
+                &queue,
+                &mut encoder,
+                &surface,
+                oag_present::upscale::Composite {
+                    brightness: state.presentation.brightness,
+                    gamma: state.presentation.gamma,
+                    screen: oag_present::upscale::ScreenFrame {
+                        native: hud.space.size,
+                        strength: options.screen_filter_strength,
+                    },
+                },
+            );
+        }
+
+        encoder.copy_texture_to_buffer(
+            target.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded as u32),
+                    rows_per_image: Some(height),
                 },
             },
-        );
-    }
-
-    encoder.copy_texture_to_buffer(
-        target.as_image_copy(),
-        wgpu::TexelCopyBufferInfo {
-            buffer: &readback,
-            layout: wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(padded as u32),
-                rows_per_image: Some(height),
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
             },
-        },
-        wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-    queue.submit(Some(encoder.finish()));
+        );
+        queue.submit(Some(encoder.finish()));
 
-    let slice = readback.slice(..);
-    slice.map_async(wgpu::MapMode::Read, |_| {});
-    device
-        .poll(wgpu::PollType::wait_indefinitely())
-        .context("waiting for the GPU")?;
-    let mapped = slice
-        .get_mapped_range()
-        .context("mapping the readback buffer")?;
-    let mut pixels = Vec::with_capacity(unpadded * height as usize);
-    for row in mapped.chunks(padded).take(height as usize) {
-        pixels.extend_from_slice(&row[..unpadded]);
+        let slice = readback.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .context("waiting for the GPU")?;
+        let mapped = slice
+            .get_mapped_range()
+            .context("mapping the readback buffer")?;
+        let mut pixels = Vec::with_capacity(unpadded * height as usize);
+        for row in mapped.chunks(padded).take(height as usize) {
+            pixels.extend_from_slice(&row[..unpadded]);
+        }
+        drop(mapped);
+        readback.unmap();
+
+        // A screenshot is opaque. The frame's alpha channel is the bloom mask and
+        // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
+        // straight from the readback writes a fully transparent PNG.
+        oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
+        oag_mesh::capture::make_opaque(&mut pixels);
+        let png = oag_texture::png::encode_rgba(width, height, &pixels);
+        let path = window_path(&options.path, window);
+        std::fs::write(&path, png).with_context(|| format!("writing {}", path.display()))?;
+        println!("wrote {} ({width}x{height})", path.display());
     }
-    drop(mapped);
-    readback.unmap();
-
-    // A screenshot is opaque. The frame's alpha channel is the bloom mask and
-    // not coverage - see `oag_mesh::capture::make_opaque` - so encoding it
-    // straight from the readback writes a fully transparent PNG.
-    oag_mesh::capture::dump_glow_mask_if_asked(width, height, &pixels)?;
-    oag_mesh::capture::make_opaque(&mut pixels);
-    let png = oag_texture::png::encode_rgba(width, height, &pixels);
-    std::fs::write(&options.path, png)
-        .with_context(|| format!("writing {}", options.path.display()))?;
-    println!("wrote {} ({width}x{height})", options.path.display());
     scene.dump_offscreen_if_asked(&device, &queue)?;
     Ok(())
 }

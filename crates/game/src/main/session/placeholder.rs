@@ -233,6 +233,7 @@ impl Session {
         // reminder this is a stand-in menu, on screen rather than only in the
         // log line above. See `oag_ui::placeholder`.
         self.gpu
+            .output
             .window
             .set_title(&format!("OpenAntiGrav - {} (placeholder menu)", title.name));
         println!(

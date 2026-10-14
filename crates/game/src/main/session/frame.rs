@@ -180,7 +180,7 @@ impl Session {
         // every stage change above, which may resize; `Session::draw` takes
         // the image, or draws nothing if there is none. See `Gpu::acquire`.
         let acquire_start = web_time::Instant::now();
-        let acquired = self.gpu.acquire();
+        let acquired = self.gpu.output.acquire(&self.gpu.device);
         let acquire_wait = acquire_start.elapsed();
         if acquired {
             self.frame_timing
@@ -277,7 +277,7 @@ impl Session {
         // the same rectangle `Session::draw` fits every stage into, so a
         // click maps back through exactly the transform the rows went out
         // through. See `session::pointer::in_grid`.
-        let rect = display::viewport(self.gpu.size(), self.settings.display.aspect);
+        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
 
         for _ in 0..steps {
             // Ends the devices' tick for both stages. A race reads the snapshot's
@@ -856,6 +856,9 @@ impl Session {
         self.build_endrace();
 
         let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
+        // The further windows of a `--windows` run, once window 1's frame is submitted: each
+        // seat is its own submission. A no-op with one window.
+        self.draw_seats();
         if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
             log::debug!(
                 "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \

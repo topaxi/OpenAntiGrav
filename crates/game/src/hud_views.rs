@@ -277,7 +277,9 @@ pub fn panel_viewport(
 
 /// Draws the race HUD over `view`: one HUD, or one per view of a split screen.
 ///
-/// With one view this is `overlay.draw` on the slot's readout, untouched.
+/// With one view this is `overlay.draw` on the slot's readout, untouched. **A window of a
+/// multi-window race** ([`Race::windowed`]) is also one view, whole-screen: `slot` is the
+/// craft it shows, the player's for window 1 and each seat's own for the others.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     overlay: &mut crate::hud_overlay::Overlay,
@@ -287,13 +289,14 @@ pub fn draw(
     view: &wgpu::TextureView,
     race: &Race,
     scene: &Scene,
+    slot: usize,
     campaign: Option<&oag_tables::race_campaign::Cell>,
     record_target: Option<&oag_hud::RecordTarget>,
     viewport: (f32, f32, f32, f32),
 ) {
     let count = race.viewport_count();
-    if count <= 1 {
-        let readout = readout(race, scene, race.player_slot(), campaign, record_target);
+    if count <= 1 || race.windowed() {
+        let readout = readout(race, scene, slot, campaign, record_target);
         overlay.draw(device, queue, encoder, view, &readout, viewport);
         return;
     }
