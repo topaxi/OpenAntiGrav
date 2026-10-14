@@ -19,6 +19,7 @@ use crate::hints;
 use crate::stage::Stage;
 
 use super::Session;
+use super::pause;
 use super::pointer;
 
 impl Session {
@@ -191,6 +192,7 @@ impl Session {
         // whatever the window is doing. The clock's own catch-up cap is what keeps
         // the race load above from being paid back as a burst of ticks.
         let now = web_time::Instant::now();
+        self.wall = now.duration_since(self.wall_origin).as_secs_f64();
         let elapsed = now.duration_since(self.last);
         self.last = now;
         self.schedule_next_frame(now);
@@ -364,12 +366,14 @@ impl Session {
             // **Any seated player's Start**, not the keyboard's slot alone: in a
             // split race each pad drives its own slot, and a Deck's own Start
             // was otherwise never seen (reported from play, 2026-10-13). And
-            // only the player who paused resumes - see `session::pause`.
+            // only the player who paused resumes, and a resume in a race with more
+            // than one person counts down first - see `session::pause`.
+            // A click on a paused race is slot 0's Start, through the same owner
+            // rule: a mouse cannot lift player 2's pause inside their timeout.
             if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
-                let presses = self.controls.take_presses(Button::Start);
-                let paused = super::pause::start(self.pause_state(), presses);
-                self.paused = paused.is_some();
-                self.pause_owner = paused.flatten();
+                let click = pointer.clicked && matches!(self.pause, pause::State::Paused { .. });
+                let presses = self.controls.take_presses(Button::Start) | u8::from(click);
+                self.step_pause(presses);
             }
             // Circle is "back" everywhere else on screen - the menus, the
             // front end - and a paused race is the one place a still-running
@@ -380,11 +384,8 @@ impl Session {
             // menus, exactly as `escape` does from any race.
             // Only the player who paused leaves, as for Start above.
             if matches!(self.stage, Stage::Race(_))
-                && self.paused
-                && super::pause::leaves(
-                    self.pause_state(),
-                    self.controls.take_presses(Button::Circle),
-                )
+                && self.paused()
+                && pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
             {
                 self.escape();
                 // The remaining steps this frame owed belong to whatever is on
@@ -702,11 +703,12 @@ impl Session {
                         self.tick_endrace(&grid);
                     }
                 }
-                Stage::Race(stage) if self.paused => {
+                Stage::Race(stage) if self.pause.frozen() => {
                     // A paused race reads circle as "back to the menus";
                     // the secondary button is circle everywhere else on
-                    // screen, so it is here too.
-                    if pointer.back {
+                    // screen, so it is here too. Not through the resume
+                    // countdown, which nobody leaves.
+                    if pointer.back && matches!(self.pause, pause::State::Paused { .. }) {
                         self.controls.tap(Button::Circle);
                     }
                     // Same shape as the finished arm above and for the same

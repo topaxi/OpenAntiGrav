@@ -385,7 +385,7 @@ impl Session {
                     // clock is into the next one, so motion is smooth at any
                     // frame rate - and the tick exactly while paused, when the
                     // race is not stepping. See `race::between_ticks`.
-                    oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused),
+                    oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.pause.frozen()),
                     inside,
                     self.settings.graphics.fov,
                     self.settings.graphics.frustum_culling,
@@ -925,7 +925,7 @@ impl Session {
         match &self.stage {
             Stage::Launcher(_) | Stage::Frontend(_) | Stage::Menu(_) => true,
             Stage::Loading(_) => false,
-            Stage::Race(stage) => self.paused || stage.race.finished(),
+            Stage::Race(stage) => self.paused() || stage.race.finished(),
         }
     }
 

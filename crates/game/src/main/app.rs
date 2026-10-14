@@ -444,8 +444,10 @@ impl App {
             cursor_sheet,
             cursor_title: None,
             stalled: true,
-            paused: false,
-            pause_owner: None,
+            pause: crate::session::pause::State::Running,
+            wall: 0.0,
+            go_at: None,
+            wall_origin: web_time::Instant::now(),
             next_frame: web_time::Instant::now(),
             logged_limit: None,
             cli_foreign_track: self

@@ -66,6 +66,19 @@ pub const GO_TICK: u64 = COUNTDOWN_TICKS - 1;
 pub const READY_TICK: u64 = GO_TICK - READY_TO_GO_TICKS;
 
 impl Race {
+    /// Raises one of the start voice's cues outside a tick, for a resume
+    /// countdown (`oag_game`'s `session::pause`, chosen, not measured): the same
+    /// cue the original voices at the start, on a title that voices it, and
+    /// nothing on one that does not. Like [`Self::tick_countdown_voice`] it is an
+    /// output and no world state.
+    pub fn raise_start_cue(&mut self, cue: Cue) {
+        if !self.sim.countdown_voice {
+            return;
+        }
+        let player = self.sim.world.primary_slot();
+        self.sim.cues.push(CueEvent::new(cue, player));
+    }
+
     /// Raises `ready` and `go` on their ticks, on a title that voices its start.
     ///
     /// Called from [`Race::tick`] before the step, so `World::tick` is the tick

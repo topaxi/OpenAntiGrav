@@ -95,7 +95,7 @@ impl Session {
         // Never left mid-freeze by a pause that predates the trip through the
         // menus - see `Session::launch_race`, which resets this for the same
         // reason on a fresh race.
-        self.paused = false;
+        self.pause = super::pause::State::Running;
         // The playlist's own resume: `pause_race_music` (called on the way
         // into the menus) saved the position and left `race_index` alone, so
         // this continues the same track rather than starting a new one - see
