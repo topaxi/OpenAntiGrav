@@ -147,7 +147,11 @@ fn the_start_voice_cues_are_raised_where_the_title_has_them() {
     assert_eq!(raised, vec![Cue::Ready, Cue::Go]);
     let hash = pulse.sim.state_hash();
     pulse.raise_start_cue(Cue::Go);
-    assert_eq!(pulse.sim.state_hash(), hash, "a cue is an output, not state");
+    assert_eq!(
+        pulse.sim.state_hash(),
+        hash,
+        "a cue is an output, not state"
+    );
 
     let Some(mut pure) = loaded("data/images/pure-psp-usa.chd") else {
         return;
