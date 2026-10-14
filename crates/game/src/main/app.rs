@@ -327,11 +327,6 @@ impl App {
                 let title = self.race_title.map_or("", |title| title.name);
                 net.join(&mut race_stage.race, title)?;
             } else if let Stage::Race(race_stage) = &mut staged {
-                oag_game::ai_choice::apply(
-                    &mut race_stage.race,
-                    self.ai_choice,
-                    oag_game::ai_choice::Source::Free(ai_difficulty),
-                );
                 let players = self.players;
                 // `--windows` / `--window-seats`: the people are dealt across windows, each cut
                 // up inside its own. The windows themselves open on the first pass of the event
@@ -352,6 +347,15 @@ impl App {
                 if windowed && views > 1 {
                     windows_wanted = u8::try_from(self.window_layout.len()).unwrap_or(u8::MAX);
                 }
+                // After the people are dealt out, as the menu route does: the driver is
+                // chosen by how many humans race, and with a second one seated this
+                // project's driver flies (the original's is single-human). Applied before
+                // the split, a `--race --players 2` run flew the original on a two-human grid.
+                oag_game::ai_choice::apply(
+                    &mut race_stage.race,
+                    self.ai_choice,
+                    oag_game::ai_choice::Source::Free(ai_difficulty),
+                );
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {

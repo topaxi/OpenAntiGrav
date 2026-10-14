@@ -429,18 +429,20 @@ pub fn capture(
     let mut race = Race::start(setup);
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
     // applied by `NetPlay::join` below).
+    if options.net.is_some() {
+    } else if options.window_layout.is_empty() {
+        crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
+    } else {
+        crate::split_screen::apply_windows(&mut race, &options.window_layout);
+    }
+    // After the people are seated: the driver is chosen by how many humans race, and the
+    // original's is single-human. Chosen before the split, a two-view capture flew it.
     if options.net.is_none() {
         crate::ai_choice::apply(
             &mut race,
             options.ai_choice,
             crate::ai_choice::Source::Free(difficulty),
         );
-    }
-    if options.net.is_some() {
-    } else if options.window_layout.is_empty() {
-        crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
-    } else {
-        crate::split_screen::apply_windows(&mut race, &options.window_layout);
     }
     race.set_boost_fov_kick(options.boost_fov_kick);
     race.set_sight_fov(options.fov);
