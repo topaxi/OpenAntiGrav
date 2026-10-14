@@ -557,6 +557,7 @@ impl App {
             window_monitors: Vec::new(),
             window_layout_chosen: false,
             focus: crate::windows::Focus::default(),
+            seat_clicks: 0,
             split_race_box: false,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
@@ -700,9 +701,35 @@ impl ApplicationHandler for App {
             match &event {
                 WindowEvent::Focused(gained) => {
                     session.focus.changed(id, *gained, web_time::Instant::now());
-                    if !*gained && !is_seat {
-                        session.controls.release_all();
-                        session.pointer.release();
+                    // A key held in a window that lost focus is never seen to come up,
+                    // whichever window it was: a seat window's loss lets go too, or the key
+                    // would stay held for the seat the keyboard is moved to next.
+                    if !*gained {
+                        if session.windowed_race() {
+                            session.controls.let_go();
+                        } else {
+                            session.controls.release_all();
+                        }
+                        if !is_seat {
+                            session.pointer.release();
+                        }
+                    } else {
+                        // The keyboard goes to this window's seat before any key it
+                        // receives, so none lands on the seat it came from.
+                        session.sync_keyboard_seat();
+                    }
+                    return;
+                }
+                // A click on a further window is that window's first seat's Start while the
+                // race is paused (`Session::seat_clicked`); the rest of its pointer is
+                // ignored, as before.
+                WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: winit::event::MouseButton::Left,
+                    ..
+                } if is_seat => {
+                    if let windows::Which::Screen(index) = which {
+                        session.seat_clicked(index + 1);
                     }
                     return;
                 }
@@ -780,7 +807,11 @@ impl ApplicationHandler for App {
                 crate::clipboard::set_ctrl_held(modifiers.state().control_key());
             }
 
-            WindowEvent::KeyboardInput { event, .. } => {
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => {
                 // The keyboard is the device in use now, whatever the key:
                 // the drawn cursor goes until the mouse moves again. See
                 // `crate::pointer::Window::other_device`.
@@ -858,6 +889,17 @@ impl ApplicationHandler for App {
                         return;
                     }
                 }
+                // In a race dealt across windows a key that was let go as the focus moved
+                // stays released until it is pressed again (`Controls::let_go`). So winit's
+                // own reports of the focus changing are not keys: X11 sends a synthetic
+                // release for every key down to the window that loses focus (which would
+                // end the wait for the key to come up before the focus event that starts
+                // it) and a synthetic press for each to the window that gains it, and the
+                // auto-repeat of a key still held then reaches the new window as plain
+                // presses, which `let_go` holds off until the key is really released.
+                if (event.repeat || is_synthetic) && session.windowed_race() {
+                    return;
+                }
                 session
                     .controls
                     .set_key(&event.logical_key, event.state == ElementState::Pressed);
@@ -895,6 +937,9 @@ impl ApplicationHandler for App {
                 session.open_screens(event_loop, count);
             }
             if session.screens_opened && session.focus.away(web_time::Instant::now()) {
+                // Nothing has the focus now, so which keys are down is unknown: the next
+                // press of any key counts again.
+                session.controls.forget_let_go();
                 session.window_away(Away::FocusLost);
             }
         }

@@ -81,3 +81,66 @@ fn a_window_is_named_for_its_seats() {
     assert_eq!(label("PLAYER", 0, 4), "PLAYER 1 - 4");
     assert_eq!(label("PLAYER", 6, 0), "PLAYER");
 }
+
+/// The keyboard follows the focused window, and the rule is only about where it goes: the first
+/// seat of the window, or where it already is when that is in the window. Fails if the
+/// keyboard stayed on window 1's seat whatever had the focus.
+#[test]
+fn the_keyboard_goes_to_the_first_seat_of_the_focused_window() {
+    let windows: [&[usize]; 3] = [&[0, 1], &[2], &[3, 4]];
+    assert_eq!(keyboard_seat(Some(1), &windows, 0), Some(2), "window 2 has the focus");
+    assert_eq!(keyboard_seat(Some(2), &windows, 2), Some(3), "first of several, not the last");
+    assert_eq!(keyboard_seat(Some(0), &windows, 3), Some(0), "back on window 1");
+    assert_eq!(
+        keyboard_seat(Some(0), &windows, 1),
+        Some(1),
+        "a keyboard seated on a later seat of the focused window stays there"
+    );
+}
+
+/// No window with the focus, a focused window that is not the race's, and one with no seat all
+/// leave the keyboard alone.
+#[test]
+fn the_keyboard_stays_when_the_focus_names_no_seat() {
+    let windows: [&[usize]; 2] = [&[0], &[]];
+    assert_eq!(keyboard_seat(None, &windows, 0), None, "no window has it");
+    assert_eq!(keyboard_seat(Some(1), &windows, 0), None, "a window nobody sits at");
+    assert_eq!(keyboard_seat(Some(5), &windows, 0), None, "a window the race does not have");
+}
+
+/// Only windows that hold a seat can be reached by the keyboard.
+#[test]
+fn every_window_with_a_seat_is_reachable() {
+    let windows: [&[usize]; 3] = [&[0, 1], &[], &[2]];
+    assert_eq!(first_seats(windows), vec![0, 2]);
+}
+
+/// The focus the keyboard follows is the latest gain still held, and none once everything lost it.
+#[test]
+fn the_current_window_is_the_latest_gain_still_held() {
+    let start = Instant::now();
+    let mut focus = Focus::default();
+    assert_eq!(focus.current(), None);
+    focus.changed(id(1), true, start);
+    assert_eq!(focus.current(), Some(id(1)));
+    // The gain for window 2 arrives before the loss for window 1.
+    focus.changed(id(2), true, start);
+    assert_eq!(focus.current(), Some(id(2)));
+    focus.changed(id(1), false, start);
+    assert_eq!(focus.current(), Some(id(2)));
+    focus.changed(id(2), false, start);
+    assert_eq!(focus.current(), None);
+}
+
+/// A click on a window is that window's first seat's Start, under the pause's owner rule - so a
+/// click on window 2 is slot 2's here and never slot 0's, and a window with no seat is nobody's.
+/// Fails if a click on a further window answered window 1's seat.
+#[test]
+fn a_click_is_its_windows_first_seats_start() {
+    let windows: [&[usize]; 3] = [&[0, 1], &[2, 3], &[]];
+    assert_eq!(click_slots(0b001, &windows), 0b0001, "window 1");
+    assert_eq!(click_slots(0b010, &windows), 0b0100, "window 2: slot 2, not 0 or 3");
+    assert_eq!(click_slots(0b100, &windows), 0, "a window with no seat");
+    assert_eq!(click_slots(0b011, &windows), 0b0101, "both at once");
+    assert_eq!(click_slots(0b1000, &windows), 0, "a window the race does not have");
+}

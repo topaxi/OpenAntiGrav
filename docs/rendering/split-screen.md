@@ -789,10 +789,12 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   strand the others. The claim also lapses **at once when the owner's device is gone**:
   `pause::present_seats` asks the same `Assignment::drives` the seat turns to the AI on
   (`split_screen::follow_devices` runs only in a ticking arm, so it cannot be waited
-  for).
+  for). In a multi-window race each window's first seat counts as present whichever window
+  the keyboard is at ([multi-window.md](multi-window.md), "A keyboard per window"), and a
+  click on a window is that window's first seat's Start.
 - **A line under the pause** says who and for how long: `PLAYER 2 PAUSED - ANYONE CAN
   RESUME IN 0:25`, then `PLAYER 2 PAUSED - ANYONE CAN RESUME` (or `PAUSED - ANYONE CAN
-  RESUME` for a focus-loss pause), on a dark band at the bottom of the window, in a race
+  RESUME` for a focus-loss pause), on a dark band at the bottom of every window that holds a seat, in a race
   with more than one person only (`OAG_PAUSE_*` in the strings files; French is under
   `[untranslated]`).
 - **A resume counts down `3`, `2`, `1`, `GO`** for 3 s (`pause::RESUME_SECONDS`, the 180

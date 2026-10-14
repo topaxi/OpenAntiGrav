@@ -430,6 +430,46 @@ fn an_unseated_keyboard_goes_back_to_the_default_slot() {
     assert!(!assignment.drives(1));
 }
 
+/// The seats a keyboard can be moved to stay driven while it is on another, which is what
+/// keeps a multi-window race's other windows from turning to the AI at every focus change.
+#[test]
+fn a_seat_the_keyboard_can_reach_is_driven_while_it_is_elsewhere() {
+    let mut assignment = Seated::seated(3);
+    assert!(assignment.drives(0));
+    assert!(!assignment.drives(2));
+    assignment.set_keyboard_reach(&[0, 2]);
+    assert!(assignment.drives(0));
+    assert!(
+        assignment.drives(2),
+        "the keyboard is on slot 0, slot 2 is reachable"
+    );
+    assert!(
+        !assignment.drives(1),
+        "a seat in no window's first place is not"
+    );
+    assignment.assign_keyboard(2);
+    assert!(assignment.drives(0), "and the seat it left is still driven");
+    assignment.set_keyboard_reach(&[]);
+    assert!(
+        !assignment.drives(0),
+        "an empty reach (the race ended) drives nothing extra"
+    );
+}
+
+/// A closed window's seat leaves the reach and cannot rejoin it.
+#[test]
+fn an_unseated_slot_is_no_longer_reachable() {
+    let mut assignment = Seated::seated(3);
+    assignment.set_keyboard_reach(&[0, 2]);
+    assignment.unseat(2);
+    assert!(!assignment.drives(2));
+    assignment.set_keyboard_reach(&[0, 2]);
+    assert!(
+        !assignment.drives(2),
+        "a closed slot is not reachable again"
+    );
+}
+
 /// The humans count is held to the grid, and at least one.
 #[test]
 fn the_human_count_is_held_to_the_grid() {

@@ -20,7 +20,7 @@ mod footer;
 /// and Wipeout Pure's SINGLE PLAYER screens.
 #[path = "menu_stage/screens.rs"]
 mod screens;
-use screens::PAUSE_OVERLAY;
+pub(crate) use screens::PAUSE_OVERLAY;
 
 /// The front end, and everything only it needs.
 /// The menus, and a renderer of their own.

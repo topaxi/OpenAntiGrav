@@ -352,8 +352,82 @@ impl Session {
         )
     }
 
+    /// Puts the keyboard on the seat of the window that has the focus: **a keyboard per
+    /// window, chosen, not measured.** Only in a race that is dealt across windows (a single
+    /// window, the front end and a race of one window are untouched). The keyboard drives the
+    /// first seat of the focused window ([`windows::keyboard_seat`]; it stays where it is when
+    /// that seat is in the window already), every window's first seat counts as driven
+    /// meanwhile (`Assignment::set_keyboard_reach`) so the others are not handed to the AI,
+    /// and a held key is let go as the keyboard moves (`Controls::keyboard_to`). Idempotent:
+    /// run on a focus gain and once a frame, for a race that starts or a window that closes
+    /// under a window that already has the focus.
+    pub(crate) fn sync_keyboard_seat(&mut self) {
+        let race = match &self.stage {
+            Stage::Race(stage) => Some(&stage.race),
+            Stage::Menu(_) => self.suspended_race.as_ref().map(|stage| &stage.race),
+            _ => None,
+        };
+        let seats: Vec<Vec<usize>> = match race {
+            Some(race) if self.screens_opened && race.windowed() => race
+                .windows()
+                .iter()
+                .map(|window| window.seats.clone())
+                .collect(),
+            _ => Vec::new(),
+        };
+        let views: Vec<&[usize]> = seats.iter().map(Vec::as_slice).collect();
+        self.controls
+            .assignment_mut()
+            .set_keyboard_reach(&windows::first_seats(views.iter().copied()));
+        let ids = self.screen_ids();
+        let primary = self.gpu.output.window.id();
+        let focused = self
+            .focus
+            .current()
+            .and_then(|id| windows::which(id, primary, &ids))
+            .map(|which| match which {
+                windows::Which::Primary => 0,
+                windows::Which::Screen(index) => index + 1,
+            });
+        if let Some(slot) =
+            windows::keyboard_seat(focused, &views, self.controls.keyboard_slot())
+        {
+            if slot != self.controls.keyboard_slot() {
+                info!("window keyboard: the keyboard is now on slot {slot}");
+            }
+            self.controls.keyboard_to(slot);
+        }
+    }
+
+    /// A left click landed on further window `window` (1-based index of the run's windows,
+    /// 1 being the first further one). Kept for the pause only.
+    pub(crate) fn seat_clicked(&mut self, window: usize) {
+        if let Ok(bit) = u32::try_from(window)
+            && bit < u8::BITS
+        {
+            self.seat_clicks |= 1 << bit;
+        }
+    }
+
+    /// The slots whose Start a click on a further window is, as the bitmask the pause reads
+    /// (`oag_input::Controls::take_presses`): each clicked window's first seat. Taken: clicks
+    /// are spent whether or not the race is paused, so a click while it ran cannot pause later.
+    pub(crate) fn take_seat_clicks(&mut self) -> u8 {
+        let clicks = std::mem::take(&mut self.seat_clicks);
+        let Stage::Race(stage) = &self.stage else {
+            return 0;
+        };
+        let seats: Vec<&[usize]> = stage
+            .race
+            .windows()
+            .iter()
+            .map(|window| window.seats.as_slice())
+            .collect();
+        windows::click_slots(clicks, &seats)
+    }
+
     /// Whether the race on screen (or parked behind the pause menu) is dealt across windows.
-    pub(super) fn windowed_race(&self) -> bool {
+    pub(crate) fn windowed_race(&self) -> bool {
         match &self.stage {
             Stage::Race(stage) => stage.race.windowed(),
             Stage::Menu(_) => self
@@ -547,6 +621,33 @@ impl Session {
                 },
             },
         );
+        // The pause's line, as window 1 draws it: over the graded frame, on the window's own
+        // whole-surface grid. Every window that holds a seat says who paused and when it is
+        // anyone's; nothing while the race runs or the resume counts down.
+        let space = perf::grid(surface);
+        let mut line = Vec::new();
+        // Escape has parked the race behind window 1's front-end menu: the other windows keep
+        // showing the frozen race under the menus' own pause tint (`PAUSE_OVERLAY`, the alpha
+        // window 1's menu is drawn over the parked race with), a stopgap for the menu itself,
+        // which only window 1 has. **Chosen, not measured.**
+        if matches!(self.stage, Stage::Menu(_)) && self.suspended_race.is_some() {
+            line.push(Draw::Fill {
+                rect: [0.0, 0.0, space.size.0, space.size.1],
+                color: crate::menu_stage::PAUSE_OVERLAY,
+            });
+        }
+        line.extend(self.pause_line(space.size));
+        if !line.is_empty() {
+            self.overlay.set_space(space);
+            self.overlay.overlay(
+                &self.gpu.device,
+                &self.gpu.queue,
+                encoder,
+                view,
+                &line,
+                (0.0, 0.0, surface.0 as f32, surface.1 as f32),
+            );
+        }
     }
 
     /// The frame a window shows when the race is not drawing for it - the front end, a race of

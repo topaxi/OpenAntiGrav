@@ -265,6 +265,41 @@ fn the_seats_present_follow_the_assignment() {
     );
 }
 
+/// Two windows, one keyboard: the window the keyboard is not at still has its person, so a pause
+/// owned by that seat keeps its claim while the focus is on the other window. Fails if
+/// the keyboard's move lapsed the owner's claim.
+#[test]
+fn a_seat_in_a_window_the_keyboard_can_reach_is_present() {
+    use oag_input::pad::Assignment;
+    let mut seated: Assignment<u32> = Assignment::seated(2);
+    seated.set_keyboard_reach(&[0, 1]);
+    assert_eq!(present_seats(&seated), P1 | P2);
+    seated.assign_keyboard(1);
+    assert_eq!(
+        present_seats(&seated),
+        P1 | P2,
+        "the keyboard moved to window 2"
+    );
+    let table = Table {
+        present: present_seats(&seated),
+        countdown: true,
+    };
+    let owned = State::pause_by(0, 5.0);
+    assert_eq!(
+        line(owned, 10.0, table),
+        Some(Line::Owned {
+            player: 0,
+            seconds_left: 25
+        }),
+        "player 1's pause is still theirs with the keyboard at window 2"
+    );
+    assert_eq!(
+        step(owned, P2, 10.0, table),
+        owned,
+        "and player 2 cannot lift it"
+    );
+}
+
 #[test]
 fn the_count_goes_three_two_one_go_a_second_apart() {
     let at = |elapsed: f32| Count::at(ART_CLOCK_START + elapsed);

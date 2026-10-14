@@ -20,7 +20,7 @@ use crate::gpu::Gpu;
 /// it, because leaving a race used to drop the `World` outright. So there is
 /// no colour or alpha on the disc for this to recover, and this one is
 /// this project's own rather than a reading of one.
-pub(super) const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+pub(crate) const PAUSE_OVERLAY: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
 
 impl MenuStage {
     /// Wipeout Pure's SINGLE PLAYER screens, drawn as the title's own menu pages
