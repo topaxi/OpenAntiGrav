@@ -41,6 +41,9 @@ pub(crate) struct RaceStage {
     /// over the gantry's circuits too, since a gantry stands at the start line and
     /// a resume happens wherever the race was paused. See `session::pause`.
     pub(crate) resume_art: Option<f32>,
+    /// The language's `GO`, while [`Self::resume_art`] is up on a title that draws the
+    /// count as text; set by the session when a countdown begins, empty otherwise.
+    pub(crate) resume_go: String,
     /// The track-description panel over the pre-race flyby, or `None` off Pulse's PSP disc and
     /// when any part of it would not read - see `oag_game::track_panel`.
     pub(crate) track_panel: Option<oag_game::track_panel::Overlay>,
@@ -637,6 +640,19 @@ impl RaceStage {
         if let Some(hud) = &mut self.hud
             && self.race.hud_shown()
         {
+            // A title with no countdown art says the count in its own HUD face
+            // (`oag_title::hud::ResumeCountdown::Text`), inside the HUD's own
+            // frame so it is not overwritten by it.
+            let word = self
+                .resume_art
+                .filter(|_| {
+                    hud.resume_countdown() == oag_title::hud::ResumeCountdown::Text
+                })
+                .map(|seconds| {
+                    oag_game::pause::Count::at(seconds)
+                        .text(&self.resume_go)
+                        .to_string()
+                });
             oag_game::hud_views::draw(
                 hud,
                 gpu.device(),
@@ -648,6 +664,7 @@ impl RaceStage {
                 window,
                 self.campaign_cell.as_ref(),
                 self.record_target.as_ref(),
+                word.as_deref(),
                 viewport,
             );
             // The countdown, for exactly the measured start-line gate's
@@ -676,19 +693,26 @@ impl RaceStage {
             // (chosen: a split's seam is no place for a digit). **In a multi-window
             // race a window's views are its own**: one picture per view the window
             // cuts, so a window of one seat draws one over the whole of it.
+            let (views, cut) = if self.race.windowed() {
+                (
+                    self.race.window_drawn(window).len().max(1),
+                    self.race.window_cut(window),
+                )
+            } else {
+                (self.race.viewport_count(), self.race.cut())
+            };
             let rects = if self.resume_art.is_some() {
-                let (views, cut) = if self.race.windowed() {
-                    (
-                        self.race.window_drawn(window).len().max(1),
-                        self.race.window_cut(window),
-                    )
-                } else {
-                    (self.race.viewport_count(), self.race.cut())
-                };
                 oag_render::viewport::layout(views, viewport, cut)
             } else {
                 vec![viewport]
             };
+            // Only a resume is placed here; the start's is the authored one.
+            let anchor = (self.resume_art.is_some() && views > 1)
+                .then(|| oag_game::hud_countdown::Anchor {
+                    across: 0.5,
+                    down: oag_game::pause::anchor_y(views),
+                    scale: oag_game::pause::SPLIT_ART_SCALE,
+                });
             if let Some(countdown) = &mut self.countdown
                 && let Some(seconds) = self.resume_art.or(start_line)
             {
@@ -699,6 +723,7 @@ impl RaceStage {
                         encoder,
                         view,
                         seconds,
+                        anchor,
                         rect,
                         target_size,
                     );

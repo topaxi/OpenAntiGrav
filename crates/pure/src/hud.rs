@@ -197,6 +197,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // **Chosen, not measured.** Neither disc authors an indicator (census in
     // `docs/architecture/asset-layers.md`); the names follow HD's and the layout
     // and art are this project's own fallback, `assets/fallback/`.
+    resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: Some(oag_title::hud::AssistIndicator {
         background: "AssistIndicatorBG",
         main: "AssistIndicatorMain",

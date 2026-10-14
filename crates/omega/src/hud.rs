@@ -163,6 +163,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     // fragment is spliced. Zone's root carries none, as HD's does not. The
     // readout rule (3 s, 1.5 s, 4 Hz) is HD's and 2048's shared function. See
     // `docs/physics/pilot-assist.md`.
+    resume_countdown: oag_title::hud::ResumeCountdown::Text,
     assist: Some(oag_title::hud::AssistIndicator {
         background: "AssistIndicatorBG",
         main: "AssistIndicatorMain",

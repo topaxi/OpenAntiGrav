@@ -43,6 +43,68 @@ pub const ART_CLOCK_START: f32 = ART_GO_SECONDS - RESUME_SECONDS as f32;
 /// How long `GO` stays on screen after the race moves again, in seconds. **Chosen.**
 pub const GO_LINGER: f64 = 1.5;
 
+/// How far down a view the countdown sits when the view is one of a split, as a
+/// fraction of the view's height. **Chosen**: the authored place (see
+/// [`anchor_y`]) is over the craft in a short view, so a split lifts it to where a
+/// view shows track and gantry.
+pub const SPLIT_ANCHOR_Y: f32 = 0.30;
+
+/// How much larger than authored Pulse's countdown art is drawn in a view of a split.
+/// **Chosen**: at the authored size it is about 5% of a short strip's height.
+pub const SPLIT_ART_SCALE: f32 = 2.2;
+
+/// Where the title's countdown art sits on a screen of one view, as a fraction of
+/// its height: `Cockpit_321GO`'s authored `(0, 0)` plus `OriginY 35` on the PSP's
+/// 480x272 grid, 171 down (`oag_game::hud_countdown`). The text a title with no art
+/// draws takes the same place.
+pub const AUTHORED_ANCHOR_Y: f32 = 171.0 / 272.0;
+
+/// How far down a view the countdown sits, as a fraction of its height: the
+/// authored place for a whole screen, [`SPLIT_ANCHOR_Y`] for a view of a split.
+pub fn anchor_y(views: usize) -> f32 {
+    if views > 1 {
+        SPLIT_ANCHOR_Y
+    } else {
+        AUTHORED_ANCHOR_Y
+    }
+}
+
+/// What the countdown says at one moment. **Chosen**: one second each, `GO` from
+/// the moment the race moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Count {
+    Three,
+    Two,
+    One,
+    Go,
+}
+
+impl Count {
+    /// What is said at `art_seconds` on the art's clock ([`art_seconds`]).
+    pub fn at(art_seconds: f32) -> Self {
+        let elapsed = art_seconds - ART_CLOCK_START;
+        if elapsed < 1.0 {
+            Count::Three
+        } else if elapsed < 2.0 {
+            Count::Two
+        } else if elapsed < 3.0 {
+            Count::One
+        } else {
+            Count::Go
+        }
+    }
+
+    /// The word, with `go` the language's `GO` ([`strings::GO`]).
+    pub fn text(self, go: &str) -> &str {
+        match self {
+            Count::Three => "3",
+            Count::Two => "2",
+            Count::One => "1",
+            Count::Go => go,
+        }
+    }
+}
+
 /// The pause the session is in.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
@@ -231,6 +293,8 @@ pub mod strings {
     pub const OPEN: &str = "OAG_PAUSE_OPEN";
     /// A pause nobody pressed for: the window was away.
     pub const OPEN_UNOWNED: &str = "OAG_PAUSE_OPEN_UNOWNED";
+    /// The countdown's last word, for a title that draws it as text.
+    pub const GO: &str = "OAG_COUNTDOWN_GO";
 }
 
 #[cfg(test)]

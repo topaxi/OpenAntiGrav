@@ -387,6 +387,14 @@ impl Session {
                 // for the same reason its state does: it is one hold for the
                 // frame, not one per drawable that reads it.
                 stage.resume_art = resume_art;
+                if resume_art.is_none() {
+                    stage.resume_go.clear();
+                } else if stage.resume_go.is_empty() {
+                    stage.resume_go = super::pause::say(
+                        self.settings.language.as_deref(),
+                        oag_game::pause::strings::GO,
+                    );
+                }
                 let spectrum = self.audio.output().spectrum().levels();
                 let zone_spectrum = self.zone_hold.advance(&spectrum).to_vec();
                 // Every frame, so the MODEL DETAIL, TEXTURE DETAIL and BLUR
