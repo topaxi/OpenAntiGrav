@@ -386,7 +386,9 @@ fn summary_line(values: impl Iterator<Item = f64>) -> String {
 }
 
 /// The metrics a summary reports: name and how to read it off a frame.
-const METRICS: [(&str, fn(&Frame) -> f64); 9] = [
+type Read = fn(&Frame) -> f64;
+
+const METRICS: [(&str, Read); 9] = [
     ("tick_us", |f| f.tick_us),
     ("record_us", |f| f.record_us),
     ("submit_us", |f| f.submit_us),
@@ -495,9 +497,7 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
     let last_lap = frames.iter().map(|f| f.lap).max().unwrap_or(0);
     let laps = (1..=last_lap)
         .map(|lap| {
-            let of = |read: fn(&Frame) -> f64| {
-                summary_line(counted.iter().filter(|f| f.lap == lap).map(read))
-            };
+            let of = |read: Read| summary_line(counted.iter().filter(|f| f.lap == lap).map(read));
             format!(
                 "    {{\"lap\": {lap}, \"frame_us\": {}, \"cpu_us\": {}, \"gpu_us\": {}}}",
                 of(|f| f.frame_us),
