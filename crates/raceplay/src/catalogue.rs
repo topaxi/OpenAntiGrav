@@ -632,11 +632,14 @@ impl Team {
     /// the model rather than the team ([`Self::models`]): a variant id is a
     /// directory suffix on such a title (`""`, `"_c1"`, `"_n1"` on HD - see
     /// `oag_hd::race::TEAM_VARIANTS`), so its model is the one racing out of
-    /// [`Self::location`] plus that suffix. Empty when the team has no
+    /// [`Self::location`] joined with that suffix by `join`
+    /// ([`oag_title::RaceDefaults::join_for`]: a suffix on HD's directory, a
+    /// subdirectory on a numbered craft). Empty when the team has no
     /// per-model ratings at all.
     #[must_use]
     pub fn variant_stats<'a>(
         &self,
+        join: oag_title::VariantJoin,
         variant_ids: impl IntoIterator<Item = &'a str>,
     ) -> Vec<Option<oag_ui_screens::picker::hd::Stats>> {
         if self.models.is_empty() {
@@ -646,7 +649,7 @@ impl Team {
             .into_iter()
             .map(|suffix| {
                 let rating = self
-                    .model_for_directory(&format!("{}{suffix}", self.location))?
+                    .model_for_directory(&join.combine(&self.location, suffix))?
                     .rating_tenths?;
                 Some(oag_ui_screens::picker::hd::Stats {
                     speed: rating.speed,
@@ -686,12 +689,13 @@ impl Team {
     #[must_use]
     pub fn hex_cells<'a>(
         &self,
+        join: oag_title::VariantJoin,
         variant_ids: impl IntoIterator<Item = &'a str>,
     ) -> Vec<oag_ui_screens::picker::hd::hex::ModelCell> {
         let offered: Vec<Option<usize>> = variant_ids
             .into_iter()
             .map(|suffix| {
-                let model = self.model_for_directory(&format!("{}{suffix}", self.location))?;
+                let model = self.model_for_directory(&join.combine(&self.location, suffix))?;
                 self.models.iter().position(|candidate| candidate == model)
             })
             .collect();
@@ -722,17 +726,12 @@ impl Team {
     /// means is decided by its unlock state, which this build does not keep.
     #[must_use]
     pub fn model_for_directory(&self, directory: &str) -> Option<&TeamModel> {
-        let leaf = |path: &str| {
-            path.rsplit(['\\', '/'])
-                .next()
-                .unwrap_or(path)
-                .to_ascii_lowercase()
-        };
-        let want = leaf(directory);
+        // The whole path, not its leaf: a numbered craft's directory is `3` under
+        // `Feisar2048` and under `VR_2048` alike.
         let matching = self
             .models
             .iter()
-            .filter(|model| leaf(&model.model_location) == want);
+            .filter(|model| paths_match(&model.model_location, directory));
         let first = matching.clone().next();
         let open: Vec<&TeamModel> = matching.filter(|model| !model.has_unlock).collect();
         // Several open models in one directory (Omega's `Tigron_x`, whose models all name it):

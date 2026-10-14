@@ -799,8 +799,10 @@ pub(super) fn picker_page(
                     {
                         variants.push(own);
                     }
-                    let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
-                    let models = team.hex_cells(variants.iter().map(|(id, _)| id.as_str()));
+                    let join = title.race.join_for(&team.id);
+                    let stats =
+                        team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str()));
+                    let models = team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str()));
                     (
                         Entry {
                             id: team.id.clone(),
@@ -816,6 +818,7 @@ pub(super) fn picker_page(
                                 variants,
                                 stats,
                                 models,
+                                logo: Some(oag_ui_screens::picker::hd::logo_src(&team.location)),
                             },
                         },
                         Some(crate::preview::ship_entry(title, &team.location)),

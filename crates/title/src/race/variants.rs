@@ -51,6 +51,15 @@ pub struct GuestRoster {
     /// `None` for a roster that is the very same data (2048's HD twelve),
     /// where a real source of the reshipped title simply wins.
     pub alongside_label: Option<&'static str>,
+    /// Whether this title's own team list offers these teams: its
+    /// front end and RACE page carry them as teams of their own, each flying
+    /// one of [`Self::variants`]' craft. Omega's `Team Selection` does for its
+    /// five 2048-era teams, whose `PI_Team` is declared in the same definition as the
+    /// HD-era ones and has no craft of its own under the bare id. `false` leaves a
+    /// declared guest team out of the list: 2048's HD-derived twelve are
+    /// reachable through RACE REMIX's craft title only, and what the original's
+    /// own team list does with them is unmeasured.
+    pub offered: bool,
     /// The speed classes this roster's teams author, slowest first, as their
     /// `handlingstats.xml` files spell them; `None` where the roster's files
     /// have not been read. 2048's HD-derived twelve author four where its own
@@ -310,6 +319,31 @@ impl RaceDefaults {
     #[must_use]
     pub fn has_team_variants(&self) -> bool {
         self.team_variants.is_some() || self.guest_roster.is_some() || self.hull_variants.is_some()
+    }
+
+    /// The join that turns a **bare** team id and one of its variants' suffixes
+    /// into a race id: [`TeamVariants::join`] of the table that offers
+    /// variants for `team`, [`VariantJoin::Suffix`] (a plain append, which an
+    /// empty suffix leaves alone) for a team that has none.
+    #[must_use]
+    pub fn join_for(&self, team: &str) -> VariantJoin {
+        self.team_variants_for(team)
+            .map_or(VariantJoin::Suffix, |variants| variants.join)
+    }
+
+    /// Whether a **bare** team id names no craft of its own: it is offered
+    /// variants and every one of them has a suffix, so only a combined id
+    /// (`Feisar2048\3`) is a directory a race can load. A pool of bare team
+    /// ids drawn for the grid leaves these out - nothing chose which of their
+    /// craft an opponent flies.
+    #[must_use]
+    pub fn names_no_craft(&self, team: &str) -> bool {
+        self.team_variants_for(team).is_some_and(|variants| {
+            variants
+                .variants
+                .iter()
+                .all(|variant| !variant.suffix.is_empty())
+        })
     }
 
     /// Which directory an **already-combined** team id's guest roster lives

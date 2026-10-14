@@ -99,6 +99,7 @@ fn left_and_right_move_the_livery_only_when_there_is_one_to_move_to() {
         label: id.to_uppercase(),
         details: Details::Ship {
             loyalty: None,
+            logo: None,
             models: Vec::new(),
             rating: None,
             variants,
@@ -563,6 +564,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             label: "FEISAR".into(),
             details: Details::Ship {
                 loyalty: None,
+                logo: None,
                 models: Vec::new(),
                 rating: None,
                 variants: Vec::new(),
@@ -574,6 +576,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             label: "QIREX".into(),
             details: Details::Ship {
                 loyalty: None,
+                logo: None,
                 models: Vec::new(),
                 rating: None,
                 variants: Vec::new(),
@@ -585,6 +588,7 @@ fn a_menu_widget_lists_every_entry_at_its_own_position_and_step() {
             label: "AURICOM".into(),
             details: Details::Ship {
                 loyalty: None,
+                logo: None,
                 models: Vec::new(),
                 rating: None,
                 variants: Vec::new(),
@@ -782,6 +786,7 @@ fn pures_listed_rows_select_on_hover_and_confirm_on_a_second_click() {
             label: id.to_uppercase(),
             details: Details::Ship {
                 loyalty: None,
+                logo: None,
                 models: Vec::new(),
                 rating: None,
                 variants: Vec::new(),
@@ -851,6 +856,7 @@ fn the_wheel_steps_the_entry_and_livery_arrows_step_the_livery() {
         label: id.to_uppercase(),
         details: Details::Ship {
             loyalty: None,
+            logo: None,
             models: Vec::new(),
             rating: None,
             variants,
@@ -924,6 +930,7 @@ fn a_team_step_keeps_the_model_row_only_on_the_across_layout() {
         label: id.to_uppercase(),
         details: Details::Ship {
             loyalty: None,
+            logo: None,
             models: Vec::new(),
             rating: None,
             variants: vec![

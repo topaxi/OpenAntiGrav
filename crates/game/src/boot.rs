@@ -605,9 +605,8 @@ pub fn load_shell(
     let zone_tracks = load_zone_tracks(&mut archives, title.race.zone, &documents, &mut report);
     let teams = load_teams(
         &mut archives,
-        (title.race.ship_dir, title.race.handling_dir),
+        &title.race,
         definition,
-        title.race.team,
         &documents,
         &mut report,
     );
@@ -651,7 +650,7 @@ pub fn load_shell(
         ]);
         block_textures.extend(campaign2048::card_textures(&campaign_events));
     }
-    let logos = screens::team_logos(team_box.is_some(), title.race.ship_dir, &teams);
+    let logos = screens::team_logos(team_box.is_some(), &teams);
     block_textures.extend(logos.iter().map(String::as_str));
     let emblems = screens::track_emblems(track_box.is_some(), &tracks);
     block_textures.extend(emblems.iter().map(String::as_str));
@@ -833,7 +832,6 @@ pub fn load_shell(
         title
             .front_end
             .is_some_and(|front_end| front_end.borrows_ps2_split_screens),
-        title.race.ship_dir,
         title
             .front_end
             .and_then(|front_end| front_end.ship_preview_pose),

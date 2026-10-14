@@ -233,6 +233,7 @@ pub const ERA_2048_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     variants: &ERA_2048_VARIANTS,
     reships: "Wipeout 2048",
     alongside_label: Some("Wipeout 2048 (Omega)"),
+    offered: true,
     // Unread: these are Omega's own re-textured copies of 2048's five craft, and
     // their `handlingstats.xml` ladder has not been listed.
     speed_classes: None,

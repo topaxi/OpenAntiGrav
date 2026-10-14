@@ -318,6 +318,7 @@ const GUEST_ROSTER: GuestRoster = GuestRoster {
     variants: &GUEST,
     reships: "A Fixture Title",
     alongside_label: None,
+    offered: false,
     speed_classes: Some(SpeedClasses::PULSE_LADDER),
     origin: crate::effects::Origin::Chosen,
 };
@@ -415,6 +416,22 @@ fn team_variants_for_resolves_native_and_guest_teams_and_nothing_else() {
         None,
         "not on either table"
     );
+}
+
+/// The join a menu pick combines with is the table's own, a plain append for a
+/// team that has none; and only a team whose every variant carries a suffix names
+/// no craft under its bare id (the grid's opponent pool leaves it out).
+#[test]
+fn join_for_and_names_no_craft_follow_the_variant_table() {
+    assert_eq!(DEFAULTS.join_for("Feisar2048"), VariantJoin::Subdirectory);
+    assert_eq!(DEFAULTS.join_for("Assegai"), VariantJoin::Suffix);
+    assert_eq!(DEFAULTS.join_for("Triakis"), VariantJoin::Suffix);
+    assert!(DEFAULTS.names_no_craft("Feisar2048"), "only 1 and 3 exist");
+    assert!(
+        !DEFAULTS.names_no_craft("Assegai"),
+        "its empty suffix is its own directory"
+    );
+    assert!(!DEFAULTS.names_no_craft("Triakis"), "no table at all");
 }
 
 /// An already-combined guest id resolves under the guest roster's own

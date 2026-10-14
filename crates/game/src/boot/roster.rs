@@ -147,9 +147,8 @@ pub(super) fn load_zone_tracks(
 /// filter cannot disagree with the loader about how a path is spelled.
 pub(super) fn load_teams(
     archives: &mut oag_assets::Archives,
-    dirs: (&str, &str),
+    race: &oag_title::RaceDefaults,
     definition: &str,
-    default_team: &str,
     documents: &[String],
     report: &mut Vec<String>,
 ) -> Vec<oag_raceplay::catalogue::Team> {
@@ -165,7 +164,8 @@ pub(super) fn load_teams(
     // reason: the original's craft picker is unread, so every team flies one
     // fixed craft until it is. No slot on a title whose default team carries
     // none, which is every other title, where this is a no-op.
-    let craft_slot = default_team.rsplit_once('\\').map(|(_, slot)| slot);
+    let craft_slot = race.team.rsplit_once('\\').map(|(_, slot)| slot);
+    let dirs = (race.ship_dir, race.handling_dir);
     let mut teams: Vec<oag_raceplay::catalogue::Team> = Vec::new();
     for mut team in declared {
         if raceable(archives, dirs, &team.id) {
@@ -177,7 +177,25 @@ pub(super) fn load_teams(
             if raceable(archives, dirs, &slotted) {
                 team.id = slotted;
                 teams.push(team);
+                continue;
             }
+        }
+        // A guest roster this title offers as teams of its own (Omega's 2048-era
+        // five): the bare id names no craft, so the team is raceable when every
+        // craft it offers is, each in the directories its roster names. Offered
+        // under the bare id - the variant row and `combine_variant` choose the craft.
+        if let Some(guest) = race.guest_roster.filter(|guest| guest.offered)
+            && guest.variants.teams.contains(&team.id.as_str())
+            && guest.variants.variants.iter().all(|variant| {
+                let craft = guest.variants.join.combine(&team.id, variant.suffix);
+                raceable(
+                    archives,
+                    (race.ships_for(&craft).dir, race.handling_dir_for(&craft)),
+                    &craft,
+                )
+            })
+        {
+            teams.push(team);
         }
     }
 

@@ -76,6 +76,26 @@ mod tests {
         }
     }
 
+    /// A team Omega offers only through its numbered craft (a 2048-era one) is
+    /// picked bare and raced as the combined id: the menu path's last step.
+    #[test]
+    fn a_2048_era_team_launches_as_its_numbered_craft() {
+        let mut options = race::Options::default();
+        let race = settings::Race {
+            team: "Feisar2048".to_string(),
+            variant: "3".to_string(),
+            ..settings::Race::default()
+        };
+        let warnings = apply_race_team(
+            oag_omega::TITLE,
+            &teams(&["Assegai", "Feisar2048"]),
+            &race,
+            &mut options,
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(options.team.as_deref(), Some(r"Feisar2048\3"));
+    }
+
     /// **The campaign bug's first shape.** A session's first race carries
     /// `race_options.team = None` (no `--team`); the team Team Selection
     /// picked must land, or the EndRace loyalty row is omitted.

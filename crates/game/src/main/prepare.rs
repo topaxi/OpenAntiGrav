@@ -319,6 +319,9 @@ impl Pending {
             boot_shell
                 .teams
                 .iter()
+                // A team offered only through its numbered craft (Omega's 2048-era
+                // five) is not drawn as an opponent: nothing chose which craft.
+                .filter(|team| !title.race.names_no_craft(&team.id))
                 .map(|team| team.id.clone())
                 .collect(),
         );

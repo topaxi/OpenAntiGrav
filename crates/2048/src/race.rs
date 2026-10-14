@@ -406,6 +406,7 @@ pub const GUEST_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     // title package does not depend on (a test pins it to `oag_hd::TITLE.name`).
     reships: "Wipeout HD",
     alongside_label: None,
+    offered: false,
     // The twelve author four classes (`oag-tables`' `speed_ladder_ground_truth`,
     // 2048's `hdships` tree, both regions): no `SUPERPHANTOM`.
     speed_classes: Some(oag_title::SpeedClasses::PULSE_LADDER),
