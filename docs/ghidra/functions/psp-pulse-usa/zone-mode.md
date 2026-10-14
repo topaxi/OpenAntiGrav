@@ -470,7 +470,7 @@ The dirty flag is set from bit 22 (`0x400000`) of `entity+0x860`, which reads as
    find. Confidence **85** on the cue and the path; the argument order is
    `FUN_0883e9b0`'s, read once here and once on the autopilot's warning.
 
-   **Ported**: `oag_sound::sfx::Cue::Blowup`, held on
+   **Ported**: `oag_gameplay::cue::Cue::Blowup`, held on
    `Race::craft_is_exploding` - the state's own `0.5 s`, because where the
    original releases `craft+0xcac` is unread and that is the shortest lifetime
    the evidence supports.

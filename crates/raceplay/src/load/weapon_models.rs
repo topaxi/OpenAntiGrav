@@ -54,7 +54,7 @@ pub(super) fn load(
     // `oag_mesh::mesh::rcs` for what is decoded and what is not, and this
     // module's own doc comment for why the branch lives here rather than
     // being duplicated per caller.
-    if mesh::geometry_is_external(&blob) {
+    if oag_vex::vex::geometry_is_external(&blob) {
         let sibling = mesh::rcs::sibling_name(entry);
         let Some(geometry) = sibling.as_deref().and_then(|s| archives.read_name(s).ok()) else {
             report.push(format!(

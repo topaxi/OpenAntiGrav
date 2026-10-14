@@ -41,7 +41,7 @@
 
 use super::*;
 use oag_fx::magstrip::{Craft, Placement, Wake};
-use oag_sound::sfx::{Cue, CueEvent};
+use oag_gameplay::cue::{Cue, CueEvent};
 
 /// What the sound does on a tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

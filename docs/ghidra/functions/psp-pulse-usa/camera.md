@@ -279,7 +279,7 @@ Two things follow:
    axis as `lookat_length` (stored positive, i.e. ahead). One axis, one sign
    convention, three fields.
 
-**Consequence for the Rust side.** `oag_render::camera::chase::anchor` computes
+**Consequence for the Rust side.** `oag_race::chase_rig::anchor` computes
 `position + up * pos_height - forward * pos_length`, so it wants the *negated*
 disc value, and `crates/raceplay/src/camera.rs::chase_pos_length` supplies exactly
 that. **The behaviour is correct today and the negation must not be removed from
@@ -787,7 +787,7 @@ are not touched, being not lengths.
 > static probes in this page cannot see. Measured over the 150 ticks of
 > `data/traces/pad0-boost.csv`: pre-multiplied offsets miss the original's own
 > recorded eye by `0.121` RMS, applying the scale after the spring by `0.008`.
-> `oag_render::camera::chase::ChaseParams::craft_scale` is the field that exists
+> `oag_race::chase_rig::ChaseParams::craft_scale` is the field that exists
 > because of this; `crates/raceplay/tests/chase_camera_ground_truth.rs` is the
 > measurement.
 

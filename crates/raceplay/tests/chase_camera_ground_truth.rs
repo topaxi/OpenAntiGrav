@@ -62,8 +62,9 @@
 
 use std::path::{Path, PathBuf};
 
+use oag_race::chase_rig::Target;
 use oag_raceplay as race;
-use oag_render::camera::chase::{Chase, Target};
+use oag_render::camera::chase::Chase;
 
 /// The largest per-tick eye error, in world units, this comparison may show.
 ///
@@ -109,7 +110,7 @@ fn require_capture(path: &Path) -> String {
 
 /// The ship's `<ExternalCameraClose>` block, off the user's own disc and through
 /// the same `race::chase_params` the game uses - the craft scale included.
-fn close_params() -> Option<oag_render::camera::chase::ChaseParams> {
+fn close_params() -> Option<oag_race::chase_rig::ChaseParams> {
     let image = repo().join("data/images/pulse-psp-usa.chd");
     if !image.exists() {
         assert!(

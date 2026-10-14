@@ -11,6 +11,7 @@
 use oag_audio::{Bus, Mixer, VoiceId};
 use oag_core::Rng;
 
+use super::CueTables;
 use super::layers::{CueVoice, Program, Where, start};
 use super::{Banks, Cue};
 

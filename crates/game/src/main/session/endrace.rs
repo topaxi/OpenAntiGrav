@@ -423,7 +423,7 @@ impl Session {
     pub(crate) fn tick_endrace(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let mut confirmed_option = None;
         let mut navs = Vec::new();
-        let voice: Option<oag_sound::sfx::Cue>;
+        let voice: Option<oag_gameplay::cue::Cue>;
         {
             let Stage::Race(stage) = &mut self.stage else {
                 return;

@@ -122,8 +122,8 @@ impl Race {
         // already makes the very first `advance` call pulse, so the two agree
         // on tick one anyway.
         if pulsed && let Some(at) = at {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
-                oag_sound::sfx::Cue::LeachEnergy,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
+                oag_gameplay::cue::Cue::LeachEnergy,
                 at,
             ));
         }

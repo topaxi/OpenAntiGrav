@@ -84,7 +84,7 @@ changed.
 class IDs to HD's version 6** (measured via `vex::classes_of` on
 `environments/altima/track.vex`: `mesh`, `wo_track`, `section`, `skycube`,
 `floor_collision`, `engine_flare`, all the same numbers HD's version-6 tracks
-carry). `mesh::geometry_is_external` reads `false` here because its whole test
+carry). `oag_vex::vex::geometry_is_external` reads `false` here because its whole test
 is "is the vex file's own byte order big-endian" - a PS3 (PowerPC, BE) proxy
 that a Vita (ARM, LE) file defeats by construction, even though the geometry
 *is* external exactly as it is on HD. This one is a cheap, well-understood fix
@@ -243,7 +243,7 @@ runs the simulation. What landed to get there:
   `zone_craft` so the two travel together. `handling::entry_name_in` and
   `ships::entry_name_in` take the directory; the old two-argument spellings stay
   as the three-title convenience wrappers.
-- **`mesh::geometry_is_external` no longer asks the byte order alone.** Its
+- **`oag_vex::vex::geometry_is_external` no longer asks the byte order alone.** Its
   whole test was "is this a big-endian `.vex`", which answers `false` for 2048
   on a little-endian console; it now also asks whether the first mesh batch
   declares GU vertex type `0`, which is what an exporter writes when the

@@ -254,8 +254,8 @@ impl Race {
         let now = timer - self.sim.dt;
         self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
         if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Disengaging,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Disengaging,
                 slot,
             ));
         }
@@ -914,6 +914,7 @@ impl Race {
                     &b_size,
                 );
                 if touched.is_some() {
+                    #[cfg(feature = "view")]
                     for slot in [a, b] {
                         self.view.pair_spoil[slot] |=
                             self.sim.world.ships[slot].physics.craft_state

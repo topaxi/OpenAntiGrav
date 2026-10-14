@@ -48,6 +48,7 @@ impl Race {
     pub fn tick(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         self.ensure_speed_plans();
         // Before anything moves: the poses a draw blends from. See `between_ticks`.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.capture_poses();
         }
@@ -60,6 +61,7 @@ impl Race {
         // one tick - where advancing at the end of the tick would show the
         // impact frame already one tick in. Measured 2026-09-30, see
         // `oag_render::camera::shake`.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.view.shake.advance(self.sim.dt);
             let mut shown = false;
@@ -71,14 +73,15 @@ impl Race {
                 }
             }
             if shown {
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::Message,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::Message,
                     0,
                 ));
             }
         }
         // Before anything steps, so the perfect start's edge is a change
         // across this tick - see `race::perfect_start`.
+        #[cfg(feature = "view")]
         let launch_grades = self.launch_grades();
         // Every craft is in the original's grid state until the green light:
         // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
@@ -199,6 +202,7 @@ impl Race {
         // Read before the step, for `ignite_missile_bounces` below: a bounce
         // never stops a projectile, so it never reaches `impacts` and the
         // only way to see one is to compare this counter before and after.
+        #[cfg(feature = "view")]
         let bounces_before: [u8; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].bounces);
         // Read before the step too, for `ignite_blast`'s Bomb arm below: a
@@ -208,6 +212,7 @@ impl Race {
         // `bounces_before` already takes, and `impacts` is slot-indexed the
         // same way. Read for every slot rather than gated on `kind ==
         // Bomb`, since nothing here is on the determinism-hashed path.
+        #[cfg(feature = "view")]
         let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
         let impacts = oag_weapons::projectile::step(
@@ -230,14 +235,18 @@ impl Race {
         }
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.throw_hit_sparks(&hits, false);
         }
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_projectile_flares();
         }
+        // `slot` is read only by the drawn blast below.
+        #[cfg_attr(not(feature = "view"), allow(unused_variables))]
         for (slot, impact) in impacts
             .iter()
             .enumerate()
@@ -251,6 +260,7 @@ impl Race {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
             self.credit_blast(impact, &hits);
+            #[cfg(feature = "view")]
             if self.draws() {
                 self.ignite_blast(
                     impact.kind,
@@ -270,7 +280,7 @@ impl Race {
             // wall hit or the 10 s timeout (`struck: None` either way) plays
             // `PlasmaHitWall` as before. See
             // `docs/ghidra/functions/psp-pulse-usa/plasma.md`'s "a craft hit
-            // is the third ending" section and `oag_sound::sfx::Cue::PlasmaHitShip`'s
+            // is the third ending" section and `oag_gameplay::cue::Cue::PlasmaHitShip`'s
             // own doc comment.
             //
             // The Rocket and the Cannon share the same wall/craft split, each
@@ -284,16 +294,16 @@ impl Race {
             use oag_tables::weapons::Weapon;
             let hit_cues = match impact.kind {
                 Weapon::Plasma => Some((
-                    oag_sound::sfx::Cue::PlasmaHitWall,
-                    oag_sound::sfx::Cue::PlasmaHitShip,
+                    oag_gameplay::cue::Cue::PlasmaHitWall,
+                    oag_gameplay::cue::Cue::PlasmaHitShip,
                 )),
                 Weapon::Rocket => Some((
-                    oag_sound::sfx::Cue::RocketHitWall,
-                    oag_sound::sfx::Cue::RocketHitShip,
+                    oag_gameplay::cue::Cue::RocketHitWall,
+                    oag_gameplay::cue::Cue::RocketHitShip,
                 )),
                 Weapon::Cannon => Some((
-                    oag_sound::sfx::Cue::CannonHitWall,
-                    oag_sound::sfx::Cue::CannonHitShip,
+                    oag_gameplay::cue::Cue::CannonHitWall,
+                    oag_gameplay::cue::Cue::CannonHitShip,
                 )),
                 _ => None,
             };
@@ -307,11 +317,12 @@ impl Race {
             if let Some(cue) = weapons::missile_ending_cue(impact) {
                 self.sim
                     .cues
-                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_gameplay::cue::CueEvent::at_point(cue, impact.point));
             }
             // HD's Cannon throws its own spark on the craft it strikes, from
             // the weapon's side - see `Race::throw_weapon_spark`. A no-op
             // unless the title built weapon anchors (HD only).
+            #[cfg(feature = "view")]
             if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck)
                 && self.draws()
             {
@@ -321,13 +332,14 @@ impl Race {
                 let cue = if impact.struck.is_some() { ship } else { wall };
                 self.sim
                     .cues
-                    .push(oag_sound::sfx::CueEvent::at_point(cue, impact.point));
+                    .push(oag_gameplay::cue::CueEvent::at_point(cue, impact.point));
             }
         }
         // After the loop above, so a Plasma detonated this tick is already
         // in the pool at `age == 0.0` when this ages every slot - the same
         // one-tick order `advance_projectile_flares` above takes relative to
         // a freshly-placed flare. See `blast_models` module doc comment.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_plasma_blast_models(self.sim.dt);
             // Same one-tick order, for the Bomb's own hemisphere/shockwave pool.
@@ -343,6 +355,8 @@ impl Race {
         // (`SHURIKENHIT`, `Shuriken_Bounce`, confidence 88).
         // `weapons::bounced_this_tick` already gates on the weapon, so a
         // stray nonzero `bounces` on some other kind never fires either cue.
+        // Lean: a cue is dropped on a tick that is not drawn, so none is raised.
+        #[cfg(feature = "view")]
         for (slot, projectile) in self.sim.world.projectiles.slots.iter().enumerate() {
             if !weapons::bounced_this_tick(
                 projectile.kind,
@@ -353,15 +367,15 @@ impl Race {
             }
             match projectile.kind {
                 Some(oag_tables::weapons::Weapon::Missile) => {
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
-                        oag_sound::sfx::Cue::MissileHitWall,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
+                        oag_gameplay::cue::Cue::MissileHitWall,
                         projectile.position,
                     ));
                 }
                 // On the blade's own emitter - see `Cue::ShurikenHit`.
                 Some(oag_tables::weapons::Weapon::Shuriken) => {
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::at_point(
-                        oag_sound::sfx::Cue::ShurikenHit,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::at_point(
+                        oag_gameplay::cue::Cue::ShurikenHit,
                         projectile.position,
                     ));
                 }
@@ -370,6 +384,7 @@ impl Race {
         }
         // After the craft have moved, so a flare sits on this tick's nozzle
         // rather than the last one's.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_engine_flares();
             self.advance_absorb_bursts();
@@ -407,6 +422,7 @@ impl Race {
         // left mid-explosion for the lap counter to read. See
         // `crate::eliminator`.
         self.tick_destroyed_craft();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_craft_flashes();
             self.advance_destroy_camera();
@@ -468,6 +484,7 @@ impl Race {
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
         self.update_standings();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.tick_split_gap();
         }
@@ -476,6 +493,7 @@ impl Race {
         // every craft's freshest `Standing::progress` rather than last
         // tick's. See `Race::advance_quake`'s own doc comment.
         self.advance_quake();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_quake_visual();
         }
@@ -484,6 +502,7 @@ impl Race {
         // weapons that read every craft's freshest state rather than last
         // tick's. See `Race::advance_leach_beam`.
         self.advance_leach_beam();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_leach_beam_visual();
             self.advance_leach_beam_ribbon();
@@ -494,6 +513,7 @@ impl Race {
         // Beside them for the same reason: a Repulser's wave sweep reads every
         // craft's ring index from this tick. See `Race::advance_repulsers`.
         self.advance_repulsers();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_repulser_visual();
         }
@@ -505,6 +525,7 @@ impl Race {
         // [`Race::capture_results`].
         self.capture_results();
 
+        #[cfg(feature = "view")]
         if self.draws() {
             let target = target_of(&self.sim.world.ships[0]);
             self.view
@@ -610,6 +631,7 @@ impl Race {
         // count. **After the camera**, because it projects through it, and only
         // when the tick is drawn: it follows the lock and decides nothing.
         self.advance_locks();
+        #[cfg(feature = "view")]
         if self.draws() {
             self.update_sight();
         }
@@ -620,11 +642,14 @@ impl Race {
         // the tick it lands rather than one late; and after
         // `advance_absorb_bursts`, which the blink reads. Every bar of every
         // viewed slot: see `Self::advance_slot_huds`.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.advance_slot_huds();
         }
 
+        // Lean (no `view` feature): `draws()` is false, so the cooldown branch.
         if self.draws() {
+            #[cfg(feature = "view")]
             self.advance_contact_fx(&evaluated);
         } else {
             // Its cooldown is sim state; the cue it would push is dropped.
@@ -636,12 +661,14 @@ impl Race {
         // inputs this tick was handed and the state it arrived at, and reads
         // the player's lap edge the rules above just produced. A no-op unless
         // `start_recording` was called - see `race::replay`.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.record_tick(inputs);
         }
         Evaluations::new(&steps, primary)
     }
 
+    #[cfg(feature = "view")]
     /// The collision sparks, the shake a hit arms, and the two contact sounds,
     /// for the primary craft's wall contact this tick.
     ///
@@ -680,8 +707,8 @@ impl Race {
         // level the edge starts. The level half is `Race::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
         if shielded && !self.view.shield_was_up {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::ShieldActive,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::ShieldActive,
                 0,
             ));
         }
@@ -768,7 +795,7 @@ impl Race {
                 .shake
                 .arm(shake_severity, side, &mut self.view.shake_rng);
             self.view.sparks_ignitions += 1;
-            self.view.sparks_cooldown = sparks::COLLISION_COOLDOWN;
+            self.view.sparks_cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
             self.view.sparks_attached = attached_effect;
         }
         // Releasing on "no contact at all" rather than on `impact` going false

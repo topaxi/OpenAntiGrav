@@ -178,7 +178,7 @@ pub fn event_class(event: &Event) -> Option<EClass> {
 /// (`crates/raceplay/src/load/campaign.rs`): `forced_craft` overrides
 /// `race::Options::team`, `grid_craft` overrides `race::Options::grid_teams`,
 /// which `oag_raceplay::load::roster::grid` applies over
-/// `oag_game::livery::teams_for_slots`'s own roster draw, per AI slot.
+/// `oag_race::roster::teams_for_slots`'s own roster draw, per AI slot.
 /// The restriction mask does not enforce anywhere in this crate, because
 /// which native screen would enforce it (grey a tile, clamp the cursor,
 /// refuse the launch) was not found in `eboot.elf` this pass - see
@@ -239,7 +239,7 @@ pub mod craft {
 
     /// `event`'s own `M_PGRIDSHIPMODELDATA`, resolved slot-by-slot onto
     /// `race::Options::grid_teams` - `oag_raceplay::load_event`'s own
-    /// per-AI-slot override of `oag_game::livery::teams_for_slots`'s
+    /// per-AI-slot override of `oag_race::roster::teams_for_slots`'s
     /// roster draw (Pulse's law, inherited). One entry per `<ARRAY>` child the
     /// field carries, in document order; `None` at an index whose slot is
     /// unauthored (an empty `value=`) or whose [`super::ShipModel`]

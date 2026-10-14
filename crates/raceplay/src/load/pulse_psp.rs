@@ -7,8 +7,10 @@
 //! See `docs/ghidra/functions/psp-pulse-usa/scene-light.md` and
 //! `docs/rendering/glow-mask.md`.
 
+#[cfg(feature = "view")]
 use oag_mesh::mesh_render;
 
+#[cfg(feature = "view")]
 use super::Loaded;
 
 /// Whether this race is Pulse off a PSP disc.
@@ -16,6 +18,7 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
     title.looks.measured_draws.applies(archives.layout.platform)
 }
 
+#[cfg(feature = "view")]
 /// Lights the hulls with the circuit's own `AmbientLight`/`DirectionalLight`
 /// nodes and marks every `.vex` model the race draws as stamping the glow
 /// mask. A no-op when `pulse_psp` is false.
@@ -82,6 +85,7 @@ pub(super) fn finish(
     );
 }
 
+#[cfg(feature = "view")]
 /// The circuit's own `ParticleSystem` nodes, each played from load on its node,
 /// as `race::scenery_fx` describes. Pulse PSP only: `PsysNode_Init` was read
 /// and confirmed live there and nowhere else.
@@ -104,6 +108,7 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
     loaded.setup.scenery_fx.placed = placed;
 }
 
+#[cfg(feature = "view")]
 /// The circuit's `<Weather>` element and the `weatherPos` anchors it is
 /// played against, as `race::scenery_fx::weather` describes. Pulse PSP only:
 /// `Weather_Update` was read there, and the PS2 disc's three circuits that
@@ -149,6 +154,7 @@ fn place_weather(
     });
 }
 
+#[cfg(feature = "view")]
 /// The mist overlay's `Tex`, decoded, or `None` with the reason in the report:
 /// an absent or undecodable texture draws no mist rather than a stand-in.
 fn mist_texture(

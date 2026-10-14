@@ -19,6 +19,7 @@
 //! simulation never knows the network exists. What reaches it is an
 //! `InputSnapshot` per slot per tick, the same as from a pad.
 
+#[cfg(feature = "client")]
 pub mod client;
 pub mod host;
 pub mod link;

@@ -10,9 +10,9 @@
 //! must start where the cue is raised, and there must be exactly one cue.
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
 use oag_sound::Volume;
-use oag_sound::sfx::Cue;
 
 const WRECKED_AT: u64 = 300;
 const RENDER_TICKS: u64 = 520;

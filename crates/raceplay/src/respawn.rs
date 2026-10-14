@@ -335,6 +335,7 @@ impl Race {
         // Put back on the ring, so off any route. See `oag_ai::branch::Branching::on_ring`.
         ship.driver.branching = ship.driver.branching.on_ring();
 
+        #[cfg(feature = "view")]
         self.flash_player_reset(slot);
         self.sim.respawns[slot] += 1;
         self.sim.respawns_in_a_row[slot] += 1;
@@ -352,6 +353,7 @@ impl Race {
         // wherever the craft fell off, stretched across the track to where it was
         // put back. The camera is snapped for the same reason, and only for the
         // player, who is the only craft one is flown from.
+        #[cfg(feature = "view")]
         if self.draws() {
             self.view.exhaust[slot].clear_trail();
             self.view.hd_trail[slot].clear();

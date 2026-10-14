@@ -110,152 +110,232 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+#[cfg(feature = "view")]
+use oag_core::Rng;
+#[cfg(feature = "view")]
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Quat, Vec3};
-use oag_core::{Rng, TickClock, TickRate};
+use oag_core::{TickClock, TickRate};
+#[cfg(feature = "view")]
 use oag_fx::exhaust::{self, Exhaust, FlareTexture};
+#[cfg(feature = "view")]
 use oag_fx::psys;
+#[cfg(feature = "view")]
 use oag_fx::sparks;
 use oag_gameplay::{
     ControlScheme, GRID_SLOTS, InputSnapshot, MAX_SHIPS, Pose, Ship, World, collision_world,
     handling_for, ship_controls,
 };
+#[cfg(feature = "view")]
 use oag_livery::Livery;
+#[cfg(feature = "view")]
 use oag_livery::entry::ps2_texture_set;
+#[cfg(feature = "view")]
 use oag_mesh::mesh;
+#[cfg(feature = "view")]
 use oag_mesh::mesh::{DrawCall, Model};
+#[cfg(feature = "view")]
 use oag_mesh::mesh_render;
+#[cfg(feature = "view")]
 use oag_mesh::mesh_render::Anisotropy;
 use oag_physics::{CollisionWorld, Environment, Evaluated, Handling};
+#[cfg(feature = "view")]
 use oag_present::perf::SceneStats;
+use oag_race::chase_rig::{ChaseParams, Target};
 use oag_race::recovery::{
     BENEATH_LINE, PLAYER_RESCUE_HALF_WIDTHS, PLAYER_RESCUE_TICKS, RESCUE_HALF_WIDTHS, RESCUE_TICKS,
     RESPAWN_COOLDOWN_TICKS, RESPAWN_GIVE_UP, STALL_SPEED, STALL_TICKS,
 };
 use oag_race::sight;
 use oag_race::{Course, Mode, RaceState};
-use oag_render::camera::chase::{Chase, ChaseParams, Target};
+#[cfg(feature = "view")]
+use oag_render::camera::chase::Chase;
+#[cfg(feature = "view")]
 use oag_render::camera::internal::InternalParams;
+#[cfg(feature = "view")]
 use oag_render::collision as render_collision;
+#[cfg(feature = "view")]
 use oag_render::pvs::{
     ChunkSet, DrawSections, PlacementStats, SectionPadding, SwapConflicts, UNPLACED, VisibleSet,
 };
+#[cfg(feature = "view")]
 use oag_render::{shield::ShipShield, track as track_render};
 use oag_tables::handling;
 use oag_tables::handling::SpeedClass;
 use oag_vex::track::{AiTrack, Sample, StartPosition};
 use oag_vex::vex;
 
+#[cfg(feature = "view")]
 mod absorb;
 mod access;
+#[cfg(feature = "view")]
 pub mod adverts;
 mod assets;
+#[cfg(feature = "view")]
 pub mod between_ticks;
+#[cfg(feature = "view")]
 mod blast_models;
+#[cfg(feature = "view")]
 mod bomb_blast;
 mod breadcrumbs;
 mod camera;
 pub mod catalogue;
+#[cfg(feature = "view")]
 pub mod correction;
 pub mod countdown;
+#[cfg(feature = "view")]
 mod craft_flash;
+mod cues;
+#[cfg(feature = "view")]
 mod damage_fx;
+#[cfg(feature = "view")]
 mod destroy_camera;
+#[cfg(feature = "view")]
 mod drawable;
+#[cfg(feature = "view")]
 mod effects;
 mod eliminator;
+#[cfg(feature = "view")]
 pub mod engine_light;
 mod field;
+#[cfg(feature = "view")]
 pub mod finish_camera;
 mod finished_thrust;
 pub mod foreign;
+#[cfg(feature = "view")]
 pub mod gantry;
+#[cfg(feature = "view")]
 mod handles;
 mod hash;
+#[cfg(feature = "view")]
 mod held_buttons;
+#[cfg(feature = "view")]
 mod hit_sparks;
+#[cfg(feature = "view")]
 mod hud;
+#[cfg(feature = "view")]
 pub mod hull_gather;
+#[cfg(feature = "view")]
 pub mod intro_camera;
 pub mod lap_messages;
 pub mod launch_hover;
+#[cfg(feature = "view")]
 pub mod leach_strip;
 mod load;
 pub mod loader_log;
 mod lock;
+#[cfg(feature = "view")]
 mod mag_floor_fx;
+#[cfg(feature = "view")]
 mod magstrip_wake;
+#[cfg(feature = "view")]
 mod missile_blast;
+#[cfg(feature = "view")]
 mod models;
 mod options;
 mod original_ai;
 mod original_tables;
 mod pads;
+#[cfg(feature = "view")]
 mod perfect_start;
 mod pilot_assist;
 pub mod pilots;
 pub mod player_step;
 mod reconcile;
+#[cfg(feature = "view")]
 mod replay;
+#[cfg(feature = "view")]
 mod repulser_field;
 mod respawn;
 mod results;
+#[cfg(feature = "view")]
 pub mod rocket_smoke;
 mod routes;
+#[cfg(feature = "view")]
 mod scene;
+#[cfg(feature = "view")]
 pub mod scenery_fx;
 pub mod scoreboard;
+#[cfg(feature = "view")]
 mod shadow;
 mod sim;
+#[cfg(feature = "view")]
 mod slot_hud;
 mod spawn;
 mod speed_plan;
 mod spline;
+#[cfg(feature = "view")]
 mod split_gap;
 mod stages;
 mod start;
 mod takeoff_line;
 mod telemetry;
+#[cfg(feature = "view")]
 mod texture_sink;
 mod tick;
 pub mod tournament;
+#[cfg(feature = "view")]
 pub mod track_panel;
 mod view;
+#[cfg(feature = "view")]
 mod viewpoint;
+#[cfg(feature = "view")]
 mod visibility;
+#[cfg(feature = "view")]
 mod weapon_light;
 mod weapons;
+#[cfg(feature = "view")]
 mod wreck_fx;
+#[cfg(feature = "view")]
 pub(crate) use weapons::{CannonAssets, CannonDraw};
+#[cfg(feature = "view")]
 mod worker;
+#[cfg(feature = "view")]
 pub mod zone_grade;
 
+#[cfg(feature = "view")]
 pub use absorb::absorb_burst_for;
+#[cfg(feature = "view")]
 pub use blast_models::PlasmaBlastModels;
 pub use camera::chase_params;
 pub use field::{FireLaw, PadSeeking};
+#[cfg(feature = "view")]
 pub use handles::EffectHandles;
+#[cfg(feature = "view")]
 pub use held_buttons::HeldButtons;
+#[cfg(feature = "view")]
 pub use hud::{hud_layout, splice_assist_indicator};
+#[cfg(feature = "view")]
+pub use load::load_event;
+#[cfg(feature = "view")]
 pub use load::ripple::{Ripples, SpanPlaces};
-pub use load::{export_track, load, load_event};
+pub use load::{export_track, load};
+#[cfg(feature = "view")]
 pub(crate) use oag_title::Trigger;
 pub use options::{
     CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup, Sighting,
 };
+#[cfg(feature = "view")]
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
+#[cfg(feature = "view")]
 pub use scene::Scene;
+#[cfg(feature = "view")]
 pub use scene::WindowEffects;
+#[cfg(feature = "view")]
 pub use scene::behind_glass::BehindGlassModels;
 pub use sim::RaceSim;
 pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
+#[cfg(feature = "view")]
 pub use texture_sink::TextureSink;
 pub use view::RaceView;
+#[cfg(feature = "view")]
 pub use viewpoint::WindowViews;
+#[cfg(feature = "view")]
 pub use visibility::TrackVisibility;
+#[cfg(feature = "view")]
 pub use worker::{LoadProgress, LoadWorker};
 
 // `pub`, not `pub(crate)`: the selection screens' previews are built by the
@@ -265,20 +345,28 @@ pub use worker::{LoadProgress, LoadWorker};
 // The two exhaust names are re-exported so a ground-truth test can assert the
 // report line each one produces without spelling the literal a second time -
 // the names are the executable's, and one copy of them is the point.
+#[cfg(feature = "view")]
 pub use assets::{FLARE_TEXTURE, NOISE_TEXTURE};
+#[cfg(feature = "view")]
 use assets::{particle_effect, unrecovered_or_absent, untextured_note};
 
+#[cfg(feature = "view")]
 use camera::target_of;
-#[cfg(test)]
+#[cfg(all(test, feature = "view"))]
 pub(crate) use drawable::Uniforms;
+#[cfg(feature = "view")]
 use drawable::draw::Lists;
+#[cfg(feature = "view")]
 use drawable::{Drawable, model_matrix_of};
+#[cfg(feature = "view")]
 use effects::exhaust_seed;
-#[cfg(test)]
+#[cfg(all(test, feature = "view"))]
 pub(crate) use held_buttons::key_for_button;
+#[cfg(feature = "view")]
 use hud::load_hud;
 use spawn::{grid_poses, grid_row, spawn_pose, start_position_of};
 use spline::{ai_order, racing_line};
+#[cfg(feature = "view")]
 use visibility::{CAMERA_SEARCH_SAMPLES, OFF_TRACK_HALF_WIDTHS, visible};
 
 /// The track a race is flown on unless another is named.
@@ -414,12 +502,14 @@ pub const EXHAUST_SEED: u64 = 0xe8_a5_71_00;
 /// A **compile-time** assertion, because the failure is the silent kind:
 /// `exhaust::Pipeline::upload` clamps with `min`, so an undersized buffer drops
 /// the last craft's ribbon with nothing in the logs.
+#[cfg(feature = "view")]
 const _: () = assert!(oag_fx::exhaust::MAX_TRAILS >= MAX_SHIPS);
 
 /// Same reason as [`EXHAUST_SEED`]'s assertion above, for the Cannon's own
 /// two quads: `oag_fx::weapon_quads` sizes its buffers for
 /// [`oag_fx::weapon_quads::MAX_ROUNDS`] and cannot import
 /// `oag_weapons::projectile::MAX_PROJECTILES` itself.
+#[cfg(feature = "view")]
 const _: () = assert!(oag_fx::weapon_quads::MAX_ROUNDS >= oag_weapons::projectile::MAX_PROJECTILES);
 
 /// Seed for spark spawn parameters, kept distinct from [`SEED`] and
@@ -554,6 +644,7 @@ pub const PROJECTILE_SPRITE_HALF_SIZE: f32 = 1.5;
 ///
 /// Defined beside the triggers themselves in [`mod@effects`], and re-exported
 /// here because that is where callers have always found it.
+#[cfg(feature = "view")]
 pub use effects::RACE_EFFECTS;
 
 /// How much faster a craft assumes a Turbo will make it, when deciding whether
@@ -620,6 +711,7 @@ pub struct Race {
     /// The recording of this race, if one was asked for, and the ghost it
     /// races against, if any. Neither reaches [`RaceSim::state_hash`] - see
     /// [`replay`].
+    #[cfg(feature = "view")]
     replay: replay::ReplayState,
     /// Set for the length of [`Race::tick_sim_only`] and nowhere else. Neither
     /// half's state: it is the caller's statement that this tick is a replay
@@ -645,4 +737,5 @@ pub const BOOST_FOV_CLOSE_RATE: f32 = 3.5;
 
 #[cfg(test)]
 mod tests;
+#[cfg(feature = "view")]
 mod zoom;

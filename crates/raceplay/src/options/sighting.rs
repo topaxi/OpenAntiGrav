@@ -42,6 +42,7 @@ impl Default for Sighting {
 
 impl Sighting {
     /// A title's reticle, off its loaded HUD.
+    #[cfg(feature = "view")]
     #[must_use]
     pub fn of(hud: &oag_hud::Assets) -> Self {
         let view = hud.sight_screen();
@@ -49,6 +50,21 @@ impl Sighting {
             lock_screen: [hud.space.size.0, hud.space.size.1],
             view_screen: [view.0, view.1],
             leach_law: hud.art.sights.runs_leach_law(),
+        }
+    }
+
+    /// A title's reticle with no HUD loaded: the lock grid is the whole HUD
+    /// space of `platform` (what [`Self::of`] reads off `hud.space`, which
+    /// `load_hud` sets from the same platform) and the law is the title's
+    /// art, as [`Self::of`] reads it; with no view, the view grid is the lock
+    /// grid. What a build without the `view` feature loads.
+    #[must_use]
+    pub fn without_view(platform: oag_disc::Platform, art: &oag_title::hud::HudArt) -> Self {
+        let size = oag_display::space::Space::of(platform).size;
+        Self {
+            lock_screen: [size.0, size.1],
+            view_screen: [size.0, size.1],
+            leach_law: art.sights.runs_leach_law(),
         }
     }
 

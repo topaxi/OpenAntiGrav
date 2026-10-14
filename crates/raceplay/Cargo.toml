@@ -28,26 +28,26 @@ oag-ballisticng.workspace = true
 oag-disc.workspace = true
 oag-display.workspace = true
 oag-formats.workspace = true
-oag-fx.workspace = true
+oag-fx = { workspace = true, optional = true }
 oag-gameplay.workspace = true
-oag-gpu.workspace = true
+oag-gpu = { workspace = true, optional = true }
 oag-hd.workspace = true
-oag-hud.workspace = true
-oag-input.workspace = true
-oag-livery.workspace = true
-oag-mesh.workspace = true
+oag-hud = { workspace = true, optional = true }
+oag-input = { workspace = true, optional = true }
+oag-livery = { workspace = true, optional = true }
+oag-mesh = { workspace = true, optional = true }
 oag-physics.workspace = true
 oag-pob.workspace = true
-oag-post.workspace = true
-oag-present.workspace = true
+oag-post = { workspace = true, optional = true }
+oag-present = { workspace = true, optional = true }
 oag-pulse.workspace = true
 oag-pure.workspace = true
 oag-race.workspace = true
 oag-rcs.workspace = true
-oag-render.workspace = true
+oag-render = { workspace = true, optional = true }
 oag-schema.workspace = true
 oag-replay.workspace = true
-oag-sound.workspace = true
+oag-sound = { workspace = true, optional = true }
 oag-source.workspace = true
 oag-tables.workspace = true
 oag-texture.workspace = true
@@ -56,24 +56,47 @@ oag-title.workspace = true
 oag-trace.workspace = true
 oag-trackfile.workspace = true
 oag-unity.workspace = true
-oag-ui.workspace = true
-oag-ui-screens.workspace = true
+oag-ui = { workspace = true, optional = true }
+oag-ui-screens = { workspace = true, optional = true }
 oag-vex.workspace = true
 oag-weapons.workspace = true
 anyhow.workspace = true
-bytemuck = { workspace = true, features = ["derive"] }
+bytemuck = { workspace = true, features = ["derive"], optional = true }
 dirs = "7"
 log.workspace = true
 serde.workspace = true
 toml.workspace = true
 # `crate::pilots` writes a hand-authored pilot file back byte-for-byte; see its module doc.
 toml_edit = "0.25"
-wgpu.workspace = true
-winit.workspace = true
+wgpu = { workspace = true, optional = true }
+winit = { workspace = true, optional = true }
 
 [features]
+default = ["view"]
+# Everything a race draws and plays: the renderer, the effects, the HUD, the
+# sound, the window types. Off, the crate is the simulation half alone - the
+# tick, the load of what the simulation reads, the results - which is what the
+# headless server (`oag-net`'s `oag-server`) links. See
+# docs/architecture/workspace-layout.md, "The lean race".
+view = [
+    "dep:bytemuck",
+    "dep:oag-fx",
+    "dep:oag-gpu",
+    "dep:oag-hud",
+    "dep:oag-input",
+    "dep:oag-livery",
+    "dep:oag-mesh",
+    "dep:oag-post",
+    "dep:oag-present",
+    "dep:oag-render",
+    "dep:oag-sound",
+    "dep:oag-ui",
+    "dep:oag-ui-screens",
+    "dep:wgpu",
+    "dep:winit",
+]
 # See `oag-render`'s feature of the same name. Off by default.
-perf-probe = ["oag-render/perf-probe"]
+perf-probe = ["view", "oag-render/perf-probe"]
 
 [lints]
 workspace = true

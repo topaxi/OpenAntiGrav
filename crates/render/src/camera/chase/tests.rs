@@ -7,6 +7,7 @@
 //! may hold. See `scripts/check-file-size.py`, which is the rule as a gate.
 
 use super::*;
+use oag_race::chase_rig::anchor;
 
 /// A ship at the origin facing +X, upright. No parameter here claims to be
 /// the game's; they are round numbers picked to make the geometry readable.

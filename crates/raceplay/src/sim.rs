@@ -168,7 +168,13 @@ pub struct RaceSim {
     pub(super) locks: [oag_race::sight::Sight; oag_gameplay::MAX_SHIPS],
     /// The chase rig the locks' virtual camera is built from: the team's far
     /// external rig, at rest. Set at load, never changes. See [`crate::lock`].
-    pub(super) lock_rig: oag_render::camera::chase::ChaseParams,
+    pub(super) lock_rig: oag_race::chase_rig::ChaseParams,
+    /// Whether a laid Mine or Bomb leaves from the rear anchor,
+    /// [`REAR_ANCHOR_BACK`](super::weapons::REAR_ANCHOR_BACK) behind the body, rather
+    /// than at the body: `options::Setup::laid_from_rear`. Simulation, not
+    /// look: it moves where the mine is dropped. Not hashed, being a constant
+    /// of the load.
+    pub(super) laid_from_rear: bool,
     /// The kill count that ends an Eliminator event - see
     /// [`Setup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,
@@ -322,6 +328,7 @@ pub struct RaceSim {
     /// Whether every craft's steering ramp stops at its target - see [`Setup::craft_laws`].
     pub(super) steer_ramp_clamped: bool,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
+    #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,
@@ -428,10 +435,10 @@ pub struct RaceSim {
     /// **A per-tick output, never state** - the shape ADR-0018 requires, and
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
     /// and one that made every sound must hash alike. See [`Race::drain_cues`].
-    pub(super) cues: Vec<oag_sound::sfx::CueEvent>,
+    pub(super) cues: Vec<oag_gameplay::cue::CueEvent>,
     /// Zone milestone numbers reached this tick, awaiting a drain.
     ///
-    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](oag_sound::sfx::Cue):
+    /// Kept apart from [`Self::cues`] rather than folded into [`Cue`](oag_gameplay::cue::Cue):
     /// the milestone ladder is per-title data
     /// ([`oag_title::ZoneAnnouncer`]), not one of the engine's own fixed,
     /// statically-named cues, so there is no `Cue` variant for it to be. Same

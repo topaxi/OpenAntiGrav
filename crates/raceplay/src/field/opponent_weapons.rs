@@ -182,8 +182,8 @@ impl Race {
         // LeachBeam case pushes - an opponent only ever fires this weapon
         // with a lock (this function's own gate, above), so there is no
         // unlocked arm to reach here at all.
-        self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-            oag_sound::sfx::Cue::Leach,
+        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            oag_gameplay::cue::Cue::Leach,
             slot,
         ));
         self.sim.world.leach_beam = Some(oag_weapons::projectile::leach_beam::Beam::locked(
@@ -270,8 +270,8 @@ impl Race {
             return false;
         };
         if thrown {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::ShurikenLaunch,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::ShurikenLaunch,
                 slot,
             ));
         }

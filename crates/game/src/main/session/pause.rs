@@ -4,7 +4,7 @@
 
 use log::info;
 use oag_game::pause::{Line, State, Table, clock, go, line, present_seats, several_people, step, strings};
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 
 use crate::stage::Stage;
 

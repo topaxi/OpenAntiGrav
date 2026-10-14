@@ -42,7 +42,7 @@ pub struct Settings {
     /// A third row the original's menu does not have, on a line the original
     /// does draw: a cue is a voice line when it lives in `speech.bnk` rather than
     /// beside the effects (how `oag_sound::sfx` tells `shieldactive` from
-    /// `~SHIELD`). See [`crate::sfx::Cue::bus`] and
+    /// `~SHIELD`). See [`crate::sfx::CueTables::bus`] and
     /// `docs/architecture/adr/0027-three-mix-buses.md`.
     ///
     /// Two cues reach it today (the shield callout and the Autopilot's one-second

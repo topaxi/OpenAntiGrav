@@ -7,6 +7,7 @@
 
 use super::*;
 
+#[cfg(feature = "view")]
 /// The exhaust sprite's texture, named as a literal string in the executable.
 ///
 /// At `0x08a84c80`, loaded by `Texture_LoadEngineFlare`. Being a literal means the
@@ -20,6 +21,7 @@ use super::*;
 /// on the same footing as [`NOISE_TEXTURE`] beside it.
 pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x8.mip";
 
+#[cfg(feature = "view")]
 /// The trail ribbon's texture, also a literal in the executable.
 ///
 /// At `0x08a889e4`, loaded by `Texture_LoadEngineNoise` into three slots that
@@ -33,6 +35,7 @@ pub const FLARE_TEXTURE: &str = r"Data\Tex\EngineFlare\grabbedEngineFlare128x64x
 /// needs to know which disc it is reading.
 pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 
+#[cfg(feature = "view")]
 /// The LeachBeam ribbon's own texture, a literal in the executable - found
 /// 2026-09-17, spelled "lee**ch**" on disc rather than "leach", which is why
 /// the earlier `(?i)leach` search over `.rodata` missed it.
@@ -48,6 +51,7 @@ pub const NOISE_TEXTURE: &str = r"Data\Tex\engineFlare\Engine_noise.mip";
 /// earlier search missed it too.
 pub const LEACHBEAM_TEXTURE: &str = r"Data\Weapons\Textures\pulse_leechbeam1_ADD.mip";
 
+#[cfg(feature = "view")]
 /// Decodes [`LEACHBEAM_TEXTURE`] out of the archive set, or reports why it did
 /// not - the same "absence is reported, not fatal" rule every optional asset
 /// in this module follows. No per-title axis the way [`flare_texture`]'s
@@ -99,6 +103,7 @@ pub(super) fn leach_beam_texture(
     }
 }
 
+#[cfg(feature = "view")]
 /// Reads one `Data\Psys\<name>.POB` out of the archive set and parses it
 /// into a playable effect.
 ///
@@ -223,6 +228,7 @@ pub(super) fn particle_effect(
     Ok((effect, note))
 }
 
+#[cfg(feature = "view")]
 /// The report line for an effect whose sprite loaded but did not fit the
 /// [`psys::Library`]'s sheet, so it draws the procedural profile.
 pub(super) fn sheet_note(name: &str, effects: &psys::Library) -> Option<String> {
@@ -236,6 +242,7 @@ pub(super) fn sheet_note(name: &str, effects: &psys::Library) -> Option<String> 
     })
 }
 
+#[cfg(feature = "view")]
 /// Decodes an exhaust texture out of the archive set, in whichever of the two
 /// formats this disc stores it.
 ///
@@ -322,6 +329,7 @@ pub(super) fn trail_texture(
     }
 }
 
+#[cfg(feature = "view")]
 /// The `Authored` half: a `.rcsmodel` whose first material names everything.
 fn authored_ribbon(
     archives: &mut oag_assets::Archives,
@@ -432,6 +440,7 @@ fn authored_ribbon(
     Ok((noise_texture, blend, shape, notes))
 }
 
+#[cfg(feature = "view")]
 /// [`decode_gtf`] or [`decode_gxt`], by the name's own extension.
 pub(crate) fn decode_texture(
     archives: &mut oag_assets::Archives,
@@ -447,6 +456,7 @@ pub(crate) fn decode_texture(
     }
 }
 
+#[cfg(feature = "view")]
 /// Pulse's `.mip` (or HD's `.gtf`) entry `name` as this source ships the same texture: the
 /// same directory and stem with the platform's own extension, `.gxt` on the
 /// Vita and `.gnf` on the PS4. `None` on a platform whose textures keep the
@@ -465,6 +475,7 @@ pub(crate) fn platform_sibling(archives: &oag_assets::Archives, name: &str) -> O
     Some(format!("{stem}.{ext}"))
 }
 
+#[cfg(feature = "view")]
 /// One PS4 `.gnf` out of the archive set, base level - [`decode_gxt`]'s
 /// Omega counterpart.
 pub(crate) fn decode_gnf(
@@ -483,6 +494,7 @@ pub(crate) fn decode_gnf(
     })
 }
 
+#[cfg(feature = "view")]
 /// One Vita `.gxt` out of the archive set, as pixels the exhaust pipeline can
 /// bind - 2048's counterpart of [`decode_gtf`].
 pub(crate) fn decode_gxt(
@@ -507,6 +519,7 @@ pub(crate) fn decode_gxt(
     })
 }
 
+#[cfg(feature = "view")]
 /// One `.gtf` out of the archive set, as pixels the exhaust pipeline can bind.
 ///
 /// The `.gtf` half of [`authored_ribbon`], lifted out when the ribbon needed a
@@ -534,6 +547,7 @@ pub(crate) fn decode_gtf(
     })
 }
 
+#[cfg(feature = "view")]
 /// The flare's sprite texture, from wherever this title keeps it - or nothing
 /// at all, for a title that authors the flare as a model instead.
 ///
@@ -602,6 +616,7 @@ pub(super) fn flare_texture(
     }
 }
 
+#[cfg(feature = "view")]
 pub(super) fn exhaust_texture(
     archives: &mut oag_assets::Archives,
     name: &str,
@@ -611,6 +626,7 @@ pub(super) fn exhaust_texture(
     decode_either(name, &blob)
 }
 
+#[cfg(feature = "view")]
 /// Decodes whichever of the two texture formats the blob is, with the pixels a
 /// [`FlareTexture`] wants.
 ///
@@ -655,6 +671,7 @@ fn decode_either(name: &str, blob: &[u8]) -> std::result::Result<(FlareTexture, 
     }
 }
 
+#[cfg(feature = "view")]
 /// Why a class produced nothing: the file authors none, or nobody has recovered
 /// its id for this format version.
 ///
@@ -681,6 +698,7 @@ pub(super) fn unrecovered_or_absent(
     }
 }
 
+#[cfg(feature = "view")]
 #[must_use]
 pub(super) fn untextured_note(model: &Model) -> Option<String> {
     let slots = model.textures.len();
@@ -756,6 +774,7 @@ pub(super) fn zone_circuit_miss(
     }
 }
 
+#[cfg(feature = "view")]
 /// The report line a Zone race owes about its handling, or `None` for any other
 /// mode.
 ///

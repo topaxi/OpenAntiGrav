@@ -38,10 +38,12 @@ pub enum Stage {
     CraftsBuilt = 4,
 }
 
+#[cfg(feature = "view")]
 /// How far a race load has got, shared between the load thread and the screen.
 #[derive(Debug, Clone, Default)]
 pub struct LoadStages(Arc<AtomicU8>);
 
+#[cfg(feature = "view")]
 impl LoadStages {
     /// The highest [`Stage`] reached, as its number, or `0` before the first.
     #[must_use]
@@ -63,10 +65,12 @@ thread_local! {
     static ACTIVE: RefCell<Option<(Arc<AtomicU8>, Instant)>> = const { RefCell::new(None) };
 }
 
+#[cfg(feature = "view")]
 /// Closes the scope [`LoadStages::open`] opened.
 #[derive(Debug)]
 pub struct StageScope;
 
+#[cfg(feature = "view")]
 impl Drop for StageScope {
     fn drop(&mut self) {
         ACTIVE.with(|active| *active.borrow_mut() = None);

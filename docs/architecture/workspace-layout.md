@@ -226,6 +226,65 @@ Rule 1 is the one that will be under pressure. It is easier to reach for a
 texture handle inside physics than to plumb it out. Resisting that is what keeps
 headless verification possible.
 
+## The lean race (2026-10-14)
+
+`oag-raceplay` has a default-on **`view`** feature. Off, the crate is the
+simulation half of a race and nothing else: `load` reads what the simulation
+reads, `Race::start` builds the `RaceSim` and a `RaceView` of five fields (the
+results board, the slot teams, the seat, the wreck's end tick, the run
+statistics), and every tick runs the way `Race::tick_sim_only` runs one
+(`Race::draws()` is `cfg!(feature = "view") && !quiet`). `oag-render`, `oag-fx`,
+`oag-gpu`, `oag-hud`, `oag-input`, `oag-livery`, `oag-mesh`, `oag-post`,
+`oag-present`, `oag-sound`, `oag-ui`, `oag-ui-screens`, `wgpu`, `winit` and
+`bytemuck` are optional and come only with `view`.
+
+The workspace dependency on `oag-raceplay` is `default-features = false`;
+`oag-game` asks for `view`. `oag-net` takes it without, and has a **`client`**
+feature (`oag-raceplay/view`) that gates `oag_net::client` and the overlay's
+`stats::Collector`: the game turns it on, `oag-server` builds without it, and
+`oag-net`'s own tests turn it on through a dev-dependency on the crate itself.
+So `cargo build -p oag-net --bin oag-server` links no renderer, window, audio or
+UI crate. **Rule 6** of `just check-deps` holds that by running
+`cargo tree -p oag-net -e normal` (the package alone: `cargo metadata` unifies
+the workspace's features, and `oag-game` turns `view` back on, so a
+workspace-wide check cannot see this build), and `just lint` ends with a
+`cargo clippy -p oag-net --lib --bins`, the only gate step that compiles
+`oag-raceplay` without `view`.
+
+**How the split was made.** One tick body, not two: view-only modules are gated at
+their `mod` line, the view half of a mixed function at the statement
+(`#[cfg(feature = "view")] if self.draws() { .. }`), and `Setup`'s view fields
+and the whole of `Loaded` beyond the setup by field. Where the simulation read a
+type that lived on the render side, the type moved down, with no re-export:
+
+| Moved | From | To | Why the simulation reads it |
+| --- | --- | --- | --- |
+| `Cue`, `CueEvent`, `COLLISION_COOLDOWN` | `oag_sound::sfx`, `oag_fx::sparks` | `oag_gameplay::cue` | `RaceSim::cues` and the contact cue's re-arm; what a cue plays as stays in `oag_sound::sfx::CueTables` |
+| `ChaseParams`, `Target`, `anchor`, `look_at_point` and the rig's other rigid points | `oag_render::camera::chase` | `oag_race::chase_rig` | the lock-on projects through the settled chase rig (`RaceSim::lock_rig`) |
+| `teams_for_slots`, `ROSTER_SALT` | `oag_livery::draw` | `oag_race::roster` | each slot's handling follows its team |
+| `geometry_is_external` | `oag_mesh::mesh` | `oag_vex::vex` | decides `vex_geometry`, which gates Pulse PSP's track stats and so the finished thrust |
+| the `WO Track` parse of `oag_render::track::load` | `oag_render::track` | `oag_vex::track::from_vex` | the AI line every craft flies |
+
+One value the simulation read **off the view** moved to `RaceSim`:
+`laid_from_rear`, which moves where a laid Mine or Bomb is dropped. `Sighting`'s lock grid is read without the HUD by
+`Sighting::without_view(platform, art)`, the same `Space::of(platform)` and
+title art `Sighting::of(hud)` reads. `Spline::tube_frame` (`oag_fx::beam`) is a
+view method and is gated rather than moved.
+
+**Measured.** A lean `oag-server` against the full game as a `--net-bot` client:
+1,042 confirmed ticks at a 100 ms `--net-shim` with 0 bad hashes (Pulse,
+circuit 01), a whole three-lap race at no shim with 6,240 hash checks, 0 bad, no
+correction and the board equal to the server's line for line, and 948 ticks of
+HD at 100 ms, 0 bad. The tick-0 fingerprint of the previous (full) server and the
+lean one agree on Pulse, HD and Omega. A 12-capture `--screenshot` set (Pulse,
+HD and Omega, one and two players, ticks 300 and 900) is byte-identical before
+and after. Release server, stripped: 14.3 MB before, 9.3 MB after (9.2 MB
+static musl); `cargo tree -p oag-net -e normal --prefix none | sort -u`: 454
+lines before, 280 after; a clean release build of the server alone (no compiler
+cache): 768 CPU-s before, 254 CPU-s after (152 s and 26 s wall at load averages
+of 90 and 25-36). The static build is `scripts/build-server-portable.sh musl`
+([networking](../networking/README.md), "Running a server on another machine").
+
 ## Gameplay state
 
 A single `World` struct of plain data, with fixed-size arrays. No ECS. See

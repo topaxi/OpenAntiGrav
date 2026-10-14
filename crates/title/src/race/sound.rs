@@ -19,7 +19,7 @@
 /// | `shieldactive` | `speech.bnk` | `speech.bnk` |
 ///
 /// So this is a five-field path table, measured per title, and not a
-/// re-derivation of anything. `oag_sound::sfx::Cue` maps a cue to a field
+/// re-derivation of anything. `oag_gameplay::cue::Cue` maps a cue to a field
 /// here; nothing else knows a filename.
 ///
 /// # A missing cue is an ordinary state

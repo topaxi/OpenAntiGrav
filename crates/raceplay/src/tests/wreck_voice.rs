@@ -4,8 +4,8 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_physics::CraftState;
-use oag_sound::sfx::Cue;
 
 /// The ticks `cont_elim` was raised on, with `down` slots set `Eliminated`
 /// from the first tick.

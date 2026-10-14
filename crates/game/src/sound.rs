@@ -67,8 +67,8 @@ impl Library for GameLibrary {
 pub fn menu_cue(
     nav: oag_ui::menu::nav::Nav,
     pad: Option<oag_ui::menu::nav::Dir>,
-) -> oag_sound::sfx::Cue {
-    use oag_sound::sfx::Cue;
+) -> oag_gameplay::cue::Cue {
+    use oag_gameplay::cue::Cue;
     use oag_ui::menu::nav::{Dir, Nav};
     match nav {
         Nav::Moved(dir) => match dir.or(pad).unwrap_or(Dir::Down) {
@@ -100,7 +100,7 @@ pub fn race_tick(audio: &mut Audio, race: &mut Race) {
 pub fn race_tick_keeping(
     audio: &mut Audio,
     race: &mut Race,
-    keep: impl Fn(&oag_sound::sfx::CueEvent) -> bool,
+    keep: impl Fn(&oag_gameplay::cue::CueEvent) -> bool,
 ) {
     let mut cues = race.drain_cues();
     cues.retain(|event| keep(event));
@@ -182,7 +182,7 @@ fn craft_positions(race: &oag_raceplay::Race) -> [Option<(Vec3, f32)>; oag_gamep
 
 #[cfg(test)]
 mod tests {
-    use oag_sound::sfx::Cue;
+    use oag_gameplay::cue::Cue;
     use oag_ui::menu::nav::{Dir, Nav};
 
     use super::menu_cue;

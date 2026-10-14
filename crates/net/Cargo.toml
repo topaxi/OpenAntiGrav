@@ -10,9 +10,9 @@ rust-version.workspace = true
 autotests = false
 
 # The headless authoritative server. A binary of this crate because everything
-# it runs is `oag_raceplay` plus this crate's protocol; it opens no window, no
-# GPU device and no audio device (it links `oag-raceplay`, which links wgpu and
-# winit, and never initialises either).
+# it runs is `oag_raceplay` plus this crate's protocol. Built with this crate's
+# default features it links `oag-raceplay` without `view`: no renderer, no
+# window, no audio crate at all (`scripts/check-dependency-rules.py` holds it).
 [[bin]]
 name = "oag-server"
 path = "src/bin/oag_server.rs"
@@ -43,7 +43,14 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"
 url = "2"
 web-transport-quinn = { version = "0.13", default-features = false, features = ["ring"] }
 
+[features]
+# The predicting client (`client`), which draws the race it predicts: the game
+# turns it on, the server leaves it off. Its tests turn it on through the
+# dev-dependency on this crate below.
+client = ["oag-raceplay/view"]
+
 [dev-dependencies]
+oag-net = { path = ".", features = ["client"] }
 oag-testdata.workspace = true
 
 [lints]

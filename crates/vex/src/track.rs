@@ -572,6 +572,38 @@ pub fn has_magic(payload: &[u8]) -> bool {
 
 /// Decodes a `WO Track` node payload.
 ///
+/// A track's spline graph out of a whole `.vex` file named `name`: its
+/// `WO Track` node, parsed, with the length check that settled the layout.
+///
+/// The race load and the viewer read a circuit's racing line through this,
+/// so a build with nothing to draw reads it the same way.
+///
+/// # Errors
+///
+/// A file that is not a `.vex`, has no `WO Track` node, or whose payload
+/// [`parse`] refuses or does not consume exactly; each message names `name`.
+pub fn from_vex(data: &[u8], name: &str) -> std::result::Result<AiTrack, String> {
+    if !vex::has_magic(data) {
+        return Err(format!("{name} is not a .vex file (no VEXX magic)"));
+    }
+    let nodes = vex::nodes(data).map_err(|e| format!("walking the node tree: {e}"))?;
+    let node = find_node(data, &nodes).ok_or_else(|| format!("{name} has no WO Track node"))?;
+    let payload = data
+        .get(node.payload())
+        .ok_or_else(|| "the WO Track payload runs past the end of the file".to_string())?;
+    let ai = parse(payload).map_err(|e| format!("{name}: {e}"))?;
+    // The check that settled the layout, kept as a runtime assertion rather
+    // than a comment: a parse that is one structure out cannot come out even.
+    if ai.encoded_len() != payload.len() {
+        return Err(format!(
+            "{name}: decoded {} bytes but the payload is {} -- the layout is wrong",
+            ai.encoded_len(),
+            payload.len()
+        ));
+    }
+    Ok(ai)
+}
+
 /// # Errors
 ///
 /// Refuses a wrong magic, a version the game's own loader would reject, any

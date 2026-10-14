@@ -185,7 +185,7 @@ impl EndRaceRuntime {
     }
 
     /// The voice cue that starts this tick, if the screen on top calls for one.
-    pub(crate) fn voice_tick(&mut self) -> Option<oag_sound::sfx::Cue> {
+    pub(crate) fn voice_tick(&mut self) -> Option<oag_gameplay::cue::Cue> {
         self.voice.tick(self.flow.which(), &self.results)
     }
 

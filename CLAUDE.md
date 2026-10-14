@@ -32,7 +32,7 @@ just test-data    # also runs #[ignore]d ground-truth tests that need data/image
 just gate-affected # `just` with every check in full but only the tests a branch can reach (scripts/affected.py) - a drive member's gate
 just test-data-affected # `just test-data` narrowed the same way; the per-test ceiling holds, the suite ceiling is the full run's
 just check-docs   # validates internal links in docs/ (scripts/check-doc-links.py)
-just check-deps   # asserts the five dependency-boundary rules below (scripts/check-dependency-rules.py)
+just check-deps   # asserts the six dependency-boundary rules below (scripts/check-dependency-rules.py)
 just check-unused-deps # no crate declares a dependency its code never uses, or a normal one only tests/examples use (`cargo shear`)
 just check-determinism # asserts no platform transcendental reaches simulation code (scripts/check-transcendentals.py)
 just check-size   # ratchet on file length (1.5k lines) and on inline #[cfg(test)] modules (500) (scripts/check-file-size.py)
@@ -298,14 +298,14 @@ Existing crates:
 | `oag-log` | `crates/log` | The binaries' log sink: the terminal as `env_logger` always built it, plus one appended, timestamped file with its own filter, pruned to seven days at startup. Plain data in; knows no game. `oag-game`, `oag-view` and `oag-trace` install it, the last two through `oag_log::tool`. |
 | `oag-mobile` | `crates/mobile` | What a phone needs around the windowed game: the Android app's files directory and event loop (`android`), the iOS container's working directory (`ios`), and `MOBILE`. A library under `oag-game`, which keeps the entry points; no gameplay crate depends on it. [ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md). |
 | `oag-mod` | `crates/mod` | Mods: a folder, `.zip` or `.oagmod` read in place (deflate, zstd or stored), the `oag-mod.toml` manifest, the search path, and the built-in `oag-extras` that adds this project's own menu rows. Knows no menu and no title. [ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md). |
-| `oag-net` | `crates/net` | Network play: the wire messages, a `Link` of two channel kinds (unreliable datagrams, one reliable stream) over WebTransport (`web-transport-quinn`, native only), the authoritative `host`, the predicting `client` (ADR-0069's shape) and the `oag-server` binary. Rule 1 forbids it to every gameplay crate. [ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md). |
+| `oag-net` | `crates/net` | Network play: the wire messages, a `Link` of two channel kinds (unreliable datagrams, one reliable stream) over WebTransport (`web-transport-quinn`, native only), the authoritative `host`, the predicting `client` (ADR-0069's shape, behind the `client` feature the game turns on) and the `oag-server` binary, which builds without it. Rule 1 forbids it to every gameplay crate. [ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md). |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
 | `oag-audio` | `crates/audio` | Mixing and playback: a hardware-free voice pool and sample loop, a `cpal` stream or none at all, and a WAV writer so a headless run is checkable. Cues are a per-tick *output* of the simulation, never `World` state. See [ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md). |
 | `oag-music` | `crates/music` | A title's soundtrack: reading it off the title's archives and decoding ATRAC3+, ATRAC9, MP3 and Wwise media to PCM. |
 | `oag-sound` | `crates/sound` | The music and effects the game plays: soundtrack selection, effect banks and cues, and HD's authored mix, over the `oag-audio` mixer. |
-| `oag-raceplay` | `crates/raceplay` | A race from load to finish line: the front-to-back tick, the scene it draws, weapon visuals, scenery effects, replay glue, and what a load reads with it (`catalogue`, `pilots`, the scoreboard table). Above `oag-render`/`oag-fx`/`oag-sound`, below `oag-game`; classified in `NOT_TITLE_PACKAGES`, nothing gameplay-side may depend on it. |
+| `oag-raceplay` | `crates/raceplay` | A race from load to finish line: the front-to-back tick, the scene it draws, weapon visuals, scenery effects, replay glue, and what a load reads with it (`catalogue`, `pilots`, the scoreboard table). Above `oag-render`/`oag-fx`/`oag-sound`, below `oag-game`; classified in `NOT_TITLE_PACKAGES`, nothing gameplay-side may depend on it. All of the drawing half is its default `view` feature; without it the crate is the simulation half alone, which is what `oag-server` links (`docs/architecture/workspace-layout.md`, "The lean race"). |
 | `oag-source` | `crates/source` | Finding a title's disc image and opening it as whichever title it is, with its DLC packs, a race's track and craft sources, and the derived-cache directories. |
 | `oag-hud` | `crates/hud` | The in-race HUD: the layout model, the `Readout` a race hands it, the `Draw` list `draw_list` builds, and the `sprite` sheet every screen packs its textures into. No GPU pass of its own: `oag_game::hud_overlay` and `oag_game::hud_countdown` hold the wgpu halves. Reads titles, so it is classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES`; nothing gameplay-side may ever depend on it. |
 | `oag-ui` | `crates/ui` | The front end: boot movies, menus, the HUD's font, and the strings a screen draws - the `Draw` vocabulary `oag_game::render` rasterises. Menus draw, so it is classified in `NOT_TITLE_PACKAGES` rather than `GAMEPLAY_CRATES`; nothing gameplay-side may ever depend on it. |
@@ -317,7 +317,7 @@ added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.
 
-Five dependency rules, all enforced by `just check-deps` (part of the `just` gate,
+Six dependency rules, all enforced by `just check-deps` (part of the `just` gate,
 `scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
 review:
 
@@ -331,6 +331,7 @@ review:
    out of `oag-mesh`. `oag-render` still reads `oag-pulse`'s presentation tables and is not listed.
 4. `oag-unity`, the generic Unity reader, depends on no other workspace crate (an allowlist, empty today). It knows no title and no game; a content-specific layer is a separate crate that depends on it, never the reverse ([ADR-0062](docs/architecture/adr/0062-unity-content-is-a-generic-reader-with-a-content-layer-on-top.md)).
 5. `oag-ballisticng`, the first content layer over `oag-unity`, reaches `oag-unity`, `oag-texture` and `oag-formats` and no other workspace crate, and no gameplay crate may depend on it or on `oag-unity` (both are in rule 1's forbidden set). How a foreign track is mapped into this engine is the consumer's choice, not the layer's reading.
+6. `oag-server` (`oag-net` built with its own default features) links no renderer, window, audio or UI crate: `cargo tree -p oag-net -e normal` reaches none of `wgpu`, `winit`, `cpal`, `oag-render`, `oag-fx`, `oag-audio`, `oag-sound`, `oag-mesh`, `oag-ui`, `oag-hud`, `oag-input` and the rest of the drawing crates. `oag-raceplay`'s drawing half is its `view` feature and `oag-net`'s client its `client` feature; checked per package, because the workspace's unified features (`oag-game` turns `view` on) hide this build.
 
 Two size rules, both enforced by `just check-size` (`scripts/check-file-size.py`) as
 ratchets over a frozen baseline. `BASELINE` holds the files still over rule 1 - 4 as of

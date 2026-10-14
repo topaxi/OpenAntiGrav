@@ -16,6 +16,7 @@
 pub mod collision;
 pub mod controls;
 pub mod craft;
+pub mod cue;
 pub mod grid_walk;
 pub mod handling;
 pub mod hash;

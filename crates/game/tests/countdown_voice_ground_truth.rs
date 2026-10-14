@@ -29,9 +29,9 @@
 use std::path::{Path, PathBuf};
 
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
 use oag_sound::Volume;
-use oag_sound::sfx::Cue;
 
 /// The tick `ready` is raised on, in `World::tick` terms: measured 90.0 entries
 /// after the first `InGame` craft update on the docs' axis, one behind the

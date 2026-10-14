@@ -98,11 +98,11 @@ pub fn sibling_name_cooked(vex_name: &str) -> Option<String> {
 /// - a name with no `.vex` extension to rewrite;
 /// - a sibling the archive does not have.
 ///
-/// A caller that wants the distinction has [`super::geometry_is_external`] for the
+/// A caller that wants the distinction has [`oag_vex::vex::geometry_is_external`] for the
 /// first of them.
 #[must_use]
 pub fn sibling_geometry(spec: &str, name: &str, data: &[u8]) -> Option<Vec<u8>> {
-    if !super::geometry_is_external(data) {
+    if !oag_vex::vex::geometry_is_external(data) {
         return None;
     }
     super::read_blob(spec, &sibling_name(name)?).ok()
@@ -130,7 +130,7 @@ pub fn sibling_geometry(spec: &str, name: &str, data: &[u8]) -> Option<Vec<u8>> 
 ///
 /// As [`build_scene`].
 pub fn scene_from(spec: &str, name: &str, data: &[u8]) -> Result<Option<(Model, Report)>> {
-    if !super::geometry_is_external(data) {
+    if !oag_vex::vex::geometry_is_external(data) {
         return Ok(None);
     }
     let Some(sibling) = sibling_name(name) else {

@@ -2,6 +2,7 @@
 //! (see [ADR-0027](../../../../../docs/architecture/adr/0027-three-mix-buses.md)
 //! for why four and which two are ours).
 
+use crate::sfx::CueTables;
 use oag_audio::mixer::MUSIC_MASTER_TRIM;
 
 use super::*;
@@ -57,7 +58,7 @@ fn every_settings_volume_reaches_the_bus_it_names() {
 fn a_cue_is_a_voice_line_exactly_when_its_bank_is_the_speech_one() {
     // `Cue::bus` must stay derived from `Cue::bank`: a second hand-written list is
     // what ADR-0027 avoids.
-    for cue in sfx::Cue::ALL {
+    for cue in oag_gameplay::cue::Cue::ALL {
         let expected = if cue.bank() == sfx::BankName::Speech {
             Bus::Speech
         } else {
@@ -67,7 +68,9 @@ fn a_cue_is_a_voice_line_exactly_when_its_bank_is_the_speech_one() {
     }
     // The speech bank is not empty, so the loop above is not vacuous.
     assert!(
-        sfx::Cue::ALL.iter().any(|cue| cue.bus() == Bus::Speech),
+        oag_gameplay::cue::Cue::ALL
+            .iter()
+            .any(|cue| cue.bus() == Bus::Speech),
         "no cue reaches the speech bus at all"
     );
 }

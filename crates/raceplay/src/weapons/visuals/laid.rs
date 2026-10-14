@@ -37,17 +37,6 @@ pub(crate) const PULSE_MINE_SCALE: f32 = 0.6;
 /// the positive one misses by 0.4 to 1.1.
 pub(crate) const PULSE_MINE_SPIN_RATE: f32 = 4.0;
 
-/// How far behind the body a title that lays from the craft's rear anchor
-/// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
-/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
-/// Trial, Feisar, Vineta K and a second circuit) its translation sat
-/// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
-/// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
-/// laid Mine's and the Bomb's first position equalled the anchor. Pulse's
-/// anchor is the body itself. **One craft measured** (Feisar): the other
-/// teams' hulls are assumed alike, chosen, not measured.
-pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
-
 /// One laid charge's model matrix. `pulse` selects Pulse's own measured poses
 /// over the frozen craft pose - see this module's doc comment.
 pub(super) fn matrix(

@@ -105,13 +105,16 @@ impl Race {
     }
 
     /// Whether this tick draws and sounds, as opposed to only simulating.
-    /// False only inside [`Self::tick_sim_only`].
+    /// False inside [`Self::tick_sim_only`], and always in a build without the
+    /// `view` feature, where every tick runs as that one does.
     pub(super) fn draws(&self) -> bool {
-        !self.quiet
+        cfg!(feature = "view") && !self.quiet
     }
 
     /// A shell bulge on `slot`, if this tick is drawn. View-only.
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_hit(&mut self, slot: usize) {
+        #[cfg(feature = "view")]
         if self.draws()
             && let Some(shell) = self.view.shield.get_mut(slot)
         {
@@ -120,14 +123,18 @@ impl Race {
     }
 
     /// `slot`'s shield coming up, if this tick is drawn. View-only.
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_activate(&mut self, slot: usize) {
+        #[cfg(feature = "view")]
         if self.draws() {
             self.view.shield[slot].activate();
         }
     }
 
     /// `slot`'s boost plume lighting, if this tick is drawn. View-only.
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn boost_plume(&mut self, slot: usize) {
+        #[cfg(feature = "view")]
         if self.draws() {
             self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
         }

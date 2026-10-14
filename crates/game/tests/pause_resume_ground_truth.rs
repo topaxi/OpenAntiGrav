@@ -13,8 +13,8 @@
 
 use oag_game::pause::{RESUME_SECONDS, State, Table, go, step};
 use oag_gameplay::PlayerInputs;
+use oag_gameplay::cue::Cue;
 use oag_raceplay as race;
-use oag_sound::sfx::Cue;
 
 const P1: u8 = 0b01;
 const FRAME: f64 = 1.0 / 60.0;

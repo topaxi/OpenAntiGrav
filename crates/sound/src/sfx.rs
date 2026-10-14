@@ -70,6 +70,7 @@
 use oag_audio::{Bus, Play, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
+use oag_gameplay::cue::{Cue, CueEvent};
 
 use super::{Audio, TICK_HZ};
 
@@ -95,7 +96,7 @@ pub use announcer::{Announcer, ClassAnnouncer};
 pub use bank_name::BankName;
 use banks::load_named_cue;
 pub use banks::{Banks, Loaded};
-pub use cue::Cue;
+pub use cue::CueTables;
 pub use engine::Engine;
 pub use layers::{CueVoice, Where as VoicePlace, start as start_voices};
 pub use menu::MenuSfx;
@@ -834,51 +835,6 @@ pub enum Placement {
     /// `Plasma_Launch` writes the emitter's `+0x38`, so it keeps
     /// `SoundEmitter_Init`'s default, as the craft's does.
     Point,
-}
-
-/// A cue and the craft that raised it.
-///
-/// The slot is the original's own: `Sound_Play` takes an emitter first and
-/// every one of these cues passes the craft's, the part this port once threw
-/// away, so only the player was audible. [`Self::point`] is the same for
-/// [`Placement::Point`]. No `#[derive(Eq)]`: `Vec3` holds `f32`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CueEvent {
-    /// What to play.
-    pub cue: Cue,
-    /// The grid slot whose emitter plays it. Slot 0 is the player. Left at `0`
-    /// and unread for a [`Placement::Point`] cue built with [`Self::at_point`].
-    pub slot: u8,
-    /// The world position a [`Placement::Point`] cue plays at, else [`None`].
-    pub point: Option<Vec3>,
-}
-
-impl CueEvent {
-    /// A cue from `slot`.
-    #[must_use]
-    pub fn new(cue: Cue, slot: usize) -> Self {
-        Self {
-            cue,
-            slot: u8::try_from(slot).unwrap_or(u8::MAX),
-            point: None,
-        }
-    }
-
-    /// A cue at `point` rather than at a craft ([`Placement::Point`]).
-    #[must_use]
-    pub fn at_point(cue: Cue, point: Vec3) -> Self {
-        Self {
-            cue,
-            slot: 0,
-            point: Some(point),
-        }
-    }
-
-    /// Whether the player raised it.
-    #[must_use]
-    pub fn is_player(self) -> bool {
-        self.slot == 0
-    }
 }
 
 #[cfg(test)]

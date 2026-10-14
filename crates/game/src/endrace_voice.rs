@@ -9,7 +9,7 @@
 //! and outcome and which screen is on top this tick, which cue starts. The
 //! session plays it through [`oag_sound::sfx::MenuSfx`].
 
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 use oag_tables::race_campaign::Medal;
 use oag_title::{MedalScreen, ResultsLaw, TournamentPlace};
 

@@ -102,7 +102,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
 
 /// Every `ready` and `go` a race raises across its first 400 ticks, with the
 /// tick each was raised on.
-fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_sound::sfx::Cue)> {
+fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_gameplay::cue::Cue)> {
     let mut setup = setup(hulled_handling());
     setup.countdown_voice = countdown_voice;
     let mut race = without_player_rescue(Race::start(setup));
@@ -113,7 +113,7 @@ fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_sound::sfx::Cue)> {
         for event in race.drain_cues() {
             if matches!(
                 event.cue,
-                oag_sound::sfx::Cue::Ready | oag_sound::sfx::Cue::Go
+                oag_gameplay::cue::Cue::Ready | oag_gameplay::cue::Cue::Go
             ) {
                 raised.push((stepped, event.cue));
             }
@@ -127,7 +127,7 @@ fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_sound::sfx::Cue)> {
 /// the thrust gate holds, and nothing else.
 #[test]
 fn a_voiced_start_raises_ready_then_go_on_the_measured_ticks() {
-    use oag_sound::sfx::Cue;
+    use oag_gameplay::cue::Cue;
     assert_eq!(voiced_start(true), vec![(91, Cue::Ready), (271, Cue::Go)]);
     assert_eq!(
         271,

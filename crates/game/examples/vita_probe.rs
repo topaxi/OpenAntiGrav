@@ -91,7 +91,7 @@ fn main() -> anyhow::Result<()> {
                 Ok(classes) => println!("classes_of: {classes:?}"),
                 Err(e) => println!("classes_of: ERROR {e}"),
             }
-            let external = mesh::geometry_is_external(&blob);
+            let external = oag_vex::vex::geometry_is_external(&blob);
             println!("geometry_is_external: {external}");
             match mesh::build_with_textures(track, &blob, None) {
                 Ok(model) => println!(

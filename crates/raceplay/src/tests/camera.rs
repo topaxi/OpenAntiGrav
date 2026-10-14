@@ -367,12 +367,12 @@ fn the_external_blocks_carry_the_crafts_global_scale() {
         pos_length: -15.0,
         ..block
     });
-    let target = oag_render::camera::chase::Target {
+    let target = oag_race::chase_rig::Target {
         position: Vec3::ZERO,
         forward: Vec3::X,
         up: Vec3::Y,
     };
-    let distance = (oag_render::camera::chase::anchor(target, &close) - target.position).length();
+    let distance = (oag_race::chase_rig::anchor(target, &close) - target.position).length();
     assert!((distance - 11.643).abs() < 0.01, "{distance}");
 }
 

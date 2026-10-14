@@ -1269,7 +1269,7 @@ here since the Bomb's teardown is outside this page's own function set.
 
 - **2026-09-16, later still.** `PLASMAHITSHIP` wired for the craft-hit ending,
   closing the "chosen, not measured" gap the `plasma-cues` session left open
-  the same day: `oag_sound::sfx::Cue::PlasmaHitShip` fires for
+  the same day: `oag_gameplay::cue::Cue::PlasmaHitShip` fires for
   `Impact { kind: Plasma, struck: Some(_), .. }` and `PlasmaHitWall` for
   everything else, matching `Plasma_SweepCraftHit`'s own emitter-clear-then-play
   order read above. Confirmed in `weapons.bnk` (bank `#866`, hash `01bec824`)

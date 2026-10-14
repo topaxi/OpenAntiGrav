@@ -62,7 +62,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use oag_ai::{Lean, Pilot, Span};
+#[cfg(feature = "view")]
 use oag_ui::language::StringTable;
+#[cfg(feature = "view")]
 use oag_ui::menu;
 use serde::Deserialize;
 
@@ -367,6 +369,7 @@ pub fn axis_accessor(axis: &str) -> Option<fn(&Pilot) -> Span> {
         .map(|(_, accessor)| *accessor)
 }
 
+#[cfg(feature = "view")]
 /// A one-line, plain-English gloss for one axis - what it does and the range
 /// [`limit`] allows for it - and the `string_id` a translation may override it
 /// with.
@@ -438,6 +441,7 @@ fn axis_gloss(axis: &str) -> Option<(&'static str, String)> {
     Some((id, format!("{meaning}. RANGE {min} TO {max}{unit}.")))
 }
 
+#[cfg(feature = "view")]
 /// [`axis_gloss`], resolved through `strings` and read live off `model`'s own
 /// `AXIS` row - so this tracks whatever a player has AXIS on. Deliberately
 /// crate-only rather than living beside `session::pilot_editor`'s other pure
@@ -478,6 +482,7 @@ pub fn page_reserves_axis_preview(page: &menu::Page) -> bool {
         .any(|entry| entry.setting() == Some("pilot.axis"))
 }
 
+#[cfg(feature = "view")]
 #[must_use]
 pub fn axis_preview_for(model: &menu::Menu, strings: Option<&StringTable>) -> Option<String> {
     let axis = model

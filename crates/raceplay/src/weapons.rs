@@ -15,7 +15,9 @@ mod disruptor;
 mod repulser;
 mod reticle;
 mod single_instance;
+#[cfg(feature = "view")]
 mod visuals;
+#[cfg(feature = "view")]
 pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `bounced_this_tick` reaches beyond this module now: `crate::tick`'s
 // own sibling loop needs it too, for `Cue::MissileHitWall` and
@@ -23,16 +25,28 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `Race::ignite_missile_bounces` already reads for the visual. Not
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
+#[cfg(feature = "view")]
 pub(super) use visuals::bounced_this_tick;
 // The remaining four are only reached through `crate::weapons::<name>`
 // by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
-#[cfg(test)]
+#[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
     bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors, plasma_flare_scale,
 };
+
+/// How far behind the body a title that lays from the craft's rear anchor
+/// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// Trial, Feisar, Vineta K and a second circuit) its translation sat
+/// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
+/// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
+/// laid Mine's and the Bomb's first position equalled the anchor. Pulse's
+/// anchor is the body itself. **One craft measured** (Feisar): the other
+/// teams' hulls are assumed alike, chosen, not measured.
+pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
 
 /// The far plane the reticle's own projection uses.
 ///
@@ -161,11 +175,12 @@ impl Race {
                     // cue, and the one a perfect start calls. So the fired Turbo
                     // draws the pad's boost plume by the original's own path,
                     // not by a reuse of ours. See `perfect-start.md`.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Turbo,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Turbo,
                         slot,
                     ));
                     self.boost_plume(slot);
+                    #[cfg(feature = "view")]
                     self.fire_zoom_boost(slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
@@ -221,8 +236,8 @@ impl Race {
                     // `Ship_FireHeldWeapon`'s own switch plays it
                     // unconditionally on a held-id-0 press, with no test of
                     // whether the volley actually gets anywhere.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Rocket,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Rocket,
                         slot,
                     ));
                     let ship = &self.sim.world.ships[slot];
@@ -293,9 +308,9 @@ impl Race {
                     // decompiled directly to confirm this runs before the
                     // bolt's own emitter even exists, so the cue belongs at
                     // the press rather than at release. See
-                    // `oag_sound::sfx::Cue::Plasma`'s own doc comment.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::Plasma,
+                    // `oag_gameplay::cue::Cue::Plasma`'s own doc comment.
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::Plasma,
                         slot,
                     ));
                 }
@@ -345,8 +360,8 @@ impl Race {
                     }
                     // `Shuriken_Init` plays `SHURIKEN` on the firing craft's
                     // emitter before it builds the blade's own.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::ShurikenLaunch,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::ShurikenLaunch,
                         slot,
                     ));
                 }
@@ -461,8 +476,8 @@ impl Race {
                     });
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
-                            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                                oag_sound::sfx::Cue::Leach,
+                            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                                oag_gameplay::cue::Cue::Leach,
                                 slot,
                             ));
                             oag_weapons::projectile::leach_beam::Beam::locked(
@@ -472,8 +487,8 @@ impl Race {
                         // `LeachBeam_InitUnlocked` plays `LEACHFAIL` on the
                         // shooter's emitter - see `Cue::LeachFail`.
                         None => {
-                            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                                oag_sound::sfx::Cue::LeachFail,
+                            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                                oag_gameplay::cue::Cue::LeachFail,
                                 slot,
                             ));
                             oag_weapons::projectile::leach_beam::Beam::unlocked(slot as u8, &stats)
@@ -493,8 +508,8 @@ impl Race {
                     // own switch plays it unconditionally on a held-id-2
                     // press, with no test of whether a wave is already
                     // travelling.
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::QuakeLaunch,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::QuakeLaunch,
                         slot,
                     ));
                     // **The busy check - matching `Weapon_FireQuake`'s
@@ -586,6 +601,7 @@ impl Race {
             // Eliminator, which returned above: the `ABSORB` cue, then the
             // `WO_WEAPON_ABSORB` burst staggered over the hull's locators.
             // See `race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+            #[cfg(feature = "view")]
             self.play_absorb_feedback(slot, true);
         }
         // `Held::take` rather than a direct write - see its doc comment for
@@ -642,8 +658,8 @@ impl Race {
             }
             let ship = &self.sim.world.ships[slot];
             let mut point = oag_weapons::projectile::mine::drop_point(&ship.physics);
-            if self.view.laid_from_rear {
-                point -= ship.physics.body.forward() * visuals::laid::REAR_ANCHOR_BACK;
+            if self.sim.laid_from_rear {
+                point -= ship.physics.body.forward() * REAR_ANCHOR_BACK;
             }
             // A full array drops this mine and not the drop: the counter has
             // already been spent, so the cluster goes on laying the rest rather
@@ -661,8 +677,8 @@ impl Race {
             // doc comment. Both weapons share this loop because they are one
             // mechanism in this engine, but the cue is the Mine's alone.
             if weapon == oag_tables::weapons::Weapon::Mine {
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::MineLaunch,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::MineLaunch,
                     slot,
                 ));
             }
@@ -827,8 +843,8 @@ impl Race {
             ship.physics.body.up(),
             0.0,
         ) {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Cannon,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Cannon,
                 slot,
             ));
         }
@@ -930,8 +946,8 @@ impl Race {
         // covers both, matching `Missile_Init`'s own single call site. See
         // `Cue::Missile`'s own doc comment.
         if fired {
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Missile,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Missile,
                 slot,
             ));
         }
@@ -949,8 +965,8 @@ impl Race {
 /// has not read.
 pub(super) fn missile_ending_cue(
     impact: &oag_weapons::projectile::Impact,
-) -> Option<oag_sound::sfx::Cue> {
-    use oag_sound::sfx::Cue;
+) -> Option<oag_gameplay::cue::Cue> {
+    use oag_gameplay::cue::Cue;
     if impact.kind != oag_tables::weapons::Weapon::Missile {
         return None;
     }

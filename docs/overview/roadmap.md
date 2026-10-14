@@ -1655,7 +1655,7 @@ per-tick channel to record a trace on. See
 
 Every HD race put eight Assegais on the grid, and that is what an **empty
 roster** looks like rather than what a broken one does: with no team declared,
-`livery::teams_for_slots` gives every slot the player's. Two faults each
+`oag_race::roster::teams_for_slots` gives every slot the player's. Two faults each
 produced that empty list, and the second was hidden behind the first.
 
 `Title::plugin_definition` is the fix for the first and the fourth axis to move

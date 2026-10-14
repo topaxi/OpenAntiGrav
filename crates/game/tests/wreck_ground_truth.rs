@@ -121,7 +121,7 @@ fn a_zone_race_loads_the_zone_wreck_where_the_disc_has_one() {
 }
 
 /// The team `oag-game --race` flies on grid slot `slot`: the title's default
-/// team for the player, the rest by `livery::teams_for_slots`'s roster draw
+/// team for the player, the rest by `oag_race::roster::teams_for_slots`'s roster draw
 /// over the disc's own definition, off the default seed - the same inputs the
 /// game's own `--race` run below resolves.
 fn team_on_slot(slot: usize) -> String {
@@ -136,7 +136,7 @@ fn team_on_slot(slot: usize) -> String {
         .into_iter()
         .map(|team| team.id)
         .collect();
-    livery::teams_for_slots(
+    oag_race::roster::teams_for_slots(
         oag_pulse::TITLE.race.team,
         &available,
         oag_gameplay::MAX_SHIPS,

@@ -1,12 +1,15 @@
 //! The headless server needs no shared library beyond the C runtime.
 //!
-//! `oag-server` links `oag-raceplay`, which links wgpu, winit and cpal, and
-//! never initialises any of them. The linker drops what the server never calls
-//! (`--as-needed`), and wgpu and winit load their libraries at run time, so the
-//! binary asks for libc and a few runtime libraries only. That is what lets a
-//! plain Linux host with no ALSA, X11 or Vulkan run it. A change that makes the
-//! server call into one of those libraries adds a `DT_NEEDED` entry here and
-//! fails this test.
+//! Built alone (`cargo build -p oag-net --bin oag-server`), the server takes
+//! `oag-raceplay` without `view` and links no wgpu, winit or cpal at all - rule 6
+//! of `just check-deps` holds that - and `scripts/build-server-portable.sh musl`
+//! links it fully static. This test sees the binary as the test build makes it,
+//! with this crate's tests' `client` feature unified in, so `oag-raceplay`'s view
+//! *is* linked here and the linker's `--as-needed`, with wgpu and winit loading
+//! their libraries at run time, is what keeps the list to the C runtime. Either
+//! way a plain Linux host with no ALSA, X11 or Vulkan runs it, and a change that
+//! makes the server call into one of those libraries adds a `DT_NEEDED` entry
+//! and fails this test.
 //!
 //! Read straight from the ELF dynamic section rather than through `ldd`, which
 //! executes the loader and is not on every machine.

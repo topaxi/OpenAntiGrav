@@ -735,7 +735,7 @@ interpreter are the two things not tried.
 
 ### What the port does with it
 
-`oag_livery::teams_for_slots` reproduces the filter's name tests
+`oag_race::roster::teams_for_slots` reproduces the filter's name tests
 (player excluded, `Zone` excluded; `Type="Race"` is already
 `catalogue::teams`'s filter), the swap and the first-seven cut, with slot 0
 the player's. **Chosen, not measured:** the seed is the race seed through a

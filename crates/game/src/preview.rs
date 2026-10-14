@@ -434,7 +434,7 @@ pub fn model_named(
     // materials and textures in other entries of the same archive set - which
     // is why this takes `Archives` rather than a blob. `build` below is the
     // PSP/PS2 path and cannot draw one.
-    if oag_mesh::mesh::geometry_is_external(&blob) {
+    if oag_vex::vex::geometry_is_external(&blob) {
         return ps3_model(archives, entry, &blob);
     }
     let named = |model| (model, Vec::new());

@@ -19,6 +19,7 @@ impl Race {
         self.sim.scheme = scheme;
     }
 
+    #[cfg(feature = "view")]
     /// How far each airbrake flap has swung, left then right, in **radians**.
     ///
     /// Read by the renderer once a frame. Render-only state - see
@@ -43,6 +44,7 @@ impl Race {
         self.sim.scheme
     }
 
+    #[cfg(feature = "view")]
     /// Sets how strong the boost's field-of-view kick is. `[graphics]
     /// boost_fov_kick`.
     ///
@@ -59,6 +61,7 @@ impl Race {
         self.view.sight_fov = fov;
     }
 
+    #[cfg(feature = "view")]
     /// How far out the authored `LodGroup`s switch to their coarser tiers -
     /// `[render_profiles.<title>] model_detail`. Render-only, cheap and
     /// idempotent like [`Self::set_sight_fov`], so the frame loop sets it
@@ -67,6 +70,7 @@ impl Race {
         self.view.model_detail = detail;
     }
 
+    #[cfg(feature = "view")]
     /// How far out a PSP `.vex` model keeps its finer texture levels -
     /// `[render_profiles.<title>] texture_detail`. Render-only and idempotent
     /// like [`Self::set_model_detail`], so the frame loop sets it every frame
@@ -75,6 +79,7 @@ impl Race {
         self.view.texture_detail = detail;
     }
 
+    #[cfg(feature = "view")]
     /// The preset [`Self::set_texture_detail`] last set; the frame writes it
     /// into the scene uniform.
     #[must_use]
@@ -82,6 +87,7 @@ impl Race {
         self.view.texture_detail
     }
 
+    #[cfg(feature = "view")]
     /// The lock-on reticle, for whoever draws it.
     ///
     /// Render-only state - see [`RaceView::sight`] - so this returning a borrow
@@ -91,12 +97,14 @@ impl Race {
         &self.view.sight
     }
 
+    #[cfg(feature = "view")]
     /// What the reticle is doing, which is what `~ROCKLOCK` plays off.
     #[must_use]
     pub fn sight_state(&self) -> oag_race::sight::State {
         self.view.sight_state
     }
 
+    #[cfg(feature = "view")]
     pub fn set_boost_fov_kick(&mut self, kick: oag_display::display::BoostFovKick) {
         self.view.boost_fov_kick = kick;
         if kick == oag_display::display::BoostFovKick::OFF {
@@ -104,6 +112,7 @@ impl Race {
         }
     }
 
+    #[cfg(feature = "view")]
     /// What this race was actually built with, for the `BOOST FOV KICK` row's
     /// restart note - see `Self::set_boost_fov_kick`, which is called once at
     /// `Race::start` and does not track the settings file afterwards.
@@ -112,6 +121,7 @@ impl Race {
         self.view.boost_fov_kick
     }
 
+    #[cfg(feature = "view")]
     /// Chooses which of the three perspectives to render from. `[graphics]
     /// camera_view`.
     ///
@@ -138,12 +148,14 @@ impl Race {
         self.view.camera = Chase::snapped(target_of(self.ship()), &self.view.chase_params);
     }
 
+    #[cfg(feature = "view")]
     /// Which perspective this race is rendering from.
     #[must_use]
     pub fn camera_view(&self) -> oag_display::display::CameraView {
         self.view.camera_view
     }
 
+    #[cfg(feature = "view")]
     /// Whether the player's own hull should be drawn this frame.
     ///
     /// False in the cockpit view alone. Read by [`Scene::render`], which skips
@@ -169,6 +181,7 @@ impl Race {
         self.sim.respawns[0]
     }
 
+    #[cfg(feature = "view")]
     /// How many times the player's picture has jumped to a different shot: each
     /// of their respawns, and the destroy camera taking over and letting go
     /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts
@@ -495,6 +508,7 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 /// The external block `view` flies with.
 ///
 /// Shared by [`Race::set_camera_view`] and the race start, so a race that begins
