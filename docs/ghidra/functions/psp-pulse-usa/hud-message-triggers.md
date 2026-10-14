@@ -24,6 +24,9 @@ others in code that runs in a race:
 | Bit | Line | Writer | Condition |
 | --- | --- | --- | --- |
 | `0x1` | `IG_HUD_PLAP` | `Craft_UpdateLapProgress` `0x08842ff0` | The **player's** craft completes a lap, `craft+0x860 & 0x20` is clear (no wall hit since the last completed lap), and the craft has not finished (`+0x912`). |
+
+Which contacts spoil a lap (2026-10-14): the bit is armed in `FUN_088418e0`'s loop for **every** contact record with positive combined friction while no shield absorbs it ([contact-response.md](contact-response.md), reaction #2; [shield-pickup.md](shield-pickup.md)), with no inbound-speed or impulse-size test. Ours feeds `oag_raceplay`'s lap watch from `WallResponse::resolved` (any reacting contact), not `impact` (inbound edge only), so a sustained scrape counts. In a network race the watch follows `Race::player_slot` and skips reconciliation replays (chosen, not measured). Craft-to-craft contact is not read here and is not counted. Confidence 80.
+
 | `0x2` | `IG_HUD_NEWLAP_REC` | same, `0x08842f74` | Player, not finished, `Profile_IsNewLapRecord(last_lap_cs)` and `craft+0x930 == craft+0x92c` (this lap is the race's best so far). |
 | `0x4` | `IG_HUD_FIN_LAP` | same, `0x08843224` | Player, not finished, after a lap completes `craft+0xac8 == g_race_laps`: the start of the final lap. |
 | `0x8`/`0x10` | `IG_HUD_CONT_ELIM` green/red | `Ship_Damage` `0x088439ac`, at `0x08843ef8`/`0x08843ee4` | Mode `8` (Elimination) only: a craft is destroyed by a weapon (`param_3 == 2`) of a different craft; the attacker's byte `+0x48` clear gives the green line, set the red. **Not wired**: what `+0x48` means is read at confidence 60 (a guess: the AI flag), below the bar; the address is recorded for a lane that reads it. |
