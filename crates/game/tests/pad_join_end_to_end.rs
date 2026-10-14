@@ -198,6 +198,7 @@ fn a_closed_window_hands_all_its_seats_to_the_ai_and_the_pads_cannot_take_them_b
     deal_windows(
         &mut race,
         &[WindowSeats { count: 1, cut }, WindowSeats { count: 2, cut }],
+        &[],
     );
     assert_eq!(
         race.windows()[1].seats,
@@ -397,7 +398,7 @@ fn a_layout_chosen_on_the_screen_deals_the_seats_the_command_line_would() {
         &[0, 1, 2, 3],
         oag_render::viewport::Cut::Horizontal,
     );
-    split_screen::deal_windows(&mut race, &layout);
+    split_screen::deal_windows(&mut race, &layout, &[]);
     let seats: Vec<Vec<usize>> = race
         .windows()
         .iter()

@@ -56,6 +56,8 @@ mod prepare;
 mod join_stage;
 #[path = "main/window_layout_stage.rs"]
 mod window_layout_stage;
+#[path = "main/seat_assign_stage.rs"]
+mod seat_assign_stage;
 #[path = "main/pure_chain_stage.rs"]
 mod pure_chain_stage;
 #[path = "main/race_build.rs"]

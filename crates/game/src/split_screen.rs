@@ -270,36 +270,125 @@ pub fn apply_windows(race: &mut Race, layout: &[WindowSeats]) -> usize {
         .first()
         .map_or_else(Default::default, |window| window.cut);
     let count = apply(race, total, cut);
-    deal_windows(race, layout);
+    deal_windows(race, layout, &[]);
     count
 }
 
-/// Deals the views a race already has ([`apply`]) across the windows of `layout`, in slot order,
-/// window 1 taking slots from 0: the presentation alone, which a race that was seated first (the
-/// join screen's, a restart's kept seats) takes afterwards. A race of one view stays ordinary.
-pub fn deal_windows(race: &mut Race, layout: &[WindowSeats]) {
+/// The slots each window of `layout` shows, in view order. `order` is who sits in each pane,
+/// the panes counted across the windows from 0 (the seat assignment screen's answer,
+/// [`oag_ui_screens::seat_assign::SeatAssign::pane_people`]); an `order` that is not every
+/// slot below the layout's total once is no assignment, and the windows take slots in order,
+/// window 1 from 0. **Chosen, not measured.**
+#[must_use]
+pub fn window_slots(layout: &[WindowSeats], order: &[usize]) -> Vec<Vec<usize>> {
+    let total: usize = layout.iter().map(|window| window.count).sum();
+    let mut seen = vec![false; total];
+    let assigned = order.len() == total
+        && order
+            .iter()
+            .all(|&slot| slot < total && !std::mem::replace(&mut seen[slot], true));
+    let mut next = 0;
+    layout
+        .iter()
+        .map(|window| {
+            let panes = next..next + window.count;
+            next += window.count;
+            if assigned {
+                order[panes].to_vec()
+            } else {
+                panes.collect()
+            }
+        })
+        .collect()
+}
+
+/// What the profile calls a seated device, so the seat assignment can be put back by device
+/// after a restart (a `GamepadId` is per run): `keyboard` for the keyboard, `keyboard 2` for the
+/// second one the platform told apart, a pad's name, and `name 2` for a second pad of that
+/// name. `devices` is every seated device's name in seat order and `seat` the one to name;
+/// pads the backend gave no name are `gamepad`. **Chosen, not measured.**
+#[must_use]
+pub fn device_key(devices: &[DeviceName], seat: usize) -> String {
+    let own = &devices[seat];
+    let (name, nth) = match own {
+        DeviceName::Keyboard(0) => return "keyboard".to_string(),
+        DeviceName::Keyboard(index) => return format!("keyboard {}", index + 1),
+        DeviceName::Pad(name) => (
+            name.as_deref().unwrap_or("gamepad").to_lowercase(),
+            devices[..seat].iter().filter(|d| *d == own).count(),
+        ),
+    };
+    if nth == 0 {
+        name
+    } else {
+        format!("{name} {}", nth + 1)
+    }
+}
+
+/// A seated device as far as [`device_key`] tells it apart.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DeviceName {
+    /// A keyboard: 0 is the keyboard (and the anonymous one), more are the further ones the
+    /// platform told apart.
+    Keyboard(usize),
+    /// A pad, by the name the backend gave it.
+    Pad(Option<String>),
+}
+
+/// The assignment to open the seat assignment screen with: who sits in each pane (a person per
+/// pane), from `saved`, the device key last remembered in each pane, for the people `keys`
+/// names (a key per person, in join order). A person whose device sat in a pane takes it
+/// again; the people and panes left over are matched in order, so a device that is gone, or a
+/// new one, never leaves a pane empty or doubled. **Chosen, not measured.**
+#[must_use]
+pub fn remembered_panes(keys: &[String], saved: &[String]) -> Vec<usize> {
+    let mut pane_people: Vec<Option<usize>> = vec![None; keys.len()];
+    let mut placed = vec![false; keys.len()];
+    for (pane, key) in saved.iter().take(keys.len()).enumerate() {
+        if let Some(person) = keys.iter().position(|k| k == key)
+            && !placed[person]
+        {
+            pane_people[pane] = Some(person);
+            placed[person] = true;
+        }
+    }
+    let mut left = (0..keys.len()).filter(|person| !placed[*person]);
+    pane_people
+        .into_iter()
+        .map(|person| person.or_else(|| left.next()).unwrap_or_default())
+        .collect()
+}
+
+/// Deals the views a race already has ([`apply`]) across the windows of `layout`, window 1
+/// taking the first panes: the presentation alone, which a race that was seated first (the
+/// join screen's, a restart's kept seats) takes afterwards. `order` says who sits in each pane
+/// ([`window_slots`]); empty deals the slots in order. A race of one view stays ordinary.
+pub fn deal_windows(race: &mut Race, layout: &[WindowSeats], order: &[usize]) {
     if race.viewport_count() <= 1 {
         return;
     }
-    let mut next = 0;
+    let slots = window_slots(layout, order);
     let views = layout
         .iter()
-        .map(|window| {
-            let seats = (next..next + window.count).collect();
-            next += window.count;
-            oag_raceplay::WindowViews {
-                seats,
-                cut: window.cut,
-            }
+        .zip(&slots)
+        .map(|(window, seats)| oag_raceplay::WindowViews {
+            seats: seats.clone(),
+            cut: window.cut,
         })
         .collect();
     race.set_windows(views);
     log::info!(
         "multi-window: {} window(s) holding {}",
         layout.len(),
-        layout
+        slots
             .iter()
-            .map(|window| window.count.to_string())
+            .map(|seats| {
+                seats
+                    .iter()
+                    .map(|slot| format!("slot {slot}"))
+                    .collect::<Vec<_>>()
+                    .join(" + ")
+            })
             .collect::<Vec<_>>()
             .join(", ")
     );

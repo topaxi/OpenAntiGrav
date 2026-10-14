@@ -255,6 +255,11 @@ impl Session {
             self.handle_campaign(oag_ui_screens::campaign::Event::Back);
             return;
         }
+        // The seat assignment screen, which sits after the layout screen: escape is back.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.assign.is_some()) {
+            self.handle_seat_assign(oag_ui_screens::seat_assign::Event::Back);
+            return;
+        }
         // The window layout screen, which sits after the join screen: escape is back.
         if matches!(&self.stage, Stage::Menu(stage) if stage.layout.is_some()) {
             self.escape_window_layout();

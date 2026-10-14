@@ -7,6 +7,7 @@ fn labels() -> Labels {
         hint: "MOVE".into(),
         player: "PLAYER".into(),
         window: "WINDOW".into(),
+        view: "VIEW".into(),
         auto: "AUTO".into(),
         start: "START".into(),
         back: "BACK".into(),
@@ -162,11 +163,11 @@ fn the_rows_are_the_people_then_auto_start_and_back() {
 #[test]
 fn a_row_says_the_window_and_the_pane_in_it() {
     let mut screen = three();
-    assert_eq!(screen.place(0), "WINDOW 1 / 1");
-    assert_eq!(screen.place(1), "WINDOW 1 / 2");
+    assert_eq!(screen.place(0), "WINDOW 1 VIEW 1");
+    assert_eq!(screen.place(1), "WINDOW 1 VIEW 2");
     assert_eq!(screen.place(2), "WINDOW 2");
     screen.press(2, press(Button::Left));
-    assert_eq!(screen.place(2), "WINDOW 1 / 2");
+    assert_eq!(screen.place(2), "WINDOW 1 VIEW 2");
     assert_eq!(screen.place(1), "WINDOW 2");
 }
 

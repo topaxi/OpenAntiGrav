@@ -128,6 +128,10 @@ pub(crate) struct MenuStage {
     /// while it is open. Takes the tick whole like the join screen. See
     /// `crate::window_layout_stage`.
     pub(crate) layout: Option<crate::window_layout_stage::WindowLayoutStage>,
+    /// The seat assignment screen, when open: it comes after the layout screen, which it holds
+    /// while it is open. Takes the tick whole like the join screen. See
+    /// `crate::seat_assign_stage`.
+    pub(crate) assign: Option<crate::seat_assign_stage::SeatAssignStage>,
 }
 
 /// A page change part-way through.
@@ -570,6 +574,17 @@ impl MenuStage {
         }
         if self.layout.is_some() {
             return self.render_window_layout(
+                gpu,
+                encoder,
+                view,
+                viewport,
+                shown,
+                frozen_race,
+                ticker_tips,
+            );
+        }
+        if self.assign.is_some() {
+            return self.render_seat_assign(
                 gpu,
                 encoder,
                 view,

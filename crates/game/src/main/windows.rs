@@ -178,15 +178,28 @@ pub(crate) fn shared_allocation(
         .fold(own, |all, wanted| (all.0.max(wanted.0), all.1.max(wanted.1)))
 }
 
-/// What a window holding `count` seats from slot `first` is called: the join screen's own word
-/// for a person and the seats' numbers, `PLAYER 3` for one and `PLAYER 3 - 4` for several. A
-/// window with nobody to show is the word alone. Its title is the app's name and this, and a
-/// holding frame draws it.
-pub(crate) fn label(word: &str, first: usize, count: usize) -> String {
-    match count {
-        0 => word.to_string(),
+/// What a window holding the seats `slots` (from 0) is called: the join screen's own word for a
+/// person and the seats' numbers, `PLAYER 3` for one, `PLAYER 3 - 4` for a run of several and
+/// `PLAYER 1, 3` for several that are not a run (the seat assignment put somebody else between
+/// them). A window with nobody to show is the word alone. Its title is the app's name and this,
+/// and a holding frame draws it.
+pub(crate) fn label(word: &str, slots: &[usize]) -> String {
+    let (Some(first), Some(last)) = (slots.first(), slots.last()) else {
+        return word.to_string();
+    };
+    match slots.len() {
         1 => format!("{word} {}", first + 1),
-        _ => format!("{word} {} - {}", first + 1, first + count),
+        count if *last == first + count - 1 && slots.windows(2).all(|pair| pair[1] == pair[0] + 1) => {
+            format!("{word} {} - {}", first + 1, last + 1)
+        }
+        _ => format!(
+            "{word} {}",
+            slots
+                .iter()
+                .map(|slot| (slot + 1).to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
     }
 }
 

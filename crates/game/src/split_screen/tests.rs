@@ -262,3 +262,95 @@ fn the_preview_cuts_seats_as_a_window_does() {
         "one above the other"
     );
 }
+
+fn slots(layout: &[WindowSeats], order: &[usize]) -> Vec<Vec<usize>> {
+    window_slots(layout, order)
+}
+
+/// Player 3 can sit in window 1: the windows take the slots the assignment gives their panes,
+/// and the grid order (the slots) is not touched.
+#[test]
+fn an_assignment_puts_a_person_in_the_window_they_chose() {
+    let cut = oag_render::viewport::Cut::Horizontal;
+    let layout = deal(3, 2, cut);
+    assert_eq!(
+        slots(&layout, &[]),
+        [vec![0, 1], vec![2]],
+        "no assignment: in order"
+    );
+    assert_eq!(slots(&layout, &[0, 2, 1]), [vec![0, 2], vec![1]]);
+    assert_eq!(slots(&layout, &[2, 0, 1]), [vec![2, 0], vec![1]]);
+}
+
+/// An order that is not every slot once is no assignment: the windows deal in order rather
+/// than seat a slot twice or not at all.
+#[test]
+fn an_order_that_is_not_a_permutation_is_ignored() {
+    let layout = deal(3, 2, oag_render::viewport::Cut::Horizontal);
+    for bad in [
+        &[0, 0, 1][..],
+        &[0, 1][..],
+        &[0, 1, 3][..],
+        &[0, 1, 2, 3][..],
+    ] {
+        assert_eq!(slots(&layout, bad), [vec![0, 1], vec![2]], "{bad:?}");
+    }
+}
+
+fn keys(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| (*name).to_string()).collect()
+}
+
+/// A device sits where it sat; the rest fill the panes left, in join order.
+#[test]
+fn the_remembered_panes_put_each_device_back_where_it_sat() {
+    let now = keys(&["keyboard", "pad", "pad 2"]);
+    assert_eq!(
+        remembered_panes(&now, &keys(&["pad 2", "keyboard", "pad"])),
+        [2, 0, 1]
+    );
+    assert_eq!(
+        remembered_panes(&now, &[]),
+        [0, 1, 2],
+        "nothing remembered: join order"
+    );
+    // `pad 2` was unplugged and `other` is new: `keyboard` keeps pane 1, the rest fill in order.
+    assert_eq!(
+        remembered_panes(
+            &keys(&["keyboard", "pad", "other"]),
+            &keys(&["pad 2", "keyboard", "pad"])
+        ),
+        [2, 0, 1]
+    );
+    for saved in [
+        keys(&["x", "y", "z", "w"]),
+        keys(&["keyboard", "keyboard", "keyboard"]),
+    ] {
+        let mut order = remembered_panes(&now, &saved);
+        order.sort_unstable();
+        assert_eq!(
+            order,
+            [0, 1, 2],
+            "{saved:?}: a permutation whatever was remembered"
+        );
+    }
+}
+
+#[test]
+fn devices_are_told_apart_by_kind_name_and_number_among_their_name() {
+    use DeviceName::{Keyboard, Pad};
+    let devices = [
+        Keyboard(0),
+        Pad(Some("Xbox".into())),
+        Pad(Some("Xbox".into())),
+        Pad(None),
+        Keyboard(1),
+    ];
+    let named: Vec<String> = (0..devices.len())
+        .map(|seat| device_key(&devices, seat))
+        .collect();
+    assert_eq!(
+        named,
+        ["keyboard", "xbox", "xbox 2", "gamepad", "keyboard 2"]
+    );
+}

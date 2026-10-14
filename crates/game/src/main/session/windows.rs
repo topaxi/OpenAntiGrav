@@ -222,11 +222,10 @@ impl Session {
     pub(super) fn window_title(&self, window: usize) -> String {
         let table = strings::project_table(self.settings.language.as_deref());
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
-        let (first, held) = self.planned_seats(window);
         format!(
             "{} - {}",
             crate::hints::title(&table),
-            windows::label(word, first, held)
+            windows::label(word, &self.planned_seats(window))
         )
     }
 
@@ -238,19 +237,28 @@ impl Session {
         (1 + self.screens.len()).max(usize::from(self.windows_wanted))
     }
 
-    /// The seats window `window` (0 is window 1) is planned to hold before a race has dealt
-    /// them: the first slot and how many, from the layout the command line asked for (one
-    /// person per window when it spelled none). What a holding frame and a window's title say.
-    pub(crate) fn planned_seats(&self, window: usize) -> (usize, usize) {
-        let counts = |index: usize| self.window_layout.get(index).map_or(1, |seats| seats.count);
-        ((0..window).map(counts).sum(), counts(window))
+    /// The slots window `window` (0 is window 1) is planned to hold before a race has dealt
+    /// them, in pane order: the counts of the layout the command line or the layout screen asked
+    /// for (one person per window when it spelled none), the slots the seat assignment gave
+    /// their panes ([`oag_game::split_screen::window_slots`]). What a holding frame and a
+    /// window's title say.
+    pub(crate) fn planned_seats(&self, window: usize) -> Vec<usize> {
+        let windows = self.window_layout.len().max(window + 1);
+        let layout: Vec<oag_game::split_screen::WindowSeats> = (0..windows)
+            .map(|index| oag_game::split_screen::WindowSeats {
+                count: self.window_layout.get(index).map_or(1, |seats| seats.count),
+                cut: oag_render::viewport::Cut::default(),
+            })
+            .collect();
+        oag_game::split_screen::window_slots(&layout, &self.pane_people)
+            .swap_remove(window)
     }
 
     /// How many people the open windows are planned to seat: the layout's counts over window 1
     /// and the further windows still open.
     fn planned_people(&self) -> usize {
         (0..=self.screens.len())
-            .map(|window| self.planned_seats(window).1)
+            .map(|window| self.planned_seats(window).len())
             .sum()
     }
 
@@ -415,7 +423,10 @@ impl Session {
         // the join screen, the layout, the RACE page and the seats' Ship Select all read a seat's
         // device (`Controls::lobby_key`). Never in a race, which routes them by seat.
         let joining = matches!(&self.stage, Stage::Menu(stage)
-            if stage.join.is_some() || stage.layout.is_some() || self.multiplayer);
+            if stage.join.is_some()
+                || stage.layout.is_some()
+                || stage.assign.is_some()
+                || self.multiplayer);
         if !joining && !self.keys_by_window() && !self.controls.per_device_keys() {
             return;
         }
@@ -739,7 +750,7 @@ impl Session {
     ) {
         let table = strings::project_table(self.settings.language.as_deref());
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
-        let (first, held) = self.planned_seats(window);
+        let seats = self.planned_seats(window);
         let surface = screen.output.size();
         let space = perf::grid(surface);
         self.overlay.set_space(space);
@@ -750,7 +761,7 @@ impl Session {
             color: HOLD_TEXT,
             border: None,
             align: Align::Centre,
-            text: windows::label(word, first, held),
+            text: windows::label(word, &seats),
             wrap_width: None,
         }];
         self.overlay.render(

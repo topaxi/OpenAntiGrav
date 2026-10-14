@@ -76,10 +76,12 @@ fn the_windows_share_the_largest_allocation_any_of_them_wants() {
 /// just the word for a window nobody sits at yet.
 #[test]
 fn a_window_is_named_for_its_seats() {
-    assert_eq!(label("PLAYER", 1, 1), "PLAYER 2");
-    assert_eq!(label("PLAYER", 4, 2), "PLAYER 5 - 6");
-    assert_eq!(label("PLAYER", 0, 4), "PLAYER 1 - 4");
-    assert_eq!(label("PLAYER", 6, 0), "PLAYER");
+    assert_eq!(label("PLAYER", &[1]), "PLAYER 2");
+    assert_eq!(label("PLAYER", &[4, 5]), "PLAYER 5 - 6");
+    assert_eq!(label("PLAYER", &[0, 1, 2, 3]), "PLAYER 1 - 4");
+    assert_eq!(label("PLAYER", &[]), "PLAYER");
+    assert_eq!(label("PLAYER", &[0, 2]), "PLAYER 1, 3", "not a run: somebody sits between");
+    assert_eq!(label("PLAYER", &[2, 0]), "PLAYER 3, 1", "in pane order");
 }
 
 /// Only windows that hold a seat have a first seat to presume a person at.

@@ -200,6 +200,7 @@ impl Session {
                 // (`session::window_layout`); elsewhere the flow goes straight on.
                 if let Some(open) = self.open_window_layout(open) {
                     self.split_cut = self.remembered_cut();
+                    self.pane_people.clear();
                     self.continue_multiplayer(open.lobby().clone());
                 }
             }

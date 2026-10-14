@@ -120,7 +120,12 @@ impl Session {
         #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         self.apply_window_layout(open.screen());
         self.play_navs(Some(Nav::Accept));
-        self.continue_multiplayer(open.join().lobby().clone());
+        // The seat assignment screen comes next when the layout has windows to choose between
+        // (`session::seat_assign`); with one window the flow goes straight on.
+        if let Some(open) = self.open_seat_assign(open) {
+            self.pane_people.clear();
+            self.continue_multiplayer(open.join().lobby().clone());
+        }
     }
 }
 

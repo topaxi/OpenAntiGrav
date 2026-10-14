@@ -43,6 +43,8 @@ pub struct Labels {
     pub player: String,
     /// "WINDOW", before a window's number.
     pub window: String,
+    /// "VIEW", before a pane's number inside a window that holds several.
+    pub view: String,
     /// The row that puts everybody back in join order.
     pub auto: String,
     /// The row that goes on to the race settings.
@@ -64,6 +66,7 @@ impl Labels {
             ),
             player: say("OAG_JOIN_PLAYER", "PLAYER"),
             window: say("OAG_WINDOW_LAYOUT_WINDOW", "WINDOW"),
+            view: say("OAG_SEAT_ASSIGN_VIEW", "VIEW"),
             auto: say("OAG_SEAT_ASSIGN_AUTO", "AUTO"),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
@@ -398,7 +401,13 @@ impl SeatAssign {
         let (window, inside) = self.window_of(self.pane_of[person]);
         let seats = self.windows[window].seats;
         if seats > 1 {
-            format!("{} {} / {}", self.labels.window, window + 1, inside + 1)
+            format!(
+                "{} {} {} {}",
+                self.labels.window,
+                window + 1,
+                self.labels.view,
+                inside + 1
+            )
         } else {
             format!("{} {}", self.labels.window, window + 1)
         }

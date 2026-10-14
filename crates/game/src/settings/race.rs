@@ -92,6 +92,12 @@ pub struct Race {
     /// gives it, window 2 first. A name this machine no longer has is its first monitor.
     #[serde(default)]
     pub window_monitors: Vec<String>,
+    /// Who sat in each pane of [`Self::window_seats`] the last time the seat assignment screen
+    /// went on, one device key per pane in pane order (`oag_game::split_screen::device_key`:
+    /// `keyboard`, `keyboard 2`, a pad's name and its number among pads of that name). The next
+    /// screen opens with each seated device back in its pane. **Chosen, not measured.**
+    #[serde(default)]
+    pub window_panes: Vec<String>,
 }
 
 /// Time trial: the mode the RACE page opens on, and the one the reference
@@ -125,6 +131,7 @@ impl Default for Race {
             weapons: String::new(),
             window_seats: String::new(),
             window_monitors: Vec::new(),
+            window_panes: Vec::new(),
         }
     }
 }
