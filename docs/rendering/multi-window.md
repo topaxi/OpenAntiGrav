@@ -53,8 +53,8 @@ pad is, and a key goes to the keyboard seat of **the window it arrived on**
 1. Window 1's seat holds the keyboard the front end uses, as it always did.
 2. **A key press in a window that holds no keyboard seat claims the window's lowest free seat** (a seat
    below the seated head count, not closed, with no pad and no keyboard on it; a pad that connects
-   later takes the lowest seat that is not claimed). The press has to be a bound key: Alt-Tab claims
-   nothing. A release claims nothing.
+   later takes the lowest seat that is not claimed). The press has to be a bound key (a modifier or an F-key claims
+   nothing; Tab is Select, so it does). A release claims nothing.
 3. **A window that holds no keyboard seat and has none to claim ignores keys.** This is the flaw it
    fixes: a keyboard player in window 1 and a pad player in window 2, and the focus moves to window 2:
    the keys go nowhere (window 2's only seat is the pad's) instead of onto the pad player's craft.
@@ -67,8 +67,8 @@ What tells a keyboard apart depends on what the platform reports (**the capabili
 | --- | --- | --- | --- |
 | Wayland, a compositor with a `wl_seat` per window (sway `seat`) | The window each seat's keyboard has focus in | **Yes**, each window's player flies at once (live, below) | A key claims the seat of the window it arrives in |
 | Wayland, one seat (niri, GNOME, KDE) | Nothing: winit reports one dummy device id | No: one keyboard has one focus | **Only the focused window's keyboard player moves** (stated limit); each window's player is a seat claimed by pressing there |
-| X11 | The raw key event's source device (`DeviceEvent::Key`, XInput2 `sourceid`) | **Yes**, from the moment a second keyboard presses a bound key, whichever window has the focus (live, below) | Until a second keyboard speaks, as the Wayland row |
-| Windows | The raw input device handle on `DeviceEvent::Key` | Implemented the same way, **not tested here** (recipe below) | As X11 |
+| X11 | The raw key event's source device (`DeviceEvent::Key`, XInput2 `sourceid`) | **Yes**, from the moment a second keyboard presses a bound key, whichever window has the focus (live, below) | Until a second keyboard speaks, as the one-seat Wayland row |
+| Windows | The raw input device handle on `DeviceEvent::Key` | Implemented the same way, **not tested here** (recipe below) | As the X11 row |
 | macOS | Nothing (no per-keyboard id) | No | As the one-seat Wayland row |
 | Android, iOS, web | Nothing | No | One window |
 
@@ -125,7 +125,9 @@ The log says what happened: `keyboard seat: a key in a window with a free seat c
 --no-audio` with `RUST_LOG=warn,oag=info`. Press X on keyboard A with window 1 focused: no
 `keyboard seat` line is expected, window 1's craft thrusts. Press X on keyboard B: the log must say
 `a second keyboard spoke` and `claims slot 1 (Device(KeyboardId(1)))`, window 2's craft thrusts while
-window 1's keeps thrusting, whichever window has the focus. If A and B drive one craft, Windows reports
+window 1's keeps thrusting, whichever window has the focus. If window 1's craft keeps thrusting after B
+lets go of X, Windows delivers a key's window event before its raw event (measured the other way round on
+X11) and the engagement in `Controls::device_key` needs reversing there. If A and B drive one craft, Windows reports
 both keyboards under one raw device handle (a remote desktop, a KVM, or a keyboard that presents as a
 hub) and the table's Windows row is wrong for that setup.
 
@@ -478,13 +480,14 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
     claims slot 1 (Shared)`) and flew it (34 km/h) while slot 0 coasted at 0.15.
   - *X11*: the same sway's Xwayland exposes one X keyboard per seat (`xwayland-keyboard:53` and `:54`,
     two XInput2 slaves under the one `Virtual core keyboard`), which is the two-physical-keyboards case
-    (a plain Xvfb has one XTEST keyboard and `xinput create-master` made nothing there). With window 1
-    focused throughout: keyboard B alone flew window 1's seat (one keyboard, window path); then A
-    holding X and B holding X and Right gave `a second keyboard spoke`, `slot 0 is now bound to
-    Device(KeyboardId(0))`, `claims slot 1 (Device(KeyboardId(1)))`, and slot 0 reached 152 km/h while
-    slot 1 steered into the walls, window 1 focused the whole time. A first cut that let go of the held
-    keys when the second keyboard spoke left the first keyboard's craft idle for the rest of the hold;
-    now it keeps them (`the_first_keyboard_keeps_its_held_key_when_a_second_one_speaks`).
+    (a plain Xvfb has one XTEST keyboard and `xinput create-master` made nothing there). Window 1 had the
+    focus throughout. Temporary log lines (not kept) gave the order of one press's two events: the raw
+    event of A's first X came ahead of its window event, and B's Right likewise. Keyboard B alone flew
+    window 1's seat (one keyboard, the window path); then A holding X and B holding X and Right made the
+    seat list `[(Device(KeyboardId(0)), 0), (Device(KeyboardId(1)), 1)]`, and slot 0 reached 152 km/h
+    while slot 1 steered into the walls. A first cut that let go of the held keys when the second
+    keyboard spoke left the first keyboard's craft idle for the rest of the hold; now it keeps them
+    (`the_first_keyboard_keeps_its_held_key_when_a_second_one_speaks`).
   - *Not exercised*: a pad player in the other window (a pad cannot be made headless; the rule is
     `pad::keyboards::tests::a_window_whose_seats_are_pads_ignores_keys`), Windows, more than two windows.
 - **Tests**: `oag-input` (`pad::keyboards::tests`: a window whose seats are pads ignores keys, a press claims the lowest free seat, a pad does not take a claimed seat, nothing is free merged or closed, a device keeps its seat whichever window has the focus, a device-bound seat takes no window events, unseating drops the seat; `tests`: a key flies the seat of the window it arrived on, no keyboard seat ignores keys, a single window is unchanged, a window's focus loss lets go of its own seat only, two keyboards fly two seats, the first keyboard keeps its held key when a second speaks, the extra seats let go while parked; `keys::every_candidate_is_reachable_from_a_physical_key`; checked by mutation: sending a window with no free seat to claim to the first seat fails four of them, dropping the device rule fails three), the reach tests in `pad::tests`, `windows::tests` (`first_seats`, `Focus::current`, `click_slots`), `pause::tests::a_seat_in_a_window_the_keyboard_can_reach_is_present`,
@@ -518,6 +521,7 @@ Omega capture (below) ran.
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
+- **A second keyboard cannot join from the join screen** (2026-10-14, `keyboard-seats`): every live proof seated through `--race`, `--windows` or `seat_default`, where a press claims a free seat. On the menu path the join screen's lobby has one keyboard device (`lobby::Device::Keyboard`, read off window events that carry no keyboard identity) and `Lobby::seat` sets the head count to the number who joined, so a keyboard and a pad joined leave a second keyboard no seat, and a lone keyboard with a two-window layout chosen leaves the seating merged (window 2 AI-flown, its keys ignored). Wiring it: `Device::Keyboard` carries a source (`KeyboardId` from raw events on X11 and Windows, the window a key arrived on for Wayland seats, the layout screen's holding frames taking presses) and the join screen shows a row per keyboard; it touches `oag-ui-screens`'s join, `oag_input::lobby` and the head count.
 - **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera

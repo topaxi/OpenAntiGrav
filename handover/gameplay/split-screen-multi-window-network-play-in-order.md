@@ -344,8 +344,7 @@ macOS report no per-keyboard id, a compositor with a seat per window gives each 
 player, one seat gives only the focused window's). Every window's first seat still counts as driven, a
 window's focus loss lets go of its own seat's keys. Proven live on a private headless sway with a virtual
 keyboard per seat and under its Xwayland (two XInput2 keyboards); **Windows is untested** (recipe in
-`docs/rendering/multi-window.md`, "Who sits where"), two physical keyboards in one window's split screen
-(the join screen seats one keyboard) are open. The pause line draws on every
+`docs/rendering/multi-window.md`, "Who sits where"), **open: a second keyboard cannot join from the join screen** (`lobby::Device::Keyboard` is one device, the head count is the number joined; the design is in the doc's "Open"), and two physical keyboards in one window's split screen are not wired. The pause line draws on every
 window with a seat, and a click on a window is its first seat's Start under the owner rule. Escape's pause menu is window 1's; the seat windows show the frozen race under a dim tint (stopgap), the menu itself on them is open. **Still open from it** (all in the doc's
 "Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;

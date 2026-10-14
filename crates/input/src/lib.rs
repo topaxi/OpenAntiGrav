@@ -497,8 +497,10 @@ impl Controls {
                 // The keyboards that spoke before keep the seats the window events gave them, and
                 // the keys they hold: each is bound where it last pressed, ahead of the one that
                 // just spoke, and its release now arrives as a raw event instead of a window's.
-                // (A raw event comes ahead of the window event for the same press, on X11 and
-                // Windows alike, so the window event of this very press is already dropped.)
+                // (A raw event comes ahead of the window event for the same press - measured on
+                // X11, assumed on Windows - so the window event of this very press is already
+                // dropped. If a platform reverses the order the press lands on the earlier
+                // keyboard's seat and is never released there.)
                 self.per_device = true;
                 log::info!(
                     "keyboards: a second keyboard spoke, race keys now come per physical keyboard"
