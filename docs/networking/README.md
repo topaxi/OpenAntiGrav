@@ -573,6 +573,87 @@ late, more than two clients, a real network (only the shim's constant delay, no
 jitter), and the own craft's correction moving the camera (ADR-0069, condition 4; the
 runs above did not log which craft each correction moved).
 
+## Running a server on another machine
+
+The server is one binary and one disc image; the client is the game. Nothing is
+installed on the server's host.
+
+1. **Build a binary the host can run.** `oag-server` links `oag-raceplay`, which
+   links wgpu, winit and cpal, but it never calls into them: the linker keeps only
+   `libc` and `libm` (`ldd target/debug/oag-server`), and
+   `crates/net/tests/server_libs.rs` fails if the server ever asks for another
+   shared library, so a host with no ALSA, X11 or Vulkan runs it. What does not
+   travel is the build machine's glibc: a binary linked on a current distribution
+   asks for symbols an older host lacks. `scripts/build-server-portable.sh [GLIBC]
+   [OUT]` links through `zig cc` against a named glibc (default 2.35, Ubuntu 22.04),
+   needs `zig` and nothing on the host, and strips the result to about 14 MB. A musl
+   static build does not work today: `alsa-sys` (through `oag-audio`) has no
+   cross-compiling `pkg-config`, which is one more reason for the lean-server item
+   in the handover thread.
+2. **Copy the binary and the one image** the race is on (`pulse-psp-eu.chd`, 210 MB)
+   to a directory of its own, and give the server that directory for its settings
+   and logs (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`).
+3. **Run it listening on every address**, on a UDP port the host lets through:
+
+   ```sh
+   ./oag-server --image pulse-psp-eu.chd --track 'Data\Environments\01_Track\track.vex' \
+     --people 1 --listen '[::]:PORT' --hash-out hash.txt
+   ```
+
+   `[::]` accepts IPv4 too on Linux (dual stack). A host whose name has only an AAAA
+   record needs it: the client resolved the name to IPv6 and the first attempt, bound
+   to `0.0.0.0`, was never answered. The default `127.0.0.1` accepts nobody else.
+4. **The certificate hash is the handoff.** The server mints a self-signed
+   certificate per run and prints `cert-hash <64 hex digits>`; the client pins that
+   hash and checks nothing else (not the name), so the digits must come from this
+   run of the server, over a channel you trust (the shell session that started
+   it). Read `hash.txt` over the same ssh connection and pass it on:
+
+   ```sh
+   oag-game pulse-psp-eu.chd --connect HOST:PORT --cert-hash <digits> [--net-bot]
+   ```
+
+   A server restart is a new certificate and a new hash.
+5. **When it is over**, the server exits by itself once every person has finished;
+   stop it by its process id otherwise, and delete the binary and the image.
+
+**Blocked ports.** UDP is filtered on many hosts. The test host let through port
+60000 and dropped 4433, 4434, 8443, 27015 and 44330 (checked with a one-line UDP
+echo before any server ran; ICMP was dropped too, so `ping` shows nothing). Probe
+a few high ports the same way; do not change the host's firewall for a test.
+
+### Measured against a remote host (2026-10-14)
+
+A server on a small Linux host over the internet (Ubuntu 22.04, glibc 2.35, one
+vCPU, release build, no GPU), the client on the shared desktop (debug game
+build), Pulse EU, circuit 01, VENOM, seed 1, one person with the AI on the other
+seven, weapons off, three laps. **Round trip** by a 100-packet UDP echo, 50 ms
+apart: minimum 11.4 ms, median 11.9, 95th percentile 14.7, maximum 19.6. No
+`--net-shim`.
+
+| Client | Ticks | Hash ok / bad | Corrections | Ticks replayed | Largest pop | Stalls | Resends | Final board |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Headless bot, `--screenshot` | 6,308 | 6,248 / 0 | 1 | 3 | 1.26 | 118, all in the first 200 ticks | 0 | the server's, line for line |
+| Windowed bot, Xvfb, software Vulkan | 6,326 | 6,326 / 0 | 0 | 0 | none | 54 | 0 | the server's (race complete) |
+
+("Hash ok" sums the per-second lines, which start counting once the first tick is
+confirmed, so it trails the ticks by the first second.) In both runs the server
+ran 60 ticks a second with every seat's input fresh and a lead of about 5 ticks,
+except in the first 180 ticks inside the countdown, where the client was still
+starting and the server repeated its last input (31 and 60 of 60 in the first
+two seconds, a negative lead, then caught up), and in the windowed run for about
+300 ticks around tick 4,200, where 2 to 13 inputs a second were repeated and the
+lead fell to -13 once. That window is when two screenshots were being taken of
+the software-rendered window on the same machine; the cause was not isolated.
+One person alone needs no corrections, as on localhost (the one correction in the
+headless run was a single 3-tick replay, pop 1.26, at tick 441).
+
+**Against the local shim.** At 12 ms the numbers sit at the "none" row of the
+localhost table (0.9 to 1.0 corrections a second there with two people; none to
+one here with one), not at the 100 ms rows: the real round trip is a ninth of the
+shim's, and the prediction window stayed at 3 to 6 ticks (it was 10 to 11 at 100
+ms). A lossy or jittery link, a second person and a real GPU are still unmeasured.
+
 ## Cheating: what is and is not worth defending
 
 Ranked by how bad it is for a Wipeout lobby, given decisions 2 and 3.
