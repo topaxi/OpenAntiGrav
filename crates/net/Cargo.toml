@@ -1,0 +1,54 @@
+[package]
+name = "oag-net"
+description = "Network play: the wire messages, a transport with two channel kinds over WebTransport, and the authoritative server and predicting client around a race"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+# One integration-test binary; see `tests/it.rs`.
+autotests = false
+
+# The headless authoritative server. A binary of this crate because everything
+# it runs is `oag_raceplay` plus this crate's protocol; it opens no window, no
+# GPU device and no audio device (it links `oag-raceplay`, which links wgpu and
+# winit, and never initialises either).
+[[bin]]
+name = "oag-server"
+path = "src/bin/oag_server.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+log.workspace = true
+oag-ai.workspace = true
+oag-core.workspace = true
+oag-gameplay.workspace = true
+oag-log.workspace = true
+oag-physics.workspace = true
+oag-race.workspace = true
+oag-raceplay.workspace = true
+oag-source.workspace = true
+web-time = "1.1.0"
+
+# The native transport. QUIC through quinn, rustls on `ring` only (no aws-lc C
+# build, which would put cmake into the Android and iOS builds), and a
+# self-signed ECDSA P-256 certificate minted per run. Not on the web, where the
+# browser's own `WebTransport` object is the transport (not built yet).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rcgen = { version = "0.14", default-features = false, features = ["ring", "crypto"] }
+ring = "0.17"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+url = "2"
+web-transport-quinn = { version = "0.13", default-features = false, features = ["ring"] }
+
+[dev-dependencies]
+oag-testdata.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

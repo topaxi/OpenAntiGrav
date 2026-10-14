@@ -21,6 +21,7 @@ members = [
   "crates/log",
   "crates/mobile",
   "crates/mod",
+  "crates/net",
   "crates/mesh",
   "crates/music",
   "crates/omega",
@@ -78,6 +79,7 @@ oag-shader-check = { path = "crates/shader-check" }
 oag-hd = { path = "crates/hd" }
 oag-hud = { path = "crates/hud" }
 oag-log = { path = "crates/log" }
+oag-net = { path = "crates/net" }
 oag-mobile = { path = "crates/mobile" }
 oag-mod = { path = "crates/mod" }
 oag-input = { path = "crates/input" }

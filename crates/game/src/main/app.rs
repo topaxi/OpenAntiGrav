@@ -58,6 +58,9 @@ pub(crate) struct App {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--connect`: the race is a server's. Joined once the race is built, then
+    /// handed to the session. See `oag_game::net_play`.
+    pub(crate) net: Option<oag_game::net_play::NetPlay>,
     /// `--prompt-style`, parsed. See `session::prompts`.
     pub(crate) prompt_style: Option<oag_input::prompt::PromptStyle>,
     /// `--autopilot`: whether the player's craft is flown for them. A
@@ -309,7 +312,13 @@ impl App {
             )?;
             // A direct `--race` is never a campaign launch, so this is the
             // free case: the original driver unless `--ai ours`.
-            if let Stage::Race(race_stage) = &mut staged {
+            if let Stage::Race(race_stage) = &mut staged
+                && let Some(net) = &self.net
+            {
+                // The server's race: its AI, its seats, its start. No split.
+                let title = self.race_title.map_or("", |title| title.name);
+                net.join(&mut race_stage.race, title)?;
+            } else if let Stage::Race(race_stage) = &mut staged {
                 oag_game::ai_choice::apply(
                     &mut race_stage.race,
                     self.ai_choice,
@@ -489,6 +498,7 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             no_intro: self.no_intro,
+            net: self.net.take(),
             prompt: oag_game::prompts::PromptState {
                 style_override: self.prompt_style,
                 family_logged: None,

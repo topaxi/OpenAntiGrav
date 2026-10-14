@@ -80,17 +80,19 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-pure` | `crates/pure` | Wipeout Pure's tables, in the same shape. |
 | `oag-hd` | `crates/hd` | Wipeout HD / Fury's, in the same shape - and the release that forced `ArchiveCandidates::extra`, a *set* of archives all of which mount, because HD ships seven and they do not split by kind. |
 | `oag-omega` | `crates/omega` | Wipeout: Omega Collection's, on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory patch. Racing is out of scope: the patch's `data09.psarc` carries the newest front end (older layers sit in `data00` and `data08`) and no circuits at all. |
+| `oag-net` | `crates/net` | Network play: the wire messages (`wire`), a transport of two channel kinds (`link::Link`, an in-process pair and a latency/loss shim), WebTransport over `web-transport-quinn` (`wt`, native only), one race setup for server and client (`race`), the authoritative host (`host`), the predicting client (`client`), and the `oag-server` binary. No gameplay crate depends on it (rule 1). [ADR-0070](adr/0070-the-network-transport-is-webtransport.md). |
 | `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
 
 ## Crates that do not exist yet
 
 Added when their milestone opens. Empty placeholder crates are noise, and a
 crate created before its shape is understood tends to get the wrong shape.
+`oag-net`, reserved here for M8, was created on 2026-10-14 once the transport was
+decided ([ADR-0070](adr/0070-the-network-transport-is-webtransport.md)).
 
 | Crate | Milestone | Purpose |
 | --- | --- | --- |
 | `oag-ui` | M5 | HUD and menus. |
-| `oag-net` | M8 | Multiplayer. |
 
 **`oag-weapons` was reserved here for M5 and created on 2026-10-05.** Pickups
 and projectiles had landed in `oag-gameplay` on 2026-08-11 because it already

@@ -92,6 +92,9 @@ pub struct CaptureOptions {
     pub force_missile_hit: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
     pub remote_correction: Option<oag_raceplay::correction::Scene>,
+    /// `--connect`: the race is a server's, stepped through
+    /// [`crate::net_play::NetPlay`] on the wall clock. See [`crate::net_play`].
+    pub net: Option<std::rc::Rc<crate::net_play::NetPlay>>,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
@@ -396,6 +399,7 @@ pub fn capture(
         ghost_static,
         ripples,
         track_stats,
+        title,
         ..
     } = loaded;
     let mode = setup.mode;
@@ -417,12 +421,17 @@ pub fn capture(
     // fallback when the flag was not given. See `main::stage::build_race_stage`.
     let difficulty = setup.difficulty;
     let mut race = Race::start(setup);
-    crate::ai_choice::apply(
-        &mut race,
-        options.ai_choice,
-        crate::ai_choice::Source::Free(difficulty),
-    );
-    if options.window_layout.is_empty() {
+    // A network race's AI and seats are the server's (`oag_net::race::prepare`,
+    // applied by `NetPlay::join` below).
+    if options.net.is_none() {
+        crate::ai_choice::apply(
+            &mut race,
+            options.ai_choice,
+            crate::ai_choice::Source::Free(difficulty),
+        );
+    }
+    if options.net.is_some() {
+    } else if options.window_layout.is_empty() {
         crate::split_screen::apply(&mut race, usize::from(options.players), options.cut);
     } else {
         crate::split_screen::apply_windows(&mut race, &options.window_layout);
@@ -452,8 +461,11 @@ pub fn capture(
         }
     }
 
+    if let Some(net) = &options.net {
+        net.join(&mut race, title.name)?;
+    }
     options.ghost.arm(&mut race)?;
-    if options.intro_ticks > 0 && race.begin_intro() {
+    if options.net.is_none() && options.intro_ticks > 0 && race.begin_intro() {
         for _ in 0..options.intro_ticks {
             race.tick_intro(&oag_gameplay::PlayerInputs::none());
         }

@@ -59,6 +59,7 @@ pub mod medal_watch;
 pub mod mods;
 pub mod movie;
 pub mod music_state;
+pub mod net_play;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

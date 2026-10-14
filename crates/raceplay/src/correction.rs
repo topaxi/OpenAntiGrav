@@ -56,12 +56,25 @@ impl Race {
         authoritative: &RaceSim,
         inputs: impl IntoIterator<Item = oag_gameplay::PlayerInputs>,
     ) -> Reconciled {
+        self.reconcile_observed(authoritative, inputs, |_| {})
+    }
+
+    /// [`Self::reconcile`], showing `each` the simulation after every replayed
+    /// tick: a network client keeps what it predicted at each tick, to compare with
+    /// the server's state when that tick is confirmed.
+    pub fn reconcile_observed(
+        &mut self,
+        authoritative: &RaceSim,
+        inputs: impl IntoIterator<Item = oag_gameplay::PlayerInputs>,
+        mut each: impl FnMut(&RaceSim),
+    ) -> Reconciled {
         let before: [Vec3; MAX_SHIPS] =
             std::array::from_fn(|slot| self.sim.world.ships[slot].physics.body.position);
         self.restore_sim(authoritative);
         let mut ticks = 0;
         for tick in inputs {
             self.tick_sim_only(&tick);
+            each(&self.sim);
             ticks += 1;
         }
         let mut pops = [0.0; MAX_SHIPS];
@@ -71,7 +84,10 @@ impl Race {
             // **Only a remote person's craft glides.** The craft the camera follows
             // is drawn where the camera puts it: offsetting the hull alone would
             // draw it off its own chase camera for the length of the glide.
-            let remote = self.sim.world.controllers[slot] == oag_gameplay::Controller::Remote;
+            // In a network race every person is remote on every peer; this
+            // machine's own seat is the one the camera follows.
+            let remote = self.sim.world.controllers[slot] == oag_gameplay::Controller::Remote
+                && self.view.seat != Some(slot);
             if self.view.correction_smoothing && remote && *pop <= SNAP_DISTANCE {
                 self.view.correction[slot] += moved;
             } else {

@@ -50,9 +50,10 @@ pub(super) fn advance_one_tick(
             race.sim.world.ships[slot].pickup.weapon = Some(weapon);
         }
     }
-    match &options.remote_correction {
-        Some(scene) => scene.tick(race, &snapshot, tick),
-        None => {
+    match (&options.net, &options.remote_correction) {
+        (Some(net), _) => net.drive_to(race, u64::from(tick) + 1, snapshot),
+        (None, Some(scene)) => scene.tick(race, &snapshot, tick),
+        (None, None) => {
             race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
         }
     }

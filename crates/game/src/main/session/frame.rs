@@ -712,7 +712,15 @@ impl Session {
                     // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
                     // run) steps only what is seen: the explosion, the shake, the
                     // destroy camera. See `Race::tick_cosmetics`.
-                    stage.race.tick_finished();
+                    // A network race goes on through the protocol: the server's
+                    // world runs on after the line, and its confirmed state is
+                    // what the board is finally taken from (`oag_net::client`).
+                    match &self.net {
+                        Some(net) => {
+                            net.step(&mut stage.race, oag_gameplay::InputSnapshot::EMPTY);
+                        }
+                        None => stage.race.tick_finished(),
+                    }
                     oag_game::sound::race_tick(&mut self.audio, &mut stage.race);
                     // `stage`'s own last use - the reborrow inside
                     // `Session::tick_endrace` is legal from here on, the
@@ -771,11 +779,18 @@ impl Session {
                     // the slot it used to go to.
                     // A local slot nobody is on flies as the AI, or the race
                     // never ends: see `split_screen::follow_devices`.
-                    oag_game::split_screen::follow_devices(
-                        &mut stage.race,
-                        self.controls.assignment(),
-                    );
-                    stage.race.tick(&inputs);
+                    if let Some(net) = &self.net {
+                        // The server's race: predicted and corrected by the
+                        // protocol, this machine's devices on its seat. The
+                        // devices are all on slot 0 under the default assignment.
+                        net.step(&mut stage.race, *inputs.get(0));
+                    } else {
+                        oag_game::split_screen::follow_devices(
+                            &mut stage.race,
+                            self.controls.assignment(),
+                        );
+                        stage.race.tick(&inputs);
+                    }
                     stage.tick_messages();
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
@@ -807,7 +822,12 @@ impl Session {
             // A ghost is written on the tick a lap beats it, not only at the
             // finish: Speed Lap never finishes, and a lap set before a crash
             // should survive it. A no-op on every tick without a new best.
-            if let Stage::Race(stage) = &mut self.stage {
+            // Neither a ghost nor a record comes out of a network race: its
+            // inputs are predictions corrected by a server, under the server's
+            // settings, not this player's run.
+            if let Stage::Race(stage) = &mut self.stage
+                && self.net.is_none()
+            {
                 crate::race_stage::ghost::save(&mut stage.race, &stage.result_key);
             }
             if let Stage::Race(stage) = &mut self.stage
@@ -816,6 +836,7 @@ impl Session {
                 // A split screen's result is nobody's record: the results are
                 // slot 0's, which a second person was racing.
                 && stage.race.viewport_count() <= 1
+                && self.net.is_none()
             {
                 stage.result_saved = true;
                 let key = stage.result_key.clone();

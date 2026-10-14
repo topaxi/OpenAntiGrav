@@ -66,8 +66,11 @@ pub(crate) fn silences(away: Away) -> bool {
 impl Session {
     /// Applies [`decide`] to the live session.
     pub(crate) fn window_away(&mut self, away: Away) {
+        // A network race is never paused from here: the server's race goes on
+        // whatever this window does, so a frozen client only falls behind it.
         let running = matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-            && !matches!(self.pause, oag_game::pause::State::Paused { .. });
+            && !matches!(self.pause, oag_game::pause::State::Paused { .. })
+            && self.net.is_none();
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,

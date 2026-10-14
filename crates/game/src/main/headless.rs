@@ -484,6 +484,7 @@ pub(crate) fn run_race(
     anisotropy: Anisotropy,
     mut audio: oag_sound::Audio,
     music_discs: oag_sound::MusicDiscs,
+    net: Option<oag_game::net_play::NetPlay>,
 ) -> Result<()> {
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
@@ -616,6 +617,7 @@ pub(crate) fn run_race(
                     cli.wreck.force_missile_hit.as_deref(),
                     "Missile hit",
                 )?,
+                net: net.map(std::rc::Rc::new),
                 remote_correction: crate::args::remote_correction(
                     cli.wreck.force_remote_correction.as_deref(),
                     !cli.wreck.no_correction_smoothing,
@@ -720,7 +722,9 @@ pub(crate) fn run_race(
         // transition to time.
         measure_race_load: None,
         give,
-        no_intro: cli.intro.no_intro,
+        // A network race starts on the server's clock: no flyby to wait through.
+        no_intro: cli.intro.no_intro || net.is_some(),
+        net,
         prompt_style: cli
             .menu_args
             .prompt_style

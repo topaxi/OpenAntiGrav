@@ -297,6 +297,7 @@ Existing crates:
 | `oag-log` | `crates/log` | The binaries' log sink: the terminal as `env_logger` always built it, plus one appended, timestamped file with its own filter, pruned to seven days at startup. Plain data in; knows no game. `oag-game`, `oag-view` and `oag-trace` install it, the last two through `oag_log::tool`. |
 | `oag-mobile` | `crates/mobile` | What a phone needs around the windowed game: the Android app's files directory and event loop (`android`), the iOS container's working directory (`ios`), and `MOBILE`. A library under `oag-game`, which keeps the entry points; no gameplay crate depends on it. [ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md). |
 | `oag-mod` | `crates/mod` | Mods: a folder, `.zip` or `.oagmod` read in place (deflate, zstd or stored), the `oag-mod.toml` manifest, the search path, and the built-in `oag-extras` that adds this project's own menu rows. Knows no menu and no title. [ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md). |
+| `oag-net` | `crates/net` | Network play: the wire messages, a `Link` of two channel kinds (unreliable datagrams, one reliable stream) over WebTransport (`web-transport-quinn`, native only), the authoritative `host`, the predicting `client` (ADR-0069's shape) and the `oag-server` binary. Rule 1 forbids it to every gameplay crate. [ADR-0070](docs/architecture/adr/0070-the-network-transport-is-webtransport.md). |
 | `oag-input` | `crates/input` | Maps real devices onto the abstract button layer and produces an `InputSnapshot`. |
 | `oag-view` | `crates/view` | Asset viewer: CLI, window and texture browser over `oag-render`. |
 | `oag-trace` | `crates/trace` | Per-tick trace capture and comparison against the original: `oag-trace show\|run\|compare\|script\|drive\|track`. The reading half of the M3 verification harness. |
@@ -310,7 +311,7 @@ Existing crates:
 | `oag-game` | `crates/game` | Composition root; boots the front end. A thin `[[bin]]` over `[lib]` so boot logic is testable headlessly. |
 | `oag-testdata` | `crates/testdata` | **A dev-dependency, never a runtime one.** Where a test finds the disc images this project does not ship, and the `OAG_REQUIRE_GAME_DATA` skip-or-fail contract, in one place instead of 130 copies. Holds no game knowledge at all - no image names, no archive names, no title. |
 
-Later crates (`oag-net`) are
+Later crates are
 added only when their milestone opens - see
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md) for the
 full table and reasoning. Don't create placeholder crates ahead of that.
@@ -319,7 +320,7 @@ Five dependency rules, all enforced by `just check-deps` (part of the `just` gat
 `scripts/check-dependency-rules.py`) so a `cargo add` that breaks one fails CI, not just
 review:
 
-1. No gameplay crate depends on `oag-render`, `oag-fx`, `oag-audio`, `oag-input`, `winit` or `wgpu`.
+1. No gameplay crate depends on `oag-render`, `oag-fx`, `oag-audio`, `oag-input`, `oag-net`, `winit` or `wgpu`.
    The simulation consumes an input *snapshot type* owned by `oag-gameplay`, never the
    input system itself.
 2. No crate depends on `oag-game` (the composition root).

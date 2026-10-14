@@ -52,6 +52,11 @@ pub struct RaceView {
     pub(super) correction: [Vec3; MAX_SHIPS],
     /// Whether a correction glides or is drawn where it lands.
     pub(super) correction_smoothing: bool,
+    /// The grid slot this machine's person flies in a network race, set by
+    /// [`super::Race::set_seat`]. View-only: in a network race every person's slot
+    /// is [`oag_gameplay::Controller::Remote`] on every peer, because the
+    /// controllers are hashed, so "which craft is mine" cannot live in the world.
+    pub(super) seat: Option<usize>,
     /// The player's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`Self::camera`] is - see
     /// `oag_render::camera::shake`'s module doc comment for what is confirmed

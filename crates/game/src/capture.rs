@@ -469,6 +469,7 @@ pub fn run(
                 force_bomb_trip: None,
                 force_missile_hit: None,
                 remote_correction: None,
+                net: None,
                 no_weapon_lights: false,
                 force_shield: Vec::new(),
                 medals: Default::default(),
