@@ -243,7 +243,11 @@ fn start_and_back_are_buttons_with_no_value() {
         .body(&skin, &Frame::default())
         .into_iter()
         .filter_map(|draw| match draw {
-            Draw::Text { text, align, .. } if align == Align::Right => Some(text),
+            Draw::Text {
+                text,
+                align: Align::Right,
+                ..
+            } => Some(text),
             _ => None,
         })
         .collect();
