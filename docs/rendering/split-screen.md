@@ -1022,23 +1022,31 @@ fields opponents whatever the mode). `GSDisableEntriesBitField` is not applied. 
 
 **Walked** (2026-10-14, windowed on an own Xvfb with software Vulkan, `scripts/uinput-pads.py`
 with three pads and `xdotool` for the keyboard, member `mp-menu-flow`): **every title through the page and the join
-screen**; Pulse PSP EU **the whole flow and a race**, PS2 Pulse EU, Pure EU, HD and Omega to the RACE page (HD also to
-Track Select and `Ship Select - Player 1`, then the load; Omega's `PLAYER 2 PRESS OPTIONS TO JOIN` read on screen),
-2048 to the join screen.
+screen**, and **Pulse PSP EU, PS2 Pulse EU, Pure EU and Omega through the flow to a two-view race frame** (HD to
+`Ship Select - Player 1` and the load screen, its picker is Omega's; 2048 stopped at the join screen: its race has no
+Ship Select to walk).
 
 - **Pulse PSP EU, the whole flow**: main menu (`MULTIPLAYER & SHARING` between REMIX and OPTIONS, its authored help under
   it), the page (LOCAL, LAN and ONLINE dimmed, `Coming later` under LAN), join (pad a and pad b, START of pad c joins
   a third and its circle gives the seat up), layout, RACE page, MODE changed to Single Race, Track Select, the shared
-  two-person Ship Select, a two-view race. Escape and the pause's circle left it for the menus, and **a second round
+  two-person Ship Select, a two-view race. The pause's circle left it for the menus, and **a second round
   came up with both pads already seated, the layout and the Single Race mode remembered**. A race flown by `--autopilot`
   ended in the results and the end menu: **RACE AGAIN** raced the same two views (no join, no layout), **RETURN TO
   MENUS** came up on the RACE page and START went to the two-seat Ship Select (the lobby survived the page).
-- **PS2 Pulse EU**: the keyboard joined seat 1 (named `KEYBOARD`) and a pad seat 2, START, layout, RACE page, Track Select,
-  the shared Ship Select: **the keyboard seat's own `X` (the X11 raw-key path, the key a seat's Ship Select reads) set its
-  side `READY`**, the pad's cross the other, then a two-view race.
+- **PS2 Pulse EU**: the keyboard joined seat 1 and a pad seat 2, START, layout, RACE page, Track Select, the shared
+  Ship Select: the keyboard seat's `X` set its side `READY`, the pad's cross the other, then a two-view race. (That binary had no
+  log line for the raw path, so which keyboard path it was is not recorded; Pure's walk below is the proof of the raw one.)
+- **Pure EU, keyboard and pad: the raw-key path, live**: with the log line in (`keyboards: a raw key event names the
+  keyboard, so the join screen tells keyboards apart`, so **raw key events do reach the game on an Xvfb**), the keyboard
+  joined seat 1 and a pad seat 2, START, layout, RACE page, Track Select, and the one-per-seat Ship Select:
+  **`X` on the keyboard confirmed `Team Selection - Player 1` (a `Keys` seat reading its own raw presses through the
+  picker) and the pad's cross `Player 2`**, then a two-view race.
+- **Omega, two pads**: join (`PLAYER 2 PRESS OPTIONS TO JOIN` before the second pad), layout, RACE page, Track Select,
+  `Ship Select - Player 1` and `- Player 2`, a two-view race with the HD-shaped HUD.
 - **Not walked**: a real second X11 keyboard (a plain Xvfb has one XTEST keyboard), Wayland, a real integrated GPU,
   a layout of two windows through to a race from the menus (the layout screen's own walk is `multi-window.md`'s), the
-  LAN and ONLINE rows by click or touch (they go through the menus' one `activate`), a Head to Head cap on screen.
+  LAN and ONLINE rows by click or touch (they go through the menus' one `activate`), a Head to Head cap on screen, HD's
+  race frame and a 2048 race from the menus.
 - Found by walking: **2048's `MULTIPLAYER` word was clipped by its 122-unit tile** (fixed: a word wider than the box is
   drawn smaller, `touch::CAPITAL_WIDTH`, chosen, not measured); HD's language table lacked the join line (the overlay in step 2).
 
