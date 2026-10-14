@@ -7,8 +7,8 @@ categories: [frontend, rendering]
 2026-10-14, maintainer's request. The spike ran the same day and answers both
 Open items: **it works**, with one design constraint (the opener's frame loop,
 below). Nothing is wired into the game: `--windows` is still refused on wasm,
-and the in-game run needs edits to `session/windows.rs` and `gpu.rs`, which the
-desktop multi-window lane owns (see "Wiring", below).
+and the in-game run needs an edit to `open_screens` in `session/windows.rs`, the
+desktop multi-window lane's file (see "Wiring", below).
 
 ## The idea
 
@@ -30,11 +30,33 @@ the game:
    colour per frame into each, a `requestAnimationFrame` loop per window or a
    single one, `keydown` and `getGamepads()` per window.
 2. **A Rust wasm crate on this workspace's exact `winit` 0.30.13 and `wgpu`
-   30.0.1** (not committed): winit window 1 on the page's canvas, window 2 on
-   the popup's canvas through `with_canvas`, one device, a clear per window per
-   `RedrawRequested`, and every `WindowEvent` logged per window. It was built
-   with the stable toolchain, no threads, and is the same code path the game's
-   `gpu::web::canvas` and `Gpu::open_output` take.
+   30.0.1** (not committed, about 150 lines): winit window 1 on the page's
+   canvas, window 2 on the popup's canvas through `with_canvas`, one device, a
+   clear per window per `RedrawRequested`, and every `WindowEvent` logged per
+   window. It was built with the stable toolchain, no threads, and takes the
+   same calls the game's `gpu::web::canvas` and `Gpu::open_output` make. Its
+   essential part, so the claim can be rebuilt:
+
+   ```rust
+   // The page opens the popup from a click, makes a <canvas> in popup.document, and
+   // calls start(canvas, ..) on the module. The canvas is another realm's object.
+   #[wasm_bindgen]
+   pub async fn start(popup_canvas: JsValue) -> Result<(), JsValue> {
+       let popup_canvas: web_sys::HtmlCanvasElement = popup_canvas.unchecked_into(); // never dyn_into
+       // one instance, adapter and device, requested as the game's gpu::web::prepare does
+       event_loop.spawn_app(app); // winit 0.30, ApplicationHandler
+   }
+   // in ApplicationHandler::resumed, for each of the two canvases:
+   let attrs = Window::default_attributes()
+       .with_canvas(Some(canvas.clone()))
+       .with_prevent_default(true)
+       .with_focusable(true);
+   let window = Arc::new(event_loop.create_window(attrs)?);
+   let surface = instance.create_surface(window.clone())?; // or SurfaceTarget::Canvas(canvas)
+   // inner_size() is 0x0 here: configure the surface on WindowEvent::Resized, which follows.
+   // per RedrawRequested: get_current_texture(), a clear pass, queue.submit, queue.present(frame),
+   // then window.request_redraw().
+   ```
 
 The popup is `window.open('', name, 'popup,width=640,height=360')`: an
 `about:blank` document inherits the opener's origin and its cross-origin
@@ -77,19 +99,28 @@ make COOP sever the opener link.
   focus; the runs below launch Chromium directly and move windows with
   `xdotool`):
 
-  | state | opener rAF | popup rAF | visibility |
+  | state (geometry from `xdotool getwindowgeometry`) | opener rAF | popup rAF | visibility |
   | --- | --- | --- | --- |
-  | both visible, either focused, partly overlapped | 60 | 60 | both visible |
+  | popup as the browser opened it: 700x534 at 1,22 over the opener's 700x500 at 0,0, popup focused | **0** | 60 | opener hidden |
+  | popup at 300,150 or 100,50 or 40,40 (partly over the opener), popup or opener focused | 60 | 60 | both visible |
+  | popup beside the opener, no overlap, either focused | 60 | 60 | both visible |
   | popup fully covered by the opener, or minimised | 60 | **0** | popup hidden |
-  | **opener minimised**, popup visible and focused | **0** | 60 | opener hidden |
-  | opener fully covered by the popup (popup opened on top) | **0** | 60 | opener hidden |
+  | opener minimised, popup visible and focused | **0** | 60 | opener hidden |
 
-  So a hidden window stops its own `requestAnimationFrame`. winit's single
-  loop runs on the *opener's*: with the opener hidden or minimised the whole
-  game, including a visible popup, stops (the winit spike read 0.0 fps for
-  both windows and `Occluded true` on both). With the popup hidden the loop
-  keeps drawing into it (the frame counter ran at 60) for no benefit, and
-  `getCurrentTexture` did not fail.
+  The popup opened at the opener's size, not at the `width=640,height=360` the
+  call asked for: that run launched Chromium with `--window-size=700,500`, which
+  applied to the popup as well, so the first row is a popup that covers the
+  opener (all but a 1 pixel column), not what a default player sees. What it
+  shows is the rule: **a window that is fully covered or minimised is hidden
+  and stops its own `requestAnimationFrame`; a partial overlap does not hide
+  it** (the three overlap rows ran 60/60 with each window focused in turn).
+  winit's single loop runs on the *opener's*: with the opener hidden or
+  minimised the whole game, including a visible popup, stops (the winit spike
+  read 0.0 fps for both windows and `Occluded true` on both). With the popup
+  hidden the loop keeps drawing into it (the frame counter ran at 60) for no
+  benefit, and `getCurrentTexture` did not fail. How often a player's popup
+  lands fully over the opener (a maximised popup on the same monitor) depends
+  on the browser's and compositor's placement: untested beyond openbox.
 
 ### 2. Input: works (gamepad on a virtual pad, not a real one)
 
@@ -154,9 +185,9 @@ make COOP sever the opener link.
    `Session::open_screens` -> `Gpu::open_output(event_loop, Look, modes)`, which
    builds window 2 with `window::attributes`, then
    `instance.create_surface(window.clone())`. Reading it, the changes are small
-   but sit in files the desktop multi-window lane is editing
-   (`session/windows.rs`, `gpu.rs`, `window.rs`, `app.rs` at
-   `screens_to_open`), so none was made:
+   but the hook point, `open_screens`, lives in `session/windows.rs`, the desktop
+   multi-window lane's file, so none was made (the spike's brief kept it to the
+   web entry point, the page and a probe):
    - drop the `cfg(not(wasm32))` from `open_screens`, `open_output`,
      `seat_placement` (monitors are empty on the web, so it returns
      `(None, None)` on its first lookup), `seat_mode`, `window_title` and
