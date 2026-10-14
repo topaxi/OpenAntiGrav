@@ -112,8 +112,11 @@ Rules that carry over from `window-keyboard` and what became of them:
   (`Controls::let_go_extra_seats`), because the menu reads window 1's keyboard only and a key released
   meanwhile would come back held on resume.
 - **Pointer taps** (a click is a tap on the keyboard's latch) stay on the first keyboard seat, window 1's.
-- **Not changed:** the flyby's skip is the *player's* held Cross (`tick_intro` reads the primary slot), so
-  a keyboard seat at window 2 skips it only by a click on window 1. A single-window split screen's join
+- **The flyby's skip is any flown person's** (2026-10-14, `flyby-panel`): `tick_intro` ends the flyby
+  while any slot a person flies (`World::person_flown`, plus the primary) holds Cross, so a keyboard or
+  pad seat at window 2 skips it, as a click on window 1 does. **Chosen, not measured**; it is view-side
+  (the flyby holds `World::tick` at 0) and a single person's race reads the same slot as before. A
+  single-window split screen's join
   screen seats one keyboard (`lobby::Device::Keyboard`); two physical keyboards in one window's split
   screen are not wired (open).
 
@@ -156,8 +159,8 @@ further window the same way (`session/windows.rs`). **What a window draws is the
 it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::window_drawn`):
 
 - **One seat**: a full screen, not a split view. The title's whole-screen HUD for that slot
-  (`hud_views::draw` with the window), the countdown, and - on window 1 only - the track panel, the
-  results and the end screens. The scene is `oag_raceplay::Scene::render_view`, next to
+  (`hud_views::draw` with the window), the countdown, the track panel while the flyby plays and fades
+  (every window, see "The flyby and the end") and - on window 1 only - the results and the end screens. The scene is `oag_raceplay::Scene::render_view`, next to
   `render_viewports`: a view of slot `s` through `Layer::Window`, which clears its target and does all
   the camera-independent work itself like a split's first view, and runs the post chains (Pulse's
   bloom, HD's, Omega's tone map) like an unsplit race, because a window starts at the origin and fills
@@ -192,10 +195,16 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   and each goes back to its own seats, cut by its own cut, on the tick the flyby ends. A window
   with no seat keeps its holding frame. **Chosen, not measured**; it is view-side only, nothing the
   tick reads or the hash holds (`World::tick` stays 0 under the flyby). The flyby and its skip are
-  one race state, so a skip (a held Cross, or a click on window 1; the seat windows' pointer is
+  one race state, so a skip (any flown person's held Cross, or a click on window 1; the seat windows' pointer is
   ignored, as everywhere) ends it on every window at once, and the HUD, which `Race::hud_shown`
   already hid race-wide through it, is off on every window. The track panel (circuit name and
-  blurb) is part of the flyby but belongs to window 1, so the other windows show the bare camera.
+  blurb) is drawn **on every window that plays the flyby**, in the title's own panel art
+  (`oag_game::track_panel::Overlay`, one per race), laid out against that window's own first view
+  (`RaceStage::draw_window_track_panel`: `Race::window_drawn(window)` and `window_cut(window)`, so
+  the panel's 480x272 box fits the window's own size and aspect and letterboxes in a tall one). It
+  runs on the one clock (`Race::track_panel_progress`, the flyby's ticks, then the world's while it
+  fades), so every window fades it together behind its own seats. Window 1 and single-window frames
+  are unchanged. Skipping is any flown person's, above.
   Once every person has finished, the window that holds the player shows the end screens over the
   spectator camera (`Race::window_drawn` is the player alone, as `views_drawn` is one in a split)
   and the other windows keep their chase cameras and HUD. **Not exercised live:** a finish with
@@ -420,6 +429,19 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
 - **Seat lists, real windows**: Xvfb + `lvp`, `--race --window-seats 3,2`: window 1 held three seats
   (one over two), window 2 two stacked, window title `PLAYER 4 - 5`; closing window 2 logged
   `window 2 closed: slot(s) [3, 4] flown by the AI` and window 1 kept running its three.
+- **The track panel on every window and the any-person skip** (2026-10-14, lane `flyby-panel`).
+  Headless, Pulse EU (Talon's Junction White), `--race --window-seats 2,1 --intro-ticks 100|400|800`
+  against `main` (`028d1f232`): window 1 byte-identical at all three, window 2 differs and now carries
+  the panel (the name over the shot, the blurb under it, the wipe clipping the blurb at tick 100, as
+  window 1's does); `--players 1|2|4` at flyby ticks 100|100|600 and `--players 2 --intro-ticks 3000
+  --ticks 30` (the panel's fade) byte-identical; `--window-seats 1,1 --size 700x1000`: window 1
+  identical, window 2's panel fitted and letterboxed in the tall frame. Live, Xvfb + `lvp`, `--race
+  --window-seats 2,1`: both windows draw the panel through the flyby in step; `--window-seats 1,1`
+  with `xdotool keydown x` focused on window 2 skipped the flyby (both windows were on the race, window 2
+  thrusting, on the next capture, 2 s later). The pin is
+  `raceplay::window_flyby_ground_truth::a_second_persons_held_cross_skips_the_flyby`, which fails
+  with the old primary-only read. The panel's drawing has no test of its own beyond the capture
+  diff (a GPU draw).
 - **The flyby on every window** (2026-10-14, lane `window-flyby`). Headless, `--race --window-seats
   2,1 --intro-ticks 100 --screenshot` on Pulse EU (Talon's Junction White): window 2's frame, which
   drew its own craft's chase camera through the flyby before, is now the flyby camera, the same
