@@ -247,7 +247,7 @@ impl Session {
                             .collect()
                     })
                     .unwrap_or_default();
-                let variants: Vec<(String, String)> =
+                let mut variants: Vec<(String, String)> =
                     if skins.is_empty() {
                         variant_choices(title, &choice.value)
                             .into_iter()
@@ -266,6 +266,11 @@ impl Session {
                         }))
                         .collect()
                     };
+                if variants.is_empty()
+                    && let Some(own) = details.and_then(|team| team.own_directory_variant())
+                {
+                    variants.push(own);
+                }
                 let stats = details
                     .map(|team| team.variant_stats(variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();

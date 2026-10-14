@@ -18,9 +18,9 @@
 //!
 //! **What this module still does not know**, and fills with an honest
 //! "unmeasured" (`None`, or a variant that names no path) rather than a
-//! guess: Zone mode, the boost plume, every per-team variant table, the
-//! speed classes, and the announcer. Racing is not *complete* on this title
-//! - see the report in `omega-status.md` for what is drawn and what is not.
+//! guess: Zone mode, the boost plume, the speed classes, and the announcer.
+//! Racing is not *complete* on this title - see the report in
+//! `omega-status.md` for what is drawn and what is not.
 
 /// The HD-derived ship directory, lowercase, confirmed by direct listing on
 /// `data00.psarc` (`Data/art/published/hdships/ag_systems/...`). 2048's own
@@ -106,11 +106,66 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     borrows_zoom_ring: false,
     zone_stage_textures: None,
     zone_sky: None,
-    team_variants: None,
+    team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
     hull_variants: None,
     fresh_variant: None,
     speed_classes: None,
+};
+
+/// The twelve HD-era teams that ship a model per Fury variant, spelled as
+/// `Data\plugins\teams\Definition.xml`'s own `PI_Team` locations are. **Not**
+/// `Tigron` and `Tigron_x`: their `PI_TeamModel`s all name one directory
+/// (`hdships\Tigron_x`, `hdships\Tigron`), and neither ships a `_c1` or `_n1`
+/// beside it. **Duplicated from `oag_hd::race::TEAMS`**, not borrowed (a title
+/// package depends on no other); the ground truth checks every combined id
+/// against Omega's own archive.
+pub const HD_ERA_TEAMS: [&str; 12] = [
+    "AG_Systems",
+    "Assegai",
+    "Auricom",
+    "EGX",
+    "Feisar",
+    "Goteki",
+    "Harimau",
+    "Icaras",
+    "Mirage",
+    "Piranha",
+    "Qirex",
+    "Triakis",
+];
+
+/// [`oag_title::RaceDefaults::team_variants`] for Omega's HD-era roster: the
+/// three directories each of [`HD_ERA_TEAMS`] ships under `hdships`, joined as
+/// HD's are (`Feisar`, `Feisar_c1`, `Feisar_n1`). **Measured**: the teams
+/// definition authors a `PI_TeamModel` for each - `normal` at `hdships\<Team>`,
+/// `concept1` at `<Team>_c1` and `nitro` at `<Team>_n1` - and the labels are
+/// those models' own `name` attributes. The same shape as HD's table, and the
+/// same three directories, checked for every team.
+///
+/// **What is not measured on Omega**: whether its AI flies the player's variant
+/// (`opponents_match_player_variant` is `false`, so every opponent flies the
+/// id the roster drew, which is a choice and not a finding - Omega's own
+/// `Ship_Construct` was not read), and which model a fresh profile opens on
+/// ([`oag_title::RaceDefaults::fresh_variant`] is `None`: the classic hull).
+pub const TEAM_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
+    teams: &HD_ERA_TEAMS,
+    variants: &[
+        oag_title::TeamVariant {
+            suffix: "",
+            label: "Normal",
+        },
+        oag_title::TeamVariant {
+            suffix: "_c1",
+            label: "Concept",
+        },
+        oag_title::TeamVariant {
+            suffix: "_n1",
+            label: "Nitro",
+        },
+    ],
+    join: oag_title::VariantJoin::Suffix,
+    opponents_match_player_variant: false,
 };
 
 /// Where Omega keeps the models of its **2048-era** craft: 2048's own tree,

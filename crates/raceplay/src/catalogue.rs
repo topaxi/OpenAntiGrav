@@ -658,6 +658,20 @@ impl Team {
             .collect()
     }
 
+    /// The one livery row of a team its title's variant table does not name:
+    /// its own directory, the empty suffix, called what the model that
+    /// resolves there is called. `None` when the team authors no per-model
+    /// ratings (Pulse's and Pure's teams) or no model sits in its directory.
+    ///
+    /// Omega's `Tigron` and `Tigron_x` are the two that need it - every one of
+    /// their models names one directory, so no `_c1`/`_n1` sibling exists to
+    /// table - and without it every row of their honeycomb is a padlock.
+    #[must_use]
+    pub fn own_directory_variant(&self) -> Option<(String, String)> {
+        let model = self.model_for_directory(&self.location)?;
+        Some((String::new(), model.name.clone()))
+    }
+
     /// What `Team Selection`'s hex column shows for each of this team's
     /// [`Self::models`], in file order: the model's own thumbnail, and
     /// whether it can be picked right now.
