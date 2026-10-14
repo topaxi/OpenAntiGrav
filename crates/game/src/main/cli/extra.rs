@@ -585,7 +585,7 @@ pub(crate) struct DevArgs {
     pub(crate) preseat: bool,
 
     /// A timed button script for a windowed run: `SECONDS:BUTTON,...`, e.g.
-    /// `5:down,5.5:down,6:right,12:quit`. Buttons are the `--press` names; `quit` ends the run.
+    /// `5:down,5.5:down,6:right,12:quit`; `+3:right` counts from where `--preseat` landed. Buttons are the `--press` names; `quit` ends the run.
     ///
     /// Seconds count from the first frame. Each entry is one tap. Unlike `--press` it needs no
     /// `--screenshot`. Dev only.

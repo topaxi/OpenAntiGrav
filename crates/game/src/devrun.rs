@@ -45,12 +45,15 @@ pub enum Step {
 
 /// A timed script: `SECONDS:BUTTON` entries, comma separated, e.g. `3:down,3.5:down,4:right,10:quit`.
 ///
-/// Seconds count from the first frame the script is polled. `quit` ends the run, so a
+/// Seconds count from the first frame the script is polled. An entry written `+SECONDS:BUTTON`
+/// counts from the moment `--preseat` lands instead (from the first frame without it), so a
+/// measurement does not depend on how long the boot took; the plain taps that got it through
+/// the boot are dropped once it has. `quit` ends the run, so a
 /// measurement under `timeout` still flushes its log.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Script {
-    steps: Vec<(f32, Step)>,
-    next: usize,
+    /// `(seconds, counted from the anchor, step, done)`, in time order within each base.
+    steps: Vec<(f32, bool, Step, bool)>,
 }
 
 impl Script {
@@ -58,15 +61,18 @@ impl Script {
     ///
     /// # Errors
     ///
-    /// Names the first entry that is not `SECONDS:BUTTON`, a negative time, or an unknown button.
+    /// Names the first entry that is not `[+]SECONDS:BUTTON`, a negative time, or an unknown button.
     pub fn parse(text: &str) -> Result<Self, String> {
         let mut steps = Vec::new();
         for entry in text.split(',').map(str::trim).filter(|e| !e.is_empty()) {
             let (at, what) = entry
                 .split_once(':')
                 .ok_or_else(|| format!("{entry:?} is not SECONDS:BUTTON"))?;
-            let at: f32 = at
+            let (relative, at) = at
                 .trim()
+                .strip_prefix('+')
+                .map_or((false, at.trim()), |rest| (true, rest));
+            let at: f32 = at
                 .parse()
                 .map_err(|_| format!("{entry:?}: {at:?} is not a number of seconds"))?;
             if !at.is_finite() || at < 0.0 {
@@ -81,10 +87,10 @@ impl Script {
                         .ok_or_else(|| format!("{entry:?}: {what:?} is not a button name or quit"))?,
                 )
             };
-            steps.push((at, step));
+            steps.push((at, relative, step, false));
         }
         steps.sort_by(|a, b| a.0.total_cmp(&b.0));
-        Ok(Self { steps, next: 0 })
+        Ok(Self { steps })
     }
 
     /// Whether the script has anything to do.
@@ -93,15 +99,22 @@ impl Script {
         self.steps.is_empty()
     }
 
-    /// The steps now due at `elapsed` seconds, each handed out once.
-    pub fn due(&mut self, elapsed: f32) -> Vec<Step> {
+    /// The steps now due, each handed out once: `elapsed` seconds since the first frame, and
+    /// `anchored` seconds since `--preseat` landed (`None` before it has, which holds the
+    /// `+` entries back).
+    pub fn due(&mut self, elapsed: f32, anchored: Option<f32>) -> Vec<Step> {
         let mut out = Vec::new();
-        while let Some(&(at, step)) = self.steps.get(self.next) {
-            if at > elapsed {
-                break;
+        for (at, relative, step, done) in &mut self.steps {
+            // A plain tap is meant for the boot (language, logo); once `--preseat` has landed
+            // it would hit the layout screen's rows instead, so it is dropped.
+            if !*relative && anchored.is_some() && matches!(step, Step::Tap(_)) {
+                *done = true;
             }
-            out.push(step);
-            self.next += 1;
+            let clock = if *relative { anchored } else { Some(elapsed) };
+            if !*done && clock.is_some_and(|clock| *at <= clock) {
+                *done = true;
+                out.push(*step);
+            }
         }
         out
     }

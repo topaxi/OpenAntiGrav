@@ -22,6 +22,8 @@ const LOG_EVERY: Duration = Duration::from_secs(1);
 #[derive(Debug, Default)]
 pub(crate) struct Clock {
     started: Option<Instant>,
+    /// When `--preseat` landed, which `+` script entries count from.
+    anchor: Option<Instant>,
     last_log: Option<Instant>,
     /// Buttons tapped on the previous frame, released on this one.
     down: Vec<Button>,
@@ -40,8 +42,11 @@ impl Session {
         for button in std::mem::take(&mut self.dev_clock.down) {
             self.controls.press_button(button, false);
         }
-        self.dev_preseat();
-        for step in self.dev.script.due((now - started).as_secs_f32()) {
+        if self.dev_preseat() {
+            self.dev_clock.anchor = Some(now);
+        }
+        let anchored = self.dev_clock.anchor.map(|at| (now - at).as_secs_f32());
+        for step in self.dev.script.due((now - started).as_secs_f32(), anchored) {
             match step {
                 Step::Tap(button) => {
                     info!("script: tap {button:?} on {}", self.dev_stage_name());
@@ -60,15 +65,15 @@ impl Session {
     /// START on the join screen, which lands on WINDOW LAYOUT (or, where that screen does not
     /// apply, on the next step of the flow). The same two calls a pad's LOCAL MULTIPLAYER and
     /// START make, so nothing about the screens differs.
-    fn dev_preseat(&mut self) {
+    fn dev_preseat(&mut self) -> bool {
         let Some(people) = self.dev.preseat else {
-            return;
+            return false;
         };
         let ready = matches!(&self.stage, Stage::Menu(stage)
             if stage.join.is_none() && stage.layout.is_none() && stage.picker.is_none())
             && self.shell.is_some();
         if !ready {
-            return;
+            return false;
         }
         self.dev.preseat = None;
         self.mp_devices = devrun::placeholder_devices(people);
@@ -78,6 +83,7 @@ impl Session {
         info!("preseat: {people} people on placeholder devices");
         self.open_join();
         self.handle_join(Outcome::Start);
+        true
     }
 
     /// The stage, and for the menus the screen over them, as the log names it.

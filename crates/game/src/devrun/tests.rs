@@ -12,11 +12,21 @@ fn placeholders_seat_the_keyboard_first_and_never_collide_with_a_real_id() {
 #[test]
 fn a_script_hands_each_step_out_once_in_time_order() {
     let mut script = Script::parse("4:right, 1:down,10:quit").unwrap();
-    assert!(script.due(0.5).is_empty());
-    assert_eq!(script.due(1.0), vec![Step::Tap(Button::Down)]);
-    assert!(script.due(3.0).is_empty());
-    assert_eq!(script.due(99.0), vec![Step::Tap(Button::Right), Step::Quit]);
-    assert!(script.due(100.0).is_empty());
+    assert!(script.due(0.5, None).is_empty());
+    assert_eq!(script.due(1.0, None), vec![Step::Tap(Button::Down)]);
+    assert!(script.due(3.0, None).is_empty());
+    assert_eq!(script.due(99.0, None), vec![Step::Tap(Button::Right), Step::Quit]);
+    assert!(script.due(100.0, None).is_empty());
+}
+
+#[test]
+fn a_plus_entry_waits_for_the_anchor_and_counts_from_it() {
+    let mut script = Script::parse("2:start,+1:down,+4:quit").unwrap();
+    assert_eq!(script.due(50.0, None), vec![Step::Tap(Button::Start)]);
+    assert!(script.due(51.0, None).is_empty());
+    assert!(script.due(60.0, Some(0.5)).is_empty());
+    assert_eq!(script.due(61.0, Some(1.0)), vec![Step::Tap(Button::Down)]);
+    assert_eq!(script.due(65.0, Some(4.0)), vec![Step::Quit]);
 }
 
 #[test]
@@ -46,4 +56,11 @@ fn the_line_carries_every_field_and_dashes_what_was_not_read() {
     assert!(line.starts_with("frame-log stage=menu:window-layout fps=59.9"));
     assert!(line.contains("gpu_ms=- "));
     assert!(line.contains("window=3840x2160 surface=3840x2160 render=-"));
+}
+
+#[test]
+fn a_plain_tap_not_yet_due_is_dropped_once_the_anchor_lands() {
+    let mut script = Script::parse("9:cross,+1:down").unwrap();
+    assert!(script.due(2.0, Some(0.0)).is_empty());
+    assert_eq!(script.due(10.0, Some(1.0)), vec![Step::Tap(Button::Down)]);
 }
