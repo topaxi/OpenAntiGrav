@@ -25,19 +25,20 @@ pub(super) fn seats(page: &str) -> Option<usize> {
 /// What `lan-lobby[:N]` or `lan-join[:N]` asks for: the screen and `N`, the people in the
 /// lobby or the hosts found (two by default, none is allowed), or `None` for any other page.
 #[must_use]
-pub(super) fn lan(page: &str) -> Option<(bool, usize)> {
+pub(super) fn lan(page: &str) -> Option<(bool, usize, usize)> {
     let (lobby, rest) = if let Some(rest) = page.strip_prefix("lan-lobby") {
         (true, rest)
     } else {
         (false, page.strip_prefix("lan-join")?)
     };
     if rest.is_empty() {
-        return Some((lobby, 2));
+        return Some((lobby, 2, 0));
     }
-    rest.strip_prefix(':')?
-        .parse::<usize>()
-        .ok()
-        .map(|n| (lobby, n.min(oag_gameplay::MAX_PLAYERS)))
+    // `:N`, and for the list `:N:K`, the row the cursor is on (0, the first, by default).
+    let mut parts = rest.strip_prefix(':')?.split(':');
+    let people = parts.next()?.parse::<usize>().ok()?;
+    let focus = parts.next().map_or(Some(0), |k| k.parse::<usize>().ok())?;
+    Some((lobby, people.min(oag_gameplay::MAX_PLAYERS), focus))
 }
 
 /// LAN's lobby with `people` waiting (the host first) or its host list with `people` hosts,
@@ -46,6 +47,8 @@ pub(super) fn lan(page: &str) -> Option<(bool, usize)> {
 pub(super) fn capture_lan(
     lobby: bool,
     people: usize,
+    focus: usize,
+    title: &str,
     strings: &oag_ui::language::StringTable,
     backdrop: Option<oag_ui::menu::Picture>,
     skin: &oag_ui::menu::Skin,
@@ -77,10 +80,16 @@ pub(super) fn capture_lan(
         let mut screen = Join::new(Labels::read_lan_list(strings), 16).as_list();
         // The first host can be joined; the next ones each show one reason in turn (another
         // title, version, content, a full race).
+        // The still's hosts run this title, or (for the "other title" row) another one.
+        let elsewhere = if title == "Wipeout HD" {
+            "Wipeout Pulse"
+        } else {
+            "Wipeout HD"
+        };
         let local = oag_net::discovery::Local {
             protocol: 1,
             build: "build",
-            title: "THIS TITLE",
+            title,
             platform: "PSP",
             content: 7,
         };
@@ -91,7 +100,7 @@ pub(super) fn capture_lan(
                     port: 4435,
                     hash: [0; 32],
                     name: NAMES[n].to_string(),
-                    title: "THIS TITLE".into(),
+                    title: title.into(),
                     platform: "PSP".into(),
                     build: "build".into(),
                     content: 7,
@@ -101,7 +110,7 @@ pub(super) fn capture_lan(
                     people: 1 + u8::try_from(n % 3).unwrap_or(0),
                 };
                 match n % 5 {
-                    1 => host.title = "OTHER TITLE".into(),
+                    1 => host.title = elsewhere.into(),
                     2 => host.protocol = 2,
                     3 => host.content = 8,
                     4 => host.people = host.max,
@@ -111,9 +120,8 @@ pub(super) fn capture_lan(
             })
             .collect();
         crate::lan_list::fill(&mut screen, &hosts, &local, strings);
-        // The cursor on the first incompatible host, so its reason shows as the hint.
-        screen.step(1);
-        if people > 1 {
+        // The cursor on row `focus`, so its line shows as the help line.
+        for _ in 0..=focus {
             screen.step(1);
         }
         screen

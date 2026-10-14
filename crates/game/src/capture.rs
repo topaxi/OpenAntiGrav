@@ -812,12 +812,14 @@ pub fn run(
                     join_page::capture(seated, &strings, frame, &skin, &menu_frame, footer);
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
-            } else if let Some((lobby, people)) = join_page::lan(page) {
+            } else if let Some((lobby, people, focus)) = join_page::lan(page) {
                 // LAN's lobby and host list - see `crate::main::session::lan` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = join_page::capture_lan(
                     lobby,
                     people,
+                    focus,
+                    title.name,
                     &strings,
                     frame,
                     &skin,
