@@ -12,16 +12,25 @@ use crate::loopback::{headless, params, pilot};
 fn welcomes_wait_for_start_then_seat_in_arrival_order_and_the_race_agrees() {
     let mut lobby = Lobby::new();
     let mut clients = Vec::new();
-    for name in ["host", "guest"] {
+    for (name, team) in [("host", "feisar"), ("guest", "qirex")] {
         let (server_end, client_end) = Loopback::pair();
         lobby.join(Box::new(server_end));
-        clients.push(Client::connect(Box::new(client_end) as Box<dyn Link>, name));
+        clients.push(Client::connect_as(
+            Box::new(client_end) as Box<dyn Link>,
+            name,
+            team,
+        ));
     }
     for _ in 0..50 {
         lobby.poll();
         std::thread::sleep(std::time::Duration::from_millis(1));
     }
     assert_eq!(lobby.names(), ["host", "guest"]);
+    assert_eq!(
+        lobby.teams(),
+        ["feisar", "qirex"],
+        "each pick waits with its name"
+    );
     for client in &mut clients {
         assert!(
             client.poll_welcome().expect("no refusal").is_none(),
@@ -29,7 +38,8 @@ fn welcomes_wait_for_start_then_seat_in_arrival_order_and_the_race_agrees() {
         );
     }
     // START: two people, so the race has two.
-    let params = params(u8::try_from(lobby.len()).expect("small"));
+    let mut params = params(u8::try_from(lobby.len()).expect("small"));
+    params.teams = lobby.teams();
     let mut host = Host::new(headless(&params), params.clone());
     for (name, link) in lobby.take() {
         host.seat(link, name).expect("a free seat");
@@ -42,6 +52,11 @@ fn welcomes_wait_for_start_then_seat_in_arrival_order_and_the_race_agrees() {
             .expect("the welcome arrived after START");
         assert_eq!(welcome.seat, n, "arrival order is seat order");
         assert_eq!(welcome.params.people, 2);
+        assert_eq!(
+            welcome.params.teams,
+            ["feisar", "qirex"],
+            "every seat learns every pick"
+        );
         seated.push((
             client,
             headless(&params),

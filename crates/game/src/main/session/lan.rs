@@ -43,6 +43,8 @@ pub(crate) struct Lan {
 }
 
 enum Step {
+    /// JOIN GAME's Ship Select, before the host list; the pick travels in the hello.
+    ShipPick,
     /// HOST GAME walking the RACE page, Track Select and Ship Select; nothing runs yet.
     Settings,
     /// The lobby: the host runs, and this machine is its first client.
@@ -65,6 +67,25 @@ enum Step {
         pending: Pending,
         to: Found,
     },
+}
+
+/// What discovery compares a host against: the title, its platform and the mods.
+pub(crate) struct LanFacts {
+    title: String,
+    platform: String,
+    content: u64,
+}
+
+impl LanFacts {
+    fn local(&self) -> oag_net::discovery::Local<'_> {
+        oag_net::discovery::Local {
+            protocol: oag_net::wire::PROTOCOL,
+            build: oag_game::BUILD_VERSION,
+            title: &self.title,
+            platform: &self.platform,
+            content: self.content,
+        }
+    }
 }
 
 /// How many hosts the list holds before TYPE AN ADDRESS stops showing. **Chosen.**
@@ -114,18 +135,45 @@ impl Session {
         )
     }
 
-    /// Ends the settings step once the menu has left the RACE page by BACK (and no Track or
-    /// Ship Select is open over it).
+    /// Whether JOIN GAME is in its Ship Select.
+    pub(crate) fn lan_picking_ship(&self) -> bool {
+        matches!(
+            self.lan,
+            Some(Lan {
+                step: Step::ShipPick
+            })
+        )
+    }
+
+    /// Ends the settings or ship step once the menu has left the page it belongs to by BACK
+    /// (and no Track or Ship Select is open over it).
     pub(crate) fn sync_lan(&mut self) {
-        if !self.lan_hosting_settings() {
+        let picking = self.lan_picking_ship();
+        if !self.lan_hosting_settings() && !picking {
             return;
         }
         let Stage::Menu(stage) = &self.stage else {
             return;
         };
-        if stage.menu.page().id != "race" && stage.picker.is_none() && stage.lan.is_none() {
+        if (picking || stage.menu.page().id != "race")
+            && stage.picker.is_none()
+            && stage.lan.is_none()
+        {
             self.lan = None;
             self.resupply_race_modes();
+        }
+    }
+
+    /// This machine as discovery's compatibility check sees it.
+    fn lan_facts(&self) -> LanFacts {
+        let mods = oag_game::mods::Mods::load().ok();
+        LanFacts {
+            title: self.shell.as_ref().map_or("", |s| s.title.name).to_string(),
+            platform: self
+                .shell
+                .as_ref()
+                .map_or_else(String::new, |s| s.platform.to_string()),
+            content: mods.as_ref().map_or(0, oag_game::mods::Mods::content_fingerprint),
         }
     }
 
@@ -158,11 +206,18 @@ impl Session {
         }
         let params = lan_params(&title, &options, self.scheme, seed());
         let name = player_name();
+        let facts = self.lan_facts();
+        self.lan_facts = Some(facts);
+        let facts = self.lan_facts.as_ref().expect("set just above");
+        self.lan_team = options.team.clone().unwrap_or_default();
         let config = Config {
             source: options.source.clone(),
             params,
             name: name.clone(),
             track_label,
+            platform: facts.platform.clone(),
+            build: oag_game::BUILD_VERSION.to_string(),
+            content: facts.content,
             port: oag_net::lan::DEFAULT_PORT,
             discovery_port: oag_net::discovery::PORT,
         };
@@ -180,7 +235,13 @@ impl Session {
             oag_net::wt::hex(&hosted.hash()),
             if hosted.announcing() { "on" } else { "off" }
         );
-        let own = Pending::new(Box::new(own_link), &name, self.net_bot, "this machine");
+        let own = Pending::new(
+            Box::new(own_link),
+            &name,
+            &self.lan_team,
+            self.net_bot,
+            "this machine",
+        );
         self.lan = Some(Lan {
             step: Step::Lobby {
                 hosted,
@@ -195,8 +256,25 @@ impl Session {
         self.show_lan_screen(Join::new(labels, oag_gameplay::MAX_PLAYERS));
     }
 
-    /// JOIN GAME: starts looking and shows the host list.
+    /// JOIN GAME: Ship Select first (the pick goes in the hello), then the host list.
     pub(crate) fn open_lan_join(&mut self) {
+        self.lan = Some(Lan {
+            step: Step::ShipPick,
+        });
+        if !self.open_ship_picker() {
+            // A title with no Ship Select: the settings' team stands.
+            self.launch_from_settings();
+        }
+    }
+
+    /// The ship is picked: starts looking and shows the host list.
+    pub(crate) fn open_lan_browse(&mut self) {
+        self.lan_team = self
+            .race_options
+            .as_ref()
+            .and_then(|options| options.team.clone())
+            .unwrap_or_default();
+        info!("lan: flying {:?} (the ship picked for the hello)", self.lan_team);
         let browser = match Browser::new() {
             Ok(browser) => browser,
             Err(e) => {
@@ -204,6 +282,7 @@ impl Session {
                 return;
             }
         };
+        self.lan_facts = Some(self.lan_facts());
         self.lan = Some(Lan {
             step: Step::Browse {
                 browser,
@@ -393,7 +472,6 @@ impl Session {
 
     /// A host row was chosen: refused by name when it plays another title, else connected to.
     fn choose_lan_host(&mut self, chosen: usize) {
-        let mine = self.shell.as_ref().map(|shell| shell.title.name);
         let Some(Lan {
             step: Step::Browse { found, .. },
         }) = &self.lan
@@ -403,10 +481,19 @@ impl Session {
         let Some(host) = found.get(chosen).cloned() else {
             return;
         };
-        if mine.is_some_and(|mine| mine != host.advert.title) {
+        let state = self
+            .lan_facts
+            .as_ref()
+            .map_or(oag_net::discovery::Compat::Joinable, |facts| {
+                oag_net::discovery::compat(&facts.local(), &host.advert)
+            });
+        if state != oag_net::discovery::Compat::Joinable {
+            // The row is unselectable already; this is the same answer for a stale list.
             let hint = self
-                .lan_say("OAG_LAN_NOT_HERE", "THIS PLAYS %s, NOT THIS DISC")
-                .replace("%s", &host.advert.title.to_uppercase());
+                .shell
+                .as_ref()
+                .and_then(|shell| oag_game::lan_list::reason(state, &shell.strings))
+                .unwrap_or_default();
             if let Stage::Menu(stage) = &mut self.stage
                 && let Some(screen) = stage.lan.as_mut()
             {
@@ -520,6 +607,7 @@ impl Session {
                             let pending = Pending::new(
                                 Box::new(link),
                                 &player_name(),
+                                &self.lan_team,
                                 self.net_bot,
                                 &to.addr.to_string(),
                             );
@@ -583,45 +671,22 @@ impl Session {
                     return;
                 }
             },
-            Step::Settings => {
-                self.lan = Some(Lan {
-                    step: Step::Settings,
-                });
+            step @ (Step::Settings | Step::ShipPick) => {
+                self.lan = Some(Lan { step });
                 return;
             }
         };
         self.lan = Some(Lan { step });
-        let mine = self.shell.as_ref().map_or("", |shell| shell.title.name);
         if let Stage::Menu(stage) = &mut self.stage
             && let Some(screen) = stage.lan.as_mut()
         {
             match rows {
                 Rows::Seats(names) => screen.set_seats(names),
                 Rows::Hosts(found) => {
-                    screen.set_seats(
-                        found
-                            .iter()
-                            .map(|host| {
-                                // A host on another title says which and no more, since it cannot
-                                // be joined; the others say their circuit and how many are in.
-                                if host.advert.title == mine {
-                                    format!(
-                                        "{} ({})",
-                                        host.advert.track.to_uppercase(),
-                                        host.advert.people
-                                    )
-                                } else {
-                                    host.advert.title.to_uppercase()
-                                }
-                            })
-                            .collect(),
-                    );
-                    screen.set_row_labels(
-                        found
-                            .iter()
-                            .map(|host| host.advert.name.to_uppercase().chars().take(12).collect())
-                            .collect(),
-                    );
+                    if let (Some(facts), Some(shell)) = (&self.lan_facts, &self.shell) {
+                        let adverts: Vec<_> = found.iter().map(|host| host.advert.clone()).collect();
+                        oag_game::lan_list::fill(screen, &adverts, &facts.local(), &shell.strings);
+                    }
                 }
             }
             if let Some(hint) = hint {
@@ -682,6 +747,7 @@ fn lan_params(
         title: title.to_string(),
         track: options.track.clone().unwrap_or_default(),
         team: options.team.clone().unwrap_or_default(),
+        teams: Vec::new(),
         class: options.class.clone(),
         mode: oag_race::Mode::SingleRace.name().to_string(),
         difficulty: options.difficulty.name().to_string(),

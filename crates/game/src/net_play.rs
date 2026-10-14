@@ -80,9 +80,15 @@ pub struct Pending {
 impl Pending {
     /// Says hello over `link`, named `name`. `bot` is `--net-bot`.
     #[must_use]
-    pub fn new(link: Box<dyn oag_net::link::Link>, name: &str, bot: bool, label: &str) -> Self {
+    pub fn new(
+        link: Box<dyn oag_net::link::Link>,
+        name: &str,
+        team: &str,
+        bot: bool,
+        label: &str,
+    ) -> Self {
         Self {
-            client: Some(Client::connect(link, name)),
+            client: Some(Client::connect_as(link, name, team)),
             bot,
             label: label.to_string(),
         }
@@ -166,7 +172,7 @@ impl NetPlay {
             Some(conditions) => Box::new(oag_net::link::Shim::new(link, conditions)),
             None => Box::new(link),
         };
-        let mut pending = Pending::new(link, &args.name, args.bot, &args.addr);
+        let mut pending = Pending::new(link, &args.name, "", args.bot, &args.addr);
         let asked = Instant::now();
         loop {
             if let Some(net) = pending.poll()? {
@@ -218,7 +224,7 @@ impl NetPlay {
             skin: None,
             opponent_teams: Vec::new(),
             grid_teams: Vec::new(),
-            seat_picks: Vec::new(),
+            seat_picks: server.seat_picks,
             laps_override: None,
             eliminator_kill_target: None,
             zone_stage: None,

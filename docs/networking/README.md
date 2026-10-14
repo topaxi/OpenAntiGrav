@@ -517,7 +517,7 @@ Both are release builds, as `just play` is: a debug build (`cargo run` without
 
 `--cert-hash` takes the 64 hex digits the server printed, or `@FILE` for the file
 `--hash-out` wrote. Server flags: `--people N` (each client takes the next seat, grid
-slot `0..N`), `--no-opponents`, `--class`, `--mode`, `--difficulty`, `--scheme`
+slot `0..N`), `--team NAME` (repeat it per seat in order, `--team a --team b`; a seat past the list flies the last one), `--no-opponents`, `--class`, `--mode`, `--difficulty`, `--scheme`
 (one control scheme per race; every client flies the server's), `--seed`,
 `--listen ADDR`, `--cert-name NAME` (another name the certificate is valid for),
 `--max-ticks N`, `--lead-ticks N`. Client flags: `--net-bot` (the player's own driver
@@ -648,7 +648,7 @@ changed no firewall**).
    on the joiner and enter the host's IPv4 address or name (the pad's or the desk keyboard's, digits,
    dot, hyphen, letters); the joiner then asks that address directly and the host appears in the list.
 
-Pointer and touch work on every one of these screens (rows click like the join screen's).
+Pointer and touch work on every one of these screens (rows click like the join screen's). In step 2 the joiner first picks a ship (Ship Select), then the list.
 
 ### How it works
 
@@ -681,12 +681,28 @@ Pointer and touch work on every one of these screens (rows click like the join s
 - **A stopped host frees its port.** The accept loop ends and closes the endpoint when the `Listener` is
   dropped; a second HOST GAME in the same game binds the same port.
 
-**One local person per machine** in this cut: no split screen on a LAN client. **Every person flies the
-host's ship**: `RaceParams` carries one team for the race, so a per-person ship needs a wire change (a
-team in the hello and one per seat in the welcome, protocol 2); open. Held fixed as in any network race:
+**One local person per machine** in this cut: no split screen on a LAN client. **Every person flies the ship they
+picked**, wire v1 changed in place (nothing is released): the hello carries the team its person wants (`Hello.team`),
+the welcome's `RaceParams.teams` lists every seat's team in seat order (an empty entry is `RaceParams.team`, the
+default), and `oag_net::race::options` maps seat 0 to `Options::team` and seats 1 and up to `Options::seat_picks`,
+on both ends, so the tick-0 hash still agrees. A joiner picks in Ship Select **before** the host list (JOIN GAME opens
+it first); the host picks in its own Ship Select. `oag-server --team a --team b` fills the seats in order (a seat past the
+list flies the last one); `--team a` alone is the old behaviour. Held fixed as in any network race:
 weapons off, our AI flies the opponents, pilot assist off, no ghost, no record. The host's race is a Single Race
 whatever the pages say. Race again is not offered on a network race (the end screen's RACE AGAIN returns
 to the menus; a rematch is a new lobby).
+
+### The join list says whether you can join (maintainer's requirement)
+
+Every host the browser finds stays in the list. The advert carries the title, the platform of its image, the build
+(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded, FNV-1a of their ids and releases;
+mods may change the sim), the circuit, the mode, and the people in out of the seats. `oag_net::discovery::compat` decides,
+on the joiner, before connecting, in this order: **OtherTitle** (another title, another platform's pressing, or this
+client lacks that image), **OtherVersion** (another protocol or build), **OtherContent** (other mods), **Full**, else
+**Joinable**. A row reads `NAME   TITLE (people/max)`; a row that cannot be joined is dimmed, cannot be selected by a
+confirm or a click, and says why as the help line while the cursor is on it (`oag_game::lan_list`, strings
+`OAG_LAN_ROW_*`); a joinable row says its circuit there. A different pressing of one platform's title (EU against USA)
+is not told apart by the advert and is refused at the tick-0 hash.
 
 ### Proof (2026-10-14, one machine, two game instances, Xvfb `:93` and `:94`, lavapipe, Pulse EU, `--net-bot` on both)
 

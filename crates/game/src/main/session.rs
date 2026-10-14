@@ -675,6 +675,10 @@ pub(crate) struct Session {
     /// LAN play, from HOST GAME or JOIN GAME until the menus reopen after the race
     /// (`session::lan`). It owns the in-process host and the connection while they run.
     pub(crate) lan: Option<lan::Lan>,
+    /// The ship this machine flies in a LAN race: its own pick, sent in the hello.
+    pub(crate) lan_team: String,
+    /// This machine as the host list compares it with a host (`session::lan`).
+    pub(crate) lan_facts: Option<lan::LanFacts>,
     /// Who sits in each pane of the layout, the panes counted across the windows from 0: the
     /// seat assignment screen's answer, kept for the race, a race again and a RETURN TO MENU
     /// race until the flow ends ([`Session::sync_multiplayer`]). Empty deals the slots in

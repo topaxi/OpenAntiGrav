@@ -144,6 +144,10 @@ pub struct Join {
     listing: bool,
     /// What a seat row says on the left in a [`Self::listing`] screen, row for row.
     row_labels: Vec<String>,
+    /// In a list, the line a row says as the hint while it is highlighted, row for row.
+    notes: Vec<Option<String>>,
+    /// In a list, the rows that cannot be chosen: drawn dimmed, answering nothing.
+    blocked: Vec<bool>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -256,6 +260,8 @@ impl Join {
             hover: None,
             listing: false,
             row_labels: Vec::new(),
+            notes: Vec::new(),
+            blocked: Vec::new(),
         }
     }
 
@@ -276,6 +282,21 @@ impl Join {
     /// the seat's own text).
     pub fn set_row_labels(&mut self, labels: Vec<String>) {
         self.row_labels = labels;
+    }
+
+    /// The line each list row says as the hint while highlighted, and which rows cannot be
+    /// chosen (a blocked row is dimmed and answers nothing).
+    pub fn set_notes(&mut self, notes: Vec<Option<String>>, blocked: Vec<bool>) {
+        self.notes = notes;
+        self.blocked = blocked;
+    }
+
+    fn note(&self, n: usize) -> Option<&str> {
+        self.notes.get(n).and_then(Option::as_deref)
+    }
+
+    fn is_blocked(&self, n: usize) -> bool {
+        self.blocked.get(n).copied().unwrap_or(false)
     }
 
     /// Whether this is the list form ([`Self::as_list`]).
@@ -306,6 +327,7 @@ impl Join {
 
     fn answer(&self, row: Row) -> Option<Event> {
         match row {
+            Row::Seat(n) if self.is_blocked(n) => None,
             Row::Seat(n) => Some(Event::Leave(n)),
             Row::Empty => Some(Event::Join),
             Row::Start if self.can_start() => Some(Event::Start),
@@ -447,7 +469,10 @@ impl Join {
             layout.scale * 0.6,
             hint_ink.unwrap_or_else(|| skin.normal()),
             Align::Left,
-            self.labels.hint.clone(),
+            match self.hover {
+                Some(Row::Seat(n)) => self.note(n).unwrap_or(&self.labels.hint).to_string(),
+                _ => self.labels.hint.clone(),
+            },
         )];
         for (index, row) in rows.into_iter().enumerate() {
             let y = layout.text_y(index);
@@ -456,6 +481,9 @@ impl Join {
             } else {
                 skin.normal()
             };
+            if matches!(row, Row::Seat(n) if self.is_blocked(n)) {
+                ink = dim(ink);
+            }
             let (left, right) = match row {
                 Row::Seat(n) => (
                     match self.row_labels.get(n).filter(|_| self.listing) {

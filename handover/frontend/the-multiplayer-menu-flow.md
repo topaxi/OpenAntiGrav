@@ -69,8 +69,7 @@ The LAN row is a page with HOST GAME and JOIN GAME (`session::lan`, `docs/networ
 (the MODE row shows a network race is a Single Race), Track Select, Ship Select, then the LAN LOBBY (the join screen in its
 lobby form, the people waiting, START RACE); join: the host list (the same screen in its list form, one row per host
 discovery found, TYPE AN ADDRESS under them, a host on another title refused by name), then a waiting screen. The address
-keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One local person per machine, every person flies
-the host's ship, a hosted race is a Single Race, no race again** (chosen). ONLINE stays greyed.
+keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One local person per machine, each person flies their own pick (Ship Select before the list; wire v1 changed in place), a hosted race is a Single Race, no race again**, and the list says per host whether it can be joined (chosen). ONLINE stays greyed.
 
 ## Lanes
 
@@ -82,10 +81,10 @@ the host's ship, a hosted race is a Single Race, no race again** (chosen). ONLIN
 
 ## Open
 
-- **LAN, open** (`lan-menu`): a ship per joiner (a team in the hello and one per seat in the welcome, protocol 2); two physical
+- **LAN, open** (`lan-menu`): two physical
   machines on a real network (broadcast, a firewall, UDP 4434 and 4435); IPv6 and a typed port; split screen on a LAN client;
   the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen (it returns to the
-  menus today); the lobby names the pressing a joiner has, so a mismatch shows before START instead of at the tick-0 hash.
+  menus today); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
 
 - ~~**A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).~~ **Done on X11 and
   Windows** (`Device::Keys`, a row per keyboard); **open on Wayland and macOS**, which name no keyboard, so a join *row* is

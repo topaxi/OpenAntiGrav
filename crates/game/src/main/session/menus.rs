@@ -897,6 +897,11 @@ impl Session {
             self.open_lan_lobby();
             return;
         }
+        // JOIN GAME's Ship Select: the pick is made, the host list is next.
+        if self.lan_picking_ship() {
+            self.open_lan_browse();
+            return;
+        }
         match self.launch_race() {
             Ok(()) => {
                 let strings = strings::project_table(self.settings.language.as_deref());

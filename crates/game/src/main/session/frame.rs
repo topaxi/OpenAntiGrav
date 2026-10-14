@@ -769,7 +769,10 @@ impl Session {
                 // ends - the original's does too. See `race::intro_camera`. After the
                 // paused and finished arms, so Start still pauses it; and never reached
                 // by a headless run, whose loop drives `Race::tick` from tick 0.
-                Stage::Race(stage) if !self.no_intro && stage.race.intro_to_play() => {
+                // A network race starts on the server's clock: no flyby.
+                Stage::Race(stage)
+                    if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
+                {
                     stage.race.begin_intro();
                     if pointer.clicked {
                         stage.race.skip_intro();

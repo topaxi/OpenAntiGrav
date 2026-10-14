@@ -374,3 +374,49 @@ fn a_list_has_no_start_names_its_own_rows_and_answers_a_confirm_with_the_index()
     pointer.back = false;
     assert_eq!(list.pointer(&pointer, &skin).last(), Some(&Event::Leave(1)));
 }
+
+/// A list row with a note is dimmed, cannot be chosen by a confirm or a click, and its note
+/// replaces the hint while the cursor is on it.
+#[test]
+fn a_row_with_a_note_is_dimmed_unselectable_and_says_why() {
+    let mut list = Join::new(labels(), 8).as_list();
+    list.set_seats(vec!["OK".into(), "NO".into()]);
+    list.set_notes(
+        vec![Some("TRACK".into()), Some("DIFFERENT VERSION".into())],
+        vec![false, true],
+    );
+    let skin = skin();
+    let said = |list: &Join| -> Vec<String> {
+        list.body(&skin, &Frame::default())
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    list.step(1);
+    assert!(
+        said(&list).contains(&"TRACK".to_string()),
+        "a joinable row says its own line too"
+    );
+    assert_eq!(list.confirm(), Some(Event::Leave(0)));
+    list.step(1);
+    assert_eq!(list.confirm(), None, "the dimmed row answers nothing");
+    assert!(
+        said(&list).contains(&"DIFFERENT VERSION".to_string()),
+        "the note is the hint"
+    );
+    assert_eq!(
+        list.pointer(&click(centre(&skin, 1)), &skin).last(),
+        None,
+        "nor does a click"
+    );
+    list.step(-1);
+    assert!(said(&list).contains(&"TRACK".to_string()));
+    list.step(-1);
+    assert!(
+        said(&list).contains(&"PRESS A BUTTON TO JOIN".to_string()),
+        "on BACK the hint comes back"
+    );
+}

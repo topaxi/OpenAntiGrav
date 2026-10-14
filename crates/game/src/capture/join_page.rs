@@ -75,12 +75,47 @@ pub(super) fn capture_lan(
         screen
     } else {
         let mut screen = Join::new(Labels::read_lan_list(strings), 16).as_list();
-        screen.set_seats(
-            (0..people)
-                .map(|n| format!("TRACK {} ({})", n + 1, n + 1))
-                .collect(),
-        );
-        screen.set_row_labels((0..people).map(|n| NAMES[n].to_string()).collect());
+        // The first host can be joined; the next ones each show one reason in turn (another
+        // title, version, content, a full race).
+        let local = oag_net::discovery::Local {
+            protocol: 1,
+            build: "build",
+            title: "THIS TITLE",
+            platform: "PSP",
+            content: 7,
+        };
+        let hosts: Vec<oag_net::discovery::Advert> = (0..people)
+            .map(|n| {
+                let mut host = oag_net::discovery::Advert {
+                    protocol: 1,
+                    port: 4435,
+                    hash: [0; 32],
+                    name: NAMES[n].to_string(),
+                    title: "THIS TITLE".into(),
+                    platform: "PSP".into(),
+                    build: "build".into(),
+                    content: 7,
+                    mode: "single_race".into(),
+                    max: 8,
+                    track: format!("Track {}", n + 1),
+                    people: 1 + u8::try_from(n % 3).unwrap_or(0),
+                };
+                match n % 5 {
+                    1 => host.title = "OTHER TITLE".into(),
+                    2 => host.protocol = 2,
+                    3 => host.content = 8,
+                    4 => host.people = host.max,
+                    _ => {}
+                }
+                host
+            })
+            .collect();
+        crate::lan_list::fill(&mut screen, &hosts, &local, strings);
+        // The cursor on the first incompatible host, so its reason shows as the hint.
+        screen.step(1);
+        if people > 1 {
+            screen.step(1);
+        }
         screen
     };
     let mut list = oag_ui_screens::join::draw_list(&screen, skin, frame, backdrop, false).flatten();

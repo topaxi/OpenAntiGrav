@@ -479,6 +479,7 @@ mod tests {
         client.send_control(&Control::Hello {
             protocol: PROTOCOL,
             name: "test".into(),
+            team: String::new(),
         });
         let mut server = wait(|| listener.accept());
         let hello = wait(|| server.recv_control()).expect("parses");

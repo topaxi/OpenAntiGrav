@@ -250,6 +250,25 @@ impl Mods {
         Self::load_from(&[])
     }
 
+    /// A fingerprint of the player mods loaded (id and release of each, in id order; the built-in
+    /// extras are the build's own). Mods may change the simulation, so a LAN host and a joiner
+    /// must agree on it (`oag_net::discovery::compat`). FNV-1a, **chosen**.
+    #[must_use]
+    pub fn content_fingerprint(&self) -> u64 {
+        let mut named: Vec<String> = self
+            .player
+            .iter()
+            .map(|m| format!("{}@{}", m.manifest.id, m.manifest.version))
+            .collect();
+        named.sort();
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+        for byte in named.join("\n").bytes() {
+            hash ^= u64::from(byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3);
+        }
+        hash
+    }
+
     /// Whether any mod beside the extras is loaded.
     #[must_use]
     pub fn has_player_mods(&self) -> bool {

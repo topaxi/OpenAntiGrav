@@ -55,6 +55,13 @@ pub struct Config {
     pub track_label: String,
     /// The game port; 0 lets the system pick.
     pub port: u16,
+    /// What discovery says of this host besides the race: the platform of the title's image,
+    /// the build and the content fingerprint (`Advert`'s fields of those names).
+    pub platform: String,
+    /// The host's build.
+    pub build: String,
+    /// The host's content fingerprint.
+    pub content: u64,
     /// The UDP port discovery queries are answered on; [`crate::discovery::PORT`] for a game.
     pub discovery_port: u16,
 }
@@ -251,6 +258,11 @@ fn run(
                 hash,
                 name: config.name.clone(),
                 title: config.params.title.clone(),
+                platform: config.platform.clone(),
+                build: config.build.clone(),
+                content: config.content,
+                mode: config.params.mode.clone(),
+                max: u8::try_from(oag_gameplay::MAX_PLAYERS).unwrap_or(8),
                 track: config.track_label.clone(),
                 people: u8::try_from(names.len()).unwrap_or(u8::MAX),
             });
@@ -264,6 +276,9 @@ fn run(
     lobby.poll();
     let mut params = config.params.clone();
     params.people = u8::try_from(lobby.len().clamp(1, oag_gameplay::MAX_PLAYERS)).unwrap_or(1);
+    // Each person flies the ship they asked for, in the order they are seated; the host's own
+    // choice (`params.team`) stands for anyone who asked for none.
+    params.teams = lobby.teams();
     let loaded = crate::race::load(&params, &config.source);
     let (race, _title) = match loaded {
         Ok(loaded) => loaded,

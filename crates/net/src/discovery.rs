@@ -43,6 +43,18 @@ pub struct Advert {
     pub name: String,
     /// The title it races (`Title::name`).
     pub title: String,
+    /// The platform the title's image is for (the pressing's family), so a PSP host and a PS2
+    /// joiner of the same title are told apart before connecting.
+    pub platform: String,
+    /// The host's build (`BUILD_VERSION`): a different build may simulate differently.
+    pub build: String,
+    /// A fingerprint of the host's content beyond the title: the mods it runs. Mods may change the
+    /// sim, so a joiner's must match.
+    pub content: u64,
+    /// The race mode ([`oag_race::Mode::name`]).
+    pub mode: String,
+    /// Seats the host's race has, the most people it can take.
+    pub max: u8,
     /// The circuit, as the host's menu names it (a display label, not an id).
     pub track: String,
     /// People in the lobby now, the host included.
@@ -65,8 +77,13 @@ impl Advert {
         out.extend_from_slice(&self.port.to_le_bytes());
         out.extend_from_slice(&self.hash);
         out.push(self.people);
+        out.push(self.max);
+        out.extend_from_slice(&self.content.to_le_bytes());
         put_str(&mut out, &self.name);
         put_str(&mut out, &self.title);
+        put_str(&mut out, &self.platform);
+        put_str(&mut out, &self.build);
+        put_str(&mut out, &self.mode);
         put_str(&mut out, &self.track);
         out
     }
@@ -75,12 +92,16 @@ impl Advert {
     #[must_use]
     pub fn decode(bytes: &[u8]) -> Option<Self> {
         let rest = bytes.strip_prefix(&REPLY)?;
-        let (head, mut rest) = rest.split_at_checked(2 + 2 + 32 + 1)?;
+        let (head, mut rest) = rest.split_at_checked(2 + 2 + 32 + 1 + 1 + 8)?;
         let protocol = u16::from_le_bytes([head[0], head[1]]);
         let port = u16::from_le_bytes([head[2], head[3]]);
         let mut hash = [0; 32];
         hash.copy_from_slice(&head[4..36]);
         let people = head[36];
+        let max = head[37];
+        let mut content = [0u8; 8];
+        content.copy_from_slice(&head[38..46]);
+        let content = u64::from_le_bytes(content);
         let mut take = || -> Option<String> {
             let (&len, tail) = rest.split_first()?;
             let (text, tail) = tail.split_at_checked(usize::from(len))?;
@@ -89,6 +110,9 @@ impl Advert {
         };
         let name = take()?;
         let title = take()?;
+        let platform = take()?;
+        let build = take()?;
+        let mode = take()?;
         let track = take()?;
         Some(Self {
             protocol,
@@ -96,9 +120,62 @@ impl Advert {
             hash,
             name,
             title,
+            platform,
+            build,
+            content,
+            mode,
+            max,
             track,
             people,
         })
+    }
+}
+
+/// What this machine is, for [`compat`]: the same facts an [`Advert`] states of a host.
+#[derive(Debug, Clone, Copy)]
+pub struct Local<'a> {
+    /// [`crate::wire::PROTOCOL`].
+    pub protocol: u16,
+    /// This build.
+    pub build: &'a str,
+    /// The title this machine has open.
+    pub title: &'a str,
+    /// Its platform.
+    pub platform: &'a str,
+    /// This machine's content fingerprint.
+    pub content: u64,
+}
+
+/// Whether this machine can join a host, worked out before connecting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Compat {
+    /// Everything matches and there is a seat.
+    Joinable,
+    /// Another title, or another platform's pressing of it (this machine may lack that image).
+    OtherTitle,
+    /// Another wire protocol or another build.
+    OtherVersion,
+    /// Other mods or content: the sim would differ.
+    OtherContent,
+    /// No seat is free.
+    Full,
+}
+
+/// The decision, most fundamental difference first: title, then version, then content, then
+/// seats. **Chosen**; a different pressing of one platform's title (EU and USA) is not told
+/// apart here and is refused at the tick-0 hash.
+#[must_use]
+pub fn compat(local: &Local<'_>, host: &Advert) -> Compat {
+    if host.title != local.title || host.platform != local.platform {
+        Compat::OtherTitle
+    } else if host.protocol != local.protocol || host.build != local.build {
+        Compat::OtherVersion
+    } else if host.content != local.content {
+        Compat::OtherContent
+    } else if host.people >= host.max {
+        Compat::Full
+    } else {
+        Compat::Joinable
     }
 }
 
@@ -270,9 +347,66 @@ mod tests {
             hash: [7; 32],
             name: "Ada".into(),
             title: "pulse".into(),
+            platform: "PSP".into(),
+            build: "0.1 (abc)".into(),
+            content: 77,
+            mode: "single_race".into(),
+            max: 8,
             track: "Vineta K".into(),
             people: 2,
         }
+    }
+
+    fn local() -> Local<'static> {
+        Local {
+            protocol: 1,
+            build: "0.1 (abc)",
+            title: "pulse",
+            platform: "PSP",
+            content: 77,
+        }
+    }
+
+    /// One case per state, and the order they win in.
+    #[test]
+    fn the_compatibility_decision_has_one_answer_per_state() {
+        let host = advert();
+        assert_eq!(compat(&local(), &host), Compat::Joinable);
+        let mut other = host.clone();
+        other.title = "pure".into();
+        assert_eq!(compat(&local(), &other), Compat::OtherTitle);
+        let mut other = host.clone();
+        other.platform = "PS2".into();
+        assert_eq!(
+            compat(&local(), &other),
+            Compat::OtherTitle,
+            "another pressing's platform"
+        );
+        let mut other = host.clone();
+        other.protocol = 2;
+        assert_eq!(compat(&local(), &other), Compat::OtherVersion);
+        let mut other = host.clone();
+        other.build = "0.2 (def)".into();
+        assert_eq!(compat(&local(), &other), Compat::OtherVersion);
+        let mut other = host.clone();
+        other.content = 78;
+        assert_eq!(compat(&local(), &other), Compat::OtherContent);
+        let mut other = host.clone();
+        other.people = other.max;
+        assert_eq!(compat(&local(), &other), Compat::Full);
+        // The title is the first thing that is wrong, then the version, then the content.
+        let mut other = host;
+        other.title = "pure".into();
+        other.protocol = 2;
+        other.content = 1;
+        other.people = other.max;
+        assert_eq!(compat(&local(), &other), Compat::OtherTitle);
+        other.title = "pulse".into();
+        assert_eq!(compat(&local(), &other), Compat::OtherVersion);
+        other.protocol = 1;
+        assert_eq!(compat(&local(), &other), Compat::OtherContent);
+        other.content = 77;
+        assert_eq!(compat(&local(), &other), Compat::Full);
     }
 
     #[test]

@@ -576,6 +576,8 @@ impl App {
             seat_clicks: 0,
             multiplayer: false,
             lan: None,
+            lan_team: String::new(),
+            lan_facts: None,
             pane_people: Vec::new(),
             mp_devices: Vec::new(),
             split_picks: Vec::new(),

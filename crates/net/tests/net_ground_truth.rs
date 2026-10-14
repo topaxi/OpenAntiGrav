@@ -22,6 +22,7 @@ fn params() -> RaceParams {
         title: String::new(),
         track: "Data\\Environments\\01_Track\\track.vex".into(),
         team: String::new(),
+        teams: Vec::new(),
         class: "VENOM".into(),
         mode: "single_race".into(),
         difficulty: "elite".into(),
@@ -122,6 +123,9 @@ fn a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets() {
         name: "Ada".into(),
         track_label: "Talon".into(),
         port: 0,
+        platform: "PSP".into(),
+        build: "test".into(),
+        content: 0,
         discovery_port,
     })
     .expect("hosts");

@@ -250,7 +250,7 @@ impl Host {
                 continue;
             };
             let reason = match message {
-                Ok(Control::Hello { protocol, name }) if protocol == PROTOCOL => {
+                Ok(Control::Hello { protocol, name, .. }) if protocol == PROTOCOL => {
                     // `seat` has already sent a refusal its reason by name.
                     if let Err(why) = self.seat(link, name) {
                         log::warn!("net: refused a connection: {why}");

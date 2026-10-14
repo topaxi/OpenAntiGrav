@@ -42,9 +42,11 @@ struct Cli {
     /// The circuit, as the game's `--track` takes it; the title's default when absent.
     #[arg(long, default_value = "")]
     track: String,
-    /// The team every person flies, as the game's `--team` takes it.
-    #[arg(long, default_value = "")]
-    team: String,
+    /// The team a person flies, as the game's `--team` takes it. Repeat it for each seat in
+    /// order (`--team a --team b`: seat 0 flies a, seat 1 b); a seat past the list flies the
+    /// last one given.
+    #[arg(long = "team")]
+    teams: Vec<String>,
     /// The speed class, as the title spells it.
     #[arg(long, default_value = "VENOM")]
     class: String,
@@ -91,7 +93,8 @@ fn main() -> Result<()> {
     let mut params = RaceParams {
         title: String::new(),
         track: cli.track.clone(),
-        team: cli.team.clone(),
+        team: cli.teams.last().cloned().unwrap_or_default(),
+        teams: cli.teams.clone(),
         class: cli.class.clone(),
         mode: cli.mode.clone(),
         difficulty: cli.difficulty.clone(),

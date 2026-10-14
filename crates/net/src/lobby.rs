@@ -12,6 +12,7 @@ use crate::wire::{Control, PROTOCOL};
 
 struct Waiting {
     name: String,
+    team: String,
     link: Box<dyn Link>,
 }
 
@@ -47,8 +48,12 @@ impl Lobby {
                 continue;
             };
             let reason = match message {
-                Ok(Control::Hello { protocol, name }) if protocol == PROTOCOL => {
-                    self.waiting.push(Waiting { name, link });
+                Ok(Control::Hello {
+                    protocol,
+                    name,
+                    team,
+                }) if protocol == PROTOCOL => {
+                    self.waiting.push(Waiting { name, team, link });
                     continue;
                 }
                 Ok(Control::Hello { protocol, .. }) => {
@@ -81,6 +86,12 @@ impl Lobby {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.waiting.is_empty()
+    }
+
+    /// The team each waiting person asked for, in the order they will be seated.
+    #[must_use]
+    pub fn teams(&self) -> Vec<String> {
+        self.waiting.iter().map(|w| w.team.clone()).collect()
     }
 
     /// Hands over everyone waiting, name and link, first arrival first.

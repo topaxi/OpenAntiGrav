@@ -9,6 +9,9 @@ use super::Session;
 /// LAN play's state: none on the web.
 pub(crate) struct Lan;
 
+/// What the host list compares: nothing on the web.
+pub(crate) struct LanFacts;
+
 impl Session {
     pub(crate) fn open_lan_host(&mut self) {
         self.play_navs(Some(Nav::Decline));
