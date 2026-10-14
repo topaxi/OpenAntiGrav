@@ -276,7 +276,7 @@ use effects::exhaust_seed;
 #[cfg(test)]
 pub(crate) use held_buttons::key_for_button;
 use hud::load_hud;
-use spawn::{grid_poses, spawn_pose, start_position_of};
+use spawn::{grid_poses, grid_row, spawn_pose, start_position_of};
 use spline::{ai_order, racing_line};
 use visibility::{CAMERA_SEARCH_SAMPLES, OFF_TRACK_HALF_WIDTHS, visible};
 

@@ -115,3 +115,59 @@ fn a_person_stands_on_the_row_an_opponent_stood_on() {
         one.sim.world.ships[0].physics.body.position
     );
 }
+
+/// A Head to Head race with `people` people, built the way the load builds it.
+fn head_to_head_with(people: u8) -> Race {
+    let mut setup = setup(hulled_handling());
+    setup.mode = Mode::Head2Head;
+    setup.people = people;
+    setup.start_position = Some(oag_vex::track::StartPosition {
+        position: [0.0, 0.0, 0.0],
+        left: [0.0, 0.0, -1.0],
+        up: [0.0, 1.0, 0.0],
+        forward: [1.0, 0.0, 0.0],
+    });
+    Race::start(setup)
+}
+
+/// The `x` of grid row `row` (1 front, 8 back) of the full grid, read off an eight-craft race.
+fn full_grid_x(row: usize) -> f32 {
+    let race = race_with(1);
+    let order = back_to_front(&race);
+    race.sim.world.ships[order[8 - row]].physics.body.position.x
+}
+
+/// One person: the AI on place 1 and the player on place 2, the two FRONT places (PPSSPP,
+/// measured). Fails on the build that packed the field to the back rows 8 and 7.
+#[test]
+fn head_to_head_one_person_starts_on_the_front_two_places() {
+    let race = head_to_head_with(1);
+    assert_eq!(race.sim.world.ship_count, 2);
+    let x = |ship: usize| race.sim.world.ships[ship].physics.body.position.x;
+    assert!((x(1) - full_grid_x(1)).abs() < 1e-3, "AI on place 1");
+    assert!((x(0) - full_grid_x(2)).abs() < 1e-3, "player on place 2");
+}
+
+/// Two people: person 2 on place 1 and person 1 on place 2 (PS2, measured).
+#[test]
+fn head_to_head_two_people_start_on_the_front_two_places() {
+    let race = head_to_head_with(2);
+    assert_eq!(race.sim.world.ship_count, 2);
+    let x = |ship: usize| race.sim.world.ships[ship].physics.body.position.x;
+    assert!((x(1) - full_grid_x(1)).abs() < 1e-3, "person 2 on place 1");
+    assert!((x(0) - full_grid_x(2)).abs() < 1e-3, "person 1 on place 2");
+}
+
+/// The rule behind it, with no mode in it: a front-anchored field of N fills places 1..=N and
+/// a packed one keeps its rank from the back of the eight.
+#[test]
+fn the_row_of_a_field_is_its_rank_from_the_front_or_the_back() {
+    use crate::spawn::grid_row;
+    assert_eq!(grid_row(0, 2, true), 2);
+    assert_eq!(grid_row(1, 2, true), 1);
+    assert_eq!(grid_row(0, 2, false), 8);
+    assert_eq!(grid_row(1, 2, false), 7);
+    for rank in 0..8 {
+        assert_eq!(grid_row(rank, 8, true), grid_row(rank, 8, false));
+    }
+}

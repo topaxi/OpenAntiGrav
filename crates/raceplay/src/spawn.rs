@@ -188,6 +188,24 @@ fn face_the_way_the_track_runs(pose: Pose, slot: &StartPosition, spline: &Spline
     pose.facing(levelled)
 }
 
+/// The grid row (1 front, `GRID_SLOTS` back) a craft of rank `rank` from the back of a field
+/// of `field` craft starts on ([`oag_gameplay::rank_from_back`]).
+///
+/// **A short field packs to the back** (`front_anchored == false`): `GRID_SLOTS - rank`, so a
+/// full grid is untouched. **A front-anchored field** keeps the racer index as the eight-place
+/// slot, so a field of two fills places 1 and 2 (`field - rank`): Head to Head, measured on
+/// PPSSPP and PCSX2 (`docs/ghidra/functions/ps2-pulse-eu/head2head.md`, confidence 92).
+/// Every row computation (pose, load report, original AI grid) goes through here.
+#[must_use]
+pub(crate) fn grid_row(rank: usize, field: usize, front_anchored: bool) -> usize {
+    let span = if front_anchored {
+        field.clamp(1, GRID_SLOTS as usize)
+    } else {
+        GRID_SLOTS as usize
+    };
+    span.saturating_sub(rank).max(1)
+}
+
 /// Every grid slot's pose, front to back, re-dropped onto the track under each.
 ///
 /// `base` is slot 8 - the authored `Start Position` node, which
