@@ -13,7 +13,8 @@ use oag_raceplay as race;
 use oag_raceplay::Ghost;
 
 /// Loads `key`'s stored ghost into `race` and starts recording, on a mode that
-/// races one. A no-op on every other mode.
+/// races one with one person flying it. A no-op otherwise: a ghost is a single
+/// player's Time Trial or Speed Lap (maintainer, 2026-10-14).
 pub(crate) fn arm(
     race: &mut race::Race,
     key: &records::Key,
@@ -22,7 +23,7 @@ pub(crate) fn arm(
     seed: u64,
     options: std::collections::BTreeMap<String, String>,
 ) {
-    if !mode.races_a_ghost() {
+    if !races_a_ghost(mode, race.people()) {
         return;
     }
     if let Some(stored) = ghosts::load(key)
@@ -46,9 +47,9 @@ pub(crate) fn arm(
 /// call, and it beats the stored file. Logged, never fatal - the
 /// `records.toml` contract.
 pub(crate) fn save(race: &mut race::Race, key: &records::Key) {
-    // A split screen's lap is slot 0's, in a race a second person was in: not a
-    // ghost anybody should race against.
-    if race.viewport_count() > 1 {
+    // A lap from a race a second person was in, split or in another window, is
+    // not a ghost anybody should race against.
+    if race.people() > 1 {
         return;
     }
     let Some(replay) = race.take_new_best_ghost() else {
@@ -61,5 +62,26 @@ pub(crate) fn save(race: &mut race::Race, key: &records::Key) {
         ),
         Ok(false) => {}
         Err(e) => error!("could not save the ghost: {e:#}"),
+    }
+}
+
+/// Whether a race of `mode` with `people` flying it races a ghost: a Time
+/// Trial or Speed Lap with one person.
+fn races_a_ghost(mode: oag_race::Mode, people: usize) -> bool {
+    mode.races_a_ghost() && people == 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::races_a_ghost;
+    use oag_race::Mode;
+
+    #[test]
+    fn only_a_single_players_time_trial_or_speed_lap_races_a_ghost() {
+        assert!(races_a_ghost(Mode::TimeTrial, 1));
+        assert!(races_a_ghost(Mode::SpeedLap, 1));
+        assert!(!races_a_ghost(Mode::TimeTrial, 2));
+        assert!(!races_a_ghost(Mode::SpeedLap, 4));
+        assert!(!races_a_ghost(Mode::Head2Head, 1));
     }
 }
