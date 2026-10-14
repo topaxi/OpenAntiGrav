@@ -12,8 +12,8 @@ executable imports and decompiles here, so the question is checkable. Static onl
 other writer and stores `1` (`MOV byte ptr [R13 + 0x8890], 1` at `0x01393b7d`; it also writes
 `DAT_019ff468` at `0x01393b30`). The pair dispatch reads the byte before every **dynamic against
 dynamic** test: box against box, box against sphere and a third pair kind. Box against track mesh
-does not read it. So craft pass through each other in Omega's online Time Trial, as on Pulse, HD
-and Pure.
+does not read it. So the box colliders pass through each other in Omega's online Time Trial, as
+on Pulse, HD and Pure; that the craft is the box collider is by lineage (65), not re-read here.
 
 **It differs from HD in width.** HD gates the box-box case alone (spheres only ever meet the
 mesh there). Omega's byte also gates the sphere pairs, so a Time Trial would switch off a craft
@@ -42,6 +42,19 @@ manager, is set by the constructor, and guards the dynamic pairs.
 [collision.md](collision.md) declined to name `0x01393610` on the tag alone (2026-09-15). The
 sole `+0x8890` writer, the contact array and the pair pass above are the code evidence it asked
 for.
+
+## Cross-check (2048 and HD)
+
+- **2048: ported.** Same byte (`+0x7448`), same constructor shape, a gate of
+  seven `movw` sites; [../vita-2048-eu-v104/mp-time-trial-collision.md](../vita-2048-eu-v104/mp-time-trial-collision.md).
+  The online mode is not offered by 2048's data, so nothing is left to wire there.
+- **HD: checked, differs.** HD gates the box-box case only; [../ps3-hdfury-eu/mp-time-trial-collision.md](../ps3-hdfury-eu/mp-time-trial-collision.md).
+
+A count of `90 88 00 00` over the whole program finds 59 hits, because `+0x8890` is a common
+displacement in other objects. Eight sit in the collision pair: the clear and the set (`0x0127ed0f`,
+`0x01393b80`) and the six reads (`0x0131e775`, `0x0131ec9e`, `0x0131ecde`, `0x0131f288`,
+`0x0131f2d1`, `0x0131f563`). The rest were not checked one by one against the readers of
+`DAT_019ff468`.
 
 ## Port consequence
 

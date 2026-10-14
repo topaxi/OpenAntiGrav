@@ -31,5 +31,5 @@ was not traced.
 
 ## Cross-check
 
-- **Omega: checked, applies** ([../ps4-omega-eu/mp-time-trial-collision.md](../ps4-omega-eu/mp-time-trial-collision.md)): the same byte, and a gate wider than craft against craft there; 2048's own gate count (seven `movw`) agrees with Omega's six-site shape, so 2048 probably gates the sphere pairs too (not read).
+- **Omega: checked, differs** ([../ps4-omega-eu/mp-time-trial-collision.md](../ps4-omega-eu/mp-time-trial-collision.md)): the same byte, and a gate wider than craft against craft there; 2048's own gate count (seven `movw`) agrees with Omega's six-site shape, so 2048 probably gates the sphere pairs too (not read).
 - **Port:** none. 2048's local split Time Trial takes Pulse's rule, **chosen**.

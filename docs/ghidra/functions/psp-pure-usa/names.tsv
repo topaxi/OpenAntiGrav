@@ -191,3 +191,7 @@
 0x08879020	function	Quake_SampleSpan	75	quake.md
 0x0882e648	function	ScreenFlash_Start	80	quake.md
 0x0893bf08	function	ParticleSystem_SetScaleParams	80	quake.md
+
+# 2026-10-14 (mp-collision-re): the MPTimeTrial constructor and the craft-pair dispatch. See mp-time-trial-collision.md.
+0x08815e1c	function	MPTimeTrial_Construct	82	mp-time-trial-collision.md
+0x08824e34	function	Collision_DispatchPair	80	mp-time-trial-collision.md

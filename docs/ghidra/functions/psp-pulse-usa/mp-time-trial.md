@@ -42,20 +42,22 @@ every mode except `0x12` (Elimination, which sorts by kills):
 
 1. each craft gets its total race time, `Craft_TotalRaceTime` (`0x08826b18`), as a float key, and
    the keys are sorted ascending (`FUN_088265cc` compares `+4` as floats, smaller first; the
-   default element `FUN_08826c74` is index `-1`, key `1,000,000`);
-2. each craft, in that order, goes to the row `mgr + 0x58 + 4 * craftId` holds, or, when that
-   is `-1`, to its race place `craft + 0xbd4 - 1` (`+0xbd4` is index plus one, distinct per
-   craft, [race-progress.md](race-progress.md));
+   default element `FUN_08826c74` is index `-1`, key `0x497423f0`, 999,999.0);
+2. each craft, in that order, goes to the row `mgr + 0x58 + 4 * craftId` holds. That slot is
+   written by this same function: when it is `-1` and the craft has finished (`craft + 0x912`),
+   it latches the craft's race place `craft + 0xbd4 - 1` (`+0xbd4` is index plus one, distinct per
+   craft, [race-progress.md](race-progress.md)); a craft with the slot still `-1` uses that
+   place unlatched. So the row is the place at the moment of finishing;
 3. the record gets the name, kills and deaths, and `+0x140` is `Craft_TotalRaceTime` when the
    craft has finished (`craft + 0x912` set), `-2` while still racing and `-1` when destroyed or
    retired (`Ship_State` 6 or 7).
 
 `Race_UpdatePositions` (`0x08827f0c`) keys finished craft by total time in centiseconds, so the
 race place is finishing order, which is total-time order from the common start. **The board is
-ranked by total race time; a person still racing sits below every finisher.** Not found: the
-writer of `mgr + 0x58` (the latched place), and what a tie in centiseconds does to the row (the
-rows are distinct places, so two equal times do not share a row). Confidence 76: both ends of the
-record layout and the whole fill are read, no run, and one input (`+0x58`) is unread.
+ranked by total race time; a person still racing sits below every finisher.** Not found: who
+resets the `mgr + 0x58` slots to `-1`, and what a tie in centiseconds does (the rows are
+distinct places, so two equal times do not share a row). Confidence 76: both ends of the
+record layout and the whole fill are read, no run.
 
 This agrees with the port (`oag_race::places`, finishing tick, the same order) and needs no change.
 
@@ -106,19 +108,19 @@ Pulse's hull draws inside the other's, HD's two hulls visibly interpenetrate.
 
 **2048 / Omega / HD / Pure cross-check (CLAUDE.md), 2026-10-14, static:**
 
-- **HD: ported (the law), not wired (online).** The `MPTimeTrial` race manager (`0x00041248`,
+- **HD: ported.** The local rule is title-generic (`Mode::craft_collide`), and HD's own run shows the hulls interpenetrate ("The port" above). The online mode is not built. The `MPTimeTrial` race manager (`0x00041248`,
   mode 19) clears `collision + 0x17778`, which `Collision_ProcessPairs` reads only in the box-box
   case; craft against the track is not gated
   ([../ps3-hdfury-eu/mp-time-trial-collision.md](../ps3-hdfury-eu/mp-time-trial-collision.md), 84).
   `multiplayer_definition.xml` (`DATA02`) offers `Create Time Trial`, 2 to 8 players, Pulse's file
   shape. No online play here; the local split is Pulse's rule on HD's authored arcade split
   layout, **chosen**, and it now agrees with the original's collision.
-- **Omega: ported (the law), not wired (online).** `multiplayer_definition.xml` (`data09`) is
+- **Omega: ported, with a difference.** The rule is title-generic and weapons are off, so it is the same here; the online mode is not built. `multiplayer_definition.xml` (`data09`) is
   byte-identical to HD's. `MPTimeTrialRaceManager_Construct` (`0x0127ecd0`) clears
   `collision + 0x8890`; **checked, differs in width**: the byte also gates box-against-sphere and
   a third dynamic pair, not box-box alone, which changes nothing here because weapons are off
   ([../ps4-omega-eu/mp-time-trial-collision.md](../ps4-omega-eu/mp-time-trial-collision.md), 74).
-- **2048: corrected, was "checked, differs".** The executable still carries
+- **2048: ported (corrected from "checked, differs").** The executable still carries
   `Backend/General/MPTimeTrial_RaceManager.cpp`; its constructor `FUN_8116385c` clears the same
   kind of byte (`+0x7448`) and the by-mode factory builds it for mode id `0x13`. What 2048 does
   not have is a way in that was found: no `multiplayer_definition.xml`, and `MP.xml` is a season
@@ -126,7 +128,7 @@ Pulse's hull draws inside the other's, HD's two hulls visibly interpenetrate.
   class exists and its reachability is **not shown**
   ([../vita-2048-eu-v104/mp-time-trial-collision.md](../vita-2048-eu-v104/mp-time-trial-collision.md), 74).
   The local split borrows HD's, **chosen**.
-- **Pure: ported (the law), not wired (online).** `MPTimeTrial_Construct` (USA `0x08815e1c`, EU
+- **Pure: ported.** The rule is title-generic; ground truth runs on Pulse and HD only. The online mode is not built. `MPTimeTrial_Construct` (USA `0x08815e1c`, EU
   `0x08815c34`) clears `world + 0x3664`, and `Collision_DispatchPair` runs `Collision_BoxAgainstBox`
   only when it is set, the same as Pulse
   ([../psp-pure-usa/mp-time-trial-collision.md](../psp-pure-usa/mp-time-trial-collision.md), 82;
@@ -140,7 +142,7 @@ is needed.
 
 - Translucency: the craft draw call for a non-local racer, checked for a `g_game_mode == 0x11`
   test (start from the `MPTag_HUD.xml` owner `FUN_0881b86c` and the craft render pass).
-- The latched place `mgr + 0x58` and whether a tied centisecond total shares a row
-  ([the board](#the-end-board-order)); and what `player + 0x911` and the `+0x1bc = 4` store in
+- Who resets the latched place slots `mgr + 0x58` to `-1`, and whether a tied centisecond total
+  changes a row ([the board](#the-end-board-order)); and what `player + 0x911` and the `+0x1bc = 4` store in
   `MPTimeTrial`'s racing state are.
 - A live check needs two PPSSPP instances on one ad-hoc link.
