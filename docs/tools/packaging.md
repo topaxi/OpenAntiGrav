@@ -593,7 +593,24 @@ last holds for a launch over ssh with a bare environment, which is how it was fi
 does not ask whether the machine is a Deck. Under gamescope the window size is requested as
 physical pixels (`window::request_size`), held to the monitor's size, and the position uses scale 1
 (`window::effective_scale`). The same function sizes a window changed from the settings menu.
-Borderless was never affected and a desktop is unchanged (a logical size at the reported scale).
+A desktop is unchanged (a logical size at the reported scale).
+
+**Borderless was affected too, through the surface (measured on the Deck, 2026-10-14).** The
+request was fine (`window: requested 3840x2160 logical` was only a label), but winit's X11 backend
+reads a freshly fullscreened window's `inner_size()` as the monitor's size times its scale, so
+the first surface was configured from 23040x12960 (3840x2160 x 6) and only the device texel limit
+caught it:
+
+```
+[INFO ] window: requested 3840x2160 logical, scale 6, inner 23040x12960, fullscreen true
+[WARN ] surface 23040x12960 is past the device's 16384 texel limit; configured 16384x12960
+```
+
+The first `Resized` then brought it back to 3840x2160. `window::surface_size` /
+`window::held_to_monitor` now hold every size a surface is configured from (the first surface, a
+recreated one, a further window's, and `WindowEvent::Resized`) to the monitor's size under
+gamescope; the window line logs both, `inner 3840x2160 (winit reports 23040x12960)`. After, on the
+Deck: `inner 3840x2160`, no clamp warning, `surface=3840x2160` in every frame-log line.
 Seat windows (`session/windows.rs`) take the same `effective_scale` for their placement.
 
 **Windowed is borderless under gamescope (maintainer decision, 2026-10-14).** A window frame
