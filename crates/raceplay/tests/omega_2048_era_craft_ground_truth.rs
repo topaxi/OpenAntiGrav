@@ -120,7 +120,7 @@ fn omegas_honeycomb_opens_the_variants_it_races_with_the_discs_own_ratings() {
         .find(|team| team.id == "Feisar")
         .expect("Feisar");
 
-    let cells = feisar.hex_cells(ids.iter().copied());
+    let cells = feisar.hex_cells(table.join, ids.iter().copied());
     assert_eq!(cells.len(), 9, "the nine models that author an <FE>");
     assert_eq!(cells.iter().filter(|cell| cell.open).count(), 3);
     let rate = |speed, thrust, handling, shield| {
@@ -133,7 +133,7 @@ fn omegas_honeycomb_opens_the_variants_it_races_with_the_discs_own_ratings() {
     };
     // `normal` 7/8/10/8, `concept1` and `nitro` 8/8.5/10/8.
     assert_eq!(
-        feisar.variant_stats(ids.iter().copied()),
+        feisar.variant_stats(table.join, ids.iter().copied()),
         vec![
             rate(70, 80, 100, 80),
             rate(80, 85, 100, 80),
@@ -157,13 +157,92 @@ fn omegas_honeycomb_opens_the_variants_it_races_with_the_discs_own_ratings() {
         );
         let own = team.own_directory_variant().expect("its own directory");
         assert_eq!(own.1, name, "{id}: the open model");
-        let cells = team.hex_cells([own.0.as_str()]);
+        let cells = team.hex_cells(VariantJoin::Suffix, [own.0.as_str()]);
         assert_eq!(cells.iter().filter(|cell| cell.open).count(), 1, "{id}");
-        let stats = team.variant_stats([own.0.as_str()])[0].expect("rated");
+        let stats = team.variant_stats(VariantJoin::Suffix, [own.0.as_str()])[0].expect("rated");
         assert_eq!(
             (stats.speed, stats.thrust, stats.handling, stats.shield),
             want,
             "{id}"
         );
     }
+}
+
+/// The five 2048-era teams open their four numbered craft on `Team Selection`:
+/// the join is the roster's own (`Subdirectory`), not a suffix, so each of the
+/// four `1`..`4` finds its model (`Feisar2048\3`, never `Feisar20483`), the four
+/// `IsVR` models that share those numbers under `VR_2048` stay padlocks, and every
+/// open cell's thumbnail and the team's logo are on the disc. Feisar2048's authored
+/// ratings in table order: combat (`1`) 5/8.5/6/8, agility (`2`) 5/8/9/6, speed (`3`)
+/// 8/8/7/4, prototype (`4`) 8/8/7/4. Dropping the join gives no open cell.
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn the_2048_era_teams_open_their_four_numbered_craft_with_the_discs_own_ratings() {
+    let Some(mut archives) = opened() else { return };
+    let xml = archives
+        .read_name(oag_omega::TITLE.plugin_definition)
+        .expect("teams definition");
+    let teams = oag_raceplay::catalogue::teams(&String::from_utf8_lossy(&xml));
+    let defaults = oag_omega::race::DEFAULTS;
+    let table = oag_omega::race::ERA_2048_VARIANTS;
+    let suffixes: Vec<&str> = table.variants.iter().map(|v| v.suffix).collect();
+    for id in table.teams {
+        let team = teams.iter().find(|team| team.id == *id).expect("declared");
+        assert_eq!(defaults.join_for(id), table.join, "{id}");
+        assert!(
+            defaults.names_no_craft(id),
+            "{id}: no craft under the bare id"
+        );
+        let cells = team.hex_cells(defaults.join_for(id), suffixes.iter().copied());
+        assert_eq!(cells.len(), 8, "{id}: four craft and their four VR copies");
+        let open: Vec<_> = cells.iter().filter(|cell| cell.open).collect();
+        assert_eq!(open.len(), 4, "{id}");
+        assert!(cells[4..].iter().all(|cell| !cell.open), "{id}: VR rows");
+        for cell in open {
+            // The sprite is named `.gtf` as HD's are; Omega's files are `.gnf`.
+            let thumb = cell.thumb.as_deref().expect("a thumbnail name");
+            let thumb = thumb.replace(".gtf", ".gnf");
+            assert!(archives.read_name(&thumb).is_ok(), "{id}: {thumb}");
+        }
+        let logo = oag_ui_screens::picker::hd::logo_src(&team.location).replace(".gtf", ".gnf");
+        assert!(archives.read_name(&logo).is_ok(), "{id}: {logo}");
+        assert!(
+            team.variant_stats(defaults.join_for(id), suffixes.iter().copied())
+                .iter()
+                .all(Option::is_some),
+            "{id}: every craft is rated"
+        );
+    }
+    // Each table label is the authored name of the model its directory holds.
+    for id in table.teams {
+        let team = teams.iter().find(|team| team.id == *id).expect("declared");
+        for variant in table.variants {
+            let directory = table.join.combine(&team.location, variant.suffix);
+            let model = team.model_for_directory(&directory).expect("a model");
+            assert_eq!(model.name, variant.label, "{id} {}", variant.suffix);
+        }
+    }
+    let feisar = teams
+        .iter()
+        .find(|team| team.id == "Feisar2048")
+        .expect("Feisar2048");
+    let rate = |speed, thrust, handling, shield| {
+        Some(oag_ui_screens::picker::hd::Stats {
+            speed,
+            thrust,
+            handling,
+            shield,
+        })
+    };
+    assert_eq!(
+        feisar.variant_stats(table.join, suffixes.iter().copied()),
+        vec![
+            rate(50, 85, 60, 80),
+            rate(50, 80, 90, 60),
+            rate(80, 80, 70, 40),
+            rate(80, 80, 70, 40),
+        ]
+    );
+    let wrong = feisar.hex_cells(VariantJoin::Suffix, suffixes.iter().copied());
+    assert_eq!(wrong.iter().filter(|cell| cell.open).count(), 0);
 }

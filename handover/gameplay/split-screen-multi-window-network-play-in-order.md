@@ -1268,10 +1268,14 @@ a guess.
   - ~~**Omega's Ship Select is wired and bare**~~ **Done, 2026-10-14 (`omega-ship-select`)**: Omega's HD-era
     teams carry `TEAM_VARIANTS` (three open models each, off the teams definition), the bars carry each
     model's ratings and the `SHIP MODEL` frame draws the PS4 race hull at HD's pose (**chosen, not measured**,
-    `FrontEnd::ship_preview_pose`). Walked for one person and each seat. Still open: the five 2048-era teams
-    are not offered on the screen (their craft sit under `Ships\<id>\<n>`, so `load_teams` finds no
-    `hdships\<id>`; showing them needs the `VariantJoin` passed into `Team::hex_cells`/`variant_stats`, their
-    logos under `fe\NewImages\Team_Logos` and a team-level `<Unlock purchase>` rule); ~~the bars' two halves are one
+    `FrontEnd::ship_preview_pose`). Walked for one person and each seat. ~~The five 2048-era teams are not
+    offered on the screen~~ **Done 2026-10-14 (`omega-2048-era-teams`)**: all five are offered (19 teams), the
+    roster's `VariantJoin` reaches `Team::hex_cells`/`variant_stats`, each shows its four `Ships\<Team>\<n>` craft
+    as open cells (four `IsVR` models padlocked), the ratings off each model's `<FE>`, the logo off
+    `Ships\<Team>\FE\Logo`, and a pick starts a race on that craft (walked to a race start). Still open there: the
+    team-level `<Unlock purchase>`/`grid` rules are unread on every team (all offered), AI opponents are
+    still drawn from the HD-era teams only (chosen), `ShipDesc` and the hexagonal window's stills are not drawn;
+    ~~the bars' two halves are one
     grey on Omega's page~~ **done 2026-10-14 (`omega-colour-template`)**: Omega's boot copies `WOHD_Colours` over the
     base colour block (`BootProfile::colour_template`), so `HD_Grey` is `0xFF010001` and the bar fill shows;
     the authored `ShipDesc`, livery hint and `PadlockText` are not drawn.

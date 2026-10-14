@@ -52,7 +52,6 @@ fn layout_of(xml: &str) -> Layout {
         &strings(),
         FaceScales::default(),
         [1920.0, 1080.0],
-        r"Data\Ships",
     )
     .expect("both screens are there")
 }
@@ -63,6 +62,7 @@ fn team(id: &str, stats: Vec<Option<Stats>>) -> Entry {
         label: id.to_uppercase(),
         details: Details::Ship {
             loyalty: None,
+            logo: None,
             models: Vec::new(),
             rating: None,
             variants: vec![
@@ -129,7 +129,6 @@ fn a_file_missing_either_screen_reads_as_none() {
             &strings(),
             FaceScales::default(),
             [1920.0, 1080.0],
-            r"Data\Ships"
         )
         .is_none()
     );
@@ -229,7 +228,7 @@ fn a_livery_with_no_model_of_its_own_shows_no_stats() {
 #[test]
 fn the_logo_is_the_teams_own_front_end_texture() {
     assert_eq!(
-        logo_src(r"Data\Ships", "Feisar"),
+        logo_src(r"Data\Ships\Feisar"),
         r"Data\Ships\Feisar\FE\Logo.gtf"
     );
 }

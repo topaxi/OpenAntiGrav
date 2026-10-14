@@ -621,7 +621,7 @@ fn hd_reads_its_own_team_selection() {
         .iter()
         .find(|team| team.id == "Feisar")
         .expect("Feisar");
-    let stats = feisar.variant_stats(["", "_c1", "_n1"]);
+    let stats = feisar.variant_stats(oag_title::VariantJoin::Suffix, ["", "_c1", "_n1"]);
     let values: Vec<Option<[u8; 4]>> = stats.iter().map(|s| s.map(|s| s.values())).collect();
     assert_eq!(
         values,
@@ -633,7 +633,7 @@ fn hd_reads_its_own_team_selection() {
     );
     // And every team's logo is on the sheet.
     for team in &shell.teams {
-        let src = oag_ui_screens::picker::hd::logo_src(oag_hd::TITLE.race.ship_dir, &team.id);
+        let src = oag_ui_screens::picker::hd::logo_src(&team.location);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
 
@@ -659,7 +659,7 @@ fn hd_reads_its_own_team_selection() {
     );
     // Feisar's seven rows: the fresh profile opens `concept1` and `normal`;
     // this build also opens `nitro`, which its `_n1` variant races.
-    let cells = feisar.hex_cells(["", "_c1", "_n1"]);
+    let cells = feisar.hex_cells(oag_title::VariantJoin::Suffix, ["", "_c1", "_n1"]);
     let open: Vec<(usize, Option<usize>)> = cells
         .iter()
         .enumerate()
@@ -676,7 +676,7 @@ fn hd_reads_its_own_team_selection() {
     // are on the sheet; the classic hulls' thumbnails are `DATA06`'s
     // 126x64 copy, not `DATA02`'s 256x64 top-down plan.
     for team in &shell.teams {
-        for cell in team.hex_cells(["", "_c1", "_n1"]) {
+        for cell in team.hex_cells(oag_title::VariantJoin::Suffix, ["", "_c1", "_n1"]) {
             let thumb = cell.thumb.expect("every model has a thumbnail");
             assert!(shell.sprites.get(&thumb).is_some(), "{thumb}");
         }
@@ -861,11 +861,27 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!(model.origin, pose.origin);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
-    assert!(!shell.teams.is_empty());
+    // The nineteen declared teams are all offered: the twelve HD-era, the two Tigrons and
+    // the five 2048-era, whose `Logo.gtf` sits under their own `Ships\<Team>` directory.
+    assert_eq!(shell.teams.len(), 19);
     for team in &shell.teams {
-        let src = oag_ui_screens::picker::hd::logo_src(oag_omega::TITLE.race.ship_dir, &team.id);
+        let src = oag_ui_screens::picker::hd::logo_src(&team.location);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
+    let mut era: Vec<&str> = oag_omega::race::ERA_2048_VARIANTS.teams.to_vec();
+    era.sort_unstable();
+    for id in &era {
+        assert!(shell.teams.iter().any(|team| team.id == *id), "{id}");
+    }
+    // Only those five name no craft under their bare id, so only they leave the opponent pool.
+    let mut craftless: Vec<&str> = shell
+        .teams
+        .iter()
+        .map(|team| team.id.as_str())
+        .filter(|id| oag_omega::TITLE.race.names_no_craft(id))
+        .collect();
+    craftless.sort_unstable();
+    assert_eq!(craftless, era);
     assert!(
         shell.ship_select_split.is_none(),
         "Omega authors per-player screens as a sequence, not one shared page"

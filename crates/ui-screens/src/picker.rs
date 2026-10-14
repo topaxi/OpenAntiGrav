@@ -126,6 +126,9 @@ pub enum Details {
         /// one per `PI_TeamModel` in file order - see [`hd::hex`]. Empty
         /// where the title draws no such grid.
         models: Vec<hd::hex::ModelCell>,
+        /// The sprite of the team's own `Logo` ([`hd::logo_src`] of its directory),
+        /// which the `CHOOSE TEAM` frame shows. `None` where the title draws none.
+        logo: Option<String>,
     },
 }
 

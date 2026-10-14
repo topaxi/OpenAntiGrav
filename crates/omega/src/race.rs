@@ -189,7 +189,10 @@ pub const ERA_2048_SHIP_DIR: &str = r"Data\art\published\ships";
 pub const ERA_2048_HANDLING_DIR: &str = r"Data\handlingstats";
 
 /// 2048's four craft per team, joined as a numbered subdirectory
-/// (`Feisar2048\3`). **Duplicated from `oag_2048::race::TEAM_VARIANTS`**,
+/// (`Feisar2048\3`), labelled by their `PI_TeamModel`'s own authored `name`
+/// (`combat`, `agility`, `speed`, `prototype`, which is also what 2048's own
+/// definition calls them; 2048's own table says `fighter` for the first, after
+/// its string id). **Duplicated from `oag_2048::race::TEAM_VARIANTS`**,
 /// not borrowed: a title package does not depend on another, and the test
 /// checks every combined id against Omega's own archive.
 pub const ERA_2048_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
@@ -203,7 +206,7 @@ pub const ERA_2048_VARIANTS: oag_title::TeamVariants = oag_title::TeamVariants {
     variants: &[
         oag_title::TeamVariant {
             suffix: "1",
-            label: "fighter",
+            label: "combat",
         },
         oag_title::TeamVariant {
             suffix: "2",
@@ -233,6 +236,7 @@ pub const ERA_2048_ROSTER: oag_title::GuestRoster = oag_title::GuestRoster {
     variants: &ERA_2048_VARIANTS,
     reships: "Wipeout 2048",
     alongside_label: Some("Wipeout 2048 (Omega)"),
+    offered: true,
     // Unread: these are Omega's own re-textured copies of 2048's five craft, and
     // their `handlingstats.xml` ladder has not been listed.
     speed_classes: None,

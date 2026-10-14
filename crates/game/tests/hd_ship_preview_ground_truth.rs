@@ -139,28 +139,43 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
 
     assert_eq!(
         shell.teams.len(),
-        14,
-        "twelve HD-era teams and the two Tigrons"
+        19,
+        "twelve HD-era teams, the two Tigrons and the five 2048-era teams"
     );
+    // Every craft a team offers: the HD-era directories, and the 2048-era teams' four
+    // numbered ones, whose hull is `<Team>\<n>\ship.vex` (the bare team directory has none).
+    let mut hulls = 0;
     for team in &shell.teams {
-        let entry = oag_game::preview::ship_entry(title, &team.location);
-        let mut model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
-            .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-        assert!(
-            model.indices.len() / 3 > 5_000,
-            "{entry} has a hull's triangles"
-        );
-        assert!(
-            model.textures.iter().flatten().count() > 0,
-            "{entry} draws with its own textures"
-        );
-        oag_game::preview::frame_hull(&mut model);
-        assert!(
-            (3.0..30.0).contains(&model.radius),
-            "{entry}: framed radius {}",
-            model.radius
-        );
+        let table = title.race.team_variants_for(&team.id);
+        let suffixes: Vec<&str> =
+            table.map_or(vec![""], |t| t.variants.iter().map(|v| v.suffix).collect());
+        for suffix in suffixes {
+            let location = oag_game::preview::variant::variant_location(
+                table.map(|t| t.join),
+                &team.location,
+                suffix,
+            );
+            let entry = oag_game::preview::ship_entry(title, &location);
+            let mut model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
+                .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+            assert!(
+                model.indices.len() / 3 > 5_000,
+                "{entry} has a hull's triangles"
+            );
+            assert!(
+                model.textures.iter().flatten().count() > 0,
+                "{entry} draws with its own textures"
+            );
+            oag_game::preview::frame_hull(&mut model);
+            assert!(
+                (3.0..30.0).contains(&model.radius),
+                "{entry}: framed radius {}",
+                model.radius
+            );
+            hulls += 1;
+        }
     }
+    assert_eq!(hulls, 12 * 3 + 2 + 5 * 4, "every craft of every team");
 
     // The preview follows the chosen model: Feisar's three directories are three hulls.
     let join = title.race.team_variants_for("Feisar").map(|v| v.join);

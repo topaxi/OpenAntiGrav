@@ -271,11 +271,12 @@ impl Session {
                 {
                     variants.push(own);
                 }
+                let join = title.race.join_for(&choice.value);
                 let stats = details
-                    .map(|team| team.variant_stats(variants.iter().map(|(id, _)| id.as_str())))
+                    .map(|team| team.variant_stats(join, variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
                 let models = details
-                    .map(|team| team.hex_cells(variants.iter().map(|(id, _)| id.as_str())))
+                    .map(|team| team.hex_cells(join, variants.iter().map(|(id, _)| id.as_str())))
                     .unwrap_or_default();
                 (
                     Entry {
@@ -293,6 +294,7 @@ impl Session {
                             variants,
                             stats,
                             models,
+                            logo: details.map(|team| picker::hd::logo_src(&team.location)),
                             loyalty: gates
                                 .then(|| records.loyalty_total(title.name, &choice.value)),
                         },

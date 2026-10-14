@@ -54,7 +54,7 @@ fn main() -> anyhow::Result<()> {
             .team_variants_for(&team.id)
             .map(|table| table.variants.iter().map(|v| v.suffix).collect())
             .unwrap_or_default();
-        let cells = team.hex_cells(ids.iter().copied());
+        let cells = team.hex_cells(title.race.join_for(&team.id), ids.iter().copied());
         let open = cells.iter().filter(|cell| cell.open).count();
         println!(
             "  {:<12} {:<44} models {} open {} variants {:?}",
@@ -74,7 +74,14 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     };
     for team in &shell.teams {
-        let entry = format!(r"{}\{hull}", team.location);
+        // A numbered craft's hull is in its own subdirectory, not the team's.
+        let first = title
+            .race
+            .team_variants_for(&team.id)
+            .and_then(|table| table.variants.first())
+            .map_or("", |variant| variant.suffix);
+        let directory = title.race.join_for(&team.id).combine(&team.location, first);
+        let entry = format!(r"{directory}\{hull}");
         let mut model = oag_game::preview::psp2_scene::model(&mut archives, &entry)?;
         let raw = (model.centre, model.radius);
         oag_game::preview::frame_hull(&mut model);

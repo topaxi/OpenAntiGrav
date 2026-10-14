@@ -35,7 +35,7 @@
 //! # What this draws, and what it does not
 //!
 //! Drawn, off the disc: the `NAVIGATE TEAM` honeycomb ([`hex`]), the title,
-//! the four `MiniText` headings, the `LogoOutline` frame, the selected team's own `Data\Ships\<team>\FE\Logo.gtf`
+//! the four `MiniText` headings, the `LogoOutline` frame, the selected team's own `<location>\FE\Logo.gtf`
 //! in the `Logo` widget's rect, the four `STATISTICS` blocks with their
 //! value labels and down-nobbles, and the `LOYALTY` block's box and label.
 //!
@@ -131,9 +131,6 @@ pub struct TeamScreen {
     /// the selected team's own `FE\Logo.gtf` at runtime, which is the only
     /// per-team texture of that name on the disc (twelve, one per team).
     pub logo: Option<[f32; 4]>,
-    /// The title's ship directory the logo's file sits under (`Data\Ships` on HD,
-    /// `Data\art\published\hdships` on Omega), see [`logo_src`].
-    pub logo_dir: String,
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
@@ -161,7 +158,6 @@ pub fn read(
     strings: &StringTable,
     faces: FaceScales,
     grid: [f32; 2],
-    ship_dir: &str,
 ) -> Option<Layout> {
     let parent = screens.by_name(TOP_LEVEL)?;
     let child = screens.by_name(SCREEN)?;
@@ -192,10 +188,7 @@ pub fn read(
 
     let root = parse(xml);
     let top = find_screen(&root, TOP_LEVEL)?;
-    let mut extra = TeamScreen {
-        logo_dir: ship_dir.to_string(),
-        ..TeamScreen::default()
-    };
+    let mut extra = TeamScreen::default();
     walk(top, (0.0, 0.0), screens, strings, &mut extra);
     extra.bonus = screens.resolve(BONUS_GLOBAL).and_then(parse_argb);
 
@@ -376,7 +369,10 @@ pub(super) fn body(
         return out;
     };
     if let Some(rect) = extra.logo
-        && let Some(placed) = sprites(&logo_src(&extra.logo_dir, &entry.id))
+        && let Some(Details::Ship {
+            logo: Some(logo), ..
+        }) = Some(&entry.details)
+        && let Some(placed) = sprites(logo)
     {
         out.push(Draw::Sprite {
             rect,
@@ -467,12 +463,14 @@ fn base_stats(picker: &Picker) -> Option<Stats> {
     }
 }
 
-/// `<ship_dir>\<team>\FE\Logo.gtf` - the texture the `Logo` widget shows for
-/// `team`, under the title's ship directory (`Data\Ships` on HD). Named by no widget; see
-/// [`TeamScreen::logo`]. `pub` so the boot can put every team's on the sheet.
+/// `<location>\FE\Logo.gtf` - the texture the `Logo` widget shows for the team
+/// whose directory is `location` (`Data\Ships\Feisar` on HD,
+/// `Data\art\published\Ships\Feisar2048` on Omega's 2048-era teams). Named by no widget; see
+/// [`TeamScreen::logo`]. `pub` so the boot can put every team's on the sheet and
+/// an entry can carry it ([`super::Details::Ship::logo`]).
 #[must_use]
-pub fn logo_src(ship_dir: &str, team: &str) -> String {
-    format!(r"{ship_dir}\{team}\FE\Logo.gtf")
+pub fn logo_src(location: &str) -> String {
+    format!(r"{location}\FE\Logo.gtf")
 }
 
 /// One statistics block: the box, its label, and - where `value` is known -

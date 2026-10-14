@@ -248,6 +248,7 @@ mod tests {
                 variants: Vec::new(),
                 stats: Vec::new(),
                 loyalty: None,
+                logo: None,
                 models: Vec::new(),
             },
         }
