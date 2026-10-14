@@ -388,6 +388,7 @@ pub(crate) struct Session {
     /// `Race::tick`. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
     /// `--net-bot`, carried so a LAN race started from the menus is flown by the driver too.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code, reason = "LAN play is native only"))]
     pub(crate) net_bot: bool,
     /// Ticks a network race has stood ended with nobody finished (`session::frame`).
     pub(crate) net_over_ticks: u32,
@@ -676,8 +677,10 @@ pub(crate) struct Session {
     /// (`session::lan`). It owns the in-process host and the connection while they run.
     pub(crate) lan: Option<lan::Lan>,
     /// The ship this machine flies in a LAN race: its own pick, sent in the hello.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code, reason = "LAN play is native only"))]
     pub(crate) lan_team: String,
     /// This machine as the host list compares it with a host (`session::lan`).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code, reason = "LAN play is native only"))]
     pub(crate) lan_facts: Option<lan::LanFacts>,
     /// Who sits in each pane of the layout, the panes counted across the windows from 0: the
     /// seat assignment screen's answer, kept for the race, a race again and a RETURN TO MENU
