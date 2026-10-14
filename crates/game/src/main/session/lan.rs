@@ -50,7 +50,7 @@ enum Step {
     /// The lobby: the host runs, and this machine is its first client.
     Lobby {
         hosted: Hosted,
-        own: Pending,
+        own: Box<Pending>,
         started: bool,
     },
     /// The host list.
@@ -64,7 +64,7 @@ enum Step {
     /// Joined, waiting for the host's START.
     Waiting {
         browser: Browser,
-        pending: Pending,
+        pending: Box<Pending>,
         to: Found,
     },
 }
@@ -245,7 +245,7 @@ impl Session {
         self.lan = Some(Lan {
             step: Step::Lobby {
                 hosted,
-                own,
+                own: Box::new(own),
                 started: false,
             },
         });
@@ -604,13 +604,13 @@ impl Session {
                 } else {
                     match task.join() {
                         Some(Ok(Ok(link))) => {
-                            let pending = Pending::new(
+                            let pending = Box::new(Pending::new(
                                 Box::new(link),
                                 &player_name(),
                                 &self.lan_team,
                                 self.net_bot,
                                 &to.addr.to_string(),
-                            );
+                            ));
                             (
                                 Step::Waiting {
                                     browser,
