@@ -216,6 +216,14 @@ impl Session {
         format!("{} - {}", crate::hints::title(&table), windows::label(word, first, held))
     }
 
+    /// How many windows a race launched now is laid out across: the windows open, or the ones
+    /// asked for and not yet opened. The event loop opens a window on its next pass
+    /// ([`Self::screens_to_open`]), so a launch in the same frame as the layout screen's START
+    /// (a title with neither Track nor Ship Select) must still count them.
+    pub(crate) fn open_windows(&self) -> usize {
+        (1 + self.screens.len()).max(usize::from(self.windows_wanted))
+    }
+
     /// The seats window `window` (0 is window 1) is planned to hold before a race has dealt
     /// them: the first slot and how many, from the layout the command line asked for (one
     /// person per window when it spelled none). What a holding frame and a window's title say.
@@ -233,7 +241,8 @@ impl Session {
     }
 
     /// Seats everyone the windows are planned for a race launched from the menus, when nobody
-    /// was seated otherwise: the join screen's lobby and a restart's kept seats (both of which
+    /// was seated otherwise: a layout the layout screen chose (that was for its split race), the
+    /// join screen's lobby and a restart's kept seats (both of which
     /// say how many people race) win, and so does a campaign race, which is one person's and
     /// keeps its records. Otherwise the keyboard and the first pad take slot 0 and each
     /// further pad the next slot, as `--players N` seats them, and the grid fields opponents
@@ -242,6 +251,7 @@ impl Session {
         let people = self.planned_people();
         if self.screens.is_empty()
             || people < 2
+            || self.window_layout_chosen
             || self.split_lobby.is_some()
             || self.controls.assignment().humans().is_some()
             || self.campaign_cell.is_some()

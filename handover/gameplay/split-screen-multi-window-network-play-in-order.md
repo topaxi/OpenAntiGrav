@@ -517,7 +517,7 @@ end, the pause menu and the pointer; a seat window closing hands its slot to the
 (`Assignment::unseat` and the existing `follow_devices`); focus is "away" only when no window has it;
 seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies.
 Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
-**Still open from it** (all in the doc's "Open"): a menu row for the window count; a keyboard per
+**Still open from it** (all in the doc's "Open"): ~~a menu row for the window count~~ (the layout screen, below in section 2's newer block); a keyboard per
 window; the pause overlay and the end screens on every window; `--window-monitor` and remembered
 placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
 work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the

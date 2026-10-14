@@ -470,7 +470,7 @@ impl Session {
                 oag_game::split_screen::views_for(&oag_game::split_screen::layout_for(
                     Some(&self.window_layout),
                     seats,
-                    1 + self.screens.len(),
+                    self.open_windows(),
                     self.split_cut,
                 ))
             })
@@ -588,7 +588,7 @@ impl Session {
         let ai_choice = self.ai_choice;
         let cut = self.split_cut;
         let ai_difficulty = crate::args::resolve_difficulty(&self.settings);
-        let open_windows = 1 + self.screens.len();
+        let open_windows = self.open_windows();
         let wanted_layout = self.window_layout.clone();
         let Stage::Loading(stage) = &mut self.stage else {
             return;

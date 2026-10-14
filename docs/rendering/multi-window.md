@@ -154,6 +154,17 @@ always was. A window for the monitor window 1 is on goes beside window 1 (a requ
 Wayland places it); a window for another monitor is centred on it, stepped aside for each window already
 there; `--windows-fullscreen` or WINDOW MODE FULLSCREEN puts it borderless on its monitor.
 
+**A chosen layout is for its split race only.** `Session::window_layout_chosen` keeps the menu race
+seating (`seat_the_windows`, which seats everyone a `--windows` layout plans for) from reading it: a later
+one-person race from RACEBOX stays one person in window 1, and the windows still open show their holding
+frames. A restart from the end screens keeps the seats and so the layout. A race parked behind the pause
+menu keeps its seats (existing behaviour, `unseat_after_split_race`), so a race started from that menu is
+still the split; walked on Pulse. Choosing fewer windows while a race is parked closes the dropped windows
+through `close_screen` (their seats go to the AI and they leave the parked race's layout); with no parked
+race they only had holding frames and are dropped as they are. A launch in the same frame as START (a
+title with neither Track nor Ship Select) counts the windows asked for, not only those already open
+(`Session::open_windows`).
+
 **Remembered with no save slot**, as the RACE page's choices are: `[race] window_seats` (the
 `--window-seats` spelling, `"3,1"`, `"4,2v"`, empty for one window) and `window_monitors` (names) in
 `settings.toml`. The screen starts from the layout this run already has (`--windows`), else the remembered

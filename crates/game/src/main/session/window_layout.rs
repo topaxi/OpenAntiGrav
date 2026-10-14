@@ -210,10 +210,18 @@ impl Session {
     fn apply_window_layout(&mut self, screen: &oag_ui_screens::window_layout::Picker) {
         use oag_display::display::{Monitor, WindowMode};
         let monitors = self.monitor_names();
+        // What the screen opened on, before this writes anything: `--windows-fullscreen` opens it
+        // on FULLSCREEN without the profile saying so, and only a change the player made is
+        // written to the DISPLAY page's row.
+        let opened_fullscreen = self.starting_fullscreen();
         let name_of = |monitor: usize| monitors.get(monitor).cloned().unwrap_or_default();
         let layout = oag_game::split_screen::layout_of(screen.windows());
         self.split_cut = layout[0].cut;
         self.settings.race.window_seats = oag_game::split_screen::spell_window_seats(&layout);
+        // Windows past the chosen count go first, while the old layout still names their seats:
+        // a race parked behind the menus hands them to the AI as a closed window does.
+        self.drop_screens_beyond(layout.len().max(1));
+        self.window_layout_chosen = layout.len() >= 2;
         if layout.len() >= 2 {
             self.window_monitors = screen.windows()[1..]
                 .iter()
@@ -228,7 +236,6 @@ impl Session {
             self.window_layout.clear();
         }
         self.settings.race.window_monitors = self.window_monitors.clone();
-        self.drop_screens_beyond(self.window_layout.len().max(1));
         for index in 0..self.screens.len() {
             let title = self.window_title(index + 1);
             self.screens[index].output.window.set_title(&title);
@@ -239,7 +246,7 @@ impl Session {
         } else {
             WindowMode::Windowed
         };
-        if mode != self.settings.display.window_mode {
+        if screen.fullscreen() != opened_fullscreen && mode != self.settings.display.window_mode {
             self.apply_setting(
                 "display.window_mode",
                 &oag_ui::menu::Value::Text(mode.name().to_string()),
@@ -269,11 +276,15 @@ impl Session {
         }
     }
 
-    /// Closes the windows after the first `count`, with no seat handed to anyone: nothing
-    /// has been dealt yet, so they only had holding frames.
+    /// Closes the windows after the first `count`. With a race parked behind the menus each
+    /// goes through [`Session::close_screen`]: its seats are flown by the AI, and it leaves the
+    /// parked race's layout, so resuming never waits on a window nobody draws. Otherwise
+    /// nothing has been dealt yet and they only had holding frames.
     fn drop_screens_beyond(&mut self, count: usize) {
         while self.screens.len() + 1 > count {
-            if let Some(screen) = self.screens.pop() {
+            if self.suspended_race.is_some() {
+                self.close_screen(self.screens.len() - 1);
+            } else if let Some(screen) = self.screens.pop() {
                 self.focus.forget(screen.output.window.id());
             }
         }

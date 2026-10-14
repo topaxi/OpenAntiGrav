@@ -626,6 +626,11 @@ pub(crate) struct Session {
         allow(dead_code)
     )]
     pub(crate) windows_fullscreen: bool,
+    /// Whether [`Self::window_layout`] is the layout screen's choice for the split race it started
+    /// (rather than `--windows`/`--window-seats`, which seat everyone a menu race fields): a
+    /// later one-person race from the menus stays one person in window 1
+    /// ([`Session::seat_the_windows`]), whatever windows are still open.
+    pub(crate) window_layout_chosen: bool,
     /// The monitor each further window was chosen to sit on, by name, window 2 first: the
     /// layout screen's choice (`Session::apply_window_layout`). Empty for a `--windows` run,
     /// whose windows sit beside window 1.
