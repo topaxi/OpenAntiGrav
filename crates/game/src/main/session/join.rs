@@ -72,7 +72,11 @@ impl Session {
             return;
         }
         if let Stage::Menu(stage) = &self.stage
-            && has_left_race_box(&stage.menu.page().id, stage.picker.is_some(), stage.join.is_some())
+            && has_left_race_box(
+                &stage.menu.page().id,
+                stage.picker.is_some(),
+                stage.join.is_some() || stage.layout.is_some(),
+            )
         {
             self.split_race_box = false;
         }
@@ -240,6 +244,12 @@ impl Session {
                 if self.authored_people() >= 2 {
                     self.split_cut = self.authored_cut();
                 }
+                // The people are seated: on a desktop the window layout screen comes next,
+                // and its START is what goes on to the race box (`session::window_layout`).
+                let Some(open) = self.open_window_layout(open) else {
+                    self.play_navs(Some(Nav::Accept));
+                    return;
+                };
                 self.play_navs(Some(Nav::Accept));
                 if open.lobby().count() > 1 {
                     self.split_lobby = Some(open.lobby().clone());

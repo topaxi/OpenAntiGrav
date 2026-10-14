@@ -76,6 +76,17 @@ OAG_JOIN_EMPTY = { text = "APPUYEZ SUR UN BOUTON", human = false }
 OAG_JOIN_KEYBOARD = { text = "CLAVIER", human = false }
 OAG_JOIN_PAD = { text = "MANETTE", human = false }
 OAG_JOIN_START = { text = "DÉMARRER", human = false }
+# The window layout screen (`session::window_layout`), after the join screen.
+OAG_WINDOW_LAYOUT_TITLE = { text = "DISPOSITION DES FENÊTRES", human = false }
+OAG_WINDOW_LAYOUT_HINT = { text = "CHOISISSEZ COMMENT LES JOUEURS SONT RÉPARTIS ENTRE LES FENÊTRES", human = false }
+OAG_WINDOW_LAYOUT_WINDOWS = { text = "FENÊTRES", human = false }
+OAG_WINDOW_LAYOUT_WINDOW = { text = "FENÊTRE", human = false }
+OAG_WINDOW_LAYOUT_SEATS = { text = "PLACES", human = false }
+OAG_WINDOW_LAYOUT_CUT = { text = "DÉCOUPE", human = false }
+OAG_WINDOW_LAYOUT_HORIZONTAL = { text = "HORIZONTALE", human = false }
+OAG_WINDOW_LAYOUT_VERTICAL = { text = "VERTICALE", human = false }
+OAG_WINDOW_LAYOUT_WINDOWED = { text = "EN FENÊTRE", human = false }
+OAG_WINDOW_LAYOUT_FULLSCREEN = { text = "PLEIN ÉCRAN", human = false }
 OAG_PICK_READY = { text = "PRÊT", human = false }
 OAG_MENU_OPTIONS = { text = "OPTIONS", human = false }
 OAG_MENU_QUIT = { text = "QUITTER", human = false }

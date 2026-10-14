@@ -196,6 +196,46 @@ pub fn parse_window_seats(
     Ok(windows)
 }
 
+/// The spelling [`parse_window_seats`] reads back: the counts, comma-separated, a window of two
+/// seats carrying `h` or `v` for its cut (`4,2v`). Empty for fewer than two windows, which is
+/// not a layout `--window-seats` takes.
+#[must_use]
+pub fn spell_window_seats(layout: &[WindowSeats]) -> String {
+    if layout.len() < 2 {
+        return String::new();
+    }
+    layout
+        .iter()
+        .map(|window| match (window.count, window.cut) {
+            (2, oag_render::viewport::Cut::Vertical) => "2v".to_string(),
+            (2, oag_render::viewport::Cut::Horizontal) => "2h".to_string(),
+            (count, _) => count.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// How a window of `seats` seats cuts them (`vertical`: two side by side), as rectangles in the
+/// unit square in seat order: the race's own cut ([`oag_render::viewport::layout`]) on a 16:9
+/// window, so the layout screen's preview is the picture a window draws.
+#[must_use]
+pub fn seat_cells(seats: usize, vertical: bool) -> Vec<[f32; 4]> {
+    use oag_render::viewport::{Cut, layout};
+    // The gap between views is in pixels of the target, so the unit square is laid out at a
+    // window's size and divided back.
+    const WIDTH: f32 = 640.0;
+    const HEIGHT: f32 = WIDTH * 9.0 / 16.0;
+    let cut = if vertical {
+        Cut::Vertical
+    } else {
+        Cut::Horizontal
+    };
+    layout(seats, (0.0, 0.0, WIDTH, HEIGHT), cut)
+        .into_iter()
+        .map(|(x, y, w, h)| [x / WIDTH, y / HEIGHT, w / WIDTH, h / HEIGHT])
+        .collect()
+}
+
 /// The view count the load is told for a layout ([`oag_raceplay::Options::views`]): it reads a
 /// title's authored two-player split HUD and packs its textures when the race has two views, and
 /// nothing else about the count. `2` when any window holds exactly two seats, so that window can

@@ -343,3 +343,45 @@ fn the_load_is_told_two_views_when_any_window_holds_two() {
     assert_eq!(views_for(&layout("4,3")), 4);
     assert_eq!(views_for(&layout("1,1")), 1);
 }
+
+#[test]
+fn a_layout_is_spelled_the_way_the_command_line_reads_it() {
+    for text in ["4,2v", "3,1", "2h,2v,1", "1,1,1,1"] {
+        let layout = parse_window_seats(text, Cut::Horizontal).unwrap();
+        let spelled = spell_window_seats(&layout);
+        assert_eq!(
+            parse_window_seats(&spelled, Cut::Vertical).unwrap(),
+            layout,
+            "{text} spelled {spelled}"
+        );
+    }
+    assert_eq!(
+        spell_window_seats(&deal(4, 1, Cut::Horizontal)),
+        "",
+        "one window is not a layout"
+    );
+}
+
+#[test]
+fn the_preview_cuts_seats_as_a_window_does() {
+    for seats in 1..=8 {
+        for vertical in [false, true] {
+            let cells = seat_cells(seats, vertical);
+            assert_eq!(cells.len(), seats);
+            for cell in &cells {
+                assert!(cell[0] >= 0.0 && cell[1] >= 0.0);
+                assert!(cell[0] + cell[2] <= 1.0001 && cell[1] + cell[3] <= 1.0001);
+            }
+        }
+    }
+    let two = seat_cells(2, true);
+    assert!(
+        two[0][1] == two[1][1] && two[0][0] < two[1][0],
+        "side by side"
+    );
+    let two = seat_cells(2, false);
+    assert!(
+        two[0][0] == two[1][0] && two[0][1] < two[1][1],
+        "one above the other"
+    );
+}

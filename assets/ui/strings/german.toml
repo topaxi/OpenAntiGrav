@@ -38,6 +38,17 @@ OAG_JOIN_EMPTY = { text = "TASTE DRÜCKEN", human = false }
 OAG_JOIN_KEYBOARD = { text = "TASTATUR", human = false }
 OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
 OAG_JOIN_START = { text = "START", human = false }
+# The window layout screen (`session::window_layout`), after the join screen.
+OAG_WINDOW_LAYOUT_TITLE = { text = "FENSTERANORDNUNG", human = false }
+OAG_WINDOW_LAYOUT_HINT = { text = "WÄHLT, WIE DIE SPIELER AUF DIE FENSTER VERTEILT WERDEN", human = false }
+OAG_WINDOW_LAYOUT_WINDOWS = { text = "FENSTER", human = false }
+OAG_WINDOW_LAYOUT_WINDOW = { text = "FENSTER", human = false }
+OAG_WINDOW_LAYOUT_SEATS = { text = "PLÄTZE", human = false }
+OAG_WINDOW_LAYOUT_CUT = { text = "TEILUNG", human = false }
+OAG_WINDOW_LAYOUT_HORIZONTAL = { text = "HORIZONTAL", human = false }
+OAG_WINDOW_LAYOUT_VERTICAL = { text = "VERTIKAL", human = false }
+OAG_WINDOW_LAYOUT_WINDOWED = { text = "IM FENSTER", human = false }
+OAG_WINDOW_LAYOUT_FULLSCREEN = { text = "VOLLBILD", human = false }
 OAG_PICK_READY = { text = "BEREIT", human = false }
 OAG_MENU_RECORDS = { text = "REKORDE", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Deine Bestzeiten und Punktestände nach Strecke und Tempoklasse", human = false }

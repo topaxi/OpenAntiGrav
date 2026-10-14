@@ -368,7 +368,9 @@ impl Gpu {
     ///
     /// `modes` is the chain [`Output::apply_modes`] walks, the first one the surface
     /// offers. A seat window asks for a mode that does not block
-    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop.
+    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop. `monitor` is
+    /// where the window goes (borderless over all of it when `fullscreen`, else a window on
+    /// it, unless `position` says where).
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(crate) fn open_output(
         &self,
@@ -376,6 +378,7 @@ impl Gpu {
         title: &str,
         size: winit::dpi::LogicalSize<u32>,
         monitor: Option<winit::monitor::MonitorHandle>,
+        fullscreen: bool,
         position: Option<winit::dpi::PhysicalPosition<i32>>,
         modes: &[wgpu::PresentMode],
     ) -> Result<Output> {
@@ -386,6 +389,7 @@ impl Gpu {
             .with_fullscreen(
                 monitor
                     .clone()
+                    .filter(|_| fullscreen)
                     .map(|monitor| winit::window::Fullscreen::Borderless(Some(monitor))),
             );
         #[cfg(target_os = "linux")]

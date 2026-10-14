@@ -36,6 +36,17 @@ OAG_JOIN_EMPTY = { text = "APERTE UM BOTÃO", human = false }
 OAG_JOIN_KEYBOARD = { text = "TECLADO", human = false }
 OAG_JOIN_PAD = { text = "CONTROLE", human = false }
 OAG_JOIN_START = { text = "INICIAR", human = false }
+# The window layout screen (`session::window_layout`), after the join screen.
+OAG_WINDOW_LAYOUT_TITLE = { text = "LAYOUT DAS JANELAS", human = false }
+OAG_WINDOW_LAYOUT_HINT = { text = "ESCOLHA COMO OS JOGADORES SÃO DIVIDIDOS ENTRE AS JANELAS", human = false }
+OAG_WINDOW_LAYOUT_WINDOWS = { text = "JANELAS", human = false }
+OAG_WINDOW_LAYOUT_WINDOW = { text = "JANELA", human = false }
+OAG_WINDOW_LAYOUT_SEATS = { text = "LUGARES", human = false }
+OAG_WINDOW_LAYOUT_CUT = { text = "DIVISÃO", human = false }
+OAG_WINDOW_LAYOUT_HORIZONTAL = { text = "HORIZONTAL", human = false }
+OAG_WINDOW_LAYOUT_VERTICAL = { text = "VERTICAL", human = false }
+OAG_WINDOW_LAYOUT_WINDOWED = { text = "EM JANELA", human = false }
+OAG_WINDOW_LAYOUT_FULLSCREEN = { text = "TELA CHEIA", human = false }
 OAG_PICK_READY = { text = "PRONTO", human = false }
 OAG_MENU_RECORDS = { text = "RECORDES", human = false }
 OAG_MENU_RECORDS_SUBTITLE = { text = "Seus melhores tempos e pontuações, por pista e classe", human = false }

@@ -54,6 +54,8 @@ mod pose;
 mod prepare;
 #[path = "main/join_stage.rs"]
 mod join_stage;
+#[path = "main/window_layout_stage.rs"]
+mod window_layout_stage;
 #[path = "main/pure_chain_stage.rs"]
 mod pure_chain_stage;
 #[path = "main/race_build.rs"]

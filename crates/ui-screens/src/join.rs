@@ -87,27 +87,27 @@ pub struct Join {
 }
 
 /// Where the rows sit on the skin's grid.
-struct Layout {
+pub(crate) struct Layout {
     /// Where a row's label starts.
-    text_x: f32,
+    pub(crate) text_x: f32,
     /// Where the device column ends.
-    right_x: f32,
+    pub(crate) right_x: f32,
     /// From one row to the next.
-    line: f32,
+    pub(crate) line: f32,
     /// The text's scale.
-    scale: f32,
+    pub(crate) scale: f32,
     /// The top of the first row, which is what a click is measured from.
-    top: f32,
+    pub(crate) top: f32,
     /// Whether the hint goes under the rows rather than between the title and the first
     /// one: where a block row would sit on the screen's rule, or where this build's own
     /// row origin leaves no room under a title (2048's placeholder menu).
-    hint_below: bool,
+    pub(crate) hint_below: bool,
     /// How far a row's text sits below its top: nothing for bare text, the tab's own
     /// pad inside a block.
-    text_pad: f32,
-    width: f32,
+    pub(crate) text_pad: f32,
+    pub(crate) width: f32,
     /// The row boxes, on a title whose menus draw blocks.
-    blocks: Option<BlockRows>,
+    pub(crate) blocks: Option<BlockRows>,
 }
 
 /// The boxes behind the rows on HD and Omega, in the grid being drawn in. **Chosen, not
@@ -115,13 +115,13 @@ struct Layout {
 /// `ListBlocks`: where the rows start, their pitch, their text scale, the block height and
 /// the gap) and gives a label block and a value block, the value block wider than any
 /// value HD's lists hold because a device's name is longer.
-struct BlockRows {
-    x: f32,
-    label_width: f32,
-    value_x: f32,
-    value_width: f32,
-    height: f32,
-    scale: (f32, f32),
+pub(crate) struct BlockRows {
+    pub(crate) x: f32,
+    pub(crate) label_width: f32,
+    pub(crate) value_x: f32,
+    pub(crate) value_width: f32,
+    pub(crate) height: f32,
+    pub(crate) scale: (f32, f32),
 }
 
 /// A value block's width in multiples of the title's own list value width.
@@ -133,7 +133,7 @@ const VALUE_INSET: f32 = 13.0;
 const TEXT_TOP_PAD: f32 = 1.9;
 
 impl Layout {
-    fn new(skin: &Skin) -> Self {
+    pub(crate) fn new(skin: &Skin) -> Self {
         let (width, grid_height) = skin.space().size;
         if let (Some(list), Some(numbers)) = (skin.list(), skin.blocks()) {
             let (sx, sy) = skin.theirs_scale();
@@ -179,7 +179,7 @@ impl Layout {
     }
 
     /// The text's `y` on row `index`.
-    fn text_y(&self, index: usize) -> f32 {
+    pub(crate) fn text_y(&self, index: usize) -> f32 {
         self.top + index as f32 * self.line + self.text_pad
     }
 }
@@ -286,36 +286,12 @@ impl Join {
     /// where the frame has no block art, which is both PSP titles: their rows are bare text.
     #[must_use]
     pub fn blocks(&self, skin: &Skin, frame: &Frame) -> Vec<Draw> {
-        let layout = Layout::new(skin);
-        let (Some(rows), Some(art), Some(ink)) = (layout.blocks.as_ref(), frame.blocks, frame.ink)
-        else {
-            return Vec::new();
-        };
-        let mut out = Vec::new();
-        for (index, row) in self.rows().into_iter().enumerate() {
-            let color = if self.hover == Some(row) {
-                frame.tab_selected.unwrap_or(ink)
-            } else {
-                ink
-            };
-            let mut block = oag_ui::menu::block::Block {
-                x: rows.x,
-                y: layout.top + index as f32 * layout.line,
-                width: rows.label_width,
-                height: rows.height,
-                color,
-                landing: false,
-            };
-            oag_ui::menu::block::draw(&block, &art, rows.scale, &mut out);
-            if matches!(row, Row::Back) {
-                continue;
-            }
-            block.x = rows.value_x;
-            block.width = rows.value_width;
-            block.landing = true;
-            oag_ui::menu::block::draw(&block, &art, rows.scale, &mut out);
-        }
-        out
+        let rows = self.rows();
+        let shape: Vec<(bool, bool)> = rows
+            .iter()
+            .map(|row| (self.hover == Some(*row), !matches!(row, Row::Back)))
+            .collect();
+        row_blocks(skin, frame, &shape)
     }
 
     /// The hint and the rows, drawn on the skin's grid. `frame` is the title's own, for the
@@ -408,6 +384,44 @@ impl Join {
     pub fn labels(&self) -> &Labels {
         &self.labels
     }
+}
+
+/// The boxes behind a list of rows on HD and Omega, one `(hovered, has a value)` per row:
+/// a label block, and a value block where the row has a value, in the frame's ink and the
+/// selected fill under the hovered row. Empty where the frame has no block art (both PSP
+/// titles, whose rows are bare text). Shared by every screen drawn in the join screen's
+/// rows ([`crate::window_layout`]).
+pub(crate) fn row_blocks(skin: &Skin, frame: &Frame, rows: &[(bool, bool)]) -> Vec<Draw> {
+    let layout = Layout::new(skin);
+    let (Some(shape), Some(art), Some(ink)) = (layout.blocks.as_ref(), frame.blocks, frame.ink)
+    else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (index, (hovered, has_value)) in rows.iter().copied().enumerate() {
+        let color = if hovered {
+            frame.tab_selected.unwrap_or(ink)
+        } else {
+            ink
+        };
+        let mut block = oag_ui::menu::block::Block {
+            x: shape.x,
+            y: layout.top + index as f32 * layout.line,
+            width: shape.label_width,
+            height: shape.height,
+            color,
+            landing: false,
+        };
+        oag_ui::menu::block::draw(&block, &art, shape.scale, &mut out);
+        if !has_value {
+            continue;
+        }
+        block.x = shape.value_x;
+        block.width = shape.value_width;
+        block.landing = true;
+        oag_ui::menu::block::draw(&block, &art, shape.scale, &mut out);
+    }
+    out
 }
 
 /// The whole screen in paint order: the title's frame, the title, the row blocks where the
