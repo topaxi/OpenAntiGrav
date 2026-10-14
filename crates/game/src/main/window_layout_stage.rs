@@ -18,6 +18,11 @@ pub(crate) struct WindowLayoutStage {
 }
 
 impl WindowLayoutStage {
+    /// Opened only where windows can be (a desktop build).
+    #[cfg_attr(
+        any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
+        allow(dead_code)
+    )]
     pub(crate) fn new(join: JoinStage, screen: Picker) -> Self {
         Self { join, screen }
     }

@@ -196,6 +196,13 @@ impl Geometry {
         layout.scale *= BARE_SHRINK;
         layout.line *= BARE_SHRINK;
         layout.right_x = width * BARE_SPLIT;
+        // Where the title leaves no room under it (2048's placeholder menu) the hint goes
+        // under the rows, as the join screen's does.
+        let hint_y = if layout.hint_below {
+            layout.top + MAX_ROWS as f32 * layout.line
+        } else {
+            hint_y
+        };
         let preview_x = width * (BARE_SPLIT + 0.05);
         Self {
             hint_y,
@@ -208,6 +215,16 @@ impl Geometry {
             ],
             layout,
         }
+    }
+}
+
+/// `ink` where it reads on a dark box, else white: a light page (Omega's) inks its text black,
+/// which the preview's dark boxes would swallow.
+fn legible(ink: [f32; 4]) -> [f32; 4] {
+    if ink[0] + ink[1] + ink[2] < 1.2 {
+        [1.0, 1.0, 1.0, 0.6]
+    } else {
+        ink
     }
 }
 
@@ -761,7 +778,7 @@ impl Picker {
                     x: cell[0] + cell[2] / 2.0,
                     y: cell[1] + cell[3] / 2.0 - scale * 8.0,
                     scale,
-                    color: if edited { lit } else { ink },
+                    color: if edited { lit } else { legible(ink) },
                     border: None,
                     align: Align::Centre,
                     text: seat.to_string(),

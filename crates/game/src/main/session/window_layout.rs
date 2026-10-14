@@ -22,11 +22,10 @@
 //! first monitor, and another head count is dealt anew from the same windows.
 
 use oag_ui::menu::nav::Nav;
-use oag_ui_screens::window_layout::{Event, Labels, Picker, Window};
+use oag_ui_screens::window_layout::Event;
 
 use crate::join_stage::JoinStage;
 use crate::stage::Stage;
-use crate::window_layout_stage::WindowLayoutStage;
 
 use super::Session;
 
@@ -41,6 +40,8 @@ impl Session {
         }
         #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         {
+            use crate::window_layout_stage::WindowLayoutStage;
+            use oag_ui_screens::window_layout::{Labels, Picker};
             let offered = self.shell.as_ref().is_some_and(|shell| {
                 oag_game::split_screen::offered(shell.title, self.gpu.device_type)
             });
@@ -115,6 +116,7 @@ impl Session {
         let Some(open) = stage.layout.take() else {
             return;
         };
+        #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         self.apply_window_layout(open.screen());
         self.play_navs(Some(Nav::Accept));
         if open.join().lobby().count() > 1 {
@@ -149,7 +151,8 @@ impl Session {
     /// has (`--windows`, or the last one the screen applied), else the one remembered in the
     /// profile, else one window holding everybody. Monitors are the names' indices; a name
     /// that is gone is the first monitor. The screen deals again whatever does not add up.
-    fn starting_windows(&self, people: usize, monitors: &[String]) -> Vec<Window> {
+    fn starting_windows(&self, people: usize, monitors: &[String]) -> Vec<oag_ui_screens::window_layout::Window> {
+        use oag_ui_screens::window_layout::Window;
         let remembered;
         let layout = if self.window_layout.len() >= 2 {
             &self.window_layout
@@ -204,7 +207,7 @@ impl Session {
     /// the event loop opens or closes, each further window's monitor, window 1's cut, mode
     /// and monitor (the DISPLAY page's rows, only when they changed: setting them moves and
     /// resizes the window), and the profile's memory of it all.
-    fn apply_window_layout(&mut self, screen: &Picker) {
+    fn apply_window_layout(&mut self, screen: &oag_ui_screens::window_layout::Picker) {
         use oag_display::display::{Monitor, WindowMode};
         let monitors = self.monitor_names();
         let name_of = |monitor: usize| monitors.get(monitor).cloned().unwrap_or_default();
