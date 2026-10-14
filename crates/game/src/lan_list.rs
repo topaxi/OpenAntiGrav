@@ -2,8 +2,8 @@
 //! it, worked out before connecting (`oag_net::discovery::compat`). Shared by the live screen
 //! (`session::lan`) and its still (`--menu-page lan-join`), so the two cannot differ.
 //!
-//! A row reads the host's name on the left and, on the right, its title and how many are in
-//! (`WIPEOUT PULSE (1/8)`). A host this machine cannot join stays in the list, dimmed and
+//! A row reads the host's name and its state on the left (`ADA  JOINABLE`) and, on the right,
+//! the title it runs and how many are in (`WIPEOUT PULSE (1/8)`). A host this machine cannot join stays in the list, dimmed and
 //! unselectable, and its reason is the line under the title while the cursor is on it; a host it
 //! can join says its circuit there. **Chosen, not measured** (maintainer's requirement,
 //! 2026-10-14).
@@ -25,6 +25,19 @@ pub fn reason(state: Compat, strings: &StringTable) -> Option<String> {
         Compat::OtherVersion => Some(say("OAG_LAN_ROW_VERSION", "A DIFFERENT VERSION")),
         Compat::OtherContent => Some(say("OAG_LAN_ROW_CONTENT", "DIFFERENT MODS OR CONTENT")),
         Compat::Full => Some(say("OAG_LAN_ROW_FULL", "FULL")),
+    }
+}
+
+/// The one or two words a row says for its state, `JOINABLE` for a host that can be joined.
+#[must_use]
+pub fn state_word(state: Compat, strings: &StringTable) -> String {
+    let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+    match state {
+        Compat::Joinable => say("OAG_LAN_STATE_JOINABLE", "JOINABLE"),
+        Compat::OtherTitle => say("OAG_LAN_STATE_TITLE", "OTHER TITLE"),
+        Compat::OtherVersion => say("OAG_LAN_STATE_VERSION", "OTHER VERSION"),
+        Compat::OtherContent => say("OAG_LAN_STATE_CONTENT", "OTHER MODS"),
+        Compat::Full => say("OAG_LAN_STATE_FULL", "FULL"),
     }
 }
 
@@ -50,10 +63,15 @@ pub fn fill(
             })
             .collect(),
     );
+    // The name and the state on the left, the title and the seats on the right.
     screen.set_row_labels(
         hosts
             .iter()
-            .map(|host| host.name.to_uppercase().chars().take(12).collect())
+            .zip(&states)
+            .map(|(host, state)| {
+                let name: String = host.name.to_uppercase().chars().take(6).collect();
+                format!("{name}  {}", state_word(*state, strings))
+            })
             .collect(),
     );
     screen.set_notes(

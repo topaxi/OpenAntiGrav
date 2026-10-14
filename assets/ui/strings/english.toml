@@ -101,6 +101,11 @@ OAG_LAN_ROW_TITLE = { text = "A DIFFERENT TITLE OR PRESSING, OR YOU LACK THIS TI
 OAG_LAN_ROW_VERSION = { text = "A DIFFERENT VERSION", human = false }
 OAG_LAN_ROW_CONTENT = { text = "DIFFERENT MODS OR CONTENT", human = false }
 OAG_LAN_ROW_FULL = { text = "FULL", human = false }
+OAG_LAN_STATE_JOINABLE = { text = "JOINABLE", human = false }
+OAG_LAN_STATE_TITLE = { text = "OTHER TITLE", human = false }
+OAG_LAN_STATE_VERSION = { text = "OTHER VERSION", human = false }
+OAG_LAN_STATE_CONTENT = { text = "OTHER MODS", human = false }
+OAG_LAN_STATE_FULL = { text = "FULL", human = false }
 OAG_LAN_WAIT_HINT = { text = "WAITING FOR THE HOST TO START THE RACE", human = false }
 OAG_LAN_NOT_HERE = { text = "THIS PLAYS %s, NOT THIS DISC", human = false }
 OAG_LAN_FAILED = { text = "COULD NOT JOIN", human = false }

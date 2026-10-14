@@ -196,6 +196,10 @@ const VALUE_INSET: f32 = 13.0;
 /// (`oag_ui::menu::Skin`'s own, 1.9).
 const TEXT_TOP_PAD: f32 = 1.9;
 
+/// How much smaller a list row's two columns are drawn than a lobby row. **Chosen**: the
+/// widest face (Pulse's) fits `NAME  OTHER VERSION` beside `WIPEOUT PULSE (8/8)` at this size.
+const LIST_ROW_SCALE: f32 = 0.7;
+
 impl Layout {
     pub(crate) fn new(skin: &Skin) -> Self {
         let (width, grid_height) = skin.space().size;
@@ -482,7 +486,14 @@ impl Join {
                 skin.normal()
             };
             if matches!(row, Row::Seat(n) if self.is_blocked(n)) {
-                ink = dim(ink);
+                // The row the cursor is on stays readable, so the help line is plainly its own.
+                ink = if self.hover == Some(row) {
+                    let mut lit = ink;
+                    lit[3] *= 0.75;
+                    lit
+                } else {
+                    dim(ink)
+                };
             }
             let (left, right) = match row {
                 Row::Seat(n) => (
@@ -511,16 +522,17 @@ impl Join {
                 }
                 Row::Back => (self.labels.back.clone(), String::new()),
             };
-            out.push(text(layout.text_x, y, layout.scale, ink, Align::Left, left));
+            // A list with a state and a title on every row sets them smaller, so the two columns
+            // clear each other on the widest face.
+            let scale = match row {
+                Row::Seat(_) if self.listing && !self.row_labels.is_empty() => {
+                    layout.scale * LIST_ROW_SCALE
+                }
+                _ => layout.scale,
+            };
+            out.push(text(layout.text_x, y, scale, ink, Align::Left, left));
             if !right.is_empty() {
-                out.push(text(
-                    layout.right_x,
-                    y,
-                    layout.scale,
-                    ink,
-                    Align::Right,
-                    right,
-                ));
+                out.push(text(layout.right_x, y, scale, ink, Align::Right, right));
             }
         }
         out
