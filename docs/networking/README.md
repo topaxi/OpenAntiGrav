@@ -470,7 +470,7 @@ maintainer's decision (2026-10-13); a public server would present a CA-signed on
 ## Hosting model
 
 **Chosen, not measured.** Direction from the maintainer discussion of 2026-10-14.
-Nothing of it is built yet.
+`oag-server` already runs one race per process; the warm loop and the lobby in item 3 are not built.
 
 1. **One race per `oag-server` process.** Each process runs one match: one canonical
    `RaceSim`, one 60 Hz tick loop, one set of clients. This is the usual shape for
