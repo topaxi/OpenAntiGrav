@@ -104,6 +104,27 @@ HUD texture by entry name.
 4. **The original HUDs stay as they are**: a HUD mod is opt-in, the vanilla layout is the default
    and the original campaigns keep it.
 
+## 1d. Multiplayer Time Trial and Speed Lap as ghosts (maintainer's idea, 2026-10-14)
+
+An idea for a mod mode, not built. Local or networked players run a Time Trial or Speed Lap
+together:
+
+- Everyone starts on **the same grid spot**, under the normal Time Trial / Speed Lap rules.
+- Every other player is drawn **as a ghost**, and there are **no collisions** between players.
+- **Time Trial** ranks by total time; **Speed Lap** is won by the fastest single lap over 7 laps.
+- The HUD may show the live ranking, and for Speed Lap the current fastest lap.
+
+**Check the original first**: Pulse PSP may already have a version of this. Its ad-hoc
+`Multiplayer` screen (`Multiplayer_Definition.xml`) lists `Create Time Trial`, and
+`PlayerStatus_Update` (`0x0883b3b8`) names a **Multiplayer Time Trial** mode among those that
+show the race clock ([hud.md](../../docs/ui/hud.md)). Whether its players see each other as
+ghosts, collide, or share a grid spot is unread. If the original has it, it is a port, not a
+mod; if it differs, the differences are the mod.
+
+Needs: a per-mode "players are ghosts" rule (collision pairs skipped, the ghost drawable for
+another person's craft), one shared spawn pose, and per-person results. It sits on the
+extension points above (rules as data) plus the ghost renderer that already exists.
+
 ## 2. A custom campaign
 
 What the titles' campaigns already give us: Pulse/HD/Omega grids and Pure's list (both launch
