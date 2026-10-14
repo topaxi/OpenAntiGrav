@@ -182,6 +182,11 @@
   race, `N` views of it (layout for 1 to 8, a chase camera per view, one scene draw
   per view). Layout and the camera rig are chosen, not measured; HUD hidden while
   split.
+- [Multi-window local play](multi-window.md) - **first cut** 2026-10-14: `--windows N` and
+  `--window-seats 4,2v`, one process, one race, the people dealt across OS windows; a window holds a
+  list of seats (one is a whole-screen view, several are cut up like a split screen), on one shared
+  device, one submission per window. Closing a window gives its seats to the AI. Chosen, not
+  measured; real multi-display pacing and the layout picker are open
 - [Drawing between ticks](between-ticks.md) - **built** 2026-10-13: the window
   draws a race between its last two 60 Hz ticks, so motion is smooth at 144 or
   240 Hz; captures still draw each tick exactly, byte for byte. A modern

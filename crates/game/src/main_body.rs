@@ -74,6 +74,8 @@ mod touch;
 mod typing;
 #[path = "main/window.rs"]
 mod window;
+#[path = "main/windows.rs"]
+mod windows;
 
 use crate::app::App;
 use crate::args::{autopilot_pilot, give_weapon};
@@ -628,6 +630,8 @@ fn run(cli: Cli) -> Result<()> {
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
     let players = cli.driver.players;
+    let window_layout = cli.driver.window_layout()?;
+    let windows_fullscreen = cli.driver.windows_fullscreen;
     let split_cut = cli.driver.cut();
     let (boot_overlay, pick_language, autopilot, trace, log_every) = (
         cli.overlay,
@@ -664,6 +668,8 @@ fn run(cli: Cli) -> Result<()> {
         autopilot_skill,
         ai_choice,
         players,
+        window_layout,
+        windows_fullscreen,
         split_cut,
         anim_seconds,
         race: None,

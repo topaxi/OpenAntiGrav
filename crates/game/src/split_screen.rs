@@ -115,6 +115,170 @@ pub fn apply(race: &mut Race, players: usize, cut: oag_render::viewport::Cut) ->
     count
 }
 
+/// One OS window's share of a multi-window race: how many seats it holds and how it cuts
+/// them. A window of one seat is the whole-screen view; two or more are cut up inside the
+/// window exactly as a split screen cuts its views ([`oag_render::viewport::layout`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WindowSeats {
+    /// How many people this window shows. `0` is a window with nobody yet, which draws a
+    /// holding frame.
+    pub count: usize,
+    /// Which way two seats are cut; means nothing for any other count.
+    pub cut: oag_render::viewport::Cut,
+}
+
+/// `people` dealt across `windows` windows as evenly as it divides, the first windows taking
+/// the remainder: 3 over 2 is `[2, 1]`, 2 over 4 is `[1, 1, 0, 0]` (the last two have
+/// nobody). `--windows N` is this with `people == N` unless `--players` says otherwise.
+/// **Chosen, not measured.**
+#[must_use]
+pub fn deal(people: usize, windows: usize, cut: oag_render::viewport::Cut) -> Vec<WindowSeats> {
+    let windows = windows.max(1);
+    let people = people.min(oag_render::viewport::MAX_VIEWPORTS);
+    (0..windows)
+        .map(|window| WindowSeats {
+            count: people / windows + usize::from(window < people % windows),
+            cut,
+        })
+        .collect()
+}
+
+/// `--window-seats`: the seats per window as a comma-separated list, each a count of 1 to 8 and
+/// optionally `h` or `v` for the way two seats are cut (`4,2v`: four seats in window 1, two side
+/// by side in window 2); a count without a letter takes `default_cut`. At least two windows
+/// (one window is `--players`), at most eight seats in all.
+///
+/// # Errors
+///
+/// Names the entry that is not a count, a count out of range, a cut letter that is neither, a
+/// list of one window, or more seats than the grid has views.
+pub fn parse_window_seats(
+    text: &str,
+    default_cut: oag_render::viewport::Cut,
+) -> Result<Vec<WindowSeats>, String> {
+    let mut windows = Vec::new();
+    for entry in text.split(',') {
+        let entry = entry.trim();
+        let (digits, cut) = match entry.chars().last() {
+            Some('h' | 'H') => (
+                &entry[..entry.len() - 1],
+                oag_render::viewport::Cut::Horizontal,
+            ),
+            Some('v' | 'V') => (
+                &entry[..entry.len() - 1],
+                oag_render::viewport::Cut::Vertical,
+            ),
+            _ => (entry, default_cut),
+        };
+        let count: usize = digits.parse().map_err(|_| {
+            format!(
+                "{entry:?} is not a seat count: write a number, then h or v for how two are cut"
+            )
+        })?;
+        if !(1..=oag_render::viewport::MAX_VIEWPORTS).contains(&count) {
+            return Err(format!(
+                "{entry:?} asks for {count} seats in a window; a window holds 1 to {}",
+                oag_render::viewport::MAX_VIEWPORTS
+            ));
+        }
+        windows.push(WindowSeats { count, cut });
+    }
+    if windows.len() < 2 {
+        return Err("one window is --players; --window-seats takes a list like 4,2".to_string());
+    }
+    let total: usize = windows.iter().map(|window| window.count).sum();
+    if total > oag_render::viewport::MAX_VIEWPORTS {
+        return Err(format!(
+            "{total} seats in all; the grid shows at most {}",
+            oag_render::viewport::MAX_VIEWPORTS
+        ));
+    }
+    Ok(windows)
+}
+
+/// The view count the load is told for a layout ([`oag_raceplay::Options::views`]): it reads a
+/// title's authored two-player split HUD and packs its textures when the race has two views, and
+/// nothing else about the count. `2` when any window holds exactly two seats, so that window can
+/// use the authored layout; otherwise the largest window, which is `1` for a window each.
+#[must_use]
+pub fn views_for(layout: &[WindowSeats]) -> usize {
+    if layout.iter().any(|window| window.count == 2) {
+        2
+    } else {
+        layout
+            .iter()
+            .map(|window| window.count)
+            .max()
+            .unwrap_or(1)
+            .max(1)
+    }
+}
+
+/// The layout a race of `people` takes across `windows` open windows: `wanted`, the layout the
+/// command line spelled, when its first `windows` entries add up to exactly `people`; otherwise
+/// `people` dealt evenly ([`deal`]) with `cut`. A join screen that seats a different head count
+/// than `--window-seats` spelled is dealt, not refused.
+#[must_use]
+pub fn layout_for(
+    wanted: Option<&[WindowSeats]>,
+    people: usize,
+    windows: usize,
+    cut: oag_render::viewport::Cut,
+) -> Vec<WindowSeats> {
+    if let Some(wanted) = wanted {
+        let held = &wanted[..windows.min(wanted.len())];
+        if held.iter().map(|window| window.count).sum::<usize>() == people {
+            return held.to_vec();
+        }
+    }
+    deal(people, windows, cut)
+}
+
+/// Makes `race` a multi-window race of `layout`: the cameras and local slots of a split screen of
+/// all the seats, which are then dealt across the windows in slot order, window 1 taking slots
+/// from 0. Returns how many views the race settled on (clamped to the craft fielded), which is
+/// `1` and leaves the race ordinary when the layout holds one person or none.
+pub fn apply_windows(race: &mut Race, layout: &[WindowSeats]) -> usize {
+    let total: usize = layout.iter().map(|window| window.count).sum();
+    let cut = layout
+        .first()
+        .map_or_else(Default::default, |window| window.cut);
+    let count = apply(race, total, cut);
+    deal_windows(race, layout);
+    count
+}
+
+/// Deals the views a race already has ([`apply`]) across the windows of `layout`, in slot order,
+/// window 1 taking slots from 0: the presentation alone, which a race that was seated first (the
+/// join screen's, a restart's kept seats) takes afterwards. A race of one view stays ordinary.
+pub fn deal_windows(race: &mut Race, layout: &[WindowSeats]) {
+    if race.viewport_count() <= 1 {
+        return;
+    }
+    let mut next = 0;
+    let views = layout
+        .iter()
+        .map(|window| {
+            let seats = (next..next + window.count).collect();
+            next += window.count;
+            oag_raceplay::WindowViews {
+                seats,
+                cut: window.cut,
+            }
+        })
+        .collect();
+    race.set_windows(views);
+    log::info!(
+        "multi-window: {} window(s) holding {}",
+        layout.len(),
+        layout
+            .iter()
+            .map(|window| window.count.to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
 /// Makes `race` the split screen `lobby` asked for and puts each device on the
 /// slot it joined: slots `0..seated` become local players and `assignment` is
 /// [`Lobby::seat`]'s, with `connected` the pads plugged in now. Returns the views the race settled on.

@@ -451,6 +451,9 @@ pub struct Assignment<D = gilrs::GamepadId> {
     /// They stay out until they disconnect: a pad on the desk that nobody joined
     /// with must not take a seat the moment the race starts.
     benched: Vec<D>,
+    /// Slots whose seat was given up ([`Self::unseat`]): nothing is seated on them
+    /// again, however many pads connect.
+    closed: Vec<u8>,
 }
 
 impl<D> Default for Assignment<D> {
@@ -461,6 +464,7 @@ impl<D> Default for Assignment<D> {
             seating: Seating::Merged,
             keyboard_claimed: false,
             benched: Vec::new(),
+            closed: Vec::new(),
         }
     }
 }
@@ -480,6 +484,7 @@ impl<D: Copy + PartialEq> Assignment<D> {
             },
             keyboard_claimed: false,
             benched: Vec::new(),
+            closed: Vec::new(),
         }
     }
 
@@ -499,6 +504,28 @@ impl<D: Copy + PartialEq> Assignment<D> {
             if !self.pads.iter().any(|(held, _)| held == id) && !self.benched.contains(id) {
                 self.benched.push(*id);
             }
+        }
+    }
+
+    /// Gives up `slot`'s seat: the pads on it are [benched](Self::bench) until they
+    /// disconnect, a keyboard on it goes back to [`DEFAULT_SLOT`], and nothing is
+    /// seated on it again. Afterwards [`Self::drives`] is `false` for `slot` (unless it
+    /// is the default slot, which the keyboard always holds), which is what makes the
+    /// race fly it as the AI. What closing a multi-window race's window does.
+    pub fn unseat(&mut self, slot: usize) {
+        let Ok(slot) = u8::try_from(slot) else {
+            return;
+        };
+        let (left, kept): (Vec<_>, Vec<_>) =
+            self.pads.drain(..).partition(|(_, held)| *held == slot);
+        self.pads = kept;
+        self.benched.extend(left.into_iter().map(|(id, _)| id));
+        if self.keyboard == slot {
+            self.keyboard = DEFAULT_SLOT as u8;
+            self.keyboard_claimed = false;
+        }
+        if !self.closed.contains(&slot) {
+            self.closed.push(slot);
         }
     }
 
@@ -582,7 +609,9 @@ impl<D: Copy + PartialEq> Assignment<D> {
                 continue;
             }
             let free = (0..humans).find(|slot| {
-                self.pads.iter().all(|(_, held)| held != slot) && !(claimed && *slot == keyboard)
+                self.pads.iter().all(|(_, held)| held != slot)
+                    && !(claimed && *slot == keyboard)
+                    && !self.closed.contains(slot)
             });
             if let Some(slot) = free {
                 self.pads.push((*id, slot));

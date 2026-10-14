@@ -183,6 +183,59 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     assert_eq!(race.sim.world.controllers[2], Controller::Remote);
 }
 
+/// Closing a window hands every seat it held to the AI **even though their pads are still
+/// plugged in**, and a pad that reconnects does not take one back: nobody could see the craft.
+/// Window 2 here holds two seats. Fails if closing a window only forgets the window and leaves
+/// the people at it flying blind.
+#[test]
+fn a_closed_window_hands_all_its_seats_to_the_ai_and_the_pads_cannot_take_them_back() {
+    use oag_game::split_screen::{WindowSeats, deal_windows};
+    let cut = oag_render::viewport::Cut::Horizontal;
+    let mut race = race(3);
+    let mut assignment = Assignment::<u32>::seated(3);
+    assignment.claim_keyboard(0);
+    split_screen::apply(&mut race, 3, cut);
+    deal_windows(
+        &mut race,
+        &[WindowSeats { count: 1, cut }, WindowSeats { count: 2, cut }],
+    );
+    assert_eq!(
+        race.windows()[1].seats,
+        vec![1, 2],
+        "window 2 holds slots 1 and 2"
+    );
+    assignment.reconcile(&[7, 8]);
+    split_screen::follow_devices(&mut race, &assignment);
+    let controller = |race: &Race, slot: usize| race.sim.world.controllers[slot];
+    assert_eq!(controller(&race, 1), Controller::Local);
+    assert_eq!(controller(&race, 2), Controller::Local);
+
+    // What `Session::close_screen` does for window 2.
+    for slot in race.windows()[1].seats.clone() {
+        assignment.unseat(slot);
+    }
+    race.remove_window(1);
+    assert_eq!(split_screen::follow_devices(&mut race, &assignment), 2);
+    assert_eq!(controller(&race, 1), Controller::Ai);
+    assert_eq!(controller(&race, 2), Controller::Ai);
+    assert_eq!(
+        controller(&race, 0),
+        Controller::Local,
+        "window 1's person flies on"
+    );
+
+    assignment.reconcile(&[]);
+    assignment.reconcile(&[7, 8]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert_eq!(controller(&race, 1), Controller::Ai);
+    assert_eq!(controller(&race, 2), Controller::Ai);
+    assert!(
+        race.windowed(),
+        "the race itself is still windowed, by window 1 alone"
+    );
+    assert_eq!(race.windows().len(), 1);
+}
+
 /// Merged devices are a single person: nothing is reverted.
 #[test]
 fn merged_devices_leave_the_controllers_alone() {

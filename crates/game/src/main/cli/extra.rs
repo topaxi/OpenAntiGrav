@@ -405,9 +405,73 @@ pub(crate) struct DriverArgs {
     /// [`oag_render::viewport::Cut`].
     #[arg(long, default_value = "horizontal", value_parser = ["horizontal", "vertical"])]
     pub(crate) split_cut: String,
+
+    /// Multi-window local play: this many OS windows (2 to 8), the people dealt across them as
+    /// evenly as they divide - `--windows 2` is two people, a window each; `--windows 2 --players 6`
+    /// is three and three, each window cut up like a split screen.
+    ///
+    /// Window 1 is the front end's and the one whose close ends the run; the others show a
+    /// holding frame until a race starts, and closing one turns its seats over to the AI. Seated
+    /// the way `--players N` seats: the keyboard and the first pad on slot 0, each further pad on
+    /// the next slot. Desktop only. **Chosen, not measured.** See `docs/rendering/multi-window.md`.
+    #[arg(long, value_parser = clap::value_parser!(u8).range(2..=8), conflicts_with = "window_seats")]
+    pub(crate) windows: Option<u8>,
+
+    /// Multi-window local play with the seats per window spelled out: a comma-separated list, one
+    /// entry per window, each a count of 1 to 8 and optionally `h` or `v` for the way two seats are
+    /// cut. `--window-seats 4,2v` is two windows: four seats cut in quarters in the first, two side
+    /// by side in the second. A count without a letter takes `--split-cut`. At most eight seats in
+    /// all. Not with `--windows` or `--players`. See `docs/rendering/multi-window.md`.
+    #[arg(long, value_name = "COUNTS", conflicts_with_all = ["windows", "players"])]
+    pub(crate) window_seats: Option<String>,
+
+    /// With `--windows` or `--window-seats`: each window borderless fullscreen on a monitor of its
+    /// own, in the order the platform lists them (window 1 on the first; they share when there are
+    /// fewer). Works under Wayland, which cannot place a plain window on a monitor.
+    #[arg(long)]
+    pub(crate) windows_fullscreen: bool,
 }
 
 impl DriverArgs {
+    /// The people dealt across windows, window 1 first: `--window-seats` as spelled, or
+    /// `--windows` with `--players` (one person per window without it) dealt evenly. Empty for a
+    /// run with one window. **An error where a window cannot be opened** - the browser, Android
+    /// and iOS have the one surface the platform gives - rather than a flag silently ignored.
+    pub(crate) fn window_layout(&self) -> anyhow::Result<Vec<oag_game::split_screen::WindowSeats>> {
+        use oag_game::split_screen::{deal, parse_window_seats};
+        let layout = match (&self.window_seats, self.windows) {
+            (Some(text), _) => parse_window_seats(text, self.cut())
+                .map_err(|why| anyhow::anyhow!("--window-seats: {why}"))?,
+            (None, Some(windows)) => {
+                let people = if self.players > 1 {
+                    usize::from(self.players)
+                } else {
+                    usize::from(windows)
+                };
+                deal(people, usize::from(windows), self.cut())
+            }
+            (None, None) => return Ok(Vec::new()),
+        };
+        if cfg!(any(target_arch = "wasm32", target_os = "android", target_os = "ios")) {
+            anyhow::bail!(
+                "--windows and --window-seats need a desktop: this platform has the one window it gives"
+            );
+        }
+        Ok(layout)
+    }
+
+    /// How many people the run seats at the start: the windows' seats, or `--players`.
+    pub(crate) fn people(&self) -> u8 {
+        let seated: usize = self
+            .window_layout()
+            .map_or(0, |layout| layout.iter().map(|window| window.count).sum());
+        if seated > 0 {
+            u8::try_from(seated).unwrap_or(u8::MAX)
+        } else {
+            self.players
+        }
+    }
+
     /// `--split-cut` as the type the renderer takes.
     pub(crate) fn cut(&self) -> oag_render::viewport::Cut {
         oag_render::viewport::Cut::parse(&self.split_cut).unwrap_or_default()

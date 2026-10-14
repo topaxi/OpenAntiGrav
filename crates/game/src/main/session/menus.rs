@@ -249,7 +249,7 @@ impl Session {
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
         let monitors: Vec<menu::Choice> = display::Monitor::offered(&monitor_names(
-            &self.gpu.window.available_monitors().collect::<Vec<_>>(),
+            &self.gpu.output.window.available_monitors().collect::<Vec<_>>(),
         ))
         .into_iter()
         .map(menu::Choice::plain)
@@ -412,7 +412,7 @@ impl Session {
         let mut renderer = Renderer::new(
             &self.gpu.device,
             &self.gpu.queue,
-            self.gpu.config.format,
+            self.gpu.output.config.format,
             format,
             rows_face,
             &shell.sprites,
@@ -541,6 +541,7 @@ impl Session {
             self.suspended_race = Some(stage);
         }
         self.gpu
+            .output
             .window
             .set_title(&hints::shell_title(&strings::project_table(
                 self.settings.language.as_deref(),

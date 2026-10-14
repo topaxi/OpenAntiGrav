@@ -217,6 +217,23 @@ impl RaceStage {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
         self.race.set_draw_alpha(alpha);
+        // A multi-window race deals its views across the windows: this is window 1's. See
+        // `Self::render_window`, which the other windows call too.
+        if self.race.windowed() {
+            return self.render_window(
+                gpu,
+                encoder,
+                view,
+                0,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+            );
+        }
         // A split screen draws one scene per view, each submitted on its own, so
         // `encoder` keeps only what the caller records after it: see
         // `Scene::render_viewports`. No timers, blur or jitter - the views
@@ -259,6 +276,67 @@ impl RaceStage {
             blur_timestamps,
             hd_bloom_timestamps,
         )
+    }
+
+    /// Window `window`'s views of a multi-window race drawn into `view`: the one seat it holds
+    /// full-frame (`Scene::render_view`, recorded into `encoder`), or several cut up inside it
+    /// as a split screen cuts its views (`Scene::render_window_views`, which submits its own
+    /// command buffers first). The caller submits `encoder` before the next window draws, and
+    /// has set the draw alpha. No timers: dynamic resolution holds its scale while the race has
+    /// more than one view, as it does for a split. A window with no seats draws nothing.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn render_window(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        window: usize,
+        viewport: (f32, f32, f32, f32),
+        fov: display::Fov,
+        cull: bool,
+        pvs_cull: bool,
+        anim_seconds: Option<f32>,
+        shadows: display::Shadows,
+        zone_spectrum: &[f32],
+    ) -> oag_present::perf::SceneStats {
+        // Pointed at the zone the race has reached, as `Self::render` does; a second window
+        // of the same frame finds it already there and the rebuild is not repeated.
+        if self.scene.sync_zone_grade(&self.race) {
+            self.scene.rebind_zone_art(gpu.device(), gpu.queue());
+        }
+        match self.race.window_drawn(window).as_slice() {
+            [] => oag_present::perf::SceneStats::default(),
+            &[slot] => self.scene.render_view(
+                gpu.device(),
+                gpu.queue(),
+                encoder,
+                view,
+                &self.race,
+                slot,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+                None,
+            ),
+            _ => self.scene.render_window_views(
+                gpu.device(),
+                gpu.queue(),
+                view,
+                &self.race,
+                window,
+                viewport,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+            ),
+        }
     }
 
     /// What a temporal upscaler needs from this frame, or `None` when nothing
@@ -478,7 +556,7 @@ impl RaceStage {
     /// too - see the `_BLOWUP` note in `race::tick`.
     ///
     /// `target_size` is `view`'s own full pixel dimensions - **not** derived
-    /// from `gpu.config` here, because it used to be and that is exactly what
+    /// from `gpu.output.config` here, because it used to be and that is exactly what
     /// broke: the ordinary per-frame call draws into `Framebuffer::output`,
     /// which does track the surface, but [`RaceStage::warm_up`] draws this
     /// same pass into the scene's own (possibly letterboxed, smaller) target
@@ -538,69 +616,92 @@ impl RaceStage {
                         ),
                     );
                 }
-                if let Some(hud) = &mut self.hud
-                    && self.race.hud_shown()
-                {
-                    oag_game::hud_views::draw(
-                        hud,
+                self.draw_window_hud(gpu, encoder, view, viewport, target_size, 0);
+            }
+        }
+    }
+
+    /// The race HUD of window `window` over `view`, and the start-line countdown: everything
+    /// [`Self::draw_hud`] draws while the race runs, for the seats a window shows. A multi-window
+    /// race's further windows call this alone, because the track panel, the results and the
+    /// end screens belong to window 1. `window` is not read when the race is not windowed.
+    pub(crate) fn draw_window_hud(
+        &mut self,
+        gpu: &impl GpuContext,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        target_size: (u32, u32),
+        window: usize,
+    ) {
+        if let Some(hud) = &mut self.hud
+            && self.race.hud_shown()
+        {
+            oag_game::hud_views::draw(
+                hud,
+                gpu.device(),
+                gpu.queue(),
+                encoder,
+                view,
+                &self.race,
+                &self.scene,
+                window,
+                self.campaign_cell.as_ref(),
+                self.record_target.as_ref(),
+                viewport,
+            );
+            // The countdown, for exactly the measured start-line gate's
+            // span and no other window - see `oag_game::hud_countdown`
+            // and `oag_race::RaceState::thrust_gated`, whose own doc
+            // names the three live captures behind the 272-tick figure.
+            // Not gated further by mode: the capture that measured it
+            // was Time Trial alone, and `thrust_gated` already applies
+            // it to every mode on the same reasoning
+            // `RaceState::eliminate` uses, so this follows it rather
+            // than adding a second, narrower guess on top.
+            //
+            // **Not while the gantry is showing it.** The countdown
+            // belongs on the start gantry - the maintainer's account
+            // of the original, and what `race::gantry` now draws -
+            // so this overlay is the fallback for a circuit that
+            // stands no gantry, not a second countdown beside one.
+            //
+            // **A resume countdown draws the same art on its own clock,
+            // wherever on the track the race was paused.**
+            let start_line = (!self.scene.draws_gantry()
+                && oag_race::RaceState::thrust_gated(self.race.sim.world.tick))
+            .then_some(self.race.sim.world.tick as f32 / 60.0);
+            // The start's is one picture over the whole screen; a resume's is
+            // one per view of a split, each centred as it would be alone
+            // (chosen: a split's seam is no place for a digit). **In a multi-window
+            // race a window's views are its own**: one picture per view the window
+            // cuts, so a window of one seat draws one over the whole of it.
+            let rects = if self.resume_art.is_some() {
+                let (views, cut) = if self.race.windowed() {
+                    (
+                        self.race.window_drawn(window).len().max(1),
+                        self.race.window_cut(window),
+                    )
+                } else {
+                    (self.race.viewport_count(), self.race.cut())
+                };
+                oag_render::viewport::layout(views, viewport, cut)
+            } else {
+                vec![viewport]
+            };
+            if let Some(countdown) = &mut self.countdown
+                && let Some(seconds) = self.resume_art.or(start_line)
+            {
+                for rect in rects {
+                    countdown.draw(
                         gpu.device(),
                         gpu.queue(),
                         encoder,
                         view,
-                        &self.race,
-                        &self.scene,
-                        self.campaign_cell.as_ref(),
-                        self.record_target.as_ref(),
-                        viewport,
+                        seconds,
+                        rect,
+                        target_size,
                     );
-                    // The countdown, for exactly the measured start-line gate's
-                    // span and no other window - see `oag_game::hud_countdown`
-                    // and `oag_race::RaceState::thrust_gated`, whose own doc
-                    // names the three live captures behind the 272-tick figure.
-                    // Not gated further by mode: the capture that measured it
-                    // was Time Trial alone, and `thrust_gated` already applies
-                    // it to every mode on the same reasoning
-                    // `RaceState::eliminate` uses, so this follows it rather
-                    // than adding a second, narrower guess on top.
-                    //
-                    // **Not while the gantry is showing it.** The countdown
-                    // belongs on the start gantry - the maintainer's account
-                    // of the original, and what `race::gantry` now draws -
-                    // so this overlay is the fallback for a circuit that
-                    // stands no gantry, not a second countdown beside one.
-                    //
-                    // **A resume countdown draws the same art on its own clock,
-                    // wherever on the track the race was paused.**
-                    let start_line = (!self.scene.draws_gantry()
-                        && oag_race::RaceState::thrust_gated(self.race.sim.world.tick))
-                    .then_some(self.race.sim.world.tick as f32 / 60.0);
-                    // The start's is one picture over the whole screen; a resume's is
-                    // one per view of a split, each centred as it would be alone
-                    // (chosen: a split's seam is no place for a digit).
-                    let rects = if self.resume_art.is_some() {
-                        oag_render::viewport::layout(
-                            self.race.viewport_count(),
-                            viewport,
-                            self.race.cut(),
-                        )
-                    } else {
-                        vec![viewport]
-                    };
-                    if let Some(countdown) = &mut self.countdown
-                        && let Some(seconds) = self.resume_art.or(start_line)
-                    {
-                        for rect in rects {
-                            countdown.draw(
-                                gpu.device(),
-                                gpu.queue(),
-                                encoder,
-                                view,
-                                seconds,
-                                rect,
-                                target_size,
-                            );
-                        }
-                    }
                 }
             }
         }

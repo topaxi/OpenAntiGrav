@@ -252,6 +252,7 @@ pub use spline::{Spline, circuit_length};
 pub use telemetry::{Telemetry, describe};
 pub use texture_sink::TextureSink;
 pub use view::RaceView;
+pub use viewpoint::WindowViews;
 pub use visibility::TrackVisibility;
 pub use worker::{LoadProgress, LoadWorker};
 

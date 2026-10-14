@@ -8,6 +8,7 @@
 use super::super::*;
 use super::Scene;
 use super::motion::MotionState;
+use super::viewports::Layer;
 
 mod craft;
 use craft::{cockpit_shield_visible, hd_flame_transform, shell_visible};
@@ -281,7 +282,7 @@ impl Scene {
         // clock and nothing the camera decides: a split screen runs them with its
         // first view, and the later views draw with what they left in the
         // buffers and the card textures. See `Scene::render_viewports`.
-        let first_view = self.layer.get() != super::viewports::Layer::Next;
+        let first_view = self.layer.get() != Layer::Next;
         if first_view {
             self.write_scenery_anims(queue, seconds);
             self.frame_work.update(|w| super::FrameWork {
@@ -736,7 +737,7 @@ impl Scene {
                         // entire frame in and bloom everything.
                         // A split-screen view after the first keeps what the
                         // earlier ones drew - see `Scene::render_viewports`.
-                        load: if self.layer.get() == super::viewports::Layer::Next {
+                        load: if self.layer.get() == Layer::Next {
                             wgpu::LoadOp::Load
                         } else {
                             wgpu::LoadOp::Clear(wgpu::Color {
@@ -953,7 +954,14 @@ impl Scene {
         // clearing pass and sample the linear scene from its top-left, so one run
         // per view would wipe every earlier view. `Scene::render_viewports` runs
         // the chain once over the whole area after the last view instead.
-        let whole = self.layer.get() == super::viewports::Layer::Whole;
+        //
+        // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
+        // target's origin and fills it, which is what the chains sample from, so it
+        // runs them as an unsplit race does. The boost pulse is the player's own, so
+        // only the window that follows the player's craft draws it.
+        let layer = self.layer.get();
+        let whole = matches!(layer, Layer::Whole | Layer::Window);
+        let own_pulse = layer != Layer::Window || race.viewed_slot() == race.player_slot();
         if self.hd.is_some() {
             if whole {
                 self.run_hd(
@@ -961,7 +969,7 @@ impl Scene {
                     encoder,
                     view,
                     viewport,
-                    race.hd_zoom_frame(),
+                    race.hd_zoom_frame().filter(|_| own_pulse),
                     hd_bloom_timestamps,
                 );
                 stats.hd_bloom_encoded = true;
@@ -972,9 +980,7 @@ impl Scene {
             if whole {
                 self.run_omega(omega, device, queue, encoder, view, viewport, true);
             }
-        } else if (self.bloom.is_some() || self.ps2_bloom.is_some())
-            && self.layer.get() == super::viewports::Layer::Whole
-        {
+        } else if (self.bloom.is_some() || self.ps2_bloom.is_some()) && whole {
             // The recovered post-process, reading the alpha channel the scene
             // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and
             // adding a blurred copy of the masked colour back over the frame.
@@ -1002,7 +1008,9 @@ impl Scene {
             self.bloom_pending.set(true);
         }
         // The borrowed zoom-streak ring (`BoostZoom`): after the bloom's prepare, before the HUD.
-        self.run_boost_zoom(device, queue, encoder, view, viewport, race);
+        if own_pulse {
+            self.run_boost_zoom(device, queue, encoder, view, viewport, race);
+        }
         // Motion blur, last: it smears the finished frame - but not the
         // Pulse glow, whose composite comes after the HUD - and it
         // runs before the caller composites the HUD over `view`, so the

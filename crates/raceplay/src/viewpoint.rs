@@ -53,12 +53,29 @@ pub(super) struct Viewpoints {
     /// Which way two views are cut. Read through [`Race::cut`], which ignores it for
     /// any other count.
     cut: oag_render::viewport::Cut,
+    /// The views are dealt across OS windows (`--windows N`, `--window-seats`): window
+    /// `i` shows the seats of `windows[i]`, cut up inside it like a split screen. Empty
+    /// is one window (the split of [`Self::cut`], or no split). A presentation choice
+    /// beside [`Self::cut`], not a second count: the cameras are still [`Self::count`]'s.
+    windows: Vec<WindowViews>,
     /// The extra slot the scene is being drawn for right now, `None` for the
     /// player's own view. Set by the draw through `&Race`, so a [`Cell`].
     drawing: Cell<Option<u8>>,
     /// Indexed by slot. Slot 0 stays `None`: the player's camera is
     /// `RaceView::camera`.
     cams: [Option<Cam>; MAX_SHIPS],
+}
+
+/// What one OS window shows of a multi-window race: which grid slots, cut up the way a split
+/// screen cuts its views.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WindowViews {
+    /// The slots this window shows, in view order. Empty is a window with nothing to show
+    /// yet, which draws a holding frame.
+    pub seats: Vec<usize>,
+    /// Which way two views are cut; means nothing for any other count
+    /// ([`oag_render::viewport::Cut::for_views`]).
+    pub cut: oag_render::viewport::Cut,
 }
 
 impl Viewpoints {
@@ -84,7 +101,89 @@ impl Race {
     /// ([`oag_render::viewport::Cut::for_views`]).
     #[must_use]
     pub fn cut(&self) -> oag_render::viewport::Cut {
+        if self.windowed() {
+            return self.window_cut(0);
+        }
         self.view.viewpoints.cut.for_views(self.viewport_count())
+    }
+
+    /// Whether the views are dealt across OS windows. See [`Viewpoints::windows`].
+    #[must_use]
+    pub fn windowed(&self) -> bool {
+        !self.view.viewpoints.windows.is_empty()
+    }
+
+    /// The windows the views are dealt across, window 1 first.
+    #[must_use]
+    pub fn windows(&self) -> &[WindowViews] {
+        &self.view.viewpoints.windows
+    }
+
+    /// Deals the views across OS windows: the multi-window presentation. Empty turns it
+    /// off. A view-side choice like [`Self::set_cut`]; no tick reads it and the state hash
+    /// does not hold it. The seats are slots of the views [`Self::set_viewport_count`]
+    /// fielded; a slot past them has no camera and is skipped when drawn.
+    pub fn set_windows(&mut self, windows: Vec<WindowViews>) {
+        self.view.viewpoints.windows = windows;
+    }
+
+    /// Takes window `index` out of the layout (it was closed), so the windows after it
+    /// keep their place in the list. Its seats stay in the race, flown by the AI.
+    /// Window 1 (index 0) is never removed: closing it ends the run.
+    pub fn remove_window(&mut self, index: usize) {
+        if index > 0 && index < self.view.viewpoints.windows.len() {
+            self.view.viewpoints.windows.remove(index);
+        }
+    }
+
+    /// The slots window `window` draws right now, in view order. Its own seats while the
+    /// race runs; **just the player's own while the intro flyby plays and once the race is
+    /// over, in the window that holds the player** (the flyby is the player's camera and the
+    /// end screens sit over the spectator camera, as in a split: [`Self::views_drawn`]). A
+    /// window past the layout, or with no seats, draws none.
+    #[must_use]
+    pub fn window_drawn(&self, window: usize) -> Vec<usize> {
+        let Some(views) = self.view.viewpoints.windows.get(window) else {
+            return Vec::new();
+        };
+        let player = self.player_slot();
+        let seats: Vec<usize> = views
+            .seats
+            .iter()
+            .copied()
+            .filter(|&slot| slot < self.viewport_count())
+            .collect();
+        if seats.contains(&player) && (self.in_intro() || self.finished()) {
+            vec![player]
+        } else {
+            seats
+        }
+    }
+
+    /// Which way window `window` cuts what it draws ([`Self::window_drawn`]).
+    #[must_use]
+    pub fn window_cut(&self, window: usize) -> oag_render::viewport::Cut {
+        let drawn = self.window_drawn(window).len();
+        self.view
+            .viewpoints
+            .windows
+            .get(window)
+            .map_or_else(Default::default, |views| views.cut.for_views(drawn))
+    }
+
+    /// The rectangles of the views window `window` draws in `area`, in view order: the
+    /// single source for where a view and its HUD go in that window.
+    #[must_use]
+    pub fn window_rects(
+        &self,
+        window: usize,
+        area: oag_render::viewport::Rect,
+    ) -> Vec<oag_render::viewport::Rect> {
+        oag_render::viewport::layout(
+            self.window_drawn(window).len(),
+            area,
+            self.window_cut(window),
+        )
     }
 
     /// Chooses the cut for a two-view race. A view-side choice like the cameras: no tick
@@ -116,6 +215,11 @@ impl Race {
     /// with no blur, jitter or upscaler history, for its one last view too.
     #[must_use]
     pub fn views_drawn(&self) -> usize {
+        // Window 1's, when the views are dealt across windows: what the track panel and
+        // the end screens, which belong to window 1, are laid out against.
+        if self.windowed() {
+            return self.window_drawn(0).len().max(1);
+        }
         if self.in_intro() || self.finished() {
             1
         } else {
