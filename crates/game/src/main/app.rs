@@ -327,9 +327,7 @@ impl App {
                     self.ai_choice,
                     oag_game::ai_choice::Source::Free(ai_difficulty),
                 );
-                let players = self.race_title.map_or(self.players, |title| {
-                    oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
-                });
+                let players = self.players;
                 // `--windows` / `--window-seats`: the people are dealt across windows, each cut
                 // up inside its own. The windows themselves open on the first pass of the event
                 // loop (`Session::screens_to_open`), when the title is known to offer them.

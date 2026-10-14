@@ -873,8 +873,7 @@ table says "In Racebox, set the number of players to 2, and choose between verti
 horizontal split screen", which is the shape this takes. No Ship Select: `Team_Definition.xml`
 authors one touch `team` screen and no `Player 1`/`Player 2` pair (see
 [split-screen.md](../rendering/split-screen.md)). Omega: **checked, differs** (it authors the
-lists itself). It follows the menu tree's `split_screen` rows, so it is absent on an integrated
-GPU (`Title::split_on_integrated_gpu` is `false` for 2048). Walked windowed 2026-10-13 on an own
+lists itself). It follows the menu tree's `split_screen` rows. Walked windowed 2026-10-13 on an own
 Xvfb with two virtual pads: RACEBOX tile, the rows, two pads join, START, a left and right
 two-view race.
 

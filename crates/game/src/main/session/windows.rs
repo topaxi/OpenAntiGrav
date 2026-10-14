@@ -31,9 +31,7 @@ const HOLD_SCALE: f32 = 3.0;
 
 impl Session {
     /// How many windows to open now, or `None`: `--windows` or `--window-seats` asked for them, none are open
-    /// yet, the title is known, and the title offers a split on this adapter - the same
-    /// rule `--players` follows ([`oag_game::split_screen::offered`]). A refusal is said
-    /// once and ends the request.
+    /// yet, and the title is known.
     #[cfg_attr(
         any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
         allow(dead_code)
@@ -42,20 +40,10 @@ impl Session {
         if self.windows_wanted < 2 {
             return None;
         }
-        let title = self
-            .shell
-            .as_ref()
-            .map(|shell| shell.title)
-            .or(self.race_title)?;
-        let wanted = std::mem::take(&mut self.windows_wanted);
-        if !oag_game::split_screen::offered(title, self.gpu.device_type) {
-            warn!(
-                "--windows {wanted}: split screen is not offered for {} on an integrated GPU, \
-                 so one window",
-                title.name
-            );
+        if self.shell.is_none() && self.race_title.is_none() {
             return None;
         }
+        let wanted = std::mem::take(&mut self.windows_wanted);
         // Windows are already open for as many (a layout the picker chose after a race on
         // another one): nothing to add.
         (usize::from(wanted) > 1 + self.screens.len()).then_some(wanted)

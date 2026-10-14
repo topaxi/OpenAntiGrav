@@ -517,6 +517,42 @@ and 9.76 after, and HD four views 8.16 against 5.43.
 single runs, so only the order of magnitude: 1.2 to 2.0 ms of CPU, which is the GPU's
 business more than the CPU's on Omega, whose scene passes cost 1.1 ms).
 
+**Vertical against horizontal cut, two views (2026-10-14, `split-vertical-cost`): the vertical
+cut is not dearer in this build.** Asked because the maintainer saw the vertical cut tank on the
+Steam Deck. Not reproduced, on either machine, so no fix was made. Pulse (PSP EU), Single Race,
+tick 300 / autopilot, the same seed and track, release build with `perf-probe`.
+
+- *Workstation* (RX 7800 XT, 1280x800 offscreen, `OAG_RENDER_BENCH`, load 20 to 25): draws 981
+  horizontal against 954 vertical, 3442 against 3453 culled, CPU 2.17 against 2.02 ms, GPU scene
+  passes 0.526 against 0.508 ms, pipelined 2.25 against 2.05 ms. The Raphael iGPU (same size, two
+  runs each): scene passes 5.0 and 5.1 ms against 4.75 and 4.80, pipelined 5.40 and 5.41
+  against 5.02 and 5.19. So the widened vertical field (`fit_vertical_fov`) admits no extra
+  geometry here (the culling and the draws above), and the cut moves nothing the scene pass pays for.
+- *Steam Deck* (Van Gogh, RADV, gamescope, a windowed `--players 2` race; the Deck's output was
+  3840x2160, so the render scale stood in for a 1280x800 target; mean frame time of the game's
+  own meter, vsync off, load 1): at 33 percent (1267x713) one player 6.5 ms, two views cut
+  horizontally 12.1 ms (1.85x one player), cut vertically 8.6 ms; at 200 percent 49.8 horizontal
+  against 47.1 vertical; at 100 percent both held the compositor's 60 Hz. With FSR 3 at 50 percent: 14.1 against
+  13.3 ms. The horizontal cut was the dearer one every time, and two views cost about 1.85x one.
+- *Steam Deck, every title, default settings* (Van Gogh, RADV, gamescope borderless on a 3840x2160
+  output, so render scale 33 percent = 1267x713, 50 percent = 1920x1080; vsync off, mean frame time of the
+  game's own meter at ~2 s intervals, load 1 to 1.6; the Deck, not this host). **The vertical cut
+  matches the horizontal one on all four titles**, and no title is dearer vertically:
+
+  | Title | 1 view | 2 views horizontal | 2 views vertical |
+  | --- | ---: | ---: | ---: |
+  | Pulse 720p | 6.2 ms | 9.0 | 8.8 |
+  | Pure 720p | 4.8 | 5.8 | 5.3 |
+  | HD 720p | 9.9 | 12.7 | 12.7 |
+  | 2048 720p | 5.9 | 7.4 | 7.4 |
+  | HD 1080p | 12.5 | 14.8 to 16.5 | 15.5 to 17.2 |
+
+  HD and 2048 two-view splits run on the Deck's iGPU with no gate (removed 2026-10-14): 720p holds
+  60 Hz with 4 to 9 ms to spare; HD at 1080p sits at the 16.7 ms edge. A lower default render scale
+  for HD on a small iGPU is worth proposing (not built here): **chosen, not measured**.
+- Not reached: the menu path to the vertical cut (HD's race box row, the window layout screen)
+  and HD, which the observation may have been on; and the Deck's own 1280x800 output.
+
 **The shadow gather per tick, and the `mapped` map per view** (2026-10-13, `shadow-gather-per-tick`).
 Both are for the Raphael iGPU and the discrete card alike; the numbers follow.
 
@@ -703,8 +739,7 @@ and two views most hulls are projected for nothing: needs the visibility to be e
 two-tick cache wants every craft's gather on the tick before); the Steam Deck numbers above
 (the maintainer's).
 
-**Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
-2048 and Omega stay off integrated GPUs in a split):
+**Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure first, then HD and 2048:
 
 1. Build the bench binary on the Deck (desktop mode, repo checked out, the two images under
    `data/images/`): `cargo build --release -p oag-game --features perf-probe`. Plugged in,
@@ -761,9 +796,10 @@ Pure at any count) the GPU is the limit, where a lower render scale would help a
 work does not matter. Eight views hold 16.7 ms on this machine either way: Pulse at 9.7 ms
 and Pure at 6.2 ms pipelined, 1280x720 in all.
 
-**Product rule (decided by the maintainer, not a proposal here): split screen on an
-integrated GPU is offered for Pulse and Pure only; HD, 2048 and Omega stay off it.** What the
-Raphael numbers say about the two that are offered: the GPU cost is set by the pixels and barely
+**Product rule (maintainer, 2026-10-14): split screen is offered for every title on every GPU
+class.** An earlier rule (2026-10-13) withheld HD, 2048 and Omega on integrated GPUs; it is gone
+(`Title::split_on_integrated_gpu` and `oag_game::split_screen::offered` removed), because iGPUs
+improve and a player may try it. What the Raphael numbers say about Pulse and Pure: the GPU cost is set by the pixels and barely
 by the view count (Pulse 4.3 ms at one view, 7.1 at eight; Pure 5.1 to 6.6), because the views
 share one frame's pixels, so **no view-count cap is implied at 720p**: every count up to eight
 holds 60 Hz with 7 ms or more to spare. What the iGPU's budget is made of is resolution: a
@@ -1102,27 +1138,11 @@ Ship Select to walk).
 - Found by walking: **2048's `MULTIPLAYER` word was clipped by its 122-unit tile** (fixed: a word wider than the box is
   drawn smaller, `touch::CAPITAL_WIDTH`, chosen, not measured); HD's language table lacked the join line (the overlay in step 2).
 
-### Integrated GPUs (2026-10-13)
+### Integrated GPUs
 
-The maintainer's product rule (see "Cost"): on an integrated GPU a split is offered for
-Pulse and Pure only. It is `Title::split_on_integrated_gpu` (`true` on those two, `false` on
-HD, 2048 and Omega: data on the title, no title-name branch), read by
-`oag_game::split_screen::offered(title, wgpu::DeviceType)`: only `IntegratedGpu` is gated;
-a discrete, virtual, software (lavapipe) or unknown adapter offers every title. Where it
-acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
-
-- **The menus**: `Definition::drop_multiplayer` removes the MULTIPLAYER row (the page behind it
-  would hold nothing to do) on HD, 2048 and Omega when a `Shell` is installed
-  (`Session::drop_split_screen_row`, from the windowed boot and from 2048's placeholder route; a
-  language reload clones the trimmed definition). REMIX and every other row stay.
-- **A windowed `--race --players N`** on such a title logs `--players N: split screen is
-  not offered for <title> on an integrated GPU, so one view` and runs one view
-  (`players_offered`). **Headless captures and the render bench are not gated**: they are
-  diagnostics and the Raphael numbers in "Cost" were taken that way.
-- The adapter is chosen at launch (`graphics.renderer` takes effect on a restart), so the
-  row never changes mid-run. Unit-tested over stand-in device types; no real integrated
-  adapter was walked (Xvfb offers lavapipe only), so the gate on a real iGPU is read, not
-  looked at.
+No GPU class is gated: a split is offered for every title on every adapter, and the MULTIPLAYER
+row is on every title's main page. (The 2026-10-13 rule that withheld HD, 2048 and Omega on an
+integrated GPU was removed 2026-10-14 by the maintainer.)
 
 A split screen writes **no result and no ghost** (`records.toml` and the ghost
 store are for the one person the result is about), and it **fields opponents
@@ -1225,8 +1245,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
   The laws that key on the grid *row* follow the new row: the original AI's `8 - grid` formation slot
   and `GridPlace<N>` start stats take `rank_from_back` (`Race::use_original_ai`, campaign only, so one
   person there today), and the `pilots on the grid` log line lists the rows.
-- If the head count at launch is higher than the devices that turn up (an unplugged pad, an
-  integrated GPU clamping `--players`), the rows are still the people's and the vacant ones are flown by
+- If the head count at launch is higher than the devices that turn up (an unplugged pad), the rows are still the people's and the vacant ones are flown by
   the grid's driver (`follow_devices`).
 
 Tests: `oag-gameplay` `spawn::grid_tests` (the rank law, a permutation at every head count),

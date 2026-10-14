@@ -492,21 +492,6 @@ impl Definition {
         }
     }
 
-    /// Drops the MULTIPLAYER row from the main page, for a run whose adapter the title
-    /// offers no split on (`oag_title::Title::split_on_integrated_gpu`): the page behind it
-    /// would hold LOCAL MULTIPLAYER alone and a dead end is worse than no row. Same
-    /// once-before-read timing as [`Self::drop_quit`]: the adapter is fixed for the run.
-    pub fn drop_multiplayer(&mut self) {
-        let Some(page) = self.pages.iter().position(|page| page.id == "multiplayer") else {
-            return;
-        };
-        for page_entries in &mut self.pages {
-            page_entries.retain_rows(
-                |entry| !matches!(entry, Entry::Submenu { target, .. } if *target == page),
-            );
-        }
-    }
-
     /// Changes what the row editing `setting` draws for its option `value`,
     /// leaving the stored value alone (the web build reads `borderless` as
     /// FULLSCREEN). Same once-before-read timing as [`Self::drop_quit`].
