@@ -586,6 +586,11 @@ impl Controls {
             return;
         };
         self.prompt.note_key();
+        if !self.raw_seen {
+            log::info!(
+                "keyboards: a raw key event names the keyboard, so the join screen tells keyboards apart"
+            );
+        }
         self.raw_seen = true;
         match self.raw_edges.iter_mut().find(|(id, _)| *id == device) {
             Some((_, bits)) => *bits |= button.bit(),

@@ -66,11 +66,25 @@ impl Session {
         let Some(open) = stage.join.as_mut() else {
             return;
         };
+        let named = open
+            .lobby()
+            .seats()
+            .iter()
+            .any(|seat| matches!(seat, Device::Keys(_)));
+        let told_apart = told_apart || named;
         open.lobby_mut().retain_connected(&connected);
-        let mut outcomes: Vec<Outcome> = presses
-            .into_iter()
-            .map(|press| open.lobby_mut().press(press))
-            .collect();
+        let mut outcomes: Vec<Outcome> = Vec::new();
+        for press in presses {
+            // A keyboard that joined anonymously (a click, or a key before the platform named
+            // any) turns out to be this one: it keeps its seat.
+            if let Device::Keys(_) = press.device
+                && open.lobby().seat_of(press.device).is_none()
+                && open.lobby_mut().replace(Device::Keyboard, press.device)
+            {
+                continue;
+            }
+            outcomes.push(open.lobby_mut().press(press));
+        }
         for event in open.screen_mut().pointer(pointer, &stage.skin) {
             outcomes.push(match event {
                 Event::Moved => continue,
@@ -124,7 +138,20 @@ impl Session {
         let labels = open.screen().labels();
         match seat {
             Device::Keyboard => labels.keyboard.clone(),
-            Device::Keys(id) => format!("{} {}", labels.keyboard, id.0 + 1),
+            // "KEYBOARD" alone while it is the only one told apart, "KEYBOARD 2" once there are more.
+            Device::Keys(id) => {
+                let keyboards = open
+                    .lobby()
+                    .seats()
+                    .iter()
+                    .filter(|seat| matches!(seat, Device::Keys(_)))
+                    .count();
+                if keyboards > 1 || id.0 > 0 {
+                    format!("{} {}", labels.keyboard, id.0 + 1)
+                } else {
+                    labels.keyboard.clone()
+                }
+            }
             Device::Pad(id) => self
                 .controls
                 .pad_name(id)
@@ -164,7 +191,9 @@ impl Session {
                 let Some(open) = stage.join.take() else {
                     return;
                 };
-                self.controls.forget_lobby_keys();
+                // The keyboards stay told apart (`Controls::lobby_key`) through the layout, the
+                // RACE page and the seats' own Ship Select, which read a seat's device: until the
+                // flow ends ([`Session::sync_multiplayer`]).
                 self.mp_devices = open.lobby().seats().to_vec();
                 self.play_navs(Some(Nav::Accept));
                 // On a desktop the window layout screen comes next, and its START carries on
@@ -187,8 +216,17 @@ impl Session {
         let Some(open) = stage.join.as_mut() else {
             return;
         };
+        // Escape is the keyboard pressing back: the keyboard that sat last, else the anonymous one.
+        let device = open
+            .lobby()
+            .seats()
+            .iter()
+            .rev()
+            .find(|seat| matches!(seat, Device::Keyboard | Device::Keys(_)))
+            .copied()
+            .unwrap_or(Device::Keyboard);
         let outcome = open.lobby_mut().press(oag_input::lobby::Press {
-            device: Device::Keyboard,
+            device,
             buttons: oag_gameplay::input::Button::Circle.bit(),
         });
         self.sync_join_names();

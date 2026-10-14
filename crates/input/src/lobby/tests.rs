@@ -197,6 +197,25 @@ fn start_from_an_unseated_device_joins_and_from_a_seated_one_begins() {
     assert_eq!(lobby.count(), 1);
 }
 
+/// The anonymous keyboard turning out to be keyboard A keeps its seat and its place in the order, and
+/// nothing is replaced when A already sits or the anonymous keyboard does not.
+#[test]
+fn the_anonymous_keyboard_becomes_a_named_one_in_place() {
+    use crate::pad::KeyboardId;
+    let a = Device::Keys(KeyboardId(0));
+    let mut lobby = Lobby::new();
+    lobby.join(Device::Pad(3));
+    lobby.join(Device::Keyboard);
+    assert!(lobby.replace(Device::Keyboard, a));
+    assert_eq!(lobby.seats(), &[Device::Pad(3), a]);
+    assert!(
+        !lobby.replace(Device::Keyboard, a),
+        "no anonymous keyboard left"
+    );
+    lobby.join(Device::Keyboard);
+    assert!(!lobby.replace(Device::Keyboard, a), "A already sits");
+}
+
 /// Two physical keyboards are two devices with a seat each, and seating them binds each seat to
 /// its keyboard: the first is the seat the front end reads, the second a seat after it.
 #[test]

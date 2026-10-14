@@ -476,10 +476,22 @@ fn the_multiplayer_tile_is_the_third_extra_and_launches_its_page() {
         press(&mut frontend, &mut input, Button::Right);
     }
     let list = frontend.draw_list();
-    assert!(list.iter().any(|draw| matches!(
-        draw,
-        Draw::Text { text, .. } if text == "MULTIPLAYER"
-    )));
+    let scale_of = |label: &str| {
+        list.iter().find_map(|draw| match draw {
+            Draw::Text { text, scale, .. } if text == label => Some(*scale),
+            _ => None,
+        })
+    };
+    let multiplayer = scale_of("MULTIPLAYER").expect("the tile's label is drawn");
+    assert!(
+        multiplayer < crate::frontend::touch::LABEL_SCALE,
+        "a word wider than the tile is drawn smaller to fit it"
+    );
+    assert_eq!(
+        scale_of("RACEBOX"),
+        Some(crate::frontend::touch::LABEL_SCALE),
+        "a word that fits keeps the label scale"
+    );
     press(&mut frontend, &mut input, Button::Cross);
     assert!(frontend.is_finished());
     assert_eq!(frontend.launch(), Some(&Launch::Multiplayer));

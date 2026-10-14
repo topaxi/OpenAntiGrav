@@ -126,6 +126,7 @@ impl Session {
             stage.join.is_some() || stage.layout.is_some(),
         ) {
             self.multiplayer = false;
+            self.controls.forget_lobby_keys();
             self.drop_split_lobby();
             self.resupply_race_modes();
         }

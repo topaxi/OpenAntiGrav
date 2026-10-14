@@ -131,6 +131,22 @@ impl<D: Copy + PartialEq> Lobby<D> {
         Outcome::Joined(self.seats.len() - 1)
     }
 
+    /// Gives the seat `from` holds to `to`, if `from` has one and `to` has none: the anonymous
+    /// keyboard (a click, or a key before the platform named any keyboard) turning out to be
+    /// one physical keyboard. The seat keeps its place.
+    pub fn replace(&mut self, from: Device<D>, to: Device<D>) -> bool {
+        if self.seat_of(to).is_some() {
+            return false;
+        }
+        match self.seat_of(from) {
+            Some(seat) => {
+                self.seats[seat] = to;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Empties seat `seat`; later seats move down. `Nothing` past the last.
     pub fn leave(&mut self, seat: usize) -> Outcome {
         if seat >= self.seats.len() {

@@ -170,14 +170,16 @@ fn the_multiplayer_rows_words_are_the_psp_discs_own() {
         return;
     };
     let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
-    let table = oag_ui::language::StringTable::from_xml(
-        &fexml::text(
-            &archives
-                .read_name(r"Data\Plugins\PI001\entries.xml")
-                .expect("PI001 is the PSP disc's English plugin"),
-        )
-        .expect("text"),
-    );
+    // English is `PI000` on the EU pressing and `PI012` on the USA one.
+    let blob = ["PI000", "PI012"]
+        .iter()
+        .find_map(|plugin| {
+            archives
+                .read_name(&format!(r"Data\Plugins\{plugin}\entries.xml"))
+                .ok()
+        })
+        .expect("an English plugin on the PSP disc");
+    let table = oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("text"));
     let ours = oag_ui::strings::project_table(None);
     let row = oag_pulse::TITLE
         .main_menu

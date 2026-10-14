@@ -81,6 +81,10 @@ const LABEL_GAP: f32 = 18.0;
 /// header caps (`scale="1.0"`, the same face) 27, so the label draws at
 /// their ratio. Measured, one capture.
 pub(super) const LABEL_SCALE: f32 = 16.0 / 27.0;
+/// How wide a capital of the `Default` face is at [`LABEL_SCALE`], for fitting a long word in a
+/// text button: `MULTIPLAYER` drew about 135 units wide there. **Chosen, not measured**
+/// (one screenshot, 11 capitals).
+const CAPITAL_WIDTH: f32 = 12.4;
 /// How far above the cap line the `Default` face's pen sits at scale 1:
 /// the header's own `y="30"` puts its caps at 40 on the capture. Measured.
 pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
@@ -610,6 +614,25 @@ impl Frontend {
         let Some(label) = &tile.label else {
             return;
         };
+        // A label whose longest word is wider than the box is drawn smaller to fit: this
+        // build's own tiles carry words the disc's text buttons never did (`MULTIPLAYER`
+        // is about 135 units at the label scale in a 114-unit box, `MULTIJOGADOR` more).
+        // **Chosen, not measured**: a capital of this face is about 12.4 units wide.
+        let scale = match (tile.label_inside, tile.wrap) {
+            (true, Some(wrap)) => {
+                let longest = label
+                    .split_whitespace()
+                    .map(|word| word.chars().count())
+                    .max();
+                let widest = longest.map_or(0.0, |chars| chars as f32 * CAPITAL_WIDTH);
+                if widest > wrap {
+                    LABEL_SCALE * wrap / widest
+                } else {
+                    LABEL_SCALE
+                }
+            }
+            _ => LABEL_SCALE,
+        };
         let (y, color) = if tile.label_inside {
             // Centred in the box, white on the tile - the game-list
             // screen's text buttons. The line count is the wrap's: a
@@ -620,7 +643,7 @@ impl Frontend {
             } else {
                 1.0
             };
-            let line = self.default_line_height.unwrap_or(37.0) * LABEL_SCALE;
+            let line = self.default_line_height.unwrap_or(37.0) * scale;
             (
                 rect[1] + (rect[3] - lines * line) * 0.5,
                 [1.0, 1.0, 1.0, 1.0],
@@ -634,7 +657,7 @@ impl Frontend {
         out.push(Draw::Text {
             x: rect[0] + rect[2] * 0.5,
             y,
-            scale: LABEL_SCALE,
+            scale,
             color,
             border: None,
             align: Align::Centre,

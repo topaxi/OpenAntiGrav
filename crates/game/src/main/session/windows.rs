@@ -411,7 +411,11 @@ impl Session {
         physical: winit::keyboard::PhysicalKey,
         pressed: bool,
     ) {
-        let joining = matches!(&self.stage, Stage::Menu(stage) if stage.join.is_some());
+        // The keyboards are told apart for as long as the LOCAL MULTIPLAYER flow is on the menus:
+        // the join screen, the layout, the RACE page and the seats' Ship Select all read a seat's
+        // device (`Controls::lobby_key`). Never in a race, which routes them by seat.
+        let joining = matches!(&self.stage, Stage::Menu(stage)
+            if stage.join.is_some() || stage.layout.is_some() || self.multiplayer);
         if !joining && !self.keys_by_window() && !self.controls.per_device_keys() {
             return;
         }

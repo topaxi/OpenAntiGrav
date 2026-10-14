@@ -398,4 +398,25 @@ mod tests {
         assert!(!input(Some(&lobby), 5, &presses).is_pressed(Button::Cross));
         assert!(!input::<u8>(None, 0, &presses).is_pressed(Button::Cross));
     }
+
+    /// A seat a physical keyboard took on the join screen hears that keyboard's raw presses, which
+    /// the session keeps feeding through Ship Select (`Session::device_key`), and not the
+    /// anonymous keyboard's: the window's own key events are the same presses again once the
+    /// keyboards are told apart. Fails if the seat's device stops matching its presses.
+    #[test]
+    fn a_named_keyboards_seat_hears_its_raw_presses_alone() {
+        use oag_input::pad::KeyboardId;
+        let (a, b) = (Device::Keys(KeyboardId(0)), Device::Keys(KeyboardId(1)));
+        let mut lobby = Lobby::<u8>::new();
+        lobby.join(a);
+        lobby.join(b);
+        let presses = [
+            press(b, Button::Cross),
+            press(Device::Keyboard, Button::Down),
+        ];
+        let first = input(Some(&lobby), 0, &presses);
+        assert!(!first.is_pressed(Button::Cross) && !first.is_pressed(Button::Down));
+        let second = input(Some(&lobby), 1, &presses);
+        assert!(second.is_pressed(Button::Cross) && !second.is_pressed(Button::Down));
+    }
 }
