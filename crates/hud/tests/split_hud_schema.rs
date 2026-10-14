@@ -5,7 +5,7 @@
 //! `scale` in (0, 8], an `offset` inside one view, an increasing `aspect`): a file past
 //! one is refused by the loader alone, and every example below is inside them.
 
-use oag_hud::split_hud::SplitHud;
+use oag_hud::split_hud::{Anchor, SplitHud};
 use oag_race::Mode;
 
 const HEADER: &str = "toml-schema = { location = \"https://oag.topaxi.com/mods/schemas/v1/split-hud.tosd\", version = \"1.0.0\" }\n";
@@ -153,21 +153,35 @@ fn hd_has_no_tall_rule_for_its_authored_two_view_split_to_lose_to() {
 }
 
 /// Pure authors its weapon grid as a model, which the loader pins by its centre point
-/// alone, so at the usual offset half of it hangs below the view. The column rule raises it
-/// by more than half the grid's height at that scale; the strip's, left as it was, does not.
+/// alone, so an offset smaller than half the grid's height hangs the rest below the view
+/// and the scissor cuts it. Every rule raises it by more than that: the grid is about 39
+/// units tall on the 272-unit screen (read off a render, 67 pixels at scale 1.3 in a
+/// 358-pixel row), so a view of width over height `a` shows it `39 * scale * min(a / 1.765,
+/// 1) / 272` of its height, and `a` is the widest view the rule answers (a column's widest
+/// is a 21:9 screen's 1.19).
 #[test]
-fn pures_tall_rule_raises_the_weapon_grid_clear_of_the_bottom_edge() {
+fn pures_every_rule_raises_the_weapon_grid_clear_of_the_bottom_edge() {
     let file = shipped("Pure");
-    let grid_offset = |name: &str| {
+    for (name, widest) in [
+        ("tall", 1.19_f32),
+        ("strip", 99.0),
+        ("landscape", 2.4),
+        ("square", 1.4),
+        ("portrait", 1.0),
+    ] {
         let rule = file.rules.iter().find(|rule| rule.name == name).unwrap();
-        rule.groups
+        let grid = rule
+            .groups
             .iter()
             .find(|group| group.widgets.iter().any(|w| w == "weapon_icon_grid"))
-            .unwrap()
-            .offset[1]
-    };
-    assert!(grid_offset("tall") <= -0.09);
-    assert_eq!(grid_offset("strip"), -0.04);
+            .unwrap();
+        let half = 0.5 * 39.0 * grid.scale * (widest / 1.765).min(1.0) / 272.0;
+        assert!(
+            -grid.offset[1] >= half,
+            "{name}: offset {} leaves a grid of half-height {half} below the view",
+            grid.offset[1]
+        );
+    }
 }
 
 /// The kill column is the Eliminator's, and a column has the room for it.
@@ -181,4 +195,32 @@ fn pulses_tall_rule_places_the_eliminators_kill_column() {
             .iter()
             .any(|group| group.widgets.iter().any(|w| w == "PosTag*"))
     );
+}
+
+/// A row is too short for eight kill lines and the speed and shield bars both: the column
+/// hangs from the top corner at a scale that ends it above the bars' top. Both fractions
+/// are read off renders at a height-bound view: the column (title and eight rows) is
+/// 0.608 of the view's height at scale 1.0, and the bars with their labels 0.2 at scale
+/// 1.0.
+#[test]
+fn pulses_kill_column_stops_above_the_bars_in_a_row() {
+    let file = shipped("Pulse");
+    for name in ["strip", "landscape"] {
+        let rule = file.rules.iter().find(|rule| rule.name == name).unwrap();
+        let group_of = |widget: &str| {
+            rule.groups
+                .iter()
+                .find(|group| group.widgets.iter().any(|w| w == widget))
+                .unwrap()
+        };
+        let kills = group_of("KillsText");
+        assert_eq!(kills.anchor, Anchor::TopRight, "{name}");
+        let bars = group_of("SpeedBar*");
+        let column_end = kills.offset[1] + 0.608 * kills.scale;
+        let bars_start = 1.0 + bars.offset[1] - 0.2 * bars.scale;
+        assert!(
+            column_end < bars_start,
+            "{name}: the column ends at {column_end}, the bars start at {bars_start}"
+        );
+    }
 }
