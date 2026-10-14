@@ -165,7 +165,7 @@ impl Race {
                         oag_sound::sfx::Cue::Turbo,
                         slot,
                     ));
-                    self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
+                    self.boost_plume(slot);
                     self.fire_zoom_boost(slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
@@ -187,7 +187,7 @@ impl Race {
                     // nothing having happened, and here something did.
                     if self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
                         self.sim.world.ships[slot].physics.shield_pickup_timer = simple.time;
-                        self.view.shield[slot].activate();
+                        self.shield_activate(slot);
                     }
                 }
                 oag_tables::weapons::Weapon::Autopilot => {

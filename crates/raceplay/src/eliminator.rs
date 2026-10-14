@@ -311,7 +311,7 @@ impl Race {
             && self.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
         {
             self.sim.world.ships[slot].physics.shield_pickup_timer = time;
-            self.view.shield[slot].activate();
+            self.shield_activate(slot);
         }
     }
 

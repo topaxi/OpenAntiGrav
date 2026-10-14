@@ -257,7 +257,7 @@ impl Race {
         // and bulges the shell. The original's contact loop takes exactly this
         // branch instead of its hull-damage call.
         if evaluated.shield.absorbed {
-            self.view.shield[slot].hit();
+            self.shield_hit(slot);
         }
         PlayerStep {
             evaluated,
@@ -331,7 +331,7 @@ impl Race {
     /// clock, its zone counter and its finish are the simulation's.
     pub(super) fn advance_player_rules(&mut self, slot: usize, evaluated: &Evaluated) {
         let primary = slot == self.sim.world.primary_slot();
-        if primary {
+        if primary && self.draws() {
             let body = &self.sim.world.ships[slot].physics.body;
             self.view
                 .run_stats
@@ -353,7 +353,7 @@ impl Race {
         // to the ship's own pool. `Ship_SetShield` (`0x0883e6f4`) does the
         // same clamp against the stat block's maximum, so a full ship gains
         // nothing and the bar cannot overfill.
-        if primary && outcome.perfect_zone {
+        if primary && outcome.perfect_zone && self.draws() {
             self.view.run_stats.perfect_zones += 1;
         }
         if outcome.perfect_zone

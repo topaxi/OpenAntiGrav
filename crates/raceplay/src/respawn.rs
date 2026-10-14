@@ -352,8 +352,10 @@ impl Race {
         // wherever the craft fell off, stretched across the track to where it was
         // put back. The camera is snapped for the same reason, and only for the
         // player, who is the only craft one is flown from.
-        self.view.exhaust[slot].clear_trail();
-        self.view.hd_trail[slot].clear();
+        if self.draws() {
+            self.view.exhaust[slot].clear_trail();
+            self.view.hd_trail[slot].clear();
+        }
 
         if self.sim.respawns_in_a_row[slot] >= RESPAWN_GIVE_UP {
             self.sim.respawn_disabled[slot] = true;

@@ -739,6 +739,7 @@ impl Race {
                 flap_graphics: setup.airbrake_graphics,
             },
             replay: replay::ReplayState::default(),
+            quiet: false,
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot

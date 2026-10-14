@@ -34,8 +34,10 @@
 //! countdown. Steering is not gated, so `stick_x` diverges two races inside
 //! thirty ticks and these tests stay short.
 
+use super::cues::grid_on_a_speed_pad;
 use super::*;
 use oag_gameplay::{Controller, PlayerInputs};
+use oag_sound::sfx::Cue;
 
 /// Ticks the client and server agree on before anything goes wrong. The
 /// authoritative snapshot is taken here.
@@ -70,9 +72,8 @@ fn steering(stick_x: f32) -> PlayerInputs {
 ///
 /// Every caller here does this, because a cue is a per-tick *output* awaiting
 /// a drain (ADR-0018) and there is no audio in this process to drain it. It is
-/// also the one place a replay is visibly not free: the replayed ticks raise
-/// their cues a second time, and only the fact that nothing is listening makes
-/// that harmless. See [`Race::restore_sim`].
+/// also why the replays below go through [`Race::tick_sim_only`]: the same
+/// ticks through [`Race::tick`] would raise their cues a second time.
 fn advance(race: &mut Race, inputs: &PlayerInputs) {
     race.tick(inputs);
     race.drain_cues();
@@ -147,7 +148,7 @@ fn a_mispredicted_run_reconciles_to_the_servers_hash() {
     );
 
     for inputs in &truth {
-        advance(&mut client, inputs);
+        client.tick_sim_only(inputs);
     }
     assert_eq!(
         server.sim.state_hash(),
@@ -193,7 +194,7 @@ fn reconciling_a_correct_prediction_changes_nothing() {
 
     client.restore_sim(&authoritative);
     for inputs in &truth {
-        advance(&mut client, inputs);
+        client.tick_sim_only(inputs);
     }
 
     assert_eq!(
@@ -368,7 +369,7 @@ fn a_mispredicted_remote_slot_reconciles_to_the_servers_hash() {
         "the restored client already matched the server"
     );
     for inputs in &truth {
-        advance(&mut client, inputs);
+        client.tick_sim_only(inputs);
     }
     assert_eq!(
         server.sim.state_hash(),
@@ -413,4 +414,154 @@ fn restoring_the_sim_leaves_the_view_alone() {
         u64::from(AGREED_TICKS),
         "the simulation half did not go back"
     );
+}
+
+/// Everything the view holds, rendered as text: the camera, the shake, every
+/// view RNG and the particle systems in one string, so "untouched" is a
+/// comparison and not a list of fields that can fall behind the struct.
+fn view_fingerprint(race: &Race) -> String {
+    format!("{:?}", race.view)
+}
+
+/// Asserts two view fingerprints match, and on a mismatch names where they part
+/// instead of printing both: the view is hundreds of kilobytes of text.
+fn assert_same_view(before: &str, after: &str) {
+    if before == after {
+        return;
+    }
+    let at = before
+        .bytes()
+        .zip(after.bytes())
+        .position(|(a, b)| a != b)
+        .unwrap_or(before.len().min(after.len()));
+    let from = before.floor_char_boundary(at.saturating_sub(300));
+    let to_b = before.ceil_char_boundary((at + 120).min(before.len()));
+    let to_a = after.ceil_char_boundary((at + 120).min(after.len()));
+    panic!(
+        "the view moved at byte {at}:\n  before: ...{}\n  after:  ...{}",
+        &before[from..to_b],
+        &after[from..to_a]
+    );
+}
+
+/// What a slot's craft and rules look like, for comparing slot by slot.
+fn slot_fingerprint(race: &Race, slot: usize) -> String {
+    format!(
+        "{:?} {:?}",
+        race.sim.world.ships[slot], race.sim.world.race[slot]
+    )
+}
+
+/// Inputs that move both craft differently every tick, so a divergence between
+/// two paths shows within the run.
+fn varied(tick: u32) -> PlayerInputs {
+    let wave = |phase: f32| ((tick as f32) * 0.07 + phase).sin();
+    two_steering(wave(0.0), wave(2.0))
+}
+
+/// The hash after N quiet ticks is the hash after N normal ticks, on every
+/// tick and for every slot, and the quiet path is the real replay: a client
+/// restored to the server's snapshot and quietly replayed reaches the server.
+#[test]
+fn a_quiet_replay_reaches_the_hash_of_a_normal_one() {
+    let mut server = two_person_race(Controller::Remote);
+    let mut client = two_person_race(Controller::Remote);
+    for tick in 0..AGREED_TICKS {
+        advance(&mut server, &varied(tick));
+        advance(&mut client, &varied(tick));
+    }
+    let authoritative = server.snapshot_sim();
+    let mut quiet = two_person_race(Controller::Remote);
+    quiet.restore_sim(&authoritative);
+
+    for tick in AGREED_TICKS..AGREED_TICKS + PREDICTED_TICKS {
+        advance(&mut server, &varied(tick));
+        quiet.tick_sim_only(&varied(tick));
+        assert_eq!(
+            server.sim.state_hash(),
+            quiet.sim.state_hash(),
+            "the quiet path left the server's trajectory at tick {tick}"
+        );
+        for slot in 0..2 {
+            assert_eq!(
+                slot_fingerprint(&server, slot),
+                slot_fingerprint(&quiet, slot),
+                "slot {slot} differs between the paths at tick {tick}"
+            );
+        }
+    }
+    // Non-vacuous: the run went somewhere, and the two slots went different
+    // ways, so equality is not two craft sitting still.
+    assert_ne!(server.sim.state_hash(), client.sim.state_hash());
+    assert_ne!(
+        slot_fingerprint(&server, 0),
+        slot_fingerprint(&server, 1),
+        "the slots did not diverge from each other, so the comparison proves little"
+    );
+}
+
+/// A quiet replay leaves the whole view alone - the camera, the shake and every
+/// RNG the view draws from, which is everything [`view_fingerprint`] prints -
+/// while the same ticks through [`Race::tick`] do not.
+#[test]
+fn a_quiet_replay_leaves_the_view_alone() {
+    let mut normal = two_person_race(Controller::Remote);
+    let mut quiet = two_person_race(Controller::Remote);
+    for tick in 0..AGREED_TICKS {
+        advance(&mut normal, &varied(tick));
+        advance(&mut quiet, &varied(tick));
+    }
+    let snapshot = quiet.snapshot_sim();
+    let view_before = view_fingerprint(&quiet);
+
+    for tick in AGREED_TICKS..AGREED_TICKS + PREDICTED_TICKS {
+        advance(&mut normal, &varied(tick));
+        quiet.tick_sim_only(&varied(tick));
+    }
+    assert_same_view(&view_before, &view_fingerprint(&quiet));
+    // The controls: the same window through the normal tick moves the view, and
+    // the quiet one still moved the sim.
+    assert_ne!(view_before, view_fingerprint(&normal));
+    assert_ne!(snapshot.state_hash(), quiet.sim.state_hash());
+}
+
+/// A tick that would light a plume and sound a cue does neither quietly and
+/// still enters the pad: the speed pad is the nearest thing the fixture has to
+/// a one-tick event with a view half and a cue.
+#[test]
+fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
+    let mut normal = grid_on_a_speed_pad();
+    let mut quiet = grid_on_a_speed_pad();
+    normal.tick(&PlayerInputs::none());
+    quiet.tick_sim_only(&PlayerInputs::none());
+
+    assert_eq!(normal.sim.state_hash(), quiet.sim.state_hash());
+    assert!(
+        normal
+            .pending_cues()
+            .iter()
+            .any(|e| e.cue == Cue::SpeedupPad),
+        "the normal tick raised no pad cue, so the quiet one dropping it proves nothing"
+    );
+    assert!(normal.view.exhaust[0].boost_timer() > 0.0);
+    assert!(
+        quiet.pending_cues().is_empty(),
+        "{:?}",
+        quiet.pending_cues()
+    );
+    assert_eq!(quiet.view.exhaust[0].boost_timer(), 0.0);
+}
+
+/// The quiet path drops what its own tick raised and keeps what was already
+/// waiting: it is a tick, not a drain.
+#[test]
+fn a_quiet_replay_keeps_the_cues_that_were_already_queued() {
+    let mut race = grid_on_a_speed_pad();
+    race.tick(&PlayerInputs::none());
+    let waiting = race.pending_cues().len();
+    assert!(waiting > 0, "no cue was waiting, so the claim is vacuous");
+    for _ in 0..10 {
+        race.tick_sim_only(&PlayerInputs::none());
+    }
+    assert_eq!(race.pending_cues().len(), waiting);
 }

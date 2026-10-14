@@ -607,7 +607,7 @@ impl Race {
             // this is unreachable today and is here because the alternative is a
             // rival shield that silently has no visual the day it arrives.
             if evaluated.shield.absorbed {
-                self.view.shield[slot].hit();
+                self.shield_hit(slot);
             }
             // **The same recovery the player gets**, and it is not a nicety.
             // Without it an opponent that leaves the geometry keeps going: the
