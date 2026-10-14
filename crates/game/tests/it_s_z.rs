@@ -21,6 +21,7 @@ mod shine_ground_truth;
 mod spawn_heading_ground_truth;
 mod split_end_race_ground_truth;
 mod split_grid_ground_truth;
+mod split_head_to_head_ground_truth;
 mod split_hud_ground_truth;
 mod split_screen_ground_truth;
 mod texture_detail_ground_truth;

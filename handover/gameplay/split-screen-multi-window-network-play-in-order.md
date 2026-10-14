@@ -291,8 +291,11 @@ PS2 Pulse's split HUD, which floated at 76% of the view because the grid's cells
 is still half clipped in rows, Pulse's strip kill column overlaps the speed bars~~ (both fixed
 2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's grid on a 32:9
 column too, `pure-tall-32x9`: a `tall-wide` rule from 1.4 up, `-0.14`, chosen, not measured).
-A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
-never draws (one view draws it); Tournament is campaign-only. **Still open from it**: Omega's
+~~A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
+never draws~~ **done 2026-10-14 (`split-head2head`)**: exactly two people and no AI (three or more
+refused by name), each view's gap against the other person, both cuts and multi-window, Pulse's
+bar in the place group; Pure and HD draw their place (no authored readout); Tournament is
+campaign-only. **Still open from it**: Omega's
 `Zone_HUDvert` and its non-authored cases, and a real display.
 **Still open before it**: Time Trial and the Eliminator on Pure and HD and
 HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
@@ -496,8 +499,11 @@ PS2 Pulse's split HUD, which floated at 76% of the view because the grid's cells
 is still half clipped in rows, Pulse's strip kill column overlaps the speed bars~~ (both fixed
 2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's grid on a 32:9
 column too, `pure-tall-32x9`: a `tall-wide` rule from 1.4 up, `-0.14`, chosen, not measured).
-A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
-never draws (one view draws it); Tournament is campaign-only. **Still open from it**: Omega's
+~~A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
+never draws~~ **done 2026-10-14 (`split-head2head`)**: exactly two people and no AI (three or more
+refused by name), each view's gap against the other person, both cuts and multi-window, Pulse's
+bar in the place group; Pure and HD draw their place (no authored readout); Tournament is
+campaign-only. **Still open from it**: Omega's
 `Zone_HUDvert` and its non-authored cases, and a real display.
 **Still open before it**: Time Trial and the Eliminator on Pure and HD and
 HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
@@ -1370,8 +1376,9 @@ Pulse (both pressings) and Pure show SPLIT SCREEN VERTICAL and HORIZONTAL after 
 campaign row; the RACEBOX SPLIT SCREEN row is gone there (see `docs/rendering/split-screen.md`,
 "The Pulse and Pure entry"). The row's choice feeds `Session::split_cut`, so
 VERTICAL draws left and right (merged with `hd-authored-split-setup`). **Open**: (1) the PS2's
-Tournament and Head to Head race types and the `TournamentLoad` dialog are not built (a split
-`--mode head_to_head` race today fields seven opponents and reads as a Single Race); (2) the
+Tournament race type and the `TournamentLoad` dialog are not built, and Head to Head is CLI-only
+(`--mode head_to_head`, two people and no AI since `split-head2head`; the RACE page's mode row has
+no entry for it, so the two-person cap is not yet enforced at the join screen); (2) the
 RACE page's default MODE is whatever the profile holds, the PS2's split page opens on Arcade;
 (3) on the PS2 pressing in another language the rows read the project's translation, not the
 disc's own `FE_RACE_CAM_SS` text.
@@ -1391,3 +1398,25 @@ both spawn them; done in `oag_gameplay::rank_from_back` / `Setup::people`, evide
 - Three to eight people are chosen, not measured (the next row forward each).
 - What sets the ship count `g_GameState[0]` for a split race is unread: the rule assumes it stays eight.
 - A launch whose `--players` is clamped after the load (an integrated GPU) keeps the people's rows.
+
+## 2026-10-14, `split-head2head`: Head to Head with people is two craft
+
+Two seated people fly exactly two craft and no AI (`Mode::field_is_fixed`; the second person
+takes the one opponent's slot), and three or more are refused by name from the CLI
+(`Mode::max_people`, `--players`/`--window-seats`). **Chosen, not measured**: nothing in the RE
+docs reads the original's two-player Head to Head (mode `0xf` shares the HUD swap, no grid-size
+row). Each person's HUD reads the gap to the other: Pulse's `SplitHud_Pulse.toml` carries the
+bar in the place group in every rule, so both cuts and each window of `--window-seats 1,1`
+draw `1st`/`2nd`/`+- NNm` from that person's slot; the end screens already name both seats
+and give a winner. A split's place is ranked over the craft in the race.
+
+**Open:**
+- The RACE page's MODE row has no Head to Head entry (`Mode::ALL` omits it), so a player cannot
+  reach it with people but from the CLI; the cap belongs at the join screen or START once a row
+  exists (`h2h-port-titles`).
+- Pure, HD, Omega, 2048 draw no gap readout: none authors one. HD has no Head2Head cell, Pure's
+  and 2048's are unread (status.md `?`); they draw the title's place, `1 / 2` and `2 / 2`.
+- The second row at a large gap (clamped 180 units) was checked in both cuts at tick 1200 in a
+  test, not looked at in a frame: the CLI autopilot flies every seat, so gaps there stay
+  small; a still with one person sat still needs a scripted run.
+- The opponent's team and grid slot for one person are unchanged (extrapolated, head2head.md).

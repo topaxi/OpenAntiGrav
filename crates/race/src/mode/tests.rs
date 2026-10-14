@@ -195,6 +195,18 @@ fn head2head_fields_exactly_one_opponent() {
     }
 }
 
+/// Head to Head is two craft whoever flies them: no mode but it fixes its field, and
+/// it takes two people at most. Chosen, not measured: see `Mode::field_is_fixed`.
+#[test]
+fn head2head_alone_fixes_its_field_and_caps_its_people_at_two() {
+    assert!(Mode::Head2Head.field_is_fixed());
+    assert_eq!(Mode::Head2Head.max_people(), Some(2));
+    for mode in Mode::ALL.into_iter().chain([Mode::Tournament]) {
+        assert!(!mode.field_is_fixed(), "{mode:?}");
+        assert_eq!(mode.max_people(), None, "{mode:?}");
+    }
+}
+
 /// `shield.md`'s `g_weapons_enabled` switch puts Head2Head in both its
 /// default-off and its no-override set, and all 23 authored cells carry
 /// `Weapons="off"` with no exception - locked, not merely defaulted off.

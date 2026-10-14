@@ -27,9 +27,9 @@ version = "1.0.0"
 # too, and a horizontal pair (2.7:1 or wider on a 4:3 screen or wider) never does; a window
 # narrower than 1.2:1 cutting its pair in rows does, which is a pair of tall views too. The
 # same corners as `portrait`, plus what a column has the room for and a row of eight does not:
-# the Eliminator's kill column (and the Head2Head bar, which the horizontal rules name too)
-# and the Pilot Assist indicator, raised over the time readout because at the bottom centre
-# it lay on the shield and speed bars.
+# the Eliminator's kill column and the Pilot Assist indicator, raised over the time readout because at the bottom centre
+# it lay on the shield and speed bars. Every rule keeps `HeadToHeadBar` in the place group: the
+# Head2Head readout needs the bar with `Position`, `Position Outof` and `PositionOf` in one layout.
 [[layout]]
 name = "tall"
 views = [2]
@@ -54,7 +54,7 @@ offset = [0.03, -0.04]
 scale = 1.5
 
 [[layout.group]]
-widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+widgets = ["Position*", "HeadToHeadBar", "TotalTime*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.03, 0.04]
 scale = 1.6
@@ -78,7 +78,7 @@ offset = [0.03, -0.2]
 scale = 1.2
 
 [[layout.group]]
-widgets = ["KillsText", "PosTag*", "HeadToHeadBar"]
+widgets = ["KillsText", "PosTag*"]
 anchor = "right"
 offset = [-0.03, 0.0]
 scale = 0.9
@@ -108,7 +108,7 @@ offset = [0.012, -0.04]
 scale = 1.3
 
 [[layout.group]]
-widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+widgets = ["Position*", "HeadToHeadBar", "TotalTime*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.012, 0.04]
 scale = 1.3
@@ -137,12 +137,6 @@ anchor = "top-right"
 offset = [-0.012, 0.04]
 scale = 1.0
 
-[[layout.group]]
-widgets = ["HeadToHeadBar"]
-anchor = "right"
-offset = [-0.012, 0.0]
-scale = 1.2
-
 
 # Views a little wider than tall to a little wider than the screen: four views, the
 # larger views of three or five.
@@ -169,7 +163,7 @@ offset = [0.015, -0.04]
 scale = 1.0
 
 [[layout.group]]
-widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+widgets = ["Position*", "HeadToHeadBar", "TotalTime*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.015, 0.04]
 scale = 1.1
@@ -198,12 +192,6 @@ anchor = "top-right"
 offset = [-0.015, 0.04]
 scale = 0.95
 
-[[layout.group]]
-widgets = ["HeadToHeadBar"]
-anchor = "right"
-offset = [-0.015, 0.0]
-scale = 0.95
-
 
 # Squarer and smaller views: the small views of five to seven.
 [[layout]]
@@ -229,7 +217,7 @@ offset = [0.02, -0.04]
 scale = 1.2
 
 [[layout.group]]
-widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+widgets = ["Position*", "HeadToHeadBar", "TotalTime*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.02, 0.04]
 scale = 1.3
@@ -247,7 +235,7 @@ offset = [0.0, 0.0]
 scale = 1.1
 
 [[layout.group]]
-widgets = ["KillsText", "PosTag*", "HeadToHeadBar"]
+widgets = ["KillsText", "PosTag*"]
 anchor = "right"
 offset = [-0.02, 0.0]
 scale = 0.8
@@ -278,7 +266,7 @@ offset = [0.03, -0.04]
 scale = 1.5
 
 [[layout.group]]
-widgets = ["Position*", "TotalTime*", "Zone", "ZoneTxt"]
+widgets = ["Position*", "HeadToHeadBar", "TotalTime*", "Zone", "ZoneTxt"]
 anchor = "top-right"
 offset = [-0.03, 0.04]
 scale = 1.6

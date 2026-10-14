@@ -218,16 +218,25 @@ over `portrait`:
   room for and which `portrait` never placed, so an Eliminator column showed lap and speed and
   no kills; and the Pilot Assist indicator (`--pilot-assist extreme`), raised to the left over
   the time readout, since at the bottom centre it lay on the shield and speed bars (seen and
-  moved). `HeadToHeadBar` is named too, as the horizontal rules name it, but **no frame drew
-  it**: Head2Head showed no bar in a row or a column at tick 900, so that claim is by name only.
-  **Why (2026-10-14, `pure-tall-32x9`, looked at on PSP and PS2 Pulse and on Pure, `--mode
-  head_to_head --players 2` and `4`, rows, ticks 300 and 1200):** a split Head2Head race fields
-  seven opponents (the log reads `pilots on the grid: 1..7`, the place reads `8/8`), not the
-  mode's one, and draws the Single Race readout, so there is no gap bar to place; one view
-  draws the real thing (`1st`, `- 10m`, `2nd` and the bar) with one opponent. That is the mode
-  not being built for a split (below), not a placement fault, so nothing in the split files
-  changed for it. Tournament is not reachable at all: `--mode tournament` is refused, it exists
-  only as a campaign cell.
+  moved). `HeadToHeadBar` was named too, as its own group, and **drew nothing**: the Head2Head
+  readout (`oag_hud::head_to_head`) needs `Position`, `Position Outof`, `PositionOf` and the bar
+  in one layout, and a split draws each group on its own, so the swap never fired.
+  ~~Head2Head showed no bar in a row or a column~~ **Fixed 2026-10-14 (`split-head2head`)**: the
+  bar joined the place group in every Pulse rule (`SplitHud_Pulse.toml`), and a split Head to Head
+  now fields exactly the people (two, no AI: `Mode::field_is_fixed`, **chosen, not measured**;
+  three or more is refused by name, `Mode::max_people`). Each view draws `1st`, `2nd` and the
+  gap against the other person: the one who trails reads a red `+ NNm`, the one who leads a green
+  `- NNm`, the same distance in both. Looked at on Pulse PSP, rows and columns, ticks 300 and 1200,
+  and in `--window-seats 1,1` (each window its own person's readout); pinned by
+  `crates/game/tests/split_head_to_head_ground_truth.rs` (both cuts, ticks 300 and 1200, every
+  word inside its own view) and `crates/raceplay/tests/head_to_head_people_ground_truth.rs`.
+  **Other titles, checked:** HD has no Head2Head cell (`docs/overview/status.md`) and Pure's
+  Head2Head is unread (`?`), and their split files name no `HeadToHeadBar`, so a two-person Head
+  to Head there draws the title's own place, `1 / 2` and `2 / 2` (looked at, both cuts and
+  windows), and nothing invented - **checked, differs**, the mode on those titles is the next
+  lane's. The place now ranks the craft in the race: a field of two read `8 / 2` for the back
+  row until the line (empty slots rank at distance zero), fixed for what is drawn only. Omega shares HD's vocabulary (**checked,
+  applies, not wired**) and 2048 is unread (**not checkable** here: no 2048 Head2Head evidence).
   Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
   1280x720, at tick 900 to 1200.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone

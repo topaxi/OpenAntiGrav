@@ -474,6 +474,34 @@ impl Mode {
         }
     }
 
+    /// Whether the mode's field is exactly [`Self::opponent_count`] other craft and
+    /// nothing may widen it: `true` for [`Self::Head2Head`] only.
+    ///
+    /// The original's field of two is the mode's own (`FUN_0880502c`, mode `9`
+    /// is `2`), so neither the `--opponents` escape hatch nor a split race's
+    /// habit of fielding a full grid for the people to race against makes it
+    /// larger. With several people the craft is the other person's, not an
+    /// opponent: two people fly the two craft and no AI is fielded.
+    /// **Chosen, not measured**: the original's own two-player Head to Head is
+    /// unknown (no capture, and `Hud_BindWidgets`'s mode `0xf` branch shares the
+    /// readout without a grid row of its own), so a field of two for two people is
+    /// this project's rule, not a recovered one.
+    #[must_use]
+    pub const fn field_is_fixed(self) -> bool {
+        matches!(self, Self::Head2Head)
+    }
+
+    /// The most people who can fly one race of this mode at once, `None` for no
+    /// cap: `Some(2)` for [`Self::Head2Head`], whose field is two craft
+    /// ([`Self::field_is_fixed`]). **Chosen, not measured**, the same as above.
+    #[must_use]
+    pub const fn max_people(self) -> Option<u8> {
+        match self {
+            Self::Head2Head => Some(2),
+            _ => None,
+        }
+    }
+
     /// Whether the original arms `Weapon Pad`s for this mode.
     ///
     /// **`false` for the three single-ship modes, measured on the running

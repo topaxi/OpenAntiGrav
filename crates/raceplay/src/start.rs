@@ -192,6 +192,10 @@ impl Race {
         // existed.
         let field_opponents = if no_opponents {
             0
+        } else if mode.field_is_fixed() {
+            // Head2Head: two craft, whoever flies them. A second person takes the
+            // one opponent's slot, so the people never meet an AI craft.
+            mode.opponent_count()
         } else {
             mode.opponent_count()
                 .max(if opponents { GRID_SLOTS - 1 } else { 0 })
