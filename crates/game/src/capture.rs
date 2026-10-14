@@ -22,6 +22,7 @@ mod offscreen;
 mod presented;
 mod preview_pass;
 mod pure_chain_page;
+mod seat_assign_page;
 mod video;
 mod window_layout_page;
 use campaign_page::{campaign_kind, campaign_page};
@@ -814,6 +815,20 @@ pub fn run(
                 // `crate::main::session::window_layout` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = window_layout_page::capture(
+                    &request,
+                    &strings,
+                    frame,
+                    &skin,
+                    &menu_frame,
+                    footer,
+                );
+                ticker_clip = clip;
+                (backdrop, video_format, list, space)
+            } else if let Some(request) = seat_assign_page::request(page) {
+                // The seat assignment screen, after the window layout - see
+                // `crate::main::session::seat_assign` for the live flow.
+                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let (list, clip) = seat_assign_page::capture(
                     &request,
                     &strings,
                     frame,

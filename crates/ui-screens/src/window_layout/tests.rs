@@ -270,7 +270,11 @@ fn a_click_on_a_box_in_the_preview_picks_that_window() {
     let skin = skin(oag_display::space::Space::PSP);
     let mut picker = picker(4, 1);
     picker.set_window_count(3);
-    let boxes = picker.boxes(Geometry::new(&skin).preview);
+    let boxes = boxes(
+        picker.windows().len(),
+        picker.monitors.len() > 1,
+        Geometry::new(&skin).preview,
+    );
     assert_eq!(boxes.len(), 3);
     let centre = |rect: [f32; 4]| (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
     assert_eq!(
@@ -287,7 +291,7 @@ fn the_preview_boxes_hold_inside_their_area_and_do_not_overlap() {
         let mut picker = picker(people, 2);
         picker.set_window_count(people);
         let area = Geometry::new(&skin).preview;
-        let boxes = picker.boxes(area);
+        let boxes = boxes(picker.windows().len(), picker.monitors.len() > 1, area);
         for (index, rect) in boxes.iter().enumerate() {
             assert!(rect[0] >= area[0] - 0.01 && rect[0] + rect[2] <= area[0] + area[2] + 0.01);
             assert!(rect[1] >= area[1] - 0.01 && rect[1] + rect[3] <= area[1] + area[3] + 0.01);

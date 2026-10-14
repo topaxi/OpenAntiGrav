@@ -547,6 +547,14 @@ impl Session {
                         self.tick_pure_chain(&grid);
                         continue;
                     }
+                    // The seat assignment screen, after the layout screen: same shape.
+                    if stage.assign.is_some() {
+                        self.tick_seat_assign(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
                     // The window layout screen, after the join screen: same shape.
                     if stage.layout.is_some() {
                         self.tick_window_layout(&grid);

@@ -312,7 +312,12 @@ impl Join {
         let rows = self.rows();
         let shape: Vec<(bool, bool)> = rows
             .iter()
-            .map(|row| (self.hover == Some(*row), !matches!(row, Row::Back)))
+            .map(|row| {
+                (
+                    self.hover == Some(*row),
+                    !matches!(row, Row::Start | Row::Back),
+                )
+            })
             .collect();
         row_blocks(skin, frame, &shape)
     }
@@ -380,7 +385,7 @@ impl Join {
                     if !self.can_start() {
                         ink = dim(ink);
                     }
-                    (self.labels.start.clone(), self.seats.len().to_string())
+                    (self.labels.start.clone(), String::new())
                 }
                 Row::Back => (self.labels.back.clone(), String::new()),
             };

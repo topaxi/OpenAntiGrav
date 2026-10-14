@@ -120,7 +120,12 @@ impl Session {
         #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         self.apply_window_layout(open.screen());
         self.play_navs(Some(Nav::Accept));
-        self.continue_multiplayer(open.join().lobby().clone());
+        // The seat assignment screen comes next when the layout has windows to choose between
+        // (`session::seat_assign`); with one window the flow goes straight on.
+        if let Some(open) = self.open_seat_assign(open) {
+            self.pane_people.clear();
+            self.continue_multiplayer(open.join().lobby().clone());
+        }
     }
 }
 
@@ -234,10 +239,7 @@ impl Session {
             self.window_layout.clear();
         }
         self.settings.race.window_monitors = self.window_monitors.clone();
-        for index in 0..self.screens.len() {
-            let title = self.window_title(index + 1);
-            self.screens[index].output.window.set_title(&title);
-        }
+        self.refresh_window_titles();
 
         let mode = if screen.fullscreen() {
             WindowMode::Borderless
@@ -261,6 +263,15 @@ impl Session {
         }
         if let Err(e) = crate::settings::save(&self.settings) {
             log::error!("could not save settings: {e:#}");
+        }
+    }
+
+    /// Names each further window for the seats it is planned to hold
+    /// ([`Session::planned_seats`]); called when the layout or the seat assignment changes them.
+    pub(crate) fn refresh_window_titles(&mut self) {
+        for index in 0..self.screens.len() {
+            let title = self.window_title(index + 1);
+            self.screens[index].output.window.set_title(&title);
         }
     }
 

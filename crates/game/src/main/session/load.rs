@@ -640,7 +640,11 @@ impl Session {
                         open_windows,
                         cut,
                     );
-                    oag_game::split_screen::deal_windows(&mut race_stage.race, &layout);
+                    oag_game::split_screen::deal_windows(
+                        &mut race_stage.race,
+                        &layout,
+                        &self.pane_people,
+                    );
                 }
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();

@@ -226,7 +226,7 @@ fn a_title_that_draws_blocks_boxes_its_rows_and_a_bare_one_does_not() {
     let join = screen(2);
     assert!(join.blocks(&hd, &Frame::default()).is_empty());
     let with = join.blocks(&hd, &block_frame());
-    // 2 seats + empty + START + BACK = 5 rows, 4 of them with a value block.
+    // 2 seats + empty + START + BACK = 5 rows, 3 of them with a value block (START and BACK are buttons).
     let plain = {
         let mut one = Vec::new();
         let frame = block_frame();
@@ -244,8 +244,8 @@ fn a_title_that_draws_blocks_boxes_its_rows_and_a_bare_one_does_not() {
     };
     assert_eq!(
         with.len(),
-        plain * 9,
-        "{} draws for nine blocks",
+        plain * 8,
+        "{} draws for eight blocks",
         with.len()
     );
     assert!(
@@ -302,4 +302,29 @@ fn start_waits_for_every_seat_when_the_head_count_is_authored() {
     // The generic screen is unchanged: one seat is enough.
     assert!(screen(1).can_start());
     assert!(!screen(0).can_start());
+}
+
+/// START and BACK are buttons: START used to draw the head count beside it, which read as a
+/// stray number. The seats still say which device holds them.
+#[test]
+fn a_button_row_shows_no_value() {
+    let skin = skin();
+    let texts: Vec<(String, Align)> = screen(2)
+        .body(&skin, &Frame::default())
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, align, .. } => Some((text, align)),
+            _ => None,
+        })
+        .collect();
+    let rights: Vec<&str> = texts
+        .iter()
+        .filter(|(_, align)| *align == Align::Right)
+        .map(|(text, _)| text.as_str())
+        .collect();
+    assert_eq!(
+        rights,
+        ["PAD 0", "PAD 1", "OPEN"],
+        "no value beside START or BACK"
+    );
 }

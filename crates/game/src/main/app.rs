@@ -560,6 +560,7 @@ impl App {
             focus: crate::windows::Focus::default(),
             seat_clicks: 0,
             multiplayer: false,
+            pane_people: Vec::new(),
             mp_devices: Vec::new(),
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),

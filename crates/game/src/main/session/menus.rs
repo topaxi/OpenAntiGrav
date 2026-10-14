@@ -520,6 +520,7 @@ impl Session {
                 pure_chain: None,
                 join: None,
                 layout: None,
+                assign: None,
                 styled,
                 backdrop: shape.map(|shape| Backdrop {
                     player: menu_playhead(carried, frames, shape.frame_rate),

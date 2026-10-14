@@ -70,6 +70,8 @@ mod custom_tracks;
 mod join;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
+#[path = "session/seat_assign.rs"]
+mod seat_assign;
 #[path = "session/window_layout.rs"]
 mod window_layout;
 #[path = "session/pure_chain.rs"]
@@ -657,6 +659,11 @@ pub(crate) struct Session {
     /// the page's changes and the Track and Ship Select that follow. Cleared, with the lobby,
     /// when the menu leaves the page (`Session::sync_multiplayer`).
     pub(crate) multiplayer: bool,
+    /// Who sits in each pane of the layout, the panes counted across the windows from 0: the
+    /// seat assignment screen's answer, kept for the race, a race again and a RETURN TO MENU
+    /// race until the flow ends ([`Session::sync_multiplayer`]). Empty deals the slots in
+    /// order ([`oag_game::split_screen::window_slots`]).
+    pub(crate) pane_people: Vec<usize>,
     /// The devices the join screen last seated this session, seated again the next time it
     /// opens where they are still connected. **In memory only**: a restart joins again.
     pub(crate) mp_devices: Vec<oag_input::lobby::Device>,

@@ -121,3 +121,29 @@ fn unseating_removes_the_keyboard_seat() {
     assert!(!assignment.drives(1));
     assert_eq!(assignment.keyboard_seats(), vec![(Binding::Shared, 0)]);
 }
+
+/// The seat assignment can give a window slots that are not a run (window 1 shows slots 0 and
+/// 2, window 2 slot 1): a key goes to the keyboard seat whichever window slots it sits among,
+/// and a window that holds only pads' slots ignores it.
+#[test]
+fn a_window_whose_slots_are_not_a_run_still_routes_to_the_keyboard_seat() {
+    let mut assignment = Seated::seated(3);
+    assignment.claim_keyboard(2);
+    assignment.reconcile(&[10, 11]);
+    assert_eq!(assignment.slot_of(10), Some(0));
+    assert_eq!(assignment.slot_of(11), Some(1));
+    assert_eq!(
+        assignment.route_key(None, &[0, 2], &[0, 1, 2], true),
+        Some(2)
+    );
+    assert_eq!(assignment.route_key(None, &[1], &[0, 1, 2], true), None);
+    let mut first = Seated::seated(3);
+    first.claim_keyboard(0);
+    first.reconcile(&[10, 11]);
+    assert_eq!(
+        first.route_key(None, &[1, 2], &[0, 1, 2], true),
+        None,
+        "slot 0 is in the other window"
+    );
+    assert_eq!(first.route_key(None, &[0], &[0, 1, 2], true), Some(0));
+}

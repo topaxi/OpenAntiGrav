@@ -176,6 +176,7 @@ impl Session {
                 if let Stage::Menu(stage) = &mut self.stage {
                     stage.join = None;
                 }
+                self.pane_people.clear();
                 self.controls.forget_lobby_keys();
                 self.play_navs(Some(Nav::Decline));
             }
@@ -200,6 +201,7 @@ impl Session {
                 // (`session::window_layout`); elsewhere the flow goes straight on.
                 if let Some(open) = self.open_window_layout(open) {
                     self.split_cut = self.remembered_cut();
+                    self.pane_people.clear();
                     self.continue_multiplayer(open.lobby().clone());
                 }
             }

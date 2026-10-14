@@ -86,6 +86,11 @@ OAG_JOIN_EMPTY = { text = "PRESS A BUTTON", human = false }
 OAG_JOIN_KEYBOARD = { text = "KEYBOARD", human = false }
 OAG_JOIN_PAD = { text = "GAMEPAD", human = false }
 OAG_JOIN_START = { text = "START", human = false }
+# The seat assignment screen (`session::seat_assign`), after the window layout.
+OAG_SEAT_ASSIGN_TITLE = { text = "WHO SITS WHERE", human = false }
+OAG_SEAT_ASSIGN_HINT = { text = "MOVE YOUR OWN MARKER TO THE VIEW YOU WANT, THEN CONFIRM", human = false }
+OAG_SEAT_ASSIGN_VIEW = { text = "VIEW", human = false }
+OAG_SEAT_ASSIGN_AUTO = { text = "AUTO", human = false }
 # The window layout screen (`session::window_layout`), after the join screen.
 OAG_WINDOW_LAYOUT_TITLE = { text = "WINDOW LAYOUT", human = false }
 OAG_WINDOW_LAYOUT_HINT = { text = "CHOOSE HOW THE PLAYERS ARE SPLIT ACROSS WINDOWS", human = false }

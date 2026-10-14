@@ -7,14 +7,15 @@
 //!    seated earlier this session are seated again where they are still connected.
 //! 3. **Layout** (`session::window_layout`): windows, monitors, the cut, fullscreen.
 //!    Remembered on disk.
-//! 4. **Seat assignment** (next lane, `mp-seat-assign`): [`Session::assign_seats`] is where it
-//!    goes, between the layout and the settings. It hands the lobby back as it got it today.
+//! 4. **Seat assignment** (`session::seat_assign`): after the layout, each person moves their own
+//!    marker onto the pane they want; [`Session::pane_people`] is the answer, dealt by
+//!    `split_screen::deal_windows`. Remembered on disk. Skipped for a single window.
 //! 5. **Race settings**: the RACE page, remembered. The mode row marks a mode that takes fewer
 //!    people than are seated ([`Session::resupply_race_modes`], `Mode::max_people`).
 //! 6. **Track Select**, then **Ship Select** per seat, then the race (`session::picker`).
 //!
 //! **Quick paths.** A race again from the end screen keeps the seats and the windows and skips
-//! 2 to 4 (the devices stay seated, `Session::seat_the_windows`). RETURN TO MENU after a
+//! 2 to 4 (the devices stay seated, and so does the assignment, `Session::seat_the_windows`). RETURN TO MENU after a
 //! multiplayer race lands on step 5 with everyone still seated
 //! ([`Session::reenter_multiplayer`]): change the track and race again. Leaving through BACK
 //! to the MULTIPLAYER page, or any other page, ends the flow ([`Session::sync_multiplayer`]).
@@ -32,8 +33,8 @@ impl Session {
         self.open_join();
     }
 
-    /// The step after join and layout: seat assignment ([`Self::assign_seats`]), then the RACE
-    /// page, with `lobby` carried to the race. A lobby of fewer than two is not multiplayer
+    /// The step after join, layout and seat assignment: the RACE page, with `lobby` carried to
+    /// the race. A lobby of fewer than two is not multiplayer
     /// and goes no further.
     pub(crate) fn continue_multiplayer(&mut self, lobby: Lobby) {
         if lobby.count() < 2 {
@@ -43,17 +44,8 @@ impl Session {
             return;
         }
         self.remember_devices(&lobby);
-        let lobby = self.assign_seats(lobby);
         self.split_lobby = Some(lobby);
         self.open_multiplayer_settings();
-    }
-
-    /// **The hook for seat assignment (`mp-seat-assign`)**: each person moving their own
-    /// marker onto the pane they want, between the layout and the settings. Nothing yet: the
-    /// people sit in the order they joined, slot `i` in seat `i`, dealt across the windows in
-    /// order (`Session::seat_the_windows`, `split_screen::deal_windows`).
-    fn assign_seats(&mut self, lobby: Lobby) -> Lobby {
-        lobby
     }
 
     /// Keeps `lobby`'s devices for the next time the join screen opens this session. In memory
@@ -122,9 +114,10 @@ impl Session {
         if has_left_the_flow(
             &stage.menu.page().id,
             stage.picker.is_some(),
-            stage.join.is_some() || stage.layout.is_some(),
+            stage.join.is_some() || stage.layout.is_some() || stage.assign.is_some(),
         ) {
             self.multiplayer = false;
+            self.pane_people.clear();
             self.controls.forget_lobby_keys();
             self.drop_split_lobby();
             self.resupply_race_modes();

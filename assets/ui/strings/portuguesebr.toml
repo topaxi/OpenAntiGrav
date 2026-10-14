@@ -42,6 +42,11 @@ OAG_JOIN_EMPTY = { text = "APERTE UM BOTÃO", human = false }
 OAG_JOIN_KEYBOARD = { text = "TECLADO", human = false }
 OAG_JOIN_PAD = { text = "CONTROLE", human = false }
 OAG_JOIN_START = { text = "INICIAR", human = false }
+# The seat assignment screen (`session::seat_assign`), after the window layout.
+OAG_SEAT_ASSIGN_TITLE = { text = "QUEM FICA ONDE", human = false }
+OAG_SEAT_ASSIGN_HINT = { text = "MOVA O SEU PRÓPRIO MARCADOR PARA A VISTA QUE QUISER E CONFIRME", human = false }
+OAG_SEAT_ASSIGN_VIEW = { text = "VISTA", human = false }
+OAG_SEAT_ASSIGN_AUTO = { text = "AUTO", human = false }
 # The window layout screen (`session::window_layout`), after the join screen.
 OAG_WINDOW_LAYOUT_TITLE = { text = "LAYOUT DAS JANELAS", human = false }
 OAG_WINDOW_LAYOUT_HINT = { text = "ESCOLHA COMO OS JOGADORES SÃO DIVIDIDOS ENTRE AS JANELAS", human = false }

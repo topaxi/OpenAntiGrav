@@ -165,4 +165,49 @@ impl MenuStage {
         );
         Ok(())
     }
+
+    /// The seat assignment screen, drawn as the layout screen is
+    /// (`oag_ui_screens::seat_assign::draw_list`).
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the same facts `MenuStage::render` already has in hand"
+    )]
+    pub(super) fn render_seat_assign(
+        &mut self,
+        gpu: &Gpu,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        viewport: (f32, f32, f32, f32),
+        shown: Option<menu::Picture>,
+        frozen_race: bool,
+        ticker_tips: &[String],
+    ) -> Result<()> {
+        let Some(open) = self.assign.as_ref() else {
+            return Ok(());
+        };
+        let layers = oag_ui_screens::seat_assign::draw_list(
+            open.screen(),
+            &self.skin,
+            &self.frame,
+            if frozen_race { None } else { shown },
+            frozen_race,
+            &oag_game::split_screen::seat_cells,
+        );
+        let footer = self
+            .ticker
+            .is_some()
+            .then(|| self.footer_overlay(Vec::new(), ticker_tips));
+        let (list, ticker_clip) = footer::append(layers.flatten(), footer);
+        self.renderer.render_with(
+            wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            &gpu.device,
+            &gpu.queue,
+            encoder,
+            view,
+            &list,
+            viewport,
+            footer::resolve_clip(None, ticker_clip, frozen_race),
+        );
+        Ok(())
+    }
 }
