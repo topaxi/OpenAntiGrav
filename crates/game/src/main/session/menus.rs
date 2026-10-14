@@ -519,6 +519,7 @@ impl Session {
                 campaign: None,
                 pure_chain: None,
                 join: None,
+                lan: None,
                 layout: None,
                 assign: None,
                 styled,
@@ -534,8 +535,13 @@ impl Session {
         // table is not pausing - there is nothing there to resume back into -
         // so that race is discarded exactly as it always was. Only a race still
         // running when `escape` reached here is worth keeping.
+        // A LAN race is the server's and cannot be parked: leaving it leaves the game.
+        let was_lan = self.net.is_some();
+        self.net = None;
+        self.lan = None;
         if let Stage::Race(stage) = outgoing
             && !stage.race.finished()
+            && !was_lan
         {
             self.suspended_race = Some(stage);
         }
@@ -659,6 +665,9 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::OpenMultiplayerLocal) => {
                 self.open_multiplayer_local();
             }
+            // The LAN page's two rows (`session::lan`).
+            menu::MenuEvent::Fired(menu::Action::HostLan) => self.open_lan_host(),
+            menu::MenuEvent::Fired(menu::Action::JoinLan) => self.open_lan_join(),
             // Never fired: the menu refuses the confirm (`Menu::is_disabled`).
             menu::MenuEvent::Fired(menu::Action::ComingLater) => {}
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
@@ -883,6 +892,16 @@ impl Session {
     /// alike. Neither builds `self.race_options` here: by the time either
     /// calls this, it is already exactly what should load.
     pub(crate) fn finish_launch(&mut self) {
+        // HOST GAME's RACE page: the race is the lobby's to start.
+        if self.lan_hosting_settings() {
+            self.open_lan_lobby();
+            return;
+        }
+        // JOIN GAME's Ship Select: the pick is made, the host list is next.
+        if self.lan_picking_ship() {
+            self.open_lan_browse();
+            return;
+        }
         match self.launch_race() {
             Ok(()) => {
                 let strings = strings::project_table(self.settings.language.as_deref());

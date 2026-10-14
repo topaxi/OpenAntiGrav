@@ -265,6 +265,12 @@ impl Session {
             self.escape_window_layout();
             return;
         }
+        // LAN's lobby or host list (the typed address keyboard, when open, took the key
+        // above): escape is back.
+        if matches!(&self.stage, Stage::Menu(stage) if stage.lan.is_some()) {
+            self.escape_lan();
+            return;
+        }
         // The split-screen join screen: escape is the keyboard pressing back.
         if matches!(&self.stage, Stage::Menu(stage) if stage.join.is_some()) {
             self.escape_join();

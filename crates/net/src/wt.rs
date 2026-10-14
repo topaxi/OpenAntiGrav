@@ -118,6 +118,10 @@ pub fn parse_hash(text: &str) -> Result<[u8; 32]> {
     Ok(hash)
 }
 
+/// How long a link may go without sending before it sends a keep-alive. Chosen: well inside
+/// QUIC's default idle timeout.
+const KEEP_ALIVE: std::time::Duration = std::time::Duration::from_secs(5);
+
 enum Out {
     Datagram(Vec<u8>),
     Reliable(Vec<u8>),
@@ -171,6 +175,8 @@ impl WtLink {
         rt.spawn(async move {
             loop {
                 match reader.read_datagram().await {
+                    // The keep-alive of the other end's writer.
+                    Ok(bytes) if bytes.is_empty() => {}
                     Ok(bytes) => {
                         if datagram_in.send(bytes.to_vec()).is_err() {
                             break;
@@ -213,7 +219,17 @@ impl WtLink {
         let writer = session;
         rt.spawn(async move {
             let mut send = send;
-            while let Some(message) = outgoing.recv().await {
+            loop {
+                // A lobby can sit for minutes with nothing to say, and QUIC closes a quiet
+                // connection: an empty datagram is the keep-alive (the other end drops it).
+                let message = tokio::select! {
+                    message = outgoing.recv() => message,
+                    () = tokio::time::sleep(KEEP_ALIVE) => {
+                        let _ = writer.send_datagram(Vec::new().into());
+                        continue;
+                    }
+                };
+                let Some(message) = message else { break };
                 match message {
                     // A datagram that will not go (too large, congestion) is lost,
                     // which the protocol's redundancy covers.
@@ -292,6 +308,9 @@ impl Link for WtLink {
 pub struct Listener {
     incoming: mpsc::Receiver<WtLink>,
     local: SocketAddr,
+    /// Dropping the listener drops this, which ends the accept task and closes the socket,
+    /// so the port is free for the next host in the same process.
+    _stop: tokio::sync::oneshot::Sender<()>,
 }
 
 impl Listener {
@@ -309,8 +328,14 @@ impl Listener {
             .with_context(|| format!("listening on {addr}"))?;
         let local = server.local_addr()?;
         let (found, incoming) = mpsc::channel();
+        let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         rt.spawn(async move {
-            while let Some(request) = server.accept().await {
+            loop {
+                let request = tokio::select! {
+                    request = server.accept() => request,
+                    _ = &mut stopped => break,
+                };
+                let Some(request) = request else { break };
                 let found = found.clone();
                 tokio::spawn(async move {
                     let peer = request.conn().remote_address();
@@ -329,8 +354,13 @@ impl Listener {
                     }
                 });
             }
+            server.close(0u32.into(), b"the host stopped");
         });
-        Ok(Self { incoming, local })
+        Ok(Self {
+            incoming,
+            local,
+            _stop: stop,
+        })
     }
 
     /// The address actually bound (a port of 0 resolved).
@@ -411,6 +441,26 @@ mod tests {
         }
     }
 
+    /// A host that stops frees its port: the second HOST GAME of a session binds the same one.
+    #[test]
+    fn dropping_a_listener_frees_its_port() {
+        let identity = Identity::self_signed(&[]).expect("certificate");
+        let first = Listener::bind("127.0.0.1:0".parse().expect("addr"), &identity).expect("bind");
+        let addr = first.local_addr();
+        drop(first);
+        let started = std::time::Instant::now();
+        loop {
+            match Listener::bind(addr, &identity) {
+                Ok(_) => break,
+                Err(e) => assert!(
+                    started.elapsed() < std::time::Duration::from_secs(5),
+                    "the port stayed taken: {e:#}"
+                ),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
     /// The spike's claim, kept: both channel kinds both ways over a real socket on
     /// localhost, the certificate pinned, and a wrong pin refused by the handshake
     /// rather than by a timeout.
@@ -429,6 +479,7 @@ mod tests {
         client.send_control(&Control::Hello {
             protocol: PROTOCOL,
             name: "test".into(),
+            team: String::new(),
         });
         let mut server = wait(|| listener.accept());
         let hello = wait(|| server.recv_control()).expect("parses");

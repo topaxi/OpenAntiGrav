@@ -139,9 +139,9 @@ title = "MULTIPLAYER"
 title_string_id = "OAG_MP_PAGE_TITLE"
 
 # LOCAL MULTIPLAYER starts the flow `oag_game::main::session::multiplayer` runs: join, the
-# window layout, the RACE page, Track Select and Ship Select per seat. LAN and ONLINE are
-# rows for what comes later: dimmed, focusable so the line under them can say so, and
-# refusing the confirm (`Action::ComingLater`).
+# window layout, the RACE page, Track Select and Ship Select per seat. LAN opens the `lan`
+# page below. ONLINE is a row for what comes later: dimmed, focusable so the line under it
+# can say so, and refusing the confirm (`Action::ComingLater`).
 [[page.entry]]
 id = "multiplayer_local"
 kind = "action"
@@ -153,12 +153,12 @@ subtitle_string_id = "OAG_MP_LOCAL_SUBTITLE"
 
 [[page.entry]]
 id = "multiplayer_lan"
-kind = "action"
+kind = "submenu"
 label = "LAN"
 string_id = "OAG_MP_LAN"
-action = "coming_later"
-subtitle = "Coming later"
-subtitle_string_id = "OAG_MP_COMING_LATER"
+target = "lan"
+subtitle = "Host a race on your network, or join one"
+subtitle_string_id = "OAG_MP_LAN_SUBTITLE"
 
 [[page.entry]]
 id = "multiplayer_online"
@@ -168,6 +168,38 @@ string_id = "OAG_MP_ONLINE"
 action = "coming_later"
 subtitle = "Coming later"
 subtitle_string_id = "OAG_MP_COMING_LATER"
+
+[[page.entry]]
+kind = "back"
+label = "BACK"
+string_id = "OAG_MENU_BACK"
+
+# **LAN play (2026-10-14, chosen, not measured).** HOST GAME walks the RACE page, Track
+# Select and Ship Select and opens a lobby; JOIN GAME lists the hosts discovery finds. Both
+# are `oag_game::main::session::lan`; the web has no network transport yet, so there they
+# refuse the confirm.
+[[page]]
+id = "lan"
+title = "LAN"
+title_string_id = "OAG_MP_LAN"
+
+[[page.entry]]
+id = "lan_host"
+kind = "action"
+label = "HOST GAME"
+string_id = "OAG_LAN_HOST"
+action = "lan_host"
+subtitle = "Choose the race, then wait for the others to join"
+subtitle_string_id = "OAG_LAN_HOST_SUBTITLE"
+
+[[page.entry]]
+id = "lan_join"
+kind = "action"
+label = "JOIN GAME"
+string_id = "OAG_LAN_JOIN"
+action = "lan_join"
+subtitle = "Find a game on your network"
+subtitle_string_id = "OAG_LAN_JOIN_SUBTITLE"
 
 [[page.entry]]
 kind = "back"

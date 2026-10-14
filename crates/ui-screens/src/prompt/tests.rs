@@ -442,3 +442,28 @@ fn hovering_an_answer_moves_it_and_a_click_elsewhere_is_ignored() {
     );
     assert!(prompt.on_yes(), "a stray click changes nothing");
 }
+
+/// LAN play's address entry is this grid over another alphabet: the separator an address
+/// needs are cells (and are what a desk key may type), a pilot's grid still offers none of them,
+/// and the cursor reaches the special keys after the last character whatever the grid's size.
+#[test]
+fn an_address_keyboard_offers_the_dot_and_a_pilot_one_does_not() {
+    let labels = Labels::default();
+    let address = Keyboard::with_keys(labels.clone(), "", 40, ADDRESS_KEYS);
+    for c in ['0', '9', '.', 'a', 'z', '-'] {
+        assert!(address.accepts(c), "{c:?}");
+    }
+    assert!(!address.accepts('_') && !address.accepts('/') && !address.accepts(':'));
+    let pilot = Keyboard::new(labels, "", 24);
+    assert!(!pilot.accepts('.') && pilot.accepts('-'));
+    assert_eq!(address.cells(), ADDRESS_KEYS.len() + 2);
+    assert_eq!(address.key(address.cells() - 1), Key::Accept);
+    assert_eq!(address.key(address.cells() - 2), Key::Delete);
+    assert_eq!(address.key(11), Key::Char('-'));
+    assert_eq!(address.cells(), 40, "the same four rows as a pilot's grid");
+    // The cursor walks to the `.` (cell 10, the start of the second row) and presses it.
+    let mut address = address;
+    address.update(&mut tick(&[Button::Down]));
+    address.update(&mut tick(&[Button::Cross]));
+    assert_eq!(address.text(), ".");
+}

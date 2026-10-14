@@ -8,10 +8,13 @@
 //! [`NetPlay::step`], which predicts, sends this machine's input and corrects on the
 //! server's word (`oag_net::client`), instead of `Race::tick`.
 //!
-//! What this leaves alone: the menus (the LAN and ONLINE rows stay greyed), the
-//! sound, the HUD and the camera, which follow this machine's seat
-//! (`Race::set_seat`). Weapons are off in a network race until they are server
-//! events.
+//! The menus' LAN page (`session::lan`) joins the same way a frame at a time:
+//! [`Pending`] waits for the welcome, [`NetPlay::begin_join`] and
+//! [`NetPlay::poll_start`] are [`NetPlay::join`]'s two halves, so the window never blocks.
+//!
+//! What this leaves alone: the sound, the HUD and the camera, which follow this
+//! machine's seat (`Race::set_seat`). Weapons are off in a network race until they
+//! are server events.
 //!
 //! `--net-bot` flies this machine's craft with the player's own driver, sent as
 //! input like a pad's: a verification aid for a whole race with nobody at the
@@ -64,6 +67,89 @@ pub struct NetPlay {
     overlay: RefCell<(Collector, Option<NetStats>)>,
 }
 
+/// A connection that has said hello and is waiting for the server's welcome: the menus'
+/// LAN screens poll it a frame at a time, where `--connect` blocks on it
+/// ([`NetPlay::connect`]).
+pub struct Pending {
+    client: Option<Client>,
+    bot: bool,
+    /// Where it connected, for the log line.
+    label: String,
+}
+
+impl Pending {
+    /// Says hello over `link`, named `name`. `bot` is `--net-bot`.
+    #[must_use]
+    pub fn new(
+        link: Box<dyn oag_net::link::Link>,
+        name: &str,
+        team: &str,
+        bot: bool,
+        label: &str,
+    ) -> Self {
+        Self {
+            client: Some(Client::connect_as(link, name, team)),
+            bot,
+            label: label.to_string(),
+        }
+    }
+
+    /// Reads the link once: the [`NetPlay`] once the welcome has come, `None` before.
+    ///
+    /// # Errors
+    ///
+    /// The server refused (it names why), or the link closed.
+    pub fn poll(&mut self) -> Result<Option<NetPlay>> {
+        let Some(client) = self.client.as_mut() else {
+            return Ok(None);
+        };
+        let Some(welcome) = client.poll_welcome()? else {
+            return Ok(None);
+        };
+        let client = self.client.take().expect("polled just above");
+        println!(
+            "net: seat {} of {} on {}, {} on {}, seed {}, weapons {}",
+            welcome.seat,
+            welcome.params.people,
+            self.label,
+            welcome.params.title,
+            if welcome.params.track.is_empty() {
+                "the title's default circuit"
+            } else {
+                &welcome.params.track
+            },
+            welcome.params.seed,
+            if welcome.params.weapons { "on" } else { "off" },
+        );
+        Ok(Some(NetPlay {
+            client: RefCell::new(client),
+            welcome,
+            bot: self.bot,
+            due: Cell::new(None),
+            log: RefCell::new((Stats::default(), Instant::now())),
+            board_printed: Cell::new(false),
+            overlay: RefCell::new((Collector::new(), None)),
+        }))
+    }
+}
+
+impl Drop for Pending {
+    /// Backing out before the welcome tells the host this seat is gone.
+    fn drop(&mut self) {
+        if let Some(client) = self.client.as_mut() {
+            client.leave("the player backed out");
+        }
+    }
+}
+
+impl std::fmt::Debug for Pending {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pending")
+            .field("label", &self.label)
+            .finish_non_exhaustive()
+    }
+}
+
 impl std::fmt::Debug for NetPlay {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NetPlay")
@@ -86,40 +172,17 @@ impl NetPlay {
             Some(conditions) => Box::new(oag_net::link::Shim::new(link, conditions)),
             None => Box::new(link),
         };
-        let mut client = Client::connect(link, &args.name);
+        let mut pending = Pending::new(link, &args.name, "", args.bot, &args.addr);
         let asked = Instant::now();
-        let welcome = loop {
-            if let Some(welcome) = client.poll_welcome()? {
-                break welcome;
+        loop {
+            if let Some(net) = pending.poll()? {
+                return Ok(net);
             }
             if asked.elapsed() > Duration::from_secs(10) {
                 return Err(anyhow!("{} answered but sent no welcome", args.addr));
             }
             std::thread::sleep(Duration::from_millis(5));
-        };
-        println!(
-            "net: seat {} of {} on {}, {} on {}, seed {}, weapons {}",
-            welcome.seat,
-            welcome.params.people,
-            args.addr,
-            welcome.params.title,
-            if welcome.params.track.is_empty() {
-                "the title's default circuit"
-            } else {
-                &welcome.params.track
-            },
-            welcome.params.seed,
-            if welcome.params.weapons { "on" } else { "off" },
-        );
-        Ok(Self {
-            client: RefCell::new(client),
-            welcome,
-            bot: args.bot,
-            due: Cell::new(None),
-            log: RefCell::new((Stats::default(), Instant::now())),
-            board_printed: Cell::new(false),
-            overlay: RefCell::new((Collector::new(), None)),
-        })
+        }
     }
 
     /// The race the server is running.
@@ -161,7 +224,7 @@ impl NetPlay {
             skin: None,
             opponent_teams: Vec::new(),
             grid_teams: Vec::new(),
-            seat_picks: Vec::new(),
+            seat_picks: server.seat_picks,
             laps_override: None,
             eliminator_kill_target: None,
             zone_stage: None,
@@ -178,6 +241,27 @@ impl NetPlay {
     /// A different title, a different start state (different content or options),
     /// or no start within two minutes.
     pub fn join(&self, race: &mut Race, title: &str) -> Result<()> {
+        self.begin_join(race, title)?;
+        let asked = Instant::now();
+        loop {
+            if self.poll_start()? {
+                return Ok(());
+            }
+            if asked.elapsed() > START_TIMEOUT {
+                return Err(anyhow!("no start within {START_TIMEOUT:?}"));
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// The first half of [`Self::join`]: makes `race` the server's, proves its start state
+    /// and says this machine is ready. The menus' LAN races poll [`Self::poll_start`] a frame
+    /// at a time after this instead of blocking the window.
+    ///
+    /// # Errors
+    ///
+    /// A different title or a different start state.
+    pub fn begin_join(&self, race: &mut Race, title: &str) -> Result<()> {
         oag_net::race::check_title(&self.welcome.params, title)?;
         oag_net::race::prepare(race, &self.welcome.params)?;
         let mut client = self.client.borrow_mut();
@@ -186,18 +270,21 @@ impl NetPlay {
             "net: ready at state {:#018x}, waiting for the start",
             oag_net::race::fingerprint(race)
         );
-        let asked = Instant::now();
-        loop {
-            client.poll();
-            match client.phase() {
-                Phase::Racing => return Ok(()),
-                Phase::Over(why) => return Err(anyhow!("the server ended the race: {why}")),
-                _ => {}
-            }
-            if asked.elapsed() > START_TIMEOUT {
-                return Err(anyhow!("no start within {START_TIMEOUT:?}"));
-            }
-            std::thread::sleep(Duration::from_millis(5));
+        Ok(())
+    }
+
+    /// Reads the link once; whether the server has started the race.
+    ///
+    /// # Errors
+    ///
+    /// The server ended the race before it began.
+    pub fn poll_start(&self) -> Result<bool> {
+        let mut client = self.client.borrow_mut();
+        client.poll();
+        match client.phase() {
+            Phase::Racing => Ok(true),
+            Phase::Over(why) => Err(anyhow!("the server ended the race: {why}")),
+            _ => Ok(false),
         }
     }
 

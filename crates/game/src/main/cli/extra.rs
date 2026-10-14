@@ -519,8 +519,9 @@ pub(crate) struct NetArgs {
     pub(crate) cert_hash: Option<String>,
 
     /// Fly this machine's craft with the player's own driver, sent to the server as
-    /// input like a pad's. A verification aid for a whole race with nobody at the keys.
-    #[arg(long, requires = "connect")]
+    /// input like a pad's. A verification aid for a whole race with nobody at the keys; on a
+    /// LAN race from the menus (HOST GAME or JOIN GAME) it flies that machine's craft too.
+    #[arg(long)]
     pub(crate) net_bot: bool,
 
     /// Add a round trip and a datagram loss rate on this end of the connection,

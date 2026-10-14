@@ -517,7 +517,7 @@ Both are release builds, as `just play` is: a debug build (`cargo run` without
 
 `--cert-hash` takes the 64 hex digits the server printed, or `@FILE` for the file
 `--hash-out` wrote. Server flags: `--people N` (each client takes the next seat, grid
-slot `0..N`), `--no-opponents`, `--class`, `--mode`, `--difficulty`, `--scheme`
+slot `0..N`), `--team NAME` (repeat it per seat in order, `--team a --team b`; a seat past the list flies the last one), `--no-opponents`, `--class`, `--mode`, `--difficulty`, `--scheme`
 (one control scheme per race; every client flies the server's), `--seed`,
 `--listen ADDR`, `--cert-name NAME` (another name the certificate is valid for),
 `--max-ticks N`, `--lead-ticks N`. Client flags: `--net-bot` (the player's own driver
@@ -551,7 +551,7 @@ driver flies the opponents (the original driver with several people is unread),
 pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot
 is `Controller::Remote` on every peer, the client's own included, because the
 controllers are hashed; which craft is this machine's is view-side
-(`Race::set_seat`). The menus' LAN and ONLINE rows stay greyed. Start and focus loss
+(`Race::set_seat`). The menus' ONLINE row stays greyed (LAN is real, see [LAN play](#lan-play-2026-10-14) below). Start and focus loss
 do not pause a network race, and it writes no record and no ghost (its inputs are
 predictions corrected by a server, under the server's settings).
 
@@ -620,6 +620,107 @@ agrees and that corrections happen.
 late, more than two clients, a real network (only the shim's constant delay, no
 jitter), and the own craft's correction moving the camera (ADR-0069, condition 4; the
 runs above did not log which craft each correction moved).
+
+## LAN play (2026-10-14)
+
+**Chosen, not measured**, except where a number is quoted. The maintainer approved the
+lane on 2026-10-14; the decisions it builds on are 3 (a LAN host is a listen server inside a
+client, trusted) and the transport of ADR-0070. Code: `oag-net` (`discovery`, `lobby`, `serve`,
+`lan`), `oag-game` (`session::lan`, `net_play::Pending`), the LAN page of `assets/ui/menu.toml`.
+
+### Two machines, step by step
+
+Both machines run the same title and pressing (a different one is refused by name; a different
+pressing of the same title is refused at the tick-0 hash), on one network where UDP broadcast and
+UDP/QUIC on ports 4434 and 4435 reach each other (a host firewall must allow them, **this lane
+changed no firewall**).
+
+1. **Host.** MULTIPLAYER, LAN, HOST GAME. The RACE page opens (the MODE row shows that a
+   network race is a Single Race); pick class, AI difficulty and the rest, START; pick the circuit
+   in Track Select and the ship in Ship Select. The LAN LOBBY opens: PLAYER 1 is you.
+2. **Joiner.** MULTIPLAYER, LAN, JOIN GAME. The list shows each host found, its name and circuit and
+   how many are in. Choose one and wait; the host's lobby now lists you as the next player.
+   A host on another title shows that title and refuses the choice ("THIS PLAYS ... NOT THIS DISC").
+3. **Host.** START RACE (the pad's or key's START works anywhere on the lobby). The race loads on
+   every machine, starts when all have loaded, and ends on the end screens; RETURN TO MENU or
+   Escape leaves the network race (a joiner whose host leaves is returned to the menus after a second).
+4. **If the list stays empty** (a network that drops broadcast, another subnet): TYPE AN ADDRESS
+   on the joiner and enter the host's IPv4 address or name (the pad's or the desk keyboard's, digits,
+   dot, hyphen, letters); the joiner then asks that address directly and the host appears in the list.
+
+Pointer and touch work on every one of these screens (rows click like the join screen's). In step 2 the joiner first picks a ship (Ship Select), then the list.
+
+### How it works
+
+- **One host loop.** `oag_net::serve::run` is the race phase (start, 60 Hz on the wall clock, late
+  connections refused by name, end, linger). `oag-server` and the hosting game both call it; they differ
+  in how the seats fill and where the log goes.
+- **The host is a client of its own server.** `oag_net::lan::Hosted::spawn` binds the game port (4435,
+  every interface), answers discovery, and runs the lobby and then the host on a thread. The game's own
+  player is the host's first client over an in-process `Loopback` link that is already in the lobby when the
+  thread starts, so it is seat 0 by construction and goes through the same `Client` a joiner uses. (A
+  WebTransport connection to itself would be the same code with TLS in the way, and a fast joiner
+  could take seat 0.)
+- **The lobby holds the welcomes.** The welcome carries the race and the head count, and START fixes the
+  count. `oag_net::lobby::Lobby` collects hellos (names) and waits; at START the host thread fixes
+  `people` at the number waiting (the host alone is allowed: a race against the AI over the network code),
+  loads the race (`oag_net::race::load`, the server's path), seats the links in arrival order with
+  `Host::seat` and waits for every seat's tick-0 hash. A seat that is refused or leaves meanwhile ends the
+  start (`Host::departed`); nobody waits on a seat that will not come. Joiners wait on the reliable
+  stream, with `Pending::poll` a frame at a time in the game (no blocking wait on the window thread).
+- **Discovery** (`oag_net::discovery`): a joiner asks (UDP datagram `OAGQ`, to the limited broadcast
+  address, to loopback, and to any typed address, every second), the host answers the asker with
+  protocol, game port, certificate hash, host name, title, circuit label and head count (`OAGA`).
+  Only the host binds the well-known port (4434), so a host and a joiner on one machine do not
+  fight over it; the host's address is the answer's source address. A host heard on two legs is one
+  host (same hash and port). LAN hosts are trusted (decision 3), so the hash travels in the clear; a
+  WAN server's hash would not.
+- **Keep-alive.** A QUIC connection closes after its idle time (30 s by default), and a lobby can
+  wait minutes. `WtLink` sends an empty datagram every 5 s when it has nothing else to send; the
+  other end drops it. (First run without it: the joiner timed out at about 30 s.)
+- **A stopped host frees its port.** The accept loop ends and closes the endpoint when the `Listener` is
+  dropped; a second HOST GAME in the same game binds the same port.
+
+**One local person per machine** in this cut: no split screen on a LAN client. **Every person flies the ship they
+picked**, wire v1 changed in place (nothing is released): the hello carries the team its person wants (`Hello.team`),
+the welcome's `RaceParams.teams` lists every seat's team in seat order (an empty entry is `RaceParams.team`, the
+default), and `oag_net::race::options` maps seat 0 to `Options::team` and seats 1 and up to `Options::seat_picks`,
+on both ends, so the tick-0 hash still agrees. A joiner picks in Ship Select **before** the host list (JOIN GAME opens
+it first); the host picks in its own Ship Select. `oag-server --team a --team b` fills the seats in order (a seat past the
+list flies the last one); `--team a` alone is the old behaviour. Held fixed as in any network race:
+weapons off, our AI flies the opponents, pilot assist off, no ghost, no record. The host's race is a Single Race
+whatever the pages say. Race again is not offered on a network race (the end screen's RACE AGAIN returns
+to the menus; a rematch is a new lobby).
+
+### The join list says whether you can join (maintainer's requirement)
+
+Every host the browser finds stays in the list. The advert carries the title, the platform of its image, the build
+(`BUILD_VERSION`), the wire protocol, a content fingerprint (the player mods loaded, FNV-1a of their ids and releases;
+mods may change the sim), the circuit, the mode, and the people in out of the seats. `oag_net::discovery::compat` decides,
+on the joiner, before connecting, in this order: **OtherTitle** (another title, another platform's pressing, or this
+client lacks that image), **OtherVersion** (another protocol or build), **OtherContent** (other mods), **Full**, else
+**Joinable**. A row reads `NAME   TITLE (people/max)`; a row that cannot be joined is dimmed, cannot be selected by a
+confirm or a click, and says why as the help line while the cursor is on it (`oag_game::lan_list`, strings
+`OAG_LAN_ROW_*`); a joinable row says its circuit there. A different pressing of one platform's title (EU against USA)
+is not told apart by the advert and is refused at the tick-0 hash.
+
+### Proof (2026-10-14, one machine, two game instances, Xvfb `:93` and `:94`, lavapipe, Pulse EU, `--net-bot` on both)
+
+Both walked the menus with scripted key presses. Host: MULTIPLAYER, LAN, HOST GAME, RACE page, Track Select, Ship
+Select, lobby. Joiner: MULTIPLAYER, LAN, JOIN GAME, found the host by discovery (loopback leg and broadcast
+leg, one row), chose it, waited **over 50 seconds** (keep-alive), the host pressed START. Whole three-lap race
+to the end screens: host log `tick 8880: every person has finished`; **hash ok 8,880 bad 0 on both
+machines**; the eight `board` lines identical on the server and the joiner; the joiner's prediction needed 133
+corrections and 0 stalls over the race (bots, M1 territory). Also proved live: a typed address (`127.0.0.1`
+through the desk keyboard) reaches the asking path; a host that leaves a race returns the joiner to the menus;
+a second HOST GAME in the same game after the race binds the port again; a Pure joiner is refused by name
+when it picks a Pulse host. A ground-truth test (`net_ground_truth::a_lan_host_is_found_joined_started_and_raced_by_two_over_real_sockets`)
+runs the same chain over real sockets without a window.
+
+**Not covered:** two physical machines (one network, a real broadcast), a firewall in the way, IPv6, a
+different pressing of the same title live (the tick-0 refusal is a loopback test), more than two people,
+a human at the keys, Android and iOS, the web (the rows decline there).
+||||||| c83eaf38e
 
 ## Running a server on another machine
 

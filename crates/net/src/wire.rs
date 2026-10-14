@@ -106,8 +106,11 @@ pub struct RaceParams {
     pub title: String,
     /// The circuit as `--track` names it.
     pub track: String,
-    /// The team every person flies, as `--team` names it.
+    /// The team a seat flies when [`Self::teams`] names none for it, as `--team` names it.
     pub team: String,
+    /// The team each person flies, in seat order (the first is slot 0); an empty or missing
+    /// entry is [`Self::team`]. The hosting game fills it from each person's hello.
+    pub teams: Vec<String>,
     /// The speed class, as the title spells it.
     pub class: String,
     /// [`oag_race::Mode::name`].
@@ -138,6 +141,8 @@ pub enum Control {
         protocol: u16,
         /// A name for the server's log.
         name: String,
+        /// The team this person wants to fly (`--team`'s spelling), empty for the host's choice.
+        team: String,
     },
     /// Server to client: the seat (grid slot) this client flies, the race, and the
     /// state hash at tick 0 after the race starts, which the client must reproduce.
@@ -344,6 +349,10 @@ impl RaceParams {
         ] {
             put_string(out, text);
         }
+        out.push(u8::try_from(self.teams.len()).unwrap_or(u8::MAX));
+        for team in self.teams.iter().take(usize::from(u8::MAX)) {
+            put_string(out, team);
+        }
         out.extend_from_slice(&self.seed.to_le_bytes());
         out.push(self.people);
         out.push(u8::from(self.opponents));
@@ -351,14 +360,26 @@ impl RaceParams {
     }
 
     fn take(reader: &mut Reader<'_>) -> Result<Self, Malformed> {
+        let title = reader.string()?;
+        let track = reader.string()?;
+        let team = reader.string()?;
+        let class = reader.string()?;
+        let mode = reader.string()?;
+        let difficulty = reader.string()?;
+        let scheme = reader.string()?;
+        let count = reader.u8()?;
+        let teams = (0..count)
+            .map(|_| reader.string())
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            title: reader.string()?,
-            track: reader.string()?,
-            team: reader.string()?,
-            class: reader.string()?,
-            mode: reader.string()?,
-            difficulty: reader.string()?,
-            scheme: reader.string()?,
+            title,
+            track,
+            team,
+            teams,
+            class,
+            mode,
+            difficulty,
+            scheme,
             seed: reader.u64()?,
             people: reader.u8()?,
             opponents: reader.u8()? != 0,
@@ -373,11 +394,16 @@ impl Control {
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::new();
         match self {
-            Self::Hello { protocol, name } => {
+            Self::Hello {
+                protocol,
+                name,
+                team,
+            } => {
                 out.push(1);
                 out.extend_from_slice(&MAGIC);
                 out.extend_from_slice(&protocol.to_le_bytes());
                 put_string(&mut out, name);
+                put_string(&mut out, team);
             }
             Self::Welcome {
                 seat,
@@ -433,6 +459,7 @@ impl Control {
                 Self::Hello {
                     protocol: reader.u16()?,
                     name: reader.string()?,
+                    team: reader.string()?,
                 }
             }
             2 => Self::Welcome {

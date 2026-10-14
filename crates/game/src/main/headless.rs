@@ -727,6 +727,7 @@ pub(crate) fn run_race(
         // A network race starts on the server's clock: no flyby to wait through.
         no_intro: cli.intro.no_intro || net.is_some(),
         net,
+        net_bot: cli.net.net_bot,
         prompt_style: cli
             .menu_args
             .prompt_style

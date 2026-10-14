@@ -16,6 +16,7 @@ fn params() -> RaceParams {
         title: "Wipeout Pulse".into(),
         track: "01_Track".into(),
         team: "Feisar".into(),
+        teams: vec!["Feisar".into(), String::new(), "Qirex".into()],
         class: "Venom".into(),
         mode: "single_race".into(),
         difficulty: "elite".into(),
@@ -33,6 +34,7 @@ fn every_control_message_round_trips() {
         Control::Hello {
             protocol: PROTOCOL,
             name: "client".into(),
+            team: "Qirex".into(),
         },
         Control::Welcome {
             seat: 1,
@@ -99,6 +101,7 @@ fn a_bad_message_is_refused_by_name() {
     let hello = Control::Hello {
         protocol: PROTOCOL,
         name: "x".into(),
+        team: String::new(),
     }
     .encode();
     assert_eq!(

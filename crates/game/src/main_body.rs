@@ -684,6 +684,7 @@ fn run(cli: Cli) -> Result<()> {
         give,
         no_intro: cli.intro.no_intro,
         net: None,
+        net_bot: cli.net.net_bot,
         prompt_style: cli
             .menu_args
             .prompt_style

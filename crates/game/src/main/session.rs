@@ -68,6 +68,12 @@ mod pilot_editor;
 mod custom_tracks;
 #[path = "session/join.rs"]
 mod join;
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "session/lan.rs"]
+mod lan;
+#[cfg(target_arch = "wasm32")]
+#[path = "session/lan_web.rs"]
+mod lan;
 #[path = "session/multiplayer.rs"]
 mod multiplayer;
 #[path = "session/seat_assign.rs"]
@@ -381,6 +387,10 @@ pub(crate) struct Session {
     /// `--connect`: the race is stepped through the server's protocol instead of
     /// `Race::tick`. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
+    /// `--net-bot`, carried so a LAN race started from the menus is flown by the driver too.
+    pub(crate) net_bot: bool,
+    /// Ticks a network race has stood ended with nobody finished (`session::frame`).
+    pub(crate) net_over_ticks: u32,
     /// `--autopilot`, carried the same way and applied to every race this
     /// session starts - including one launched from the menus, which is how
     /// the results table is reached without driving. See
@@ -662,6 +672,13 @@ pub(crate) struct Session {
     /// the page's changes and the Track and Ship Select that follow. Cleared, with the lobby,
     /// when the menu leaves the page (`Session::sync_multiplayer`).
     pub(crate) multiplayer: bool,
+    /// LAN play, from HOST GAME or JOIN GAME until the menus reopen after the race
+    /// (`session::lan`). It owns the in-process host and the connection while they run.
+    pub(crate) lan: Option<lan::Lan>,
+    /// The ship this machine flies in a LAN race: its own pick, sent in the hello.
+    pub(crate) lan_team: String,
+    /// This machine as the host list compares it with a host (`session::lan`).
+    pub(crate) lan_facts: Option<lan::LanFacts>,
     /// Who sits in each pane of the layout, the panes counted across the windows from 0: the
     /// seat assignment screen's answer, kept for the race, a race again and a RETURN TO MENU
     /// race until the flow ends ([`Session::sync_multiplayer`]). Empty deals the slots in

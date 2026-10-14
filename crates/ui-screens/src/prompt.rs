@@ -104,6 +104,12 @@ pub enum Key {
 /// parameter, and it is cheap to make one then rather than to guess now.
 const KEYS: &str = "abcdefghijklmnopqrstuvwxyz0123456789-_";
 
+/// The alphabet of an address (a host name or an IPv4 address): digits, the dot and the hyphen
+/// and the letters a host name is made of. 38 characters, so with the two special keys the
+/// grid is the same four rows as a pilot's. **Ours, chosen**: LAN play's manual address entry
+/// ([`Keyboard::with_keys`]); an IPv6 literal cannot be typed on it.
+pub const ADDRESS_KEYS: &str = "0123456789.-abcdefghijklmnopqrstuvwxyz";
+
 /// How many cells a row of the grid holds.
 ///
 /// **Chosen, not measured.** Ten by ten-times-four arithmetic: [`KEYS`] is 38
@@ -116,7 +122,8 @@ pub const COLUMNS: usize = 10;
 /// Every cell, characters first and the two special keys last.
 pub const CELLS: usize = KEYS.len() + 2;
 
-/// How many rows of [`COLUMNS`] the grid has.
+/// How many rows of [`COLUMNS`] the default grid has.
+#[cfg(test)]
 const GRID_ROWS: usize = CELLS.div_ceil(COLUMNS);
 
 /// What the cell at `index` does.
@@ -171,8 +178,10 @@ pub struct Keyboard {
     note: Option<String>,
     /// How many characters the buffer may hold.
     limit: usize,
-    /// Which cell the cursor is on, indexing [`key_at`].
+    /// Which cell the cursor is on, indexing [`Self::key`].
     cell: usize,
+    /// The characters the grid offers, in order; [`KEYS`] unless set by [`Self::with_keys`].
+    keys: &'static str,
 }
 
 impl Keyboard {
@@ -185,12 +194,45 @@ impl Keyboard {
     /// its own limit could never be got back under one except by deleting.
     #[must_use]
     pub fn new(labels: Labels, initial: &str, limit: usize) -> Self {
+        Self::with_keys(labels, initial, limit, KEYS)
+    }
+
+    /// [`Self::new`] over another alphabet of characters, [`ADDRESS_KEYS`] for an address.
+    /// The two special keys follow the characters, whatever their number.
+    #[must_use]
+    pub fn with_keys(labels: Labels, initial: &str, limit: usize, keys: &'static str) -> Self {
         Self {
             labels,
             text: initial.chars().take(limit).collect(),
             note: None,
             limit: limit.max(1),
             cell: 0,
+            keys,
+        }
+    }
+
+    /// Whether `c` is a character this grid offers: what a desk key may type into it.
+    #[must_use]
+    pub fn accepts(&self, c: char) -> bool {
+        self.keys.contains(c)
+    }
+
+    /// How many cells the grid has: the characters and the two special keys.
+    fn cells(&self) -> usize {
+        self.keys.len() + 2
+    }
+
+    /// How many rows of [`COLUMNS`] the grid has.
+    fn grid_rows(&self) -> usize {
+        self.cells().div_ceil(COLUMNS)
+    }
+
+    /// What the cell at `index` does.
+    fn key(&self, index: usize) -> Key {
+        match self.keys.chars().nth(index) {
+            Some(c) => Key::Char(c),
+            None if index == self.keys.len() => Key::Delete,
+            _ => Key::Accept,
         }
     }
 
@@ -212,7 +254,7 @@ impl Keyboard {
     /// The cell the cursor is on, for a test and for the draw list.
     #[must_use]
     pub fn selected(&self) -> Key {
-        key_at(self.cell)
+        self.key(self.cell)
     }
 
     /// Applies one edit, from the grid or from a desk keyboard alike.
@@ -249,16 +291,16 @@ impl Keyboard {
             column = (column + COLUMNS - 1) % COLUMNS;
         }
         if input.take(Button::Down) {
-            row = (row + 1) % GRID_ROWS;
+            row = (row + 1) % self.grid_rows();
         }
         if input.take(Button::Up) {
-            row = (row + GRID_ROWS - 1) % GRID_ROWS;
+            row = (row + self.grid_rows() - 1) % self.grid_rows();
         }
         // A grid whose last row is short would otherwise let the cursor land
         // on a cell that is not there. `CELLS` is a whole number of rows
         // today, so this is the guard that keeps changing `KEYS` from being a
         // panic rather than a ragged bottom row.
-        self.cell = (row * COLUMNS + column).min(CELLS - 1);
+        self.cell = (row * COLUMNS + column).min(self.cells() - 1);
 
         // A pad shortcut for the key the cursor would otherwise have to travel
         // to. Ours, and the one convenience worth having: deleting a typo is
@@ -309,7 +351,7 @@ impl Keyboard {
         let Some(at) = pointer.at else {
             return Outcome::Pending;
         };
-        let cell = Self::grid(skin).cell_at(at);
+        let cell = Self::grid(skin).cell_at(at, self.cells());
         if pointer.moved
             && let Some(cell) = cell
         {
@@ -388,7 +430,7 @@ impl Keyboard {
 
         let grid = Grid::new(&panel, y);
         let (cell_w, cell_h) = (grid.cell_w, grid.cell_h);
-        for index in 0..CELLS {
+        for index in 0..self.cells() {
             let [x, top, _, _] = grid.cell(index);
             let selected = index == self.cell;
             if selected {
@@ -405,7 +447,7 @@ impl Keyboard {
                     color: CURSOR,
                 });
             }
-            let label = match key_at(index) {
+            let label = match self.key(index) {
                 Key::Char(c) => c.to_string(),
                 Key::Delete => self.labels.delete.clone(),
                 Key::Accept => self.labels.accept.clone(),
@@ -498,18 +540,18 @@ impl Grid {
     }
 
     /// The cell under `at`, if any.
-    fn cell_at(&self, at: (f32, f32)) -> Option<usize> {
+    fn cell_at(&self, at: (f32, f32), cells: usize) -> Option<usize> {
         let row = oag_ui::pointer::row_at(
             at,
             self.left,
             self.cell_w * COLUMNS as f32,
             self.top,
             self.cell_h,
-            GRID_ROWS,
+            cells.div_ceil(COLUMNS),
         )?;
         let column = ((at.0 - self.left) / self.cell_w).floor() as usize;
         let index = row * COLUMNS + column.min(COLUMNS - 1);
-        (index < CELLS).then_some(index)
+        (index < cells).then_some(index)
     }
 }
 

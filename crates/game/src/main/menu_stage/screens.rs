@@ -93,11 +93,16 @@ impl MenuStage {
         frozen_race: bool,
         ticker_tips: &[String],
     ) -> Result<()> {
-        let Some(open) = self.join.as_ref() else {
+        let Some(screen) = self
+            .join
+            .as_ref()
+            .map(crate::join_stage::JoinStage::screen)
+            .or(self.lan.as_ref())
+        else {
             return Ok(());
         };
         let layers = oag_ui_screens::join::draw_list(
-            open.screen(),
+            screen,
             &self.skin,
             &self.frame,
             if frozen_race { None } else { shown },
@@ -107,7 +112,11 @@ impl MenuStage {
             .ticker
             .is_some()
             .then(|| self.footer_overlay(Vec::new(), ticker_tips));
-        let (list, ticker_clip) = footer::append(layers.flatten(), footer);
+        let (mut list, ticker_clip) = footer::append(layers.flatten(), footer);
+        // LAN's typed address keyboard sits over its host list.
+        if let Some(prompt) = &self.prompt {
+            list.extend(prompt.draw(&self.skin));
+        }
         self.renderer.render_with(
             wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             &gpu.device,

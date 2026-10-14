@@ -47,7 +47,16 @@ pub fn options(params: &RaceParams, source: &str) -> Result<Options> {
     Ok(Options {
         source: source.to_string(),
         track: Some(params.track.clone()).filter(|t| !t.is_empty()),
-        team: Some(params.team.clone()).filter(|t| !t.is_empty()),
+        team: seat_team(params, 0),
+        seat_picks: (1..usize::from(params.people).min(oag_gameplay::MAX_PLAYERS))
+            // A seat with no team ends the list: a pick is the next slot's, so none may be skipped.
+            .map_while(|seat| seat_team(params, seat))
+            .map(|team| oag_raceplay::SeatPick {
+                team,
+                hull_variant: None,
+                skin: None,
+            })
+            .collect(),
         class: params.class.clone(),
         mode,
         difficulty,
@@ -58,6 +67,16 @@ pub fn options(params: &RaceParams, source: &str) -> Result<Options> {
         no_driver_for_class: !oag_ai::coverage::project_driver_covers(&params.class),
         ..Options::default()
     })
+}
+
+/// The team seat `seat` flies: its own entry in [`RaceParams::teams`], else the race's default.
+fn seat_team(params: &RaceParams, seat: usize) -> Option<String> {
+    let team = params
+        .teams
+        .get(seat)
+        .filter(|team| !team.is_empty())
+        .unwrap_or(&params.team);
+    (!team.is_empty()).then(|| team.clone())
 }
 
 fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
@@ -125,4 +144,41 @@ pub fn check_title(params: &RaceParams, opened: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every person flies their own team: seat 0 is the race's team, the rest are `seat_picks`
+    /// in slot order, a seat that named none flies the default, and no seat is skipped.
+    #[test]
+    fn each_seat_flies_its_own_team() {
+        let params = RaceParams {
+            mode: "single_race".into(),
+            difficulty: "elite".into(),
+            scheme: "veteran".into(),
+            team: "default".into(),
+            teams: vec!["a".into(), String::new(), "c".into()],
+            people: 3,
+            ..RaceParams::default()
+        };
+        let options = options(&params, "x").expect("options");
+        assert_eq!(options.team.as_deref(), Some("a"));
+        let picks: Vec<&str> = options
+            .seat_picks
+            .iter()
+            .map(|pick| pick.team.as_str())
+            .collect();
+        assert_eq!(picks, ["default", "c"]);
+        // One person: no picks. No default and no choice: the title's own draw.
+        let alone = RaceParams {
+            people: 1,
+            teams: Vec::new(),
+            team: String::new(),
+            ..params
+        };
+        let options = super::options(&alone, "x").expect("options");
+        assert!(options.seat_picks.is_empty() && options.team.is_none());
+    }
 }

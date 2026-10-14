@@ -517,6 +517,11 @@ impl Session {
                 }
             }
             MenuOption::RaceAgain => {
+                // A LAN race ended on its server; a rematch is the lobby's, so the menus come back.
+                if self.net.is_some() {
+                    self.leave_finished_race();
+                    return;
+                }
                 // The same cell has to be re-armed before `finish_launch`
                 // relaunches: `Session::launch_campaign_cell`'s own drain
                 // (`crate::main::session::load::finish_loading`) already

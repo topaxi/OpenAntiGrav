@@ -100,7 +100,7 @@ pub enum Launch {
     RaceBox,
     /// This build's own RACE REMIX page (ADR-0034).
     Remix,
-    /// This build's own MULTIPLAYER page (local, with LAN and online for later): the one
+    /// This build's own MULTIPLAYER page (local and LAN, with online for later): the one
     /// entry to split screen, here a tile where the other titles have a row.
     Multiplayer,
 }

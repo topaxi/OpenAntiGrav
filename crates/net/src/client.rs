@@ -180,10 +180,16 @@ fn held_on(held: Held) -> InputSnapshot {
 
 impl Client {
     /// Says hello on `link`, as `name`.
-    pub fn connect(mut link: Box<dyn Link>, name: &str) -> Self {
+    pub fn connect(link: Box<dyn Link>, name: &str) -> Self {
+        Self::connect_as(link, name, "")
+    }
+
+    /// Says hello on `link`, as `name`, asking to fly `team` (empty: the host's choice).
+    pub fn connect_as(mut link: Box<dyn Link>, name: &str, team: &str) -> Self {
         link.send_control(&Control::Hello {
             protocol: PROTOCOL,
             name: name.to_string(),
+            team: team.to_string(),
         });
         Self {
             link,

@@ -124,6 +124,8 @@ pub(crate) struct MenuStage {
     /// The split-screen join screen, when open: it takes the tick whole and is
     /// drawn on the frame the page behind it carries. See `crate::join_stage`.
     pub(crate) join: Option<crate::join_stage::JoinStage>,
+    /// The LAN lobby or host list (`session::lan`): the join screen in its two other shapes.
+    pub(crate) lan: Option<oag_ui_screens::join::Join>,
     /// The window layout screen, when open: it comes after the join screen, which it holds
     /// while it is open. Takes the tick whole like the join screen. See
     /// `crate::window_layout_stage`.
@@ -569,7 +571,7 @@ impl MenuStage {
         if self.pure_chain.is_some() {
             return self.render_pure_chain(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
         }
-        if self.join.is_some() {
+        if self.join.is_some() || self.lan.is_some() {
             return self.render_join(gpu, encoder, view, viewport, shown, frozen_race, ticker_tips);
         }
         if self.layout.is_some() {

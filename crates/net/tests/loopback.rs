@@ -90,7 +90,7 @@ pub(crate) fn drive(
     totals
 }
 
-fn params(people: u8) -> RaceParams {
+pub(crate) fn params(people: u8) -> RaceParams {
     RaceParams {
         title: String::new(),
         mode: "single_race".into(),
@@ -102,7 +102,7 @@ fn params(people: u8) -> RaceParams {
     }
 }
 
-fn headless(params: &RaceParams) -> Box<Race> {
+pub(crate) fn headless(params: &RaceParams) -> Box<Race> {
     let mut race = Box::new(Race::start(Setup::headless(
         oag_race::Mode::SingleRace,
         params.seed,
@@ -111,7 +111,7 @@ fn headless(params: &RaceParams) -> Box<Race> {
     race
 }
 
-fn pilot(phase: u32) -> Pilot {
+pub(crate) fn pilot(phase: u32) -> Pilot {
     Box::new(move |_, race| {
         let tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
         let mut buttons = oag_gameplay::input::Input::new();
@@ -206,4 +206,8 @@ fn a_client_with_different_content_is_refused_at_the_start() {
     );
     host.poll();
     assert!(!host.all_ready());
+    assert!(
+        host.departed(),
+        "the refused seat is a departure a lobby can end the start on"
+    );
 }

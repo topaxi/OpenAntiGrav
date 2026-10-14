@@ -67,6 +67,36 @@ impl Labels {
     }
 }
 
+impl Labels {
+    /// The words of LAN play's host lobby (the screen in its lobby form).
+    #[must_use]
+    pub fn read_lan_lobby(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_LAN_LOBBY_TITLE", "LAN LOBBY"),
+            hint: say(
+                "OAG_LAN_LOBBY_HINT",
+                "THE OTHERS JOIN FROM JOIN GAME, THEN YOU START",
+            ),
+            empty: say("OAG_LAN_WAITING", "WAITING FOR PLAYERS"),
+            start: say("OAG_LAN_START", "START RACE"),
+            ..Self::read(strings)
+        }
+    }
+
+    /// The words of LAN play's host list (the screen in its list form).
+    #[must_use]
+    pub fn read_lan_list(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_LAN_JOINLIST_TITLE", "JOIN GAME"),
+            hint: say("OAG_LAN_JOINLIST_HINT", "CHOOSE A GAME ON YOUR NETWORK"),
+            empty: say("OAG_LAN_ADDRESS", "TYPE AN ADDRESS"),
+            ..Self::read(strings)
+        }
+    }
+}
+
 /// One line of the screen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Row {
@@ -106,8 +136,18 @@ pub struct Join {
     /// The seats START needs filled: one, or more where the caller needs them (two for a
     /// multiplayer race).
     needs: usize,
-    /// The row the pointer last moved onto.
+    /// The row the pointer last moved onto, or the cursor a pad or key moved.
     hover: Option<Row>,
+    /// The screen as a list to choose from rather than a lobby (LAN's host list): no START
+    /// row, a seat row says its own label instead of "PLAYER n", and a confirm on a row
+    /// answers [`Event::Leave`] with that row's index, which the caller reads as "chosen".
+    listing: bool,
+    /// What a seat row says on the left in a [`Self::listing`] screen, row for row.
+    row_labels: Vec<String>,
+    /// In a list, the line a row says as the hint while it is highlighted, row for row.
+    notes: Vec<Option<String>>,
+    /// In a list, the rows that cannot be chosen: drawn dimmed, answering nothing.
+    blocked: Vec<bool>,
 }
 
 /// Where the rows sit on the skin's grid.
@@ -218,6 +258,81 @@ impl Join {
             capacity,
             needs: 1,
             hover: None,
+            listing: false,
+            row_labels: Vec::new(),
+            notes: Vec::new(),
+            blocked: Vec::new(),
+        }
+    }
+
+    /// This screen as a list to choose from ([`Self::listing`]), the rows' left-hand words
+    /// set with [`Self::set_row_labels`].
+    #[must_use]
+    pub fn as_list(mut self) -> Self {
+        self.listing = true;
+        self
+    }
+
+    /// Replaces the line under the title: a refusal's reason, or what is happening now.
+    pub fn set_hint(&mut self, hint: String) {
+        self.labels.hint = hint;
+    }
+
+    /// What each row says on the left in a list, one per seat row (the device column stays
+    /// the seat's own text).
+    pub fn set_row_labels(&mut self, labels: Vec<String>) {
+        self.row_labels = labels;
+    }
+
+    /// The line each list row says as the hint while highlighted, and which rows cannot be
+    /// chosen (a blocked row is dimmed and answers nothing).
+    pub fn set_notes(&mut self, notes: Vec<Option<String>>, blocked: Vec<bool>) {
+        self.notes = notes;
+        self.blocked = blocked;
+    }
+
+    fn note(&self, n: usize) -> Option<&str> {
+        self.notes.get(n).and_then(Option::as_deref)
+    }
+
+    fn is_blocked(&self, n: usize) -> bool {
+        self.blocked.get(n).copied().unwrap_or(false)
+    }
+
+    /// Whether this is the list form ([`Self::as_list`]).
+    #[must_use]
+    pub fn is_list(&self) -> bool {
+        self.listing
+    }
+
+    /// Moves the cursor one row down (`1`) or up (`-1`), starting on the first row, and
+    /// wrapping. The pad's and the keyboard's way to choose a row; the pointer sets the same
+    /// highlight by hovering.
+    pub fn step(&mut self, by: i32) {
+        let rows = self.rows();
+        let at = self
+            .hover
+            .and_then(|row| rows.iter().position(|r| *r == row))
+            .unwrap_or(if by > 0 { rows.len() - 1 } else { 0 });
+        let len = rows.len() as i32;
+        let next = (at as i32 + by).rem_euclid(len) as usize;
+        self.hover = Some(rows[next]);
+    }
+
+    /// What confirming the highlighted row asks for, the same answer a click on it gives.
+    #[must_use]
+    pub fn confirm(&self) -> Option<Event> {
+        self.hover.and_then(|row| self.answer(row))
+    }
+
+    fn answer(&self, row: Row) -> Option<Event> {
+        match row {
+            Row::Seat(n) if self.is_blocked(n) => None,
+            Row::Seat(n) => Some(Event::Leave(n)),
+            Row::Empty => Some(Event::Join),
+            Row::Start if self.can_start() => Some(Event::Start),
+            Row::Start => None,
+            Row::Back => Some(Event::Back),
         }
     }
 
@@ -252,7 +367,9 @@ impl Join {
         if self.seats.len() < self.capacity {
             rows.push(Row::Empty);
         }
-        rows.push(Row::Start);
+        if !self.listing {
+            rows.push(Row::Start);
+        }
         rows.push(Row::Back);
         rows
     }
@@ -293,13 +410,7 @@ impl Join {
             out.push(Event::Moved);
         }
         if pointer.clicked {
-            match row {
-                Row::Seat(n) => out.push(Event::Leave(n)),
-                Row::Empty => out.push(Event::Join),
-                Row::Start if self.can_start() => out.push(Event::Start),
-                Row::Start => {}
-                Row::Back => out.push(Event::Back),
-            }
+            out.extend(self.answer(row));
         }
         out
     }
@@ -315,7 +426,8 @@ impl Join {
             .map(|row| {
                 (
                     self.hover == Some(*row),
-                    !matches!(row, Row::Start | Row::Back),
+                    // A list's TYPE AN ADDRESS row, like START and BACK, has no value.
+                    !matches!(row, Row::Start | Row::Back) && !(self.listing && *row == Row::Empty),
                 )
             })
             .collect();
@@ -357,7 +469,10 @@ impl Join {
             layout.scale * 0.6,
             hint_ink.unwrap_or_else(|| skin.normal()),
             Align::Left,
-            self.labels.hint.clone(),
+            match self.hover {
+                Some(Row::Seat(n)) => self.note(n).unwrap_or(&self.labels.hint).to_string(),
+                _ => self.labels.hint.clone(),
+            },
         )];
         for (index, row) in rows.into_iter().enumerate() {
             let y = layout.text_y(index);
@@ -366,11 +481,18 @@ impl Join {
             } else {
                 skin.normal()
             };
+            if matches!(row, Row::Seat(n) if self.is_blocked(n)) {
+                ink = dim(ink);
+            }
             let (left, right) = match row {
                 Row::Seat(n) => (
-                    format!("{} {}", self.labels.player, n + 1),
+                    match self.row_labels.get(n).filter(|_| self.listing) {
+                        Some(label) => label.clone(),
+                        None => format!("{} {}", self.labels.player, n + 1),
+                    },
                     self.seats[n].clone(),
                 ),
+                Row::Empty if self.listing => (self.labels.empty.clone(), String::new()),
                 Row::Empty => {
                     ink = dim(ink);
                     match (&self.labels.guest, self.seats.len()) {

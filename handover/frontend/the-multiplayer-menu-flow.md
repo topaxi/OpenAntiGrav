@@ -2,7 +2,7 @@
 categories: [gameplay]
 ---
 
-# The multiplayer menu flow: one MULTIPLAYER entry, local now, LAN and online greyed
+# The multiplayer menu flow: one MULTIPLAYER entry, local and LAN now, online greyed
 
 2026-10-14, planned with the maintainer. **Landed the same day (`mp-menu-flow`): steps 1 to 4 and 6 to 8**; step 5, seat
 assignment, **landed 2026-10-14 as `mp-seat-assign`** (`session::seat_assign`, between layout and settings). Replaces the per-title split
@@ -63,6 +63,14 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
   Track and Ship Select per seat. RETURN TO MENU after a multiplayer race lands on the RACE page with the
   same people seated (**chosen**); race again was already seatless.
 
+## LAN, landed (`lan-menu`, 2026-10-14)
+
+The LAN row is a page with HOST GAME and JOIN GAME (`session::lan`, `docs/networking/README.md`, "LAN play"). Host: the RACE page
+(the MODE row shows a network race is a Single Race), Track Select, Ship Select, then the LAN LOBBY (the join screen in its
+lobby form, the people waiting, START RACE); join: the host list (the same screen in its list form, one row per host
+discovery found, TYPE AN ADDRESS under them, a host on another title refused by name), then a waiting screen. The address
+keyboard is the pilot-name grid over an address alphabet (`ADDRESS_KEYS`). **One local person per machine, each person flies their own pick (Ship Select before the list; wire v1 changed in place), a hosted race is a Single Race, no race again**, and the list says per host whether it can be joined (chosen). ONLINE stays greyed.
+
 ## Lanes
 
 - ~~`mp-menu-flow`: steps 1 to 4 and 6 to 8.~~ **Landed 2026-10-14.**
@@ -72,6 +80,11 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
   the RACE page's MODE row.
 
 ## Open
+
+- **LAN, open** (`lan-menu`): two physical
+  machines on a real network (broadcast, a firewall, UDP 4434 and 4435); IPv6 and a typed port; split screen on a LAN client;
+  the lobby on Android, iOS and the web (the rows decline on the web); a rematch from the end screen (it returns to the
+  menus today); a pressing of one platform's title (EU against USA) is told apart only at the tick-0 hash, not in the list.
 
 - ~~**A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).~~ **Done on X11 and
   Windows** (`Device::Keys`, a row per keyboard); **open on Wayland and macOS**, which name no keyboard, so a join *row* is

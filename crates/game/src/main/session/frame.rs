@@ -13,6 +13,10 @@ use oag_physics::pilot_assist::Level;
 use oag_raceplay as race;
 use oag_ui::frontend::{self};
 use oag_ui::strings;
+
+/// Ticks a network race may stand ended with nobody finished before the menus return: one
+/// second. **Chosen.**
+const NET_OVER_TICKS: u32 = 60;
 use oag_ui::{font, menu};
 
 use crate::hints;
@@ -522,6 +526,7 @@ impl Session {
                     stage.tick(dt);
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
+                    self.sync_lan();
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
@@ -560,6 +565,15 @@ impl Session {
                     // The window layout screen, after the join screen: same shape.
                     if stage.layout.is_some() {
                         self.tick_window_layout(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // LAN's lobby and host list take the tick whole too, except while the typed
+                    // address keyboard is over them: that goes through the prompt below.
+                    if stage.lan.is_some() && stage.prompt.is_none() {
+                        self.tick_lan(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {
                             break;
                         }
@@ -757,7 +771,10 @@ impl Session {
                 // ends - the original's does too. See `race::intro_camera`. After the
                 // paused and finished arms, so Start still pauses it; and never reached
                 // by a headless run, whose loop drives `Race::tick` from tick 0.
-                Stage::Race(stage) if !self.no_intro && stage.race.intro_to_play() => {
+                // A network race starts on the server's clock: no flyby.
+                Stage::Race(stage)
+                    if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
+                {
                     stage.race.begin_intro();
                     if pointer.clicked {
                         stage.race.skip_intro();
@@ -794,6 +811,22 @@ impl Session {
                         stage.race.tick(&inputs);
                     }
                     stage.tick_messages();
+                    // A server that ends a race nobody had finished (the host left, a link
+                    // died) leaves a frozen world: after a second of it, back to the menus.
+                    match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {
+                        Some(why) if !stage.race.finished() => {
+                            self.net_over_ticks += 1;
+                            if self.net_over_ticks == NET_OVER_TICKS {
+                                log::error!("the network race ended before the finish: {why}");
+                                self.net_over_ticks = 0;
+                                if let Err(e) = self.open_menus() {
+                                    log::error!("cannot reopen the menus: {e:#}");
+                                }
+                                break;
+                            }
+                        }
+                        _ => self.net_over_ticks = 0,
+                    }
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See
