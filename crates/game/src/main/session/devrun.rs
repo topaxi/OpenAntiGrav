@@ -53,6 +53,13 @@ impl Session {
                     self.controls.press_button(button, true);
                     self.dev_clock.down.push(button);
                 }
+                Step::SeatTap(seat, button) => {
+                    info!("script: tap {button:?} for seat {seat}");
+                    self.controls.press_keyboard_device(
+                        oag_input::pad::KeyboardId(devrun::PLACEHOLDER_BASE + seat as u32),
+                        button,
+                    );
+                }
                 Step::Quit => {
                     info!("script: quit");
                     self.quit = true;
