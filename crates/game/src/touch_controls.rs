@@ -475,7 +475,7 @@ pub fn draw_preview(
 
 /// One overlay-renderer pass of whatever `build` makes from the touch art
 /// and the window's grid.
-fn overlay_pass(
+pub(crate) fn overlay_pass(
     (device, queue, format): (&wgpu::Device, &wgpu::Queue, wgpu::TextureFormat),
     encoder: &mut wgpu::CommandEncoder,
     view: &wgpu::TextureView,

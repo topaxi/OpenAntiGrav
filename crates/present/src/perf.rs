@@ -69,6 +69,7 @@ use oag_ui::frontend::{Align, Draw};
 
 pub mod cost;
 pub mod memory;
+pub mod net;
 pub mod scene;
 pub mod transition;
 
@@ -599,8 +600,8 @@ pub fn grid(size: (u32, u32)) -> oag_display::space::Space {
 /// is chosen, to stay legible at the smallest window the game opens.
 const EDGE: f32 = 0.0;
 const TOP: f32 = EDGE;
-const PAD: f32 = 4.0;
-const LINE: f32 = 10.0;
+pub(crate) const PAD: f32 = 4.0;
+pub(crate) const LINE: f32 = 10.0;
 /// One column per remembered frame, so the graph is [`WINDOW`] pixels wide.
 const GRAPH_W: f32 = WINDOW as f32;
 const GRAPH_H: f32 = 30.0;
@@ -630,11 +631,11 @@ const GPU_LEFT: f32 = EDGE;
 const GPU_PANEL_W: f32 = 110.0;
 
 /// The panel, the text, and the three bands a frame time can fall in.
-const PANEL: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
-const TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
+pub(crate) const PANEL: [f32; 4] = [0.0, 0.0, 0.0, 0.55];
+pub(crate) const TEXT: [f32; 4] = [0.92, 0.95, 1.0, 1.0];
 const GOOD: [f32; 4] = [0.35, 0.86, 0.45, 0.9];
-const WARN: [f32; 4] = [0.96, 0.78, 0.25, 0.9];
-const BAD: [f32; 4] = [0.94, 0.32, 0.3, 0.95];
+pub(crate) const WARN: [f32; 4] = [0.96, 0.78, 0.25, 0.9];
+pub(crate) const BAD: [f32; 4] = [0.94, 0.32, 0.3, 0.95];
 /// The line across the graph at one target frame time.
 const RULE: [f32; 4] = [1.0, 1.0, 1.0, 0.35];
 
@@ -721,6 +722,8 @@ impl RenderSize {
 /// so a size there would name a texture nothing on screen came from. Same
 /// discipline as `scene`: absent rather than stale.
 ///
+/// `net` is the network block of a network race ([`net::Readout`]), `None` otherwise.
+///
 /// `gpu` and `cpu` are the two clocks a frame can be asked about, and they
 /// share one panel because they are read as one answer - see [`cost`] for why
 /// only the second of them adds up to the frame time.
@@ -736,6 +739,7 @@ pub fn draw_list(
     render: Option<RenderSize>,
     gpu: GpuCost,
     cpu: CpuCost,
+    net: Option<&net::Readout>,
     width: f32,
 ) -> Vec<Draw> {
     if !mode.is_on() {
@@ -849,6 +853,13 @@ pub fn draw_list(
                 color: band(ms, target_ms),
             });
         }
+    }
+
+    // The network block, under the frame-time panel and `Dev`-only like the
+    // rest of what names an internal. A race with no server passes `None`.
+    if mode == Overlay::Dev {
+        let (panel, _) = net::draw_list(net, right, TOP + panel_h + 2.0);
+        out.extend(panel);
     }
 
     // **Its own panel, top left** - see [`GPU_LEFT`] for why it is not a

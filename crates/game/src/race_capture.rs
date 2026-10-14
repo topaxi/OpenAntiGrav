@@ -96,6 +96,10 @@ pub struct CaptureOptions {
     /// `--connect`: the race is a server's, stepped through
     /// [`crate::net_play::NetPlay`] on the wall clock. See [`crate::net_play`].
     pub net: Option<std::rc::Rc<crate::net_play::NetPlay>>,
+    /// Draw the network block of the `Dev` performance overlay into a `--connect`
+    /// capture (`--overlay`, or `[graphics] perf_overlay = "dev"`). A capture has no
+    /// frame loop, so no other part of that overlay exists here.
+    pub net_overlay: bool,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
@@ -1233,6 +1237,17 @@ pub fn capture(
                 Ok(None) => warn!("no HUD layout: capturing without one"),
                 Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
             },
+        }
+        if options.net_overlay
+            && let Some(net) = &options.net
+        {
+            crate::net_play::draw_overlay(
+                net,
+                (&device, &queue, format),
+                &mut encoder,
+                &hud_view,
+                (width, height),
+            )?;
         }
         if let Some(demo) = options.touch_demo {
             crate::touch_controls::draw_pose(

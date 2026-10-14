@@ -1882,6 +1882,34 @@ It is **window-only**. `--screenshot` runs the sequence as fast as it can with
 nothing presenting, so a frame time from it would be a real measurement of
 something nobody is asking about.
 
+### The network block (`dev` tier, network races only)
+
+A `--connect` race adds a block of rows under the frame-time panel at the `dev`
+tier (`[graphics] perf_overlay = "dev"`; there is no menu value for `dev`):
+QUIC's smoothed round trip, **CONF** (the time from sending a tick's input to
+that tick coming back confirmed, which is the round trip plus the server's input
+buffer and the number that moves under `--net-shim`), jitter (the mean change
+between consecutive CONF samples), wire rx/tx in KB/s and datagrams/s, QUIC
+packet loss, the congestion window, **LEAD** (the server's input buffer depth for
+this seat, in ticks), the prediction window, server and local tick, corrections,
+replayed ticks, the largest pop and error, stalls, resends, hash ok and bad
+(**bad turns red**: it is always a bug or different content) and a sparkline of
+CONF over the last twelve seconds, scaled to its own tallest column (the row above
+it names the scale). Under `--net-shim` two amber rows give the configured round
+trip and loss and the datagrams the shim has dropped, labelled a test condition:
+QUIC's own RTT and loss read loopback there, because the shim sits above the
+socket.
+
+The figures are the per-second ones the client's log line prints (the line carries
+the same RTT, CONF, jitter, rx, tx and loss), so the two agree by construction.
+Plain data crosses from `oag_net::stats::NetStats` through
+`oag_game::net_play::NetPlay::readout` into
+[`oag_present::perf::net::Readout`](../../crates/present/src/perf/net.rs); the
+renderer crate knows no transport. A headless `--connect --screenshot` has no
+frame loop and so none of the rest of this overlay, but draws this block alone
+(top right) when `--overlay` is passed or the setting is `dev`. The row layout,
+the sparkline's twelve seconds and its 50 ms floor are **chosen, not measured**.
+
 ### Vsync, and where triple buffering went
 
 VSYNC has three values, because on a modern API "double or triple buffering" is

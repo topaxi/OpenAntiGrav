@@ -512,6 +512,7 @@ pub fn run(
                 // No CLI flag on this path for either: see `main/headless.rs`.
                 zone_spectrum_test: false,
                 touch_demo: None,
+                net_overlay: false,
                 previous_best,
                 // No flag for it on this path; see `main/headless.rs`.
                 ghost: race::GhostCapture::default(),

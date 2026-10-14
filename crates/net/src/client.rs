@@ -40,7 +40,10 @@ use oag_gameplay::input::{Button, Input};
 use oag_gameplay::{InputSnapshot, MAX_SHIPS, PlayerInputs};
 use oag_raceplay::{Race, RaceSim};
 
+use web_time::Instant;
+
 use crate::link::Link;
+use crate::stats::PathStats;
 use crate::wire::{Confirmed, Control, Datagram, Held, PROTOCOL, RaceParams, TickRecord};
 
 /// A craft further than this from where the server has it forces a correction.
@@ -120,6 +123,17 @@ pub struct Stats {
     pub window: u32,
     /// Datagrams lost in a row past the redundancy, recovered by a resend.
     pub resends: u32,
+    /// Milliseconds from sending a tick's input to that tick coming back confirmed,
+    /// summed over [`Self::confirm_count`] ticks. The round trip plus the server's
+    /// input buffer.
+    pub confirm_sum_ms: f32,
+    /// See [`Self::confirm_sum_ms`].
+    pub confirm_count: u32,
+    /// The change between consecutive confirm times, summed over
+    /// [`Self::jitter_count`] pairs.
+    pub jitter_sum_ms: f32,
+    /// See [`Self::jitter_sum_ms`].
+    pub jitter_count: u32,
 }
 
 /// One person's connection to a server, and the two timelines.
@@ -147,6 +161,10 @@ pub struct Client {
     /// Whether the results board has been taken from the confirmed state.
     board_confirmed: bool,
     stats: Stats,
+    /// When each own input still awaiting its confirmation was sent: (tick, time).
+    sent_at: VecDeque<(u32, Instant)>,
+    /// The last confirm time, for the jitter.
+    last_confirm_ms: Option<f32>,
 }
 
 fn positions(sim: &RaceSim) -> [Vec3; MAX_SHIPS] {
@@ -185,6 +203,8 @@ impl Client {
             bot: None,
             board_confirmed: false,
             stats: Stats::default(),
+            sent_at: VecDeque::new(),
+            last_confirm_ms: None,
         }
     }
 
@@ -372,6 +392,7 @@ impl Client {
         let inputs = self.inputs_for(snapshot);
         race.tick(&inputs);
         self.own.push_back((tick, held, snapshot));
+        self.sent_at.push_back((tick, Instant::now()));
         self.predicted.push_back((tick + 1, positions(&race.sim)));
         self.stats.predicted += 1;
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
@@ -433,6 +454,7 @@ impl Client {
                     self.confirmed_tick
                 );
             }
+            self.note_confirmed(self.confirmed_tick);
             self.confirmed_tick += 1;
             self.stats.confirmed += 1;
         }
@@ -477,6 +499,33 @@ impl Client {
             self.correct(race, &confirmed);
         }
         self.confirmed = Some(confirmed);
+    }
+
+    /// Times how long the input for `tick` took to come back confirmed. A tick the
+    /// client never predicted (the server was ahead) has no send time and is skipped.
+    fn note_confirmed(&mut self, tick: u32) {
+        while self.sent_at.front().is_some_and(|(t, _)| *t < tick) {
+            self.sent_at.pop_front();
+        }
+        if let Some((t, sent)) = self.sent_at.front().copied()
+            && t == tick
+        {
+            self.sent_at.pop_front();
+            let ms = sent.elapsed().as_secs_f32() * 1000.0;
+            self.stats.confirm_sum_ms += ms;
+            self.stats.confirm_count += 1;
+            if let Some(last) = self.last_confirm_ms {
+                self.stats.jitter_sum_ms += (ms - last).abs();
+                self.stats.jitter_count += 1;
+            }
+            self.last_confirm_ms = Some(ms);
+        }
+    }
+
+    /// The transport's counters, see [`Link::path`].
+    #[must_use]
+    pub fn path(&self) -> Option<PathStats> {
+        self.link.path()
     }
 
     /// Rebuilds the present from `confirmed` by replaying the ticks since.

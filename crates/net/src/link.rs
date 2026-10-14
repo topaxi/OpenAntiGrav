@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 
 use web_time::{Duration, Instant};
 
+use crate::stats::{PathStats, ShimStats};
 use crate::wire::{Control, Datagram, Malformed};
 
 /// One end of a connection.
@@ -34,6 +35,13 @@ pub trait Link: Send {
     fn closed(&self) -> Option<String>;
     /// The largest datagram this link carries.
     fn max_datagram(&self) -> usize;
+
+    /// The transport's cumulative counters (round trip, bytes, losses), for the
+    /// performance overlay. `None` on a link that keeps none; a wrapper must forward
+    /// it, or the number is lost behind it.
+    fn path(&self) -> Option<PathStats> {
+        None
+    }
 
     /// Sends a [`Control`] message.
     fn send_control(&mut self, message: &Control) {
@@ -74,6 +82,9 @@ impl<L: Link + ?Sized> Link for Box<L> {
     }
     fn max_datagram(&self) -> usize {
         (**self).max_datagram()
+    }
+    fn path(&self) -> Option<PathStats> {
+        (**self).path()
     }
 }
 
@@ -178,6 +189,8 @@ pub struct Shim<L: Link> {
     incoming_reliable: VecDeque<(Instant, Vec<u8>)>,
     /// xorshift64, for the drops: the network's dice, never the simulation's.
     dice: u64,
+    /// Datagrams dropped so far, both directions.
+    drops: u64,
 }
 
 impl<L: Link> Shim<L> {
@@ -190,6 +203,7 @@ impl<L: Link> Shim<L> {
             incoming_datagrams: VecDeque::new(),
             incoming_reliable: VecDeque::new(),
             dice: 0x9E37_79B9_7F4A_7C15,
+            drops: 0,
         }
     }
 
@@ -205,7 +219,9 @@ impl<L: Link> Shim<L> {
             reason = "a probability, not a value the race reads"
         )]
         let roll = (self.dice >> 40) as f32 / (1u64 << 24) as f32;
-        roll < self.conditions.loss
+        let dropped = roll < self.conditions.loss;
+        self.drops += u64::from(dropped);
+        dropped
     }
 
     /// Moves what is due across: sends whose delay has passed, and receives from
@@ -276,6 +292,16 @@ impl<L: Link> Link for Shim<L> {
     fn max_datagram(&self) -> usize {
         self.inner.max_datagram()
     }
+    /// The inner link's counters with the shim's conditions on them: the round trip
+    /// QUIC reports is the socket's alone, the delay being added above it.
+    fn path(&self) -> Option<PathStats> {
+        let mut path = self.inner.path().unwrap_or_default();
+        path.shim = Some(ShimStats {
+            conditions: self.conditions,
+            dropped: self.drops,
+        });
+        Some(path)
+    }
 }
 
 impl std::fmt::Debug for Loopback {
@@ -308,6 +334,71 @@ mod tests {
         assert_eq!(b.recv_reliable(), None);
         b.send_datagram(vec![4]);
         assert_eq!(a.recv_datagram(), Some(vec![4]));
+    }
+
+    /// A link that keeps counters, to prove a wrapper forwards them.
+    struct Counted(Loopback);
+    impl Link for Counted {
+        fn send_datagram(&mut self, bytes: Vec<u8>) {
+            self.0.send_datagram(bytes);
+        }
+        fn recv_datagram(&mut self) -> Option<Vec<u8>> {
+            self.0.recv_datagram()
+        }
+        fn send_reliable(&mut self, bytes: Vec<u8>) {
+            self.0.send_reliable(bytes);
+        }
+        fn recv_reliable(&mut self) -> Option<Vec<u8>> {
+            self.0.recv_reliable()
+        }
+        fn closed(&self) -> Option<String> {
+            None
+        }
+        fn max_datagram(&self) -> usize {
+            1_200
+        }
+        fn path(&self) -> Option<PathStats> {
+            Some(PathStats {
+                rtt: Some(Duration::from_millis(7)),
+                ..PathStats::default()
+            })
+        }
+    }
+
+    #[test]
+    fn a_boxed_link_and_a_shim_forward_the_path_counters() {
+        let (a, _b) = Loopback::pair();
+        let boxed: Box<dyn Link> = Box::new(Counted(a));
+        assert_eq!(
+            boxed.path().and_then(|p| p.rtt),
+            Some(Duration::from_millis(7))
+        );
+        let conditions = Conditions {
+            one_way: Duration::from_millis(50),
+            loss: 0.5,
+        };
+        let shim = Shim::new(boxed, conditions);
+        let path = shim.path().expect("forwarded");
+        assert_eq!(path.rtt, Some(Duration::from_millis(7)));
+        assert_eq!(path.shim.map(|s| s.conditions), Some(conditions));
+        let (plain, _) = Loopback::pair();
+        assert!(plain.path().is_none(), "a link with no counters says so");
+    }
+
+    #[test]
+    fn a_shim_counts_what_it_drops() {
+        let (a, _b) = Loopback::pair();
+        let mut shim = Shim::new(
+            a,
+            Conditions {
+                one_way: Duration::ZERO,
+                loss: 1.0,
+            },
+        );
+        for _ in 0..5 {
+            shim.send_datagram(vec![1]);
+        }
+        assert_eq!(shim.path().and_then(|p| p.shim).map(|s| s.dropped), Some(5));
     }
 
     #[test]

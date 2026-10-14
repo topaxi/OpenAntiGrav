@@ -618,6 +618,8 @@ pub(crate) fn run_race(
                     "Missile hit",
                 )?,
                 net: net.map(std::rc::Rc::new),
+                net_overlay: cli.overlay
+                    || settings.graphics.perf_overlay == oag_present::perf::Overlay::Dev,
                 remote_correction: crate::args::remote_correction(
                     cli.wreck.force_remote_correction.as_deref(),
                     !cli.wreck.no_correction_smoothing,

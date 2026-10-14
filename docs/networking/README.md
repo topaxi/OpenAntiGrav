@@ -526,6 +526,23 @@ second: the server per seat (inputs in time, repeated, late, lead), the client i
 corrections, the ticks they replayed, the largest pop, the hash agreeing and its lead
 and prediction window.
 
+The client's per-second line also carries `quic rtt`, `confirm`, `jitter`, wire
+`rx`/`tx` and `loss`, and the same figures are the **network block of the `dev`
+performance overlay** in the window (`[graphics] perf_overlay = "dev"`), or in a
+headless `--screenshot` client with `--overlay` (details in
+[the overlay's section of the menus page](../architecture/menus.md#the-network-block-dev-tier-network-races-only)):
+
+- `quic rtt` is QUIC's smoothed round trip and `confirm` is the time from sending a
+  tick's input to that tick coming back confirmed (the round trip plus the server's
+  input buffer, so it reads about 50 ms on localhost). **Under `--net-shim` only
+  `confirm` moves**: the shim sits above the socket, so `quic rtt` and `loss` stay
+  at loopback and the overlay shows the shim's configured figures and drop count
+  on their own amber rows. Measured on localhost with `--net-shim 100:2`: `confirm`
+  about 190 ms, the prediction window 10 to 11 ticks (about 180 ms), `quic rtt`
+  0.1 to 0.3 ms.
+- `jitter` is the mean change between consecutive `confirm` samples; `lead` is the
+  server's input buffer depth for this seat.
+
 **Held fixed in a network race** (`oag_net::race`, all **chosen**): this project's AI
 driver flies the opponents (the original driver with several people is unread),
 pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot

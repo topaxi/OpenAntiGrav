@@ -12,6 +12,7 @@
 //! - `wt`: [`link::Link`] over WebTransport, native only.
 //! - [`race`]: the one way the server and a client build the same race.
 //! - [`host`]: the authoritative race and each person's input buffer.
+//! - [`stats`]: what a race reports about itself, for the overlay and the log.
 //! - [`client`]: prediction, the confirmed timeline and the threshold correction.
 //!
 //! **No gameplay crate depends on this one** (rule 1 of `just check-deps`): the
@@ -22,6 +23,7 @@ pub mod client;
 pub mod host;
 pub mod link;
 pub mod race;
+pub mod stats;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;
