@@ -36,6 +36,7 @@ impl Session {
             // row - `oag_ui::menu::Menu::push`.
             Some(Launch::RaceBox) => self.push_page("race"),
             Some(Launch::Remix) => self.push_page("remix"),
+            Some(Launch::Multiplayer) => self.push_page("multiplayer"),
         }
     }
 

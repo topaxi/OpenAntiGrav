@@ -22,21 +22,6 @@ pub(super) fn seats(page: &str) -> Option<usize> {
         .map(|n| n.min(oag_gameplay::MAX_PLAYERS))
 }
 
-/// The words the live screen says, in the language `strings` is.
-fn labels(strings: &oag_ui::language::StringTable) -> Labels {
-    let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
-    Labels {
-        title: say("OAG_MENU_SPLIT_SCREEN", "SPLIT SCREEN"),
-        hint: say("OAG_JOIN_HINT", "EACH PLAYER PRESSES A BUTTON TO JOIN"),
-        player: say("OAG_JOIN_PLAYER", "PLAYER"),
-        empty: say("OAG_JOIN_EMPTY", "PRESS A BUTTON"),
-        keyboard: say("OAG_JOIN_KEYBOARD", "KEYBOARD"),
-        pad: say("OAG_JOIN_PAD", "GAMEPAD"),
-        start: say("OAG_JOIN_START", "START"),
-        back: say("OAG_MENU_BACK", "BACK"),
-    }
-}
-
 /// Draws the screen with `seated` seats taken, on the frame the live one uses,
 /// with the page's footer.
 pub(super) fn capture(
@@ -51,7 +36,7 @@ pub(super) fn capture(
         &oag_ui::font::Atlas,
     ),
 ) -> (Vec<oag_ui::frontend::Draw>, TickerClip) {
-    let labels = labels(strings);
+    let labels = Labels::read(strings);
     let mut screen = Join::new(labels.clone(), oag_gameplay::MAX_PLAYERS);
     screen.set_seats(
         (0..seated)

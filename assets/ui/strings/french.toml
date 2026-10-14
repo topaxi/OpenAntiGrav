@@ -64,11 +64,17 @@
 OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACEBOX = { text = "COURSE", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
-OAG_MENU_SPLIT_SCREEN = { text = "ÉCRAN PARTAGÉ", human = false }
-OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Jusqu'à huit joueurs sur un seul écran", human = false }
-OAG_MENU_SPLIT_VERTICAL = { text = "ÉCRAN PARTAGÉ VERTICAL", human = false }
-OAG_MENU_SPLIT_HORIZONTAL = { text = "ÉCRAN PARTAGÉ HORIZONTAL", human = false }
-OAG_MENU_SPLIT_HELP = { text = "Jouer en mode multijoueur à écran partagé", human = false }
+OAG_MENU_MULTIPLAYER = { text = "MULTIJOUEUR", human = false }
+OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Courez avec d'autres joueurs, sur cette machine et plus tard en réseau", human = false }
+OAG_MENU_MULTIPLAYER_SHARING = { text = "MULTIJOUEUR ET PARTAGE", human = false }
+OAG_MENU_MULTIPLAYER_SHARING_HELP = { text = "Courez en ligne ou en Ad Hoc et partagez des données", human = false }
+OAG_MP_PAGE_TITLE = { text = "MULTIJOUEUR", human = false }
+OAG_MP_LOCAL = { text = "MULTIJOUEUR LOCAL", human = false }
+OAG_MP_LOCAL_SUBTITLE = { text = "Jusqu'à huit joueurs sur cette machine, sur un écran ou dans plusieurs fenêtres", human = false }
+OAG_MP_LAN = { text = "LAN", human = false }
+OAG_MP_ONLINE = { text = "EN LIGNE", human = false }
+OAG_MP_COMING_LATER = { text = "Bientôt disponible", human = false }
+OAG_MP_MODE_CAPPED = { text = "Pour %d joueurs au plus", human = false }
 OAG_JOIN_HINT = { text = "CHAQUE JOUEUR APPUIE SUR UN BOUTON POUR REJOINDRE", human = false }
 OAG_JOIN_PLAYER = { text = "JOUEUR", human = false }
 OAG_SPLIT_FINISHED = { text = "TERMINÉ", human = false }
@@ -242,10 +248,6 @@ ids = [
     "OAG_RACE_KILLS",
     # The WEAPONS row, new with the race box's Weapons list; no translation pass yet.
     "OAG_RACE_WEAPONS",
-    # The race box's NUMBER OF PLAYERS and SPLIT SCREEN rows (HD's authored local split);
-    # no translation pass yet.
-    "OAG_RACE_PLAYERS",
-    "OAG_RACE_SPLIT_CUT",
     # RECORDS is new since this file's own translation pass and has not been
     # reached by it - see `docs/architecture/menus.md`'s RECORDS section.
     "OAG_MENU_RECORDS",

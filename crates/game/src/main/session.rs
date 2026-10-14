@@ -68,6 +68,8 @@ mod pilot_editor;
 mod custom_tracks;
 #[path = "session/join.rs"]
 mod join;
+#[path = "session/multiplayer.rs"]
+mod multiplayer;
 #[path = "session/window_layout.rs"]
 mod window_layout;
 #[path = "session/pure_chain.rs"]
@@ -646,10 +648,14 @@ pub(crate) struct Session {
     /// the last tick. Only the further windows set one: window 1's is `pointer`'s. Read by
     /// the pause as that window's first seat's Start, and nothing else.
     pub(crate) seat_clicks: u8,
-    /// Set while the RACE page is open as a split-screen race box (`Session::open_split_race_box`):
-    /// its START goes through the join screen first. Cleared when the menu leaves that
-    /// page.
-    pub(crate) split_race_box: bool,
+    /// Set while the RACE page is the LOCAL MULTIPLAYER flow's settings step
+    /// (`Session::open_multiplayer_settings`): the lobby the join screen made is kept through
+    /// the page's changes and the Track and Ship Select that follow. Cleared, with the lobby,
+    /// when the menu leaves the page (`Session::sync_multiplayer`).
+    pub(crate) multiplayer: bool,
+    /// The devices the join screen last seated this session, seated again the next time it
+    /// opens where they are still connected. **In memory only**: a restart joins again.
+    pub(crate) mp_devices: Vec<oag_input::lobby::Device>,
     /// What the people seated after the first picked on their own Ship Select,
     /// in seat order, until the launch moves them into
     /// `oag_raceplay::Options::seat_picks`. Empty outside a split-screen race box.
@@ -790,11 +796,6 @@ pub(crate) struct Shell {
     /// The `WEAPONS` row's two states, valued by the disc's `On`/`Off` and
     /// labelled by its own `FE_ON`/`FE_OFF` strings.
     pub(crate) weapons: Vec<menu::Choice>,
-    /// The race box's `PLAYERS` row, off the disc's own `NumberOfPlayers` list. Empty on a
-    /// title whose race box authors none.
-    pub(crate) player_counts: Vec<menu::Choice>,
-    /// The race box's `SPLIT SCREEN` row, off the disc's own `SplitScreen` list.
-    pub(crate) split_cuts: Vec<menu::Choice>,
     pub(crate) font: oag_ui::font::Atlas,
     pub(crate) sprites: oag_hud::sprite::Sheet,
     /// The front end's own `FEGlobals` table, carried from `boot::Shell`'s
@@ -926,8 +927,6 @@ impl Shell {
                 .map(menu::Choice::plain)
                 .collect(),
             weapons: boot_shell.race_setup.weapon_choices(&boot_shell.strings),
-            player_counts: boot_shell.race_setup.player_choices(),
-            split_cuts: boot_shell.race_setup.cut_choices(&boot_shell.strings),
             // The disc's own names for its stylings, so the row offers what the
             // source has rather than a list this build holds.
             front_end_styles: boot_shell

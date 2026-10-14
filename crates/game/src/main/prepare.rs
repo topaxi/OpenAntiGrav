@@ -353,6 +353,9 @@ impl Pending {
         // The campaign row as the title's original words it (`SINGLE PLAYER` on
         // Pure) - see `menu::Definition::rename_campaign_row`.
         definition.rename_campaign_row(title, &boot_shell.strings);
+        // And the MULTIPLAYER row where the title's own is worded differently (Pulse's
+        // `MULTIPLAYER & SHARING`) - see `menu::Definition::rename_multiplayer_row`.
+        definition.rename_multiplayer_row(title, &boot_shell.strings);
         // A phone app is left, not quit - see `menu::Definition::drop_quit`.
         if oag_mobile::MOBILE {
             definition.drop_quit();

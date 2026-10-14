@@ -409,9 +409,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
-    // The race box's own two split lists, read from `DATA00`'s copy (the same file in
-    // `DATA05` and `DATA06`): see `names::RACEBOX_DEFINITION`.
-    local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     // `false`: the one mesh path reads `<team>\ship_FE.vex` and `FE\forward.vex`,
     // which HD's `screen.xml`s name and no HD archive carries. The craft the
     // original draws on `Team Selection` is the race hull, named here, and
@@ -583,11 +580,6 @@ pub mod names {
     /// than a measurement of what a PS3 loads. All six agree on every layout
     /// global; they do not agree on the screen list. See `hd-frontend.md`.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
-
-    /// The race box: `Single Player` (mode, class, weapons, difficulty, and the local split's
-    /// `NumberOfPlayers` and `SplitScreen` lists). Present in `DATA00`, `DATA05` and `DATA06`
-    /// with the same lists.
-    pub const RACEBOX_DEFINITION: &str = r"Data\Plugins\Frontend\Gui\racebox_definition.xml";
 
     /// HD's own `Team Selection` - see `oag_ui_screens::picker::hd` for the screen.
     /// **`DATA06` alone carries it**, and `DATA00`'s live [`FRONTEND_ROOT`]

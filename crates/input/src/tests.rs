@@ -660,3 +660,65 @@ fn forgetting_what_was_let_go_makes_the_next_press_count() {
     controls.set_key(&key(NamedKey::ArrowUp), true);
     assert_eq!(controls.player_snapshots().get(0).stick_y, 1.0);
 }
+
+/// What the join screen reads on X11: the raw event names the keyboard, and the window's event for
+/// the same press (which carries no keyboard) is not a second device. Fails if the dedupe is
+/// dropped: keyboard A would take two seats.
+#[test]
+fn a_raw_keypress_is_one_device_and_its_window_event_is_not_another() {
+    let mut controls = Controls::without_pad();
+    let a = pad::KeyboardId(0);
+    controls.lobby_key(a, &key_char('x'), true);
+    controls.set_key(&key_char('x'), true);
+    controls.player_snapshots();
+    assert_eq!(
+        controls.device_presses(),
+        &[lobby::Press {
+            device: lobby::Device::Keys(a),
+            buttons: Button::Cross.bit(),
+        }]
+    );
+    assert!(controls.keyboards_told_apart());
+    controls.set_key(&key_char('x'), false);
+    controls.player_snapshots();
+    controls.tap(Button::Cross);
+    controls.player_snapshots();
+    assert_eq!(
+        controls.device_presses(),
+        &[lobby::Press {
+            device: lobby::Device::Keyboard,
+            buttons: Button::Cross.bit(),
+        }],
+        "a click is still the anonymous keyboard"
+    );
+    controls.player_snapshots();
+    controls.forget_lobby_keys();
+    assert!(!controls.keyboards_told_apart());
+    controls.set_key(&key_char('x'), true);
+    controls.player_snapshots();
+    assert_eq!(
+        controls.device_presses()[0].device,
+        lobby::Device::Keyboard,
+        "with no raw event the window's key is the keyboard, as on Wayland"
+    );
+}
+
+/// Two keyboards seated by the join screen fly their seats from the first tick of the race,
+/// without either having to press first to claim one.
+#[test]
+fn seated_keyboards_fly_their_seats_from_the_first_tick() {
+    let (a, b) = (pad::KeyboardId(0), pad::KeyboardId(1));
+    let mut lobby = lobby::Lobby::new();
+    lobby.join(lobby::Device::Keys(a));
+    lobby.join(lobby::Device::Keys(b));
+    let mut controls = Controls::without_pad();
+    lobby.seat(controls.assignment_mut(), &[]);
+    assert!(!controls.per_device_keys());
+    controls.sync_device_keys();
+    assert!(controls.per_device_keys());
+    controls.device_key(b, &[], &[], &key_char('d'), true);
+    controls.device_key(a, &[], &[], &key_char('w'), true);
+    let flying = controls.player_snapshots();
+    assert_eq!(flying.get(0).stick_y, 1.0, "A is slot 0");
+    assert_eq!(flying.get(1).stick_x, 1.0, "B is slot 1");
+}

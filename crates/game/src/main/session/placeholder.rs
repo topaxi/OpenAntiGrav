@@ -195,8 +195,6 @@ impl Session {
             languages: Vec::new(),
             modes: menu::mode_choices(&strings),
             kill_targets: Vec::new(),
-            player_counts: Vec::new(),
-            split_cuts: Vec::new(),
             weapons: Vec::new(),
             entries: None,
             front_end_styles: Vec::new(),
@@ -225,7 +223,7 @@ impl Session {
             team_details: Vec::new(),
             strings,
         });
-        self.drop_split_screen_row();
+        self.drop_multiplayer_row();
         self.prefetch_pending = None;
 
         self.open_menus()?;

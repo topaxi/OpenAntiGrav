@@ -132,6 +132,11 @@ impl Menu {
                 self.nav.push(Nav::Accept);
                 Vec::new()
             }
+            // A row for something not built yet is focusable and refuses the confirm.
+            Entry::Run { .. } if self.is_disabled(entry) => {
+                self.nav.push(Nav::Decline);
+                Vec::new()
+            }
             Entry::Run { action, .. } => {
                 self.nav.push(Nav::Accept);
                 vec![MenuEvent::Fired(*action)]

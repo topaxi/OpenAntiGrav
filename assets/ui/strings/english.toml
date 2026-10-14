@@ -65,14 +65,20 @@ OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACE_CAMPAIGN = { text = "RACE CAMPAIGN", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "The story mode: work your way up the tournament grid", human = false }
 OAG_MENU_RACEBOX = { text = "RACEBOX", human = false }
-OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race, split screen included", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Set up your own race", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Mix tracks and ships across every title you own", human = false }
-OAG_MENU_SPLIT_SCREEN = { text = "SPLIT SCREEN", human = false }
-OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Up to eight people on one screen", human = false }
-OAG_MENU_SPLIT_VERTICAL = { text = "SPLIT SCREEN VERTICAL", human = false }
-OAG_MENU_SPLIT_HORIZONTAL = { text = "SPLIT SCREEN HORIZONTAL", human = false }
-OAG_MENU_SPLIT_HELP = { text = "Play in multiplayer split screen mode", human = false }
+OAG_MENU_MULTIPLAYER = { text = "MULTIPLAYER", human = false }
+OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Race with other people, on this machine and later over a network", human = false }
+OAG_MENU_MULTIPLAYER_SHARING = { text = "MULTIPLAYER & SHARING", human = false }
+OAG_MENU_MULTIPLAYER_SHARING_HELP = { text = "Race online or over Ad Hoc, and share data", human = false }
+OAG_MP_PAGE_TITLE = { text = "MULTIPLAYER", human = false }
+OAG_MP_LOCAL = { text = "LOCAL MULTIPLAYER", human = false }
+OAG_MP_LOCAL_SUBTITLE = { text = "Up to eight people on this machine, on one screen or in several windows", human = false }
+OAG_MP_LAN = { text = "LAN", human = false }
+OAG_MP_ONLINE = { text = "ONLINE", human = false }
+OAG_MP_COMING_LATER = { text = "Coming later", human = false }
+OAG_MP_MODE_CAPPED = { text = "For %d people at most", human = false }
 OAG_JOIN_HINT = { text = "EACH PLAYER PRESSES A BUTTON TO JOIN", human = false }
 OAG_JOIN_PLAYER = { text = "PLAYER", human = false }
 OAG_SPLIT_FINISHED = { text = "FINISHED", human = false }
@@ -112,8 +118,6 @@ OAG_RACE_SPEED_CLASS = { text = "SPEED CLASS", human = false }
 OAG_RACE_WEAPONS = { text = "WEAPONS", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "AI DIFFICULTY", human = false }
 OAG_RACE_KILLS = { text = "KILLS", human = false }
-OAG_RACE_PLAYERS = { text = "NUMBER OF PLAYERS", human = false }
-OAG_RACE_SPLIT_CUT = { text = "SPLIT SCREEN", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANT", human = false }
 OAG_RACE_TRACK = { text = "TRACK", human = false }

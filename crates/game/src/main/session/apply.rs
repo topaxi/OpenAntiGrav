@@ -687,8 +687,6 @@ impl Session {
             "race.variant" => self.settings.race.variant = text,
             "race.kill_target" => self.settings.race.kill_target = text,
             "race.weapons" => self.settings.race.weapons = text,
-            "race.players" => self.settings.race.players = text,
-            "race.split_cut" => self.settings.race.split_cut = text,
             "ai.difficulty" => self.settings.ai.difficulty = text,
             // The two title rows resupply their scoped TRACK/TEAM the same
             // way `race.mode` resupplies the ordinary TRACK row above -

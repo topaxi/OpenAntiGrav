@@ -139,7 +139,7 @@ const TITLE: &Title = &Title {
     // A fixture: nothing here reads a campaign.
     main_menu: &oag_title::MainMenu {
         rows: &[],
-        borrowed: &[],
+        multiplayer: None,
         updated_rows: None,
         attached: oag_title::Attached::Inline,
         origin: oag_title::Origin::Chosen,

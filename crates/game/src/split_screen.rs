@@ -34,7 +34,7 @@ pub fn offered(title: &oag_title::Title, device: wgpu::DeviceType) -> bool {
     device != wgpu::DeviceType::IntegratedGpu || title.split_on_integrated_gpu
 }
 
-/// Takes the SPLIT SCREEN row out of `definition` when `title` offers no split on `device`
+/// Takes the MULTIPLAYER row out of `definition` when `title` offers no split on `device`
 /// ([`offered`]); returns whether it did. Run on every menu a run installs, once the
 /// adapter is known.
 pub fn trim_menu(
@@ -45,7 +45,7 @@ pub fn trim_menu(
     if offered(title, device) {
         return false;
     }
-    definition.drop_split_screen();
+    definition.drop_multiplayer();
     true
 }
 
@@ -62,37 +62,6 @@ pub fn players_offered(title: &oag_title::Title, device: wgpu::DeviceType, playe
         title.name
     );
     1
-}
-
-/// The head count the race box's `NUMBER OF PLAYERS` row holds: `pick` read as the disc's
-/// own entry of `counts`, on a title whose race box authors the list
-/// ([`oag_title::FrontEnd::local_split`]); `1` for a pick the list does not hold and on every
-/// other title, where the generic SPLIT SCREEN row is the entry.
-#[must_use]
-pub fn authored_people(
-    title: &oag_title::Title,
-    counts: &[oag_ui::menu::Choice],
-    pick: &str,
-) -> usize {
-    let authored = title
-        .front_end
-        .is_some_and(|front_end| front_end.local_split.is_some());
-    if authored && counts.iter().any(|choice| choice.value == pick) {
-        pick.parse().unwrap_or(1)
-    } else {
-        1
-    }
-}
-
-/// The cut the race box's `SPLIT SCREEN` row holds: `RB_VERT` is left and right, and anything
-/// the disc's own list does not name is the horizontal cut it defaults to.
-#[must_use]
-pub fn authored_cut(cuts: &[oag_ui::menu::Choice], pick: &str) -> oag_render::viewport::Cut {
-    if pick == "RB_VERT" && cuts.iter().any(|choice| choice.value == pick) {
-        oag_render::viewport::Cut::Vertical
-    } else {
-        oag_render::viewport::Cut::Horizontal
-    }
 }
 
 /// Makes `race` an `players`-way split screen and returns the count it settled
@@ -373,6 +342,8 @@ pub fn seat_for_launch(
     if let Some(lobby) = lobby.take() {
         let connected = controls.connected_pads();
         seat(race, &lobby, controls.assignment_mut(), &connected, cut);
+        // Two or more physical keyboards joined: their raw events fly the seats from the start.
+        controls.sync_device_keys();
     } else if let Some(humans) = controls.assignment().humans() {
         apply(race, humans, cut);
     }

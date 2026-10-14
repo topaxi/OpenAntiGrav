@@ -12,7 +12,7 @@ pub const MAIN_MENU: &MainMenu = &MainMenu {
         original("FE_OPT_PLUS", Some("options")),
         original("FE_RECORDS", Some("records")),
     ],
-    borrowed: &[],
+    multiplayer: None,
     updated_rows: None,
     attached: Attached::Revealed,
     origin: Origin::Measured,

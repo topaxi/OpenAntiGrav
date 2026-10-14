@@ -1,10 +1,11 @@
-//! Opens and drives the window layout screen, between the join screen and the race box's own
-//! Track and Ship Select.
+//! Opens and drives the window layout screen, the second step of LOCAL MULTIPLAYER, between the
+//! join screen and the RACE page (`session::multiplayer`).
 //!
 //! **Where it sits.** The join screen's START opens it when two or more people are seated and
 //! the run can open windows (a desktop build on an adapter the title offers a split on,
-//! [`oag_game::split_screen::offered`]); its START goes on to the race box exactly as the join
-//! screen's did, and its BACK returns to the join screen with everybody still seated. On the
+//! [`oag_game::split_screen::offered`]); its START goes on to the next step
+//! ([`Session::continue_multiplayer`]), and its BACK returns to the join screen with everybody
+//! still seated. On the
 //! browser, Android and iOS (where a program gets the one surface the platform makes, and the
 //! opener is compiled out) the screen is **skipped**: the join screen's START goes straight
 //! on. On an integrated GPU the HD, 2048 and Omega splits are not offered at all, so neither
@@ -107,8 +108,8 @@ impl Session {
         }
     }
 
-    /// START: the layout is applied, remembered and handed to the race box, which goes on
-    /// to Track and Ship Select with the lobby the join screen made.
+    /// START: the layout is applied and remembered, and the flow goes on
+    /// ([`Session::continue_multiplayer`]) with the lobby the join screen made.
     fn finish_window_layout(&mut self) {
         let Stage::Menu(stage) = &mut self.stage else {
             return;
@@ -119,10 +120,7 @@ impl Session {
         #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
         self.apply_window_layout(open.screen());
         self.play_navs(Some(Nav::Accept));
-        if open.join().lobby().count() > 1 {
-            self.split_lobby = Some(open.join().lobby().clone());
-        }
-        self.start_race_box();
+        self.continue_multiplayer(open.join().lobby().clone());
     }
 }
 

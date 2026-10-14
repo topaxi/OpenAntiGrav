@@ -914,17 +914,15 @@ the rules are unit-testable (`gilrs::GamepadId` has no public constructor):
   drives the one menu cursor; a race parked behind the pause menu keeps its
   seats.
 
-**The join screen** is the second way to seat people. Entry: the PS2 pressing's two
-SPLIT SCREEN rows on Pulse and Pure, a SPLIT SCREEN row under RACEBOX in the built-in
-`oag-extras` mod (an action, `split_screen`) on HD and Omega, and a tile on 2048's grid
-(see "Where the entry is, per title"). `oag_input::lobby::Lobby` is the model:
+**The join screen** is LOCAL MULTIPLAYER's first step (the entry is the MULTIPLAYER row; see
+"Where the entry is, per title"). `oag_input::lobby::Lobby` is the model:
 
 | Device | Press | Does |
 | --- | --- | --- |
-| no seat | confirm (cross) | takes the next seat |
+| no seat | confirm (cross) or start | takes the next seat |
 | seated | back (circle) | gives its seat up, the later seats move down |
 | no seat | back (circle) | leaves the screen |
-| seated | start | begins, with the seated count |
+| seated | start | begins, with the seated count (two at least) |
 
 Seat `i` flies slot `i`, so the seated slots are always `0..count`. A pad that
 disconnects while the screen is open loses its seat. The keyboard, the mouse and
@@ -936,78 +934,123 @@ Per-device presses come from the backend's own press events for pads
 apart before either has a slot) and from the keyboard's newly pressed bits
 (`Controls::device_presses`).
 
-### Where the entry is, per title (2026-10-13, `split-entry-hd-2048-omega`)
+### Where the entry is, per title (2026-10-14, `mp-menu-flow`)
 
-Walked windowed on an own Xvfb with two virtual pads (`scripts/uinput-pads.py`): menu,
-SPLIT SCREEN, both pads join, START, the title's own screens, a two-view race.
+**One entry on every title: a MULTIPLAYER row on the main menu** (**chosen, not measured**, the
+maintainer's plan, 2026-10-14). It replaces every per-title split entry this section used to
+describe: Pulse's and Pure's two borrowed SPLIT SCREEN VERTICAL and HORIZONTAL rows, the
+generic SPLIT SCREEN row of the built-in extras, and the `NUMBER OF PLAYERS` and `SPLIT SCREEN`
+rows HD and Omega authored on the race box and 2048 borrowed (all gone from the RACE page;
+`race.players` and `race.split_cut` are no settings any more and an old profile that holds them
+loads and ignores them).
 
-| Title | Where the entry is | Authored by the original? |
-| --- | --- | --- |
-| Pulse (both pressings), Pure | **SPLIT SCREEN VERTICAL and SPLIT SCREEN HORIZONTAL right after RACE CAMPAIGN** (Pure: after SINGLE PLAYER), then RACEBOX; no SPLIT SCREEN row under RACEBOX any more. See "The Pulse and Pure entry (2026-10-13, `split-entry-align`)" | **Pulse PS2: yes**, `MainMenu_Definition.xml` `Mode` lists `FE_RACE_CAM`, `FE_RACE_CAM_SS` ("SPLIT SCREEN VERTICAL"), `FE_RACE_CAM_SSH` ("SPLIT SCREEN HORIZONTAL"), `FE_RACEBOX`, ... with `FE_HELP_SS` ("Play in multiplayer split screen mode") as the help for both. **PSP Pulse: borrowed** from the PS2 pressing (its own assets). **Pure: borrowed** (no split screen of its own, so it mirrors Pulse). No confidence score on the borrowed placement |
-| HD | **The race box's own rows, as the disc authors them** (2026-10-13, `hd-authored-split-setup`): on the RACE page after AI DIFFICULTY, `NUMBER OF PLAYERS` (`1`, `2`) then `SPLIT SCREEN` (`HORIZONTAL`, `VERTICAL`), read from `racebox_definition.xml`'s `NumberOfPlayers` and `SplitScreen` lists (`RB_NUMP`, `RB_SPLSCR`, `RB_HORIZ`, `RB_VERT`). The cut row is greyed while the count is one (the authored `IDCantFocusString="FE_OFF"`: this build greys it and keeps the stored cut, it does not draw `FE_OFF` over it). START with two people opens the join screen **for exactly two seats** and refuses START until both are taken (chosen: the authored count is the head count), then HD's Track Select, `Ship Select - Player 1` and `Player 2`, then the race in the chosen cut. **These rows replace our generic SPLIT SCREEN row on HD** (the authored place wins; `Definition::drop_rows_picked_on_screen`); the row stays on Pulse, Pure, Omega and 2048. Two people is the authored maximum, so HD has **no route to three or more** from the menus; `--players N` still cuts up to eight. On an integrated GPU HD offers no split, and the two rows go with the row (`Definition::drop_split_screen`). The padlock beside `NumberOfPlayers` is a trial-build lock, not a progression unlock: [racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md), confidence 72, so two players are unlocked here |
-| Omega | **The race box's own rows, as the disc authors them** (2026-10-13, `split-entry-mirror-hd`): Omega's real `racebox_definition.xml` (`data09`, 15,805 bytes) carries HD's `NumberOfPlayers` (y 420, with its padlock) and `SplitScreen` (y 470, `IDCantFocusString="FE_OFF"`) lists with the same ids and English text, so `FrontEnd::local_split` names it (`LocalSplit::Authored`) and the same code HD uses puts both rows on Omega's RACE page and drops our generic row (the revealed row under RACEBOX now holds REMIX alone). START with two people opens the two-seat join screen, then Track Select, loading and a two-view race in the chosen cut with Omega's HD-shaped HUD. **Behaviour change**: the generic route seated up to eight on Omega, and the menu route now holds two, as HD's does (`--players N` still cuts up to eight) (**HD: ported**, own test `selection_screens_ground_truth::omega_race_box_offers_the_discs_own_players_and_cuts`). **Ship Select per seat: ported** (2026-10-13, the maintainer's decision, overriding "one-player unchanged" for Omega's flow): Omega's `data09` ships `team_selection_definition.xml` with `Team Selection`, `Team Selection Player 1` and `Team Selection Player 2`, the same names and redirects as HD's, in HD's dialect (the old "no Ship Select" and "not located" came through `scripts/psarc.py`). `FrontEnd::team_select` now names it: a split goes join, Track Select, `SHIP SELECT - PLAYER 1`, `PLAYER 2`, race (walked windowed, Assegai and Mirage picked), and **one-player flow changed too**: the RACE page loses TEAM, VARIANT and TRACK (as HD's), START goes Track Select, Ship Select, race. Reader changes it needed: the honeycomb's own `Scale` (`0.8`, nine rows where HD's is seven at full size), the padlock drawn at one size whatever its texture's resolution (Omega's is 512 wide), and the team logo looked up under the title's ship directory (`hdships`). **Drawn since 2026-10-14 (`omega-ship-select`)**: the honeycomb opens the three models Omega's teams definition authors per team (`oag_omega::race::TEAM_VARIANTS`), the statistics carry each model's own ratings, and the `SHIP MODEL` frame draws the team's PS4 race hull at HD's pose (**chosen, not measured**); see [omega-status.md](../formats/omega-status.md#ship-select-2026-10-14-omega-ship-select), which also holds what stays open (the five 2048-era teams were offered from 2026-10-14, `omega-2048-era-teams`; the two bar halves coincided until `omega-colour-template` read the colour template). Choosing a team works. Omega ships HD's `vert_` files too, in `data00`, and now that its race box authors the cut they are **wired** (`oag_omega::hud::SPLIT.vertical`, the same four names and 960 column; **ported**, test `split_hud_ground_truth::omega_wires_hds_vert_layouts_one_column_apart`); walked windowed 2026-10-13 with two pads: join, Track Select, a left and right two-view race |
-| 2048 | **HD's two rows, borrowed** (2026-10-13, `split-entry-mirror-hd`): the RACE page (reached by the RACEBOX tile) carries `NUMBER OF PLAYERS` and `SPLIT SCREEN` exactly as HD's, with the cut greyed at one person; START with two people opens the two-seat join screen, then the race in the chosen cut (**behaviour change**: the third tile seated up to eight, the menu route now holds two as HD's does, a choice, not a measurement; `--players N` still cuts up to eight). 2048's own `GameModeChoice` third tile (SPLIT SCREEN) is gone, as our generic row is on HD: the rows are the entry. `LocalSplit::Borrowed` in `oag_2048` holds HD's lists (`1`, `2`; `RB_HORIZ`, `RB_VERT`) and the words come from 2048's own English table, which carries HD's ids word for word (`RB_NUMP`, `RB_SPLSCR`, `RB_HORIZ`, `RB_VERT`, `FE_SHIPSEL_P1`/`P2`, and `MAN_2_SPL`, whose text sends the reader to the Racebox: "In Racebox, set the number of players to 2, and choose between vertical or horizontal split screen"). The load report says `split setup borrowed from Wipeout HD/Fury`. A disc-backed test holds the borrowed lists equal to HD's and Omega's authored ones (`wipeout_2048_borrows_the_lists_hd_and_omega_author`). **No Ship Select**: 2048 authors one `team` screen (`Team_Definition.xml`, a touch and 3D screen, `type="team2048"`) and no `Team Selection Player 1`/`2` pair and no Track Select (no `Track_Selection`, no `racebox_definition.xml` in the base, patch or DLC archives), and this build reads none of them for a race, so seats fly the settings team and circuit and the strings `FE_SHIPSEL_P1`/`P2` have no screen. 2048 is **not authored by the original**; the whole entry is **chosen, not measured**, **labelled borrowed**. Omega: **checked, differs** (Omega authors the lists itself in a race box that also lists 2048's own game) |
+| Title | The row | Words | Authored by the original? |
+| --- | --- | --- | --- |
+| Pulse (both pressings) | between RACEBOX/REMIX and OPTIONS, where the PSP's `FE_MP` stands (`Title::main_menu`, `OriginalRow::builds`) | `MULTIPLAYER & SHARING`, line `Race online or over Ad Hoc, and share data`: the PSP disc's own `FE_MP` and `FE_HELP_MP` (`oag_title::MainMenu::multiplayer`; `the_multiplayer_rows_words_are_the_psp_discs_own`) | **PSP: yes**, an online and ad-hoc flow (`Multiplayer_Definition.xml`: `Create Single Race`, `Create Tournament`, `Create Time Trial`, `Join Game`) that this build does not have; the page behind our row has LAN and ONLINE greyed for it. **PS2: no such row**, it authors `FE_RACE_CAM_SS`/`_SSH` instead (`pulses_ps2_main_menu_has_split_rows_that_multiplayer_replaces`); the PSP's design serves both (the maintainer's rule: Pulse's invented parts are shared) |
+| Pure | right after `Single Player`, where its `Multiplayer` row stands | `MULTIPLAYER` (the disc's word is ours too) | **Yes**, a row (`docs/ui/menus-original.md`) |
+| HD, Omega | right after RACEBOX, from the built-in extras (`assets/mods/oag-extras/menu.toml`, `only_if_missing`); their `FE_ONLINE` tab builds nothing, so the strip keeps its five tabs | `MULTIPLAYER`, ours | `FE_ONLINE` is the online tab; local split was a race-box pair (`NumberOfPlayers`, `SplitScreen`, read from `racebox_definition.xml`, **checked, no longer used**: the head count is the join screen's and the cut the layout screen's) |
+| 2048 | a third tile under RACEBOX and REMIX on `GameModeChoice` (`Launch::Multiplayer`, `EXTRA_TILES[2]`, `(16, 342)`, **chosen**) | `MULTIPLAYER`, ours | Not authored; **checked against Omega**, which shares the extras row: **ported**, same page and flow |
 
-HD's other multiplayer files (`multiplayer_definition.xml`, `DATA02`) are the online
-screens (`Join Game`, `Lobby`, `Network Sync`), not local. The cross-check of the lane: the
-2048 tile is **checked, differs** on Omega (its front end is HD's strip, so the row there
-was the same revealed row as HD's), and is gone now: Omega's authored rows replace it as
-HD's do (**ported**) and 2048 borrows them; the join screen's block rows are **ported** (one
-reader serves HD and Omega, the same skin numbers).
+HD's padlock beside `NumberOfPlayers` was a trial-build lock ([racebox-padlocks.md](../ghidra/functions/ps3-hdfury-eu/racebox-padlocks.md), confidence 72);
+with the rows gone it matters nowhere here.
 
-**The join screen on HD and Omega** takes HD's own `<List>` geometry (origin, pitch,
-text scale, block height and gap from `oag_title::MenuList` and `ListBlocks`) with a label
-block and a value block per row, drawn through `oag_ui::menu::block` in the frame's ink, so
-it reads like HD's own RACE page and is legible on Omega's light page (white text with no
-box was invisible there). The value block is twice HD's list value width (**chosen**: a
-device's name is longer than any value HD's lists hold). Before this change the rows were
-mirrored off the strip's column (800 on a 1920 grid, the title at 194), which put the
-device column 320 units from the names and drew "PLAYER 1" over a pad's name. The hint
-goes under the rows there, and also on a skin whose row origin is ours (2048's
-placeholder menu), where it overlapped the title. Pulse and Pure are unchanged (their
-rows and title share one margin; a test pins the right edge).
+**The flow** (`oag_game::main::session::multiplayer`):
 
-### The Pulse and Pure entry (2026-10-13, `split-entry-align`)
+1. **MULTIPLAYER page** (`assets/ui/menu.toml`): `LOCAL MULTIPLAYER`; `LAN` and `ONLINE` are
+   `Action::ComingLater` rows: dimmed, **focusable** (the menus' convention: a disabled row is
+   selectable and inert, `menu/pointer.rs`) so the line under them reads `Coming later`, and
+   refusing the confirm and the click with the decline cue. "Greyed, not selectable" is
+   therefore read as *not activatable*: a row the cursor skips could never show its line.
+2. **Join** (`session::join`): each device presses to take a seat, **confirm or START** (HD's
+   `FE_GUEST_JOIN`, "PLAYER 2 PRESS START TO JOIN", asks for START; on Omega the same id says
+   OPTIONS, which is a pad's Start). A seated device's START begins, and **START needs two
+   people** (the row dims at one). Seat 2's empty row says the title's own `FE_GUEST_JOIN` line
+   on HD and Omega (`oag_ui_screens::join::Labels::guest`, the line the disc's string table
+   authors, upper-cased as the title shows it; ground truth `hd_and_omega_say_their_own_join_line_for_the_second_seat`; HD's
+   served language table (`DATA02`'s copy) lacks the two ids that its `DATA05` and `DATA06` copies carry, so
+   `oag_ui::language::load::overlay_second_seat` fills `FE_GUEST_JOIN` and `FE_GUEST_LEAVE` alone from another archive's copy), the
+   generic `PLAYER 2 - PRESS A BUTTON` elsewhere and for every later seat.
+   **Devices seated earlier this session are seated again** where still connected
+   (`Session::mp_devices`, memory only: a restart joins again), so a second round is OK, OK.
+3. **A row per keyboard** where the platform tells keyboards apart (X11 and Windows send a raw
+   key event naming the physical keyboard, `Controls::lobby_key` from `Session::device_key`): a
+   second keyboard takes a seat of its own, `lobby::Device::Keys(KeyboardId)`, named `KEYBOARD
+   2` on the join screen, and the seated keyboards fly their seats from the first tick of
+   the race (`Controls::sync_device_keys`, `Assignment::claim_keyboard_device`). One keypress is one device: a raw event
+   comes ahead of the window's (measured on X11, assumed on Windows), and from the first raw
+   event on the window's own key presses are not the keyboard's (`window_pressed`), so a
+   keyboard cannot take two seats; a click or a touch is still the anonymous
+   `Device::Keyboard`, and once keyboards are told apart a click on the empty seat seats nobody (a mouse is
+   not a keyboard). **Wayland and macOS name no keyboard** and every keyboard is the one anonymous
+   device there; a Wayland compositor with a seat per window seats its second keyboard by a press in
+   that window after the layout screen (`multi-window.md`, "Who sits where"), which a join *row*
+   cannot do because the windows only open then. Tested over stand-in ids
+   (`a_raw_keypress_is_one_device_and_its_window_event_is_not_another`,
+   `seated_keyboards_fly_their_seats_from_the_first_tick`,
+   `two_physical_keyboards_take_two_seats_bound_to_their_devices`); a real second X11 keyboard
+   is not available on an Xvfb (one XTEST keyboard), so the live proof of the raw path is `keyboard-seats`'s on sway's Xwayland.
+4. **Layout** (`session::window_layout`): windows, monitor, cut, fullscreen, remembered on
+   disk (`[race] window_seats`). Skipped where the platform opens no windows (web, phones): the cut
+   is then the first window of the remembered layout, else horizontal
+   (`Session::remembered_cut`), the one place a cut is not chosen.
+5. **Seat assignment** (the next lane, `mp-seat-assign`): `Session::assign_seats` sits between
+   layout and settings and hands the lobby back as it got it; the people sit in the order they
+   joined, dealt across the windows in order.
+6. **Race settings**: the RACE page pushed over the MULTIPLAYER page (BACK from it lands
+   there and ends the flow, dropping the lobby; `Session::sync_multiplayer`), remembered as
+   ever. **The mode row marks a mode that takes fewer people than are seated** (`oag_ui::menu::cap_modes`,
+   `Mode::max_people`: Head to Head, two craft; `OAG_MP_MODE_CAPPED`, "For 2 people at most"): dimmed with the reason, still
+   steppable. Head to Head is not in `Mode::ALL` yet (`h2h-port-titles`), so no row is marked today.
+7. **Track Select**, then Ship Select per seat, then the race (`session::picker`, unchanged).
+   Backing out of Track Select lands on the RACE page with the seats kept.
 
-The path, walked windowed on PS2 Pulse, PSP Pulse and Pure (Xvfb, lavapipe, two virtual
-pads): **main menu row -> RACE page -> START -> join screen -> Track Select -> Ship Select
-per seat -> a two-view race.** The PS2's own path is row -> `TournamentLoad` -> `Split
-ScreenV`/`Split ScreenH` (on-screen title RACEBOX) -> `Track CreationSplit` or `Tournament
-CSplitV`/`H` -> `Team SelectionSplit`.
+**Quick paths.** **Race again** from the end screen skips 2 to 5 as it always did: the devices
+stay seated and the windows open (`seat_the_windows`). **RETURN TO MENU** after a multiplayer race
+(not the campaign's) opens the menus on the RACE page of the flow with the same people seated
+(`Session::reenter_multiplayer`, **chosen, not measured**: the disc's redirect lands on the main menu and this
+is the one place that is changed): change the track and race again is one START. Leaving
+through BACK ends the flow. A fresh entry from the main menu pre-fills every step.
 
-- **The rows** are `Title::main_menu`'s `borrowed` list (`oag_title::Borrowed`): data on the
-  title, the same two rows for both Pulse pressings and for Pure, so the PSP's ground-truth
-  list of seven rows stays the disc's own. `pulses_ps2_main_menu_puts_the_borrowed_rows_where_the_disc_does`
-  reads the PS2 disc and asserts this build's order equals the disc's, which is what proves
-  the placement. The words are the PS2's English (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`,
-  `FE_HELP_SS`) carried in `english.toml` under `OAG_MENU_SPLIT_VERTICAL`, `_HORIZONTAL` and
-  `_HELP`, pinned to the disc by `the_split_rows_words_are_the_ps2_discs_own`. The build skips
-  the generic `oag-extras` SPLIT SCREEN row on these titles (the title claims its id);
-  HD, Omega and 2048 are unchanged and keep it.
-- **The settings page is our RACE page**, the PS2's `Split ScreenV`/`H` rows being mode, class,
-  weapons, difficulty and eliminations, which MODE, SPEED CLASS, WEAPONS, AI DIFFICULTY and KILLS
-  match. **Differs, not built**: the PS2's `Mode` list is `Arcade`, `Tournament`, `Head2Head`
-  (Head2Head greys WEAPONS to `OFF` and AI DIFFICULTY, seen live 2026-10-14);
-  ours is this build's race modes, so Tournament and Head to Head are missing, and the
-  `TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves
-  by itself). Time Trial, Speed Lap and Zone stay reachable as split races (a split fields
-  opponents whatever the mode, **except a Time Trial of two or more people**, which fields the
-  people only and is Pulse PSP's Multiplayer Time Trial: [mp-time-trial.md](../ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port)),
-  **chosen, not measured**. `GSDisableEntriesBitField` is not applied.
-- **The join step is ours**, labelled: the PS2 seats two pads in port order, we need a device
-  claim and seat up to eight. It sits **after** the settings page (the race box's START opens
-  it), not before, because `handle_menu` drops a lobby on any settings change; seating at
-  START is also where HD's authored head count seats its people. Two people is the authored
-  flow; three to eight is our extension.
-- **VERTICAL vs HORIZONTAL**: the row sets `Session::split_cut` (`oag_render::viewport::Cut`),
-  the one HD's authored `SplitScreen` row and `--split-cut` set too; `Options::cut` and
-  `split_screen::seat_for_launch` carry it to the race. SPLIT SCREEN VERTICAL therefore draws two
-  full-height columns on Pulse and Pure, with the split HUD's `tall` rule from this
-  project's `SplitHud_Pulse.toml` and `SplitHud_Pure.toml` fallbacks (headless stills at
-  `--players 2 --split-cut vertical --ticks 400` read on PSP Pulse, PS2 Pulse and Pure,
-  2026-10-13; judged again with the `tall` rule, `split-hud-vertical`, below). Three or more people are cut in
-  rows whatever the row said (`Cut::for_views`). The generic SPLIT SCREEN row (Omega, 2048) is cut
-  top and bottom unless `--split-cut` says otherwise.
+**Where the original's pages differ and this build's RACE page stands in** (carried from the
+2026-10-13 entry): the PS2's `Split ScreenV`/`H` rows are mode, class, weapons, difficulty and
+eliminations, which MODE, SPEED CLASS, WEAPONS, AI DIFFICULTY and KILLS match. Its `Mode`
+list is `Arcade`, `Tournament`, `Head2Head` (Head2Head greys WEAPONS to `OFF` and AI DIFFICULTY,
+seen live 2026-10-14); ours is this build's race modes, so Tournament is missing and Head to
+Head arrives with `h2h-port-titles`. Time Trial, Speed Lap and Zone stay reachable as split races (a split
+fields opponents whatever the mode). `GSDisableEntriesBitField` is not applied. The PS2's
+`TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves by itself).
+
+**Walked** (2026-10-14, windowed on an own Xvfb with software Vulkan, `scripts/uinput-pads.py`
+with three pads and `xdotool` for the keyboard, member `mp-menu-flow`): **every title through the page and the join
+screen**, and **Pulse PSP EU, PS2 Pulse EU, Pure EU and Omega through the flow to a two-view race frame** (HD to
+`Ship Select - Player 1` and the load screen, its picker is Omega's; 2048 stopped at the join screen: its race has no
+Ship Select to walk).
+
+- **Pulse PSP EU, the whole flow**: main menu (`MULTIPLAYER & SHARING` between REMIX and OPTIONS, its authored help under
+  it), the page (LOCAL, LAN and ONLINE dimmed, `Coming later` under LAN), join (pad a and pad b, START of pad c joins
+  a third and its circle gives the seat up), layout, RACE page, MODE changed to Single Race, Track Select, the shared
+  two-person Ship Select, a two-view race. The pause's circle left it for the menus, and **a second round
+  came up with both pads already seated, the layout and the Single Race mode remembered**. A race flown by `--autopilot`
+  ended in the results and the end menu: **RACE AGAIN** raced the same two views (no join, no layout), **RETURN TO
+  MENUS** came up on the RACE page and START went to the two-seat Ship Select (the lobby survived the page).
+- **PS2 Pulse EU**: the keyboard joined seat 1 and a pad seat 2, START, layout, RACE page, Track Select, the shared
+  Ship Select: the keyboard seat's `X` set its side `READY`, the pad's cross the other, then a two-view race. (That binary had no
+  log line for the raw path, so which keyboard path it was is not recorded; Pure's walk below is the proof of the raw one.)
+- **Pure EU, keyboard and pad: the raw-key path, live**: with the log line in (`keyboards: a raw key event names the
+  keyboard, so the join screen tells keyboards apart`, so **raw key events do reach the game on an Xvfb**), the keyboard
+  joined seat 1 and a pad seat 2, START, layout, RACE page, Track Select, and the one-per-seat Ship Select:
+  **`X` on the keyboard confirmed `Team Selection - Player 1` (a `Keys` seat reading its own raw presses through the
+  picker) and the pad's cross `Player 2`**, then a two-view race.
+- **Omega, two pads**: join (`PLAYER 2 PRESS OPTIONS TO JOIN` before the second pad), layout, RACE page, Track Select,
+  `Ship Select - Player 1` and `- Player 2`, a two-view race with the HD-shaped HUD.
+- **A Time Trial of two or more people** fields the people only and runs Pulse PSP's Multiplayer Time Trial rules
+  (craft pass through each other): [mp-time-trial.md](../ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port).
+- **Not walked**: a real second X11 keyboard (a plain Xvfb has one XTEST keyboard), Wayland, a real integrated GPU,
+  a layout of two windows through to a race from the menus (the layout screen's own walk is `multi-window.md`'s), the
+  LAN and ONLINE rows by click or touch (they go through the menus' one `activate`), a Head to Head cap on screen, HD's
+  race frame and a 2048 race from the menus.
+- Found by walking: **2048's `MULTIPLAYER` word was clipped by its 122-unit tile** (fixed: a word wider than the box is
+  drawn smaller, `touch::CAPITAL_WIDTH`, chosen, not measured); HD's language table lacked the join line (the overlay in step 2).
 
 ### Integrated GPUs (2026-10-13)
 
@@ -1018,11 +1061,10 @@ HD, 2048 and Omega: data on the title, no title-name branch), read by
 a discrete, virtual, software (lavapipe) or unknown adapter offers every title. Where it
 acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
 
-- **The menus**: `Definition::drop_split_screen` removes every split entry (the generic row, the
-  two Pulse and Pure rows, and the authored or borrowed `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows of
-  HD, Omega and 2048) when a `Shell` is installed (`Session::drop_split_screen_row`, from the windowed
-  boot and from 2048's placeholder route; a language reload clones the trimmed
-  definition). REMIX and every other row stay.
+- **The menus**: `Definition::drop_multiplayer` removes the MULTIPLAYER row (the page behind it
+  would hold nothing to do) on HD, 2048 and Omega when a `Shell` is installed
+  (`Session::drop_split_screen_row`, from the windowed boot and from 2048's placeholder route; a
+  language reload clones the trimmed definition). REMIX and every other row stay.
 - **A windowed `--race --players N`** on such a title logs `--players N: split screen is
   not offered for <title> on an integrated GPU, so one view` and runs one view
   (`players_offered`). **Headless captures and the render bench are not gated**: they are
@@ -1039,8 +1081,9 @@ people only, with craft that pass through each other, [mp-time-trial.md](../ghid
 so Time Trial, Speed Lap and Zone are reachable as split races from the menus. Restarting a race from the 2048 end-of-race screen, which skips the
 menus, keeps the split.
 
-START goes on to the race box's own Track Select and Ship Select, as the RACE
-page's START does; backing out of Track Select drops the lobby. **Each seat picks its
+The join screen's START goes on to the window layout and the RACE page (LOCAL MULTIPLAYER's flow above), whose START opens
+Track Select and Ship Select; backing out of Track Select lands on the RACE page and the flow
+ends when the menu leaves that page. **Each seat picks its
 own craft** - see [Ship Select per seat](#ship-select-per-seat). The race build
 drains it (`split_screen::seat`): slots `0..count` become local, the screen is
 cut into `count` views and each device goes on the slot it joined. One seat, or
