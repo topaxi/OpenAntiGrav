@@ -763,11 +763,18 @@ impl Session {
                     // the slot it used to go to.
                     // A local slot nobody is on flies as the AI, or the race
                     // never ends: see `split_screen::follow_devices`.
-                    oag_game::split_screen::follow_devices(
-                        &mut stage.race,
-                        self.controls.assignment(),
-                    );
-                    stage.race.tick(&inputs);
+                    if let Some(net) = &self.net {
+                        // The server's race: predicted and corrected by the
+                        // protocol, this machine's devices on its seat. The
+                        // devices are all on slot 0 under the default assignment.
+                        net.step(&mut stage.race, *inputs.get(0));
+                    } else {
+                        oag_game::split_screen::follow_devices(
+                            &mut stage.race,
+                            self.controls.assignment(),
+                        );
+                        stage.race.tick(&inputs);
+                    }
                     stage.tick_messages();
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame

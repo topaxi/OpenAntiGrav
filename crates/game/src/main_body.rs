@@ -674,6 +674,7 @@ fn run(cli: Cli) -> Result<()> {
         measure_race_load: cli.measure.measure_race_load,
         give,
         no_intro: cli.intro.no_intro,
+        net: None,
         prompt_style: cli
             .menu_args
             .prompt_style

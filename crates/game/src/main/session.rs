@@ -376,6 +376,9 @@ pub(crate) struct Session {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`, carried into the race loop. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--connect`: the race is stepped through the server's protocol instead of
+    /// `Race::tick`. See `oag_game::net_play`.
+    pub(crate) net: Option<oag_game::net_play::NetPlay>,
     /// `--autopilot`, carried the same way and applied to every race this
     /// session starts - including one launched from the menus, which is how
     /// the results table is reached without driving. See

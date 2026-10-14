@@ -98,6 +98,10 @@ impl super::Session {
         let Stage::Race(stage) = &self.stage else {
             return;
         };
+        // Start does not pause a network race, for the reason `window_away` gives.
+        if self.net.is_some() {
+            return;
+        }
         let start_counted = oag_race::RaceState::thrust_gated(stage.race.sim.world.tick)
             || (!self.no_intro && stage.race.intro_to_play());
         let assignment = self.controls.assignment();
