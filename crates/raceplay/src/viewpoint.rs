@@ -53,6 +53,11 @@ pub(super) struct Viewpoints {
     /// Which way two views are cut. Read through [`Race::cut`], which ignores it for
     /// any other count.
     cut: oag_render::viewport::Cut,
+    /// Each view fills a window of its own instead of a rectangle of one
+    /// (`--windows N`): [`Race::views_drawn`] is one, so the layout and the
+    /// HUD's placement see the whole window. A presentation choice beside
+    /// [`Self::cut`], not a second count: the cameras are still [`Self::count`]'s.
+    windowed: bool,
     /// The extra slot the scene is being drawn for right now, `None` for the
     /// player's own view. Set by the draw through `&Race`, so a [`Cell`].
     drawing: Cell<Option<u8>>,
@@ -87,6 +92,19 @@ impl Race {
         self.view.viewpoints.cut.for_views(self.viewport_count())
     }
 
+    /// Whether every view fills a window of its own. See [`Viewpoints::windowed`].
+    #[must_use]
+    pub fn windowed(&self) -> bool {
+        self.view.viewpoints.windowed
+    }
+
+    /// Draws each of the race's views into a window of its own rather than into
+    /// one cut into rectangles: the multi-window presentation. A view-side choice
+    /// like [`Self::set_cut`]; no tick reads it and the state hash does not hold it.
+    pub fn set_windowed(&mut self, windowed: bool) {
+        self.view.viewpoints.windowed = windowed;
+    }
+
     /// Chooses the cut for a two-view race. A view-side choice like the cameras: no tick
     /// reads it and the state hash does not hold it.
     pub fn set_cut(&mut self, cut: oag_render::viewport::Cut) {
@@ -116,7 +134,7 @@ impl Race {
     /// with no blur, jitter or upscaler history, for its one last view too.
     #[must_use]
     pub fn views_drawn(&self) -> usize {
-        if self.in_intro() || self.finished() {
+        if self.in_intro() || self.finished() || self.windowed() {
             1
         } else {
             self.viewport_count()

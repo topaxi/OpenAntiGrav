@@ -62,9 +62,67 @@ pub(super) enum Layer {
     First,
     /// A later view: loads what the earlier ones drew.
     Next,
+    /// A view that fills a target of its own (a window): clears like [`Layer::First`] and
+    /// does all the camera-independent work itself, but runs the post chains as
+    /// [`Layer::Whole`] does, because it starts at the origin and fills the target.
+    Window,
 }
 
 impl Scene {
+    /// Draws slot `slot`'s view into the whole of `area` of `view`, recorded into
+    /// `encoder`: one window of a multi-window race. The caller submits `encoder`
+    /// before it draws another window, **one submission per window for the whole
+    /// chain** (scene, resolve, HUD, composite), for the reason the module doc gives.
+    ///
+    /// Everything [`Scene::render`] draws is drawn: the bloom, HD's and Omega's chains
+    /// and the shadows. **Not the motion blur and not the jitter** (**chosen, not
+    /// measured**): [`MotionState`] and the temporal upscaler's frame record hold one
+    /// camera's history, and the windows alternate cameras every frame. The viewpoint is
+    /// put back to the player's own before returning.
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        race: &Race,
+        slot: usize,
+        area: (f32, f32, f32, f32),
+        fov: oag_display::display::Fov,
+        cull: bool,
+        pvs_cull: bool,
+        anim_seconds: Option<f32>,
+        shadows: oag_display::display::Shadows,
+        zone_spectrum: &[f32],
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+    ) -> SceneStats {
+        race.set_viewpoint(slot);
+        self.layer.set(Layer::Window);
+        let stats = self.render(
+            device,
+            queue,
+            encoder,
+            view,
+            race,
+            area,
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            oag_display::display::MotionBlur::Off,
+            shadows,
+            None,
+            zone_spectrum,
+            timestamps,
+            None,
+            None,
+        );
+        self.layer.set(Layer::Whole);
+        race.reset_viewpoint();
+        stats
+    }
+
     /// Draws `race` into the rectangles `race.views_drawn()` cuts `area` into,
     /// and returns the sum of what each drew. **That is one view once the race is
     /// over**: the end screens sit over the spectator camera, and it is drawn

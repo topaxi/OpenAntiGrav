@@ -615,6 +615,13 @@ impl Hold {
     /// `-0x5a7c(r2)`.
     pub const DECAY: f32 = 0.1;
 
+    /// The levels the last [`Self::advance`] returned, without folding another frame in:
+    /// a second window of the same frame reads what the first one advanced.
+    #[must_use]
+    pub fn levels(&self) -> &[f32] {
+        &self.held
+    }
+
     /// Folds one frame's `bands` in and returns the held levels.
     pub fn advance(&mut self, bands: &[f32]) -> &[f32] {
         self.held.resize(bands.len(), 0.0);

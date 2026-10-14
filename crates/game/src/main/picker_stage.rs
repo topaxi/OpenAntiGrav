@@ -434,7 +434,7 @@ impl PickerStage {
         let preview = Preview::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             self.anisotropy,
             model,
         )

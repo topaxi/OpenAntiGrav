@@ -455,13 +455,19 @@ impl Session {
         // The join screen's seats, or the seats a restart kept: the load reads a
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
+        self.seat_the_windows(&mut options);
         if let Some(seats) = self
             .split_lobby
             .as_ref()
             .map(oag_input::lobby::Lobby::count)
             .or_else(|| self.controls.assignment().humans())
         {
-            options.views = u8::try_from(seats).unwrap_or(u8::MAX);
+            // A window each shows the whole-screen HUD, which is what one view packs.
+            options.views = if self.seats_cover(seats) {
+                1
+            } else {
+                u8::try_from(seats).unwrap_or(u8::MAX)
+            };
         }
         // Which way two views are cut: the load reads the left-and-right HUD for a vertical
         // cut, and `split_screen::seat_for_launch` cuts the screen the same way.
@@ -575,6 +581,7 @@ impl Session {
         let ai_choice = self.ai_choice;
         let cut = self.split_cut;
         let ai_difficulty = crate::args::resolve_difficulty(&self.settings);
+        let open_windows = self.open_slots();
         let Stage::Loading(stage) = &mut self.stage else {
             return;
         };
@@ -596,7 +603,7 @@ impl Session {
                 if built.allocation != allocation {
                     race_stage
                         .scene
-                        .resize(&self.gpu.device, self.gpu.config.format, allocation);
+                        .resize(&self.gpu.device, self.gpu.output.config.format, allocation);
                 }
                 // Drained here, not read: this is the one place a launch that
                 // set `self.campaign_cell` (`Session::launch_campaign_cell`)
@@ -613,6 +620,11 @@ impl Session {
                     &mut race_stage.race,
                     cut,
                 );
+                // Every person has a window of their own: show them as windows, not as
+                // views cut up inside window 1. Otherwise the split is window 1's, as ever.
+                if crate::windows::covers(&open_windows, race_stage.race.viewport_count()) {
+                    race_stage.race.set_windowed(true);
+                }
                 race_stage.campaign_difficulty = self.campaign_difficulty.take();
                 race_stage.campaign_ai_skill_scale = self.campaign_ai_skill_scale.take();
                 // Applied here, once, before the stage ever ticks - see
@@ -814,6 +826,7 @@ impl Session {
         }
         debug!("race music started in {:?}", music_start.elapsed());
         self.gpu
+            .output
             .window
             .set_title(&hints::race_title(&strings::project_table(
                 self.settings.language.as_deref(),

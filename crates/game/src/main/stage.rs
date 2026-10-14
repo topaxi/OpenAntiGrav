@@ -58,7 +58,7 @@ impl Stage {
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             None,
             oag_ui::font::Atlas::build(),
             &oag_hud::sprite::Sheet::default(),
@@ -103,7 +103,7 @@ impl Stage {
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             None,
             shell.font.clone(),
             // **The feature illustration's own sheet where this title ships
@@ -123,7 +123,7 @@ impl Stage {
         let wave = oag_render::loading::Pipeline::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             &assets.strip,
             1,
         );
@@ -175,7 +175,7 @@ impl Stage {
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             None,
             font.clone(),
             // The illustration's own sheet where the title ships one; see
@@ -186,7 +186,7 @@ impl Stage {
         let wave = oag_render::loading::Pipeline::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             &assets.strip,
             1,
         );
@@ -225,7 +225,7 @@ impl Stage {
         let renderer = Renderer::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             video_format,
             loaded.font.clone(),
             &loaded.sprites,

@@ -199,7 +199,7 @@ impl Session {
     }
 
     fn window_size(&self) -> (f32, f32) {
-        let (w, h) = self.gpu.size();
+        let (w, h) = self.gpu.output.size();
         (w as f32, h as f32)
     }
 }

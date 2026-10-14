@@ -48,6 +48,9 @@ pub struct CaptureOptions {
     pub ai_choice: crate::ai_choice::AiChoice,
     /// `--players`: how many split-screen views. See [`crate::split_screen`].
     pub players: u8,
+    /// `--windows`: the `players` people are shown a window each rather than cut up in one
+    /// picture, and the capture writes one PNG per window. See [`windows`].
+    pub windows: bool,
     /// `--split-cut`: which way two views are cut.
     pub cut: oag_render::viewport::Cut,
     /// `--force-shake TICK:SEVERITY`: arm the camera shake as a wall hit would.
@@ -976,6 +979,7 @@ pub fn capture(
                     &hud_view,
                     &race,
                     &scene,
+                    race.player_slot(),
                     None,
                     record_target.as_ref(),
                     hud_viewport,

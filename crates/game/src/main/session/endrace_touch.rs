@@ -101,7 +101,7 @@ impl Session {
         match TouchRuntime::new(
             &self.gpu.device,
             &self.gpu.queue,
-            self.gpu.config.format,
+            self.gpu.output.config.format,
             screens,
             model,
             space,

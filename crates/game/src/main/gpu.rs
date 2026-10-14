@@ -22,27 +22,38 @@ use crate::window::{
     centred_on, choose_monitor, frame_latency, fullscreen, present_modes, window_icon,
 };
 
-/// The window and the GPU objects, which both stages draw through.
-///
-/// One window and one device for the whole process: the front end reaching
-/// `Launch Game` swaps what is drawn, not what it is drawn with.
-pub(crate) struct Gpu {
+/// One window and the surface drawn onto it: everything about a screen that is
+/// not the device. Window 1 owns one inside [`Gpu`]; each further window of a
+/// multi-window race (`crate::windows`) owns one beside the same device.
+pub(crate) struct Output {
     pub(crate) window: Arc<Window>,
-    /// The instance the surface came from: a surface is only valid with the
-    /// adapter and device of its own instance, so [`Gpu::recreate_surface`]
-    /// needs this one and not a fresh `adapter::instance()`.
-    instance: wgpu::Instance,
-    pub(crate) device: wgpu::Device,
-    pub(crate) queue: wgpu::Queue,
     /// The swapchain image this frame acquired ahead of its ticks, until the
-    /// draw takes it. See [`Gpu::acquire`]. **Declared before
+    /// draw takes it. See [`Output::acquire`]. **Declared before
     /// [`Self::surface`]** because fields drop in declaration order, and an
     /// image must not outlive the surface it came from.
     held: Option<wgpu::SurfaceTexture>,
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
-    /// The present modes this surface actually has. See [`Gpu::present_mode`].
+    /// The present modes this surface actually has. See [`Output::present_mode`].
     offered: Vec<wgpu::PresentMode>,
+}
+
+/// The window and the GPU objects, which both stages draw through.
+///
+/// One device for the whole process: the front end reaching `Launch Game`
+/// swaps what is drawn, not what it is drawn with. One window until a race
+/// asks for more (`--windows`), and then the others share this device.
+pub(crate) struct Gpu {
+    pub(crate) output: Output,
+    /// The instance the surface came from: a surface is only valid with the
+    /// adapter and device of its own instance, so [`Gpu::recreate_surface`] and
+    /// [`Gpu::open_output`] need this one and not a fresh `adapter::instance()`.
+    instance: wgpu::Instance,
+    /// The adapter the device came from, which a further window's surface is
+    /// configured against. Cheap to clone and kept for that.
+    adapter: wgpu::Adapter,
+    pub(crate) device: wgpu::Device,
+    pub(crate) queue: wgpu::Queue,
     /// What the RENDERER row offers. See [`adapter::Chosen::offered`].
     pub(crate) adapters: Vec<String>,
     /// What the RENDERER row would have to say to describe this run, which is
@@ -75,6 +86,7 @@ pub(crate) struct Gpu {
 /// to run the whole sequence again on a different adapter. See
 /// [`Gpu::bring_up`].
 pub(crate) struct BroughtUp {
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
@@ -173,6 +185,7 @@ impl Gpu {
         );
         Ok(BroughtUp {
             temporal,
+            adapter: chosen.adapter,
             device,
             queue,
             config,
@@ -283,6 +296,7 @@ impl Gpu {
             Err(e) => return Err(e),
         };
         let BroughtUp {
+            adapter,
             device,
             queue,
             config,
@@ -295,20 +309,23 @@ impl Gpu {
 
         let mut gpu = Self {
             temporal,
-            window,
+            output: Output {
+                window,
+                held: None,
+                surface,
+                config,
+                offered,
+            },
             instance,
+            adapter,
             device,
             queue,
-            surface,
-            config,
-            offered,
             adapters,
             in_use,
             device_type,
-            held: None,
         };
-        gpu.apply_vsync(settings.vsync);
-        gpu.configure();
+        gpu.output.apply_vsync(settings.vsync);
+        gpu.output.configure(&gpu.device);
         Ok(gpu)
     }
 
@@ -322,7 +339,7 @@ impl Gpu {
     pub(crate) fn recreate_surface(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         // Before the old surface is replaced below: an image of it must not
         // outlive it.
-        self.held = None;
+        self.output.held = None;
         let window = Arc::new(
             event_loop
                 .create_window(Window::default_attributes())
@@ -334,14 +351,84 @@ impl Gpu {
             .create_surface(window.clone())
             .context("recreating the surface")?;
         let size = window.inner_size();
-        self.window = window;
-        self.surface = surface;
-        self.config.width = size.width.max(1);
-        self.config.height = size.height.max(1);
-        self.configure();
+        self.output.window = window;
+        self.output.surface = surface;
+        self.output.config.width = size.width.max(1);
+        self.output.config.height = size.height.max(1);
+        self.output.configure(&self.device);
         Ok(())
     }
 
+    /// A further window of a multi-window race, on this device: the window, a surface
+    /// over it configured against the same adapter, and the present modes it offers.
+    ///
+    /// `modes` is the chain [`Output::apply_modes`] walks, the first one the surface
+    /// offers. A seat window asks for a mode that does not block
+    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    pub(crate) fn open_output(
+        &self,
+        event_loop: &ActiveEventLoop,
+        title: &str,
+        size: winit::dpi::LogicalSize<u32>,
+        monitor: Option<winit::monitor::MonitorHandle>,
+        modes: &[wgpu::PresentMode],
+    ) -> Result<Output> {
+        let mut attributes = Window::default_attributes()
+            .with_title(title)
+            .with_inner_size(size)
+            .with_window_icon(Some(window_icon()))
+            .with_fullscreen(
+                monitor
+                    .clone()
+                    .map(|monitor| winit::window::Fullscreen::Borderless(Some(monitor))),
+            );
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            attributes = attributes.with_name(APP_ID, APP_ID);
+        }
+        if let (None, Some(monitor)) = (&attributes.fullscreen, &monitor) {
+            attributes = attributes.with_position(centred_on(
+                monitor,
+                oag_display::display::Size {
+                    width: size.width,
+                    height: size.height,
+                },
+            ));
+        }
+        let window = Arc::new(
+            event_loop
+                .create_window(attributes)
+                .context("creating a further window")?,
+        );
+        window.set_cursor_visible(false);
+        let surface = self
+            .instance
+            .create_surface(window.clone())
+            .context("creating a further surface")?;
+        let inner = window.inner_size();
+        let mut config = surface
+            .get_default_config(&self.adapter, inner.width.max(1), inner.height.max(1))
+            .context("the surface is not supported by this adapter")?;
+        // The same format rule as window 1's: see `Gpu::bring_up`.
+        config.format = config.format.remove_srgb_suffix();
+        config.view_formats = vec![config.format];
+        let offered = surface.get_capabilities(&self.adapter).present_modes;
+        let mut output = Output {
+            window,
+            held: None,
+            surface,
+            config,
+            offered,
+        };
+        output.apply_modes(modes, 1);
+        output.configure(&self.device);
+        Ok(output)
+    }
+}
+
+impl Output {
     /// Acquires the next swapchain image and holds it for this frame's draw,
     /// answering whether there is one.
     ///
@@ -355,7 +442,7 @@ impl Gpu {
     /// surface that is `Outdated` or `Lost` is reconfigured and the frame
     /// draws nothing; any other refusal (a timeout, an occluded or minimised
     /// window) skips the frame the same way.
-    pub(crate) fn acquire(&mut self) -> bool {
+    pub(crate) fn acquire(&mut self, device: &wgpu::Device) -> bool {
         self.held = None;
         match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(frame)
@@ -364,7 +451,7 @@ impl Gpu {
                 true
             }
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                self.configure();
+                self.configure(device);
                 false
             }
             other => {
@@ -385,40 +472,49 @@ impl Gpu {
     /// old swapchain outstanding. Every configure goes through here - a
     /// settings change that reconfigures mid-frame (vsync) costs that frame its
     /// draw, which the caller already counts as a stall.
-    pub(crate) fn configure(&mut self) {
+    pub(crate) fn configure(&mut self, device: &wgpu::Device) {
         self.held = None;
-        self.surface.configure(&self.device, &self.config);
+        self.surface.configure(device, &self.config);
     }
 
-    /// The best present mode this surface offers for a vsync setting.
+    /// The best present mode this surface offers out of `wanted`, best first.
     ///
     /// Falls back to `Fifo`, which Vulkan requires every device to have, and
     /// says so once rather than silently: "vsync off did nothing" is otherwise
     /// a bug report about this build rather than a fact about the driver.
-    fn present_mode(&self, vsync: perf::Vsync) -> wgpu::PresentMode {
-        for wanted in present_modes(vsync) {
+    fn present_mode(&self, wanted: &[wgpu::PresentMode], what: &dyn std::fmt::Display) -> wgpu::PresentMode {
+        for wanted in wanted {
             if self.offered.contains(wanted) {
                 return *wanted;
             }
         }
         warn!(
-            "this surface offers {:?}, so vsync {vsync} falls back to Fifo",
+            "this surface offers {:?}, so {what} falls back to Fifo",
             self.offered
         );
         wgpu::PresentMode::Fifo
     }
 
     /// Puts `vsync` into effect.
-    pub(crate) fn set_vsync(&mut self, vsync: perf::Vsync) {
+    pub(crate) fn set_vsync(&mut self, device: &wgpu::Device, vsync: perf::Vsync) {
         self.apply_vsync(vsync);
-        self.configure();
+        self.configure(device);
     }
 
     /// The present mode and queue depth `vsync` asks for, into the config.
     fn apply_vsync(&mut self, vsync: perf::Vsync) {
-        self.config.present_mode = self.present_mode(vsync);
+        self.config.present_mode = self.present_mode(present_modes(vsync), &format_args!("vsync {vsync}"));
         self.config.desired_maximum_frame_latency =
             frame_latency(vsync, self.config.present_mode);
+    }
+
+    /// The first of `modes` this surface offers, with `latency` frames queued,
+    /// into the config: a further window's counterpart of [`Self::apply_vsync`],
+    /// which does not follow the VSYNC row.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    fn apply_modes(&mut self, modes: &[wgpu::PresentMode], latency: u32) {
+        self.config.present_mode = self.present_mode(modes, &"a further window's present mode");
+        self.config.desired_maximum_frame_latency = latency;
     }
 
     /// The viewport, which every stage draws into.
@@ -449,7 +545,7 @@ impl GpuContext for Gpu {
         &self.queue
     }
     fn format(&self) -> wgpu::TextureFormat {
-        self.config.format
+        self.output.config.format
     }
 }
 
@@ -471,7 +567,7 @@ impl Gpu {
         Handles {
             device: self.device.clone(),
             queue: self.queue.clone(),
-            format: self.config.format,
+            format: self.output.config.format,
         }
     }
 }

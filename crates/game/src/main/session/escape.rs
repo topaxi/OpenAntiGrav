@@ -106,7 +106,7 @@ impl Session {
             &oag_source::cache::default_audio_cache_dir(),
         );
         let strings = strings::project_table(self.settings.language.as_deref());
-        self.gpu.window.set_title(&hints::race_title(&strings));
+        self.gpu.output.window.set_title(&hints::race_title(&strings));
         println!(
             "\n{}{}",
             hints::race_keys(&strings),

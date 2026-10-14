@@ -32,6 +32,7 @@ use crate::prepare;
 use crate::session::lifecycle::Away;
 use crate::session::{Session, Shell};
 use crate::stage::Stage;
+use crate::windows;
 
 /// One application handler for both ways in, because there is one window.
 pub(crate) struct App {
@@ -70,6 +71,10 @@ pub(crate) struct App {
     pub(crate) ai_choice: oag_game::ai_choice::AiChoice,
     /// `--players`: split-screen views of a direct `--race`. See `oag_game::split_screen`.
     pub(crate) players: u8,
+    /// `--windows`: how many OS windows, `1` for the one. See `crate::windows`.
+    pub(crate) windows: u8,
+    /// `--windows-fullscreen`.
+    pub(crate) windows_fullscreen: bool,
     /// `--split-cut`: which way two views are cut.
     pub(crate) split_cut: oag_render::viewport::Cut,
     /// `--anim-seconds`: pins the trackside animation clock. See
@@ -187,11 +192,11 @@ impl App {
         // reallocation.
         let render_profile = self.race_profile();
         let target = oag_game::settings::web::render_target(
-            display::viewport(gpu.size(), self.settings.display.aspect),
+            display::viewport(gpu.output.size(), self.settings.display.aspect),
             render_profile.render_scale,
             gpu.device.limits().max_texture_dimension_2d,
         );
-        let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.config.format, target)
+        let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.output.config.format, target)
             .context("building the upscale pipeline")?;
         // Read once here and polled from the frame loop after: the built-ins
         // are in the binary, and the player's directory is one `read_dir`.
@@ -229,6 +234,9 @@ impl App {
             return Ok(None);
         };
         let mut music_place = oag_game::music_state::Run::default();
+        // Windows beyond the first: a front-end run asks for them here and opens them once
+        // its title is known; a `--race` run sets this where it seats its views, below.
+        let mut windows_wanted = if self.race.is_none() { self.windows } else { 0 };
         let stage = if let Some(launcher) = self.launcher.take() {
             // Before both of the others, because it is what comes before both:
             // nothing has been opened yet and the two branches below are about
@@ -236,7 +244,7 @@ impl App {
             // `Stage::launcher` - since there is no disc to take a font from.
             Stage::launcher(&gpu, launcher)?
         } else if let Some(loaded) = self.race.take() {
-            gpu.window
+            gpu.output.window
                 .set_title(&hints::race_title(&strings::project_table(
                     self.settings.language.as_deref(),
                 )));
@@ -305,10 +313,18 @@ impl App {
                 let players = self.race_title.map_or(self.players, |title| {
                     oag_game::split_screen::players_offered(title, gpu.device_type, self.players)
                 });
-                oag_game::split_screen::apply(
+                let views = oag_game::split_screen::apply(
                     &mut race_stage.race,
                     usize::from(players),
-                    self.split_cut,);
+                    self.split_cut,
+                );
+                // `--windows N`: those views are a window each. The windows themselves
+                // open on the first pass of the event loop (`Session::seats_to_open`),
+                // when the title is known to offer them.
+                if self.windows > 1 && views > 1 {
+                    race_stage.race.set_windowed(true);
+                    windows_wanted = self.windows;
+                }
             }
             staged
         } else if let Some(shell) = self.boot_shell.take() {
@@ -367,7 +383,7 @@ impl App {
         let overlay = Renderer::new(
             &gpu.device,
             &gpu.queue,
-            gpu.config.format,
+            gpu.output.config.format,
             None,
             oag_ui::font::Atlas::build(),
             &cursor_sheet,
@@ -519,6 +535,10 @@ impl App {
             pure_chain_class: 0,
             split_lobby: None,
             split_cut: self.split_cut,
+            seats: Vec::new(),
+            windows_wanted,
+            windows_fullscreen: self.windows_fullscreen,
+            focus: crate::windows::Focus::default(),
             split_race_box: false,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
@@ -595,7 +615,7 @@ impl ApplicationHandler for App {
                 match session.gpu.recreate_surface(event_loop) {
                     Ok(()) => {
                         self.suspended = false;
-                        let (width, height) = session.gpu.size();
+                        let (width, height) = session.gpu.output.size();
                         session.resize(width, height);
                         // A minimised desktop window never gets here, but a
                         // resume on top of one would be wrong to restart.
@@ -632,13 +652,50 @@ impl ApplicationHandler for App {
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
         if self.suspended {
             return;
         }
         let Some(session) = self.state.as_mut() else {
             return;
         };
+
+        // A `--windows` run: which window is this for? The keyboard is one device whichever
+        // window has the focus, so its events go the way window 1's do; a seat window's
+        // own life (resize, close, focus) is handled here; the rest of what a seat
+        // receives is not for it (the front end, the pointer and drops are window 1's).
+        if !session.seats.is_empty() {
+            let ids = session.seat_ids();
+            let primary = session.gpu.output.window.id();
+            let is_seat = windows::which(id, primary, &ids).is_some_and(|which| which != windows::Which::Primary);
+            match (&event, windows::closed(id, primary, &ids)) {
+                (WindowEvent::CloseRequested | WindowEvent::Destroyed, windows::Closed::Seat(index)) => {
+                    session.close_seat(index);
+                    return;
+                }
+                (WindowEvent::Destroyed, windows::Closed::Nothing) => return,
+                _ => {}
+            }
+            match &event {
+                WindowEvent::Focused(gained) => {
+                    session.focus.changed(id, *gained, web_time::Instant::now());
+                    if !*gained && !is_seat {
+                        session.controls.release_all();
+                        session.pointer.release();
+                    }
+                    return;
+                }
+                WindowEvent::Resized(size) if is_seat => {
+                    if let Some(index) = ids.iter().position(|seat| *seat == id) {
+                        session.resize_seat(index, *size);
+                    }
+                    return;
+                }
+                WindowEvent::KeyboardInput { .. } | WindowEvent::ModifiersChanged(_) => {}
+                _ if is_seat => return,
+                _ => {}
+            }
+        }
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
@@ -809,6 +866,17 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // The further windows of a `--windows` run, opened on the first pass the title is
+        // known on, and the focus decision across all of them.
+        if let Some(session) = self.state.as_mut() {
+            #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+            if let Some(count) = session.seats_to_open() {
+                session.open_seats(event_loop, count);
+            }
+            if !session.seats.is_empty() && session.focus.away(web_time::Instant::now()) {
+                session.window_away(Away::FocusLost);
+            }
+        }
         // A menu asking to quit is handled here rather than where it is raised:
         // the tick loop has no event loop to call, and quitting from inside a
         // frame would leave that frame half-drawn.
@@ -843,7 +911,7 @@ impl ApplicationHandler for App {
             #[cfg(target_arch = "wasm32")]
             _ => {
                 event_loop.set_control_flow(ControlFlow::Wait);
-                session.gpu.window.request_redraw();
+                session.gpu.output.window.request_redraw();
             }
             #[cfg(not(target_arch = "wasm32"))]
             Some(deadline) if web_time::Instant::now() < deadline => {
@@ -852,7 +920,7 @@ impl ApplicationHandler for App {
             #[cfg(not(target_arch = "wasm32"))]
             _ => {
                 event_loop.set_control_flow(ControlFlow::Poll);
-                session.gpu.window.request_redraw();
+                session.gpu.output.window.request_redraw();
             }
         }
     }

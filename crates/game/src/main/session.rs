@@ -76,6 +76,8 @@ mod placeholder;
 mod pointer;
 #[path = "session/timing.rs"]
 mod timing;
+#[path = "session/windows.rs"]
+mod windows;
 #[path = "session/tournament.rs"]
 mod tournament;
 // Named `remix_menu`, not `remix` - `oag_game::remix` is already imported
@@ -590,6 +592,17 @@ pub(crate) struct Session {
     /// `SPLIT SCREEN` row on a title that authors it, set when the join screen starts the
     /// race. Kept across a restart from the end screens, which keeps the seats.
     pub(crate) split_cut: oag_render::viewport::Cut,
+    /// The windows after the first of a `--windows N` run (`crate::windows`): empty until
+    /// [`Session::open_seats`] has opened them, and then one per seat still open.
+    pub(crate) seats: Vec<crate::windows::Seat>,
+    /// How many windows `--windows` asked for, in all, until the seats are opened (or
+    /// refused for the title); `0` for a run with one window. See [`Session::seats_to_open`].
+    pub(crate) windows_wanted: u8,
+    /// `--windows-fullscreen`: each window borderless fullscreen on a monitor of its own.
+    pub(crate) windows_fullscreen: bool,
+    /// Which of the run's windows have focus. Used only while there are seats: with one
+    /// window a lost focus is acted on at once, as it always was.
+    pub(crate) focus: crate::windows::Focus,
     /// Set while the RACE page is open as a split-screen race box (`Session::open_split_race_box`):
     /// its START goes through the join screen first. Cleared when the menu leaves that
     /// page.
@@ -990,9 +1003,9 @@ impl Session {
         if width == 0 || height == 0 {
             return;
         }
-        self.gpu.config.width = width;
-        self.gpu.config.height = height;
-        self.gpu.configure();
+        self.gpu.output.config.width = width;
+        self.gpu.output.config.height = height;
+        self.gpu.output.configure(&self.gpu.device);
         // The depth attachment follows the *framebuffer*, not the window, and
         // `frame` resizes both together - so a resize only has to invalidate,
         // which configuring the surface above already did.
