@@ -324,6 +324,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_backdrop_parent: None,
     picker_from_loaded_faces: false,
     fallback_globals: &[],
+    colour_template: None,
     fallback_images: &[],
 };
 

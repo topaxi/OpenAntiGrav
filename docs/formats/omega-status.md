@@ -332,15 +332,13 @@ PSVR rows on a flat screen; this build draws them as padlocks.
 
 **The statistics.** The four bars take the selected model's own `<FE>` (tenths, so Feisar `normal` reads `070 080 100 080`
 and `concept1`/`nitro` `080 085 100 080`) through `Team::variant_stats`, as HD does, with the down-nobble and the three-digit
-value. **What does not read on Omega**: the bar's two halves. HD draws left of the split in `HD_Grey` and right of it in the
-block's `AlwaysSolidColor` (`0xff646464`). This build resolves Omega's `FEGlobals->HD_Grey` to `0xFF646464`, the value in the
-skin's first colour block (`HD_Colours`), whose own comment says it is *"IGNORED AND OVERWRITTEN by the WOHD_Colours and
-Fury_Colours templates"*; the two halves are then the same grey and the rating shows by the nobble and its three digits alone
-(the digits are small, at the authored `0.45`). **That is this build's unresolved colour-template switch, not a finding about
-the original**: `WOHD_Colours` (`HD_Grey 0xFF010001`, `HD_SubGrey 0xff646464`, `HD_BG 0xffffffff`) is the template Omega's white
-page and its `HD_SubGrey` headings point at, and under it the left half would be near black over the grey remainder, a visible
-bar. Which template is live is unread (`omega-frontend.md`); selecting it moves every Omega screen's `HD_Grey`, so it is its own
-lane, not done here. Nothing was added to the bars in the meantime. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
+value. **The bar's two halves.** HD draws left of the split in `HD_Grey` and right of it in the
+block's `AlwaysSolidColor` (`0xff646464`). Until 2026-10-14 (`omega-colour-template`) this build resolved Omega's `FEGlobals->HD_Grey`
+to `0xFF646464`, the value in the skin's first colour block (`HD_Colours`), whose own comment says it is *"IGNORED AND OVERWRITTEN by
+the WOHD_Colours and Fury_Colours templates"*, so the two halves were one grey. Omega's boot copies `WOHD_Colours` over that block
+(always: the selector compares `"HD"` with itself, see [omega-frontend.md](omega-frontend.md#the-colour-skin-switch-is-restructured-not-just-copied)),
+`HD_Grey` is `0xFF010001`, and the left half is near black over the grey remainder, a visible bar (walked: the rating, the nobble and the
+three digits now sit on a two-tone bar). The same change moved every Omega screen's `HD_Grey`-tinted chrome from mid grey to near black. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
 `length` are authored per model and no block of this screen shows them: drawn nowhere.
 
 **The craft.** `ship_preview_hull` is `"ship.vex"` and the hull is the team's race hull, a PS4 `.rcsmodel` (8-byte pointers, `.gnf`

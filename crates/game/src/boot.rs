@@ -500,7 +500,7 @@ pub fn load_shell(
         &mut archives,
         front_end.root,
         title.plugin_definition,
-        profile.fallback_globals,
+        profile,
         &fallback_images,
         movie_region,
         &mut report,

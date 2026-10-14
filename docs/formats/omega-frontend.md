@@ -170,18 +170,58 @@ has no `HD_Colours` block at all.
 `<Screen>` blocks**, `HD_Colours`, `WOHD_Colours` and `Fury_Colours` -
 `HD_Colours`'s own comment says why: *"THESE COLOURS ARE IGNORED AND
 OVERWRITTEN by the WOHD_Colours and Fury_Colours templates below"*.
-`WOHD_Colours`'s values (`HD_Blue = 0xffee0707`, `HD_Grey = 0xFF010001`) are
-base-HD's; `Fury_Colours`'s (`HD_Blue = 0xffac0717`, `HD_Grey = 0xff969696`)
-match `DATA00`'s baked Fury palette on the nose. **A fourth block,
+`Fury_Colours`'s (`HD_Blue = 0xffac0717`, `HD_Grey = 0xff969696`) match
+`DATA00`'s baked Fury palette on the nose. **`WOHD_Colours`'s values
+(`HD_Blue = 0xffee0707`, `HD_Grey = 0xFF010001`) are not `DATA06`'s**, as this
+page said until 2026-10-14: `DATA06` has `HD_Blue = 0xff8ac0ca` and
+`HD_Grey = 0xff646464`, so Omega's HD-style palette is its own (a red highlight
+and near-black ink on white). **A fourth block,
 `2048_Colours`, is new** - `Blue2048`, `Orange2048`, `White2048`,
 `Transparent2048`, `Grey2048` - and is not a per-mode override of the same
 `HD_*` names the way `WOHD_Colours`/`Fury_Colours` are; it is its own,
 independently-named palette, consistent with 2048 drawing through its own
 screens rather than through HD's `<Strip>`/`<Menu>` widgets recoloured.
-Confidence 85: the *values* are read directly; which runtime condition
-selects between the three `HD_*` blocks is not - the same gap HD's own page
-leaves for `selected_fill` (no capture on Omega exists to watch the switch
-happen).
+Confidence 85: the *values* are read directly.
+
+**The rule, read off the executable 2026-10-14 (`omega-colour-template`,
+confidence 90; [`fe-style-colours.md`](../ghidra/functions/ps4-omega-eu/fe-style-colours.md)).**
+The base `HD_Colours` block is what `FEGlobals->HD_*` resolves through, and the
+boot screen's constructor **copies the chosen template's value over the base
+block's variable of the same name** (`HD_Blue`, `HD_Grey`, `HD_LightGrey`,
+`HD_White`, `HD_BG`, `HD_transBG`; not `HD_SubGrey`, which every block registers
+with `global=`). A template's `<Variable name="HD_Grey">` carries no `global=`,
+which is why a reader that follows `global=` alone never saw them and resolved
+`HD_Grey` to `HD_Colours`' `0xFF646464`. **The template chosen is always
+`WOHD_Colours`**: the selector is `strcasecmp("HD", "HD")`, on the base
+`eboot.bin` and on the patch's, and no `FE Style` option row exists in Omega's
+front-end XML. `Fury_Colours` is unreachable and `2048_Colours` is its own
+palette, read by 2048's own screens. This build does it in the reader:
+`oag_title::BootProfile::colour_template` names the block (`Some("WOHD_Colours")`
+on `oag_omega::frontend::BOOT`, `None` everywhere else) and
+`oag_ui::screen::Screens::from_xml_with_fallbacks` overwrites each global the
+block names **before any widget is built**, since widgets bake their colour once.
+Only a name the file already declares is overwritten.
+
+**The census: of every Omega colour id, one moves - `HD_Grey`, `0xFF646464` ->
+`0xFF010001`.** `WOHD_Colours` agrees with `HD_Colours` on `HD_Blue`
+(`0xffee0707`), `HD_LightGrey` (`0xFFDEDEDE`), `HD_White`, `HD_BG`
+(`0xffffffff`) and `HD_transBG` (`0xe0ffffff`), and `HD_SubGrey` stays
+`0xff646464` (pinned in `omega_colour_template_ground_truth`). What that moves
+on screen is everything tinted `HD_Grey`: the frame's two rules and title mark,
+every screen title and the tabs and rows of the menus (black where they were
+mid grey), and the Ship Select statistics bars, whose fill is `HD_Grey` over an
+`AlwaysSolidColor` of `0xff646464` (the two halves coincided before). The
+`SCREEN TITLE` and section headings are `HD_SubGrey` and stay grey. The red
+highlight is `HD_Blue` and does not move.
+
+**Checked against the others.** HD: *checked, differs* - its `EBOOT.elf` has the
+string `HD_Colours` and neither template name, and its colours are baked per
+archive, so `BootProfile::colour_template` is `None` there and every HD still is
+byte-identical. 2048: *checked, differs* - `NEWGUI/Skin.xml` carries one
+`HD_Colours` block, inherited verbatim, and its `eboot.elf` the same one string.
+**Open**: the same branch sets bits `6` of the `bgAnim` widget's flags on
+`FE Screen` (and the Fury branch clears them); what they do to the
+`BackgroundAnim` this build draws behind Omega's menus is unread and unwired.
 
 ## The boot chain is declared identically, unmeasured
 

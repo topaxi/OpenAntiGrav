@@ -31,6 +31,7 @@ mod mp4_movie_ground_truth;
 mod music_resume_ground_truth;
 mod omega_campaign_launch_ground_truth;
 mod omega_campaign_screens_ground_truth;
+mod omega_colour_template_ground_truth;
 mod omega_menu_backdrop_ground_truth;
 mod omega_menu_blocks_ground_truth;
 mod omega_music_ground_truth;

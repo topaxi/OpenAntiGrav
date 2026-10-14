@@ -145,6 +145,13 @@ is more lineage evidence for "2048 is HD's codebase retargeted"
 but the *menu* globals that block exists beside on HD are gone, not
 renamed and not zero-filled.
 
+**Omega's colour-template layering (2026-10-14): checked, differs.** Omega's
+`skin.xml` adds `WOHD_Colours`/`Fury_Colours` blocks whose name-only variables
+its boot copies over `HD_Colours`
+([omega-frontend.md](omega-frontend.md#the-colour-skin-switch-is-restructured-not-just-copied));
+2048's skin has the one `HD_Colours` block and no template, and its `eboot.elf`
+has the string `HD_Colours` and neither template name.
+
 What replaced them, read off `NEWGUI/Definition.xml`'s root screen
 (`overshell` -> `newFEshell`):
 
