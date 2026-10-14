@@ -783,7 +783,13 @@ impl ApplicationHandler for App {
                         session.window_back();
                     }
                 }
-                session.resize(size.width, size.height);
+                let monitor = session.gpu.output.window.current_monitor();
+                let held = crate::window::held_to_monitor(
+                    size,
+                    crate::window::under_gamescope_cached(monitor.as_ref()),
+                    monitor.map(|m| (m.size().width, m.size().height)),
+                );
+                session.resize(held.width, held.height);
             }
 
             // A key held while the window loses focus is never seen to come up, and
