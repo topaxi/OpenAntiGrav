@@ -24,6 +24,7 @@ fn texts(frame: &oag_hud::Frame) -> Vec<Word> {
         .hud_text
         .iter()
         .chain(&frame.small_text)
+        .chain(&frame.default_text)
         .filter_map(|draw| match draw {
             Draw::Text { x, y, text, .. } => Some((*x, *y, text.clone())),
             _ => None,
@@ -106,8 +107,10 @@ fn each_view_draws_the_gap_to_the_other_person_in_both_cuts() {
             for (view, (clip, words)) in views.iter().enumerate() {
                 let label = format!("{cut:?} tick {ticks} view {view}");
                 let names: Vec<&str> = words.iter().map(|w| w.2.as_str()).collect();
+                // Each row is the ordinal then the craft's team name (`1st Triakis`).
                 assert!(
-                    names.contains(&"1st") && names.contains(&"2nd"),
+                    names.iter().any(|n| n.starts_with("1st ") && n.len() > 4)
+                        && names.iter().any(|n| n.starts_with("2nd ") && n.len() > 4),
                     "{label}: {names:?}"
                 );
                 assert!(
@@ -130,7 +133,7 @@ fn each_view_draws_the_gap_to_the_other_person_in_both_cuts() {
                 // The second row stays clear of the shield and speed bars in the lower
                 // quarter of the view, even at the clamp (tick 1200): in the top and
                 // bottom cut a flat view put it on them at the first scale tried.
-                let second = words.iter().find(|w| w.2 == "2nd").unwrap();
+                let second = words.iter().find(|w| w.2.starts_with("2nd")).unwrap();
                 assert!(
                     (second.1 - clip[1]) / clip[3] < 0.75,
                     "{label}: the second row is on the shield and speed bars"
@@ -168,7 +171,10 @@ fn each_window_draws_its_own_persons_gap() {
     let gap = |slot: usize| {
         let frame = oag_hud::draw_list(&cx, &race.readout_for(slot));
         let words: Vec<String> = texts(&frame).into_iter().map(|word| word.2).collect();
-        assert!(words.iter().any(|w| w == "1st") && words.iter().any(|w| w == "2nd"));
+        assert!(
+            words.iter().any(|w| w.starts_with("1st"))
+                && words.iter().any(|w| w.starts_with("2nd"))
+        );
         words
             .into_iter()
             .find(|w| w.ends_with('m') && (w.starts_with('+') || w.starts_with('-')))

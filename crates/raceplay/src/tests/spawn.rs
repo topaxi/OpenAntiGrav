@@ -404,16 +404,12 @@ fn a_full_grid_still_starts_the_player_on_slot_eight() {
     );
 }
 
-/// Head2Head fields the player plus exactly one AI opponent, on slot 7 -
-/// immediately ahead of the player's own slot 8, not the front of the grid.
-///
-/// **The slot is extrapolated, not independently measured** - see
-/// `docs/ghidra/functions/psp-pulse-usa/head2head.md`'s own "grid
-/// placement... is extrapolated" note. This test pins this project's own
-/// choice so a future change to the packing rule has to touch it on
-/// purpose.
+/// Head2Head fields the player plus exactly one AI opponent on the two FRONT places: the AI on
+/// place 1, the player on place 2 (PPSSPP, measured, confidence 92,
+/// `docs/ghidra/functions/psp-pulse-usa/head2head.md`). Fails on the back rows 7 and 8 this
+/// used to pin, which were an extrapolation the measurement struck.
 #[test]
-fn head2head_fields_the_player_plus_one_opponent_on_slot_seven() {
+fn head2head_fields_the_player_plus_one_opponent_on_places_one_and_two() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Head2Head;
     setup.start_position = Some(oag_vex::track::StartPosition {
@@ -428,21 +424,24 @@ fn head2head_fields_the_player_plus_one_opponent_on_slot_seven() {
         race.sim.world.ship_count, 2,
         "Head2Head fields the player plus one opponent"
     );
-    assert!(race.sim.world.ships[1].active, "slot 7's ship is driven");
+    assert!(race.sim.world.ships[1].active, "the opponent is driven");
     for slot in 2..oag_gameplay::MAX_SHIPS {
         assert!(
             !race.sim.world.ships[slot].active,
             "no ship beyond the sole opponent should be active"
         );
     }
-    // Slot 7 is one `GRID_ROW_PITCH` ahead of the node (slot 8), not seven -
-    // the front of a full grid, which a bug reusing the full-grid loop's own
-    // slot numbering would instead put it at.
-    let opponent = race.sim.world.ships[1].physics.body.position;
+    // Place 1 is seven rows ahead of the node (place 8), place 2 six.
+    let opponent = race.sim.world.ships[1].physics.body.position.x;
+    let player = race.sim.world.ships[0].physics.body.position.x;
     assert!(
-        (10.0..30.0).contains(&opponent.x),
-        "slot 7 should be about one row ahead of the node, not the front of \
-         the grid: {opponent}"
+        opponent > 120.0 && player > 100.0 && opponent > player,
+        "the AI is on place 1 and the player one row behind it, both near the front: \
+         {opponent} {player}"
+    );
+    assert!(
+        (10.0..30.0).contains(&(opponent - player)),
+        "one grid row apart: {opponent} {player}"
     );
 }
 

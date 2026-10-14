@@ -349,9 +349,16 @@ impl Race {
         // is) ranks behind empty slots and neither of two people ever read first.
         let ahead = world.ships[player].standing.distance(course)
             - world.ships[opponent].standing.distance(course);
+        // Two people: both rows carry a team name, each view's own first. One person: the
+        // player's row is the profile tag in the original, which this build has none of.
+        let named = self.sim.people > 1;
+        let team = |slot: usize| self.view.slot_teams.get(slot).cloned();
         Some(oag_hud::HeadToHead {
             gap: ahead.abs(),
             player_leads: ahead > 0.0,
+            own_team: if named { team(player) } else { None },
+            other_team: team(opponent),
+            stacked: false,
         })
     }
 }

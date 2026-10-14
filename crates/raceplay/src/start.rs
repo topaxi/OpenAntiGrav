@@ -199,9 +199,9 @@ impl Race {
         // existed.
         let field_opponents = if multiplayer_time_trial {
             // The people and nobody else, each on a grid slot of their own: person `k`
-            // takes seat `k`, the back row first (`Race_SpawnGrid`, "a short grid packs to
-            // the back", `docs/ghidra/functions/psp-pulse-usa/grid.md`; the field of N is
-            // not measured for any N but the full eight).
+            // takes seat `k`, the back row first. **Chosen, not measured**: the original has no
+            // such mode on the grid, and `grid.md`'s "a short grid packs to the back" is
+            // contradicted by the measured Head to Head field of two ([`grid_row`]).
             people.min(GRID_SLOTS) - 1
         } else if no_opponents {
             0
@@ -277,12 +277,18 @@ impl Race {
                     walked.as_ref(),
                 )[0]
             });
-        // A full grid puts the player on slot 8, and slot 8 is the authored node
-        // re-laid on the corridor midpoint's own `+/-10`, not the node's raw
-        // position: `Race_ComputeGridLayout` derives every slot, the eighth
-        // included, from the midpoint at its own sample (`grid.md`). Measured on
-        // `16_Track`, the raw node sits 1.68 units from the original's eighth
-        // craft, all of it lateral.
+        // The player's grid row. A full grid puts the player on slot 8, the authored node
+        // re-laid on the corridor midpoint's own `+/-10` (not the node's raw position:
+        // `Race_ComputeGridLayout` derives every slot, the eighth included, from the midpoint
+        // at its own sample, `grid.md`; measured on `16_Track`, the raw node sits 1.68 units
+        // from the original's eighth craft, all of it lateral). A Head to Head field is
+        // anchored at the front instead, see [`grid_row`].
+        let front_anchored = mode.field_is_fixed();
+        let player_row = grid_row(
+            oag_gameplay::rank_from_back(0, field_opponents as usize + 1, usize::from(people)),
+            field_opponents as usize + 1,
+            front_anchored,
+        );
         let full_grid_slot_eight = full_grid.then_some(base).flatten().map(|base| {
             grid_poses(
                 base,
@@ -291,7 +297,7 @@ impl Race {
                 capped_spawn_height(&handling, grid_cap),
                 grid_frame_from_sample,
                 walked.as_ref(),
-            )[GRID_SLOTS as usize - 1]
+            )[player_row - 1]
         });
         if let Some(pose) = pose_override
             .or(solo_slot_one)
@@ -357,16 +363,14 @@ impl Race {
                 grid_frame_from_sample,
                 walked.as_ref(),
             );
-            // **A short field packs to the back**, mirroring the original's
-            // own compaction rule for a field smaller than the grid
-            // (`grid.md`'s "a short grid packs to the back", confidence 82,
-            // composed with "the local player is forced to the back",
-            // confidence 75) - so `field_opponents < 7` takes the poses
-            // nearest the player (the high end of this slice, e.g. slot 7
-            // alone for Head2Head's field of one) rather than the front of
-            // the grid. Not independently measured for `g_racer_count == 2`
-            // specifically - see `docs/ghidra/functions/psp-pulse-usa
-            // /head2head.md`'s own "grid placement... is extrapolated" note.
+            // **Where a short field sits.** Most modes pack a field smaller than the grid to
+            // the back, mirroring `Race_SpawnGrid`'s compaction (`grid.md`, "a short grid packs
+            // to the back", confidence 82, composed with "the local player is forced to the
+            // back", confidence 75). Head to Head is the measured exception: a field of two
+            // starts on the two FRONT places, read off PPSSPP (one person, AI on place 1) and
+            // PCSX2 (two people, no compaction, the slot is the racer index), `head2head.md`
+            // on both pages, confidence 92. [`grid_row`] holds the rule; the pose below, the
+            // load report and the original AI's grid read all go through it.
             let pose_start = (GRID_SLOTS as usize - 1) - field_opponents as usize;
             for slot_index in pose_start..GRID_SLOTS as usize - 1 {
                 let ship_index = slot_index - pose_start + 1;
@@ -381,7 +385,7 @@ impl Race {
                     field_opponents as usize + 1,
                     usize::from(people),
                 );
-                let pose = &poses[GRID_SLOTS as usize - 1 - rank];
+                let pose = &poses[grid_row(rank, field_opponents as usize + 1, front_anchored) - 1];
                 // Its own team's tuning where the title's variant family gave
                 // it one (`load::family`), the player's otherwise.
                 let handling = opponent_handling
@@ -456,7 +460,7 @@ impl Race {
                         usize::from(people),
                     );
                     (
-                        GRID_SLOTS as usize - rank,
+                        grid_row(rank, field_opponents as usize + 1, front_anchored),
                         pilot_names[pose_start + ship].as_str(),
                     )
                 })
@@ -476,7 +480,11 @@ impl Race {
                             field_opponents as usize + 1,
                             usize::from(people),
                         );
-                        format!("{}:{}", seat + 1, GRID_SLOTS as usize - rank)
+                        format!(
+                            "{}:{}",
+                            seat + 1,
+                            grid_row(rank, field_opponents as usize + 1, front_anchored)
+                        )
                     })
                     .collect();
                 info!("people on the grid: {}", seats.join(" "));

@@ -15,6 +15,13 @@ fn every_mode_round_trips_through_its_token() {
     }
 }
 
+/// The RACE page's mode row offers Head to Head, and the token round-trips (the loop above).
+#[test]
+fn head_to_head_is_on_the_mode_row() {
+    assert!(Mode::ALL.contains(&Mode::Head2Head));
+    assert_eq!(Mode::from_name("head_to_head"), Some(Mode::Head2Head));
+}
+
 /// See [`Mode::ALL`]'s own doc for why: a one-track launch cannot run
 /// what the disc's own `Tournament C` needs, a leg list.
 #[test]
@@ -202,6 +209,9 @@ fn head2head_alone_fixes_its_field_and_caps_its_people_at_two() {
     assert!(Mode::Head2Head.field_is_fixed());
     assert_eq!(Mode::Head2Head.max_people(), Some(2));
     for mode in Mode::ALL.into_iter().chain([Mode::Tournament]) {
+        if mode == Mode::Head2Head {
+            continue;
+        }
         assert!(!mode.field_is_fixed(), "{mode:?}");
         assert_eq!(mode.max_people(), None, "{mode:?}");
     }
@@ -256,11 +266,4 @@ fn head2head_shares_single_races_per_class_lap_count() {
             "{class} disagrees with single race"
         );
     }
-}
-
-/// Like `Tournament`, reachable only through a campaign cell - see
-/// `Mode::Head2Head`'s own doc comment for why.
-#[test]
-fn head2head_is_not_in_all() {
-    assert!(!Mode::ALL.contains(&Mode::Head2Head));
 }

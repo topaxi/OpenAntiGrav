@@ -932,3 +932,26 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
     }
     println!("checked {checked:?}");
 }
+
+/// The widget set HD's authored split HUD carries for Head to Head, read for the port to HD,
+/// Omega and 2048: `Position`, `Position Outof` and `HeadToHeadBar` (a zero-height fill) are
+/// there, `PositionOf` - the gap label Pulse's readout is built on - is not, and `Position` is
+/// a centred number in a hex panel rather than a right-aligned row. So Pulse's rows-and-gap
+/// readout (`oag_hud::HeadToHead`) has nothing to draw into on HD and draws nothing; the
+/// place stands. Fails if a layout starts authoring the gap label, which is when the readout
+/// can be wired to it.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_authors_the_bar_and_both_places_but_no_gap_label() {
+    let Some(two) = hd_loaded(2) else { return };
+    let split = two.hud.split.as_ref().expect("HD ships the split layouts");
+    for layout in &split.layouts {
+        assert!(layout.fill("HeadToHeadBar").is_some());
+        assert!(layout.label("Position").is_some());
+        assert!(layout.label("Position Outof").is_some());
+        assert!(
+            layout.label("PositionOf").is_none(),
+            "no gap label is authored"
+        );
+    }
+}

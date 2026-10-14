@@ -121,12 +121,11 @@ pub enum Mode {
     /// recovered off Single Race (`docs/ghidra/functions/psp-pulse-usa/grid.md`'s
     /// "which team flies which slot"), inherited here rather than measured.
     ///
-    /// **Deliberately absent from [`Self::ALL`]**, like [`Self::Tournament`],
-    /// reachable only through a campaign cell
-    /// (`oag_game::campaign::race_mode_for_cell`). Unlike Tournament this is
-    /// not a leg-list problem; it is kept out to keep this mode's field-size
-    /// axis off the RACE page's one-track launch, which has no way to ask
-    /// for "one opponent" today.
+    /// **On the RACE page's mode row ([`Self::ALL`])**, as the last entry. Pulse's Racebox
+    /// authors it (PSP, `race-setup.md`) and its PS2 split screens list it by name; Pure, HD,
+    /// Omega and 2048 author none (`<aEntry>` switched off, or absent), so there the row is
+    /// this project's own: **chosen, not measured**. The row takes two people at most
+    /// ([`Self::max_people`]), and WEAPONS and AI DIFFICULTY grey as the original does.
     Head2Head,
 }
 
@@ -151,12 +150,13 @@ impl Mode {
     /// why a tournament needs a leg list rather than a single track and
     /// cannot be reached from this array's own consumer, the RACE page's
     /// mode row.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 6] = [
         Self::TimeTrial,
         Self::SpeedLap,
         Self::Zone,
         Self::SingleRace,
         Self::Eliminator,
+        Self::Head2Head,
     ];
 
     /// Laps in a time trial, per speed class, slowest rung first.

@@ -65,15 +65,17 @@ fn every_seat_across_every_window_takes_a_back_row() {
     }
 }
 
-/// Head to Head across two windows is the two people's two craft on rows 8 and 7: the same count
-/// reaches the grid, so the second person is not left on the front row as the AI opponent.
+/// Head to Head across two windows is the two people's two craft on the FRONT two places, person
+/// 1 on row 2 and person 2 on row 1 (PS2 Pulse, measured: the slot is the racer index). The same
+/// count reaches the grid, so the second person is not left as the AI opponent. Fails on the back
+/// rows `[8, 7]` this used to pin.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn head_to_head_across_two_windows_seats_both_people_at_the_back() {
+fn head_to_head_across_two_windows_seats_both_people_on_the_front_two_places() {
     let Some(rows) = seat_rows("head_to_head", &["--window-seats", "1,1"]) else {
         return;
     };
-    assert_eq!(rows, [8, 7]);
+    assert_eq!(rows, [2, 1]);
 }
 
 /// A Time Trial across two windows is the Multiplayer Time Trial too: both people on the back

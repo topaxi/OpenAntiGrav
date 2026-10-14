@@ -37,6 +37,7 @@ fn texts(frame: &Frame) -> Vec<(String, f32, [f32; 4])> {
     frame
         .hud_text
         .iter()
+        .chain(&frame.default_text)
         .filter_map(|draw| match draw {
             Draw::Text { text, y, color, .. } => Some((text.clone(), *y, *color)),
             _ => None,
@@ -49,6 +50,7 @@ fn the_bar_runs_from_its_authored_y_to_the_second_row() {
     let (frame, _) = frame_for(Some(HeadToHead {
         gap: 100.0,
         player_leads: true,
+        ..HeadToHead::default()
     }));
     // half = 60: the bar's local top is 30, so 30 px tall, from screen y 35.
     assert_eq!(fill_rect(&frame), Some([460.0, 35.0, 5.0, 30.0]));
@@ -63,6 +65,7 @@ fn the_gap_is_halved_and_clamped_to_60_and_180() {
         let (frame, _) = frame_for(Some(HeadToHead {
             gap,
             player_leads: false,
+            ..HeadToHead::default()
         }));
         assert_eq!(fill_rect(&frame).unwrap()[3], half - 30.0, "gap {gap}");
     }
@@ -74,6 +77,7 @@ fn leading_reads_minus_green_and_trailing_plus_red() {
         let (frame, _) = frame_for(Some(HeadToHead {
             gap: 42.0,
             player_leads: leads,
+            ..HeadToHead::default()
         }));
         texts(&frame)
             .into_iter()
@@ -95,4 +99,67 @@ fn outside_head2head_nothing_here_draws_and_the_ordinary_place_stands() {
     let texts = texts(&frame);
     assert!(texts.iter().all(|row| !row.0.contains("IG_HUD_2ND")));
     assert!(texts.iter().any(|row| row.0 == "2"), "{texts:?}");
+}
+
+fn state(stacked: bool, leads: bool, gap: f32) -> HeadToHead {
+    HeadToHead {
+        gap,
+        player_leads: leads,
+        own_team: Some("Qirex".into()),
+        other_team: Some("Assegai".into()),
+        stacked,
+    }
+}
+
+/// A split's rows carry the craft's team name, the view's own on the row it is in: leading, it
+/// is the first row; trailing, the second (`1st Qirex` / `2nd Assegai` live on PS2).
+#[test]
+fn the_rows_carry_the_team_names_own_craft_first_only_when_it_leads() {
+    let rows = |leads| texts(&frame_for(Some(state(false, leads, 100.0))).0);
+    let leading = rows(true);
+    assert!(
+        leading.iter().any(|r| r.0 == "IG_HUD_1ST Qirex"),
+        "{leading:?}"
+    );
+    assert!(
+        leading.iter().any(|r| r.0 == "IG_HUD_2ND Assegai"),
+        "{leading:?}"
+    );
+    let trailing = rows(false);
+    assert!(
+        trailing.iter().any(|r| r.0 == "IG_HUD_1ST Assegai"),
+        "{trailing:?}"
+    );
+    assert!(
+        trailing.iter().any(|r| r.0 == "IG_HUD_2ND Qirex"),
+        "{trailing:?}"
+    );
+}
+
+/// Only the view's own row and the gap are coloured, the other row white, whichever cut.
+#[test]
+fn only_the_views_own_row_is_coloured() {
+    let rows = texts(&frame_for(Some(state(false, false, 100.0))).0);
+    let colour = |name: &str| rows.iter().find(|r| r.0 == name).unwrap().2;
+    assert_eq!(colour("IG_HUD_1ST Assegai"), [1.0; 4]);
+    assert_eq!(colour("IG_HUD_2ND Qirex"), argb_to_rgba(0xFFFF_3030));
+}
+
+/// The top and bottom cut clamps the half gap to `[40, 85]` and puts the leader row on the
+/// bar's top (the authored place); the other cut keeps `[60, 180]`.
+#[test]
+fn the_top_and_bottom_cut_clamps_to_40_and_85_with_the_leader_on_the_bar() {
+    for (gap, half) in [(0.0, 40.0), (60.0, 40.0), (120.0, 60.0), (900.0, 85.0)] {
+        let (frame, _) = frame_for(Some(state(true, true, gap)));
+        assert_eq!(fill_rect(&frame).unwrap()[3], half - 30.0, "gap {gap}");
+    }
+    // Both rows are in the `Default` font, and the leader row stands on the bar's top in either cut.
+    let (frame, _) = frame_for(Some(state(true, true, 300.0)));
+    assert!(
+        frame
+            .default_text
+            .iter()
+            .any(|d| matches!(d, Draw::Text { text, .. } if text.starts_with("IG_HUD_1ST"))),
+        "the leader row is Default-font text"
+    );
 }

@@ -991,3 +991,37 @@ fn the_touch_rows_sit_on_their_own_page_and_desktop_drops_the_way_in() {
     assert_eq!(way_in(&desktop), 0);
     assert!(desktop.pages.iter().any(|page| page.id == "touch_controls"));
 }
+
+/// Head to Head on the RACE page greys WEAPONS to `Off` and AI DIFFICULTY, as the original's
+/// Racebox does (PS2, seen live): its field is two craft and the weapons are locked off. KILLS
+/// is Eliminator's alone. Fails on a definition that adds the mode to the row and forgets the
+/// rows that follow it.
+#[test]
+fn head_to_head_greys_weapons_ai_difficulty_and_kills() {
+    let definition = built_in();
+    let hth = Value::Text("head_to_head".to_string());
+    let row = |setting: &str| {
+        definition
+            .pages
+            .iter()
+            .filter(|page| page.id == "race")
+            .flat_map(|page| page.entries.iter())
+            .find(|entry| entry.setting() == Some(setting))
+            .unwrap_or_else(|| panic!("the RACE page has no {setting} row"))
+    };
+    let weapons = row("race.weapons");
+    let pin = weapons
+        .pins()
+        .iter()
+        .find(|pin| pin.when.values.contains(&hth))
+        .expect("WEAPONS is pinned in Head to Head");
+    assert_eq!(pin.shows, "Off");
+    for setting in ["ai.difficulty", "race.kill_target"] {
+        let condition = row(setting).disabled_by().expect("a condition");
+        assert!(condition.values.contains(&hth), "{setting} greys");
+    }
+    assert!(
+        oag_race::Mode::ALL.contains(&oag_race::Mode::Head2Head),
+        "the MODE row offers it"
+    );
+}
