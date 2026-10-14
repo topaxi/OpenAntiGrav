@@ -57,7 +57,6 @@ pub mod race;
 /// Wipeout: Omega Collection, as the asset layer needs to know it.
 pub const TITLE: &Title = &Title {
     name: "Wipeout: Omega Collection",
-    split_on_integrated_gpu: false,
     archives: ArchiveCandidates {
         patch: &[],
         data: DATA_CANDIDATES,

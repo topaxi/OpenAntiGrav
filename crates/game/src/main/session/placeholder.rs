@@ -223,7 +223,6 @@ impl Session {
             team_details: Vec::new(),
             strings,
         });
-        self.drop_multiplayer_row();
         self.prefetch_pending = None;
 
         self.open_menus()?;

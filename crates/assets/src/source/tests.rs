@@ -17,7 +17,6 @@ use oag_title::{ArchiveCandidates, ForeignSerial};
 /// assertion below meaningful.
 const TITLE: &Title = &Title {
     name: "Wipeout Pulse",
-    split_on_integrated_gpu: false,
     archives: ArchiveCandidates {
         patch: &[],
         data: &[
@@ -466,7 +465,6 @@ fn a_psp_extract_resolves_to_the_psp_archives() {
 #[test]
 fn every_extra_archive_present_resolves_and_a_missing_one_is_skipped() {
     const SEVEN: &Title = &Title {
-        split_on_integrated_gpu: false,
         archives: ArchiveCandidates {
             patch: &[],
             data: &[("USRDIR/DATA00.PSARC", Platform::Ps3)],

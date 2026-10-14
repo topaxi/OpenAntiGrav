@@ -2,15 +2,12 @@
 //! join screen and the RACE page (`session::multiplayer`).
 //!
 //! **Where it sits.** The join screen's START opens it when two or more people are seated and
-//! the run can open windows (a desktop build on an adapter the title offers a split on,
-//! [`oag_game::split_screen::offered`]); its START goes on to the next step
+//! the run can open windows (a desktop build); its START goes on to the next step
 //! ([`Session::continue_multiplayer`]), and its BACK returns to the join screen with everybody
 //! still seated. On the
 //! browser, Android and iOS (where a program gets the one surface the platform makes, and the
 //! opener is compiled out) the screen is **skipped**: the join screen's START goes straight
-//! on. On an integrated GPU the HD, 2048 and Omega splits are not offered at all, so neither
-//! screen is reachable there; Pulse and Pure, which the rule exempts, get the screen with
-//! every window count. **Chosen, not measured**: the screen, the rows, the persistence.
+//! on. **Chosen, not measured**: the screen, the rows, the persistence.
 //!
 //! **What START writes** is what `--window-seats` writes: [`Session::window_layout`] (one
 //! `WindowSeats` per window), `windows_wanted` for the event loop to open the windows on its
@@ -43,10 +40,7 @@ impl Session {
         {
             use crate::window_layout_stage::WindowLayoutStage;
             use oag_ui_screens::window_layout::{Labels, Picker};
-            let offered = self.shell.as_ref().is_some_and(|shell| {
-                oag_game::split_screen::offered(shell.title, self.gpu.device_type)
-            });
-            if !offered || join.lobby().count() < 2 || !matches!(self.stage, Stage::Menu(_)) {
+            if join.lobby().count() < 2 || !matches!(self.stage, Stage::Menu(_)) {
                 return Some(join);
             }
             let Some(shell) = self.shell.as_ref() else {

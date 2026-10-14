@@ -149,10 +149,6 @@ hub) and the table's Windows row is wrong for that setup.
   `4,2` layout is `2,1`). Back on the menus the windows go back to their holding frames.
 - **Fewer people than windows**: the windows nobody is dealt show their holding frame.
 
-On Wipeout HD, 2048 and Omega the integrated-GPU rule is `--players`' own
-(`Title::split_on_integrated_gpu`, `oag_game::split_screen::offered`): on an integrated GPU those titles
-open one window, said once in the log, and Pulse and Pure open them all.
-
 ## What a window draws
 
 Every window runs **the whole single-window chain on its own framebuffer** (`upscale::Framebuffer`,
@@ -333,9 +329,7 @@ monitor that is gone is monitor 1. The command line still wins for its own run.
 
 **Where it is not offered.** The browser, Android and iOS get the one surface the platform makes (the
 opener is compiled out), so the screen is **skipped** there and the join screen's START goes straight on.
-On an integrated GPU the HD, 2048 and Omega splits are not offered at all
-(`Title::split_on_integrated_gpu`), so neither the join screen nor this one is reachable; Pulse and Pure,
-which the rule exempts, get the screen with every window count.
+Every title gets the screen with every window count, on every GPU class.
 
 `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]` draws it as a still (4 people, 1
 window, 1 monitor, the first window by default); the monitors are made up (`MONITOR n`), the rest is the

@@ -723,8 +723,7 @@ and two views most hulls are projected for nothing: needs the visibility to be e
 two-tick cache wants every craft's gather on the tick before); the Steam Deck numbers above
 (the maintainer's).
 
-**Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure only (HD,
-2048 and Omega stay off integrated GPUs in a split):
+**Steam Deck.** Not measured: the Deck is the maintainer's. Steps, Pulse and Pure first, then HD and 2048:
 
 1. Build the bench binary on the Deck (desktop mode, repo checked out, the two images under
    `data/images/`): `cargo build --release -p oag-game --features perf-probe`. Plugged in,
@@ -781,9 +780,10 @@ Pure at any count) the GPU is the limit, where a lower render scale would help a
 work does not matter. Eight views hold 16.7 ms on this machine either way: Pulse at 9.7 ms
 and Pure at 6.2 ms pipelined, 1280x720 in all.
 
-**Product rule (decided by the maintainer, not a proposal here): split screen on an
-integrated GPU is offered for Pulse and Pure only; HD, 2048 and Omega stay off it.** What the
-Raphael numbers say about the two that are offered: the GPU cost is set by the pixels and barely
+**Product rule (maintainer, 2026-10-14): split screen is offered for every title on every GPU
+class.** An earlier rule (2026-10-13) withheld HD, 2048 and Omega on integrated GPUs; it is gone
+(`Title::split_on_integrated_gpu` and `oag_game::split_screen::offered` removed), because iGPUs
+improve and a player may try it. What the Raphael numbers say about Pulse and Pure: the GPU cost is set by the pixels and barely
 by the view count (Pulse 4.3 ms at one view, 7.1 at eight; Pure 5.1 to 6.6), because the views
 share one frame's pixels, so **no view-count cap is implied at 720p**: every count up to eight
 holds 60 Hz with 7 ms or more to spare. What the iGPU's budget is made of is resolution: a
@@ -1089,27 +1089,11 @@ Ship Select to walk).
 - Found by walking: **2048's `MULTIPLAYER` word was clipped by its 122-unit tile** (fixed: a word wider than the box is
   drawn smaller, `touch::CAPITAL_WIDTH`, chosen, not measured); HD's language table lacked the join line (the overlay in step 2).
 
-### Integrated GPUs (2026-10-13)
+### Integrated GPUs
 
-The maintainer's product rule (see "Cost"): on an integrated GPU a split is offered for
-Pulse and Pure only. It is `Title::split_on_integrated_gpu` (`true` on those two, `false` on
-HD, 2048 and Omega: data on the title, no title-name branch), read by
-`oag_game::split_screen::offered(title, wgpu::DeviceType)`: only `IntegratedGpu` is gated;
-a discrete, virtual, software (lavapipe) or unknown adapter offers every title. Where it
-acts, once the adapter is known (`Gpu::device_type`, fixed for the run):
-
-- **The menus**: `Definition::drop_multiplayer` removes the MULTIPLAYER row (the page behind it
-  would hold nothing to do) on HD, 2048 and Omega when a `Shell` is installed
-  (`Session::drop_split_screen_row`, from the windowed boot and from 2048's placeholder route; a
-  language reload clones the trimmed definition). REMIX and every other row stay.
-- **A windowed `--race --players N`** on such a title logs `--players N: split screen is
-  not offered for <title> on an integrated GPU, so one view` and runs one view
-  (`players_offered`). **Headless captures and the render bench are not gated**: they are
-  diagnostics and the Raphael numbers in "Cost" were taken that way.
-- The adapter is chosen at launch (`graphics.renderer` takes effect on a restart), so the
-  row never changes mid-run. Unit-tested over stand-in device types; no real integrated
-  adapter was walked (Xvfb offers lavapipe only), so the gate on a real iGPU is read, not
-  looked at.
+No GPU class is gated: a split is offered for every title on every adapter, and the MULTIPLAYER
+row is on every title's main page. (The 2026-10-13 rule that withheld HD, 2048 and Omega on an
+integrated GPU was removed 2026-10-14 by the maintainer.)
 
 A split screen writes **no result and no ghost** (`records.toml` and the ghost
 store are for the one person the result is about), and it **fields opponents
@@ -1212,8 +1196,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
   The laws that key on the grid *row* follow the new row: the original AI's `8 - grid` formation slot
   and `GridPlace<N>` start stats take `rank_from_back` (`Race::use_original_ai`, campaign only, so one
   person there today), and the `pilots on the grid` log line lists the rows.
-- If the head count at launch is higher than the devices that turn up (an unplugged pad, an
-  integrated GPU clamping `--players`), the rows are still the people's and the vacant ones are flown by
+- If the head count at launch is higher than the devices that turn up (an unplugged pad), the rows are still the people's and the vacant ones are flown by
   the grid's driver (`follow_devices`).
 
 Tests: `oag-gameplay` `spawn::grid_tests` (the rank law, a permutation at every head count),

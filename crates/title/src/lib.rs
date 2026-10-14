@@ -138,16 +138,6 @@ pub struct Title {
     /// promoted temporaries whose addresses need not be equal. Carrying the
     /// answer removes the question.
     pub race: &'static race::RaceDefaults,
-    /// Whether split screen is offered on an integrated GPU.
-    ///
-    /// **The maintainer's product rule (2026-10-13), not a measurement of the original:**
-    /// split screen on an integrated GPU is offered for Pulse and Pure only, and HD, 2048
-    /// and Omega stay off it. It rests on the Raphael iGPU numbers in
-    /// `docs/rendering/split-screen.md` ("Cost"): the two PSP-era scenes hold 60 Hz at every
-    /// view count there and the three later ones were not shown to. `true` for Pulse and
-    /// Pure; `false` elsewhere, which is the answer for a title not measured. A discrete,
-    /// virtual or software adapter offers every title; see `oag_game::split_screen::offered`.
-    pub split_on_integrated_gpu: bool,
     /// Where this title keeps the exhaust ribbon's texture. See
     /// [`exhaust::Exhaust`], which is an axis because the two answers are not
     /// the same kind of thing: Pulse and Pure name a texture, Wipeout HD ships

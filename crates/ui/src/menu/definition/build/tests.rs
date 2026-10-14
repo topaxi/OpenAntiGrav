@@ -264,29 +264,6 @@ fn main_row_ids(definition: &Definition) -> Vec<String> {
         .collect()
 }
 
-/// The integrated-GPU rule drops the one row and nothing around it: REMIX stays under
-/// RACEBOX, and a definition it is not applied to still has the row.
-#[test]
-fn dropping_the_multiplayer_row_leaves_every_other_row() {
-    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
-        let mut definition = built_for(title);
-        let before = main_row_ids(&definition);
-        assert!(
-            before.iter().any(|row| row == "multiplayer"),
-            "{}: {before:?}",
-            title.name
-        );
-        definition.drop_multiplayer();
-        let after = main_row_ids(&definition);
-        let expected: Vec<String> = before
-            .into_iter()
-            .filter(|row| row != "multiplayer")
-            .collect();
-        assert_eq!(after, expected, "{}", title.name);
-        assert!(after.iter().any(|row| row == "racebox>remix"));
-    }
-}
-
 /// Every title shows exactly one MULTIPLAYER row and none of the old split-screen ones: Pulse
 /// and Pure from their own disc's multiplayer entry, the other three from the built-in extras.
 #[test]
