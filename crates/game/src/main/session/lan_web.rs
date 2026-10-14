@@ -25,6 +25,12 @@ impl Session {
         false
     }
 
+    pub(crate) fn lan_picking_ship(&self) -> bool {
+        false
+    }
+
+    pub(crate) fn open_lan_browse(&mut self) {}
+
     pub(crate) fn sync_lan(&mut self) {}
 
     pub(crate) fn open_lan_lobby(&mut self) {}
