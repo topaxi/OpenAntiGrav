@@ -534,6 +534,22 @@ tick 300 / autopilot, the same seed and track, release build with `perf-probe`.
   horizontally 12.1 ms (1.85x one player), cut vertically 8.6 ms; at 200 percent 49.8 horizontal
   against 47.1 vertical; at 100 percent both held the compositor's 60 Hz. With FSR 3 at 50 percent: 14.1 against
   13.3 ms. The horizontal cut was the dearer one every time, and two views cost about 1.85x one.
+- *Steam Deck, every title, default settings* (Van Gogh, RADV, gamescope borderless on a 3840x2160
+  output, so render scale 33 percent = 1267x713, 50 percent = 1920x1080; vsync off, mean frame time of the
+  game's own meter at ~2 s intervals, load 1 to 1.6; the Deck, not this host). **The vertical cut
+  matches the horizontal one on all four titles**, and no title is dearer vertically:
+
+  | Title | 1 view | 2 views horizontal | 2 views vertical |
+  | --- | ---: | ---: | ---: |
+  | Pulse 720p | 6.2 ms | 9.0 | 8.8 |
+  | Pure 720p | 4.8 | 5.8 | 5.3 |
+  | HD 720p | 9.9 | 12.7 | 12.7 |
+  | 2048 720p | 5.9 | 7.4 | 7.4 |
+  | HD 1080p | 12.5 | 14.8 to 16.5 | 15.5 to 17.2 |
+
+  HD and 2048 two-view splits run on the Deck's iGPU with no gate (removed 2026-10-14): 720p holds
+  60 Hz with 4 to 9 ms to spare; HD at 1080p sits at the 16.7 ms edge. A lower default render scale
+  for HD on a small iGPU is worth proposing (not built here): **chosen, not measured**.
 - Not reached: the menu path to the vertical cut (HD's race box row, the window layout screen)
   and HD, which the observation may have been on; and the Deck's own 1280x800 output.
 
