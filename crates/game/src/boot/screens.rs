@@ -318,11 +318,15 @@ fn expand_front_end_xml(blob: &[u8]) -> Result<String> {
 /// union is 50 - **the two files name no global in common**, measured rather
 /// than assumed. The precedence is stated anyway so that a title that does
 /// overlap resolves predictably rather than by whichever file was read last.
+///
+/// `profile` supplies the title's own stand-in globals and its
+/// [`colour_template`](oag_title::BootProfile::colour_template), applied to the
+/// root's declarations before any widget is built.
 pub(super) fn load_screens(
     archives: &mut oag_assets::Archives,
     root: &str,
     plugin_definition: &str,
-    fallback_globals: &[(&str, &str)],
+    profile: &oag_title::BootProfile,
     fallback_images: &[(&str, &str)],
     movie_region: &str,
     report: &mut Vec<String>,
@@ -331,7 +335,7 @@ pub(super) fn load_screens(
     let fallback_globals: Vec<(&str, &str)> = style
         .iter()
         .map(|(key, value)| (key.as_str(), value.as_str()))
-        .chain(fallback_globals.iter().copied())
+        .chain(profile.fallback_globals.iter().copied())
         .collect();
     let fallback_globals = fallback_globals.as_slice();
     // The one piece with no degraded form: a front end with no screens is not a
@@ -353,7 +357,12 @@ pub(super) fn load_screens(
     // to be handed to every source on the grounds that `or_insert` made it a
     // no-op on Pulse - true, and true only for as long as no two titles measure a
     // *different* value for one name. Pulse's own table is empty.
-    let screens = Screens::from_xml_with_fallbacks(&xml, fallback_globals, fallback_images);
+    let screens = Screens::from_xml_with_fallbacks(
+        &xml,
+        fallback_globals,
+        fallback_images,
+        profile.colour_template,
+    );
     report.push(format!(
         "{}: {} screens, {} globals, {} LoadXML includes",
         root,

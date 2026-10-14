@@ -686,8 +686,12 @@ fn a_src_less_image_stays_dropped_with_no_fallback_table() {
 
 #[test]
 fn a_src_less_image_is_resolved_by_name_against_the_fallback_table() {
-    let screens =
-        Screens::from_xml_with_fallbacks(SRCLESS_IMAGE, &[], &[("TitleFrame", "hash:3af18d90")]);
+    let screens = Screens::from_xml_with_fallbacks(
+        SRCLESS_IMAGE,
+        &[],
+        &[("TitleFrame", "hash:3af18d90")],
+        None,
+    );
     let image = &screens.by_name("Title Screen").unwrap().images[0];
     assert_eq!(image.src, "hash:3af18d90");
     assert_eq!((image.x, image.y), (0.0, 76.0));
@@ -714,6 +718,7 @@ fn a_real_src_in_the_xml_always_wins_over_the_fallback_table() {
 "#,
         &[],
         &[("TitleFrame", "hash:3af18d90")],
+        None,
     );
     let image = &screens.by_name("Title Screen").unwrap().images[0];
     assert_eq!(image.src, r"Data\FE\Images\Real.mip");
@@ -954,4 +959,45 @@ fn interpolate_reveal_holds_at_the_ends_and_is_linear_between_keys() {
     );
     assert_eq!(interpolate_reveal(&keys, 0.65), 0.0, "at the final key");
     assert_eq!(interpolate_reveal(&keys, 10.0), 0.0, "after the final key");
+}
+
+const TEMPLATED_SKIN: &str = r#"
+<Screen>
+  <Screen name="Base_Colours">
+    <Variable global="Ink" name="Ink"><Values String="0xFF646464"></Values></Variable>
+    <Variable global="Paper" name="Paper"><Values String="0xFFFFFFFF"></Values></Variable>
+  </Screen>
+  <Screen name="Style_Colours">
+    <Variable name="Ink"><Values String="0xFF010001"></Values></Variable>
+    <Variable global="Paper" name="Paper"><Values String="0xFF000000"></Values></Variable>
+    <Variable name="Undeclared"><Values String="0xFF123456"></Values></Variable>
+  </Screen>
+  <Screen name="Page">
+    <Text name="Heading"><Values idstring="X" color="FEGlobals->Ink"></Values></Text>
+  </Screen>
+</Screen>
+"#;
+
+#[test]
+fn a_colour_template_overwrites_the_globals_it_names_before_widgets_bake_them() {
+    let plain = Screens::from_xml_with_fallbacks(TEMPLATED_SKIN, &[], &[], None);
+    assert_eq!(plain.globals["Ink"], "0xFF646464");
+    let styled = Screens::from_xml_with_fallbacks(TEMPLATED_SKIN, &[], &[], Some("Style_Colours"));
+    assert_eq!(styled.globals["Ink"], "0xFF010001");
+    // A widget that names the global is built with the template's value: the override has to
+    // land before collection, not after.
+    let heading = |screens: &Screens| screens.by_name("Page").unwrap().texts[0].color;
+    assert_eq!(heading(&plain), 0xFF64_6464);
+    assert_eq!(heading(&styled), 0xFF01_0001);
+}
+
+#[test]
+fn a_colour_template_adds_nothing_and_a_global_declaration_is_not_an_override() {
+    let styled = Screens::from_xml_with_fallbacks(TEMPLATED_SKIN, &[], &[], Some("Style_Colours"));
+    // `Undeclared` has no base variable to copy over.
+    assert!(!styled.globals.contains_key("Undeclared"));
+    // `Paper` carries `global=` in the template too: a registration, read last-wins as ever.
+    assert_eq!(styled.globals["Paper"], "0xFF000000");
+    let missing = Screens::from_xml_with_fallbacks(TEMPLATED_SKIN, &[], &[], Some("Nope_Colours"));
+    assert_eq!(missing.globals["Ink"], "0xFF646464");
 }
