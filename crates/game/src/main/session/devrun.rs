@@ -89,10 +89,12 @@ impl Session {
             Stage::Race(_) => "race".into(),
             Stage::Menu(stage) => {
                 let screen = if let Some(open) = &stage.layout {
-                    let cut = open.screen().windows().first().map_or("-", |w| {
-                        if w.vertical { "vertical" } else { "horizontal" }
-                    });
-                    format!("window-layout(cut={cut})")
+                    let windows = open.screen().windows();
+                    let cuts: String = windows
+                        .iter()
+                        .map(|w| if w.vertical { 'v' } else { 'h' })
+                        .collect();
+                    format!("window-layout(windows={},cut={cuts})", windows.len())
                 } else if stage.assign.is_some() {
                     "seat-assign".into()
                 } else if stage.join.is_some() {
