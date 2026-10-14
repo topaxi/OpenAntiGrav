@@ -281,8 +281,8 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
 
 **Chosen, not measured, all of it.** After the join screen's START (two or more people seated, a
 desktop build, a title that offers a split on this adapter), the **WINDOW LAYOUT** screen opens
-before Track and Ship Select; its START opens the seat assignment screen below (with one window, nothing to
-choose between, it goes straight on to the RACE page), and its BACK returns to the join screen with everybody
+before Track and Ship Select; its START opens the seat assignment screen below (unless the layout has a single view in all, which has nothing to
+choose between and goes straight on to the RACE page), and its BACK returns to the join screen with everybody
 still seated. It is `oag_ui_screens::window_layout`
 (model, drawing, pad, keyboard and pointer) over the join screen's rows, on the title's own menu
 skin and font (HD's and Omega's row blocks where the title draws them), driven by
@@ -354,10 +354,13 @@ and wrote an empty `window_seats`. **Not exercised**: more than one real monitor
 
 **Chosen, not measured, all of it** (2026-10-14, lane `mp-seat-assign`, step 5 of the LOCAL
 MULTIPLAYER flow in `split-screen.md`). After the layout screen's START, when the layout has **two or
-more windows**, the **WHO SITS WHERE** screen opens before the RACE page: which pane of the chosen layout each
-seated person flies in. With one window (which is also every browser and phone, where no layout screen
-exists) the people sit in join order and the screen is skipped: there is no window to choose between and a
-two-way split in one window keeps its order. It is `oag_ui_screens::seat_assign` over the join screen's rows
+more views in all** (`split_screen::has_panes_to_choose`: several windows, or **one window holding a split**,
+2026-10-14 `seat-assign-split`, so person 2 can take the top view), the **WHO SITS WHERE** screen opens before
+the RACE page: which pane of the chosen layout each seated person flies in. Only a layout with a single view in
+total skips it. The browser and the phones have no layout screen (`session::join` goes straight on there), so
+the screen is not reachable on them: `open_seat_assign` needs the layout stage BACK returns to, and a split
+there keeps the join order (**checked, not wired**; a `WindowLayoutStage` built from `remembered_cut` would
+open it). It is `oag_ui_screens::seat_assign` over the join screen's rows
 and the layout screen's preview (one shared `window_layout::draw_preview`, so the boxes and the cuts are the
 picture the race draws), on the title's own skin and font, driven by `session/seat_assign.rs`.
 
@@ -387,6 +390,19 @@ picture the race draws), on the title's own skin and font, driven by `session/se
   The windows' titles and holding frames name the people they hold (`PLAYER 1, 3`, `Session::planned_seats`).
   A race again, and a RETURN TO MENU race, skip the screen and keep `pane_people` (cleared when the flow
   ends, `Session::sync_multiplayer`, or the join screen is left).
+- **One window holding a split** is dealt the same way: `load.rs` deals the views by pane whenever several windows
+  are open **or the seat assignment ran** (`split_screen::deals_the_panes`), as a one-window `deal_windows`
+  (`layout_for` over one window is `deal(people, 1, cut)`, the layout screen's `split_cut` for two seats), so
+  pane `k` of the screen is view `k` of the race: the screen's `seat_cells` and the race's `window_rects` are the
+  one `viewport::layout`. `--players N` leaves `pane_people` empty and keeps the plain split (view `i` follows
+  slot `i`); the plain split does not carry an order, which is why an assigned single window takes the dealt
+  path even for the identity order, so P1-on-top and P2-on-top draw by the same path. What `windowed()` changes
+  for one window: window 1's views drive the HUD and end screens as in a multi-window race, a window of several
+  seats is a split for the resolution controller (`Session::drs_runs`: scale held, as a split holds it), and
+  keys are not read per window (`keys_by_window` needs further windows). Tests:
+  `pad_join_end_to_end::one_window_split_puts_the_chosen_person_in_the_chosen_view` (2 horizontal, 2 vertical, 3
+  and 4 views, order reversed: the race's rectangles equal the screen's cells, person 2 first),
+  `split_screen::tests` (the skip rule and the deal gate).
 - **Remembered on disk** with the layout: `[race] window_panes`, one device key per pane in pane order
   (`split_screen::device_key`: `keyboard`, `keyboard 2`, a pad's name, `name 2` for a second pad of that name;
   a `GamepadId` is per run). The next screen puts each device back in its pane
@@ -411,13 +427,28 @@ picked player 1 up, a click on pane 3 put them there and swapped player 3 into p
 joined, the keyboard moved its marker twice to the window-2 pane (`seat assignment: pane 1 = player 2 (xbox 360
 controller), pane 2 = player 3 (xbox 360 controller 2), pane 3 = player 1 (keyboard)`, `multi-window: 2 window(s)
 holding slot 1 + slot 2, slot 0`).
-**Not walked**: a race again and a RETURN TO MENU race (no race finished on lavapipe; the menus get no tick
-between `open_menus` and `reenter_multiplayer`, so `sync_multiplayer` cannot clear `pane_people` in between, and both
-paths read it at the load site the walked launches used), **the keyboard player flying a pane in a race on Xvfb**
+**One window holding a split, looked at (2026-10-14, `seat-assign-split`)**: `--menu-page seat-assign:2` and
+`seat-assign:4` as stills on Pulse EU and HD EU (the `WINDOW 1 VIEW n` rows, a stacked pair and a 2x2 preview, 1440x816), and
+live on Pulse PSP EU under Xvfb with software Vulkan and two virtual pads: both pads joined, the layout screen left at
+WINDOWS 1 (HORIZONTAL), START opened the screen, pad 2's Left put it in view 1 (rows `PLAYER 1 WINDOW 1 VIEW 2`,
+`PLAYER 2 WINDOW 1 VIEW 1`, both dimmed until confirmed, START refused), both confirmed, `seat assignment: pane 1 =
+player 2 (xbox 360 controller 2), pane 2 = player 1 (xbox 360 controller)`, Track and Ship Select, the race logged
+`multi-window: 1 window(s) holding slot 1 + slot 0`, and the frame at the start showed pad 2's purple Qirex in the **top**
+view and pad 1's blue Assegai below; holding pad 2's throttle moved the top view to 72 km/h while the bottom stayed at 0.
+**The end screens**: `Session::reenter_multiplayer`'s lobby and page walk is `multiplayer::reenter`, tested on the shipped
+`menu.toml` (`return_to_menu_lands_on_the_race_page_with_the_same_people`: the menu lands on RACE over MULTIPLAYER, where
+`has_left_the_flow` is false, so `sync_multiplayer` does not clear `pane_people`; `..._without_two_people_is_a_plain_menu`),
+and a race again clones `self.race_options` in `launch_race`, so it carries `seat_picks` (only `drop_split_lobby`, reached
+from `handle_menu`/Track Select BACK while `multiplayer` is false, clears them; `RaceAgain` calls neither). The three
+fields a RETURN TO MENU keeps (`pane_people`, `window_layout`, `split_cut`) have no writer on the path: `open_menus` writes
+none, `sync_multiplayer` is the one clearing `pane_people` and it ends the flow only off the RACE page. There is no
+`Session` without a window and a GPU, so those two are pinned at the functions the path calls, not as one run. No race
+finished on lavapipe, so neither end-screen path was walked.
+**Not walked**: a race again and a RETURN TO MENU race (see above), **the keyboard player flying a pane in a race on Xvfb**
 (a held `x` moved nothing, with the keyboard in window 1 under the join-order assignment as well as in window 2
 under the chosen one, so it is the Xvfb/XTEST keyboard and not this screen; the routing is
 `a_window_whose_slots_are_not_a_run_still_routes_to_the_keyboard_seat`), Pure, Omega and 2048 stills (2048's `.pkg`
-is PFS-encrypted here), a single window of two or more people (skipped by rule), a second real keyboard.
+is PFS-encrypted here), a second real keyboard.
 
 ## Windows
 
