@@ -198,14 +198,11 @@ pub struct RaceView {
     /// a split-screen view. Indexed by slot; the primary slot's is the one the
     /// full-screen HUD reads. See [`super::slot_hud`]. Render-side, out of the hash.
     pub(super) huds: [super::slot_hud::SlotHud; MAX_SHIPS],
-    /// The HUD's four message lines - `oag_hud::messages`. Render-side and out
-    /// of the hash; advanced a tick at a time by [`Race::tick`], so a paused race
-    /// holds them still. Raised by [`Race::raise_message`].
-    pub(super) messages: oag_hud::messages::MessageBoard,
-    /// The lap-crossing lines (`PLAP`, `NEWLAP_REC`, `FIN_LAP`), or `None` for a
-    /// title whose HUD has no message slots. Set by [`Race::watch_laps`].
-    pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
-    /// The lap-line time gap, on and off with [`Self::lap_watch`].
+    /// Whether a craft-to-craft contact resolved on `slot` last tick and no shield
+    /// swallowed it: the pair path's twin of the wall's `craft+0x860 & 0x20`
+    /// spoil, read and cleared by `Race::observe_lap`. Render-side, out of the hash.
+    pub(super) pair_spoil: [bool; MAX_SHIPS],
+    /// The lap-line time gap, on and off with the primary slot's lap watch.
     pub(super) split_gap: Option<super::split_gap::SplitGap>,
     /// The `engine_flare` locator in model space, when the ship model has one.
     ///

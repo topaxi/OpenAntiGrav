@@ -106,7 +106,7 @@ impl super::Race {
         hit: bool,
     ) {
         let state = self.sim.world.race[slot];
-        let Some(watch) = self.view.lap_watch.as_mut() else {
+        let Some(watch) = self.view.huds[slot].lap_watch.as_mut() else {
             return;
         };
         let edge = LapEdge {
@@ -119,7 +119,7 @@ impl super::Race {
         };
         let time_trial = self.sim.world.mode() == oag_race::Mode::TimeTrial;
         for id in watch.observe(hit, time_trial, edge) {
-            self.view.messages.push(id, true);
+            self.view.huds[slot].messages.push(id, true);
         }
     }
 }

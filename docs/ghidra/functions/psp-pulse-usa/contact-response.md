@@ -1018,6 +1018,16 @@ does for `Body_ApplyImpulseAtPoint`'s call two lines above in the same tail.
   Confidence on that question: 50, which is why the function stays
   `FUN_0884dc60` rather than `Body_RecordContactPair` or similar.
 
+  **Named 2026-10-14: `Body_RecordPairContact` (`0x0884dc60`), confidence 82
+  for the role, not for the argument semantics.** Its consumer is found: the
+  ring entries it appends (kind word `1`, friction `f12` = the pair contact's
+  `+0x34`, positive `0.02` for two racing craft) are read by `FUN_088418e0`'s
+  loop like `Body_RecordContact`'s, and arm `craft+0x860 & 0x20` for both
+  bodies - see [hud-message-triggers.md](hud-message-triggers.md) for the
+  chain from `Collision_BoxAgainstBox` and what it does to a perfect lap. What
+  the `a1`/`a2` quads mean is still unread, which is why the confidence stops
+  below the 84 a single-binary static read caps at.
+
 **Neither call posts the pending impulse.** `Body_Translate` only ever
 touches `body+0x30/0x34/0x38`. `FUN_0884dc60` only ever touches
 `body+0x170/0x180/0x190/0x1a0/0x370` on whatever it is handed as `a0`. There

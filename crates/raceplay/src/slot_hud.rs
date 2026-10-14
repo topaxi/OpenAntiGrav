@@ -48,6 +48,14 @@ pub(super) struct SlotHud {
     pub(super) sight: sight::Sight,
     /// What [`Self::sight`] said last tick.
     pub(super) sight_state: sight::State,
+    /// This view's HUD message lines. One per slot so that each person's own
+    /// perfect-lap, lap-record and final-lap lines show in their own view; a
+    /// slot nobody flies never has one raised. Render-side, out of the hash.
+    pub(super) messages: oag_hud::messages::MessageBoard,
+    /// This slot's lap-crossing lines, or `None` for a title with no message
+    /// slots. Set for every slot by `Race::watch_laps`, fed only for the slots a
+    /// person on this machine flies.
+    pub(super) lap_watch: Option<super::lap_messages::LapWatch>,
 }
 
 /// 2048's `EnergyBarDelay` factor, `Hud_UpdateEnergyBar`'s own `0.1`, applied
