@@ -79,8 +79,11 @@ other's motion tick to tick. A racing pack does: ship contact and weapon hits
 change a craft's motion on contact, and a predicted local craft meeting an
 interpolated remote one resolves against a state close to a round trip stale.
 
-**Status: measure first.** Nothing is decided and no ADR is written. The
-options, their outcomes and the measurements are written up in the handover
+**Status: measured on the desktop, 2026-10-14; the maintainer decides.** M1 to M4
+are in ("Reconciliation cost", "Remote-input predictability", "What a correction
+looks like" below) and favour the recommendation, with two conditions still unmet
+(the Galaxy S24 cost and weapons). [ADR-0069](../architecture/adr/0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md)
+is drafted as Proposed. The options, outcomes and measurements are in the handover
 thread for this work.
 
 **Current recommendation, open to challenge:** predict every craft in one
@@ -99,7 +102,8 @@ remote cars the weak case and price a correction at 24 replayed frames for 200 m
 of ping at 120 Hz. Rocket League has one ball, no weapons and simple bodies.
 Nothing here has been measured on this engine.
 
-Costs to measure before committing, with what is known (2026-10-14):
+Costs to measure before committing, with what is known (2026-10-14; M1 and M4
+measured, see below):
 
 - The replay cost: **measured on the desktop, below**. The Galaxy S24 half is
   open.
@@ -233,6 +237,174 @@ Reproduce: `OAG_SWEEP=1 OAG_SWEEP_TRACKS=09_Track OAG_REQUIRE_GAME_DATA=1 cargo
 nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_cost/)'`
 (one circuit per process; omit `OAG_SWEEP_TRACKS` for all twelve, with heap
 figures that then read low after the first).
+
+## Remote-input predictability (2026-10-14, desktop)
+
+Section 3a's M1. Counts are deterministic, shown rather than assumed: the full
+AI sweep and the full human sweep were each run twice and the two tables are
+byte-identical; only timings, which this sweep does not take, would need repeats.
+One-minute load average at the start of each circuit, from the logs: 12.9 to 66.2
+(AI sweep, both runs), 12.9 to 43.1 (human sweep, both runs); the other members'
+builds and tests were the load.
+
+**Method.** `tests::reconcile_predict` (`crates/raceplay/src/tests/reconcile_predict.rs`,
+`#[ignore]`d, `OAG_SWEEP=1`; `OAG_SWEEP_GHOSTS` names a directory of `.oagr` ghost
+files for the human half). A server runs the race on the true inputs and a client
+runs it ahead: its own craft on the true input, every remote craft on that craft's
+last input it has heard of, which is `window` ticks old (3, 6 and 12 ticks: 50, 100
+and 200 ms). Every tick a packet carries the server's state after tick `t - window +
+1`; the client compares it with what it had and, under the policy, restores the
+server's state and replays `window` ticks through `Race::tick_sim_only`. In-process,
+lossless; the latency is the only network. Policies: `every packet` corrects when
+the state hash differs at all; `threshold d` when some craft is more than `d` world
+units from the server's (**chosen, not measured**: 0.25, 1 and 4; a craft is 13
+units long and 5.5 wide). Scored from the countdown's release, 1,500 ticks on each of
+the 12 Pulse circuits (VENOM, Single Race, 8 craft). A correction is checked to land
+on the server's exact hash (`bad corrections`: 0 in every row).
+
+**Where the input comes from, and what that means.**
+
+- **AI-derived streams** (`ai7`: 1 own craft and 7 remote; `ai1`: 7 own, 1 remote).
+  The driver's controls recorded off an all-autopilot run and replayed as
+  `InputSnapshot`s, thrust binarised the way a button is (26 to 41 percent of
+  ticks, by circuit, had a fractional thrust). Continuous and reactive: about 10,000 distinct `stick_x`
+  values over the 10,500 scored remote ticks of a circuit, 1 to 5 percent of them at
+  full deflection, and the next input differs from the last on 96 to 99 percent of
+  ticks (the next 3, 6 and 12: 97 to 100 percent). This is **a proxy for an analog stick, not a
+  recording of one**; no recording of eight people on one circuit exists.
+- **The maintainer's four ghost files** (Pulse, three circuits, 1,878 to 3,997
+  scored ticks each). A census of `stick_x` finds **three distinct values in every
+  file (-1, 0, +1) and 33 to 39 percent of ticks at full deflection: these were
+  flown on a keyboard or d-pad, not an analog stick.** The next input differs from
+  the last on 4 to 8 percent of ticks; the next 3, 6 and 12 differ on 13 to 22, 25 to
+  40 and 45 to 63 percent. They are replayed alone as recorded and as slot 0 of a
+  pack whose other seven craft run the AI-derived streams.
+- **Weapons are absent**: a replayed stream never presses fire, so a pack here has
+  walls and contact but no missiles (option D is untouched). No packet loss, jitter
+  or server input buffer.
+
+**Results** (pooled over the 12 circuits for `ai`; a range over the 4 files for
+`human`). Corrections per second of racing, then the sim cost
+of the replays as a multiple of the forward simulation (`1 + replayed ticks / 60`),
+for windows 3 / 6 / 12.
+
+| stream | policy | corrections per second | sim cost x |
+| --- | --- | --- | --- |
+| ai7 (7 remote) | every packet | 53 / 53 / 53 | 3.7 / 6.3 / 11.6 |
+| | threshold 0.25 | 2.7 / 3.0 / 3.2 | 1.13 / 1.30 / 1.65 |
+| | threshold 1 | 1.4 / 1.6 / 1.8 | 1.07 / 1.15 / 1.36 |
+| | threshold 4 | 0.65 / 0.78 / 0.99 | 1.03 / 1.08 / 1.20 |
+| ai1 (1 remote) | every packet | 25 / 25 / 25 | 2.3 / 3.5 / 6.1 |
+| | threshold 1 | 0.59 / 0.67 / 0.82 | 1.03 / 1.07 / 1.16 |
+| human (keyboard), alone | every packet | 2.6 to 4.8, all windows | 1.1 to 1.2 / 1.3 to 1.5 / 1.5 to 2.0 |
+| | threshold 1 | 0.4 to 1.5 / 0.5 to 1.6 / 0.8 to 1.8 | at most 1.4 |
+| human (keyboard), in a pack | every packet | 2.6 to 4.8, all windows | as alone |
+
+Position error against the server, in world units (a craft covers about 2 units a
+tick at 120 units/s, so 2 units is one tick of travel). Remote craft, p95 over ticks,
+free-running (not in contact within the window), for windows 3 / 6 / 12:
+
+| stream | every packet | threshold 1 | threshold 4 |
+| --- | --- | --- | --- |
+| ai7 | 0.01 / 0.04 / 0.21 | 0.66 / 0.82 / 1.46 | 2.6 / 2.8 / 3.7 |
+| ai1 | 0.01 / 0.04 / 0.23 | 0.94 / 1.08 / 1.82 | 3.4 / 3.8 / 4.9 |
+| human, alone | 0.00 to 0.01 / 0.01 to 0.08 / 0.14 to 0.41 | 0.86 to 1.12 / 0.99 to 1.84 / 1.7 to 4.8 | 3.0 to 3.9 / 3.3 to 5.0 / 4.3 to 9.8 |
+
+The size of the correction a player would see (the pop, p95): every packet 0.16 /
+0.49 / 1.65 units (ai7), threshold 1 1.7 / 2.5 / 5.3 (ai7), threshold 4 5.9 / 7.9 /
+13.8. The player's own craft, shoved only through contact: p95 at most 0.07 unit in `ai7`
+under every policy and 0.0 to 0.6 in `ai1` (the 0.4 to 0.6 under threshold 4); the
+maxima of 3 to 17 units are contact. Contact ticks (a craft pair resolved on the server's tick) are
+45 percent of the scored ticks in the AI packs.
+
+**What it says.**
+
+- **Last-input prediction is nearly free for digital input and a storm for analog
+  input.** The keyboard ghosts need 2.6 to 4.8 corrections a second under the strict
+  policy at every window, 1.1 to 2.0 times the simulation. The AI-derived streams,
+  which change every tick, need 53 a second for seven remote craft (11.6 times the
+  simulation at 200 ms). Section 3a's risk (1), "an analog stick changes almost every
+  tick", is real **for an analog stick**, and these ghosts cannot say how often that
+  is: the proxy is a driver, which is more reactive than a hand.
+- **A state threshold removes the storm.** At 1 unit (0.08 of a craft's length, half
+  a tick of travel) the seven-remote pack needs 1.4 to 1.8 corrections a second and
+  1.07 to 1.36 times the simulation, with a free-running remote error p95 of 0.7 to
+  1.5 units. The error the threshold leaves is below one tick of travel; the
+  correction pop is 1.7 to 5 units. This is the policy the recommendation already
+  names ("a large difference requires correction"), now with a number to argue about.
+- **The cost of the strict policy against the proposed pass condition.** 6.3 times
+  the simulation at 100 ms is 0.41 ms a frame on this desktop (65 us a tick), 2.5
+  percent of a frame; on a phone 10 times slower it is 25 percent, exactly the
+  proposed budget, and 46 percent at 200 ms. Under a threshold it is 1.1 to 1.4 times,
+  negligible. **The S24 itself is still unmeasured.**
+- **Outliers.** The maxima of 257 to 289 units under thresholds 1 and 4 are craft
+  respawned on one timeline only, drawn wrong for up to one window until the next
+  packet crosses the threshold. They are what `correction::SNAP_DISTANCE` (20 units)
+  is for: a correction that large is drawn where it lands. They are rare (the p95 is
+  below 4 units) and are a discrete-event problem, not an input-prediction one.
+- **Only discrete events make a big error.** A sideshift moves a craft about 4.5
+  units; contact, a respawn and a wreck move it more. A stick or a thrust held wrong
+  for 200 ms moves it under 1 unit.
+
+Reproduce: `OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-raceplay
+--run-ignored all --no-capture -E 'test(/reconcile_predict_ai_sweep/)'` (about 11
+minutes on a loaded machine; `OAG_SWEEP_TRACKS=09_Track` for one circuit), and the same
+with `reconcile_predict_human_sweep` and `OAG_SWEEP_GHOSTS=<a directory of .oagr
+files saved by the game's ghost recording>`.
+
+**Not covered:** an analog human stream (no recording exists; the fix is to record
+one, a controller player flying a pack through the existing `--record-ghost` path),
+weapons, loss and jitter, the S24, and a threshold in effect rather than in units
+(section 3a's last question).
+
+## What a correction looks like (2026-10-14)
+
+Section 3a's M4. `Race::reconcile` (`crates/raceplay/src/correction.rs`) is the
+client's correction: restore the server's state and replay the ticks since through
+`tick_sim_only`. When the guess was wrong a craft ends the replay somewhere else, and
+drawn as it is that is a pop. The smoothing is **a view-only offset that decays**:
+the craft stays drawn where it was (`before - after`) and the offset loses half
+every 6 ticks (100 ms, **chosen, not measured**; the originals have no rollback),
+added where a craft is drawn (`drawn_model`, `drawn_position`) and nowhere the
+simulation reads. A correction over 20 units (**chosen**) is drawn where it lands.
+**Only a remote person's craft glides**: the craft the camera follows is drawn where
+the camera puts it, because offsetting the hull alone draws it off its own chase
+camera (seen: the hull slid left of the camera's centre for the length of the glide
+in the first render, which is why the rule exists). The hash is identical with
+smoothing on or off (`tests::correction`), and a replay is not a drawn tick.
+
+**The scene.** `oag-game --race --opponents --hold cross --scheme veteran --size 960x540
+--ticks N --force-remote-correction TICK:SLOT[:WINDOW[:contact]] [--no-correction-smoothing]
+--screenshot out.png`. At `TICK` craft `SLOT` is handed to a scripted remote person
+who double-taps its airbrake toward the player (a **sideshift**, the input a last-input
+guess cannot see coming: a pressed edge, two within a quarter second); the client
+guesses it straight on for `WINDOW` ticks (default 6), then the server's state arrives
+and the client corrects. With `contact` the player dashes at it too, so the two touch
+on the true timeline and not on the guessed one. A frame is a function of the tick
+count, so a sequence is one run per `--ticks`. **No capture of the original shows a
+correction (it has none); there is no reference frame.**
+
+- **A, the rival pops** (`325:7:12`, Pulse circuit 01, slot 7 beside the player at
+  the left edge of the chase view): the rival moves 4.5 units at the correction.
+  Without smoothing it jumps about 70 px right in one frame at 960x540 (measured as
+  the centroid of its purple hull in the crop, approximate: it moves 60 to 78 px
+  between frames 337 and 338 and the centroid is noisy); with it, it stays where the
+  last frame drew it (the same crop at 337 and 338 shows a 10 to 20 px step) and
+  glides across over about 8 frames, about 45 px short of the unsmoothed one still at
+  frame 345. Read by eye on a contact sheet of the crops (the left column pops, the
+  right column glides). A 1 unit pop is about 15 px at that distance and would not be
+  noticed against 2 units of travel a tick.
+- **B, contact** (`480:7:16:contact`, window 16 is the shortest of 12/16/20 where
+  the touch exists: own craft 2.1 units at 16, 3.6 at 20): the rival is **out of shot**
+  behind a trackside barrier, so the picture shows only the player's own craft and the
+  camera jerked by 2.1 units, which is not smoothed by the rule above and which the
+  player's own dash makes impossible to separate by eye from the contact. The contact
+  case is judged by the numbers (own craft 2 to 5 units) and not the picture.
+
+**Reading.** The smoothing is worth having for a remote craft near the camera and
+costs a `Vec3` per craft; below about 2 units nothing needs it. The own craft is the
+open case: its correction moves the camera, and smoothing it means offsetting the
+camera too (not built).
 
 ## Transport: WebTransport leaning, not decided
 

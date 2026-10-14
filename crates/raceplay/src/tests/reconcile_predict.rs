@@ -324,14 +324,38 @@ fn spread3(samples: &mut [f32]) -> String {
     )
 }
 
-/// How often the last input is not the next `window` inputs, per remote stream:
-/// the strict-policy correction rate before any physics.
+/// What the remote streams are made of, and how often the last input is not the
+/// next `window` inputs: the strict-policy correction rate before any physics. Both
+/// count from the countdown's release, the same ticks the run scores.
 fn stream_report(sc: &Scenario) {
+    let after = oag_race::COUNTDOWN_TICKS as usize;
+    let mut sticks: Vec<u32> = sc
+        .remote
+        .iter()
+        .flat_map(|&slot| {
+            sc.streams[slot][after..]
+                .iter()
+                .map(|s| s.stick_x.to_bits())
+        })
+        .collect();
+    let total = sticks.len().max(1);
+    let full = sticks
+        .iter()
+        .filter(|&&bits| f32::from_bits(bits).abs() == 1.0)
+        .count();
+    sticks.sort_unstable();
+    sticks.dedup();
+    println!(
+        "  {} input: {} distinct stick_x values over {total} ticks, {:.1}% of them at full deflection",
+        sc.name,
+        sticks.len(),
+        100.0 * full as f64 / total as f64
+    );
     for &window in &WINDOWS {
         let (mut changed, mut total, mut moved, mut delta) = (0usize, 0usize, 0usize, 0.0f64);
         for &slot in &sc.remote {
             let stream = &sc.streams[slot];
-            for u in RACED.min(stream.len() / 2)..stream.len().saturating_sub(window + 1) {
+            for u in oag_race::COUNTDOWN_TICKS as usize..stream.len().saturating_sub(window + 1) {
                 let last = &stream[u];
                 let differs = |s: &InputSnapshot| {
                     s.stick_x != last.stick_x

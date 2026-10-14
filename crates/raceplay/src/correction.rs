@@ -127,17 +127,19 @@ impl Race {
 
 /// A scripted misprediction for a capture: at tick `at` craft `slot` is handed to a
 /// "remote person" who double-taps the airbrake toward the player (a sideshift, a
-/// lateral dash) as the player dashes toward it, the client keeps guessing it straight on for `window` ticks, and
-/// then the server's state arrives and the client corrects. A verification aid,
+/// lateral dash), the client keeps guessing it straight on for `window` ticks, and
+/// then the server's state arrives and the client corrects. With `contact` the player
+/// dashes at it too. A verification aid,
 /// there because no capture has two timelines: see `--force-remote-correction`.
 ///
 /// A sideshift because it is the input a last-input guess cannot see coming (a
 /// pressed edge, two within a quarter of a second) and the one that moves a craft
 /// sideways into its neighbour.
 ///
-/// The server's side is one `Race::tick` run ahead of the client's and rewound
-/// (`snapshot_sim`/`restore_sim`), so a single [`Race`] is both, and a frame at any
-/// tick is a function of the tick count alone.
+/// The server's side is one `Race::tick_sim_only` run ahead of the client's and
+/// rewound (`snapshot_sim`/`restore_sim`), so a single [`Race`] is both, the camera
+/// and the particles tick once per drawn tick, and a frame at any tick is a function
+/// of the tick count alone.
 #[derive(Debug, Clone)]
 pub struct Scene {
     /// The tick the remote person takes the craft.
@@ -247,7 +249,7 @@ impl Scene {
             race.sim.world.controllers[self.slot] = oag_gameplay::Controller::Remote;
             let base = race.snapshot_sim();
             let side = Self::side(race, self.slot, 0);
-            race.tick(&self.inputs(0, side, Self::truth(0, side)));
+            race.tick_sim_only(&self.inputs(0, side, Self::truth(0, side)));
             *self.server.borrow_mut() = Some((race.snapshot_sim(), side));
             race.restore_sim(&base);
         }
