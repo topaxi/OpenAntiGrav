@@ -868,10 +868,20 @@ fn omega_reads_its_own_team_selection() {
         let src = oag_ui_screens::picker::hd::logo_src(&team.location);
         assert!(shell.sprites.get(&src).is_some(), "{src}");
     }
-    let era: Vec<&str> = oag_omega::race::ERA_2048_VARIANTS.teams.to_vec();
-    for id in era {
-        assert!(shell.teams.iter().any(|team| team.id == id), "{id}");
+    let mut era: Vec<&str> = oag_omega::race::ERA_2048_VARIANTS.teams.to_vec();
+    era.sort_unstable();
+    for id in &era {
+        assert!(shell.teams.iter().any(|team| team.id == *id), "{id}");
     }
+    // Only those five name no craft under their bare id, so only they leave the opponent pool.
+    let mut craftless: Vec<&str> = shell
+        .teams
+        .iter()
+        .map(|team| team.id.as_str())
+        .filter(|id| oag_omega::TITLE.race.names_no_craft(id))
+        .collect();
+    craftless.sort_unstable();
+    assert_eq!(craftless, era);
     assert!(
         shell.ship_select_split.is_none(),
         "Omega authors per-player screens as a sequence, not one shared page"

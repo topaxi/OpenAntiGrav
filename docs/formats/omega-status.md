@@ -310,9 +310,9 @@ five 2048-era (`Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auri
 `Icaras`, `Mirage`, `Piranha`, `Qirex`, `Triakis`) and `Tigron_x` and `Tigron` (named `Tigron` and `VanUber`). Each HD-era team
 authors thirteen `PI_TeamModel`: nine with an `<FE speed thrust handling shield length firepower>` (`chrome_c1`, `nitro`,
 `concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`, `vr_hd`, `vr_fury`; `zone`, `detonator` and the two `vr_` ones have none), which is
-the **nine rows** the honeycomb authors. The screen offers **14 teams**: the twelve and the two Tigrons. The five
-2048-era teams are declared and **not offered**: `load_teams` asks for `hdships\<id>\Ship.vex` and
-`handlingstats.xml` by the bare id, and theirs sit under `Ships\<id>\<n>\` (the load report says "5 declared team(s)
+the **nine rows** the honeycomb authors. The screen offers **19 teams** since 2026-10-14 (`omega-2048-era-teams`, below): the twelve, the two Tigrons and
+the five 2048-era teams. Before that it offered 14: `load_teams` asked for `hdships\<id>\Ship.vex` and
+`handlingstats.xml` by the bare id, and the 2048-era teams' sit under `Ships\<id>\<n>\` (the load report said "5 declared team(s)
 have no ship or no handling stats").
 
 **What opens.** `oag_omega::race::TEAM_VARIANTS`: the twelve HD-era teams, `""`, `_c1`, `_n1` joined as a suffix, labelled with the
@@ -363,9 +363,51 @@ still (`--menu-page ship-select`) and a `--race --team Feisar --variant _c1`/`_n
   17 teams and 104 `PI_TeamModel` with an `<FE>`, all 104 rated (`omega_ship_select_probe`, run on `PCSF00007/base`). 2048 authors no
   `Team Selection` (and so no per-player pair), so nothing draws them.
 - *PS4/Vita `.rcsmodel` hull as a preview*: **checked, applies, not wired.** `psp2_scene::model` reads the Vita container too (`mesh::rcs::psp2::is_psp2`); 2048 has no ship screen to draw it.
-- *Numbered craft (`Subdirectory` join) in the honeycomb*: **checked, differs.** `Team::hex_cells` and `variant_stats` append a suffix to the
-  team's location, which is right for HD's suffix join and wrong for 2048's `<team>\<n>`; Omega's five 2048-era teams would need the title's `VariantJoin` passed in, and
-  they are not offered on this screen, so it is not done. Open.
+- *Numbered craft (`Subdirectory` join) in the honeycomb*: **done on Omega 2026-10-14** (`omega-2048-era-teams`, next section); 2048's own result is there.
+
+## 2048-era teams on Ship Select (2026-10-14, `omega-2048-era-teams`)
+
+**The five 2048-era teams (`Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048`) are on Omega's Ship Select, for one
+person and for each split seat, and picking one starts a race on that craft.** Walked on an own Xvfb with a virtual pad: RACE, START, Track Select,
+`SHIP SELECT`, right to `Feisar2048` (the team column is the definition's file order, which puts them first; the wrap from `Tigron` is **chosen, not
+measured**), the `speed` craft, confirm, and the race loads and starts on the yellow `Feisar2048\3` hull.
+
+- **What a team is.** `Feisar2048` is offered under its bare id, as the definition declares it; the bare id names no craft (`Ships\Feisar2048\ship.vex`
+  does not exist), only `Feisar2048\1`..`\4` do. `oag_title::GuestRoster::offered` (data, `true` on Omega's roster, `false` on 2048's HD-derived twelve,
+  which stay reachable through RACE REMIX only) lets `boot::roster::load_teams` offer a guest roster's team when **every** craft its table names resolves
+  its hull and tuning in the roster's own directories (`ships_for`/`handling_dir_for`). The load report's "declared team(s) have no ship" line is gone on
+  Omega; 2048's and HD's counts and frames do not move (HD's and 2048's `--menu-page ship-select`/team lists compared to a build of `28d164268`).
+- **The join is data.** `Team::hex_cells` and `variant_stats` take the `VariantJoin` (`RaceDefaults::join_for`, the variant table's own join, a suffix
+  for a team with none): `Data\...\Feisar2048` + `3` is `...\Feisar2048\3`, where the old suffix append gave `Feisar20483`. `Team::model_for_directory`
+  now compares the whole path, not its leaf: `Feisar2048\3` and the `IsVR` model at `VR_2048\3` share the leaf `3`.
+- **Rows, in the definition's file order** (so the honeycomb places them, nothing chosen): `speed` (`\3`), `combat` (`\1`), `agility` (`\2`),
+  `prototype` (`\4`), then the four `IsVR` models (`vr_speed`...), which this build draws as padlocks like HD's two PSVR rows. Four open cells and four
+  padlocks per team. The variant table's labels are the models' own `name` (`combat`, `agility`, `speed`, `prototype`; Omega's table said `fighter` for `\1`
+  after the string id, 2048's own table still does); the ground truth holds each label to its model.
+- **Ratings** off each model's `<FE>` as for HD (Feisar2048: combat 5/8.5/6/8, agility 5/8/9/6, speed 8/8/7/4, prototype 8/8/7/4, in tenths 50/85/60/80 ...).
+  Thumbnails are `<model>\FE\thumb0.gnf` per craft (drawn), the logo `Ships\<Team>\FE\Logo.gnf` per team: `picker::hd::logo_src` now takes the team's
+  `location` and the entry carries it (`Details::Ship::logo`), where it joined `ship_dir` and the id and so only reached `hdships`.
+- **The preview** is `Ships\<Team>\<n>\ship.vex`, through the same `PreviewSource` join the HD-era variants use; the pose is the borrowed one.
+- **Team-level unlock rules are not read, as on the HD-era teams.** `Piranha2048` and `AG_Systems2048` author `<Unlock purchase="1">` on the team (as HD-era
+  `Qirex`, `Piranha`, `AG_Systems`, `Triakis`, `Goteki`, `EGX`, `Assegai` do, and `Mirage`..`Icaras` a `grid`); this build keeps no unlock state, offers all
+  nineteen and says nothing is locked. **Not measured**: what the original draws for an unpurchased team.
+- **Not drawn, said so**: `ShipDesc` (the `description` string id), the hexagonal window's stills (`Ships\<Team>\screen.xml` has no slideshow chain, the load report
+  says so), the four `IsVR` models.
+- **Opponents unchanged (chosen, not measured).** The grid's pool is drawn from the bare ids of the offered teams except those that name no craft
+  (`RaceDefaults::names_no_craft`): nothing chose which craft an AI flies, and a bare `Feisar2048` is not a directory. A race's opponents are the HD-era teams
+  as before, whoever the player is; whether the original mixes eras is unmeasured. A player's pick reaches the race through the usual
+  `apply_race_team`/`combine_variant` (`Feisar2048` + `3` = `Feisar2048\3`), pinned by a test.
+- **Frames.** HD's Ship Select frames (Feisar `_c1`, Mirage `_n1`) are byte-identical to a build of `28d164268`. Omega's HD-era frames differ in the two
+  neighbour columns (the wrap now shows 2048-era neighbours) and by at most 2/255 on a few frame lines, the sprite sheet having grown by the five logos and
+  forty thumbnails.
+
+**2048 cross-check.**
+- *The teams definition and `<FE>` of the five teams*: **checked, applies, not wired.** 2048's own `data/plugins/teams/Definition.xml` authors the same twenty
+  models (name, directory and `<FE>` identical to Omega's, all twenty compared, `IsVR` copies aside); the reader finds all of them. 2048 has no Ship Select, so
+  nothing draws them.
+- *Logo and thumbnails under each team's own directory*: **checked, differs.** 2048's `data.psarc` has no `Ships\<Team>\fe\` entry at all (no `Logo`, no `thumb0`), only `FE\NewImages\Team_Logos\<Team>2048.gxt` icons (Omega ships those as `.gnf` too, and the directory ones besides); it has no screen to need either.
+- *`Subdirectory` join in the honeycomb*: **ported**, to Omega, with a disc-backed ground truth (`omega_2048_era_craft_ground_truth`); 2048 has no honeycomb.
+- *Labels*: **checked, differs.** 2048's `oag_2048::race::TEAM_VARIANTS` calls craft `1` `fighter` (string id `..._Fighter_...`), its definition `combat`.
 
 ## What a menu-page capture does today
 

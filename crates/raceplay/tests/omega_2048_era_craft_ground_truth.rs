@@ -213,6 +213,15 @@ fn the_2048_era_teams_open_their_four_numbered_craft_with_the_discs_own_ratings(
             "{id}: every craft is rated"
         );
     }
+    // Each table label is the authored name of the model its directory holds.
+    for id in table.teams {
+        let team = teams.iter().find(|team| team.id == *id).expect("declared");
+        for variant in table.variants {
+            let directory = table.join.combine(&team.location, variant.suffix);
+            let model = team.model_for_directory(&directory).expect("a model");
+            assert_eq!(model.name, variant.label, "{id} {}", variant.suffix);
+        }
+    }
     let feisar = teams
         .iter()
         .find(|team| team.id == "Feisar2048")
