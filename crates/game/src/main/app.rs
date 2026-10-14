@@ -200,9 +200,12 @@ impl App {
         // [`Self::race_profile`] - and using it here saves that first-frame
         // reallocation.
         let render_profile = self.race_profile();
+        let rect = display::viewport(gpu.output.size(), self.settings.display.aspect);
+        let gamescope =
+            crate::window::under_gamescope_cached(gpu.output.window.current_monitor().as_ref());
         let target = oag_game::settings::web::render_target(
-            display::viewport(gpu.output.size(), self.settings.display.aspect),
-            render_profile.render_scale,
+            rect,
+            render_profile.scale_for((rect.2, rect.3), gamescope),
             gpu.device.limits().max_texture_dimension_2d,
         );
         let framebuffer = upscale::Framebuffer::new(&gpu.device, gpu.output.config.format, target)

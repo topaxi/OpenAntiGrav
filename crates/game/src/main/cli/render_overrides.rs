@@ -26,6 +26,7 @@ impl Cli {
     ) {
         if let Some(render_scale) = render_scale {
             profile.render_scale = render_scale;
+            profile.render_scale_chosen = true;
         }
         if let Some(reconstruction) = self.reconstruction {
             profile.reconstruction = reconstruction;

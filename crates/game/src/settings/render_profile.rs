@@ -106,6 +106,18 @@ pub struct RenderProfile {
     /// [`oag_display::display::Scale`].
     #[serde(default)]
     pub render_scale: oag_display::display::Scale,
+    /// Whether `render_scale` is the player's own choice, from the menu or the
+    /// file. `false` lets [`Self::scale_for`] pick a default for an output too
+    /// big to carry (under gamescope); `true` always wins over that default.
+    ///
+    /// A flag beside the value and not an `Option`, because the settings file
+    /// is rewritten on every launch with every key written, so "key absent"
+    /// is not a state that survives a save. A file that predates the flag
+    /// reads as chosen when it holds a scale other than 100 (nobody wrote 75
+    /// by accident); a saved 100 cannot be told from the default and reads as
+    /// unchosen, so picking 100 again in the menu is what pins it.
+    #[serde(default)]
+    pub render_scale_chosen: bool,
     /// The frame rate a resolution controller aims for, or `off`.
     ///
     /// The target *is* the enable, so there is no second key that can disagree
@@ -321,6 +333,72 @@ pub(super) fn seed_shadow_defaults(table: &mut toml::Table) {
     }
 }
 
+/// The pixels a frame is drawn with under gamescope when the player has not
+/// chosen a render scale: 1920x1080. **Chosen, not measured.** Measured on a
+/// Steam Deck at its 3840x2160 TV output (Pulse, one view, GPU at 1600 MHz and
+/// the 15 W cap throughout): the scene pass costs 8-35 ms at 8.2 Mpx and the
+/// cost is linear in pixels, which puts the worst stretch of the track at
+/// about 10 ms, 58 fps, at 2.1 Mpx. See `docs/tools/packaging.md`.
+pub const GAMESCOPE_PIXEL_BUDGET: f32 = 1920.0 * 1080.0;
+
+impl RenderProfile {
+    /// The scale to draw `rect_pixels` (the aspect rectangle's width and
+    /// height) at: the player's own `render_scale` when they chose one, and
+    /// otherwise 100 % everywhere but under gamescope, where it is the
+    /// largest whole percentage that keeps the frame within
+    /// [`GAMESCOPE_PIXEL_BUDGET`] (never above 100, never below the range's
+    /// floor). A default only: no output is refused and nothing is
+    /// disabled, and the menu row shows this value, so one step from it is
+    /// one step from what the player sees.
+    #[must_use]
+    pub fn scale_for(
+        &self,
+        rect_pixels: (f32, f32),
+        gamescope: bool,
+    ) -> oag_display::display::Scale {
+        use oag_display::display::Scale;
+        let pixels = rect_pixels.0 * rect_pixels.1;
+        if self.render_scale_chosen || !gamescope || pixels <= GAMESCOPE_PIXEL_BUDGET {
+            return self.render_scale;
+        }
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a ratio under 1 scaled to a percentage, floored"
+        )]
+        let percent = ((GAMESCOPE_PIXEL_BUDGET / pixels).sqrt() * 100.0) as u32;
+        Scale::try_from(percent.max(*Scale::RANGE.start())).unwrap_or(self.render_scale)
+    }
+}
+
+/// Marks a profile whose file already holds a render scale other than 100 as
+/// chosen: the flag did not exist when it was written, and a player's 75 is a
+/// choice. Runs on the parsed table, before serde, and only where the flag is
+/// absent.
+pub(super) fn seed_render_scale_chosen(table: &mut toml::Table) {
+    let Some(profiles) = table
+        .get_mut("render_profiles")
+        .and_then(toml::Value::as_table_mut)
+    else {
+        return;
+    };
+    for (_, profile) in profiles.iter_mut() {
+        let Some(profile) = profile.as_table_mut() else {
+            continue;
+        };
+        if profile.contains_key("render_scale_chosen") {
+            continue;
+        }
+        let scaled = profile
+            .get("render_scale")
+            .and_then(toml::Value::as_integer)
+            .is_some_and(|percent| percent != 100);
+        if scaled {
+            profile.insert("render_scale_chosen".into(), true.into());
+        }
+    }
+}
+
 /// See [`RenderProfile::screen_filter`]: `off`.
 fn default_screen_filter() -> String {
     SCREEN_FILTER_OFF.to_string()
@@ -333,6 +411,7 @@ impl Default for RenderProfile {
     fn default() -> Self {
         Self {
             render_scale: oag_display::display::Scale::default(),
+            render_scale_chosen: false,
             target_fps: oag_present::drs::Target::default(),
             // The one field whose default is not its type's - see
             // `default_minimum_resolution`, and the reason this impl is
@@ -379,8 +458,9 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 13] = [
+pub(super) const PROFILE_KEYS: [&str; 14] = [
     "render_scale",
+    "render_scale_chosen",
     "target_fps",
     "minimum_resolution",
     "reconstruction",

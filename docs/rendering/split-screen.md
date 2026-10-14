@@ -432,6 +432,16 @@ a split race goes through `run_split`). It prints, per run:
 - with `OAG_RENDER_PERF=1`, the last CPU run's per-phase spans and allocations.
 
 
+**Steam Deck at the TV's 3840x2160 under gamescope (2026-10-14, `deck-4k`; Deck figures).** Pulse
+and HD/Fury, `--race --autopilot`, `--windows 2` for the split (one window, two views), 62 s each
+with `--frame-log`. At render scale 100 (3812x2160) a two-view split costs about what one view
+does, because the split halves the pixels per view: Pulse 49.6 fps mean (23.5 worst second)
+against 50.2 (23.1) for one view, HD 37.7 (15.4) against 38.9 (15.9). With the gamescope default
+of at most 1920x1080 pixels (1906x1080) the split runs Pulse 104.2 (57.0) against 112.3 (56.3)
+for one view and HD 69.1 (27.1) against 77.8 (28.5): the split costs 8-11 % of the mean here, and
+HD's worst stretch stays near 28 fps either way. The full table and the cause of the "58 then 23
+fps" run are in [packaging](../tools/packaging.md#under-gamescope-the-window-is-not-6x-the-size).
+
 **The whole-race version (2026-10-14).** `just bench-render --views 1,2h,2v --size 1280x800`
 plays Pulse, Pure and HD from the grid to the last crossing in one view, split horizontally and
 split vertically, records every frame and compares across machines by file name; its figures

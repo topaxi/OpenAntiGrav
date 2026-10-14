@@ -103,6 +103,7 @@ fn read(text: &str) -> Settings {
     migrate_reconstruction_keys(&mut table);
     migrate_platform_split(&mut table);
     render_profile::seed_shadow_defaults(&mut table);
+    render_profile::seed_render_scale_chosen(&mut table);
     let mut settings: Settings = table.try_into().expect("deserialise");
     ensure_known_titles(&mut settings);
     settings
@@ -886,4 +887,49 @@ fn a_profile_with_the_old_split_picks_still_loads() {
     assert_eq!(old.race.mode, "single_race");
     let back: Settings = toml::from_str(&toml::to_string_pretty(&old).unwrap()).unwrap();
     assert!(!toml::to_string_pretty(&back).unwrap().contains("split_cut"));
+}
+
+/// The gamescope default for an output too big to carry (a Steam Deck on a 4K
+/// TV): the budget applies only when the player has chosen nothing, only under
+/// gamescope, and never above 100 or past the output it would shrink.
+#[test]
+fn the_gamescope_scale_default_yields_to_a_chosen_scale_and_to_a_small_output() {
+    let unchosen = RenderProfile::default();
+    let scale = |profile: &RenderProfile, w, h, gamescope| profile.scale_for((w, h), gamescope);
+    assert_eq!(scale(&unchosen, 3840.0, 2160.0, true).percent(), 50);
+    assert_eq!(scale(&unchosen, 2560.0, 1440.0, true).percent(), 75);
+    assert_eq!(scale(&unchosen, 1280.0, 800.0, true).percent(), 100);
+    assert_eq!(scale(&unchosen, 3840.0, 2160.0, false).percent(), 100);
+
+    let chosen = RenderProfile {
+        render_scale: oag_display::display::Scale::try_from(100).expect("scale"),
+        render_scale_chosen: true,
+        ..RenderProfile::default()
+    };
+    assert_eq!(scale(&chosen, 3840.0, 2160.0, true).percent(), 100);
+}
+
+/// A file written before the flag existed: a scale other than 100 is the
+/// player's, a 100 cannot be told from the default, and a flag already in the
+/// file is left alone.
+#[test]
+fn a_file_without_the_chosen_flag_reads_a_non_default_scale_as_chosen() {
+    let settings = read(
+        "\
+[render_profiles.\"Wipeout Pulse\"]
+render_scale = 75
+
+[render_profiles.\"Wipeout Pure\"]
+render_scale = 100
+
+[render_profiles.\"Wipeout HD\"]
+render_scale = 75
+render_scale_chosen = false
+",
+    );
+    let chosen = |title: &'static oag_title::Title, platform| {
+        settings.render_profiles[&profile_key(title, platform)].render_scale_chosen
+    };
+    assert!(chosen(oag_pulse::TITLE, oag_disc::Platform::Psp));
+    assert!(!chosen(oag_pure::TITLE, oag_disc::Platform::Psp));
 }

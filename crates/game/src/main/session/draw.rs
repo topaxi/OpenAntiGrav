@@ -154,7 +154,7 @@ impl Session {
             .resize_output(&self.gpu.device, self.gpu.output.size());
         let own_wanted = oag_game::settings::web::render_target(
             rect,
-            self.render_profile().render_scale,
+            self.render_scale_for(rect),
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         // **A multi-window race shares one scene allocation** (the scene's depth and
