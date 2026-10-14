@@ -561,6 +561,12 @@ impl Controls {
         }
     }
 
+    /// One tap of `button` from physical keyboard `id`, as the join and seat screens read it
+    /// ([`lobby::Device::Keys`]): what a timed script presses for a placeholder seat.
+    pub fn press_keyboard_device(&mut self, id: pad::KeyboardId, button: Button) {
+        self.raw_edges.push((id, button.bit()));
+    }
+
     /// A button going down or up with no key behind it: what a timed script
     /// (`oag_game::devrun`) taps. The keyboard's own slot, as a key press is.
     pub fn press_button(&mut self, button: Button, pressed: bool) {

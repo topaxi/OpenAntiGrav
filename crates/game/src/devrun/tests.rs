@@ -67,3 +67,10 @@ fn a_plain_tap_not_yet_due_is_dropped_once_the_anchor_lands() {
     assert!(script.due(2.0, Some(0.0)).is_empty());
     assert_eq!(script.due(10.0, Some(1.0)), vec![Step::Tap(Button::Down)]);
 }
+
+#[test]
+fn a_seat_tap_names_its_seat() {
+    let mut script = Script::parse("1:cross@2").unwrap();
+    assert_eq!(script.due(1.0, None), vec![Step::SeatTap(2, Button::Cross)]);
+    assert!(Script::parse("1:cross@x").unwrap_err().contains("seat"));
+}

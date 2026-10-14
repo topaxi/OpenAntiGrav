@@ -39,11 +39,13 @@ pub fn placeholder_devices(people: usize) -> Vec<Device> {
 pub enum Step {
     /// A tap of this button: down for one frame, up on the next.
     Tap(Button),
+    /// A tap from the placeholder keyboard of this seat (`cross@1`), which has no key to press.
+    SeatTap(usize, Button),
     /// End the run (the window closes, the log flushes).
     Quit,
 }
 
-/// A timed script: `SECONDS:BUTTON` entries, comma separated, e.g. `3:down,3.5:down,4:right,10:quit`.
+/// A timed script: `SECONDS:BUTTON` entries (`BUTTON@N` taps from the placeholder keyboard of seat N, which a `--preseat` seat has no key for), comma separated, e.g. `3:down,3.5:down,4:right,10:quit`.
 ///
 /// Seconds count from the first frame the script is polled. An entry written `+SECONDS:BUTTON`
 /// counts from the moment `--preseat` lands instead (from the first frame without it), so a
@@ -79,14 +81,21 @@ impl Script {
                 return Err(format!("{entry:?}: time must be zero or more"));
             }
             let what = what.trim();
-            let step =
-                if what.eq_ignore_ascii_case("quit") {
-                    Step::Quit
-                } else {
-                    Step::Tap(oag_core::buttons::button_from_name(what).ok_or_else(|| {
-                        format!("{entry:?}: {what:?} is not a button name or quit")
-                    })?)
-                };
+            let button = |name: &str| {
+                oag_core::buttons::button_from_name(name.trim())
+                    .ok_or_else(|| format!("{entry:?}: {name:?} is not a button name or quit"))
+            };
+            let step = if what.eq_ignore_ascii_case("quit") {
+                Step::Quit
+            } else if let Some((name, seat)) = what.split_once('@') {
+                let seat: usize = seat
+                    .trim()
+                    .parse()
+                    .map_err(|_| format!("{entry:?}: {seat:?} is not a seat number"))?;
+                Step::SeatTap(seat, button(name)?)
+            } else {
+                Step::Tap(button(what)?)
+            };
             steps.push((at, relative, step, false));
         }
         steps.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -107,7 +116,8 @@ impl Script {
         for (at, relative, step, done) in &mut self.steps {
             // A plain tap is meant for the boot (language, logo); once `--preseat` has landed
             // it would hit the layout screen's rows instead, so it is dropped.
-            if !*relative && anchored.is_some() && matches!(step, Step::Tap(_)) {
+            if !*relative && anchored.is_some() && matches!(step, Step::Tap(_) | Step::SeatTap(..))
+            {
                 *done = true;
             }
             let clock = if *relative { anchored } else { Some(elapsed) };
