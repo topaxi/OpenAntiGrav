@@ -23,7 +23,8 @@ Landed 2026-10-14 (`pause-timeout`, all chosen, not measured):
   IN 0:25`, then `ANYONE CAN RESUME`.
 - ~~**A resume countdown**~~: `3`, `2`, `1`, `GO` for 3 s in a race with more than
   one person, the race frozen through it (hash test), Start during it re-pauses.
-  Single-player resume is unchanged; widening it is one flag (`Table::countdown`).
+  Multiplayer only, the maintainer's decision (2026-10-14): single-player
+  resume stays instant, not an open question.
 
 ## Open: the local rule's edges
 
