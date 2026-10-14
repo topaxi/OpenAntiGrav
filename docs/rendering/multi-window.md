@@ -184,10 +184,34 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   largest target any window wants (`windows::shared_allocation`) and draws into its own extent of it
   ([ADR-0037](../architecture/adr/0037-dynamic-resolution-varies-a-viewport-not-an-allocation.md)).
   A 1080p window beside a 4K one renders at its own size, inside the 4K allocation.
-- **Off while windowed**, chosen, not measured: motion blur, the jitter and the temporal record (so
-  FSR 3.1 falls to FSR 1, as on a menu frame) and dynamic resolution. Each holds one camera's history
-  or times one pass, and the windows alternate cameras every frame. A split drops the same three.
-  Pulse's bloom and HD's and Omega's chains are *kept*, which a split cannot do.
+- **Motion blur, FSR 3.1 and dynamic resolution run per window while it holds one seat**
+  (2026-10-14, lane `window-render-cost`, **chosen, not measured**; this replaces "off while
+  windowed", which dropped all three because each holds one camera's history or times one pass).
+  Each window now has its own:
+  - **Camera history**, `Scene::history`: the previous tick's matrices the blur measures against
+    (`MotionState`), the camera-jitter phase, the last-frame record the temporal upscaler reads and
+    the cut watch, one set per window (`motion::MAX_HISTORIES`, 8). A shared set had three faults, each
+    silent: a second window at the same tick and draw alpha is "the same frame" to `MotionState` and
+    read window 1's previous view-projection; the jitter phase advanced once per render call, so
+    with two windows each saw every other phase of an even sequence; and the cut watch alternated
+    cameras. A window viewing another seat takes its camera cuts from that seat's respawns
+    (`Race::viewed_camera_cuts`), not the player's.
+  - **FSR 3.1 history**, in the window's own `Framebuffer`, fed that window's `Scene::temporal(window)`.
+  - **Timers**, `session::timing::Rings`: the five GPU timestamp rings window 1 owns on `Session`
+    (scene pass, blur chain, HD bloom chain, the two halves of FSR 3.1), claimed, abandoned and
+    resolved by the same rules, read into a `drs::Cost` by the same `assemble` rule.
+  - **One controller, one scale.** The windows' passes are serial on the one queue and the frame period
+    is their sum, so the controller is fed the cost **summed over the windows of a frame**, once every
+    window has come back for it (`Session::feed_windows`: a frame waits up to four frames for a late
+    window and is then dropped, in order), and its one scale is applied to each window's own
+    ceiling. The controller's model, cost goes as the pixel count, holds for a sum of windows each
+    scaled by one fraction. (Independent controllers per window were the alternative: each would learn
+    the others' cost as unmeasured fixed work and the windows would ratchet down together.)
+  - **A window of several seats is a split and keeps dropping all of it**: its views are N cameras in
+    one frame (a history holds one) and its scene pass has no one pair to bracket. While any window
+    holds several seats every window holds its scale at the ceiling (`Session::drs_runs`, as a split
+    screen does), and blur and FSR 3.1 stay on in the windows of one seat. A split screen in one
+    window is unchanged. Pulse's bloom and HD's and Omega's chains are *kept*, which a split cannot do.
 - **The flyby and the end.** The pre-race flyby is the player's camera and **every window that
   holds a seat plays it** (2026-10-14, maintainer's request): `Race::window_drawn` answers the
   player's slot alone for each such window while `in_intro()` holds, so each draws the same flyby
@@ -237,9 +261,18 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   63% in a window of one, `pause::anchor_y`), see [split-screen.md](split-screen.md). Looked at on
   HD under Xvfb, `--window-seats 2,1` (the one-seat window is the whole-screen case) and `2,2` (four
   views in two windows): `3`, `2`, `GO` in every view.
-- **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
-  scenery clocks, advert cards) once per window rather than once, because each window is a whole
-  frame. A split shares it between views. Measured below.
+- **Cost.** A frame draws the scene once per window, and **the camera-independent work runs once
+  per frame however many windows draw** (2026-10-14, lane `window-render-cost`): the two shadow
+  maps and the shadow gather, the scenery clocks and the advert cards. `Scene::render_window`'s
+  `shared` flag says an earlier window of this frame already drew; it is the gate a later view of a
+  split already used (`Scene::does_frame_work`), set by the first window that draws
+  (`RaceStage::shared_frame_work`, cleared once a frame by `Session::begin_scene_frame`), so a window 1
+  that draws nothing leaves the work to window 2. That window's encoder is submitted before the next
+  window draws, so the maps are the textures it wrote. The `mapped` tier's depth map is fitted on the
+  craft each window follows, so every window still redraws it. Particles, clouds, mist and the other
+  effects advance per tick, not per render call (the clouds are gated by the tick), so there was no
+  per-window simulation to hoist; what each window still does is camera-dependent (uniforms, LOD, sort,
+  the particle and exhaust geometry built against its own right and up). Measured below.
 
 ## The layout screen
 
@@ -405,6 +438,62 @@ design working. An acquire near a refresh period, or `Fifo` in the parentheses, 
 offered no non-blocking mode and window 1 is waiting on window 2's display too; then try
 `vsync = "off"` for window 1's row, or set the second monitor's refresh to match.
 
+## Cost of a windowed frame (2026-10-14, lane `window-render-cost`)
+
+**How to measure.** The render bench reaches a windowed race (`crates/game/src/race_capture/bench.rs`,
+`perf-probe` build, headless, no window): each window is its own encoder and submission, as the
+frame loop makes them, and each seat's scene pass is timed.
+
+```sh
+# on the maintainer's RADV desk, a real GPU (CPU and GPU separate), a dev build with the probe
+cargo build -p oag-game --bin oag-game --features perf-probe
+OAG_RENDER_BENCH=60 OAG_RENDER_GPU_BENCH=60 target/debug/oag-game data/images/pulse-psp-eu.chd \
+  --race --window-seats 2,2 --screenshot /tmp/bench.png --ticks 300 --no-audio | grep '^bench'
+# the same with --motion-blur medium prices the effect each window now draws; swap the
+# disc for data/images/hdfury-ps3-eu.iso for HD; --window-seats 1,1 and 4,4 are the other rows
+# (add VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json for software Vulkan)
+# a live two-monitor run: the pacing line, and the controller with graphics.target_fps set:
+RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio 2>&1 | grep 'windows:'
+```
+
+`render_viewports CPU` is one whole frame's CPU, record plus submit, the GPU idled first;
+`pipelined per frame` is frames back to back with one wait at the end, the number a frame budget is
+read against. **Relative numbers, not real-GPU numbers**: measured on this workstation (RADV on an RX
+7800 XT, headless, and lavapipe), a dev build (opt-level 2, not the release builds the split's table
+below uses, so absolute CPU is several times higher), at a load average of **8 to 78 from other
+lanes** (the load each run started under is in the scratch log; it is what makes the medians
+bimodal, one population at about half the other). Each row is before (`b5412435f` plus the harness)
+against after, **interleaved, three repetitions of 60 runs** (HD on lavapipe: 5 runs, it is 0.4 s a
+frame); the table is the best repetition's p10, which is the least contended run, and the scene passes on
+RADV are 0.5 to 3 ms in all rows (the GPU is not the limit, as for a split).
+
+| Title (RADV) | Windows | CPU ms before -> after | Pipelined ms before -> after |
+| --- | --- | --- | --- |
+| Pulse | 1,1 | 12.5 -> 11.1 | 13.2 -> 11.9 |
+| Pulse | 2,2 | 22.3 -> 20.3 | 25.8 -> 21.7 |
+| Pulse | 4,4 | 47.0 -> 43.7 | 47.1 -> 48.4 |
+| HD | 1,1 | 38.7 -> 31.2 | 37.8 -> 35.2 |
+| HD | 2,2 | 57.7 -> 43.9 | 61.9 -> 50.9 |
+| HD | 4,4 | 84.3 -> 81.4 | 90.2 -> 88.3 |
+
+Lavapipe (software, CPU and GPU are the same cores, so only the pipelined column means anything):
+Pulse 56 -> 52, 93 -> 86, 128 -> 134 ms; HD 392 -> 327, 614 -> 562, 898 -> 830 ms.
+
+**Reading it.** The hoist saves a few percent to about 20 percent of a windowed frame's CPU: the
+shadow maps' encoding, the scenery clocks (0.65 ms in a dev build) and the advert cards, once instead of
+once per window. It is small because the **shadow gather was already shared between the windows of a
+frame** (the per-tick hull cache of `shadow-gather-per-tick`) and because what each window still does
+is camera-dependent: uniform writes, LOD, sort, particle and exhaust geometry, and `encoder.finish`,
+which scales with the draw count. At 4,4 the saving is inside the noise (3 to 7 percent against a spread
+of 2x between repetitions). **What a window costs is what it draws**, so a windowed race is CPU-bound as a split is: on RADV the
+GPU spends 0.5 to 3 ms in the scene passes against 11 to 84 ms of CPU. The effects each window now
+draws cost, on the same rows with `--motion-blur medium` (median over three, noisy): Pulse 1,1 +1.4 ms,
+2,2 -4 ms (noise), 4,4 +12 ms; HD 1,1 +13 ms, 2,2 -3 ms (noise), 4,4 +23 ms, so about 1 to 3 ms per window in a dev build;
+they are scene-side only, and the FSR 3.1 chain is a `Framebuffer` pass outside the bench.
+**What is not measured:** the live frame's HUD, resolve and composite per window (identical before and
+after), real-display pacing, and the controller on a GPU that can hold its target (lavapipe cannot, and
+the log says so).
+
 ## Verification
 
 - **Single-window and split frames are byte-identical to `main`** (`201dae2ab`): `--race --screenshot`
@@ -512,6 +601,27 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
     (`the_first_keyboard_keeps_its_held_key_when_a_second_one_speaks`).
   - *Not exercised*: a pad player in the other window (a pad cannot be made headless; the rule is
     `pad::keyboards::tests::a_window_whose_seats_are_pads_ignores_keys`), Windows, more than two windows.
+- **Per-window effects, the shared work and the summed controller** (2026-10-14, lane
+  `window-render-cost`). Pictures: `--race` PNGs of `--players 1|2|4` and `--window-seats
+  1,1|2,1|2,2|4,4`, Pulse EU and HD EU, shadows `original` and `mapped`, ticks 300 and 1200, against the
+  build before (`main` plus the bench harness, which draws the same): **88 of 88 `cmp` identical**, for
+  the hoist build and again for the final build. Blur: `--window-seats 1,1 --autopilot --ticks 600
+  --motion-blur high` on Pulse: both windows differ from blur off and read as blur along their own travel (the
+  road streaks run out from each camera's own vanishing point, the HUD stays sharp, no ghost of
+  the other window's camera); a capture primes each window's history with its own tick-before-last view.
+  Live under Xvfb with lavapipe, `--race --window-seats 1,1` with `target_fps = 60`, `reconstruction =
+  fsr3`, `motion_blur = medium` (Pulse PSP profile in a scratch settings file): both windows draw the
+  flyby with blur; the log says `dynamic resolution: 60 fps is out of reach here - 51.553 ms of this
+  frame is fixed cost` (the two windows' FSR 3.1 presented halves summed: a software rasteriser cannot
+  hold 60); with `reconstruction = off`, `dynamic resolution: 1080x612 (75% of 1440x816) - scalable 77.7 ms`
+  then `720x408 (50%)` (the two windows' passes summed, the one scale reaching both), then the same
+  out-of-reach line at the floor. **Not exercised:** a real GPU's controller, two monitors, the FSR
+  3.1 picture itself under lavapipe at speed. Pins: `raceplay::tests::windowed` (the work once per frame
+  across four windows and again on the next frame; a window told the work is done does none; the
+  `mapped` map still per window; each window's previous camera, jitter phase and reset are its own,
+  which fails with one shared history) and `session::timing::tests` (the cost rule, and a frame fed
+  only once every window has come back, in order, given up on after four frames); checked by
+  mutation: reading `shared` as always false and keying the history on window 0 each fail them.
 - **Tests**: `oag-input` (`pad::keyboards::tests`: a window whose seats are pads ignores keys, a press claims the lowest free seat, a pad does not take a claimed seat, nothing is free merged or closed, a device keeps its seat whichever window has the focus, a device-bound seat takes no window events, unseating drops the seat; `tests`: a key flies the seat of the window it arrived on, no keyboard seat ignores keys, a single window is unchanged, a window's focus loss lets go of its own seat only, two keyboards fly two seats, the first keyboard keeps its held key when a second speaks, the extra seats let go while parked; `keys::every_candidate_is_reachable_from_a_physical_key`; checked by mutation: sending a window with no free seat to claim to the first seat fails four of them, dropping the device rule fails three), the reach tests in `pad::tests`, `windows::tests` (`first_seats`, `Focus::current`, `click_slots`), `pause::tests::a_seat_in_a_window_the_keyboard_can_reach_is_present`,
   `windows::tests` (routing, close, focus, the shared allocation, a window's name),
   `split_screen::tests` (`deal`, `parse_window_seats`, `layout_for`, `views_for`),
@@ -546,9 +656,12 @@ Omega capture (below) ran.
 - **A second keyboard cannot join from the join screen** (2026-10-14, `keyboard-seats`): every live proof seated through `--race`, `--windows` or `seat_default`, where a press claims a free seat. On the menu path the join screen's lobby has one keyboard device (`lobby::Device::Keyboard`, read off window events that carry no keyboard identity) and `Lobby::seat` sets the head count to the number who joined, so a keyboard and a pad joined leave a second keyboard no seat, and a lone keyboard with a two-window layout chosen leaves the seating merged (window 2 AI-flown, its keys ignored). Wiring it: `Device::Keyboard` carries a source (`KeyboardId` from raw events on X11 and Windows, the window a key arrived on for Wayland seats, the layout screen's holding frames taking presses) and the join screen shows a row per keyboard; it touches `oag-ui-screens`'s join, `oag_input::lobby` and the head count.
 - **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
-- **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera
-  (a `MotionState` and a temporal record per window) and a timer per window.
-- **Camera-independent work once per frame** across windows, as `render_viewports` does for a split.
+- ~~Per-window motion blur, FSR 3.1 and dynamic resolution; the camera-independent work once per frame~~
+  (2026-10-14, `window-render-cost`, see "What a window draws"). Open from it: **per-view history for a
+  window of several seats** (a split's views are N cameras in one frame; blur, the temporal record and
+  timing there want one history per view, which a split screen in one window wants too); the
+  summed-cost controller on **real displays** (the command in "Cost", below); and FSR 3.1 and the
+  blur under lavapipe could be looked at but not timed meaningfully.
 - **Pacing on real displays**, the command above.
 - **Monitor hot-plug** and a window dragged between monitors of different scale are not exercised.
 - **Seat windows' own settings** (render scale, screen filter per window): they follow the profile.
