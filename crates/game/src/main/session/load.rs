@@ -632,8 +632,10 @@ impl Session {
                     cut,
                 );
                 // Several windows are open: deal the people across them, window 1 first, each
-                // window cutting its own seats. With one window the split is its, as ever.
-                if open_windows > 1 {
+                // window cutting its own seats. With one window the split is its, as ever,
+                // unless the seat assignment ran (`pane_people`): its answer says who sits in
+                // which view, which only `deal_windows` carries out.
+                if oag_game::split_screen::deals_the_panes(open_windows, &self.pane_people) {
                     let layout = oag_game::split_screen::layout_for(
                         Some(&wanted_layout),
                         race_stage.race.viewport_count(),

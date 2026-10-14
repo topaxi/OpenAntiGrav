@@ -429,3 +429,57 @@ fn a_layout_chosen_on_the_screen_deals_the_seats_the_command_line_would() {
         .collect();
     assert_eq!(seats, [vec![0, 1, 2], vec![3]]);
 }
+
+/// One window holding a split routes the chosen seat to the chosen view, for every way a window
+/// cuts: with the people in reverse order, view `k` of the window is the rectangle the seat
+/// assignment screen drew for pane `k` (`seat_cells`), and it shows the slot the screen put
+/// there, so person 2 in the first pane is the top view (left view for two cut vertically).
+/// The race builds this the way `Session` does: `layout_for` over one window, `deal_windows`
+/// with `pane_people`. Fails if the gate (`deals_the_panes`) skips a one-window split, if
+/// `deal_windows` ignores its order, or if the screen and the race cut a window differently.
+#[test]
+fn one_window_split_puts_the_chosen_person_in_the_chosen_view() {
+    use oag_render::viewport::Cut;
+    const AREA: (f32, f32, f32, f32) = (0.0, 0.0, 640.0, 360.0);
+    for (people, cut) in [
+        (2, Cut::Horizontal),
+        (2, Cut::Vertical),
+        (3, Cut::Horizontal),
+        (4, Cut::Horizontal),
+    ] {
+        let reversed: Vec<usize> = (0..people).rev().collect();
+        assert!(split_screen::deals_the_panes(1, &reversed), "{people}");
+        let mut race = race(people);
+        split_screen::apply(&mut race, people, cut);
+        let layout = split_screen::layout_for(Some(&[]), people, 1, cut);
+        assert_eq!(layout.len(), 1);
+        split_screen::deal_windows(&mut race, &layout, &reversed);
+        assert!(race.windowed());
+        assert_eq!(race.window_drawn(0), reversed, "{people} people, {cut:?}");
+        let cells = split_screen::seat_cells(people, cut == Cut::Vertical);
+        for (pane, rect) in race.window_rects(0, AREA).iter().enumerate() {
+            let cell = cells[pane];
+            let expected = (
+                cell[0] * AREA.2,
+                cell[1] * AREA.3,
+                cell[2] * AREA.2,
+                cell[3] * AREA.3,
+            );
+            assert!(
+                (rect.0 - expected.0).abs() < 0.01
+                    && (rect.1 - expected.1).abs() < 0.01
+                    && (rect.2 - expected.2).abs() < 0.01
+                    && (rect.3 - expected.3).abs() < 0.01,
+                "{people} people {cut:?}: pane {pane} is {rect:?} in the race, {expected:?} on the screen"
+            );
+        }
+        // Person 2 (slot 1) in the first pane is the first rectangle: the top, or the left.
+        let first = race.window_rects(0, AREA)[0];
+        assert_eq!(race.window_drawn(0)[0], people - 1);
+        assert!(first.1 == 0.0 && first.0 == 0.0);
+    }
+    assert!(
+        !split_screen::deals_the_panes(1, &[]),
+        "--players N keeps the plain split"
+    );
+}

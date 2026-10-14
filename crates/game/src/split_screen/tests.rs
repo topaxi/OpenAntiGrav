@@ -263,6 +263,27 @@ fn the_preview_cuts_seats_as_a_window_does() {
     );
 }
 
+/// The seat assignment screen opens for any layout with two views or more in all, one window
+/// holding a split included, and is skipped for a single view.
+#[test]
+fn the_seat_assignment_opens_for_any_layout_with_more_than_one_view() {
+    assert!(has_panes_to_choose([2]), "one window holding a split");
+    assert!(has_panes_to_choose([4]));
+    assert!(has_panes_to_choose([1, 1]));
+    assert!(has_panes_to_choose([2, 1]));
+    assert!(!has_panes_to_choose([1]), "a single view");
+    assert!(!has_panes_to_choose([]));
+}
+
+/// A race deals its views by pane when several windows are open, or one is open and the seat
+/// assignment ran; `--players N` (no assignment, one window) keeps the plain split.
+#[test]
+fn a_one_window_race_deals_only_after_a_seat_assignment() {
+    assert!(deals_the_panes(2, &[]));
+    assert!(deals_the_panes(1, &[1, 0]));
+    assert!(!deals_the_panes(1, &[]));
+}
+
 fn slots(layout: &[WindowSeats], order: &[usize]) -> Vec<Vec<usize>> {
     window_slots(layout, order)
 }

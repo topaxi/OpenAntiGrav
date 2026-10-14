@@ -2,9 +2,11 @@
 //! window layout and the RACE page (`session::multiplayer` has the flow it belongs to).
 //!
 //! **Ours, chosen, not measured.** The layout screen's START opens it when the layout has two or
-//! more windows (the people are dealt across windows and there is a window to choose); with one
-//! window, which is also every browser and phone, there is nothing to choose between and the
-//! flow goes straight on with the people in join order. Each person moves their own marker with
+//! more views in all ([`oag_game::split_screen::has_panes_to_choose`]): several windows, or one
+//! window holding a split, where person 2 can take the top view. A layout with a single view in
+//! total has nothing to choose and the flow goes straight on. The browser and the phones have no
+//! layout screen (`session::join` goes straight on there), so they never reach it and a split
+//! there keeps the join order. Each person moves their own marker with
 //! their own device (`Controls::device_presses`, told apart by `Lobby::seat_of`), the mouse
 //! picks a person up and puts them down on a pane, and START goes on once everybody has
 //! confirmed. BACK returns to the layout screen with its choice as it was.
@@ -29,7 +31,7 @@ use super::Session;
 
 impl Session {
     /// The layout screen's START with `layout` holding the windows and the people: opens the
-    /// assignment screen over the menus when there is more than one window to choose between,
+    /// assignment screen over the menus when there is more than one pane to choose between,
     /// else hands `layout` back for the flow to go on with the people in join order.
     pub(crate) fn open_seat_assign(&mut self, layout: WindowLayoutStage) -> Option<WindowLayoutStage> {
         let windows: Vec<Pane> = layout
@@ -41,7 +43,9 @@ impl Session {
                 vertical: window.vertical,
             })
             .collect();
-        if windows.len() < 2 || !matches!(self.stage, Stage::Menu(_)) {
+        if !oag_game::split_screen::has_panes_to_choose(windows.iter().map(|window| window.seats))
+            || !matches!(self.stage, Stage::Menu(_))
+        {
             return Some(layout);
         }
         let Some(shell) = self.shell.as_ref() else {

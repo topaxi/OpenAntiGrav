@@ -9,7 +9,7 @@
 //!    Remembered on disk.
 //! 4. **Seat assignment** (`session::seat_assign`): after the layout, each person moves their own
 //!    marker onto the pane they want; [`Session::pane_people`] is the answer, dealt by
-//!    `split_screen::deal_windows`. Remembered on disk. Skipped for a single window.
+//!    `split_screen::deal_windows`. Remembered on disk. Skipped when the layout has one view in all.
 //! 5. **Race settings**: the RACE page, remembered. The mode row marks a mode that takes fewer
 //!    people than are seated ([`Session::resupply_race_modes`], `Mode::max_people`).
 //! 6. **Track Select**, then **Ship Select** per seat, then the race (`session::picker`).
@@ -130,29 +130,43 @@ impl Session {
     /// last seated, if they are still there; fewer than two ends it as a plain menu.
     pub(crate) fn reenter_multiplayer(&mut self) {
         let connected = self.controls.connected_pads();
-        let mut lobby = Lobby::new();
-        for device in &self.mp_devices {
-            let present = match device {
-                Device::Pad(id) => connected.contains(id),
-                Device::Keyboard | Device::Keys(_) => true,
-            };
-            if present {
-                lobby.join(*device);
-            }
-        }
-        if lobby.count() < 2 {
-            return;
-        }
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
-        if !(stage.menu.push("multiplayer") && stage.menu.push("race")) {
+        let Some(lobby) = reenter(&mut stage.menu, &self.mp_devices, &connected) else {
             return;
-        }
+        };
         self.split_lobby = Some(lobby);
         self.multiplayer = true;
         self.resupply_race_modes();
     }
+}
+
+/// What RETURN TO MENU does to the menu and the people ([`Session::reenter_multiplayer`]):
+/// the lobby of `devices` still `connected`, and `menu` walked to the RACE page over the
+/// MULTIPLAYER page. `None`, with the menu untouched, when fewer than two are left, which ends
+/// the flow as a plain menu. It writes nothing of the layout or the seat assignment
+/// ([`Session::pane_people`], the window layout, the cut): those stay as the race left them
+/// until [`Session::sync_multiplayer`] ends the flow, which it does not on the RACE page.
+fn reenter<D: Copy + PartialEq>(
+    menu: &mut oag_ui::menu::Menu,
+    devices: &[Device<D>],
+    connected: &[D],
+) -> Option<Lobby<D>> {
+    let mut lobby = Lobby::new();
+    for device in devices {
+        let present = match device {
+            Device::Pad(id) => connected.contains(id),
+            Device::Keyboard | Device::Keys(_) => true,
+        };
+        if present {
+            lobby.join(*device);
+        }
+    }
+    if lobby.count() < 2 {
+        return None;
+    }
+    (menu.push("multiplayer") && menu.push("race")).then_some(lobby)
 }
 
 /// Whether the menu has left the multiplayer flow's RACE page: it is on some page but RACE, with
@@ -164,7 +178,9 @@ fn has_left_the_flow(page: &str, picker_open: bool, setup_open: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::has_left_the_flow;
+    use super::{has_left_the_flow, reenter};
+    use oag_input::lobby::Device;
+    use oag_ui::menu::{Definition, Menu};
 
     #[test]
     fn the_flow_ends_off_the_race_page_and_not_under_its_own_screens() {
@@ -181,5 +197,46 @@ mod tests {
             has_left_the_flow("multiplayer", false, false),
             "BACK to the MULTIPLAYER page ends it"
         );
+    }
+
+    fn shipped_menu() -> Menu {
+        let strings = oag_ui::language::StringTable::from_xml("<Strings/>");
+        let text = include_str!("../../../../../assets/ui/menu.toml");
+        Menu::new(Definition::parse_vanilla(text, &strings).expect("the shipped menu parses"))
+    }
+
+    /// RETURN TO MENU after a multiplayer race: the menu lands on the RACE page over the
+    /// MULTIPLAYER page with the same people, and the flow does not end on the next tick
+    /// (`Session::sync_multiplayer` would clear `pane_people` if it did). Fails if the re-entry
+    /// stops at the main page, loses a person, or leaves a page the flow ends on.
+    #[test]
+    fn return_to_menu_lands_on_the_race_page_with_the_same_people() {
+        let mut menu = shipped_menu();
+        let devices = [Device::Keyboard, Device::Pad(7u32), Device::Pad(9)];
+        assert!(
+            has_left_the_flow(&menu.page().id, false, false),
+            "the main page is not the flow: re-entry has to be what keeps it"
+        );
+        let lobby = reenter(&mut menu, &devices, &[7, 9]).expect("three people are still there");
+        assert_eq!(lobby.seats(), devices);
+        assert_eq!(menu.page().id, "race");
+        assert!(
+            !has_left_the_flow(&menu.page().id, false, false),
+            "the flow survives the next tick"
+        );
+    }
+
+    /// A pad that left while the race ran is not seated again, and below two people the menu
+    /// is left on the main page, where the flow ends.
+    #[test]
+    fn return_to_menu_without_two_people_is_a_plain_menu() {
+        let mut menu = shipped_menu();
+        let root = menu.page().id.clone();
+        let devices = [Device::Keyboard, Device::Pad(7u32), Device::Pad(9)];
+        let two = reenter(&mut shipped_menu(), &devices, &[9]).expect("keyboard and one pad");
+        assert_eq!(two.count(), 2);
+        assert!(reenter(&mut menu, &devices, &[]).is_none());
+        assert_eq!(menu.page().id, root, "the menu is untouched");
+        assert!(has_left_the_flow(&menu.page().id, false, false));
     }
 }
