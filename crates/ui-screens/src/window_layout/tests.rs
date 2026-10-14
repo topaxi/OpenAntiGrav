@@ -64,6 +64,16 @@ fn one_window_holds_everybody_and_is_where_it_starts() {
     );
 }
 
+/// START and BACK are buttons: no value is drawn beside them. START used to show the head count
+/// (the join screen's row, copied), which read as a stray number here.
+#[test]
+fn a_button_row_shows_no_value() {
+    let picker = picker(4, 1);
+    assert_eq!(picker.value(Row::Start), "");
+    assert_eq!(picker.value(Row::Back), "");
+    assert_eq!(picker.value(Row::Windows), "1");
+}
+
 #[test]
 fn windows_run_from_one_to_the_head_count_and_never_past_eight() {
     assert_eq!(picker(1, 1).most_windows(), 1);
