@@ -1381,6 +1381,20 @@ a guess.
 
 ## Next Steps
 
+- **Server in the nightly release, and real certificates** (planned 2026-10-14, not started; deferred
+  when the drive wound down). One lane, after the lean server split lands:
+  1. A portable `oag-server` asset in the nightly release (`.github/workflows/release.yml`, which
+     `nightly.yml` calls): a static musl build if the lean split dropped `alsa-sys`, else
+     `scripts/build-server-portable.sh` (zig, glibc 2.35). Verify with local builds and `act`, never
+     a push.
+  2. `oag-server --cert <pem> --key <pem>` for a publicly trusted certificate (Let's Encrypt), read
+     once at start: one race per process (`docs/networking/README.md`, "Hosting model") lives
+     minutes, so no reload; a future reset-and-wait loop re-reads at each reset.
+  3. The client verifies against the system trust store when no `--cert-hash` is given; LAN keeps
+     the self-signed certificate and its hash.
+  4. Docs: ACME via HTTP-01 or DNS-01 (a DNS provider's API issues without port 80). The game's
+     hostname must be DNS-only: a CDN's HTTP proxy does not forward WebTransport or raw QUIC to an
+     origin, so TLS terminates in `oag-server`.
 - ~~Land the shared prerequisite (per-player `RaceState`, N-input
   `World::tick`, per-player device mapping in `oag-input`) as its own
   change, before starting split screen.~~ **Done, 2026-09-16** - see
@@ -1501,3 +1515,48 @@ and give a winner. A split's place is ranked over the craft in the race.
   label reads about 11 px at 1280x720. A larger one needs the shield and speed group moved off
   the right edge in that rule; not tried. The columns (`tall`) are fine at 1.6.
 - The opponent's team and grid slot for one person are unchanged (extrapolated, head2head.md).
+
+## 2026-10-14, `net-remote`: the server on a remote host, and the lean server left open
+
+`oag-server` ran a whole 3-lap Pulse race against a client over the internet (about
+12 ms round trip, one person plus seven AI), twice: 0 bad hashes, board equal to the
+server's. Numbers and the steps are in `docs/networking/README.md`, "Running a server
+on another machine"; `scripts/build-server-portable.sh` builds a binary for an older
+glibc and `crates/net/tests/server_libs.rs` pins that the server needs libc and libm
+only. A musl static build fails on `alsa-sys` (no cross `pkg-config`).
+
+**Open: a server that does not link the render side at all.** Deferred by the lead
+(the lap/hit path in `oag-raceplay` was being edited). Today the server links wgpu,
+winit, cpal, `oag-render`, `oag-fx` and `oag-audio` through `oag-raceplay` and relies
+on the linker dropping them. Surveyed, not coded (2026-10-14):
+- `oag-raceplay` is 71,000 lines; `Race::tick` writes `self.view` 570 times in 52
+  files, interleaved with the simulation (`reconcile.rs` says a second tick body
+  would be a 700-line copy). `Setup` is not a clean sim half: it carries
+  `oag_render::shield::Palette`, models' anchors, `oag_sound` banks and announcers,
+  and `load()` (800 lines) builds meshes and the HUD in the same pass as the
+  handling and the collision soup.
+- The plan sized: a default-on `view` feature on `oag-raceplay` that makes
+  `oag-fx`, `oag-gpu`, `oag-hud`, `oag-input`, `oag-mesh`, `oag-post`, `oag-present`,
+  `oag-render`, `oag-sound`, `oag-ui`, `oag-ui-screens`, `oag-livery`, `wgpu` and
+  `winit` optional (`oag-net` takes `default-features = false`); view-only modules
+  gated at the `mod` line in `lib.rs` (about 45 of them: `effects`, `camera`,
+  `scene`, `weapons::visuals`, ...); `Setup`'s view fields and `Loaded` gated; a
+  sim-only `load` path whose `Setup` is bit-identical to the full one (hull-derived
+  numbers that reach spawn height or inertia must be checked); `cfg` at the mixed
+  statements in `tick.rs`, `absorb.rs`, `access.rs`, `weapons/`.
+- Three types the simulation uses live in render-side crates and must move or be
+  split first: `oag_sound::sfx::{Cue, CueEvent}` (`RaceSim::cues`; the module also
+  imports `oag_audio`), `oag_render::camera::chase::{ChaseParams, anchor,
+  look_at_point}` (`RaceSim::lock_rig`, the lock-on projection in `lock.rs`;
+  pure `oag_core` maths) and `oag_fx::beam::TubeFrame` (`Spline::tube_frame`, a view
+  method). Cheapest for the first two: a feature on `oag-audio` (cpal optional) and
+  on `oag-render` (wgpu modules optional), which moves nothing, at the price of
+  `oag-render` and `oag-audio` staying in the tree in lean form.
+- Proof: the lean `oag-server` against a full `oag-game --connect --net-bot` client,
+  900 ticks at the 100 ms shim, 0 bad hashes (in-process `oag-net` tests share one
+  feature set and cannot catch a divergent lean load); `just check-deps` or
+  `scripts/check-dependency-rules.py` running `cargo tree -p oag-net -e normal` and
+  failing on any of wgpu, winit, cpal (feature unification hides the lean build from
+  `--workspace` runs, so the guard must name the package); the racing ground truth
+  `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+  quoted before and after. Its own lane, after `perfect-lap-bug` lands.

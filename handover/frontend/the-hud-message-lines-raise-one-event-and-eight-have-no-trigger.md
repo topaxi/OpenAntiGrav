@@ -25,6 +25,11 @@ for Zone and Speed Lap.
 
 ## Open
 
+- **Per-seat lap lines landed 2026-10-14** (one board and watch per local slot; every seat
+  compares against the primary's stored best, chosen). Still open from it: the PS2 split's own
+  message drain per view is unread; the split gap and pace stay primary-only; a craft bump
+  spoiling a lap is a static read on Pulse PSP (`Body_RecordPairContact`, 82) with no live
+  watchpoint on `craft+0x860`, and Pure and HD are unchecked.
 - **A live frame of the slot law and of a lap line** on PPSSPP (Pulse, Pure) and
   RPCS3 (HD): the flash phases, the 3.5 s hold, the 0.8 s gate, Pure's outline
   staying at full alpha while the text fades (read off one decompile, 70).

@@ -125,12 +125,22 @@ mod race_wiring {
     fn watched() -> (Race, oag_physics::Evaluated) {
         let mut race = race_with_a_grid();
         let evaluated = *race.tick(&PlayerInputs::none()).primary();
-        race.view.lap_watch = Some(pulse(None));
+        for hud in &mut race.view.huds {
+            hud.lap_watch = Some(pulse(None));
+        }
         (race, evaluated)
     }
 
+    fn dirty_of(race: &Race, slot: usize) -> bool {
+        race.view.huds[slot]
+            .lap_watch
+            .as_ref()
+            .expect("watched")
+            .dirty
+    }
+
     fn dirty(race: &Race) -> bool {
-        race.view.lap_watch.as_ref().expect("watched").dirty
+        dirty_of(race, 0)
     }
 
     /// The original's `0x20` bit is set by every positive-friction contact
@@ -164,7 +174,73 @@ mod race_wiring {
         race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
         assert!(!dirty(&race), "slot 0 is someone else's craft");
         race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
-        assert!(dirty(&race));
+        assert!(dirty_of(&race, 1));
+    }
+
+    /// Two people on one machine: each seat's wall scrape spoils only its own
+    /// lap, and each seat's lines land in its own view's board.
+    #[test]
+    fn each_local_seat_grades_its_own_laps_into_its_own_view() {
+        let (mut race, mut evaluated) = watched();
+        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        let clean = evaluated;
+        evaluated.wall.resolved = Some(contact());
+        let done = oag_race::Outcome {
+            lap_completed: true,
+            lap_ticks: Some(3600),
+            ..Default::default()
+        };
+        race.sim.world.race[0].lap = 2;
+        race.sim.world.race[1].lap = 2;
+        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
+        race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
+        assert!(!dirty_of(&race, 0));
+        assert!(dirty_of(&race, 1), "seat 1 scraped");
+        race.observe_lap(0, &done, &clean);
+        race.observe_lap(1, &done, &clean);
+        let has = |slot: usize| {
+            let mut board = race.view.huds[slot].messages.clone();
+            board.advance();
+            board.lines().iter().any(Option::is_some)
+        };
+        assert!(has(0), "seat 0's clean lap announces in seat 0's view");
+        assert!(!has(1), "seat 1's scraped lap announces nothing");
+    }
+
+    fn overlap_slots_0_and_1(race: &mut Race) {
+        let at = race.sim.world.ships[0].physics.body.position;
+        race.sim.world.ships[1].physics.body.position =
+            at + oag_core::math::Vec3::new(0.0, 0.0, 1.0);
+        race.sim.world.ships[0].physics.body.linear_velocity =
+            oag_core::math::Vec3::new(0.0, 0.0, 8.0);
+        race.sim.world.ships[1].physics.body.linear_velocity =
+            oag_core::math::Vec3::new(0.0, 0.0, -8.0);
+    }
+
+    /// `Body_ResolveContactPair` appends a positive-friction record to both
+    /// bodies' contact rings, and the loop that reads them sets the `0x20` bit
+    /// for each: bumping a rival spoils both craft's laps.
+    #[test]
+    fn a_craft_to_craft_contact_spoils_both_laps() {
+        let (mut race, clean) = watched();
+        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        overlap_slots_0_and_1(&mut race);
+        race.resolve_craft_pairs();
+        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
+        race.observe_lap(1, &oag_race::Outcome::default(), &clean);
+        assert!(dirty_of(&race, 0) && dirty_of(&race, 1));
+    }
+
+    #[test]
+    fn a_shielded_craft_keeps_its_lap_through_a_craft_contact() {
+        let (mut race, clean) = watched();
+        race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
+        race.sim.world.ships[1].physics.shield_pickup_timer = 1.0;
+        overlap_slots_0_and_1(&mut race);
+        race.resolve_craft_pairs();
+        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
+        race.observe_lap(1, &oag_race::Outcome::default(), &clean);
+        assert!(dirty_of(&race, 0) && !dirty_of(&race, 1));
     }
 
     /// A reconciliation replay re-runs ticks the prediction already watched.

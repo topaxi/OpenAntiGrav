@@ -62,6 +62,8 @@ pub(crate) fn drive(
             total.sped_up += s.sped_up;
             total.slowed_down += s.slowed_down;
             total.lead = s.lead;
+            total.confirm_count += s.confirm_count;
+            total.confirm_sum_ms += s.confirm_sum_ms;
         }
         if !sleep.is_zero() {
             std::thread::sleep(sleep);
@@ -155,6 +157,9 @@ fn two_clients_agree_with_the_server_on_every_confirmed_tick() {
         assert_eq!(total.hash_mismatches, 0, "client {n}: {total:?}");
         assert_eq!(total.hash_matches, 300, "client {n}: {total:?}");
         assert!(total.predicted >= 300, "client {n}: {total:?}");
+        // Dropping the send-time ring leaves this at zero and the overlay's CONF row blank.
+        assert!(total.confirm_count > 100, "client {n}: {total:?}");
+        assert!(total.confirm_sum_ms > 0.0, "client {n}: {total:?}");
     }
     for (client, _, _) in &clients {
         assert_eq!(client.phase(), &Phase::Over("the test is over".into()));

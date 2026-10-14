@@ -31,6 +31,7 @@ fn an_empty_meter_reports_nothing_rather_than_infinity() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            None,
             480.0
         )
         .is_empty()
@@ -135,6 +136,7 @@ fn off_draws_nothing_however_full_the_meter_is() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            None,
             480.0
         )
         .is_empty()
@@ -158,6 +160,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert_eq!(fps.len(), 2);
@@ -174,6 +177,7 @@ fn each_mode_draws_exactly_what_it_promises() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     // panel + two lines + the rule + one column per frame
@@ -200,6 +204,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     // Same shape as `Pacing` with nothing extra: panel + two lines + the
@@ -223,6 +228,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -241,6 +247,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -259,6 +266,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -280,6 +288,7 @@ fn dev_adds_a_line_for_whichever_of_scene_memory_and_video_it_is_given() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -339,6 +348,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
         None,
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -361,6 +371,7 @@ fn a_stage_with_no_scene_draws_no_render_row() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -390,6 +401,7 @@ fn the_render_row_is_dev_only() {
         }),
         GpuCost::default(),
         CpuCost::default(),
+        None,
         480.0,
     );
     assert!(
@@ -430,6 +442,7 @@ fn nothing_is_drawn_outside_the_panel() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            None,
             480.0,
         ),
         draw_list(
@@ -447,6 +460,7 @@ fn nothing_is_drawn_outside_the_panel() {
             }),
             GpuCost::default(),
             CpuCost::default(),
+            None,
             480.0,
         ),
     ] {
@@ -491,6 +505,7 @@ fn the_graph_is_scaled_to_the_target_it_is_given() {
             None,
             GpuCost::default(),
             CpuCost::default(),
+            None,
             480.0,
         )
         .into_iter()
@@ -614,6 +629,7 @@ fn the_wall_clock_rows_join_the_gpu_panel_and_fit_inside_it() {
         None,
         gpu,
         cpu,
+        None,
         480.0,
     );
     let panel = draws
@@ -681,6 +697,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
             None,
             cost,
             CpuCost::default(),
+            None,
             480.0,
         )
         .iter()
@@ -702,6 +719,7 @@ fn the_gpu_panel_is_dev_only_and_sits_top_left() {
         None,
         cost,
         CpuCost::default(),
+        None,
         480.0,
     );
     let panel_count = draws
@@ -750,6 +768,7 @@ fn the_panels_sit_on_the_windows_corners_at_any_aspect() {
             None,
             cost,
             CpuCost::default(),
+            None,
             width,
         )
         .into_iter()

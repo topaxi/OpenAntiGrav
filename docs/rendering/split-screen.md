@@ -378,9 +378,17 @@ change, `Camera_SubmitScene`'s viewport count, see
 - **The countdown** (the HUD overlay's fallback, drawn only where the circuit has no
   gantry) is drawn once, centred on the screen. The gantry's own count is in the
   scene and so in every view.
-- **No message lines, split gap or time-trial pace on a view that is not the
-  primary's.** They compare laps against the primary's stored best and push a
-  `MESSAGE` cue; per-person records are not read yet. The Zone colour grade is one
+- **Message lines are per view; the split gap and time-trial pace are the
+  primary's alone.** Every slot a person flies on this machine owns a message
+  board (`SlotHud::messages`) and a lap watch (`SlotHud::lap_watch`), so each
+  person's perfect lap, new lap record and final lap come from their own craft's
+  wall scrapes, craft contacts and laps and show in their own view (2026-10-14).
+  A rival bump spoils both craft's laps ([Pulse](../ghidra/functions/psp-pulse-usa/hud-message-triggers.md)).
+  Every seat compares against the **same stored best** (the primary's): the PS2
+  split's own message drain per view is unread, so this is **chosen, not
+  measured**. A network client watches only its own seat. One `MESSAGE` cue plays
+  when any board starts a line. The split gap and pace compare against the
+  primary's stored best and stay primary-only; per-person records are not read yet. The Zone colour grade is one
   per scene, so every view reads the primary's speed class.
 - **The reticle of a view that is not the primary's is display only.** It is
   projected through that slot's own chase camera and field of view
@@ -1261,7 +1269,7 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   Omega's Zone vertical variant (`Zone_HUDvert`) and Omega's non-authored cases are unwired;
   nobody has seen the columns on a real display. HD's Eliminator
   column, lap times and Zone ladder are placed by name and have not been judged on a
-  real display. Per-person messages and records, and a lock that
+  real display. Per-person records (messages are per view now), and a lock that
   gates another person's fire.
 - ~~HD's front end shows no SPLIT SCREEN row, so its authored one-after-the-other Ship
   Select is unreachable by menu there.~~ **It always had one** (the `oag-extras` row,

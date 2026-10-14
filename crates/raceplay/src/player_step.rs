@@ -413,9 +413,16 @@ impl Race {
 }
 
 impl Race {
-    /// Feeds this machine's own craft to the lap watch. This is the player's
-    /// slot, not the world's lowest person slot: in a network race a client
-    /// flying seat 1 would otherwise grade seat 0's laps. A replayed tick
+    /// Whether this machine grades `slot`'s laps: the player's slot, not the
+    /// world's lowest person slot (in a network race a client flying seat 1
+    /// would otherwise grade seat 0's), and in a local race every person's own
+    /// slot, so each seat of a split or multi-window race gets its own lines.
+    fn watches_laps_of(&self, slot: usize) -> bool {
+        slot == self.player_slot()
+            || (self.view.seat.is_none() && self.sim.world.person_flown(slot))
+    }
+
+    /// Feeds each local person's craft to its own lap watch. A replayed tick
     /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
     /// already did. **Chosen, not measured.**
     pub(super) fn observe_lap(
@@ -424,8 +431,9 @@ impl Race {
         outcome: &oag_race::Outcome,
         evaluated: &Evaluated,
     ) {
-        if slot == self.player_slot() && self.draws() {
-            self.raise_lap_messages(slot, outcome, lap_spoiling_contact(evaluated));
+        let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
+        if self.draws() && self.watches_laps_of(slot) {
+            self.raise_lap_messages(slot, outcome, pair || lap_spoiling_contact(evaluated));
         }
     }
 }
@@ -436,6 +444,7 @@ impl Race {
 /// friction is positive, whatever the sign of its normal speed or the size of
 /// its impulse, and not taken while a shield absorbs it (`shield-pickup.md`).
 /// So a sustained scrape counts, not only the inbound edge `wall.impact` marks.
+/// A craft-to-craft contact counts too, through `RaceView::pair_spoil`.
 fn lap_spoiling_contact(evaluated: &Evaluated) -> bool {
     evaluated.wall.resolved.is_some() && !evaluated.shield.absorbed
 }

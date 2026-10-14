@@ -813,6 +813,8 @@ impl Session {
         let overlay_space = perf::grid(surface);
         let overlay_rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         self.overlay.set_space(overlay_space);
+        // The network block, only in a network race. `Dev` shows it; `draw_list` gates.
+        let net_readout = self.net.as_ref().and_then(oag_game::net_play::NetPlay::readout);
         let mut list = perf::draw_list(
             &self.meter,
             self.settings.graphics.perf_overlay,
@@ -853,6 +855,7 @@ impl Session {
                 frame: self.cpu_cost.stats().map(|s| s.mean_ms / 1000.0),
                 present: self.present_cost.stats().map(|s| s.mean_ms / 1000.0),
             },
+            net_readout.as_ref(),
             overlay_space.size.0,
         );
         // The on-screen racing controls, under the pointer. Empty unless this

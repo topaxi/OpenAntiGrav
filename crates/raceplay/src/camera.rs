@@ -278,7 +278,8 @@ impl Race {
     /// colour. See [`oag_hud::messages`], and `RaceStage::tick_messages` for the
     /// one thing the windowed game raises.
     pub fn raise_message(&mut self, id: &str, good: bool) {
-        self.view.messages.push(id, good);
+        let slot = self.player_slot();
+        self.view.huds[slot].messages.push(id, good);
     }
 
     /// Turns on the lap-crossing lines (a perfect lap, a new lap record, the
@@ -291,12 +292,16 @@ impl Race {
     /// table lacks their ids, so no line queues and no `MESSAGE` cue plays for
     /// words nothing draws.
     pub fn watch_laps(&mut self, hud: &oag_hud::Assets, stored_best_ticks: Option<u32>) {
-        self.view.lap_watch = None;
+        for hud in &mut self.view.huds {
+            hud.lap_watch = None;
+        }
         self.view.split_gap = None;
         let Some(lap_hud) = hud.art.lap_hud.filter(|_| hud.art.message_slots) else {
             return;
         };
-        self.view.messages.set_tint(lap_hud.tint);
+        for hud in &mut self.view.huds {
+            hud.messages.set_tint(lap_hud.tint);
+        }
         let lines = hud.context().is_some_and(|cx| {
             [
                 lap_hud.perfect_lap,
@@ -306,15 +311,18 @@ impl Race {
             .iter()
             .all(|id| cx.strings.get(id).is_some())
         });
-        self.view.lap_watch =
-            lines.then(|| super::lap_messages::LapWatch::new(lap_hud, stored_best_ticks));
+        for hud in &mut self.view.huds {
+            hud.lap_watch =
+                lines.then(|| super::lap_messages::LapWatch::new(lap_hud, stored_best_ticks));
+        }
         self.view.split_gap = Some(super::split_gap::SplitGap::new(lap_hud.gap));
     }
 
     /// Sets the HUD line that stays up for the rest of the race - the best
     /// medal earned so far. See [`oag_hud::messages::MessageBoard::set_standing`].
     pub fn set_standing_message(&mut self, id: &str) {
-        self.view.messages.set_standing(id);
+        let slot = self.player_slot();
+        self.view.huds[slot].messages.set_standing(id);
     }
 
     /// Puts the craft in `slot` into the destroyed sequence, for

@@ -24,6 +24,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use web_time::Duration;
 
 use crate::link::Link;
+use crate::stats::PathStats;
 
 /// How long a client waits for the handshake. Chosen.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -134,6 +135,7 @@ pub struct WtLink {
     closed: Arc<Mutex<Option<String>>>,
     max_datagram: usize,
     peer: SocketAddr,
+    session: web_transport_quinn::Session,
 }
 
 impl WtLink {
@@ -213,6 +215,7 @@ impl WtLink {
             }
         });
 
+        let counters = session.clone();
         let writer = session;
         rt.spawn(async move {
             let mut send = send;
@@ -256,6 +259,7 @@ impl WtLink {
             closed,
             max_datagram,
             peer,
+            session: counters,
         }
     }
 }
@@ -281,6 +285,22 @@ impl Link for WtLink {
     }
     fn max_datagram(&self) -> usize {
         self.max_datagram
+    }
+    fn path(&self) -> Option<PathStats> {
+        // `Session` derefs to quinn's `Connection`, whose `stats()` the session's own
+        // shadows; the connection's carries the counters.
+        let stats = (*self.session).stats();
+        Some(PathStats {
+            rtt: Some(self.session.rtt()),
+            cwnd: Some(stats.path.cwnd),
+            tx_bytes: stats.udp_tx.bytes,
+            rx_bytes: stats.udp_rx.bytes,
+            tx_datagrams: stats.udp_tx.datagrams,
+            rx_datagrams: stats.udp_rx.datagrams,
+            sent_packets: stats.path.sent_packets,
+            lost_packets: stats.path.lost_packets,
+            shim: None,
+        })
     }
 }
 
@@ -476,6 +496,12 @@ mod tests {
         server.send_datagram(vec![4]);
         assert_eq!(wait(|| client.recv_datagram()), vec![4]);
         assert!(client.max_datagram() >= 1_200, "{}", client.max_datagram());
+        // The overlay's counters: a link that fell back to the default `None` would
+        // show a blank RTT and zero rates.
+        let path = client.path().expect("a WebTransport link keeps counters");
+        assert!(path.rtt.is_some(), "{path:?}");
+        assert!(path.tx_bytes > 0 && path.rx_bytes > 0, "{path:?}");
+        assert!(path.tx_datagrams > 0 && path.rx_datagrams > 0, "{path:?}");
     }
 
     #[test]

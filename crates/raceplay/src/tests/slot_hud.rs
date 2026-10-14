@@ -23,8 +23,9 @@ fn a_slots_readout_is_off_its_own_craft() {
 }
 
 #[test]
-fn only_the_primarys_readout_carries_the_message_lines() {
+fn a_message_shows_in_the_view_of_the_slot_it_was_raised_for() {
     let mut race = race_with_a_grid();
+    race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     race.raise_message("IG_HUD_TEST", true);
     for _ in 0..2 {
         race.tick(&PlayerInputs::none());

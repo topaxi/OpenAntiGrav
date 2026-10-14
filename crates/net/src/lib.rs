@@ -16,6 +16,7 @@
 //! - [`serve`]: the race phase of a server, shared by `oag-server` and a hosting game.
 //! - `lan`: a game hosting a race in-process, native only.
 //! - [`host`]: the authoritative race and each person's input buffer.
+//! - [`stats`]: what a race reports about itself, for the overlay and the log.
 //! - [`client`]: prediction, the confirmed timeline and the threshold correction.
 //!
 //! **No gameplay crate depends on this one** (rule 1 of `just check-deps`): the
@@ -31,6 +32,7 @@ pub mod link;
 pub mod lobby;
 pub mod race;
 pub mod serve;
+pub mod stats;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;
