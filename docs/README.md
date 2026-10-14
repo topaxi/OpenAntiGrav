@@ -21,13 +21,15 @@ New to the project? Read these in order:
 4. [Glossary](overview/glossary.md) - terminology, including Wipeout-specific terms
 5. [Legal](overview/legal.md) - the no-copyrighted-content policy
 6. [Installing and running](overview/installing.md) - for a player: download, where the game files go on each OS, what the file names can be, what goes wrong
-7. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
-8. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
+7. [Developing](overview/developing.md) - for a contributor: tools, a first session, the gate, where things live
+8. [Workspace layout](architecture/workspace-layout.md) - the crates and their boundaries
+9. [Determinism](architecture/determinism.md) - the rule the whole engine is built around
 
 Then, depending on what you are here to do:
 
 | I want to... | Start at |
 | --- | --- |
+| Start contributing: tools, gate, first session | [Developing](overview/developing.md) |
 | Understand a design decision | [ADR index](architecture/adr/README.md) |
 | Reverse engineer something | [Methodology](reverse-engineering/methodology.md) |
 | Set up Ghidra and the emulators | [Toolchain](reverse-engineering/toolchain.md) |
@@ -50,7 +52,7 @@ Then, depending on what you are here to do:
 ## Tree
 
 ```
-overview/               goals, roadmap, glossary, legal, installing (player setup)
+overview/               goals, roadmap, glossary, legal, installing (player setup), developing (contributor setup)
 architecture/           how the engine is put together
   adr/                  architecture decision records
 reverse-engineering/    methodology, verification, confidence, source images
