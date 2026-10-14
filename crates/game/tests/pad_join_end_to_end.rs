@@ -369,3 +369,39 @@ fn the_cut_reaches_the_race_through_apply_and_seat() {
     );
     assert_eq!(alone.view_rects(AREA), vec![AREA], "one person is no split");
 }
+
+/// The window layout screen's choice reaches the race: four people laid out as three and one
+/// are the same list `--window-seats 3,1` parses, and dealt across the race's windows they put
+/// slots 0 to 2 in window 1 and slot 3 in window 2.
+#[test]
+fn a_layout_chosen_on_the_screen_deals_the_seats_the_command_line_would() {
+    use oag_ui_screens::window_layout::{Labels, Picker};
+    let labels = Labels::read(&oag_ui::language::StringTable::from_xml("<Strings/>"));
+    let mut picker = Picker::new(labels, 4, Vec::new(), vec!["screen".to_string()], false);
+    picker.set_window_count(2);
+    let layout = split_screen::layout_of(picker.windows());
+    assert_eq!(
+        layout,
+        split_screen::parse_window_seats("3,1", oag_render::viewport::Cut::Horizontal).unwrap()
+    );
+    let mut lobby = Lobby::<u32>::new();
+    for key in 0..4 {
+        lobby.join(Device::Pad(key));
+    }
+    let mut assignment = Assignment::<u32>::default();
+    let mut race = race(4);
+    split_screen::seat(
+        &mut race,
+        &lobby,
+        &mut assignment,
+        &[0, 1, 2, 3],
+        oag_render::viewport::Cut::Horizontal,
+    );
+    split_screen::deal_windows(&mut race, &layout);
+    let seats: Vec<Vec<usize>> = race
+        .windows()
+        .iter()
+        .map(|window| window.seats.clone())
+        .collect();
+    assert_eq!(seats, [vec![0, 1, 2], vec![3]]);
+}

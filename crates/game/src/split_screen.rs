@@ -196,6 +196,23 @@ pub fn parse_window_seats(
     Ok(windows)
 }
 
+/// The layout the window layout screen chose, as the seats per window the race deals by: the
+/// same list `--window-seats` parses ([`parse_window_seats`]), a two-seat window's cut included.
+#[must_use]
+pub fn layout_of(windows: &[oag_ui_screens::window_layout::Window]) -> Vec<WindowSeats> {
+    windows
+        .iter()
+        .map(|window| WindowSeats {
+            count: window.seats,
+            cut: if window.vertical {
+                oag_render::viewport::Cut::Vertical
+            } else {
+                oag_render::viewport::Cut::Horizontal
+            },
+        })
+        .collect()
+}
+
 /// The spelling [`parse_window_seats`] reads back: the counts, comma-separated, a window of two
 /// seats carrying `h` or `v` for its cut (`4,2v`). Empty for fewer than two windows, which is
 /// not a layout `--window-seats` takes.

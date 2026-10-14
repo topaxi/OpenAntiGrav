@@ -174,15 +174,19 @@ impl Session {
                 return (Some(monitor.clone()), None);
             }
             // Window 1 is on the monitor the DISPLAY page names, the first one by default.
+            // A window for that same monitor goes beside window 1 as a `--windows` one does,
+            // rather than on top of it; one for another monitor is centred there and stepped
+            // aside for each window already on it.
             let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
-            let aside = (0..window - 1)
-                .filter(|&other| chosen(other) == Some(index))
-                .count()
-                + usize::from(first == index);
-            let mut at = crate::window::centred_on(monitor, size);
-            at.x += 48 * aside as i32;
-            at.y += 32 * aside as i32;
-            return (Some(monitor.clone()), Some(at));
+            if first != index {
+                let aside = (0..window - 1)
+                    .filter(|&other| chosen(other) == Some(index))
+                    .count();
+                let mut at = crate::window::centred_on(monitor, size);
+                at.x += 48 * aside as i32;
+                at.y += 32 * aside as i32;
+                return (Some(monitor.clone()), Some(at));
+            }
         }
         let monitor = self
             .windows_fullscreen

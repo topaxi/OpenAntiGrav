@@ -208,18 +208,7 @@ impl Session {
         use oag_display::display::{Monitor, WindowMode};
         let monitors = self.monitor_names();
         let name_of = |monitor: usize| monitors.get(monitor).cloned().unwrap_or_default();
-        let layout: Vec<oag_game::split_screen::WindowSeats> = screen
-            .windows()
-            .iter()
-            .map(|window| oag_game::split_screen::WindowSeats {
-                count: window.seats,
-                cut: if window.vertical {
-                    oag_render::viewport::Cut::Vertical
-                } else {
-                    oag_render::viewport::Cut::Horizontal
-                },
-            })
-            .collect();
+        let layout = oag_game::split_screen::layout_of(screen.windows());
         self.split_cut = layout[0].cut;
         self.settings.race.window_seats = oag_game::split_screen::spell_window_seats(&layout);
         if layout.len() >= 2 {

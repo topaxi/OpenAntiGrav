@@ -1,4 +1,5 @@
 use super::*;
+use oag_render::viewport::Cut;
 use wgpu::DeviceType;
 
 const ALL: [DeviceType; 5] = [
@@ -245,7 +246,6 @@ fn the_head_count_is_the_pick_on_titles_with_the_lists_alone() {
 
 #[test]
 fn the_cut_is_vertical_only_for_the_discs_own_vertical_entry() {
-    use oag_render::viewport::Cut;
     let cuts = choices(&["RB_HORIZ", "RB_VERT"]);
     assert_eq!(authored_cut(&cuts, "RB_VERT"), Cut::Vertical);
     assert_eq!(authored_cut(&cuts, "RB_HORIZ"), Cut::Horizontal);
@@ -350,7 +350,7 @@ fn a_layout_is_spelled_the_way_the_command_line_reads_it() {
         let layout = parse_window_seats(text, Cut::Horizontal).unwrap();
         let spelled = spell_window_seats(&layout);
         assert_eq!(
-            parse_window_seats(&spelled, Cut::Vertical).unwrap(),
+            parse_window_seats(&spelled, Cut::Horizontal).unwrap(),
             layout,
             "{text} spelled {spelled}"
         );

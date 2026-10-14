@@ -36,6 +36,7 @@ mod vita_2048_endrace_ground_truth;
 mod vita_2048_event_card_ground_truth;
 mod vita_2048_music_ground_truth;
 mod weapon_stamp_ground_truth;
+mod window_layout_ground_truth;
 mod wreck_ground_truth;
 mod wreck_voice_ground_truth;
 mod zone_airbrake_flaps_ground_truth;
