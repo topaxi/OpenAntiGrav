@@ -212,7 +212,13 @@ impl Session {
         // written to the DISPLAY page's row.
         let opened_fullscreen = self.starting_fullscreen();
         let name_of = |monitor: usize| monitors.get(monitor).cloned().unwrap_or_default();
-        let layout = oag_game::split_screen::layout_of(screen.windows());
+        // Under gamescope every window of a client is mapped full-output at 0,0 and one shows, so
+        // the layout folds into one window holding every seat, as `--windows` does at the command
+        // line (`window::one_window_under_gamescope`); the people count is kept.
+        let layout = crate::window::one_window_under_gamescope(
+            oag_game::split_screen::layout_of(screen.windows()),
+            crate::window::under_gamescope(self.gpu.output.window.current_monitor().as_ref()),
+        );
         self.split_cut = layout[0].cut;
         self.settings.race.window_seats = oag_game::split_screen::spell_window_seats(&layout);
         // Windows past the chosen count go first, while the old layout still names their seats:
