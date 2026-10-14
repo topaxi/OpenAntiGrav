@@ -563,6 +563,43 @@ route has not been tried either, and Steam Input will present its own
 configuration as an ordinary gamepad rather than needing anything from the
 engine.
 
+### Under gamescope: the window is not 6x the size
+
+**Cause (measured, Steam Deck in gaming mode, 2026-10-14).** gamescope runs two Xwaylands
+(`--xwayland-count 2`). Both report a 3840x2160 screen, but `xrandr --display :0` says
+`1600mm x 900mm` (96 dpi, scale 1) and `xrandr --display :1` says `100mm x 160mm`. winit's X11
+backend derives the scale factor from that physical size and reads `:1` as **scale 6**, so a
+`LogicalSize` of 1440x816 became an 8640x4896 surface, and the maintainer's `window_size =
+"2560x1440"` a 15360x8640 one. `--max-scale 2` and the 1280x800 nominal size play no part; a
+previous member's 7680x4800 was a 1280x800 window times the same 6. `:0` is not affected.
+Which display a Steam library launch lands on was not observed (Steam itself is on `:0`, and
+`STEAM_MULTIPLE_XWAYLANDS=1` is set); a launch on `:1` is the case that breaks.
+
+**Evidence** (Pulse PSP EU, `--race`, windowed 2560x1440, vsync as default, release `znver2`
+AppImage, Deck load average 0.3, the game's own `frame timing` line, a launch environment copied
+from Steam's: `ENABLE_GAMESCOPE_WSI=1`, `GAMESCOPE_WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP=gamescope`,
+`SteamDeck=1`):
+
+| Build | Display | Reported scale | Inner size | Frames per second |
+| --- | --- | ---: | --- | ---: |
+| before | `:1` | 6 | 15360x8640 | **5** (acquire waits 222 ms) |
+| before | `:0` | 1 | 2560x1440 | 108 |
+| after | `:1` | 6 | 2560x1440 | **107** |
+| after | `:0` | 1 | 2560x1440 | 109 |
+
+**Fix.** `window::is_gamescope` decides by gamescope's own signals, any of
+`GAMESCOPE_WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP=gamescope` or a monitor named `gamescope` (the
+last holds for a launch over ssh with a bare environment, which is how it was first seen); it
+does not ask whether the machine is a Deck. Under gamescope the window size is requested as
+physical pixels (`window::request_size`), held to the monitor's size, and the position uses scale 1
+(`window::effective_scale`). The same function sizes a window changed from the settings menu.
+Borderless was never affected and a desktop is unchanged (a logical size at the reported scale).
+Further windows (`--players` seat windows, `session/windows.rs`) still read the window's own scale
+for their placement; a multi-window race under gamescope is not a case anyone has. Windowed under
+gamescope stays what the player set: gamescope scales that window to its output, so it is a
+render size choice, not the output size (open question for the maintainer: whether windowed
+should become borderless there).
+
 ## AUR packages
 
 Two PKGBUILDs live in [`packaging/aur/`](../../packaging/aur/), each with its
