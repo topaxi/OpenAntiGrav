@@ -80,7 +80,7 @@ Race - is what Head2Head uses too; see the implementation's own doc comment.
 **~~Grid placement of the sole opponent is extrapolated~~ - measured 2026-10-14
 (`h2h-re`), and the extrapolation was wrong: the two craft start on the two *front*
 grid places, the AI on place 1 and the player on place 2.** PPSSPP, Racebox `Head to
-Head`, Talon's Junction White, Venom, read off the racer table (`0x08b34420`, stride
+Head`, Talon's Junction (the fresh profile's default track), Venom, read off the racer table (`0x08b34420`, stride
 `0x370`) while the track description held the field: `g_game_mode == 9`, count `2`,
 racer 0 (the AI) at `(6.145, -52.221, -195.876)` and racer 1 (the player) at
 `(-13.561, -51.863, -175.820)`, which are exactly places 1 and 2 of an eight-craft single
@@ -323,7 +323,7 @@ drawn, and this build's cyclic choice stays chosen, not measured. Screenshots
 **Unread:** `FUN_088099b4`'s test that picks the `Show Unlocks` redirect, the
 finish of a Head2Head cell watched live to its medal, and the opponent
 selection rule. A third sample (2026-10-14, Racebox Head to Head, Talon's Junction
-White, Venom, player Assegai): the opponent flew **AG Systems**. Three samples, three
+(profile default), Venom, player Assegai): the opponent flew **AG Systems**. Three samples, three
 teams (`Goteki 45`, `Qirex`, `AG Systems`); still no law.
 
 ## Names landed

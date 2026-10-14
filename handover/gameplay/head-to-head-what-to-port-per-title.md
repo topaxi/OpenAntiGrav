@@ -29,8 +29,13 @@ relative (Pure from Pulse, Omega from HD, 2048 from HD via Omega).
    two people, person 2 on place 1 and person 1 on place 2 (PS2, measured, the slot is the
    racer index with no compaction). This build puts both on the back two
    (`crates/raceplay/src/start.rs`, the `pose_start` / `rank_from_back` block, whose own
-   comment calls it extrapolated). Changes the one-person hash; regenerate in a separate
-   commit that names it.
+   comment calls it extrapolated and cites a note now struck). The general law, from PS2:
+   **the absolute slot is the racer index in the eight-place layout**, with people at the
+   highest indices; that gives the back rows for a full grid and the front two for a field
+   of two, so no Head to Head special case is needed. Pinned today to the back rows, to
+   change on purpose: `crates/game/tests/window_seats_grid_ground_truth.rs`'s
+   `head_to_head_across_two_windows_seats_both_people_at_the_back` (`assert_eq!(rows, [8, 7])`).
+   Changes the one-person hash; regenerate in a separate commit that names it.
 2. **Row names.** In a split each row is `1st <team>` / `2nd <team>` with the craft's team
    name (`Qirex`, `Assegai`), the same two rows in both views; only the view's own
    person's row and the gap are coloured (green leading, red trailing). One person: the

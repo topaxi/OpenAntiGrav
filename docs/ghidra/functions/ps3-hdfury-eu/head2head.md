@@ -31,7 +31,8 @@ Player` screen, `<List name="Mode">`:
 
 | Archive | Entries |
 | --- | --- |
-| `DATA02`, `DATA03` (HD) | `Arcade`, `<aEntry idstring="Head2Head">`, `Time Trial`, `Speed Lap`, `Tournament`, `Zone`, `<aEntry idstring="Ghost Viewer">` |
+| `DATA02` (HD) | `Arcade`, `<aEntry idstring="Head2Head">`, `Time Trial`, `Speed Lap`, `Tournament`, `Zone` |
+| `DATA03` (HD) | the same, then `<aEntry idstring="Ghost Viewer">` |
 | `DATA00` (Fury) | `Arcade`, `<aEntry idstring="Head2Head">`, `Time Trial`, `Speed Lap`, `Eliminator`, `Zone`, `NitroBattle`, `Detonator`, `Tournament`, `<aEntry idstring="Ghost Viewer">` |
 
 `network_definition.xml`'s online `Mode` list does the same in `DATA02`, `DATA03` and
@@ -55,7 +56,7 @@ head: a two player single race of intense rivalry...", where Pulse's speaks of b
 | Title | Head to Head? | Evidence | Conf |
 | --- | --- | --- | ---: |
 | **Pure** (`psp-pure-eu` `BOOT.BIN`) | **None, single or multi.** | `strings`: the race managers are `SPArcade`, `SPTimeTrial`, `SPTournament`, `SPZone`, `SPFreePlay`, `Demo`, `AIBatch`, `MPArcade`, `MPTimeTrial`, `MPTournament`; no `Head2Head`, `HeadToHead` or `HeadToHeadBar` string at all | 85 |
-| **2048** (`vita-2048-eu-v104`) | **None reachable.** The mode-name strings and `HeadToHeadBar` are inherited, nothing sets the mode. | `search_strings`: `Head2Head` (`0x81419094`), `Multiplayer Head2Head` (`0x814193b4`), `HeadToHeadBar` (`0x8147bce4`); the six `GameMode_*` classes are `ArcadeRace`, `CheckPointRace`, `EliminatorRace`, `SpeedLapRace`, `ZombieRace`, `ZoneRace` ([2048-campaign.md](../../../formats/2048-campaign.md)); 2048 has no racebox; no `Head2Head` cell in the 16 `data/plugins/grids/grid_NN.xml` of `data.psarc` or `data2.psarc` (`mode` census: Race 44, Speed Lap 34, Time Trial 22, Elimination 18, NitroBattle 13, Detonator, Tournament and Zone 12 each); outside the language files only HUD position files name it | 82 |
+| **2048** (`vita-2048-eu-v104`) | **None reachable.** The mode-name strings and `HeadToHeadBar` are inherited, nothing sets the mode. | `search_strings`: `Head2Head` (`0x81419094`), `Multiplayer Head2Head` (`0x814193b4`), `HeadToHeadBar` (`0x8147bce4`); the six `GameMode_*` classes are `ArcadeRace`, `CheckPointRace`, `EliminatorRace`, `SpeedLapRace`, `ZombieRace`, `ZoneRace` ([2048-campaign.md](../../../formats/2048-campaign.md)); 2048 has no racebox; no `Head2Head` cell in the 16 `data/plugins/grids/grid_NN.xml` of `data.psarc` or `data2.psarc`, which are HD-lineage files (they carry Fury's NitroBattle and Detonator) rather than 2048's own campaign, so the `GameMode_*` list is the real negative (`mode` census: Race 44, Speed Lap 34, Time Trial 22, Elimination 18, NitroBattle 13, Detonator, Tournament and Zone 12 each); outside the language files only HUD position files name it | 82 |
 | **Omega** (`ps4-omega-eu`, patch 1.07) | **None reachable**, HD's case exactly. | `search_strings`: `Multiplayer Head2Head` (`0x0182c0a6`), `Head2Head` (`0x0183085a`), `HeadToHeadBar` (`0x018115c3`); `racebox_definition.xml` in `data00`, `data08` and `data09` all carry `<aEntry idstring="Head2Head" intvalue="1">`; the 20 grid files in each of `data00`, `data08`, `data09` hold the same mode census as 2048's, no `Head2Head` | 82 |
 
 **2048 and Omega checked against each other** (CLAUDE.md's rule): **checked, applies**:

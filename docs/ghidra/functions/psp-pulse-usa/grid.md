@@ -53,7 +53,7 @@ Three things follow:
 
   **Measured against it for a field of two (2026-10-14, `h2h-re`):** a Racebox Head to
   Head (`g_game_mode` 9, two craft) starts the AI on place 1 and the player on place 2,
-  the two *front* places, read off the racer table on Talon's Junction White against an
+  the two *front* places, read off the racer table on Talon's Junction against an
   eight-craft read on the same track ([head2head.md](head2head.md)). So a field of two
   does not pack to the back; either the compaction loop is not what runs for mode 9, or
   `slots` is read the other way round. Not traced; the measurement is what to build.
