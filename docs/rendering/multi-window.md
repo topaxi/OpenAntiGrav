@@ -330,14 +330,16 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   build before, and so are `--players 1`, `2` and `4` at flyby ticks 100 and 600 (six of six, `cmp`).
   Live under Xvfb with software Vulkan (`pause_on_focus_loss = false`, since with no window manager
   the first focus loss froze the race before the flyby ran), `--race --window-seats 2,1` on Pulse EU,
-  24 captures of both windows: both play the flyby through its shots at the same time, window 1
-  switches to its two views (top and bottom) and window 2 to its whole-screen view when it ends,
-  then the `3`, `2`, `1`, `GO` countdown shows in every view of both windows and the craft run. HD
-  EU has no flyby (its circuits author none, so `begin_intro` is false and a capture at
-  `--intro-ticks 100` is the grid): `--window-seats 2,1` there is as before, window 1 split and
-  window 2 whole, read live too. The disc-backed pin is
+  one root capture holding both windows per frame (so the frames are simultaneous): both play the
+  flyby through its shots at the same time; **a click on window 1 skipped it and the next frames
+  show window 1 in its two views (top and bottom) and window 2 whole in the same capture**, then the
+  `3`, `2`, `1`, `GO` countdown in every view of both windows and the craft run. This project loads
+  a flyby only for Pulse PSP (`start_grid.vex`, [race-intro.md](race-intro.md)): on HD EU
+  `begin_intro` is false and a capture at `--intro-ticks 100` is the grid, so `--window-seats 2,1`
+  there is as before, window 1 split and window 2 whole, read live too. The disc-backed pin is
   `raceplay::window_flyby_ground_truth` (every window, a window with no seat, the split after, and a
-  skip ending it everywhere).
+  skip ending it everywhere); both tests fail on the build before this change (window 2 answers its
+  own seats `[2, 3]` through the flyby).
 - **Real windows** under Xvfb with software Vulkan (`lvp`), two windows, a race on Pulse: both windows
   draw their own craft with their own HUD; window 1's craft sat on the grid (its keyboard idle) while
   window 2's, flown by the AI, ran at 554 km/h; closing window 2 (`xdotool windowclose`, which is a
