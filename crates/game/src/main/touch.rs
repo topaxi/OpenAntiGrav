@@ -144,7 +144,7 @@ impl Session {
             self.controls.set_touch(Reading::default());
             return;
         }
-        let paused = self.paused;
+        let paused = self.pause.frozen();
         let setup = Self::touch_setup(&self.settings);
         overlay.touches.set_setup(setup, size);
         let taps = overlay.touches.take_taps();
@@ -174,7 +174,7 @@ impl Session {
                 &art,
                 size,
                 scale,
-                self.paused,
+                self.paused(),
                 Self::touch_setup(&self.settings),
                 self.settings.controls.touch_alpha(),
             )

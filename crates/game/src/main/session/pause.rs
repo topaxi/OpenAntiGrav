@@ -1,91 +1,116 @@
-//! Who may resume a paused race.
-//!
-//! **Only the player who paused**, in a local split race (maintainer's rule,
-//! 2026-10-13): anyone seated can pause, and the pause belongs to them until they
-//! press Start again or Circle to leave the race. A pause nobody pressed for (the
-//! window losing focus, `Session::window_away`) has no owner, and any player may
-//! lift it. With devices merged - every race that is not a split - every press is
-//! slot 0's, so a one-player race behaves as it always did.
+//! The session's half of the pause: the rules are [`oag_game::pause`], this is
+//! what reads the live devices, the race and the clock into them and draws the
+//! line.
 
-/// The pause state the session keeps: `None` while the race runs, `Some(owner)`
-/// while paused, `owner` being the slot that paused or `None` for a pause nobody
-/// pressed for.
-pub(crate) type Paused = Option<Option<usize>>;
+use log::info;
+use oag_game::pause::{Line, State, Table, clock, go, line, present_seats, several_people, step, strings};
+use oag_sound::sfx::Cue;
 
-/// What a Start press does: `presses` is [`oag_input::Controls::take_presses`]'s
-/// bitmask. Pauses on anyone's press, owned by the lowest slot that pressed;
-/// resumes only on the owner's press, or anyone's for an unowned pause.
-pub(crate) fn start(paused: Paused, presses: u8) -> Paused {
-    if presses == 0 {
-        return paused;
-    }
-    match paused {
-        None => Some(Some(presses.trailing_zeros() as usize)),
-        Some(owner) if may_act(owner, presses) => None,
-        Some(owner) => Some(owner),
-    }
-}
+use crate::stage::Stage;
 
-/// Whether a Circle press leaves the paused race: the same owner rule as
-/// resuming, so another player cannot quit someone else's pause either.
-pub(crate) fn leaves(paused: Paused, presses: u8) -> bool {
-    matches!(paused, Some(owner) if may_act(owner, presses))
-}
+/// Where the line sits, in the overlay grid (272 high): how far above the bottom
+/// edge its top is, and its scale. **Chosen.**
+const LINE_ABOVE_BOTTOM: f32 = 44.0;
+const LINE_SCALE: f32 = 1.0;
+/// How much of the width the line may take before it wraps.
+const LINE_WIDTH: f32 = 0.9;
+/// The band behind it, so it reads over any frame.
+const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 
 impl super::Session {
-    /// The session's pause as [`Paused`].
-    pub(crate) fn pause_state(&self) -> Paused {
-        self.paused.then_some(self.pause_owner)
+    /// The line under the pause as a draw list in the overlay grid `grid`
+    /// (width, height), or nothing: in a race with one person, while the race
+    /// runs, and through the countdown, which has no line: its art is the title's
+    /// own where it has one, and where it has none nothing is drawn (never a
+    /// stand-in for the art).
+    pub(crate) fn pause_line(&self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
+        use oag_ui::frontend::{Align, Draw};
+        if !matches!(self.stage, Stage::Race(_)) || !several_people(self.controls.assignment()) {
+            return Vec::new();
+        }
+        let table = Table {
+            present: present_seats(self.controls.assignment()),
+            countdown: true,
+        };
+        let Some(line) = line(self.pause, self.wall, table) else {
+            return Vec::new();
+        };
+        let table = oag_ui::strings::project_table(self.settings.language.as_deref());
+        let text = |id: &str, fills: &[String]| {
+            fills.iter().fold(table.get_or_id(id).to_string(), |text, fill| {
+                text.replacen("%s", fill, 1)
+            })
+        };
+        let number = |slot: usize| (slot + 1).to_string();
+        let text = match line {
+            Line::Owned {
+                player,
+                seconds_left,
+            } => text(strings::OWNED, &[number(player), clock(seconds_left)]),
+            Line::Open { player: Some(player) } => text(strings::OPEN, &[number(player)]),
+            Line::Open { player: None } => text(strings::OPEN_UNOWNED, &[]),
+            Line::Resuming => return Vec::new(),
+        };
+        let top = grid.1 - LINE_ABOVE_BOTTOM;
+        vec![
+            Draw::Fill {
+                rect: [0.0, top - 6.0, grid.0, 16.0 * LINE_SCALE + 12.0],
+                color: BAND,
+            },
+            Draw::Text {
+                x: grid.0 / 2.0,
+                y: top,
+                scale: LINE_SCALE,
+                color: [1.0, 1.0, 1.0, 1.0],
+                border: None,
+                align: Align::Centre,
+                text,
+                wrap_width: Some(grid.0 * LINE_WIDTH),
+            },
+        ]
+    }
+
+
+    /// Whether the race is held for any reason, paused or counting down.
+    pub(crate) fn paused(&self) -> bool {
+        self.pause.frozen()
+    }
+
+    /// One tick of the pause rule against the live session, with this tick's Start
+    /// `presses`, raising the start voice's cues on a title that has them.
+    ///
+    /// A resume while the race is still counting down its own start (or flying
+    /// the pre-race camera) happens at once: that countdown is on screen, and a
+    /// second one would draw over it.
+    pub(crate) fn step_pause(&mut self, presses: u8) {
+        let Stage::Race(stage) = &self.stage else {
+            return;
+        };
+        let start_counted = oag_race::RaceState::thrust_gated(stage.race.sim.world.tick)
+            || (!self.no_intro && stage.race.intro_to_play());
+        let assignment = self.controls.assignment();
+        let table = Table {
+            present: present_seats(assignment),
+            countdown: several_people(assignment) && !start_counted,
+        };
+        let before = self.pause;
+        let after = step(before, presses, self.wall, table);
+        if after == before {
+            return;
+        }
+        self.pause = after;
+        info!("pause: {before:?} -> {after:?}");
+        let cue = match (before, after) {
+            (State::Paused { .. }, State::Resuming { .. }) => Some(Cue::Ready),
+            _ if go(before, after) => {
+                self.go_at = Some(self.wall);
+                Some(Cue::Go)
+            }
+            _ => None,
+        };
+        if let (Some(cue), Stage::Race(stage)) = (cue, &mut self.stage) {
+            stage.race.raise_start_cue(cue);
+        }
     }
 }
 
-fn may_act(owner: Option<usize>, presses: u8) -> bool {
-    match owner {
-        Some(slot) => presses & (1 << slot) != 0,
-        None => presses != 0,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const P1: u8 = 0b01;
-    const P2: u8 = 0b10;
-
-    #[test]
-    fn whoever_pauses_owns_the_pause() {
-        assert_eq!(start(None, P2), Some(Some(1)));
-        assert_eq!(start(None, P1 | P2), Some(Some(0)), "lowest slot on a tie");
-        assert_eq!(start(None, 0), None);
-    }
-
-    #[test]
-    fn only_the_owner_resumes() {
-        let paused = Some(Some(1));
-        assert_eq!(start(paused, P1), paused, "player 1 cannot resume player 2's pause");
-        assert_eq!(start(paused, P2), None);
-        assert_eq!(start(paused, P1 | P2), None, "the owner's press counts in a tie");
-    }
-
-    #[test]
-    fn only_the_owner_leaves() {
-        let paused = Some(Some(1));
-        assert!(!leaves(paused, P1));
-        assert!(leaves(paused, P2));
-        assert!(!leaves(None, P1 | P2), "a running race is not left by Circle");
-    }
-
-    #[test]
-    fn an_unowned_pause_is_anyones() {
-        assert_eq!(start(Some(None), P2), None);
-        assert!(leaves(Some(None), P1));
-    }
-
-    #[test]
-    fn one_player_pauses_and_resumes_as_before() {
-        let paused = start(None, P1);
-        assert_eq!(paused, Some(Some(0)));
-        assert_eq!(start(paused, P1), None);
-    }
-}

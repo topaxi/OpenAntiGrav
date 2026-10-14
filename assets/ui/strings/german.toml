@@ -191,3 +191,6 @@ OAG_MODS_NO_LICENSE = { text = "KEINE LIZENZ ANGEGEBEN", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SIEHE %s", human = false }
 OAG_MODS_NOTHING = { text = "NICHTS", human = false }
 OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
+OAG_PAUSE_OWNED = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN IN %s FORTSETZEN", human = false }
+OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", human = false }
+OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }

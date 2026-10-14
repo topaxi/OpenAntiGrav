@@ -359,3 +359,11 @@ OAG_MODS_NO_LICENSE = { text = "NO LICENSE STATED", human = false }
 OAG_MODS_LICENSE_FILE = { text = "SEE %s", human = false }
 OAG_MODS_NOTHING = { text = "NOTHING", human = false }
 OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
+
+# The line under a split race's pause - `crates/game/src/main/session/pause.rs`.
+# Read by Rust, not by a `menu.toml` row. `%s` is substituted left to right: the
+# player's number, then the time left as `m:ss`. **Chosen, not measured**: the
+# original has no split screen and no pause ownership to word.
+OAG_PAUSE_OWNED = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME IN %s", human = false }
+OAG_PAUSE_OPEN = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME", human = false }
+OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }

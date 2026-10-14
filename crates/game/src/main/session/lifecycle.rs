@@ -67,7 +67,7 @@ impl Session {
     /// Applies [`decide`] to the live session.
     pub(crate) fn window_away(&mut self, away: Away) {
         let running = matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
-            && !self.paused;
+            && !matches!(self.pause, oag_game::pause::State::Paused { .. });
         let pause = decide(
             away,
             self.settings.display.pause_on_focus_loss,
@@ -80,11 +80,12 @@ impl Session {
             Pause::Menu => self.back(),
             Pause::Freeze => {
                 // Nobody pressed for this pause, so anyone may lift it - unless
-                // a player already holds one, which stays theirs.
-                if !self.paused {
-                    self.pause_owner = None;
+                // a player already holds one, which stays theirs. A resume
+                // countdown under way gives way to the same unowned pause
+                // (chosen): a window that was away has not seen it.
+                if !matches!(self.pause, oag_game::pause::State::Paused { .. }) {
+                    self.pause = oag_game::pause::State::unowned(self.wall);
                 }
-                self.paused = true;
             }
         }
         if silences(away) {

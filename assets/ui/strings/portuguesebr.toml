@@ -189,3 +189,6 @@ OAG_MODS_NO_LICENSE = { text = "SEM LICENÇA INFORMADA", human = false }
 OAG_MODS_LICENSE_FILE = { text = "VEJA %s", human = false }
 OAG_MODS_NOTHING = { text = "NADA", human = false }
 OAG_MODS_BUILT_IN = { text = "INTEGRADO", human = false }
+OAG_PAUSE_OWNED = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR EM %s", human = false }
+OAG_PAUSE_OPEN = { text = "JOGADOR %s PAUSOU - QUALQUER UM PODE RETOMAR", human = false }
+OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSADO - QUALQUER UM PODE RETOMAR", human = false }

@@ -56,7 +56,7 @@ pub(crate) mod menus;
 #[path = "session/pacing.rs"]
 mod pacing;
 #[path = "session/pause.rs"]
-mod pause;
+pub(crate) mod pause;
 #[path = "session/picker.rs"]
 mod picker;
 // Named `pilot_editor`, not `pilots` - `oag_raceplay::pilots` is already imported
@@ -312,14 +312,22 @@ pub(crate) struct Session {
     /// Starts `true`: the first frame's `elapsed` reaches back to before the
     /// window existed.
     pub(crate) stalled: bool,
-    /// Toggled by `Start` while a race is running: freezes the tick, nothing
-    /// else. There is deliberately no pause screen behind it - see
-    /// [`Session::frame`], which is the only place this is read.
-    pub(crate) paused: bool,
-    /// The slot whose Start paused the race, which alone may resume or leave it;
-    /// `None` for a pause nobody pressed for. Meaningless while not paused. See
-    /// `session::pause`.
-    pub(crate) pause_owner: Option<usize>,
+    /// Moved by `Start` while a race is running: freezes the tick, nothing else,
+    /// and counts a resume down in a race with more than one person. There is
+    /// deliberately no pause screen behind it, only the line under it - see
+    /// `session::pause`, which owns the rules and the one gate
+    /// (`pause::State::ticks`).
+    pub(crate) pause: oag_game::pause::State,
+    /// The session's wall clock in seconds, read once a frame: what a pause's
+    /// owner timeout and the resume countdown are measured on. A race that is
+    /// frozen has no ticks to count, so this is not simulation time and is never
+    /// hashed.
+    pub(crate) wall: f64,
+    /// When [`Self::wall`] last had the race move again out of a resume
+    /// countdown, so `GO` can linger on screen for a moment.
+    pub(crate) go_at: Option<f64>,
+    /// Where [`Self::wall`] counts from.
+    pub(crate) wall_origin: web_time::Instant,
     /// When the next frame is due, under a frame limit.
     ///
     /// A schedule rather than a stopwatch - see

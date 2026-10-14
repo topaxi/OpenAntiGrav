@@ -772,14 +772,53 @@ carries both players' widget sets, `docs/formats/race-setup.md`) is a camera cho
 and a per-player team pick, not a device join, so it is not what the entry below
 follows. Confidence scores do not apply.
 
-**Any seated player pauses; only they resume.** Start pauses from every seated
-device, not the keyboard's slot alone (`Controls::take_presses`): with devices seated
+**Any seated player pauses; only they resume, for 30 seconds.** Start pauses from every
+seated device, not the keyboard's slot alone (`Controls::take_presses`): with devices seated
 a pad's presses land on its own slot, and before 2026-10-13 a Steam Deck's own Start
 did nothing in a split race (reported from play). The pause then belongs to the player
 who pressed: only their Start resumes and only their Circle leaves the race
-(maintainer's rule, 2026-10-13; `session::pause`). A pause nobody pressed for, the
-window losing focus, is anyone's to lift. A one-player race is unchanged, since every
-press is slot 0's there.
+(maintainer's rule, 2026-10-13). A pause nobody pressed for, the window losing focus,
+is anyone's to lift. A one-player race is unchanged, since every press is slot 0's there.
+All of it is `oag_game::pause`, a pure function of the state, the tick's Start presses,
+"now" and which seats still have a device, with the session's wall clock as "now" (a
+frozen race has no ticks to count; nothing here is hashed). **Chosen, not measured**
+(2026-10-14, maintainer's decisions and the thread's leanings, no confidence score):
+
+- **The owner's claim lapses 30 s after the pause itself**, no setting. From then the
+  pause is anyone's (owner `None`), so a walked-away player or a dead battery cannot
+  strand the others. The claim also lapses **at once when the owner's device is gone**:
+  `pause::present_seats` asks the same `Assignment::drives` the seat turns to the AI on
+  (`split_screen::follow_devices` runs only in a ticking arm, so it cannot be waited
+  for).
+- **A line under the pause** says who and for how long: `PLAYER 2 PAUSED - ANYONE CAN
+  RESUME IN 0:25`, then `PLAYER 2 PAUSED - ANYONE CAN RESUME` (or `PAUSED - ANYONE CAN
+  RESUME` for a focus-loss pause), on a dark band at the bottom of the window, in a race
+  with more than one person only (`OAG_PAUSE_*` in the strings files; French is under
+  `[untranslated]`).
+- **A resume counts down `3`, `2`, `1`, `GO`** for 3 s (`pause::RESUME_SECONDS`, the 180
+  ticks the original leaves between `ready` and `go`) before the race moves, in a race
+  with more than one person. The race stays frozen through it: no tick runs and no input
+  reaches the simulation, so the state hash does not move
+  (`pause_resume_ground_truth`). Start during it pauses again and the presser owns the
+  new pause (the 30 s runs from there); Circle and a click do nothing through it; a window
+  that loses focus during it gives way to an unowned pause. A resume while the race is
+  still counting down its own start (`thrust_gated`, or the flyby) is immediate, so two
+  countdowns never overlap. A single-player resume is unchanged: no countdown.
+- **The countdown's art is the title's own**: Pulse's `Cockpit_321GO.vex` overlay, played
+  on its own clock started 0.6 s in so that its `GO` (lit from 3.6 s, the texel-grid
+  derivation in [`start-gantry.md`](start-gantry.md)) lands as the 3 s run out, drawn once
+  per view of a split and over the gantry circuits too (a gantry stands at the start line,
+  not where the race was paused); `GO` stays 1.5 s after the race moves. The start voice's
+  `ready` is raised as the countdown starts and `go` as it ends, on titles that voice their
+  start (`Race::raise_start_cue`; Pulse only). **No other title has screen-space art**:
+  Pure authors `Ready_GO.vex` and no `Cockpit321Go`, HD's `hud_ready_go.xml` is disabled
+  (`aMode3D`), so HD, Pure, 2048 and Omega draw nothing during the countdown, by
+  design: no stand-in for art the title does not author (checked live on HD, which holds
+  the frozen race for 3 s with nothing on screen but the race; 2048 and Omega were not
+  run).
+- **A click on a paused race is slot 0's Start**, through the same owner rule, so a mouse
+  cannot lift player 2's pause inside their 30 s. The whole window is the target: there is
+  no resume row, since the pause draws no menu.
 
 **The assignment** is `oag_input::pad::Assignment`, generic over the pad's id so
 the rules are unit-testable (`gilrs::GamepadId` has no public constructor):

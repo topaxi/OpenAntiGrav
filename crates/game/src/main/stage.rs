@@ -643,6 +643,7 @@ impl Stage {
             hud: overlay,
             scoreboard,
             countdown,
+            resume_art: None,
             track_panel,
             result_key,
             record_target,

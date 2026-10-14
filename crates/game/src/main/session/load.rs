@@ -776,7 +776,7 @@ impl Session {
         self.stage = Stage::Race(race_stage);
         // Never inherited from whatever race was on screen before this one -
         // see `Session::paused`.
-        self.paused = false;
+        self.pause = oag_game::pause::State::Running;
         // The outgoing race's held voices, if this is a relaunch rather than a
         // first start. The back-out path does this too, but a race launched
         // straight from a race never passes through it - and a carried-over
