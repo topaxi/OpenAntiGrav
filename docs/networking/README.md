@@ -1,9 +1,12 @@
 # Networking
 
-> **Not started in code.** Milestone M8, after single-player is complete. The
-> shape is decided in outline (below); one design question is open and there
-> is no ADR yet. `oag-net` is deliberately not created until the transport is
-> decided, per [workspace layout](../architecture/workspace-layout.md).
+> **A first server and client exist (2026-10-14)**: `oag-server` and
+> `oag-game --connect`, over WebTransport, on localhost (below, "Running a local
+> server"). Milestone M8 is otherwise ahead: no menu entry, no web client, no
+> weapons over the network, no discovery. The transport is
+> [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md); the
+> prediction is [ADR-0069](../architecture/adr/0069-remote-craft-are-predicted-in-one-timeline-and-corrected-on-a-threshold.md),
+> still Proposed.
 
 ## Scope: two separate things
 
@@ -406,27 +409,138 @@ costs a `Vec3` per craft; below about 2 units nothing needs it. The own craft is
 open case: its correction moves the camera, and smoothing it means offsetting the
 camera too (not built).
 
-## Transport: WebTransport leaning, not decided
+## Transport: WebTransport (2026-10-14)
 
-The web build runs in a browser tab, which cannot send raw UDP; WebSocket is TCP
-and stalls every packet behind a lost one. WebTransport (QUIC) offers unreliable
-datagrams and reliable streams, the two channel kinds the protocol needs.
-Browser support per search excerpts: Chrome and Edge from 97, Firefox from 114,
-Safari 26.4 (March 2026); not checked against caniuse or MDN.
+**Decided by the maintainer (2026-10-14): WebTransport, plain UDP only if it fails.**
+It did not fail. [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md)
+records it; what follows the decision there (the crate, the certificate scheme, the
+wire shape) is Proposed.
 
-Decided (maintainer, 2026-10-13): accepting self-signed certificates on a LAN is
-acceptable. Native clients may trust a LAN host's certificate; a web client still
-needs the host to advertise the certificate hash (`serverCertificateHashes`),
-since a browser has no click-through for WebTransport (from memory, verify).
+Why WebTransport at all: the web build runs in a browser tab, which cannot send raw
+UDP; WebSocket is TCP and stalls every packet behind a lost one. WebTransport (QUIC)
+has unreliable datagrams and reliable streams, the two channel kinds the protocol
+needs. Browser support per search excerpts: Chrome and Edge from 97, Firefox from
+114, Safari 26.4 (March 2026); not checked against caniuse or MDN. A browser tab
+cannot open sockets itself, so a web client would drive the browser's own
+`WebTransport` object through `wasm-bindgen` behind the same `Link` trait (not built).
 
-Constraints: it needs TLS, so a public server needs a normal certificate; a
-browser tab can be a client but
-never a listen server; networks that block UDP fail QUIC. The lean is a transport
-trait with the two channel kinds, WebTransport implemented first for the dedicated
-server and the web build, and native clients on it too if the LAN certificate
-story proves workable (one wire protocol while the design is young). The Rust
-crates (`wtransport`, `web-transport-quinn`) are unverified. Details and the proof
-order are in the handover thread.
+**The spike (2026-10-14, half a day).** Both Rust crates were tried in a scratch
+crate on this workspace's MSRV (1.97.1), localhost, a self-signed certificate:
+
+| | `wtransport` 0.7.2 | `web-transport-quinn` 0.13.2 |
+| --- | --- | --- |
+| Session, one bidirectional stream both ways, datagrams both ways | works | works |
+| Pinned by certificate hash | works | works; a wrong hash fails the handshake with `UnknownIssuer` in 2.4 ms |
+| Largest datagram on localhost | 1,413 bytes | 1,413 bytes |
+| 200 datagram echoes, median round trip (debug build, loaded machine) | 379 us | 189 to 269 us |
+| Self-signed certificate | built in | minted with `rcgen` (a few lines) |
+| Crypto | `ring` by default | `aws-lc-rs` by default (C, cmake); `ring` as a feature, used |
+| Browser client in the same family | no (a third-party `xwt`) | `web-transport-wasm`, and `web-transport` over both |
+| Last release (crates.io, 2026-10-14) | 2026-08-11 | 2026-10-07 |
+| Crates in a spike's normal dependency tree | 135 | 143 (`ring`) |
+
+`web-transport-quinn` was taken, for the browser path. An earlier run that seemed to
+show both refusing a wrong hash with a timeout was a test bug (the server accepted
+one session only); with an accept loop the refusal is the TLS error.
+
+**The certificate.** `oag-server` mints an ECDSA P-256 certificate per run, valid 13
+days (a browser's `serverCertificateHashes` accepts at most 14; from memory, verify),
+for `localhost`, `127.0.0.1`, `::1` and any `--cert-name`, and prints its SHA-256. A
+client accepts that certificate only (`--cert-hash`). Self-signed on a LAN is the
+maintainer's decision (2026-10-13); a public server would present a CA-signed one
+(not built).
+
+**What crosses the wire** (`oag_net::wire`, version 1):
+
+- Reliable stream: hello (protocol, name), welcome (seat, the race's options as
+  names, the tick-0 state hash), ready (the client's tick-0 hash), start, resend,
+  confirmed ticks, end, reject. Length-prefixed.
+- Datagrams up: a seat's held buttons and four axes for its newest eight ticks
+  (20 bytes a tick; **chosen**). The server derives press and release from the held
+  stream itself (decision 2).
+- Datagrams down: per tick, the input the server applied to every person and the
+  state hash after the tick, the newest sixteen ticks (**chosen**; 28 bytes a tick
+  for one person, 168 for eight), and the receiver's lead: how many ticks of its
+  input the server holds.
+- **No state.** A client re-runs the server's inputs on its own copy of the
+  server's state and checks the hash every tick; a mismatch is a determinism bug or
+  different content, logged as an error, never a misprediction. The join refuses a
+  client whose race starts at a different tick-0 hash.
+
+## Running a local server
+
+From a checkout with a Pulse image in `data/images/` (any title works; the server
+resolves the image as the game does when `--image` is left out):
+
+```sh
+# 1. The server: one person, the AI on the rest of the grid, Pulse's circuit 01.
+cargo run -p oag-net --bin oag-server -- --image data/images/pulse-psp-eu.chd \
+  --track 'Data\Environments\01_Track\track.vex' --people 1 --hash-out /tmp/oag.hash
+# prints: listening on 127.0.0.1:4433, then: cert-hash <64 hex digits>
+
+# 2. The client, in a second terminal: the game, straight into the server's race.
+cargo run -p oag-game -- --connect 127.0.0.1:4433 --cert-hash @/tmp/oag.hash
+```
+
+`--cert-hash` takes the 64 hex digits the server printed, or `@FILE` for the file
+`--hash-out` wrote. Server flags: `--people N` (each client takes the next seat, grid
+slot `0..N`), `--no-opponents`, `--class`, `--mode`, `--difficulty`, `--scheme`
+(one control scheme per race; every client flies the server's), `--seed`,
+`--listen ADDR`, `--cert-name NAME` (another name the certificate is valid for),
+`--max-ticks N`, `--lead-ticks N`. Client flags: `--net-bot` (the player's own driver
+flies this client's craft, sent as input like a pad's: a whole race with nobody at
+the keys), `--net-shim RTT_MS[:LOSS_PERCENT]` (a round trip and a datagram loss rate
+added on the client's end, **chosen** test conditions), and `--screenshot out.png
+--ticks N` for a headless client paced on the wall clock. Both print one line a
+second: the server per seat (inputs in time, repeated, late, lead), the client its
+corrections, the ticks they replayed, the largest pop, the hash agreeing and its lead
+and prediction window.
+
+**Held fixed in a network race** (`oag_net::race`, all **chosen**): this project's AI
+driver flies the opponents (the original driver with several people is unread),
+pilot assist is off, weapons are off (ADR-0069, condition 2), and every person's slot
+is `Controller::Remote` on every peer, the client's own included, because the
+controllers are hashed; which craft is this machine's is view-side
+(`Race::set_seat`). The menus' LAN and ONLINE rows stay greyed. Start and focus loss
+do not pause a network race.
+
+### Measured on localhost (2026-10-14)
+
+Pulse EU, circuit 01, VENOM, seed 1, two people (bot clients, each headless at
+960x540) and six AI, weapons off, 1,500 ticks; debug build on the shared desktop.
+Each line is one client over the whole run; "hash ok" counts confirmed ticks whose
+state hash matched the server's.
+
+| Round trip, loss (`--net-shim`) | Client | Hash ok / bad | Corrections | Ticks replayed | Largest pop | Largest error at a confirmed tick | Prediction window |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| none | 0 | 1,459 / 0 | 18 (0.7 a second) | 36 | 1.27 | 1.07 | 2 ticks |
+| none | 1 | 1,463 / 0 | 16 (0.6 a second) | 32 | 1.62 | 1.13 | 2 ticks |
+| 100 ms | 0 | 1,461 / 0 | 25 (1.0 a second) | 226 | 3.91 | 1.28 | 10 ticks |
+| 100 ms | 1 | 1,463 / 0 | 25 (1.0 a second) | 256 | 5.98 | 1.33 | 11 ticks |
+| 100 ms, 5% | 0 | 1,462 / 0 | 26 (1.0 a second) | 287 | 4.29 | 1.31 | 11 ticks |
+| 100 ms, 5% | 1 | 1,465 / 0 | 27 (1.1 a second) | 297 | 7.12 | 1.58 | 11 ticks |
+
+The server's side of every run: each seat's input arrived in time on every tick
+(none repeated, none late) with a lead of 2 to 5 ticks; at 5 percent loss the
+eight-tick redundancy covered every gap and no client needed a resend. One person
+alone needs no corrections at all (900 ticks, 0 corrections): the AI is the same
+on both ends and the client knows its own input. A windowed client on Xvfb with
+software Vulkan (20 to 25 frames a second) kept pace: 2,540 confirmed ticks, hash ok on
+every one. The corrections are the other person's craft guessed on its last input
+for a window of 2 to 11 ticks, crossing the 1-unit threshold about once a second;
+they agree with section "Remote-input predictability" (ai1, threshold 1: 0.6 to 0.8
+a second).
+
+Reproduce: the two commands above, with `--people 2`, two clients with `--net-bot
+--screenshot cN.png --ticks 1500 [--net-shim 100[:5]]`, and the per-second lines
+summed. The disc-backed test `net_ground_truth` (`crates/net/tests/`) runs a server
+and two bot clients in one process at a 100 ms round trip and asserts every hash
+agrees and that corrections happen.
+
+**Not covered:** the Galaxy S24, an analog human hand, weapons, a client joining
+late, more than two clients, a real network (only the shim's constant delay, no
+jitter), and the own craft's correction moving the camera (ADR-0069, condition 4; the
+runs above did not log which craft each correction moved).
 
 ## Cheating: what is and is not worth defending
 

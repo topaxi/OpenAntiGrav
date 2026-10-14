@@ -77,6 +77,10 @@ FORBIDDEN_FOR_GAMEPLAY = {
     # This project's own track file: read by the race loader, and what a
     # foreign importer or a disc exporter writes. ADR-0063.
     "oag-trackfile",
+    # Network play: the transport, the wire and the server and client around a
+    # race. The simulation never knows the network exists; what reaches it is an
+    # InputSnapshot per slot per tick, the same as from a pad. ADR-0070.
+    "oag-net",
 }
 
 # The crates that link `oag-title` without being title packages: the reader of
@@ -105,6 +109,9 @@ NOT_TITLE_PACKAGES = {
     "oag-hud",
     "oag-livery",
     "oag-music",
+    # Reaches a title through `oag-raceplay`'s race load; a network race is any
+    # title's.
+    "oag-net",
     "oag-present",
     "oag-raceplay",
     "oag-sound",

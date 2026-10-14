@@ -1351,7 +1351,11 @@ paths.
 
 ## M8 - Beyond Pulse
 
-- [ ] Networking
+- [ ] Networking - a first headless `oag-server` and `oag-game --connect` over
+      WebTransport race a whole circuit on localhost (2026-10-14,
+      [ADR-0070](../architecture/adr/0070-the-network-transport-is-webtransport.md),
+      [networking](../networking/README.md#running-a-local-server)); no menu entry,
+      no web client, no weapons over the network yet
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
 - [ ] Wipeout Pure: its own physics, HUD, Zone mode, reset volumes - boost
       plume settled (2026-09-23): none exists, and the engine flare already

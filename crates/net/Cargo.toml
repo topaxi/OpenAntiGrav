@@ -36,7 +36,6 @@ web-time = "1.1.0"
 # self-signed ECDSA P-256 certificate minted per run. Not on the web, where the
 # browser's own `WebTransport` object is the transport (not built yet).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bytes = "1"
 rcgen = { version = "0.14", default-features = false, features = ["ring", "crypto"] }
 ring = "0.17"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

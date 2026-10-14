@@ -927,7 +927,13 @@ world units or in effect on lap or contact outcome?
 
 ## 3b. Transport: WebTransport for the server and the web build (2026-10-13)
 
-**Status: leaning, not decided.** Raised by the maintainer: support WebTransport
+**Status, 2026-10-14: decided and built** (the maintainer: WebTransport if possible,
+otherwise UDP; it was possible). See
+[ADR-0070](../../docs/architecture/adr/0070-the-network-transport-is-webtransport.md)
+and `docs/networking/README.md`, "Transport", which has the spike's table; the rest
+of this section is the reasoning as it stood before.
+
+**Status before: leaning, not decided.** Raised by the maintainer: support WebTransport
 on the server and in the web build, "or even all builds". Not measured, and the
 crate facts below come from search excerpts, so check them against docs.rs before
 choosing.
@@ -1224,15 +1230,26 @@ a guess.
   measured, `docs/networking/README.md`), so the cap is a correctness
   hazard and not a CPU one. The live tick after the replay is what goes through
   the clock.
-- Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
+- ~~Transport choice for `oag-net` (framing, reliable-vs-unreliable channel
   split for inputs vs. snapshots, send rate relative to the fixed 60 Hz
-  tick) - not decided, needed before the crate is created. Section 3b has the
-  WebTransport option for the server and the web build (leaning, not decided).
-- Reconciliation tuning: how many ticks of local input the client buffers
-  for replay, how snapshots are diffed/compressed for the wire, and how a
-  genuine desync (caught by the state hash) is surfaced to the player - none
-  of this is decided, all of it sits inside the server-authoritative/
-  client-prediction shape section 3 already commits to.
+  tick) - not decided, needed before the crate is created.~~ **Done, 2026-10-14
+  (`net-local`)**: WebTransport, the maintainer's decision ("WebTransport if
+  possible, otherwise UDP"); `web-transport-quinn` on `ring` after a spike against
+  `wtransport`; inputs and a state hash per tick on datagrams, no state on the wire;
+  every input and confirmed tick sent each tick (no send-rate reduction).
+  [ADR-0070](../../docs/architecture/adr/0070-the-network-transport-is-webtransport.md)
+  (Accepted for the maintainer's part only), `oag-net` created, `oag-server` and
+  `oag-game --connect` built, proven on localhost with two clients at 0 and 100 ms
+  and 5 percent loss: `docs/networking/README.md`, "Transport" and "Running a local
+  server". **Open from it** (in Next Steps): a web client, LAN/ONLINE in the menus,
+  weapons as server events, late join, a real network, more than two clients.
+- Reconciliation tuning: ~~how many ticks of local input the client buffers
+  for replay, how snapshots are diffed/compressed for the wire~~ (**built
+  2026-10-14, all chosen**: the client keeps its own inputs from the confirmed tick
+  on, at most 30 ticks ahead before it waits; no snapshot crosses the wire, the
+  client re-runs the server's applied inputs and checks the hash), and how a
+  genuine desync (caught by the state hash) is surfaced to the player: still only
+  an error in the log (`oag_net::client`), nothing on screen and no recovery.
 - **Trust model and server roles, decided 2026-10-13** in a design discussion
   and written into `docs/networking/README.md`. Online is server-authoritative.
   A client-hosted game exists on LAN only and is trusted; cheating there is a
@@ -1380,10 +1397,26 @@ a guess.
   this one still has a real open design question in it, not just a write-up
   owed. Not before M8 opens per the roadmap, but the decision itself doesn't
   need to wait for that milestone to start.
-- Decide the transport (framing, channel split, send rate) as the next open
-  question once that ADR is written. **The loopback proof that gated this is
-  done** (2026-09-21, see "Recommended order" step 4), so the only thing
-  still ahead of the transport decision is the remote-player question above.
+- ~~Decide the transport (framing, channel split, send rate).~~ **Done
+  2026-10-14**, ADR-0070; see the Open entry. Next, in order, each a lane of its
+  own:
+  1. **Run it across a real network** (two machines on a LAN, `--cert-name` with the
+     host's address) and record the same per-second numbers as the localhost table
+     in `docs/networking/README.md`; the shim is a constant delay with no jitter.
+  2. **LAN and ONLINE in the menus**: a host row that starts a listen server inside
+     the client (decision 3) and a join screen that takes an address and the
+     certificate hash. Owned by the front end's session flow (`mp-seat-assign`'s
+     area), not `oag-net`.
+  3. **Weapons as server events** (ADR-0069 condition 2): today a network race
+     forces weapons off (`RaceParams::weapons`).
+  4. **The browser client**: `Link` over the browser's `WebTransport` object
+     (`web-transport-wasm` is the same family), `serverCertificateHashes` from the
+     hash the server prints.
+  5. **Late join and desync recovery**: neither exists; both need either the whole
+     input history replayed from tick 0 or a state snapshot on the reliable stream.
+  6. **Per-seat settings**: pilot assist, the control scheme and the team are one
+     per race in this engine; a network race fixes pilot assist off, the server's
+     scheme and the server's team for every person (`oag_net::race`).
 - ~~Give a reconciliation replay a tick path that does not re-fire the camera,
   the particles and the sound cues.~~ **Done 2026-10-14**, `Race::tick_sim_only`;
   see the Open entry. What it leaves: a recording that does not hear a replay.
