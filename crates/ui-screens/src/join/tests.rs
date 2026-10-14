@@ -322,5 +322,9 @@ fn a_button_row_shows_no_value() {
         .filter(|(_, align)| *align == Align::Right)
         .map(|(text, _)| text.as_str())
         .collect();
-    assert_eq!(rights, ["PAD 0", "PAD 1", "OPEN"], "no value beside START or BACK");
+    assert_eq!(
+        rights,
+        ["PAD 0", "PAD 1", "OPEN"],
+        "no value beside START or BACK"
+    );
 }

@@ -153,14 +153,14 @@ pub struct Picker {
 }
 
 /// Where the rows and the preview sit on the skin's grid.
-struct Geometry {
-    layout: Layout,
+pub(crate) struct Geometry {
+    pub(crate) layout: Layout,
     /// Where the hint line goes.
-    hint_y: f32,
+    pub(crate) hint_y: f32,
     /// How far right a row answers a click.
-    column: f32,
+    pub(crate) column: f32,
     /// The preview's area: `[x, y, width, height]`.
-    preview: [f32; 4],
+    pub(crate) preview: [f32; 4],
 }
 
 /// How much smaller a bare-text title's rows are drawn here than on its own pages, so eight
@@ -171,7 +171,7 @@ const BARE_SHRINK: f32 = 0.72;
 const BARE_SPLIT: f32 = 0.56;
 
 impl Geometry {
-    fn new(skin: &Skin) -> Self {
+    pub(crate) fn new(skin: &Skin) -> Self {
         let mut layout = Layout::new(skin);
         let (width, height) = skin.space().size;
         let hint_y = layout.top - layout.line * 0.5;
@@ -220,7 +220,7 @@ impl Geometry {
 
 /// `ink` where it reads on a dark box, else white: a light page (Omega's) inks its text black,
 /// which the preview's dark boxes would swallow.
-fn legible(ink: [f32; 4]) -> [f32; 4] {
+pub(crate) fn legible(ink: [f32; 4]) -> [f32; 4] {
     if ink[0] + ink[1] + ink[2] < 1.2 {
         [1.0, 1.0, 1.0, 0.6]
     } else {
@@ -532,10 +532,13 @@ impl Picker {
             }
         }
         if pointer.clicked
-            && let Some(window) = self
-                .boxes(geometry.preview)
-                .iter()
-                .position(|rect| contains(*rect, at))
+            && let Some(window) = boxes(
+                self.windows.len(),
+                self.monitors.len() > 1,
+                geometry.preview,
+            )
+            .iter()
+            .position(|rect| contains(*rect, at))
             && window != self.edit
         {
             self.edit = window;
@@ -543,44 +546,6 @@ impl Picker {
             out.push(Event::Moved);
         }
         out
-    }
-
-    /// Each window's box in the preview, in window order: 16:9, centred, in as many columns
-    /// as make the boxes largest for the area.
-    fn boxes(&self, area: [f32; 4]) -> Vec<[f32; 4]> {
-        let count = self.windows.len();
-        let gap = (area[2] * 0.03).min(area[3] * 0.06).max(1.0);
-        // A box and the line of text under it (the monitor, which is drawn when there is
-        // more than one).
-        let label = if self.monitors.len() > 1 {
-            area[3] * 0.1
-        } else {
-            0.0
-        };
-        let width_for = |per_row: usize| {
-            let rows = count.div_ceil(per_row);
-            let cell_w = (area[2] - gap * (per_row - 1) as f32) / per_row as f32;
-            let cell_h = (area[3] - gap * (rows - 1) as f32) / rows as f32 - label;
-            cell_w.min(cell_h.max(1.0) * 16.0 / 9.0)
-        };
-        let per_row = (1..=count)
-            .max_by(|&a, &b| width_for(a).total_cmp(&width_for(b)).then(b.cmp(&a)))
-            .unwrap_or(1);
-        let width = width_for(per_row);
-        let height = width * 9.0 / 16.0;
-        (0..count)
-            .map(|index| {
-                let (row, column) = (index / per_row, index % per_row);
-                let in_row = per_row.min(count - row * per_row);
-                let used = in_row as f32 * width + (in_row - 1) as f32 * gap;
-                [
-                    area[0] + (area[2] - used) / 2.0 + column as f32 * (width + gap),
-                    area[1] + row as f32 * (height + label + gap),
-                    width,
-                    height,
-                ]
-            })
-            .collect()
     }
 
     /// What a row's value says.
@@ -722,83 +687,188 @@ impl Picker {
         frame: &Frame,
         cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
     ) -> Vec<Draw> {
-        let geometry = Geometry::new(skin);
-        let ink = frame.ink.filter(|_| geometry.layout.blocks.is_some());
-        let ink = ink.unwrap_or_else(|| skin.normal());
-        let lit = skin.selected();
-        let dim = |mut colour: [f32; 4], alpha: f32| {
-            colour[3] *= alpha;
-            colour
-        };
-        let mut out = Vec::new();
-        let mut seat = 0;
-        for (index, (window, rect)) in self
+        let windows: Vec<PreviewWindow> = self
             .windows
             .iter()
-            .zip(self.boxes(geometry.preview))
+            .map(|window| PreviewWindow {
+                seats: window.seats,
+                vertical: window.vertical,
+                caption: (self.monitors.len() > 1).then(|| self.monitor_name(window.monitor)),
+            })
+            .collect();
+        let owner: Vec<usize> = self
+            .windows
+            .iter()
             .enumerate()
-        {
-            let edited = index == self.edit;
-            let border = if edited { lit } else { dim(ink, 0.5) };
-            let edge = (rect[2] * 0.012).max(1.0);
-            out.push(Draw::Fill {
-                rect,
-                color: border,
-            });
-            out.push(Draw::Fill {
-                rect: [
-                    rect[0] + edge,
-                    rect[1] + edge,
-                    rect[2] - 2.0 * edge,
-                    rect[3] - 2.0 * edge,
-                ],
-                color: [0.0, 0.0, 0.0, 0.85],
-            });
-            let inner = [
-                rect[0] + 2.0 * edge,
-                rect[1] + 2.0 * edge,
-                rect[2] - 4.0 * edge,
-                rect[3] - 4.0 * edge,
-            ];
-            for cell in cells(window.seats, window.vertical) {
-                let cell = [
-                    inner[0] + cell[0] * inner[2],
-                    inner[1] + cell[1] * inner[3],
-                    cell[2] * inner[2],
-                    cell[3] * inner[3],
-                ];
-                out.push(Draw::Fill {
-                    rect: cell,
-                    color: dim(if edited { lit } else { ink }, 0.28),
-                });
-                seat += 1;
-                let scale = (cell[3] * 0.045).clamp(0.2, 1.0).min(cell[2] * 0.02);
-                out.push(Draw::Text {
-                    x: cell[0] + cell[2] / 2.0,
-                    y: cell[1] + cell[3] / 2.0 - scale * 8.0,
-                    scale,
-                    color: if edited { lit } else { legible(ink) },
-                    border: None,
-                    align: Align::Centre,
-                    text: seat.to_string(),
-                    wrap_width: None,
-                });
+            .flat_map(|(index, window)| std::iter::repeat_n(index, window.seats))
+            .collect();
+        draw_preview(skin, frame, &windows, Some(self.edit), cells, &|seat| {
+            CellPaint {
+                text: (seat + 1).to_string(),
+                lit: owner.get(seat) == Some(&self.edit),
+                firm: true,
             }
-            if self.monitors.len() > 1 {
-                out.push(Draw::Text {
-                    x: rect[0] + rect[2] / 2.0,
-                    y: rect[1] + rect[3] + rect[3] * 0.04,
-                    scale: (rect[3] * 0.006).clamp(0.2, 0.7),
-                    color: dim(ink, if edited { 1.0 } else { 0.6 }),
-                    border: None,
-                    align: Align::Centre,
-                    text: self.monitor_name(window.monitor),
-                    wrap_width: None,
-                });
-            }
-        }
-        out
+        })
     }
+}
+
+/// Each window's box in the preview, in window order: 16:9, centred, in as many columns
+/// as make the boxes largest for the area. `labelled` leaves room under each box for a line
+/// of text (the monitor, drawn when there is more than one).
+pub(crate) fn boxes(count: usize, labelled: bool, area: [f32; 4]) -> Vec<[f32; 4]> {
+    let gap = (area[2] * 0.03).min(area[3] * 0.06).max(1.0);
+    let label = if labelled { area[3] * 0.1 } else { 0.0 };
+    let width_for = |per_row: usize| {
+        let rows = count.div_ceil(per_row);
+        let cell_w = (area[2] - gap * (per_row - 1) as f32) / per_row as f32;
+        let cell_h = (area[3] - gap * (rows - 1) as f32) / rows as f32 - label;
+        cell_w.min(cell_h.max(1.0) * 16.0 / 9.0)
+    };
+    let per_row = (1..=count)
+        .max_by(|&a, &b| width_for(a).total_cmp(&width_for(b)).then(b.cmp(&a)))
+        .unwrap_or(1);
+    let width = width_for(per_row);
+    let height = width * 9.0 / 16.0;
+    (0..count)
+        .map(|index| {
+            let (row, column) = (index / per_row, index % per_row);
+            let in_row = per_row.min(count - row * per_row);
+            let used = in_row as f32 * width + (in_row - 1) as f32 * gap;
+            [
+                area[0] + (area[2] - used) / 2.0 + column as f32 * (width + gap),
+                area[1] + row as f32 * (height + label + gap),
+                width,
+                height,
+            ]
+        })
+        .collect()
+}
+
+/// The rectangles of a window box's seat cells, in seat order, inside its border.
+pub(crate) fn cell_rects(
+    rect: [f32; 4],
+    seats: usize,
+    vertical: bool,
+    cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
+) -> Vec<[f32; 4]> {
+    let edge = (rect[2] * 0.012).max(1.0);
+    let inner = [
+        rect[0] + 2.0 * edge,
+        rect[1] + 2.0 * edge,
+        rect[2] - 4.0 * edge,
+        rect[3] - 4.0 * edge,
+    ];
+    cells(seats, vertical)
+        .into_iter()
+        .map(|cell| {
+            [
+                inner[0] + cell[0] * inner[2],
+                inner[1] + cell[1] * inner[3],
+                cell[2] * inner[2],
+                cell[3] * inner[3],
+            ]
+        })
+        .collect()
+}
+
+/// One window of a preview: how many seats it cuts and which way, and the line under its box.
+pub(crate) struct PreviewWindow {
+    pub(crate) seats: usize,
+    pub(crate) vertical: bool,
+    /// The line drawn under the box (the monitor), if the preview has one.
+    pub(crate) caption: Option<String>,
+}
+
+/// How a preview paints one seat's cell.
+pub(crate) struct CellPaint {
+    /// What the cell says (the seat's number, or the person in it).
+    pub(crate) text: String,
+    /// Whether it is drawn lit, in the selected ink.
+    pub(crate) lit: bool,
+    /// Whether it is drawn at full strength rather than dimmed.
+    pub(crate) firm: bool,
+}
+
+/// The preview both the layout screen and the seat assignment draw: a box per window, its seats
+/// cut up as a split screen cuts them (`cells`), the `edited` window's box lit, and each seat's
+/// cell painted by `paint(seat)`, seats counted across the windows from 0.
+pub(crate) fn draw_preview(
+    skin: &Skin,
+    frame: &Frame,
+    windows: &[PreviewWindow],
+    edited: Option<usize>,
+    cells: &dyn Fn(usize, bool) -> Vec<[f32; 4]>,
+    paint: &dyn Fn(usize) -> CellPaint,
+) -> Vec<Draw> {
+    let geometry = Geometry::new(skin);
+    let ink = frame.ink.filter(|_| geometry.layout.blocks.is_some());
+    let ink = ink.unwrap_or_else(|| skin.normal());
+    let lit = skin.selected();
+    let dim = |mut colour: [f32; 4], alpha: f32| {
+        colour[3] *= alpha;
+        colour
+    };
+    let labelled = windows.iter().any(|window| window.caption.is_some());
+    let mut out = Vec::new();
+    let mut seat = 0;
+    for (index, (window, rect)) in windows
+        .iter()
+        .zip(boxes(windows.len(), labelled, geometry.preview))
+        .enumerate()
+    {
+        let is_edited = edited == Some(index);
+        let border = if is_edited { lit } else { dim(ink, 0.5) };
+        let edge = (rect[2] * 0.012).max(1.0);
+        out.push(Draw::Fill {
+            rect,
+            color: border,
+        });
+        out.push(Draw::Fill {
+            rect: [
+                rect[0] + edge,
+                rect[1] + edge,
+                rect[2] - 2.0 * edge,
+                rect[3] - 2.0 * edge,
+            ],
+            color: [0.0, 0.0, 0.0, 0.85],
+        });
+        for cell in cell_rects(rect, window.seats, window.vertical, cells) {
+            let paint = paint(seat);
+            seat += 1;
+            out.push(Draw::Fill {
+                rect: cell,
+                color: dim(if paint.lit { lit } else { ink }, 0.28),
+            });
+            let scale = (cell[3] * 0.045).clamp(0.2, 1.0).min(cell[2] * 0.02);
+            out.push(Draw::Text {
+                x: cell[0] + cell[2] / 2.0,
+                y: cell[1] + cell[3] / 2.0 - scale * 8.0,
+                scale,
+                color: if paint.lit {
+                    dim(lit, if paint.firm { 1.0 } else { 0.6 })
+                } else {
+                    dim(legible(ink), if paint.firm { 1.0 } else { 0.6 })
+                },
+                border: None,
+                align: Align::Centre,
+                text: paint.text,
+                wrap_width: None,
+            });
+        }
+        if let Some(caption) = &window.caption {
+            out.push(Draw::Text {
+                x: rect[0] + rect[2] / 2.0,
+                y: rect[1] + rect[3] + rect[3] * 0.04,
+                scale: (rect[3] * 0.006).clamp(0.2, 0.7),
+                color: dim(ink, if is_edited { 1.0 } else { 0.6 }),
+                border: None,
+                align: Align::Centre,
+                text: caption.clone(),
+                wrap_width: None,
+            });
+        }
+    }
+    out
 }
 
 /// The whole screen in paint order: the title's frame, the title, the row blocks where the

@@ -16,6 +16,7 @@ pub mod marquee;
 pub mod picker;
 pub mod prompt;
 pub mod pure_chain;
+pub mod seat_assign;
 pub mod tag_entry;
 pub mod track_panel;
 pub mod window_layout;
