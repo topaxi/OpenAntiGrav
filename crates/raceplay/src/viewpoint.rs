@@ -20,7 +20,8 @@
 //!   load keeps one team's camera blocks, and a rig per slot is open work.
 //! - An extra view has **no impact shake**, no intro flyby, no finish or destroy
 //!   camera and no cockpit view. Those belong to the player's own camera, and the
-//!   flyby plays full screen before the split starts ([`Race::views_drawn`]).
+//!   flyby plays full screen before the split starts ([`Race::views_drawn`]); in a
+//!   multi-window race every window plays it ([`Race::window_drawn`]).
 //! - The speed widen of the field of view follows the viewed craft; the boost
 //!   kick does not (it is armed from slot 0's pad alone).
 
@@ -137,10 +138,13 @@ impl Race {
     }
 
     /// The slots window `window` draws right now, in view order. Its own seats while the
-    /// race runs; **just the player's own while the intro flyby plays and once the race is
-    /// over, in the window that holds the player** (the flyby is the player's camera and the
-    /// end screens sit over the spectator camera, as in a split: [`Self::views_drawn`]). A
-    /// window past the layout, or with no seats, draws none.
+    /// race runs; **just the player's own while the intro flyby plays, in every window that
+    /// holds a seat** (the flyby is the player's camera and the other seats have none, so each
+    /// window plays it full window at its own size and aspect, and each switches to its own
+    /// seats when it ends - **chosen, not measured**); **and once the race is over, in the
+    /// window that holds the player** (the end screens sit over the spectator camera, as in a
+    /// split: [`Self::views_drawn`]; the other windows keep their chase cameras). A window
+    /// past the layout, or with no seats, draws none.
     #[must_use]
     pub fn window_drawn(&self, window: usize) -> Vec<usize> {
         let Some(views) = self.view.viewpoints.windows.get(window) else {
@@ -153,7 +157,8 @@ impl Race {
             .copied()
             .filter(|&slot| slot < self.viewport_count())
             .collect();
-        if seats.contains(&player) && (self.in_intro() || self.finished()) {
+        let flyby = self.in_intro() && !seats.is_empty();
+        if flyby || (seats.contains(&player) && self.finished()) {
             vec![player]
         } else {
             seats

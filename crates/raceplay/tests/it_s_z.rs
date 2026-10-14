@@ -45,6 +45,7 @@ mod weapon_slowdown_ground_truth;
 mod weapons_row_ground_truth;
 mod weather_ground_truth;
 mod web_picker_table;
+mod window_flyby_ground_truth;
 mod zone_announcer_ground_truth;
 mod zone_craft_ground_truth;
 mod zone_grade_ground_truth;

@@ -614,8 +614,7 @@ impl Picker {
             }
             .clone(),
             Row::Monitor => self.monitor_name(window.monitor),
-            Row::Start => self.people.to_string(),
-            Row::Back => String::new(),
+            Row::Start | Row::Back => String::new(),
         }
     }
 
