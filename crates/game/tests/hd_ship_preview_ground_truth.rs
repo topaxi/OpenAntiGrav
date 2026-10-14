@@ -48,30 +48,6 @@ fn the_race_hull_frames_to_a_hull_sized_sphere() {
             model.radius
         );
     }
-
-    // The preview follows the chosen model: Feisar's three directories are three hulls.
-    let join = title.race.team_variants_for("Feisar").map(|v| v.join);
-    let mut shapes = Vec::new();
-    for variant in ["", "_c1", "_n1"] {
-        let location = oag_game::preview::variant::variant_location(
-            join,
-            r"Data\art\published\hdships\Feisar",
-            variant,
-        );
-        let entry = oag_game::preview::ship_entry(title, &location);
-        let (model, loaded) =
-            oag_game::preview::variant::model_or_default(&mut archives, &entry, None)
-                .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
-        assert_eq!(loaded, entry);
-        shapes.push((model.vertices.len(), model.indices.len()));
-    }
-    shapes.sort_unstable();
-    shapes.dedup();
-    assert_eq!(
-        shapes.len(),
-        3,
-        "three directories, three hulls: {shapes:?}"
-    );
 }
 
 /// The preview follows the selected variant: each of a team's three
