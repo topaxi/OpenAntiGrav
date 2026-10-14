@@ -105,3 +105,75 @@ fn pure_raises_its_own_keys() {
         ["HUD_Perfect Lap!", "HUD_New Lap Record", "HUD_Final Lap!"]
     );
 }
+
+mod race_wiring {
+    use super::*;
+    use crate::Race;
+    use crate::tests::race_with_a_grid;
+    use oag_gameplay::PlayerInputs;
+
+    fn contact() -> oag_physics::wall::WallContact {
+        oag_physics::wall::WallContact {
+            point: oag_core::math::Vec3::ZERO,
+            normal: oag_core::math::Vec3::Y,
+            depth: 0.1,
+            surface: oag_physics::Surface::Wall,
+            collider: 0,
+        }
+    }
+
+    fn watched() -> (Race, oag_physics::Evaluated) {
+        let mut race = race_with_a_grid();
+        let evaluated = *race.tick(&PlayerInputs::none()).primary();
+        race.view.lap_watch = Some(pulse(None));
+        (race, evaluated)
+    }
+
+    fn dirty(race: &Race) -> bool {
+        race.view.lap_watch.as_ref().expect("watched").dirty
+    }
+
+    /// The original's `0x20` bit is set by every positive-friction contact
+    /// record, not only an inbound one: a sustained scrape spoils the lap.
+    #[test]
+    fn a_scrape_that_is_not_an_inbound_hit_spoils_the_lap() {
+        let (mut race, mut evaluated) = watched();
+        evaluated.wall.resolved = Some(contact());
+        evaluated.wall.impact = false;
+        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        assert!(dirty(&race));
+    }
+
+    #[test]
+    fn a_shielded_contact_and_no_contact_leave_it_clean() {
+        let (mut race, mut evaluated) = watched();
+        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        assert!(!dirty(&race), "no contact");
+        evaluated.wall.resolved = Some(contact());
+        evaluated.shield.absorbed = true;
+        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        assert!(!dirty(&race), "absorbed by a shield");
+    }
+
+    /// A network client flying seat 1 grades seat 1's laps, not slot 0's.
+    #[test]
+    fn the_watch_follows_this_machines_seat() {
+        let (mut race, mut evaluated) = watched();
+        race.set_seat(Some(1));
+        evaluated.wall.resolved = Some(contact());
+        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        assert!(!dirty(&race), "slot 0 is someone else's craft");
+        race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
+        assert!(dirty(&race));
+    }
+
+    /// A reconciliation replay re-runs ticks the prediction already watched.
+    #[test]
+    fn a_replayed_tick_does_not_feed_the_watch() {
+        let (mut race, mut evaluated) = watched();
+        evaluated.wall.resolved = Some(contact());
+        race.quiet = true;
+        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        assert!(!dirty(&race));
+    }
+}

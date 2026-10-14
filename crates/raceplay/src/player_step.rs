@@ -403,13 +403,39 @@ impl Race {
         if outcome.lap_completed || outcome.first_crossing {
             self.grant_free_turbo(slot);
         }
-        if primary {
-            self.raise_lap_messages(&outcome, contact && !evaluated.shield.absorbed);
-        }
+        self.observe_lap(slot, &outcome, evaluated);
         if outcome.lap_completed {
             // Eliminator's own per-lap mechanic, a no-op on every other
             // mode - see `Race::eliminator_lap_health_refill`.
             self.eliminator_lap_health_refill(slot);
         }
     }
+}
+
+impl Race {
+    /// Feeds this machine's own craft to the lap watch. This is the player's
+    /// slot, not the world's lowest person slot: in a network race a client
+    /// flying seat 1 would otherwise grade seat 0's laps. A replayed tick
+    /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
+    /// already did. **Chosen, not measured.**
+    pub(super) fn observe_lap(
+        &mut self,
+        slot: usize,
+        outcome: &oag_race::Outcome,
+        evaluated: &Evaluated,
+    ) {
+        if slot == self.player_slot() && self.draws() {
+            self.raise_lap_messages(slot, outcome, lap_spoiling_contact(evaluated));
+        }
+    }
+}
+
+/// Whether this tick's contact sets the original's `0x20` bit of `craft+0x860`
+/// (`contact-response.md`, reaction #2): the hull-damage branch of
+/// `FUN_088418e0`'s loop, taken for **every** contact record whose combined
+/// friction is positive, whatever the sign of its normal speed or the size of
+/// its impulse, and not taken while a shield absorbs it (`shield-pickup.md`).
+/// So a sustained scrape counts, not only the inbound edge `wall.impact` marks.
+fn lap_spoiling_contact(evaluated: &Evaluated) -> bool {
+    evaluated.wall.resolved.is_some() && !evaluated.shield.absorbed
 }

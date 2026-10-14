@@ -99,8 +99,13 @@ impl super::Race {
     /// Raises the lap-crossing lines for this tick's lap update. `hit` is a wall
     /// scrape nothing absorbed (the original's `0x20` bit is set on the
     /// collision-damage path and not on the shield's, `shield-pickup.md`).
-    pub(super) fn raise_lap_messages(&mut self, outcome: &oag_race::Outcome, hit: bool) {
-        let state = *self.sim.world.primary_race();
+    pub(super) fn raise_lap_messages(
+        &mut self,
+        slot: usize,
+        outcome: &oag_race::Outcome,
+        hit: bool,
+    ) {
+        let state = self.sim.world.race[slot];
         let Some(watch) = self.view.lap_watch.as_mut() else {
             return;
         };
