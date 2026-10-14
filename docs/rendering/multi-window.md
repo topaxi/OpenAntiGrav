@@ -219,10 +219,27 @@ and wrote an empty `window_seats`. **Not exercised**: more than one real monitor
   only "away" when **no window of the run has it** (`windows::Focus`), after a 250 ms grace (winit
   reports `Focused(false)` for one window and `Focused(true)` for the other, not always in one pass
   of the loop). Clicking from window 1 into window 2 does not pause the race.
-- **Placement.** Seat windows are asked to sit beside window 1 at creation (X11); the compositor
-  places them under Wayland, which cannot place a plain window. `--windows-fullscreen` puts window
-  `k` borderless on the platform's `k`-th monitor (they share when there are fewer), which Wayland
-  honours. **`--windows-fullscreen` was not exercised** (no second monitor, and no `xrandr
+- **Every window opens the same way** (fixed 2026-10-14, reported from play on niri, where window 1
+  floated and the seat windows were tiled). Window 1 and each further window are built by one
+  function, `window::attributes` (title, size, icon, app id, fullscreen mode and monitor, and the
+  resizable rule): **a windowed window is fixed size** (`with_resizable(false)`, min = max, the
+  signal a tiling compositor floats a window on, measured under niri), a borderless one is
+  resizable and fullscreen. The mode is the profile's WINDOW MODE, or `--windows-fullscreen` / the
+  layout screen's FULLSCREEN for the run (`Session::seat_mode`). Checked under Xvfb: both windows
+  of `--windows 2` carry `WM_NORMAL_HINTS` minimum = maximum = 1440x816, where the build before
+  the fix gave window 2 no min or max at all.
+- **Monitors.** Each further window goes on the monitor the layout screen chose for it
+  (`window_monitors`, by name; a name that is gone is the first monitor). With no layout chosen
+  (`--windows`) the windows are **spread over the monitors in winit's order, starting from the one
+  window 1 is on** (the profile's `display.monitor`, the first by default) and wrapping, so window
+  1 on monitor 1 puts window 2 on monitor 2 and window 3 back on monitor 1. Borderless covers that
+  monitor. Under a nested weston with two outputs, `--windows 2 --windows-fullscreen` put window
+  2 borderless over all of the second output (1280x720).
+- **Windowed placement is a request, and the platforms differ.** X11 and Windows honour
+  `with_position`: a windowed window for window 1's monitor opens beside it, one for another
+  monitor is centred there and stepped aside for each window already on it. **Wayland has no
+  protocol for a position**: the compositor places every windowed window (a tiling one floats it
+  because it is fixed size) and only the monitor of a borderless one is honoured. **`--windows-fullscreen` was not exercised** (no second monitor, and no `xrandr
 --setmonitor` run under Xvfb); it is the winit calls `Fullscreen::Borderless(Some(monitor))` per window
 and nothing more. **Open:** `--window-monitor`, a monitor per window by name.
 - **A window that cannot open** is said in the log and skipped; the run goes on with the windows it
