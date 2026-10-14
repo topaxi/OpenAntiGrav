@@ -46,7 +46,6 @@ fn two_people(cut: Cut, ticks: usize) -> Option<(race::Race, oag_hud::Assets)> {
     .expect("loading the race");
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(hud.space.size);
     oag_game::split_screen::apply(&mut race, 2, cut);
     race.sim.world.controllers[1] = Controller::Remote;
     race.set_autopilot(true);
