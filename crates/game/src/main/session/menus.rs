@@ -565,7 +565,15 @@ impl Session {
         title: &'static oag_title::Title,
         platform: oag_disc::Platform,
     ) {
+        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
         for (key, value) in settings::menu_seeds(&self.settings, self.anisotropy, title, platform) {
+            // The row reads what the game is drawn at, which under gamescope is not the stored
+            // value until the player picks one.
+            let value = if key == "graphics.render_scale" {
+                menu::Value::Text(self.render_scale_for(rect).to_string())
+            } else {
+                value
+            };
             // Rows this platform drops (`prepare.rs`) are not a gap.
             let dropped = if cfg!(target_arch = "wasm32") {
                 settings::web::HIDDEN_ROWS.contains(&key) || key == "display.window_size"

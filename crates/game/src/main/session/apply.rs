@@ -320,6 +320,7 @@ impl Session {
                 Ok(scale) => {
                     if let Some(profile) = self.render_profile_mut() {
                         profile.render_scale = scale;
+                        profile.render_scale_chosen = true;
                     }
                 }
                 Err(e) => {

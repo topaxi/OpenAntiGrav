@@ -81,6 +81,13 @@ pub(crate) fn under_gamescope(monitor: Option<&winit::monitor::MonitorHandle>) -
     }
 }
 
+/// [`under_gamescope`], asked once per process: it cannot change under a running
+/// game, and the frame loop asks every frame.
+pub(crate) fn under_gamescope_cached(monitor: Option<&winit::monitor::MonitorHandle>) -> bool {
+    static GAMESCOPE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *GAMESCOPE.get_or_init(|| under_gamescope(monitor))
+}
+
 /// The scale to turn a logical size into pixels with. Under gamescope it is 1, whatever winit
 /// reports: gamescope's game Xwayland advertises its 3840x2160 screen as 100mm x 160mm, which
 /// winit's X11 backend reads as a scale of 6, so a 1440x816 window opened as 8640x4896 pixels

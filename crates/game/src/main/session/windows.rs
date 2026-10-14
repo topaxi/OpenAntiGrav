@@ -351,9 +351,21 @@ impl Session {
         let rect = display::viewport(surface, self.settings.display.aspect);
         oag_game::settings::web::render_target(
             rect,
-            self.render_profile().render_scale,
+            self.render_scale_for(rect),
             self.gpu.device.limits().max_texture_dimension_2d,
         )
+    }
+
+    /// The render scale for the aspect rectangle `rect`: the profile's, or under gamescope the
+    /// default that keeps an oversized output within a pixel budget when the player chose none
+    /// ([`settings::RenderProfile::scale_for`]).
+    pub(super) fn render_scale_for(
+        &self,
+        rect: (f32, f32, f32, f32),
+    ) -> oag_display::display::Scale {
+        let gamescope =
+            crate::window::under_gamescope_cached(self.gpu.output.window.current_monitor().as_ref());
+        self.render_profile().scale_for((rect.2, rect.3), gamescope)
     }
 
     /// Every window's seats, window 1 first, for a race dealt across windows (on screen or
