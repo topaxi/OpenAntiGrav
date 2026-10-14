@@ -77,6 +77,7 @@ out to be wrong.
 | [0065](0065-one-mobile-crate-for-every-phone-os.md) | One mobile crate holds the glue for every phone OS | Accepted; the entry points stay in `oag-game` |
 | [0066](0066-the-menu-is-the-disc-plus-mods.md) | The main menu is each title's own, plus rows that mods attach | Accepted; a mod is a folder, `.zip` or `.oagmod`, our own rows are the built-in `oag-extras` |
 | [0067](0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md) | A multi-window race is one device and one submission per window | Accepted; a window per person, closing a seat window hands it to the AI, desktop only |
+| [0068](0068-a-window-holds-a-list-of-seats.md) | A window holds a list of seats | Accepted; amends 0067: a window is one seat or a split of several, `--windows` deals people, `--window-seats` spells them |
 
 ## Format
 

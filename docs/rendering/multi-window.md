@@ -1,62 +1,91 @@
 # Multi-window local play
 
-`--windows N` (2 to 8): one process, one race, one tick, and **N operating-system windows
-instead of N views in one window** - each person's whole-screen view in a window of their
-own, for a desk with more than one monitor. Split screen ([split-screen.md](split-screen.md))
-is the other way to seat the same people; the two share every camera, HUD and input slot, and
-differ only in where view `i` goes. The decision record is
-[ADR-0067](../architecture/adr/0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md).
+One process, one race, one tick, and **the views dealt across operating-system windows
+instead of all cut up in one window** - for a desk with more than one monitor. **A window holds a
+list of seats**: one seat is that person's whole-screen view and HUD, several are cut up inside the
+window exactly as a split screen cuts its views (`oag_render::viewport::layout` over the window's
+area, the split-HUD rules picked by that window's own view count and cut). So 2 windows of 4 players,
+4 and 2, 1 and 1 and 1 are all one model: a list of windows, each `{ seats, cut }`. Split screen
+([split-screen.md](split-screen.md)) is the one-window case; the two share every camera, HUD and input
+slot, and differ only in where view `i` goes. The decision records are
+[ADR-0067](../architecture/adr/0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md)
+(the device, the submission, the lifecycle) and
+[ADR-0068](../architecture/adr/0068-a-window-holds-a-list-of-seats.md) (the seat list).
 
 **Chosen, not measured, all of it.** The original has no multi-window mode and nothing here is
-read off it. First cut, 2026-10-14 (lane `multi-window`).
+read off it. First cut 2026-10-14 (lane `multi-window`); seat lists the same day.
 
 ```sh
-oag-game --race --windows 2                      # a race for two people, a window each
-oag-game --windows 3                             # the front end on window 1; a race seats three
+oag-game --race --windows 2                      # two people, a window each
+oag-game --race --windows 2 --players 6          # six people, three in each window (cut in thirds)
+oag-game --race --window-seats 4,2v              # window 1: four seats in quarters; window 2: two side by side
+oag-game --windows 3                             # the front end on window 1; a race seats three, a window each
 oag-game --race --windows 2 --windows-fullscreen # each window borderless on a monitor of its own
-oag-game --race --windows 2 --screenshot shot.png --ticks 300   # headless: shot-window1.png, shot-window2.png
+oag-game --race --window-seats 4,2 --screenshot shot.png --ticks 300   # headless: shot-window1.png, shot-window2.png
 ```
+
+**The flags.**
+
+- `--windows N` (2 to 8): N windows, the people dealt across them as evenly as they divide
+  (`split_screen::deal`: 3 over 2 is `2,1`, 6 over 4 is `2,2,1,1`, 2 over 4 is `1,1,0,0` - a window
+  nobody is dealt shows a holding frame). One person per window without `--players`; `--players P`
+  says how many people. The cut of a two-seat window is `--split-cut`.
+- `--window-seats COUNTS`: the seats per window spelled out, a comma-separated list with one entry per
+  window, each a count of 1 to 8 and optionally `h` or `v` for the way two seats are cut
+  (`4,2v` = four seats in window 1, two side by side in window 2; a count without a letter takes
+  `--split-cut`). At least two windows (one window is `--players`), at most eight seats in all; each
+  bad entry is refused by name. Not with `--windows` or `--players`
+  (`split_screen::parse_window_seats`, tested).
+- `--windows-fullscreen`: see Windows below.
 
 ## Who sits where
 
 Seated the way `--players N` seats people ([split-screen.md](split-screen.md), "Who plays which
 slot"): the keyboard and the first pad on slot 0, each further pad on the next slot in the order
-the pads connect. A slot nobody drives is flown by the AI. **The keyboard is one device whichever
-window has the focus**; a per-window keyboard seat is open.
+the pads connect. A slot nobody drives is flown by the AI. Slots are dealt to windows in order,
+window 1 taking the first: `--window-seats 4,2` is slots 0 to 3 in window 1 and 4 and 5 in window 2.
+**The keyboard is one device whichever window has the focus**; a per-window keyboard seat is open.
 
-- **`--race --windows N`**: slots `0..N` are people from the first tick, window `k` shows slot
-  `k - 1`.
-- **A front-end run** (`--windows N` without `--race`): window 1 is the front end; windows 2 to N
+- **`--race` with a layout**: the people are in their seats from the first tick (`apply_windows`).
+- **A front-end run** (a layout without `--race`): window 1 is the front end; the further windows
   open on the first pass of the event loop once the title is known, and show a **holding frame**
-  (black, the join screen's own word for a person and the seat's number: `PLAYER 2`) until a race
-  starts. A race launched from the menus seats everyone who has a window - unless the join screen's
-  lobby or a restart's kept seats say how many people race, or it is a campaign race, which is one
-  person's - and fields opponents for the others to race. Back on the menus the windows go back to
-  their holding frames. The text is the existing `OAG_JOIN_PLAYER`; no new string.
-- **More people than windows** (the join screen seats three, two windows are open): the race is not
-  windowed; it is the split screen in window 1, so everybody is seen. A window closed in the middle
-  of the run ends the run of windows: slots past the gap are not seated.
+  (black, the join screen's own word for a person and the seats the window is planned to hold:
+  `PLAYER 2` for one, `PLAYER 5 - 6` for two; the existing `OAG_JOIN_PLAYER`, no new string) until a
+  race starts. A race launched from the menus seats everyone the layout plans for - unless the join
+  screen's lobby or a restart's kept seats say how many people race, or it is a campaign race, which
+  is one person's - and fields opponents for the others to race. **A head count other than the one
+  spelled is dealt, not refused** (`split_screen::layout_for`: the join screen seating three over a
+  `4,2` layout is `2,1`). Back on the menus the windows go back to their holding frames.
+- **Fewer people than windows**: the windows nobody is dealt show their holding frame.
 
-`--windows` and `--players` do not combine (a clap conflict). On Wipeout HD, 2048 and Omega the
-integrated-GPU rule is `--players`' own (`Title::split_on_integrated_gpu`,
-`oag_game::split_screen::offered`): on an integrated GPU those titles open one window, said once in
-the log, and Pulse and Pure open them all.
+On Wipeout HD, 2048 and Omega the integrated-GPU rule is `--players`' own
+(`Title::split_on_integrated_gpu`, `oag_game::split_screen::offered`): on an integrated GPU those titles
+open one window, said once in the log, and Pulse and Pure open them all.
 
 ## What a window draws
 
 Every window runs **the whole single-window chain on its own framebuffer** (`upscale::Framebuffer`,
-at the window's own size): scene, resolve, whole-screen HUD, Pulse's bloom over the HUD, the
-screen filter and the grade. Window 1 is `Session::draw` as ever; `Session::draw_seats` runs after
-it and draws each further window the same way (`session/windows.rs`). A window is a full screen, not
-a split view: the title's whole-screen HUD for that window's slot (`hud_views::draw` with the slot),
-the countdown, and - on window 1 only - the track panel, the results and the end screens.
+at the window's own size): scene, resolve, HUD, Pulse's bloom over the HUD, the screen filter and the
+grade. Window 1 is `Session::draw` as ever; `Session::draw_screens` runs after it and draws each
+further window the same way (`session/windows.rs`). **What a window draws is the seats the race gives
+it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::window_drawn`):
 
-The scene is `oag_raceplay::Scene::render_view`, next to `render_viewports`, called by the window
-and by the headless capture alike. It is a view of slot `s` through `Layer::Window`: it clears its
-target and does all the camera-independent work itself, like a split's first view, and runs the post
-chains (Pulse's bloom, HD's, Omega's tone map) like an unsplit race, because a window starts at the
-origin and fills the target. The boost-zoom pulse is the player's own, so only the window that
-follows the player's craft draws it.
+- **One seat**: a full screen, not a split view. The title's whole-screen HUD for that slot
+  (`hud_views::draw` with the window), the countdown, and - on window 1 only - the track panel, the
+  results and the end screens. The scene is `oag_raceplay::Scene::render_view`, next to
+  `render_viewports`: a view of slot `s` through `Layer::Window`, which clears its target and does all
+  the camera-independent work itself like a split's first view, and runs the post chains (Pulse's
+  bloom, HD's, Omega's tone map) like an unsplit race, because a window starts at the origin and fills
+  the target. The boost-zoom pulse is the player's own, so only the window that follows the player's
+  craft draws it.
+- **Several seats**: cut up inside the window by the window's own cut, exactly as a split screen
+  (`Scene::render_window_views` is `render_viewports` over the window's slots; both are
+  `render_slots`, so a one-window split is byte-identical to what it was). The HUD is the split HUD
+  (`overlay.draw_views`) with the rules picked by **this window's** view count and cut
+  (`split_hud::source`: the title's authored two-player layout for a window of two seats, this
+  project's split-HUD files, or the whole-screen layout scaled into each view). As in a split, no
+  Pulse bloom and HD's and Omega's chains run once over the window after its last view.
+- **Nothing**: a window with no seat to show draws the holding frame.
 
 - **One encoder, one submission per window, for the whole chain.** A queue write lands before the
   submission that follows it, and the scene, the upscaler and the HUD all write per frame; two
@@ -71,10 +100,11 @@ follows the player's craft draws it.
   FSR 3.1 falls to FSR 1, as on a menu frame) and dynamic resolution. Each holds one camera's history
   or times one pass, and the windows alternate cameras every frame. A split drops the same three.
   Pulse's bloom and HD's and Omega's chains are *kept*, which a split cannot do.
-- **The flyby and the end.** The pre-race flyby is the player's camera: window 1 plays it, and the
-  other windows show their own craft's chase camera from the first tick. Once every person has
-  finished, window 1 shows the end screens over the spectator camera
-  (`Race::views_drawn` is one, as in a split) and the other windows keep their chase camera and HUD.
+- **The flyby and the end.** The pre-race flyby is the player's camera: the window that holds the
+  player (window 1) plays it full screen where a split would, and the other windows show their own
+  craft's chase camera from the first tick. Once every person has finished, the window that holds
+  the player shows the end screens over the spectator camera (`Race::window_drawn` is the player alone,
+  as `views_drawn` is one in a split) and the other windows keep their chase cameras and HUD.
 - **Pause.** The pause menu and the pause overlay are on window 1. Every window shows the frozen race
   behind it. **Open:** the pause overlay on every window.
 - **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
@@ -87,18 +117,20 @@ follows the player's craft draws it.
 
 | Event | Window 1 | A seat window |
 | --- | --- | --- |
-| Close request | Quit, as ever | The seat goes to the AI, the window closes |
+| Close request | Quit, as ever | Every seat it held goes to the AI, the window closes |
 | `Destroyed` | (ignored) | The same as a close: under X11 with no window manager a window is destroyed outright |
 | Resize | The surface; zero-sized pauses as ever | The surface; zero-sized is ignored and **never pauses** |
 | Keyboard | The shared keyboard | The same keyboard |
 | Pointer, touch, drops | The front end's | Ignored |
 | Focus | See below | See below |
 
-- **A closed seat is flown by the AI** even though its pad is still plugged in, and a pad that
-  reconnects does not take it back. `Assignment::unseat(slot)` benches the pads on the slot, moves a
-  keyboard that was seated there back to slot 0 and closes the slot to `reconcile`; the existing
-  `split_screen::follow_devices` then flies the craft as `Controller::Ai` from the next tick. The
-  pinning test is `pad_join_end_to_end::a_closed_window_hands_its_seat_to_the_ai_and_the_pad_cannot_take_it_back`.
+- **A closed window's seats are flown by the AI** even though their pads are still plugged in, and a
+  pad that reconnects does not take one back. For each slot the window held `Assignment::unseat(slot)`
+  benches the pads on it, moves a keyboard that was seated there back to slot 0 and closes the slot to
+  `reconcile`; the existing `split_screen::follow_devices` then flies the craft as `Controller::Ai`
+  from the next tick. The window leaves the race's layout (`Race::remove_window`) and the planned one,
+  so the windows after it keep their seats; the race keeps its cameras and slots. The pinning test is
+  `pad_join_end_to_end::a_closed_window_hands_all_its_seats_to_the_ai_and_the_pads_cannot_take_them_back`.
 - **Focus.** With one window a lost focus is acted on at once, as it always was. With seats it is
   only "away" when **no window of the run has it** (`windows::Focus`), after a 250 ms grace (winit
   reports `Focused(false)` for one window and `Focused(true)` for the other, not always in one pass
@@ -163,11 +195,21 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   `Scene::render_viewports` are untouched in what they draw), the HUD and the readback. **It does not
   cover `session/draw.rs` or `app.rs`**, which `--screenshot` never runs; for the window path there is
   no byte-level tool, and the check is the code (a race that is not windowed takes the old branch in
-  every `if windowed`) and the real windows below.
+  every `if windowed`) and the real windows below. **Re-run after the seat-list change** (which
+  refactored `render_viewports` into `render_slots` and `hud_views::draw` to read a window): the same
+  twelve against `main`'s `201dae2ab` PNGs, merged with the later `main`: twelve of twelve identical.
+  A `--windows 2` capture (one seat per window) is byte-identical to the first cut's.
 - **Headless per-window frames**: `--windows 2 --screenshot shot.png` writes `shot-window1.png` and
   `shot-window2.png`, each through `Scene::render_view` and the HUD of its slot. Read at 1440x816 on
   Pulse and HD at ticks 300 and 1200: each window shows its own craft from behind and its own times,
   speed and shield.
+- **Seat lists, headless**: `--window-seats 4,2v --screenshot` on Pulse and HD at ticks 300 and 1200,
+  read at 1440x816: window 1 holds four seats in quarters, window 2 two side by side; each view has its
+  own craft and its own HUD, and on HD window 2's two-seat window uses the title's authored two-player
+  layout while window 1's four use the split-HUD rules for four.
+- **Seat lists, real windows**: Xvfb + `lvp`, `--race --window-seats 3,2`: window 1 held three seats
+  (one over two), window 2 two stacked, window title `PLAYER 4 - 5`; closing window 2 logged
+  `window 2 closed: slot(s) [3, 4] flown by the AI` and window 1 kept running its three.
 - **Real windows** under Xvfb with software Vulkan (`lvp`), two windows, a race on Pulse: both windows
   draw their own craft with their own HUD; window 1's craft sat on the grid (its keyboard idle) while
   window 2's, flown by the AI, ran at 554 km/h; closing window 2 (`xdotool windowclose`, which is a
@@ -180,10 +222,12 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   behind the pause menu on window 1 and window 2 froze on the parked race (two captures five seconds
   apart were pixel-identical in window 2's timer). **Not walked:** leaving the parked race for the menus
   to see window 2 go back to its holding frame (it is `windowed_race()` going false, no more).
-- **Tests**: `windows::tests` (routing, close, focus, the shared allocation, the windowed rule),
-  `raceplay::tests::windowed` (the layout sees one view per window; each window does a frame's shared
-  work itself and puts the viewpoint back), `input::pad::tests::an_unseated_*`, and the end-to-end
-  close test above.
+- **Tests**: `windows::tests` (routing, close, focus, the shared allocation, a window's name),
+  `split_screen::tests` (`deal`, `parse_window_seats`, `layout_for`, `views_for`),
+  `raceplay::tests::windowed` (each window cuts its own seats by its own cut; a one-seat window is
+  whole; a seat with no camera is skipped; removing a window; each window does a frame's shared work
+  once and puts the viewpoint back, for one seat and for several), `input::pad::tests::an_unseated_*`,
+  and the end-to-end close test above (a window of two seats).
 
 ## Cross-title check
 
@@ -198,7 +242,13 @@ Omega capture (below) ran.
 
 ## Open
 
-- **A menu row** for the window count. This cut has the flag only.
+- **The layout picker**: a menu to choose the windows and the seats per window, per screen, and a
+  per-window cut chosen there. This cut has the two flags only (`--windows`, `--window-seats`); the
+  model (`Race::windows`, `WindowSeats`) is what a picker would write.
+- **The authored two-player HUD when the layout mixes counts**: the load packs the title's authored
+  two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
+  exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
+  for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
 - **A keyboard per window**: the keyboard seat follows the focused window, so two people can share one
   machine with a keyboard each (or a keyboard and a pad). Today the keyboard is slot 0's.
 - **The pause overlay on every window**, and the end screens on a seat's own window.
