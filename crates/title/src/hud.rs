@@ -610,11 +610,11 @@ pub struct HudArt {
 /// How a resume countdown reaches the screen on a title.
 ///
 /// **Ours, chosen, not measured**: the original is single-player and has no
-/// resume countdown, so this says only whether the title *has art* to play for
-/// one. Pulse authors `Cockpit_321GO.vex`; Pure, HD, 2048 and Omega author no
-/// screen-space countdown (Pure's `Ready_GO.vex` is a gantry model, HD's
-/// `hud_ready_go.xml` is disabled), so they draw the count as text in the title's
-/// own `HUD` face.
+/// resume countdown, so this says only whether the title *has screen-space art*
+/// to play for one. Pulse's HUD layouts author a `Cockpit321Go` widget and its
+/// `Cockpit_321GO.vex`; Pure, HD, 2048 and Omega have no such widget in a HUD
+/// layout this build reads (Pure authors `Ready_GO.vex`, HD's `hud_ready_go.xml`
+/// is disabled), so they draw the count as text in the title's own `HUD` face.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResumeCountdown {
     /// Play the title's authored overlay (`oag_game::hud_countdown`). If it did

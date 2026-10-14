@@ -814,8 +814,10 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   start (`Race::raise_start_cue`; Pulse only).
 - **Where a title authors no countdown art, the count is text in its own `HUD` face**
   (2026-10-14, **chosen, not measured**; the original has no resume countdown at all).
-  Pure authors `Ready_GO.vex` and no `Cockpit321Go`, HD's `hud_ready_go.xml` is disabled
-  (`aMode3D`), and 2048 and Omega carry neither, so those four draw `3`, `2`, `1` a second
+  Pure's HUD authors `Ready_GO.vex` and no `Cockpit321Go` widget, HD's `hud_ready_go.xml` is
+  disabled (`aMode3D`), and 2048's and Omega's HUD layouts carry no `Cockpit321Go` widget
+  either (the loader finds none; 2048's `321Go_2048.vex` is not screen-space art this build
+  places), so those four draw `3`, `2`, `1` a second
   apart and then `GO` (`pause::Count`), per view, in the face the title's HUD values use
   (`HudArt::hud_font_role`). Which of art and text a title gets is data:
   `oag_title::hud::HudArt::resume_countdown` (`Authored` on Pulse, both pressings share
@@ -829,7 +831,9 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   HUD's `write_buffer`. Its height is `COUNTDOWN_HEIGHT` (30% of the HUD grid fitted into
   the view, so about 13 to 18% of the view's height for a digit). The glyph census
   (`resume_countdown_ground_truth`): `3`, `2`, `1` and `GO` are all in the loaded `HUD`
-  face of Pure, HD, 2048 and Omega (an absent glyph draws nothing, silently).
+  face of Pure, HD, 2048 and Omega (an absent glyph draws nothing, silently). 2048 and
+  Omega share the path and the test: **ported** (both ran, 2048 also on screen; Omega on
+  screen for the `3` only).
 - **Placement** (chosen): a view of a split shows the count `pause::SPLIT_ANCHOR_Y` (30%)
   of the way down it, centred across it, because the authored place (171 of 272, 63%)
   is over the craft in a short strip; a screen of one view keeps the authored 63%
