@@ -200,7 +200,7 @@ transferred to EU, so EU's count includes names that add no page.
 
 | Binary | names.tsv rows | below 70 (`_q`) | Evidence pages | Emulator harness | Newest dated page |
 | --- | ---: | ---: | ---: | --- | --- |
-| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 204 (177 fn, 27 data) | 1 (0%) | 21 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+1 measurement script) | 2026-10-13, [grid-local-players.md](../ghidra/functions/ps2-pulse-eu/grid-local-players.md) |
+| [ps2-pulse-eu](../ghidra/functions/ps2-pulse-eu/) | 216 (185 fn, 31 data) | 1 (0%) | 22 | `pcsx2-drive.py`, `pcsx2-gsdump-alpha.py`, `pcsx2-gsdump.py`, `pcsx2-trace.py`, `pcsx2_pine.py`, `pcsx2_trace_fields.py` (+1 measurement script) | 2026-10-14, [camera.md](../ghidra/functions/ps2-pulse-eu/camera.md) |
 | [ps3-hdfury-eu](../ghidra/functions/ps3-hdfury-eu/) | 677 (613 fn, 64 data) | 38 (5%) | 70 | `rpcs3-drive.py`, `rpcs3-spu-job-binary-dump.py`, `rpcs3-spu-light-dump.py`, `rpcs3-trace.py`, `rpcs3-trail-dump.py`, `rpcs3_debugger.py` (+31 measurement scripts) | 2026-10-13, [grid-local-players.md](../ghidra/functions/ps3-hdfury-eu/grid-local-players.md) |
 | [ps4-omega-eu](../ghidra/functions/ps4-omega-eu/) | 113 (108 fn, 5 data) | 9 (7%) | 21 | none | 2026-10-14, [fe-style-colours.md](../ghidra/functions/ps4-omega-eu/fe-style-colours.md) |
 | [psp-pulse-eu](../ghidra/functions/psp-pulse-eu/) | 432 (415 fn, 17 data) | 74 (17%) | 5 | `ppsspp_debugger.py`, `psp-drive.py`, `psp-fall-drive.py`, `psp-ge-dump.py`, `psp-postrace.py`, `psp-trace.py`, `psp_trace_fields.py` (+43 measurement scripts) | 2026-10-12, [opponent-handling.md](../ghidra/functions/psp-pulse-eu/opponent-handling.md) |

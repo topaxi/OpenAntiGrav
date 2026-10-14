@@ -28,6 +28,7 @@ form, and Ghidra's string search will return all three.
 | [Loading screen](loading-screen.md) | The same procedural heartbeat wave as the PSP, and the four places the port diverges |
 | [Texture names](texture-names.md) | Why no `.mip` or `.tga` name resolves on this disc: the loader rewrites the extension to `.pct` before it hashes |
 | [Shield pickup](shield-pickup.md) | The shield's visual object: `ShipShield_Activate`/`Deactivate`/`Update`, the PSP's law at `+0x80`, and a raised shell captured on PCSX2 by writing its fields |
+| [Two-person Head2Head](head2head.md) | The split screen's Head2Head is mode 9 with `g_split_mode` set: two people, no AI, a per-view gap readout, the race ends when both finish; mode `0xf` builds no race here |
 | [Ship skins](ship-skin.md) | A skin is a whole sibling atlas picked by the `.dat`'s file name; the `.dat`'s bytes are never read |
 | [Batch draw state](batch-draw-state.md) | The port keeps the PSP's `pass_mask` bit for bit, and programs the same two blend equations into GS registers |
 | [Collision feedback](collision-shake.md) | The hull-spark trigger, the shield-bubble hit-flash, and a camera shake on impact - all three shared with the PSP, the shake mislabelled a sound cue there until this page's own read prompted correcting it |
@@ -118,10 +119,9 @@ rule or because the hypothesis is untested.
 | `0x00257740` | The stored (uncompressed) WAD stream constructor | 55 |
 | `0x001fd8c0` | Registers an already-loaded buffer in the resource registry beside `Resource_Find` / `Resource_Load`. Same node layout, but no caller was traced | 60 |
 | `0x001fed88` / `0x001fede8` / `0x001fee90` / `0x001fef20` | A third CRC-32 family with its own table at `0x003025e0`: an **uppercase**-folding string hash, a raw string hash, and a two-word hash. Not the WAD hash (wrong fold direction). **What uses it is now traced**: the front-end globals registry, through the wrapper `Hash_Crc32String` (`0x001fed38`) - see [fe-globals.md](fe-globals.md). The four listed here are still unrenamed | 60 |
-| `0x0014f108` | Returns the current camera view setting, from `g_settings` or from a per-player array depending on a global that reads like an attract-mode switch | 55 |
+| `0x0014f108` | Returns the current camera view setting, from `g_settings` or from a per-player array depending on `g_split_mode` (`0x002dab3c`, [head2head.md](head2head.md)) | 55 |
 | `0x00201f30` / `0x0010aec8` | The pad read. A thin shim over a library call; no import table was resolved for this binary | 50 |
 | `0x002849a0` | A per-pad global that suppresses every button except cross. Reads like a menu or demo lockout | 40 |
-| `0x002dab3c` | A global selecting between profile-backed and per-player camera settings. Attract mode is the obvious guess | 40 |
 
 ## Not attempted
 
