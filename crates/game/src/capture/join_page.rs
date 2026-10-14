@@ -44,6 +44,10 @@ pub(super) fn lan(page: &str) -> Option<(bool, usize, usize)> {
 /// LAN's lobby with `people` waiting (the host first) or its host list with `people` hosts,
 /// drawn like the live screens (`session::lan`); the names are made up, the rest is the
 /// live screen's own.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the facts a still needs, each a separate thing the live screen has in hand"
+)]
 pub(super) fn capture_lan(
     lobby: bool,
     people: usize,
