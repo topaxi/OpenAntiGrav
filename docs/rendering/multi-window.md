@@ -44,7 +44,35 @@ Seated the way `--players N` seats people ([split-screen.md](split-screen.md), "
 slot"): the keyboard and the first pad on slot 0, each further pad on the next slot in the order
 the pads connect. A slot nobody drives is flown by the AI. Slots are dealt to windows in order,
 window 1 taking the first: `--window-seats 4,2` is slots 0 to 3 in window 1 and 4 and 5 in window 2.
-**The keyboard is one device whichever window has the focus**; a per-window keyboard seat is open.
+**The keyboard follows the focus** (below): it drives slot 0 until a seat window has the focus.
+
+**A keyboard per window** (2026-10-14, lane `window-keyboard`, **chosen, not measured**). In a race dealt
+across windows the keyboard's seat follows the focused window: when window `i` gains focus the
+keyboard moves to **the first seat of that window** (`windows::keyboard_seat`; a window of several
+seats gives its lowest slot, the one its view shows first, and a keyboard already on a seat of the
+focused window stays there, so a join screen's choice survives). Two people on one machine then have
+a keyboard each (it goes to whoever's window is focused) or a keyboard and a pad. Rules that make it
+work:
+
+- **Every window's first seat counts as driven** while the keyboard is at another
+  (`Assignment::set_keyboard_reach`, which `Assignment::drives` reads). Without it the seat the
+  keyboard left would be turned to the AI by `follow_devices` at each focus change and a pause
+  owner's claim would lapse. **Consequence:** with a keyboard and no pads, `--window-seats 1,1` now
+  seats *two people*: the window not focused sits idle where it was (it used to be AI-flown), and the
+  race's end screens wait for both to finish. A window's seat the keyboard cannot reach (the later
+  seats of a window of several) is still the AI's unless a pad is on it.
+- **A key held as the focus moves is let go** (`Controls::keyboard_to` and `Controls::let_go`): the
+  held buttons release and each stays released until its key is seen to come up, because X11 reports
+  held keys to the window that gains focus as synthetic presses and then keeps delivering the
+  auto-repeat as ordinary presses. In a windowed race synthetic and repeated key events are dropped,
+  and the wait ends when no window has focus (the next press counts again). A seat window's focus
+  loss releases keys too, which it did not before.
+- A single-window race, the front end and a race with no seat windows open are untouched: the rule
+  runs only for a race with seat windows (`Session::sync_keyboard_seat`, once a frame and on every
+  focus gain, so no key lands on the seat it came from).
+- **Not changed:** the flyby's skip is the *player's* held Cross (`tick_intro` reads the primary
+  slot), so a keyboard at window 2 skips it only by a click on window 1; Escape (leave to the menus)
+  and the menus stay window 1's, whichever seat the keyboard is on.
 
 - **`--race` with a layout**: the people are in their seats from the first tick (`apply_windows`).
 - **A front-end run** (a layout without `--race`): window 1 is the front end; the further windows
@@ -120,7 +148,14 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
 - **Pause and the resume countdown** (`oag_game::pause`, a multiplayer race only). The race is held
   for the whole `pause::State::frozen` - `Paused` and `Resuming` alike, the gate `Session::draw` reads
   for window 1 - so every window draws the tick exactly (no between-ticks blend) while held and blends
-  again once it runs. The pause line ("PLAYER 1 PAUSED - ANYONE CAN RESUME IN 0:28") is on window 1.
+  again once it runs. The pause line ("PLAYER 1 PAUSED - ANYONE CAN RESUME IN 0:28") is **on every window that holds a
+  seat** (since 2026-10-14, `window-keyboard`; each draws it on its own whole-window grid over its
+  graded frame). **Start on any window pauses with that window's seat as the owner** (the keyboard is
+  at that seat), and **a left click on a window is that window's first seat's Start** under the owner
+  rule (`windows::click_slots`; window 1's click was slot 0's and still is, a click on window 2 is
+  its seat's, so it lifts player 2's pause and not player 1's); a seat window's pointer is otherwise
+  ignored. There is no pause *menu* on a multiplayer pause: Escape parks the race behind window 1's
+  menus and the seat windows keep showing the frozen race.
   **The resume countdown is drawn in every window**, one picture per view the window cuts (the split's
   one-per-view rule, per window): one over the whole of a one-seat window. Looked at under
   Xvfb in a `--race --windows 2` race, Start on window 1 to pause and again to resume: window 2 froze on
@@ -130,7 +165,7 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   placement per window's own views (30% down each view of a window of several seats; the authored
   63% in a window of one, `pause::anchor_y`), see [split-screen.md](split-screen.md). Looked at on
   HD under Xvfb, `--window-seats 2,1` (the one-seat window is the whole-screen case) and `2,2` (four
-  views in two windows): `3`, `2`, `GO` in every view. **Open:** the pause line on every window.
+  views in two windows): `3`, `2`, `GO` in every view.
 - **Cost.** A frame draws the scene once per window, and the camera-independent work (shadow gathers,
   scenery clocks, advert cards) once per window rather than once, because each window is a whole
   frame. A split shares it between views. Measured below.
@@ -352,7 +387,25 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   behind the pause menu on window 1 and window 2 froze on the parked race (two captures five seconds
   apart were pixel-identical in window 2's timer). **Not walked:** leaving the parked race for the menus
   to see window 2 go back to its holding frame (it is `windowed_race()` going false, no more).
-- **Tests**: `windows::tests` (routing, close, focus, the shared allocation, a window's name),
+- **A keyboard per window and the pause line on every window** (2026-10-14, lane `window-keyboard`).
+  Pulse EU, Talon's Junction White, `--race --window-seats 1,1`, Xvfb with software Vulkan
+  (`pause_on_focus_loss = false`), real input through XTEST (`xdotool windowfocus`, `keydown x`),
+  one root capture holding both windows per frame: with window 2 focused and X held, window 2's
+  craft left the grid (24, 34, 49 and 56 to 63 km/h over successive frames) while window 1's sat at
+  0 km/h with its timer running, and the log says only `window keyboard: the keyboard is now on slot 1`
+  (no `slot 0 is now Ai`, so window 1 stayed a person). With X still physically held, focus moved to
+  window 1: window 1 stayed at 0 km/h (before the let-go fix it thrust from the re-delivered press,
+  seen in the same capture), and a fresh press then drove it. Space on window 2 paused with owner
+  slot 1: both windows drew `PLAYER 2 PAUSED - ANYONE CAN RESUME IN 0:27` (window 2's scene, black in
+  a first cut that cleared under the line, was intact); a click on window 1 and Space with the focus
+  on window 1 did not lift it (slot 0 is not the owner); a click on window 2 did, into the resume
+  countdown and the race. **Not exercised:** a pad beside the keyboard (the pad join is
+  `pad_join_end_to_end`'s), a finish, more than two windows.
+- **Tests**: `oag-input` (`moving_the_keyboard_releases_what_was_held_on_the_seat_it_left`,
+  `a_key_let_go_of_stays_released_until_it_comes_up`, the reach tests in `pad::tests`; the first two
+  fail if the release is dropped, checked by deleting it), `windows::tests` (`keyboard_seat`,
+  `first_seats`, `Focus::current`, `click_slots`), `pause::tests::a_seat_in_a_window_the_keyboard_can_reach_is_present`,
+  `windows::tests` (routing, close, focus, the shared allocation, a window's name),
   `split_screen::tests` (`deal`, `parse_window_seats`, `layout_for`, `views_for`),
   `raceplay::tests::windowed` (each window cuts its own seats by its own cut; a one-seat window is
   whole; a seat with no camera is skipped; removing a window; each window does a frame's shared work
@@ -382,9 +435,7 @@ Omega capture (below) ran.
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
-- **A keyboard per window**: the keyboard seat follows the focused window, so two people can share one
-  machine with a keyboard each (or a keyboard and a pad). Today the keyboard is slot 0's.
-- **The pause overlay on every window**, and the end screens on a seat's own window (the flyby is on every window since 2026-10-14).
+- **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **a pause menu on the seat windows** (Escape's menu is window 1's; a tint or the menu on the others was not built).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera
   (a `MotionState` and a temporal record per window) and a timer per window.

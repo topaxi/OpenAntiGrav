@@ -439,12 +439,21 @@ fn a_seat_the_keyboard_can_reach_is_driven_while_it_is_elsewhere() {
     assert!(!assignment.drives(2));
     assignment.set_keyboard_reach(&[0, 2]);
     assert!(assignment.drives(0));
-    assert!(assignment.drives(2), "the keyboard is on slot 0, slot 2 is reachable");
-    assert!(!assignment.drives(1), "a seat in no window's first place is not");
+    assert!(
+        assignment.drives(2),
+        "the keyboard is on slot 0, slot 2 is reachable"
+    );
+    assert!(
+        !assignment.drives(1),
+        "a seat in no window's first place is not"
+    );
     assignment.assign_keyboard(2);
     assert!(assignment.drives(0), "and the seat it left is still driven");
     assignment.set_keyboard_reach(&[]);
-    assert!(!assignment.drives(0), "an empty reach (the race ended) drives nothing extra");
+    assert!(
+        !assignment.drives(0),
+        "an empty reach (the race ended) drives nothing extra"
+    );
 }
 
 /// A closed window's seat leaves the reach and cannot rejoin it.
@@ -455,7 +464,10 @@ fn an_unseated_slot_is_no_longer_reachable() {
     assignment.unseat(2);
     assert!(!assignment.drives(2));
     assignment.set_keyboard_reach(&[0, 2]);
-    assert!(!assignment.drives(2), "a closed slot is not reachable again");
+    assert!(
+        !assignment.drives(2),
+        "a closed slot is not reachable again"
+    );
 }
 
 /// The humans count is held to the grid, and at least one.

@@ -275,7 +275,11 @@ fn a_seat_in_a_window_the_keyboard_can_reach_is_present() {
     seated.set_keyboard_reach(&[0, 1]);
     assert_eq!(present_seats(&seated), P1 | P2);
     seated.assign_keyboard(1);
-    assert_eq!(present_seats(&seated), P1 | P2, "the keyboard moved to window 2");
+    assert_eq!(
+        present_seats(&seated),
+        P1 | P2,
+        "the keyboard moved to window 2"
+    );
     let table = Table {
         present: present_seats(&seated),
         countdown: true,
@@ -289,7 +293,11 @@ fn a_seat_in_a_window_the_keyboard_can_reach_is_present() {
         }),
         "player 1's pause is still theirs with the keyboard at window 2"
     );
-    assert_eq!(step(owned, P2, 10.0, table), owned, "and player 2 cannot lift it");
+    assert_eq!(
+        step(owned, P2, 10.0, table),
+        owned,
+        "and player 2 cannot lift it"
+    );
 }
 
 #[test]

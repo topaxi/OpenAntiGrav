@@ -173,6 +173,18 @@ pub(crate) fn keyboard_seat(
     }
 }
 
+/// The slots whose Start a click is: `clicks` has bit `i` set for a click on window `i` (window 1
+/// is 0), and each clicked window's first seat is a slot, as the bitmask the pause reads. A window
+/// with no seat, or one the race does not have, is nobody's Start.
+pub(crate) fn click_slots(clicks: u8, windows: &[&[usize]]) -> u8 {
+    windows
+        .iter()
+        .enumerate()
+        .filter(|(window, _)| *window < 8 && clicks & (1 << window) != 0)
+        .filter_map(|(_, seats)| seats.first())
+        .fold(0, |mask, slot| mask | 1 << slot)
+}
+
 /// The render target a window of `size` wants, at the profile's render scale: the
 /// largest of these over the open windows is the one allocation they share.
 pub(crate) fn shared_allocation(

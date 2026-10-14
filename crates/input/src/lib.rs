@@ -35,6 +35,11 @@ pub use pad::{Pad, Reading};
 #[derive(Debug, Clone, Default)]
 pub struct Keyboard {
     held: u32,
+    /// Buttons whose keys were held when [`Self::let_go`] released them. A press of such a
+    /// key is ignored until it has been seen to come up (or [`Self::forget_let_go`]), because
+    /// the platform may go on delivering the held key's auto-repeat to the window that gains the
+    /// focus, as a press that is not marked a repeat.
+    let_go: u32,
     /// Bits that went down since the last read, whether or not they are still
     /// down. See [`Self::take_taps`].
     tapped: u32,
@@ -68,11 +73,29 @@ impl Keyboard {
         };
         let bit = button.bit();
         if pressed {
+            if self.let_go & bit != 0 {
+                return;
+            }
             self.held |= bit;
             self.tapped |= bit;
         } else {
             self.held &= !bit;
+            self.let_go &= !bit;
         }
+    }
+
+    /// [`Self::release_all`] for a keyboard whose seat is being moved while keys are still down:
+    /// what was held stays released until its key is pressed again, however the platform
+    /// reports the key it is still holding down.
+    pub fn let_go(&mut self) {
+        self.let_go |= self.held;
+        self.release_all();
+    }
+
+    /// Forgets which keys [`Self::let_go`] is waiting to see come up: the next press of any
+    /// key counts. For when the keyboard's real state is unknown (nothing has had focus).
+    pub fn forget_let_go(&mut self) {
+        self.let_go = 0;
     }
 
     /// Presses `button` for one tick, as if a bound key had gone down and
@@ -337,7 +360,20 @@ impl Controls {
             return;
         }
         self.pad.assignment_mut().assign_keyboard(slot);
+        self.let_go();
+    }
+
+    /// Lets go of every key the way a move to another seat does ([`Keyboard::let_go`]): what
+    /// is held stays released until it is pressed again. What a window losing the focus does
+    /// in a race dealt across windows.
+    pub fn let_go(&mut self) {
+        self.keyboard.let_go();
         self.release_all();
+    }
+
+    /// See [`Keyboard::forget_let_go`].
+    pub fn forget_let_go(&mut self) {
+        self.keyboard.forget_let_go();
     }
 
     /// Records a key going down or coming up. See [`Keyboard::set_key`].

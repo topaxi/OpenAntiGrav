@@ -705,7 +705,11 @@ impl ApplicationHandler for App {
                     // whichever window it was: a seat window's loss lets go too, or the key
                     // would stay held for the seat the keyboard is moved to next.
                     if !*gained {
-                        session.controls.release_all();
+                        if session.windowed_race() {
+                            session.controls.let_go();
+                        } else {
+                            session.controls.release_all();
+                        }
                         if !is_seat {
                             session.pointer.release();
                         }
@@ -803,7 +807,11 @@ impl ApplicationHandler for App {
                 crate::clipboard::set_ctrl_held(modifiers.state().control_key());
             }
 
-            WindowEvent::KeyboardInput { event, .. } => {
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => {
                 // The keyboard is the device in use now, whatever the key:
                 // the drawn cursor goes until the mouse moves again. See
                 // `crate::pointer::Window::other_device`.
@@ -881,6 +889,17 @@ impl ApplicationHandler for App {
                         return;
                     }
                 }
+                // In a race dealt across windows a key that was let go as the focus moved
+                // stays released until it is pressed again (`Controls::let_go`). So winit's
+                // own reports of the focus changing are not keys: X11 sends a synthetic
+                // release for every key down to the window that loses focus (which would
+                // end the wait for the key to come up before the focus event that starts
+                // it) and a synthetic press for each to the window that gains it, and the
+                // auto-repeat of a key still held then reaches the new window as plain
+                // presses, which `let_go` holds off until the key is really released.
+                if (event.repeat || is_synthetic) && session.windowed_race() {
+                    return;
+                }
                 session
                     .controls
                     .set_key(&event.logical_key, event.state == ElementState::Pressed);
@@ -918,6 +937,9 @@ impl ApplicationHandler for App {
                 session.open_screens(event_loop, count);
             }
             if session.screens_opened && session.focus.away(web_time::Instant::now()) {
+                // Nothing has the focus now, so which keys are down is unknown: the next
+                // press of any key counts again.
+                session.controls.forget_let_go();
                 session.window_away(Away::FocusLost);
             }
         }

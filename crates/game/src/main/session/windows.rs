@@ -417,18 +417,17 @@ impl Session {
         let Stage::Race(stage) = &self.stage else {
             return 0;
         };
-        stage
+        let seats: Vec<&[usize]> = stage
             .race
             .windows()
             .iter()
-            .enumerate()
-            .filter(|(window, _)| clicks & (1 << window) != 0)
-            .filter_map(|(_, window)| window.seats.first())
-            .fold(0, |mask, slot| mask | 1 << slot)
+            .map(|window| window.seats.as_slice())
+            .collect();
+        windows::click_slots(clicks, &seats)
     }
 
     /// Whether the race on screen (or parked behind the pause menu) is dealt across windows.
-    pub(super) fn windowed_race(&self) -> bool {
+    pub(crate) fn windowed_race(&self) -> bool {
         match &self.stage {
             Stage::Race(stage) => stage.race.windowed(),
             Stage::Menu(_) => self
@@ -629,14 +628,13 @@ impl Session {
         let line = self.pause_line(space.size);
         if !line.is_empty() {
             self.overlay.set_space(space);
-            self.overlay.render(
+            self.overlay.overlay(
                 &self.gpu.device,
                 &self.gpu.queue,
                 encoder,
                 view,
                 &line,
                 (0.0, 0.0, surface.0 as f32, surface.1 as f32),
-                None,
             );
         }
     }

@@ -131,3 +131,16 @@ fn the_current_window_is_the_latest_gain_still_held() {
     focus.changed(id(2), false, start);
     assert_eq!(focus.current(), None);
 }
+
+/// A click on a window is that window's first seat's Start, under the pause's owner rule - so a
+/// click on window 2 is slot 2's here and never slot 0's, and a window with no seat is nobody's.
+/// Fails if a click on a further window answered window 1's seat.
+#[test]
+fn a_click_is_its_windows_first_seats_start() {
+    let windows: [&[usize]; 3] = [&[0, 1], &[2, 3], &[]];
+    assert_eq!(click_slots(0b001, &windows), 0b0001, "window 1");
+    assert_eq!(click_slots(0b010, &windows), 0b0100, "window 2: slot 2, not 0 or 3");
+    assert_eq!(click_slots(0b100, &windows), 0, "a window with no seat");
+    assert_eq!(click_slots(0b011, &windows), 0b0101, "both at once");
+    assert_eq!(click_slots(0b1000, &windows), 0, "a window the race does not have");
+}

@@ -514,12 +514,23 @@ fn moving_the_keyboard_releases_what_was_held_on_the_seat_it_left() {
     assert!(!moved.get(0).buttons.is_held(Button::Start));
     assert_eq!(moved.get(1).stick_y, 0.0, "nothing carries to the new seat");
     assert!(!moved.get(1).buttons.is_held(Button::Start));
-    assert!(!moved.get(1).buttons.is_pressed(Button::Start), "and no press edge");
-    assert!(!moved.get(1).buttons.is_pressed(Button::Cross), "a tap latched before the move is dropped");
+    assert!(
+        !moved.get(1).buttons.is_pressed(Button::Start),
+        "and no press edge"
+    );
+    assert!(
+        !moved.get(1).buttons.is_pressed(Button::Cross),
+        "a tap latched before the move is dropped"
+    );
 
+    controls.set_key(&key(NamedKey::ArrowUp), false);
     controls.set_key(&key(NamedKey::ArrowUp), true);
     let steered = controls.player_snapshots();
-    assert_eq!(steered.get(1).stick_y, 1.0, "a key pressed after the move drives the new seat");
+    assert_eq!(
+        steered.get(1).stick_y,
+        1.0,
+        "a key pressed after the move drives the new seat"
+    );
     assert_eq!(steered.get(0).stick_y, 0.0, "and not the old one");
 }
 
@@ -532,5 +543,40 @@ fn moving_the_keyboard_to_where_it_is_keeps_its_keys() {
     controls.keyboard_to(0);
     controls.keyboard_to(oag_gameplay::MAX_PLAYERS);
     assert_eq!(controls.keyboard_slot(), 0);
+    assert_eq!(controls.player_snapshots().get(0).stick_y, 1.0);
+}
+
+/// A key let go of as the seat moved, and still physically down, is delivered again by the platform
+/// as a press the moment the new window has focus; it must not drive the new seat until the key has
+/// been seen to come up. Fails if `let_go` is a plain `release_all`.
+#[test]
+fn a_key_let_go_of_stays_released_until_it_comes_up() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    controls.keyboard_to(1);
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    assert_eq!(
+        controls.player_snapshots().get(1).stick_y,
+        0.0,
+        "the held key's re-delivered press is ignored"
+    );
+    controls.set_key(&key(NamedKey::ArrowUp), false);
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    assert_eq!(
+        controls.player_snapshots().get(1).stick_y,
+        1.0,
+        "a fresh press counts"
+    );
+}
+
+/// With nothing holding the focus the keys' real state is unknown, so the wait ends.
+#[test]
+fn forgetting_what_was_let_go_makes_the_next_press_count() {
+    let mut controls = Controls::without_pad();
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    controls.let_go();
+    controls.forget_let_go();
+    controls.set_key(&key(NamedKey::ArrowUp), true);
     assert_eq!(controls.player_snapshots().get(0).stick_y, 1.0);
 }

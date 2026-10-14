@@ -554,7 +554,10 @@ impl<D: Copy + PartialEq> Assignment<D> {
     /// The slots the keyboard can be moved onto. See [`Self::set_keyboard_reach`].
     #[must_use]
     pub fn keyboard_reach(&self) -> Vec<usize> {
-        self.keyboard_reach.iter().map(|slot| usize::from(*slot)).collect()
+        self.keyboard_reach
+            .iter()
+            .map(|slot| usize::from(*slot))
+            .collect()
     }
 
     /// How many slots are people under [`Seating::Seated`], or `None` merged.
@@ -653,7 +656,10 @@ impl<D: Copy + PartialEq> Assignment<D> {
     #[must_use]
     pub fn drives(&self, slot: usize) -> bool {
         self.keyboard_slot() == slot
-            || self.keyboard_reach.iter().any(|reach| usize::from(*reach) == slot)
+            || self
+                .keyboard_reach
+                .iter()
+                .any(|reach| usize::from(*reach) == slot)
             || self.pads.iter().any(|(_, held)| usize::from(*held) == slot)
     }
 

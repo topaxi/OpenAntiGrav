@@ -335,9 +335,12 @@ draws the player's flyby camera full window until it ends, then its own seats
 (`Race::window_drawn`, view-side only; window 1 and the single-window split are byte-identical);
 the layout screen's START row no longer shows the head count (a button shows no value). The end
 screens per window were read, not exercised (no finish reachable headless or under Xvfb); nothing
-looked broken. **Still open from it** (all in the doc's
-"Open"): a keyboard per window; the pause overlay and
-the end screens on every window; `--window-monitor` and remembered placement; per-window motion blur,
+looked broken. **The keyboard per window and the pause line on every window landed 2026-10-14 (lane
+`window-keyboard`)**: the keyboard drives the first seat of the focused window (every window's first
+seat counts as driven meanwhile, a held key is let go as the focus moves), the pause line draws on every
+window with a seat, and a click on a window is its first seat's Start under the owner rule. Not built:
+a pause menu on the seat windows. **Still open from it** (all in the doc's
+"Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
 **pacing on real displays** (cannot be measured under Xvfb: the
 `RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
@@ -523,8 +526,8 @@ end, the pause menu and the pointer; a seat window closing hands its slot to the
 (`Assignment::unseat` and the existing `follow_devices`); focus is "away" only when no window has it;
 seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies.
 Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
-**Still open from it** (all in the doc's "Open"): ~~a menu row for the window count~~ (the layout screen, below in section 2's newer block); a keyboard per
-window; the pause overlay and the end screens on every window; `--window-monitor` and remembered
+**Still open from it** (all in the doc's "Open"): ~~a menu row for the window count~~ (the layout screen, below in section 2's newer block); ~~a keyboard per
+window; the pause overlay~~ (2026-10-14, `window-keyboard`) and the end screens on every window; `--window-monitor` and remembered
 placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
 work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the
 `RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
