@@ -193,6 +193,10 @@ impl Race {
         // existed.
         let field_opponents = if no_opponents {
             0
+        } else if mode.field_is_fixed() {
+            // Head2Head: two craft, whoever flies them. A second person takes the
+            // one opponent's slot, so the people never meet an AI craft.
+            mode.opponent_count()
         } else {
             mode.opponent_count()
                 .max(if opponents { GRID_SLOTS - 1 } else { 0 })
@@ -451,6 +455,20 @@ impl Race {
                 .map(|(row, name)| format!("{row}:{name}"))
                 .collect();
             info!("pilots on the grid: {}", grid.join(" "));
+            if people > 1 {
+                // Where each seat starts, counted from the front (1 to 8): the back rows, in seat order.
+                let seats: Vec<String> = (0..usize::from(people).min(field_opponents as usize + 1))
+                    .map(|seat| {
+                        let rank = oag_gameplay::rank_from_back(
+                            seat,
+                            field_opponents as usize + 1,
+                            usize::from(people),
+                        );
+                        format!("{}:{}", seat + 1, GRID_SLOTS as usize - rank)
+                    })
+                    .collect();
+                info!("people on the grid: {}", seats.join(" "));
+            }
         } else {
             world.ship_count = 1;
         }

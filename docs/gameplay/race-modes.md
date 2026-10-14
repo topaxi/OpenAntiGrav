@@ -1284,6 +1284,22 @@ section is what implements it.
   "+/-NNNm" gap whenever the live mode is `Head2Head`, and a campaign cell was
   walked live on 2026-10-08 (`head2head.md`). Several widget-struct field
   meanings stay at the confidences that page gives.
+- **Two people fly exactly two craft, and no AI** (2026-10-14, `split-head2head`),
+  **chosen, not measured**: nothing in the RE docs says what the original's own
+  two-player Head to Head does. The original has mode `0xf`, "Multiplayer Head2Head"
+  ([head2head.md](../ghidra/functions/psp-pulse-usa/head2head.md): it shares the HUD swap in
+  `Hud_BindWidgets`), but the grid-size table (`state-machine.md`, `FUN_0880502c`) gives
+  only mode `9` a field of two and lists no row for `0xf`, so its field is unread. This build:
+  [`Mode::field_is_fixed`][`oag_race::Mode::field_is_fixed`] keeps the `--opponents` escape
+  hatch and a split race's habit of fielding a full grid from widening the field, so with two
+  seated people the second takes the one opponent's slot and the race fields those two craft.
+  With one person nothing moved (a one-person run hashes the same with and without the hatch, in
+  `head_to_head_people_ground_truth`). With three or more, [`Mode::max_people`][`oag_race::Mode::max_people`]
+  is `Some(2)` and `oag-game` refuses `--mode head_to_head --players 3` (or `--window-seats 1,2`)
+  by name. Each person's HUD reads the gap to the other person, in a split of either cut and
+  in each window of a multi-window race; see [split-screen.md](../rendering/split-screen.md#hud).
+  **Side effect:** `--opponents` with one person in Head to Head used to field seven AI and
+  now fields the mode's one.
 - **Quitting the race returns to `Cell Selection`**, like every campaign mode
   ([campaign-quit.md](../ghidra/functions/psp-pulse-usa/campaign-quit.md)).
 - **Deliberately absent from [`Mode::ALL`]**, like `Tournament` - reachable
@@ -1293,6 +1309,8 @@ section is what implements it.
 
 [`oag_race::Mode::Head2Head`]: ../../crates/race/src/mode.rs
 [`oag_race::Mode::opponent_count`]: ../../crates/race/src/mode.rs
+[`oag_race::Mode::field_is_fixed`]: ../../crates/race/src/mode.rs
+[`oag_race::Mode::max_people`]: ../../crates/race/src/mode.rs
 [`oag_race::Mode::weapons_enabled`]: ../../crates/race/src/mode.rs
 [`Mode::ALL`]: ../../crates/race/src/mode.rs
 

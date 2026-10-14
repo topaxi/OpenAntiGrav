@@ -192,6 +192,29 @@ headlessly (a verification aid; a player reaches the mode through a campaign
 cell). Checked with a headless screenshot, `--autopilot --ticks 900`: `1.` at the
 top-right anchor, a red `+ 3m`, the mint 5-px bar, `2.` below it, `POS` gone.
 
+**Two people (2026-10-14, `split-head2head`), chosen, not measured.** The original's own
+two-player Head to Head is not read: mode `0xf` shares this HUD swap but the grid-size table has
+no row for it. This build fields the two seated people's craft and no AI; each person's readout
+is `|d_self - d_other|` with `player_leads` from the signed difference, **not** from
+`Race::places` (a place counts empty slots at distance zero, so a person short of the line
+ranked behind them and neither of two people ever read first). In a split the bar lives in the
+same split-HUD group as the place widgets (`SplitHud_Pulse.toml`), because the readout needs
+`Position`, `Position Outof`, `PositionOf` and `HeadToHeadBar` in one layout.
+`docs/rendering/split-screen.md` has the frames.
+
+**Open question for `h2h-re`: what mode `0xf` ("Multiplayer Head2Head") does.** What is known,
+all from this page and [state-machine.md](state-machine.md): `g_game_mode` `0xf` is constructed by
+`MPRace_Construct` (shared with `0xe`, layout id `0x1aa4`, state-machine.md's mode table);
+`Hud_BindWidgets` (`0x0881fbec`, the `mode == 9 || mode == 0xf` test at `0x08820748`) and
+`FUN_0881d458` (`0x0881d458`) give it the same gap readout as mode `9`; the names come from
+`FUN_08966848`/`FUN_0895ebf0` (network names) at `g_game_mode >= 0xe`. The grid-size table
+(`FUN_0880502c`, state-machine.md "What `Race_ReadSetupOptions` derives from the mode") has a row
+for `9` (two) and none for `0xf`, which falls into "everything else = 1"; `Race_ReadSetupOptions`
+(`0x08896b84`) puts `0xf` in the weapons-off default set. Unread: how many craft `0xf` fields,
+who flies them (the PSP has no `pspnet` stack, so this is probably the ad-hoc multiplayer
+path), and whether it is the original's two-person Head to Head. Until that is read, this build's
+two-person rule (two seated people, two craft, no AI) is **chosen, not measured**.
+
 **Not drawn, each with its address:**
 
 - The two **names** - measured live to be `Goteki 45` (the opponent team's

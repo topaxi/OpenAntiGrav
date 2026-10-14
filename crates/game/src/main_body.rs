@@ -290,6 +290,19 @@ fn run(cli: Cli) -> Result<()> {
             cli.mode
         )
     })?;
+    // Head to Head is two craft, so it seats two people at most. Refused by name here,
+    // where the mode and the head count (`--players` or the windows' seats) are both
+    // known, rather than fielding a race that cannot be what was asked for.
+    // **Chosen, not measured**: see `Mode::max_people`.
+    if let Some(most) = mode.max_people() {
+        let people = cli.driver.people();
+        anyhow::ensure!(
+            people <= most,
+            "{} takes at most {most} people and {people} are seated (--players or \
+             --window-seats): it is two craft, one against the other",
+            mode.name()
+        );
+    }
     // A windowed run may dump too (a scripted front-end walk is the only way
     // to hear the session's own cues). The buffer grows for as long as the
     // window stays open, about 384 KB a second, so it belongs to a run that

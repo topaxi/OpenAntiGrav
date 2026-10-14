@@ -196,3 +196,77 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         );
     }
 }
+
+/// Head to Head with two people ends on a board of exactly those two: one first, one
+/// second, each named by their seat on the table and the HD grid, and a lap table each.
+/// There is no AI craft among the rows to take a place from either of them. The pairing
+/// is **chosen, not measured** (`oag_race::Mode::field_is_fixed`).
+#[test]
+#[ignore = "needs data/images/pulse-psp-usa.chd"]
+fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Head2Head,
+        views: 2,
+        opponents: true,
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let mut race = race::Race::start(loaded.setup);
+    oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Vertical);
+    race.set_autopilot(true);
+    while !race.finished() && race.sim.world.tick < CAP {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.finished(), "still running after {CAP} ticks");
+    let board = race.results().expect("both people finished");
+    assert_eq!(
+        board.rows.len(),
+        2,
+        "two craft, two rows: no AI on the board"
+    );
+    assert_eq!(board.persons(), 2);
+    let mut places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
+    places.sort_unstable();
+    assert_eq!(places, [1, 2], "one winner, one second");
+    let winner = board.rows.iter().find(|row| row.place == 1).unwrap();
+    let second = board.rows.iter().find(|row| row.place == 2).unwrap();
+    assert!(
+        winner.finish_tick <= second.finish_tick,
+        "first place crossed no later than second"
+    );
+
+    let people = oag_game::results_tables::people_rows(Some(board), race.slot_teams())
+        .expect("a board gives a table");
+    let named: Vec<_> = people.rows.iter().map(|row| row.name.clone()).collect();
+    assert_eq!(
+        named.len(),
+        2,
+        "the table names the two people and nobody else: {named:?}"
+    );
+    for seat in [1, 2] {
+        assert!(
+            named.contains(&oag_ui_screens::endrace::PersonName::Player(seat)),
+            "seat {seat} is on the table: {named:?}"
+        );
+    }
+    let seats: Vec<u8> = oag_game::results_tables::field_rows(Some(board))
+        .iter()
+        .filter_map(|row| row.seat)
+        .collect();
+    assert_eq!(seats.len(), 2, "both people are named on the HD grid too");
+
+    let boosts = race.run_stats().boosts_by_lap;
+    let split = oag_game::results_tables::split_people(board, &race.sim.world, &boosts);
+    let mut split_places: Vec<_> = split.iter().map(|person| person.place).collect();
+    split_places.sort_unstable();
+    assert_eq!(
+        split_places,
+        [Some(1), Some(2)],
+        "each person's own table carries their place"
+    );
+}

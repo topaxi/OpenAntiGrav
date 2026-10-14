@@ -160,7 +160,7 @@ impl Race {
             // arithmetic rather than a standing, and the widget group is omitted
             // the same way the lap group is on a track that cannot count.
             place: if counted && self.sim.world.ship_count > 1 {
-                u32::from(self.places()[slot])
+                self.field_place(slot)
             } else {
                 0
             },
@@ -312,8 +312,24 @@ impl Race {
             .collect()
     }
 
+    /// The place the HUD shows: [`Self::places`] ranked among the craft that are in
+    /// the race. A slot with no craft in it sits at distance zero, so on a grid still
+    /// short of the line (the back rows are) a field smaller than eight read `8 / 2`
+    /// for the craft at the back. Only what is drawn: the simulation, the AI and the
+    /// results keep reading [`Self::places`] as they always did.
+    fn field_place(&self, slot: usize) -> u32 {
+        let places = self.places();
+        let world = &self.sim.world;
+        let empty_ahead = (0..oag_gameplay::MAX_SHIPS)
+            .filter(|&other| !world.ships[other].active && places[other] < places[slot])
+            .count();
+        u32::from(places[slot]) - u32::try_from(empty_ahead).unwrap_or(0)
+    }
+
     /// Head2Head's gap readout: the unwrapped-progress difference between the
     /// player and the one opponent, and who leads. `None` outside Head2Head.
+    /// With two people the opponent is the other person, so each view reads its
+    /// own gap to the other (**chosen, not measured**).
     ///
     /// The original takes `|craft+0xad0 - craft+0xad0|` over the pair
     /// (`FUN_0881d458`), and [`oag_race::Standing::distance`] is this
@@ -327,12 +343,15 @@ impl Race {
         let world = &self.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;
-        let gap = (world.ships[player].standing.distance(course)
-            - world.ships[opponent].standing.distance(course))
-        .abs();
+        // **Measured between the two craft, not read off [`Self::places`].** A place is
+        // a rank among all eight slots, and a slot with no craft in it sits at
+        // distance zero, so a person still short of the line (the back of the grid
+        // is) ranks behind empty slots and neither of two people ever read first.
+        let ahead = world.ships[player].standing.distance(course)
+            - world.ships[opponent].standing.distance(course);
         Some(oag_hud::HeadToHead {
-            gap,
-            player_leads: self.places()[player] == 1,
+            gap: ahead.abs(),
+            player_leads: ahead > 0.0,
         })
     }
 }

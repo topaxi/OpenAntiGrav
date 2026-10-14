@@ -280,6 +280,13 @@ pub struct Options {
     /// textures into the HUD sheet when there are two views; with one view the
     /// sheet and the layout are exactly what they always were.
     pub views: u8,
+    /// How many people fly the race, across every window: the number of person-flown slots, which
+    /// the starting grid reads to put every person on the back rows in seat order. `0`, the
+    /// default, means one person per view ([`Self::views`]), which is right for one window and
+    /// is what every split race built before windows had. **A multi-window race must set it**:
+    /// `views` is then what one window's HUD needs (`--window-seats 1,1` is one view), not the
+    /// head count, and reading it for the grid put the second person at the front as an opponent.
+    pub people: u8,
     /// Which way two views are cut, [`oag_render::viewport::Cut`]. Like [`Self::views`] only
     /// the load needs it: a title's authored left-and-right HUD
     /// ([`oag_title::hud::VerticalLayouts`]) is read for a vertical cut. The race box's
@@ -381,7 +388,7 @@ pub struct Setup {
     pub opponents: bool,
     /// See [`Options::no_driver_for_class`]: the grid is left empty.
     pub no_opponents: bool,
-    /// How many people fly this race at once: [`Options::views`], at least one. Only the
+    /// How many people fly this race at once: [`Options::people`], else [`Options::views`], at least one. Only the
     /// starting grid reads it - two or more people take the back of the grid in order
     /// ([`Race::start`]); one person, the default, changes nothing.
     pub people: u8,

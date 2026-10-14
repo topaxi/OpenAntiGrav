@@ -218,16 +218,34 @@ over `portrait`:
   room for and which `portrait` never placed, so an Eliminator column showed lap and speed and
   no kills; and the Pilot Assist indicator (`--pilot-assist extreme`), raised to the left over
   the time readout, since at the bottom centre it lay on the shield and speed bars (seen and
-  moved). `HeadToHeadBar` is named too, as the horizontal rules name it, but **no frame drew
-  it**: Head2Head showed no bar in a row or a column at tick 900, so that claim is by name only.
-  **Why (2026-10-14, `pure-tall-32x9`, looked at on PSP and PS2 Pulse and on Pure, `--mode
-  head_to_head --players 2` and `4`, rows, ticks 300 and 1200):** a split Head2Head race fields
-  seven opponents (the log reads `pilots on the grid: 1..7`, the place reads `8/8`), not the
-  mode's one, and draws the Single Race readout, so there is no gap bar to place; one view
-  draws the real thing (`1st`, `- 10m`, `2nd` and the bar) with one opponent. That is the mode
-  not being built for a split (below), not a placement fault, so nothing in the split files
-  changed for it. Tournament is not reachable at all: `--mode tournament` is refused, it exists
-  only as a campaign cell.
+  moved). `HeadToHeadBar` was named too, as its own group, and **drew nothing**: the Head2Head
+  readout (`oag_hud::head_to_head`) needs `Position`, `Position Outof`, `PositionOf` and the bar
+  in one layout, and a split draws each group on its own, so the swap never fired.
+  ~~Head2Head showed no bar in a row or a column~~ **Fixed 2026-10-14 (`split-head2head`)**: the
+  bar joined the place group in every Pulse rule (`SplitHud_Pulse.toml`), and a split Head to Head
+  now fields exactly the people (two, no AI: `Mode::field_is_fixed`, **chosen, not measured**;
+  three or more is refused by name, `Mode::max_people`). Each view draws `1st`, `2nd` and the
+  gap against the other person: the one who trails reads a red `+ NNm`, the one who leads a green
+  `- NNm`, the same distance in both. Looked at on Pulse PSP, rows and columns, ticks 300 and 1200,
+  and in `--window-seats 1,1` (each window its own person's readout), and with one seat sat still
+  (`--hold cross`, no `--autopilot`) at gaps of 18 m, 208 m and 488 m, so the bar's length is seen
+  at the 60 clamp, between the clamps and at the 180 clamp (`clamp(gap / 2, 60, 180)`). At 488 m
+  the top and bottom cut put the second row and the bar's foot on the shield and speed bars at
+  the view's lower edge, so a Head to Head variant of `strip` (`strip-head-to-head`,
+  `modes = ["head_to_head"]`, place group at 0.8 against 1.3, **chosen, not measured**) keeps it
+  in the upper 60% of the view; the columns of a left and right cut had room and are unchanged.
+  Pinned by
+  `crates/game/tests/split_head_to_head_ground_truth.rs` (both cuts, ticks 300 and 1200, every
+  word inside its own view, the second row above the lower quarter) and `crates/raceplay/tests/head_to_head_people_ground_truth.rs`.
+  **Other titles, checked:** HD has no Head2Head cell (`docs/overview/status.md`) and Pure's
+  Head2Head is unread (`?`); a window of `--window-seats 1,1` on Pure draws its whole-screen
+  layout and shows `POS 2 / 2` and no bar, so Pure's own layout authors no readout (HD likewise
+  shows its place), and a two-person Head
+  to Head there draws the title's own place, `1 / 2` and `2 / 2` (looked at, both cuts and
+  windows), and nothing invented - **checked, differs**, the mode on those titles is the next
+  lane's. The place now ranks the craft in the race: a field of two read `8 / 2` for the back
+  row until the line (empty slots rank at distance zero), fixed for what is drawn only. Omega shares HD's vocabulary (**checked,
+  applies, not wired**) and 2048 is unread (**not checkable** here: no 2048 Head2Head evidence).
   Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
   1280x720, at tick 900 to 1200.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
@@ -1086,7 +1104,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
 - **Pulse PSP and Pure** have no local split in the original and take PS2 Pulse's rule; **Omega and
   2048** take HD's (both ship the same `SPArcade_RaceManager`, found by string, **checked, applies,
   not decompiled**). All five are the same code path in ours: `oag_gameplay::rank_from_back`, fed
-  `Setup::people` (`Options::views`, the head count the launch seats).
+  `Setup::people` (`Options::people`, the seats across every window; `Options::views` only when it is `0`).
 - **Three to eight people are chosen, not measured**: the originals ship two. The law is continued
   - person `k` on the `k`-th row from the back - and the opponents keep their own order ahead.
 - **One person is untouched**: ship 0 at the back and ship `s` on the row `8 - s`, bit for bit
