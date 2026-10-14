@@ -2,14 +2,17 @@
 """Whole-race rendering benchmark: the race table, the runs, the comparison.
 
     scripts/bench-render.py run [--out DIR] [--tag NAME] [--profile release|debug]
-                                [--repeat] [title ...]
+                                [--repeat] [--views 1,2h,2v] [--size WxH] [title ...]
     scripts/bench-render.py compare A B        (two result files, or two run directories)
     scripts/bench-render.py selftest
 
 `run` drives `oag-game --race` with `OAG_RENDER_BENCH_RACE` set (see
 `crates/game/src/race_capture/race_bench.rs`), one race per title, and leaves
 `<title>.json` (summary and reproduction facts) and `<title>.csv` (every frame)
-in the output directory. Guide: docs/tools/render-bench.md.
+in the output directory. `--views` picks the cases: `1` one view (the file is
+`<title>.json`), `2h` two views cut horizontally and `2v` two side by side (the
+files are `<title>-2h.json`, `<title>-2v.json`), so `compare` lines the same case
+up across two runs. Guide: docs/tools/render-bench.md.
 
 **It takes the gate lock** (`$HOME/.cache/oag/gate.lock`, the one `just
 gate-affected` and `just test-data-affected` hold) for the runs only, so a bench
@@ -48,7 +51,6 @@ COMMON = [
     "--seed", "1",
     "--autopilot",
     "--no-audio",
-    "--size", "1280x720",
     "--log-every", "0",
 ]
 # Safety cap in ticks: three laps are about 7,500 ticks on Pulse; a race that is
@@ -63,6 +65,14 @@ TITLES = {
 }
 
 METRICS = ["tick_us", "record_us", "submit_us", "cpu_us", "frame_us", "gpu_us", "draws", "triangles"]
+DEFAULT_SIZE = "1280x720"
+# Case name -> the flags that make it. `1` adds none, so a one-view result is
+# exactly what it was before the cases existed.
+CASES = {
+    "1": [],
+    "2h": ["--players", "2", "--split-cut", "horizontal"],
+    "2v": ["--players", "2", "--split-cut", "vertical"],
+}
 STATS = ["p50", "p95", "p99", "max"]
 
 
@@ -100,12 +110,14 @@ class GateLock:
             os.close(self.fd)
 
 
-def run_one(binary, title, out, profile, repeat_name=None):
+def run_one(binary, title, out, profile, case="1", size=DEFAULT_SIZE, repeat_name=None):
     spec = TITLES[title]
     source = ROOT / spec["source"]
     if not source.exists():
         return None, f"{source} is missing"
-    stem = out / (repeat_name or title)
+    name = title if case == "1" else f"{title}-{case}"
+    stem = out / (repeat_name or name)
+    flags = [*COMMON, "--size", size, *CASES[case]]
     tmp = pathlib.Path(tempfile.mkdtemp(prefix=f"oag-bench-{title}-"))
     try:
         env = dict(os.environ)
@@ -113,7 +125,7 @@ def run_one(binary, title, out, profile, repeat_name=None):
         # A finished race writes records and ghosts; never into the player's saves.
         for var, name in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"), ("XDG_STATE_HOME", "state"), ("XDG_CACHE_HOME", "cache")):
             env[var] = str(tmp / name)
-        cmd = [str(binary), str(source), *COMMON, *spec["extra"], "--ticks", str(TICK_CAP), "--screenshot", str(tmp / "unused.png")]
+        cmd = [str(binary), str(source), *flags, *spec["extra"], "--ticks", str(TICK_CAP), "--screenshot", str(tmp / "unused.png")]
         start = time.monotonic()
         done = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
         wall = time.monotonic() - start
@@ -126,7 +138,8 @@ def run_one(binary, title, out, profile, repeat_name=None):
             "title_key": title,
             "source": spec["source"],
             "track": racing.group(1).strip() if racing else None,
-            "command": [str(pathlib.Path(cmd[0]).name), spec["source"], *COMMON, *spec["extra"], "--ticks", str(TICK_CAP)],
+            "case": case,
+            "command": [str(pathlib.Path(cmd[0]).name), spec["source"], *flags, *spec["extra"], "--ticks", str(TICK_CAP)],
             "env_note": "OAG_RENDER_BENCH_RACE set; XDG dirs on a throwaway directory (defaults for every setting)",
             "profile": profile,
             "tick_cap_chosen": TICK_CAP,
@@ -143,6 +156,10 @@ def cmd_run(args):
     binary = ROOT / "target" / profile / "oag-game"
     if not binary.exists():
         sys.exit(f"{binary} is missing: build it first (cargo build --{profile if profile == 'release' else 'profile dev'} -p oag-game), or use `just bench-render`")
+    cases = [c.strip() for c in args.views.split(",") if c.strip()]
+    for case in cases:
+        if case not in CASES:
+            sys.exit(f"unknown view case {case!r}; known: {', '.join(CASES)}")
     titles = args.titles or list(TITLES)
     for title in titles:
         if title not in TITLES:
@@ -154,24 +171,25 @@ def cmd_run(args):
     failures = 0
     with GateLock(enabled) as lock:
         print(f"bench: gate lock {'held' if enabled else 'SKIPPED (OAG_BENCH_NO_LOCK)'}; load average {load_average()}; results in {out}", flush=True)
-        for title in titles:
-            first, why = run_one(binary, title, out, profile)
+        for title, case in [(t, c) for t in titles for c in cases]:
+            name = title if case == "1" else f"{title}-{case}"
+            first, why = run_one(binary, title, out, profile, case, args.size)
             if first is None:
-                print(f"bench: {title}: FAILED: {why}")
+                print(f"bench: {name}: FAILED: {why}")
                 failures += 1
                 continue
             first["run"]["lock"] = {"held": enabled, "waited_seconds": round(lock.waited, 1)}
             first["run"]["load_average_at_run_start"] = first["load_average_start"]
-            pathlib.Path(out / f"{title}.json").write_text(json.dumps(first, indent=2) + "\n")
-            print(summary_line(title, first), flush=True)
+            pathlib.Path(out / f"{name}.json").write_text(json.dumps(first, indent=2) + "\n")
+            print(summary_line(name, first), flush=True)
             if args.repeat:
-                second, why = run_one(binary, title, out, profile, repeat_name=f"{title}-repeat")
+                second, why = run_one(binary, title, out, profile, case, args.size, repeat_name=f"{name}-repeat")
                 if second is None:
-                    print(f"bench: {title}: repeat FAILED: {why}")
+                    print(f"bench: {name}: repeat FAILED: {why}")
                     failures += 1
                     continue
                 same = (first["final_tick"], first["final_state_hash"], first["frames"]) == (second["final_tick"], second["final_state_hash"], second["frames"])
-                print(f"bench: {title}: determinism {'OK' if same else 'MISMATCH'}: tick {first['final_tick']} / {second['final_tick']}, hash {first['final_state_hash']} / {second['final_state_hash']}")
+                print(f"bench: {name}: determinism {'OK' if same else 'MISMATCH'}: tick {first['final_tick']} / {second['final_tick']}, hash {first['final_state_hash']} / {second['final_state_hash']}")
                 failures += 0 if same else 1
     return 1 if failures else 0
 
@@ -179,11 +197,17 @@ def cmd_run(args):
 def summary_line(title, result):
     m = result["metrics"]
     cell = lambda name, stat: (f"{m[name][stat]:.0f}" if m.get(name) else "n/a")
+    views = " ".join(
+        f"v{n} {m[k]['p50']:.0f}/{m[k]['p99']:.0f}"
+        for n in range(8)
+        if m.get((k := f"gpu_view{n}_us"))
+    )
     return (
         f"bench: {title}: {result['frames']} frames, finished {result['finished']}, "
         f"cpu p50/p99 {cell('cpu_us', 'p50')}/{cell('cpu_us', 'p99')} us, "
         f"gpu p50/p99 {cell('gpu_us', 'p50')}/{cell('gpu_us', 'p99')} us, "
         f"frame p50/p99 {cell('frame_us', 'p50')}/{cell('frame_us', 'p99')} us "
+        f"{('gpu per view p50/p99 us: ' + views + ' ') if views else ''}"
         f"({result['adapter']['name']}, load {result['load_average_start']} -> {result['load_average_end']})"
     )
 
@@ -201,6 +225,8 @@ def compare_pair(a, b):
     for key in ("title", "mode", "laps_target", "tick_cap", "settings"):
         if a.get(key) != b.get(key):
             warnings.append(f"{key} differs: {a.get(key)} vs {b.get(key)}")
+    if a.get("run", {}).get("case", "1") != b.get("run", {}).get("case", "1"):
+        warnings.append(f"view case differs: {a.get('run', {}).get('case', '1')} vs {b.get('run', {}).get('case', '1')}")
     if a.get("run", {}).get("track") != b.get("run", {}).get("track"):
         warnings.append(f"track differs: {a.get('run', {}).get('track')} vs {b.get('run', {}).get('track')}")
     if a["adapter"]["name"] != b["adapter"]["name"] or a["adapter"]["driver_info"] != b["adapter"]["driver_info"]:
@@ -213,7 +239,8 @@ def compare_pair(a, b):
         lines.append(f"  WARNING: {w}")
     header = f"  {'metric':<14}{'stat':<6}{'A':>12}{'B':>12}{'delta':>12}{'%':>9}"
     lines.append(header)
-    for metric in METRICS:
+    extra = sorted({k for r in (a, b) for k in r["metrics"] if k.startswith("gpu_view")})
+    for metric in METRICS + extra:
         ma, mb = a["metrics"].get(metric), b["metrics"].get(metric)
         if not ma or not mb:
             lines.append(f"  {metric:<14}{'(not timed in one of the runs)':<6}")
@@ -271,6 +298,17 @@ def cmd_selftest(_):
             self.assertIn("+10.0%", text)
             self.assertNotIn("WARNING", text)
 
+        def test_a_split_case_compares_its_views(self):
+            left, right = self.result(100.0), self.result(110.0)
+            for r in (left, right):
+                r["run"] = {"case": "2h"}
+                r["metrics"]["gpu_view0_us"] = r["metrics"]["gpu_us"]
+                r["metrics"]["gpu_view1_us"] = r["metrics"]["gpu_us"]
+            text = compare_pair(left, right)
+            self.assertIn("gpu_view1_us", text)
+            right["run"] = {"case": "2v"}
+            self.assertIn("view case differs", compare_pair(left, right))
+
         def test_a_different_race_is_flagged(self):
             text = compare_pair(self.result(100.0), self.result(100.0, tick=101))
             self.assertIn("the race itself differs", text)
@@ -287,6 +325,8 @@ def main():
     run.add_argument("--out", help="output directory (default data/bench/<tag>)")
     run.add_argument("--tag", help="run name, the default output directory's name (default: a timestamp)")
     run.add_argument("--profile", choices=["release", "debug"], default="release")
+    run.add_argument("--views", default="1", help="cases to run, comma separated: 1 (one view), 2h (two views cut horizontally), 2v (side by side); default 1")
+    run.add_argument("--size", default=DEFAULT_SIZE, help=f"offscreen target WxH (default {DEFAULT_SIZE}; the Steam Deck's panel is 1280x800)")
     run.add_argument("--repeat", action="store_true", help="run each title twice and check tick count and final state hash agree")
     run.set_defaults(fn=cmd_run)
     compare = sub.add_parser("compare", help="deltas between two result files or run directories")

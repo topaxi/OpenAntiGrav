@@ -506,9 +506,13 @@ impl Session {
         // **And what it last cost stops being reported**: a split draws no blur, so no reading
         // ever replaces the last single view's, and the overlay went on naming it. Only on a
         // frame that had a scene - a menu frame says nothing about the chain.
-        if has_scene
+        if  has_scene
             && !scene_stats.is_some_and(|stats| stats.blur_encoded)
-            && self.blur_cost.idle(self.frame_index)
+            && self.blur_cost.after_frame(
+            self.frame_index,
+            has_scene,
+            scene_stats.is_some_and(|stats| stats.blur_encoded),
+        )
         {
             debug!(
                 "motion blur chain not drawn on frame {}: its cost is no longer reported",
@@ -525,9 +529,13 @@ impl Session {
         {
             timer.abandon();
         }
-        if has_scene
+        if  has_scene
             && !scene_stats.is_some_and(|stats| stats.hd_bloom_encoded)
-            && self.hd_bloom_cost.idle(self.frame_index)
+            && self.hd_bloom_cost.after_frame(
+            self.frame_index,
+            has_scene,
+            scene_stats.is_some_and(|stats| stats.hd_bloom_encoded),
+        )
         {
             debug!(
                 "hd bloom chain not drawn on frame {}: its cost is no longer reported",
@@ -555,6 +563,7 @@ impl Session {
         // capture cannot drift apart, and so the HUD below lands on a frame that
         // is already at presentation size. Ungraded on purpose; `composite`
         // grades.
+        let mut upscale_encoded = false;
         if has_scene {
             let presentation = {
                 let render_profile = self.render_profile();
@@ -603,7 +612,7 @@ impl Session {
                 );
             }
 
-            let upscale_encoded = self.framebuffer.resolve_scene(
+            upscale_encoded = self.framebuffer.resolve_scene(
                 &self.gpu.device,
                 &self.gpu.queue,
                 &mut encoder,
@@ -637,6 +646,19 @@ impl Session {
                 );
             }
         }
+
+        // **And what the upscaler last cost stops being reported** the frame it does not run: a
+        // split (no temporal record), a setting that turned it off or a shader that failed to
+        // build leave no reading to replace the last one. Both halves run or neither
+        // (`resolve_scene` returns one answer), so they idle together.
+        if self.upscale_cost.after_frame(self.frame_index, has_scene, upscale_encoded) {
+            debug!(
+                "upscaler not run on frame {}: its cost is no longer reported",
+                self.frame_index
+            );
+        }
+        self.upscale_presented_cost
+            .after_frame(self.frame_index, has_scene, upscale_encoded);
 
         // The HUD, after the resolve and at presentation size, laid out against
         // the aspect rectangle rather than the offscreen extent - so it stays

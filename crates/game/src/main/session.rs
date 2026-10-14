@@ -179,7 +179,7 @@ pub(crate) struct Session {
     /// the two that resolve a pixel are [`Session::upscale_presented_cost`],
     /// because they are the half of the chain a resolution controller cannot
     /// make cheaper.
-    pub(crate) upscale_cost: perf::Meter,
+    pub(crate) upscale_cost: perf::ChainCost,
     /// The timer behind [`Session::upscale_cost`].
     ///
     /// **Its own ring rather than a share of [`Session::pass_timer`]'s**: that
@@ -197,7 +197,7 @@ pub(crate) struct Session {
     /// than summed with it: it is the only part of the chain that belongs in
     /// [`drs::Cost::fixed`], and counting the whole chain there made the
     /// budget smaller than the truth.
-    pub(crate) upscale_presented_cost: perf::Meter,
+    pub(crate) upscale_presented_cost: perf::ChainCost,
     /// The timer behind [`Session::upscale_presented_cost`], on its own ring
     /// for the reason [`Session::upscale_timer`] has one.
     ///

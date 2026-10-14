@@ -453,7 +453,7 @@ impl Session {
 
         for reading in upscale_readings.iter().flatten() {
             if reading.frame > self.stall_frame && reading.seconds > 0.0 {
-                self.upscale_cost.record(reading.seconds);
+                self.upscale_cost.record(reading.frame, reading.seconds);
                 trace!(
                     "fsr3 chain, render resolution: frame {} took {:.3} ms, read on frame {}",
                     reading.frame,
@@ -464,7 +464,7 @@ impl Session {
         }
         for reading in upscale_presented_readings.iter().flatten() {
             if reading.frame > self.stall_frame && reading.seconds > 0.0 {
-                self.upscale_presented_cost.record(reading.seconds);
+                self.upscale_presented_cost.record(reading.frame, reading.seconds);
                 trace!(
                     "fsr3 chain, presentation resolution: frame {} took {:.3} ms, read on frame {}",
                     reading.frame,

@@ -45,6 +45,15 @@ impl ChainCost {
         reported
     }
 
+    /// The end of `frame`: `had_scene` is whether it drew a scene at all (a menu frame says
+    /// nothing about a chain) and `encoded` whether the chain ran in it. A frame that had a
+    /// scene and did not run the chain is [`Self::idle`]; every other frame leaves the meter alone.
+    ///
+    /// Returns whether a reading was being reported and has just been dropped.
+    pub fn after_frame(&mut self, frame: u64, had_scene: bool, encoded: bool) -> bool {
+        had_scene && !encoded && self.idle(frame)
+    }
+
     /// A load or stall on `frame`, whose readings are a load and not a cost.
     pub fn stalled(&mut self, frame: u64) {
         self.idle(frame);
@@ -97,6 +106,31 @@ mod tests {
         // The chain comes back (a single view again): frame 12 counts.
         cost.record(12, 0.0025);
         assert!((mean_ms(&cost).unwrap() - 2.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn only_a_frame_with_a_scene_and_no_chain_idles_it() {
+        let mut cost = ChainCost::new();
+        cost.record(1, 0.004);
+        assert!(!cost.after_frame(2, true, true), "the chain ran");
+        assert!(
+            !cost.after_frame(3, false, false),
+            "a menu frame says nothing"
+        );
+        assert!((mean_ms(&cost).unwrap() - 4.0).abs() < 0.01);
+        assert!(
+            cost.after_frame(4, true, false),
+            "the upscaler was switched off"
+        );
+        assert_eq!(mean_ms(&cost), None);
+        cost.record(3, 0.004);
+        assert_eq!(
+            mean_ms(&cost),
+            None,
+            "a reading in flight from before is refused"
+        );
+        cost.record(5, 0.004);
+        assert!(mean_ms(&cost).is_some(), "it runs again");
     }
 
     #[test]

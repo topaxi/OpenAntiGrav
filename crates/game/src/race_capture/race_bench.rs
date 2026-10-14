@@ -21,7 +21,13 @@
 //! - `draws`, `culled`, `triangles`: what the scene submitted.
 //!
 //! **The scene only, no HUD**, which is what the single-frame bench measures.
-//! **One view**: a split or multi-window race is refused by name. The player's
+//! **One view or a split** (`--players 2 --split-cut horizontal|vertical`):
+//! a split is drawn by `Scene::render_viewports`, which records and submits
+//! its own command buffers, so its `record_us` is the whole call (the submit
+//! is inside it, `submit_us` is empty) and the GPU columns are one timestamped
+//! scene pass per view (`gpu_view<N>_us`, `gpu_scene_us` their sum). It draws
+//! no motion blur or bloom chain, so those columns stay empty. A multi-window
+//! race is refused by name. The player's
 //! craft is on `--autopilot` when the caller says so; the race ends on the
 //! player's own crossing (not when the AI field is done), or at the tick cap
 //! (`--ticks`, [`DEFAULT_TICK_CAP`] when zero), in which case the result says
@@ -92,7 +98,10 @@ struct Frame {
     record_us: f64,
     submit_us: f64,
     frame_us: f64,
-    gpu: [f64; 3],
+    /// One entry per timer: scene, blur, bloom for one view; one scene pass per
+    /// view for a split.
+    gpu: Vec<f64>,
+    split: bool,
     draws: u32,
     culled: u32,
     triangles: u32,
@@ -100,7 +109,30 @@ struct Frame {
 
 impl Frame {
     fn cpu_us(&self) -> f64 {
-        self.record_us + self.submit_us
+        self.record_us
+            + if self.submit_us.is_finite() {
+                self.submit_us
+            } else {
+                0.0
+            }
+    }
+
+    /// The scene passes: the one pass of a single view, the sum over a split's.
+    fn gpu_scene_us(&self) -> f64 {
+        if self.split {
+            self.gpu_us()
+        } else {
+            self.gpu.first().copied().unwrap_or(f64::NAN)
+        }
+    }
+
+    /// The blur and bloom chains: only a single view draws them.
+    fn gpu_chain_us(&self, slot: usize) -> f64 {
+        if self.split {
+            f64::NAN
+        } else {
+            self.gpu.get(slot).copied().unwrap_or(f64::NAN)
+        }
     }
 
     fn gpu_us(&self) -> f64 {
@@ -148,17 +180,21 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         options,
         title,
     } = rig;
-    if race.windowed() || race.viewport_count() > 1 {
-        bail!("{ENV}: a split or multi-window race is not benched here, it has one view");
+    if race.windowed() {
+        bail!("{ENV}: a multi-window race is not benched here, it has one window");
     }
+    let split = race.viewport_count() > 1;
+    let views = if split { race.views_drawn() } else { 1 };
     let cap = if options.ticks > 0 {
         options.ticks
     } else {
         DEFAULT_TICK_CAP
     };
-    let mut timers: [Option<PassTimer>; 3] = std::array::from_fn(|_| PassTimer::new(device, queue));
+    let slots = if split { views } else { 3 };
+    let mut timers: Vec<Option<PassTimer>> =
+        (0..slots).map(|_| PassTimer::new(device, queue)).collect();
     let timed = timers.iter().all(Option::is_some);
-    let mut gpu: Vec<[f64; 3]> = Vec::new();
+    let mut gpu: Vec<Vec<f64>> = Vec::new();
     let mut frames: Vec<Frame> = Vec::new();
     let mut in_flight: VecDeque<wgpu::SubmissionIndex> = VecDeque::new();
     let load_start = load_average();
@@ -191,7 +227,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
 
         let index = frames.len() as u64;
         collect(device, &mut timers, &mut gpu);
-        gpu.push([f64::NAN; 3]);
+        gpu.push(vec![f64::NAN; slots]);
         for timer in timers.iter_mut().flatten() {
             timer.begin(index);
         }
@@ -200,58 +236,88 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         }
         let spectrum = spectrum::zone_spectrum(options, audio);
         let record = Instant::now();
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("race bench frame"),
-        });
-        let [scene_timer, blur_timer, bloom_timer] = &timers;
-        let stats = scene.render(
-            device,
-            queue,
-            &mut encoder,
-            view,
-            race,
-            viewport,
-            options.fov,
-            options.frustum_culling,
-            options.pvs_culling,
-            options.anim_seconds,
-            options.motion_blur,
-            options.shadows,
-            camera_jitter,
-            &spectrum,
-            scene_timer.as_ref().and_then(PassTimer::writes),
-            blur_timer.as_ref().and_then(|t| {
-                Some(oag_post::motion_blur::ChainTimestamps {
-                    begin: t.half_writes(Half::Begin)?,
-                    end: t.half_writes(Half::End)?,
-                })
-            }),
-            bloom_timer.as_ref().and_then(|t| {
-                Some(oag_post::hd_bloom::ChainTimestamps {
-                    begin: t.half_writes(Half::Begin)?,
-                    end: t.half_writes(Half::End)?,
-                })
-            }),
-        );
-        // A claim the chain did not write into is given back, never resolved:
-        // four of those end every reading for the run (`PassTimer::abandon`).
-        for (timer, encoded) in
-            timers
-                .iter_mut()
-                .zip([true, stats.blur_encoded, stats.hd_bloom_encoded])
-        {
-            if let Some(timer) = timer {
-                if encoded {
-                    timer.resolve(&mut encoder);
-                } else {
-                    timer.abandon();
+        let stats;
+        let mut submit_us = f64::NAN;
+        let mut encoder = None;
+        if split {
+            // Records and submits inside the call; the empty submission below
+            // only names the point the frame-in-flight window waits on.
+            stats = scene.render_viewports(
+                device,
+                queue,
+                view,
+                race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.shadows,
+                &spectrum,
+                &mut timers,
+            );
+        } else {
+            let mut frame_encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race bench frame"),
+                });
+            let [scene_timer, blur_timer, bloom_timer] = &timers[..] else {
+                unreachable!("three timers for one view");
+            };
+            stats = scene.render(
+                device,
+                queue,
+                &mut frame_encoder,
+                view,
+                race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.motion_blur,
+                options.shadows,
+                camera_jitter,
+                &spectrum,
+                scene_timer.as_ref().and_then(PassTimer::writes),
+                blur_timer.as_ref().and_then(|t| {
+                    Some(oag_post::motion_blur::ChainTimestamps {
+                        begin: t.half_writes(Half::Begin)?,
+                        end: t.half_writes(Half::End)?,
+                    })
+                }),
+                bloom_timer.as_ref().and_then(|t| {
+                    Some(oag_post::hd_bloom::ChainTimestamps {
+                        begin: t.half_writes(Half::Begin)?,
+                        end: t.half_writes(Half::End)?,
+                    })
+                }),
+            );
+            // A claim the chain did not write into is given back, never resolved:
+            // four of those end every reading for the run (`PassTimer::abandon`).
+            for (timer, encoded) in
+                timers
+                    .iter_mut()
+                    .zip([true, stats.blur_encoded, stats.hd_bloom_encoded])
+            {
+                if let Some(timer) = timer {
+                    if encoded {
+                        timer.resolve(&mut frame_encoder);
+                    } else {
+                        timer.abandon();
+                    }
                 }
             }
+            encoder = Some(frame_encoder);
         }
         let recorded = record.elapsed().as_secs_f64() * 1e6;
-        let submit = Instant::now();
-        in_flight.push_back(queue.submit(Some(encoder.finish())));
-        let submit_us = submit.elapsed().as_secs_f64() * 1e6;
+        if let Some(encoder) = encoder {
+            let submit = Instant::now();
+            in_flight.push_back(queue.submit(Some(encoder.finish())));
+            submit_us = submit.elapsed().as_secs_f64() * 1e6;
+        } else {
+            in_flight.push_back(queue.submit(std::iter::empty()));
+        }
         frames.push(Frame {
             tick: race.sim.world.tick,
             lap: race.sim.world.race[0].lap,
@@ -259,7 +325,8 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
             record_us: recorded,
             submit_us,
             frame_us,
-            gpu: [f64::NAN; 3],
+            gpu: Vec::new(),
+            split,
             draws: stats.draws_submitted,
             culled: stats.draws_culled,
             triangles: stats.triangles,
@@ -271,7 +338,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         collect(device, &mut timers, &mut gpu);
     }
     for (frame, readings) in frames.iter_mut().zip(&gpu) {
-        frame.gpu = *readings;
+        frame.gpu.clone_from(readings);
     }
     let wall = begun.elapsed().as_secs_f64();
     let load_end = load_average();
@@ -286,6 +353,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         load_start,
         load_end,
         cap,
+        views,
         race,
         options,
     };
@@ -315,26 +383,35 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
 }
 
 /// Files the GPU readings that have landed under the frames they name.
-fn collect(device: &wgpu::Device, timers: &mut [Option<PassTimer>; 3], gpu: &mut [[f64; 3]]) {
+fn collect(device: &wgpu::Device, timers: &mut [Option<PassTimer>], gpu: &mut [Vec<f64>]) {
     for (slot, timer) in timers.iter_mut().enumerate() {
         let Some(timer) = timer else { continue };
         let mut readings: [Option<Reading>; 4] = [None; 4];
         timer.drain(device, &mut readings);
         for reading in readings.into_iter().flatten() {
-            if let Some(entry) = usize::try_from(reading.frame)
+            if let Some(cell) = usize::try_from(reading.frame)
                 .ok()
                 .and_then(|f| gpu.get_mut(f))
+                .and_then(|entry| entry.get_mut(slot))
             {
-                entry[slot] = f64::from(reading.seconds) * 1e6;
+                *cell = f64::from(reading.seconds) * 1e6;
             }
         }
     }
 }
 
 fn csv(frames: &[Frame]) -> String {
+    let views = frames
+        .first()
+        .filter(|f| f.split)
+        .map_or(0, |f| f.gpu.len());
     let mut out = String::from(
-        "frame,tick,lap,tick_us,record_us,submit_us,cpu_us,frame_us,gpu_scene_us,gpu_blur_us,gpu_bloom_us,gpu_us,draws,culled,triangles\n",
+        "frame,tick,lap,tick_us,record_us,submit_us,cpu_us,frame_us,gpu_scene_us,gpu_blur_us,gpu_bloom_us,gpu_us,draws,culled,triangles",
     );
+    for view in 0..views {
+        let _ = write!(out, ",gpu_view{view}_us");
+    }
+    out.push('\n');
     let cell = |v: f64| {
         if v.is_finite() {
             format!("{v:.1}")
@@ -343,7 +420,7 @@ fn csv(frames: &[Frame]) -> String {
         }
     };
     for (index, f) in frames.iter().enumerate() {
-        let _ = writeln!(
+        let _ = write!(
             out,
             "{index},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             f.tick,
@@ -353,14 +430,20 @@ fn csv(frames: &[Frame]) -> String {
             cell(f.submit_us),
             cell(f.cpu_us()),
             cell(f.frame_us),
-            cell(f.gpu[0]),
-            cell(f.gpu[1]),
-            cell(f.gpu[2]),
+            cell(f.gpu_scene_us()),
+            cell(f.gpu_chain_us(1)),
+            cell(f.gpu_chain_us(2)),
             cell(f.gpu_us()),
             f.draws,
             f.culled,
             f.triangles
         );
+        if f.split {
+            for value in &f.gpu {
+                let _ = write!(out, ",{}", cell(*value));
+            }
+        }
+        out.push('\n');
     }
     out
 }
@@ -374,6 +457,7 @@ struct Facts<'a> {
     load_start: String,
     load_end: String,
     cap: u32,
+    views: usize,
     race: &'a Race,
     options: &'a CaptureOptions,
 }
@@ -394,7 +478,7 @@ const METRICS: [(&str, Read); 9] = [
     ("submit_us", |f| f.submit_us),
     ("cpu_us", Frame::cpu_us),
     ("frame_us", |f| f.frame_us),
-    ("gpu_scene_us", |f| f.gpu[0]),
+    ("gpu_scene_us", Frame::gpu_scene_us),
     ("gpu_us", Frame::gpu_us),
     ("draws", |f| f64::from(f.draws)),
     ("triangles", |f| f64::from(f.triangles)),
@@ -420,6 +504,14 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
         ("presented", format!("{}", o.presented.is_some())),
         ("autopilot", format!("{}", o.autopilot)),
     ];
+    let split_settings = [
+        ("views", facts.views.to_string()),
+        ("split_cut", o.cut.name().to_string()),
+    ];
+    let settings: Vec<(&str, String)> = settings
+        .into_iter()
+        .chain(split_settings.into_iter().filter(|_| facts.views > 1))
+        .collect();
     let mut out = String::from("{\n");
     let mut put = |key: &str, value: String| {
         let _ = writeln!(out, "  {}: {value},", json_string(key));
@@ -493,7 +585,21 @@ fn json(frames: &[Frame], facts: &Facts<'_>) -> String {
         })
         .collect::<Vec<_>>()
         .join(",\n");
-    put("metrics", format!("{{\n{metrics}\n  }}"));
+    let view_metrics: String = (0..facts.views)
+        .filter(|_| facts.views > 1)
+        .map(|view| {
+            format!(
+                ",\n    {}: {}",
+                json_string(&format!("gpu_view{view}_us")),
+                summary_line(
+                    counted
+                        .iter()
+                        .map(|f| f.gpu.get(view).copied().unwrap_or(f64::NAN))
+                )
+            )
+        })
+        .collect();
+    put("metrics", format!("{{\n{metrics}{view_metrics}\n  }}"));
     let last_lap = frames.iter().map(|f| f.lap).max().unwrap_or(0);
     let laps = (1..=last_lap)
         .map(|lap| {
