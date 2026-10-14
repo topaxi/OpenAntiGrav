@@ -115,6 +115,11 @@ impl Race {
                 *slot_controls = self.player_controls(slot, inputs.get(slot));
             }
         }
+        #[cfg(test)]
+        {
+            self.last_controls = controls;
+            self.pair_contacts.clear();
+        }
 
         // **Before every craft is stepped, and over the whole field at once.**
         // The weapon slowdown a blast credited last tick becomes a running timer

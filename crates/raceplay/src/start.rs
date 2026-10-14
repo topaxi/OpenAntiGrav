@@ -601,6 +601,8 @@ impl Race {
                 camera_view,
                 camera,
                 poses: Default::default(),
+                correction: [Vec3::ZERO; MAX_SHIPS],
+                correction_smoothing: true,
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 intro: intro_camera
@@ -746,6 +748,10 @@ impl Race {
             },
             replay: replay::ReplayState::default(),
             quiet: false,
+            #[cfg(test)]
+            last_controls: Default::default(),
+            #[cfg(test)]
+            pair_contacts: Vec::new(),
         };
         // The free Turbo is granted at the release edge, not here - see
         // `Race::tick`'s own `COUNTDOWN_TICKS` check for the mode, full-slot

@@ -305,6 +305,40 @@ pub(crate) fn force_at_slot(text: Option<&str>, what: &str) -> Result<Option<(u3
     )))
 }
 
+/// Parses `--force-remote-correction`'s `TICK:SLOT[:WINDOW[:contact]]`.
+pub(crate) fn remote_correction(
+    text: Option<&str>,
+    smooth: bool,
+) -> Result<Option<oag_raceplay::correction::Scene>> {
+    let Some(text) = text else { return Ok(None) };
+    let bad = || {
+        anyhow::anyhow!(
+            "{text:?} is not a remote correction; write it as TICK:SLOT[:WINDOW[:contact]], e.g. 480:7:20:contact"
+        )
+    };
+    let mut parts = text.split(':');
+    let mut next = || parts.next().map(|part| part.trim().parse::<u32>());
+    let at = next().ok_or_else(bad)?.map_err(|_| bad())?;
+    let slot = next().ok_or_else(bad)?.map_err(|_| bad())?;
+    let window = match next() {
+        Some(window) => window.map_err(|_| bad())?,
+        None => 6,
+    };
+    let contact = match parts.next() {
+        Some("contact") => true,
+        Some(_) => return Err(bad()),
+        None => false,
+    };
+
+    Ok(Some(oag_raceplay::correction::Scene::new(
+        at,
+        slot as usize,
+        window,
+        smooth,
+        contact,
+    )))
+}
+
 /// Reads `--leach-path`'s file: one `x,y,z` sample per non-empty line.
 pub(crate) fn leach_path(path: Option<&std::path::Path>) -> Result<Option<Vec<oag_core::math::Vec3>>> {
     let Some(path) = path else { return Ok(None) };

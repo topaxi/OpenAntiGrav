@@ -47,6 +47,11 @@ pub struct RaceView {
     /// The previous tick's draw poses and the alpha a draw blends them by.
     /// See [`super::between_ticks`].
     pub(super) poses: super::between_ticks::Poses,
+    /// How far each craft is drawn from where the simulation has it, while a
+    /// reconciliation's jump glides out. View-only: see [`super::correction`].
+    pub(super) correction: [Vec3; MAX_SHIPS],
+    /// Whether a correction glides or is drawn where it lands.
+    pub(super) correction_smoothing: bool,
     /// The player's camera shake, armed by a hard wall hit. Render-only, for
     /// the same reason [`Self::camera`] is - see
     /// `oag_render::camera::shake`'s module doc comment for what is confirmed

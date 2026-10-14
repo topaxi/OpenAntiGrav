@@ -872,12 +872,18 @@ impl Race {
                 let ship_b = &mut second[0];
                 let a_size = ship_a.handling.dimensions;
                 let b_size = ship_b.handling.dimensions;
-                oag_physics::pair::resolve(
+                let touched = oag_physics::pair::resolve(
                     &mut ship_a.physics,
                     &a_size,
                     &mut ship_b.physics,
                     &b_size,
                 );
+                #[cfg(test)]
+                if touched.is_some() {
+                    self.pair_contacts.push((a, b));
+                }
+                #[cfg(not(test))]
+                let _ = touched;
             }
         }
     }

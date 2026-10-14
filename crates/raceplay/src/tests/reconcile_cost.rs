@@ -67,7 +67,7 @@ fn spread(samples: &mut [f64]) -> (f64, f64, f64) {
     )
 }
 
-fn circuits() -> Vec<(String, String)> {
+pub(super) fn circuits() -> Vec<(String, String)> {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return Vec::new();
     };

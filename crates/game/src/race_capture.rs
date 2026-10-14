@@ -90,6 +90,8 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
+    /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
+    pub remote_correction: Option<oag_raceplay::correction::Scene>,
     /// `--no-weapon-lights`.
     pub no_weapon_lights: bool,
     /// Every `--force-shield TICK:PERCENT`: the player's shield, as a
