@@ -42,6 +42,10 @@ not a hang.
 | `2h` | `--players 2 --split-cut horizontal` (one view above the other) | `<title>-2h.json` |
 | `2v` | `--players 2 --split-cut vertical` (side by side) | `<title>-2v.json` |
 
+The split cases chose the opponents' AI before the second person was seated until 2026-10-14
+(the original driver flew a two-human race); it is chosen after now, and the frame figures did
+not move (see `docs/rendering/multi-window.md`).
+
 `just bench-compare A B` lines two directories up by file name, so `pulse-2h.json`
 meets `pulse-2h.json`; `run.case` in the result names the case and a compare of two
 different cases warns. `--size WxH` sets the offscreen target for every case (default

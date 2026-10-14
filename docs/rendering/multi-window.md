@@ -739,6 +739,41 @@ unchanged: the window request still arrives at scale 6 (`inner 23040x12960`, cla
 surface to 16384x12960 with a warning, then to the 3840x2160 output), and the first launch on a
 fresh cache is the movie transcode, so a timed script must run a second time.
 
+### Why the CLI race measured 17 fps slower (2026-10-14, lane `cli-race-cost`)
+
+Two real differences, one fixed, one a property of the measurement.
+
+- **Fixed: `--race --players 2` picked the opponents' AI before the second person was seated.**
+  `ai_choice::apply` reads the number of humans, and the CLI route (and the `--screenshot`
+  capture the render bench runs) called it before `split_screen::apply` added the second one, so
+  the original driver flew a two-human race (log: `AI: the original driver flies the opponents`)
+  where the menu route logs `AI: this project's driver flies (more than one human is racing)`.
+  Both routes now choose after the seating. This is a rule bug, not the frame cost: with
+  render, cut and race the same, the A/B (`before`/`after` binaries, Raphael iGPU, 3812x2160,
+  two views) gave 22.2 fps and 45.6 ms CPU (waiting on the GPU) before, 22.3 fps and 45.4 ms after.
+- **A property of the walk, not a cost: the CLI race has a driver in seat 2.** With one keyboard
+  or one pad nothing drives seat 2, so `split_screen::follow_devices` hands it to the AI
+  (`split screen: slot 1 is now Ai`, a few seconds in; on the Deck it is in the CLI log and not in
+  the menu log, where `--preseat` seats a placeholder keyboard that keeps the seat `Local`).
+  That craft then flies, so the CLI views move through the track while the menu walk's views
+  show craft standing on the grid. On the iGPU the CLI race swings between 13 and 29 fps with
+  the position on the track; the menu-started one holds 28 fps standing still. A frame rate
+  taken from a stationary start is a best case for either route.
+- Settings, render target (3812x2160), render profile and frame limit match between the routes;
+  the only frame-log field that differs is `gpu_ms`: a split race with one window draws one scene
+  per view and times none of them (`session/draw.rs`, chosen so resolution holds its scale while
+  split), a one-window multi-window race times its window, so the Deck's menu log has a GPU
+  figure and the CLI log has `-`.
+- On current main under gamescope with no player-chosen render scale the frame is drawn within a
+  1920x1080 budget (`deck-4k`), on both routes; the 3812x2160 figures above are with
+  `--render-scale 100`, which is the case the 2026-10-14 Deck numbers were.
+
+Not re-measured on the Deck: it was unreachable (`No route to host`) from the moment the fix was
+built, so the Deck pair `before`/`after` is **open**; the iGPU A/B above is the evidence.
+`render-bench` is affected by the first item only for its `2h`/`2v` cases (the capture path
+chose the AI the same way); its numbers measure the frame, which the AI choice did not move
+here, so they stand.
+
 ## Verification
 
 - **Single-window and split frames are byte-identical to `main`** (`201dae2ab`): `--race --screenshot`
