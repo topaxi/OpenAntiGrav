@@ -1293,7 +1293,7 @@ section is what implements it.
   [`Mode::field_is_fixed`][`oag_race::Mode::field_is_fixed`] keeps the `--opponents` escape
   hatch and a split race's habit of fielding a full grid from widening the field, so with two
   seated people the second takes the one opponent's slot and the race fields those two craft.
-  With one person nothing moved (the state hash of a one-person run is pinned by
+  With one person nothing moved (a one-person run hashes the same with and without the hatch, in
   `head_to_head_people_ground_truth`). With three or more, [`Mode::max_people`][`oag_race::Mode::max_people`]
   is `Some(2)` and `oag-game` refuses `--mode head_to_head --players 3` (or `--window-seats 1,2`)
   by name. Each person's HUD reads the gap to the other person, in a split of either cut and
