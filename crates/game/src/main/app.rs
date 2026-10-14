@@ -465,6 +465,7 @@ impl App {
             present_cost: perf::Meter::new(),
             frame_timing: Default::default(),
             drs_unreachable_said: false,
+            window_ahead: Default::default(),
             frame_index: 0,
             stall_frame: 0,
             memory: perf::memory::Probe::new(),

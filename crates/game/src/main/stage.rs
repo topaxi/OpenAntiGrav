@@ -658,6 +658,7 @@ impl Stage {
             // Not known until the leg itself finishes - see
             // `RaceStage::tournament_final_rank`'s own doc.
             tournament_final_rank: None,
+            shared_frame_work: false,
             // Known here, unlike `campaign_cell` above: `load_event` already
             // resolved it onto `Loaded` itself, since it has the parsed
             // `SP.xml` `Document` in hand at exactly that point - see

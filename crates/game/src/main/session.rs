@@ -79,7 +79,7 @@ mod placeholder;
 #[path = "session/pointer.rs"]
 mod pointer;
 #[path = "session/timing.rs"]
-mod timing;
+pub(crate) mod timing;
 #[path = "session/windows.rs"]
 mod windows;
 #[path = "session/tournament.rs"]
@@ -285,6 +285,10 @@ pub(crate) struct Session {
     /// reporting it, so a target that becomes reachable again and then does
     /// not says so twice.
     pub(crate) drs_unreachable_said: bool,
+    /// Window 1's cost of each frame of a multi-window race, until every further window's
+    /// rings have come back for it and the sum is fed to [`Session::drs`]
+    /// ([`Session::feed_windows`]). Empty with one window.
+    pub(crate) window_ahead: std::collections::BTreeMap<u64, drs::Cost>,
     /// Which frame the loop is on, counted rather than timed.
     ///
     /// Exists because a GPU reading arrives a frame or more after the frame it

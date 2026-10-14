@@ -247,6 +247,7 @@ pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
 pub use scene::Scene;
+pub use scene::WindowEffects;
 pub use scene::behind_glass::BehindGlassModels;
 pub use sim::RaceSim;
 pub use spline::{Spline, circuit_length};

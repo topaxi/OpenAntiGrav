@@ -349,8 +349,9 @@ window's focus loss lets go of its own seat's keys. Proven live on a private hea
 keyboard per seat and under its Xwayland (two XInput2 keyboards); **Windows is untested** (recipe in
 `docs/rendering/multi-window.md`, "Who sits where"), **open: a second keyboard cannot join from the join screen** (`lobby::Device::Keyboard` is one device, the head count is the number joined; the design is in the doc's "Open"), and two physical keyboards in one window's split screen are not wired. The pause line draws on every
 window with a seat, and a click on a window is its first seat's Start under the owner rule. Escape's pause menu is window 1's; the seat windows show the frozen race under a dim tint (stopgap), the menu itself on them is open. **Still open from it** (all in the doc's
-"Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; per-window motion blur,
-FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
+"Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; ~~per-window motion blur,
+FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows~~
+(2026-10-14, `window-render-cost`; a window of several seats still draws none of the three);
 **pacing on real displays** (cannot be measured under Xvfb: the
 `RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
 doc); monitor hot-plug.
@@ -540,8 +541,8 @@ seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GP
 Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
 **Still open from it** (all in the doc's "Open"): ~~a menu row for the window count~~ (the layout screen, below in section 2's newer block); ~~a keyboard per
 window; the pause overlay~~ (2026-10-14, `window-keyboard`) and the end screens on every window; `--window-monitor` and remembered
-placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
-work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the
+placement; ~~per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
+work once per frame across windows~~ (2026-10-14, `window-render-cost`); **pacing on real displays** (cannot be measured under Xvfb: the
 `RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
 doc); monitor hot-plug.
 

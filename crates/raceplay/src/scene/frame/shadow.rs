@@ -63,7 +63,8 @@ const FIT_MARGIN: f32 = 6.0;
 impl super::super::Scene {
     /// Both shadow maps, once for a frame, ahead of its first view.
     ///
-    /// **A split screen's later views do not redraw them** ([`Layer::Next`]), bar
+    /// **A split screen's later views do not redraw them** ([`Layer::Next`], and a later
+    /// window of a multi-window race, [`Scene::does_frame_work`]), bar
     /// one: the maps are a function of the craft (their model matrices and the
     /// circuit's own sun or fixed light axis), never of the camera. The casters
     /// are fixed buffers and ranges (`Drawable::caster` draws `opaque_ranges`,
@@ -80,7 +81,7 @@ impl super::super::Scene {
         race: &Race,
         shadows: oag_display::display::Shadows,
     ) {
-        if self.layer.get() == Layer::Next {
+        if !self.does_frame_work() {
             // The `mapped` tier's map is fitted on the craft the view follows, so
             // it is the one pass a later view does itself. Each view is its own
             // submission, and a queue write lands before the submission that
@@ -123,7 +124,7 @@ impl super::super::Scene {
         shadows: oag_display::display::Shadows,
     ) {
         let mut gathered = self.shadow_gathered.borrow_mut();
-        if self.layer.get() != Layer::Next {
+        if self.does_frame_work() {
             *gathered = self.shadow_geometry(race, shadows);
         }
         let (quads, hull_vertices) = &*gathered;
@@ -549,7 +550,7 @@ impl super::super::Scene {
         // bound at once and only one of them may have anything in it, or a
         // switch between tiers would show the other's leftovers.
         // A later view of a split finds it already cleared by the first view's.
-        if self.layer.get() != Layer::Next {
+        if self.does_frame_work() {
             map.render(queue, encoder, &default_fit(), &[]);
         }
         map.render_depth(queue, encoder, &fit, &casters);

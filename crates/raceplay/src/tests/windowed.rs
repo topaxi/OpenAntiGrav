@@ -1,6 +1,7 @@
 //! Multi-window: the views are dealt across OS windows, each cut up inside its window like a
-//! split screen, so the layout sees the window's own views and each window does a whole
-//! frame's work.
+//! split screen, so the layout sees the window's own views, and a frame's camera-independent
+//! work (the shadow maps, the scenery clocks, the advert cards) runs once however many windows
+//! draw.
 
 use super::scene_build::{bare_scene, test_gpu};
 use super::*;
@@ -92,78 +93,17 @@ fn removing_a_window_keeps_the_others_and_never_removes_window_one() {
     );
 }
 
-#[test]
-fn each_window_does_the_frames_shared_work_itself_and_leaves_the_viewpoint() {
-    let Some((device, queue)) = test_gpu() else {
-        return;
-    };
-    let scene = bare_scene(&device, &queue);
-    let mut race = race_with_a_grid();
-    assert_eq!(race.set_viewport_count(4), 4);
-    race.set_windows(two_and_two());
-    for slot in 0..4 {
-        let target = device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("windowed test target"),
-                size: wgpu::Extent3d {
-                    width: 64,
-                    height: 64,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Rgba8Unorm,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            })
-            .create_view(&Default::default());
-        let mut encoder = device.create_command_encoder(&Default::default());
-        scene.render_view(
-            &device,
-            &queue,
-            &mut encoder,
-            &target,
-            &race,
-            slot,
-            (0.0, 0.0, 64.0, 64.0),
-            Fov::AUTHORED,
-            true,
-            true,
-            None,
-            Shadows::Original,
-            &[],
-            None,
-        );
-        queue.submit(Some(encoder.finish()));
-        assert_eq!(
-            race.extra_viewpoint(),
-            None,
-            "window {slot} puts the player's view back"
-        );
-        // A window is a whole frame: it is not a later view of a split, which would
-        // read what an earlier one left.
-        assert_eq!(
-            scene.frame_work().scenery_clocks,
-            slot as u32 + 1,
-            "window {slot} runs the scenery clocks"
-        );
-    }
+fn four_windows() -> Vec<WindowViews> {
+    (0..4)
+        .map(|slot| WindowViews {
+            seats: vec![slot],
+            cut: Default::default(),
+        })
+        .collect()
 }
 
-/// A window of several seats draws them as a split does - the first view does the frame's
-/// shared work, the later ones read it - and each window is a frame of its own: two windows
-/// of two seats run the scenery clocks twice, not four times and not once.
-#[test]
-fn a_window_of_several_seats_does_the_shared_work_once_and_leaves_the_viewpoint() {
-    let Some((device, queue)) = test_gpu() else {
-        return;
-    };
-    let scene = bare_scene(&device, &queue);
-    let mut race = race_with_a_grid();
-    assert_eq!(race.set_viewport_count(4), 4);
-    race.set_windows(two_and_two());
-    let target = device
+fn target(device: &wgpu::Device) -> wgpu::TextureView {
+    device
         .create_texture(&wgpu::TextureDescriptor {
             label: Some("windowed test target"),
             size: wgpu::Extent3d {
@@ -175,30 +115,275 @@ fn a_window_of_several_seats_does_the_shared_work_once_and_leaves_the_viewpoint(
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         })
-        .create_view(&Default::default());
+        .create_view(&Default::default())
+}
+
+/// Window `window` of `race` drawn into `target` and submitted, the way a window's frame loop
+/// does it. `shared` says an earlier window of the frame has drawn.
+fn draw_window(
+    (device, queue): (&wgpu::Device, &wgpu::Queue),
+    scene: &Scene,
+    race: &Race,
+    target: &wgpu::TextureView,
+    window: usize,
+    shadows: Shadows,
+    shared: bool,
+) {
+    draw_window_with(
+        (device, queue),
+        scene,
+        race,
+        target,
+        window,
+        shadows,
+        shared,
+        WindowEffects::default(),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_window_with(
+    (device, queue): (&wgpu::Device, &wgpu::Queue),
+    scene: &Scene,
+    race: &Race,
+    target: &wgpu::TextureView,
+    window: usize,
+    shadows: Shadows,
+    shared: bool,
+    effects: WindowEffects<'_>,
+) {
+    let mut encoder = device.create_command_encoder(&Default::default());
+    scene.render_window(
+        device,
+        queue,
+        &mut encoder,
+        target,
+        race,
+        window,
+        (0.0, 0.0, 64.0, 64.0),
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        shadows,
+        &[],
+        shared,
+        effects,
+        &mut [],
+    );
+    queue.submit(Some(encoder.finish()));
+    assert_eq!(
+        race.extra_viewpoint(),
+        None,
+        "window {window} puts the player's view back"
+    );
+}
+
+/// Four one-seat windows are one frame: the first runs the shadow maps, the scenery clocks and the
+/// advert cards and the other three read what it left, and the next frame runs them again, once.
+/// Fails if a window does the work itself (the old behaviour: four runs a frame), or if the
+/// work is never done again after the first frame.
+#[test]
+fn a_frame_does_the_shared_work_once_across_its_windows() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&device, &queue);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.set_windows(four_windows());
+    let target = target(&device);
+    for frame in 1..=3_u32 {
+        for window in 0..4 {
+            draw_window(
+                (&device, &queue),
+                &scene,
+                &race,
+                &target,
+                window,
+                Shadows::Original,
+                window > 0,
+            );
+            let work = scene.frame_work();
+            assert_eq!(work.scenery_clocks, frame, "frame {frame}, window {window}");
+            assert_eq!(work.shadow_maps, frame, "frame {frame}, window {window}");
+            assert_eq!(work.advert_cards, frame, "frame {frame}, window {window}");
+        }
+    }
+}
+
+/// `shared` is read: a window told an earlier one drew does none of it, so a caller that says it
+/// wrongly is a stale shadow, not a double run.
+#[test]
+fn a_window_told_the_work_is_done_does_none_of_it() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&device, &queue);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.set_windows(four_windows());
+    let target = target(&device);
+    draw_window(
+        (&device, &queue),
+        &scene,
+        &race,
+        &target,
+        0,
+        Shadows::Original,
+        true,
+    );
+    let work = scene.frame_work();
+    assert_eq!(
+        (work.scenery_clocks, work.shadow_maps, work.advert_cards),
+        (0, 0, 0)
+    );
+}
+
+/// The `mapped` tier's depth map is fitted on the craft the view follows, so every window
+/// redraws it for its own seat even when the rest of the work is shared.
+#[test]
+fn a_shared_window_still_fits_the_mapped_depth_map_on_its_own_craft() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&device, &queue);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.set_windows(four_windows());
+    let target = target(&device);
+    draw_window(
+        (&device, &queue),
+        &scene,
+        &race,
+        &target,
+        0,
+        Shadows::Mapped,
+        false,
+    );
+    let first = scene.mapped_matrix();
+    draw_window(
+        (&device, &queue),
+        &scene,
+        &race,
+        &target,
+        3,
+        Shadows::Mapped,
+        true,
+    );
+    assert_ne!(
+        scene.mapped_matrix(),
+        first,
+        "window 4's map is fitted on its own craft"
+    );
+    assert_eq!(
+        scene.frame_work().shadow_maps,
+        1,
+        "the coverage map ran once"
+    );
+}
+
+/// A window of several seats draws them as a split does - the first view does the frame's shared
+/// work, the later ones read it - and a second window after it does none: two windows of two seats
+/// run the scenery clocks once.
+#[test]
+fn windows_of_several_seats_do_the_shared_work_once_and_leave_the_viewpoint() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let scene = bare_scene(&device, &queue);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(4), 4);
+    race.set_windows(two_and_two());
+    let target = target(&device);
     for window in 0..2 {
-        scene.render_window_views(
-            &device,
-            &queue,
-            &target,
+        draw_window(
+            (&device, &queue),
+            &scene,
             &race,
+            &target,
             window,
-            (0.0, 0.0, 64.0, 64.0),
-            Fov::AUTHORED,
-            true,
-            true,
-            None,
             Shadows::Original,
-            &[],
+            window > 0,
         );
-        assert_eq!(race.extra_viewpoint(), None, "the player's view is back");
         assert_eq!(
             scene.frame_work().scenery_clocks,
-            window as u32 + 1,
-            "window {window}: one run of the clocks for its two views"
+            1,
+            "window {window}: the clocks ran once for the frame"
+        );
+    }
+}
+
+/// Each window keeps the history of its own camera: window A's previous view-projection is A's
+/// last one however many other windows drew between, and the camera-jitter phase advances once
+/// per window frame. Fails with one shared history, where window 2 reads window 1's previous
+/// view (the same tick and draw alpha are "the same frame") and takes every other jitter phase.
+#[test]
+fn each_window_keeps_the_history_of_its_own_camera() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let gpu = (&device, &queue);
+    let scene = bare_scene(&device, &queue);
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2);
+    race.set_windows(vec![
+        WindowViews {
+            seats: vec![0],
+            cut: Default::default(),
+        },
+        WindowViews {
+            seats: vec![1],
+            cut: Default::default(),
+        },
+    ]);
+    let target = target(&device);
+    let phases = 8;
+    let mut last = [None; 2];
+    for frame in 0..4_u32 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+        #[allow(clippy::needless_range_loop)]
+        for window in 0..2 {
+            draw_window_with(
+                gpu,
+                &scene,
+                &race,
+                &target,
+                window,
+                Shadows::Original,
+                window > 0,
+                WindowEffects {
+                    motion_blur: oag_display::display::MotionBlur::Medium,
+                    camera_jitter: Some(phases),
+                    ..Default::default()
+                },
+            );
+            let (_, _, record) = scene.temporal(window).expect("a frame was recorded");
+            assert_eq!(
+                record.jitter,
+                oag_post::jitter::offset_pixels(frame, phases),
+                "window {window}, frame {frame}: the jitter phase is the window's own frame count"
+            );
+            assert_eq!(
+                record.reset,
+                frame == 0,
+                "window {window}, frame {frame}: only a window's first frame resets its history"
+            );
+            let (previous, current) = scene.motion_probe(window).expect("a history");
+            if let Some(before) = last[window] {
+                assert_eq!(
+                    previous, before,
+                    "window {window}, frame {frame}: its previous camera is its own last one"
+                );
+            }
+            last[window] = Some(current);
+        }
+        assert_ne!(
+            last[0], last[1],
+            "the two windows look through different cameras"
         );
     }
 }

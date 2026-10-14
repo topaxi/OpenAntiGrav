@@ -117,6 +117,7 @@ impl Session {
                         framebuffer,
                         acquire: perf::Meter::new(),
                         present: perf::Meter::new(),
+                        rings: super::timing::Rings::new(&self.gpu.device, &self.gpu.queue),
                     })
                 });
             match opened {
@@ -507,6 +508,20 @@ impl Session {
         }
     }
 
+    /// A frame begins: the race on screen (or parked behind the menus) has had no window draw
+    /// yet this frame, so the first window to draw does the camera-independent work and the
+    /// others read it ([`RaceStage::begin_frame`]).
+    ///
+    /// [`RaceStage::begin_frame`]: crate::race_stage::RaceStage::begin_frame
+    pub(crate) fn begin_scene_frame(&mut self) {
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.begin_frame();
+        }
+        if let Some(stage) = self.suspended_race.as_mut() {
+            stage.begin_frame();
+        }
+    }
+
     /// Draws every further window once, after window 1's frame. A window that fails to draw is
     /// said once per failure and does not end the run.
     pub(crate) fn draw_screens(&mut self) {
@@ -593,9 +608,11 @@ impl Session {
     }
 
     /// Window `window`'s views of the race through the whole of window 1's chain: scene,
-    /// resolve, HUD, bloom, grade. No upscaler history, blur or jitter (**chosen, not
-    /// measured**: the windows alternate cameras every frame, and each history holds one),
-    /// so FSR 3.1 takes the rung down, as it does on a menu frame.
+    /// resolve, HUD, bloom, grade. **A window of one seat has its own camera history**
+    /// (`Scene::render_window`), so motion blur, camera jitter and the temporal upscaler (FSR
+    /// 3.1, which keeps its history in this window's framebuffer) run per window; **a window of
+    /// several seats is a split**, whose views are N cameras in one frame, and draws none of
+    /// them (FSR 3.1 takes the rung down there, as it does on a menu frame). Chosen, not measured.
     fn encode_screen_race(
         &mut self,
         window: usize,
@@ -611,6 +628,14 @@ impl Session {
         screen.framebuffer.resize_output(device, surface);
         // Window 1's allocation, the scene's own; this window's extent inside it.
         screen.framebuffer.resize(device, self.framebuffer.allocation());
+        // The one controller's scale on this window's own ceiling (the target it wants),
+        // while every window holds one seat; the ceiling itself otherwise (`Session::drs_runs`).
+        let wanted = if self.drs_runs() {
+            self.drs
+                .extent(self.drs_limits_for(surface, wanted))
+        } else {
+            wanted
+        };
         screen.framebuffer.set_extent(wanted);
         let extent = screen.framebuffer.extent();
         let inside = (0.0, 0.0, extent.0 as f32, extent.1 as f32);
@@ -633,7 +658,27 @@ impl Session {
             return;
         };
         stage.race.set_draw_alpha(alpha);
-        stage.render_window(
+        // This window's own blur and camera jitter, on its own history in the scene
+        // (`Scene::render_window`): a window of one seat draws them, one of several is a split
+        // and does not. The jitter's length is a property of the upscaler resolving this
+        // window's frames, as for window 1.
+        stage.scene.set_blur_resolution(profile.motion_blur_resolution);
+        let effects = oag_raceplay::WindowEffects {
+            motion_blur: profile.motion_blur,
+            camera_jitter: upscale::jitter_phases(
+                self.camera_jitter,
+                profile.reconstruction,
+                self.gpu.temporal,
+                extent,
+                (rect.2 as u32, rect.3 as u32),
+            ),
+            ..Default::default()
+        };
+        // This window's own timers, bracketing its own passes: its cost joins window 1's in the
+        // controller's frame (`Session::feed_windows`).
+        let frame = self.frame_index;
+        screen.rings.claim(frame);
+        let stats = stage.render_window(
             &self.gpu,
             encoder,
             screen.framebuffer.view(),
@@ -645,22 +690,44 @@ impl Session {
             self.anim_seconds,
             profile.shadows,
             self.zone_hold.levels(),
+            screen.rings.effects(effects),
         );
+        screen
+            .rings
+            .give_back(&stats, stage.race.window_drawn(window).len() == 1);
         let presentation = upscale::Presentation {
             reconstruction: profile.reconstruction,
             sharpness: profile.upscale_sharpness.stops(),
             brightness: self.settings.display.brightness,
             gamma: self.settings.display.gamma,
         };
-        let _ = screen.framebuffer.resolve_scene(
+        // This window's own temporal record (`None` for a window of several seats, and where
+        // the adapter cannot run the upscaler): FSR 3.1 keeps its history in `screen.framebuffer`.
+        let temporal = if self.gpu.temporal {
+            stage.temporal(window)
+        } else {
+            None
+        };
+        // Claimed on the three conditions `resolve_scene` decides with, as window 1's is
+        // (`Session::draw`): a slot nothing writes into does not read back as zero.
+        let upscaling = temporal.is_some()
+            && presentation.reconstruction == display::Reconstruction::Fsr3
+            && screen.framebuffer.temporal_upscaler_viable();
+        if upscaling {
+            screen.rings.claim_upscale(frame);
+        }
+        let encoded = screen.framebuffer.resolve_scene(
             &self.gpu.device,
             &self.gpu.queue,
             encoder,
             rect,
             &presentation,
-            None,
-            None,
+            temporal,
+            screen.rings.upscale_timestamps(),
         );
+        if upscaling && !encoded {
+            screen.rings.abandon_upscale();
+        }
         stage.draw_window_track_panel(
             &self.gpu,
             encoder,
@@ -679,6 +746,7 @@ impl Session {
         stage
             .scene
             .composite_bloom(encoder, screen.framebuffer.output(), rect);
+        screen.rings.resolve(encoder);
         stage.race.set_draw_alpha(1.0);
         screen
             .framebuffer

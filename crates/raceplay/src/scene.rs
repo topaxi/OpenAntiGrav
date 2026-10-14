@@ -34,8 +34,8 @@ mod wreck;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
-pub use motion::TemporalFrame;
 pub(super) use scratch::Scratch;
+pub use viewports::WindowEffects;
 
 /// Counts of the frame's camera-independent work, one each per frame that
 /// did it: a split screen's first view does it and later views must not.
@@ -275,6 +275,10 @@ pub struct Scene {
     /// How often the camera-independent work ran, for `tests/split_shadows.rs`:
     /// once a frame however many views a split draws.
     frame_work: std::cell::Cell<FrameWork>,
+    /// Set while a window of a multi-window race draws after another window of the same
+    /// frame: that window already did the camera-independent work, so this one reads what
+    /// it left (see [`Scene::render_window`]). Never set outside a window's draw.
+    reuse_frame_work: std::cell::Cell<bool>,
     /// The blob quads and projected hulls [`Scene::shadow_geometry`] gathered for
     /// the frame in progress. A split screen gathers once, on its first view, and
     /// every later view uploads the same lists: where the craft cast is not a
@@ -371,27 +375,19 @@ pub struct Scene {
     /// much as a blur input, and gating it on a setting would make it a
     /// sometimes-there artefact nothing downstream could rely on.
     velocity: wgpu::Texture,
-    /// The previous tick's camera and model matrices, for the `prev_mvp`
-    /// every drawable's velocity is measured against - see
-    /// [`motion::MotionState`]. `RefCell` for the reason [`Self::exhaust`]
-    /// is: promoting a tick's snapshot is per-frame state `render`'s `&self`
-    /// has to move.
-    motion: std::cell::RefCell<Option<motion::MotionState>>,
-    /// The camera-jitter phase: frames, not ticks. See [`Scene::jittered`].
-    frame_index: std::cell::Cell<u32>,
-    /// What the last [`Scene::render`] drew with, for a temporal upscaler that
-    /// runs *after* it and cannot see any of it.
-    ///
-    /// **Recorded rather than recomputed.** The jitter offset, the sequence
-    /// length and the camera are all decided inside `render` - the offset from
-    /// a counter this scene owns, the camera from the tick's own speed-widened
-    /// field of view - and a caller re-deriving them would be a second answer
-    /// to the same question, wrong in exactly the way that produces a
-    /// plausible picture. `None` until the first frame.
-    last_frame: std::cell::Cell<Option<TemporalFrame>>,
-    /// The camera view and player respawn count as of the last recorded
-    /// frame, for detecting a camera cut mid-race - see `motion::CutWatch`.
-    cut_watch: std::cell::Cell<motion::CutWatch>,
+    /// Each camera's frame-to-frame history: the previous tick's camera and model
+    /// matrices for the `prev_mvp` every drawable's velocity is measured against
+    /// ([`motion::MotionState`]), the camera-jitter phase, what the last frame was drawn
+    /// with for a temporal upscaler, and the cut watch. **One per window**
+    /// ([`motion::MAX_HISTORIES`]), because each is one camera's: a second window drawn at
+    /// the same tick would otherwise read the first's previous view, take every other
+    /// jitter phase, and find a camera cut in every frame. Window 1, and everything that
+    /// is not a multi-window race, is history 0. Which one a draw reads and writes is
+    /// [`Self::history`]; see [`Scene::history`].
+    histories: Vec<motion::History>,
+    /// The history the draw in progress reads and writes: the window's, set by
+    /// [`Scene::render_window`] and put back to 0 after.
+    history: std::cell::Cell<usize>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -970,10 +966,10 @@ impl Scene {
             motion_blur,
             blur_half: std::cell::Cell::new(false),
             velocity,
-            motion: std::cell::RefCell::new(None),
-            frame_index: std::cell::Cell::new(0),
-            last_frame: std::cell::Cell::new(None),
-            cut_watch: std::cell::Cell::new(motion::CutWatch::default()),
+            histories: (0..motion::MAX_HISTORIES)
+                .map(|_| motion::History::default())
+                .collect(),
+            history: std::cell::Cell::new(0),
             track,
             visibility,
             ships,
@@ -1021,6 +1017,7 @@ impl Scene {
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
             frame_work: Default::default(),
+            reuse_frame_work: std::cell::Cell::new(false),
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),

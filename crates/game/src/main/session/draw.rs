@@ -56,7 +56,22 @@ impl Session {
     /// every render scale, which is not what a row spelled `50` beside a row
     /// spelled `100` says.
     fn drs_limits(&self) -> drs::Limits {
-        let rect = display::viewport(self.gpu.output.size(), self.settings.display.aspect);
+        let surface = self.gpu.output.size();
+        // A multi-window race shares one scene allocation, the largest any window wants, so
+        // window 1's ceiling is its own target rather than that allocation.
+        let ceiling = if self.windowed_race() {
+            self.target_for(surface)
+        } else {
+            self.framebuffer.allocation()
+        };
+        self.drs_limits_for(surface, ceiling)
+    }
+
+    /// The bounds for a window of `surface` pixels whose ceiling is `ceiling`: window 1's, or a
+    /// further window's of a multi-window race (the one controller's scale is applied to each
+    /// window's own ceiling).
+    pub(super) fn drs_limits_for(&self, surface: (u32, u32), ceiling: (u32, u32)) -> drs::Limits {
+        let rect = display::viewport(surface, self.settings.display.aspect);
         // Off the **render profile**, like the ceiling it pairs with: a target
         // Pulse holds comfortably is not one HD/Fury holds, which is the whole
         // reason those rows are per title.
@@ -67,7 +82,7 @@ impl Session {
             self.gpu.device.limits().max_texture_dimension_2d,
         );
         drs::Limits::new(
-            self.framebuffer.allocation(),
+            ceiling,
             floor,
             // Held under the limiter: aiming above a rate the loop is not
             // allowed to produce would drop the resolution permanently to buy
@@ -213,10 +228,11 @@ impl Session {
         // Off, and on every capture path, `drs::Controller::extent` is the
         // allocation and this is inert.
         let drs_limits = self.drs_limits();
-        // Resolution holds its scale while there is more than one window, as it does for a
-        // split (the controller times one scene pass), so a windowed race draws exactly the
-        // extent this window wants.
-        self.framebuffer.set_extent(if windowed {
+        // A multi-window race runs the one controller on the cost summed over its windows
+        // (`Session::feed_windows`) and applies its scale to each window's own ceiling, while
+        // every window holds one seat; with a window of several seats (a split, whose views are
+        // not timed) the scale holds at the ceiling, as a split screen's does.
+        self.framebuffer.set_extent(if windowed && !self.drs_runs() {
             own_wanted
         } else {
             self.drs.extent(drs_limits)
@@ -461,9 +477,14 @@ impl Session {
                 // are below. Timing one view of `N` would read as a cheap frame
                 // and send the render scale up, so **resolution holds its scale
                 // while split** - chosen, not measured.
-                if stage.race.viewport_count() > 1
-                    && let Some(timer) = self.pass_timer.as_mut()
-                {
+                // A window of one seat in a multi-window race is the exception: its pass is
+                // timed like a whole screen's (`Scene::render_window`).
+                let timed = if stage.race.windowed() {
+                    stage.race.window_drawn(0).len() == 1
+                } else {
+                    stage.race.viewport_count() <= 1
+                };
+                if !timed && let Some(timer) = self.pass_timer.as_mut() {
                     timer.abandon();
                 }
                 (Some(stats), None)
@@ -529,10 +550,10 @@ impl Session {
             // an unsupported adapter does. Read *after* the stage rendered
             // above, which is what makes it this frame's camera rather than the
             // previous one's.
-            // None while windowed: the temporal record holds one camera, and the windows
-            // alternate cameras every frame.
+            // A windowed race keeps a record per window, and a window of several seats (a
+            // split) has none: `None` there, as a menu frame.
             let temporal = match &self.stage {
-                Stage::Race(stage) if self.gpu.temporal && !windowed => stage.temporal(),
+                Stage::Race(stage) if self.gpu.temporal => stage.temporal(0),
                 _ => None,
             };
 

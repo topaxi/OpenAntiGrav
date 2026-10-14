@@ -68,16 +68,55 @@ pub(super) enum Layer {
     Window,
 }
 
+/// What a one-seat window draws on top of the scene itself, read fresh off the settings each
+/// frame as [`Scene::render`]'s arguments are: the motion blur, the camera jitter a temporal
+/// upscaler wants and the timestamp pairs a dynamic-resolution timer is read from. Each is
+/// one camera's: they ride the window's own history ([`Scene::render_window`]), which is why
+/// a window of several seats (a split) draws none of them.
+#[derive(Default)]
+pub struct WindowEffects<'a> {
+    /// The blur's strength; `Off` encodes nothing.
+    pub motion_blur: oag_display::display::MotionBlur,
+    /// The jitter sequence's length, `None` for no jitter. See [`Scene::render`].
+    pub camera_jitter: Option<u32>,
+    /// Brackets the window's scene pass.
+    pub timestamps: Option<wgpu::RenderPassTimestampWrites<'a>>,
+    /// Brackets the motion-blur chain.
+    pub blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'a>>,
+    /// Brackets HD's bloom chain.
+    pub hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'a>>,
+}
+
+impl std::fmt::Debug for WindowEffects<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WindowEffects")
+            .field("motion_blur", &self.motion_blur)
+            .field("camera_jitter", &self.camera_jitter)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Scene {
+    /// Whether the view being drawn does the frame's camera-independent work itself: the two
+    /// shadow maps, the shadow gather, the scenery clocks and the advert cards. **Not a later
+    /// view of a split** ([`Layer::Next`]), and not a window drawing after another window of
+    /// the same frame ([`Scene::render_window`]'s `shared`): both read what the view that
+    /// did it left in the buffers and textures.
+    pub(super) fn does_frame_work(&self) -> bool {
+        self.layer.get() != Layer::Next && !self.reuse_frame_work.get()
+    }
+
     /// Draws slot `slot`'s view into the whole of `area` of `view`, recorded into
     /// `encoder`: one window of a multi-window race. The caller submits `encoder`
     /// before it draws another window, **one submission per window for the whole
     /// chain** (scene, resolve, HUD, composite), for the reason the module doc gives.
     ///
-    /// Everything [`Scene::render`] draws is drawn: the bloom, HD's and Omega's chains
-    /// and the shadows. **Not the motion blur and not the jitter** (**chosen, not
-    /// measured**): [`MotionState`] and the temporal upscaler's frame record hold one
-    /// camera's history, and the windows alternate cameras every frame. The viewpoint is
+    /// Everything [`Scene::render`] draws is drawn: the bloom, HD's and Omega's chains,
+    /// the shadows, and what `effects` asks for (the motion blur and the camera jitter).
+    /// **Each window has a camera history of its own** (`window` picks it,
+    /// [`Scene::history`]): the previous tick's matrices the blur measures against, the
+    /// jitter phase and the temporal upscaler's frame record, and the cut watch, so the
+    /// windows alternating cameras within a frame never read each other's. The viewpoint is
     /// put back to the player's own before returning.
     #[allow(clippy::too_many_arguments)]
     pub fn render_view(
@@ -87,6 +126,7 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         race: &Race,
+        window: usize,
         slot: usize,
         area: (f32, f32, f32, f32),
         fov: oag_display::display::Fov,
@@ -95,10 +135,13 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
-        timestamps: Option<wgpu::RenderPassTimestampWrites<'_>>,
+        shared: bool,
+        effects: WindowEffects<'_>,
     ) -> SceneStats {
         race.set_viewpoint(slot);
         self.layer.set(Layer::Window);
+        self.reuse_frame_work.set(shared);
+        self.history.set(window);
         let stats = self.render(
             device,
             queue,
@@ -110,15 +153,17 @@ impl Scene {
             cull,
             pvs_cull,
             anim_seconds,
-            oag_display::display::MotionBlur::Off,
+            effects.motion_blur,
             shadows,
-            None,
+            effects.camera_jitter,
             zone_spectrum,
-            timestamps,
-            None,
-            None,
+            effects.timestamps,
+            effects.blur_timestamps,
+            effects.hd_bloom_timestamps,
         );
         self.layer.set(Layer::Whole);
+        self.reuse_frame_work.set(false);
+        self.history.set(0);
         race.reset_viewpoint();
         stats
     }
@@ -170,8 +215,105 @@ impl Scene {
             anim_seconds,
             shadows,
             zone_spectrum,
+            false,
+            0,
             view_timers,
         )
+    }
+
+    /// Window `window` of a multi-window race, whatever it holds: nothing for a window with
+    /// no seat, [`Scene::render_view`] for one seat (recorded into `encoder`, which the caller
+    /// submits before it draws another window) and [`Scene::render_window_views`] for several
+    /// (which submits its own buffers, so `encoder` keeps only what the caller records after
+    /// it). The one place that choice is made; the window's frame loop and the headless
+    /// capture both draw through it.
+    ///
+    /// `effects` is the one-seat window's blur, jitter and timers; a window of several seats
+    /// is a split and draws none of them (**chosen, not measured**: the views in one target
+    /// are N cameras in one frame, and a history holds one). `view_timers` brackets each of
+    /// the window's seats' scene passes, as [`Scene::render_viewports`]'s does: empty
+    /// everywhere but the render bench, where it stands in for `effects.timestamps`.
+    ///
+    /// **`shared` is whether an earlier window of this same frame already drew**, and with
+    /// it did the camera-independent work (the shadow maps and their gather, the scenery
+    /// clocks, the advert cards): this window reads what that one left, as a later view of
+    /// a split does, so a frame does it once however many windows draw. The earlier window's
+    /// encoder must be submitted before this window's (the maps are textures it wrote). The
+    /// `mapped` tier's depth map is fitted on the craft each view follows, so every window
+    /// still redraws that one. The caller says it: `false` for the first window that draws a
+    /// frame (window 1 can draw nothing, and then window 2 is the first).
+    #[allow(clippy::too_many_arguments)]
+    pub fn render_window(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        race: &Race,
+        window: usize,
+        area: (f32, f32, f32, f32),
+        fov: oag_display::display::Fov,
+        cull: bool,
+        pvs_cull: bool,
+        anim_seconds: Option<f32>,
+        shadows: oag_display::display::Shadows,
+        zone_spectrum: &[f32],
+        shared: bool,
+        effects: WindowEffects<'_>,
+        view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
+    ) -> SceneStats {
+        match race.window_drawn(window).as_slice() {
+            [] => SceneStats::default(),
+            &[slot] => {
+                let timer = view_timers.first_mut().and_then(Option::as_mut);
+                let effects = WindowEffects {
+                    timestamps: effects.timestamps.or_else(|| {
+                        timer
+                            .as_deref()
+                            .and_then(oag_gpu::timing::PassTimer::writes)
+                    }),
+                    ..effects
+                };
+                let stats = self.render_view(
+                    device,
+                    queue,
+                    encoder,
+                    view,
+                    race,
+                    window,
+                    slot,
+                    area,
+                    fov,
+                    cull,
+                    pvs_cull,
+                    anim_seconds,
+                    shadows,
+                    zone_spectrum,
+                    shared,
+                    effects,
+                );
+                if let Some(timer) = timer {
+                    timer.resolve(encoder);
+                }
+                stats
+            }
+            _ => self.render_window_views(
+                device,
+                queue,
+                view,
+                race,
+                window,
+                area,
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                zone_spectrum,
+                shared,
+                view_timers,
+            ),
+        }
     }
 
     /// Draws window `window`'s views ([`Race::window_drawn`]) into the rectangles its cut
@@ -195,6 +337,8 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
+        shared: bool,
+        view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let slots = race.window_drawn(window);
         let rects = race.window_rects(window, area);
@@ -212,7 +356,9 @@ impl Scene {
             anim_seconds,
             shadows,
             zone_spectrum,
-            &mut [],
+            shared,
+            window,
+            view_timers,
         )
     }
 
@@ -234,9 +380,15 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
+        shared: bool,
+        history: usize,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let mut stats = SceneStats::default();
+        self.reuse_frame_work.set(shared);
+        // The window's own history slot, so these views' cameras (several in one frame, and
+        // unread: a split draws no blur and no jitter) never touch another window's.
+        self.history.set(history);
         for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
             race.set_viewpoint(slot);
             self.layer.set(if index == 0 {
@@ -280,6 +432,8 @@ impl Scene {
             oag_gpu::perfprobe::mark("submit");
         }
         self.layer.set(Layer::Whole);
+        self.reuse_frame_work.set(false);
+        self.history.set(0);
         race.reset_viewpoint();
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),

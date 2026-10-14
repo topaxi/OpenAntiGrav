@@ -31,6 +31,31 @@ pub(super) struct MotionState {
     cur: Snapshot,
 }
 
+/// How many cameras keep a history: a multi-window race's windows, the most `--windows` allows.
+pub(super) const MAX_HISTORIES: usize = 8;
+
+/// One camera's frame-to-frame state, the fields [`Scene::history`] picks one set of.
+#[derive(Debug, Default)]
+pub(super) struct History {
+    /// The previous tick's matrices. `RefCell` for the reason [`Scene::exhaust`] is:
+    /// promoting a tick's snapshot is per-frame state `render`'s `&self` has to move.
+    pub(super) motion: std::cell::RefCell<Option<MotionState>>,
+    /// The camera-jitter phase: frames, not ticks. See [`Scene::jittered`].
+    pub(super) frame_index: std::cell::Cell<u32>,
+    /// What the last [`Scene::render`] drew with, for a temporal upscaler that runs
+    /// *after* it and cannot see any of it.
+    ///
+    /// **Recorded rather than recomputed.** The jitter offset, the sequence length and
+    /// the camera are all decided inside `render` - the offset from a counter this scene
+    /// owns, the camera from the tick's own speed-widened field of view - and a caller
+    /// re-deriving them would be a second answer to the same question, wrong in exactly
+    /// the way that produces a plausible picture. `None` until the first frame.
+    pub(super) last_frame: std::cell::Cell<Option<TemporalFrame>>,
+    /// The camera view and player respawn count as of the last recorded frame, for
+    /// detecting a camera cut mid-race - see [`CutWatch`].
+    pub(super) cut_watch: std::cell::Cell<CutWatch>,
+}
+
 /// One tick's worth of the matrices anything draws with.
 #[derive(Clone, Debug)]
 pub(super) struct Snapshot {
@@ -120,7 +145,7 @@ impl MotionState {
                 let now = Snapshot::take(race, cannon, view_projection, drawn);
                 *state = Some(Self {
                     key: FrameKey::of(race),
-                    cuts: race.camera_cuts(),
+                    cuts: race.viewed_camera_cuts(),
                     prev: now.clone(),
                     cur: now.clone(),
                 });
@@ -135,7 +160,7 @@ impl MotionState {
                 // camera's "previous" is taken from the new shot, so the blur measures no camera
                 // travel across it. The craft and the projectiles keep their own previous
                 // matrices: they did move.
-                let cuts = race.camera_cuts();
+                let cuts = race.viewed_camera_cuts();
                 if cuts != state.cuts {
                     state.cuts = cuts;
                     state.prev.view_projection = state.cur.view_projection;
@@ -272,6 +297,11 @@ mod cut_watch_tests {
 }
 
 impl super::Scene {
+    /// The history the draw in progress reads and writes ([`Scene::history`]'s field).
+    pub(super) fn history(&self) -> &History {
+        &self.histories[self.history.get().min(MAX_HISTORIES - 1)]
+    }
+
     /// Records what this frame is being drawn with, for the upscaler that
     /// resolves it afterwards and can derive none of it.
     ///
@@ -298,20 +328,23 @@ impl super::Scene {
         view: oag_display::display::CameraView,
         respawns: u32,
     ) {
-        let phase = self.frame_index.get();
-        let mut watch = self.cut_watch.get();
+        let history = self.history();
+        let phase = history.frame_index.get();
+        let mut watch = history.cut_watch.get();
         let cut = watch.observe(view, respawns);
-        self.cut_watch.set(watch);
-        self.last_frame.set(phases.map(|phase_count| TemporalFrame {
-            camera: oag_post::fsr3::camera_from_projection(projection),
-            jitter: oag_post::jitter::offset_pixels(phase, phase_count),
-            phase_count,
-            // The sequence's first frame has nothing behind it, and a camera
-            // cut mid-race - a view change or the player's own respawn - hands
-            // the resolve a history of a different shot, so both throw it away
-            // the same way. See `CutWatch`.
-            reset: phase == 0 || cut,
-        }));
+        history.cut_watch.set(watch);
+        history
+            .last_frame
+            .set(phases.map(|phase_count| TemporalFrame {
+                camera: oag_post::fsr3::camera_from_projection(projection),
+                jitter: oag_post::jitter::offset_pixels(phase, phase_count),
+                phase_count,
+                // The sequence's first frame has nothing behind it, and a camera
+                // cut mid-race - a view change or the player's own respawn - hands
+                // the resolve a history of a different shot, so both throw it away
+                // the same way. See `CutWatch`.
+                reset: phase == 0 || cut,
+            }));
     }
 
     /// The depth and velocity attachments, and what the last frame was drawn
@@ -319,15 +352,25 @@ impl super::Scene {
     ///
     /// `None` before the first [`Scene::render`], which is the same frame on
     /// which there would be no history anyway.
+    ///
+    /// `window` is whose frame: 0 for a race that is not dealt across windows, and for window 1.
+    /// A window whose picture is several views (a split) has none, so a temporal upscaler
+    /// there falls to its spatial rung.
     #[must_use]
-    pub fn temporal(&self) -> Option<(&wgpu::TextureView, &wgpu::TextureView, TemporalFrame)> {
-        self.last_frame.get().map(|frame| {
-            (
-                &self.attachment_views.depth,
-                &self.attachment_views.velocity,
-                frame,
-            )
-        })
+    pub fn temporal(
+        &self,
+        window: usize,
+    ) -> Option<(&wgpu::TextureView, &wgpu::TextureView, TemporalFrame)> {
+        self.histories[window.min(MAX_HISTORIES - 1)]
+            .last_frame
+            .get()
+            .map(|frame| {
+                (
+                    &self.attachment_views.depth,
+                    &self.attachment_views.velocity,
+                    frame,
+                )
+            })
     }
 
     /// How many samples this scene's attachments carry.
@@ -392,8 +435,9 @@ impl super::Scene {
         view_projection: Mat4,
         prev_vp: Mat4,
     ) -> (Mat4, Mat4) {
-        let frame = self.frame_index.get();
-        self.frame_index.set(frame.wrapping_add(1));
+        let history = self.history();
+        let frame = history.frame_index.get();
+        history.frame_index.set(frame.wrapping_add(1));
         let Some(phases) = phases else {
             return (view_projection, prev_vp);
         };
@@ -451,6 +495,19 @@ impl super::Scene {
             },
             timestamps,
         )
+    }
+}
+
+#[cfg(test)]
+impl super::Scene {
+    /// Window `window`'s previous and current view-projection, for the tests that pin which
+    /// camera a history belongs to.
+    pub(crate) fn motion_probe(&self, window: usize) -> Option<(Mat4, Mat4)> {
+        self.histories[window]
+            .motion
+            .borrow()
+            .as_ref()
+            .map(|state| (state.prev.view_projection, state.cur.view_projection))
     }
 }
 
