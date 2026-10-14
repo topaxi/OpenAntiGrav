@@ -70,12 +70,17 @@ Constraints whatever is chosen:
   which is the related open lane `seat-changes-as-input`.
 - A resume should have a short countdown (the race start's own, or a shorter one) so
   the players who did not resume are not crashed into a wall on the first tick.
+  **Decided 2026-10-14 (maintainer):** once a resume is triggered, an on-screen
+  `3`, `2`, `1`, `GO` countdown runs, then the race resumes. This is ours (the
+  original is single-player and has no resume countdown), so it is **chosen, not
+  measured**. The race stays frozen through the countdown.
 - Leaning (Claude's, to be challenged): option 1 for public online races, option 2
   only once private lobbies exist, option 3 for LAN.
 
 ## Next Steps
 
 - Local timeout: decide the value and whether to show it, then extend
-  `session::pause` with tests.
+  `session::pause` with tests. The `pause-timeout` lane also carries the
+  `3 2 1 GO` resume countdown decided above.
 - Online: pick between the options above when the protocol ADR is written; until
   then nothing online should assume a race can be paused.
