@@ -1009,11 +1009,15 @@ a guess.
   vertical, join, a left and right two-view race (Omega also through Track Select). Written up in
   [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
   **Open from it**:
-  - **Omega's Ship Select is wired and bare** (maintainer's decision, `team_select` on `oag-omega`, one
-    person and each seat): the screen draws padlocks in every model cell (no `team_variants` for the
-    HD and 2048 rosters Omega mixes), an empty ship model preview (`preview_meshes`,
-    `ship_preview_hull` unset) and empty statistics bars. Next: Omega's roster and variants table,
-    the hull preview, and ratings per team model.
+  - ~~**Omega's Ship Select is wired and bare**~~ **Done, 2026-10-14 (`omega-ship-select`)**: Omega's HD-era
+    teams carry `TEAM_VARIANTS` (three open models each, off the teams definition), the bars carry each
+    model's ratings and the `SHIP MODEL` frame draws the PS4 race hull at HD's pose (**chosen, not measured**,
+    `FrontEnd::ship_preview_pose`). Walked for one person and each seat. Still open: the five 2048-era teams
+    are not offered on the screen (their craft sit under `Ships\<id>\<n>`, so `load_teams` finds no
+    `hdships\<id>`; showing them needs the `VariantJoin` passed into `Team::hex_cells`/`variant_stats`, their
+    logos under `fe\NewImages\Team_Logos` and a team-level `<Unlock purchase>` rule); the bars' two halves are one
+    grey on Omega's page (`AlwaysSolidColor` equals `HD_Grey` there, no capture says what the original draws);
+    the authored `ShipDesc`, livery hint and `PadlockText` are not drawn.
   - **2048 seats pick no ship**: no per-player pair is authored (`Team_Definition.xml` is one touch screen).
   - **HD guest join not used**: `FE_GUEST_JOIN` ("PLAYER 2 PRESS START TO JOIN" on HD, "PRESS OPTIONS TO
     JOIN" on Omega) names a different button than our lobby's join press (confirm), so showing it on the

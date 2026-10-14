@@ -5,8 +5,30 @@
 //! cargo run -p oag-game --example omega_ship_select_probe -- data/extracted/ps4
 //! ```
 
+/// `<psarc> <entry>`: how many models with an `<FE>` the catalogue reader finds per team
+/// in a teams definition, for the 2048 cross-check.
+fn census(psarc: &str, entry: &str) -> anyhow::Result<()> {
+    let mut archive = oag_assets::psarc::Archive::open_file(std::path::Path::new(psarc))?;
+    let xml = String::from_utf8_lossy(&archive.read_path(entry)?).into_owned();
+    let teams = oag_raceplay::catalogue::teams(&xml);
+    let models: usize = teams.iter().map(|team| team.models.len()).sum();
+    let rated: usize = teams
+        .iter()
+        .flat_map(|team| &team.models)
+        .filter(|model| model.rating_tenths.is_some())
+        .count();
+    println!(
+        "{entry}: {} team(s), {models} model(s) with an FE, {rated} rated",
+        teams.len()
+    );
+    Ok(())
+}
+
 fn main() -> anyhow::Result<()> {
     let source = std::env::args().nth(1).expect("a source path");
+    if let Some(entry) = std::env::args().nth(2) {
+        return census(&source, &entry);
+    }
     let options = oag_game::boot::Options {
         source,
         language: None,
