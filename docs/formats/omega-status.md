@@ -376,14 +376,18 @@ measured**), the `speed` craft, confirm, and the race loads and starts on the ye
   does not exist), only `Feisar2048\1`..`\4` do. `oag_title::GuestRoster::offered` (data, `true` on Omega's roster, `false` on 2048's HD-derived twelve,
   which stay reachable through RACE REMIX only) lets `boot::roster::load_teams` offer a guest roster's team when **every** craft its table names resolves
   its hull and tuning in the roster's own directories (`ships_for`/`handling_dir_for`). The load report's "declared team(s) have no ship" line is gone on
-  Omega; 2048's and HD's counts and frames do not move (HD's and 2048's `--menu-page ship-select`/team lists compared to a build of `28d164268`).
+  Omega. Compared with a build of `28d164268`: HD's Ship Select frames are byte-identical and 2048's team list is the same five; 2048 has no
+  ship-select page to compare.
 - **The join is data.** `Team::hex_cells` and `variant_stats` take the `VariantJoin` (`RaceDefaults::join_for`, the variant table's own join, a suffix
   for a team with none): `Data\...\Feisar2048` + `3` is `...\Feisar2048\3`, where the old suffix append gave `Feisar20483`. `Team::model_for_directory`
   now compares the whole path, not its leaf: `Feisar2048\3` and the `IsVR` model at `VR_2048\3` share the leaf `3`.
 - **Rows, in the definition's file order** (so the honeycomb places them, nothing chosen): `speed` (`\3`), `combat` (`\1`), `agility` (`\2`),
   `prototype` (`\4`), then the four `IsVR` models (`vr_speed`...), which this build draws as padlocks like HD's two PSVR rows. Four open cells and four
-  padlocks per team. The variant table's labels are the models' own `name` (`combat`, `agility`, `speed`, `prototype`; Omega's table said `fighter` for `\1`
-  after the string id, 2048's own table still does); the ground truth holds each label to its model.
+  padlocks per team, and a ninth padlock under them: Omega's grid is nine rows and no model fills the ninth, so `hex::draw` gives it the grid's padlock
+  (**chosen, not measured**; HD's own seven rows are all filled, and HD-era teams author nine models). The variant table's labels are the models' own `name` (`combat`, `agility`, `speed`, `prototype`; Omega's table said `fighter` for `\1`
+  after the string id, 2048's own table still does); the ground truth holds each label to its model. **The change is visible outside Ship Select**:
+  RACE REMIX's VARIANT row for "Wipeout 2048 (Omega)" reads this table (`variant_choices`), so its first entry now says `combat`. The HD-era table's labels are
+  title-cased (`Normal`/`Concept`/`Nitro`), these are the lowercase authored names: a convention difference, not changed here.
 - **Ratings** off each model's `<FE>` as for HD (Feisar2048: combat 5/8.5/6/8, agility 5/8/9/6, speed 8/8/7/4, prototype 8/8/7/4, in tenths 50/85/60/80 ...).
   Thumbnails are `<model>\FE\thumb0.gnf` per craft (drawn), the logo `Ships\<Team>\FE\Logo.gnf` per team: `picker::hd::logo_src` now takes the team's
   `location` and the entry carries it (`Details::Ship::logo`), where it joined `ship_dir` and the id and so only reached `hdships`.
