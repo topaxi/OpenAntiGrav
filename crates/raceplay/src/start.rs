@@ -39,6 +39,7 @@ impl Race {
             opponents,
             no_opponents,
             people,
+            #[cfg(feature = "view")]
             trail_sparks,
             seed,
             zone,
@@ -50,26 +51,42 @@ impl Race {
             handling,
             opponent_handling,
             chase,
+            #[cfg(feature = "view")]
             chase_close,
+            #[cfg(feature = "view")]
             internal,
+            #[cfg(feature = "view")]
             nozzles,
+            #[cfg(feature = "view")]
             engine_lights,
+            #[cfg(feature = "view")]
             spu_vertex_lights,
+            #[cfg(feature = "view")]
             spark_anchors,
+            #[cfg(feature = "view")]
             collision_fx,
+            #[cfg(feature = "view")]
             scenery_fx,
+            #[cfg(feature = "view")]
             effects,
+            #[cfg(feature = "view")]
             handles,
+            #[cfg(feature = "view")]
             sounds,
+            #[cfg(feature = "view")]
             track_emitters,
+            #[cfg(feature = "view")]
             announcer,
+            #[cfg(feature = "view")]
             class_announcer,
             zone_stages,
             countdown_voice,
             launch_hover,
             hover_rig,
             craft_laws,
+            #[cfg(feature = "view")]
             zoom_ring,
+            #[cfg(feature = "view")]
             zoom_borrowed,
             weapon_pad_glow,
             speedup_pads,
@@ -83,28 +100,49 @@ impl Race {
             start_boost,
             pilot_assist,
             pose_override,
+            #[cfg(feature = "view")]
             camera_override,
+            #[cfg(feature = "view")]
             hd_trail,
+            #[cfg(feature = "view")]
             shield_palette,
+            #[cfg(feature = "view")]
             hd_plasma_blast,
+            #[cfg(feature = "view")]
             hd_bomb_blast,
+            #[cfg(feature = "view")]
             bomb_shockwave_fades,
+            #[cfg(feature = "view")]
             hd_missile_blast,
+            #[cfg(feature = "view")]
             pulse_laid_pose,
+            #[cfg(feature = "view")]
             laid_pose_scaled,
             laid_from_rear,
             grid_frame_from_sample,
+            #[cfg(feature = "view")]
             screen_flash,
+            #[cfg(feature = "view")]
             quake_flash,
+            #[cfg(feature = "view")]
             absorb_burst,
+            #[cfg(feature = "view")]
             absorb_anchors,
+            #[cfg(feature = "view")]
             hit_spark_anchors,
+            #[cfg(feature = "view")]
             weapon_spark_anchors,
+            #[cfg(feature = "view")]
             wreck_anchors,
+            #[cfg(feature = "view")]
             magstrip_wake,
+            #[cfg(feature = "view")]
             magstrip_pob,
+            #[cfg(feature = "view")]
             leach_strip,
+            #[cfg(feature = "view")]
             destroy_stations,
+            #[cfg(feature = "view")]
             intro_camera,
             slot_teams,
             sight,
@@ -142,6 +180,7 @@ impl Race {
         // measured**, and carries no confidence score. The warning is the point
         // - a silent Venom is how three of four classes raced short in the
         // first place.
+        #[cfg(feature = "view")]
         let destroy_focus_rate = super::destroy_camera::focus_rate(&class);
         let lap_class = oag_race::SpeedClass::census(&class).unwrap_or_else(|| {
             warn!(
@@ -493,8 +532,11 @@ impl Race {
             world.ship_count = 1;
         }
 
+        #[cfg(feature = "view")]
         let camera_view = oag_display::display::CameraView::default();
+        #[cfg(feature = "view")]
         let chase_params = super::access::chase_block_for(camera_view, chase, chase_close);
+        #[cfg(feature = "view")]
         let camera = Chase::snapped(target_of(&world.ships[0]), &chase_params);
 
         let weapon_pad_line = super::field::pad_seek_positions(&line, &weapon_pads);
@@ -569,6 +611,7 @@ impl Race {
                 last_damager: [None; oag_gameplay::MAX_SHIPS],
                 locks: [sight.lock_sight(); oag_gameplay::MAX_SHIPS],
                 lock_rig: chase,
+                laid_from_rear,
                 last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
                 respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
                 wreck_voice: [0.0; oag_gameplay::MAX_SHIPS],
@@ -626,6 +669,12 @@ impl Race {
                 pad_previous_position: [None; MAX_SHIPS],
                 scheme: ControlScheme::default(),
             },
+            #[cfg(not(feature = "view"))]
+            view: RaceView {
+                slot_teams,
+                ..RaceView::default()
+            },
+            #[cfg(feature = "view")]
             view: RaceView {
                 chase_params,
                 chase_far: chase,
@@ -731,7 +780,6 @@ impl Race {
                 hd_plasma_blast,
                 pulse_laid_pose,
                 laid_pose_scaled,
-                laid_from_rear,
                 screen_flash: if screen_flash {
                     Some(oag_fx::flash::ScreenFlash::default())
                 } else {
@@ -784,6 +832,7 @@ impl Race {
                 flaps: [0.0, 0.0],
                 flap_graphics: setup.airbrake_graphics,
             },
+            #[cfg(feature = "view")]
             replay: replay::ReplayState::default(),
             quiet: false,
             #[cfg(test)]

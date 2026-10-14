@@ -310,7 +310,7 @@ impl Race {
             };
             self.view.stage.orient(playing, up);
             let sparks = &mut self.view.hit_sparks;
-            sparks.cooldown[slot][node] = oag_fx::sparks::COLLISION_COOLDOWN;
+            sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
             sparks.riding.push(Riding {
                 slot,
                 node,

@@ -33,6 +33,7 @@ pub mod chase_rig;
 pub mod course;
 pub mod mode;
 pub mod recovery;
+pub mod roster;
 pub mod sight;
 pub mod standing;
 pub mod state;

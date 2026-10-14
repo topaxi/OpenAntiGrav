@@ -117,7 +117,7 @@ pub enum Mode {
     ///
     /// **Which team the opponent flies is not measured for this mode**. This
     /// build answers it the way [`Self::SingleRace`]'s seven opponents are
-    /// answered: `oag_game::livery::teams_for_slots`, Pulse's roster draw
+    /// answered: `oag_race::roster::teams_for_slots`, Pulse's roster draw
     /// recovered off Single Race (`docs/ghidra/functions/psp-pulse-usa/grid.md`'s
     /// "which team flies which slot"), inherited here rather than measured.
     ///

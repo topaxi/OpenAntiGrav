@@ -272,6 +272,7 @@ impl Race {
             &dimensions,
             dimensions.shield * LAP_REFILL_FRACTION,
         );
+        #[cfg(feature = "view")]
         self.play_absorb_feedback(slot, false);
     }
 

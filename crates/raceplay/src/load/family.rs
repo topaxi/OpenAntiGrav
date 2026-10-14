@@ -15,7 +15,7 @@ fn table(race: &oag_title::RaceDefaults) -> Option<&'static oag_title::TeamVaria
 
 /// `available` without the player's own team in any of its variants, so a
 /// player on `Feisar_c1` never faces `Feisar`. Unchanged for a title with no
-/// families (its own exact-id filter in `oag_livery::teams_for_slots` stands).
+/// families (its own exact-id filter in `oag_race::roster::teams_for_slots` stands).
 pub(super) fn pool(
     race: &oag_title::RaceDefaults,
     player: &str,

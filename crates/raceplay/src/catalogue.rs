@@ -57,6 +57,7 @@ pub fn race_laps(mode: oag_race::Mode, class: &str) -> Option<u32> {
     mode.laps_target(oag_race::SpeedClass::census(class)?)
 }
 
+#[cfg(feature = "view")]
 /// Lays a title's circuits out the way Wipeout HD/Fury's `Track Creation`
 /// grid does: every forward circuit in list order, then every reverse one in
 /// the same order, and the number of columns that makes (`0` where the two
@@ -118,6 +119,7 @@ pub fn direction_rows(
     (out, columns)
 }
 
+#[cfg(feature = "view")]
 /// The sheet name of `track`'s own emblem, for a title whose track screen
 /// draws one (`oag_title::FrontEnd::track_select`) and `None` for the rest.
 #[must_use]
@@ -128,6 +130,7 @@ pub fn track_emblem(title: &oag_title::Title, track: &Track) -> Option<String> {
         .then(|| oag_ui_screens::picker::hd::track::emblem_src(&track.location))
 }
 
+#[cfg(feature = "view")]
 /// The sheet name of `track`'s white icon, the picture its hexagon carries in
 /// HD's `Track Creation` grid, on the titles whose track screen has one.
 #[must_use]
@@ -496,6 +499,7 @@ impl Team {
             .find(|skin| skin.name.eq_ignore_ascii_case(name))
     }
 
+    #[cfg(feature = "view")]
     /// What to show a player for this team.
     ///
     /// **The order is the whole content of this function**, and the middle step
@@ -628,6 +632,7 @@ fn read_models(team: &Node) -> Vec<TeamModel> {
 }
 
 impl Team {
+    #[cfg(feature = "view")]
     /// Each of `variant_ids`' own ratings, for a title whose ratings sit on
     /// the model rather than the team ([`Self::models`]): a variant id is a
     /// directory suffix on such a title (`""`, `"_c1"`, `"_n1"` on HD - see
@@ -675,6 +680,7 @@ impl Team {
         Some((String::new(), model.name.clone()))
     }
 
+    #[cfg(feature = "view")]
     /// What `Team Selection`'s hex column shows for each of this team's
     /// [`Self::models`], in file order: the model's own thumbnail, and
     /// whether it can be picked right now.
@@ -907,6 +913,7 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
     })
 }
 
+#[cfg(feature = "view")]
 /// The `FE_REVERSE` key: the front end's own word for a circuit driven the
 /// other way.
 ///
@@ -915,6 +922,7 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
 /// Present in all five of Wipeout HD's copies of the string table.
 const REVERSE_KEY: &str = "FE_REVERSE";
 
+#[cfg(feature = "view")]
 /// What the RACE page shows for one circuit.
 ///
 /// The name out of [`oag_ui::language::CircuitNames`], falling back to the
@@ -963,6 +971,7 @@ pub fn label(
     }
 }
 
+#[cfg(feature = "view")]
 /// Whether the circuit this one reverses is named the same thing.
 fn shares_a_name_with_its_forward_twin(
     track: &Track,

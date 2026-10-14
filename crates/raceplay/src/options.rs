@@ -98,15 +98,15 @@ pub struct Options {
     /// what this engine did before liveries and what a source with no readable
     /// definition still gets.
     ///
-    /// Which of them ends up in which slot is [`oag_livery::teams_for_slots`],
+    /// Which of them ends up in which slot is [`oag_race::roster::teams_for_slots`],
     /// Pulse's own roster draw off the race seed.
     pub opponent_teams: Vec<String>,
     /// A per-AI-slot team override, index `0` being grid slot `1` (slot `0`
     /// is always the player) - **what authored data replaces
-    /// [`oag_livery::teams_for_slots`]'s own draw with**, where a caller has one to offer.
+    /// [`oag_race::roster::teams_for_slots`]'s own draw with**, where a caller has one to offer.
     ///
     /// `None` at an index leaves that slot exactly what
-    /// [`oag_livery::teams_for_slots`] would already give it; an index
+    /// [`oag_race::roster::teams_for_slots`] would already give it; an index
     /// past the end of this list is the same as `None` there. Empty
     /// (`Vec::new()`, [`Default`]'s own value) changes nothing anywhere -
     /// every caller outside the one below.
@@ -291,6 +291,7 @@ pub struct Options {
     /// the load needs it: a title's authored left-and-right HUD
     /// ([`oag_title::hud::VerticalLayouts`]) is read for a vertical cut. The race box's
     /// `SPLIT SCREEN` row sets it; it means nothing for any other view count.
+    #[cfg(feature = "view")]
     pub cut: oag_render::viewport::Cut,
     /// The class has no controller that defines how to fly it
     /// (`oag_ai::coverage`): the race fields no opponents and says so. Set by
@@ -393,6 +394,7 @@ pub struct Setup {
     /// ([`Race::start`]); one person, the default, changes nothing.
     pub people: u8,
     /// See [`Options::trail_sparks`] - a draw-path verification aid.
+    #[cfg(feature = "view")]
     pub trail_sparks: bool,
     /// The world generator's seed, already resolved from [`Options::seed`].
     pub seed: u64,
@@ -426,6 +428,7 @@ pub struct Setup {
     /// HD craft's is blue. The loader derives the flag from each slot's team
     /// directory: `*_c1` is the concept skin, `*_n1` the nitro one. See
     /// `docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`.
+    #[cfg(feature = "view")]
     pub hd_trail: Option<[f32; oag_gameplay::MAX_SHIPS]>,
     /// Which three colours a fired shield's shell moves between.
     ///
@@ -436,26 +439,33 @@ pub struct Setup {
     /// comes from HD draws HD's own colours rather than Pulse's borrowed
     /// ones. See [`oag_render::shield::Palette`]'s own doc comment for what
     /// each title's palette carries and which parts are measured.
+    #[cfg(feature = "view")]
     pub shield_palette: oag_render::shield::Palette,
     /// Whether a Plasma detonation plays HD's three-model scale ease rather than
     /// Pulse's baked anim-time scrub: `plasma_blast_hd.is_some()`. The two are
     /// read off different executables and do not unify (`blast_models`).
+    #[cfg(feature = "view")]
     pub hd_plasma_blast: bool,
     /// Whether a Bomb detonation plays HD's own blast object rather than Pulse's
     /// two eased models: `bomb_blast_hd.is_some()`. See `bomb_blast::hd`.
+    #[cfg(feature = "view")]
     pub hd_bomb_blast: bool,
     /// Whether a Bomb detonation's shockwave fades while it widens:
     /// `bomb_blast_pulse.shockwave_fades`. Pulse's does, Pure's does not.
+    #[cfg(feature = "view")]
     pub bomb_shockwave_fades: bool,
     /// Whether a Missile hit plays HD's explosion: `missile_blast_hd.is_some()`.
+    #[cfg(feature = "view")]
     pub hd_missile_blast: bool,
     /// Whether a laid Mine and Bomb take Pulse's own measured poses - the
     /// Mine spun and scaled by `Mine_PoseNode`, the Bomb squared to the world
     /// by `Bomb_Init` - rather than the frozen craft pose. A title fact:
     /// `craft_title.looks.laid_pose`. See
     /// `weapons::visuals::laid`.
+    #[cfg(feature = "view")]
     pub pulse_laid_pose: bool,
     /// A laid Mine alone takes the spun, 0.6-scaled pose: `looks.laid_pose_scaled`.
+    #[cfg(feature = "view")]
     pub laid_pose_scaled: bool,
     /// A laid Mine or Bomb starts at the rear anchor: `looks.laid_from_rear`.
     pub laid_from_rear: bool,
@@ -470,43 +480,55 @@ pub struct Setup {
     /// Whether weapon detonations start `ScreenFlash_Start`'s full-screen
     /// wash - Pulse off a PSP disc only, the one executable its consumer is
     /// read off. See `oag_fx::flash`.
+    #[cfg(feature = "view")]
     pub screen_flash: bool,
     /// Whether the Quake wave alone starts that wash: a title that draws none
     /// of its other detonations' flashes but whose own wave is read
     /// (`oag_title::QuakeLook::flash`). Ignored with [`Self::screen_flash`].
+    #[cfg(feature = "view")]
     pub quake_flash: bool,
     /// How this title staggers `WO_WEAPON_ABSORB` over a hull, or `None` on a
     /// title whose absorb path is unread. See `race::absorb`.
+    #[cfg(feature = "view")]
     pub absorb_burst: Option<oag_title::Burst>,
     /// Each slot's absorb locators in its hull's model space, in the order
     /// the original collects them: the `Ship Collision Fx` set on Pulse and
     /// Pure, the `absorb` set on HD.
+    #[cfg(feature = "view")]
     pub absorb_anchors: Vec<Vec<Vec3>>,
     /// Each slot's `Ship Collision Fx` locators for the hit sparks a landed
     /// weapon hit throws, or none on a title whose path is unread. See
     /// `race::hit_sparks`.
+    #[cfg(feature = "view")]
     pub hit_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's `Ship Collision Fx` locators for the spark HD's Cannon
     /// throws on the craft it hits, or none on every other title. See
     /// `race::hit_sparks::throw_weapon_spark`.
+    #[cfg(feature = "view")]
     pub weapon_spark_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's wreck `Ship Collision Fx` locators, where its destruction
     /// effects spawn - see `race::wreck_fx`.
+    #[cfg(feature = "view")]
     pub wreck_anchors: Vec<Vec<oag_livery::SparkAnchor>>,
     /// Each slot's `arc_anchor_point` in its hull's model space, when the title
     /// builds the HD-lineage magstrip arc wake (`Some`); a slot whose hull
     /// authors none is `None` and draws no wake. See `race::magstrip_wake`.
+    #[cfg(feature = "view")]
     pub magstrip_wake: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// Whether the over-strip effect is the title's `.pob`: see `WeaponModels::magstrip_pob`.
+    #[cfg(feature = "view")]
     pub magstrip_pob: bool,
     /// Each slot's `arc_anchor_point` for HD's LeachBeam strip, `Some` when drawn.
+    #[cfg(feature = "view")]
     pub leach_strip: Option<[Option<Mat4>; oag_gameplay::MAX_SHIPS]>,
     /// The circuit's authored cameras, where the player's camera stands once
     /// their craft is destroyed - see `race::destroy_camera`. Empty off Pulse.
+    #[cfg(feature = "view")]
     pub destroy_stations: Vec<oag_render::camera::destroy::Station>,
     /// The circuit's pre-race flyby, dormant until a windowed session begins it - see
     /// `race::intro_camera`. `None` where the title plays none (`oag_title::pre_race`) and on a circuit with no
     /// `start_grid.vex`.
+    #[cfg(feature = "view")]
     pub intro_camera: Option<(
         oag_vex::grid_camera::GridCamera,
         &'static oag_title::pre_race::PreRace,
@@ -531,6 +553,7 @@ pub struct Setup {
     /// Separate from [`Self::handling`] because it is per *team* rather than
     /// per speed class, and because no force term reads it - see
     /// `oag_gameplay::airbrake_graphics_for`.
+    #[cfg(feature = "view")]
     pub airbrake_graphics: oag_gameplay::AirbrakeGraphics,
     /// The per-class scale on grounded gravity, from `<GlobalClass><GravityMul/>`.
     ///
@@ -549,8 +572,10 @@ pub struct Setup {
     pub chase: ChaseParams,
     /// The same seven from `<ExternalCameraClose>`: the nearer of the two
     /// external views [`oag_display::display::CameraView`] cycles.
+    #[cfg(feature = "view")]
     pub chase_close: ChaseParams,
     /// The cockpit view's five values, from `<InternalCamera>`.
+    #[cfg(feature = "view")]
     pub internal: InternalParams,
     /// Each grid slot's `engine_flare` locator, in **that slot's own hull's**
     /// model space. Slot 0 is the player's.
@@ -564,15 +589,18 @@ pub struct Setup {
     /// **Per slot since liveries landed.** The eight hulls are different
     /// models, so one team's locator carried onto another's craft puts the
     /// flare inside the fuselage.
+    #[cfg(feature = "view")]
     pub nozzles: Vec<Option<Vec3>>,
     /// Wipeout HD's engine light per slot - `EngineLightData.xml` and the
     /// flare locator's Z axis - or `None` on every other title and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
     /// carries the locator's position. See [`crate::engine_light`].
+    #[cfg(feature = "view")]
     pub engine_lights: Vec<Option<oag_livery::engine_light::EngineLight>>,
     /// Whether the circuit's `.envsettings` leaves the SPU vertex lights on -
     /// `"Lighting.Enable spu vertex lights"`, on by default and authored off
     /// on two HD circuits. See `race::load::engine_light`.
+    #[cfg(feature = "view")]
     pub spu_vertex_lights: bool,
     /// Each slot's `Ship Collision Fx` locators, in that hull's model space.
     ///
@@ -580,6 +608,7 @@ pub struct Setup {
     /// nearest of for a collision, and this engine's stand-in for the ten
     /// nodes `Trail_HitShipEffect` parents a trail hit to. Per slot because
     /// the hulls are different models.
+    #[cfg(feature = "view")]
     pub spark_anchors: Vec<Vec<Vec3>>,
     /// The `Ship Collision Fx` locators, in the ship model's own space.
     ///
@@ -589,8 +618,10 @@ pub struct Setup {
     /// node, and along its authored `+Y`, as it rides the hull. Empty means
     /// the model authors none, and the burst falls back to anchoring at the
     /// contact point itself, aimed along world up.
+    #[cfg(feature = "view")]
     pub collision_fx: Vec<oag_livery::SparkAnchor>,
     /// The circuit's own placed effects - see `race::scenery_fx`. Empty off Pulse PSP.
+    #[cfg(feature = "view")]
     pub scenery_fx: super::scenery_fx::Plan,
     /// Every [`RACE_EFFECTS`] entry that loaded, parsed from the disc's own
     /// `Data\Psys\*.POB`.
@@ -601,9 +632,11 @@ pub struct Setup {
     /// fall back to and a stand-in would be this engine's invention rather
     /// than the game's. Headless tests that build a `Race` by hand leave the
     /// library empty, which is the same path.
+    #[cfg(feature = "view")]
     pub effects: psys::Library,
     /// Each [`Trigger`] resolved against [`Self::effects`] once at load, off the
     /// craft's title's table. Empty where nothing loaded.
+    #[cfg(feature = "view")]
     pub handles: super::EffectHandles,
     /// The decoded sound cues, out of `Data\Sound\*.bnk`.
     ///
@@ -617,6 +650,7 @@ pub struct Setup {
     /// simulation the way the particle library does; the mixer, the voices and
     /// the choice of which alternate sounds all live in
     /// [`oag_sound::Audio`]. See `docs/architecture/adr/0018-audio-mixer-architecture.md`.
+    #[cfg(feature = "view")]
     pub sounds: oag_sound::sfx::Banks,
     /// The circuit's **own** authored sound emitters, the ambience that belongs
     /// to the track rather than to any craft.
@@ -625,6 +659,7 @@ pub struct Setup {
     /// with nothing device-shaped in it. Empty on a Zone circuit, which authors
     /// none of the three `.vex` audio classes at all, and on any title whose
     /// circuits have never been swept for them.
+    #[cfg(feature = "view")]
     pub track_emitters: oag_sound::sfx::TrackEmitters,
     /// Zone mode's milestone announcer, decoded from this title's own
     /// `oag_title::ZoneAnnouncer` when it has one.
@@ -632,10 +667,12 @@ pub struct Setup {
     /// Empty on every other mode and on a title with no recovered ladder -
     /// [`Self::sounds`]'s rule applies unchanged: a milestone that will not
     /// resolve plays nothing rather than a substitute.
+    #[cfg(feature = "view")]
     pub announcer: oag_sound::sfx::Announcer,
     /// Zone mode's speed-class announcer, [`Self::announcer`]'s sibling,
     /// decoded from this title's own `oag_title::ZoneClassAnnouncer` when it
     /// has one.
+    #[cfg(feature = "view")]
     pub class_announcer: oag_sound::sfx::ClassAnnouncer,
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
@@ -655,10 +692,12 @@ pub struct Setup {
     /// The title's craft-body laws, `oag_title::RaceDefaults::craft_laws` ([`crate::launch_hover`]).
     pub craft_laws: Option<&'static oag_title::craft_laws::CraftLaws>,
     /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
+    #[cfg(feature = "view")]
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,
     /// Whether [`Self::zoom_ring`] is HD's ring borrowed on a title that draws none
     /// of its own ([`Options::boost_zoom`]), and so is drawn by the scene's own host
     /// pass rather than inside HD's bloom chain. **Chosen, not measured.**
+    #[cfg(feature = "view")]
     pub zoom_borrowed: bool,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
@@ -721,10 +760,12 @@ pub struct Setup {
     pub pose_override: Option<Pose>,
     /// [`Options::camera`], carried through to [`Race::view`]. Plain data, so
     /// it rides in the simulation half even though only the renderer reads it.
+    #[cfg(feature = "view")]
     pub camera_override: Option<CameraOverride>,
 }
 
 /// A [`Setup`] plus the geometry to draw it with.
+#[cfg(feature = "view")]
 #[derive(Debug)]
 pub struct Loaded {
     /// The simulation half.
@@ -992,6 +1033,18 @@ pub struct Loaded {
     /// source the ripple was read from.
     pub ripples: super::Ripples,
     /// Lines worth printing once, describing what was found.
+    pub report: Vec<String>,
+}
+
+/// What [`load`] returns in a build without the `view` feature: the
+/// simulation's half of a race and what names it, nothing drawn or played.
+/// Each field is documented on the full struct's field of the same name.
+#[cfg(not(feature = "view"))]
+#[derive(Debug)]
+pub struct Loaded {
+    pub setup: Setup,
+    pub title: &'static oag_title::Title,
+    pub platform: oag_disc::Platform,
     pub report: Vec<String>,
 }
 

@@ -914,6 +914,7 @@ impl Race {
                     &b_size,
                 );
                 if touched.is_some() {
+                    #[cfg(feature = "view")]
                     for slot in [a, b] {
                         self.view.pair_spoil[slot] |=
                             self.sim.world.ships[slot].physics.craft_state

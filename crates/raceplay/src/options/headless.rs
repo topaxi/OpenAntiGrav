@@ -44,6 +44,7 @@ impl Setup {
             opponents: true,
             no_opponents: false,
             people: 1,
+            #[cfg(feature = "view")]
             trail_sparks: false,
             seed,
             // An empty track, spelled out because `AiTrack` deliberately has
@@ -59,6 +60,7 @@ impl Setup {
             // takes for a circuit that cannot count.
             course: None,
             start_position: None,
+            #[cfg(feature = "view")]
             hd_trail: None,
             // No shield to draw either, and `Palette` has no measured "empty"
             // constant of its own - only Pulse's and HD's real, measured
@@ -66,6 +68,7 @@ impl Setup {
             // matching every other visual field on this constructor rather
             // than picking one title's real palette for a race that draws
             // nothing.
+            #[cfg(feature = "view")]
             shield_palette: oag_render::shield::Palette {
                 activation: [0.0; 4],
                 target: [0.0; 4],
@@ -74,27 +77,45 @@ impl Setup {
             },
             // Nothing draws on this constructor, Pulse's mechanism included -
             // see `shield_palette` above for the same reasoning.
+            #[cfg(feature = "view")]
             hd_plasma_blast: false,
+            #[cfg(feature = "view")]
             hd_bomb_blast: false,
+            #[cfg(feature = "view")]
             bomb_shockwave_fades: false,
+            #[cfg(feature = "view")]
             hd_missile_blast: false,
+            #[cfg(feature = "view")]
             pulse_laid_pose: false,
+            #[cfg(feature = "view")]
             laid_pose_scaled: false,
             laid_from_rear: false,
             grid_frame_from_sample: false,
+            #[cfg(feature = "view")]
             screen_flash: false,
+            #[cfg(feature = "view")]
             quake_flash: false,
+            #[cfg(feature = "view")]
             absorb_burst: None,
+            #[cfg(feature = "view")]
             absorb_anchors: Vec::new(),
+            #[cfg(feature = "view")]
             hit_spark_anchors: Vec::new(),
+            #[cfg(feature = "view")]
             weapon_spark_anchors: Vec::new(),
+            #[cfg(feature = "view")]
             wreck_anchors: Vec::new(),
+            #[cfg(feature = "view")]
             magstrip_wake: None,
+            #[cfg(feature = "view")]
             magstrip_pob: false,
+            #[cfg(feature = "view")]
             leach_strip: None,
+            #[cfg(feature = "view")]
             destroy_stations: Vec::new(),
             finished_thrust: None,
             original_tables: None,
+            #[cfg(feature = "view")]
             intro_camera: None,
             slot_teams: Vec::new(),
             sight: Sighting::default(),
@@ -102,6 +123,7 @@ impl Setup {
             handling: Handling::ZERO,
             opponent_handling: Vec::new(),
             // Zero travel at zero speed: the flaps neither open nor move.
+            #[cfg(feature = "view")]
             airbrake_graphics: oag_gameplay::AirbrakeGraphics {
                 amount: 0.0,
                 up_speed: 0.0,
@@ -115,7 +137,9 @@ impl Setup {
             // `CLAUDE.md`'s "never invent what the assets already author"
             // names - zero is the honest absence.
             chase: ZERO_CHASE,
+            #[cfg(feature = "view")]
             chase_close: ZERO_CHASE,
+            #[cfg(feature = "view")]
             internal: InternalParams {
                 fov: 0.0,
                 headtilt: None,
@@ -123,24 +147,38 @@ impl Setup {
                 length: 0.0,
                 pitch: 0.0,
             },
+            #[cfg(feature = "view")]
             nozzles: Vec::new(),
+            #[cfg(feature = "view")]
             engine_lights: Vec::new(),
+            #[cfg(feature = "view")]
             spu_vertex_lights: true,
+            #[cfg(feature = "view")]
             spark_anchors: Vec::new(),
+            #[cfg(feature = "view")]
             collision_fx: Vec::new(),
+            #[cfg(feature = "view")]
             scenery_fx: Default::default(),
+            #[cfg(feature = "view")]
             effects: psys::Library::default(),
+            #[cfg(feature = "view")]
             handles: Default::default(),
+            #[cfg(feature = "view")]
             sounds: oag_sound::sfx::Banks::default(),
+            #[cfg(feature = "view")]
             track_emitters: oag_sound::sfx::TrackEmitters::default(),
+            #[cfg(feature = "view")]
             announcer: oag_sound::sfx::Announcer::default(),
+            #[cfg(feature = "view")]
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
             zone_stages: None,
             countdown_voice: false,
             launch_hover: None,
             hover_rig: None,
             craft_laws: None,
+            #[cfg(feature = "view")]
             zoom_ring: None,
+            #[cfg(feature = "view")]
             zoom_borrowed: false,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             speedup_pads: Vec::new(),
@@ -150,6 +188,7 @@ impl Setup {
             allowed_weapons: Vec::new(),
             weapon_pad_refresh: 0.0,
             pose_override: None,
+            #[cfg(feature = "view")]
             camera_override: None,
         }
     }

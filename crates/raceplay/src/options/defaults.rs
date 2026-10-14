@@ -48,6 +48,7 @@ impl Default for Options {
             opponents: false,
             views: 1,
             people: 0,
+            #[cfg(feature = "view")]
             cut: oag_render::viewport::Cut::Horizontal,
             trail_sparks: false,
             seed: None,

@@ -35,7 +35,7 @@
 //!
 //! # 3. How often
 //!
-//! [`COLLISION_COOLDOWN`] is the trigger's own re-arm. The original spawns
+//! `oag_gameplay::cue::COLLISION_COOLDOWN` is the trigger's own re-arm. The original spawns
 //! a fresh instance tree per trigger and lets old ones finish; a caller
 //! reusing one [`crate::psys::System`] restarts its emitters instead, which
 //! can cut short a few trailing embers of the previous burst - accepted
@@ -57,13 +57,6 @@ pub const DAMAGE_EFFECT: &str = "WO_SHIP_COLL_SPARK_DAMAGE";
 /// The effect it spawns when the contact dealt none: the same fountain and
 /// `bits`, without the smoke or the embers.
 pub const NO_DAMAGE_EFFECT: &str = "WO_SHIP_COLL_SPARK_NODAMAGE";
-
-/// Seconds a wall contact must persist before another burst is allowed.
-///
-/// **Recovered.** `ShipCollisionFx_Trigger` re-arms exactly this long after
-/// every collision-variant spawn: `instance + 100 = now + 0.8`, checked on
-/// entry and skipped while still armed.
-pub const COLLISION_COOLDOWN: f32 = 0.8;
 
 /// Converts a contact's impact speed into `[0, 1]` intensity.
 ///

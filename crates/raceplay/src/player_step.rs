@@ -413,6 +413,7 @@ impl Race {
 }
 
 impl Race {
+    #[cfg(feature = "view")]
     /// Whether this machine grades `slot`'s laps: the player's slot, not the
     /// world's lowest person slot (in a network race a client flying seat 1
     /// would otherwise grade seat 0's), and in a local race every person's own
@@ -425,19 +426,23 @@ impl Race {
     /// Feeds each local person's craft to its own lap watch. A replayed tick
     /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
     /// already did. **Chosen, not measured.**
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn observe_lap(
         &mut self,
         slot: usize,
         outcome: &oag_race::Outcome,
         evaluated: &Evaluated,
     ) {
+        #[cfg(feature = "view")]
         let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
+        #[cfg(feature = "view")]
         if self.draws() && self.watches_laps_of(slot) {
             self.raise_lap_messages(slot, outcome, pair || lap_spoiling_contact(evaluated));
         }
     }
 }
 
+#[cfg(feature = "view")]
 /// Whether this tick's contact sets the original's `0x20` bit of `craft+0x860`
 /// (`contact-response.md`, reaction #2): the hull-damage branch of
 /// `FUN_088418e0`'s loop, taken for **every** contact record whose combined

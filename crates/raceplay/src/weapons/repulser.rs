@@ -108,6 +108,7 @@ impl Race {
                 self.shield_hit(slot);
             }
         }
+        #[cfg(feature = "view")]
         self.throw_hit_sparks(&hits, false);
         for (slot, owner) in credits {
             if hits[slot].landed {
@@ -117,6 +118,7 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 impl Race {
     /// Keeps each live Repulser's three particle instances where the original
     /// keeps them, and releases them when it retires.

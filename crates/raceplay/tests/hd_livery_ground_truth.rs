@@ -17,7 +17,7 @@
 //! upstream of everything that test covers: `race::load` read
 //! `Data\Plugins\PI001\Definition.xml` whatever title it had opened, and HD
 //! **names** its game plugin where the PSP titles number it. The read missed,
-//! the roster came back empty, and `livery::teams_for_slots` gave every slot the
+//! the roster came back empty, and `oag_race::roster::teams_for_slots` gave every slot the
 //! player's team - which is exactly what a working grid looks like on a disc
 //! that genuinely declares one team, so nothing failed and nothing said so.
 //!

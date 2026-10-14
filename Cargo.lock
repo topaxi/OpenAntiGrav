@@ -3019,6 +3019,7 @@ dependencies = [
  "oag-core",
  "oag-gameplay",
  "oag-log",
+ "oag-net",
  "oag-physics",
  "oag-race",
  "oag-raceplay",

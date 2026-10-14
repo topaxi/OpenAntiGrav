@@ -169,6 +169,12 @@ pub struct RaceSim {
     /// The chase rig the locks' virtual camera is built from: the team's far
     /// external rig, at rest. Set at load, never changes. See [`crate::lock`].
     pub(super) lock_rig: oag_race::chase_rig::ChaseParams,
+    /// Whether a laid Mine or Bomb leaves from the rear anchor,
+    /// [`REAR_ANCHOR_BACK`](super::weapons::REAR_ANCHOR_BACK) behind the body, rather
+    /// than at the body: `options::Setup::laid_from_rear`. Simulation, not
+    /// look: it moves where the mine is dropped. Not hashed, being a constant
+    /// of the load.
+    pub(super) laid_from_rear: bool,
     /// The kill count that ends an Eliminator event - see
     /// [`Setup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,
@@ -322,6 +328,7 @@ pub struct RaceSim {
     /// Whether every craft's steering ramp stops at its target - see [`Setup::craft_laws`].
     pub(super) steer_ramp_clamped: bool,
     /// What colours a weapon pad's light bars - see [`Setup::weapon_pad_glow`].
+    #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// The per-class grounded-gravity scale - see [`Setup::class_gravity_scale`].
     pub(super) class_gravity_scale: f32,

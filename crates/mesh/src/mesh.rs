@@ -302,9 +302,6 @@ pub use anim_node::{AnimNode, Motion, NODE_ANIM_LIMIT};
 mod emissive;
 pub use emissive::{Emissive, ZONE_EXEMPT_RATE};
 
-mod external;
-pub use external::geometry_is_external;
-
 mod flap;
 pub use flap::Flap;
 
@@ -814,7 +811,7 @@ fn build_class(
     }
 
     if indices.is_empty() {
-        if geometry_is_external(data) {
+        if oag_vex::vex::geometry_is_external(data) {
             bail!(
                 "{label}: a PS3 .vex carries no render geometry - it is in the .rcsmodel \
                  beside it, which nothing here decodes"

@@ -35,7 +35,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         };
         println!("  bytes: {}", blob.len());
-        let external = oag_mesh::mesh::geometry_is_external(&blob);
+        let external = oag_vex::vex::geometry_is_external(&blob);
         println!("  geometry_is_external: {external}");
         let nodes = match vex::nodes(&blob) {
             Ok(n) => n,

@@ -9,6 +9,15 @@
 
 use oag_core::math::Vec3;
 
+/// Seconds a wall contact must persist before another collision burst is
+/// allowed, sparks and [`Cue::Collision`] alike.
+///
+/// **Recovered.** `ShipCollisionFx_Trigger` re-arms exactly this long after
+/// every collision-variant spawn: `instance + 100 = now + 0.8`, checked on
+/// entry and skipped while still armed. Here rather than beside the sparks
+/// (`oag_fx::sparks`) because the cue's re-arm is simulation state.
+pub const COLLISION_COOLDOWN: f32 = 0.8;
+
 /// A sound the simulation asks for, by the name the original passes to
 /// `Sound_Play`.
 ///

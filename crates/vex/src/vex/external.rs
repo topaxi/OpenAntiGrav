@@ -1,9 +1,10 @@
 //! Whether a `.vex` file's render geometry is in the file or beside it.
 //!
 //! Its own module because the test grew a second half when Wipeout 2048
-//! arrived, and because [`super`] is at this project's 1,000-line ceiling.
+//! arrived. Here rather than in `oag_mesh` because it reads the node tree and
+//! nothing else, and a race with nothing to draw still asks it.
 
-use oag_vex::vex;
+use crate::vex;
 
 /// Whether this `.vex`'s render geometry lives outside the file.
 ///

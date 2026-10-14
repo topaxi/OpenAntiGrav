@@ -157,7 +157,7 @@ pub fn mesh_layer(payload: &[u8], model_layer: u32) -> Option<u32> {
 /// **`Some(0)` is the answer that matters**: a batch declaring no vertex format
 /// has its vertices elsewhere. Wipeout HD and 2048 export that way, geometry in a
 /// `.rcsmodel` beside the `.vex` and batch headers left behind. See
-/// `oag_mesh::mesh::geometry_is_external`.
+/// [`super::geometry_is_external`].
 ///
 /// `None` when the payload is too short for a batch list or neither list has a
 /// batch: says nothing either way, so not folded into `Some(0)`.

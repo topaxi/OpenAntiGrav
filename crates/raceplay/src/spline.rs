@@ -331,6 +331,7 @@ impl Spline {
         best.map(|(index, distance)| (index, &self.samples[index], distance))
     }
 
+    #[cfg(feature = "view")]
     /// What `AiTrack_LocatePosition(100.0, track, &frame, position, ...)` hands
     /// `LeachBeam_KeepInTrack`: the nearest sample's frame, in the running
     /// game's **lifted** form (`pos -= 3.0 * down`, see [`Self::track_sample`]),

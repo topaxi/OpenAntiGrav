@@ -20,10 +20,12 @@
 //! Chosen, not measured: [`SAMPLE_STEPS`] and [`HISTORY`], the sparkline's
 //! resolution.
 
+#[cfg(feature = "client")]
 use std::collections::VecDeque;
 
 use web_time::Duration;
 
+#[cfg(feature = "client")]
 use crate::client::Stats;
 use crate::link::Conditions;
 
@@ -120,6 +122,7 @@ pub const SAMPLE_STEPS: u32 = 6;
 /// Sparkline columns: with [`SAMPLE_STEPS`] twelve seconds. Chosen.
 pub const HISTORY: usize = 120;
 
+#[cfg(feature = "client")]
 /// Differences the transport's counters and keeps the hash totals and the
 /// sparkline between seconds.
 #[derive(Debug, Default)]
@@ -134,6 +137,7 @@ pub struct Collector {
     held_ms: f32,
 }
 
+#[cfg(feature = "client")]
 impl Collector {
     /// An empty collector.
     #[must_use]
@@ -228,7 +232,7 @@ impl Collector {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "client"))]
 mod tests {
     use super::*;
 

@@ -6,7 +6,6 @@
 
 use super::*;
 
-mod cues;
 mod vertices;
 
 /// Where a trail-hit burst sits on a struck craft: on its hull, facing the

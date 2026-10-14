@@ -117,7 +117,9 @@ impl Race {
                 // human craft's own per-lap counter on this same edge (`craft+0x900 +
                 // lap * 0x10 + 0x94`, its only writer). See [`RunStats`].
                 if self.sim.world.controllers[slot].is_human() {
+                    #[cfg(feature = "view")]
                     let lap = self.sim.world.race[slot].lap;
+                    #[cfg(feature = "view")]
                     if self.draws() {
                         self.view.run_stats.count_boost(lap);
                     }
@@ -149,6 +151,7 @@ impl Race {
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
                 self.boost_plume(slot);
+                #[cfg(feature = "view")]
                 self.fire_zoom_boost(slot);
                 // The sound is on the same edge and from the same branch:
                 // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",

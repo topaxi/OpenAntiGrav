@@ -15,7 +15,9 @@ mod disruptor;
 mod repulser;
 mod reticle;
 mod single_instance;
+#[cfg(feature = "view")]
 mod visuals;
+#[cfg(feature = "view")]
 pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `bounced_this_tick` reaches beyond this module now: `crate::tick`'s
 // own sibling loop needs it too, for `Cue::MissileHitWall` and
@@ -23,16 +25,28 @@ pub(crate) use visuals::{CannonAssets, CannonDraw};
 // `Race::ignite_missile_bounces` already reads for the visual. Not
 // `#[cfg(test)]` any more for that reason - production code calls through
 // this path, not only `race/tests/weapons.rs`.
+#[cfg(feature = "view")]
 pub(super) use visuals::bounced_this_tick;
 // The remaining four are only reached through `crate::weapons::<name>`
 // by `race/tests/weapons.rs`, which asserts each pure gate without a disc -
 // see the doc comments on `visuals::flare_effect_for` and its neighbours.
 // `#[cfg(test)]` because nothing in a non-test build calls through this
 // path: `visuals.rs` reaches all three directly by their bare names.
-#[cfg(test)]
+#[cfg(all(test, feature = "view"))]
 pub(super) use visuals::{
     bounce_effect_for, flare_effect_for, flash_for, missile_flare_anchors, plasma_flare_scale,
 };
+
+/// How far behind the body a title that lays from the craft's rear anchor
+/// starts its Mine or Bomb, world units. Pure's `Mine_Init` and `Bomb_Init`
+/// take the anchor matrix at `holder+0xa0`; live on PPSSPP (2026-10-08, Time
+/// Trial, Feisar, Vineta K and a second circuit) its translation sat
+/// `4.875` and `4.87` behind the body matrix at `ship+0x40` along the craft's
+/// own `-forward`, `6.5` hull units at the `0.75` craft scale, while the
+/// laid Mine's and the Bomb's first position equalled the anchor. Pulse's
+/// anchor is the body itself. **One craft measured** (Feisar): the other
+/// teams' hulls are assumed alike, chosen, not measured.
+pub(crate) const REAR_ANCHOR_BACK: f32 = 4.875;
 
 /// The far plane the reticle's own projection uses.
 ///
@@ -166,6 +180,7 @@ impl Race {
                         slot,
                     ));
                     self.boost_plume(slot);
+                    #[cfg(feature = "view")]
                     self.fire_zoom_boost(slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
@@ -586,6 +601,7 @@ impl Race {
             // Eliminator, which returned above: the `ABSORB` cue, then the
             // `WO_WEAPON_ABSORB` burst staggered over the hull's locators.
             // See `race::absorb` and `docs/ghidra/functions/psp-pulse-usa/shield.md`.
+            #[cfg(feature = "view")]
             self.play_absorb_feedback(slot, true);
         }
         // `Held::take` rather than a direct write - see its doc comment for
@@ -642,8 +658,8 @@ impl Race {
             }
             let ship = &self.sim.world.ships[slot];
             let mut point = oag_weapons::projectile::mine::drop_point(&ship.physics);
-            if self.view.laid_from_rear {
-                point -= ship.physics.body.forward() * visuals::laid::REAR_ANCHOR_BACK;
+            if self.sim.laid_from_rear {
+                point -= ship.physics.body.forward() * REAR_ANCHOR_BACK;
             }
             // A full array drops this mine and not the drop: the counter has
             // already been spent, so the cluster goes on laying the rest rather
