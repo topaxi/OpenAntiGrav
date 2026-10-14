@@ -56,4 +56,10 @@ pre-fills every step, so it is OK, OK, OK.
 
 ## Open
 
+- **A second keyboard cannot join through the menu** (found by `keyboard-seats`, 2026-10-14).
+  The windowed-race path (`--windows`, `--window-seats`) routes keyboards per seat (Wayland
+  seats by window, X11/Windows by raw device). The join screen still treats the keyboard as one
+  device, so `mp-menu-flow`'s join step should take its design: `lobby::Device::Keyboard`
+  carries a source, and the join screen shows a row per keyboard. Details in
+  `docs/rendering/multi-window.md`'s Open list.
 - Whether the CLI (`--players`, `--window-seats`) gains a way to skip into the flow at a step.
