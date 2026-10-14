@@ -642,6 +642,13 @@ impl Session {
             None,
             None,
         );
+        stage.draw_window_track_panel(
+            &self.gpu,
+            encoder,
+            screen.framebuffer.output(),
+            rect,
+            window,
+        );
         stage.draw_window_hud(
             &self.gpu,
             encoder,

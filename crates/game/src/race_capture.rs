@@ -1000,11 +1000,16 @@ pub fn capture(
             None => (view.clone(), viewport),
         };
         // The track-description panel, over the flyby and fading out behind the chase view - the
-        // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there.
+        // same overlay `RaceStage::draw_hud` draws, ahead of the HUD as there, and on every
+        // window of a multi-window race against that window's own views.
+        let (panel_views, panel_cut) = match window {
+            Some(index) => (race.window_drawn(index).len(), race.window_cut(index)),
+            None => (race.views_drawn(), race.cut()),
+        };
         if let (Some(assets), Some(progress), true) = (
             track_panel.clone(),
             race.track_panel_progress(),
-            window.is_none_or(|index| index == 0),
+            panel_views > 0,
         ) {
             crate::track_panel::draw_once(
                 &device,
@@ -1014,7 +1019,7 @@ pub fn capture(
                 &mut encoder,
                 &hud_view,
                 progress,
-                crate::hud_views::panel_viewport(race.views_drawn(), race.cut(), hud_viewport),
+                crate::hud_views::panel_viewport(panel_views, panel_cut, hud_viewport),
             );
         }
         let scale = options.hud_scale;

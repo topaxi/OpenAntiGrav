@@ -292,15 +292,17 @@ impl Race {
         }
     }
 
-    /// One flyby tick, in place of [`Race::tick`]. `skip_held` is whether the player holds
-    /// [`Button::Cross`].
+    /// One flyby tick, in place of [`Race::tick`]. The flyby is skipped while **any person who
+    /// flies** (any seat, in any window) holds [`Button::Cross`]: it is one race state, so one
+    /// person's skip ends it for everyone (chosen, not measured).
     pub fn tick_intro(&mut self, inputs: &PlayerInputs) {
         // Before the flyby moves the camera - see `between_ticks`.
         self.capture_poses();
-        let held = inputs
-            .get(self.sim.world.primary_slot())
-            .buttons
-            .is_held(Button::Cross);
+        let world = &self.sim.world;
+        let held = (0..world.ship_count.into())
+            .filter(|&slot| world.person_flown(slot))
+            .chain([world.primary_slot()])
+            .any(|slot| inputs.get(slot).buttons.is_held(Button::Cross));
         let dt = self.sim.dt;
         let Some(intro) = &mut self.view.intro else {
             return;
