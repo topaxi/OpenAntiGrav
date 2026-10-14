@@ -517,6 +517,26 @@ and 9.76 after, and HD four views 8.16 against 5.43.
 single runs, so only the order of magnitude: 1.2 to 2.0 ms of CPU, which is the GPU's
 business more than the CPU's on Omega, whose scene passes cost 1.1 ms).
 
+**Vertical against horizontal cut, two views (2026-10-14, `split-vertical-cost`): the vertical
+cut is not dearer in this build.** Asked because the maintainer saw the vertical cut tank on the
+Steam Deck. Not reproduced, on either machine, so no fix was made. Pulse (PSP EU), Single Race,
+tick 300 / autopilot, the same seed and track, release build with `perf-probe`.
+
+- *Workstation* (RX 7800 XT, 1280x800 offscreen, `OAG_RENDER_BENCH`, load 20 to 25): draws 981
+  horizontal against 954 vertical, 3442 against 3453 culled, CPU 2.17 against 2.02 ms, GPU scene
+  passes 0.526 against 0.508 ms, pipelined 2.25 against 2.05 ms. The Raphael iGPU (same size, two
+  runs each): scene passes 5.0 and 5.1 ms against 4.75 and 4.80, pipelined 5.40 and 5.41
+  against 5.02 and 5.19. So the widened vertical field (`fit_vertical_fov`) admits no extra
+  geometry here (the culling and the draws above), and the cut moves nothing the scene pass pays for.
+- *Steam Deck* (Van Gogh, RADV, gamescope, a windowed `--players 2` race; the Deck's output was
+  3840x2160, so the render scale stood in for a 1280x800 target; mean frame time of the game's
+  own meter, vsync off, load 1): at 33 percent (1267x713) one player 6.5 ms, two views cut
+  horizontally 12.1 ms (1.85x one player), cut vertically 8.6 ms; at 200 percent 49.8 horizontal
+  against 47.1 vertical; at 100 percent both held the compositor's 60 Hz. With FSR 3 at 50 percent: 14.1 against
+  13.3 ms. The horizontal cut was the dearer one every time, and two views cost about 1.85x one.
+- Not reached: the menu path to the vertical cut (HD's race box row, the window layout screen)
+  and HD, which the observation may have been on; and the Deck's own 1280x800 output.
+
 **The shadow gather per tick, and the `mapped` map per view** (2026-10-13, `shadow-gather-per-tick`).
 Both are for the Raphael iGPU and the discrete card alike; the numbers follow.
 
