@@ -239,3 +239,15 @@
 0x00128be0	function	Race_CreateAiRacer	75	grid-local-players.md
 0x00128158	function	Race_PlaceGrid	82	grid-local-players.md
 0x00127ad0	function	Race_ComputeGridLayout	85	grid-local-players.md
+0x00100600	function	GameMode_FromName	85	head2head.md
+0x00100e70	function	GameSetup_SetGridSize	75	head2head.md
+0x001868b8	function	Race_ReadSetupOptions	82	head2head.md
+0x00124f80	function	Race_CreateModeObject	80	head2head.md
+0x0012ad78	function	ArcadeRace_Construct	85	head2head.md
+0x0012b2c0	function	ArcadeRace_UpdateFinish	72	head2head.md
+0x00139ea8	function	Hud_BindWidgets	80	head2head.md
+0x001054c8	function	Race_RecordResult	78	head2head.md
+0x0027a5e8	data	g_game_mode_names	88	head2head.md
+0x002dabd0	data	g_game_mode	92	head2head.md
+0x002dab08	data	g_racer_count	90	head2head.md
+0x002dab3c	data	g_split_mode	92	head2head.md

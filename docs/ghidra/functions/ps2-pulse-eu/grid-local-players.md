@@ -12,7 +12,9 @@ that agree and a second binary that agrees.
 
 `FUN_0012ad78` and `FUN_0012b880` (two race modes decompiled; six more callers of `FUN_00128860` exist and were **not decompiled**)
 branch on `*(DAT_002e0cc8 + 0xc7c)`, which reads as the split-screen setting (`0` one person, `1` and `2` two:
-**inferred** from the branch structure, the writer was not read):
+**inferred** from the branch structure, the writer was not read; **since read and measured, 2026-10-14**: it is
+`g_split_mode` (`0x002dab3c`), stored at `+0xc7c` by `FUN_00147040`, `1` for Split ScreenH and `2` for Split
+ScreenV, read live on PCSX2, [head2head.md](head2head.md)):
 
 ```c
 // N = DAT_002dab08, the ships on the grid

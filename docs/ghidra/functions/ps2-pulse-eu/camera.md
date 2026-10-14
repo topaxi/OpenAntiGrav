@@ -341,8 +341,9 @@ than, say, a shadow-volume or reflection-clip use.
 
 - **`0x0014f108`**, which returns the current view setting, reading either from
   `g_settings` or from a per-player array at `0x0027e8a8` depending on a global
-  at `0x002dab3c` (which reads like an attract/demo switch). Not renamed: the
-  branch is clear but what selects it is not.
+  at `0x002dab3c`. That global is `g_split_mode` (`0` one person, `1`/`2` the two
+  split cuts, [head2head.md](head2head.md), 2026-10-14), so the per-player array is the
+  split screen's. `0x0014f108` itself is still not renamed.
 - **The rig lookup** at `0x00149450` and the trace at `0x00132ed0`.
 - **The second, spectator/photo camera enum** that the PSP page warns not to
   confuse with this one. Not searched for here.
