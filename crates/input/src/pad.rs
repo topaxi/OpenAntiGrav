@@ -668,7 +668,10 @@ impl<D: Copy + PartialEq> Assignment<D> {
     #[must_use]
     pub fn drives(&self, slot: usize) -> bool {
         self.keyboard_slot() == slot
-            || self.more_keyboards.iter().any(|seat| usize::from(seat.slot) == slot)
+            || self
+                .more_keyboards
+                .iter()
+                .any(|seat| usize::from(seat.slot) == slot)
             || self
                 .keyboard_reach
                 .iter()

@@ -391,7 +391,8 @@ impl Controls {
 
     /// Every keyboard, the first included.
     fn each_keyboard(&mut self) -> impl Iterator<Item = &mut Keyboard> {
-        std::iter::once(&mut self.keyboard).chain(self.more_keys.iter_mut().map(|seat| &mut seat.keys))
+        std::iter::once(&mut self.keyboard)
+            .chain(self.more_keys.iter_mut().map(|seat| &mut seat.keys))
     }
 
     /// Lets go of every key the way a move to another seat does ([`Keyboard::let_go`]): what
@@ -423,7 +424,9 @@ impl Controls {
     /// window 1's menu does, where the first keyboard is the menu's and the others' keys
     /// (which the menu does not read) would otherwise come back held when the race resumes.
     pub fn let_go_extra_seats(&mut self) {
-        self.more_keys.iter_mut().for_each(|seat| seat.keys.let_go());
+        self.more_keys
+            .iter_mut()
+            .for_each(|seat| seat.keys.let_go());
     }
 
     /// See [`Keyboard::forget_let_go`].
@@ -452,10 +455,14 @@ impl Controls {
     /// The id for a physical keyboard the platform reported, numbered in the order they are first
     /// heard from.
     pub fn keyboard_id(&mut self, device: winit::event::DeviceId) -> pad::KeyboardId {
-        let at = self.devices.iter().position(|seen| *seen == device).unwrap_or_else(|| {
-            self.devices.push(device);
-            self.devices.len() - 1
-        });
+        let at = self
+            .devices
+            .iter()
+            .position(|seen| *seen == device)
+            .unwrap_or_else(|| {
+                self.devices.push(device);
+                self.devices.len() - 1
+            });
         pad::KeyboardId(u32::try_from(at).unwrap_or(u32::MAX))
     }
 
@@ -487,13 +494,17 @@ impl Controls {
                 None => self.speakers.push((device, window.to_vec())),
             }
             if self.speakers.len() >= 2 {
-                // The keyboards that spoke before keep the seats the window events gave them: each
-                // is bound where it last pressed, ahead of the one that just spoke.
+                // The keyboards that spoke before keep the seats the window events gave them, and
+                // the keys they hold: each is bound where it last pressed, ahead of the one that
+                // just spoke, and its release now arrives as a raw event instead of a window's.
+                // (A raw event comes ahead of the window event for the same press, on X11 and
+                // Windows alike, so the window event of this very press is already dropped.)
                 self.per_device = true;
-                self.let_go();
                 let earlier: Vec<_> = self.speakers.clone();
                 for (id, last) in earlier.into_iter().filter(|(id, _)| *id != device) {
-                    self.pad.assignment_mut().route_key(Some(id), &last, race, true);
+                    self.pad
+                        .assignment_mut()
+                        .route_key(Some(id), &last, race, true);
                 }
             }
         }

@@ -20,9 +20,17 @@ fn a_window_whose_seats_are_pads_ignores_keys() {
 #[test]
 fn a_press_in_a_window_with_a_free_seat_claims_the_lowest() {
     let mut assignment = Seated::seated(4);
-    assert_eq!(assignment.route_key(None, &[2, 3], ALL, false), None, "a release claims nothing");
+    assert_eq!(
+        assignment.route_key(None, &[2, 3], ALL, false),
+        None,
+        "a release claims nothing"
+    );
     assert_eq!(assignment.route_key(None, &[2, 3], ALL, true), Some(2));
-    assert_eq!(assignment.route_key(None, &[2, 3], ALL, true), Some(2), "and keeps it");
+    assert_eq!(
+        assignment.route_key(None, &[2, 3], ALL, true),
+        Some(2),
+        "and keeps it"
+    );
     assert_eq!(
         assignment.keyboard_seats(),
         vec![(Binding::Shared, 0), (Binding::Shared, 2)]
@@ -38,8 +46,16 @@ fn a_pad_does_not_take_a_claimed_keyboard_seat() {
     let mut assignment = Seated::seated(2);
     assignment.route_key(None, &[1], ALL, true);
     assignment.reconcile(&[10, 11]);
-    assert_eq!(assignment.slot_of(10), Some(0), "the first pad shares the first keyboard's seat");
-    assert_eq!(assignment.slot_of(11), None, "no free seat is left for the second");
+    assert_eq!(
+        assignment.slot_of(10),
+        Some(0),
+        "the first pad shares the first keyboard's seat"
+    );
+    assert_eq!(
+        assignment.slot_of(11),
+        None,
+        "no free seat is left for the second"
+    );
 }
 
 /// No seat is free merged (one person), closed, or past the seated head count.
@@ -60,9 +76,21 @@ fn a_device_keeps_its_seat_whichever_window_has_the_focus() {
     let mut assignment = Seated::seated(2);
     let (a, b) = (KeyboardId(0), KeyboardId(1));
     assert_eq!(assignment.route_key(Some(a), &[0], ALL, true), Some(0));
-    assert_eq!(assignment.route_key(Some(b), &[0], ALL, true), Some(1), "window 1's seat is A's; B takes a free one");
-    assert_eq!(assignment.route_key(Some(a), &[1], ALL, true), Some(0), "A in window 2's focus");
-    assert_eq!(assignment.route_key(Some(b), &[0], ALL, true), Some(1), "B in window 1's focus");
+    assert_eq!(
+        assignment.route_key(Some(b), &[0], ALL, true),
+        Some(1),
+        "window 1's seat is A's; B takes a free one"
+    );
+    assert_eq!(
+        assignment.route_key(Some(a), &[1], ALL, true),
+        Some(0),
+        "A in window 2's focus"
+    );
+    assert_eq!(
+        assignment.route_key(Some(b), &[0], ALL, true),
+        Some(1),
+        "B in window 1's focus"
+    );
     assert_eq!(
         assignment.keyboard_seats(),
         vec![(Binding::Device(a), 0), (Binding::Device(b), 1)]
@@ -76,7 +104,11 @@ fn a_seat_bound_to_a_device_takes_no_window_events() {
     let mut assignment = Seated::seated(2);
     assignment.route_key(Some(KeyboardId(0)), &[0], ALL, true);
     assert_eq!(assignment.route_key(None, &[0], ALL, false), None);
-    assert_eq!(assignment.route_key(None, &[0], ALL, true), None, "window 1 has no free seat");
+    assert_eq!(
+        assignment.route_key(None, &[0], ALL, true),
+        None,
+        "window 1 has no free seat"
+    );
 }
 
 /// Closing a window drops its keyboard seat with it.

@@ -122,7 +122,12 @@ impl<D: Copy + PartialEq> Assignment<D> {
         if !claim {
             return None;
         }
-        let lowest = |from: &[usize]| from.iter().copied().filter(|slot| self.is_free(*slot)).min();
+        let lowest = |from: &[usize]| {
+            from.iter()
+                .copied()
+                .filter(|slot| self.is_free(*slot))
+                .min()
+        };
         let slot = lowest(window).or_else(|| device.and_then(|_| lowest(race)))?;
         let binding = device.map_or(Binding::Shared, Binding::Device);
         self.more_keyboards.push(Seat {
