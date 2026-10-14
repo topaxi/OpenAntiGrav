@@ -723,9 +723,9 @@ impl Store {
 /// binary module is visible to this crate's own `capture`, and this crate
 /// cannot depend on the binary the other way (`workspace-layout.md`'s rule 2).
 ///
-/// `Tournament`/`Head2Head` never launch in this engine
-/// (`crate::campaign::race_mode_for_cell`), so `TKR_NOTOURN`/`TKR_NOHH` are
-/// unconditionally included; the other five are gated on whether `store`
+/// `Tournament` never launches from the RACE page (`crate::campaign::race_mode_for_cell`
+/// reaches it only through a campaign cell), so `TKR_NOTOURN` is unconditionally included;
+/// the other six, `Head2Head` among them since it joined the RACE page, are gated on whether `store`
 /// carries any row for that mode - `oag_race::Mode::name`'s own spelling, the
 /// same string [`Key::new`] normalises every record's `mode` to - which reads
 /// real save data rather than a guess, at the cost of never re-showing a tip
@@ -733,7 +733,10 @@ impl Store {
 #[must_use]
 pub fn ticker_tips(strings: &oag_ui::language::StringTable, store: &Store) -> Vec<String> {
     let never_raced = |mode: &str| !store.rows().iter().any(|row| row.mode == mode);
-    let mut ids = vec!["TKR_NOTOURN", "TKR_NOHH"];
+    let mut ids = vec!["TKR_NOTOURN"];
+    if never_raced(oag_race::Mode::Head2Head.name()) {
+        ids.push("TKR_NOHH");
+    }
     if never_raced(oag_race::Mode::SingleRace.name()) {
         ids.push("TKR_NOSR");
     }

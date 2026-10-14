@@ -232,8 +232,15 @@ over `portrait`:
   at the 60 clamp, between the clamps and at the 180 clamp (`clamp(gap / 2, 60, 180)`). At 488 m
   the top and bottom cut put the second row and the bar's foot on the shield and speed bars at
   the view's lower edge, so a Head to Head variant of `strip` (`strip-head-to-head`,
-  `modes = ["head_to_head"]`, place group at 0.8 against 1.3, **chosen, not measured**) keeps it
-  in the upper 60% of the view; the columns of a left and right cut had room and are unchanged.
+  `modes = ["head_to_head"]`, place group at 0.8 against 1.3, **chosen, not measured**) kept it
+  in the upper 60% of the view. **Replaced 2026-10-14 (`h2h-port-titles`)** by the original's own
+  law: the top and bottom cut clamps the half gap to `[40, 85]` (`HeadToHead::stacked`, set by
+  `hud_views::view_draws` for two views cut `Horizontal`), the left and right cut keeps
+  `[60, 180]`, and the rule is gone. Both rows now draw in the `Default` font, as the original,
+  and carry the team names (`1st Triakis` over `2nd Assegai`, each view's own person's row and
+  the gap coloured, the other white); with one person only the opponent's row is named, the
+  player's profile tag having no counterpart here. Looked at on Pulse PSP EU, both cuts, ticks
+  300 and 1200: the short views read cleanly where the HUD-font rows overlapped.
   Pinned by
   `crates/game/tests/split_head_to_head_ground_truth.rs` (both cuts, ticks 300 and 1200, every
   word inside its own view, the second row above the lower quarter) and `crates/raceplay/tests/head_to_head_people_ground_truth.rs`.
@@ -251,14 +258,13 @@ over `portrait`:
   **Measured against the original, 2026-10-14 (`h2h-re`, PCSX2, two pads, both cuts):** PS2
   Pulse's own split Head2Head is mode 9 with two people and no AI, so the field above is the
   original's, not only a choice ([ps2 head2head.md](../ghidra/functions/ps2-pulse-eu/head2head.md)).
-  What differs from this build: (1) the original starts the two craft on the **front** two grid
-  places (person 2 on place 1, person 1 on place 2; the PSP's one-person race does the same with
-  the AI on place 1), this build on the back two; (2) both views draw the same two rows, `1st` and
-  `2nd` with each craft's **team name** (`1st Qirex` / `2nd Assegai`), and colour only the
-  view's own person's row and the gap, where this build draws ordinals; (3) the **top and bottom
-  cut** (`Split ScreenH`) clamps the half gap to `[40, 85]` and puts the leader row on the bar's
-  top, the left and right cut keeps `[60, 180]` (decompiled, and the shorter bar seen live: 80
-  against 158 px at about 680 m); this build's `strip-head-to-head` scales the group instead.
+  Ported 2026-10-14 (`h2h-port-titles`): (1) the two craft start on the **front** two grid
+  places (person 2 on place 1, person 1 on place 2; the PSP's one-person race the AI on place 1),
+  `oag_raceplay`'s `grid_row`; (2) both views draw the same two rows with each craft's **team
+  name**, coloured for the view's own person only; (3) the **top and bottom cut**
+  (`Split ScreenH`) clamps the half gap to `[40, 85]`, the left and right cut keeps `[60, 180]`.
+  Still different: the original puts the leader row at `y = 49` in the left and right cut where
+  this build keeps the authored place, and the player's one-person row is a profile tag.
   HD, 2048 and Omega have no Head to Head to port (switched-off `<aEntry>` lists, no cells) and
   Pure has none at all ([hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md)): the
   "checked, differs" above stands, and a Head to Head there is this project's own extension.
@@ -1000,7 +1006,7 @@ with the rows gone it matters nowhere here.
    there and ends the flow, dropping the lobby; `Session::sync_multiplayer`), remembered as
    ever. **The mode row marks a mode that takes fewer people than are seated** (`oag_ui::menu::cap_modes`,
    `Mode::max_people`: Head to Head, two craft; `OAG_MP_MODE_CAPPED`, "For 2 people at most"): dimmed with the reason, still
-   steppable. Head to Head is not in `Mode::ALL` yet (`h2h-port-titles`), so no row is marked today.
+   steppable. Head to Head is in `Mode::ALL` since 2026-10-14 (`h2h-port-titles`), so the row is marked with three seated.
 7. **Track Select**, then Ship Select per seat, then the race (`session::picker`, unchanged).
    Backing out of Track Select lands on the RACE page with the seats kept.
 

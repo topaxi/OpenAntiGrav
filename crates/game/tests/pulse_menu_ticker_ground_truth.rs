@@ -79,7 +79,7 @@ fn pulses_footer_authors_the_ticker_viewport_docs_measured() {
 
 /// A sanity check on the wiring, not a new measurement: given the two tips
 /// `oag_game::records::ticker_tips` finds on a fresh save (`TKR_NOTOURN`/
-/// `TKR_NOHH` are unconditional - see that function's own doc), the ticker
+/// `TKR_NOHH` on a fresh save, which has raced neither - see that function's own doc), the ticker
 /// actually draws something inside its own viewport at `elapsed = 0.0`. This
 /// is what a player sees on the very first frame a menu with no save data
 /// yet opens on - not a still with nothing in the footer at all.

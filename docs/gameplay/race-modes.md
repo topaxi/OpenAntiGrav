@@ -1273,11 +1273,28 @@ section is what implements it.
   path that does carry a real per-entrant team id has no confirmed write
   site. This build answers it the same way: `teams_for_slots`'s own cyclic
   assignment, chosen rather than measured.
-- **The sole opponent's grid slot is extrapolated, not independently
-  measured for a two-craft field** - composing `grid.md`'s own compaction
-  rule ("a short grid packs to the back") with "the local player is forced
-  to the back" puts the opponent at slot 7, immediately ahead of the
-  player, but no live capture of an actual two-craft grid confirms it.
+- **The field starts on the two FRONT grid places** (2026-10-14, `h2h-port-titles`),
+  measured: the AI on place 1 and the player on place 2 (PPSSPP, one person), person 2 on
+  place 1 and person 1 on place 2 (PS2, two people, the slot is the racer index). This
+  replaced an extrapolation that composed `grid.md`'s "a short grid packs to the back" and put
+  them on 7 and 8; the measurement says a field of two does not pack. `oag_raceplay`'s
+  `grid_row` holds it: a front-anchored field (`Mode::field_is_fixed`, Head to Head alone)
+  keeps the racer index as the grid row, every other short field (Multiplayer Time Trial) still
+  packs to the back, **chosen, not measured**. A full grid is the same either way, so no
+  other mode's hash moved.
+- **On the RACE page of every title** (`Mode::ALL`'s last entry): Pulse authors it (PSP Racebox,
+  the PS2 split screens' list); Pure, HD, Omega and 2048 author none or a switched-off
+  `<aEntry>`, so there it is this project's own row, **chosen, not measured**. WEAPONS greys to
+  `OFF`, AI DIFFICULTY and KILLS grey (`assets/ui/menu.toml`), as the original's Racebox does.
+  A stored Head to Head with three or more people seated does not launch as one: it races a
+  Single Race (`session::menus::mode_for_people`, logged), and the setting is left alone so the
+  pick returns with fewer people; the MODE row meanwhile marks it unusable
+  (`oag_ui::menu::cap_modes`). Laps: the RACE page path runs the class default (3 on Venom,
+  `Mode::laps_target` falls back to `SINGLE_RACE_LAPS_BY_CLASS`), which is what the original's
+  Racebox Head to Head ran on Venom (PS2 and PSP); the 4 and 5 laps belong to campaign cells.
+  Records: nothing new is written for a two-person race (the original's `Race_RecordResult`
+  stores each person's place in one profile's best-place record; this build has no such record
+  and its modern-saves rule has no per-person profile to put it in) - left open.
 - **The HUD's own gap readout - `MSC_EVENT_HTH`'s "track the distance
   between you and your opponent" - is drawn**: `crates/hud/src/head_to_head.rs`
   swaps the Position readout for the "1ST"/"2ND" rows, the bar and the
@@ -1302,10 +1319,8 @@ section is what implements it.
   now fields the mode's one.
 - **Quitting the race returns to `Cell Selection`**, like every campaign mode
   ([campaign-quit.md](../ghidra/functions/psp-pulse-usa/campaign-quit.md)).
-- **Deliberately absent from [`Mode::ALL`]**, like `Tournament` - reachable
-  only through a campaign cell. Unlike `Tournament` this is not a leg-list
-  problem; a field of one opponent has no row on the RACE page's own mode
-  list to ask for it from.
+- **In [`Mode::ALL`]** since 2026-10-14 (`h2h-port-titles`); `Tournament` still is not,
+  being reachable only through a campaign cell (a leg-list problem).
 
 [`oag_race::Mode::Head2Head`]: ../../crates/race/src/mode.rs
 [`oag_race::Mode::opponent_count`]: ../../crates/race/src/mode.rs
