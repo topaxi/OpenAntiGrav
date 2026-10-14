@@ -1381,6 +1381,20 @@ a guess.
 
 ## Next Steps
 
+- **Server in the nightly release, and real certificates** (planned 2026-10-14, not started; deferred
+  when the drive wound down). One lane, after the lean server split lands:
+  1. A portable `oag-server` asset in the nightly release (`.github/workflows/release.yml`, which
+     `nightly.yml` calls): a static musl build if the lean split dropped `alsa-sys`, else
+     `scripts/build-server-portable.sh` (zig, glibc 2.35). Verify with local builds and `act`, never
+     a push.
+  2. `oag-server --cert <pem> --key <pem>` for a publicly trusted certificate (Let's Encrypt), read
+     once at start: one race per process (`docs/networking/README.md`, "Hosting model") lives
+     minutes, so no reload; a future reset-and-wait loop re-reads at each reset.
+  3. The client verifies against the system trust store when no `--cert-hash` is given; LAN keeps
+     the self-signed certificate and its hash.
+  4. Docs: ACME via HTTP-01 or DNS-01 (a DNS provider's API issues without port 80). The game's
+     hostname must be DNS-only: a CDN's HTTP proxy does not forward WebTransport or raw QUIC to an
+     origin, so TLS terminates in `oag-server`.
 - ~~Land the shared prerequisite (per-player `RaceState`, N-input
   `World::tick`, per-player device mapping in `oag-input`) as its own
   change, before starting split screen.~~ **Done, 2026-09-16** - see
