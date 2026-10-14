@@ -827,7 +827,8 @@ a guess.
   and the disc-backed `quiet_replay_ground_truth` (eight craft, weapons in every
   hand, a real circuit). The loopback's three replays now go through it.
   **Still open from it:**
-  - **The sim reads the reticle.** The primary's Missile and LeachBeam take
+  - **The sim reads the reticle, so "hash always equal" and "camera
+    untouched" cannot both hold - the lead has to choose.** The primary's Missile and LeachBeam take
     their target only once `RaceView::sight` reports a lock
     (`weapons.rs`, `view.sight.locked()` and `leach_law()`), and that lock is
     advanced from the chase camera's projection (`update_sight`). The sim-only
@@ -837,7 +838,10 @@ a guess.
     client and a server whose cameras differ can disagree about a lock without
     any misprediction. Removing the gate makes
     `quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile`
-    fail. The fix is a sim-side lock that does not read the camera; a gameplay
+    fail, as do the moving-pack and lock-forms-inside-the-window variants; all
+    three are equal with it, which is evidence and not proof (the reticle's
+    hold and previous point are not advanced on ticks where no lock weapon is
+    held). The fix is a sim-side lock that does not read the camera; a gameplay
     change with its own hash consequences, not done here.
   - **A recording does not hear a replayed tick.** `record_tick` is skipped, so
     a client recording a race keeps the inputs it first predicted.

@@ -91,8 +91,8 @@ fn slots(race: &race::Race) -> Vec<String> {
 /// [`race::Race::tick_sim_only`], compared on every tick and every slot.
 ///
 /// `prime` runs on both once `prime_at` ticks have run (hand out the weapons),
-/// early enough that the reticle has had time to lock; `fire` says on which
-/// window ticks slot 0 presses Square.
+/// which may be inside the window; `fire` says on which window ticks slot 0
+/// presses Square.
 ///
 /// Returns what the window did, for the caller's non-vacuity checks.
 fn compare(
@@ -121,6 +121,10 @@ fn compare(
     let mut seen = Window::default();
     for step in 0..window {
         let tick = lead_in + step;
+        if tick == prime_at {
+            prime(&mut normal);
+            prime(&mut quiet);
+        }
         normal.tick(&pads_n.tick(tick, fire(step)));
         quiet.tick_sim_only(&pads_q.tick(tick, fire(step)));
         seen.cues += normal.drain_cues().len();
@@ -144,6 +148,17 @@ fn compare(
         seen.spark_ignitions = normal.spark_ignitions() - ignited_before;
     }
     assert_eq!(slots(&normal), slots(&quiet));
+    // The whole simulation, not only what the hash reads: `RaceSim` keeps
+    // counters and dwell timers outside `state_hash`, and a skipped helper that
+    // wrote one would pass every check above.
+    for race in [&mut normal, &mut quiet] {
+        race.drain_announcements();
+        race.drain_class_announcements();
+    }
+    assert!(
+        format!("{:?}", normal.sim) == format!("{:?}", quiet.sim),
+        "the quiet path left the sim differing from the normal one outside the hash"
+    );
     assert_eq!(
         quiet.spark_ignitions(),
         ignited_before,
@@ -183,6 +198,52 @@ fn a_quiet_replay_fires_the_same_locked_missile() {
     assert!(
         seen.locked_shots > 0,
         "slot 0's Missile never carried a lock, so the reticle dependency was not exercised"
+    );
+}
+
+/// The same shot with the field underway. In the countdown above the grid and
+/// the chase camera barely move, so a camera the quiet path leaves where it was
+/// and one that follows the craft project the same reticle. Here slot 0 covers
+/// several units a tick, the quiet camera does not follow it, and the lock the
+/// primary's Missile reads from the reticle can differ between the two paths.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack() {
+    let Some(seen) = compare(
+        COUNTDOWN + 540,
+        COUNTDOWN + 600,
+        120,
+        |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
+        |step| step == 40,
+    ) else {
+        return;
+    };
+    println!("locked shots: {}", seen.locked_shots);
+    assert!(
+        seen.locked_shots > 0,
+        "slot 0's Missile never carried a lock in the pack"
+    );
+}
+
+/// The lock forms **inside** the window: the Missile is handed over as it opens,
+/// so the reticle's 0.8 s hold runs entirely under the quiet path's frozen
+/// camera, and the primary fires once it has locked.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_quiet_replay_locks_a_missile_inside_the_window() {
+    let Some(seen) = compare(
+        COUNTDOWN + 600,
+        COUNTDOWN + 600,
+        160,
+        |race| race.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile),
+        |step| step == 100,
+    ) else {
+        return;
+    };
+    println!("locked shots: {}", seen.locked_shots);
+    assert!(
+        seen.locked_shots > 0,
+        "slot 0's Missile never carried a lock inside the window"
     );
 }
 

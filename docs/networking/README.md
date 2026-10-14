@@ -118,8 +118,11 @@ step, no view RNG draw (`sparks_rng`, `shake_rng`, `stage_rng`, `exhaust_rng`,
 `engine_light_rng`, `leach_beam_rng`), no HUD, no recording, and the cues,
 announcements and class announcements it raised are dropped. The hash after N of
 these equals the hash after N normal ticks from the same snapshot, on every
-tick and every slot (`tests::reconcile::a_quiet_replay_reaches_the_hash_of_a_normal_one`, and on a real
-circuit with eight craft, two of them people, `quiet_replay_ground_truth`).
+tick and every slot, in every scenario pinned
+(`tests::reconcile::a_quiet_replay_reaches_the_hash_of_a_normal_one`, which also
+compares the whole `RaceSim` as text outside the hash, and on a real circuit with
+eight craft, two of them people, weapons in every hand, `quiet_replay_ground_truth`),
+**with one structural exception**: the reticle lock below.
 
 **A mode on the one body, not a second entry point.** View writes sit inside the
 simulation's helpers (a craft's step flashes its shield, a pad crossing lights
@@ -129,15 +132,21 @@ mode unset runs the same instructions in the same order as before. The three cue
 queues are truncated to their entry length rather than gating twenty-odd push
 sites, because a cue's bookkeeping (`contact_cue_cooldown`) is sim state.
 
-**A known leak, left in place.** The primary's Missile and LeachBeam take their
-target from the reticle (`RaceView::sight`), which is view state advanced from
-the chase camera's projection (`weapons.rs`, `sight.locked()`). The sim-only tick
-therefore still runs the reticle while the primary holds a lock weapon. A replay
-that holds one is only as exact as the reticle it starts from, and two machines
-whose cameras differ can disagree about a lock. Pinned by
-`quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile`, which
-fails with the gate removed. The fix is a sim-side lock that does not read the
-camera; it is a gameplay change, not part of this tick.
+**A known leak, left in place, and the hash guarantee depends on it.** The
+primary's Missile and LeachBeam take their target from the reticle
+(`RaceView::sight`), which is view state advanced from the chase camera's
+projection (`weapons.rs`, `sight.locked()`). The brief's two requirements, "hash
+always equal" and "camera untouched", cannot both hold while that is so. The
+sim-only tick keeps the camera frozen and still runs the reticle while the
+primary holds a lock weapon (reading the camera, writing only the reticle).
+Where the primary fires one in a replay, equality is only as good as the reticle
+it starts from: pinned equal in a countdown, in a moving pack and with the lock
+forming inside the replay window
+(`quiet_replay_ground_truth::a_quiet_replay_{fires_the_same_locked_missile,..._in_a_moving_pack,locks_a_missile_inside_the_window}`,
+which all fail with the gate removed), not proven in general, and two machines
+whose cameras differ can disagree about a lock with no misprediction at all.
+The fix is a sim-side lock that does not read the camera; it is a gameplay
+change with hash consequences, not part of this tick, and needs a decision.
 
 **Not covered by the sim-only tick:** a recording in progress does not hear the
 replayed ticks, so it keeps the inputs as first predicted; `restore_sim` puts

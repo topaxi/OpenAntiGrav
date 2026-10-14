@@ -490,6 +490,18 @@ fn a_quiet_replay_reaches_the_hash_of_a_normal_one() {
             );
         }
     }
+    // The whole simulation, not only what the hash reads: `RaceSim` keeps
+    // counters, dwell timers and cue bookkeeping outside `state_hash`, and a
+    // skipped helper that wrote one would pass every check above.
+    for race in [&mut server, &mut quiet] {
+        race.drain_announcements();
+        race.drain_class_announcements();
+    }
+    assert_eq!(
+        format!("{:?}", server.sim),
+        format!("{:?}", quiet.sim),
+        "the quiet path left the sim differing from the normal one outside the hash"
+    );
     // Non-vacuous: the run went somewhere, and the two slots went different
     // ways, so equality is not two craft sitting still.
     assert_ne!(server.sim.state_hash(), client.sim.state_hash());

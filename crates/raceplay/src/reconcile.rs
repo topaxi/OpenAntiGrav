@@ -53,9 +53,10 @@ impl Race {
     /// One tick of the simulation and nothing else: the replay step of a
     /// reconciliation.
     ///
-    /// Advances [`RaceSim`] exactly as [`Race::tick`] does - the state hash after
-    /// N of these equals the hash after N ticks, from the same snapshot and the
-    /// same inputs - and leaves the picture and the sound alone. Not touched:
+    /// Advances [`RaceSim`] as [`Race::tick`] does - in every scenario pinned,
+    /// the state hash after N of these equals the hash after N ticks from the
+    /// same state and the same inputs, with one structural exception below -
+    /// and leaves the picture and the sound alone. Not touched:
     /// the chase camera and every other camera, the shake, the particle systems
     /// and every view RNG (`sparks_rng`, `shake_rng`, `stage_rng`, `exhaust_rng`,
     /// `engine_light_rng`, `leach_beam_rng`), the exhausts, trail hits, shield
@@ -82,9 +83,16 @@ impl Race {
     ///   [`RaceView::sight`](crate::view::RaceView) reports a lock, and that lock
     ///   is advanced from the chase camera's projection. This is a
     ///   view-to-sim dependency that exists in [`Race::tick`] too; it reads
-    ///   the camera and never writes it. While it exists, a replay that holds a
-    ///   lock weapon is only as exact as the reticle state it starts from, and
-    ///   the client's reticle and the server's can disagree about a lock.
+    ///   the camera and never writes it. **That is the exception to the hash
+    ///   guarantee**: the camera a sim-only tick projects through is not
+    ///   advanced, and the reticle is not updated on ticks where no lock weapon
+    ///   is held (its hold, previous point and lock are left as they were), so a
+    ///   replay in which the primary fires a lock weapon is only as exact as the
+    ///   reticle it starts from. Pinned equal in a countdown, in a moving pack
+    ///   and with the lock forming inside the window, not proven in general. The
+    ///   client's reticle and the server's can also disagree about a lock without
+    ///   any misprediction. "Camera untouched" and "hash always equal" cannot
+    ///   both hold while the lock reads the camera.
     /// - `capture_results`, which writes the scoreboard once, on the first tick
     ///   the race is finished.
     /// - `wreck_ended_tick`, which `Race::runs_on_after_the_wreck` reads.
