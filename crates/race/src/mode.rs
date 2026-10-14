@@ -502,6 +502,33 @@ impl Mode {
         }
     }
 
+    /// Whether this mode flown by `people` people is Pulse PSP's **Multiplayer Time
+    /// Trial**: a Time Trial with two or more people in it. **The mapping is chosen, not
+    /// measured**: the original's mode `17` is its own mode on the ad-hoc menu, and this
+    /// build has no menu mode for it - the head count switches Time Trial's rules instead.
+    /// What the rules are is measured (`docs/ghidra/functions/psp-pulse-usa/mp-time-trial.md`):
+    /// the field is the people and nobody else, each on a grid slot of their own, craft do
+    /// not collide ([`Self::craft_collide`]), weapons stay off, the HUD is the arcade one.
+    /// One person is the ordinary Time Trial and nothing here applies. Speed Lap and Zone
+    /// have no multiplayer twin in the original and are left as they are.
+    #[must_use]
+    pub const fn is_multiplayer_time_trial(self, people: usize) -> bool {
+        matches!(self, Self::TimeTrial) && people >= 2
+    }
+
+    /// Whether two craft of this race touch each other at all. `false` for a
+    /// [`Self::is_multiplayer_time_trial`]: `MPTimeTrial_Construct` clears the collision
+    /// world's craft-pair byte and `Collision_DispatchPair` runs the box-against-box test
+    /// only when it is set (confidence 82). Craft against the track is untouched.
+    ///
+    /// **Derived, not stored**: the mode and the head count are both already hashed, so
+    /// the rule is deterministic without a byte of its own in the world snapshot, and a
+    /// one-person race hashes as it always did.
+    #[must_use]
+    pub const fn craft_collide(self, people: usize) -> bool {
+        !self.is_multiplayer_time_trial(people)
+    }
+
     /// Whether the original arms `Weapon Pad`s for this mode.
     ///
     /// **`false` for the three single-ship modes, measured on the running

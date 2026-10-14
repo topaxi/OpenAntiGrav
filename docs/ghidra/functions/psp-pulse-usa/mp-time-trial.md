@@ -31,6 +31,59 @@ ad-hoc menu offers none either. Confidence 88. PS2 Pulse's table is the same 19 
 ([../ps2-pulse-eu/head2head.md](../ps2-pulse-eu/head2head.md)) and builds no multiplayer
 mode at all.
 
+## The port
+
+**Ported 2026-10-14 (`mp-time-trial-port`), on every title this build runs.** The mapping is
+**chosen, not measured**: there is no ad-hoc play and no Multiplayer menu mode here, so a Time
+Trial raced by two or more people (`--mode time_trial --players N`, `--window-seats`, the join
+screen's seats) runs mode 17's rules, and one person is the ordinary Time Trial, byte for byte
+(`Mode::is_multiplayer_time_trial`). The rules are the measured ones above and carry their
+confidence; the wiring is ours.
+
+| Rule | What this build does | Where |
+| --- | --- | --- |
+| Field | the people and nobody else: `people` craft, 2 to 8, whatever the `--opponents` hatch or a class with no driver says | `Race::start`, `Mode::is_multiplayer_time_trial` |
+| Grid slots | each person a row of their own, the back rows in seat order (person 1 on the last). **Read as `Race_SpawnGrid` plus "a short grid packs to the back"** ([grid.md](grid.md), 82), which agrees with `oag_gameplay::rank_from_back`; which rows a field of N takes was not measured for any N below eight. [grid.md](grid.md) records Head2Head's field of two on the two *front* places, which conflicts with packing to the back; not resolved here, and mode 17 follows `Race_SpawnGrid` as `MPRace_Construct` does | `rank_from_back` |
+| Collision | craft pass through each other, the track still stops them. **Derived state, not a stored byte**: `resolve_craft_pairs` asks `Mode::craft_collide(people)`, and both the mode and the person-flown slots are already in the state hash, so the rule is deterministic and a one-person race hashes exactly as before. The original's byte is `+0x5464` | `Race::resolve_craft_pairs` |
+| Weapons | off, as Time Trial already is | `Mode::weapons_enabled` |
+| HUD | the title's **arcade** layout, so the clock and `POS n / m` per view (Pulse measured, 80; no place list, no pickup widgets). Every other title takes Pulse's rule, chosen: HD and Omega draw their authored arcade split layout (`PositionPanel`), Pure's, Omega's and 2048's arcade layouts carry the clock and `POS` too, and no fallback layer was needed on any title | `hud_layout_for`, `split_assets` |
+| Ranking | the board is `oag_race::places`, which orders finishers by finishing tick: the total race time from the common start. The board names every person by seat | `oag_game::results_tables::people_rows` |
+| Records | **a multiplayer run writes no record and no ghost**, the same as every split race. The original keeps the lowest total time in the one profile; here a profile's Time Trial row is one person's, and writing a multiplayer total into it would change that person's solo records. Chosen | `Session::frame` |
+| Speed Lap | several people in Speed Lap are left as they were (the hatch fields the AI): the original has none. A multiplayer Speed Lap, with the other players as ghosts on one shared start spot, is the maintainer's mod idea (2026-10-14), not built | - |
+
+Tests: `oag_raceplay`'s `tests::multiplayer_time_trial` (field, rows, pass-through against a
+Single Race contact, the time ranking) and the disc-backed
+`crates/game/tests/mp_time_trial_ground_truth.rs` (the grid at 2, 5 and 8 people, two craft left
+overlapping on Pulse's circuit passing through each other where Head2Head's separate, an
+autopiloted two-person run ending on a two-row board in total-time order naming seats 1 and 2).
+Looked at on Pulse PSP (EU) and HD at ticks 300 and 1200, on Pulse PS2, Pure, Omega and 2048
+at tick 1200 (each shows the clock, the lap and `POS 1 / 2` and `POS 2 / 2`, one per view), and
+at the tick two craft overlap under the autopilot (Pulse 362, 1.8 units apart; HD 1435, 2.6):
+Pulse's hull draws inside the other's, HD's two hulls visibly interpenetrate.
+
+**2048 / Omega / HD cross-check (CLAUDE.md), read 2026-10-14 off the shipped data:**
+
+- **HD: checked, applies, not wired.** The executable has an `MPTimeTrial` race manager
+  (mode 19, `0x00040f00`; [mode-manager.md](../ps3-hdfury-eu/mode-manager.md)), and
+  `multiplayer_definition.xml` (`DATA02`) offers `Create Single Race`, `Create Tournament`,
+  `Create Time Trial`, `Join Game`, with `Max Players` 2 to 8 on `Create Time Trial`: Pulse
+  PSP's file shape, so the online mode is in HD's code and data. Its constructor was not read
+  (does it also clear a craft-pair byte? unknown), and there is no online play here. The local
+  split is Pulse's rule on HD's authored arcade split layout, **chosen**.
+- **Omega: checked, applies, not wired.** `multiplayer_definition.xml` (`data09`) is
+  **byte-identical** to HD's (18,226 bytes, `diff` empty), `Create Time Trial` included.
+  Whether Omega's executable carries an `MPTimeTrial` class was not looked for here.
+- **2048: checked, differs.** No multiplayer Time Trial: `MP.xml` is a season ladder of XP and
+  par-time levels (`MP_S12_E02` and siblings, [2048-campaign.md](../../../formats/2048-campaign.md)),
+  its executable names six `GameMode_*` classes and none is a Time Trial or a multiplayer one
+  ([head2head.md](../ps3-hdfury-eu/head2head.md#census-pure-2048-omega)), and no
+  `multiplayer_definition.xml` is listed in its archives. Which mode each MP level runs was not
+  read. The local split borrows HD's, **chosen**.
+- **Pure: checked, applies, not wired.** Its executable's race managers include `MPTimeTrial`
+  beside `MPArcade` and `MPTournament` (string census, [head2head.md](../ps3-hdfury-eu/head2head.md#census-pure-2048-omega),
+  85); the constructor was not read, so Pulse's rules are assumed for the local split,
+  **chosen**.
+
 ## Next address to try
 
 - Translucency: the craft draw call for a non-local racer, checked for a `g_game_mode == 0x11`

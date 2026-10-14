@@ -21,3 +21,16 @@ pub struct SeatPick {
     /// The `PI_ModelSkin` name, as [`crate::Options::skin`].
     pub skin: Option<String>,
 }
+
+impl crate::Options {
+    /// How many people fly this race: [`crate::Options::people`], else one per view
+    /// ([`crate::Options::views`]), at least one. What [`crate::Setup::people`] is built from.
+    #[must_use]
+    pub fn people_flying(&self) -> u8 {
+        if self.people == 0 {
+            self.views.max(1)
+        } else {
+            self.people
+        }
+    }
+}

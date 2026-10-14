@@ -141,7 +141,7 @@ hub) and the table's Windows row is wrong for that setup.
   `PLAYER 2` for one, `PLAYER 5 - 6` for two; the existing `OAG_JOIN_PLAYER`, no new string) until a
   race starts. A race launched from the menus seats everyone the layout plans for - unless the join
   screen's lobby or a restart's kept seats say how many people race, or it is a campaign race, which
-  is one person's - and fields opponents for the others to race. **A head count other than the one
+  is one person's - and fields opponents for the others to race (not in a Time Trial of several people, which fields the people only, [mp-time-trial.md](../ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port)). **A head count other than the one
   spelled is dealt, not refused** (`split_screen::layout_for`: the join screen seating three over a
   `4,2` layout is `2,1`). Back on the menus the windows go back to their holding frames.
 - **Fewer people than windows**: the windows nobody is dealt show their holding frame.

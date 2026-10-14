@@ -126,6 +126,15 @@ multiplayer Speed Lap** in Pulse. So: Multiplayer Time Trial with collisions off
 slots is a **port**; the shared start spot, ghost drawing and a multiplayer Speed Lap are the
 **mod**. The end-of-race order (finish or time) is unread.
 
+**Ported 2026-10-14 (`mp-time-trial-port`): the Time Trial half.** A Time Trial with two or more
+people now runs the original's Multiplayer Time Trial rules (the people only, own grid rows,
+craft-to-craft collision off, the arcade HUD with the clock and `POS n / m`, a board ranked by
+total time, no record written), with no new menu mode: the head count switches the rules
+(**chosen**; the rules are measured, [`mp-time-trial.md`](../../docs/ghidra/functions/psp-pulse-usa/mp-time-trial.md#the-port)).
+**What stays the mod**: the shared start spot, other players drawn as ghosts, and **Speed Lap
+with several people, which the original has no twin for** and which is left as it was (the
+split's hatch still fields AI there).
+
 Needs: a per-mode "players are ghosts" rule (collision pairs skipped, the ghost drawable for
 another person's craft), one shared spawn pose, and per-person results. It sits on the
 extension points above (rules as data) plus the ghost renderer that already exists.

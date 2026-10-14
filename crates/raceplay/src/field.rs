@@ -851,7 +851,16 @@ impl Race {
     /// solid. [`oag_physics::damage::solid_to_craft`] is that rule; measured
     /// on PPSSPP, `docs/ghidra/functions/psp-pulse-usa/wreck-collision.md`.
     /// Every title inherits Pulse's rule: no other title has a measured one.
+    ///
+    /// **Not at all in a Multiplayer Time Trial** ([`Mode::craft_collide`]): craft pass
+    /// through each other and only the track stops them. The rule reads the world's own
+    /// mode and how many slots a person flies, both hashed, so it is simulation state
+    /// without a byte of its own.
     pub(super) fn resolve_craft_pairs(&mut self) {
+        let people = self.sim.world.human_slots().count();
+        if !self.sim.world.mode().craft_collide(people) {
+            return;
+        }
         let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
         for a in 0..self.sim.world.ship_count as usize {
             for b in (a + 1)..self.sim.world.ship_count as usize {
