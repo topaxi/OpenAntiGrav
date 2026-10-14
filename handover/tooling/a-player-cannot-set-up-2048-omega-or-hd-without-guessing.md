@@ -21,7 +21,7 @@ a step-by-step player's guide per OS (Windows, macOS, Linux, Steam Deck,
 Android); the program also searches the folder its executable is in (a Windows
 zip works from any folder); a windowed run with nothing found shows a
 `NO DISC IMAGE FOUND` screen naming the per-user folder and the file endings,
-on every desktop OS and not only Android; the README has a "How to play" entry.
+on every desktop OS and not only Android; the README has a "Play" section linking `docs/overview/installing.md`.
 Omega `.pkg` pairs, `.vpk` and the encrypted PS3 `.iso` are read in place, so
 the old item 1 (an unpack command for them) no longer applies.
 
