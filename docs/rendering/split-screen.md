@@ -966,7 +966,9 @@ with the rows gone it matters nowhere here.
    OPTIONS, which is a pad's Start). A seated device's START begins, and **START needs two
    people** (the row dims at one). Seat 2's empty row says the title's own `FE_GUEST_JOIN` line
    on HD and Omega (`oag_ui_screens::join::Labels::guest`, the line the disc's string table
-   authors, upper-cased as the title shows it; ground truth `hd_and_omega_say_their_own_join_line_for_the_second_seat`), the
+   authors, upper-cased as the title shows it; ground truth `hd_and_omega_say_their_own_join_line_for_the_second_seat`; HD's
+   served language table (`DATA02`'s copy) lacks the two ids that its `DATA05` and `DATA06` copies carry, so
+   `oag_ui::language::load::overlay_second_seat` fills `FE_GUEST_JOIN` and `FE_GUEST_LEAVE` alone from another archive's copy), the
    generic `PLAYER 2 - PRESS A BUTTON` elsewhere and for every later seat.
    **Devices seated earlier this session are seated again** where still connected
    (`Session::mp_devices`, memory only: a restart joins again), so a second round is OK, OK.
@@ -1018,7 +1020,27 @@ Head arrives with `h2h-port-titles`. Time Trial, Speed Lap and Zone stay reachab
 fields opponents whatever the mode). `GSDisableEntriesBitField` is not applied. The PS2's
 `TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves by itself).
 
-**Walked** (2026-10-14, Xvfb `:93` with software Vulkan, three virtual pads): see "Walk" below.
+**Walked** (2026-10-14, windowed on an own Xvfb with software Vulkan, `scripts/uinput-pads.py`
+with three pads and `xdotool` for the keyboard, member `mp-menu-flow`): **every title through the page and the join
+screen**; Pulse PSP EU **the whole flow and a race**, PS2 Pulse EU, Pure EU, HD and Omega to the RACE page (HD also to
+Track Select and `Ship Select - Player 1`, then the load; Omega's `PLAYER 2 PRESS OPTIONS TO JOIN` read on screen),
+2048 to the join screen.
+
+- **Pulse PSP EU, the whole flow**: main menu (`MULTIPLAYER & SHARING` between REMIX and OPTIONS, its authored help under
+  it), the page (LOCAL, LAN and ONLINE dimmed, `Coming later` under LAN), join (pad a and pad b, START of pad c joins
+  a third and its circle gives the seat up), layout, RACE page, MODE changed to Single Race, Track Select, the shared
+  two-person Ship Select, a two-view race. Escape and the pause's circle left it for the menus, and **a second round
+  came up with both pads already seated, the layout and the Single Race mode remembered**. A race flown by `--autopilot`
+  ended in the results and the end menu: **RACE AGAIN** raced the same two views (no join, no layout), **RETURN TO
+  MENUS** came up on the RACE page and START went to the two-seat Ship Select (the lobby survived the page).
+- **PS2 Pulse EU**: the keyboard joined seat 1 (named `KEYBOARD`) and a pad seat 2, START, layout, RACE page, Track Select,
+  the shared Ship Select: **the keyboard seat's own `X` (the X11 raw-key path, the key a seat's Ship Select reads) set its
+  side `READY`**, the pad's cross the other, then a two-view race.
+- **Not walked**: a real second X11 keyboard (a plain Xvfb has one XTEST keyboard), Wayland, a real integrated GPU,
+  a layout of two windows through to a race from the menus (the layout screen's own walk is `multi-window.md`'s), the
+  LAN and ONLINE rows by click or touch (they go through the menus' one `activate`), a Head to Head cap on screen.
+- Found by walking: **2048's `MULTIPLAYER` word was clipped by its 122-unit tile** (fixed: a word wider than the box is
+  drawn smaller, `touch::CAPITAL_WIDTH`, chosen, not measured); HD's language table lacked the join line (the overlay in step 2).
 
 ### Integrated GPUs (2026-10-13)
 
