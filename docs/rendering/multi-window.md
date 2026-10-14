@@ -100,11 +100,23 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   FSR 3.1 falls to FSR 1, as on a menu frame) and dynamic resolution. Each holds one camera's history
   or times one pass, and the windows alternate cameras every frame. A split drops the same three.
   Pulse's bloom and HD's and Omega's chains are *kept*, which a split cannot do.
-- **The flyby and the end.** The pre-race flyby is the player's camera: the window that holds the
-  player (window 1) plays it full screen where a split would, and the other windows show their own
-  craft's chase camera from the first tick. Once every person has finished, the window that holds
-  the player shows the end screens over the spectator camera (`Race::window_drawn` is the player alone,
-  as `views_drawn` is one in a split) and the other windows keep their chase cameras and HUD.
+- **The flyby and the end.** The pre-race flyby is the player's camera and **every window that
+  holds a seat plays it** (2026-10-14, maintainer's request): `Race::window_drawn` answers the
+  player's slot alone for each such window while `in_intro()` holds, so each draws the same flyby
+  camera full window at its own size and aspect (`Scene::render_view`, as window 1 always did),
+  and each goes back to its own seats, cut by its own cut, on the tick the flyby ends. A window
+  with no seat keeps its holding frame. **Chosen, not measured**; it is view-side only, nothing the
+  tick reads or the hash holds (`World::tick` stays 0 under the flyby). The flyby and its skip are
+  one race state, so a skip (a held Cross, or a click on window 1; the seat windows' pointer is
+  ignored, as everywhere) ends it on every window at once, and the HUD, which `Race::hud_shown`
+  already hid race-wide through it, is off on every window. The track panel (circuit name and
+  blurb) is part of the flyby but belongs to window 1, so the other windows show the bare camera.
+  Once every person has finished, the window that holds the player shows the end screens over the
+  spectator camera (`Race::window_drawn` is the player alone, as `views_drawn` is one in a split)
+  and the other windows keep their chase cameras and HUD. **Not exercised live:** a finish with
+  several windows (a headless run seats people nobody drives, so no one finishes, and a windowed run
+  under software Vulkan would need a four-minute race at 8 fps); read from `Race::finished` (every
+  *flown* person), `window_drawn` and `RaceStage::draw_hud`/`draw_window_hud` only.
 - **Pause and the resume countdown** (`oag_game::pause`, a multiplayer race only). The race is held
   for the whole `pause::State::frozen` - `Paused` and `Resuming` alike, the gate `Session::draw` reads
   for window 1 - so every window draws the tick exactly (no between-ticks blend) while held and blends
@@ -311,6 +323,21 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
 - **Seat lists, real windows**: Xvfb + `lvp`, `--race --window-seats 3,2`: window 1 held three seats
   (one over two), window 2 two stacked, window title `PLAYER 4 - 5`; closing window 2 logged
   `window 2 closed: slot(s) [3, 4] flown by the AI` and window 1 kept running its three.
+- **The flyby on every window** (2026-10-14, lane `window-flyby`). Headless, `--race --window-seats
+  2,1 --intro-ticks 100 --screenshot` on Pulse EU (Talon's Junction White): window 2's frame, which
+  drew its own craft's chase camera through the flyby before, is now the flyby camera, the same
+  shot window 1 draws (window 1 adds the track panel); window 1's frame is byte-identical to the
+  build before, and so are `--players 1`, `2` and `4` at flyby ticks 100 and 600 (six of six, `cmp`).
+  Live under Xvfb with software Vulkan (`pause_on_focus_loss = false`, since with no window manager
+  the first focus loss froze the race before the flyby ran), `--race --window-seats 2,1` on Pulse EU,
+  24 captures of both windows: both play the flyby through its shots at the same time, window 1
+  switches to its two views (top and bottom) and window 2 to its whole-screen view when it ends,
+  then the `3`, `2`, `1`, `GO` countdown shows in every view of both windows and the craft run. HD
+  EU has no flyby (its circuits author none, so `begin_intro` is false and a capture at
+  `--intro-ticks 100` is the grid): `--window-seats 2,1` there is as before, window 1 split and
+  window 2 whole, read live too. The disc-backed pin is
+  `raceplay::window_flyby_ground_truth` (every window, a window with no seat, the split after, and a
+  skip ending it everywhere).
 - **Real windows** under Xvfb with software Vulkan (`lvp`), two windows, a race on Pulse: both windows
   draw their own craft with their own HUD; window 1's craft sat on the grid (its keyboard idle) while
   window 2's, flown by the AI, ran at 554 km/h; closing window 2 (`xdotool windowclose`, which is a
@@ -355,7 +382,7 @@ Omega capture (below) ran.
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
 - **A keyboard per window**: the keyboard seat follows the focused window, so two people can share one
   machine with a keyboard each (or a keyboard and a pad). Today the keyboard is slot 0's.
-- **The pause overlay on every window**, and the end screens on a seat's own window.
+- **The pause overlay on every window**, and the end screens on a seat's own window (the flyby is on every window since 2026-10-14).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera
   (a `MotionState` and a temporal record per window) and a timer per window.

@@ -329,7 +329,13 @@ on a desktop build, WINDOW LAYOUT chooses the windows (1 to the head count, 8 at
 window, a two-seat window's cut, each window's monitor and windowed or fullscreen, with a preview of
 boxes per window; pad, keyboard and pointer; remembered in `[race] window_seats`/`window_monitors`
 and re-validated against the monitors present; skipped on wasm, Android and iOS (see
-`docs/rendering/multi-window.md`, "The layout screen"). **Still open from it** (all in the doc's
+`docs/rendering/multi-window.md`, "The layout screen").
+**The flyby plays on every window (2026-10-14, lane `window-flyby`)**: each window that holds a seat
+draws the player's flyby camera full window until it ends, then its own seats
+(`Race::window_drawn`, view-side only; window 1 and the single-window split are byte-identical);
+the layout screen's START row no longer shows the head count (a button shows no value). The end
+screens per window were read, not exercised (no finish reachable headless or under Xvfb); nothing
+looked broken. **Still open from it** (all in the doc's
 "Open"): a keyboard per window; the pause overlay and
 the end screens on every window; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
