@@ -227,11 +227,20 @@ over `portrait`:
   three or more is refused by name, `Mode::max_people`). Each view draws `1st`, `2nd` and the
   gap against the other person: the one who trails reads a red `+ NNm`, the one who leads a green
   `- NNm`, the same distance in both. Looked at on Pulse PSP, rows and columns, ticks 300 and 1200,
-  and in `--window-seats 1,1` (each window its own person's readout); pinned by
+  and in `--window-seats 1,1` (each window its own person's readout), and with one seat sat still
+  (`--hold cross`, no `--autopilot`) at gaps of 18 m, 208 m and 488 m, so the bar's length is seen
+  at the 60 clamp, between the clamps and at the 180 clamp (`clamp(gap / 2, 60, 180)`). At 488 m
+  the top and bottom cut put the second row and the bar's foot on the shield and speed bars at
+  the view's lower edge, so a Head to Head variant of `strip` (`strip-head-to-head`,
+  `modes = ["head_to_head"]`, place group at 0.8 against 1.3, **chosen, not measured**) keeps it
+  in the upper 60% of the view; the columns of a left and right cut had room and are unchanged.
+  Pinned by
   `crates/game/tests/split_head_to_head_ground_truth.rs` (both cuts, ticks 300 and 1200, every
-  word inside its own view) and `crates/raceplay/tests/head_to_head_people_ground_truth.rs`.
+  word inside its own view, the second row above the lower quarter) and `crates/raceplay/tests/head_to_head_people_ground_truth.rs`.
   **Other titles, checked:** HD has no Head2Head cell (`docs/overview/status.md`) and Pure's
-  Head2Head is unread (`?`), and their split files name no `HeadToHeadBar`, so a two-person Head
+  Head2Head is unread (`?`); a window of `--window-seats 1,1` on Pure draws its whole-screen
+  layout and shows `POS 2 / 2` and no bar, so Pure's own layout authors no readout (HD likewise
+  shows its place), and a two-person Head
   to Head there draws the title's own place, `1 / 2` and `2 / 2` (looked at, both cuts and
   windows), and nothing invented - **checked, differs**, the mode on those titles is the next
   lane's. The place now ranks the craft in the race: a field of two read `8 / 2` for the back

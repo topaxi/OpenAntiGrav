@@ -1416,7 +1416,7 @@ and give a winner. A split's place is ranked over the craft in the race.
   exists (`h2h-port-titles`).
 - Pure, HD, Omega, 2048 draw no gap readout: none authors one. HD has no Head2Head cell, Pure's
   and 2048's are unread (status.md `?`); they draw the title's place, `1 / 2` and `2 / 2`.
-- The second row at a large gap (clamped 180 units) was checked in both cuts at tick 1200 in a
-  test, not looked at in a frame: the CLI autopilot flies every seat, so gaps there stay
-  small; a still with one person sat still needs a scripted run.
+- The top and bottom cut's `strip-head-to-head` rule (place group at 0.8) is small: the gap
+  label reads about 11 px at 1280x720. A larger one needs the shield and speed group moved off
+  the right edge in that rule; not tried. The columns (`tall`) are fine at 1.6.
 - The opponent's team and grid slot for one person are unchanged (extrapolated, head2head.md).

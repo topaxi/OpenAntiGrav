@@ -128,6 +128,14 @@ fn each_view_draws_the_gap_to_the_other_person_in_both_cuts() {
                         "{label}: {text:?} at ({x}, {y}) is outside its view {clip:?}"
                     );
                 }
+                // The second row stays clear of the shield and speed bars in the lower
+                // quarter of the view, even at the clamp (tick 1200): in the top and
+                // bottom cut a flat view put it on them at the first scale tried.
+                let second = words.iter().find(|w| w.2 == "2nd").unwrap();
+                assert!(
+                    (second.1 - clip[1]) / clip[3] < 0.75,
+                    "{label}: the second row is on the shield and speed bars"
+                );
                 gaps.push(gap.2.clone());
             }
             assert_eq!(gaps[0][1..], gaps[1][1..], "one gap, seen from both seats");

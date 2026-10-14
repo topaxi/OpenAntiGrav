@@ -165,27 +165,32 @@ fn each_person_reads_the_gap_to_the_other_person() {
     );
 }
 
-/// One person's Head to Head, flown by the autopilot for 600 ticks, hashes to the number
-/// it did before two people fielded two craft: the one-person race is untouched. The
-/// constant was read from a tree without the two-person change (the same run with the
-/// field rule switched off) and is never edited to make a test pass.
+/// One person's Head to Head is the same race whether or not the `--opponents` escape hatch
+/// is set: the mode's field of two is fixed, so the hatch (which fielded seven AI here before
+/// two people fielded two craft) leaves the state hash where it was. Relative on purpose: the
+/// pilot roster feeds the hash and comes from the player's own config directory, so no constant
+/// is pinned. The absolute number was also read on a tree without the two-person rule, equal.
 #[test]
 #[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn one_persons_head_to_head_hash_has_not_moved() {
+fn one_persons_head_to_head_is_the_same_race_with_or_without_the_hatch() {
     let Some(image) = oag_testdata::image("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    let loaded = race::load(&race::Options {
-        source: image.display().to_string(),
-        class: "VENOM".to_string(),
-        mode: oag_race::Mode::Head2Head,
-        ..race::Options::default()
-    })
-    .expect("loading the race");
-    let mut race = Race::start(loaded.setup);
-    race.set_autopilot(true);
-    for _ in 0..600 {
-        race.tick(&PlayerInputs::none());
-    }
-    assert_eq!(race.sim.state_hash(), 0xbd7e_b236_ddbd_4729);
+    let hash = |opponents: bool| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::Head2Head,
+            opponents,
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        let mut race = Race::start(loaded.setup);
+        race.set_autopilot(true);
+        for _ in 0..600 {
+            race.tick(&PlayerInputs::none());
+        }
+        race.sim.state_hash()
+    };
+    assert_eq!(hash(false), hash(true));
 }
