@@ -302,6 +302,24 @@ pub fn window_slots(layout: &[WindowSeats], order: &[usize]) -> Vec<Vec<usize>> 
         .collect()
 }
 
+/// Whether the seat assignment screen has anything to ask: two or more panes in all, counting
+/// the views of every window (`seats_per_window`). One window holding a split qualifies, so a
+/// person can take the top view; a single view does not. **Chosen, not measured.**
+#[must_use]
+pub fn has_panes_to_choose(seats_per_window: impl IntoIterator<Item = usize>) -> bool {
+    seats_per_window.into_iter().sum::<usize>() >= 2
+}
+
+/// Whether a race built with `open_windows` windows deals its views by [`deal_windows`]: when
+/// several windows are open, and also when only one is but the seat assignment ran
+/// (`pane_people` is its answer), because the plain split has view `i` follow slot `i` and
+/// only the dealt path can seat person 2 in the top view. `--players N` leaves `pane_people`
+/// empty and keeps the plain split. **Chosen, not measured.**
+#[must_use]
+pub fn deals_the_panes(open_windows: usize, pane_people: &[usize]) -> bool {
+    open_windows > 1 || !pane_people.is_empty()
+}
+
 /// What the profile calls a seated device, so the seat assignment can be put back by device
 /// after a restart (a `GamepadId` is per run): `keyboard` for the keyboard, `keyboard 2` for the
 /// second one the platform told apart, a pad's name, and `name 2` for a second pad of that

@@ -39,7 +39,7 @@ and SPLIT SCREEN rows) with one flow on every title.
 4. **Layout**: windows, monitor, cut, fullscreen (the existing WINDOW LAYOUT screen). Remembered
    on disk.
 5. **Seat assignment** (**landed**): each player moves their own marker onto the pane they want (moving onto a held pane
-   swaps; a moved person confirms again). Remembered on disk by device. Skipped with one window.
+   swaps; a moved person confirms again). Remembered on disk by device. Opens for any layout with more than one view, one window holding a split included; skipped for a single view.
 6. **Race settings**: our RACE page (mode, class, weapons, AI difficulty, AI on/off); Head to
    Head greyed unless exactly two are seated (`Mode::max_people`). Remembered.
 7. **Track Select**, then **Ship Select** per seat, then the race.
@@ -67,7 +67,7 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
 
 - ~~`mp-menu-flow`: steps 1 to 4 and 6 to 8.~~ **Landed 2026-10-14.**
 - ~~`mp-seat-assign`: step 5.~~ **Landed 2026-10-14**: `oag_ui_screens::seat_assign`, `session::seat_assign`, `[race] window_panes`;
-  skipped for one window. Documented in `docs/rendering/multi-window.md`, "The seat assignment screen".
+  opens for one window holding a split too (`seat-assign-split`). Documented in `docs/rendering/multi-window.md`, "The seat assignment screen".
 - Not before `h2h-port-titles` adds Head to Head to the mode list, or coordinate: both touch
   the RACE page's MODE row.
 
@@ -91,7 +91,8 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
   people are seated (the row dims, `launch_from_settings` does not yet refuse).
 - The cut on the web and phones (no layout screen) is the remembered layout's first window, else horizontal; nothing there can
   choose a vertical split.
-- **Seat assignment, not walked** (`mp-seat-assign`): a race again and a RETURN TO MENU race after an assigned layout (the
-  menus get no tick between `open_menus` and `reenter_multiplayer`; the path keeps `Session::pane_people` and reads it at the same load site as the first launch; no race finished on lavapipe), a keyboard player flying a pane in a race on Xvfb (not even in the join-order
-  control: a held key moved nothing there), Pure, Omega and 2048 stills. A single window of two or more people skips the
-  screen, so a two-way split in one window cannot put person 2 on top; say if that should be choosable.
+- **Seat assignment, still open** (`mp-seat-assign`, `seat-assign-split`): a race again and a RETURN TO MENU race after an
+  assigned layout were not walked (no race finishes on lavapipe; pinned at `multiplayer::reenter` and the functions the path
+  calls, see `docs/rendering/multi-window.md`), a keyboard player flying a pane in a race on Xvfb (not even in the join-order
+  control: a held key moved nothing there), Pure, Omega and 2048 stills. The browser and the phones have no layout screen,
+  so a split there cannot open the seat screen (a `WindowLayoutStage` built from `remembered_cut` would).

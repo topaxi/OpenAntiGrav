@@ -1000,10 +1000,11 @@ with the rows gone it matters nowhere here.
    is then the first window of the remembered layout, else horizontal
    (`Session::remembered_cut`), the one place a cut is not chosen.
 5. **Seat assignment** (`session::seat_assign`, `mp-seat-assign`, 2026-10-14): after the layout, when it has
-   two or more windows, each person moves their own marker onto the pane they want (a pane holds one person;
+   two or more views in all (several windows, or one window holding a split), each person moves their own marker onto the pane they want (a pane holds one person;
    moving onto a held one swaps), remembered on disk by device. It decides who sits in which pane
-   (`Session::pane_people`, `split_screen::deal_windows`); the grid order stays the join order. Skipped for one
-   window. See `multi-window.md`, "The seat assignment screen".
+   (`Session::pane_people`, `split_screen::deal_windows`); the grid order stays the join order. Skipped only for a
+   layout with a single view; one window dealt by `pane_people` is a one-window `deal_windows`
+   (`split_screen::deals_the_panes`). See `multi-window.md`, "The seat assignment screen".
 6. **Race settings**: the RACE page pushed over the MULTIPLAYER page (BACK from it lands
    there and ends the flow, dropping the lobby; `Session::sync_multiplayer`), remembered as
    ever. **The mode row marks a mode that takes fewer people than are seated** (`oag_ui::menu::cap_modes`,
