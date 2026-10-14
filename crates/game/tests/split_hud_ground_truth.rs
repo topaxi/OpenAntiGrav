@@ -42,7 +42,6 @@ fn split_race(players: usize) -> Option<(race::Race, oag_hud::Assets)> {
     .expect("loading the race");
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(hud.space.size);
     oag_game::split_screen::apply(&mut race, players, oag_render::viewport::Cut::Horizontal);
     Some((race, hud))
 }
@@ -454,8 +453,6 @@ fn hd_reticle_in_split_view(cut: oag_render::viewport::Cut) {
     };
     let hud = loaded.hud;
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(hud.sight_screen());
-    race.set_sight_dialect(hud.art.sights);
     oag_game::split_screen::apply(&mut race, 2, cut);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
@@ -909,7 +906,6 @@ fn pulse_pure_and_2048_draw_a_vertical_two_view_race_from_the_tall_rule() {
         let loaded = load(Cut::Vertical);
         let hud = loaded.hud;
         let mut race = race::Race::start(loaded.setup);
-        race.set_sight_screen(hud.space.size);
         oag_game::split_screen::apply(&mut race, 2, Cut::Vertical);
         for _ in 0..300 {
             race.tick(&throttle(2));

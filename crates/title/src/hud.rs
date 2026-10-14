@@ -265,6 +265,19 @@ pub enum Sights {
     Unread,
 }
 
+impl Sights {
+    /// Whether a held LeachBeam's reticle runs the LeachBeam's own law
+    /// (`FUN_0881e8c8`: spinning arrowheads, no hold timer, the lock taken on
+    /// arrival) rather than the Missile's: the PSP dialect with a LeachBeam set,
+    /// which is Pulse. HD's concentric rings and Pure's no-LeachBeam brackets keep
+    /// the Missile's, because HD's own update is a different function and nothing
+    /// has read it.
+    #[must_use]
+    pub const fn runs_leach_law(&self) -> bool {
+        matches!(self, Self::Brackets { leach: Some(_), .. })
+    }
+}
+
 /// How a title's HUD sprites reach the screen: where their pixels come from,
 /// which of them are up whenever the HUD is, and the one colour this build
 /// substitutes.

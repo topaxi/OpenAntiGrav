@@ -97,6 +97,7 @@ impl Setup {
             original_tables: None,
             intro_camera: None,
             slot_teams: Vec::new(),
+            sight: Sighting::default(),
             collision: CollisionWorld::new(),
             handling: Handling::ZERO,
             opponent_handling: Vec::new(),

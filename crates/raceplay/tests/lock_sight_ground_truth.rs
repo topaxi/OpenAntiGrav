@@ -302,11 +302,11 @@ fn a_leachbeam_in_hand_locks_a_craft_on_a_real_circuit() {
     use oag_race::sight;
 
     let Some(loaded) = single_race() else { return };
-    let sights = loaded.hud.art.sights;
+    // **No dialect call: `Race::start` takes it from the load** (`Setup::sight`),
+    // so this is Pulse's reticle and the LeachBeam's own law, which is what the
+    // game runs - not the Missile's with the LeachBeam's art. A start that stopped
+    // applying it would lock at tick 48, not 20, and fail below.
     let mut race = race::Race::start(loaded.setup);
-    // The real dialect: Pulse's reticle, so the LeachBeam's own law, which is
-    // what the game runs - not the Missile's with the LeachBeam's art.
-    race.set_sight_dialect(sights);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -396,7 +396,6 @@ fn pure_locks_a_craft_and_draws_the_psp_reticle() {
     );
 
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(loaded.hud.space.size);
     assert!(
         race.missile_stats().is_some(),
         "Pure's weapon table did not parse - its Missile authors one `speed` \
@@ -547,7 +546,6 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
     // reticle to come up over a real target, and check the four names above
     // - not the Missile's `MissileSight*` - are what is on screen.
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(loaded.hud.space.size);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
@@ -584,7 +582,7 @@ fn hd_draws_its_own_four_leachbeam_sight_widgets_when_held() {
 /// **That screen is why this test exists.** A reticle projecting into the PSP's
 /// 480x272 while the layout draws in 1920x1080 lands in the top-left ninth of
 /// the picture and never leaves it - which is what HD did until
-/// `Race::set_sight_screen`, and which reads on screen as a stray widget rather
+/// `Setup::sight`, and which reads on screen as a stray widget rather
 /// than as a missing one.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -640,7 +638,6 @@ fn hd_locks_a_craft_and_draws_its_own_concentric_reticle() {
     }
 
     let mut race = race::Race::start(loaded.setup);
-    race.set_sight_screen(loaded.hud.space.size);
     assert_eq!(
         race.sight().screen(),
         [1920.0, 1080.0],

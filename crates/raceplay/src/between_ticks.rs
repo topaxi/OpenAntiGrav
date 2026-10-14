@@ -293,14 +293,16 @@ impl Race {
     /// alpha is: what [`Self::ship_model_matrix_of`] returns at `1.0`.
     #[must_use]
     pub fn ship_tick_model(&self, slot: usize) -> Mat4 {
-        model_matrix_of(&self.sim.world.ships[slot])
+        self.drawn_model(slot)
     }
 
     /// The craft in `slot`'s body at this tick exactly, whatever the draw alpha
     /// is: what [`Self::body_between`] returns at `1.0`.
     #[must_use]
     pub fn ship_tick_body(&self, slot: usize) -> oag_physics::Body {
-        self.sim.world.ships[slot].physics.body
+        let mut body = self.sim.world.ships[slot].physics.body;
+        body.position = self.drawn_position(slot);
+        body
     }
 
     /// The craft in `slot`'s model matrix on the previous tick, when a draw
@@ -315,13 +317,10 @@ impl Race {
         let from = previous.ships[slot];
         let moved =
             |a: Vec3, b: Vec3| !a.is_finite() || !b.is_finite() || a.distance(b) > SNAP_DISTANCE;
-        let model = model_matrix_of(&self.sim.world.ships[slot]);
+        let model = self.drawn_model(slot);
         (from.key == self.ship_key(slot)
             && !moved(from.model.w_axis.truncate(), model.w_axis.truncate())
-            && !moved(
-                from.position,
-                self.sim.world.ships[slot].physics.body.position,
-            ))
+            && !moved(from.position, self.drawn_position(slot)))
         .then_some(from.model)
     }
 
@@ -345,14 +344,17 @@ impl Race {
             ships: std::array::from_fn(|slot| {
                 let ship = &self.sim.world.ships[slot];
                 ShipPose {
-                    model: model_matrix_of(ship),
-                    position: ship.physics.body.position,
+                    model: self.drawn_model(slot),
+                    position: self.drawn_position(slot),
                     orientation: ship.physics.body.orientation,
                     key: self.ship_key(slot),
                 }
             }),
         };
         self.view.poses.previous = Some(pose);
+        // After the capture, so the previous pose is the one last drawn and the
+        // tick's own draws start from the offset one step further out.
+        self.decay_corrections();
         let mut projectiles = std::mem::take(&mut self.view.poses.projectiles);
         projectiles.clear();
         projectiles.extend(self.sim.world.projectiles.slots.iter().enumerate().map(
@@ -458,7 +460,7 @@ impl Race {
     /// [`Self::ship_model_matrix_of`]. The tick's body itself, untouched,
     /// outside a draw.
     pub(super) fn body_between(&self, slot: usize) -> oag_physics::Body {
-        let mut body = self.sim.world.ships[slot].physics.body;
+        let mut body = self.ship_tick_body(slot);
         if let (Some(alpha), Some(previous)) = (self.ship_alpha(slot), &self.view.poses.previous) {
             let from = previous.ships[slot];
             if from.position.distance(body.position) <= SNAP_DISTANCE {

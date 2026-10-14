@@ -708,8 +708,9 @@ That's wrong - `Race::tick`/`RaceSim` live in `oag-game`, and per
 
 ## 3a. Remote craft: interpolate or roll back (2026-10-13)
 
-**Status: MEASURE. Not decided.** (2026-10-14: M2 and M3 measured on the
-desktop, S24 and M1/M4 still open.) Written up from a design discussion between
+**Status: MEASURED on the desktop; the maintainer decides.** (2026-10-14: M1 to M4
+measured on the desktop; the S24 half of M2 and M3, weapons (option D) and an analog
+human stream are open. The ADR is drafted as Proposed.) Written up from a design discussion between
 the maintainer and Claude. The options, outcomes, evidence and survey below are
 the record; the recommendation at the end is Claude's and is meant to be
 argued with. The network-protocol ADR waits on the measurements. The permanent
@@ -821,6 +822,16 @@ what any of those games do.
    remote craft and count corrections and position error of last-input prediction
    over windows of 3, 6 and 12 ticks (50, 100 and 200 ms), under both "every
    packet" and a threshold policy. A remote slot's input reaches its craft since 2026-10-13.
+   **Done 2026-10-14** (`tests::reconcile_predict`, tables and method in
+   `docs/networking/README.md`, "Remote-input predictability"). AI-derived streams
+   (a proxy for an analog stick: the next input differs on 96 to 99 percent of ticks)
+   need 53 corrections a second under the strict policy for seven remote craft (11.6
+   times the simulation at 200 ms) and 1.4 to 1.8 a second (1.07 to 1.36 times) under a
+   1-unit state threshold. The maintainer's four ghost files are **keyboard input**
+   (three distinct `stick_x` values) and need 2.6 to 4.8 a second under the strict
+   policy (1.1 to 2.0 times). Free-running error is under one tick of travel; only
+   discrete events (a sideshift 4.5 units, contact, a respawn) make a large one.
+   **Open:** an analog human stream (record one through `--record-ghost`) and weapons.
 2. **M2, replay cost per tick.** Time one sim-only `Race` tick for 8 craft plus
    weapons on the desktop and on the Galaxy S24. Budget is rollbacks per second
    times window ticks times that cost. Runs on the existing loopback in
@@ -838,11 +849,18 @@ what any of those games do.
    does that; whole-struct clone stands until then. S24 open.
 4. **M4, what a correction looks like.** A scripted contact scene with the
    renderer-side smoothing, judged by eye.
+   **Done 2026-10-14** (`Race::reconcile`, `oag-game --force-remote-correction`, method
+   and reading in `docs/networking/README.md`, "What a correction looks like"). A
+   sideshift into the neighbour is a 4.5 unit pop, about 70 px on a near rival at
+   960x540 and clearly visible unsmoothed; the decaying offset (half-life 6 ticks,
+   chosen) turns it into a glide of about 8 frames. The scene's contact case has the
+   rival out of shot, so it is judged by the numbers. The own craft is not smoothed
+   (its camera moves with it); smoothing it needs the camera offset too, not built.
 
 M2 and M3 were roughly half a day on the existing loopback (desktop half done
 2026-10-14). M1 and M4 waited on the
 remote-slot input path, which landed 2026-10-13 (`Race::tick` steps every
-person-flown slot), so both are unblocked.
+person-flown slot) and were done 2026-10-14.
 Proposed pass condition, number chosen arbitrarily and open to challenge: a
 100 ms round trip (6 ticks) costs at most 25 percent of a 16.7 ms frame on the S24.
 
@@ -878,6 +896,15 @@ What would change my mind: M1 shows many corrections a second even with a
 threshold; M2 puts the 6-tick replay over the budget on the S24; playtests find
 weapon pop-in unacceptable. Then A for remote craft plus a cheap contact
 prediction, or D (weapons as server-confirmed events) on top of B.
+
+**After M1 and M4 (2026-10-14, Claude's reading).** The measurements do not move
+the recommendation and sharpen two of its parts. The strict "correct on any
+difference" reading is a storm for continuous input and should not be the policy;
+the state threshold the recommendation already names works, at about 1 unit (half a
+tick of travel) on this data, 1.07 to 1.4 times the simulation. Keyboard input is
+cheap either way. **Not met, so the ADR stays Proposed:** the S24 cost; weapons
+(option D, a replayed stream never fires); an analog human stream, so the 53-a-second
+figure is an upper proxy, not a measurement of a stick.
 
 Questions for the challenge: is client input delay really off the table at 60 Hz
 with heavier craft? Is 25 percent of a frame the right budget? Should weapons be

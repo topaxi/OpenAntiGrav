@@ -82,51 +82,6 @@ impl Race {
         self.view.texture_detail
     }
 
-    /// Which grid the lock-on reticle's coordinates are in.
-    ///
-    /// The title's own HUD space - `oag_hud::Assets::space` - because the
-    /// reticle is drawn beside that layout's widgets and has to project into the
-    /// same grid. Wipeout HD authors 1920x1080 and the PSP titles 480x272; a
-    /// reticle left at the default on HD lands in the top-left ninth of the
-    /// screen and never leaves it.
-    ///
-    /// **Resets the reticle and every slot's simulation lock** ([`crate::lock`]
-    /// runs the same law in this grid), because the centre, the extent and the
-    /// chase are all in the old grid's units. Called once before the first tick,
-    /// and by a server too: the grid is configuration the lock depends on.
-    pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
-        self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
-        self.sim.locks =
-            [oag_race::sight::Sight::new([screen.0, screen.1]); oag_gameplay::MAX_SHIPS];
-        for hud in &mut self.view.huds {
-            hud.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
-        }
-    }
-
-    /// Which reticle dialect the title draws, and so which law a held LeachBeam's
-    /// reticle runs.
-    ///
-    /// **The PSP dialect** - `Sights::Brackets` with a LeachBeam set, which is
-    /// Pulse - runs the LeachBeam's own law (`FUN_0881e8c8`: spinning arrowheads,
-    /// no hold timer, the lock taken on arrival); Wipeout HD's concentric rings
-    /// and Pure's no-LeachBeam brackets keep the Missile's, because HD's own
-    /// update is a different function and nothing has read it. One call at each
-    /// place a race is built, after [`Self::set_sight_screen`] (which resets the
-    /// reticle). Sets the simulation's locks too, which run the same law.
-    pub fn set_sight_dialect(&mut self, sights: &oag_title::hud::Sights) {
-        let leach_law = matches!(
-            sights,
-            oag_title::hud::Sights::Brackets { leach: Some(_), .. }
-        );
-        self.view.sight.set_leach_law(leach_law);
-        for lock in &mut self.sim.locks {
-            lock.set_leach_law(leach_law);
-        }
-        for hud in &mut self.view.huds {
-            hud.sight.set_leach_law(leach_law);
-        }
-    }
-
     /// The lock-on reticle, for whoever draws it.
     ///
     /// Render-only state - see [`RaceView::sight`] - so this returning a borrow

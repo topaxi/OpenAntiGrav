@@ -83,7 +83,7 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_model_matrix_of(&self, slot: usize) -> Mat4 {
-        self.ship_between(slot, model_matrix_of(&self.sim.world.ships[slot]))
+        self.ship_between(slot, self.drawn_model(slot))
     }
 
     /// How many craft are in play, the player included.

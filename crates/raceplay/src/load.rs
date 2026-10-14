@@ -809,6 +809,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
             intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
+            sight: super::Sighting::of(&hud),
             magstrip_wake: magstrip_wake.anchors,
             magstrip_pob: wm.magstrip_pob,
             leach_strip: magstrip_wake.leach_anchors,

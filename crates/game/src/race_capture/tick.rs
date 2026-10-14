@@ -50,7 +50,12 @@ pub(super) fn advance_one_tick(
             race.sim.world.ships[slot].pickup.weapon = Some(weapon);
         }
     }
-    race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
+    match &options.remote_correction {
+        Some(scene) => scene.tick(race, &snapshot, tick),
+        None => {
+            race.tick(&oag_gameplay::PlayerInputs::single(snapshot));
+        }
+    }
     // After the tick, as an impact arms it: the frame this tick ends on shows
     // the shake at progress 0.
     if let Some((at, severity)) = options.force_shake

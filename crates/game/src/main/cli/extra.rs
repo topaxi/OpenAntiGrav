@@ -230,6 +230,21 @@ pub(crate) struct WreckArgs {
     #[arg(long, requires = "race")]
     pub(crate) no_weapon_lights: bool,
 
+    /// With `--race --screenshot`, hand craft `SLOT` to a scripted remote person
+    /// at a tick: `TICK:SLOT[:WINDOW[:contact]]`, e.g. `480:7:20:contact`. The client guesses its
+    /// input straight on for `WINDOW` ticks (default 6, 100 ms) while the true
+    /// taps its airbrake twice toward the player (a sideshift; with `contact` the player dashes at it too), then the server's state arrives and the
+    /// client reconciles; the frame at `--ticks` is drawn on the client. A
+    /// verification aid for what a correction looks like. See
+    /// [`oag_raceplay::correction::Scene`].
+    #[arg(long, value_name = "TICK:SLOT[:WINDOW[:contact]]", requires = "race")]
+    pub(crate) force_remote_correction: Option<String>,
+
+    /// With `--force-remote-correction`, draw the correction where it lands
+    /// instead of gliding it out. See [`oag_raceplay::Race::set_correction_smoothing`].
+    #[arg(long, requires = "force_remote_correction")]
+    pub(crate) no_correction_smoothing: bool,
+
     /// With `--race --screenshot`, put craft `SLOT` on a Missile the player has
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `330:1`. The same aid
     /// `--force-bomb-trip` is, for the Missile's explosion: a headless run's

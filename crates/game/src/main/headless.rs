@@ -616,6 +616,10 @@ pub(crate) fn run_race(
                     cli.wreck.force_missile_hit.as_deref(),
                     "Missile hit",
                 )?,
+                remote_correction: crate::args::remote_correction(
+                    cli.wreck.force_remote_correction.as_deref(),
+                    !cli.wreck.no_correction_smoothing,
+                )?,
                 no_weapon_lights: cli.wreck.no_weapon_lights,
                 force_shield: crate::args::force_shield(&cli.wreck.force_shield)?,
                 medals: oag_game::race_capture::tick::Medals {

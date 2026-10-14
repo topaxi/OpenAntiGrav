@@ -156,6 +156,7 @@ mod bomb_blast;
 mod breadcrumbs;
 mod camera;
 pub mod catalogue;
+pub mod correction;
 pub mod countdown;
 mod craft_flash;
 mod damage_fx;
@@ -240,7 +241,7 @@ pub use load::ripple::{Ripples, SpanPlaces};
 pub use load::{export_track, load, load_event};
 pub(crate) use oag_title::Trigger;
 pub use options::{
-    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup,
+    CameraOverride, Campaign2048Progress, Loaded, Options, PoseRequest, SeatPick, Setup, Sighting,
 };
 pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
@@ -623,6 +624,13 @@ pub struct Race {
     /// half's state: it is the caller's statement that this tick is a replay
     /// whose picture and sound already happened. Read through [`Race::draws`].
     quiet: bool,
+    /// What each person-flown slot's controls were on the last tick, so a test can
+    /// record a driver's output as an input stream (`tests::reconcile_predict`).
+    #[cfg(test)]
+    last_controls: [oag_physics::ShipControls; oag_gameplay::MAX_PLAYERS],
+    /// The craft pairs that touched on the last tick, for the same test.
+    #[cfg(test)]
+    pair_contacts: Vec<(usize, usize)>,
 }
 
 /// How fast the kick opens, per second, as an exponential approach.
