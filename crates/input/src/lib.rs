@@ -327,6 +327,19 @@ impl Controls {
         *self.pad.assignment_mut() = pad::Assignment::default();
     }
 
+    /// Moves the keyboard onto `slot` and lets go of every key, in one call: what a
+    /// multi-window race does when the focus moves to another window. The release is
+    /// part of the move so a key held in the window the focus left cannot read as held
+    /// (or as a fresh press) on the seat it arrives at. Nothing happens when the
+    /// keyboard is on `slot` already.
+    pub fn keyboard_to(&mut self, slot: usize) {
+        if slot == self.keyboard_slot() || slot >= oag_gameplay::MAX_PLAYERS {
+            return;
+        }
+        self.pad.assignment_mut().assign_keyboard(slot);
+        self.release_all();
+    }
+
     /// Records a key going down or coming up. See [`Keyboard::set_key`].
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
         if pressed {

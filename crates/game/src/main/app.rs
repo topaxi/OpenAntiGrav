@@ -557,6 +557,7 @@ impl App {
             window_monitors: Vec::new(),
             window_layout_chosen: false,
             focus: crate::windows::Focus::default(),
+            seat_clicks: 0,
             split_race_box: false,
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
@@ -700,9 +701,31 @@ impl ApplicationHandler for App {
             match &event {
                 WindowEvent::Focused(gained) => {
                     session.focus.changed(id, *gained, web_time::Instant::now());
-                    if !*gained && !is_seat {
+                    // A key held in a window that lost focus is never seen to come up,
+                    // whichever window it was: a seat window's loss lets go too, or the key
+                    // would stay held for the seat the keyboard is moved to next.
+                    if !*gained {
                         session.controls.release_all();
-                        session.pointer.release();
+                        if !is_seat {
+                            session.pointer.release();
+                        }
+                    } else {
+                        // The keyboard goes to this window's seat before any key it
+                        // receives, so none lands on the seat it came from.
+                        session.sync_keyboard_seat();
+                    }
+                    return;
+                }
+                // A click on a further window is that window's first seat's Start while the
+                // race is paused (`Session::seat_clicked`); the rest of its pointer is
+                // ignored, as before.
+                WindowEvent::MouseInput {
+                    state: ElementState::Pressed,
+                    button: winit::event::MouseButton::Left,
+                    ..
+                } if is_seat => {
+                    if let windows::Which::Screen(index) = which {
+                        session.seat_clicked(index + 1);
                     }
                     return;
                 }

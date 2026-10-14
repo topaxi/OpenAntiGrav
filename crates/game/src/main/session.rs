@@ -642,6 +642,10 @@ pub(crate) struct Session {
     /// Which of the run's windows have focus. Used only while there are seats: with one
     /// window a lost focus is acted on at once, as it always was.
     pub(crate) focus: crate::windows::Focus,
+    /// Windows (bit `i` is window `i + 1`, window 1 being 0) a left click landed on since
+    /// the last tick. Only the further windows set one: window 1's is `pointer`'s. Read by
+    /// the pause as that window's first seat's Start, and nothing else.
+    pub(crate) seat_clicks: u8,
     /// Set while the RACE page is open as a split-screen race box (`Session::open_split_race_box`):
     /// its START goes through the join screen first. Cleared when the menu leaves that
     /// page.

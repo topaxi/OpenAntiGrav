@@ -292,6 +292,7 @@ impl Session {
             // the one slot the keyboard drives; it has one menu and one cursor
             // however many people are racing.
             self.feed_touch();
+            self.sync_keyboard_seat();
             let inputs = self.controls.player_snapshots();
             self.frame_timing.sampled(web_time::Instant::now());
             self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
@@ -370,8 +371,13 @@ impl Session {
             // A click on a paused race is slot 0's Start, through the same owner
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if matches!(&self.stage, Stage::Race(stage) if !stage.race.finished()) {
-                let click = pointer.clicked && matches!(self.pause, oag_game::pause::State::Paused { .. });
-                let presses = self.controls.take_presses(Button::Start) | u8::from(click);
+                let paused = matches!(self.pause, oag_game::pause::State::Paused { .. });
+                let click = pointer.clicked && paused;
+                // A click on a further window is its first seat's Start, the same way.
+                let seat_clicks = self.take_seat_clicks();
+                let presses = self.controls.take_presses(Button::Start)
+                    | u8::from(click)
+                    | if paused { seat_clicks } else { 0 };
                 self.step_pause(presses);
             }
             // Circle is "back" everywhere else on screen - the menus, the

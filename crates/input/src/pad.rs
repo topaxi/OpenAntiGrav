@@ -454,6 +454,12 @@ pub struct Assignment<D = gilrs::GamepadId> {
     /// Slots whose seat was given up ([`Self::unseat`]): nothing is seated on them
     /// again, however many pads connect.
     closed: Vec<u8>,
+    /// Slots the keyboard can be moved onto: a multi-window race's windows' first
+    /// seats ([`Self::set_keyboard_reach`]). **Chosen, not measured.** Each counts as
+    /// driven ([`Self::drives`]) while the keyboard is on another, so the seat a person
+    /// has left the keyboard for stays that person's (idle) rather than turning to
+    /// the AI the moment the focus moves.
+    keyboard_reach: Vec<u8>,
 }
 
 impl<D> Default for Assignment<D> {
@@ -465,6 +471,7 @@ impl<D> Default for Assignment<D> {
             keyboard_claimed: false,
             benched: Vec::new(),
             closed: Vec::new(),
+            keyboard_reach: Vec::new(),
         }
     }
 }
@@ -485,6 +492,7 @@ impl<D: Copy + PartialEq> Assignment<D> {
             keyboard_claimed: false,
             benched: Vec::new(),
             closed: Vec::new(),
+            keyboard_reach: Vec::new(),
         }
     }
 
@@ -527,6 +535,26 @@ impl<D: Copy + PartialEq> Assignment<D> {
         if !self.closed.contains(&slot) {
             self.closed.push(slot);
         }
+        self.keyboard_reach.retain(|reach| *reach != slot);
+    }
+
+    /// Sets the slots the keyboard can be moved onto (a multi-window race: each window's
+    /// first seat), replacing the last set. A slot past the grid or [closed](Self::unseat)
+    /// is ignored. All of them count as [driven](Self::drives), the one the keyboard is
+    /// on or not, so moving the keyboard between windows never hands a seat to the AI.
+    pub fn set_keyboard_reach(&mut self, slots: &[usize]) {
+        self.keyboard_reach = slots
+            .iter()
+            .filter_map(|slot| u8::try_from(*slot).ok())
+            .filter(|slot| usize::from(*slot) < oag_gameplay::MAX_PLAYERS)
+            .filter(|slot| !self.closed.contains(slot))
+            .collect();
+    }
+
+    /// The slots the keyboard can be moved onto. See [`Self::set_keyboard_reach`].
+    #[must_use]
+    pub fn keyboard_reach(&self) -> Vec<usize> {
+        self.keyboard_reach.iter().map(|slot| usize::from(*slot)).collect()
     }
 
     /// How many slots are people under [`Seating::Seated`], or `None` merged.
@@ -624,7 +652,9 @@ impl<D: Copy + PartialEq> Assignment<D> {
     /// to know which of its local slots still have a person at them.
     #[must_use]
     pub fn drives(&self, slot: usize) -> bool {
-        self.keyboard_slot() == slot || self.pads.iter().any(|(_, held)| usize::from(*held) == slot)
+        self.keyboard_slot() == slot
+            || self.keyboard_reach.iter().any(|reach| usize::from(*reach) == slot)
+            || self.pads.iter().any(|(_, held)| usize::from(*held) == slot)
     }
 
     /// Whether every device still drives [`DEFAULT_SLOT`].

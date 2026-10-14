@@ -492,3 +492,45 @@ fn merging_undoes_a_seating() {
     assert_eq!(controls.assignment().humans(), None);
     assert!(controls.assignment().is_single_player());
 }
+
+/// The focus moving between windows moves the keyboard to the other window's seat, and
+/// what was held on the seat it left is released, not carried: nothing is held or
+/// freshly pressed on the seat it arrives at, and the seat it left sees the key come up.
+#[test]
+fn moving_the_keyboard_releases_what_was_held_on_the_seat_it_left() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    controls.set_key(&key(NamedKey::Space), true);
+    let held = controls.player_snapshots();
+    assert_eq!(held.get(0).stick_y, 1.0);
+    assert!(held.get(0).buttons.is_held(Button::Start));
+
+    controls.set_key(&key(NamedKey::Enter), true);
+    controls.keyboard_to(1);
+    assert_eq!(controls.keyboard_slot(), 1);
+    let moved = controls.player_snapshots();
+    assert_eq!(moved.get(0).stick_y, 0.0, "the seat it left lets go");
+    assert!(!moved.get(0).buttons.is_held(Button::Start));
+    assert_eq!(moved.get(1).stick_y, 0.0, "nothing carries to the new seat");
+    assert!(!moved.get(1).buttons.is_held(Button::Start));
+    assert!(!moved.get(1).buttons.is_pressed(Button::Start), "and no press edge");
+    assert!(!moved.get(1).buttons.is_pressed(Button::Cross), "a tap latched before the move is dropped");
+
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    let steered = controls.player_snapshots();
+    assert_eq!(steered.get(1).stick_y, 1.0, "a key pressed after the move drives the new seat");
+    assert_eq!(steered.get(0).stick_y, 0.0, "and not the old one");
+}
+
+/// Moving onto the seat it is on, or off the grid, changes nothing - the keys held stay held.
+#[test]
+fn moving_the_keyboard_to_where_it_is_keeps_its_keys() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.set_key(&key(NamedKey::ArrowUp), true);
+    controls.keyboard_to(0);
+    controls.keyboard_to(oag_gameplay::MAX_PLAYERS);
+    assert_eq!(controls.keyboard_slot(), 0);
+    assert_eq!(controls.player_snapshots().get(0).stick_y, 1.0);
+}
