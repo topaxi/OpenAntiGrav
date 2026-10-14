@@ -51,6 +51,13 @@ Three things follow:
   moves, so a three-racer field occupies slots 6, 7 and 8 rather than 1, 2 and
   3. That is a real behaviour and a cheap one to get wrong.
 
+  **Measured against it for a field of two (2026-10-14, `h2h-re`):** a Racebox Head to
+  Head (`g_game_mode` 9, two craft) starts the AI on place 1 and the player on place 2,
+  the two *front* places, read off the racer table on Talon's Junction White against an
+  eight-craft read on the same track ([head2head.md](head2head.md)). So a field of two
+  does not pack to the back; either the compaction loop is not what runs for mode 9, or
+  `slots` is read the other way round. Not traced; the measurement is what to build.
+
   **It cannot be the whole story for a field of one, and the conflict is
   recorded here rather than resolved.** Taken literally, compaction puts a
   solo racer on slot 8 - which is the authored node itself, per this page's own

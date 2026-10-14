@@ -77,8 +77,22 @@ does, was not this pass's job. This project's own `oag_livery::teams_for_slots`
 - already labelled "this project's own rule rather than the original's" for
 Race - is what Head2Head uses too; see the implementation's own doc comment.
 
-**Grid placement of the sole opponent is extrapolated, not independently
-measured for `g_racer_count == 2`.** `Race_SpawnGrid`'s compaction rule -
+**~~Grid placement of the sole opponent is extrapolated~~ - measured 2026-10-14
+(`h2h-re`), and the extrapolation was wrong: the two craft start on the two *front*
+grid places, the AI on place 1 and the player on place 2.** PPSSPP, Racebox `Head to
+Head`, Talon's Junction White, Venom, read off the racer table (`0x08b34420`, stride
+`0x370`) while the track description held the field: `g_game_mode == 9`, count `2`,
+racer 0 (the AI) at `(6.145, -52.221, -195.876)` and racer 1 (the player) at
+`(-13.561, -51.863, -175.820)`, which are exactly places 1 and 2 of an eight-craft single
+race read the same way on the same track (the player's own place 8 there is
+`(-132.291, -51.737, -175.193)`). The HUD at the countdown reads `1st AG Systems`, red
+`+ 20M`, `2nd AAA` (`data/reference/psp-head2head/grid-go.png`, gitignored). Confidence
+92. So whatever `Race_SpawnGrid`'s compaction does, a field of two does not pack to the
+back; PS2 Pulse puts its two craft on the same two places by a different route (no
+compaction, the slot is the racer index, [`../ps2-pulse-eu/head2head.md`](../ps2-pulse-eu/head2head.md)).
+The paragraph below is the superseded reasoning, kept for the record.
+
+**Superseded:** `Race_SpawnGrid`'s compaction rule -
 "bubble every assigned slot toward the high end" - is read at confidence 82
 ([grid.md:14-52](grid.md)), and "the local player is forced to the back" is
 separately read at confidence 75 ([grid.md:72-78](grid.md)). Composing the two
@@ -202,6 +216,17 @@ same split-HUD group as the place widgets (`SplitHud_Pulse.toml`), because the r
 `Position`, `Position Outof`, `PositionOf` and `HeadToHeadBar` in one layout.
 `docs/rendering/split-screen.md` has the frames.
 
+**Answered 2026-10-14 (`h2h-re`): mode `0xf` is the PSP's network Head2Head, and the
+original's two-person Head to Head on one console is PS2 Pulse's mode `9` with its split
+flag set.** On PS2 the split screens' `Mode` list sets `Head2Head` by name (mode 9, a grid
+of two), the Arcade race's split branch fields both people and no AI, and mode `0xf`
+builds no race at all (no case in its `Race_CreateModeObject`); measured live on PCSX2 in
+both cuts. See [`../ps2-pulse-eu/head2head.md`](../ps2-pulse-eu/head2head.md). On the PSP,
+`0xf` reaches `MPRace_Construct` (ad hoc) and its grid-size row is `1`, so the field there
+comes from the network peers, not this table (not read further: no ad-hoc capture path).
+The two-person rule this build chose (two people, two craft, no AI) is therefore the PS2's
+own. What follows is the question as it was posed:
+
 **Open question for `h2h-re`: what mode `0xf` ("Multiplayer Head2Head") does.** What is known,
 all from this page and [state-machine.md](state-machine.md): `g_game_mode` `0xf` is constructed by
 `MPRace_Construct` (shared with `0xe`, layout id `0x1aa4`, state-machine.md's mode table);
@@ -212,8 +237,9 @@ all from this page and [state-machine.md](state-machine.md): `g_game_mode` `0xf`
 for `9` (two) and none for `0xf`, which falls into "everything else = 1"; `Race_ReadSetupOptions`
 (`0x08896b84`) puts `0xf` in the weapons-off default set. Unread: how many craft `0xf` fields,
 who flies them (the PSP has no `pspnet` stack, so this is probably the ad-hoc multiplayer
-path), and whether it is the original's two-person Head to Head. Until that is read, this build's
-two-person rule (two seated people, two craft, no AI) is **chosen, not measured**.
+path), and whether it is the original's two-person Head to Head. ~~Until that is read, this build's
+two-person rule (two seated people, two craft, no AI) is **chosen, not measured**.~~ Read
+above.
 
 **Not drawn, each with its address:**
 
@@ -296,7 +322,9 @@ drawn, and this build's cyclic choice stays chosen, not measured. Screenshots
 
 **Unread:** `FUN_088099b4`'s test that picks the `Show Unlocks` redirect, the
 finish of a Head2Head cell watched live to its medal, and the opponent
-selection rule.
+selection rule. A third sample (2026-10-14, Racebox Head to Head, Talon's Junction
+White, Venom, player Assegai): the opponent flew **AG Systems**. Three samples, three
+teams (`Goteki 45`, `Qirex`, `AG Systems`); still no law.
 
 ## Names landed
 

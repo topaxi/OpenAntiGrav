@@ -248,6 +248,20 @@ over `portrait`:
   applies, not wired**) and 2048 is unread (**not checkable** here: no 2048 Head2Head evidence).
   Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
   1280x720, at tick 900 to 1200.
+  **Measured against the original, 2026-10-14 (`h2h-re`, PCSX2, two pads, both cuts):** PS2
+  Pulse's own split Head2Head is mode 9 with two people and no AI, so the field above is the
+  original's, not only a choice ([ps2 head2head.md](../ghidra/functions/ps2-pulse-eu/head2head.md)).
+  What differs from this build: (1) the original starts the two craft on the **front** two grid
+  places (person 2 on place 1, person 1 on place 2; the PSP's one-person race does the same with
+  the AI on place 1), this build on the back two; (2) both views draw the same two rows, `1st` and
+  `2nd` with each craft's **team name** (`1st Qirex` / `2nd Assegai`), and colour only the
+  view's own person's row and the gap, where this build draws ordinals; (3) the **top and bottom
+  cut** (`Split ScreenH`) clamps the half gap to `[40, 85]` and puts the leader row on the bar's
+  top, the left and right cut keeps `[60, 180]` (decompiled, and the shorter bar seen live: 80
+  against 158 px at about 680 m); this build's `strip-head-to-head` scales the group instead.
+  HD, 2048 and Omega have no Head to Head to port (switched-off `<aEntry>` lists, no cells) and
+  Pure has none at all ([hd head2head.md](../ghidra/functions/ps3-hdfury-eu/head2head.md)): the
+  "checked, differs" above stands, and a Head to Head there is this project's own extension.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule
@@ -972,7 +986,8 @@ CSplitV`/`H` -> `Team SelectionSplit`.
   HD, Omega and 2048 are unchanged and keep it.
 - **The settings page is our RACE page**, the PS2's `Split ScreenV`/`H` rows being mode, class,
   weapons, difficulty and eliminations, which MODE, SPEED CLASS, WEAPONS, AI DIFFICULTY and KILLS
-  match. **Differs, not built**: the PS2's `Mode` list is `Arcade`, `Tournament`, `Head2Head`;
+  match. **Differs, not built**: the PS2's `Mode` list is `Arcade`, `Tournament`, `Head2Head`
+  (Head2Head greys WEAPONS to `OFF` and AI DIFFICULTY, seen live 2026-10-14);
   ours is this build's race modes, so Tournament and Head to Head are missing, and the
   `TournamentLoad` "Abandon tournament progress" dialog is not on this path (progress saves
   by itself). Time Trial, Speed Lap and Zone stay reachable as split races (a split fields
