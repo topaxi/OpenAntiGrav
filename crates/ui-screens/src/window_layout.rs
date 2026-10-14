@@ -57,6 +57,8 @@ pub struct Labels {
     pub windowed: String,
     /// The fullscreen value.
     pub fullscreen: String,
+    /// The line that replaces the hint when the compositor shows one window only.
+    pub one_window: String,
     /// The row that begins the race box.
     pub start: String,
     /// The row that leaves the screen.
@@ -86,6 +88,10 @@ impl Labels {
             mode: say("OAG_DISPLAY_WINDOW_MODE", "WINDOW MODE"),
             windowed: say("OAG_WINDOW_LAYOUT_WINDOWED", "WINDOWED"),
             fullscreen: say("OAG_WINDOW_LAYOUT_FULLSCREEN", "FULLSCREEN"),
+            one_window: say(
+                "OAG_WINDOW_LAYOUT_ONE_WINDOW",
+                "ONE WINDOW ONLY: THIS DISPLAY SHOWS ONE WINDOW AT A TIME",
+            ),
             start: say("OAG_JOIN_START", "START"),
             back: say("OAG_MENU_BACK", "BACK"),
         }
@@ -148,6 +154,9 @@ pub struct Picker {
     edit: usize,
     monitors: Vec<String>,
     fullscreen: bool,
+    /// The compositor shows one window at a time (gamescope): the window count is locked at 1,
+    /// the mode is locked, and the monitor row is gone. Plain data from the composition root.
+    one_window_only: bool,
     /// An index into [`Self::rows`].
     cursor: usize,
 }
@@ -275,8 +284,28 @@ impl Picker {
             edit: 0,
             monitors,
             fullscreen,
+            one_window_only: false,
             cursor: 0,
         }
+    }
+
+    /// Locks the screen to one window, for a compositor that shows one at a time: every seat is
+    /// dealt into window 1, the WINDOWS and mode rows stay but do not change, the monitor row
+    /// goes, and the hint says why. The cut and seat rows work as before.
+    #[must_use]
+    pub fn one_window_only(mut self, one_window_only: bool) -> Self {
+        self.one_window_only = one_window_only;
+        if one_window_only {
+            self.set_window_count(1);
+            self.windows[0].monitor = 0;
+        }
+        self
+    }
+
+    /// Whether the window count and mode are locked ([`Self::one_window_only`]).
+    #[must_use]
+    pub fn is_one_window_only(&self) -> bool {
+        self.one_window_only
     }
 
     /// The layout as chosen: one entry per window.
@@ -306,6 +335,9 @@ impl Picker {
     /// The most windows this head count allows: one a person, eight at most.
     #[must_use]
     pub fn most_windows(&self) -> usize {
+        if self.one_window_only {
+            return 1;
+        }
         self.people.min(MAX_WINDOWS)
     }
 
@@ -320,7 +352,7 @@ impl Picker {
         if self.windows[self.edit].seats == 2 {
             rows.push(Row::Cut);
         }
-        if self.monitors.len() > 1 {
+        if self.monitors.len() > 1 && !self.one_window_only {
             rows.push(Row::Monitor);
         }
         rows.push(Row::Start);
@@ -423,6 +455,7 @@ impl Picker {
                 self.set_window_count(to);
                 changed.then_some(Event::Changed)
             }
+            Row::Mode if self.one_window_only => None,
             Row::Mode => {
                 self.fullscreen = !self.fullscreen;
                 Some(Event::Changed)
@@ -534,7 +567,7 @@ impl Picker {
         if pointer.clicked
             && let Some(window) = boxes(
                 self.windows.len(),
-                self.monitors.len() > 1,
+                self.monitors.len() > 1 && !self.one_window_only,
                 geometry.preview,
             )
             .iter()
@@ -553,7 +586,7 @@ impl Picker {
         let window = &self.windows[self.edit];
         match row {
             Row::Windows => self.windows.len().to_string(),
-            Row::Mode => if self.fullscreen {
+            Row::Mode => if self.fullscreen || self.one_window_only {
                 &self.labels.fullscreen
             } else {
                 &self.labels.windowed
@@ -581,6 +614,11 @@ impl Picker {
             Row::Monitor => self.monitor_name(window.monitor),
             Row::Start | Row::Back => String::new(),
         }
+    }
+
+    /// Whether a row is shown but cannot change ([`Self::one_window_only`]).
+    fn locked(&self, row: Row) -> bool {
+        self.one_window_only && matches!(row, Row::Windows | Row::Mode)
     }
 
     /// A monitor's name as a row can hold it.
@@ -644,15 +682,22 @@ impl Picker {
             layout.scale * 0.6,
             hint_ink.unwrap_or_else(|| skin.normal()),
             Align::Left,
-            self.labels.hint.clone(),
+            if self.one_window_only {
+                self.labels.one_window.clone()
+            } else {
+                self.labels.hint.clone()
+            },
         )];
         for (index, row) in self.rows().into_iter().enumerate() {
             let y = layout.text_y(index);
-            let ink = if index == self.cursor {
+            let mut ink = if index == self.cursor {
                 skin.selected()
             } else {
                 skin.normal()
             };
+            if self.locked(row) {
+                ink[3] *= 0.5;
+            }
             out.push(text(
                 layout.text_x,
                 y,
@@ -693,7 +738,8 @@ impl Picker {
             .map(|window| PreviewWindow {
                 seats: window.seats,
                 vertical: window.vertical,
-                caption: (self.monitors.len() > 1).then(|| self.monitor_name(window.monitor)),
+                caption: (self.monitors.len() > 1 && !self.one_window_only)
+                    .then(|| self.monitor_name(window.monitor)),
             })
             .collect();
         let owner: Vec<usize> = self

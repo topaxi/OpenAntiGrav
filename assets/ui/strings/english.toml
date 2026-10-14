@@ -125,6 +125,7 @@ OAG_SEAT_ASSIGN_AUTO = { text = "AUTO", human = false }
 # The window layout screen (`session::window_layout`), after the join screen.
 OAG_WINDOW_LAYOUT_TITLE = { text = "WINDOW LAYOUT", human = false }
 OAG_WINDOW_LAYOUT_HINT = { text = "CHOOSE HOW THE PLAYERS ARE SPLIT ACROSS WINDOWS", human = false }
+OAG_WINDOW_LAYOUT_ONE_WINDOW = { text = "ONE WINDOW ONLY: THIS DISPLAY SHOWS ONE WINDOW AT A TIME", human = false }
 OAG_WINDOW_LAYOUT_WINDOWS = { text = "WINDOWS", human = false }
 OAG_WINDOW_LAYOUT_WINDOW = { text = "WINDOW", human = false }
 OAG_WINDOW_LAYOUT_SEATS = { text = "SEATS", human = false }
@@ -187,6 +188,7 @@ OAG_OPTIONS_LANGUAGE = { text = "LANGUAGE", human = false }
 
 # DISPLAY's own rows - its title is `OAG_OPTIONS_DISPLAY` above.
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
+OAG_DISPLAY_MONITOR_GAMESCOPE = { text = "GAMESCOPE SHOWS ONE DISPLAY", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "WINDOW MODE", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "WINDOW SIZE", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS SIZE", human = false }

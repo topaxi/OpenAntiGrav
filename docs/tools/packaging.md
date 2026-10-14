@@ -615,8 +615,16 @@ these runs), so a Deck player may want a render scale setting below 100 %.
 windows would overlap. Under gamescope a `--windows` / `--window-seats` layout is therefore
 folded into one window holding every seat, cut up like a split screen
 (`window::one_window_under_gamescope`, chosen, not measured; `--windows 2` logs
-`multi-window: 1 window(s) holding slot 0 + slot 1`). The window layout screen in the menus is
-not folded yet.
+`multi-window: 1 window(s) holding slot 0 + slot 1`), and one `info` line at start says why.
+
+**Menus under gamescope (2026-10-14, maintainer's decision, chosen, not measured).** gamescope
+shows one window on one output, so what it cannot display is greyed, never blocked by GPU class:
+the WINDOW LAYOUT screen offers one window (WINDOWS locked at 1 with the reason in place of its
+hint, mode locked, no per-window MONITOR row; CUT and SEATS still work), and the DISPLAY page's
+MONITOR row offers `default` alone, dimmed with "GAMESCOPE SHOWS ONE DISPLAY" in the note slot
+(`window::monitor_choices`; the stored monitor name is untouched, so it applies again off
+gamescope). `--windows-fullscreen` has no per-monitor meaning there. Details:
+`docs/rendering/multi-window.md`, "Under gamescope".
 
 ## AUR packages
 

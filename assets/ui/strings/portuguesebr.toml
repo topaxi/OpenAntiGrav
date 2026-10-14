@@ -81,6 +81,7 @@ OAG_SEAT_ASSIGN_AUTO = { text = "AUTO", human = false }
 # The window layout screen (`session::window_layout`), after the join screen.
 OAG_WINDOW_LAYOUT_TITLE = { text = "LAYOUT DAS JANELAS", human = false }
 OAG_WINDOW_LAYOUT_HINT = { text = "ESCOLHA COMO OS JOGADORES SÃO DIVIDIDOS ENTRE AS JANELAS", human = false }
+OAG_WINDOW_LAYOUT_ONE_WINDOW = { text = "SÓ UMA JANELA: ESTA TELA MOSTRA UMA JANELA POR VEZ", human = false }
 OAG_WINDOW_LAYOUT_WINDOWS = { text = "JANELAS", human = false }
 OAG_WINDOW_LAYOUT_WINDOW = { text = "JANELA", human = false }
 OAG_WINDOW_LAYOUT_SEATS = { text = "LUGARES", human = false }
@@ -120,6 +121,7 @@ OAG_OPTIONS_AUDIO = { text = "ÁUDIO", human = false }
 OAG_OPTIONS_CONTROLS = { text = "CONTROLES", human = false }
 OAG_OPTIONS_LANGUAGE = { text = "IDIOMA", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
+OAG_DISPLAY_MONITOR_GAMESCOPE = { text = "O GAMESCOPE MOSTRA UMA SÓ TELA", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "MODO DE JANELA", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "TAMANHO DA JANELA", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "TAMANHO DO CANVAS", human = false }

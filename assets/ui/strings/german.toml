@@ -83,6 +83,7 @@ OAG_SEAT_ASSIGN_AUTO = { text = "AUTO", human = false }
 # The window layout screen (`session::window_layout`), after the join screen.
 OAG_WINDOW_LAYOUT_TITLE = { text = "FENSTERANORDNUNG", human = false }
 OAG_WINDOW_LAYOUT_HINT = { text = "WÄHLT, WIE DIE SPIELER AUF DIE FENSTER VERTEILT WERDEN", human = false }
+OAG_WINDOW_LAYOUT_ONE_WINDOW = { text = "NUR EIN FENSTER: DIESE ANZEIGE ZEIGT NUR EIN FENSTER AUF EINMAL", human = false }
 OAG_WINDOW_LAYOUT_WINDOWS = { text = "FENSTER", human = false }
 OAG_WINDOW_LAYOUT_WINDOW = { text = "FENSTER", human = false }
 OAG_WINDOW_LAYOUT_SEATS = { text = "PLÄTZE", human = false }
@@ -122,6 +123,7 @@ OAG_OPTIONS_AUDIO = { text = "AUDIO", human = false }
 OAG_OPTIONS_CONTROLS = { text = "STEUERUNG", human = false }
 OAG_OPTIONS_LANGUAGE = { text = "SPRACHE", human = false }
 OAG_DISPLAY_MONITOR = { text = "MONITOR", human = false }
+OAG_DISPLAY_MONITOR_GAMESCOPE = { text = "GAMESCOPE ZEIGT NUR EINE ANZEIGE", human = false }
 OAG_DISPLAY_WINDOW_MODE = { text = "FENSTERMODUS", human = false }
 OAG_DISPLAY_WINDOW_SIZE = { text = "FENSTERGRÖSSE", human = false }
 OAG_DISPLAY_CANVAS_SIZE = { text = "CANVAS-GRÖSSE", human = false }

@@ -542,8 +542,26 @@ gamescope (a Steam Deck in gaming mode) maps every window of a client full-outpu
 shows one, so seat windows would sit on top of each other (measured: two windows, both
 3840x2160+0+0 and viewable). A `--windows` / `--window-seats` layout is folded into one window
 holding every seat, cut like a split screen (`window::one_window_under_gamescope`, **chosen, not
-measured**). The layout screen's own choice is not folded yet. Details: `docs/tools/packaging.md`,
-"Under gamescope".
+measured**). Details: `docs/tools/packaging.md`, "Under gamescope".
+
+**The WINDOW LAYOUT screen offers one window under gamescope (2026-10-14, lane `gamescope-menu`,
+maintainer's decision, **chosen, not measured**).** The composition root hands
+`oag_ui_screens::window_layout::Picker` one bit of plain data, `.one_window_only(under_gamescope)`,
+and the screen never reads the environment. With it set: every seat is dealt into window 1; the
+WINDOWS row stays but reads 1 and cannot change (pad, click and wheel all end in a no-op); the mode
+row stays and reads FULLSCREEN, locked (gamescope opens every window borderless,
+`window::effective_mode`); the per-window MONITOR row is gone, and so is the monitor caption on the
+preview box; the hint line is replaced by the reason (`OAG_WINDOW_LAYOUT_ONE_WINDOW`: "ONE WINDOW
+ONLY: THIS DISPLAY SHOWS ONE WINDOW AT A TIME"); the locked rows are drawn at half alpha. The CUT
+and SEATS rows and the preview work as on a desktop. START still goes through `apply_window_layout`,
+whose own fold (`one_window_under_gamescope`) is then a no-op. On the desktop none of this is set
+and the screen is unchanged.
+
+**`--windows-fullscreen` under gamescope** has no per-monitor meaning: the layout is one window and
+that window is borderless at the output whatever the flag says, so it does nothing there.
+**CLI:** `--windows N` and `--window-seats` are not refused; one `info` line at start says why they
+fold ("gamescope shows one window at a time: the N requested windows are folded into one window
+holding all M seats", `DriverArgs::gamescope_fold_note`, logged once from `main_body`).
 
 ## Pacing (chosen, not measured on real displays)
 

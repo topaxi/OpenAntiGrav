@@ -269,6 +269,23 @@ pub(crate) fn monitor_names(monitors: &[winit::monitor::MonitorHandle]) -> Vec<S
         .collect()
 }
 
+/// The MONITOR row's options. Under gamescope the compositor shows one output, so the choice
+/// means nothing: the row offers only `default`, marked unusable for `reason` (dimmed, with the
+/// reason in the note slot, `oag_ui::menu::Choice::unusable`). The stored name is untouched.
+pub(crate) fn monitor_choices(
+    names: &[String],
+    gamescope: bool,
+    reason: &str,
+) -> Vec<oag_ui::menu::Choice> {
+    if gamescope {
+        return vec![oag_ui::menu::Choice::plain(display::Monitor::DEFAULT.to_string()).unusable(reason)];
+    }
+    display::Monitor::offered(names)
+        .into_iter()
+        .map(oag_ui::menu::Choice::plain)
+        .collect()
+}
+
 /// The monitor a setting names, or `None` for "let the compositor decide".
 ///
 /// A name this machine does not have is a note and the default, not an error:
@@ -379,6 +396,18 @@ pub(crate) fn frame_latency(vsync: perf::Vsync, mode: wgpu::PresentMode) -> u32 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gamescope_offers_the_default_monitor_alone_marked_unusable() {
+        let names = vec!["DP-1".to_string(), "HDMI-1".to_string()];
+        let desk = monitor_choices(&names, false, "why");
+        assert_eq!(desk.len(), 3);
+        assert!(desk.iter().all(|choice| choice.unavailable.is_none()));
+        let scope = monitor_choices(&names, true, "why");
+        assert_eq!(scope.len(), 1);
+        assert_eq!(scope[0].value, display::Monitor::DEFAULT);
+        assert_eq!(scope[0].unavailable.as_deref(), Some("why"));
+    }
 
     #[test]
     fn only_a_mode_that_discards_or_must_not_halve_queues_two_frames() {

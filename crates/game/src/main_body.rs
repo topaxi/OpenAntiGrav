@@ -655,6 +655,9 @@ fn run(cli: Cli) -> Result<()> {
     let autopilot_skill = cli.driver.autopilot_skill;
     let ai_choice = cli.driver.ai;
     let players = cli.driver.players;
+    if let Some(note) = cli.driver.gamescope_fold_note() {
+        log::info!("{note}");
+    }
     let window_layout = cli.driver.window_layout()?;
     let windows_fullscreen = cli.driver.windows_fullscreen;
     let split_cut = cli.driver.cut();
