@@ -1016,7 +1016,9 @@ a guess.
     are not offered on the screen (their craft sit under `Ships\<id>\<n>`, so `load_teams` finds no
     `hdships\<id>`; showing them needs the `VariantJoin` passed into `Team::hex_cells`/`variant_stats`, their
     logos under `fe\NewImages\Team_Logos` and a team-level `<Unlock purchase>` rule); the bars' two halves are one
-    grey on Omega's page (`AlwaysSolidColor` equals `HD_Grey` there, no capture says what the original draws);
+    grey on Omega's page because `FEGlobals->HD_Grey` resolves to the skin's first block (`HD_Colours`, `0xFF646464`, which
+    the file calls overwritten by `WOHD_Colours`, where it is `0xFF010001`): selecting the live colour template is the
+    next lane and moves every Omega screen;
     the authored `ShipDesc`, livery hint and `PadlockText` are not drawn.
   - **2048 seats pick no ship**: no per-player pair is authored (`Team_Definition.xml` is one touch screen).
   - **HD guest join not used**: `FE_GUEST_JOIN` ("PLAYER 2 PRESS START TO JOIN" on HD, "PRESS OPTIONS TO

@@ -1069,7 +1069,7 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   2048 draw their scaled or file layouts in the columns, not judged by eye).
 - ~~**Omega's Ship Select screen is bare**~~ **Done, 2026-10-14 (`omega-ship-select`)**: open model cells, each model's ratings
   and the craft, for one person and each seat of a split (walked, join to a two-view race). Open from it: the five
-  2048-era teams are not offered, the statistics bars' two halves are one grey on Omega's page, and the craft's pose is
+  2048-era teams are not offered, the statistics bars' two halves are one grey on Omega's page (the unresolved `WOHD_Colours` switch), and the craft's pose is
   HD's (see [omega-status.md](../formats/omega-status.md#ship-select-2026-10-14-omega-ship-select)).
 - **2048's seats pick no ship either**, for a different reason: it authors no per-player pair.
 - A seat past the second on the PS2 (the authored page holds two) and every other

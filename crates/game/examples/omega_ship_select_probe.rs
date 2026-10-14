@@ -44,6 +44,10 @@ fn main() -> anyhow::Result<()> {
     };
     let (shell, _, title) = oag_game::boot::load_shell(&options)?;
     println!("{}: {} team(s)", title.name, shell.teams.len());
+    for global in ["HD_Grey", "HD_SubGrey", "HD_Blue"] {
+        let name = format!("FEGlobals->{global}");
+        println!("  {name} = {:?}", shell.screens.resolve(&name));
+    }
     for team in &shell.teams {
         let ids: Vec<&str> = title
             .race

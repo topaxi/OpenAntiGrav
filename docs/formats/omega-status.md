@@ -322,17 +322,25 @@ models' own names (`Normal`, `Concept`, `Nitro`; **measured**: `normal` is at `h
 by `Team::hex_cells`' existing rule. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
 now resolves every combined id's hull, `.rcsmodel` and tuning (24 more than before) and holds Feisar's
 ratings. `Tigron_x` and `Tigron` carry no `_c1`/`_n1` directory (their models all name one folder), so they sit outside the table
-and `Team::own_directory_variant` gives their screen the one row their own directory is. **Chosen, not
+and `Team::own_directory_variant` gives their screen the one row their own directory is: of the models sharing it
+(none is `<Unlock>`-gated) the one named `normal` opens (`Team::model_for_directory`; the first in file order was `chrome_c1`
+with the wrong ratings), `Tigron_x` rated 10/7.5/7/7 and `Tigron` (the disc's "VanUber") 8.5/9/10/6.5 (pinned in the ground
+truth; walked 2026-10-14, one open cell each). **Chosen, not
 measured**: `opponents_match_player_variant` is `false` (HD's `true` was read off HD's executable, Omega's `Ship_Construct` is unread)
 and `fresh_variant` is `None` (a fresh profile opens on `normal`). **Not measured**: whether the original shows the two
 PSVR rows on a flat screen; this build draws them as padlocks.
 
 **The statistics.** The four bars take the selected model's own `<FE>` (tenths, so Feisar `normal` reads `070 080 100 080`
 and `concept1`/`nitro` `080 085 100 080`) through `Team::variant_stats`, as HD does, with the down-nobble and the three-digit
-value. **What does not read on Omega**: the bar's two halves. HD draws left of the split in `HD_Grey` (`0xff969696`) and right of it in
-the block's `AlwaysSolidColor` (`0xff646464`); Omega's `Team Selection` authors `0xff646464` for both, so the same composition draws
-one flat grey and the rating shows by the nobble and its number alone (the number is small, at the authored `0.45`). No PS4 capture exists to say what
-the original draws there, so nothing is added. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
+value. **What does not read on Omega**: the bar's two halves. HD draws left of the split in `HD_Grey` and right of it in the
+block's `AlwaysSolidColor` (`0xff646464`). This build resolves Omega's `FEGlobals->HD_Grey` to `0xFF646464`, the value in the
+skin's first colour block (`HD_Colours`), whose own comment says it is *"IGNORED AND OVERWRITTEN by the WOHD_Colours and
+Fury_Colours templates"*; the two halves are then the same grey and the rating shows by the nobble and its three digits alone
+(the digits are small, at the authored `0.45`). **That is this build's unresolved colour-template switch, not a finding about
+the original**: `WOHD_Colours` (`HD_Grey 0xFF010001`, `HD_SubGrey 0xff646464`, `HD_BG 0xffffffff`) is the template Omega's white
+page and its `HD_SubGrey` headings point at, and under it the left half would be near black over the grey remainder, a visible
+bar. Which template is live is unread (`omega-frontend.md`); selecting it moves every Omega screen's `HD_Grey`, so it is its own
+lane, not done here. Nothing was added to the bars in the meantime. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
 `length` are authored per model and no block of this screen shows them: drawn nowhere.
 
 **The craft.** `ship_preview_hull` is `"ship.vex"` and the hull is the team's race hull, a PS4 `.rcsmodel` (8-byte pointers, `.gnf`

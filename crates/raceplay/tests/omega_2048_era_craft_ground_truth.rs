@@ -141,23 +141,29 @@ fn omegas_honeycomb_opens_the_variants_it_races_with_the_discs_own_ratings() {
         ]
     );
 
-    for team in ["Tigron_x", "Tigron"] {
-        let team = teams.iter().find(|t| t.id == team).expect("a Tigron");
+    // The two Tigrons: no `_c1`/`_n1` directory to table, one open row each, and it is the
+    // model called `normal` (every model of both names one directory), with `normal`'s own
+    // ratings: `Tigron_x` 10/7.5/7/7, `Tigron` (the disc's "VanUber") 8.5/9/10/6.5.
+    for (id, name, want) in [
+        ("Tigron_x", "normal", (100, 75, 70, 70)),
+        ("Tigron", "normal", (85, 90, 100, 65)),
+    ] {
+        let team = teams.iter().find(|t| t.id == id).expect("a Tigron");
         assert!(
             oag_omega::race::DEFAULTS
                 .team_variants_for(&team.id)
                 .is_none(),
-            "{} has no `_c1`/`_n1` directory to table",
-            team.id
+            "{id} has no `_c1`/`_n1` directory to table"
         );
         let own = team.own_directory_variant().expect("its own directory");
+        assert_eq!(own.1, name, "{id}: the open model");
         let cells = team.hex_cells([own.0.as_str()]);
+        assert_eq!(cells.iter().filter(|cell| cell.open).count(), 1, "{id}");
+        let stats = team.variant_stats([own.0.as_str()])[0].expect("rated");
         assert_eq!(
-            cells.iter().filter(|cell| cell.open).count(),
-            1,
-            "{}",
-            team.id
+            (stats.speed, stats.thrust, stats.handling, stats.shield),
+            want,
+            "{id}"
         );
-        assert!(team.variant_stats([own.0.as_str()])[0].is_some());
     }
 }

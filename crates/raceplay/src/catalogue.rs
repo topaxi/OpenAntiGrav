@@ -716,7 +716,8 @@ impl Team {
     /// among [`Self::models`]: the one whose `modellocation` names that
     /// directory, case-insensitively, preferring one with no `<Unlock>` -
     /// `Feisar_c1` is both `chrome_c1` (locked) and `concept1` (not), and
-    /// only the second is on a fresh profile's grid. **Chosen, not
+    /// only the second is on a fresh profile's grid. Of several with no
+    /// `<Unlock>` the one named `normal` wins. **Chosen, not
     /// measured**: which of two models sharing a directory the original
     /// means is decided by its unlock state, which this build does not keep.
     #[must_use]
@@ -728,12 +729,19 @@ impl Team {
                 .to_ascii_lowercase()
         };
         let want = leaf(directory);
-        let mut matching = self
+        let matching = self
             .models
             .iter()
             .filter(|model| leaf(&model.model_location) == want);
         let first = matching.clone().next();
-        matching.find(|model| !model.has_unlock).or(first)
+        let open: Vec<&TeamModel> = matching.filter(|model| !model.has_unlock).collect();
+        // Several open models in one directory (Omega's `Tigron_x`, whose models all name it):
+        // the one called `normal`, then the first. **Chosen, not measured.**
+        open.iter()
+            .find(|model| model.name.eq_ignore_ascii_case("normal"))
+            .or(open.first())
+            .copied()
+            .or(first)
     }
 }
 
