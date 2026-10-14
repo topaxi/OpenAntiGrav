@@ -346,9 +346,9 @@ fn the_pulse_leach_beam_locks_only_once_its_reticle_has() {
 /// unlocked arm (slot 0 held nothing, and had it held one, the window would
 /// have been slot 0's). Here slot 0 is the rival, parked 60 units ahead of
 /// slot 1 and holding nothing, so the only way the beam locks is by slot 1's
-/// own window finding it. The press comes five ticks in, long before the Pulse
-/// reticle's hold would close - the second person has no reticle, so no hold
-/// (**chosen, not measured**).
+/// own window finding it. The press comes once the slot's own lock has closed
+/// (the Pulse LeachBeam's, about `0.34` s): every person-flown slot fires
+/// through the simulation's lock, the primary's and a second pad's alike.
 #[test]
 fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     let mut race = race_with_a_grid();
@@ -372,7 +372,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
     );
     let mut buttons = Buttons::new();
     buttons.tick(0);
-    for tick in 0..=5 {
+    for tick in 0..=40 {
         race.sim.world.ships[0].physics.body.position = rival;
         race.sim.world.ships[0].physics.body.linear_velocity = Vec3::ZERO;
         race.sim.world.ships[1].physics.body.position = shooter;
@@ -385,7 +385,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
             );
         }
         let mut inputs = PlayerInputs::none();
-        inputs.set(1, buttons.tick(if tick == 5 { SQUARE } else { 0 }));
+        inputs.set(1, buttons.tick(if tick == 40 { SQUARE } else { 0 }));
         race.tick(&inputs);
     }
     let beam = race.sim.world.leach_beam.expect("slot 1's press must fire");

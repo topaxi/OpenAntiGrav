@@ -528,6 +528,8 @@ impl Race {
                 eliminator_kill_target: eliminator_kill_target
                     .unwrap_or(Mode::ELIMINATOR_KILL_TARGET_DEFAULT),
                 last_damager: [None; oag_gameplay::MAX_SHIPS],
+                locks: [oag_race::sight::Sight::default(); oag_gameplay::MAX_SHIPS],
+                lock_rig: chase,
                 last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
                 respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
                 wreck_voice: [0.0; oag_gameplay::MAX_SHIPS],

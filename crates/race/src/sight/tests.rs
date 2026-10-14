@@ -341,3 +341,71 @@ fn the_art_holds_while_the_brackets_ease_back_open() {
         "the art changed under a reticle that is still closing"
     );
 }
+
+/// A reticle that follows a lock takes it from the caller and not from its own
+/// hold, on both laws, and only while it has a target on screen.
+#[test]
+fn a_following_reticle_shows_the_lock_it_is_handed() {
+    for leach in [false, true] {
+        let mut sight = Sight::default();
+        sight.set_leach_law(leach);
+        if leach {
+            sight.set_held(Held::LeachBeam);
+        }
+        // Well inside the hold of either law.
+        assert_eq!(
+            sight.follow(DT, Some(centred()), true),
+            State::Locked,
+            "leach law {leach}: a lock handed in was not shown"
+        );
+        assert!(sight.locked());
+        assert_eq!(
+            sight.follow(DT, None, true),
+            State::Absent,
+            "leach law {leach}: a lock was shown with nothing on screen"
+        );
+        assert!(!sight.locked());
+        // And handed `false` it stays unlocked however long it holds.
+        let mut sight = Sight::default();
+        sight.set_leach_law(leach);
+        if leach {
+            sight.set_held(Held::LeachBeam);
+        }
+        for _ in 0..120 {
+            sight.follow(DT, Some(centred()), false);
+        }
+        assert!(!sight.locked(), "leach law {leach}: it locked on its own");
+    }
+}
+
+/// The lock's hash covers what decides the next lock and not what only draws, so
+/// two reticles that hash equal lock on the same tick as each other: the same
+/// hold gives the same hash whatever alpha, blink and spin say, and a different
+/// hold gives a different one.
+#[test]
+fn the_lock_hash_covers_the_hold_and_not_the_picture() {
+    let hash = |sight: &Sight| {
+        let mut hasher = oag_core::hash::StateHasher::new();
+        sight.hash_lock(&mut hasher);
+        hasher.finish()
+    };
+    let mut a = Sight::default();
+    let mut b = Sight::default();
+    for _ in 0..10 {
+        a.update(DT, Some(centred()));
+        b.update(DT, Some(centred()));
+    }
+    assert_eq!(hash(&a), hash(&b));
+    b.alpha = 17.0;
+    b.blink = !b.blink;
+    b.blink_timer = 0.05;
+    b.spin = 1.0;
+    assert_eq!(hash(&a), hash(&b), "the hash reads what only draws");
+    for _ in 0..5 {
+        a.update(DT, Some(centred()));
+        b.update(DT, Some(centred()));
+    }
+    assert_eq!(a.locked(), b.locked());
+    b.update(DT, Some(centred()));
+    assert_ne!(hash(&a), hash(&b), "the hash ignores the hold");
+}

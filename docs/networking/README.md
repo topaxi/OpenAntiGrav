@@ -122,7 +122,8 @@ tick and every slot, in every scenario pinned
 (`tests::reconcile::a_quiet_replay_reaches_the_hash_of_a_normal_one`, which also
 compares the whole `RaceSim` as text outside the hash, and on a real circuit with
 eight craft, two of them people, weapons in every hand, `quiet_replay_ground_truth`),
-**with one structural exception**: the reticle lock below.
+**with no exception**: the lock a Missile or LeachBeam fires at is simulation
+state, below.
 
 **A mode on the one body, not a second entry point.** View writes sit inside the
 simulation's helpers (a craft's step flashes its shield, a pad crossing lights
@@ -132,21 +133,29 @@ mode unset runs the same instructions in the same order as before. The three cue
 queues are truncated to their entry length rather than gating twenty-odd push
 sites, because a cue's bookkeeping (`contact_cue_cooldown`) is sim state.
 
-**A known leak, left in place, and the hash guarantee depends on it.** The
-primary's Missile and LeachBeam take their target from the reticle
-(`RaceView::sight`), which is view state advanced from the chase camera's
-projection (`weapons.rs`, `sight.locked()`). The brief's two requirements, "hash
-always equal" and "camera untouched", cannot both hold while that is so. The
-sim-only tick keeps the camera frozen and still runs the reticle while the
-primary holds a lock weapon (reading the camera, writing only the reticle).
-Where the primary fires one in a replay, equality is only as good as the reticle
-it starts from: pinned equal in a countdown, in a moving pack and with the lock
-forming inside the replay window
-(`quiet_replay_ground_truth::a_quiet_replay_{fires_the_same_locked_missile,..._in_a_moving_pack,locks_a_missile_inside_the_window}`,
-which all fail with the gate removed), not proven in general, and two machines
-whose cameras differ can disagree about a lock with no misprediction at all.
-The fix is a sim-side lock that does not read the camera; it is a gameplay
-change with hash consequences, not part of this tick, and needs a decision.
+**The lock is simulation state (2026-10-14, lane `sim-side-lock`).** A Missile
+or LeachBeam fires at the craft its holder has *locked*, and a lock is a reticle
+held on a target for a time. It used to be the primary's on-screen reticle, advanced
+from the chase camera, so the simulation read the view: a replay was exact only as
+far as the reticle it started from, and a server with no camera could disagree with
+its client about a lock with no misprediction at all. Now `RaceSim::locks` holds one
+`oag_race::sight::Sight` per slot, advanced by `Race::advance_locks`
+(`crates/raceplay/src/lock.rs`) for every person-flown slot (the primary and any
+second pad alike) from the world alone, and hashed while the slot holds a Missile or
+a LeachBeam (a race holding neither hashes as before). The law is the recovered
+reticle law, unchanged (the Missile's `0.8` s hold and arrival, the Pulse
+LeachBeam's `0.34` s closing); what it is *fed* is **chosen, not measured**: a fixed
+virtual camera, the team's far chase rig at rest at the authored field of view plus
+the speed widen, in the title's HUD grid - no spring lag, shake, boost kick,
+field-of-view setting or cockpit view, which is what the picture's reticle still has
+(it advances only on a drawn tick, through the real camera, and is told the lock by
+`Sight::follow`). It times the same: first lock at tick 48, 20 and 48 for the
+Missile, the Pulse LeachBeam and Wipeout HD's LeachBeam, as before the change.
+`set_sight_screen` and `set_sight_dialect` are configuration the lock reads, so a
+server calls them as a client does. Opponents have no lock (their shot takes the
+window's candidate at once), unchanged. Pinned by `tests::lock` (the camera cannot
+move the lock, a quiet replay locks exactly as a normal tick does) and the
+`quiet_replay_ground_truth` tests, which hold with no exception.
 
 **Not covered by the sim-only tick:** a recording in progress does not hear the
 replayed ticks, so it keeps the inputs as first predicted; `restore_sim` puts

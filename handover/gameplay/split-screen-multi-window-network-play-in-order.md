@@ -831,22 +831,16 @@ a guess.
   and the disc-backed `quiet_replay_ground_truth` (eight craft, weapons in every
   hand, a real circuit). The loopback's three replays now go through it.
   **Still open from it:**
-  - **The sim reads the reticle, so "hash always equal" and "camera
-    untouched" cannot both hold - the lead has to choose.** The primary's Missile and LeachBeam take
-    their target only once `RaceView::sight` reports a lock
-    (`weapons.rs`, `view.sight.locked()` and `leach_law()`), and that lock is
-    advanced from the chase camera's projection (`update_sight`). The sim-only
-    tick therefore still runs `update_sight` while the primary holds a lock
-    weapon, and nothing else of the view. Two consequences: a replay that holds
-    a lock weapon is only as exact as the reticle state it starts from, and a
-    client and a server whose cameras differ can disagree about a lock without
-    any misprediction. Removing the gate makes
-    `quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile`
-    fail, as do the moving-pack and lock-forms-inside-the-window variants; all
-    three are equal with it, which is evidence and not proof (the reticle's
-    hold and previous point are not advanced on ticks where no lock weapon is
-    held). The fix is a sim-side lock that does not read the camera; a gameplay
-    change with its own hash consequences, not done here.
+  - ~~**The sim reads the reticle, so "hash always equal" and "camera untouched"
+    cannot both hold.**~~ **Landed 2026-10-14** (lane `sim-side-lock`). The lock a
+    Missile or LeachBeam fires at is `RaceSim::locks`, advanced from the world
+    with no camera (`crates/raceplay/src/lock.rs`) and hashed; the reticle follows
+    it. `update_sight` is gone from the sim-only tick and the quiet-replay hash
+    tests hold with no exception. See `docs/networking/README.md`, "The lock is
+    simulation state". **Still open from it:** opponents have no lock (their shot
+    takes the window's candidate with no hold), so an AI missile is guided at
+    once; routing them through the hold is an AI behaviour change that moves AI
+    race hashes and was left.
   - **A recording does not hear a replayed tick.** `record_tick` is skipped, so
     a client recording a race keeps the inputs it first predicted.
   - **`restore_sim` restores undrained cues too.** `sim.cues` is part of the
@@ -1114,8 +1108,7 @@ a guess.
   still ahead of the transport decision is the remote-player question above.
 - ~~Give a reconciliation replay a tick path that does not re-fire the camera,
   the particles and the sound cues.~~ **Done 2026-10-14**, `Race::tick_sim_only`;
-  see the Open entry. What it leaves: the reticle lock the sim reads from the
-  view, and a recording that does not hear a replay.
+  see the Open entry. What it leaves: a recording that does not hear a replay.
 - Before writing that ADR, resolve the remote-player prediction question
   flagged in section 3 (interpolation vs. rollback-with-predicted-inputs) -
   it changes the protocol shape, not just a tuning parameter.

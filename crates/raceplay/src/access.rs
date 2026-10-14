@@ -90,10 +90,14 @@ impl Race {
     /// reticle left at the default on HD lands in the top-left ninth of the
     /// screen and never leaves it.
     ///
-    /// **Resets the reticle**, because its centre, its extent and its chase are
-    /// all in the old grid's units. Called once before the first tick.
+    /// **Resets the reticle and every slot's simulation lock** ([`crate::lock`]
+    /// runs the same law in this grid), because the centre, the extent and the
+    /// chase are all in the old grid's units. Called once before the first tick,
+    /// and by a server too: the grid is configuration the lock depends on.
     pub fn set_sight_screen(&mut self, screen: (f32, f32)) {
         self.view.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
+        self.sim.locks =
+            [oag_race::sight::Sight::new([screen.0, screen.1]); oag_gameplay::MAX_SHIPS];
         for hud in &mut self.view.huds {
             hud.sight = oag_race::sight::Sight::new([screen.0, screen.1]);
         }
@@ -108,13 +112,16 @@ impl Race {
     /// and Pure's no-LeachBeam brackets keep the Missile's, because HD's own
     /// update is a different function and nothing has read it. One call at each
     /// place a race is built, after [`Self::set_sight_screen`] (which resets the
-    /// reticle).
+    /// reticle). Sets the simulation's locks too, which run the same law.
     pub fn set_sight_dialect(&mut self, sights: &oag_title::hud::Sights) {
         let leach_law = matches!(
             sights,
             oag_title::hud::Sights::Brackets { leach: Some(_), .. }
         );
         self.view.sight.set_leach_law(leach_law);
+        for lock in &mut self.sim.locks {
+            lock.set_leach_law(leach_law);
+        }
         for hud in &mut self.view.huds {
             hud.sight.set_leach_law(leach_law);
         }

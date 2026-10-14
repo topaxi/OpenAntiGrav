@@ -457,8 +457,29 @@ impl Sight {
     ///    held past [`HOLD_SECONDS`] is necessary and not sufficient: the
     ///    brackets have to have caught up in the same frame.
     pub fn update(&mut self, dt: f32, target: Option<Projected>) -> State {
+        self.step(dt, target, None)
+    }
+
+    /// One frame of the reticle that **follows** a lock decided elsewhere.
+    ///
+    /// The picture's reticle: it is advanced from the camera the player is
+    /// looking through, so its brackets sit on the craft on screen, but whether
+    /// the lock is taken is `locked` - the simulation's, from
+    /// `Race::advance_locks` - and not this reticle's own arrival. Everything
+    /// the lock feeds on the picture (the closing extent, the red tint, the
+    /// tone, the Missile's faster chase once locked) follows it, so the red, the
+    /// tone and the shot cannot disagree. `locked` is ignored on a frame where
+    /// this reticle has no target on screen, which can happen when the player's
+    /// field of view differs from the simulation's.
+    pub fn follow(&mut self, dt: f32, target: Option<Projected>, locked: bool) -> State {
+        self.step(dt, target, Some(locked))
+    }
+
+    /// [`Self::update`] and [`Self::follow`]: the one law, with the lock either
+    /// decided here (`None`) or handed in.
+    fn step(&mut self, dt: f32, target: Option<Projected>, lock: Option<bool>) -> State {
         if self.runs_leach_law() {
-            return self.update_leach(dt, target);
+            return self.update_leach(dt, target, lock);
         }
         self.leach_seen = false;
         self.blink_timer -= dt;
@@ -521,6 +542,9 @@ impl Sight {
             self.centre[0] += dx * t;
             self.centre[1] += dy * t / VERTICAL_WEIGHT;
         }
+        if let Some(locked) = lock {
+            self.locked = locked && visible.is_some();
+        }
 
         let unzoomed = if visible.is_some() {
             if self.locked {
@@ -568,6 +592,51 @@ impl Sight {
     #[must_use]
     pub fn locked(&self) -> bool {
         self.locked
+    }
+
+    /// This reticle as it stands before it has seen anything: the same grid, the
+    /// same law and the same weapon's art, nothing held, nothing locked.
+    ///
+    /// What the simulation's lock returns to when its slot holds no lockable
+    /// weapon, so a lock never survives the weapon that took it.
+    #[must_use]
+    pub fn cleared(&self) -> Self {
+        Self {
+            held: self.held,
+            leach_law: self.leach_law,
+            ..Self::new(self.screen)
+        }
+    }
+
+    /// Writes what decides a future [`Self::update`]'s lock into a state hash.
+    ///
+    /// **The lock's state and not the picture's**: the hold, the smoothed centre
+    /// and the last projection the Missile's chase and extrapolation run off, the
+    /// extent and the first-sight flag the LeachBeam's law runs off, which
+    /// weapon's law is up, and the lock itself. The alpha, the blink, the spin and the
+    /// aim point only ever feed the draw and are left out, so two reticles
+    /// that hash equal here lock on the same tick as each other forever after.
+    /// The grid and the law's dialect are configuration set at load, the same on
+    /// both ends of a connection, and are not state.
+    pub fn hash_lock(&self, hasher: &mut oag_core::hash::StateHasher) {
+        hasher.write_u8(match self.held {
+            Held::Missile => 0,
+            Held::LeachBeam => 1,
+        });
+        hasher.write_u8(u8::from(self.locked));
+        hasher.write_u8(u8::from(self.leach_seen));
+        hasher.write_f32(self.hold);
+        hasher.write_f32(self.extent);
+        hasher.write_f32(self.centre[0]);
+        hasher.write_f32(self.centre[1]);
+        match self.previous {
+            None => hasher.write_u8(0),
+            Some(at) => {
+                hasher.write_u8(1);
+                hasher.write_f32(at[0]);
+                hasher.write_f32(at[1]);
+            }
+        }
     }
 
     /// The smoothed centre the brackets are drawn around.

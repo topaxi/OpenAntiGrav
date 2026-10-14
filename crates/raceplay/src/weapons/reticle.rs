@@ -25,8 +25,16 @@ impl Race {
     /// The one `Ship_AcquireLock` would pick for the weapon the player is
     /// **holding**, recomputed every tick. The original runs that function per
     /// frame and stores the winner on the entity; running it here reaches the
-    /// same answer without putting a lock on `World`, which would move a
-    /// determinism hash for something only the screen reads.
+    /// same answer without storing the target. What *is* stored, per slot and in
+    /// the simulation, is the lock the hold has taken on it
+    /// ([`Race::advance_locks`]).
+    ///
+    /// # The lock is not decided here
+    ///
+    /// This advances the reticle the player sees: it projects the target through
+    /// the camera on screen and runs the law over it, so the brackets close on
+    /// the craft as drawn. The lock, the red and the tone are the simulation's
+    /// and the reticle is told them with [`sight::Sight::follow`].
     ///
     /// **Both lockable weapons drive it.** `Ship_AcquireLock` (`0x08844784`) is
     /// one function serving two: it takes the Missile's window from
@@ -78,7 +86,10 @@ impl Race {
             let projection = self.projection(aspect, SIGHT_FAR, self.view.sight_fov);
             sight::project(view, projection * view, world, screen)
         });
-        self.view.sight_state = self.view.sight.update(self.sim.dt, projected);
+        // The lock is the simulation's ([`Race::advance_locks`]); this reticle
+        // only puts the brackets on the craft and follows it.
+        let locked = self.sim.locks[primary].locked();
+        self.view.sight_state = self.view.sight.follow(self.sim.dt, projected, locked);
         self.update_viewed_sights();
     }
 
@@ -86,11 +97,9 @@ impl Race {
     ///
     /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
     /// that slot's [`SlotHud`](crate::slot_hud::SlotHud), fed by
-    /// [`Self::sight_target`] (the per-slot lock the simulation already computes
-    /// for the LeachBeam) and projected through that slot's own chase camera and
-    /// field of view. The weapons code reads the primary's `RaceView::sight` and
-    /// nothing here, so a second person's fire does not wait for this lock:
-    /// open. A no-op with one view.
+    /// [`Self::sight_target`] and projected through that slot's own chase camera
+    /// and field of view, and told the slot's simulation lock exactly as the
+    /// primary's is. A no-op with one view.
     ///
     /// Projects at the title's HUD aspect, as the primary's does, and a view
     /// narrower than that sees a wider vertical field than this assumes
@@ -116,8 +125,9 @@ impl Race {
             });
             self.reset_viewpoint();
             let dt = self.sim.dt;
+            let locked = self.sim.locks[slot].locked();
             let hud = &mut self.view.huds[slot];
-            hud.sight_state = hud.sight.update(dt, projected);
+            hud.sight_state = hud.sight.follow(dt, projected, locked);
         }
     }
 
@@ -142,9 +152,9 @@ impl Race {
     /// `Ship_AcquireLock` would give for the weapon `slot` holds.
     ///
     /// **A per-slot simulation quantity**, computed from the world alone for
-    /// whichever person-flown slot asks (the LeachBeam's fire path asks for
-    /// its own shooter), with the reticle reading the primary's. Split out so
-    /// the choice can be asserted without a camera. Returns `None` whenever
+    /// whichever slot asks. [`Race::advance_locks`] runs a person-flown slot's
+    /// reticle law on it; the fire paths read the lock that comes of that. Split
+    /// out so the choice can be asserted without a camera. Returns `None` whenever
     /// `slot` is holding something that does not lock, which is every weapon
     /// but the Missile and the LeachBeam.
     ///
