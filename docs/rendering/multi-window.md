@@ -44,35 +44,92 @@ Seated the way `--players N` seats people ([split-screen.md](split-screen.md), "
 slot"): the keyboard and the first pad on slot 0, each further pad on the next slot in the order
 the pads connect. A slot nobody drives is flown by the AI. Slots are dealt to windows in order,
 window 1 taking the first: `--window-seats 4,2` is slots 0 to 3 in window 1 and 4 and 5 in window 2.
-**The keyboard follows the focus** (below): it drives slot 0 until a seat window has the focus.
+**Keyboards are seats** (2026-10-14, lane `keyboard-seats`, **chosen, not measured**; it replaces the
+`window-keyboard` lane's "the keyboard follows the focus", which put a pad player's craft under the
+keyboard of whoever's window had the focus). In a race dealt across windows a keyboard is a seat like a
+pad is, and a key goes to the keyboard seat of **the window it arrived on**
+(`Assignment::route_key`, `Controls::window_key`):
 
-**A keyboard per window** (2026-10-14, lane `window-keyboard`, **chosen, not measured**). In a race dealt
-across windows the keyboard's seat follows the focused window: when window `i` gains focus the
-keyboard moves to **the first seat of that window** (`windows::keyboard_seat`; a window of several
-seats gives its lowest slot, the one its view shows first, and a keyboard already on a seat of the
-focused window stays there, so a join screen's choice survives). Two people on one machine then have
-a keyboard each (it goes to whoever's window is focused) or a keyboard and a pad. Rules that make it
-work:
+1. Window 1's seat holds the keyboard the front end uses, as it always did.
+2. **A key press in a window that holds no keyboard seat claims the window's lowest free seat** (a seat
+   below the seated head count, not closed, with no pad and no keyboard on it; a pad that connects
+   later takes the lowest seat that is not claimed). The press has to be a bound key (a modifier or an F-key claims
+   nothing; Tab is Select, so it does). A release claims nothing.
+3. **A window that holds no keyboard seat and has none to claim ignores keys.** This is the flaw it
+   fixes: a keyboard player in window 1 and a pad player in window 2, and the focus moves to window 2:
+   the keys go nowhere (window 2's only seat is the pad's) instead of onto the pad player's craft.
+4. A single window (the front end, a race of one window, a split screen in one window) sends every key
+   to its first keyboard seat as before; Escape and the pause menu stay window 1's.
 
-- **Every window's first seat counts as driven** while the keyboard is at another
-  (`Assignment::set_keyboard_reach`, which `Assignment::drives` reads). Without it the seat the
-  keyboard left would be turned to the AI by `follow_devices` at each focus change and a pause
-  owner's claim would lapse. **Consequence:** with a keyboard and no pads, `--window-seats 1,1` now
-  seats *two people*: the window not focused sits idle where it was (it used to be AI-flown), and the
-  race's end screens wait for both to finish. A window's seat the keyboard cannot reach (the later
-  seats of a window of several) is still the AI's unless a pad is on it.
-- **A key held as the focus moves is let go** (`Controls::keyboard_to` and `Controls::let_go`): the
-  held buttons release and each stays released until its key is seen to come up, because X11 reports
-  held keys to the window that gains focus as synthetic presses and then keeps delivering the
-  auto-repeat as ordinary presses. In a windowed race synthetic and repeated key events are dropped,
-  and the wait ends when no window has focus (the next press counts again). A seat window's focus
-  loss releases keys too, which it did not before.
-- A single-window race, the front end and a race with no seat windows open are untouched: the rule
-  runs only for a race with seat windows (`Session::sync_keyboard_seat`, once a frame and on every
-  focus gain, so no key lands on the seat it came from).
-- **Not changed:** the flyby's skip is the *player's* held Cross (`tick_intro` reads the primary
-  slot), so a keyboard at window 2 skips it only by a click on window 1; Escape (leave to the menus)
-  and the menus stay window 1's, whichever seat the keyboard is on.
+What tells a keyboard apart depends on what the platform reports (**the capability table**):
+
+| Platform | Keyboards told apart by | Two keyboards drive two seats | One keyboard, two windows |
+| --- | --- | --- | --- |
+| Wayland, a compositor with a `wl_seat` per window (sway `seat`) | The window each seat's keyboard has focus in | **Yes**, each window's player flies at once (live, below) | A key claims the seat of the window it arrives in |
+| Wayland, one seat (niri, GNOME, KDE) | Nothing: winit reports one dummy device id | No: one keyboard has one focus | **Only the focused window's keyboard player moves** (stated limit); each window's player is a seat claimed by pressing there |
+| X11 | The raw key event's source device (`DeviceEvent::Key`, XInput2 `sourceid`) | **Yes**, from the moment a second keyboard presses a bound key, whichever window has the focus (live, below) | Until a second keyboard speaks, as the one-seat Wayland row |
+| Windows | The raw input device handle on `DeviceEvent::Key` | Implemented the same way, **not tested here** (recipe below) | As the X11 row |
+| macOS | Nothing (no per-keyboard id) | No | As the one-seat Wayland row |
+| Android, iOS, web | Nothing | No | One window |
+
+**Why raw events.** winit 0.30.13 reports a per-keyboard id only on `DeviceEvent::Key`; the window's
+`WindowEvent::KeyboardInput` carries the virtual core keyboard on X11 (`x11/event_processor.rs`,
+`VIRTUAL_CORE_KEYBOARD`) and a constant on Windows (`windows/event_loop.rs`, `DEVICE_ID`), and
+Wayland's id is a unit dummy. A raw event names no window, so it is read against the window with the
+focus; it carries a `PhysicalKey` only, which `oag_input::keys::key_at` reads by its place on a QWERTY
+board (**limit**: AZERTY's `Z` sits where QWERTY has `W`, so the per-device path reads by position and
+the window path by letter; `Y` and `Z` are both Circle, so QWERTZ agrees). Per-device routing is
+**inert until a second keyboard presses a bound key** (`Controls::device_key`): with one keyboard the
+window's own events carry the keys, so a single keyboard can still claim a seat in each window as
+above. From then on the window's key events are the same presses again and a windowed race drops
+them (`Controls::per_device_keys`); each keyboard is bound to the seat it pressed in (the earlier one
+keeps what it was driving and the keys it holds, a later one claims the focused window's free seat, or
+the lowest free seat of the race) and keeps it whichever window has the focus. Raw key events arrive
+while one of our windows has the focus (winit's `DeviceEvents::WhenFocused`), not while another
+application does. Escape, typing and a rebind stay on the window path.
+
+Rules that carry over from `window-keyboard` and what became of them:
+
+- **Every window's first seat counts as driven** (`Assignment::set_keyboard_reach`, which
+  `Assignment::drives` reads), **kept**: a seat nobody has pressed a key at yet idles rather than being
+  handed to the AI by `follow_devices`, and a pause owner's claim does not lapse. **Consequence:**
+  `--window-seats 1,1` seats *two people*: the window nobody has pressed in sits idle (it used to be
+  AI-flown), and the race's end screens wait for both to finish. A window's later seats are the AI's
+  unless a pad or a press seats them.
+- **A key held as a window loses focus is let go** (`Controls::let_go_window`, `Keyboard::let_go`),
+  **kept, per window now**: the keyboard seats that take that window's keys release, and each key stays
+  released until it is seen to come up, because X11 reports held keys to the window that gains focus as
+  synthetic presses and keeps delivering the auto-repeat as ordinary presses. The other windows' seats
+  keep their keys (on a compositor with a seat per window the other window's player is still typing),
+  and so does a seat bound to its physical keyboard. In a windowed race synthetic and repeated key
+  events are dropped; when no window has focus for a quarter of a second every keyboard is released and
+  the next press counts again.
+- **Dropped:** moving the keyboard to the focused window's seat (`keyboard_seat`, `keyboard_to`,
+  `sync_keyboard_seat`, the "keyboard is now on slot N" log line) and with it the single keyboard that
+  roamed on X11 and Wayland alike. One keyboard now holds one seat per window it has pressed in; on a
+  one-seat compositor only the focused window's seat moves.
+- A race parked behind window 1's pause menu lets go of the other seats' keys every frame
+  (`Controls::let_go_extra_seats`), because the menu reads window 1's keyboard only and a key released
+  meanwhile would come back held on resume.
+- **Pointer taps** (a click is a tap on the keyboard's latch) stay on the first keyboard seat, window 1's.
+- **Not changed:** the flyby's skip is the *player's* held Cross (`tick_intro` reads the primary slot), so
+  a keyboard seat at window 2 skips it only by a click on window 1. A single-window split screen's join
+  screen seats one keyboard (`lobby::Device::Keyboard`); two physical keyboards in one window's split
+  screen are not wired (open).
+
+The log says what happened: `keyboard seat: a key in a window with a free seat claims slot N (Shared)`,
+`keyboard seat: slot N is now bound to Device(KeyboardId(i))` and
+`keyboards: a second keyboard spoke, race keys now come per physical keyboard`.
+
+**Windows, test recipe (not run here).** Two USB keyboards, `oag-game --race --window-seats 1,1
+--no-audio` with `RUST_LOG=warn,oag=info`. Press X on keyboard A with window 1 focused: no
+`keyboard seat` line is expected, window 1's craft thrusts. Press X on keyboard B: the log must say
+`a second keyboard spoke` and `claims slot 1 (Device(KeyboardId(1)))`, window 2's craft thrusts while
+window 1's keeps thrusting, whichever window has the focus. If window 1's craft keeps thrusting after B
+lets go of X, Windows delivers a key's window event before its raw event (measured the other way round on
+X11) and the engagement in `Controls::device_key` needs reversing there. If A and B drive one craft, Windows reports
+both keyboards under one raw device handle (a remote desktop, a KVM, or a keyboard that presents as a
+hub) and the table's Windows row is wrong for that setup.
 
 - **`--race` with a layout**: the people are in their seats from the first tick (`apply_windows`).
 - **A front-end run** (a layout without `--race`): window 1 is the front end; the further windows
@@ -256,7 +313,7 @@ and wrote an empty `window_seats`. **Not exercised**: more than one real monitor
 | Close request | Quit, as ever | Every seat it held goes to the AI, the window closes |
 | `Destroyed` | (ignored) | The same as a close: under X11 with no window manager a window is destroyed outright |
 | Resize | The surface; zero-sized pauses as ever | The surface; zero-sized is ignored and **never pauses** |
-| Keyboard | The shared keyboard | The same keyboard |
+| Keyboard | The first keyboard seat (window 1's), or in a race dealt across windows the keyboard seat of the window it arrived on ("Who sits where") | The keyboard seat of that window, claimed by a press if it has a free seat, else ignored |
 | Pointer, touch, drops | The front end's | Ignored |
 | Focus | See below | See below |
 
@@ -392,7 +449,7 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   behind the pause menu on window 1 and window 2 froze on the parked race (two captures five seconds
   apart were pixel-identical in window 2's timer). **Not walked:** leaving the parked race for the menus
   to see window 2 go back to its holding frame (it is `windowed_race()` going false, no more).
-- **A keyboard per window and the pause line on every window** (2026-10-14, lane `window-keyboard`).
+- **A keyboard per window and the pause line on every window** (2026-10-14, lane `window-keyboard`; the keyboard-follows-focus part is superseded by "Keyboards are seats" above, the pause line and click parts stand).
   Pulse EU, Talon's Junction White, `--race --window-seats 1,1`, Xvfb with software Vulkan
   (`pause_on_focus_loss = false`), real input through XTEST (`xdotool windowfocus`, `keydown x`),
   one root capture holding both windows per frame: with window 2 focused and X held, window 2's
@@ -406,10 +463,34 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   on window 1 did not lift it (slot 0 is not the owner); a click on window 2 did, into the resume
   countdown and the race. **Not exercised:** a pad beside the keyboard (the pad join is
   `pad_join_end_to_end`'s), a finish, more than two windows.
-- **Tests**: `oag-input` (`moving_the_keyboard_releases_what_was_held_on_the_seat_it_left`,
-  `a_key_let_go_of_stays_released_until_it_comes_up`, the reach tests in `pad::tests`; the first two
-  fail if the release is dropped, checked by deleting it), `windows::tests` (`keyboard_seat`,
-  `first_seats`, `Focus::current`, `click_slots`), `pause::tests::a_seat_in_a_window_the_keyboard_can_reach_is_present`,
+- **Keyboards are seats, live** (2026-10-14, lane `keyboard-seats`). Pulse EU, Talon's Junction White,
+  `--race --window-seats 1,1`, software Vulkan, sixty-tick samples of both craft's speed from a
+  temporary log line (not kept), keys held from the start. Nothing here touched the maintainer's session:
+  a private headless sway (`WLR_BACKENDS=headless`) with two seats, a `zwp_virtual_keyboard_v1` per seat
+  (`scripts/multiseat-vk`, a 90-line client over `wayland-protocols-misc`; a uinput keyboard would not have reached it and would
+  have typed into the real session), each seat's cursor clicked into its own window (`seat seatN cursor
+  press button1`), `swaymsg -t get_seats` showing `seat0` focused on window 1 and `seat1` on window 2.
+  A virtual keyboard's first key reaches a client only after winit has bound that seat's `wl_keyboard`
+  (a capability that appears with the keyboard), so every script starts with a second's sleep.
+  - *Seat 1 only* (window 2): slot 1 to 59 km/h with window 2's readout showing it, slot 0 at 0.02 and
+    window 1 on the grid. *Both at once* (seat 0 holds X, seat 1 holds X and Right): slot 0 148 km/h
+    while slot 1 steered off and read `WRONG WAY`, two different pictures in one capture. *One seat
+    moving between windows* (the niri case): a press with the seat focused on window 1 flew slot 0
+    only; after the seat's cursor was clicked into window 2 a press claimed slot 1 (`keyboard seat: ...
+    claims slot 1 (Shared)`) and flew it (34 km/h) while slot 0 coasted at 0.15.
+  - *X11*: the same sway's Xwayland exposes one X keyboard per seat (`xwayland-keyboard:53` and `:54`,
+    two XInput2 slaves under the one `Virtual core keyboard`), which is the two-physical-keyboards case
+    (a plain Xvfb has one XTEST keyboard and `xinput create-master` made nothing there). Window 1 had the
+    focus throughout. Temporary log lines (not kept) gave the order of one press's two events: the raw
+    event of A's first X came ahead of its window event, and B's Right likewise. Keyboard B alone flew
+    window 1's seat (one keyboard, the window path); then A holding X and B holding X and Right made the
+    seat list `[(Device(KeyboardId(0)), 0), (Device(KeyboardId(1)), 1)]`, and slot 0 reached 152 km/h
+    while slot 1 steered into the walls. A first cut that let go of the held keys when the second
+    keyboard spoke left the first keyboard's craft idle for the rest of the hold; now it keeps them
+    (`the_first_keyboard_keeps_its_held_key_when_a_second_one_speaks`).
+  - *Not exercised*: a pad player in the other window (a pad cannot be made headless; the rule is
+    `pad::keyboards::tests::a_window_whose_seats_are_pads_ignores_keys`), Windows, more than two windows.
+- **Tests**: `oag-input` (`pad::keyboards::tests`: a window whose seats are pads ignores keys, a press claims the lowest free seat, a pad does not take a claimed seat, nothing is free merged or closed, a device keeps its seat whichever window has the focus, a device-bound seat takes no window events, unseating drops the seat; `tests`: a key flies the seat of the window it arrived on, no keyboard seat ignores keys, a single window is unchanged, a window's focus loss lets go of its own seat only, two keyboards fly two seats, the first keyboard keeps its held key when a second speaks, the extra seats let go while parked; `keys::every_candidate_is_reachable_from_a_physical_key`; checked by mutation: sending a window with no free seat to claim to the first seat fails four of them, dropping the device rule fails three), the reach tests in `pad::tests`, `windows::tests` (`first_seats`, `Focus::current`, `click_slots`), `pause::tests::a_seat_in_a_window_the_keyboard_can_reach_is_present`,
   `windows::tests` (routing, close, focus, the shared allocation, a window's name),
   `split_screen::tests` (`deal`, `parse_window_seats`, `layout_for`, `views_for`),
   `raceplay::tests::windowed` (each window cuts its own seats by its own cut; a one-seat window is
@@ -440,6 +521,7 @@ Omega capture (below) ran.
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
+- **A second keyboard cannot join from the join screen** (2026-10-14, `keyboard-seats`): every live proof seated through `--race`, `--windows` or `seat_default`, where a press claims a free seat. On the menu path the join screen's lobby has one keyboard device (`lobby::Device::Keyboard`, read off window events that carry no keyboard identity) and `Lobby::seat` sets the head count to the number who joined, so a keyboard and a pad joined leave a second keyboard no seat, and a lone keyboard with a two-window layout chosen leaves the seating merged (window 2 AI-flown, its keys ignored). Wiring it: `Device::Keyboard` carries a source (`KeyboardId` from raw events on X11 and Windows, the window a key arrived on for Wayland seats, the layout screen's holding frames taking presses) and the join screen shows a row per keyboard; it touches `oag-ui-screens`'s join, `oag_input::lobby` and the head count.
 - **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera

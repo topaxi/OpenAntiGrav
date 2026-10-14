@@ -493,81 +493,161 @@ fn merging_undoes_a_seating() {
     assert!(controls.assignment().is_single_player());
 }
 
-/// The focus moving between windows moves the keyboard to the other window's seat, and
-/// what was held on the seat it left is released, not carried: nothing is held or
-/// freshly pressed on the seat it arrives at, and the seat it left sees the key come up.
+/// A key goes to the keyboard seat of the window it arrived on. Two keyboard players, one in each
+/// window, each fly their own craft and the other stays still.
 #[test]
-fn moving_the_keyboard_releases_what_was_held_on_the_seat_it_left() {
+fn a_key_flies_the_seat_of_the_window_it_arrived_on() {
     let mut controls = Controls::without_pad();
     controls.seat_default(2);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
-    controls.set_key(&key(NamedKey::Space), true);
-    let held = controls.player_snapshots();
-    assert_eq!(held.get(0).stick_y, 1.0);
-    assert!(held.get(0).buttons.is_held(Button::Start));
-
-    controls.set_key(&key(NamedKey::Enter), true);
-    controls.keyboard_to(1);
-    assert_eq!(controls.keyboard_slot(), 1);
-    let moved = controls.player_snapshots();
-    assert_eq!(moved.get(0).stick_y, 0.0, "the seat it left lets go");
-    assert!(!moved.get(0).buttons.is_held(Button::Start));
-    assert_eq!(moved.get(1).stick_y, 0.0, "nothing carries to the new seat");
-    assert!(!moved.get(1).buttons.is_held(Button::Start));
-    assert!(
-        !moved.get(1).buttons.is_pressed(Button::Start),
-        "and no press edge"
-    );
-    assert!(
-        !moved.get(1).buttons.is_pressed(Button::Cross),
-        "a tap latched before the move is dropped"
-    );
-
-    controls.set_key(&key(NamedKey::ArrowUp), false);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
-    let steered = controls.player_snapshots();
+    controls.window_key(&[0], &key(NamedKey::ArrowUp), true);
+    controls.window_key(&[1], &key(NamedKey::ArrowLeft), true);
+    let flying = controls.player_snapshots();
+    assert_eq!(flying.get(0).stick_y, 1.0, "window 1 flies slot 0");
+    assert_eq!(flying.get(0).stick_x, 0.0);
     assert_eq!(
-        steered.get(1).stick_y,
-        1.0,
-        "a key pressed after the move drives the new seat"
+        flying.get(1).stick_x,
+        -1.0,
+        "window 2's press claimed slot 1"
     );
-    assert_eq!(steered.get(0).stick_y, 0.0, "and not the old one");
+    assert_eq!(flying.get(1).stick_y, 0.0);
+    assert!(controls.assignment().drives(1));
+    assert_eq!(controls.assignment().keyboard_seats().len(), 2);
 }
 
-/// Moving onto the seat it is on, or off the grid, changes nothing - the keys held stay held.
+/// A window with no keyboard seat and nothing free to claim ignores keys (the pad-player case is
+/// `pad::keyboards::tests`, where a pad can be made).
 #[test]
-fn moving_the_keyboard_to_where_it_is_keeps_its_keys() {
+fn a_window_holding_no_keyboard_seat_ignores_keys() {
     let mut controls = Controls::without_pad();
     controls.seat_default(2);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
-    controls.keyboard_to(0);
-    controls.keyboard_to(oag_gameplay::MAX_PLAYERS);
-    assert_eq!(controls.keyboard_slot(), 0);
-    assert_eq!(controls.player_snapshots().get(0).stick_y, 1.0);
-}
-
-/// A key let go of as the seat moved, and still physically down, is delivered again by the platform
-/// as a press the moment the new window has focus; it must not drive the new seat until the key has
-/// been seen to come up. Fails if `let_go` is a plain `release_all`.
-#[test]
-fn a_key_let_go_of_stays_released_until_it_comes_up() {
-    let mut controls = Controls::without_pad();
-    controls.seat_default(2);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
-    controls.keyboard_to(1);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
+    controls.assignment_mut().unseat(1);
+    controls.window_key(&[1], &key(NamedKey::ArrowUp), true);
+    controls.window_key(&[1], &key(NamedKey::Space), true);
+    let snapshots = controls.player_snapshots();
     assert_eq!(
-        controls.player_snapshots().get(1).stick_y,
+        snapshots.get(1).stick_y,
         0.0,
-        "the held key's re-delivered press is ignored"
+        "a seat nobody can claim is not the keyboard's"
     );
-    controls.set_key(&key(NamedKey::ArrowUp), false);
-    controls.set_key(&key(NamedKey::ArrowUp), true);
+    assert!(!snapshots.get(1).buttons.is_held(Button::Start));
     assert_eq!(
-        controls.player_snapshots().get(1).stick_y,
+        snapshots.get(0).stick_y,
+        0.0,
+        "and window 1's seat is not driven from window 2"
+    );
+    assert_eq!(controls.assignment().keyboard_seats().len(), 1);
+}
+
+/// A single window's keys all go to the first keyboard seat, however many seats it holds.
+#[test]
+fn a_single_window_is_unchanged() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.window_key(&[0, 1], &key(NamedKey::ArrowUp), true);
+    let snapshots = controls.player_snapshots();
+    assert_eq!(snapshots.get(0).stick_y, 1.0);
+    assert_eq!(
+        snapshots.get(1).stick_y,
+        0.0,
+        "no second keyboard seat is made"
+    );
+}
+
+/// A key let go of when its window lost the focus stays released until it comes up, and the
+/// other window's keyboard keeps its keys.
+#[test]
+fn a_window_losing_the_focus_lets_go_of_its_own_seat_only() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    controls.window_key(&[0], &key(NamedKey::ArrowUp), true);
+    controls.window_key(&[1], &key(NamedKey::ArrowUp), true);
+    controls.let_go_window(&[0]);
+    controls.window_key(&[0], &key(NamedKey::ArrowUp), true);
+    let snapshots = controls.player_snapshots();
+    assert_eq!(
+        snapshots.get(0).stick_y,
+        0.0,
+        "window 1's key is let go, its repeat ignored"
+    );
+    assert_eq!(snapshots.get(1).stick_y, 1.0, "window 2 kept its key");
+    controls.window_key(&[0], &key(NamedKey::ArrowUp), false);
+    controls.window_key(&[0], &key(NamedKey::ArrowUp), true);
+    assert_eq!(
+        controls.player_snapshots().get(0).stick_y,
         1.0,
         "a fresh press counts"
     );
+}
+
+/// A second physical keyboard switches race keys to per-device: both then fly their own seat
+/// whichever window has the focus, and the window's own key events (the same presses again) are
+/// what `per_device_keys` tells the caller to drop.
+#[test]
+fn two_keyboards_fly_two_seats_whichever_window_has_the_focus() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    let (a, b) = (pad::KeyboardId(0), pad::KeyboardId(1));
+    controls.device_key(a, &[0], &[0, 1], &key_char('w'), true);
+    assert!(
+        !controls.per_device_keys(),
+        "one keyboard: the window carries the keys"
+    );
+    controls.device_key(b, &[0], &[0, 1], &key_char('d'), true);
+    assert!(controls.per_device_keys());
+    controls.device_key(a, &[0], &[0, 1], &key_char('w'), true);
+    controls.device_key(b, &[0], &[0, 1], &key_char('d'), true);
+    let flying = controls.player_snapshots();
+    assert_eq!(flying.get(0).stick_y, 1.0, "keyboard A is slot 0");
+    assert_eq!(
+        flying.get(1).stick_x,
+        1.0,
+        "keyboard B claimed slot 1 though window 1 has the focus"
+    );
+    assert_eq!(flying.get(0).stick_x, 0.0);
+    controls.device_key(b, &[1], &[0, 1], &key_char('d'), false);
+    controls.device_key(b, &[1], &[0, 1], &key_char('a'), true);
+    let moved = controls.player_snapshots();
+    assert_eq!(
+        moved.get(1).stick_x,
+        -1.0,
+        "B keeps its seat with the focus on window 2"
+    );
+    assert_eq!(moved.get(0).stick_y, 1.0, "and A's seat is not disturbed");
+}
+
+/// A keyboard that was flying through its window's events when a second one speaks keeps flying:
+/// the key it holds stays held and its release, now a raw event, lets it go. Fails if the
+/// switch to per-device keys lets go of what is held.
+#[test]
+fn the_first_keyboard_keeps_its_held_key_when_a_second_one_speaks() {
+    let mut controls = Controls::without_pad();
+    controls.seat_default(2);
+    let (a, b) = (pad::KeyboardId(0), pad::KeyboardId(1));
+    controls.device_key(a, &[0], &[0, 1], &key_char('w'), true);
+    controls.window_key(&[0], &key_char('w'), true);
+    controls.device_key(b, &[0], &[0, 1], &key_char('d'), true);
+    assert!(controls.per_device_keys());
+    assert_eq!(
+        controls.player_snapshots().get(0).stick_y,
+        1.0,
+        "A still holds up"
+    );
+    assert_eq!(
+        controls.player_snapshots().get(1).stick_x,
+        1.0,
+        "B drives the other seat"
+    );
+    controls.device_key(a, &[1], &[0, 1], &key_char('w'), false);
+    assert_eq!(
+        controls.player_snapshots().get(0).stick_y,
+        0.0,
+        "A's raw release lets go"
+    );
+    assert_eq!(controls.player_snapshots().get(1).stick_x, 1.0);
+}
+
+fn key_char(c: char) -> Key {
+    Key::Character(c.to_string().into())
 }
 
 /// With nothing holding the focus the keys' real state is unknown, so the wait ends.

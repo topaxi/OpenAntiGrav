@@ -339,8 +339,15 @@ draws the player's flyby camera full window until it ends, then its own seats
 the layout screen's START row no longer shows the head count (a button shows no value). The end
 screens per window were read, not exercised (no finish reachable headless or under Xvfb); nothing
 looked broken. **The keyboard per window and the pause line on every window landed 2026-10-14 (lane
-`window-keyboard`)**: the keyboard drives the first seat of the focused window (every window's first
-seat counts as driven meanwhile, a held key is let go as the focus moves), the pause line draws on every
+`window-keyboard`)**, and the keyboard half was replaced the same day (lane `keyboard-seats`): **keyboards
+are seats**, a key goes to the keyboard seat of the window it arrived on, a press in a window with a free
+seat claims it and a window with none ignores keys (so a keyboard no longer flies a pad player's craft),
+and on X11 and Windows a second physical keyboard routes by device (raw `DeviceEvent::Key`; Wayland and
+macOS report no per-keyboard id, a compositor with a seat per window gives each window its own keyboard
+player, one seat gives only the focused window's). Every window's first seat still counts as driven, a
+window's focus loss lets go of its own seat's keys. Proven live on a private headless sway with a virtual
+keyboard per seat and under its Xwayland (two XInput2 keyboards); **Windows is untested** (recipe in
+`docs/rendering/multi-window.md`, "Who sits where"), **open: a second keyboard cannot join from the join screen** (`lobby::Device::Keyboard` is one device, the head count is the number joined; the design is in the doc's "Open"), and two physical keyboards in one window's split screen are not wired. The pause line draws on every
 window with a seat, and a click on a window is its first seat's Start under the owner rule. Escape's pause menu is window 1's; the seat windows show the frozen race under a dim tint (stopgap), the menu itself on them is open. **Still open from it** (all in the doc's
 "Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;

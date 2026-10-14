@@ -133,7 +133,8 @@ impl Focus {
 
     /// The window that most recently gained focus and still has it, or `None` while no
     /// window has it. With two reported focused for a pass of the loop (the gain arriving
-    /// before the loss) the later gain is the one the keyboard is in.
+    /// before the loss) the later gain is the one a raw key event (which names no window)
+    /// is read as being for.
     pub(crate) fn current(&self) -> Option<WindowId> {
         self.focused.last().copied()
     }
@@ -144,33 +145,14 @@ impl Focus {
     }
 }
 
-/// The first seat of each window of a multi-window race, window 1 first: where the keyboard
-/// can be put (`oag_input::pad::Assignment::set_keyboard_reach`). A window with no seat holds
-/// no keyboard and is left out, so the list is not indexed by window.
+/// The first seat of each window of a multi-window race, window 1 first: the seats a person is
+/// presumed to sit at before any key is pressed (`oag_input::pad::Assignment::set_keyboard_reach`).
+/// A window with no seat is left out, so the list is not indexed by window.
 pub(crate) fn first_seats<'a>(windows: impl IntoIterator<Item = &'a [usize]>) -> Vec<usize> {
     windows
         .into_iter()
         .filter_map(|seats| seats.first().copied())
         .collect()
-}
-
-/// The seat the keyboard drives while window `focused` has the focus, given each window's seats
-/// (window 1 first) and the seat it drives now. **Chosen, not measured**: the keyboard stays where
-/// it is if that seat is in the focused window (a layout screen's join may have put it on a later
-/// seat of a window of several); otherwise it moves to the **first** seat of the focused window,
-/// the one the window shows first and the one a person sitting at that window takes. `None` -
-/// leave it - when no window has focus or the focused window holds no seat.
-pub(crate) fn keyboard_seat(
-    focused: Option<usize>,
-    windows: &[&[usize]],
-    current: usize,
-) -> Option<usize> {
-    let seats = windows.get(focused?)?;
-    if seats.contains(&current) {
-        Some(current)
-    } else {
-        seats.first().copied()
-    }
 }
 
 /// The slots whose Start a click is: `clicks` has bit `i` set for a click on window `i` (window 1

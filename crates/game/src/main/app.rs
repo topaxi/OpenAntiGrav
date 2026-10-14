@@ -701,11 +701,13 @@ impl ApplicationHandler for App {
             match &event {
                 WindowEvent::Focused(gained) => {
                     session.focus.changed(id, *gained, web_time::Instant::now());
-                    // A key held in a window that lost focus is never seen to come up,
-                    // whichever window it was: a seat window's loss lets go too, or the key
-                    // would stay held for the seat the keyboard is moved to next.
+                    // A key held in a window that lost focus is never seen to come up: the
+                    // keyboard seat of that window lets go (its other windows' seats keep theirs,
+                    // and so does a seat bound to its physical keyboard).
                     if !*gained {
-                        if session.windowed_race() {
+                        if session.keys_by_window() {
+                            session.window_lost_focus(id);
+                        } else if session.windowed_race() {
                             session.controls.let_go();
                         } else {
                             session.controls.release_all();
@@ -713,10 +715,6 @@ impl ApplicationHandler for App {
                         if !is_seat {
                             session.pointer.release();
                         }
-                    } else {
-                        // The keyboard goes to this window's seat before any key it
-                        // receives, so none lands on the seat it came from.
-                        session.sync_keyboard_seat();
                     }
                     return;
                 }
@@ -900,6 +898,12 @@ impl ApplicationHandler for App {
                 if (event.repeat || is_synthetic) && session.windowed_race() {
                     return;
                 }
+                // A race dealt across windows reads the key by the window it arrived on; the
+                // front end, a pause menu and a single window's race by the first keyboard.
+                if session.keys_by_window() {
+                    session.window_key(id, &event.logical_key, event.state == ElementState::Pressed);
+                    return;
+                }
                 session
                     .controls
                     .set_key(&event.logical_key, event.state == ElementState::Pressed);
@@ -917,6 +921,23 @@ impl ApplicationHandler for App {
             }
 
             _ => {}
+        }
+    }
+
+    /// A physical keyboard's raw key event, which X11 and Windows send with the keyboard's id
+    /// and Wayland and macOS do not send at all: the race keys of a second keyboard
+    /// (`Session::device_key`). Delivered while one of our windows has the focus.
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        if self.suspended {
+            return;
+        }
+        if let (Some(session), winit::event::DeviceEvent::Key(raw)) = (self.state.as_mut(), event) {
+            session.device_key(device_id, raw.physical_key, raw.state == ElementState::Pressed);
         }
     }
 
@@ -939,6 +960,7 @@ impl ApplicationHandler for App {
             if session.screens_opened && session.focus.away(web_time::Instant::now()) {
                 // Nothing has the focus now, so which keys are down is unknown: the next
                 // press of any key counts again.
+                session.controls.release_all();
                 session.controls.forget_let_go();
                 session.window_away(Away::FocusLost);
             }

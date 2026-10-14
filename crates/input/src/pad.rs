@@ -460,6 +460,10 @@ pub struct Assignment<D = gilrs::GamepadId> {
     /// has left the keyboard for stays that person's (idle) rather than turning to
     /// the AI the moment the focus moves.
     keyboard_reach: Vec<u8>,
+    /// What routes a key to the keyboard seat on [`Self::keyboard`]; see [`keyboards`].
+    keyboard_binding: keyboards::Binding,
+    /// The keyboard seats after the first, claimed by a press in a window that held none.
+    more_keyboards: Vec<keyboards::Seat>,
 }
 
 impl<D> Default for Assignment<D> {
@@ -472,6 +476,8 @@ impl<D> Default for Assignment<D> {
             benched: Vec::new(),
             closed: Vec::new(),
             keyboard_reach: Vec::new(),
+            keyboard_binding: keyboards::Binding::Shared,
+            more_keyboards: Vec::new(),
         }
     }
 }
@@ -493,6 +499,8 @@ impl<D: Copy + PartialEq> Assignment<D> {
             benched: Vec::new(),
             closed: Vec::new(),
             keyboard_reach: Vec::new(),
+            keyboard_binding: keyboards::Binding::Shared,
+            more_keyboards: Vec::new(),
         }
     }
 
@@ -531,7 +539,9 @@ impl<D: Copy + PartialEq> Assignment<D> {
         if self.keyboard == slot {
             self.keyboard = DEFAULT_SLOT as u8;
             self.keyboard_claimed = false;
+            self.keyboard_binding = keyboards::Binding::Shared;
         }
+        self.more_keyboards.retain(|seat| seat.slot != slot);
         if !self.closed.contains(&slot) {
             self.closed.push(slot);
         }
@@ -614,6 +624,7 @@ impl<D: Copy + PartialEq> Assignment<D> {
             && let Ok(slot) = u8::try_from(slot)
         {
             self.keyboard = slot;
+            self.more_keyboards.retain(|seat| seat.slot != slot);
         }
     }
 
@@ -642,6 +653,7 @@ impl<D: Copy + PartialEq> Assignment<D> {
             let free = (0..humans).find(|slot| {
                 self.pads.iter().all(|(_, held)| held != slot)
                     && !(claimed && *slot == keyboard)
+                    && !self.more_keyboards.iter().any(|seat| seat.slot == *slot)
                     && !self.closed.contains(slot)
             });
             if let Some(slot) = free {
@@ -656,6 +668,10 @@ impl<D: Copy + PartialEq> Assignment<D> {
     #[must_use]
     pub fn drives(&self, slot: usize) -> bool {
         self.keyboard_slot() == slot
+            || self
+                .more_keyboards
+                .iter()
+                .any(|seat| usize::from(seat.slot) == slot)
             || self
                 .keyboard_reach
                 .iter()
@@ -1041,6 +1057,9 @@ pub fn merge_states(a: PadState, b: PadState) -> PadState {
 pub(crate) fn larger(a: f32, b: f32) -> f32 {
     if b.abs() > a.abs() { b } else { a }
 }
+
+mod keyboards;
+pub use keyboards::{Binding, KeyboardId};
 
 #[cfg(test)]
 mod tests;
