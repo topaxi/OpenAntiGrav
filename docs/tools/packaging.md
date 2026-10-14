@@ -610,6 +610,49 @@ Xwayland screen is 3840x2160 on both `:0` and `:1`, larger than the 1280x800 pan
 Steam launch sees a smaller screen is not measured (launching through Steam is not allowed in
 these runs), so a Deck player may want a render scale setting below 100 %.
 
+**Why the 4K output dropped from 58 to 23 fps (measured on the Steam Deck, 2026-10-14, Pulse PSP
+EU, `--race --autopilot`, the `znver2` AppImage, borderless at 3840x2160, render scale 100).**
+It is not a one-off drop after six seconds. The frame rate follows the circuit: the first six
+seconds are an easy stretch (57 fps), the next stretch is the worst of the lap (23 fps), and the
+75 s run swings between 23 and 73 fps every 10-15 s at the same seconds, run after run. The
+`--frame-log` `gpu_ms` (the scene pass) swings 8-35 ms at a constant `render=3812x2160`.
+
+| Hypothesis | Verdict | Evidence |
+| --- | --- | --- |
+| (a) thermal or power throttling | falsified | GPU clock 1600 MHz and busy 99-100 % through every drop (mean 1500-1550 MHz over a minute), power at the 15 W cap throughout, GPU 74-77 C; a run started on the already-hot Deck (fan 5300 rpm) reproduces the cold run's curve to 0.1 fps |
+| (b) dynamic resolution | falsified | `target_fps` is off by default and the render size never changes (`render=3812x2160` on every line) |
+| (c) a pass that switches on after the start | not a pass: track position | the same curve with no opponents (`--mode time_trial`: 23.2 fps min, 73.3 max, identical to the second) and with `--shadows off`, so neither the pack nor shadows; cost is linear in pixels: 35 ms at 3812x2160 against 10.1 ms at 1906x1080 for the same stretch |
+| (d) swapchain or composition | falsified | at render scale 50 the surface stays 3840x2160 and the same stretch runs 58 fps worst, 137 best; `present_ms` follows `gpu_ms` |
+
+The cause is fill cost: 8.2 Mpx per frame on a 1.6 GHz, 15 W RDNA2 part, with a stretch of the
+circuit that overdraws about four times as much as the easy ones.
+
+**The default (chosen, not measured).** A frame is drawn with at most 1920x1080 pixels
+(`GAMESCOPE_PIXEL_BUDGET`) under gamescope when the player has chosen no render scale: at the
+TV's 3840x2160 that is 50 % (1906x1080), at 2560x1440 75 %, at the panel's 1280x800 and below
+100 % (unchanged). `RenderProfile::scale_for` decides, `render_scale_chosen` is the player's
+side: the menu row and `--render-scale` set it, a file written before the flag reads as chosen
+when it holds anything but 100, and a chosen scale always wins, 100 included. The RENDER SCALE
+row shows the scale in use. Nothing is refused and no device class is asked: it is a default
+keyed on gamescope's output size. Desktop and headless captures are untouched, so their pictures
+stay byte-identical.
+
+Measured on the Deck, borderless at 3840x2160, 62 s each, `--frame-log`, Steam-like environment
+over ssh (mean fps over the run, worst second in brackets; split is `--windows 2`, which gamescope
+folds into one window with two views):
+
+| Case | Before (100 %, 3812x2160) | After (default, 1906x1080) |
+| --- | --- | --- |
+| Pulse, one view | 50.2 (23.1) | 112.3 (56.3) |
+| Pulse, two views | 49.6 (23.5) | 104.2 (57.0) |
+| HD/Fury, one view | 38.9 (15.9) | 77.8 (28.5) |
+| HD/Fury, two views | 37.7 (15.4) | 69.1 (27.1) |
+
+Pulse holds 60 fps at its worst second only just (56) and HD does not hold it at the worst
+stretch (28) in either layout: the budget is one number for every title and was not tuned per
+title, a player who wants HD smoother lowers the scale or turns dynamic resolution on. GPU clock
+over the "after" runs was 1400-1540 MHz mean, no throttling.
+
 **Several windows.** gamescope maps every window of a client full-output at 0,0 (measured with
 `xwininfo`: two oag windows, both 3840x2160+0+0, both viewable) and shows one of them, so seat
 windows would overlap. Under gamescope a `--windows` / `--window-seats` layout is therefore
