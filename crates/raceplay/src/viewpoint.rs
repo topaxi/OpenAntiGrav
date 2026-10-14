@@ -319,6 +319,18 @@ impl Race {
         self.extra_viewpoint().unwrap_or_else(|| self.player_slot())
     }
 
+    /// How many times the picture being drawn has jumped to a different shot - what a camera
+    /// history watches to throw its previous frame away. The player's view is
+    /// [`Self::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
+    /// nothing else of the player's cuts (the flyby, the spectator and destroy cameras) is its.
+    #[must_use]
+    pub fn viewed_camera_cuts(&self) -> u32 {
+        match self.extra_viewpoint() {
+            Some(slot) => self.respawns_of(slot),
+            None => self.camera_cuts(),
+        }
+    }
+
     /// The craft the view being drawn follows: the player's, or the extra slot.
     #[must_use]
     pub fn viewed_ship(&self) -> &Ship {

@@ -74,7 +74,7 @@ impl Scene {
         // Shaken views, so the buffer stays true screen motion for the temporal
         // upscaler; the blur subtracts the shake itself, `blur_shake` below.
         let prev = MotionState::advance(
-            &self.motion,
+            &self.history().motion,
             race,
             &self.weapon_quads.draw,
             view_projection,
@@ -91,7 +91,7 @@ impl Scene {
             camera_jitter,
             race.projection(aspect, self.far, fov),
             race.camera_view(),
-            race.camera_cuts(),
+            race.viewed_camera_cuts(),
         );
         // Above this line the camera is unjittered, below it is not, and the
         // frustum and the snapshot are above deliberately - see the call.
@@ -281,8 +281,9 @@ impl Scene {
         // The scenery's clocks and the advert cards are functions of the race
         // clock and nothing the camera decides: a split screen runs them with its
         // first view, and the later views draw with what they left in the
-        // buffers and the card textures. See `Scene::render_viewports`.
-        let first_view = self.layer.get() != Layer::Next;
+        // buffers and the card textures; so does a later window of a multi-window
+        // race. See `Scene::render_viewports` and `Scene::does_frame_work`.
+        let first_view = self.does_frame_work();
         if first_view {
             self.write_scenery_anims(queue, seconds);
             self.frame_work.update(|w| super::FrameWork {

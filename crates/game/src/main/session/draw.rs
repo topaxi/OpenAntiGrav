@@ -529,10 +529,10 @@ impl Session {
             // an unsupported adapter does. Read *after* the stage rendered
             // above, which is what makes it this frame's camera rather than the
             // previous one's.
-            // None while windowed: the temporal record holds one camera, and the windows
-            // alternate cameras every frame.
+            // A windowed race keeps a record per window, and a window of several seats (a
+            // split) has none: `None` there, as a menu frame.
             let temporal = match &self.stage {
-                Stage::Race(stage) if self.gpu.temporal && !windowed => stage.temporal(),
+                Stage::Race(stage) if self.gpu.temporal => stage.temporal(0),
                 _ => None,
             };
 

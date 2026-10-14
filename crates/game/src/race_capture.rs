@@ -682,37 +682,76 @@ pub fn capture(
     if let Some(tick) = deferred_tick
         && !finished_early
     {
-        let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("race capture primer"),
-        });
         let spectrum = spectrum::zone_spectrum(options, audio);
-        scene.render(
-            &device,
-            &queue,
-            &mut primer,
-            &view,
-            &race,
-            viewport,
-            options.fov,
-            options.frustum_culling,
-            options.pvs_culling,
-            options.anim_seconds,
-            options.motion_blur,
-            options.shadows,
-            camera_jitter,
-            &spectrum,
-            // **No timestamps on any capture path**, deliberately: this
-            // project compares captures byte for byte, and a measurement is
-            // the input a resolution controller would eventually act on. See
-            // `oag_gpu::timing::PassTimer` and `perf.rs`'s own argument for
-            // why the overlay is window-only. All three pairs: the scene
-            // pass's, the motion-blur chain's, and the HD/Fury bloom chain's.
-            None,
-            None,
-            None,
-        );
-        queue.submit(Some(primer.finish()));
-        advance_one_tick(&mut race, &mut held, audio, options, tick);
+        if race.windowed() {
+            // Each window of a multi-window race keeps a camera history of its own, so each is
+            // primed with its own view at the tick-before-last pose.
+            let mut shared = false;
+            for index in 0..race.windows().len() {
+                if race.window_drawn(index).is_empty() {
+                    continue;
+                }
+                let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race capture window primer"),
+                });
+                scene.render_window(
+                    &device,
+                    &queue,
+                    &mut primer,
+                    &view,
+                    &race,
+                    index,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.shadows,
+                    &spectrum,
+                    shared,
+                    oag_raceplay::WindowEffects {
+                        motion_blur: options.motion_blur,
+                        camera_jitter,
+                        ..Default::default()
+                    },
+                    &mut [],
+                );
+                shared = true;
+                queue.submit(Some(primer.finish()));
+            }
+            advance_one_tick(&mut race, &mut held, audio, options, tick);
+        } else {
+            let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("race capture primer"),
+            });
+            scene.render(
+                &device,
+                &queue,
+                &mut primer,
+                &view,
+                &race,
+                viewport,
+                options.fov,
+                options.frustum_culling,
+                options.pvs_culling,
+                options.anim_seconds,
+                options.motion_blur,
+                options.shadows,
+                camera_jitter,
+                &spectrum,
+                // **No timestamps on any capture path**, deliberately: this
+                // project compares captures byte for byte, and a measurement is
+                // the input a resolution controller would eventually act on. See
+                // `oag_gpu::timing::PassTimer` and `perf.rs`'s own argument for
+                // why the overlay is window-only. All three pairs: the scene
+                // pass's, the motion-blur chain's, and the HD/Fury bloom chain's.
+                None,
+                None,
+                None,
+            );
+            queue.submit(Some(primer.finish()));
+            advance_one_tick(&mut race, &mut held, audio, options, tick);
+        }
     }
     options.ghost.finish(&mut race)?;
     if let Some(age) = options.pose_boost {
@@ -795,6 +834,8 @@ pub fn capture(
                 }
                 if windowed {
                     let mut rest = &mut *timers;
+                    // The first window that draws does the frame's shared work, the rest read it.
+                    let mut shared = false;
                     for (window, &count) in seats.iter().enumerate() {
                         let (own, tail) = rest.split_at_mut(count.min(rest.len()));
                         rest = tail;
@@ -816,8 +857,15 @@ pub fn capture(
                             options.anim_seconds,
                             options.shadows,
                             &spectrum,
+                            shared,
+                            oag_raceplay::WindowEffects {
+                                motion_blur: options.motion_blur,
+                                camera_jitter,
+                                ..Default::default()
+                            },
                             own,
                         );
+                        shared |= count > 0;
                         queue.submit(Some(encoder.finish()));
                     }
                     return;
@@ -879,6 +927,9 @@ pub fn capture(
         vec![None]
     };
     let mut first_encoder = Some(encoder);
+    // Whether a window of this frame has drawn: the first does the camera-independent work,
+    // the rest read it, as the window's frame loop has them.
+    let mut shared_work = false;
     for window in windows {
         let mut encoder = first_encoder.take().unwrap_or_else(|| {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -893,7 +944,7 @@ pub fn capture(
             if race.window_drawn(index).is_empty() {
                 continue;
             }
-            scene.render_window(
+            let stats = scene.render_window(
                 &device,
                 &queue,
                 &mut encoder,
@@ -907,8 +958,18 @@ pub fn capture(
                 options.anim_seconds,
                 options.shadows,
                 &spectrum,
+                shared_work,
+                // Honoured per window, as the single frame's is: each window's history was
+                // primed above, so the smear a player sees is the one the PNG shows.
+                oag_raceplay::WindowEffects {
+                    motion_blur: options.motion_blur,
+                    camera_jitter,
+                    ..Default::default()
+                },
                 &mut [],
-            )
+            );
+            shared_work = true;
+            stats
         } else if race.viewport_count() > 1 {
             scene.render_viewports(
                 &device,
@@ -993,8 +1054,10 @@ pub fn capture(
             // **A `--presented` capture is the one place an upscaler's output can
             // be looked at**, which is what this flag exists for - so the temporal
             // path has to be reachable here too, not just from the window.
-            let temporal = temporal_supported.then(|| scene.temporal()).flatten().map(
-                |(depth, velocity, frame)| oag_present::upscale::Temporal {
+            let temporal = temporal_supported
+                .then(|| scene.temporal(window.unwrap_or(0)))
+                .flatten()
+                .map(|(depth, velocity, frame)| oag_present::upscale::Temporal {
                     depth,
                     velocity,
                     sample_count: scene.sample_count(),
@@ -1002,8 +1065,7 @@ pub fn capture(
                     jitter: frame.jitter,
                     phase_count: frame.phase_count,
                     reset: frame.reset,
-                },
-            );
+                });
             // No timer to abandon a claim on: a capture has no frame loop to pace
             // and no `PassTimer` to pace it with - that is per-window state the
             // session owns. The `false` this can return on a build failure is

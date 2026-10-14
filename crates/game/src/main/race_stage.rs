@@ -129,6 +129,11 @@ pub(crate) struct RaceStage {
     ///
     /// [`Session::tournament`]: crate::main::session::Session::tournament
     pub(crate) tournament_final_rank: Option<u8>,
+    /// Whether a window of this frame has already drawn, and so did the frame's
+    /// camera-independent work (`Scene::render_window`'s `shared`). Cleared once a frame by
+    /// [`RaceStage::begin_frame`]; set by the first window that draws, so a frame does that work
+    /// once however many windows it has - and a window 1 that draws nothing leaves it to window 2.
+    pub(crate) shared_frame_work: bool,
     /// The Wipeout 2048 campaign event this race was launched against, or
     /// `None` for every other title and for an ordinary `--race`/menu
     /// launch on 2048 itself. Resolved by `race::load_event` onto
@@ -235,6 +240,13 @@ impl RaceStage {
                 anim_seconds,
                 shadows,
                 zone_spectrum,
+                race::WindowEffects {
+                    motion_blur,
+                    camera_jitter,
+                    timestamps,
+                    blur_timestamps,
+                    hd_bloom_timestamps,
+                },
             );
         }
         // A split screen draws one scene per view, each submitted on its own, so
@@ -285,8 +297,9 @@ impl RaceStage {
     /// full-frame (`Scene::render_view`, recorded into `encoder`), or several cut up inside it
     /// as a split screen cuts its views (`Scene::render_window_views`, which submits its own
     /// command buffers first). The caller submits `encoder` before the next window draws, and
-    /// has set the draw alpha. No timers: dynamic resolution holds its scale while the race has
-    /// more than one view, as it does for a split. A window with no seats draws nothing.
+    /// has set the draw alpha. `effects` is the window's blur, jitter and timers, for a window of
+    /// one seat (a window of several is a split and draws none). A window with no seats draws
+    /// nothing.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn render_window(
         &mut self,
@@ -301,13 +314,15 @@ impl RaceStage {
         anim_seconds: Option<f32>,
         shadows: display::Shadows,
         zone_spectrum: &[f32],
+        effects: race::WindowEffects<'_>,
     ) -> oag_present::perf::SceneStats {
         // Pointed at the zone the race has reached, as `Self::render` does; a second window
         // of the same frame finds it already there and the rebuild is not repeated.
         if self.scene.sync_zone_grade(&self.race) {
             self.scene.rebind_zone_art(gpu.device(), gpu.queue());
         }
-        self.scene.render_window(
+        let drawn = !self.race.window_drawn(window).is_empty();
+        let stats = self.scene.render_window(
             gpu.device(),
             gpu.queue(),
             encoder,
@@ -321,8 +336,18 @@ impl RaceStage {
             anim_seconds,
             shadows,
             zone_spectrum,
+            self.shared_frame_work,
+            effects,
             &mut [],
-        )
+        );
+        self.shared_frame_work |= drawn;
+        stats
+    }
+
+    /// A new frame begins: no window has drawn yet, so the first to draw does the
+    /// camera-independent work and the rest read it (`Self::shared_frame_work`).
+    pub(crate) fn begin_frame(&mut self) {
+        self.shared_frame_work = false;
     }
 
     /// What a temporal upscaler needs from this frame, or `None` when nothing
@@ -332,9 +357,11 @@ impl RaceStage {
     /// that was drawn, and a caller that asked first would hand the upscaler the
     /// *previous* frame's camera and offset - which produces a picture rather
     /// than an error.
-    pub(crate) fn temporal(&self) -> Option<upscale::Temporal<'_>> {
+    ///
+    /// `window` is whose frame: 0 for a race that is not dealt across windows, and for window 1.
+    pub(crate) fn temporal(&self, window: usize) -> Option<upscale::Temporal<'_>> {
         self.scene
-            .temporal()
+            .temporal(window)
             .map(|(depth, velocity, frame)| upscale::Temporal {
                 depth,
                 velocity,

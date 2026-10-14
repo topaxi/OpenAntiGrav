@@ -488,6 +488,20 @@ impl Session {
         }
     }
 
+    /// A frame begins: the race on screen (or parked behind the menus) has had no window draw
+    /// yet this frame, so the first window to draw does the camera-independent work and the
+    /// others read it ([`RaceStage::begin_frame`]).
+    ///
+    /// [`RaceStage::begin_frame`]: crate::race_stage::RaceStage::begin_frame
+    pub(crate) fn begin_scene_frame(&mut self) {
+        if let Stage::Race(stage) = &mut self.stage {
+            stage.begin_frame();
+        }
+        if let Some(stage) = self.suspended_race.as_mut() {
+            stage.begin_frame();
+        }
+    }
+
     /// Draws every further window once, after window 1's frame. A window that fails to draw is
     /// said once per failure and does not end the run.
     pub(crate) fn draw_screens(&mut self) {
@@ -574,9 +588,11 @@ impl Session {
     }
 
     /// Window `window`'s views of the race through the whole of window 1's chain: scene,
-    /// resolve, HUD, bloom, grade. No upscaler history, blur or jitter (**chosen, not
-    /// measured**: the windows alternate cameras every frame, and each history holds one),
-    /// so FSR 3.1 takes the rung down, as it does on a menu frame.
+    /// resolve, HUD, bloom, grade. **A window of one seat has its own camera history**
+    /// (`Scene::render_window`), so motion blur, camera jitter and the temporal upscaler (FSR
+    /// 3.1, which keeps its history in this window's framebuffer) run per window; **a window of
+    /// several seats is a split**, whose views are N cameras in one frame, and draws none of
+    /// them (FSR 3.1 takes the rung down there, as it does on a menu frame). Chosen, not measured.
     fn encode_screen_race(
         &mut self,
         window: usize,
@@ -614,6 +630,22 @@ impl Session {
             return;
         };
         stage.race.set_draw_alpha(alpha);
+        // This window's own blur and camera jitter, on its own history in the scene
+        // (`Scene::render_window`): a window of one seat draws them, one of several is a split
+        // and does not. The jitter's length is a property of the upscaler resolving this
+        // window's frames, as for window 1.
+        stage.scene.set_blur_resolution(profile.motion_blur_resolution);
+        let effects = oag_raceplay::WindowEffects {
+            motion_blur: profile.motion_blur,
+            camera_jitter: upscale::jitter_phases(
+                self.camera_jitter,
+                profile.reconstruction,
+                self.gpu.temporal,
+                extent,
+                (rect.2 as u32, rect.3 as u32),
+            ),
+            ..Default::default()
+        };
         stage.render_window(
             &self.gpu,
             encoder,
@@ -626,6 +658,7 @@ impl Session {
             self.anim_seconds,
             profile.shadows,
             self.zone_hold.levels(),
+            effects,
         );
         let presentation = upscale::Presentation {
             reconstruction: profile.reconstruction,
@@ -633,13 +666,20 @@ impl Session {
             brightness: self.settings.display.brightness,
             gamma: self.settings.display.gamma,
         };
+        // This window's own temporal record (`None` for a window of several seats, and where
+        // the adapter cannot run the upscaler): FSR 3.1 keeps its history in `screen.framebuffer`.
+        let temporal = if self.gpu.temporal {
+            stage.temporal(window)
+        } else {
+            None
+        };
         let _ = screen.framebuffer.resolve_scene(
             &self.gpu.device,
             &self.gpu.queue,
             encoder,
             rect,
             &presentation,
-            None,
+            temporal,
             None,
         );
         stage.draw_window_track_panel(

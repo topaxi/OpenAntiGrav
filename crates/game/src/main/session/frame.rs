@@ -872,6 +872,7 @@ impl Session {
         // reopened its disc image once a frame and warned once a frame.
         self.build_endrace();
 
+        self.begin_scene_frame();
         let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
         // The further windows of a `--windows` run, once window 1's frame is submitted: each
         // seat is its own submission. A no-op with one window.
