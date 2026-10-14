@@ -501,3 +501,59 @@ fn parse_pilot_assist(text: &str) -> Result<oag_physics::pilot_assist::Level, St
     }
     Level::from_name(text).ok_or_else(|| format!("expected off, normal, extreme or on, not {text:?}"))
 }
+
+/// `--connect` and its companions: this game as a client of an `oag-server`. See
+/// `oag_game::net_play` and `docs/networking/README.md`, "Running a local server".
+#[derive(clap::Args, Debug, Default)]
+pub(crate) struct NetArgs {
+    /// Race on the `oag-server` at HOST:PORT instead of locally. Implies `--race`:
+    /// the track, team, class, mode, seed and grid are the server's. Needs
+    /// `--cert-hash`.
+    #[arg(long, value_name = "HOST:PORT", requires = "cert_hash")]
+    pub(crate) connect: Option<String>,
+
+    /// The server certificate's SHA-256, as `oag-server` prints it on its
+    /// `cert-hash` line (64 hex digits), or `@FILE` to read it from the file
+    /// `oag-server --hash-out` wrote. Only that certificate is accepted.
+    #[arg(long, value_name = "HEX|@FILE", requires = "connect")]
+    pub(crate) cert_hash: Option<String>,
+
+    /// Fly this machine's craft with the player's own driver, sent to the server as
+    /// input like a pad's. A verification aid for a whole race with nobody at the keys.
+    #[arg(long, requires = "connect")]
+    pub(crate) net_bot: bool,
+
+    /// Add a round trip and a datagram loss rate on this end of the connection,
+    /// `RTT_MS[:LOSS_PERCENT]` (e.g. `100` or `100:2`): a verification aid for judging
+    /// a run on localhost at a real network's numbers.
+    #[arg(long, value_name = "RTT_MS[:LOSS]", requires = "connect")]
+    pub(crate) net_shim: Option<String>,
+}
+
+impl NetArgs {
+    /// The connection asked for, if any, its hash and shim parsed.
+    pub(crate) fn connect(&self) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
+        let Some(addr) = &self.connect else {
+            return Ok(None);
+        };
+        let given = self.cert_hash.as_deref().unwrap_or_default();
+        let hex = match given.strip_prefix('@') {
+            Some(path) => std::fs::read_to_string(path)
+                .map_err(|e| anyhow::anyhow!("--cert-hash @{path}: {e}"))?,
+            None => given.to_string(),
+        };
+        let shim = self
+            .net_shim
+            .as_deref()
+            .map(oag_net::link::Conditions::parse)
+            .transpose()
+            .map_err(anyhow::Error::msg)?;
+        Ok(Some(oag_game::net_play::Connect {
+            addr: addr.clone(),
+            cert_hash: oag_net::wt::parse_hash(hex.trim())?,
+            shim,
+            bot: self.net_bot,
+            name: format!("oag-game {}", std::process::id()),
+        }))
+    }
+}

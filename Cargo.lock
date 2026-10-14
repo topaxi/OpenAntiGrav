@@ -2801,6 +2801,7 @@ dependencies = [
  "oag-mobile",
  "oag-mod",
  "oag-music",
+ "oag-net",
  "oag-omega",
  "oag-physics",
  "oag-pob",

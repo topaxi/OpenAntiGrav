@@ -987,6 +987,9 @@ pub(crate) struct Cli {
     pub(crate) wreck: extra::WreckArgs,
     #[command(flatten)]
     pub(crate) intro: extra::IntroArgs,
+    /// `--connect` and its companions - see [`extra::NetArgs`].
+    #[command(flatten)]
+    pub(crate) net: extra::NetArgs,
     #[command(flatten)]
     pub(crate) log: oag_log::tool::LogArgs,
 }

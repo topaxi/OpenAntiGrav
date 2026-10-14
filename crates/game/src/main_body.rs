@@ -453,7 +453,8 @@ fn run(cli: Cli) -> Result<()> {
     // anything opens it, so "no disc image found" stays a message about the
     // command line rather than something to discover eight seconds of intro
     // later.
-    if cli.race {
+    // `--connect` is a race too: the server's.
+    if cli.race || cli.net.connect.is_some() {
         // `--prefetch` is a front-end thing, and saying so is better than
         // quietly doing nothing. `--race` exists to skip the boot sequence, and
         // hanging its exit on ten minutes of `ffmpeg` would invert the one
@@ -472,14 +473,18 @@ fn run(cli: Cli) -> Result<()> {
         }
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
-        return run_race(
-            cli,
-            pending.race_options(&source, Vec::new()),
-            settings,
-            anisotropy,
-            audio,
-            music_discs,
-        );
+        // Joined before the load: the race to load is the server's.
+        let net = cli
+            .net
+            .connect()?
+            .map(|connect| oag_game::net_play::NetPlay::connect(&connect))
+            .transpose()?;
+        let options = pending.race_options(&source, Vec::new());
+        let options = match &net {
+            Some(net) => net.race_options(options)?,
+            None => options,
+        };
+        return run_race(cli, options, settings, anisotropy, audio, music_discs, net);
     }
 
     // Every leg with no window loads the whole boot here and now, blocking, and
