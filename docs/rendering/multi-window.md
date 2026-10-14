@@ -334,7 +334,7 @@ offered no non-blocking mode and window 1 is waiting on window 2's display too; 
   flyby through its shots at the same time; **a click on window 1 skipped it and the next frames
   show window 1 in its two views (top and bottom) and window 2 whole in the same capture**, then the
   `3`, `2`, `1`, `GO` countdown in every view of both windows and the craft run. This project loads
-  a flyby only for Pulse PSP (`start_grid.vex`, [race-intro.md](race-intro.md)): on HD EU
+  a flyby only for Pulse PSP (`start_grid.vex`, [race-intro.md](../gameplay/race-intro.md)): on HD EU
   `begin_intro` is false and a capture at `--intro-ticks 100` is the grid, so `--window-seats 2,1`
   there is as before, window 1 split and window 2 whole, read live too. The disc-backed pin is
   `raceplay::window_flyby_ground_truth` (every window, a window with no seat, the split after, and a
