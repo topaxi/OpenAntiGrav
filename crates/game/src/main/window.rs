@@ -89,6 +89,14 @@ pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
     if gamescope { 1.0 } else { reported }
 }
 
+/// The mode a window is opened in. Under gamescope a window frame means nothing (gamescope draws
+/// one window per output and no decoration), so `Windowed` is opened as `Borderless`, filling the
+/// output; the saved setting is left alone, so the same file still means windowed on a desktop
+/// (maintainer decision, 2026-10-14).
+pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> display::WindowMode {
+    if gamescope { display::WindowMode::Borderless } else { mode }
+}
+
 /// The size asked of winit for a window of `size`: logical on a desktop, which is what the
 /// setting means there, and physical pixels under gamescope, held to the monitor so a saved size
 /// larger than the output cannot ask for more pixels than gamescope displays.
@@ -164,6 +172,7 @@ fn attributes_in(look: Look<'_>, gamescope: bool) -> winit::window::WindowAttrib
         monitor,
         position,
     } = look;
+    let mode = effective_mode(mode, gamescope);
     let borderless = mode == display::WindowMode::Borderless;
     let mut attributes = winit::window::Window::default_attributes()
         .with_title(title)
@@ -414,6 +423,20 @@ mod tests {
         assert_eq!(px(under.inner_size.unwrap()), (1440, 816, true));
         let desktop = attributes_in(look(display::WindowMode::Windowed), false);
         assert_eq!(px(desktop.inner_size.unwrap()), (1440, 816, false));
+    }
+
+    #[test]
+    fn under_gamescope_windowed_opens_borderless_and_a_desktop_keeps_the_setting() {
+        use display::WindowMode::{Borderless, Windowed};
+        assert_eq!(effective_mode(Windowed, true), Borderless);
+        assert_eq!(effective_mode(Borderless, true), Borderless);
+        assert_eq!(effective_mode(Windowed, false), Windowed);
+        assert_eq!(effective_mode(Borderless, false), Borderless);
+        let under = attributes_in(look(Windowed), true);
+        assert!(under.resizable);
+        assert!(matches!(under.fullscreen, Some(winit::window::Fullscreen::Borderless(None))));
+        let desktop = attributes_in(look(Windowed), false);
+        assert!(!desktop.resizable && desktop.fullscreen.is_none());
     }
 
     #[test]
