@@ -69,13 +69,17 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     menu_font: None,
     // `FEGlobals->TextColor`: `0xFFFFFFFF`, matching HD's.
     text: Some(0xFFFF_FFFF),
-    // `FEGlobals->TitleColor`: `0xFF646464`, matching HD's.
-    title: Some(0xFF64_6464),
+    // `None`, so the title draws in the frame's own ink (`Skin::title_color`):
+    // `mainmenu_definition.xml`'s title authors `color="FEGlobals->HD_Grey"`,
+    // as the frame's marks do, and `HD_Grey` is whatever `WOHD_Colours` sets it
+    // to (`0xFF010001`), not `TitleColor`'s `0xFF646464` this field held while
+    // the template was unread. Reading it off the marks keeps the title and the
+    // chrome one colour without a number here.
+    title: None,
     background: None,
-    // Not measured this lane - Omega's own `HD_Colours`/`WOHD_Colours`/
-    // `Fury_Colours`/`2048_Colours` switch (`docs/formats/omega-frontend.md`,
-    // "The colour-skin switch is restructured, not just copied") is real but
-    // which runtime condition selects between them is unread here either.
+    // `None` for HD's reason (the highlight is the FE style's `HD_Blue`, and a
+    // number here would hard-code one style). Which style Omega runs is read now:
+    // `colour_template` below, `WOHD_Colours`, whose `HD_Blue` is `0xffee0707`.
     selected: None,
     selected_pulse_period_secs: None,
     // Not independently re-measured this lane - carried at HD's own
@@ -151,6 +155,11 @@ pub const BOOT: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_backdrop_parent: None,
     picker_from_loaded_faces: true,
     fallback_globals: &[],
+    // `FUN_0154dd80`, the boot screen's constructor, compares `"HD"` with
+    // itself to choose between `WOHD_Colours` and `Fury_Colours` and so always
+    // takes the first, on the patch's `eboot.bin` as well as the base's - see
+    // `docs/formats/omega-frontend.md`, "The colour-skin switch".
+    colour_template: Some("WOHD_Colours"),
     fallback_images: &[],
 };
 

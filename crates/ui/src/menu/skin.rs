@@ -693,13 +693,13 @@ impl Skin {
     /// in practice this is the only branch either one reaches.
     ///
     /// **`frame_ink` second** - [`super::Frame::ink`], the colour the frame's
-    /// own marks actually draw in - for a title that draws a frame but leaves
-    /// `TitleColor` undeclared. No title measured so far is that case: HD's
-    /// `TitleColor` and its `HD_Grey`-tinted marks agree today (worth
-    /// stating rather than assuming, since they are two separate globals
-    /// that could diverge - see `oag_hd::frontend::MENU_SKIN`'s own field
-    /// doc), and Pulse's marks carry no tint of their own at all, so a
-    /// title reaching this branch would be a first.
+    /// own marks actually draw in - for a title whose `MenuSkin::title` is
+    /// `None` while it draws a frame. Omega is that case (since 2026-10-14):
+    /// its title authors `HD_Grey` like the marks, and `HD_Grey` is the
+    /// `WOHD_Colours` template's value, not `TitleColor`'s. HD's `TitleColor`
+    /// and its `HD_Grey`-tinted marks are two separate globals that diverge
+    /// there too (see `oag_hd::frontend::MENU_SKIN`'s own field doc), and
+    /// Pulse's marks carry no tint of their own at all.
     ///
     /// **This build's own substitute last**, for a title with neither: no
     /// declared colour, and no frame. Pure is that title, and so was Pulse

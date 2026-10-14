@@ -464,6 +464,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_backdrop_parent: Some(states::INTRO_SCREEN),
     picker_from_loaded_faces: false,
     fallback_globals: FALLBACK_GLOBALS,
+    colour_template: None,
     fallback_images: FALLBACK_IMAGES,
 };
 

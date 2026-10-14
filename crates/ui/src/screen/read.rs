@@ -35,7 +35,7 @@ impl Screens {
     /// undeclared colour and needs its own table.
     #[must_use]
     pub fn from_xml_with_fallback_globals(xml: &str, fallback: &[(&str, &str)]) -> Self {
-        Self::from_xml_with_fallbacks(xml, fallback, &[])
+        Self::from_xml_with_fallbacks(xml, fallback, &[], None)
     }
 
     /// [`Self::from_xml_with_fallback_globals`], plus `fallback_images`: an
@@ -44,13 +44,19 @@ impl Screens {
     /// the original. Consulted only where a widget's own XML leaves `src`
     /// unset; a real one always wins, the same contract `fallback` carries for
     /// a colour.
+    ///
+    /// `colour_template` names a `<Screen>` of name-only `<Variable>`s that
+    /// overwrite the file's own globals of the same name before any widget is
+    /// built - see [`Self::apply_colour_template`]. `None` reads the file as it
+    /// always was.
     #[must_use]
     pub fn from_xml_with_fallbacks(
         xml: &str,
         fallback: &[(&str, &str)],
         fallback_images: &[(&str, &str)],
+        colour_template: Option<&str>,
     ) -> Self {
-        Self::read(xml, fallback, fallback_images, false)
+        Self::read(xml, fallback, fallback_images, colour_template, false)
     }
 
     /// [`Self::from_xml_with_fallback_globals`], with a colour-only `Image`'s
@@ -58,13 +64,14 @@ impl Screens {
     /// [`Self::fold_fill_offsets`]'s field doc for who needs which reading.
     #[must_use]
     pub fn from_xml_folding_fill_offsets(xml: &str, fallback: &[(&str, &str)]) -> Self {
-        Self::read(xml, fallback, &[], true)
+        Self::read(xml, fallback, &[], None, true)
     }
 
     fn read(
         xml: &str,
         fallback: &[(&str, &str)],
         fallback_images: &[(&str, &str)],
+        colour_template: Option<&str>,
         fold_fill_offsets: bool,
     ) -> Self {
         let root = parse(xml);
@@ -74,6 +81,11 @@ impl Screens {
         };
         for node in &root.children {
             out.collect_globals(node, None);
+        }
+        if let Some(template) = colour_template {
+            for node in &root.children {
+                out.apply_colour_template(node, template);
+            }
         }
         for &(name, value) in fallback {
             out.globals
