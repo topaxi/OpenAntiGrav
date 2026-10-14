@@ -500,6 +500,9 @@ impl Controls {
                 // (A raw event comes ahead of the window event for the same press, on X11 and
                 // Windows alike, so the window event of this very press is already dropped.)
                 self.per_device = true;
+                log::info!(
+                    "keyboards: a second keyboard spoke, race keys now come per physical keyboard"
+                );
                 let earlier: Vec<_> = self.speakers.clone();
                 for (id, last) in earlier.into_iter().filter(|(id, _)| *id != device) {
                     self.pad

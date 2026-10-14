@@ -130,6 +130,9 @@ impl<D: Copy + PartialEq> Assignment<D> {
         };
         let slot = lowest(window).or_else(|| device.and_then(|_| lowest(race)))?;
         let binding = device.map_or(Binding::Shared, Binding::Device);
+        log::info!(
+            "keyboard seat: a key in a window with a free seat claims slot {slot} ({binding:?})"
+        );
         self.more_keyboards.push(Seat {
             binding,
             slot: u8::try_from(slot).ok()?,
@@ -139,6 +142,7 @@ impl<D: Copy + PartialEq> Assignment<D> {
 
     /// Changes what sends keys to the keyboard seat on `slot`, if there is one.
     fn bind_keyboard(&mut self, slot: usize, binding: Binding) {
+        log::info!("keyboard seat: slot {slot} is now bound to {binding:?}");
         if self.keyboard_slot() == slot {
             self.keyboard_binding = binding;
         } else if let Some(seat) = self

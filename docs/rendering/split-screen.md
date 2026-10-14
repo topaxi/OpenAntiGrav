@@ -790,7 +790,7 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   `pause::present_seats` asks the same `Assignment::drives` the seat turns to the AI on
   (`split_screen::follow_devices` runs only in a ticking arm, so it cannot be waited
   for). In a multi-window race each window's first seat counts as present whichever window
-  the keyboard is at ([multi-window.md](multi-window.md), "A keyboard per window"), and a
+  the keyboard is at ([multi-window.md](multi-window.md), "Keyboards are seats"), and a
   click on a window is that window's first seat's Start.
 - **A line under the pause** says who and for how long: `PLAYER 2 PAUSED - ANYONE CAN
   RESUME IN 0:25`, then `PLAYER 2 PAUSED - ANYONE CAN RESUME` (or `PAUSED - ANYONE CAN
