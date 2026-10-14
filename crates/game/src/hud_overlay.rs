@@ -312,7 +312,7 @@ impl Overlay {
             viewport,
             self.space,
         ));
-        if let Some(text) = countdown {
+        if let Some(text) = countdown.filter(|_| count > 0) {
             frame.extend(crate::hud_views::countdown_frame(
                 &self.context(),
                 text,

@@ -471,6 +471,41 @@ impl Screens {
         }
     }
 
+    /// Overwrites each global the `<Screen name="template">` block names with
+    /// that block's value, the rule Wipeout: Omega's front end boot applies.
+    ///
+    /// `skin.xml` there carries a base `HD_Colours` block, whose own comment
+    /// says it is *"IGNORED AND OVERWRITTEN by the WOHD_Colours and Fury_Colours
+    /// templates"*, and one block per style whose `<Variable name="HD_Grey">`
+    /// carry **no `global=`**, so [`Self::collect_globals`] never sees them. The
+    /// executable (`FUN_0154dd80` in the base `eboot.bin`) copies the chosen
+    /// template's value string over the base block's variable of the same name.
+    ///
+    /// Only a name the file already declares is overwritten, never added: the
+    /// copy has nothing to land on otherwise. A variable that does carry
+    /// `global=` is a registration, not an override, and stays as
+    /// [`Self::collect_globals`] read it. A template the file does not carry
+    /// changes nothing.
+    ///
+    /// Run before widget collection, because widgets bake their resolved colours
+    /// once - see [`Screens::from_xml_with_fallback_globals`].
+    fn apply_colour_template(&mut self, node: &Node, template: &str) {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(template) {
+            for variable in node.children_named("Variable") {
+                if variable.attr("global").is_none()
+                    && let Some(name) = variable.attr("name")
+                    && let Some(value) = variable.value("String")
+                    && let Some(declared) = self.globals.get_mut(name)
+                {
+                    *declared = value.to_string();
+                }
+            }
+        }
+        for child in &node.children {
+            self.apply_colour_template(child, template);
+        }
+    }
+
     fn collect(&mut self, node: &Node, parent: Option<&str>, fallback_images: &[(&str, &str)]) {
         if !node.name.eq_ignore_ascii_case("Screen") {
             for child in &node.children {

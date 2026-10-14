@@ -323,10 +323,13 @@ pub fn countdown_frame(
 
 /// Draws the race HUD over `view`: one HUD, or one per view of a split screen.
 ///
-/// With one view this is `overlay.draw` on the slot's readout, untouched. `countdown`
-/// is the resume countdown's word when the title draws it as text
-/// ([`countdown_frame`]); `None` adds nothing, so a frame without one is the HUD
-/// as it always was.
+/// With one view this is `overlay.draw` on the slot's readout, untouched. **In a multi-window
+/// race** ([`Race::windowed`]) `window` is the window being drawn: its views
+/// ([`Race::window_drawn`]) are one whole-screen HUD for a window of one seat, and a split's
+/// HUD - the layout rules picked by the window's own view count and cut - for a window of
+/// several. Otherwise `window` is not read. `countdown` is the resume countdown's word when
+/// the title draws it as text ([`countdown_frame`]), one per view this window cuts; `None`
+/// adds nothing, so a frame without one is the HUD as it always was.
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     overlay: &mut crate::hud_overlay::Overlay,
@@ -336,29 +339,30 @@ pub fn draw(
     view: &wgpu::TextureView,
     race: &Race,
     scene: &Scene,
+    window: usize,
     campaign: Option<&oag_tables::race_campaign::Cell>,
     record_target: Option<&oag_hud::RecordTarget>,
     countdown: Option<&str>,
     viewport: (f32, f32, f32, f32),
 ) {
-    let count = race.viewport_count();
-    if count <= 1 {
-        let readout = readout(race, scene, race.player_slot(), campaign, record_target);
+    let (slots, cut) = if race.windowed() {
+        (race.window_drawn(window), race.window_cut(window))
+    } else if race.viewport_count() <= 1 {
+        (vec![race.player_slot()], race.cut())
+    } else {
+        ((0..race.viewport_count()).collect(), race.cut())
+    };
+    if let [slot] = slots[..] {
+        let readout = readout(race, scene, slot, campaign, record_target);
         overlay.draw(device, queue, encoder, view, &readout, countdown, viewport);
         return;
     }
-    let readouts: Vec<Readout> = (0..count)
-        .map(|slot| readout(race, scene, slot, campaign, record_target))
+    let readouts: Vec<Readout> = slots
+        .iter()
+        .map(|&slot| readout(race, scene, slot, campaign, record_target))
         .collect();
     overlay.draw_views(
-        device,
-        queue,
-        encoder,
-        view,
-        readouts,
-        countdown,
-        race.cut(),
-        viewport,
+        device, queue, encoder, view, readouts, countdown, cut, viewport,
     );
 }
 

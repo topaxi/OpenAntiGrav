@@ -137,7 +137,7 @@ impl Session {
             .clone()
             .unwrap_or_else(|| shell.font.clone());
         let base_sprites = shell.sprites.clone();
-        let format = self.gpu.config.format;
+        let format = self.gpu.output.config.format;
 
         let (packs, pure_packs, problems) =
             oag_source::dlc::packs_from_defaults(&dlc, &oag_source::cache::default_dlc_cache_dir());

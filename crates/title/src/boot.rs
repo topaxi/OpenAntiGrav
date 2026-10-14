@@ -218,6 +218,16 @@ pub struct BootProfile {
     /// Merged in only for keys the disc does not declare; a real declaration
     /// always wins. Empty for a title that declares everything its screens name.
     pub fallback_globals: &'static [(&'static str, &'static str)],
+    /// The `<Screen>` of name-only `<Variable>`s in this title's `skin.xml`
+    /// whose values overwrite the skin's own globals of the same name, if it
+    /// carries one - see `oag_ui::screen::Screens::from_xml_with_fallbacks`.
+    ///
+    /// Wipeout HD ships one baked skin per archive, Fury's colours in one and
+    /// HD's in another, so it has no such block; Omega folds the styles into one
+    /// file and the executable copies one style's values over the base block's.
+    /// `None` for a title whose skin has nothing to overwrite, and a name the
+    /// skin does not carry changes nothing.
+    pub colour_template: Option<&'static str>,
     /// `Image` widgets this title's own XML gives no `src` at all - assigned
     /// programmatically on the original, the same class of gap
     /// [`Self::fallback_globals`] fills for a colour - matched here by the
@@ -295,6 +305,7 @@ mod tests {
         picker_backdrop_parent: None,
         picker_from_loaded_faces: false,
         fallback_globals: &[],
+        colour_template: None,
         fallback_images: &[],
     };
 

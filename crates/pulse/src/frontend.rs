@@ -117,6 +117,7 @@ pub const BOOT_PROFILE: &oag_title::BootProfile = &oag_title::BootProfile {
     picker_from_loaded_faces: false,
     // Pulse's own `Skin.xml` declares every global its screens name.
     fallback_globals: &[],
+    colour_template: None,
     // No src-less widget found on this title yet.
     fallback_images: &[],
 };

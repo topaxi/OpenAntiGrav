@@ -63,6 +63,7 @@ mod title_effects;
 mod trail_hits;
 mod viewpoint;
 mod weapons;
+mod windowed;
 mod wreck_contact;
 mod wreck_finished;
 mod wreck_fx;

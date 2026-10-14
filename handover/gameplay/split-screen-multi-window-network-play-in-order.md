@@ -308,6 +308,217 @@ screen flow for enabling split screen is already partly RE'd.
 
 ## 2. Multi-window - same simulation, different rendering/app-lifecycle risk
 
+**First cut landed 2026-10-14 (lane `multi-window`), `--windows N` and `--window-seats`, desktop
+only.** Design, verification and the pacing command are in `docs/rendering/multi-window.md`,
+[ADR-0067](../../docs/architecture/adr/0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md)
+(the device, the submission, the lifecycle) and
+[ADR-0068](../../docs/architecture/adr/0068-a-window-holds-a-list-of-seats.md) (a window holds a list
+of seats). What is built: `Gpu` split into the device and an `Output` (window and surface); a `Screen`
+per further window with its own `Framebuffer`; **a window holds a list of seats** (`Race::windows`,
+`WindowViews { seats, cut }`): one seat is the whole-screen view and HUD (`Scene::render_view`,
+`Layer::Window`), several are cut up inside the window exactly as a split screen (`render_window_views`
+over `render_slots`, the split-HUD rules picked by the window's own count and cut); one encoder and one
+submission per window; `--windows N [--players P]` deals people evenly, `--window-seats 4,2v` spells
+the seats and the two-seat cut per window; window 1 keeps the front end, the pause menu and the pointer;
+closing a window hands every seat it held to the AI (`Assignment::unseat` and the existing
+`follow_devices`); focus is "away" only when no window has it; further windows present with
+`Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies. Single-window and split frames are
+byte-identical to `main` (12 of 12 `--screenshot` pairs, re-run after the seat lists).
+**Still open from it** (all in the doc's "Open"): **the layout picker menu** (windows and seats per
+window, chosen per screen, and the per-window cut there); a keyboard per window; the pause overlay and
+the end screens on every window; `--window-monitor` and remembered placement; per-window motion blur,
+FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
+**pacing on real displays** (cannot be measured under Xvfb: the
+`RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
+doc); monitor hot-plug.
+
+Same process, same machine, one `RaceSim`, one fixed 60 Hz tick, up to 8
+viewports in **one** window. This is the cheapest of the three because it changes
+nothing about process/window lifecycle (`App` stays "one per run") and
+nothing about transport - it's purely: multiple local inputs in, multiple
+local views out, same tick.
+
+What's missing beyond the shared prerequisite:
+
+- **Viewport/multi-camera support in `oag-render`.** Today there is, by its
+  own doc comment, "one track-ribbon builder and one camera convention in
+  the repository" (`crates/render/src/lib.rs:4`) - no `Viewport` struct, no
+  split-region compositing. This is new surface area, not a variant of
+  something that exists. `oag-render` owning no window
+  (`crates/render/src/lib.rs:12`, permanent by design) is actually favorable
+  here: the surface/window count stays 1, and split screen is purely "render
+  N times into N sub-rects of the one surface," which doesn't touch the
+  window-ownership boundary at all.
+- ~~**Per-player HUD** in `oag-ui`, laid out per-viewport rather than
+  full-screen.~~ **Done, 2026-10-13** (see below).
+- **Per-player pad assignment**, covered by the shared prerequisite above.
+- **A layout that scales to 8**, not just the original's 2/4-way splits -
+  viewport count and arrangement (2-up, 4-up, up to 8-up) becomes a variable
+  the viewport/camera-region support above needs to handle, not a fixed
+  quadrant layout.
+
+**2026-10-13: the viewport half landed**, `--players N` (1 to 8) on a direct
+`--race`, written up in [split-screen.md](../../docs/rendering/split-screen.md):
+`oag_render::viewport` lays out 1 to 8 views, `oag_raceplay` keeps a view-side chase
+camera per extra view (`Race::set_viewpoint`) and `Scene::render_viewports` draws one
+scene per view, each in its own encoder and submit with only the first clearing.
+Slots `0..N` are marked `Controller::Local`; view `i` follows slot `i`. One view is
+byte-identical to before. Layout, the shared far-chase rig, no shake on extra views,
+no bloom/blur/jitter under a split and the hidden HUD are all **chosen, not
+measured**. **2026-10-13, the per-player HUD landed**
+([split-screen.md](../../docs/rendering/split-screen.md#hud)): one `Readout` per
+viewed slot (`Race::readout_for`), the shield bars' state per slot, one HUD per view
+drawn in one list, a per-view reticle off `sight_target(slot)`, and HD's own
+two-player split layouts for a two-view race. **Still open from this list**:
+per-team camera rigs, per-view Pulse bloom (`oag_post::bloom` ignores the viewport
+origin), the 8-up frame budget (measured, `split-render-cost` below: 9.4 ms of CPU on the workstation, Deck unmeasured). ~~The results/end-race flow (still slot 0's, ends
+every view)~~ **2026-10-13, `split-screen-end-race`: done** (below, and
+[split-end-race.md](../../docs/ui/split-end-race.md)). **2026-10-13, `hd-split-black-view`: HD's and Omega's post chains
+checked and fixed.** On HD and 2048 a split drew only its last view (the encode pass
+clears the frame), and on Omega and HD the last view was graded from the first view's
+pixels; the chain now runs once over the whole area after the last view
+([split-screen.md](../../docs/rendering/split-screen.md#drawing)). **Open from it**
+(all chosen, not measured): one shared exposure and glow for all views, HD's boost
+zoom streak and Omega's distortion offsets are not drawn under a split, and a
+race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
+from the primary's pulse (read from the code, not captured).
+**2026-10-13, `split-render-cost`: a split is CPU-bound on a discrete GPU, and the first cut is in.**
+Measured on the RX 7800 XT (RADV, release, 1280x720; the tables and how to rerun them are in
+[split-screen.md](../../docs/rendering/split-screen.md#cost)): Pulse at eight views cost
+19 ms of CPU a frame and 1.1 ms of GPU scene passes, so the GPU was never the limit there.
+The Raphael iGPU proxy flips it at one and two views (GPU-bound, 4 to 5 ms of scene passes). The shadow gather, both shadow maps, the scenery
+clocks and the advert cards were redone per view though they do not depend on the camera;
+the first view now does them alone (`Layer::Next` skips them) and eight views cost 9.4 ms.
+Pictures are byte-identical (29 stills). **Open from it**: the Steam Deck number, which
+decides whether the next lever is a per-view draw budget (CPU) or render scale (GPU); steps
+in the doc, the maintainer runs them. `encoder.finish` looks proportional to the draw count (the lever for per-view LOD and draw
+distance, see `handover/rendering/graphics-settings-resolve-from-intent-and-context.md`),
+and per-view uniform slices are the prerequisite for recording views on several threads.
+**2026-10-13, `shadow-gather-per-tick`: the gather is per tick now, and `mapped` follows each view.**
+The hull gather is taken at each tick's poses and lerped between ticks (once per tick, not per
+rendered frame): 47 of 49 stills `cmp` equal to main, the lerp within 0.053 world units at p99 and
+0.237 at worst of the live gather on a real Zone lap, a 240 Hz window saves 1.5 ms of CPU at one
+view and 1.25 to 1.6 ms up to eight, a 60 Hz window neither gains nor loses
+([split-screen.md](../../docs/rendering/split-screen.md#cost)). The `mapped` depth map is redrawn
+per view around that view's craft (view two's shadows are there where main's had none): about
+0.1 ms of CPU a view on the discrete card and **1 to 1.6 ms of iGPU time a view**. **Open from it**:
+the floor rays and the track caster, both done in `shadow-floor-rays` (next entry); the bench
+needs `OAG_RENDER_BENCH_FRAMES_PER_TICK` set to mean a refresh rate.
+**2026-10-13, `shadow-floor-rays`: the floor rays ask once per point, the `mapped` track is culled to each map's box.**
+`conform_to_floor` remembers each `(position, normal)` it has asked the road about for the one
+hull: the gather is bit-identical (496,800 vertices over 300 ticks hash equal, 26 stills `cmp`
+equal) and 2.9 times cheaper, 1,196 -> 417 us a tick on the eight-craft grid, 1.0 ms of CPU a frame
+at a 60 Hz window on the RX 7800 XT at every view count. The `mapped` depth map records only the
+track draws whose bounding sphere touches that map's box (Pulse 465 of 1,737, Pure 123 of
+1,179): pictures identical, the iGPU's pipelined time down 0.3 to 0.7 ms at one view and about 2
+ms at eight views (18.45 -> 16.55 on Pulse, so eight views now hold 60 Hz there). No simulation
+crate changed. **Open from it**: a cheaper per-ray query is a semantics change (`floor_above`
+sees only the first four hits in collider and triangle order); culling the gather to craft some
+view can see needs the two-tick cache to keep every craft's gather; the Steam Deck numbers.
+([split-screen.md](../../docs/rendering/split-screen.md#cost))
+**2026-10-13, `pad-join-assignment`: the pad-to-slot UI is done.**
+`oag_input::pad::Assignment` gained `Seating::Seated` (an unassigned pad takes the
+lowest free human slot, a lost pad frees its slot, a pad past the humans drives
+nothing), `--players N` seats the keyboard and first pad on slot 0 and the rest in
+connection order, and a SPLIT SCREEN row under RACEBOX (oag-extras) opens a "press a
+button to join" screen (`oag_ui_screens::join`, `oag_input::lobby`) whose START goes
+on to Track and Ship Select with the seated count. All **chosen, not measured**; the
+PS2's authored flow is a camera choice (`FE_RACE_CAM_SS`) and a per-player team
+pick, not a device join. See [split-screen.md](../../docs/rendering/split-screen.md).
+A local slot with no device on it (a pad unplugged mid-race, or fewer pads than `--players`) flies as the AI (`split_screen::follow_devices`), because a race now ends only when every person-flown slot has finished. **Open from it**: two real pads on real hardware (the rules are unit-tested over stand-in
+ids, the keyboard path runs end to end; since `per-player-ship-pick` two virtual uinput
+pads also walked the join screen, Track and Ship Select and a race in an Xvfb).
+**2026-10-13, `per-player-ship-pick`: each seat picks its own craft.** The PS2 disc's
+authored `Team SelectionSplit` (both players on one page, top and bottom, READY once
+each confirms) is followed on PS2 Pulse with two seats; HD authors the players taking
+`Team Selection Player 1` then `Player 2` in turn, which every other title and any
+count above two get (chosen). Each seat is driven by its own device and a pick reaches
+slot `i` (`Options::seat_picks`; `--seat-team` headless). Written up in
+[split-screen.md](../../docs/rendering/split-screen.md#ship-select-per-seat). **Still
+open**: ~~HD's front end shows no SPLIT SCREEN row~~ (it always had one, revealed under
+RACEBOX; walked 2026-10-13, see the entry below), stick navigation on a seat's screen, a variant family's
+duplicate check on HD, and where Omega authors its Ship Select screens.
+**2026-10-13, `split-screen-end-race`: the end of the race is every person's.**
+A person's view holds after their own line (lap and clocks held, a `FINISHED` line, the
+driver flying their craft); when the last person finishes one view is drawn
+(`Race::views_drawn`) under end screens that name every person: Pulse's own
+`PopulateMultiplayerTable` (read, network-gated in the original, ours for a split) with
+`PLAYER 1`/`PLAYER 2` and a highlight per person, HD's grid with the same names, the
+built-in table's `P1`/`P2` for Pure and 2048 (whose touch pages summarise one racer). A
+split banks no loyalty, builds no `Rewards`, plays no results voice; restart keeps the
+seats and quit unseats (already the case). `--autopilot` now flies every local seat so
+a headless 2-person race reaches its end. **Found, and wired the same day (below): the PS2 pressing authors
+`EndRace Results Split` and `EndRace Rewards Split`** (two stacked per-player lap tables
+and reward panels, `Player_0`/`Player_1`, two people only; its executable names them
+beside `Split ScreenV/H` and `Kill Game Multiplayer`), see
+[split-end-race.md](../../docs/ui/split-end-race.md).
+**2026-10-13, `pulse-split-pages`: Pulse's two-person screens, both pressings.** `EndRace
+Results Split`, `EndRace Rewards Split` and `Team SelectionSplit` are wired for Pulse on
+the PS2 (the disc's own) and the PSP (the PS2's design, **borrowed**, built from the PSP's
+own assets and labelled so in the loader report; `FrontEnd::borrows_ps2_split_screens`,
+Pulse alone). The geometry bug is fixed (the grid reads each file's own rows). With two people
+each banks their own team's loyalty and `Rewards Split` shows it (chosen). Written up in
+[split-end-race.md](../../docs/ui/split-end-race.md) and
+[selection-screens.md](../../docs/ui/selection-screens.md). **Still open from it**: the PS2
+executable's entry law for these screens (not in a Ghidra project here), the PS2's highlight
+placement (chosen), a live walk on the PS2 pressing and with real pads, the second person's
+speedup-pad column (the race keeps the tally for the first craft), HD's podium for a split,
+per-person records and ghosts, and a still of the shared Ship Select with both crafts.
+**2026-10-13, `split-hud-layout-toml`: the split HUD is data.** A title's split-screen
+layout is `schemas/v1/split-hud.tosd` files (`oag_hud::split_hud`): override, then the
+disc's authored layout (HD and, newly, Omega: ported, and a two-view frame looked at), then ours through
+the fallback layer (`SplitHud_{Pulse,Pure,HD}.toml`, chosen, not measured, Pulse's one
+file for both pressings), then the scaled whole-screen layout; one rule per view shape,
+so three, five and seven views mix. Each view also has a scissor now. See
+[split-screen.md](../../docs/rendering/split-screen.md#hud) and
+[asset-layers.md](../../docs/architecture/asset-layers.md#a-split-screen-hud-layout-file).
+**2026-10-13, `split-hud-vertical`: vertical columns.** A two-view vertical cut reads a `tall`
+rule (`views = [2]`, `aspect = [0.0, 2.4]`) in `SplitHud_Pulse.toml` and `SplitHud_Pure.toml`
+(Pulse gains the Eliminator's kill column and the Pilot Assist indicator, Head2Head's bar is named and not seen drawing; Pure's
+weapon grid is raised clear of the bottom edge) and 2048 has its own `SplitHud_2048.toml`, both
+cuts and every count, mirroring HD's arrangement (2048's horizontal pair changed with it,
+deliberately). HD's authored `vert_` layouts still answer HD. 2048's file checked against
+Omega: Omega's HUD vocabulary is HD's, so `SplitHud_HD.toml` applies there, not wired.
+PS2 Pulse's split HUD, which floated at 76% of the view because the grid's cells are 2.0 by
+1.607 pixels and `hud_views` assumed square ones, is fixed (per-axis units; PSP, Pure, HD and
+2048 byte-identical, PS2 splits moved on purpose). ~~Pure's weapon grid
+is still half clipped in rows, Pulse's strip kill column overlaps the speed bars~~ (both fixed
+2026-10-14, `split-hud-fixes`, as data in the two `SplitHud_*.toml`; Pure's grid on a 32:9
+column too, `pure-tall-32x9`: a `tall-wide` rule from 1.4 up, `-0.14`, chosen, not measured).
+A split Head2Head fields seven opponents and draws the Single Race readout, so its gap bar
+never draws (one view draws it); Tournament is campaign-only. **Still open from it**: Omega's
+`Zone_HUDvert` and its non-authored cases, and a real display.
+**Still open before it**: Time Trial and the Eliminator on Pure and HD and
+HD's Eliminator column are claimed by name and not looked at, the PS2's text reads smaller
+than the PSP's in the same file, and nobody has judged the layouts on a real display.
+
+Split screen is also the one feature with existing authored data to check
+against: the PS2 build's menu XML already has `Team SelectionSplit`/`Track
+CreationSplit` screens and a `MP_Screen.xml` slideshow that this project's
+picker currently strips (`picker::strip_player_suffix`,
+`handover/frontend/pulses-race-box-is-read-both-pressings.md:108`). Worth
+reading that thread before building the front-end leg, since the original's
+screen flow for enabling split screen is already partly RE'd.
+
+## 2. Multi-window - same simulation, different rendering/app-lifecycle risk
+
+**First cut landed 2026-10-14 (lane `multi-window`), `--windows N`, desktop only.** Design,
+verification and the pacing command are in `docs/rendering/multi-window.md` and
+[ADR-0067](../../docs/architecture/adr/0067-a-multi-window-race-is-one-device-and-one-submission-per-window.md).
+What is built: `Gpu` split into the device and an `Output` (window and surface); a `Seat` per further
+window with its own `Framebuffer`; every window runs the whole single-window chain, one encoder and
+one submission each (`Scene::render_view`, `Layer::Window`, `Race::windowed`); window 1 keeps the front
+end, the pause menu and the pointer; a seat window closing hands its slot to the AI
+(`Assignment::unseat` and the existing `follow_devices`); focus is "away" only when no window has it;
+seat windows present with `Mailbox`/`Immediate`; the HD/2048/Omega integrated-GPU rule applies.
+Single-window and split frames are byte-identical to `main` (12 of 12 `--screenshot` pairs).
+**Still open from it** (all in the doc's "Open"): a menu row for the window count; a keyboard per
+window; the pause overlay and the end screens on every window; `--window-monitor` and remembered
+placement; per-window motion blur, FSR 3.1 history and dynamic resolution; the camera-independent
+work once per frame across windows; **pacing on real displays** (cannot be measured under Xvfb: the
+`RUST_LOG=warn,oag=info oag-game --race --windows 2 --no-audio` command and how to read it are in the
+doc); monitor hot-plug.
+
 Same process, same machine, one `RaceSim`, one tick - but up to 8 *OS windows*
 instead of up to 8 viewports in one window (each player's view full-screen in
 their own window, e.g. for a multi-monitor local setup). Simulation-side,
@@ -1055,10 +1266,9 @@ a guess.
     `FrontEnd::ship_preview_pose`). Walked for one person and each seat. Still open: the five 2048-era teams
     are not offered on the screen (their craft sit under `Ships\<id>\<n>`, so `load_teams` finds no
     `hdships\<id>`; showing them needs the `VariantJoin` passed into `Team::hex_cells`/`variant_stats`, their
-    logos under `fe\NewImages\Team_Logos` and a team-level `<Unlock purchase>` rule); the bars' two halves are one
-    grey on Omega's page because `FEGlobals->HD_Grey` resolves to the skin's first block (`HD_Colours`, `0xFF646464`, which
-    the file calls overwritten by `WOHD_Colours`, where it is `0xFF010001`): selecting the live colour template is the
-    next lane and moves every Omega screen;
+    logos under `fe\NewImages\Team_Logos` and a team-level `<Unlock purchase>` rule); ~~the bars' two halves are one
+    grey on Omega's page~~ **done 2026-10-14 (`omega-colour-template`)**: Omega's boot copies `WOHD_Colours` over the
+    base colour block (`BootProfile::colour_template`), so `HD_Grey` is `0xFF010001` and the bar fill shows;
     the authored `ShipDesc`, livery hint and `PadlockText` are not drawn.
   - **2048 seats pick no ship**: no per-player pair is authored (`Team_Definition.xml` is one touch screen).
   - **HD guest join not used**: `FE_GUEST_JOIN` ("PLAYER 2 PRESS START TO JOIN" on HD, "PRESS OPTIONS TO
