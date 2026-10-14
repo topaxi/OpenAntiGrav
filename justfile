@@ -529,7 +529,7 @@ play *ARGS:
     esac
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"
 
-# `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug]`, titles from
+# `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug] [--views 1,2h,2v] [--size WxH]`, titles from
 # pulse pure hd 2048 omega (default all). Builds a release `oag-game` OUTSIDE the lock, then
 # `scripts/bench-render.py` takes the gate lock ($HOME/.cache/oag/gate.lock, the one
 # gate-affected and test-data-affected hold) for the runs only, so a bench runs on a quiet

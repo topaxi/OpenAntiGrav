@@ -28,6 +28,11 @@ fn field(json: &str, key: &str) -> String {
 
 /// Runs a fresh `TICKS`-tick bench into `dir` and returns its summary and CSV.
 fn bench(dir: &std::path::Path, image: &std::path::Path) -> (String, String) {
+    bench_with(dir, image, &[])
+}
+
+/// [`bench`] with `extra` flags after the fixed ones (`--players 2 --split-cut vertical`).
+fn bench_with(dir: &std::path::Path, image: &std::path::Path, extra: &[&str]) -> (String, String) {
     std::fs::create_dir_all(dir).expect("a temp directory");
     let stem = dir.join("race");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
@@ -49,6 +54,7 @@ fn bench(dir: &std::path::Path, image: &std::path::Path) -> (String, String) {
             "--ticks",
             &TICKS.to_string(),
         ])
+        .args(extra)
         .arg("--screenshot")
         .arg(dir.join("unused.png"))
         .env("OAG_RENDER_BENCH_RACE", &stem)
@@ -110,4 +116,46 @@ fn a_capped_race_writes_its_frames_and_replays_to_the_same_hash() {
             "{key} differs between two runs"
         );
     }
+}
+
+/// A two-view race is benched as a split: the summary says two views and the cut, the CSV has a
+/// timestamped scene pass per view, every frame has a CPU time (the whole `render_viewports`
+/// call), and the cut changes the picture and not the race, so both cuts end on one state hash.
+/// Fails on a build that refuses a split again (no files written) or drops the per-view columns.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn a_split_race_is_benched_per_view_and_the_cut_does_not_change_the_race() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let base = std::env::temp_dir().join("oag-render-bench-ground-truth-split");
+    let two = ["--players", "2"];
+    let (horizontal, csv) = bench_with(
+        &base.join("h"),
+        &image,
+        &[&two[..], &["--split-cut", "horizontal"]].concat(),
+    );
+    let (vertical, _) = bench_with(
+        &base.join("v"),
+        &image,
+        &[&two[..], &["--split-cut", "vertical"]].concat(),
+    );
+
+    assert!(horizontal.contains("\"views\": \"2\""), "{horizontal}");
+    assert!(horizontal.contains("\"split_cut\": \"horizontal\""));
+    assert!(vertical.contains("\"split_cut\": \"vertical\""));
+    let header = csv.lines().next().unwrap();
+    assert!(header.ends_with(",gpu_view0_us,gpu_view1_us"), "{header}");
+    assert!(
+        csv.lines()
+            .skip(1)
+            .all(|row| row.split(',').nth(6).is_some_and(|cpu| !cpu.is_empty())),
+        "every frame has a CPU time"
+    );
+    assert_eq!(field(&horizontal, "final_tick"), TICKS.to_string());
+    assert_eq!(
+        field(&horizontal, "final_state_hash"),
+        field(&vertical, "final_state_hash"),
+        "the cut is presentation"
+    );
 }

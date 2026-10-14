@@ -432,6 +432,14 @@ a split race goes through `run_split`). It prints, per run:
 - with `OAG_RENDER_PERF=1`, the last CPU run's per-phase spans and allocations.
 
 
+**The whole-race version (2026-10-14).** `just bench-render --views 1,2h,2v --size 1280x800`
+plays Pulse, Pure and HD from the grid to the last crossing in one view, split horizontally and
+split vertically, records every frame and compares across machines by file name; its figures
+(RX 7800 XT and the Raphael iGPU, with load average) and the steps for the Steam Deck are in
+[render bench](../tools/render-bench.md#split-results-2026-10-14-split-bench). The summary: on the
+discrete card the split is CPU-bound at about 1.5 to 1.9x the CPU of one view; on the iGPU it
+is GPU-bound and adds 6% (Pulse) to 15% (Pure, horizontal) to the pipelined frame, HD 18%.
+
 The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
 reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
 eight views, and `--pvs false` 7,923 at tick 1800, so the old figures were most likely taken
@@ -839,8 +847,20 @@ timestamps), so the row could not be a measurement of this frame. What was measu
 - **Open:** whether blur per view is worth drawing in a split. A view of half the pixels
   would cost about half the single-view figure above (2.4 to 4.7 ms on the Deck at one
   view, so roughly 1 to 2.5 ms a view), but the per-view history and velocity buffers are
-  what rule 3 keeps out; not built here. FSR 3 and `upscale_cost` have the same
-  never-cleared shape and were left alone.
+  what rule 3 keeps out; not built here.
+- **The upscaler rows had the same flaw and were fixed the same way (2026-10-14,
+  `split-bench`).** `Session::upscale_cost` and `Session::upscale_presented_cost` (the
+  overlay's two FSR 3 rows, `FSR3 REN` and `FSR3 OUT`) were plain `Meter`s too: a split
+  has no temporal record, so `resolve_scene` encodes no chain and no reading replaces the
+  last one, and the same happens when the setting turns the upscaler off or its shader fails
+  to build. Both are `ChainCost` now. The rule moved into one method,
+  `ChainCost::after_frame(frame, had_scene, encoded)`, which blur, HD bloom and the upscaler
+  all call at the end of the frame (a frame with a scene that did not run the chain idles
+  it; a menu frame leaves it alone), and a stall drops the upscaler's readings as it does
+  the blur's. The two halves idle together because `resolve_scene` answers for both. The
+  frame loop logs the edge at debug level (`upscaler not run on frame N`). Tested by
+  `perf::chain::tests::only_a_frame_with_a_scene_and_no_chain_idles_it`; no picture changes.
+  Whether the DRS controller reads these meters: it does not, the overlay alone does.
 
 ## Who plays which slot (chosen, not measured)
 
