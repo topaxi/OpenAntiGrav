@@ -20,13 +20,12 @@ const BAND: [f32; 4] = [0.0, 0.0, 0.0, 0.6];
 impl super::Session {
     /// The line under the pause as a draw list in the overlay grid `grid`
     /// (width, height), or nothing: in a race with one person, while the race
-    /// runs, and while the countdown's own art is on screen.
+    /// runs, and through the countdown, which has no line: its art is the title's
+    /// own where it has one, and where it has none nothing is drawn (never a
+    /// stand-in for the art).
     pub(crate) fn pause_line(&self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
         use oag_ui::frontend::{Align, Draw};
-        let Stage::Race(stage) = &self.stage else {
-            return Vec::new();
-        };
-        if !several_people(self.controls.assignment()) {
+        if !matches!(self.stage, Stage::Race(_)) || !several_people(self.controls.assignment()) {
             return Vec::new();
         }
         let table = Table {
@@ -36,9 +35,6 @@ impl super::Session {
         let Some(line) = line(self.pause, self.wall, table) else {
             return Vec::new();
         };
-        if line == Line::Resuming && stage.countdown.is_some() {
-            return Vec::new();
-        }
         let table = oag_ui::strings::project_table(self.settings.language.as_deref());
         let text = |id: &str, fills: &[String]| {
             fills.iter().fold(table.get_or_id(id).to_string(), |text, fill| {
@@ -53,7 +49,7 @@ impl super::Session {
             } => text(strings::OWNED, &[number(player), clock(seconds_left)]),
             Line::Open { player: Some(player) } => text(strings::OPEN, &[number(player)]),
             Line::Open { player: None } => text(strings::OPEN_UNOWNED, &[]),
-            Line::Resuming => text(strings::RESUMING, &[]),
+            Line::Resuming => return Vec::new(),
         };
         let top = grid.1 - LINE_ABOVE_BOTTOM;
         vec![

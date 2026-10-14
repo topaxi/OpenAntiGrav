@@ -194,4 +194,3 @@ OAG_MODS_BUILT_IN = { text = "EINGEBAUT", human = false }
 OAG_PAUSE_OWNED = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN IN %s FORTSETZEN", human = false }
 OAG_PAUSE_OPEN = { text = "SPIELER %s HAT PAUSIERT - JEDER KANN FORTSETZEN", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSIERT - JEDER KANN FORTSETZEN", human = false }
-OAG_PAUSE_RESUMING = { text = "FORTSETZUNG", human = false }

@@ -231,8 +231,6 @@ pub mod strings {
     pub const OPEN: &str = "OAG_PAUSE_OPEN";
     /// A pause nobody pressed for: the window was away.
     pub const OPEN_UNOWNED: &str = "OAG_PAUSE_OPEN_UNOWNED";
-    /// The countdown, on a title with no countdown art of its own to draw.
-    pub const RESUMING: &str = "OAG_PAUSE_RESUMING";
 }
 
 #[cfg(test)]

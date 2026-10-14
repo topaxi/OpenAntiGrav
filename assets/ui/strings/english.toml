@@ -367,4 +367,3 @@ OAG_MODS_BUILT_IN = { text = "BUILT IN", human = false }
 OAG_PAUSE_OWNED = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME IN %s", human = false }
 OAG_PAUSE_OPEN = { text = "PLAYER %s PAUSED - ANYONE CAN RESUME", human = false }
 OAG_PAUSE_OPEN_UNOWNED = { text = "PAUSED - ANYONE CAN RESUME", human = false }
-OAG_PAUSE_RESUMING = { text = "RESUMING", human = false }

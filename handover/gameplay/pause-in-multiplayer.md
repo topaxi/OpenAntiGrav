@@ -28,9 +28,10 @@ Landed 2026-10-14 (`pause-timeout`, all chosen, not measured):
 ## Open: the local rule's edges
 
 - The countdown art is Pulse's `Cockpit_321GO.vex` only. HD, Pure, 2048 and Omega
-  author no screen-space countdown, so they show the line `RESUMING` and nothing
-  else; a countdown drawn off HD's `321go` billboards or 2048's `321Go_2048.vex`
-  would be new art placement work. 2048 and Omega were not run.
+  author no screen-space countdown, so they draw nothing while the 3 s countdown
+  holds the race (by design, no stand-in); a countdown drawn off HD's `321go`
+  billboards or 2048's `321Go_2048.vex` would be new art placement work. 2048 and
+  Omega were not run.
 - The art sits at the widget's authored spot (63% down, centred), per view of a
   split, so it lands over the craft in a short view. Not tuned.
 - No resume row exists (the pause draws no menu), so "click the resume row" is

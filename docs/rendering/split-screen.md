@@ -811,8 +811,10 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   `ready` is raised as the countdown starts and `go` as it ends, on titles that voice their
   start (`Race::raise_start_cue`; Pulse only). **No other title has screen-space art**:
   Pure authors `Ready_GO.vex` and no `Cockpit321Go`, HD's `hud_ready_go.xml` is disabled
-  (`aMode3D`), and HD, Pure, 2048 and Omega draw only the line, which reads `RESUMING`
-  while the countdown runs (checked live on HD; 2048 and Omega were not run).
+  (`aMode3D`), so HD, Pure, 2048 and Omega draw nothing during the countdown, by
+  design: no stand-in for art the title does not author (checked live on HD, which holds
+  the frozen race for 3 s with nothing on screen but the race; 2048 and Omega were not
+  run).
 - **A click on a paused race is slot 0's Start**, through the same owner rule, so a mouse
   cannot lift player 2's pause inside their 30 s. The whole window is the target: there is
   no resume row, since the pause draws no menu.

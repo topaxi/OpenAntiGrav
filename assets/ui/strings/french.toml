@@ -298,5 +298,4 @@ ids = [
     "OAG_PAUSE_OWNED",
     "OAG_PAUSE_OPEN",
     "OAG_PAUSE_OPEN_UNOWNED",
-    "OAG_PAUSE_RESUMING",
 ]

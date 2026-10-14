@@ -152,6 +152,23 @@ fn the_start_voice_cues_are_raised_where_the_title_has_them() {
         hash,
         "a cue is an output, not state"
     );
+    // The session raises GO at the top of the tick that lets the race move; that
+    // tick must not drop it before the sound step drains it.
+    let queued = pulse.pending_cues().len();
+    pulse.tick(&PlayerInputs::none());
+    assert!(
+        pulse.pending_cues().len() >= queued,
+        "a tick dropped a raised cue: {:?}",
+        pulse.pending_cues()
+    );
+    assert_eq!(
+        pulse.pending_cues()[..queued]
+            .iter()
+            .map(|event| event.cue)
+            .collect::<Vec<_>>(),
+        vec![Cue::Ready, Cue::Go, Cue::Go],
+        "the raised cues are still there, in order"
+    );
 
     let Some(mut pure) = loaded("data/images/pure-psp-usa.chd") else {
         return;
