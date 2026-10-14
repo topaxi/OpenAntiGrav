@@ -502,15 +502,18 @@ resolves the image as the game does when `--image` is left out):
 
 ```sh
 # 1. The server: one person, the AI on the rest of the grid, Pulse's circuit 01.
-cargo run -p oag-net --bin oag-server -- --image data/images/pulse-psp-eu.chd \
+cargo run --release -p oag-net --bin oag-server -- --image data/images/pulse-psp-eu.chd \
   --track 'Data\Environments\01_Track\track.vex' --people 1 --hash-out /tmp/oag.hash
 # prints: listening on 127.0.0.1:4433, then: cert-hash <64 hex digits>
 
 # 2. The client, in a second terminal: the game, straight into the server's race,
 #    from the same image (a different pressing is refused at the join).
-cargo run -p oag-game -- data/images/pulse-psp-eu.chd --connect 127.0.0.1:4433 \
-  --cert-hash @/tmp/oag.hash
+just play --connect 127.0.0.1:4433 --cert-hash @/tmp/oag.hash
 ```
+
+Both are release builds, as `just play` is: a debug build (`cargo run` without
+`--release`) turns on wgpu's Vulkan validation, which prints loader and
+`OutputNotConsumed` messages in any race, networked or not, and runs far slower.
 
 `--cert-hash` takes the 64 hex digits the server printed, or `@FILE` for the file
 `--hash-out` wrote. Server flags: `--people N` (each client takes the next seat, grid
