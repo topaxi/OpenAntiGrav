@@ -342,7 +342,7 @@ impl Session {
         let extent = seat.framebuffer.extent();
         let inside = (0.0, 0.0, extent.0 as f32, extent.1 as f32);
         let alpha = match &self.stage {
-            Stage::Race(_) => oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused),
+            Stage::Race(_) => oag_raceplay::between_ticks::frame_alpha(&self.clock, !self.paused()),
             _ => 1.0,
         };
         let pvs_culling = self.pvs_culling();
