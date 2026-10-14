@@ -392,6 +392,26 @@ second. **Which colour channel each arm lights, and the far-target alpha's
 and
 [The far-target alpha step is a live depth-buffer sample](#the-far-target-alpha-step-is-a-live-depth-buffer-sample-not-a-tuning-constant).
 
+## Where the law runs in this engine: the simulation, and the screen
+
+The law above runs twice, on purpose. Each person-flown slot's **lock** is
+`RaceSim::locks[slot]` (`oag_raceplay::lock`): the same `oag_race::sight::Sight`,
+advanced from the world alone over a projection through a fixed virtual camera (the
+team's far chase rig at rest, the authored field of view plus the speed widen, the
+title's HUD grid), hashed while the slot holds a Missile or a LeachBeam, and read
+by the shot. The **reticle the player sees** is a second `Sight` advanced through
+the camera on screen to put the brackets on the craft, and it is handed the lock
+with `Sight::follow` rather than deciding it, so the red, the tone and the shot
+cannot disagree. The law's constants are recovered (above); the virtual camera is
+**chosen, not measured**, and differs from the picture's by the eye's spring lag,
+the player's field-of-view setting, the cockpit and close views and the aspect fit.
+Measured on the unchanged tree and after: at rest the lock first reads taken at
+tick 48 (Missile), 20 (Pulse LeachBeam) and 48 (HD LeachBeam, on the Missile's law),
+dead ahead and off to a side; over 3600 ticks of an autopilot race the LeachBeam lock
+is identical and the Missile's agrees on 96% of ticks (twelve windows of 1 to 37
+ticks, the sim lock the steadier), and the screenshot sets, countdown and moving,
+are byte-identical.
+
 ## The tone: `~ROCKLOCK`, one voice with two states
 
 `HudSight_Update` publishes a small state to a global,

@@ -84,7 +84,12 @@ impl Sight {
     }
 
     /// One frame of `FUN_0881e8c8`, given where the held target projected.
-    pub(super) fn update_leach(&mut self, dt: f32, target: Option<Projected>) -> State {
+    pub(super) fn update_leach(
+        &mut self,
+        dt: f32,
+        target: Option<Projected>,
+        lock: Option<bool>,
+    ) -> State {
         let on_screen = target.map(|p| p.screen).filter(|s| {
             (0.0..self.screen[0]).contains(&s[0]) && (0.0..self.screen[1]).contains(&s[1])
         });
@@ -113,7 +118,10 @@ impl Sight {
             step *= LEACH_OPEN_RATE;
         }
         self.extent = super::ease_toward(self.extent, wanted, step);
-        self.locked = self.extent == reference;
+        self.locked = match lock {
+            Some(locked) => locked && visible,
+            None => self.extent == reference,
+        };
 
         self.spin = if visible {
             let rate = if self.locked {

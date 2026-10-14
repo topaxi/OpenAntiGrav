@@ -162,6 +162,13 @@ pub struct RaceSim {
     /// Read through [`Self::damage_rules`] so contact and weapon damage agree
     /// with the pads the load kept.
     pub(super) weapons_on: bool,
+    /// Each person-flown slot's lock: the lock-on law run off the world alone,
+    /// with no camera. Hashed for a slot holding a Missile or a LeachBeam. See
+    /// [`crate::lock`].
+    pub(super) locks: [oag_race::sight::Sight; oag_gameplay::MAX_SHIPS],
+    /// The chase rig the locks' virtual camera is built from: the team's far
+    /// external rig, at rest. Set at load, never changes. See [`crate::lock`].
+    pub(super) lock_rig: oag_render::camera::chase::ChaseParams,
     /// The kill count that ends an Eliminator event - see
     /// [`Setup::eliminator_kill_target`].
     pub(super) eliminator_kill_target: u32,

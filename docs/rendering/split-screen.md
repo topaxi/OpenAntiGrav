@@ -347,9 +347,10 @@ change, `Camera_SubmitScene`'s viewport count, see
 - **The reticle of a view that is not the primary's is display only.** It is
   projected through that slot's own chase camera and field of view
   (`SlotHud::sight`, fed by `Race::sight_target(slot)`) at the title's HUD aspect, so
-  a narrow view sees a slightly wider vertical field than it assumes. The weapons
-  code reads the primary's `RaceView::sight`, so another person's fire does not wait
-  for their lock (open).
+  a narrow view sees a slightly wider vertical field than it assumes. It is told the
+  slot's lock, which is simulation state (`RaceSim::locks`, `crates/raceplay/src/lock.rs`):
+  every person-flown slot's shot waits for its own lock, as the primary's does
+  (2026-10-14; a second pad runs the primary's law, **chosen, not measured**).
 
 ## The end of the race
 

@@ -589,16 +589,16 @@ impl Race {
                 };
             }
         }
-        // The lock-on reticle, on the fixed tick beside the camera and the
-        // exhaust and for the same reason: a headless capture calls only
-        // `tick`, so a reticle advanced in the frame loop would be at a
-        // different extent in a screenshot than in a window at the same tick
-        // count. **After the camera**, because it projects through it.
-        //
-        // **Kept in a sim-only tick, but only while the primary holds a lock
-        // weapon**: `spend_pickup` reads the reticle's lock back (see
-        // `Race::tick_sim_only`), and nothing else does.
-        if self.draws() || self.sight_held(primary).is_some() {
+        // The lock-on, simulation state advanced from the world alone
+        // ([`crate::lock`]), also in a sim-only tick: the next tick's shot reads
+        // it. Then the reticle the player sees, on the fixed tick beside the
+        // camera and the exhaust and for the same reason: a headless capture
+        // calls only `tick`, so a reticle advanced in the frame loop would be at
+        // a different extent in a screenshot than in a window at the same tick
+        // count. **After the camera**, because it projects through it, and only
+        // when the tick is drawn: it follows the lock and decides nothing.
+        self.advance_locks();
+        if self.draws() {
             self.update_sight();
         }
 

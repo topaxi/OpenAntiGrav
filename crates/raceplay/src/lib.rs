@@ -181,6 +181,7 @@ pub mod launch_hover;
 pub mod leach_strip;
 mod load;
 pub mod loader_log;
+mod lock;
 mod mag_floor_fx;
 mod magstrip_wake;
 mod missile_blast;

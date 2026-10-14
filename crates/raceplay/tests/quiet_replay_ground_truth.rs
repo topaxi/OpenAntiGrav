@@ -11,8 +11,8 @@
 //!
 //! The unit tests beside `crates/raceplay/src/tests/reconcile.rs` pin the claim
 //! on a fixture: the hash after N quiet ticks is the hash after N normal ticks.
-//! A fixture has no walls to scrape, no pickups to spend and no reticle to lock
-//! with, and each of those is a place the quiet path skips view work that
+//! A fixture has no walls to scrape, no pickups to spend and no field to lock
+//! across, and each of those is a place the quiet path skips view work that
 //! sits next to simulation work. These tests are the same claim where those
 //! happen.
 
@@ -177,9 +177,10 @@ struct Window {
     spark_ignitions: u32,
 }
 
-/// The primary's Missile takes its lock from the reticle, which is view state.
-/// A quiet replay that skipped the reticle would fire the same shot unlocked and
-/// leave the hash behind within a tick or two of the launch.
+/// The primary's Missile takes its lock from the simulation's per-slot lock,
+/// which a sim-only tick advances like any other state. A quiet replay that
+/// skipped it would fire the same shot unlocked and leave the hash behind within
+/// a tick or two of the launch.
 ///
 /// Run inside the start-line countdown, where the grid is still and a craft is
 /// in the window for the whole 140 ticks.
@@ -201,11 +202,9 @@ fn a_quiet_replay_fires_the_same_locked_missile() {
     );
 }
 
-/// The same shot with the field underway. In the countdown above the grid and
-/// the chase camera barely move, so a camera the quiet path leaves where it was
-/// and one that follows the craft project the same reticle. Here slot 0 covers
-/// several units a tick, the quiet camera does not follow it, and the lock the
-/// primary's Missile reads from the reticle can differ between the two paths.
+/// The same shot with the field underway. Here slot 0 covers several units a
+/// tick and the quiet camera does not follow it; the lock reads no camera, so the
+/// two paths still take the same lock.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack() {
@@ -226,8 +225,8 @@ fn a_quiet_replay_fires_the_same_locked_missile_in_a_moving_pack() {
 }
 
 /// The lock forms **inside** the window: the Missile is handed over as it opens,
-/// so the reticle's 0.8 s hold runs entirely under the quiet path's frozen
-/// camera, and the primary fires once it has locked.
+/// so the 0.8 s hold runs entirely under the quiet path, and the primary fires
+/// once it has locked.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_quiet_replay_locks_a_missile_inside_the_window() {

@@ -456,19 +456,14 @@ pub struct RaceView {
     /// applies the loader's own degrees-to-radians scale, recovered at
     /// confidence 92 - see `docs/ghidra/functions/psp-pulse-usa/camera.md`.
     pub(super) flap_graphics: oag_gameplay::AirbrakeGraphics,
-    /// The lock-on reticle, and what its tone is doing.
+    /// The lock-on reticle the player sees, and what its tone is doing.
     ///
-    /// **Render-only state**, on `Race` rather than in `World` for exactly the
-    /// reason [`Self::exhaust`] is: the reticle is what the screen shows, it
-    /// must not move a determinism hash, and the simulation does not know a
-    /// renderer exists. The *lock it draws* is recomputed here every tick from
-    /// the world rather than stored on a ship - see [`Race::update_sight`].
-    ///
-    /// The acquisition rule it carries is recovered and is **not** yet wired
-    /// into firing: `Ship_FireHeldWeapon` gates the target it passes on the
-    /// same flag this sets, so an unlocked press in the original fires a dumb
-    /// missile. Doing that here changes which shots are guided and is its own
-    /// change; see the handover thread.
+    /// **Render-only state**: the brackets, their closing, their colour. It is
+    /// advanced through the camera the player is looking through, so it sits on
+    /// the craft on screen, and it **follows** the lock rather than deciding it:
+    /// whether a lock is taken is `RaceSim::locks`, advanced from the world with
+    /// no camera and read by the shot (see [`crate::lock`] and
+    /// [`sight::Sight::follow`]). Nothing in the simulation reads this field.
     pub(super) sight: sight::Sight,
     /// What [`Self::sight`] said last tick, which is what the tone plays off.
     pub(super) sight_state: sight::State,

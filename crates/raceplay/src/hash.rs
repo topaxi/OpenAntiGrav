@@ -126,6 +126,21 @@ impl RaceSim {
             hasher.write_u64(tick);
         }
 
+        // The lock of every slot holding a weapon that locks. The weapon is
+        // hashed with the world, so the stream's shape is still a function of
+        // hashed state, and a race that holds neither weapon hashes as it did
+        // before the lock lived here.
+        for (slot, lock) in self.locks.iter().enumerate() {
+            let holds = matches!(
+                self.world.ships[slot].pickup.weapon,
+                Some(oag_tables::weapons::Weapon::Missile | oag_tables::weapons::Weapon::LeachBeam)
+            );
+            if holds && self.world.person_flown(slot) {
+                hasher.write_u8(slot as u8);
+                lock.hash_lock(&mut hasher);
+            }
+        }
+
         hasher.finish()
     }
 }

@@ -40,7 +40,7 @@ pub(super) use visuals::{
 /// before the projection runs. This only has to be far enough that no craft the
 /// sight would draw is clipped by it, which at 250 units of draw range anything
 /// past a few thousand is.
-const SIGHT_FAR: f32 = 10_000.0;
+pub(super) const SIGHT_FAR: f32 = 10_000.0;
 
 impl Race {
     /// Hands a time trial or a speed lap its free Turbo.
@@ -447,17 +447,17 @@ impl Race {
                     // Wipeout HD's LeachBeam reticle is a different function, so it
                     // keeps firing off the window alone. An opponent has no reticle.
                     //
-                    // **A second person has no reticle, so no hold.** The
+                    // **Every person-flown slot holds the lock.** The
                     // [`Race::sight_target`] window is computed for `slot` itself,
-                    // from its own craft; only the primary's reticle adds the
-                    // `0.34` s hold on top, because it is the only one that
-                    // exists. Every other person-flown slot fires off the window
-                    // alone, as an opponent does. **Chosen, not measured**: the
-                    // original has one reticle, and what a second pad's sight
-                    // would hold is not recovered.
-                    let primary = self.sim.world.primary_slot();
+                    // from its own craft, and [`Race::lock_taken`] adds the
+                    // `0.34` s closing on top - the simulation's lock, run off
+                    // the world with no camera, for the primary and a second pad
+                    // alike. An opponent fires off the window alone. **Chosen,
+                    // not measured**: the original has one reticle, and what a
+                    // second pad's sight would hold is not recovered; a second
+                    // pad runs the primary's law.
                     let target = self.sight_target(slot).filter(|_| {
-                        slot != primary || !self.view.sight.leach_law() || self.view.sight.locked()
+                        !self.sim.locks[slot].leach_law() || self.lock_taken(slot).unwrap_or(true)
                     });
                     self.sim.world.leach_beam = Some(match target {
                         Some(target) => {
@@ -857,10 +857,11 @@ impl Race {
     /// `entity+0x860 & 1` is set, and that bit is written by `HudSight_Update`
     /// alone - the reticle, which this project has found no evidence runs for
     /// anything but the craft the HUD is drawn for. So the craft that owns the
-    /// reticle (`slot == primary_slot()`) additionally needs [`RaceView::sight`] to say
-    /// [`sight::Sight::locked`] - held on screen past [`sight::HOLD_SECONDS`] -
-    /// before its candidate is passed through; every other slot's candidate is
-    /// used as soon as `lock` finds one, exactly as before this gate landed.
+    /// reticle (every person-flown slot) additionally needs its simulation lock
+    /// ([`Race::lock_taken`]: the reticle law over a camera-free projection, held
+    /// past [`sight::HOLD_SECONDS`]) before its candidate is passed through; an
+    /// opponent's candidate is used as soon as `lock` finds one, exactly as
+    /// before this gate landed.
     /// **Not recovered and not ported**: whether an opponent's craft has its own
     /// copy of that bit and something in the original ever sets it - if it does
     /// not, every AI-fired missile in the original is unguided regardless of
@@ -906,15 +907,11 @@ impl Race {
             stats,
             self.sim.course.as_ref().map(oag_race::Course::length),
         );
-        // Only the craft the reticle is drawn for needs the extra hold - see
+        // Only a person-flown craft needs the extra hold - see
         // "The lock test is shared; the hold is not" above. A press before the
         // brackets close still fires, same as an opponent's shot always does;
         // it just carries no candidate through.
-        let target = if slot == self.sim.world.primary_slot() {
-            candidate.filter(|_| self.view.sight.locked())
-        } else {
-            candidate
-        };
+        let target = candidate.filter(|_| self.lock_taken(slot).unwrap_or(true));
         // `target` is passed through as it comes, `None` included: that is the
         // original's null pointer, and `Missile_Update` skips its whole guidance
         // block on it rather than treating it as an error.
