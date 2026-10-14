@@ -405,9 +405,12 @@ with `Sight::follow` rather than deciding it, so the red, the tone and the shot
 cannot disagree. The law's constants are recovered (above); the virtual camera is
 **chosen, not measured**, and differs from the picture's by the eye's spring lag,
 the player's field-of-view setting, the cockpit and close views and the aspect fit.
-Measured on the unchanged tree and after: the lock first reads taken at tick 48
-(Missile), 20 (Pulse LeachBeam) and 48 (HD LeachBeam, on the Missile's law), dead
-ahead and off to a side, and the eight-frame screenshot set is byte-identical.
+Measured on the unchanged tree and after: at rest the lock first reads taken at
+tick 48 (Missile), 20 (Pulse LeachBeam) and 48 (HD LeachBeam, on the Missile's law),
+dead ahead and off to a side; over 3600 ticks of an autopilot race the LeachBeam lock
+is identical and the Missile's agrees on 96% of ticks (twelve windows of 1 to 37
+ticks, the sim lock the steadier), and the screenshot sets, countdown and moving,
+are byte-identical.
 
 ## The tone: `~ROCKLOCK`, one voice with two states
 

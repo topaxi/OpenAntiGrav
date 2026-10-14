@@ -149,8 +149,12 @@ virtual camera, the team's far chase rig at rest at the authored field of view p
 the speed widen, in the title's HUD grid - no spring lag, shake, boost kick,
 field-of-view setting or cockpit view, which is what the picture's reticle still has
 (it advances only on a drawn tick, through the real camera, and is told the lock by
-`Sight::follow`). It times the same: first lock at tick 48, 20 and 48 for the
-Missile, the Pulse LeachBeam and Wipeout HD's LeachBeam, as before the change.
+`Sight::follow`). Timing: at rest the first lock is tick 48, 20 and 48 for the
+Missile, the Pulse LeachBeam and Wipeout HD's LeachBeam, as before the change; over
+3600 ticks of an autopilot race the LeachBeam lock is identical tick for tick and the
+Missile's agrees on 96% of ticks, differing in twelve windows of 1 to 37 ticks (the
+sim lock is held 146 ticks more and re-forms less often, since the real camera's eye
+lag makes the old reticle drop after a target switch or in a bend).
 `set_sight_screen` and `set_sight_dialect` are configuration the lock reads, so a
 server calls them as a client does. Opponents have no lock (their shot takes the
 window's candidate at once), unchanged. Pinned by `tests::lock` (the camera cannot
