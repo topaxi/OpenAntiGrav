@@ -1,0 +1,77 @@
+<!doctype html><meta charset=utf-8><title>popup probe</title>
+<body style="font:14px monospace">
+<button id=go style="font-size:24px">open popup + start</button>
+<pre id=out></pre>
+<script>
+const P = window.__probe = { log: [], frames: {main:0, popup:0}, keys: [], padPopup: null, padMain: null, errors: [] };
+const L = (...a) => { const s = a.join(' '); P.log.push(s); document.getElementById('out').textContent = P.log.slice(-30).join('\n'); };
+window.onerror = (m) => P.errors.push(String(m));
+const q = new URLSearchParams(location.search);
+const sameOriginUrl = q.get('popupurl'); // e.g. popup.html (served with same headers)
+const go = async () => {
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    const fmt = navigator.gpu.getPreferredCanvasFormat();
+    L('adapter ok', fmt, 'crossOriginIsolated', crossOriginIsolated);
+    const popup = window.open(sameOriginUrl || '', 'p2', 'popup,width=640,height=360');
+    P.popupOpened = !!popup;
+    if (!popup) { L('window.open returned null'); return; }
+    await new Promise(r => setTimeout(r, 300));
+    const pdoc = popup.document;
+    pdoc.body.style.margin = '0';
+    const c1 = document.createElement('canvas'); c1.width = 640; c1.height = 360; c1.style.cssText = 'width:640px;height:360px';
+    document.body.appendChild(c1);
+    const c2 = pdoc.createElement('canvas'); c2.width = 640; c2.height = 360; c2.style.cssText = 'width:640px;height:360px;display:block';
+    pdoc.body.appendChild(c2);
+    P.cross = { c2IsMainCanvasInstance: c2 instanceof HTMLCanvasElement, c2PopupInstance: c2 instanceof popup.HTMLCanvasElement,
+                coi: popup.crossOriginIsolated, opener: popup.opener === window };
+    L('cross-realm', JSON.stringify(P.cross));
+    const ctx1 = c1.getContext('webgpu'); ctx1.configure({ device, format: fmt, alphaMode: 'opaque' });
+    const ctx2 = c2.getContext('webgpu'); ctx2.configure({ device, format: fmt, alphaMode: 'opaque' });
+    L('both contexts configured with one device');
+    const draw = (ctx, r, g, b) => {
+      const enc = device.createCommandEncoder();
+      const pass = enc.beginRenderPass({ colorAttachments: [{ view: ctx.getCurrentTexture().createView(), loadOp: 'clear', clearValue: { r, g, b, a: 1 }, storeOp: 'store' }] });
+      pass.end(); device.queue.submit([enc.finish()]);
+    };
+    let t0 = performance.now();
+    const loop1 = () => { P.frames.main++; draw(ctx1, (P.frames.main % 60) / 60, 0, 0.5); window.requestAnimationFrame(loop1); };
+    const loop2 = () => { P.frames.popup++; draw(ctx2, 0, (P.frames.popup % 60) / 60, 0.5); popup.requestAnimationFrame(loop2); };
+    // 'single' mode: one main rAF drives both canvases
+    if (q.get('mode') === 'single') {
+      const both = () => { P.frames.main++; P.frames.popup++; draw(ctx1, (P.frames.main % 60) / 60, 0, 0.5); draw(ctx2, 0, (P.frames.main % 60) / 60, 0.5); window.requestAnimationFrame(both); };
+      both();
+    } else { loop1(); loop2(); }
+    // input
+    pdoc.addEventListener('keydown', e => P.keys.push('popup:' + e.code));
+    document.addEventListener('keydown', e => P.keys.push('main:' + e.code));
+    pdoc.addEventListener('pointerdown', e => P.keys.push('popup:pointer'));
+    P.focus = () => ({ mainHasFocus: document.hasFocus(), popupHasFocus: popup.document.hasFocus(), mainVis: document.visibilityState, popupVis: popup.document.visibilityState });
+    const pads = (nav) => Array.from(nav.getGamepads()).filter(Boolean).map(g => ({ id: g.id.slice(0, 30), buttons: g.buttons.map(b => b.pressed ? 1 : 0).join(''), axes: g.axes.map(a => a.toFixed(2)).join(','), ts: Math.round(g.timestamp) }));
+    P.samples = [];
+    setInterval(() => {
+      P.padMain = pads(navigator); P.padPopup = pads(popup.navigator);
+      P.samples.push({ t: Math.round(performance.now()), main: P.padMain, popup: P.padPopup, focus: P.focus(), frames: { ...P.frames } });
+      if (P.samples.length > 600) P.samples.shift();
+    }, 100);
+    window.addEventListener('gamepadconnected', e => P.keys.push('main:gamepadconnected'));
+    popup.addEventListener('gamepadconnected', e => P.keys.push('popup:gamepadconnected'));
+    P.fs = [];
+    window.__c2 = c2;
+    pdoc.addEventListener('click', () => { c2.requestFullscreen().then(() => P.fs.push('popup-click ok, popup fsElement=' + !!popup.document.fullscreenElement + ' main fsElement=' + !!document.fullscreenElement), e => P.fs.push('popup-click ERR ' + e)); });
+    document.addEventListener('click', e => { if (e.target.id === 'go') return; c2.requestFullscreen().then(() => P.fs.push('opener-click on popup canvas ok'), e => P.fs.push('opener-click on popup canvas ERR ' + e)); });
+    setInterval(() => {
+      const fmt = (l) => l.length ? l.map(g => g.id + ' btn=' + g.buttons + ' axes=' + g.axes).join(' | ') : '(no pad listed - press a button on it)';
+      const o = [...P.log.slice(-4), '', 'frames main/popup: ' + P.frames.main + '/' + P.frames.popup, JSON.stringify(P.focus()),
+        'opener navigator.getGamepads(): ' + fmt(P.padMain || []), 'popup  navigator.getGamepads(): ' + fmt(P.padPopup || []),
+        'keys seen: ' + P.keys.slice(-8).join(' '), 'fullscreen: ' + (P.fs || []).join('; ')];
+      document.getElementById('out').textContent = o.join('\n');
+    }, 250);
+    P.popup = popup;
+  } catch (e) { P.errors.push(String(e && e.stack || e)); L('ERR', e); }
+};
+document.getElementById('go').onclick = go;
+if (q.get('auto')) { setTimeout(go, 500); }
+if (q.get('log')) setInterval(() => { try { const s = P.samples && P.samples[P.samples.length-1]; if (s) navigator.sendBeacon('/log', JSON.stringify({ ...s, keys: P.keys.slice(-6), errors: P.errors })); } catch(e){} }, 500);
+</script>
