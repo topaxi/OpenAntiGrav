@@ -57,18 +57,15 @@ pub enum Action {
     /// screen launches a race here - see `oag_ui_screens::campaign`'s own module doc
     /// for why, and the `campaign` handover thread's "Next Steps".
     OpenCampaign,
-    /// Opens the "press a button to join" screen that sets up a split-screen
-    /// race - see `oag_ui_screens::join` and `crate::main::session::join` in
-    /// `oag-game`. Reached from the built-in `oag-extras` mod's RACEBOX row;
-    /// the screen goes on to the race box's own Track and Ship Select.
-    OpenSplitScreen,
-    /// The main menu's SPLIT SCREEN VERTICAL row, `FE_RACE_CAM_SS` on the PS2 pressing: opens
-    /// the RACE page as a split-screen race box, and the race is cut left and right. See
-    /// `crate::main::session::join` in `oag-game`.
-    OpenSplitVertical,
-    /// The main menu's SPLIT SCREEN HORIZONTAL row, `FE_RACE_CAM_SSH`: the same, cut top and
-    /// bottom.
-    OpenSplitHorizontal,
+    /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
+    /// the people ("press a button to join"), lays out the windows and goes on to the RACE
+    /// page and Track and Ship Select - see `oag_ui_screens::join` and
+    /// `crate::main::session::multiplayer` in `oag-game`.
+    OpenMultiplayerLocal,
+    /// A row for something this build does not have yet (the MULTIPLAYER page's LAN and
+    /// ONLINE). It is inert: drawn dimmed, focusable so its subtitle can say so, and refusing
+    /// the confirm with the decline cue ([`super::Menu::is_disabled`]).
+    ComingLater,
 }
 
 impl Action {
@@ -84,9 +81,8 @@ impl Action {
             Self::RenamePilot => "rename_pilot",
             Self::DeletePilot => "delete_pilot",
             Self::OpenCampaign => "open_campaign",
-            Self::OpenSplitScreen => "split_screen",
-            Self::OpenSplitVertical => "split_screen_vertical",
-            Self::OpenSplitHorizontal => "split_screen_horizontal",
+            Self::OpenMultiplayerLocal => "multiplayer_local",
+            Self::ComingLater => "coming_later",
         }
     }
 
@@ -102,16 +98,15 @@ impl Action {
             "rename_pilot" => Some(Self::RenamePilot),
             "delete_pilot" => Some(Self::DeletePilot),
             "open_campaign" => Some(Self::OpenCampaign),
-            "split_screen" => Some(Self::OpenSplitScreen),
-            "split_screen_vertical" => Some(Self::OpenSplitVertical),
-            "split_screen_horizontal" => Some(Self::OpenSplitHorizontal),
+            "multiplayer_local" => Some(Self::OpenMultiplayerLocal),
+            "coming_later" => Some(Self::ComingLater),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 11] {
+    pub fn all() -> [Self; 10] {
         [
             Self::LaunchRace,
             Self::LaunchRemix,
@@ -121,9 +116,8 @@ impl Action {
             Self::RenamePilot,
             Self::DeletePilot,
             Self::OpenCampaign,
-            Self::OpenSplitScreen,
-            Self::OpenSplitVertical,
-            Self::OpenSplitHorizontal,
+            Self::OpenMultiplayerLocal,
+            Self::ComingLater,
         ]
     }
 }
@@ -304,15 +298,6 @@ pub enum ValueSource {
     /// strings (`oag_game::boot::RaceSetup::weapon_choices`). Empty only if the
     /// list will not read; a title with no such list has the row dropped.
     Weapons,
-    /// The people the race box's `PLAYERS` row offers, off the disc's own
-    /// `NumberOfPlayers` list (`oag_game::boot::RaceSetup::players`). Empty only if the
-    /// list will not read; a title whose race box authors none has the row dropped
-    /// (`Definition::drop_rows_picked_on_screen`).
-    PlayerCounts,
-    /// The cuts the race box's `SPLIT SCREEN` row offers, off the disc's own `SplitScreen`
-    /// list: stored as its string id (`RB_HORIZ`, `RB_VERT`), shown as that id's text
-    /// (`oag_game::boot::RaceSetup::cut_choices`). Empty only if the list will not read.
-    SplitCuts,
     /// Every mod this run has, the built-in one first: its name as the label, its id as the
     /// value, and a mod that did not load listed dimmed with its error as the reason
     /// (`oag_game::mods::Listing`). The MODS page is read-only, so the row only moves the
@@ -349,8 +334,6 @@ impl ValueSource {
             Self::ScreenFilters => "screen_filters",
             Self::KillTargets => "kill_targets",
             Self::Weapons => "weapons",
-            Self::PlayerCounts => "player_counts",
-            Self::SplitCuts => "split_cuts",
             Self::Mods => "mods",
         }
     }
@@ -383,8 +366,6 @@ impl ValueSource {
             "screen_filters" => Some(Self::ScreenFilters),
             "kill_targets" => Some(Self::KillTargets),
             "weapons" => Some(Self::Weapons),
-            "player_counts" => Some(Self::PlayerCounts),
-            "split_cuts" => Some(Self::SplitCuts),
             "mods" => Some(Self::Mods),
             _ => None,
         }

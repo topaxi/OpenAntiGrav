@@ -168,7 +168,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: None,
     track_select: None,
     race_setup: Some(names::RACE_SETUP_DEFINITION),
-    local_split: None,
     // `<location>\FE\forward.vex` and `<location>\ship_FE.vex`, both
     // resolving on both pressings - see `docs/formats/race-setup.md`.
     preview_meshes: true,

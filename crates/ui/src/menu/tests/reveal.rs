@@ -42,9 +42,15 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
     assert_eq!(id(&menu), "campaign");
     assert_eq!(
         drawn(&menu),
-        ["RACE CAMPAIGN", "RACEBOX", "OPTIONS", "RECORDS"]
+        [
+            "RACE CAMPAIGN",
+            "RACEBOX",
+            "MULTIPLAYER",
+            "OPTIONS",
+            "RECORDS"
+        ]
     );
-    // On RACEBOX, REMIX and SPLIT SCREEN show under it.
+    // On RACEBOX, REMIX shows under it.
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "racebox");
     assert_eq!(
@@ -53,7 +59,7 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
             "RACE CAMPAIGN",
             "RACEBOX",
             "REMIX",
-            "SPLIT SCREEN",
+            "MULTIPLAYER",
             "OPTIONS",
             "RECORDS"
         ]
@@ -62,11 +68,13 @@ fn only_the_focused_rows_attached_rows_are_drawn_below_it() {
     assert_eq!(menu.tabs()[2].depth, 1, "REMIX hangs one tab below RACEBOX");
     // On OPTIONS it is QUIT's turn.
     press(&mut menu, &[Button::Right]);
+    press(&mut menu, &[Button::Right]);
     assert_eq!(
         drawn(&menu),
         [
             "RACE CAMPAIGN",
             "RACEBOX",
+            "MULTIPLAYER",
             "OPTIONS",
             "MODS",
             "QUIT",
@@ -81,12 +89,12 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     press(&mut menu, &[Button::Right]);
     press(&mut menu, &[Button::Down]);
     assert_eq!(id(&menu), "remix");
-    press(&mut menu, &[Button::Down]);
-    assert_eq!(id(&menu), "split_screen");
     // The end of a family is an end: no wrap into the next row.
     press(&mut menu, &[Button::Down]);
-    assert_eq!(id(&menu), "split_screen");
+    assert_eq!(id(&menu), "remix");
     // Right from an attached row goes to the next top-level row, not its sibling.
+    press(&mut menu, &[Button::Right]);
+    assert_eq!(id(&menu), "multiplayer");
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "options");
     press(&mut menu, &[Button::Down]);
@@ -98,9 +106,9 @@ fn the_pad_steps_the_top_level_left_and_right_and_a_family_up_and_down() {
     press(&mut menu, &[Button::Up]);
     assert_eq!(id(&menu), "options", "up from the head stays on it");
     // Left wraps the top level; right wraps back.
-    press(&mut menu, &[Button::Left]);
-    press(&mut menu, &[Button::Left]);
-    press(&mut menu, &[Button::Left]);
+    for _ in 0..4 {
+        press(&mut menu, &[Button::Left]);
+    }
     assert_eq!(id(&menu), "records");
     press(&mut menu, &[Button::Right]);
     assert_eq!(id(&menu), "campaign");
@@ -242,10 +250,7 @@ fn a_tap_on_a_row_with_hidden_attached_rows_reveals_them_first() {
         "the first tap does not open RACEBOX"
     );
     assert_eq!(id(&menu), "racebox");
-    assert!(
-        drawn(&menu).contains(&"SPLIT SCREEN".to_string()),
-        "its rows show"
-    );
+    assert!(drawn(&menu).contains(&"REMIX".to_string()), "its rows show");
 
     // A revealed child is one tap away.
     let remix = menu.page().row_with_id("remix").unwrap();
@@ -268,7 +273,7 @@ fn a_column_title_or_no_reveal_flag_draws_every_row_in_order() {
             "RACE CAMPAIGN",
             "RACEBOX",
             "REMIX",
-            "SPLIT SCREEN",
+            "MULTIPLAYER",
             "OPTIONS",
             "MODS",
             "QUIT",

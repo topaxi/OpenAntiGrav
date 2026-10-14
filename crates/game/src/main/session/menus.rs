@@ -7,7 +7,6 @@ use oag_display::display;
 use oag_game::render::{Renderer, VideoFormat};
 use oag_game::{boot, movie, settings};
 use oag_raceplay::catalogue;
-use oag_render::viewport::Cut;
 use oag_raceplay::pilots;
 use oag_ui::{menu, strings};
 use oag_ui_screens::marquee;
@@ -243,8 +242,6 @@ impl Session {
         model.supply(menu::ValueSource::RaceModes, &shell.modes);
         model.supply(menu::ValueSource::KillTargets, &shell.kill_targets);
         model.supply(menu::ValueSource::Weapons, &shell.weapons);
-        model.supply(menu::ValueSource::PlayerCounts, &shell.player_counts);
-        model.supply(menu::ValueSource::SplitCuts, &shell.split_cuts);
         // Enumerated every time the menus open rather than kept from startup,
         // because a screen can be plugged in while the game is running and the
         // row should show it without a restart.
@@ -649,35 +646,20 @@ impl Session {
 
     /// Acts on one thing the menus did.
     pub(crate) fn handle_menu(&mut self, event: &menu::MenuEvent) {
-        // A split-screen lobby is for the race box the join screen opened and no
-        // other: any menu event that is not the screen's own entry means the
-        // player is doing something else.
-        if !matches!(
-            event,
-            menu::MenuEvent::Fired(menu::Action::OpenSplitScreen)
-        ) {
+        // A split-screen lobby is for the LOCAL MULTIPLAYER flow's RACE page and no
+        // other: any menu event outside it means the player is doing something else.
+        if !self.multiplayer {
             self.drop_split_lobby();
         }
         match event {
             menu::MenuEvent::Changed { setting, value } => self.apply_setting(setting, value),
-            // The split-screen race box seats its people first (`session::join`).
-            menu::MenuEvent::Fired(menu::Action::LaunchRace) if self.split_race_box => {
-                self.open_split_join();
+            menu::MenuEvent::Fired(menu::Action::LaunchRace) => self.start_race_box(),
+            // The MULTIPLAYER page's LOCAL MULTIPLAYER row (`session::multiplayer`).
+            menu::MenuEvent::Fired(menu::Action::OpenMultiplayerLocal) => {
+                self.open_multiplayer_local();
             }
-            menu::MenuEvent::Fired(menu::Action::LaunchRace) => {
-                // On a title whose race box authors a head count, two people mean the
-                // seats are claimed first (`Session::open_authored_split`).
-                if !self.open_authored_split() {
-                    self.start_race_box();
-                }
-            }
-            menu::MenuEvent::Fired(menu::Action::OpenSplitScreen) => self.open_split_screen(),
-            menu::MenuEvent::Fired(menu::Action::OpenSplitVertical) => {
-                self.open_split_race_box(Cut::Vertical);
-            }
-            menu::MenuEvent::Fired(menu::Action::OpenSplitHorizontal) => {
-                self.open_split_race_box(Cut::Horizontal);
-            }
+            // Never fired: the menu refuses the confirm (`Menu::is_disabled`).
+            menu::MenuEvent::Fired(menu::Action::ComingLater) => {}
             // The RACE REMIX page's own launch - see `menu::Action::LaunchRemix`'s
             // own doc comment for why it is not a second meaning for
             // `LaunchRace` above. `Self::launch_remix` builds `race::Options`

@@ -16,20 +16,13 @@ pub(crate) struct JoinStage {
 }
 
 impl JoinStage {
-    /// An empty lobby on a grid of `oag_gameplay::MAX_PLAYERS` seats.
+    /// An empty lobby on a grid of `oag_gameplay::MAX_PLAYERS` seats, START refused until a
+    /// second person has joined: a race of one is not multiplayer.
     pub(crate) fn new(labels: Labels) -> Self {
         Self {
             lobby: Lobby::new(),
-            screen: Join::new(labels, oag_gameplay::MAX_PLAYERS),
+            screen: Join::new(labels, oag_gameplay::MAX_PLAYERS).requiring(2),
         }
-    }
-
-    /// An empty lobby of exactly `people` seats, START refused until all are taken: the race
-    /// box's `NumberOfPlayers` is the head count.
-    pub(crate) fn for_people(labels: Labels, people: usize) -> Self {
-        let lobby = Lobby::with_capacity(people);
-        let screen = Join::new(labels, lobby.capacity()).requiring(lobby.capacity());
-        Self { lobby, screen }
     }
 
     pub(crate) fn lobby(&self) -> &Lobby {

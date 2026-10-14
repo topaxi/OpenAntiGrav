@@ -15,6 +15,7 @@ fn labels() -> Labels {
         hint: "PRESS A BUTTON TO JOIN".into(),
         player: "PLAYER".into(),
         empty: "OPEN".into(),
+        guest: None,
         keyboard: "KEYBOARD".into(),
         pad: "GAMEPAD".into(),
         start: "START".into(),

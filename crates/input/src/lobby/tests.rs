@@ -62,15 +62,14 @@ fn back_leaves_a_seat_then_the_screen_and_closes_the_gap() {
     );
 }
 
-/// Only a seated device starts the race: a bystander's Start is nothing.
+/// Only a seated device starts the race: a bystander's Start takes it a seat instead.
 #[test]
-fn start_needs_a_seated_device() {
+fn start_begins_only_from_a_seated_device() {
     let mut lobby = Lobby::new();
     assert_eq!(
         lobby.press(press(Device::Pad(1), Button::Start)),
-        Outcome::Nothing
+        Outcome::Joined(0)
     );
-    lobby.join(Device::Pad(1));
     assert_eq!(
         lobby.press(press(Device::Pad(1), Button::Start)),
         Outcome::Start
@@ -180,4 +179,39 @@ fn a_lobby_of_two_seats_is_full_after_two() {
         oag_gameplay::MAX_PLAYERS
     );
     assert_eq!(Lobby::new().capacity(), oag_gameplay::MAX_PLAYERS);
+}
+
+/// Start from a device with no seat joins it (HD's `FE_GUEST_JOIN`, "PLAYER 2 PRESS START TO
+/// JOIN"); from a seated one it begins. The lone Start of a seated device is not a second seat.
+#[test]
+fn start_from_an_unseated_device_joins_and_from_a_seated_one_begins() {
+    let mut lobby = Lobby::new();
+    assert_eq!(
+        lobby.press(press(Device::Pad(4), Button::Start)),
+        Outcome::Joined(0)
+    );
+    assert_eq!(
+        lobby.press(press(Device::Pad(4), Button::Start)),
+        Outcome::Start
+    );
+    assert_eq!(lobby.count(), 1);
+}
+
+/// Two physical keyboards are two devices with a seat each, and seating them binds each seat to
+/// its keyboard: the first is the seat the front end reads, the second a seat after it.
+#[test]
+fn two_physical_keyboards_take_two_seats_bound_to_their_devices() {
+    use crate::pad::{Binding, KeyboardId};
+    let (a, b) = (KeyboardId(0), KeyboardId(1));
+    let mut lobby = Lobby::new();
+    assert_eq!(lobby.join(Device::Keys(a)), Outcome::Joined(0));
+    assert_eq!(lobby.join(Device::Keys(b)), Outcome::Joined(1));
+    assert_eq!(lobby.join(Device::Keys(a)), Outcome::Nothing, "A is seated");
+    let mut assignment = Assignment::<u32>::default();
+    lobby.seat(&mut assignment, &[]);
+    assert_eq!(
+        assignment.keyboard_seats(),
+        [(Binding::Device(a), 0), (Binding::Device(b), 1)]
+    );
+    assert_eq!(assignment.device_keyboards(), 2);
 }

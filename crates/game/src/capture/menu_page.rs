@@ -154,6 +154,7 @@ pub(super) fn menu_page(
     definition.drop_unavailable_race_variant(title);
     definition.drop_rows_picked_on_screen(title);
     definition.rename_campaign_row(title, strings);
+    definition.rename_multiplayer_row(title, strings);
     if definition.page(page).is_none() {
         anyhow::bail!(
             "no menu page named {page:?}; this definition has {}",

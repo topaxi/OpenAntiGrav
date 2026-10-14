@@ -476,17 +476,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: None,
     track_select: None,
     race_setup: None,
-    // **Borrowed from Wipeout HD/Fury, chosen, not measured.** 2048 ships no race box and no
-    // `racebox_definition.xml`, and the original has no local split screen on the Vita, but
-    // its own English table carries HD's split ids word for word (`RB_NUMP`, `RB_SPLSCR`,
-    // `RB_HORIZ`, `RB_VERT`, `FE_SHIPSEL_P1`/`P2`, and the manual's `MAN_2_SPL` that sends the
-    // reader to the Racebox). The lists are HD's own, which Omega (the title that ships both
-    // lineages) authors identically; a disc-backed test holds them equal to HD's.
-    local_split: Some(oag_title::LocalSplit::Borrowed(oag_title::BorrowedSplit {
-        from: "Wipeout HD/Fury",
-        players: &["1", "2"],
-        cuts: &["RB_HORIZ", "RB_VERT"],
-    })),
     // Inert either way: `race_box` is `None`, so no picker opens to read
     // this. The real evidence that 2048 previews a mesh on its team screen
     // lives in `TOUCH::team_model_origin` instead - see that field's own doc

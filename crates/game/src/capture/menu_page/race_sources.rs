@@ -50,14 +50,6 @@ pub(super) fn supply(
         oag_ui::menu::ValueSource::Weapons,
         &race_setup.weapon_choices(strings),
     );
-    model.supply(
-        oag_ui::menu::ValueSource::PlayerCounts,
-        &race_setup.player_choices(),
-    );
-    model.supply(
-        oag_ui::menu::ValueSource::SplitCuts,
-        &race_setup.cut_choices(strings),
-    );
 }
 
 #[cfg(test)]
@@ -84,7 +76,6 @@ mod tests {
                 ("FE_ON".into(), "On".into()),
                 ("FE_OFF".into(), "Off".into()),
             ],
-            ..Default::default()
         };
         let mut model = oag_ui::menu::Menu::new(definition);
         supply(&mut model, title, &[], &[], &setup, &strings);
@@ -182,85 +173,29 @@ mod tests {
         );
         assert_eq!(shown(&model, "race.weapons"), "OFF");
     }
-    /// HD's RACE page the way a live session builds it: the title's trims and the disc's own
-    /// `NumberOfPlayers` and `SplitScreen` lists, whose words are `RB_HORIZ` and `RB_VERT`.
-    fn hd_page() -> oag_ui::menu::Menu {
-        let mut strings = oag_ui::language::StringTable::default();
-        strings.merge(
-            [("RB_HORIZ", "HORIZONTAL"), ("RB_VERT", "VERTICAL")]
-                .map(|(id, text)| (id.to_string(), text.to_string()))
-                .into(),
-        );
-        let title = oag_hd::TITLE;
-        let mut definition = oag_ui::menu::Definition::built_in(&strings).unwrap();
-        definition.drop_rows_picked_on_screen(title);
-        let setup = crate::boot::RaceSetup {
-            players: ["1", "2"].map(String::from).to_vec(),
-            cuts: ["RB_HORIZ", "RB_VERT"].map(String::from).to_vec(),
-            ..Default::default()
-        };
-        let mut model = oag_ui::menu::Menu::new(definition);
-        supply(&mut model, title, &[], &[], &setup, &strings);
-        model.open("race");
-        model
-    }
-
-    fn row<'a>(model: &'a oag_ui::menu::Menu, setting: &str) -> &'a oag_ui::menu::Entry {
-        model
-            .page()
-            .entries
-            .iter()
-            .find(|entry| entry.setting() == Some(setting))
-            .unwrap_or_else(|| panic!("no {setting} row"))
-    }
-
-    /// The two rows sit after AI DIFFICULTY in the authored order, carry the disc's own lists
-    /// (the people as spelled, the cuts in the language's words), and the cut cannot be
-    /// moved while the head count is one - the authored `SplitScreen` row's own rule.
+    /// No title's RACE page carries a NUMBER OF PLAYERS or SPLIT SCREEN row any more: the head
+    /// count is the join screen's and the cut the layout screen's (LOCAL MULTIPLAYER,
+    /// `session::multiplayer`), so the page is the same single-race setup everywhere.
     #[test]
-    fn hds_players_and_cut_rows_follow_the_authored_order_and_rule() {
-        let mut model = hd_page();
-        let settings: Vec<_> = model
-            .page()
-            .entries
-            .iter()
-            .filter_map(|entry| entry.setting())
-            .collect();
-        let at = |key: &str| settings.iter().position(|s| *s == key).unwrap();
-        assert!(at("ai.difficulty") < at("race.players"));
-        assert_eq!(at("race.players") + 1, at("race.split_cut"));
-        assert_eq!(shown(&model, "race.players"), "1");
-        assert_eq!(shown(&model, "race.split_cut"), "HORIZONTAL");
-        assert!(
-            model.is_disabled(row(&model, "race.split_cut")),
-            "one person: no cut to pick"
-        );
-        assert!(!model.is_disabled(row(&model, "race.players")));
-
-        model.seed("race.players", &oag_ui::menu::Value::Text("2".into()));
-        assert!(
-            !model.is_disabled(row(&model, "race.split_cut")),
-            "two people: a cut"
-        );
-        model.seed(
-            "race.split_cut",
-            &oag_ui::menu::Value::Text("RB_VERT".into()),
-        );
-        assert_eq!(shown(&model, "race.split_cut"), "VERTICAL");
-    }
-
-    /// Pulse's page carries neither row: its race box authors no such list.
-    #[test]
-    fn pulses_race_page_has_no_players_or_cut_row() {
-        let model = pulse_page();
-        for key in ["race.players", "race.split_cut"] {
+    fn no_race_page_has_a_players_or_cut_row() {
+        for title in [
+            oag_pulse::TITLE,
+            oag_pure::TITLE,
+            oag_hd::TITLE,
+            oag_omega::TITLE,
+            oag_2048::TITLE,
+        ] {
+            let strings = oag_ui::language::StringTable::default();
+            let mut definition = oag_ui::menu::Definition::built_in(&strings).unwrap();
+            definition.drop_rows_picked_on_screen(title);
+            let race = definition.page("race").expect("the RACE page");
             assert!(
-                model
-                    .page()
-                    .entries
-                    .iter()
-                    .all(|entry| entry.setting() != Some(key)),
-                "{key} on Pulse"
+                race.entries.iter().all(|entry| !matches!(
+                    entry.setting(),
+                    Some("race.players" | "race.split_cut")
+                )),
+                "{}",
+                title.name
             );
         }
     }

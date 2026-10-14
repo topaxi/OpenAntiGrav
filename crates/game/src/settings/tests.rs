@@ -875,30 +875,15 @@ fn a_saved_off_stays_off_and_an_absent_key_takes_the_title_default() {
     assert_eq!(shadows[&ps2], oag_display::display::Shadows::Original);
 }
 
-/// The race box's split picks persist with the profile (progress and choices are saved
-/// automatically) and a profile written before they existed reads as untouched.
+/// A profile written while the race box had NUMBER OF PLAYERS and SPLIT SCREEN rows still loads:
+/// the two keys are ignored, and the layout the multiplayer flow remembers is `window_seats`.
 #[test]
-fn the_split_picks_round_trip_and_default_to_untouched() {
-    let old: Settings = toml::from_str("[race]\nmode = \"single_race\"\n").unwrap();
-    assert_eq!(
-        (old.race.players.as_str(), old.race.split_cut.as_str()),
-        ("", "")
-    );
-    let mut settings = Settings::default();
-    settings.race.players = "2".to_string();
-    settings.race.split_cut = "RB_VERT".to_string();
-    let text = toml::to_string_pretty(&settings).unwrap();
-    let back: Settings = toml::from_str(&text).unwrap();
-    assert_eq!(back.race.players, "2");
-    assert_eq!(back.race.split_cut, "RB_VERT");
-    let seeds: Vec<&str> = menu_seeds(
-        &back,
-        oag_mesh::mesh_render::Anisotropy::default(),
-        oag_hd::TITLE,
-        oag_disc::Platform::Ps3,
+fn a_profile_with_the_old_split_picks_still_loads() {
+    let old: Settings = toml::from_str(
+        "[race]\nmode = \"single_race\"\nplayers = \"2\"\nsplit_cut = \"RB_VERT\"\n",
     )
-    .into_iter()
-    .map(|(key, _)| key)
-    .collect();
-    assert!(seeds.contains(&"race.players") && seeds.contains(&"race.split_cut"));
+    .unwrap();
+    assert_eq!(old.race.mode, "single_race");
+    let back: Settings = toml::from_str(&toml::to_string_pretty(&old).unwrap()).unwrap();
+    assert!(!toml::to_string_pretty(&back).unwrap().contains("split_cut"));
 }
