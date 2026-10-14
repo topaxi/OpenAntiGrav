@@ -176,6 +176,7 @@ impl Session {
             name: name.clone(),
             track_label,
             port: oag_net::lan::DEFAULT_PORT,
+            discovery_port: oag_net::discovery::PORT,
         };
         let (hosted, own_link) = match Hosted::spawn(config) {
             Ok(started) => started,
@@ -612,18 +613,24 @@ impl Session {
                         found
                             .iter()
                             .map(|host| {
-                                // A host on another title says which, since it cannot be joined.
-                                let other = (host.advert.title != mine)
-                                    .then(|| format!("{}: ", host.advert.title.to_uppercase()))
-                                    .unwrap_or_default();
-                                format!("{other}{} ({})", host.advert.track.to_uppercase(), host.advert.people)
+                                // A host on another title says which and no more, since it cannot
+                                // be joined; the others say their circuit and how many are in.
+                                if host.advert.title == mine {
+                                    format!(
+                                        "{} ({})",
+                                        host.advert.track.to_uppercase(),
+                                        host.advert.people
+                                    )
+                                } else {
+                                    host.advert.title.to_uppercase()
+                                }
                             })
                             .collect(),
                     );
                     screen.set_row_labels(
                         found
                             .iter()
-                            .map(|host| host.advert.name.to_uppercase())
+                            .map(|host| host.advert.name.to_uppercase().chars().take(12).collect())
                             .collect(),
                     );
                 }

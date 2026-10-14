@@ -201,4 +201,8 @@ fn a_client_with_different_content_is_refused_at_the_start() {
     );
     host.poll();
     assert!(!host.all_ready());
+    assert!(
+        host.departed(),
+        "the refused seat is a departure a lobby can end the start on"
+    );
 }

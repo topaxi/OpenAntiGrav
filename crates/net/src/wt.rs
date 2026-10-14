@@ -288,6 +288,9 @@ impl Link for WtLink {
 pub struct Listener {
     incoming: mpsc::Receiver<WtLink>,
     local: SocketAddr,
+    /// Dropping the listener drops this, which ends the accept task and closes the socket,
+    /// so the port is free for the next host in the same process.
+    _stop: tokio::sync::oneshot::Sender<()>,
 }
 
 impl Listener {
@@ -305,8 +308,14 @@ impl Listener {
             .with_context(|| format!("listening on {addr}"))?;
         let local = server.local_addr()?;
         let (found, incoming) = mpsc::channel();
+        let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         rt.spawn(async move {
-            while let Some(request) = server.accept().await {
+            loop {
+                let request = tokio::select! {
+                    request = server.accept() => request,
+                    _ = &mut stopped => break,
+                };
+                let Some(request) = request else { break };
                 let found = found.clone();
                 tokio::spawn(async move {
                     let peer = request.conn().remote_address();
@@ -325,8 +334,13 @@ impl Listener {
                     }
                 });
             }
+            server.close(0u32.into(), b"the host stopped");
         });
-        Ok(Self { incoming, local })
+        Ok(Self {
+            incoming,
+            local,
+            _stop: stop,
+        })
     }
 
     /// The address actually bound (a port of 0 resolved).
@@ -404,6 +418,26 @@ mod tests {
                 "timed out"
             );
             std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+
+    /// A host that stops frees its port: the second HOST GAME of a session binds the same one.
+    #[test]
+    fn dropping_a_listener_frees_its_port() {
+        let identity = Identity::self_signed(&[]).expect("certificate");
+        let first = Listener::bind("127.0.0.1:0".parse().expect("addr"), &identity).expect("bind");
+        let addr = first.local_addr();
+        drop(first);
+        let started = std::time::Instant::now();
+        loop {
+            match Listener::bind(addr, &identity) {
+                Ok(_) => break,
+                Err(e) => assert!(
+                    started.elapsed() < std::time::Duration::from_secs(5),
+                    "the port stayed taken: {e:#}"
+                ),
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
         }
     }
 

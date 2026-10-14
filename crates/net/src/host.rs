@@ -384,6 +384,12 @@ impl Host {
         self.race.finished()
     }
 
+    /// Whether a seat that was seated has left (a refused or closed connection, an end).
+    #[must_use]
+    pub fn departed(&self) -> bool {
+        self.seats.iter().flatten().any(|seat| seat.left.is_some())
+    }
+
     /// Whether every seat has left.
     #[must_use]
     pub fn deserted(&self) -> bool {

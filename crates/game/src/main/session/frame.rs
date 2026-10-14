@@ -13,6 +13,10 @@ use oag_physics::pilot_assist::Level;
 use oag_raceplay as race;
 use oag_ui::frontend::{self};
 use oag_ui::strings;
+
+/// Ticks a network race may stand ended with nobody finished before the menus return: one
+/// second. **Chosen.**
+const NET_OVER_TICKS: u32 = 60;
 use oag_ui::{font, menu};
 
 use crate::hints;
@@ -802,6 +806,22 @@ impl Session {
                         stage.race.tick(&inputs);
                     }
                     stage.tick_messages();
+                    // A server that ends a race nobody had finished (the host left, a link
+                    // died) leaves a frozen world: after a second of it, back to the menus.
+                    match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {
+                        Some(why) if !stage.race.finished() => {
+                            self.net_over_ticks += 1;
+                            if self.net_over_ticks == NET_OVER_TICKS {
+                                log::error!("the network race ended before the finish: {why}");
+                                self.net_over_ticks = 0;
+                                if let Err(e) = self.open_menus() {
+                                    log::error!("cannot reopen the menus: {e:#}");
+                                }
+                                break;
+                            }
+                        }
+                        _ => self.net_over_ticks = 0,
+                    }
                     // Immediately after the tick and inside this loop, so a cue
                     // lands on the tick that raised it whether the frame
                     // stepped once, twice or not at all. See

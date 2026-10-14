@@ -55,6 +55,8 @@ pub struct Config {
     pub track_label: String,
     /// The game port; 0 lets the system pick.
     pub port: u16,
+    /// The UDP port discovery queries are answered on; [`crate::discovery::PORT`] for a game.
+    pub discovery_port: u16,
 }
 
 /// Where a hosted race is.
@@ -108,7 +110,7 @@ impl Hosted {
         )
         .context("binding the game port")?;
         let port = listener.local_addr().port();
-        let responder = match Responder::bind() {
+        let responder = match Responder::on(config.discovery_port) {
             Ok(responder) => Some(responder),
             Err(e) => {
                 log::warn!("lan: cannot answer discovery ({e}); joiners must type this address");
@@ -292,7 +294,9 @@ fn run(
             host.join(Box::new(link));
         }
         host.poll();
-        if asked.elapsed() > LOAD_TIMEOUT || host.deserted() {
+        // A seat that is refused (different content) or closes while the others load ends
+        // the start: nobody is left waiting on a seat that will never be ready.
+        if asked.elapsed() > LOAD_TIMEOUT || host.departed() {
             host.end("a player did not load the race");
             anyhow::bail!("a player did not load the race: {:?}", host.seat_names());
         }

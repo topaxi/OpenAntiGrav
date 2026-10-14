@@ -139,9 +139,9 @@ title = "MULTIPLAYER"
 title_string_id = "OAG_MP_PAGE_TITLE"
 
 # LOCAL MULTIPLAYER starts the flow `oag_game::main::session::multiplayer` runs: join, the
-# window layout, the RACE page, Track Select and Ship Select per seat. LAN and ONLINE are
-# rows for what comes later: dimmed, focusable so the line under them can say so, and
-# refusing the confirm (`Action::ComingLater`).
+# window layout, the RACE page, Track Select and Ship Select per seat. LAN opens the `lan`
+# page below. ONLINE is a row for what comes later: dimmed, focusable so the line under it
+# can say so, and refusing the confirm (`Action::ComingLater`).
 [[page.entry]]
 id = "multiplayer_local"
 kind = "action"

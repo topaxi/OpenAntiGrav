@@ -115,7 +115,16 @@ impl Responder {
     ///
     /// The port is taken (another host on this machine).
     pub fn bind() -> io::Result<Self> {
-        let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, PORT))?;
+        Self::on(PORT)
+    }
+
+    /// Listens on `port` instead of [`PORT`] (a test's own, so tests do not share one).
+    ///
+    /// # Errors
+    ///
+    /// The port is taken.
+    pub fn on(port: u16) -> io::Result<Self> {
+        let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, port))?;
         socket.set_nonblocking(true)?;
         Ok(Self { socket })
     }

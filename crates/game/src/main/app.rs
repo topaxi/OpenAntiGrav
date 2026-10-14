@@ -503,6 +503,7 @@ impl App {
             no_intro: self.no_intro,
             net: self.net.take(),
             net_bot: self.net_bot,
+            net_over_ticks: 0,
             prompt: oag_game::prompts::PromptState {
                 style_override: self.prompt_style,
                 family_logged: None,

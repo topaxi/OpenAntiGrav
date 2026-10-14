@@ -8,10 +8,13 @@
 //! [`NetPlay::step`], which predicts, sends this machine's input and corrects on the
 //! server's word (`oag_net::client`), instead of `Race::tick`.
 //!
-//! What this leaves alone: the menus (the LAN and ONLINE rows stay greyed), the
-//! sound, the HUD and the camera, which follow this machine's seat
-//! (`Race::set_seat`). Weapons are off in a network race until they are server
-//! events.
+//! The menus' LAN page (`session::lan`) joins the same way a frame at a time:
+//! [`Pending`] waits for the welcome, [`NetPlay::begin_join`] and
+//! [`NetPlay::poll_start`] are [`NetPlay::join`]'s two halves, so the window never blocks.
+//!
+//! What this leaves alone: the sound, the HUD and the camera, which follow this
+//! machine's seat (`Race::set_seat`). Weapons are off in a network race until they
+//! are server events.
 //!
 //! `--net-bot` flies this machine's craft with the player's own driver, sent as
 //! input like a pad's: a verification aid for a whole race with nobody at the

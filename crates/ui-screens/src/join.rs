@@ -404,7 +404,8 @@ impl Join {
             .map(|row| {
                 (
                     self.hover == Some(*row),
-                    !matches!(row, Row::Start | Row::Back),
+                    // A list's TYPE AN ADDRESS row, like START and BACK, has no value.
+                    !matches!(row, Row::Start | Row::Back) && !(self.listing && *row == Row::Empty),
                 )
             })
             .collect();

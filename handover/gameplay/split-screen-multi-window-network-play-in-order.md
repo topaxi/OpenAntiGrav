@@ -1403,10 +1403,10 @@ a guess.
   1. **Run it across a real network** (two machines on a LAN, `--cert-name` with the
      host's address) and record the same per-second numbers as the localhost table
      in `docs/networking/README.md`; the shim is a constant delay with no jitter.
-  2. **LAN and ONLINE in the menus**: a host row that starts a listen server inside
-     the client (decision 3) and a join screen that takes an address and the
-     certificate hash. Owned by the front end's session flow (`mp-seat-assign`'s
-     area), not `oag-net`.
+  2. **LAN and ONLINE in the menus**: ~~LAN~~ **landed 2026-10-14 (`lan-menu`)**: HOST
+     GAME starts a listen server inside the client, JOIN GAME lists hosts by discovery
+     (or a typed address), see `docs/networking/README.md`, "LAN play". ONLINE (an
+     address and the certificate hash for a WAN server) is open.
   3. **Weapons as server events** (ADR-0069 condition 2): today a network race
      forces weapons off (`RaceParams::weapons`).
   4. **The browser client**: `Link` over the browser's `WebTransport` object
