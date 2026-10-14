@@ -96,9 +96,11 @@ impl Session {
                     event_loop,
                     &title,
                     winit::dpi::LogicalSize::new(size.width, size.height),
-                    monitor,
-                    self.windows_fullscreen,
-                    position,
+                    crate::gpu::Placement {
+                        monitor,
+                        fullscreen: self.windows_fullscreen,
+                        position,
+                    },
                     crate::window::seat_present_modes(),
                 )
                 .and_then(|output| {

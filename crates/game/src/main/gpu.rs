@@ -101,6 +101,15 @@ pub(crate) struct BroughtUp {
     temporal: bool,
 }
 
+/// Where a further window is asked to open: the monitor, whether it covers all of it
+/// (borderless) or is a window on it, and the position a windowed one is asked for.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub(crate) struct Placement {
+    pub(crate) monitor: Option<winit::monitor::MonitorHandle>,
+    pub(crate) fullscreen: bool,
+    pub(crate) position: Option<winit::dpi::PhysicalPosition<i32>>,
+}
+
 impl Gpu {
     /// Everything downstream of picking an adapter, so it can be *re*-run.
     ///
@@ -377,11 +386,14 @@ impl Gpu {
         event_loop: &ActiveEventLoop,
         title: &str,
         size: winit::dpi::LogicalSize<u32>,
-        monitor: Option<winit::monitor::MonitorHandle>,
-        fullscreen: bool,
-        position: Option<winit::dpi::PhysicalPosition<i32>>,
+        placement: Placement,
         modes: &[wgpu::PresentMode],
     ) -> Result<Output> {
+        let Placement {
+            monitor,
+            fullscreen,
+            position,
+        } = placement;
         let mut attributes = Window::default_attributes()
             .with_title(title)
             .with_inner_size(size)
