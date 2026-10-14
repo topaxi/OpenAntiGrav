@@ -19,7 +19,7 @@ use oag_ui::frontend::Draw;
 const VIEWPORT: (f32, f32, f32, f32) = (0.0, 0.0, 1280.0, 720.0);
 
 /// One view's text draws: position, then the words.
-fn texts(frame: &oag_hud::Frame) -> Vec<(f32, f32, String)> {
+fn texts(frame: &oag_hud::Frame) -> Vec<Word> {
     frame
         .hud_text
         .iter()
@@ -56,8 +56,11 @@ fn two_people(cut: Cut, ticks: usize) -> Option<(race::Race, oag_hud::Assets)> {
     Some((race, hud))
 }
 
+/// One text draw: where it sits and what it says.
+type Word = (f32, f32, String);
+
 /// Each view's words and the rectangle it was clipped to.
-fn per_view(race: &race::Race, hud: &oag_hud::Assets) -> Vec<([f32; 4], Vec<(f32, f32, String)>)> {
+fn per_view(race: &race::Race, hud: &oag_hud::Assets) -> Vec<([f32; 4], Vec<Word>)> {
     let readouts: Vec<Readout> = (0..2).map(|slot| race.readout_for(slot)).collect();
     let draws = oag_game::hud_views::view_draws(
         hud.context().expect("the layout parsed"),
@@ -133,7 +136,7 @@ fn each_view_draws_the_gap_to_the_other_person_in_both_cuts() {
                 gaps[1].as_bytes()[0],
                 "one leads, one trails"
             );
-            let expected = (ticks == 300).then_some(['+', '-']).unwrap_or(['-', '+']);
+            let expected = if ticks == 300 { ['+', '-'] } else { ['-', '+'] };
             assert_eq!(
                 [
                     gaps[0].chars().next().unwrap(),
