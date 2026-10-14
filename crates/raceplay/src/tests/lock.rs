@@ -229,3 +229,46 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
         );
     }
 }
+
+/// The primary's Missile takes its target from the simulation's lock and from
+/// nothing the camera shows: with the camera turned straight away from the
+/// target (so a reticle through it would never lock), a press after the hold
+/// carries the lock and a press inside the hold fires unguided.
+#[test]
+fn the_primarys_missile_is_guided_by_the_sim_lock_whatever_the_camera_shows() {
+    let target_of_shot = |press_at: usize| {
+        let (mut race, at) = parked_race(Weapon::Missile, true, 60.0, 0.0);
+        let body = race.sim.world.ships[0].physics.body;
+        race.view.camera_override = Some(crate::options::CameraOverride {
+            eye: body.position - body.forward() * 40.0,
+            orientation: body.orientation * Quat::from_rotation_y(std::f32::consts::PI),
+            fov_deg: None,
+        });
+        let mut buttons = Buttons::new();
+        buttons.tick(0);
+        for tick in 0..=press_at {
+            race.sim.world.ships[1].physics.body.position = at;
+            race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
+            let input = buttons.tick(if tick == press_at { SQUARE } else { 0 });
+            race.tick(&PlayerInputs::single(input));
+        }
+        let shot = race
+            .sim
+            .world
+            .projectiles
+            .slots
+            .iter()
+            .find(|projectile| projectile.kind.is_some() && projectile.owner == 0)
+            .expect("the press did not fire the Missile");
+        shot.target
+    };
+    assert!(
+        target_of_shot(60).is_some(),
+        "a held lock did not guide the shot"
+    );
+    assert_eq!(
+        target_of_shot(10),
+        None,
+        "a press inside the hold was guided"
+    );
+}
