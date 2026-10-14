@@ -193,7 +193,7 @@ where there is room):
 
 | View shape (a view's width/height) | Where it occurs | Pulse and Pure | HD | 2048 |
 | --- | --- | --- | --- | --- |
-| two views and under 2.4 (`tall`, a rule keyed on `views = [2]`) | a left-and-right cut: two columns, 0.89 at 16:9 | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time; Pulse also the Eliminator's kill column and the Pilot Assist indicator (Pure has no Eliminator and authors no kill widget) | none: the disc's `vert_` layouts answer, and its other modes' columns fall to `portrait` | every group |
+| two views and under 2.4 (`tall`, a rule keyed on `views = [2]`; Pure splits it at 1.4 into `tall` and `tall-wide`, below) | a left-and-right cut: two columns, 0.89 at 16:9 | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time; Pulse also the Eliminator's kill column and the Pilot Assist indicator (Pure has no Eliminator and authors no kill widget) | none: the disc's `vert_` layouts answer, and its other modes' columns fall to `portrait` | every group |
 | 2.4 and wider (`strip`) | two views cut top and bottom, the top of three | every group at its corner, larger | every group | every group |
 | 1.4 to 2.4 (`landscape`) | four views, the top of five | every group | every group | every group |
 | 1.0 to 1.4 (`square`) | five to seven views' lower rows | lap, place, speed, shield (Pulse only: Pure draws none), held weapon, current time | no best-time group | no kill column |
@@ -220,12 +220,32 @@ over `portrait`:
   the time readout, since at the bottom centre it lay on the shield and speed bars (seen and
   moved). `HeadToHeadBar` is named too, as the horizontal rules name it, but **no frame drew
   it**: Head2Head showed no bar in a row or a column at tick 900, so that claim is by name only.
+  **Why (2026-10-14, `pure-tall-32x9`, looked at on PSP and PS2 Pulse and on Pure, `--mode
+  head_to_head --players 2` and `4`, rows, ticks 300 and 1200):** a split Head2Head race fields
+  seven opponents (the log reads `pilots on the grid: 1..7`, the place reads `8/8`), not the
+  mode's one, and draws the Single Race readout, so there is no gap bar to place; one view
+  draws the real thing (`1st`, `- 10m`, `2nd` and the bar) with one opponent. That is the mode
+  not being built for a split (below), not a placement fault, so nothing in the split files
+  changed for it. Tournament is not reachable at all: `--mode tournament` is refused, it exists
+  only as a campaign cell.
   Looked at on PSP and PS2 Pulse in Single Race, Zone, Time Trial, the Eliminator and Head2Head,
   1280x720, at tick 900 to 1200.
 - **Pure**: the weapon grid raised. The loader bounds a model by its centre point alone
   (`oag_hud::split_hud::arrange`), so `anchor = "bottom"` at `-0.04` pinned the grid's centre
   and the lower third of it hung below the view and was cut by the scissor. The column rule
-  offsets it to `-0.1`, which clears the edge at the scale it draws.
+  offsets it to `-0.1`, which clears the edge at the scale it draws up to a 21:9 screen's
+  columns. From 1.4 up (`tall-wide`, 2026-10-14, `pure-tall-32x9`, **chosen, not measured**) the
+  whole-screen HUD is fitted to the view's height, so the grid stops shrinking at 1.765 and
+  `-0.1` left it level with the bottom edge on a 32:9 column (1.78), lower than the corner
+  groups and than it sits at 21:9. The rule set has no way to say "depends on aspect" inside
+  one rule (`views` and `aspect` only choose a rule), so Pure's file has the same six groups
+  twice, `tall` for `[0.0, 1.4)` and `tall-wide` for `[1.4, 2.4)`, and only the grid's offset
+  differs: `-0.14`, half its height at scale 1.4 (0.100) plus the 0.04 the corner groups keep.
+  Nothing at 16:9 (0.89) or 21:9 (1.19) moved: a 1280x720, 1920x1080 and 2560x1080 vertical
+  pair and a one-view race are byte-identical to before, and only the 3840x1080 frame differs
+  (`free` aspect, so the window's own shape reaches the columns; the default `psp` aspect
+  pillarboxes any window to 16:9 and never gives a column wider than 0.89). Pulse and 2048
+  keep one `tall` rule: their 32:9 columns were not looked at.
 - **2048**: a whole file, below.
 - **HD**: nothing. Its authored `vert_` layouts answer Single Race, Tournament, Head2Head and
   the Eliminator and its own Time Trial, Speed Lap and Zone columns still read `portrait`; the
@@ -1057,7 +1077,8 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   min(width / height / 1.765, 1) / 272` of its height. Each rule's offset is now half that at
   the widest view the rule answers, plus the 0.04 the corner groups keep from the edge:
   `strip` -0.135, `landscape` -0.115, `square` -0.11, `portrait` -0.1 (and `tall`'s -0.1,
-  unchanged, clears a column at 21:9's 1.19; a 32:9 column, 1.78, would still clip it).
+  unchanged, clears a column at 21:9's 1.19; from 1.4 up the `tall-wide` rule below raises it
+  to `-0.14`, which a 32:9 column, 1.78, needed).
   *Pulse*: in a row the kill column (title and eight lines) is 0.61 of the view's height at
   scale 1.0, centred at the right edge it ran across the bars (about 0.2 tall at the bottom
   right), and in four views it touched them. `strip` and `landscape` now hang the column from
@@ -1076,8 +1097,8 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   horizontal two-view row (and the lower rows of seven and eight views), the same defect the
   `tall` rule fixes for columns; the strip's kill column on Pulse overlaps the speed and
   shield bars at the right edge (a row is too short for eight lines and the bars)~~ **Both
-  done, 2026-10-14 (`split-hud-fixes`), above.** One piece is left: `tall` still clips Pure's grid
-  on a 32:9 column (1.78). Still open from `split-hud-vertical`: Zone's own
+  done, 2026-10-14 (`split-hud-fixes`), above, and Pure's grid on a 32:9 column too
+  (`pure-tall-32x9`, the `tall-wide` rule).** Still open from `split-hud-vertical`: Zone's own
   pale text (`speed class`, `zone`, `lap`) is hard to read over its white and cyan scenery in
   both cuts and on the whole screen alike, which is the title's colour and not placement;
   Omega's Zone vertical variant (`Zone_HUDvert`) and Omega's non-authored cases are unwired;
