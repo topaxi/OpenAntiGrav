@@ -624,6 +624,10 @@ pub struct FrontEnd {
     /// (checked 2026-10-08: no `*FE*` mesh under any HD `Data\Ships\<team>`).
     /// `None` everywhere a title has no such screen or draws stills.
     pub ship_preview_hull: Option<&'static str>,
+    /// A pose the craft preview is drawn at in place of the `ShipModel` widget's own
+    /// `OriginX`/`OriginY`/`z`, for a title whose widget authors a camera this build
+    /// cannot reproduce. `None` draws the widget as authored (HD). See [`ShipPose`].
+    pub ship_preview_pose: Option<ShipPose>,
     /// The model each circuit's selection screen draws in its circuit-model
     /// frame, found by the circuit's environment folder: HD's track-select
     /// record names `<environment>\FE\track0N.vex` per circuit, and the
@@ -695,6 +699,18 @@ pub struct BorrowedSplit {
     pub players: &'static [&'static str],
     /// Its `SplitScreen` entries as string ids, in order.
     pub cuts: &'static [&'static str],
+}
+
+/// The origin and depth a `Team Selection` draws its craft at, see
+/// [`FrontEnd::ship_preview_pose`]. The widget's rotations stay as authored.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShipPose {
+    /// Where the model's origin lands in the screen's own grid.
+    pub origin: [f32; 2],
+    /// How far in front of the lens the craft sits, in model units.
+    pub z: f32,
+    /// Where the pose comes from, for the docs and the load report.
+    pub from: &'static str,
 }
 
 /// One circuit's front-end model, see [`FrontEnd::circuit_models`].

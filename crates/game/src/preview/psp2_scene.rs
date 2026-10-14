@@ -2,9 +2,10 @@
 //!
 //! The one place a scene's motion (`.vex`) and its geometry (the `.rcsmodel`
 //! beside it, 2048's container) are joined, for the menu backdrop
-//! ([`crate::boot`]) and a circuit's selection-screen model ([`circuit_model`]).
+//! ([`crate::boot`]) and a selection screen's model ([`model`]): a circuit's on
+//! `Track Select`, a craft's hull on `Ship Select`.
 //!
-//! **Scoped to the circuit model on purpose**: [`super::model`] stays as it
+//! **Scoped to the selection screens on purpose**: [`super::model`] stays as it
 //! was, so no other caller (the flyer cards, the end-of-race placements) starts
 //! drawing a PS4 scene it did not draw before.
 
@@ -32,8 +33,8 @@ pub fn build(
     Ok(Some((model, built.describe())))
 }
 
-/// A circuit's selection-screen model: the PS4 scene when the `.rcsmodel` beside
-/// `entry` is one, else [`super::model`].
+/// A selection screen's model, a circuit or a craft's hull: the PS4 scene when
+/// the `.rcsmodel` beside `entry` is one, else [`super::model`].
 ///
 /// The sibling is asked rather than the `.vex`, because not every Omega `.vex`
 /// carries the header flag HD's do (Talons Junction, Amphiseum, Modesto
@@ -42,15 +43,15 @@ pub fn build(
 /// # Errors
 ///
 /// The entry is missing or will not decode.
-pub fn circuit_model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
+pub fn model(archives: &mut oag_assets::Archives, entry: &str) -> Result<Model> {
     if let Some(sibling) = mesh::rcs::sibling_name(entry)
         && let Ok(geometry) = archives.read_name(&sibling)
     {
         let vex = archives.read_name(entry)?;
         if let Some((mut model, report)) = build(archives, entry, &vex, &geometry)
-            .with_context(|| format!("decoding the circuit model {entry}"))?
+            .with_context(|| format!("decoding the selection model {entry}"))?
         {
-            log::debug!("circuit model {entry}: {report}");
+            log::debug!("selection model {entry}: {report}");
             model.keep_nearest();
             return Ok(model);
         }

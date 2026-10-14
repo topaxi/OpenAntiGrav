@@ -834,6 +834,9 @@ pub fn load_shell(
             .front_end
             .is_some_and(|front_end| front_end.borrows_ps2_split_screens),
         title.race.ship_dir,
+        title
+            .front_end
+            .and_then(|front_end| front_end.ship_preview_pose),
         &mut report,
     );
     report.push(steps.describe("the boot's first half"));

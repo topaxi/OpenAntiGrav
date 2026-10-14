@@ -1,5 +1,5 @@
-//! Scratch probe: the teams Omega's Ship Select offers, and per team what its
-//! honeycomb rows resolve to.
+//! Scratch probe: the teams Omega's Ship Select offers, per team what its
+//! honeycomb rows resolve to, and the size of the hull its preview draws.
 //!
 //! ```sh
 //! cargo run -p oag-game --example omega_ship_select_probe -- data/extracted/ps4
@@ -37,6 +37,24 @@ fn main() -> anyhow::Result<()> {
             team.models.len(),
             open,
             ids
+        );
+    }
+    let mut archives =
+        oag_source::title::open_source(&options.source, Vec::new(), Vec::new())?.archives;
+    let Some(hull) = title
+        .front_end
+        .and_then(|front_end| front_end.ship_preview_hull)
+    else {
+        return Ok(());
+    };
+    for team in &shell.teams {
+        let entry = format!(r"{}\{hull}", team.location);
+        let mut model = oag_game::preview::psp2_scene::model(&mut archives, &entry)?;
+        let raw = (model.centre, model.radius);
+        oag_game::preview::frame_hull(&mut model);
+        println!(
+            "  {:<12} raw centre {:.2?} radius {:.2}; framed centre {:.2?} radius {:.2}",
+            team.id, raw.0, raw.1, model.centre, model.radius
         );
     }
     Ok(())
