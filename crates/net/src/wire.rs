@@ -114,6 +114,10 @@ pub struct RaceParams {
     pub mode: String,
     /// [`oag_ai::Difficulty::name`].
     pub difficulty: String,
+    /// [`oag_gameplay::ControlScheme::name`]: how every snapshot maps to controls.
+    /// One per race in this engine (`Race::set_control_scheme`), so a client flies
+    /// the server's, whatever its own settings say.
+    pub scheme: String,
     /// The world seed.
     pub seed: u64,
     /// How many people race (each in grid slot `0..people`).
@@ -336,6 +340,7 @@ impl RaceParams {
             &self.class,
             &self.mode,
             &self.difficulty,
+            &self.scheme,
         ] {
             put_string(out, text);
         }
@@ -353,6 +358,7 @@ impl RaceParams {
             class: reader.string()?,
             mode: reader.string()?,
             difficulty: reader.string()?,
+            scheme: reader.string()?,
             seed: reader.u64()?,
             people: reader.u8()?,
             opponents: reader.u8()? != 0,

@@ -10,12 +10,18 @@
 //! - [`link`]: the transport as the protocol sees it ([`link::Link`]), an
 //!   in-process pair and a latency and loss shim.
 //! - `wt`: [`link::Link`] over WebTransport, native only.
+//! - [`race`]: the one way the server and a client build the same race.
+//! - [`host`]: the authoritative race and each person's input buffer.
+//! - [`client`]: prediction, the confirmed timeline and the threshold correction.
 //!
 //! **No gameplay crate depends on this one** (rule 1 of `just check-deps`): the
 //! simulation never knows the network exists. What reaches it is an
 //! `InputSnapshot` per slot per tick, the same as from a pad.
 
+pub mod client;
+pub mod host;
 pub mod link;
+pub mod race;
 pub mod wire;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod wt;

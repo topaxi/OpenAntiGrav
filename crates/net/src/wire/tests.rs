@@ -19,6 +19,7 @@ fn params() -> RaceParams {
         class: "Venom".into(),
         mode: "single_race".into(),
         difficulty: "elite".into(),
+        scheme: "veteran".into(),
         seed: 0xDEAD_BEEF_0123_4567,
         people: 2,
         opponents: true,

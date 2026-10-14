@@ -641,6 +641,7 @@ impl Race {
                 poses: Default::default(),
                 correction: [Vec3::ZERO; MAX_SHIPS],
                 correction_smoothing: true,
+                seat: None,
                 shake: oag_render::camera::shake::Shake::new(),
                 shake_rng: Rng::new(SHAKE_SEED),
                 intro: intro_camera

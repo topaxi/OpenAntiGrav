@@ -9,6 +9,9 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod loopback;
+mod net_ground_truth;
+
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.
 #[test]

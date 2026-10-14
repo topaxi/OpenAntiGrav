@@ -295,9 +295,23 @@ impl Race {
     /// goes through** - a HUD, a camera, a medal, a records row - so that when
     /// a second local player arrives, "which craft is this view about" is a
     /// parameter in one place rather than a literal `0` in thirty.
+    ///
+    /// In a network race, the seat [`Self::set_seat`] names: there every person's
+    /// slot is remote on every peer, so the world's lowest person slot is not
+    /// necessarily this machine's.
     #[must_use]
     pub fn player_slot(&self) -> usize {
-        self.sim.world.primary_slot()
+        self.view
+            .seat
+            .unwrap_or_else(|| self.sim.world.primary_slot())
+    }
+
+    /// Names the slot this machine's person flies in a network race, for every
+    /// presentation-side reader ([`Self::player_slot`]) and for the correction
+    /// glide, which never moves the craft the camera follows. View-only: nothing
+    /// the simulation reads changes.
+    pub fn set_seat(&mut self, slot: Option<usize>) {
+        self.view.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
     }
 
     /// The player's ship.

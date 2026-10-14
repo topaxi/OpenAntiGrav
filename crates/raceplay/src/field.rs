@@ -267,6 +267,32 @@ impl Race {
         self.sim.autopilot
     }
 
+    /// What the player's own driver would ask of `slot`'s craft now, with the
+    /// simulation left exactly as it was.
+    ///
+    /// A verification aid for a network client that flies itself (`--net-bot`): the
+    /// driver's answer becomes that client's input, so it reaches the server as an
+    /// `InputSnapshot` like a pad's, rather than as `--autopilot`, which flies the
+    /// craft inside the tick where the server never sees it. The driver keeps
+    /// state, which is hashed world state, so the caller keeps this driver's
+    /// (`driver`, located on the racing line on the first call) and the whole
+    /// simulation is put back after asking.
+    pub fn autopilot_wants(
+        &mut self,
+        slot: usize,
+        driver: &mut Option<oag_ai::Driver>,
+    ) -> oag_physics::ShipControls {
+        let kept = self.sim.clone();
+        match driver {
+            Some(own) => self.sim.world.ships[slot].driver = *own,
+            None => self.locate_player_driver(slot),
+        }
+        let wants = self.autopilot_controls(slot);
+        *driver = Some(self.sim.world.ships[slot].driver);
+        self.sim = kept;
+        wants
+    }
+
     /// What the player's own driver wants this tick.
     ///
     /// The opponents' path exactly - the same line, the same pilot slot and
