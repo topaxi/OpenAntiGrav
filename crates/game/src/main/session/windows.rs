@@ -82,6 +82,16 @@ impl Session {
                 .then(|| monitors.get(slot % monitors.len().max(1)).cloned())
                 .flatten();
             let title = windows::title(&app, &word, slot + 1);
+            // Beside window 1 where the platform lets a program say so (X11); the
+            // compositor places it otherwise (Wayland), which is why this is a request
+            // and not a layout.
+            let position = origin.map(|origin| {
+                let step = f64::from(size.width) * scale;
+                winit::dpi::PhysicalPosition::new(
+                    origin.x + (step * slot as f64) as i32 + 16 * slot as i32,
+                    origin.y,
+                )
+            });
             let opened = self
                 .gpu
                 .open_output(
@@ -89,21 +99,10 @@ impl Session {
                     &title,
                     winit::dpi::LogicalSize::new(size.width, size.height),
                     monitor,
+                    position,
                     crate::window::seat_present_modes(),
                 )
                 .and_then(|output| {
-                    // Beside window 1 where the platform lets a program say so (X11); the
-                    // compositor places it otherwise (Wayland), which is why this is a
-                    // request and not a layout.
-                    if let Some(origin) = origin {
-                        let step = f64::from(size.width) * scale;
-                        output
-                            .window
-                            .set_outer_position(winit::dpi::PhysicalPosition::new(
-                                origin.x + (step * slot as f64) as i32 + 16 * slot as i32,
-                                origin.y,
-                            ));
-                    }
                     let framebuffer = upscale::Framebuffer::new(
                         &self.gpu.device,
                         output.config.format,
@@ -121,9 +120,8 @@ impl Session {
             match opened {
                 Ok(seat) => {
                     info!(
-                        "window {}: {} on slot {slot} ({}x{})",
+                        "window {}: {title} on slot {slot} ({}x{})",
                         slot + 1,
-                        seat.output.window.title(),
                         seat.output.config.width,
                         seat.output.config.height,
                     );

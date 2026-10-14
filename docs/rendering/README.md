@@ -182,6 +182,10 @@
   race, `N` views of it (layout for 1 to 8, a chase camera per view, one scene draw
   per view). Layout and the camera rig are chosen, not measured; HUD hidden while
   split.
+- [Multi-window local play](multi-window.md) - **first cut** 2026-10-14: `--windows N`, one
+  process, one race, a window per person (each the whole-screen view of one craft, on one shared
+  device, one submission per window). Closing a window gives its seat to the AI. Chosen, not
+  measured; real multi-display pacing is open
 - [Drawing between ticks](between-ticks.md) - **built** 2026-10-13: the window
   draws a race between its last two 60 Hz ticks, so motion is smooth at 144 or
   240 Hz; captures still draw each tick exactly, byte for byte. A modern

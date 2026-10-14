@@ -183,6 +183,40 @@ fn a_local_slot_without_a_device_is_flown_by_the_ai_and_returns_with_its_pad() {
     assert_eq!(race.sim.world.controllers[2], Controller::Remote);
 }
 
+/// Closing a seat's window hands its craft to the AI **even though its pad is still plugged
+/// in**, and a pad that reconnects does not take it back: nobody could see the craft.
+/// Fails if closing a window only forgets the window and leaves the person flying blind.
+#[test]
+fn a_closed_window_hands_its_seat_to_the_ai_and_the_pad_cannot_take_it_back() {
+    let mut race = race(2);
+    let mut assignment = Assignment::<u32>::seated(2);
+    assignment.claim_keyboard(0);
+    split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
+    race.set_windowed(true);
+    assignment.reconcile(&[7]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert_eq!(
+        race.sim.world.controllers[1],
+        Controller::Local,
+        "pad 7 sits at window 2"
+    );
+
+    assignment.unseat(1);
+    assert_eq!(split_screen::follow_devices(&mut race, &assignment), 1);
+    assert_eq!(race.sim.world.controllers[1], Controller::Ai);
+    assert_eq!(
+        race.sim.world.controllers[0],
+        Controller::Local,
+        "window 1's person flies on"
+    );
+
+    assignment.reconcile(&[]);
+    assignment.reconcile(&[7]);
+    split_screen::follow_devices(&mut race, &assignment);
+    assert_eq!(race.sim.world.controllers[1], Controller::Ai);
+    assert!(race.windowed(), "the race itself is still windowed");
+}
+
 /// Merged devices are a single person: nothing is reverted.
 #[test]
 fn merged_devices_leave_the_controllers_alone() {

@@ -372,6 +372,7 @@ impl Gpu {
         title: &str,
         size: winit::dpi::LogicalSize<u32>,
         monitor: Option<winit::monitor::MonitorHandle>,
+        position: Option<winit::dpi::PhysicalPosition<i32>>,
         modes: &[wgpu::PresentMode],
     ) -> Result<Output> {
         let mut attributes = Window::default_attributes()
@@ -388,7 +389,12 @@ impl Gpu {
             use winit::platform::wayland::WindowAttributesExtWayland;
             attributes = attributes.with_name(APP_ID, APP_ID);
         }
-        if let (None, Some(monitor)) = (&attributes.fullscreen, &monitor) {
+        // Asked for at creation, not moved afterwards: a window that opens on top of window 1
+        // and is moved off it has already told window 1 it was covered (`Occluded`), which
+        // pauses the race.
+        if let Some(position) = position {
+            attributes = attributes.with_position(position);
+        } else if let (None, Some(monitor)) = (&attributes.fullscreen, &monitor) {
             attributes = attributes.with_position(centred_on(
                 monitor,
                 oag_display::display::Size {
