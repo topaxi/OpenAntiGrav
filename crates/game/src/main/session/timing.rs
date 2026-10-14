@@ -121,6 +121,251 @@ pub(super) fn upscale_timestamps<'a>(
     Some(oag_post::fsr3::ChainTimestamps { scaled, presented })
 }
 
+/// A frame's [`drs::Cost`] from what its rings read back, or `None` while a part that should
+/// have come back has not.
+///
+/// **Absent-because-it-did-not-run is zero; absent-because-it-was-not-measured is a skipped
+/// frame**, and the two are told apart by whether anything temporal is resolving at all
+/// (`expects_upscale`) and whether the scene has an HD bloom chain (`has_hd_bloom`). Treating an
+/// unmeasured chain as free would inflate the budget by the largest single term in it. One
+/// function for window 1 and for every further window ([`Rings::cost`]), so the rule is stated
+/// once.
+pub(crate) fn assemble(
+    scene: f32,
+    blur: Option<f32>,
+    hd_bloom: Option<f32>,
+    upscale: Option<(f32, f32)>,
+    has_hd_bloom: bool,
+    expects_upscale: bool,
+) -> Option<drs::Cost> {
+    let upscale = match (upscale, expects_upscale) {
+        (Some(pair), _) => Some(pair),
+        (None, false) => Some((0.0, 0.0)),
+        (None, true) => None,
+    };
+    let hd_bloom = match (hd_bloom, has_hd_bloom) {
+        (Some(seconds), _) => Some(seconds),
+        (None, false) => Some(0.0),
+        (None, true) => None,
+    };
+    let ((upscale_scaled, upscale_presented), hd_bloom) = upscale.zip(hd_bloom)?;
+    Some(drs::Cost {
+        scalable: scene + blur.unwrap_or(0.0) + hd_bloom + upscale_scaled,
+        fixed: upscale_presented,
+    })
+}
+
+/// How many frames a window's cost waits for the others' before the frame is dropped.
+const MAX_LAG: u64 = 4;
+
+/// What each of a frame's rings read back, by frame, until the frame is assembled.
+#[derive(Clone, Copy, Debug, Default)]
+struct Seen {
+    scene: Option<f32>,
+    blur: Option<f32>,
+    hd_bloom: Option<f32>,
+    upscale: Option<f32>,
+    upscale_presented: Option<f32>,
+}
+
+/// A further window's five GPU timing rings: the scene pass, the motion-blur chain, HD's bloom
+/// chain and the two halves of FSR 3.1, the same five window 1 reads on `Session`
+/// (`Session::pass_timer` and its four neighbours), claimed, abandoned and resolved by the same
+/// rules and read into the same [`drs::Cost`] through [`assemble`]. **A window times its own
+/// passes**: the controller is fed the sum over the windows of a frame
+/// ([`Session::feed_windows`]), one scale for all of them.
+///
+/// Any ring is `None` on a device that cannot be asked, and then the window has no cost at all.
+#[derive(Debug)]
+pub(crate) struct Rings {
+    pass: Option<oag_gpu::timing::PassTimer>,
+    blur: Option<oag_gpu::timing::PassTimer>,
+    hd_bloom: Option<oag_gpu::timing::PassTimer>,
+    upscale: Option<oag_gpu::timing::PassTimer>,
+    upscale_presented: Option<oag_gpu::timing::PassTimer>,
+    seen: std::collections::BTreeMap<u64, Seen>,
+}
+
+impl Rings {
+    pub(crate) fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let ring = || oag_gpu::timing::PassTimer::new(device, queue);
+        Self {
+            pass: ring(),
+            blur: ring(),
+            hd_bloom: ring(),
+            upscale: ring(),
+            upscale_presented: ring(),
+            seen: Default::default(),
+        }
+    }
+
+    /// Takes a slot for `frame` on the three rings the scene's own render brackets, ahead of it.
+    pub(crate) fn claim(&mut self, frame: u64) {
+        for timer in [&mut self.pass, &mut self.blur, &mut self.hd_bloom]
+            .into_iter()
+            .flatten()
+        {
+            timer.begin(frame);
+        }
+    }
+
+    /// The window's blur, jitter and timers, with the timestamp pairs of the rings
+    /// [`Self::claim`] took slots on.
+    pub(crate) fn effects<'a>(
+        &'a self,
+        effects: oag_raceplay::WindowEffects<'a>,
+    ) -> oag_raceplay::WindowEffects<'a> {
+        let half = |timer: &'a Option<oag_gpu::timing::PassTimer>, half| {
+            timer.as_ref().and_then(|timer| timer.half_writes(half))
+        };
+        oag_raceplay::WindowEffects {
+            timestamps: self
+                .pass
+                .as_ref()
+                .and_then(oag_gpu::timing::PassTimer::writes),
+            blur_timestamps: half(&self.blur, oag_gpu::timing::Half::Begin)
+                .zip(half(&self.blur, oag_gpu::timing::Half::End))
+                .map(|(begin, end)| oag_post::motion_blur::ChainTimestamps { begin, end }),
+            hd_bloom_timestamps: half(&self.hd_bloom, oag_gpu::timing::Half::Begin)
+                .zip(half(&self.hd_bloom, oag_gpu::timing::Half::End))
+                .map(|(begin, end)| oag_post::hd_bloom::ChainTimestamps { begin, end }),
+            ..effects
+        }
+    }
+
+    /// Gives back what the scene's render did not write into: **a claim nothing wrote into does not
+    /// read back as zero** (see `claim_upscale`), so it is abandoned, as `Session::draw` does for
+    /// window 1. `timed` is whether the window's scene pass was bracketed at all: a window of
+    /// several seats is a split and times none of them.
+    pub(crate) fn give_back(&mut self, stats: &oag_present::perf::SceneStats, timed: bool) {
+        for (timer, written) in [
+            (&mut self.pass, timed),
+            (&mut self.blur, stats.blur_encoded),
+            (&mut self.hd_bloom, stats.hd_bloom_encoded),
+        ] {
+            if !written && let Some(timer) = timer.as_mut() {
+                timer.abandon();
+            }
+        }
+    }
+
+    /// Both FSR 3.1 rings, claimed for `frame` or neither ([`claim_upscale`]).
+    pub(crate) fn claim_upscale(&mut self, frame: u64) {
+        claim_upscale(self.upscale.as_mut(), self.upscale_presented.as_mut(), frame);
+    }
+
+    pub(crate) fn upscale_timestamps(&self) -> Option<oag_post::fsr3::ChainTimestamps<'_>> {
+        upscale_timestamps(self.upscale.as_ref(), self.upscale_presented.as_ref())
+    }
+
+    pub(crate) fn abandon_upscale(&mut self) {
+        abandon_upscale(self.upscale.as_mut(), self.upscale_presented.as_mut());
+    }
+
+    /// Copies every claimed pair out of its query set, into the encoder the passes were recorded
+    /// in: unconditional, as window 1's is (claim less, always resolve).
+    pub(crate) fn resolve(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        for timer in [&mut self.pass, &mut self.blur, &mut self.hd_bloom]
+            .into_iter()
+            .flatten()
+        {
+            timer.resolve(encoder);
+        }
+        resolve_upscale(self.upscale.as_mut(), self.upscale_presented.as_mut(), encoder);
+    }
+
+    /// Reads everything that has come back, by the frame it names. A reading from `stall_frame` or
+    /// before (a load) is dropped, as window 1's are.
+    pub(crate) fn drain(&mut self, device: &wgpu::Device, stall_frame: u64) {
+        let mut readings = [None; oag_gpu::timing::PassTimer::SLOTS];
+        let fields: [(&mut Option<oag_gpu::timing::PassTimer>, fn(&mut Seen, f32)); 5] = [
+            (&mut self.pass, |seen, seconds| seen.scene = Some(seconds)),
+            (&mut self.blur, |seen, seconds| seen.blur = Some(seconds)),
+            (&mut self.hd_bloom, |seen, seconds| {
+                seen.hd_bloom = Some(seconds);
+            }),
+            (&mut self.upscale, |seen, seconds| {
+                seen.upscale = Some(seconds);
+            }),
+            (&mut self.upscale_presented, |seen, seconds| {
+                seen.upscale_presented = Some(seconds);
+            }),
+        ];
+        for (timer, set) in fields {
+            let Some(timer) = timer.as_mut() else {
+                continue;
+            };
+            timer.drain(device, &mut readings);
+            for reading in readings.iter().flatten() {
+                if reading.frame > stall_frame && reading.seconds > 0.0 {
+                    set(self.seen.entry(reading.frame).or_default(), reading.seconds);
+                }
+            }
+        }
+    }
+
+    /// This window's cost of `frame`, once its rings have come back for it, or `None` while any
+    /// of them is still to come (or the device cannot time a pass at all).
+    pub(crate) fn cost(
+        &self,
+        frame: u64,
+        has_hd_bloom: bool,
+        expects_upscale: bool,
+    ) -> Option<drs::Cost> {
+        let seen = self.seen.get(&frame)?;
+        assemble(
+            seen.scene?,
+            seen.blur,
+            seen.hd_bloom,
+            seen.upscale.zip(seen.upscale_presented),
+            has_hd_bloom,
+            expects_upscale,
+        )
+    }
+
+    /// Forgets the frames up to and including `frame`: they were fed or given up on.
+    pub(crate) fn forget_to(&mut self, frame: u64) {
+        self.seen = self.seen.split_off(&(frame + 1));
+    }
+}
+
+/// The frames whose cost every window has, with the cost summed over the windows, oldest first,
+/// out of `ahead`: window 1's cost of each frame not yet fed, by frame. **A frame is fed when
+/// every window that drew it has come back for it**, and given up on once it is [`MAX_LAG`]
+/// frames behind the newest, so one window reading a frame late cannot hold the controller (or
+/// shift its pairing for good, which is the backlog the rings' `drain` exists to prevent).
+///
+/// `window_cost(frame)` is the other windows' summed cost of the frame, `None` while any of them
+/// is still to come. Returns the frames to feed, each with its total, and removes them and every
+/// frame given up on from `ahead`.
+pub(crate) fn complete_frames(
+    ahead: &mut std::collections::BTreeMap<u64, drs::Cost>,
+    mut window_cost: impl FnMut(u64) -> Option<drs::Cost>,
+) -> Vec<(u64, drs::Cost)> {
+    let newest = ahead.keys().next_back().copied().unwrap_or(0);
+    let mut fed = Vec::new();
+    let frames: Vec<u64> = ahead.keys().copied().collect();
+    for frame in frames {
+        let own = ahead[&frame];
+        if let Some(others) = window_cost(frame) {
+            ahead.remove(&frame);
+            fed.push((
+                frame,
+                drs::Cost {
+                    scalable: own.scalable + others.scalable,
+                    fixed: own.fixed + others.fixed,
+                },
+            ));
+        } else if frame + MAX_LAG < newest {
+            ahead.remove(&frame);
+        } else {
+            // Oldest first: a younger frame is not fed ahead of an older one still waiting.
+            break;
+        }
+    }
+    fed
+}
+
 impl Session {
     /// Reads back the frame's GPU timing rings and feeds the controller.
     ///
@@ -197,6 +442,11 @@ impl Session {
         // per-*circuit* decision baked into `race::Scene::new`, not a player
         // setting. See `race::Scene::has_hd_bloom`.
         let has_hd_bloom = matches!(&self.stage, Stage::Race(stage) if stage.scene.has_hd_bloom());
+        // Every further window's own rings, by the frame they name: [`Self::feed_windows`] pairs
+        // them with window 1's below.
+        for screen in &mut self.screens {
+            screen.rings.drain(&self.gpu.device, self.stall_frame);
+        }
 
         for reading in upscale_readings.iter().flatten() {
             if reading.frame > self.stall_frame && reading.seconds > 0.0 {
@@ -263,6 +513,7 @@ impl Session {
                 drs_limits,
             );
         }
+        self.feed_windows(render_profile, frame_seconds, drs_limits);
     }
 
     /// One scene reading into the controller, with the other rings' readings
@@ -301,7 +552,7 @@ impl Session {
                     .find(|other| other.frame == reading.frame)
                     .map(|other| other.seconds)
             };
-            let blur = matching(blur_readings).unwrap_or(0.0);
+            let blur = matching(blur_readings);
             let hd_bloom = matching(hd_bloom_readings);
             // **The FSR 3.1 chain is two readings, and only one of them is
             // fixed.** Its six render-resolution dispatches fall with the
@@ -338,68 +589,24 @@ impl Session {
             let expects_upscale = render_profile.reconstruction.is_temporal()
                 && self.gpu.temporal
                 && self.framebuffer.temporal_upscaler_viable();
-            let upscale = match (upscale, expects_upscale) {
-                (Some(pair), _) => Some(pair),
-                (None, false) => Some((0.0, 0.0)),
-                (None, true) => None,
-            };
-            // The same shape of question for `hd_bloom`, answered off the
-            // scene's own `has_hd_bloom` rather than a settings row - see
-            // ADR-0043.
-            let hd_bloom = match (hd_bloom, has_hd_bloom) {
-                (Some(seconds), _) => Some(seconds),
-                (None, false) => Some(0.0),
-                (None, true) => None,
-            };
-            if let (Some((upscale_scaled, upscale_presented)), Some(hd_bloom)) = (upscale, hd_bloom)
-            {
-                let cost = drs::Cost {
-                    scalable: reading.seconds + blur + hd_bloom + upscale_scaled,
-                    fixed: upscale_presented,
-                };
-                // The same reading, inside the same guard: a load lands in one
-                // frame's timing and would otherwise drive the scale to the
-                // floor and take seconds to climb back.
-                if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
-                    // **The reserve is printed beside the costs**, because
-                    // since ADR-0044 it is not a constant a reader can look up:
-                    // two lines a minute apart can divide the same scalable
-                    // cost by two different budgets, and without this there is
-                    // nothing in the log that says so.
-                    trace!(
-                        "dynamic resolution: {}x{} ({:.0}% of {}x{}) - scalable {:.3} ms, \
-                         fixed {:.3} ms, residual {:.3} ms{}",
-                        extent.0,
-                        extent.1,
-                        self.drs.scale() * 100.0,
-                        drs_limits.ceiling().0,
-                        drs_limits.ceiling().1,
-                        cost.scalable * 1000.0,
-                        cost.fixed * 1000.0,
-                        reserved_ms(&self.drs, drs_limits),
-                        if self.drs.residual().learned().is_some() {
-                            " (learned)"
-                        } else {
-                            " (assumed)"
-                        }
-                    );
+            // Which of the two cases the zero is, and the sum, are `assemble`'s: window 1's cost
+            // and a further window's are assembled by the one rule.
+            if let Some(cost) = assemble(
+                reading.seconds,
+                blur,
+                hd_bloom,
+                upscale,
+                has_hd_bloom,
+                expects_upscale,
+            ) {
+                // With further windows open the controller is fed the cost summed over every
+                // window of the frame, once all of them have come back for it
+                // ([`Self::feed_windows`]); alone, at once, as it always was.
+                if self.screens.is_empty() {
+                    self.record_cost(cost, frame_seconds, drs_limits);
+                } else {
+                    self.window_ahead.insert(reading.frame, cost);
                 }
-                // Said once per spell rather than per frame - see
-                // `drs::Controller::unreachable`.
-                if self.drs.unreachable() && !self.drs_unreachable_said {
-                    warn!(
-                        "dynamic resolution: {} fps is out of reach here - {:.3} ms of this \
-                         frame is fixed cost the render scale cannot shrink and {:.3} ms is \
-                         held back for work nothing times, against a {:.3} ms budget. Lower \
-                         the target, or the rows that feed the fixed cost (reconstruction, \
-                         msaa)",
-                        drs_limits.target(),
-                        cost.fixed * 1000.0,
-                        reserved_ms(&self.drs, drs_limits),
-                        drs_limits.target().period().unwrap_or(0.0) * 1000.0
-                    );
-                }
-                self.drs_unreachable_said = self.drs.unreachable();
             }
         }
         trace!(
@@ -408,6 +615,139 @@ impl Session {
             reading.seconds * 1000.0,
             self.frame_index
         );
+    }
+
+    /// One frame's cost into the controller, and what it says about it.
+    ///
+    /// The same reading, inside the same guard `feed_drs` keeps: a load lands in one frame's
+    /// timing and would otherwise drive the scale to the floor and take seconds to climb back.
+    fn record_cost(
+        &mut self,
+        cost: drs::Cost,
+        frame_seconds: Option<f32>,
+        drs_limits: drs::Limits,
+    ) {
+        if let Some(extent) = self.drs.record(cost, frame_seconds, drs_limits) {
+            // **The reserve is printed beside the costs**, because
+            // since ADR-0044 it is not a constant a reader can look up:
+            // two lines a minute apart can divide the same scalable
+            // cost by two different budgets, and without this there is
+            // nothing in the log that says so.
+            trace!(
+                "dynamic resolution: {}x{} ({:.0}% of {}x{}) - scalable {:.3} ms, \
+                 fixed {:.3} ms, residual {:.3} ms{}",
+                extent.0,
+                extent.1,
+                self.drs.scale() * 100.0,
+                drs_limits.ceiling().0,
+                drs_limits.ceiling().1,
+                cost.scalable * 1000.0,
+                cost.fixed * 1000.0,
+                reserved_ms(&self.drs, drs_limits),
+                if self.drs.residual().learned().is_some() {
+                    " (learned)"
+                } else {
+                    " (assumed)"
+                }
+            );
+        }
+        // Said once per spell rather than per frame - see
+        // `drs::Controller::unreachable`.
+        if self.drs.unreachable() && !self.drs_unreachable_said {
+            warn!(
+                "dynamic resolution: {} fps is out of reach here - {:.3} ms of this \
+                 frame is fixed cost the render scale cannot shrink and {:.3} ms is \
+                 held back for work nothing times, against a {:.3} ms budget. Lower \
+                 the target, or the rows that feed the fixed cost (reconstruction, \
+                 msaa)",
+                drs_limits.target(),
+                cost.fixed * 1000.0,
+                reserved_ms(&self.drs, drs_limits),
+                drs_limits.target().period().unwrap_or(0.0) * 1000.0
+            );
+        }
+        self.drs_unreachable_said = self.drs.unreachable();
+
+    }
+
+    /// The frames of a multi-window race whose every window has come back, fed to the controller
+    /// with the cost **summed over the windows**: one budget (the windows' passes are serial on the
+    /// one queue and the frame period is their sum) and one scale, applied to each window's own
+    /// ceiling, which is what the controller's model - cost goes as the pixel count - makes sound
+    /// for a sum of windows each scaled by the same fraction. **Chosen, not measured.**
+    ///
+    /// A race whose windows are not all one seat holds its scale instead
+    /// ([`Self::drs_runs`]), as a split screen does: the frames are still taken off the queue so it
+    /// does not grow.
+    pub(super) fn feed_windows(
+        &mut self,
+        render_profile: &settings::RenderProfile,
+        frame_seconds: Option<f32>,
+        drs_limits: drs::Limits,
+    ) {
+        if self.screens.is_empty() {
+            return;
+        }
+        let race = match &self.stage {
+            Stage::Race(stage) => Some(&stage.race),
+            _ => self.suspended_race.as_ref().map(|stage| &stage.race),
+        };
+        let windowed = race.is_some_and(|race| race.windowed());
+        let has_hd_bloom = matches!(&self.stage, Stage::Race(stage) if stage.scene.has_hd_bloom());
+        let temporal = render_profile.reconstruction.is_temporal() && self.gpu.temporal;
+        let screens = &self.screens;
+        let fed = complete_frames(&mut self.window_ahead, |frame| {
+            let mut total = drs::Cost {
+                scalable: 0.0,
+                fixed: 0.0,
+            };
+            let seats = |window: usize| {
+                race.filter(|race| windowed && race.windowed())
+                    .map_or(0, |race| race.window_drawn(window).len())
+            };
+            for (index, screen) in screens.iter().enumerate() {
+                // A window that draws no seat claims nothing: it has no cost to wait for.
+                let held = seats(index + 1);
+                if held == 0 {
+                    continue;
+                }
+                let cost = screen.rings.cost(
+                    frame,
+                    has_hd_bloom,
+                    temporal && held == 1 && screen.framebuffer.temporal_upscaler_viable(),
+                )?;
+                total.scalable += cost.scalable;
+                total.fixed += cost.fixed;
+            }
+            Some(total)
+        });
+        let runs = self.drs_runs();
+        for (_, cost) in fed {
+            if runs {
+                self.record_cost(cost, frame_seconds, drs_limits);
+            }
+        }
+        let horizon = self.frame_index.saturating_sub(2 * MAX_LAG);
+        for screen in &mut self.screens {
+            screen.rings.forget_to(horizon);
+        }
+    }
+
+    /// Whether the controller moves the extent now: always for a race of one window, and for a
+    /// multi-window race while every window holds one seat. A window of several seats is a split,
+    /// whose views are not timed (its scene pass has no one pair to bracket), so the scale holds
+    /// at the ceiling, **chosen, not measured**, as a split screen holds it.
+    pub(crate) fn drs_runs(&self) -> bool {
+        let race = match &self.stage {
+            Stage::Race(stage) => Some(&stage.race),
+            _ => self.suspended_race.as_ref().map(|stage| &stage.race),
+        };
+        match race {
+            Some(race) if race.windowed() => {
+                (0..race.windows().len()).all(|window| race.window_drawn(window).len() <= 1)
+            }
+            _ => true,
+        }
     }
 }
 
@@ -420,3 +760,7 @@ fn reserved_ms(drs: &drs::Controller, limits: drs::Limits) -> f32 {
     let period = limits.target().period().unwrap_or(0.0);
     drs.residual().seconds(period) * 1000.0
 }
+
+#[cfg(test)]
+#[path = "timing/tests.rs"]
+mod tests;

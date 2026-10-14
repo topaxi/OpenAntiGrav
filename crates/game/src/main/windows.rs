@@ -36,6 +36,9 @@ pub(crate) struct Screen {
     /// Logged every [`PACING_LOG_FRAMES`] frames: the pacing measurement.
     pub(crate) acquire: perf::Meter,
     pub(crate) present: perf::Meter,
+    /// This window's own GPU timing rings: dynamic resolution is fed the cost summed over the
+    /// windows of a frame (`Session::feed_windows`).
+    pub(crate) rings: crate::session::timing::Rings,
 }
 
 /// How often a multi-window run says what each window's acquire and present cost.

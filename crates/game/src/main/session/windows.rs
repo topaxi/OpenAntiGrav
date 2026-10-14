@@ -117,6 +117,7 @@ impl Session {
                         framebuffer,
                         acquire: perf::Meter::new(),
                         present: perf::Meter::new(),
+                        rings: super::timing::Rings::new(&self.gpu.device, &self.gpu.queue),
                     })
                 });
             match opened {
@@ -608,6 +609,14 @@ impl Session {
         screen.framebuffer.resize_output(device, surface);
         // Window 1's allocation, the scene's own; this window's extent inside it.
         screen.framebuffer.resize(device, self.framebuffer.allocation());
+        // The one controller's scale on this window's own ceiling (the target it wants),
+        // while every window holds one seat; the ceiling itself otherwise (`Session::drs_runs`).
+        let wanted = if self.drs_runs() {
+            self.drs
+                .extent(self.drs_limits_for(surface, wanted))
+        } else {
+            wanted
+        };
         screen.framebuffer.set_extent(wanted);
         let extent = screen.framebuffer.extent();
         let inside = (0.0, 0.0, extent.0 as f32, extent.1 as f32);
@@ -646,7 +655,11 @@ impl Session {
             ),
             ..Default::default()
         };
-        stage.render_window(
+        // This window's own timers, bracketing its own passes: its cost joins window 1's in the
+        // controller's frame (`Session::feed_windows`).
+        let frame = self.frame_index;
+        screen.rings.claim(frame);
+        let stats = stage.render_window(
             &self.gpu,
             encoder,
             screen.framebuffer.view(),
@@ -658,8 +671,11 @@ impl Session {
             self.anim_seconds,
             profile.shadows,
             self.zone_hold.levels(),
-            effects,
+            screen.rings.effects(effects),
         );
+        screen
+            .rings
+            .give_back(&stats, stage.race.window_drawn(window).len() == 1);
         let presentation = upscale::Presentation {
             reconstruction: profile.reconstruction,
             sharpness: profile.upscale_sharpness.stops(),
@@ -673,15 +689,26 @@ impl Session {
         } else {
             None
         };
-        let _ = screen.framebuffer.resolve_scene(
+        // Claimed on the three conditions `resolve_scene` decides with, as window 1's is
+        // (`Session::draw`): a slot nothing writes into does not read back as zero.
+        let upscaling = temporal.is_some()
+            && presentation.reconstruction == display::Reconstruction::Fsr3
+            && screen.framebuffer.temporal_upscaler_viable();
+        if upscaling {
+            screen.rings.claim_upscale(frame);
+        }
+        let encoded = screen.framebuffer.resolve_scene(
             &self.gpu.device,
             &self.gpu.queue,
             encoder,
             rect,
             &presentation,
             temporal,
-            None,
+            screen.rings.upscale_timestamps(),
         );
+        if upscaling && !encoded {
+            screen.rings.abandon_upscale();
+        }
         stage.draw_window_track_panel(
             &self.gpu,
             encoder,
@@ -700,6 +727,7 @@ impl Session {
         stage
             .scene
             .composite_bloom(encoder, screen.framebuffer.output(), rect);
+        screen.rings.resolve(encoder);
         stage.race.set_draw_alpha(1.0);
         screen
             .framebuffer
