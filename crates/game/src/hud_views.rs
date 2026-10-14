@@ -207,8 +207,13 @@ pub fn view_draws<'a>(
     let views = oag_render::viewport::layout(count, viewport, cut);
     let whole = [0.0, 0.0, space.size.0, space.size.1];
     let mut out = Vec::new();
-    for (slot, (readout, view)) in readouts.into_iter().zip(views).enumerate() {
+    for (slot, (mut readout, view)) in readouts.into_iter().zip(views).enumerate() {
         let aspect = view.2 / view.3;
+        // Two views cut top and bottom are the original's `Split ScreenH`, whose Head to Head
+        // bar is shorter and whose leader row sits on the bar's top.
+        if let Some(gap) = readout.head_to_head.as_mut() {
+            gap.stacked = count == 2 && cut == oag_render::viewport::Cut::Horizontal;
+        }
         match oag_hud::split_hud::source(split, split_hud, readout.mode, count, aspect) {
             oag_hud::split_hud::Source::Authored(split) => {
                 let layout = &split.layouts[slot];

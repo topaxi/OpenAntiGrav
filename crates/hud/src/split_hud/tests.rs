@@ -237,6 +237,7 @@ fn a_layout_with_no_widgets_draws_nothing_from_a_full_readout() {
                 head_to_head: Some(crate::HeadToHead {
                     gap: 12.0,
                     player_leads: true,
+                    ..crate::HeadToHead::default()
                 }),
                 kill_tags: vec![crate::KillTag {
                     team: "Feisar".into(),
