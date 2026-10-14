@@ -532,6 +532,7 @@ pub(crate) struct NetArgs {
 
 impl NetArgs {
     /// The connection asked for, if any, its hash and shim parsed.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn connect(&self) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
         let Some(addr) = &self.connect else {
             return Ok(None);
@@ -555,5 +556,15 @@ impl NetArgs {
             bot: self.net_bot,
             name: format!("oag-game {}", std::process::id()),
         }))
+    }
+
+    /// The browser build has no native transport (`oag_net::wt` is native only), so
+    /// `--connect` is refused there.
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn connect(&self) -> anyhow::Result<Option<oag_game::net_play::Connect>> {
+        match &self.connect {
+            Some(_) => anyhow::bail!("--connect is not available in the browser build"),
+            None => Ok(None),
+        }
     }
 }

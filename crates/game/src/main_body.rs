@@ -476,11 +476,18 @@ fn run(cli: Cli) -> Result<()> {
         let source = source::resolve(cli.source.as_deref(), settings.source.image.as_deref())?;
         let music_discs = pending.music_discs(&source);
         // Joined before the load: the race to load is the server's.
+        #[cfg(not(target_arch = "wasm32"))]
         let net = cli
             .net
             .connect()?
             .map(|connect| oag_game::net_play::NetPlay::connect(&connect))
             .transpose()?;
+        #[cfg(target_arch = "wasm32")]
+        let net: Option<oag_game::net_play::NetPlay> = {
+            // Refuses `--connect` by name; the browser build never joins a server.
+            cli.net.connect()?;
+            None
+        };
         let options = pending.race_options(&source, Vec::new());
         let options = match &net {
             Some(net) => net.race_options(options)?,
