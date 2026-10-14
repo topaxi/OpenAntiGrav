@@ -505,6 +505,15 @@ rather than a flag silently ignored, and `Gpu::open_output`, the seat opener and
 are compiled out. Checked: `cargo check -p oag-game --example oag_web --features web --target wasm32-unknown-unknown`
 builds (no warning of this lane's). **Not checked: Android and iOS** (no NDK or iOS SDK here).
 
+## Under gamescope
+
+gamescope (a Steam Deck in gaming mode) maps every window of a client full-output at 0,0 and
+shows one, so seat windows would sit on top of each other (measured: two windows, both
+3840x2160+0+0 and viewable). A `--windows` / `--window-seats` layout is folded into one window
+holding every seat, cut like a split screen (`window::one_window_under_gamescope`, **chosen, not
+measured**). The layout screen's own choice is not folded yet. Details: `docs/tools/packaging.md`,
+"Under gamescope".
+
 ## Pacing (chosen, not measured on real displays)
 
 Presenting several FIFO surfaces from one thread waits on each display's vblank in turn, so with

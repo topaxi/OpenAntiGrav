@@ -89,6 +89,30 @@ pub(crate) fn effective_scale(reported: f64, gamescope: bool) -> f64 {
     if gamescope { 1.0 } else { reported }
 }
 
+/// The mode a window is opened in. Under gamescope a window frame means nothing (gamescope draws
+/// one window per output and no decoration), so `Windowed` is opened as `Borderless`, filling the
+/// output; the saved setting is left alone, so the same file still means windowed on a desktop
+/// (maintainer decision, 2026-10-14).
+pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> display::WindowMode {
+    if gamescope { display::WindowMode::Borderless } else { mode }
+}
+
+/// The windows a multi-window layout opens. Under gamescope it is one: every window of a client
+/// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck,
+/// 2026-10-14; `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
+/// that could not be seen are cut up in the one window instead, as a split screen is. Window 1
+/// keeps its cut. **Chosen, not measured.**
+pub(crate) fn one_window_under_gamescope(
+    layout: Vec<oag_game::split_screen::WindowSeats>,
+    gamescope: bool,
+) -> Vec<oag_game::split_screen::WindowSeats> {
+    if !gamescope || layout.len() < 2 {
+        return layout;
+    }
+    let count = layout.iter().map(|window| window.count).sum();
+    vec![oag_game::split_screen::WindowSeats { count, cut: layout[0].cut }]
+}
+
 /// The size asked of winit for a window of `size`: logical on a desktop, which is what the
 /// setting means there, and physical pixels under gamescope, held to the monitor so a saved size
 /// larger than the output cannot ask for more pixels than gamescope displays.
@@ -164,6 +188,7 @@ fn attributes_in(look: Look<'_>, gamescope: bool) -> winit::window::WindowAttrib
         monitor,
         position,
     } = look;
+    let mode = effective_mode(mode, gamescope);
     let borderless = mode == display::WindowMode::Borderless;
     let mut attributes = winit::window::Window::default_attributes()
         .with_title(title)
@@ -414,6 +439,36 @@ mod tests {
         assert_eq!(px(under.inner_size.unwrap()), (1440, 816, true));
         let desktop = attributes_in(look(display::WindowMode::Windowed), false);
         assert_eq!(px(desktop.inner_size.unwrap()), (1440, 816, false));
+    }
+
+    #[test]
+    fn under_gamescope_windowed_opens_borderless_and_a_desktop_keeps_the_setting() {
+        use display::WindowMode::{Borderless, Windowed};
+        assert_eq!(effective_mode(Windowed, true), Borderless);
+        assert_eq!(effective_mode(Borderless, true), Borderless);
+        assert_eq!(effective_mode(Windowed, false), Windowed);
+        assert_eq!(effective_mode(Borderless, false), Borderless);
+        let under = attributes_in(look(Windowed), true);
+        assert!(under.resizable);
+        assert!(matches!(under.fullscreen, Some(winit::window::Fullscreen::Borderless(None))));
+        let desktop = attributes_in(look(Windowed), false);
+        assert!(!desktop.resizable && desktop.fullscreen.is_none());
+    }
+
+    #[test]
+    fn under_gamescope_the_windows_of_a_layout_become_one_window_holding_every_seat() {
+        use oag_game::split_screen::WindowSeats;
+        use oag_render::viewport::Cut;
+        let two = |count, cut| WindowSeats { count, cut };
+        let layout = vec![two(4, Cut::Horizontal), two(2, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(layout.clone(), false), layout);
+        assert_eq!(
+            one_window_under_gamescope(layout, true),
+            vec![two(6, Cut::Horizontal)]
+        );
+        let single = vec![two(3, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(single.clone(), true), single);
+        assert!(one_window_under_gamescope(Vec::new(), true).is_empty());
     }
 
     #[test]

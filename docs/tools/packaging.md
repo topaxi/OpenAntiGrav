@@ -594,11 +594,29 @@ does not ask whether the machine is a Deck. Under gamescope the window size is r
 physical pixels (`window::request_size`), held to the monitor's size, and the position uses scale 1
 (`window::effective_scale`). The same function sizes a window changed from the settings menu.
 Borderless was never affected and a desktop is unchanged (a logical size at the reported scale).
-Further windows (`--players` seat windows, `session/windows.rs`) still read the window's own scale
-for their placement; a multi-window race under gamescope is not a case anyone has. Windowed under
-gamescope stays what the player set: gamescope scales that window to its output, so it is a
-render size choice, not the output size (open question for the maintainer: whether windowed
-should become borderless there).
+Seat windows (`session/windows.rs`) take the same `effective_scale` for their placement.
+
+**Windowed is borderless under gamescope (maintainer decision, 2026-10-14).** A window frame
+means nothing there, so `window::effective_mode` opens a `windowed` setting as `borderless` at
+the output's size, for the main window, the seat windows and a change from the settings menu
+(`Session::apply_window`). It is a runtime mapping: the saved `window_mode` and `window_size` are
+left alone, so the same settings file is a floating window on a desktop. What a player sees: the
+WINDOW MODE row still reads WINDOWED, the game fills the screen, and WINDOW SIZE has no effect.
+Measured on the Deck with a Steam-like environment (ssh launch, `:1`, Pulse PSP EU, autopilot,
+`pause_on_focus_loss = false` because an ssh launch never holds focus): the surface becomes the
+Xwayland screen, 3840x2160, and the race runs about 58 fps for the first six seconds and about
+23 fps after, against 107 fps for the same race windowed at 2560x1440 before this change. The
+Xwayland screen is 3840x2160 on both `:0` and `:1`, larger than the 1280x800 panel; whether a
+Steam launch sees a smaller screen is not measured (launching through Steam is not allowed in
+these runs), so a Deck player may want a render scale setting below 100 %.
+
+**Several windows.** gamescope maps every window of a client full-output at 0,0 (measured with
+`xwininfo`: two oag windows, both 3840x2160+0+0, both viewable) and shows one of them, so seat
+windows would overlap. Under gamescope a `--windows` / `--window-seats` layout is therefore
+folded into one window holding every seat, cut up like a split screen
+(`window::one_window_under_gamescope`, chosen, not measured; `--windows 2` logs
+`multi-window: 1 window(s) holding slot 0 + slot 1`). The window layout screen in the menus is
+not folded yet.
 
 ## AUR packages
 
