@@ -809,6 +809,39 @@ or 1800), so it does not see tick-to-tick variation; every view carries an unexp
 not chased (the pipelined numbers, with no idle in between, agree with the CPU ones); a
 `perf-probe` build adds marks inside the pass that can shift small spans.
 
+### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
+
+**The maintainer saw about 30 ms attributed to motion blur on the Deck in a split with no blur
+on screen.** A split draws no blur (rule 3; `render_viewports` passes `MotionBlur::Off` and no
+timestamps), so the row could not be a measurement of this frame. What was measured and read:
+
+- **Steam Deck (RADV VANGOGH, Mesa 26.2, release AppImage of `main` at `f437c3858`, windowed
+  2560x1440 from the maintainer's settings, 20:10 to 20:30, load average 0.2 on the Deck),
+  Pulse PSP EU, trace log `oag_game=trace`**: single view, 40 s, 3,305 blur readings, **2.4 ms**
+  per frame (profile `medium`, half resolution); Pulse PS2 EU (render scale 150, `high`,
+  full resolution) **4.7 ms**, 1,599 readings in 40 s. So a single view costs nothing like 30 ms
+  there. `--players 2`, 45 s: **0** blur readings, as the code says (case (b) is false: no blur pass is encoded, and
+  turning the setting off cannot move a split's frame time).
+- **The cause that the code shows (case (a)).** `Session::blur_cost` was a plain `Meter`.
+  Every split frame abandons the blur timer's claim, so no reading ever replaced the window, and
+  only a stall cleared `scene_cost` (not the blur, HD bloom or FSR 3 meters). Whatever the
+  blur had last cost (the last single view, the first frames after a load, a pause menu's
+  parked race) went on being shown as BLUR for as long as the split ran, and `OTHER` was
+  computed against it. Not reproduced end to end as a single view followed by a split on the
+  Deck (the Deck was taken by the maintainer before that walk; no session was seen showing 30 ms), so the
+  30 ms figure itself is **unexplained**: it is not a single view's cost in either Pulse profile measured.
+- **Fix.** `oag_present::perf::ChainCost` (`perf/chain.rs`) wraps the meter with a floor frame:
+  a frame with a scene that did not encode the chain (`SceneStats::blur_encoded`,
+  `hd_bloom_encoded` false) calls `idle`, which empties the window and refuses the readings
+  of frames already in flight; a stall does the same for blur and HD bloom. A single view
+  records exactly as before (no picture changes). Tested by a fed sequence
+  (`perf::chain::tests`); the frame loop logs the edge at debug level (`motion blur chain not drawn on frame N`).
+- **Open:** whether blur per view is worth drawing in a split. A view of half the pixels
+  would cost about half the single-view figure above (2.4 to 4.7 ms on the Deck at one
+  view, so roughly 1 to 2.5 ms a view), but the per-view history and velocity buffers are
+  what rule 3 keeps out; not built here. FSR 3 and `upscale_cost` have the same
+  never-cleared shape and were left alone.
+
 ## Who plays which slot (chosen, not measured)
 
 Every rule here is ours. The PS2 build takes its players from the pads in port
