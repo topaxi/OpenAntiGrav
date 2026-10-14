@@ -98,3 +98,53 @@ fn hovering_sounds_once_per_row_and_a_click_on_a_submenu_accepts() {
     assert_eq!(pointer_nav(&mut menu, &click), [Nav::Accept], "OPTIONS");
     assert_eq!(menu.page().id, "options");
 }
+
+/// The MULTIPLAYER page offers LOCAL MULTIPLAYER, and LAN and ONLINE as rows for later: dimmed,
+/// focusable so the line under them can say "Coming later", and refusing the confirm with the
+/// decline cue (a pointer click goes through the same gate, `pointer`'s own test).
+#[test]
+fn the_multiplayer_page_has_local_and_two_rows_for_later() {
+    let mut menu = Menu::new(built_in());
+    menu.open("multiplayer");
+    let actions: Vec<Option<Action>> = menu
+        .page()
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Run { action, .. } => Some(*action),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        actions,
+        [
+            Some(Action::OpenMultiplayerLocal),
+            Some(Action::ComingLater),
+            Some(Action::ComingLater),
+            None
+        ]
+    );
+    menu.take_nav();
+    assert_eq!(
+        press(&mut menu, &[Button::Cross]),
+        [MenuEvent::Fired(Action::OpenMultiplayerLocal)]
+    );
+    for (row, name) in [(1, "LAN"), (2, "ONLINE")] {
+        press(&mut menu, &[Button::Down]);
+        assert_eq!(menu.selected(), row);
+        let entry = &menu.page().entries[row];
+        assert_eq!(entry.label(), name);
+        assert!(menu.is_disabled(entry), "{name} is dimmed");
+        assert_eq!(
+            menu.page().subtitles[row].as_deref(),
+            Some("Coming later"),
+            "{name} says so"
+        );
+        menu.take_nav();
+        assert!(
+            press(&mut menu, &[Button::Cross]).is_empty(),
+            "{name} fires nothing"
+        );
+        assert_eq!(menu.take_nav(), [Nav::Decline]);
+    }
+}

@@ -19,7 +19,7 @@ pub const MAIN_MENU: &MainMenu = &MainMenu {
         original("FE_ADHOC", None),
         original("FE_CROSSPLAY", None),
     ],
-    borrowed: &[],
+    multiplayer: None,
     updated_rows: Some(&[
         original("FE_SP_CAMPAIGN", None),
         original("FE_RC_HD", None),

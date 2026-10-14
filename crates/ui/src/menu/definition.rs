@@ -492,24 +492,18 @@ impl Definition {
         }
     }
 
-    /// Drops every split-screen entry (the generic SPLIT SCREEN row and the vertical and
-    /// horizontal ones), for a run whose adapter the title does not offer a split on
-    /// (`oag_title::Title::split_on_integrated_gpu`). Same once-before-read timing as
-    /// [`Self::drop_quit`]: the adapter is fixed for the run.
-    pub fn drop_split_screen(&mut self) {
-        self.drop_actions(&[
-            Action::OpenSplitScreen,
-            Action::OpenSplitVertical,
-            Action::OpenSplitHorizontal,
-        ]);
-    }
-
-    fn drop_actions(&mut self, actions: &[Action]) {
-        for page in &mut self.pages {
-            page.retain_rows(|entry| {
-                !matches!(entry, Entry::Run { action, .. } if actions.contains(action))
-                    && !is_authored_split_row(entry)
-            });
+    /// Drops the MULTIPLAYER row from the main page, for a run whose adapter the title
+    /// offers no split on (`oag_title::Title::split_on_integrated_gpu`): the page behind it
+    /// would hold LOCAL MULTIPLAYER alone and a dead end is worse than no row. Same
+    /// once-before-read timing as [`Self::drop_quit`]: the adapter is fixed for the run.
+    pub fn drop_multiplayer(&mut self) {
+        let Some(page) = self.pages.iter().position(|page| page.id == "multiplayer") else {
+            return;
+        };
+        for page_entries in &mut self.pages {
+            page_entries.retain_rows(
+                |entry| !matches!(entry, Entry::Submenu { target, .. } if *target == page),
+            );
         }
     }
 
@@ -573,6 +567,36 @@ impl Definition {
         );
     }
 
+    /// Words the MULTIPLAYER row as the title's original does
+    /// ([`oag_title::MainMenu::multiplayer`]); a title that names none keeps the project's
+    /// `MULTIPLAYER`. The words are the project's own, looked up in `strings` and falling back
+    /// to the English the title carries, the way [`Self::rename_campaign_row`] does.
+    pub fn rename_multiplayer_row(&mut self, title: &oag_title::Title, strings: &StringTable) {
+        let Some(row) = title.main_menu.multiplayer else {
+            return;
+        };
+        let say = |wording: oag_title::Wording| {
+            strings.get(wording.id).unwrap_or(wording.text).to_string()
+        };
+        let Some(page) = self.pages.iter().position(|page| page.id == "multiplayer") else {
+            return;
+        };
+        for page_entries in &mut self.pages {
+            for (entry, line) in page_entries
+                .entries
+                .iter_mut()
+                .zip(&mut page_entries.subtitles)
+            {
+                if let Entry::Submenu { target, label } = entry
+                    && *target == page
+                {
+                    *label = say(row.label);
+                    *line = Some(say(row.subtitle));
+                }
+            }
+        }
+    }
+
     /// Drops every row that edits one of `settings`, for a platform that has
     /// no such thing (the web build has no monitor to pick and one present
     /// mode). Same once-before-read timing as [`Self::drop_quit`].
@@ -622,28 +646,7 @@ impl Definition {
         // `Single Player` screen, which only a title with a
         // `FrontEnd::race_setup` file has: elsewhere the row would draw
         // permanently unusable, the reason the VARIANT row is dropped too.
-        // The local split's two rows are the disc's where the race box authors them
-        // ([`oag_title::FrontEnd::local_split`]), and then they are the entry: our generic
-        // SPLIT SCREEN row goes (the authored place wins). Everywhere else the rows go and
-        // the generic one stays.
-        let authors_split = title
-            .front_end
-            .is_some_and(|front_end| front_end.local_split.is_some());
-        for page in &mut self.pages {
-            page.retain_rows(|entry| {
-                if authors_split {
-                    !matches!(
-                        entry,
-                        Entry::Run {
-                            action: Action::OpenSplitScreen,
-                            ..
-                        }
-                    )
-                } else {
-                    !is_authored_split_row(entry)
-                }
-            });
-        }
+
         let reads_setup = title
             .front_end
             .is_some_and(|front_end| front_end.race_setup.is_some());
@@ -671,12 +674,6 @@ impl Definition {
             });
         }
     }
-}
-
-/// The race box's `NUMBER OF PLAYERS` and `SPLIT SCREEN` rows, the two a title's authored
-/// local split adds.
-fn is_authored_split_row(entry: &Entry) -> bool {
-    matches!(entry.setting(), Some("race.players" | "race.split_cut"))
 }
 
 /// Looks `string_id` up in `strings`, falling back to `literal` when it names

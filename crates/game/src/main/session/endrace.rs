@@ -621,6 +621,12 @@ impl Session {
     /// live race - see that function's own doc on why a *finished* race is
     /// discarded rather than parked.
     pub(super) fn leave_finished_race(&mut self) {
+        // A multiplayer race that was not the campaign's lands back on the RACE page with the
+        // same people seated (`Session::reenter_multiplayer`): change the track, race again.
+        let multiplayer = matches!(
+            &self.stage,
+            Stage::Race(stage) if stage.race.viewport_count() >= 2 && stage.campaign_cell.is_none()
+        );
         // Whether the tournament just finished its last leg or is being
         // abandoned early, there is nothing to carry past this point - see
         // `Session::tournament`'s own doc for why this engine parks no
@@ -633,6 +639,8 @@ impl Session {
         if let Err(error) = self.open_menus() {
             log::error!("cannot return to the menus: {error:#}");
             self.quit = true;
+        } else if multiplayer {
+            self.reenter_multiplayer();
         }
     }
 }

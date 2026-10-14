@@ -40,21 +40,21 @@
 //! cross-play are network sessions this build does not have. Confirming one
 //! of those says so in a note and stays.
 //!
-//! # Two tiles the disc does not author: RACE BOX and REMIX
+//! # Three tiles the disc does not author: RACE BOX, REMIX and MULTIPLAYER
 //!
 //! **This build's own, not on the disc**, and the one place this module
 //! adds to what the file draws. 2048 ships no race box and no
 //! `CellMode_Definition.xml` - its front end is the campaign map and the
 //! network modes - and every other title in this project reaches this
-//! build's own race box and RACE REMIX pages (`assets/ui/menu.toml`,
-//! ADR-0034) from its own front end. So the two are appended **after** the
+//! build's own race box, RACE REMIX and MULTIPLAYER pages (`assets/ui/menu.toml`,
+//! ADR-0034) from its own front end. So the three are appended **after** the
 //! four authored tiles, never mixed into `Screen::touch_buttons`, labelled
-//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX` strings (the
+//! with this project's own `OAG_MENU_RACEBOX`/`OAG_MENU_REMIX`/`OAG_MENU_MULTIPLAYER` strings (the
 //! same ids the menu tree uses), and drawn as the labelled 122x96 box the
 //! disc's own game-list screen authors for a text button - an authored
-//! shape holding an unauthored destination. Split screen is not a tile: it is
-//! two rows of the race box's page (`oag_title::LocalSplit::Borrowed`). **Their positions are chosen,
-//! not measured**: the left column, stacked at `(16, 110)` and `(16, 226)`,
+//! shape holding an unauthored destination. Split screen is the MULTIPLAYER tile's
+//! page (LOCAL MULTIPLAYER). **Their positions are chosen,
+//! not measured**: the left column, stacked at `(16, 110)`, `(16, 226)` and `(16, 342)`,
 //! clear of the v1.04 patch's grid (two rows of three from x=228) - they sat
 //! at `(16, 432)` and `(158, 432)` until the patch was mounted and its second
 //! row put `ONLINE CAMPAIGN` under them. The parent shell
@@ -81,6 +81,10 @@ const LABEL_GAP: f32 = 18.0;
 /// header caps (`scale="1.0"`, the same face) 27, so the label draws at
 /// their ratio. Measured, one capture.
 pub(super) const LABEL_SCALE: f32 = 16.0 / 27.0;
+/// How wide a capital of the `Default` face is at [`LABEL_SCALE`], for fitting a long word in a
+/// text button: `MULTIPLAYER` drew about 135 units wide there. **Chosen, not measured**
+/// (one screenshot, 11 capitals).
+const CAPITAL_WIDTH: f32 = 12.4;
 /// How far above the cap line the `Default` face's pen sits at scale 1:
 /// the header's own `y="30"` puts its caps at 40 on the capture. Measured.
 pub(super) const PEN_ABOVE_CAPS: f32 = 10.0;
@@ -96,6 +100,9 @@ pub enum Launch {
     RaceBox,
     /// This build's own RACE REMIX page (ADR-0034).
     Remix,
+    /// This build's own MULTIPLAYER page (local, with LAN and online for later): the one
+    /// entry to split screen, here a tile where the other titles have a row.
+    Multiplayer,
 }
 
 /// One of this build's own tiles on `GameModeChoice`, in the terms the
@@ -112,7 +119,11 @@ pub struct ExtraTile {
 /// 122x96 is the tick's own authored size; the 20-unit gap between them
 /// is this build's. Stacked in the left column, clear of the v1.04 grid's
 /// three columns that start at x=228.
-pub const EXTRA_TILES: [[f32; 4]; 2] = [[16.0, 110.0, 122.0, 96.0], [16.0, 226.0, 122.0, 96.0]];
+pub const EXTRA_TILES: [[f32; 4]; 3] = [
+    [16.0, 110.0, 122.0, 96.0],
+    [16.0, 226.0, 122.0, 96.0],
+    [16.0, 342.0, 122.0, 96.0],
+];
 
 /// Where the touch front end is: which tile the pad is on, which mode has
 /// been chosen, and what a confirmed tap asked the composition root for.
@@ -603,6 +614,25 @@ impl Frontend {
         let Some(label) = &tile.label else {
             return;
         };
+        // A label whose longest word is wider than the box is drawn smaller to fit: this
+        // build's own tiles carry words the disc's text buttons never did (`MULTIPLAYER`
+        // is about 135 units at the label scale in a 114-unit box, `MULTIJOGADOR` more).
+        // **Chosen, not measured**: a capital of this face is about 12.4 units wide.
+        let scale = match (tile.label_inside, tile.wrap) {
+            (true, Some(wrap)) => {
+                let longest = label
+                    .split_whitespace()
+                    .map(|word| word.chars().count())
+                    .max();
+                let widest = longest.map_or(0.0, |chars| chars as f32 * CAPITAL_WIDTH);
+                if widest > wrap {
+                    LABEL_SCALE * wrap / widest
+                } else {
+                    LABEL_SCALE
+                }
+            }
+            _ => LABEL_SCALE,
+        };
         let (y, color) = if tile.label_inside {
             // Centred in the box, white on the tile - the game-list
             // screen's text buttons. The line count is the wrap's: a
@@ -613,7 +643,7 @@ impl Frontend {
             } else {
                 1.0
             };
-            let line = self.default_line_height.unwrap_or(37.0) * LABEL_SCALE;
+            let line = self.default_line_height.unwrap_or(37.0) * scale;
             (
                 rect[1] + (rect[3] - lines * line) * 0.5,
                 [1.0, 1.0, 1.0, 1.0],
@@ -627,7 +657,7 @@ impl Frontend {
         out.push(Draw::Text {
             x: rect[0] + rect[2] * 0.5,
             y,
-            scale: LABEL_SCALE,
+            scale,
             color,
             border: None,
             align: Align::Centre,

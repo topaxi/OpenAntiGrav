@@ -23,14 +23,20 @@ OAG_MENU_MAIN_TITLE = { text = "OPENANTIGRAV", human = false }
 OAG_MENU_RACE_CAMPAIGN = { text = "RENNKAMPAGNE", human = false }
 OAG_MENU_RACE_CAMPAIGN_SUBTITLE = { text = "Der Story-Modus: Arbeite dich im Turnierraster nach oben", human = false }
 OAG_MENU_RACEBOX = { text = "RENNBOX", human = false }
-OAG_MENU_RACEBOX_SUBTITLE = { text = "Stelle dein eigenes Rennen zusammen, auch im Splitscreen", human = false }
+OAG_MENU_RACEBOX_SUBTITLE = { text = "Stelle dein eigenes Rennen zusammen", human = false }
 OAG_MENU_REMIX = { text = "REMIX", human = false }
 OAG_MENU_REMIX_SUBTITLE = { text = "Kombiniere Strecken und Schiffe aus allen Titeln, die du besitzt", human = false }
-OAG_MENU_SPLIT_SCREEN = { text = "GETEILTER BILDSCHIRM", human = false }
-OAG_MENU_SPLIT_SCREEN_SUBTITLE = { text = "Bis zu acht Spieler an einem Bildschirm", human = false }
-OAG_MENU_SPLIT_VERTICAL = { text = "GETEILTER BILDSCHIRM VERTIKAL", human = false }
-OAG_MENU_SPLIT_HORIZONTAL = { text = "GETEILTER BILDSCHIRM HORIZONTAL", human = false }
-OAG_MENU_SPLIT_HELP = { text = "Im Mehrspieler-Splitscreen-Modus spielen", human = false }
+OAG_MENU_MULTIPLAYER = { text = "MEHRSPIELER", human = false }
+OAG_MENU_MULTIPLAYER_SUBTITLE = { text = "Fahre mit anderen Spielern, an diesem Gerät und später über ein Netzwerk", human = false }
+OAG_MENU_MULTIPLAYER_SHARING = { text = "MEHRSPIELER UND TEILEN", human = false }
+OAG_MENU_MULTIPLAYER_SHARING_HELP = { text = "Online oder über Ad Hoc fahren und Daten teilen", human = false }
+OAG_MP_PAGE_TITLE = { text = "MEHRSPIELER", human = false }
+OAG_MP_LOCAL = { text = "LOKALER MEHRSPIELER", human = false }
+OAG_MP_LOCAL_SUBTITLE = { text = "Bis zu acht Spieler an diesem Gerät, auf einem Bildschirm oder in mehreren Fenstern", human = false }
+OAG_MP_LAN = { text = "LAN", human = false }
+OAG_MP_ONLINE = { text = "ONLINE", human = false }
+OAG_MP_COMING_LATER = { text = "Kommt später", human = false }
+OAG_MP_MODE_CAPPED = { text = "Für höchstens %d Spieler", human = false }
 OAG_JOIN_HINT = { text = "JEDER SPIELER DRÜCKT EINE TASTE ZUM BEITRETEN", human = false }
 OAG_JOIN_PLAYER = { text = "SPIELER", human = false }
 OAG_SPLIT_FINISHED = { text = "IM ZIEL", human = false }
@@ -62,8 +68,6 @@ OAG_RACE_SPEED_CLASS = { text = "TEMPOKLASSE", human = false }
 OAG_RACE_WEAPONS = { text = "WAFFEN", human = false }
 OAG_RACE_AI_DIFFICULTY = { text = "KI-SCHWIERIGKEIT", human = false }
 OAG_RACE_KILLS = { text = "ABSCHÜSSE", human = false }
-OAG_RACE_PLAYERS = { text = "ANZAHL DER SPIELER", human = false }
-OAG_RACE_SPLIT_CUT = { text = "GETEILTER BILDSCHIRM", human = false }
 OAG_RACE_TEAM = { text = "TEAM", human = false }
 OAG_RACE_VARIANT = { text = "VARIANTE", human = false }
 OAG_RACE_TRACK = { text = "STRECKE", human = false }

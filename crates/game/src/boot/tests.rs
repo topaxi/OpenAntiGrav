@@ -186,10 +186,13 @@ fn a_name_that_looks_like_a_hash_is_still_a_name() {
 }
 
 #[test]
-fn wipeout_2048s_grid_gets_the_race_box_and_remix_tiles_and_no_split_screen_tile() {
+fn wipeout_2048s_grid_gets_the_race_box_remix_and_multiplayer_tiles() {
     use oag_ui::frontend::Launch;
     let tiles = super::campaign2048::extra_tiles(None, oag_2048::TITLE, false);
     let launches: Vec<Launch> = tiles.iter().map(|tile| tile.launch.clone()).collect();
-    // The split entry is the race box's own rows (`oag_title::LocalSplit`), not a tile.
-    assert_eq!(launches, [Launch::RaceBox, Launch::Remix]);
+    // The split entry is the MULTIPLAYER tile's page, as it is a row on the other titles.
+    assert_eq!(
+        launches,
+        [Launch::RaceBox, Launch::Remix, Launch::Multiplayer]
+    );
 }

@@ -19,9 +19,6 @@ use super::{Definition, Error, RowMeta, StringTable, raw, resolve, resolve_subti
 /// The reserved `parent`: the top level of the main page.
 pub const TOP: &str = "top";
 
-/// The `id` of the built-in extras' generic SPLIT SCREEN row, `assets/mods/oag-extras/menu.toml`.
-const GENERIC_SPLIT_SCREEN: &str = "split_screen";
-
 /// A mod's `menu.toml`, with the id of the mod it came from.
 #[derive(Debug, Clone, Copy)]
 pub struct ModMenu<'a> {
@@ -160,16 +157,6 @@ impl Definition {
             .filter_map(|meta| meta.id.clone())
             .map(|id| (id, "the vanilla menu".to_string()))
             .collect();
-        // A title that shows the two split-screen rows itself has no place for the
-        // extras' generic one beside them: claiming its id makes that row's
-        // `only_if_missing` skip it, and the load report says so.
-        if title.is_some_and(|target| target.title.main_menu.has_split_rows()) {
-            owners.insert(
-                GENERIC_SPLIT_SCREEN.to_string(),
-                "the title's own split-screen rows".to_string(),
-            );
-        }
-
         let mut added = Vec::new();
         for module in mods {
             let file: ModFile = toml::from_str(module.text)

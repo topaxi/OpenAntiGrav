@@ -361,7 +361,7 @@ impl App {
         let mut controls = Controls::new();
         // `--players N`: the keyboard and the first pad on slot 0, each further
         // pad on the next slot in connection order. Chosen, not measured; the
-        // join screen (`Session::open_split_screen`) seats by who pressed instead.
+        // join screen (`Session::open_join`) seats by who pressed instead.
         if let Stage::Race(stage) = &stage
             && stage.race.viewport_count() > 1
         {
@@ -558,7 +558,8 @@ impl App {
             window_layout_chosen: false,
             focus: crate::windows::Focus::default(),
             seat_clicks: 0,
-            split_race_box: false,
+            multiplayer: false,
+            mp_devices: Vec::new(),
             split_picks: Vec::new(),
             pure_classic_entries: std::collections::BTreeMap::new(),
             campaign_difficulty: None,

@@ -55,28 +55,27 @@ fn row(rest: &str) -> String {
 
 #[test]
 fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
-    // Pulse and Pure draw an attached row inline: the order is the list. Both show the
-    // PS2 pressing's two split rows right after the campaign (borrowed on the PSP and on
-    // Pure), so the extras' generic SPLIT SCREEN row is skipped.
-    let flat = [
+    // Pulse and Pure draw an attached row inline: the order is the list. Each shows MULTIPLAYER
+    // where its own disc has its multiplayer entry (Pulse's `FE_MP` after the race box, Pure's
+    // `Multiplayer` after `Single Player`, with RACEBOX from the extras in between: the same list).
+    let pulse = [
         "campaign",
-        "split_vertical",
-        "split_horizontal",
         "racebox",
         "racebox>remix",
+        "multiplayer",
         "options",
         "options>records",
         "options>mods",
         "options>quit",
     ];
-    assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), flat);
-    assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), flat);
+    assert_eq!(main_rows(Some(oag_pulse::TITLE), HEADER).unwrap(), pulse);
+    assert_eq!(main_rows(Some(oag_pure::TITLE), HEADER).unwrap(), pulse);
     // HD and Omega open on RECORDS themselves, so it is no one's child.
     let hd = [
         "campaign",
         "racebox",
         "racebox>remix",
-        "racebox>split_screen",
+        "multiplayer",
         "options",
         "options>mods",
         "options>quit",
@@ -91,7 +90,7 @@ fn every_title_shows_its_own_top_level_and_the_extras_attach_where_they_say() {
         [
             "racebox",
             "racebox>remix",
-            "racebox>split_screen",
+            "multiplayer",
             "options",
             "options>records",
             "options>mods",
@@ -106,11 +105,9 @@ fn no_title_keeps_every_vanilla_row_and_the_extras_around_them() {
         main_rows(None, HEADER).unwrap(),
         [
             "campaign",
-            "split_vertical",
-            "split_horizontal",
+            "multiplayer",
             "racebox",
             "racebox>remix",
-            "racebox>split_screen",
             "options",
             "options>mods",
             "options>quit",
@@ -126,15 +123,7 @@ fn a_mod_row_goes_after_a_sibling_or_at_the_end_of_its_parents_rows() {
         &row("id = \"a\"\nparent = \"racebox\"\n"),
     )
     .unwrap();
-    assert_eq!(
-        rows[1..5],
-        [
-            "racebox",
-            "racebox>remix",
-            "racebox>split_screen",
-            "racebox>a"
-        ]
-    );
+    assert_eq!(rows[1..4], ["racebox", "racebox>remix", "racebox>a"]);
 
     let rows = main_rows(
         Some(oag_hd::TITLE),
@@ -205,7 +194,7 @@ fn a_mod_that_does_not_fit_is_refused_naming_the_mod_and_the_key() {
 fn a_title_that_names_a_row_the_tree_lacks_is_a_build_defect() {
     static BAD: oag_title::MainMenu = oag_title::MainMenu {
         rows: &[oag_title::main_menu::original("FE_X", Some("not_a_row"))],
-        borrowed: &[],
+        multiplayer: None,
         updated_rows: None,
         attached: oag_title::Attached::Inline,
         origin: oag_title::Origin::Chosen,
@@ -278,65 +267,30 @@ fn main_row_ids(definition: &Definition) -> Vec<String> {
 /// The integrated-GPU rule drops the one row and nothing around it: REMIX stays under
 /// RACEBOX, and a definition it is not applied to still has the row.
 #[test]
-fn dropping_the_split_screen_row_leaves_every_other_row() {
+fn dropping_the_multiplayer_row_leaves_every_other_row() {
     for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
         let mut definition = built_for(title);
         let before = main_row_ids(&definition);
         assert!(
-            before.iter().any(|row| row == "racebox>split_screen"),
+            before.iter().any(|row| row == "multiplayer"),
             "{}: {before:?}",
             title.name
         );
-        definition.drop_split_screen();
+        definition.drop_multiplayer();
         let after = main_row_ids(&definition);
         let expected: Vec<String> = before
             .into_iter()
-            .filter(|row| row != "racebox>split_screen")
+            .filter(|row| row != "multiplayer")
             .collect();
         assert_eq!(after, expected, "{}", title.name);
         assert!(after.iter().any(|row| row == "racebox>remix"));
     }
 }
 
-/// Pulse and Pure show the PS2 pressing's two split rows after the campaign and skip the
-/// extras' generic one; HD, Omega and 2048 show only the generic one. The iGPU trim takes
-/// every split entry and nothing else.
+/// Every title shows exactly one MULTIPLAYER row and none of the old split-screen ones: Pulse
+/// and Pure from their own disc's multiplayer entry, the other three from the built-in extras.
 #[test]
-fn the_split_rows_are_pulses_and_pures_and_the_generic_row_is_everyone_elses() {
-    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
-        let mut definition = built_for(title);
-        let rows = main_row_ids(&definition);
-        assert!(title.main_menu.has_split_rows(), "{}", title.name);
-        assert!(
-            !rows.iter().any(|row| row.ends_with("split_screen")),
-            "{}: {rows:?}",
-            title.name
-        );
-        definition.drop_split_screen();
-        let trimmed = main_row_ids(&definition);
-        let expected: Vec<String> = rows
-            .into_iter()
-            .filter(|row| row != "split_vertical" && row != "split_horizontal")
-            .collect();
-        assert_eq!(trimmed, expected, "{}", title.name);
-    }
-    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
-        let rows = main_row_ids(&built_for(title));
-        assert!(!title.main_menu.has_split_rows(), "{}", title.name);
-        assert!(
-            rows.iter()
-                .all(|row| !row.contains("split_vertical") && !row.contains("split_horizontal")),
-            "{}: {rows:?}",
-            title.name
-        );
-    }
-}
-
-/// A borrowed row follows a row the title's list has: an anchor that names nothing would
-/// drop the row without a word, and the title's main menu would quietly lose its split
-/// rows.
-#[test]
-fn every_borrowed_row_follows_a_row_its_title_lists() {
+fn every_title_shows_one_multiplayer_row_and_no_split_rows() {
     for title in [
         oag_pulse::TITLE,
         oag_pure::TITLE,
@@ -344,40 +298,51 @@ fn every_borrowed_row_follows_a_row_its_title_lists() {
         oag_omega::TITLE,
         oag_2048::TITLE,
     ] {
-        let menu = title.main_menu;
-        for borrowed in menu.borrowed {
-            assert!(
-                menu.rows
-                    .iter()
-                    .any(|row| row.disc_id == borrowed.after && row.builds.is_some()),
-                "{}: {} follows {:?}, which is no row it builds",
-                title.name,
-                borrowed.disc_id,
-                borrowed.after
-            );
-        }
-    }
-}
-
-/// Both pressings of Pulse and Pure borrow the same two rows in the same order, the PS2's
-/// (`FE_RACE_CAM_SS` vertical, `FE_RACE_CAM_SSH` horizontal).
-#[test]
-fn pulse_and_pure_borrow_the_ps2s_two_rows_in_its_order() {
-    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
-        let rows: Vec<(&str, &str)> = title
-            .main_menu
-            .borrowed
-            .iter()
-            .map(|row| (row.disc_id, row.builds))
-            .collect();
+        let rows = main_row_ids(&built_for(title));
         assert_eq!(
-            rows,
-            [
-                ("FE_RACE_CAM_SS", "split_vertical"),
-                ("FE_RACE_CAM_SSH", "split_horizontal")
-            ],
-            "{}",
+            rows.iter().filter(|row| *row == "multiplayer").count(),
+            1,
+            "{}: {rows:?}",
+            title.name
+        );
+        assert!(
+            rows.iter().all(|row| !row.contains("split")),
+            "{}: {rows:?}",
             title.name
         );
     }
+    let own = |title: &oag_title::Title| {
+        title
+            .main_menu
+            .rows
+            .iter()
+            .any(|row| row.builds == Some(oag_title::main_menu::MULTIPLAYER))
+    };
+    assert!(own(oag_pulse::TITLE) && own(oag_pure::TITLE));
+    assert!(!own(oag_hd::TITLE) && !own(oag_omega::TITLE) && !own(oag_2048::TITLE));
+}
+
+/// Pulse words the row as its disc does (`FE_MP`) and the others keep the project's.
+#[test]
+fn pulse_words_the_multiplayer_row_as_its_disc_does() {
+    let english = english();
+    let label_of = |title: &oag_title::Title| {
+        let mut definition = built_for(title);
+        definition.rename_multiplayer_row(title, &english);
+        let main = &definition.pages[definition.root];
+        let at = main.row_with_id("multiplayer").unwrap();
+        (
+            main.entries[at].label().to_string(),
+            main.subtitles[at].clone().unwrap_or_default(),
+        )
+    };
+    assert_eq!(
+        label_of(oag_pulse::TITLE),
+        (
+            "MULTIPLAYER & SHARING".to_string(),
+            "Race online or over Ad Hoc, and share data".to_string()
+        )
+    );
+    assert_eq!(label_of(oag_pure::TITLE).0, "MULTIPLAYER");
+    assert_eq!(label_of(oag_hd::TITLE).0, "MULTIPLAYER");
 }

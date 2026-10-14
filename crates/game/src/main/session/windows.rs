@@ -411,13 +411,32 @@ impl Session {
         physical: winit::keyboard::PhysicalKey,
         pressed: bool,
     ) {
-        if !self.keys_by_window() {
+        // The keyboards are told apart for as long as the LOCAL MULTIPLAYER flow is on the menus:
+        // the join screen, the layout, the RACE page and the seats' Ship Select all read a seat's
+        // device (`Controls::lobby_key`). Never in a race, which routes them by seat.
+        let joining = matches!(&self.stage, Stage::Menu(stage)
+            if stage.join.is_some() || stage.layout.is_some() || self.multiplayer);
+        if !joining && !self.keys_by_window() && !self.controls.per_device_keys() {
             return;
         }
         let Some(key) = oag_input::keys::key_at(physical) else {
             return;
         };
-        let Some(focused) = self.focus.current().and_then(|id| self.window_index(id)) else {
+        // The join screen listens to the keyboards one by one so that a second keyboard can
+        // take a seat of its own (`Controls::lobby_key`); nothing else of the menus reads them.
+        if joining {
+            let id = self.controls.keyboard_id(device);
+            self.controls.lobby_key(id, &key, pressed);
+            return;
+        }
+        // One window with seated keyboards (a split screen joined with two): no window has the
+        // focus to ask, and the keys are already bound to their seats.
+        let focused = self
+            .focus
+            .current()
+            .and_then(|id| self.window_index(id))
+            .or_else(|| self.screens.is_empty().then_some(0));
+        let Some(focused) = focused else {
             return;
         };
         let all = self.window_seats();

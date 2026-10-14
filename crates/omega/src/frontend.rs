@@ -21,9 +21,8 @@
 //!   bare labels on a flat box, which the maintainer reported on 2026-10-06
 //!   as not rendering correctly. Labelled where it is declared.
 //! - **No race box of its own pages.** `racebox_definition.xml` exists in `data09.psarc` and
-//!   is HD's dialect; only its local-split lists (`NumberOfPlayers`, `SplitScreen`) are read
-//!   ([`oag_title::FrontEnd::local_split`]). Its `Single Player` page is not walked, so
-//!   `race_box` stays `None` - see `docs/formats/omega-status.md`.
+//!   is HD's dialect; its `Single Player` page is not walked, so `race_box` stays `None` - see
+//!   `docs/formats/omega-status.md`.
 //!
 //! [ADR-0025]: https://github.com/topaxi/OpenAntiGrav/blob/main/docs/architecture/adr/0025-a-boot-chain-carries-its-provenance.md
 
@@ -241,9 +240,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
-    // The race box's own two split lists, read from `data09`'s copy (HD's `NumberOfPlayers`
-    // and `SplitScreen`, same ids and English text): see `names::RACEBOX_DEFINITION`.
-    local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
     // **Chosen, not measured.** Omega's `ShipModel` authors `z=-2.05` with
@@ -303,11 +299,6 @@ pub mod names {
     /// `oag_assets`'s path folding resolves either spelling identically. Read
     /// off `data09.psarc`, confirmed present.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\Frontend\Gui\Skin.xml";
-
-    /// The race box: `Single Player` (mode, class, weapons, difficulty, and the local split's
-    /// `NumberOfPlayers` and `SplitScreen` lists, HD's own at y 420 and 470). Present in
-    /// `data09.psarc` (15,805 bytes) at HD's path.
-    pub const RACEBOX_DEFINITION: &str = r"Data\Plugins\Frontend\Gui\racebox_definition.xml";
 
     /// `Team Selection` and its two per-player copies, at HD's own path (`data09`, 14,480 bytes).
     pub const TEAM_SELECTION_DEFINITION: &str =

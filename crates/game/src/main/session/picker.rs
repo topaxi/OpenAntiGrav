@@ -655,8 +655,12 @@ impl Session {
             }
             (Kind::Track, Event::Back) => {
                 stage.picker = None;
-                // Out of the race box the join screen opened: the lobby went with it.
-                self.drop_split_lobby();
+                // Back on the RACE page: the multiplayer flow keeps its people there
+                // (`Session::sync_multiplayer` ends it when the page is left), any other
+                // race box has nothing to keep.
+                if !self.multiplayer {
+                    self.drop_split_lobby();
+                }
             }
             (Kind::Ship, Event::Back) => {
                 stage.picker = None;

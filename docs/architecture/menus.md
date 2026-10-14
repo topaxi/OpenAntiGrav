@@ -928,11 +928,11 @@ whole list (read 2026-10-12, all passing):
 
 | Title | Where | Rows (`builds` the row, else "nothing here") |
 | --- | --- | --- |
-| Pulse PSP, EU and USA | `MainMenu_Definition.xml` `Main Menu` | `FE_RACE_CAM` (campaign), `FE_RACEBOX` (racebox), `FE_MP`, `FE_WIPEOUT_DOT_COM`, `FE_PROFILE`, `FE_OPT_PLUS` (options), `FE_EXTRAS` |
-| Pulse PS2 (checked, differs) | same file | `FE_RACE_CAM`, `FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, `FE_RACEBOX`, `FE_PROFILE`, `FE_OPT_PLUS`, `FE_EXTRAS`: two split-screen variants of the first row, no multiplayer or website row. Since 2026-10-13 the two split rows are `MainMenu::borrowed` (the PSP pressing and Pure show them too, borrowed from this pressing), so the built order is the PS2 disc's exactly; see [split screen](../rendering/split-screen.md#the-pulse-and-pure-entry-2026-10-13-split-entry-align). |
-| Pure EU | `Skin.xml` `Main Menu` | `Single Player` (campaign), `Multiplayer`, `Profile`, `On Line`, `Teasers` |
+| Pulse PSP, EU and USA | `MainMenu_Definition.xml` `Main Menu` | `FE_RACE_CAM` (campaign), `FE_RACEBOX` (racebox), `FE_MP` (multiplayer, since 2026-10-14: the MULTIPLAYER page, worded `MULTIPLAYER & SHARING` by `MainMenu::multiplayer`), `FE_WIPEOUT_DOT_COM`, `FE_PROFILE`, `FE_OPT_PLUS` (options), `FE_EXTRAS` |
+| Pulse PS2 (checked, differs) | same file | `FE_RACE_CAM`, `FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`, `FE_RACEBOX`, `FE_PROFILE`, `FE_OPT_PLUS`, `FE_EXTRAS`: two split-screen variants of the first row, no multiplayer or website row. From 2026-10-13 to 2026-10-14 the two split rows were `MainMenu::borrowed` and every title showed them; since `mp-menu-flow` they are replaced by the one MULTIPLAYER row (the PSP's `FE_MP` slot), whose LOCAL MULTIPLAYER page is the split screen; see [split screen](../rendering/split-screen.md#where-the-entry-is-per-title-2026-10-14-mp-menu-flow). |
+| Pure EU | `Skin.xml` `Main Menu` | `Single Player` (campaign), `Multiplayer` (multiplayer, since 2026-10-14), `Profile`, `On Line`, `Teasers` |
 | Pure USA (checked, differs) | same | the same without `Teasers` |
-| HD / Fury | `<HorizMenu name="Mode">`, all five archives agree | `FE_RC` (campaign), `FE_RACEBOX` (racebox), `FE_ONLINE`, `FE_OPT_PLUS` (options), `FE_RECORDS` (records) |
+| HD / Fury | `<HorizMenu name="Mode">`, all five archives agree | `FE_RC` (campaign), `FE_RACEBOX` (racebox), `FE_ONLINE`, `FE_OPT_PLUS` (options), `FE_RECORDS` (records); the built-in extras add MULTIPLAYER after RACEBOX (the `FE_ONLINE` tab builds nothing) |
 | Omega | the same file in its base package and `data09.psarc` | HD's five, in HD's order (checked, applies) |
 | 2048 | `NEWGUI/Definition.xml` `GameModeChoice` | base: `FE_SP_CAMPAIGN`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`; with `data2.psarc` (v1.04): `FE_SP_CAMPAIGN`, `FE_RC_HD`, `FE_RC_FURY`, `FE_MP_CAMPAIGN`, `FE_ADHOC`, `FE_CROSSPLAY`. `data1.psarc` (the earlier patch) authors the four plus an HD tile reusing `FE_SP_CAMPAIGN`; `data2` shadows it. The grid is the touch front end's own, so no row is built from a tile. |
 

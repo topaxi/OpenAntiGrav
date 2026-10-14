@@ -258,6 +258,7 @@ pub fn load_strings(
                 crate::strings::overlay_disc(&mut table, namespace, &language.name, report);
             }
             crate::strings::overlay(&mut table, &language.name, report);
+            overlay_second_seat(archives, &name, &mut table);
             if table.is_empty() {
                 report.push(format!("{} names no string table", language.name));
             } else {
@@ -273,6 +274,44 @@ pub fn load_strings(
             report.push(format!("{name}: {e}"));
             StringTable::default()
         }
+    }
+}
+
+/// The second seat's join and leave lines (`FE_GUEST_JOIN`, `FE_GUEST_LEAVE`, "PLAYER 2 PRESS START
+/// TO JOIN") filled in from another archive's copy of the language table when the one served
+/// lacks them. **Wipeout HD/Fury only in effect**: its `DATA05` and `DATA06` copies carry the two
+/// ids and the `DATA02` copy the front end is served does not, while Omega's, 2048's and the
+/// served copies of the PSP titles do or have none to find. Only those two ids are taken: the
+/// rest of the table is the served copy's, as every other screen has it. The join screen
+/// (`oag_ui_screens::join::Labels::guest`) is the one reader.
+fn overlay_second_seat(archives: &mut oag_assets::Archives, name: &str, table: &mut StringTable) {
+    const IDS: [&str; 2] = ["FE_GUEST_JOIN", "FE_GUEST_LEAVE"];
+    let containers = archives
+        .patch
+        .iter_mut()
+        .chain(archives.fe.iter_mut())
+        .chain(archives.extra.iter_mut());
+    for container in containers {
+        if IDS.iter().all(|id| table.get(id).is_some()) {
+            return;
+        }
+        if !container.contains(name) {
+            continue;
+        }
+        let Ok(xml) = container
+            .read_entry(name)
+            .map_err(|_| ())
+            .and_then(|blob| expand(&blob).map_err(|_| ()))
+        else {
+            continue;
+        };
+        let other = StringTable::from_xml(&xml);
+        let found: std::collections::HashMap<String, String> = IDS
+            .iter()
+            .filter(|id| table.get(id).is_none())
+            .filter_map(|id| Some(((*id).to_string(), other.get(id)?.to_string())))
+            .collect();
+        table.merge(found);
     }
 }
 

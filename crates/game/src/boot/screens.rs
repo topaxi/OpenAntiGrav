@@ -543,13 +543,6 @@ pub struct RaceSetup {
     /// `Race_ReadSetupOptions` compares against `"On"`; the string id is the
     /// row's label in the front end's own string table.
     pub weapons: Vec<(String, String)>,
-    /// The `NumberOfPlayers` list's entries, in order: `1` and `2` on Wipeout HD/Fury, whose
-    /// race box authors local split screen ([`oag_title::FrontEnd::local_split`]). Each is
-    /// both the stored value and the label (the entry authors a literal `string`).
-    pub players: Vec<String>,
-    /// The `SplitScreen` list's entries as string ids, in order: `RB_HORIZ`, `RB_VERT` on HD.
-    /// The id is the stored value; the label is the id in the front end's string table.
-    pub cuts: Vec<String>,
 }
 
 impl RaceSetup {
@@ -566,76 +559,16 @@ impl RaceSetup {
             .map(|(id, value)| oag_ui::menu::Choice::labelled(value, strings.get_or_id(id)))
             .collect()
     }
-
-    /// The `PLAYERS` row's options: the authored literals, stored and shown as spelled.
-    #[must_use]
-    pub fn player_choices(&self) -> Vec<oag_ui::menu::Choice> {
-        self.players
-            .iter()
-            .map(oag_ui::menu::Choice::plain)
-            .collect()
-    }
-
-    /// The `SPLIT SCREEN` row's options: stored as the disc's string id, shown as its text
-    /// in the language `strings` is for.
-    #[must_use]
-    pub fn cut_choices(
-        &self,
-        strings: &oag_ui::language::StringTable,
-    ) -> Vec<oag_ui::menu::Choice> {
-        self.cuts
-            .iter()
-            .map(|id| oag_ui::menu::Choice::labelled(id, strings.get_or_id(id)))
-            .collect()
-    }
 }
 
 /// The race box's `Single Player` lists - see [`RaceSetup`]: the `KILLS` and `WEAPONS` rows'
-/// off [`oag_title::FrontEnd::race_setup`], the local split's off
-/// [`oag_title::FrontEnd::local_split`]. Each is read only where the title names its file.
+/// off [`oag_title::FrontEnd::race_setup`], read only where the title names its file.
 pub(super) fn read_race_setup(
     archives: &mut oag_assets::Archives,
     front_end: &oag_title::FrontEnd,
     report: &mut Vec<String>,
 ) -> RaceSetup {
-    let mut setup = read_setup_lists(archives, front_end.race_setup, report);
-    match front_end.local_split {
-        Some(oag_title::LocalSplit::Authored(name)) => match read_xml(archives, name) {
-            Ok(xml) => {
-                setup.players = list_entries(&xml, "NumberOfPlayers")
-                    .into_iter()
-                    .map(|(string, _)| string)
-                    .collect();
-                setup.cuts = list_entries(&xml, "SplitScreen")
-                    .into_iter()
-                    .map(|(string, _)| string)
-                    .collect();
-                report.push(format!(
-                    "{name}: split setup NumberOfPlayers {:?}, SplitScreen {:?}",
-                    setup.players, setup.cuts
-                ));
-            }
-            Err(error) => report.push(format!(
-                "{name}: {error:#} - no PLAYERS or SPLIT SCREEN row values"
-            )),
-        },
-        Some(oag_title::LocalSplit::Borrowed(borrowed)) => {
-            setup.players = borrowed.players.iter().map(ToString::to_string).collect();
-            setup.cuts = borrowed.cuts.iter().map(ToString::to_string).collect();
-            report.push(format!(
-                "split setup borrowed from {} (this title authors none): NumberOfPlayers {:?}, \
-                 SplitScreen {:?}",
-                borrowed.from, setup.players, setup.cuts
-            ));
-        }
-        None => {}
-    }
-    setup
-}
-
-fn read_xml(archives: &mut oag_assets::Archives, name: &str) -> anyhow::Result<String> {
-    let blob = archives.read_name(name).map_err(anyhow::Error::from)?;
-    fexml::text(&blob).map_err(|e| anyhow::anyhow!("reading the front-end XML: {e}"))
+    read_setup_lists(archives, front_end.race_setup, report)
 }
 
 /// The `KILLS` and `WEAPONS` lists off `name`.
@@ -663,7 +596,6 @@ fn read_setup_lists(
                 .into_iter()
                 .filter_map(|(string, value)| Some((string, value?)))
                 .collect(),
-            ..RaceSetup::default()
         },
         Err(error) => {
             report.push(format!(

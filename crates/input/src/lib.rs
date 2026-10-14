@@ -283,6 +283,16 @@ pub struct Controls {
     /// Whether race keys now come per physical keyboard rather than per window. See
     /// [`Self::per_device_keys`].
     per_device: bool,
+    /// Buttons each physical keyboard pressed since the last tick, from the raw key events
+    /// the join screen listens to ([`Self::lobby_key`]).
+    raw_edges: Vec<(pad::KeyboardId, u32)>,
+    /// Whether a raw key event has come in since the join screen opened: from then on the
+    /// window's own key presses are the same presses again and are not the keyboard's
+    /// ([`Self::lobby_key`]).
+    raw_seen: bool,
+    /// Buttons the window's key events pressed since the last tick, as distinct from a click
+    /// or a touch tap, which arrive through the same latch.
+    window_pressed: u32,
 }
 
 /// What a keyboard seat after the first holds.
@@ -321,6 +331,9 @@ impl Controls {
             devices: Vec::new(),
             speakers: Vec::new(),
             per_device: false,
+            raw_edges: Vec::new(),
+            raw_seen: false,
+            window_pressed: 0,
         }
     }
 
@@ -552,8 +565,62 @@ impl Controls {
     pub fn set_key(&mut self, key: &Key, pressed: bool) {
         if pressed {
             self.prompt.note_key();
+            if let Some(button) = self.keyboard.bindings().resolve(key) {
+                self.window_pressed |= button.bit();
+            }
         }
         self.keyboard.set_key(key, pressed);
+    }
+
+    /// A key going down on physical keyboard `device`, for the join screen: it is that
+    /// keyboard's press ([`lobby::Device::Keys`]) in [`Self::device_presses`]. **From the first
+    /// one on, the window's own key presses are not the keyboard's any more** (a raw event
+    /// arrives ahead of the window event for the same press: measured on X11, assumed on
+    /// Windows), so one keypress is one device and not two; a click or a touch is still the
+    /// anonymous [`lobby::Device::Keyboard`]. A key no button is bound to presses nothing.
+    pub fn lobby_key(&mut self, device: pad::KeyboardId, key: &Key, pressed: bool) {
+        if !pressed {
+            return;
+        }
+        let Some(button) = self.keyboard.bindings().resolve(key) else {
+            return;
+        };
+        self.prompt.note_key();
+        if !self.raw_seen {
+            log::info!(
+                "keyboards: a raw key event names the keyboard, so the join screen tells keyboards apart"
+            );
+        }
+        self.raw_seen = true;
+        match self.raw_edges.iter_mut().find(|(id, _)| *id == device) {
+            Some((_, bits)) => *bits |= button.bit(),
+            None => self.raw_edges.push((device, button.bit())),
+        }
+    }
+
+    /// Whether raw key events have told keyboards apart since the join screen opened. A click
+    /// on the empty seat does not seat the mouse then: it is not a keyboard.
+    #[must_use]
+    pub fn keyboards_told_apart(&self) -> bool {
+        self.raw_seen
+    }
+
+    /// Starts the join screen's keyboard bookkeeping over: no raw event heard, no press
+    /// pending. Called as the screen opens and as it closes.
+    pub fn forget_lobby_keys(&mut self) {
+        self.raw_edges.clear();
+        self.raw_seen = false;
+        self.window_pressed = 0;
+    }
+
+    /// After a lobby seated the keyboards ([`lobby::Lobby::seat`]): a race of two or more
+    /// physical keyboards reads its keys from their raw events from the first tick, each
+    /// keyboard on the seat it joined, as if every one had already spoken
+    /// ([`Self::per_device_keys`]). One keyboard keeps the window's own events.
+    pub fn sync_device_keys(&mut self) {
+        if self.pad.assignment().device_keyboards() >= 2 {
+            self.per_device = true;
+        }
     }
 
     /// The device used last, for the log line that names the prompt family.
@@ -736,11 +803,21 @@ impl Controls {
         // on the first and leave nothing for the rest.
         let keyboard_slot = self.keyboard_slot();
         let keyboard_keys = self.keyboard.held_mask() | self.keyboard.take_taps();
-        let pressed = keyboard_keys & !std::mem::replace(&mut self.last_keys, keyboard_keys);
+        let mut pressed = keyboard_keys & !std::mem::replace(&mut self.last_keys, keyboard_keys);
+        let window_pressed = std::mem::take(&mut self.window_pressed);
+        if self.raw_seen {
+            pressed &= !window_pressed;
+        }
         if pressed != 0 {
             self.presses.push(lobby::Press {
                 device: lobby::Device::Keyboard,
                 buttons: pressed,
+            });
+        }
+        for (id, buttons) in std::mem::take(&mut self.raw_edges) {
+            self.presses.push(lobby::Press {
+                device: lobby::Device::Keys(id),
+                buttons,
             });
         }
         let mut pads = pads;

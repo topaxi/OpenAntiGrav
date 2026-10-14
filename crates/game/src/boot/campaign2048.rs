@@ -170,7 +170,7 @@ pub(super) fn extra_tiles(
         }
     };
     let page = &built.definition.pages[built.definition.root];
-    ["racebox", "remix"]
+    ["racebox", "remix", "multiplayer"]
         .into_iter()
         .filter_map(|id| {
             let row = page.row_with_id(id)?;
@@ -178,7 +178,8 @@ pub(super) fn extra_tiles(
                 label: page.entries[row].label().to_string(),
                 launch: match id {
                     "racebox" => Launch::RaceBox,
-                    _ => Launch::Remix,
+                    "remix" => Launch::Remix,
+                    _ => Launch::Multiplayer,
                 },
             })
         })

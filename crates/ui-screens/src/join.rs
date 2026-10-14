@@ -33,6 +33,10 @@ pub struct Labels {
     pub player: String,
     /// What an empty seat says.
     pub empty: String,
+    /// The title's own line for the second seat, where its disc authors one (`FE_GUEST_JOIN`
+    /// on HD and Omega: "PLAYER 2 PRESS START TO JOIN"); it replaces the whole empty row for
+    /// that seat. `None` elsewhere, and for every later seat.
+    pub guest: Option<String>,
     /// The keyboard's name, which is also the mouse's.
     pub keyboard: String,
     /// "GAMEPAD", for a pad the backend gave no name.
@@ -41,6 +45,26 @@ pub struct Labels {
     pub start: String,
     /// The row that leaves the screen.
     pub back: String,
+}
+
+impl Labels {
+    /// The words in the language `strings` is, English where an id is missing. The screen is
+    /// LOCAL MULTIPLAYER's join step.
+    #[must_use]
+    pub fn read(strings: &oag_ui::language::StringTable) -> Self {
+        let say = |id: &str, english: &str| strings.get(id).unwrap_or(english).to_string();
+        Self {
+            title: say("OAG_MP_LOCAL", "LOCAL MULTIPLAYER"),
+            hint: say("OAG_JOIN_HINT", "EACH PLAYER PRESSES A BUTTON TO JOIN"),
+            player: say("OAG_JOIN_PLAYER", "PLAYER"),
+            empty: say("OAG_JOIN_EMPTY", "PRESS A BUTTON"),
+            guest: strings.get("FE_GUEST_JOIN").map(str::to_uppercase),
+            keyboard: say("OAG_JOIN_KEYBOARD", "KEYBOARD"),
+            pad: say("OAG_JOIN_PAD", "GAMEPAD"),
+            start: say("OAG_JOIN_START", "START"),
+            back: say("OAG_MENU_BACK", "BACK"),
+        }
+    }
 }
 
 /// One line of the screen.
@@ -79,8 +103,8 @@ pub struct Join {
     seats: Vec<String>,
     /// The seats the grid has.
     capacity: usize,
-    /// The seats START needs filled: one, or all of them where the race box authored the
-    /// head count.
+    /// The seats START needs filled: one, or more where the caller needs them (two for a
+    /// multiplayer race).
     needs: usize,
     /// The row the pointer last moved onto.
     hover: Option<Row>,
@@ -197,8 +221,7 @@ impl Join {
         }
     }
 
-    /// This screen with START refused until `seats` are taken: the race box authored the
-    /// head count (`NumberOfPlayers`), and a race for fewer would contradict it.
+    /// This screen with START refused until `seats` are taken.
     #[must_use]
     pub fn requiring(mut self, seats: usize) -> Self {
         self.needs = seats.clamp(1, self.capacity);
@@ -345,10 +368,13 @@ impl Join {
                 ),
                 Row::Empty => {
                     ink = dim(ink);
-                    (
-                        format!("{} {}", self.labels.player, self.seats.len() + 1),
-                        self.labels.empty.clone(),
-                    )
+                    match (&self.labels.guest, self.seats.len()) {
+                        (Some(guest), 1) => (guest.clone(), String::new()),
+                        _ => (
+                            format!("{} {}", self.labels.player, self.seats.len() + 1),
+                            self.labels.empty.clone(),
+                        ),
+                    }
                 }
                 Row::Start => {
                     if !self.can_start() {

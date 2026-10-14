@@ -17,7 +17,7 @@
 //! that has none leaves the screen; Start from a seated device begins the race.
 //! A pad that disconnects loses its seat.
 
-use crate::pad::Assignment;
+use crate::pad::{Assignment, KeyboardId};
 use oag_gameplay::input::Button;
 
 /// An input device, as far as who is playing is concerned.
@@ -27,6 +27,11 @@ pub enum Device<D = gilrs::GamepadId> {
     /// reaches the game through the keyboard's latch, so it is this device
     /// speaking.
     Keyboard,
+    /// One physical keyboard the platform told apart from the others, by the raw key
+    /// events X11 and Windows send (`Controls::lobby_key`). What lets a second keyboard
+    /// take a seat of its own; a platform that reports no such id (Wayland, macOS) never
+    /// produces one, and its keyboards are all [`Self::Keyboard`].
+    Keys(KeyboardId),
     /// One gamepad.
     Pad(D),
 }
@@ -126,6 +131,22 @@ impl<D: Copy + PartialEq> Lobby<D> {
         Outcome::Joined(self.seats.len() - 1)
     }
 
+    /// Gives the seat `from` holds to `to`, if `from` has one and `to` has none: the anonymous
+    /// keyboard (a click, or a key before the platform named any keyboard) turning out to be
+    /// one physical keyboard. The seat keeps its place.
+    pub fn replace(&mut self, from: Device<D>, to: Device<D>) -> bool {
+        if self.seat_of(to).is_some() {
+            return false;
+        }
+        match self.seat_of(from) {
+            Some(seat) => {
+                self.seats[seat] = to;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Empties seat `seat`; later seats move down. `Nothing` past the last.
     pub fn leave(&mut self, seat: usize) -> Outcome {
         if seat >= self.seats.len() {
@@ -136,13 +157,15 @@ impl<D: Copy + PartialEq> Lobby<D> {
     }
 
     /// What `press` does. Several buttons at once are taken in the order Start,
-    /// Cross, Circle, so one press cannot join and leave in the same tick.
+    /// Cross, Circle, so one press cannot join and leave in the same tick. **Start from a
+    /// device with no seat joins**, as it does on HD and Omega (`FE_GUEST_JOIN`, "PLAYER 2
+    /// PRESS START TO JOIN"); from a seated device it begins.
     pub fn press(&mut self, press: Press<D>) -> Outcome {
         let down = |button: Button| press.buttons & button.bit() != 0;
         let seat = self.seat_of(press.device);
         match seat {
             Some(_) if down(Button::Start) => Outcome::Start,
-            None if down(Button::Cross) => self.join(press.device),
+            None if down(Button::Cross) || down(Button::Start) => self.join(press.device),
             Some(seat) if down(Button::Circle) => self.leave(seat),
             None if down(Button::Circle) => Outcome::Back,
             _ => Outcome::Nothing,
@@ -153,7 +176,7 @@ impl<D: Copy + PartialEq> Lobby<D> {
     /// with it. The seats' former places in the order close up.
     pub fn retain_connected(&mut self, connected: &[D]) {
         self.seats.retain(|seat| match seat {
-            Device::Keyboard => true,
+            Device::Keyboard | Device::Keys(_) => true,
             Device::Pad(id) => connected.contains(id),
         });
     }
@@ -171,6 +194,7 @@ impl<D: Copy + PartialEq> Lobby<D> {
         for (slot, seat) in self.seats.iter().enumerate() {
             match seat {
                 Device::Keyboard => assignment.claim_keyboard(slot),
+                Device::Keys(id) => assignment.claim_keyboard_device(slot, *id),
                 Device::Pad(id) => assignment.assign_pad(*id, slot),
             }
         }

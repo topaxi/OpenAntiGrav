@@ -74,7 +74,7 @@ pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{HudArt, HudLayouts, ResumeCountdown, ZoneSpeedClasses};
 pub use language::LanguageManifest;
 pub use loading::Loading;
-pub use main_menu::{Attached, Borrowed, MainMenu, OriginalRow};
+pub use main_menu::{Attached, MainMenu, OriginalRow};
 pub use menu::{
     HelpText, ListBlocks, MenuBlocks, MenuList, MenuSettings, MenuSkin, MenuStrip, StripBlocks,
 };
@@ -585,14 +585,6 @@ pub struct FrontEnd {
     /// `KILLS` row offers (see `oag_game::boot::kill_targets`). `None` on a
     /// title whose setup page is unread, which shows no kill target to pick.
     pub race_setup: Option<&'static str>,
-    /// Where this title's local split screen's two lists - `NumberOfPlayers` (the people, `1`
-    /// and `2`) and `SplitScreen` (`RB_HORIZ`, `RB_VERT`) - come from, or `None` on a title
-    /// that offers no authored or borrowed pair. A title that has the lists has them as rows
-    /// on its RACE page and no generic SPLIT SCREEN row (the authored place wins); every
-    /// other title keeps its own entry. Separate from [`Self::race_setup`] on purpose: naming
-    /// this must not switch on the `KILLS` and `WEAPONS` rows, which HD's `Single Player`
-    /// authors in a shape (`Slider`) that file's reader does not read.
-    pub local_split: Option<LocalSplit>,
     /// Whether this title's race-setup screens preview an entry with a
     /// rendered mesh.
     ///
@@ -676,29 +668,6 @@ pub struct FrontEnd {
     /// borrow it. `false` elsewhere: no title but Pulse has a PS2 pressing read, and the
     /// ones with a split screen of their own author it.
     pub borrows_ps2_split_screens: bool,
-}
-
-/// Where a title's local split screen's lists are read from, see [`FrontEnd::local_split`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LocalSplit {
-    /// The definition whose race box `Single Player` screen authors both lists: Wipeout HD/Fury's
-    /// and Omega's `racebox_definition.xml`.
-    Authored(&'static str),
-    /// A title that authors no split screen of its own and mirrors its closest relative's.
-    Borrowed(BorrowedSplit),
-}
-
-/// A split screen's lists taken from another title, **chosen, not measured**: the title's own
-/// race box authors none, so it mirrors the relative's rows with the lists as that relative
-/// authors them and the words from its own string table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BorrowedSplit {
-    /// The title the lists are borrowed from, for the load report and the docs.
-    pub from: &'static str,
-    /// Its `NumberOfPlayers` entries, in order.
-    pub players: &'static [&'static str],
-    /// Its `SplitScreen` entries as string ids, in order.
-    pub cuts: &'static [&'static str],
 }
 
 /// The origin and depth a `Team Selection` draws its craft at, see

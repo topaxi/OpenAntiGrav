@@ -1298,10 +1298,14 @@ a guess.
   device column) and invisible on Omega (white text on a light page); it now uses HD's list
   blocks there. `Title::split_on_integrated_gpu` (Pulse, Pure) drops the row and tile on an
   integrated GPU and sends a windowed `--players N` to one view. Written up in
-  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
+  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-14-mp-menu-flow).
   **Open from it**: ~~Omega's racebox has HD's two lists and they are not wired~~ (done, see
   `split-entry-mirror-hd` below); a real integrated adapter was not walked; ~~Omega has no Ship
   Select in a split~~ (Omega does author `Team Selection Player 1`/`2`: see below).
+- **2026-10-14, `mp-menu-flow`: every split entry above is replaced by one MULTIPLAYER row** and the flow behind it
+  (join, window layout, seat-assignment hook, RACE page, Track and Ship Select; see the plan thread
+  `the-multiplayer-menu-flow`). The RACE page lost `NUMBER OF PLAYERS` and `SPLIT SCREEN` on every title,
+  `FrontEnd::local_split` and the two settings are gone, and the entries described below are history.
 - **2026-10-13, `split-entry-mirror-hd`: Omega authors HD's rows, 2048 borrows them.** Omega's real
   `racebox_definition.xml` (`data09`) has `NumberOfPlayers` and `SplitScreen`, so `oag_omega` names it
   (`oag_title::LocalSplit::Authored`) and Omega's RACE page carries HD's two rows with the generic row
@@ -1311,7 +1315,7 @@ a guess.
   on the RACE page behind the RACEBOX tile, and the third `GameModeChoice` tile (`Launch::SplitScreen`,
   `trim_tiles`) is removed. Walked windowed on an own Xvfb with two pads on both: rows, 2 players,
   vertical, join, a left and right two-view race (Omega also through Track Select). Written up in
-  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-13-split-entry-hd-2048-omega).
+  [split-screen.md](../../docs/rendering/split-screen.md#where-the-entry-is-per-title-2026-10-14-mp-menu-flow).
   **Open from it**:
   - ~~**Omega's Ship Select is wired and bare**~~ **Done, 2026-10-14 (`omega-ship-select`)**: Omega's HD-era
     teams carry `TEAM_VARIANTS` (three open models each, off the teams definition), the bars carry each

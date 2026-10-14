@@ -70,7 +70,7 @@ impl Session {
         self.race_options = Some(prepared.race_options);
         self.music_discs = prepared.music_discs;
         self.shell = Some(prepared.shell);
-        self.drop_split_screen_row();
+        self.drop_multiplayer_row();
         self.prefetch_pending = prepared.prefetch;
         let assets = prepared.loading_assets;
         self.stage = Stage::loading(
@@ -87,18 +87,18 @@ impl Session {
         Ok(())
     }
 
-    /// Takes the SPLIT SCREEN row off the menus when the adapter this run draws with is
+    /// Takes the MULTIPLAYER row off the menus when the adapter this run draws with is
     /// one the title offers no split on (`oag_game::split_screen::offered`, the
     /// maintainer's integrated-GPU rule). Called wherever a `Shell` is installed from a
     /// freshly built definition; a language reload clones the current definition and so
     /// keeps the row gone.
-    pub(crate) fn drop_split_screen_row(&mut self) {
+    pub(crate) fn drop_multiplayer_row(&mut self) {
         let device = self.gpu.device_type;
         if let Some(shell) = self.shell.as_mut()
             && oag_game::split_screen::trim_menu(&mut shell.definition, shell.title, device)
         {
             log::info!(
-                "split screen is not offered for {} on this {device:?} adapter: no SPLIT SCREEN row",
+                "split screen is not offered for {} on this {device:?} adapter: no MULTIPLAYER row",
                 shell.title.name
             );
         }

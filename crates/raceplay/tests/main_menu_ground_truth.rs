@@ -112,14 +112,15 @@ fn pulses_psp_main_menu_is_the_seven_rows_on_both_pressings() {
     }
 }
 
-/// Checked, differs: the PS2 pressing authors two more rows after the first
-/// (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`) and neither the multiplayer nor the website
-/// row. Those two are `Title::main_menu`'s [`oag_title::Borrowed`] rows, which the PSP
-/// borrows, so the list this build shows is the PS2's order exactly: the PS2 disc's list,
-/// each id read as the row it builds, equals `MainMenu::built`.
+/// Checked, differs: the PS2 pressing authors two split-screen rows after the first
+/// (`FE_RACE_CAM_SS`, `FE_RACE_CAM_SSH`) and neither the multiplayer nor the website row. This
+/// build shows the PSP's list on both pressings, with MULTIPLAYER (`FE_MP`, the PSP's multiplayer
+/// entry) where the PS2 has its split rows' replacement: the split screen is LOCAL MULTIPLAYER on
+/// the page behind that row, so the PS2's two rows are the one thing `Title::main_menu` does not
+/// build for them.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn pulses_ps2_main_menu_puts_the_borrowed_rows_where_the_disc_does() {
+fn pulses_ps2_main_menu_has_split_rows_that_multiplayer_replaces() {
     let Some(image) = image("pulse-ps2-eu.chd") else {
         return;
     };
@@ -144,59 +145,52 @@ fn pulses_ps2_main_menu_puts_the_borrowed_rows_where_the_disc_does() {
             .iter()
             .find(|row| row.disc_id == id)
             .and_then(|row| row.builds)
-            .or_else(|| {
-                menu.borrowed
-                    .iter()
-                    .find(|row| row.disc_id == id)
-                    .map(|row| row.builds)
-            })
     };
     let from_disc: Vec<&str> = ps2.iter().filter_map(|id| opens(id)).collect();
+    assert_eq!(
+        from_disc,
+        ["campaign", "racebox", "options"],
+        "what the PS2 disc's own rows build here, the split rows opening nothing of theirs"
+    );
     let built: Vec<&str> = menu.built(false).collect();
     assert_eq!(
-        built, from_disc,
-        "what this build shows, in the PS2 disc's order"
-    );
-    assert_eq!(
         built,
-        [
-            "campaign",
-            "split_vertical",
-            "split_horizontal",
-            "racebox",
-            "options"
-        ]
+        ["campaign", "racebox", "multiplayer", "options"],
+        "and MULTIPLAYER stands where the PSP's FE_MP does"
     );
 }
 
-/// The wording of the two rows and their help is the PS2's own, `Data\Plugins\PI012`'s
-/// English table: `assets/ui/strings/english.toml` carries it, so the PSP and Pure (which
-/// ship no such string) show the same words.
+/// The wording of Pulse's MULTIPLAYER row and its help is the PSP disc's own `FE_MP` and
+/// `FE_HELP_MP`: `assets/ui/strings/english.toml` carries it, so the PS2 pressing and the
+/// others, which author no such row (or the same word), show the same words.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_split_rows_words_are_the_ps2_discs_own() {
-    let Some(image) = image("pulse-ps2-eu.chd") else {
+fn the_multiplayer_rows_words_are_the_psp_discs_own() {
+    let Some(image) = image("pulse-psp-eu.chd") else {
         return;
     };
     let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
-    let table = oag_ui::language::StringTable::from_xml(
-        &fexml::text(
-            &archives
-                .read_name(r"Data\Plugins\PI012\entries.xml")
-                .expect("PI012 is the PS2 disc's English plugin"),
-        )
-        .expect("text"),
-    );
+    // English is `PI000` on the EU pressing and `PI012` on the USA one.
+    let blob = ["PI000", "PI012"]
+        .iter()
+        .find_map(|plugin| {
+            archives
+                .read_name(&format!(r"Data\Plugins\{plugin}\entries.xml"))
+                .ok()
+        })
+        .expect("an English plugin on the PSP disc");
+    let table = oag_ui::language::StringTable::from_xml(&fexml::text(&blob).expect("text"));
     let ours = oag_ui::strings::project_table(None);
-    for (disc, project) in [
-        ("FE_RACE_CAM_SS", "OAG_MENU_SPLIT_VERTICAL"),
-        ("FE_RACE_CAM_SSH", "OAG_MENU_SPLIT_HORIZONTAL"),
-        ("FE_HELP_SS", "OAG_MENU_SPLIT_HELP"),
-    ] {
+    let row = oag_pulse::TITLE
+        .main_menu
+        .multiplayer
+        .expect("a worded row");
+    for (disc, wording) in [("FE_MP", row.label), ("FE_HELP_MP", row.subtitle)] {
         assert_eq!(
-            ours.get(project),
+            ours.get(wording.id),
             table.get(disc),
-            "{project} against the disc's {disc}"
+            "{} against the disc's {disc}",
+            wording.id
         );
         assert!(table.get(disc).is_some(), "{disc} is on the disc");
     }

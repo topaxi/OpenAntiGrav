@@ -140,6 +140,34 @@ impl<D: Copy + PartialEq> Assignment<D> {
         Some(slot)
     }
 
+    /// Seats physical keyboard `id` on `slot` as a player: the first keyboard the join screen
+    /// seats becomes the seat the front end reads (as [`Self::claim_keyboard`] does for the
+    /// anonymous keyboard), each later one a keyboard seat after it. Either way the seat is
+    /// bound to the device ([`Binding::Device`]), so its keys come from that keyboard's raw
+    /// events whichever window has the focus.
+    pub fn claim_keyboard_device(&mut self, slot: usize, id: KeyboardId) {
+        if !self.keyboard_claimed {
+            self.claim_keyboard(slot);
+            self.keyboard_binding = Binding::Device(id);
+        } else if let Ok(slot) = u8::try_from(slot)
+            && usize::from(slot) < oag_gameplay::MAX_PLAYERS
+        {
+            self.more_keyboards.push(Seat {
+                binding: Binding::Device(id),
+                slot,
+            });
+        }
+    }
+
+    /// How many keyboard seats are bound to a physical keyboard.
+    #[must_use]
+    pub fn device_keyboards(&self) -> usize {
+        self.keyboard_seats()
+            .iter()
+            .filter(|(binding, _)| matches!(binding, Binding::Device(_)))
+            .count()
+    }
+
     /// Changes what sends keys to the keyboard seat on `slot`, if there is one.
     fn bind_keyboard(&mut self, slot: usize, binding: Binding) {
         log::info!("keyboard seat: slot {slot} is now bound to {binding:?}");

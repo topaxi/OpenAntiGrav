@@ -64,15 +64,15 @@ fn players_fall_back_to_one_view_only_where_the_split_is_not_offered() {
     );
 }
 
-fn has_split_row(definition: &oag_ui::menu::Definition) -> bool {
-    definition.pages.iter().any(|page| {
-        page.meta.iter().any(|meta| {
-            matches!(
-                meta.id.as_deref(),
-                Some("split_screen" | "split_vertical" | "split_horizontal")
-            )
+/// Whether the main page shows the MULTIPLAYER row.
+fn has_multiplayer_row(definition: &oag_ui::menu::Definition) -> bool {
+    definition
+        .page(&definition.pages[definition.root].id)
+        .is_some_and(|main| {
+            main.meta
+                .iter()
+                .any(|meta| meta.id.as_deref() == Some("multiplayer"))
         })
-    })
 }
 
 fn built(title: &'static oag_title::Title) -> oag_ui::menu::Definition {
@@ -90,175 +90,52 @@ fn built(title: &'static oag_title::Title) -> oag_ui::menu::Definition {
         .definition
 }
 
+/// Every title shows MULTIPLAYER on its main menu, and an integrated GPU takes the row away on the
+/// three titles that offer no split on one (the page behind it would hold nothing to do).
 #[test]
-fn an_integrated_gpu_menu_has_the_split_row_for_pulse_and_pure_alone() {
+fn an_integrated_gpu_menu_has_the_multiplayer_row_for_pulse_and_pure_alone() {
     for (title, on_igpu) in titles() {
         for device in ALL {
             let mut definition = built(title);
-            assert!(has_split_row(&definition), "{} starts with it", title.name);
+            assert!(
+                has_multiplayer_row(&definition),
+                "{} starts with it",
+                title.name
+            );
             let dropped = trim_menu(&mut definition, title, device);
             assert_eq!(dropped, !offered(title, device));
-            assert_eq!(has_split_row(&definition), !dropped, "{}", title.name);
+            assert_eq!(has_multiplayer_row(&definition), !dropped, "{}", title.name);
             if device == DeviceType::IntegratedGpu {
-                assert_eq!(has_split_row(&definition), on_igpu, "{}", title.name);
+                assert_eq!(has_multiplayer_row(&definition), on_igpu, "{}", title.name);
             }
         }
     }
 }
 
-fn settings_on_race(definition: &oag_ui::menu::Definition) -> Vec<String> {
-    definition
-        .pages
-        .iter()
-        .find(|page| page.id == "race")
-        .expect("the RACE page")
-        .entries
-        .iter()
-        .filter_map(|entry| entry.setting().map(str::to_string))
-        .collect()
-}
-
-const AUTHORED_ROWS: [&str; 2] = ["race.players", "race.split_cut"];
-
-/// A title with the people and the cut as lists - HD's and Omega's race boxes author them,
-/// 2048 borrows HD's (chosen, not measured) - has both rows on its RACE page and no generic
-/// SPLIT SCREEN row (the authored place wins). Pulse and Pure keep their row and have
-/// neither authored one. The pin that moves with this is
-/// `an_integrated_gpu_menu_has_the_split_row_for_pulse_and_pure_alone`'s starting point,
-/// which builds without this trim and so still starts with the row on every title.
+/// The RACE page keeps no NUMBER OF PLAYERS or SPLIT SCREEN row on any title: the head count is
+/// the join screen's and the cut the layout screen's.
 #[test]
-fn the_split_rows_replace_the_generic_row_on_hd_omega_and_2048_and_nowhere_else() {
+fn no_title_keeps_the_players_or_cut_rows_on_the_race_page() {
     for (title, _) in titles() {
         let mut definition = built(title);
         definition.drop_rows_picked_on_screen(title);
-        let has_lists = title.front_end.is_some_and(|f| f.local_split.is_some());
-        let expected = [
-            oag_hd::TITLE.name,
-            oag_omega::TITLE.name,
-            oag_2048::TITLE.name,
-        ];
-        assert_eq!(has_lists, expected.contains(&title.name), "{}", title.name);
-        assert_eq!(has_split_row(&definition), !has_lists, "{}", title.name);
-        let settings = settings_on_race(&definition);
-        for key in AUTHORED_ROWS {
-            assert_eq!(
-                settings.iter().any(|s| s == key),
-                has_lists,
+        let settings: Vec<String> = definition
+            .pages
+            .iter()
+            .find(|page| page.id == "race")
+            .expect("the RACE page")
+            .entries
+            .iter()
+            .filter_map(|entry| entry.setting().map(str::to_string))
+            .collect();
+        for key in ["race.players", "race.split_cut"] {
+            assert!(
+                !settings.iter().any(|s| s == key),
                 "{key} on {}",
                 title.name
             );
         }
     }
-}
-
-/// Which of the three keeps a disc-authored list and which borrows one.
-#[test]
-fn hd_and_omega_author_the_lists_and_2048_borrows_them() {
-    use oag_title::LocalSplit;
-    let kind = |title: &oag_title::Title| title.front_end.and_then(|f| f.local_split);
-    assert!(matches!(kind(oag_hd::TITLE), Some(LocalSplit::Authored(_))));
-    assert!(matches!(
-        kind(oag_omega::TITLE),
-        Some(LocalSplit::Authored(_))
-    ));
-    let Some(LocalSplit::Borrowed(borrowed)) = kind(oag_2048::TITLE) else {
-        panic!("2048 borrows HD's lists");
-    };
-    assert_eq!(borrowed.from, "Wipeout HD/Fury");
-    assert_eq!(borrowed.players, ["1", "2"]);
-    assert_eq!(borrowed.cuts, ["RB_HORIZ", "RB_VERT"]);
-}
-
-/// HD, 2048 and Omega offer no split on an integrated GPU, and that takes the rows with
-/// the generic row: otherwise they would offer a second person the title will not draw.
-#[test]
-fn an_integrated_gpu_takes_the_authored_and_borrowed_rows_too() {
-    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
-        for device in ALL {
-            let mut definition = built(title);
-            definition.drop_rows_picked_on_screen(title);
-            assert!(
-                settings_on_race(&definition)
-                    .iter()
-                    .any(|s| s == "race.players"),
-                "{}",
-                title.name
-            );
-            let dropped = trim_menu(&mut definition, title, device);
-            assert_eq!(
-                dropped,
-                device == DeviceType::IntegratedGpu,
-                "{} {device:?}",
-                title.name
-            );
-            let settings = settings_on_race(&definition);
-            for key in AUTHORED_ROWS {
-                assert_eq!(
-                    settings.iter().any(|s| s == key),
-                    !dropped,
-                    "{key} on {} {device:?}",
-                    title.name
-                );
-            }
-        }
-    }
-}
-
-fn choices(values: &[&str]) -> Vec<oag_ui::menu::Choice> {
-    values
-        .iter()
-        .map(|v| oag_ui::menu::Choice::plain(*v))
-        .collect()
-}
-
-/// Two people is the race box's pick of `2`, on a title that authors or borrows the list and
-/// nowhere else; a pick the disc's list does not hold, and an empty one, is one person.
-#[test]
-fn the_head_count_is_the_pick_on_titles_with_the_lists_alone() {
-    let counts = choices(&["1", "2"]);
-    for (title, _) in titles() {
-        let authored = [
-            oag_hd::TITLE.name,
-            oag_omega::TITLE.name,
-            oag_2048::TITLE.name,
-        ]
-        .contains(&title.name);
-        assert_eq!(
-            authored_people(title, &counts, "2"),
-            if authored { 2 } else { 1 },
-            "{}",
-            title.name
-        );
-        assert_eq!(authored_people(title, &counts, "1"), 1, "{}", title.name);
-    }
-    assert_eq!(
-        authored_people(oag_hd::TITLE, &counts, ""),
-        1,
-        "untouched is one"
-    );
-    assert_eq!(
-        authored_people(oag_hd::TITLE, &counts, "3"),
-        1,
-        "not on the disc's list"
-    );
-    assert_eq!(authored_people(oag_hd::TITLE, &[], "2"), 1, "no list read");
-}
-
-#[test]
-fn the_cut_is_vertical_only_for_the_discs_own_vertical_entry() {
-    let cuts = choices(&["RB_HORIZ", "RB_VERT"]);
-    assert_eq!(authored_cut(&cuts, "RB_VERT"), Cut::Vertical);
-    assert_eq!(authored_cut(&cuts, "RB_HORIZ"), Cut::Horizontal);
-    assert_eq!(
-        authored_cut(&cuts, ""),
-        Cut::Horizontal,
-        "untouched is the authored default"
-    );
-    assert_eq!(
-        authored_cut(&[], "RB_VERT"),
-        Cut::Horizontal,
-        "no list read"
-    );
 }
 
 fn counts(layout: &[WindowSeats]) -> Vec<usize> {

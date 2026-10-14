@@ -100,6 +100,30 @@ pub fn mode_choices(strings: &crate::language::StringTable) -> Vec<Choice> {
         .collect()
 }
 
+/// `modes` with every mode that takes fewer than `people` people marked unusable, `reason`
+/// saying why from the cap. A mode is still offered and the row can step onto it: it draws
+/// dimmed with the reason under it ([`Menu::unavailable`]), the way an unusable remix option
+/// does. A value that names no mode (a stored token from another build) is left alone.
+#[must_use]
+pub fn cap_modes(modes: &[Choice], people: usize, reason: impl Fn(usize) -> String) -> Vec<Choice> {
+    modes
+        .iter()
+        .map(|choice| {
+            let most = oag_race::Mode::from_name(&choice.value)
+                .or_else(|| {
+                    (choice.value == oag_race::Mode::Head2Head.name())
+                        .then_some(oag_race::Mode::Head2Head)
+                })
+                .and_then(oag_race::Mode::max_people)
+                .map(usize::from);
+            match most {
+                Some(most) if most < people => choice.clone().unusable(reason(most)),
+                _ => choice.clone(),
+            }
+        })
+        .collect()
+}
+
 /// One option on a `choice` row: what it stores, and what it shows.
 ///
 /// Named for the row kind rather than for "option", which would shadow
@@ -888,7 +912,13 @@ impl Menu {
     /// that has silently vanished has no way to find out what took it away.
     #[must_use]
     pub fn is_disabled(&self, entry: &Entry) -> bool {
-        self.pin(entry).is_some()
+        matches!(
+            entry,
+            Entry::Run {
+                action: Action::ComingLater,
+                ..
+            }
+        ) || self.pin(entry).is_some()
             || entry
                 .disabled_by()
                 .is_some_and(|condition| condition.matches(self.held(&condition.setting).as_ref()))
