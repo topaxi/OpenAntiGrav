@@ -329,7 +329,9 @@ and the layout screen's preview (one shared `window_layout::draw_preview`, so th
 picture the race draws), on the title's own skin and font, driven by `session/seat_assign.rs`.
 
 - **A row per person** (`PLAYER 3  WINDOW 1 VIEW 2`; a window of one pane says just `WINDOW 2`), then AUTO,
-  START and BACK. The preview's cells say which person is in each pane.
+  START and BACK. The preview's cells say which person is in each pane. The grid has room for eight rows, so
+  **from six people up the person rows are left out** (AUTO, START and BACK only) and the numbered preview says who
+  is where; with them, up to five people fit.
 - **Each person moves their own marker with their own device**: left or up steps to the pane before, right or
   down to the pane after (window order, a window's panes in the order the race cuts them, wrapping), and
   confirm says "I sit here". Each device's presses are told apart as the join screen's are
@@ -368,11 +370,21 @@ process opened the screen on the remembered assignment with everybody confirmed 
 same layout; window 2's title changed from `PLAYER 3` to `PLAYER 2` with the assignment. **HD EU**, two pads and
 the keyboard: the keyboard's Left moved player 3's marker and swapped it with player 2's, START was refused
 while they were dimmed, and both confirmed. The join screen's START row no longer shows the head count.
-**Not walked**: a race again and a RETURN TO MENU race (no race finished on lavapipe: the path reads the
-same `pane_people` the first launch did), Pure, Omega, 2048 (the screen is title-agnostic and drawn off the
-same skin hooks as the layout screen; Pure/Omega/2048 stills were not drawn), a single window of two or more
-people (skipped by rule, so nothing to look at), a second real keyboard, the pointer on a live window (unit
-tests only).
+**Also looked at**: 8 people on Pulse and HD (`seat-assign:4,4`, `2,2,2,2`) and 5 on HD (`2,3`) as stills; a
+first version drew a row per person for every head count and AUTO, START and BACK ran over the preview at 6 or
+more (found by review, not by the 3-person walks). **The pointer, live (Pulse PSP, window 1)**: a click on pane 1
+picked player 1 up, a click on pane 3 put them there and swapped player 3 into pane 1 (rows `PLAYER 1 WINDOW 2`,
+`PLAYER 3 WINDOW 1 VIEW 1`), a click on AUTO put everybody back; **the keyboard as a person**: pad, pad and keyboard
+joined, the keyboard moved its marker twice to the window-2 pane (`seat assignment: pane 1 = player 2 (xbox 360
+controller), pane 2 = player 3 (xbox 360 controller 2), pane 3 = player 1 (keyboard)`, `multi-window: 2 window(s)
+holding slot 1 + slot 2, slot 0`).
+**Not walked**: a race again and a RETURN TO MENU race (no race finished on lavapipe; the menus get no tick
+between `open_menus` and `reenter_multiplayer`, so `sync_multiplayer` cannot clear `pane_people` in between, and both
+paths read it at the load site the walked launches used), **the keyboard player flying a pane in a race on Xvfb**
+(a held `x` moved nothing, with the keyboard in window 1 under the join-order assignment as well as in window 2
+under the chosen one, so it is the Xvfb/XTEST keyboard and not this screen; the routing is
+`a_window_whose_slots_are_not_a_run_still_routes_to_the_keyboard_seat`), Pure, Omega and 2048 stills (2048's `.pkg`
+is PFS-encrypted here), a single window of two or more people (skipped by rule), a second real keyboard.
 
 ## Windows
 

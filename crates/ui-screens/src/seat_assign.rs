@@ -30,7 +30,9 @@ use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::pointer::{Pointer, contains, row_at};
 
 use crate::join::row_blocks;
-use crate::window_layout::{CellPaint, Geometry, PreviewWindow, boxes, cell_rects, draw_preview};
+use crate::window_layout::{
+    CellPaint, Geometry, MAX_ROWS, PreviewWindow, boxes, cell_rects, draw_preview,
+};
 
 /// The words the screen says, already looked up in the player's language.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,10 +203,17 @@ impl SeatAssign {
         self.hover
     }
 
-    /// The rows, top to bottom: every person, AUTO, START, BACK.
+    /// The rows, top to bottom: every person, AUTO, START, BACK. The grid has room for
+    /// [`MAX_ROWS`] rows under the title, so from six people up the person rows are left out
+    /// and the preview, which numbers every pane with its person, says who is where.
     #[must_use]
     pub fn rows(&self) -> Vec<Row> {
-        let mut rows: Vec<Row> = (0..self.people()).map(Row::Person).collect();
+        let shown = if self.people() + 3 <= MAX_ROWS {
+            self.people()
+        } else {
+            0
+        };
+        let mut rows: Vec<Row> = (0..shown).map(Row::Person).collect();
         rows.extend([Row::Auto, Row::Start, Row::Back]);
         rows
     }
@@ -277,15 +286,16 @@ impl SeatAssign {
             out.push(Event::Back);
         }
         if has(Button::Cross) || has(Button::Start) {
-            if !self.ready[person] {
+            let newly = !self.ready[person];
+            if newly {
                 self.ready[person] = true;
                 out.push(Event::Changed);
             }
-            out.push(if self.can_start() {
-                Event::Start
-            } else {
-                Event::Refused
-            });
+            if self.can_start() {
+                out.push(Event::Start);
+            } else if !newly {
+                out.push(Event::Refused);
+            }
         }
         out
     }

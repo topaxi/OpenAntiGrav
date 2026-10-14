@@ -83,7 +83,13 @@ fn start_waits_for_everybody_to_confirm_again() {
     screen.press(2, press(Button::Left));
     assert_eq!(
         screen.press(2, press(Button::Cross)),
-        [Event::Changed, Event::Refused]
+        [Event::Changed],
+        "a confirm that took effect is not a refusal"
+    );
+    assert_eq!(
+        screen.press(2, press(Button::Cross)),
+        [Event::Refused],
+        "a second one with somebody still dimmed is"
     );
     assert_eq!(
         screen.press(1, press(Button::Cross)),
@@ -273,4 +279,28 @@ fn the_pointer_start_refuses_while_somebody_has_not_confirmed() {
         screen.pointer(&click(at), &skin, &cells),
         [Event::Moved, Event::Refused]
     );
+}
+
+/// The rows and the preview are laid out for [`MAX_ROWS`] rows: a screen of up to eight people
+/// never has more, or its last rows draw over the preview.
+#[test]
+fn no_head_count_has_more_rows_than_the_grid_holds() {
+    for people in 2..=8 {
+        let screen = SeatAssign::new(
+            labels(),
+            vec![
+                Pane {
+                    seats: people - 1,
+                    vertical: false,
+                },
+                Pane {
+                    seats: 1,
+                    vertical: false,
+                },
+            ],
+            None,
+        );
+        assert!(screen.rows().len() <= MAX_ROWS, "{people} people");
+        assert!(screen.rows().ends_with(&[Row::Auto, Row::Start, Row::Back]));
+    }
 }

@@ -92,6 +92,6 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
 - The cut on the web and phones (no layout screen) is the remembered layout's first window, else horizontal; nothing there can
   choose a vertical split.
 - **Seat assignment, not walked** (`mp-seat-assign`): a race again and a RETURN TO MENU race after an assigned layout (the
-  path keeps `Session::pane_people` and reads it at the same load site as the first launch; no race finished on lavapipe), Pure,
-  Omega and 2048 stills, the pointer on a live window (unit tests only). A single window of two or more people skips the
+  menus get no tick between `open_menus` and `reenter_multiplayer`; the path keeps `Session::pane_people` and reads it at the same load site as the first launch; no race finished on lavapipe), a keyboard player flying a pane in a race on Xvfb (not even in the join-order
+  control: a held key moved nothing there), Pure, Omega and 2048 stills. A single window of two or more people skips the
   screen, so a two-way split in one window cannot put person 2 on top; say if that should be choosable.

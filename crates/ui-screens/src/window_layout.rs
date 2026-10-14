@@ -228,8 +228,8 @@ pub(crate) fn legible(ink: [f32; 4]) -> [f32; 4] {
     }
 }
 
-/// The most rows the screen has.
-const MAX_ROWS: usize = 8;
+/// The most rows the screen has (the rows and preview are laid out for this many).
+pub(crate) const MAX_ROWS: usize = 8;
 
 impl Picker {
     /// A screen for `people` seated people, starting from `windows` (what was chosen last,
