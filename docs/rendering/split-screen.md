@@ -1076,7 +1076,8 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   horizontal two-view row (and the lower rows of seven and eight views), the same defect the
   `tall` rule fixes for columns; the strip's kill column on Pulse overlaps the speed and
   shield bars at the right edge (a row is too short for eight lines and the bars)~~ **Both
-  done, 2026-10-14 (`split-hud-fixes`), below.** Still open from `split-hud-vertical`: Zone's own
+  done, 2026-10-14 (`split-hud-fixes`), above.** One piece is left: `tall` still clips Pure's grid
+  on a 32:9 column (1.78). Still open from `split-hud-vertical`: Zone's own
   pale text (`speed class`, `zone`, `lap`) is hard to read over its white and cyan scenery in
   both cuts and on the whole screen alike, which is the title's colour and not placement;
   Omega's Zone vertical variant (`Zone_HUDvert`) and Omega's non-authored cases are unwired;
