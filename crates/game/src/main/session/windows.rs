@@ -625,7 +625,18 @@ impl Session {
         // whole-surface grid. Every window that holds a seat says who paused and when it is
         // anyone's; nothing while the race runs or the resume counts down.
         let space = perf::grid(surface);
-        let line = self.pause_line(space.size);
+        let mut line = Vec::new();
+        // Escape has parked the race behind window 1's front-end menu: the other windows keep
+        // showing the frozen race under the menus' own pause tint (`PAUSE_OVERLAY`, the alpha
+        // window 1's menu is drawn over the parked race with), a stopgap for the menu itself,
+        // which only window 1 has. **Chosen, not measured.**
+        if matches!(self.stage, Stage::Menu(_)) && self.suspended_race.is_some() {
+            line.push(Draw::Fill {
+                rect: [0.0, 0.0, space.size.0, space.size.1],
+                color: crate::menu_stage::PAUSE_OVERLAY,
+            });
+        }
+        line.extend(self.pause_line(space.size));
         if !line.is_empty() {
             self.overlay.set_space(space);
             self.overlay.overlay(

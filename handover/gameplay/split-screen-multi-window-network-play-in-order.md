@@ -338,8 +338,7 @@ screens per window were read, not exercised (no finish reachable headless or und
 looked broken. **The keyboard per window and the pause line on every window landed 2026-10-14 (lane
 `window-keyboard`)**: the keyboard drives the first seat of the focused window (every window's first
 seat counts as driven meanwhile, a held key is let go as the focus moves), the pause line draws on every
-window with a seat, and a click on a window is its first seat's Start under the owner rule. Not built:
-a pause menu on the seat windows. **Still open from it** (all in the doc's
+window with a seat, and a click on a window is its first seat's Start under the owner rule. Escape's pause menu is window 1's; the seat windows show the frozen race under a dim tint (stopgap), the menu itself on them is open. **Still open from it** (all in the doc's
 "Open"): the end screens on every window and a pause menu there; `--window-monitor` and remembered placement; per-window motion blur,
 FSR 3.1 history and dynamic resolution; the camera-independent work once per frame across windows;
 **pacing on real displays** (cannot be measured under Xvfb: the

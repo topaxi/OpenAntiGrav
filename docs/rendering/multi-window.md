@@ -154,8 +154,13 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
   at that seat), and **a left click on a window is that window's first seat's Start** under the owner
   rule (`windows::click_slots`; window 1's click was slot 0's and still is, a click on window 2 is
   its seat's, so it lifts player 2's pause and not player 1's); a seat window's pointer is otherwise
-  ignored. There is no pause *menu* on a multiplayer pause: Escape parks the race behind window 1's
-  menus and the seat windows keep showing the frozen race.
+  ignored. There is no pause *menu* on a multiplayer pause. Escape parks the race behind window 1's
+  front-end menus, and every other window keeps showing the frozen race **under the menus' own dim
+  tint** (`PAUSE_OVERLAY`, 0.55 black, the alpha window 1's menu is drawn over the parked race
+  with; a stopgap for the menu, **chosen, not measured**), HUD still readable beneath it. Looked at
+  under Xvfb (Pulse EU, `--windows 2`, menus walked to a Racebox race, Escape on window 1): window 1
+  the menu over its craft as ever, window 2 its craft and HUD dimmed and frozen. The menu itself on
+  the other windows stays open.
   **The resume countdown is drawn in every window**, one picture per view the window cuts (the split's
   one-per-view rule, per window): one over the whole of a one-seat window. Looked at under
   Xvfb in a `--race --windows 2` race, Start on window 1 to pause and again to resume: window 2 froze on
@@ -435,7 +440,7 @@ Omega capture (below) ran.
   two-seat HUD only when told two views (`split_screen::views_for` says two when any window holds
   exactly two), so a layout of `4,3` has no window using it and a layout with a two-seat window uses it
   for that window alone; every other count uses the split-HUD files or the scaled whole-screen layout.
-- **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **a pause menu on the seat windows** (Escape's menu is window 1's; a tint or the menu on the others was not built).
+- **The end screens on a seat's own window** (the flyby, the keyboard and the pause line are on every window since 2026-10-14), and **the pause menu on the seat windows** (Escape's menu is window 1's; the other windows only show the dim tint).
 - **`--window-monitor`** on the command line (the layout screen chooses monitors; the flags still do not) and remembering the windows' sizes and places.
 - **Per-window motion blur, FSR 3.1 and dynamic resolution**: each needs its own history per camera
   (a `MotionState` and a temporal record per window) and a timer per window.
