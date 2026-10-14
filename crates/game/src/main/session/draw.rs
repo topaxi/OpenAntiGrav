@@ -503,6 +503,12 @@ impl Session {
         {
             timer.abandon();
         }
+        // **And what it last cost stops being reported**: a split draws no blur, so no reading
+        // ever replaces the last single view's, and the overlay went on naming it. Only on a
+        // frame that had a scene - a menu frame says nothing about the chain.
+        if has_scene && !scene_stats.is_some_and(|stats| stats.blur_encoded) {
+            self.blur_cost.idle(self.frame_index);
+        }
         // The same rule for the HD/Fury bloom chain: `false` on Pulse, Pure,
         // or an HD circuit with no `HDR and Bloom` block, all of which claim a
         // slot above with nothing to write into it. `Chain::run` has no early
@@ -512,6 +518,9 @@ impl Session {
             && let Some(timer) = self.hd_bloom_timer.as_mut()
         {
             timer.abandon();
+        }
+        if has_scene && !scene_stats.is_some_and(|stats| stats.hd_bloom_encoded) {
+            self.hd_bloom_cost.idle(self.frame_index);
         }
 
         // Only sampled under `Dev`, which is the one tier that shows it - a

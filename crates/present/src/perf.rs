@@ -68,12 +68,14 @@ use serde::{Deserialize, Serialize};
 
 use oag_ui::frontend::{Align, Draw};
 
+pub mod chain;
 pub mod cost;
 pub mod memory;
 pub mod net;
 pub mod scene;
 pub mod transition;
 
+pub use chain::ChainCost;
 pub use cost::{CpuCost, GpuCost};
 pub use scene::SceneStats;
 

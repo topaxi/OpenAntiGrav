@@ -225,6 +225,8 @@ impl Session {
             // frame is still somewhere between the queue and the map. Every
             // reading up to and including this one is dropped when it lands.
             self.scene_cost.clear();
+            self.blur_cost.stalled(self.frame_index);
+            self.hd_bloom_cost.stalled(self.frame_index);
             // The two wall-clock meters, on the same guard and for the same
             // reason: a 300 ms track build recorded as this frame's CPU cost
             // would sit in the `CPU` row for the two seconds a player is most

@@ -213,7 +213,7 @@ pub(crate) struct Session {
     /// and the FSR 3.1 chain both unmoved. A controller that could not see it
     /// was budgeting against a fifth of the work it controls. See
     /// [`oag_present::drs`].
-    pub(crate) blur_cost: perf::Meter,
+    pub(crate) blur_cost: perf::ChainCost,
     /// The timer behind [`Session::blur_cost`], on its own ring for the reason
     /// [`Session::upscale_timer`] has one.
     ///
@@ -237,7 +237,7 @@ pub(crate) struct Session {
     /// carries no `HDR and Bloom` block - `race::scene::frame::Scene::hd` is
     /// `None` there too, and `stats.hd_bloom_encoded` is how the frame loop
     /// tells the two "nothing measured" cases (no chain, ring full) apart.
-    pub(crate) hd_bloom_cost: perf::Meter,
+    pub(crate) hd_bloom_cost: perf::ChainCost,
     /// The timer behind [`Session::hd_bloom_cost`], on its own ring for the
     /// reason [`Session::upscale_timer`] has one.
     ///
