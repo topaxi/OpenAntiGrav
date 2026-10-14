@@ -680,9 +680,8 @@ Load average when each run started: desk 4 to 10 (other lanes; the iGPU row's pr
 constant, not a trend), Deck 0.6 to 0.9. The front end's own limit is 120 fps (`frame limit in
 force: 120`), so "120" is the cap, not what the GPU could do. No `size change` line follows the one
 at start, so neither the window nor the surface moves on CUT. START on the screen, with CUT vertical,
-goes on to the seat assignment screen and the RACE page (the log names each stage); the race itself
-was not reached by the script (**open**: the RACE page's launch row needs a walk this lane did not
-finish).
+goes on to the seat assignment screen and the RACE page (the log names each stage); the race is
+measured in the next section.
 
 What this leaves: the drop the maintainer saw needs something the probe does not have - a real
 profile (a screen filter, an upscaler, motion blur), real pads, or the Steam launch path. Launch
@@ -695,6 +694,50 @@ gamescope (`DISPLAY=:1`, 3840x2160) a requested window size arrives **six times 
 `Surface::configure` (`Requested was (23040, 12960), maximum extent for either dimension is
 16384`) on all three tries. `borderless` is clamped to 3840x2160, but about half the launches still
 panicked the same way and a retry worked. The measurements above are borderless with a retry.
+
+## The race the WINDOW LAYOUT screen leads to costs the same either way (2026-10-14, lane `menu-race-deck`)
+
+The same drop might have lived further along: START on WINDOW LAYOUT, seat assignment, Ship
+Select, the RACE page's launch row, the race. Walked by script on the **Deck** (gaming mode
+gamescope, `DISPLAY=:1`, 3840x2160 borderless, vsync off, RADV Van Gogh, Mesa 26.2.0-devel, znver2
+dist build of `main` at `7e6bce9ac`, Pulse PSP EU, fresh profile with `pause_on_focus_loss = false`,
+`--no-audio`). The script is the `--players 2 --preseat` walk above; the cut is one `+5:right`
+entry before START (CUT vertical), then a `cross` on seat 0 and `cross@1` on seat 1 every 3 s
+through the seat assignment, Ship Select and RACE pages (the walk reaches the race on its own:
+stages `menu:window-layout`, `menu:seat-assign`, `menu:race`, `menu:picker`, `loading`, `race`).
+Horizontal is the same script without `+5:right`. A first run on an empty cache spent 90 s
+transcoding the boot movies and ate the boot taps; every run below is on the warm cache.
+
+Mean of the one-line-a-second `stage=race` readings, the first 5 s of the race dropped (74 s
+of race for the menu walk, 44 s for the CLI), each run on its own, three per cut:
+
+| Start | Cut | Run | fps | frame | p99 | CPU | GPU scene | present |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| menu walk | horizontal | 1 / 2 / 3 | 66.8 / 67.9 / 66.9 | 15.00 / 14.74 / 14.98 ms | 17.4 / 16.8 / 17.4 ms | 14.9 / 14.7 / 14.9 ms | 13.8 / 13.5 / 13.5 ms | 5.3 / 5.1 / 5.3 ms |
+| menu walk | vertical | 1 / 2 / 3 | 67.8 / 69.8 / 68.8 | 14.77 / 14.34 / 14.55 ms | 17.3 / 16.7 / 16.9 ms | 14.7 / 14.3 / 14.5 ms | 13.5 / 13.4 / 13.4 ms | 5.2 / 4.8 / 5.0 ms |
+| CLI `--race --players 2 --split-cut X` | horizontal | 2 runs | 50.6 / 50.8 | 21.4 ms | 27.8 ms | 21.3 ms | not read | 13.0 / 12.6 ms |
+| CLI | vertical | 2 runs | 50.9 / 52.1 | 21.4 / 21.0 ms | 27.7 / 26.8 ms | 21.3 / 21.0 ms | not read | 12.6 / 12.3 ms |
+
+Window, surface and render size are 3840x2160, 3840x2160 and 3812x2160 in every run, and the one
+`size change` line is the start-up one: **no size moves on the way into the race, in either cut.**
+Load average when the runs started was 1.0 to 1.5.
+
+Reading: **vertical is not dearer than horizontal on the Deck, by either route.** The three-run
+spread inside a cut (66.8 to 67.9 horizontal, 67.8 to 69.8 vertical) is as wide as the gap between
+the cuts, and vertical is, if anything, 1 to 2 fps ahead. The menu-started race and the CLI race
+are not the same race: the CLI one is about 17 fps slower in both cuts (CPU 21 ms against 15 ms,
+present 12.5 ms against 5 ms, the GPU scene time not read). That is a difference of the race that
+was set up (the CLI `--race` defaults against the RACE page's choices), **not** of the cut, and
+it was not chased here (**open**, not part of this question). The craft stand still in these
+walks (nobody drives), so a moving race is a few CPU-ms dearer than either column.
+
+So the maintainer's drop is not on the Pulse path from WINDOW LAYOUT to the race with a default
+profile. What is left is what the probe does not have, as above: a real profile, real pads, or the
+Steam launch path - run the game from Steam with `--frame-log` and read the log's `stage=` and
+`cut=` fields. Two things seen on the Deck while measuring, both `gamescope-window`'s area and
+unchanged: the window request still arrives at scale 6 (`inner 23040x12960`, clamped by the
+surface to 16384x12960 with a warning, then to the 3840x2160 output), and the first launch on a
+fresh cache is the movie transcode, so a timed script must run a second time.
 
 ## Verification
 
