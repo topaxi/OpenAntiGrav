@@ -16,11 +16,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::window::Window;
 
 use crate::hints;
-#[cfg(target_os = "linux")]
-use crate::window::APP_ID;
-use crate::window::{
-    centred_on, choose_monitor, frame_latency, fullscreen, present_modes, window_icon,
-};
+use crate::window::{Look, attributes, choose_monitor, frame_latency, present_modes};
 
 /// One window and the surface drawn onto it: everything about a screen that is
 /// not the device. Window 1 owns one inside [`Gpu`]; each further window of a
@@ -99,15 +95,6 @@ pub(crate) struct BroughtUp {
     in_use: Vec<String>,
     device_type: wgpu::DeviceType,
     temporal: bool,
-}
-
-/// Where a further window is asked to open: the monitor, whether it covers all of it
-/// (borderless) or is a window on it, and the position a windowed one is asked for.
-#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-pub(crate) struct Placement {
-    pub(crate) monitor: Option<winit::monitor::MonitorHandle>,
-    pub(crate) fullscreen: bool,
-    pub(crate) position: Option<winit::dpi::PhysicalPosition<i32>>,
 }
 
 impl Gpu {
@@ -231,34 +218,16 @@ impl Gpu {
         // The renderer does not depend on either: `Race::projection` fits the
         // field of view to whatever viewport it is given, and `display::viewport`
         // shapes that viewport, so any window still frames the track correctly.
-        let size = settings.window_size;
-        let borderless = settings.window_mode == display::WindowMode::Borderless;
         let monitor = choose_monitor(event_loop.available_monitors().collect(), &settings.monitor);
         let title_strings = strings::project_table(language);
-        let mut attributes = Window::default_attributes()
-            .with_title(hints::title(&title_strings))
-            .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
-            .with_resizable(borderless)
-            .with_window_icon(Some(window_icon()))
-            .with_fullscreen(fullscreen(settings.window_mode, monitor.clone()));
-        // The Wayland/X11 app id - see `window::APP_ID`'s doc for why this is
-        // the half of the icon that actually reaches a Wayland taskbar.
-        // `WindowAttributesExtWayland` rather than the X11 twin because both
-        // write the same underlying field, so importing either sets it on
-        // both backends; cfg-gated because the trait only exists at all when
-        // winit is built with a Linux backend.
-        #[cfg(target_os = "linux")]
-        {
-            use winit::platform::wayland::WindowAttributesExtWayland;
-            attributes = attributes.with_name(APP_ID, APP_ID);
-        }
-        // Borderless carries the choice in the fullscreen request; windowed has
-        // nothing to carry it, so the window is placed on the screen instead.
-        // Asked for at creation rather than moved afterwards, which would open
-        // it on one monitor and jump it to another in view of the player.
-        if let (false, Some(monitor)) = (borderless, &monitor) {
-            attributes = attributes.with_position(centred_on(monitor, size));
-        }
+        #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+        let mut attributes = attributes(Look {
+            title: &hints::title(&title_strings),
+            size: settings.window_size,
+            mode: settings.window_mode,
+            monitor,
+            position: None,
+        });
         #[cfg(target_arch = "wasm32")]
         {
             attributes = web::canvas(attributes);
@@ -377,52 +346,16 @@ impl Gpu {
     ///
     /// `modes` is the chain [`Output::apply_modes`] walks, the first one the surface
     /// offers. A seat window asks for a mode that does not block
-    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop. `monitor` is
-    /// where the window goes (borderless over all of it when `fullscreen`, else a window on
-    /// it, unless `position` says where).
+    /// ([`window::seat_present_modes`]) so that only window 1 paces the loop. The window is built
+    /// by [`attributes`], the one function window 1 is built by too.
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(crate) fn open_output(
         &self,
         event_loop: &ActiveEventLoop,
-        title: &str,
-        size: winit::dpi::LogicalSize<u32>,
-        placement: Placement,
+        look: Look<'_>,
         modes: &[wgpu::PresentMode],
     ) -> Result<Output> {
-        let Placement {
-            monitor,
-            fullscreen,
-            position,
-        } = placement;
-        let mut attributes = Window::default_attributes()
-            .with_title(title)
-            .with_inner_size(size)
-            .with_window_icon(Some(window_icon()))
-            .with_fullscreen(
-                monitor
-                    .clone()
-                    .filter(|_| fullscreen)
-                    .map(|monitor| winit::window::Fullscreen::Borderless(Some(monitor))),
-            );
-        #[cfg(target_os = "linux")]
-        {
-            use winit::platform::wayland::WindowAttributesExtWayland;
-            attributes = attributes.with_name(APP_ID, APP_ID);
-        }
-        // Asked for at creation, not moved afterwards: a window that opens on top of window 1
-        // and is moved off it has already told window 1 it was covered (`Occluded`), which
-        // pauses the race.
-        if let Some(position) = position {
-            attributes = attributes.with_position(position);
-        } else if let (None, Some(monitor)) = (&attributes.fullscreen, &monitor) {
-            attributes = attributes.with_position(centred_on(
-                monitor,
-                oag_display::display::Size {
-                    width: size.width,
-                    height: size.height,
-                },
-            ));
-        }
+        let attributes = attributes(look);
         let window = Arc::new(
             event_loop
                 .create_window(attributes)

@@ -59,6 +59,68 @@ pub(crate) fn fullscreen(
     }
 }
 
+/// How one window opens: the same for window 1 and every further window, so they float, tile
+/// or fill a monitor alike.
+pub(crate) struct Look<'a> {
+    pub(crate) title: &'a str,
+    pub(crate) size: display::Size,
+    pub(crate) mode: display::WindowMode,
+    /// The monitor it opens on: borderless over all of it, or a window centred on it.
+    pub(crate) monitor: Option<winit::monitor::MonitorHandle>,
+    /// Where a windowed window is asked to sit instead of centred on `monitor`.
+    pub(crate) position: Option<winit::dpi::PhysicalPosition<i32>>,
+}
+
+/// The attributes every window of a run is built from (window 1, [`crate::gpu::Gpu::new`], and
+/// each further window, `Gpu::open_output`).
+///
+/// **A windowed window is fixed size, and that is a measurement.** Setting the minimum and
+/// maximum to the same thing (`with_resizable(false)`) is the signal a tiling compositor floats
+/// a window on rather than squeezing it into a column - measured under niri, which tiles it to a
+/// portrait slot without this and honours the requested size with it. Borderless has to be
+/// resizable, because the compositor is about to resize it to the monitor. A window built
+/// without this one (the further windows were, until 2026-10-14) tiles on niri while window 1
+/// floats.
+///
+/// The icon and the app id are the same for every window; a windowed position is asked for at
+/// creation (`with_position`), which X11 and Windows honour and Wayland has no protocol for - the
+/// compositor places the window there.
+pub(crate) fn attributes(look: Look<'_>) -> winit::window::WindowAttributes {
+    let Look {
+        title,
+        size,
+        mode,
+        monitor,
+        position,
+    } = look;
+    let borderless = mode == display::WindowMode::Borderless;
+    let mut attributes = winit::window::Window::default_attributes()
+        .with_title(title)
+        .with_inner_size(winit::dpi::LogicalSize::new(size.width, size.height))
+        .with_resizable(borderless)
+        .with_window_icon(Some(window_icon()))
+        .with_fullscreen(fullscreen(mode, monitor.clone()));
+    // The Wayland/X11 app id - see [`APP_ID`]'s doc. `WindowAttributesExtWayland` rather than
+    // the X11 twin because both write the same underlying field; cfg-gated because the trait
+    // only exists when winit is built with a Linux backend.
+    #[cfg(target_os = "linux")]
+    {
+        use winit::platform::wayland::WindowAttributesExtWayland;
+        attributes = attributes.with_name(APP_ID, APP_ID);
+    }
+    // Borderless carries the monitor in the fullscreen request; a windowed window has nothing to
+    // carry it, so it is placed on the screen instead, at creation rather than moved afterwards
+    // (a window moved off another has already told it `Occluded`, which pauses the race).
+    if !borderless {
+        if let Some(position) = position {
+            attributes = attributes.with_position(position);
+        } else if let Some(monitor) = &monitor {
+            attributes = attributes.with_position(centred_on(monitor, size));
+        }
+    }
+    attributes
+}
+
 /// What each monitor is called on the menu and in the settings file.
 ///
 /// A screen the platform has no name for is numbered instead, so the list has
@@ -196,5 +258,34 @@ mod tests {
         assert_eq!(frame_latency(perf::Vsync::Off, Mailbox), 2);
         assert_eq!(frame_latency(perf::Vsync::Smooth, Mailbox), 2);
         assert_eq!(frame_latency(perf::Vsync::Smooth, Fifo), 2);
+    }
+
+    fn look(mode: display::WindowMode) -> Look<'static> {
+        Look {
+            title: "t",
+            size: display::Size {
+                width: 1440,
+                height: 816,
+            },
+            mode,
+            monitor: None,
+            position: None,
+        }
+    }
+
+    /// Every window, the first and the further ones alike, is built by [`attributes`]: a windowed
+    /// one is fixed size (a tiling compositor floats it, as it floats window 1) and a borderless
+    /// one is resizable and fullscreen.
+    #[test]
+    fn a_windowed_window_is_fixed_size_and_a_borderless_one_is_resizable_and_fullscreen() {
+        let windowed = attributes(look(display::WindowMode::Windowed));
+        assert!(!windowed.resizable, "fixed size is the float signal");
+        assert!(windowed.fullscreen.is_none());
+        let borderless = attributes(look(display::WindowMode::Borderless));
+        assert!(borderless.resizable, "the compositor resizes it to the monitor");
+        assert!(matches!(
+            borderless.fullscreen,
+            Some(winit::window::Fullscreen::Borderless(None))
+        ));
     }
 }

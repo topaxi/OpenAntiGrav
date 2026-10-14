@@ -74,16 +74,18 @@ impl Session {
         let size = self.settings.display.window_size;
         let origin = self.gpu.output.window.outer_position().ok();
         let scale = self.gpu.output.window.scale_factor();
+        let mode = self.seat_mode();
+        // `--windows-fullscreen` (the profile's own WINDOW MODE already did this for window 1):
+        // window 1 goes borderless on the monitor the profile names, like the others.
         if self.windows_fullscreen
-            && self.window_monitors.is_empty()
-            && let Some(monitor) = monitors.first()
+            && self.settings.display.window_mode != display::WindowMode::Borderless
         {
-            self.gpu
-                .output
-                .window
-                .set_fullscreen(Some(winit::window::Fullscreen::Borderless(Some(
-                    monitor.clone(),
-                ))));
+            let names = crate::window::monitor_names(&monitors);
+            let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
+            self.gpu.output.window.set_resizable(true);
+            self.gpu.output.window.set_fullscreen(Some(
+                winit::window::Fullscreen::Borderless(monitors.get(first).cloned()),
+            ));
         }
         for _ in 1 + self.screens.len()..usize::from(count) {
             // The place in the layout: window 1 and the windows already open come before it.
@@ -94,11 +96,11 @@ impl Session {
                 .gpu
                 .open_output(
                     event_loop,
-                    &title,
-                    winit::dpi::LogicalSize::new(size.width, size.height),
-                    crate::gpu::Placement {
+                    crate::window::Look {
+                        title: &title,
+                        size,
+                        mode,
                         monitor,
-                        fullscreen: self.windows_fullscreen,
                         position,
                     },
                     crate::window::seat_present_modes(),
@@ -138,15 +140,31 @@ impl Session {
         }
     }
 
+    /// How a further window opens: windowed or borderless, the same as window 1 - the profile's
+    /// WINDOW MODE, or `--windows-fullscreen` / the layout screen's FULLSCREEN for the run.
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    fn seat_mode(&self) -> display::WindowMode {
+        if self.windows_fullscreen
+            || self.settings.display.window_mode == display::WindowMode::Borderless
+        {
+            display::WindowMode::Borderless
+        } else {
+            display::WindowMode::Windowed
+        }
+    }
+
     /// Where window `window` (from 1 for the first further window) goes: the monitor it is
-    /// asked to sit on and the position it is asked for.
+    /// asked to open on and, windowed, the position it is asked for.
     ///
-    /// A layout the picker chose names a monitor per window (`window_monitors`): a name this
-    /// machine no longer has is the first monitor. A windowed window is centred on its
-    /// monitor and stepped aside for each window already there; fullscreen needs no
-    /// position. With no choice (`--windows`) a window sits beside window 1, or on the
-    /// platform's `window`-th monitor when `--windows-fullscreen`. **Chosen, not measured**,
-    /// and a request the compositor may refuse (Wayland places a plain window itself).
+    /// The monitor is the layout screen's choice for it (`window_monitors`, by name; a name this
+    /// machine no longer has is the first monitor), else the windows are spread over the monitors
+    /// in winit's order starting from the one window 1 is on (the profile's `display.monitor`,
+    /// the first by default) and wrapping. Borderless covers that monitor. A windowed window for
+    /// the monitor window 1 is on goes beside window 1; one for another monitor is centred
+    /// there, stepped aside for each window already on it. **Windowed positions are a request:**
+    /// X11 and Windows honour `with_position`, Wayland has no protocol for one and the
+    /// compositor places the window (a tiling one, such as niri, floats it because every
+    /// windowed window is fixed size, `window::attributes`). **Chosen, not measured.**
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     fn seat_placement(
         &self,
@@ -160,40 +178,32 @@ impl Session {
     ) {
         let size = self.settings.display.window_size;
         let names = crate::window::monitor_names(monitors);
-        let chosen = |index: usize| {
-            self.window_monitors.get(index).map(|name| {
-                names
-                    .iter()
-                    .position(|candidate| candidate == name)
-                    .unwrap_or(0)
-            })
+        let count = monitors.len().max(1);
+        let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
+        let index_of = |window: usize| {
+            self.window_monitors
+                .get(window - 1)
+                .map_or((first + window) % count, |name| {
+                    names
+                        .iter()
+                        .position(|candidate| candidate == name)
+                        .unwrap_or(0)
+                })
         };
-        if let Some(index) = chosen(window - 1) {
-            let Some(monitor) = monitors.get(index) else {
-                return (None, None);
-            };
-            if self.windows_fullscreen {
-                return (Some(monitor.clone()), None);
-            }
-            // Window 1 is on the monitor the DISPLAY page names, the first one by default.
-            // A window for that same monitor goes beside window 1 as a `--windows` one does,
-            // rather than on top of it; one for another monitor is centred there and stepped
-            // aside for each window already on it.
-            let first = self.settings.display.monitor.choose(&names).unwrap_or(0);
-            if first != index {
-                let aside = (0..window - 1)
-                    .filter(|&other| chosen(other) == Some(index))
-                    .count();
-                let mut at = crate::window::centred_on(monitor, size);
-                at.x += 48 * aside as i32;
-                at.y += 32 * aside as i32;
-                return (Some(monitor.clone()), Some(at));
-            }
+        let index = index_of(window);
+        let Some(monitor) = monitors.get(index) else {
+            return (None, None);
+        };
+        if self.seat_mode() == display::WindowMode::Borderless {
+            return (Some(monitor.clone()), None);
         }
-        let monitor = self
-            .windows_fullscreen
-            .then(|| monitors.get(window % monitors.len().max(1)).cloned())
-            .flatten();
+        if index != first {
+            let aside = (1..window).filter(|&other| index_of(other) == index).count();
+            let mut at = crate::window::centred_on(monitor, size);
+            at.x += 48 * aside as i32;
+            at.y += 32 * aside as i32;
+            return (Some(monitor.clone()), Some(at));
+        }
         // Beside window 1 where the platform lets a program say so (X11); the compositor
         // places it otherwise (Wayland), which is why this is a request and not a layout.
         let position = origin.map(|origin| {
@@ -203,7 +213,7 @@ impl Session {
                 origin.y,
             )
         });
-        (monitor, position)
+        (Some(monitor.clone()), position)
     }
 
     /// What window `window` (0 is window 1) is called: the game's name and the seats it is
@@ -213,7 +223,11 @@ impl Session {
         let table = strings::project_table(self.settings.language.as_deref());
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER");
         let (first, held) = self.planned_seats(window);
-        format!("{} - {}", crate::hints::title(&table), windows::label(word, first, held))
+        format!(
+            "{} - {}",
+            crate::hints::title(&table),
+            windows::label(word, first, held)
+        )
     }
 
     /// How many windows a race launched now is laid out across: the windows open, or the ones
