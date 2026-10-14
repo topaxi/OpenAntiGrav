@@ -1,10 +1,10 @@
-# The Android APK builds, runs in Waydroid, and awaits its first phone run
+# The Android APK builds, runs in Waydroid and on the maintainer's phone
 
 `just apk` produces `OpenAntiGrav-<v>-android-arm64.apk` (NativeActivity, arm64,
 minimum API 26, about 9 MB, no game content) and `release.yml` has an `android` job
 for it. Evidence and the build are in [`docs/tools/android.md`](../../docs/tools/android.md).
-Nothing has run on a device or an emulator: no system image on the development
-machine, and the maintainer's phone is the first test. Target phone: Galaxy S24, EU
+It runs on the maintainer's phone, "quite well" by their report (2026-10-14), after
+the S24 install and reinstall checks in the doc. Phone: Galaxy S24, EU
 model, Exynos 2400 with an Xclipse 940 GPU (AMD RDNA3-based, Samsung Vulkan driver),
 not Adreno.
 
@@ -17,8 +17,8 @@ shows the chooser's not-found screen with the exact `adb push` path; launcher ic
 mipmaps; an x86_64 library in the APK for Waydroid; `--dry-run --prefetch`, the cache
 manifest and `cache/<image>` rows in `just push-data`.
 
-- **First on-device run.** The maintainer's phone is still the first real test.
-  Expect failures at Vulkan adapter or surface creation on the Xclipse 940
+- ~~**First on-device run.**~~ Done: the game runs on the S24 (maintainer, 2026-10-14).
+  If a later build regresses there, look for failures at Vulkan adapter or surface creation on the Xclipse 940
   (`adb logcat -s oag`, and `files/state/oag/logs/oag-game.log`). Check in order:
   the launcher finds `files/data/images/*.chd`; the surface configures; the intro
   is skipped (or plays, with the pushed cache); Language Selection draws; a touch
