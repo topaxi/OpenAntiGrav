@@ -121,7 +121,12 @@ pub(super) fn resolve(
             // Slot 8 (this node) is measured for a full grid; a solo mode
             // instead uses this project's own reading of slot 1 - see
             // `Race::start`.
-            if !(options.mode.has_opponents() || options.opponents) {
+            if !(options.mode.has_opponents()
+                || options.opponents
+                || options
+                    .mode
+                    .is_multiplayer_time_trial(usize::from(options.people_flying())))
+            {
                 report.push(
                     "solo mode: player on grid slot 1 (front), this project's own reading, \
                      not a separate measurement"

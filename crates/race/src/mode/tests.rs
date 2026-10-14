@@ -207,6 +207,35 @@ fn head2head_alone_fixes_its_field_and_caps_its_people_at_two() {
     }
 }
 
+/// Time Trial with two or more people is Pulse's Multiplayer Time Trial and nothing else is:
+/// a one-person Time Trial and every other mode's craft meet as they always did.
+#[test]
+fn only_a_time_trial_of_several_people_is_the_multiplayer_time_trial() {
+    assert!(!Mode::TimeTrial.is_multiplayer_time_trial(0));
+    assert!(!Mode::TimeTrial.is_multiplayer_time_trial(1));
+    for people in 2..=8 {
+        assert!(
+            Mode::TimeTrial.is_multiplayer_time_trial(people),
+            "{people}"
+        );
+        assert!(!Mode::TimeTrial.craft_collide(people), "{people}");
+    }
+    for mode in [
+        Mode::SpeedLap,
+        Mode::Zone,
+        Mode::SingleRace,
+        Mode::Eliminator,
+        Mode::Tournament,
+        Mode::Head2Head,
+    ] {
+        for people in 0..=8 {
+            assert!(!mode.is_multiplayer_time_trial(people), "{mode:?} {people}");
+            assert!(mode.craft_collide(people), "{mode:?} {people}");
+        }
+    }
+    assert!(Mode::TimeTrial.craft_collide(1));
+}
+
 /// `shield.md`'s `g_weapons_enabled` switch puts Head2Head in both its
 /// default-off and its no-override set, and all 23 authored cells carry
 /// `Weapons="off"` with no exception - locked, not merely defaulted off.

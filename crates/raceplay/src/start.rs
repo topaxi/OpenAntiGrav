@@ -183,15 +183,27 @@ impl Race {
         // the `--opponents` escape hatch that measurement's own ground-truth
         // tests use to force it. Read once, because both the player's own
         // pose below and the opponent loop further down have to agree on it.
-        let full_grid =
-            start_position.is_some() && !no_opponents && (mode.has_opponents() || opponents);
+        //
+        // **A Multiplayer Time Trial grids its people whatever else is asked**
+        // ([`Mode::is_multiplayer_time_trial`]): every person is a craft the mode needs, so
+        // neither the `--opponents` hatch nor a class with no driver (`no_opponents`, which
+        // empties the AI's seats) may add or remove one.
+        let multiplayer_time_trial = mode.is_multiplayer_time_trial(usize::from(people));
+        let full_grid = start_position.is_some()
+            && (multiplayer_time_trial || (!no_opponents && (mode.has_opponents() || opponents)));
         // How many of the grid's other seven slots are actually driven.
         // Every opponent-fielding mode except Head2Head fields all seven;
         // Head2Head fields exactly one - see [`Mode::opponent_count`]'s own
         // doc for the measurement. The `--opponents` escape hatch always
         // asks for the full seven, matching what it did before this field
         // existed.
-        let field_opponents = if no_opponents {
+        let field_opponents = if multiplayer_time_trial {
+            // The people and nobody else, each on a grid slot of their own: person `k`
+            // takes seat `k`, the back row first (`Race_SpawnGrid`, "a short grid packs to
+            // the back", `docs/ghidra/functions/psp-pulse-usa/grid.md`; the field of N is
+            // not measured for any N but the full eight).
+            people.min(GRID_SLOTS) - 1
+        } else if no_opponents {
             0
         } else if mode.field_is_fixed() {
             // Head2Head: two craft, whoever flies them. A second person takes the

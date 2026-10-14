@@ -703,6 +703,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         craft_of(&mut craft, &mut archives),
         craft_title,
         options.mode,
+        usize::from(options.people_flying()),
         language_plugins,
         options.language.as_deref(),
         crate::hud::SplitViews {
@@ -777,11 +778,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class: options.class.clone(),
             opponents: options.opponents,
             no_opponents: options.no_driver_for_class,
-            people: if options.people == 0 {
-                options.views.max(1)
-            } else {
-                options.people
-            },
+            people: options.people_flying(),
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
