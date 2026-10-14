@@ -157,8 +157,8 @@ fn hd_has_no_tall_rule_for_its_authored_two_view_split_to_lose_to() {
 /// and the scissor cuts it. Every rule raises it by more than that: the grid is about 39
 /// units tall on the 272-unit screen (read off a render, 67 pixels at scale 1.3 in a
 /// 358-pixel row), so a view of width over height `a` shows it `39 * scale * min(a / 1.765,
-/// 1) / 272` of its height, and `a` is the widest view the rule answers (a column's widest
-/// is a 21:9 screen's 1.19).
+/// one) / 272` of its height, and `a` is the widest view the rule answers (a column's
+/// widest is a 21:9 screen's 1.19).
 #[test]
 fn pures_every_rule_raises_the_weapon_grid_clear_of_the_bottom_edge() {
     let file = shipped("Pure");
