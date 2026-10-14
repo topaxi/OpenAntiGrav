@@ -431,6 +431,15 @@ impl Output {
     /// draw, which the caller already counts as a stall.
     pub(crate) fn configure(&mut self, device: &wgpu::Device) {
         self.held = None;
+        let max = device.limits().max_texture_dimension_2d;
+        let (width, height) = clamp_extent(self.config.width, self.config.height, max);
+        if (width, height) != (self.config.width, self.config.height) {
+            warn!(
+                "surface {}x{} is past the device's {max} texel limit; configured {width}x{height}",
+                self.config.width, self.config.height
+            );
+            (self.config.width, self.config.height) = (width, height);
+        }
         self.surface.configure(device, &self.config);
     }
 
@@ -731,5 +740,23 @@ pub(crate) mod web {
             .with_canvas(canvas)
             .with_focusable(true)
             .with_prevent_default(true)
+    }
+}
+
+/// A surface extent held to the device's texture limit, which wgpu panics past (a 6x scaled
+/// 3840x2160 window asked for 23040x12960 on a Steam Deck under gamescope).
+fn clamp_extent(width: u32, height: u32, max: u32) -> (u32, u32) {
+    (width.clamp(1, max), height.clamp(1, max))
+}
+
+#[cfg(test)]
+mod clamp_tests {
+    use super::clamp_extent;
+
+    #[test]
+    fn an_extent_past_the_device_limit_is_held_to_it() {
+        assert_eq!(clamp_extent(23040, 12960, 16384), (16384, 12960));
+        assert_eq!(clamp_extent(3840, 2160, 16384), (3840, 2160));
+        assert_eq!(clamp_extent(0, 0, 16384), (1, 1));
     }
 }
