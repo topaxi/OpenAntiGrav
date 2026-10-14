@@ -99,14 +99,109 @@ remote cars the weak case and price a correction at 24 replayed frames for 200 m
 of ping at 120 Hz. Rocket League has one ball, no weapons and simple bodies.
 Nothing here has been measured on this engine.
 
-Costs to measure before committing:
+Costs to measure before committing, with what is known (2026-10-14):
 
-- The replay cost: up to N ticks times 8 craft plus weapons, per correction.
-  No reconcile budget exists yet.
-- A sim-only tick path. A replay must not re-fire camera shake, particles and
-  audio cues; today `Race::tick` mixes view and sim side effects.
+- The replay cost: **measured on the desktop, below**. The Galaxy S24 half is
+  open.
+- A sim-only tick path: **landed**, `Race::tick_sim_only`
+  (`crates/raceplay/src/reconcile.rs`). See "The sim-only replay tick".
 - `TickClock::advance` caps catch-up at 8 ticks and discards the surplus, which
-  a replay burst exceeds above roughly 133 ms of round trip.
+  a replay burst exceeds above roughly 133 ms of round trip. **It does not touch
+  the sim-only path**: a replay is a count of ticks owed, not elapsed time, so
+  it is a plain loop and never goes through the clock. See below.
+
+## The sim-only replay tick
+
+`Race::tick_sim_only(&inputs)` advances `RaceSim` exactly as `Race::tick` does
+and leaves the picture and sound alone: no camera, shake, particle or exhaust
+step, no view RNG draw (`sparks_rng`, `shake_rng`, `stage_rng`, `exhaust_rng`,
+`engine_light_rng`, `leach_beam_rng`), no HUD, no recording, and the cues,
+announcements and class announcements it raised are dropped. The hash after N of
+these equals the hash after N normal ticks from the same snapshot, on every
+tick and every slot (`tests::reconcile::a_quiet_replay_reaches_the_hash_of_a_normal_one`, and on a real
+circuit with eight craft, two of them people, `quiet_replay_ground_truth`).
+
+**A mode on the one body, not a second entry point.** View writes sit inside the
+simulation's helpers (a craft's step flashes its shield, a pad crossing lights
+the plume, a respawn clears the trail), so a second entry point would be a
+700-line copy of `tick` or a split of a dozen helpers, and `Race::tick` with the
+mode unset runs the same instructions in the same order as before. The three cue
+queues are truncated to their entry length rather than gating twenty-odd push
+sites, because a cue's bookkeeping (`contact_cue_cooldown`) is sim state.
+
+**A known leak, left in place.** The primary's Missile and LeachBeam take their
+target from the reticle (`RaceView::sight`), which is view state advanced from
+the chase camera's projection (`weapons.rs`, `sight.locked()`). The sim-only tick
+therefore still runs the reticle while the primary holds a lock weapon. A replay
+that holds one is only as exact as the reticle it starts from, and two machines
+whose cameras differ can disagree about a lock. Pinned by
+`quiet_replay_ground_truth::a_quiet_replay_fires_the_same_locked_missile`, which
+fails with the gate removed. The fix is a sim-side lock that does not read the
+camera; it is a gameplay change, not part of this tick.
+
+**Not covered by the sim-only tick:** a recording in progress does not hear the
+replayed ticks, so it keeps the inputs as first predicted; `restore_sim` puts
+back whatever cues were undrained at the snapshot, which a client that drained
+them since would hear twice; and `capture_results` and `wreck_ended_tick` still
+run, because a caller reads them back.
+
+## Reconciliation cost (2026-10-14, desktop)
+
+Section 3a's M2 (replay cost per tick) and M3 (snapshot cost). The Galaxy S24
+half is **open**.
+
+Method. `tests::reconcile_cost::reconcile_cost_sweep` (`crates/raceplay/src/tests/reconcile_cost.rs`,
+`#[ignore]`d, runs only with `OAG_SWEEP=1`). Pulse, Single Race, VENOM, all 12
+forward circuits, 8 craft (one person on the throttle, seven AI), weapons on,
+timed after the countdown plus 600 ticks. Each timing is the median of 7
+repeats of 240 ticks, normal and sim-only alternating which goes first; the
+whole sweep was run 3 times, one fresh process per circuit, and the table is the
+median over circuits of the median over runs. Profile `dev`, where this
+workspace's crates are `opt-level 2` and not LTO; the shipping `dist` profile
+was not measured. Machine: AMD Ryzen 9 7900, 24 threads, shared; 1-minute load
+average 10.8 to 14.1 at the end of the three passes (4.9 to 8 on the
+single-process spot runs before them), so read every figure as inflated by
+contention. Heap bytes are the resident-set delta of 64 copies held at once in a
+fresh process, so they are approximate.
+
+| | median over circuits | range over circuits |
+| --- | --- | --- |
+| Tick, `Race::tick` | 65 us | 60 - 87 us |
+| Tick, `Race::tick_sim_only` | 60 us | 54 - 75 us |
+| Rollback of 6 ticks (100 ms), restore plus sim-only replay | 0.42 ms | 0.39 - 0.53 ms |
+| Rollback of 12 ticks (200 ms) | 0.77 ms | 0.71 - 0.98 ms |
+| Rollback of 24 ticks (400 ms) | 1.50 ms | 1.37 - 1.87 ms |
+| The same 6 / 12 / 24 through `Race::tick` | 0.44 / 0.82 / 1.62 ms | 0.42 - 0.60 / 0.77 - 1.09 / 1.50 - 2.11 ms |
+| `snapshot_sim()` (whole `RaceSim` clone) | 63 us, 1.7 MiB | 48 - 86 us, 1.4 - 2.6 MiB |
+| The immutable track half of it | 47 us, 0.74 MiB | 35 - 52 us, 0.58 - 0.84 MiB |
+
+What it says.
+
+- **The sim dominates the tick.** Skipping the view's work saves 5 us of 65
+  (7.5 percent) on a typical circuit and up to 23 percent on `07_Track`. The
+  sim-only path is correct for the camera, particles and sound, not a large
+  speed-up.
+- **A rollback is cheap on the desktop.** 6 ticks cost 0.42 ms, 2.5 percent of a
+  16.7 ms frame; 12 ticks 4.6 percent; 24 ticks 9 percent. Section 3a's proposed
+  pass condition (a 100 ms round trip costs at most 25 percent of a frame on the
+  S24) holds on the S24 if that phone is no more than about 10 times slower than
+  this desktop for this code. **Unmeasured.**
+- **Worst-case rollback rate.** Section 3a's expectation of about 60 rollbacks a
+  second of 6 ticks is 360 replayed ticks a second, about 22 ms of CPU per
+  second, 2.2 percent of one core. M1 (how often a real stick forces a rollback)
+  is still unmeasured.
+- **A snapshot costs as much as a tick** (63 us against 65 us). A client that
+  snapshots every tick doubles its simulation CPU; one that restores from the
+  server's snapshot and snapshots only on demand does not. The track half is 75
+  percent of the clone's time and 44 percent of its bytes, so splitting it would
+  take a snapshot from 63 to about 16 us. That is the lever to reach for if a
+  design snapshots per tick; the whole-struct clone stays until one does. A
+  24-tick window of per-tick snapshots would hold about 41 MiB.
+
+Reproduce: `OAG_SWEEP=1 OAG_SWEEP_TRACKS=09_Track OAG_REQUIRE_GAME_DATA=1 cargo
+nextest run -p oag-raceplay --run-ignored all --no-capture -E 'test(/reconcile_cost/)'`
+(one circuit per process; omit `OAG_SWEEP_TRACKS` for all twelve, with heap
+figures that then read low after the first).
 
 ## Transport: WebTransport leaning, not decided
 

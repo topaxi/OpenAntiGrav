@@ -44,6 +44,7 @@ mod pads;
 mod people_grid;
 mod perfect_start;
 mod reconcile;
+mod reconcile_cost;
 mod repulser;
 pub(crate) mod respawn;
 mod run_stats;
