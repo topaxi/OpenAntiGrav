@@ -524,6 +524,23 @@ play *ARGS:
     esac
     ${OAG_PLAY_WRAPPER:-} cargo run --release -p oag-game {{native_video_flags}} -- "${args[@]}"
 
+# `just bench-render [title ...] [--tag NAME] [--repeat] [--profile debug]`, titles from
+# pulse pure hd 2048 omega (default all). Builds a release `oag-game` OUTSIDE the lock, then
+# `scripts/bench-render.py` takes the gate lock ($HOME/.cache/oag/gate.lock, the one
+# gate-affected and test-data-affected hold) for the runs only, so a bench runs on a quiet
+# machine. `OAG_BENCH_NO_LOCK=1` skips it, for a human on an idle machine. Never run it from
+# inside a gate or wrap a gate in it: the same lock held twice deadlocks.
+# Results: data/bench/<tag>/<title>.json and .csv. docs/tools/render-bench.md.
+#
+# Whole-race rendering benchmark: one fixed race per title, every frame measured
+bench-render *ARGS:
+    cargo build --release -p oag-game
+    python3 scripts/bench-render.py run "$@"
+
+# Deltas between two bench-render results: two .json files, or two run directories
+bench-compare A B:
+    python3 scripts/bench-render.py compare "{{A}}" "{{B}}"
+
 # Start with no image named: survey the search path and choose one on screen
 #
 # The other half of `play`, which names an image for you. This one names none,
