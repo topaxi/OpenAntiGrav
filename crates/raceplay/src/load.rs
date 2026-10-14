@@ -703,12 +703,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         craft_of(&mut craft, &mut archives),
         craft_title,
         options.mode,
-        usize::from(options.people_flying()),
         language_plugins,
         options.language.as_deref(),
         crate::hud::SplitViews {
             count: options.views,
             cut: options.cut,
+            people: usize::from(options.people_flying()),
         },
         &mut report,
     );

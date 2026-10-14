@@ -76,6 +76,9 @@ pub(super) struct SplitViews {
     pub(super) count: u8,
     /// Which way two of them are cut.
     pub(super) cut: oag_render::viewport::Cut,
+    /// How many people fly the race: a Time Trial of several draws the arcade layout
+    /// ([`hud_layout_for`]).
+    pub(super) people: usize,
 }
 
 /// Reads the HUD's layout, atlas, fonts and strings.
@@ -92,13 +95,12 @@ pub(super) fn load_hud(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
-    people: usize,
     language_plugins: &[&str],
     preferred_language: Option<&str>,
     views: SplitViews,
     report: &mut Vec<String>,
 ) -> oag_hud::Assets {
-    let entry = hud_layout_for(title, mode, people);
+    let entry = hud_layout_for(title, mode, views.people);
     // **Through `compose`, on every title.** A Pulse or Pure layout includes
     // nothing and composes to itself, so this is the same read it always was
     // for them; HD's roots are *shells* that pull in up to sixteen fragments by
@@ -144,8 +146,7 @@ pub(super) fn load_hud(
     let space = oag_display::space::Space::of(archives.layout.platform);
     let layout = layout.map(|layout| splice_assist_indicator(archives, title, layout, space, mode));
 
-    let SplitViews { count: views, cut } = views;
-    let split = split_assets(archives, title, mode, people, views, cut, space, report);
+    let split = split_assets(archives, title, mode, views, space, report);
     // The sheet packs the textures of every layout this race can draw, the
     // whole-screen one first so a race with no split packs what it always did.
     let sheet = match (&layout, &split) {
@@ -252,7 +253,7 @@ pub(super) fn load_hud(
         archives,
         title,
         mode,
-        views,
+        views.count,
         layout.as_ref(),
         heights,
         split.is_some(),
@@ -376,12 +377,15 @@ fn split_assets(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
-    people: usize,
-    views: u8,
-    cut: oag_render::viewport::Cut,
+    views: SplitViews,
     space: oag_display::space::Space,
     report: &mut Vec<String>,
 ) -> Option<oag_hud::SplitAssets> {
+    let SplitViews {
+        count: views,
+        cut,
+        people,
+    } = views;
     let authored = title.hud.split.filter(|_| views == 2)?;
     let vertical = authored
         .vertical
