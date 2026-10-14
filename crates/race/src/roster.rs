@@ -12,7 +12,7 @@
 //! The original, in order:
 //!
 //! 1. Takes the team catalogue - `Type="Race"` entries only, which
-//!    [`crate::catalogue::teams`] already filters - and drops the player's own
+//!    `oag_raceplay::catalogue::teams` already filters - and drops the player's own
 //!    team by exact name, any team whose name contains `Zone`, and any team
 //!    not yet unlocked.
 //! 2. Shuffles **every** eligible team with a naive swap,
@@ -52,7 +52,7 @@ pub const ROSTER_SALT: u64 = 0x5245_4f52_4441_4d53;
 /// Which team flies each grid slot, the player first.
 ///
 /// `available` is the catalogue's own order, `seed` the race's own
-/// ([`crate::race::Options::seed`] resolved, [`crate::race::SEED`] when unset). Deterministic in all three
+/// (`oag_raceplay::Options::seed` resolved, `oag_raceplay::SEED` when unset). Deterministic in all three
 /// inputs. An empty list, or one holding only the player, gives every slot
 /// the player's team, which is what a source with no readable definition gets.
 #[must_use]

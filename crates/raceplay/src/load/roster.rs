@@ -89,6 +89,7 @@ pub(super) fn available(
     declared.into_iter().map(|team| team.id).collect()
 }
 
+#[cfg(feature = "view")]
 /// Wipeout HD's red-trail flag per grid slot, from each slot's own ship
 /// directory.
 ///
@@ -111,7 +112,7 @@ pub(super) fn hd_trail_red(slot_teams: &[String]) -> [f32; oag_gameplay::MAX_SHI
 
 /// Overlays [`crate::Options::grid_teams`] onto `slot_teams` - the
 /// disc's own authored AI grid, where an event carries one, in place of
-/// [`oag_livery::teams_for_slots`]'s draw.
+/// [`oag_race::roster::teams_for_slots`]'s draw.
 ///
 /// **Per-slot, not all-or-nothing.** `grid_teams[i]` is grid slot `i + 1`
 /// (slot `0` stays the player's, always); a `None` entry, or an index past
@@ -150,7 +151,7 @@ fn apply_grid_teams(
 /// the grid once.
 ///
 /// `picks[i]` is slot `i + 1`'s; slot `0` is the player's and untouched. The
-/// grid was drawn for one person ([`oag_livery::teams_for_slots`] keeps the
+/// grid was drawn for one person ([`oag_race::roster::teams_for_slots`] keeps the
 /// player's team out of the opponents' and flies every other team once), so a
 /// seated person who took a team the draw gave an opponent would meet
 /// themselves: the opponent that held it takes a team a person's pick
@@ -191,11 +192,12 @@ pub(super) fn apply_seat_picks(
     ));
 }
 
+#[cfg(feature = "view")]
 /// Everything the grid's own slot list decides: who flies where, what each
 /// one draws, and HD's per-slot trail flag.
 pub(super) struct Grid {
     /// Which team flies each slot, the player first - Pulse's own draw, see
-    /// [`oag_livery::teams_for_slots`].
+    /// [`oag_race::roster::teams_for_slots`].
     pub slot_teams: Vec<String>,
     /// Wipeout HD's red-trail flag per slot; see [`hd_trail_red`].
     pub hd_trail_red: [f32; oag_gameplay::MAX_SHIPS],
@@ -203,6 +205,7 @@ pub(super) struct Grid {
     pub liveries: Vec<oag_livery::Livery>,
 }
 
+#[cfg(feature = "view")]
 /// The shell tint a craft of `craft_title`, loaded from a disc of `platform`,
 /// takes. The craft's source, not the track's: the shell is loaded from the
 /// craft's archives (`livery::shield::shell`), so a Race Remix with a PSP craft
@@ -240,6 +243,34 @@ pub(super) fn shield_palette(
 ///
 /// Propagates [`oag_livery::load`]: only the player's own hull failing to
 /// read or build, which is not a race.
+/// The team each grid slot flies, slot 0 the player's: Pulse's roster draw
+/// off the race seed, then the event's authored grid, the seat picks and the
+/// title's variant family, in that order. The half of [`grid`] the
+/// simulation needs (each slot's handling follows its team), and all of it a
+/// build without the `view` feature reads.
+pub(super) fn teams(
+    craft_title: &'static oag_title::Title,
+    options: &crate::Options,
+    team: &str,
+    available: &[String],
+    report: &mut Vec<String>,
+) -> Vec<String> {
+    let seed = options.seed.unwrap_or(crate::SEED);
+    let pool = super::family::pool(craft_title.race, team, available);
+    let mut slot_teams =
+        oag_race::roster::teams_for_slots(team, &pool, oag_gameplay::MAX_SHIPS, seed);
+    apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
+    apply_seat_picks(&mut slot_teams, &options.seat_picks, report);
+    super::family::follow_player(
+        craft_title.race,
+        &mut slot_teams,
+        options.seat_picks.len(),
+        report,
+    );
+    slot_teams
+}
+
+#[cfg(feature = "view")]
 pub(super) fn grid(
     archives: &mut oag_assets::Archives,
     craft_title: &'static oag_title::Title,
@@ -259,16 +290,7 @@ pub(super) fn grid(
     );
     let zone_liveries = super::zone_livery::resolve(archives, craft_title, options.mode, report);
     let seed = options.seed.unwrap_or(crate::SEED);
-    let pool = super::family::pool(craft_title.race, team, available);
-    let mut slot_teams = oag_livery::teams_for_slots(team, &pool, oag_gameplay::MAX_SHIPS, seed);
-    apply_grid_teams(&mut slot_teams, &options.grid_teams, report);
-    apply_seat_picks(&mut slot_teams, &options.seat_picks, report);
-    super::family::follow_player(
-        craft_title.race,
-        &mut slot_teams,
-        options.seat_picks.len(),
-        report,
-    );
+    let slot_teams = teams(craft_title, options, team, available, report);
     let seat_skins: Vec<Option<String>> = options
         .seat_picks
         .iter()

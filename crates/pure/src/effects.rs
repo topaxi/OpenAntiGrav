@@ -82,7 +82,7 @@ pub const LOOKS: &Looks = &Looks {
     // axis, and its pose node (`0x0885bf4c`) turns it by `4 x` the fuse.
     // Read off the decompile, not yet pinned to live matrices.
     // Pure lays both charges at the rear anchor, not at the body: see
-    // `oag_raceplay::weapons::visuals::laid::REAR_ANCHOR_BACK`.
+    // `oag_raceplay::weapons::REAR_ANCHOR_BACK`.
     laid_from_rear: Rule {
         on: Platforms::Any,
         origin: Origin::Measured,

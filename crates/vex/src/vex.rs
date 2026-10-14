@@ -787,6 +787,9 @@ pub fn nodes(data: &[u8]) -> Result<Vec<Node>> {
 mod batch_flags;
 pub use batch_flags::BlendClass;
 
+mod external;
+pub use external::geometry_is_external;
+
 mod mesh_header;
 pub use mesh_header::{
     LAYER_DEFAULT, LAYER_EARLY, LAYER_EXHAUST, LAYER_REFLECTION_FIRST, LAYER_SCENE, Material,

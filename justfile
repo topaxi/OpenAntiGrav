@@ -111,6 +111,11 @@ fmt-check:
 
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
+    # The headless server alone: `oag-net` with its default features takes
+    # `oag-raceplay` without `view`, a configuration the workspace run above never
+    # compiles (`oag-game` unifies `view` back on). Rule 6 of `just check-deps`
+    # holds what it links; this holds that it builds.
+    cargo clippy -p oag-net --lib --bins -- -D warnings
 
 # `--tests` builds what has tests to run - libraries, binaries, integration tests -
 # and leaves out the examples, which plain `cargo nextest run` also links but
@@ -1150,7 +1155,7 @@ harvest-ppsspp-symbols binary port="47800":
 audit-leakage:
     python3 scripts/check-leakage.py
 
-# Assert the three architecture dependency rules from CLAUDE.md still hold
+# Assert the architecture dependency rules from CLAUDE.md still hold
 check-deps:
     python3 scripts/check-dependency-rules.py
 

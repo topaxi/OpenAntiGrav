@@ -67,6 +67,7 @@ impl Race {
             rules,
             &mut hits,
         );
+        #[cfg(feature = "view")]
         for (slot, hit) in hits.iter().enumerate() {
             // `self.quiet` rather than `shield_hit`: `course` above borrows
             // `self.sim` for the whole function.
@@ -80,8 +81,8 @@ impl Race {
         // slot means for a `Placement::Craft` cue.
         for (slot, &now) in wave.hit.iter().enumerate() {
             if now && !hit_before[slot] {
-                self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                    oag_sound::sfx::Cue::QuakeHit,
+                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                    oag_gameplay::cue::Cue::QuakeHit,
                     slot,
                 ));
             }
@@ -110,11 +111,13 @@ impl Race {
                     .then_some((slot, laid.position))
             })
             .collect();
+        #[cfg_attr(not(feature = "view"), allow(unused_variables))]
         for (slot, point) in tripped {
             self.sim.world.projectiles.slots[slot] = oag_weapons::projectile::Projectile::default();
             // Identity: only a Mine reaches this filter above, and
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
+            #[cfg(feature = "view")]
             self.ignite_blast(
                 oag_tables::weapons::Weapon::Mine,
                 point,
@@ -124,6 +127,7 @@ impl Race {
         }
         // The wave's landed hits spark the struck hulls - see
         // `race::hit_sparks`. Last, once `course`'s borrow has ended.
+        #[cfg(feature = "view")]
         self.throw_hit_sparks(&hits, false);
         for (slot, hit) in hits.iter().enumerate() {
             if hit.landed {
@@ -172,6 +176,7 @@ impl Race {
             if let Some(hit) = hits.get_mut(beam.target as usize) {
                 hit.landed = true;
             }
+            #[cfg(feature = "view")]
             self.throw_hit_sparks(&hits, true);
         }
         self.sim.world.leach_beam = if report.retired { None } else { Some(beam) };

@@ -1,13 +1,14 @@
 //! What a race says out loud: the cue queue, the two announcement queues, and
 //! the banks that play them.
 //!
-//! Split out of `race/effects.rs` under the 1,000-line rule in
-//! `scripts/check-file-size.py`; a move, with no behaviour change.
+//! Out of `effects` because the queues and the contact cue's re-arm are the
+//! simulation's and run in a build with no view; the bank accessors are the
+//! view's and only exist with it.
 //!
 //! It is the seam the `RaceSim`/`RaceView` split made obvious. A cue is a
 //! per-tick **output** of the simulation (ADR-0018) and lives on
-//! [`RaceSim`](super::super::RaceSim); the bank that turns it into a sample is
-//! loaded art and lives on [`RaceView`](super::super::RaceView). Every method
+//! [`RaceSim`](super::RaceSim); the bank that turns it into a sample is
+//! loaded art and lives on [`RaceView`](super::RaceView). Every method
 //! here is one half reaching the other, which is why they stay on `Race`.
 
 use super::*;
@@ -24,7 +25,7 @@ impl Race {
     ///
     /// `ShipCollisionFx_Trigger` plays `"COLLISIONS"` once per call that gets
     /// past its own 0.8-second gate, which is the same 0.8 seconds
-    /// `oag_fx::sparks::COLLISION_COOLDOWN` carries - one constant in the
+    /// `oag_gameplay::cue::COLLISION_COOLDOWN` carries - one constant in the
     /// original, read twice here.
     ///
     /// **A shielded contact is silent, and this used to raise `ABSORB` on
@@ -45,9 +46,9 @@ impl Race {
         if !impact || shielded || *cooldown > 0.0 {
             return;
         }
-        *cooldown = oag_fx::sparks::COLLISION_COOLDOWN;
-        self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-            oag_sound::sfx::Cue::Collision,
+        *cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
+        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            oag_gameplay::cue::Cue::Collision,
             slot,
         ));
     }
@@ -63,28 +64,31 @@ impl Race {
     /// a race that is never drained grows it by at most a handful of entries a
     /// second, all of them fixed-size - but the composition root does drain it,
     /// and a headless test that does not is bounded by its own tick count.
-    pub fn drain_cues(&mut self) -> Vec<oag_sound::sfx::CueEvent> {
+    pub fn drain_cues(&mut self) -> Vec<oag_gameplay::cue::CueEvent> {
         std::mem::take(&mut self.sim.cues)
     }
 
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
-    pub fn pending_cues(&self) -> &[oag_sound::sfx::CueEvent] {
+    pub fn pending_cues(&self) -> &[oag_gameplay::cue::CueEvent] {
         &self.sim.cues
     }
 
+    #[cfg(feature = "view")]
     /// The decoded sound banks this race loaded.
     #[must_use]
     pub fn sounds(&self) -> &oag_sound::sfx::Banks {
         &self.view.sounds
     }
 
+    #[cfg(feature = "view")]
     /// The circuit's own authored sound emitters, as this race loaded them.
     #[must_use]
     pub fn track_emitters(&self) -> &oag_sound::sfx::TrackEmitters {
         &self.view.track_emitters
     }
 
+    #[cfg(feature = "view")]
     /// The decoded Zone milestone announcer this race loaded.
     #[must_use]
     pub fn announcer(&self) -> &oag_sound::sfx::Announcer {
@@ -108,6 +112,7 @@ impl Race {
         std::mem::take(&mut self.sim.announcements)
     }
 
+    #[cfg(feature = "view")]
     /// The decoded Zone speed-class announcer this race loaded.
     #[must_use]
     pub fn class_announcer(&self) -> &oag_sound::sfx::ClassAnnouncer {

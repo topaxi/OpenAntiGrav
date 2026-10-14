@@ -57,7 +57,7 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
 
     // Every locator hit on every tick for a little under the gate: no
     // locator may fire twice, so at most six can have started.
-    let ticks = (oag_fx::sparks::COLLISION_COOLDOWN / race.dt()) as usize - 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         race.throw_hit_sparks(&landed_on_player(), false);

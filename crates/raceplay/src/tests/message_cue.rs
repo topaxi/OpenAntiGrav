@@ -2,7 +2,7 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 
 /// A HUD message line starting to show sounds `MESSAGE` on that tick, once, and
 /// not before it is raised: `Hud_UpdateMessages` plays it as a slot shows.

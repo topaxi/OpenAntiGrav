@@ -124,7 +124,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         launches += race
             .pending_cues()
             .iter()
-            .filter(|e| e.cue == oag_sound::sfx::Cue::MineLaunch)
+            .filter(|e| e.cue == oag_gameplay::cue::Cue::MineLaunch)
             .count();
         oag_game::sound::race_tick(&mut audio, &mut race);
         audio.tick();

@@ -166,6 +166,35 @@ CONTENT_LAYERS = {
 # Rule 2: no crate may depend on the composition root.
 COMPOSITION_ROOT = "oag-game"
 
+# Rule 6: the headless server links nothing that draws, plays, opens a window or
+# reads a pad. `oag-server` is a binary of `oag-net`, built with that crate's own
+# default features, under which `oag-raceplay` comes without `view` (its
+# renderer, effects, HUD, sound and window types). `cargo metadata` resolves the
+# whole workspace with features unified - `oag-game` turns `view` back on - so it
+# cannot see this build at all; `cargo tree -p oag-net` resolves the package
+# alone, which is what `cargo build -p oag-net --bin oag-server` compiles.
+LEAN_SERVER = "oag-net"
+FORBIDDEN_FOR_SERVER = {
+    "wgpu",
+    "winit",
+    "cpal",
+    "alsa-sys",
+    "oag-render",
+    "oag-fx",
+    "oag-gpu",
+    "oag-audio",
+    "oag-sound",
+    "oag-music",
+    "oag-mesh",
+    "oag-post",
+    "oag-present",
+    "oag-livery",
+    "oag-ui",
+    "oag-ui-screens",
+    "oag-hud",
+    "oag-input",
+}
+
 
 def load_metadata() -> dict:
     result = subprocess.run(
@@ -205,6 +234,18 @@ def reachable_names(
         stack.extend(graph.get(current, []))
     seen.discard(start)
     return {names[pkg_id] for pkg_id in seen}
+
+
+def lean_server_names() -> set[str]:
+    """Every package the server build links, the server's features alone."""
+    result = subprocess.run(
+        ["cargo", "tree", "-p", LEAN_SERVER, "-e", "normal", "--prefix", "none", "--format", "{p}"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return {line.split()[0] for line in result.stdout.splitlines() if line.strip()}
 
 
 def main() -> int:
@@ -302,11 +343,20 @@ def main() -> int:
                 "which rule 2 (nothing depends on the composition root) forbids"
             )
 
+    hit = lean_server_names() & FORBIDDEN_FOR_SERVER
+    if hit:
+        problems.append(
+            f"`cargo tree -p {LEAN_SERVER} -e normal` reaches {sorted(hit)}, which rule 6 "
+            "(the headless server links no renderer, window, audio or UI crate) "
+            "forbids; gate the new use behind `oag-raceplay`'s `view` feature or "
+            f"`{LEAN_SERVER}`'s `client` feature, or move the type it needs below them"
+        )
+
     if problems:
         print("\n\n".join(problems), file=sys.stderr)
         return 1
 
-    print("OK: all five dependency-boundary rules hold")
+    print("OK: all six dependency-boundary rules hold")
     return 0
 
 

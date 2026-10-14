@@ -36,8 +36,8 @@
 
 use super::cues::grid_on_a_speed_pad;
 use super::*;
+use oag_gameplay::cue::Cue;
 use oag_gameplay::{Controller, PlayerInputs};
-use oag_sound::sfx::Cue;
 
 /// Ticks the client and server agree on before anything goes wrong. The
 /// authoritative snapshot is taken here.

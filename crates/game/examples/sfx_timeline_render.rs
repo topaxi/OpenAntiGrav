@@ -8,7 +8,8 @@
 //! No audio device is opened: the mixer renders to a buffer.
 
 use oag_audio::{Bus, Mixer};
-use oag_sound::sfx::{Banks, Cue, VoicePlace, start_voices};
+use oag_gameplay::cue::Cue;
+use oag_sound::sfx::{Banks, CueTables, VoicePlace, start_voices};
 
 const RATE: u32 = 44_100;
 /// Longest a render runs, so a held loop ends the run.

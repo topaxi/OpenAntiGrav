@@ -5,6 +5,7 @@ use log::warn;
 use oag_audio::{Mixer, Play, VoiceId};
 use oag_core::Rng;
 
+use super::CueTables;
 use super::{Banks, Cue};
 
 /// The engine voice, and the law that drives its pitch and volume.

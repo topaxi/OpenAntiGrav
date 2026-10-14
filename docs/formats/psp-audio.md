@@ -540,7 +540,7 @@ Time Trial, a single race and Eliminator were captured (`SPEECH` 11/12 and
 the cue starts** in the original (first `Scream_KeyOnVoice` after it) and 23.3 in
 this port's render; the other two banks' `ready` speaks from the cue's own start.
 
-`oag_sound::sfx::Cue::{Ready, Go}` play them through the timeline path,
+`oag_gameplay::cue::Cue::{Ready, Go}` play them through the timeline path,
 loaded by `Banks::load_countdown` from the mode's bank on a title whose
 `RaceDefaults::countdown_voice` is measured (Pulse only), and raised by
 `oag_raceplay::countdown`. Pinned per mode, with a speech-only WAV render, by
@@ -1581,7 +1581,7 @@ could not load at all until the second codec did.
 
 **2026-09-23: fourteen more cues wired, and HD now loads 27 of 28.** The
 Rocket, the Missile, the Cannon, `QUAKEHIT`, the LeachBeam and the Shuriken's
-cues joined `oag_sound::sfx::Cue::ALL`, and every one of them resolves
+cues joined `oag_gameplay::cue::Cue::ALL`, and every one of them resolves
 on HD's own `weapons.bnk` with no per-title work at all - the same bank
 presence caveat as `MINELAUNCH` and the Plasma's four above, not a confirmed
 HD trigger. `~ENGINE` is still the sole miss, for the reason already given.

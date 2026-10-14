@@ -95,6 +95,7 @@ fn centis(ticks: u32) -> u64 {
     u64::from(ticks) * 100 / 60
 }
 
+#[cfg(feature = "view")]
 impl super::Race {
     /// Raises the lap-crossing lines for this tick's lap update. `hit` is a wall
     /// scrape nothing absorbed (the original's `0x20` bit is set on the

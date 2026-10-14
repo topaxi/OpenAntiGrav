@@ -24,7 +24,7 @@
 //! **Which team flies which slot is Pulse's own draw**, recovered off
 //! `RaceSession_DrawAiRoster` and confirmed live: every team but the player's, shuffled,
 //! seven of them racing. [`teams_for_slots`] reproduces it off the race seed
-//! where the original reads the wall clock - see [`draw`] for what is measured
+//! where the original reads the wall clock - see [`oag_race::roster`] for what is measured
 //! and what is chosen.
 //!
 //! # Short lists and long ones
@@ -55,7 +55,6 @@ use entry::{boost_entry_name, ps2_texture_set, ship_entry_name};
 mod absorb;
 mod arc_anchor;
 mod cannon_flash;
-pub mod draw;
 pub mod engine_light;
 pub mod entry;
 mod flare;
@@ -64,7 +63,6 @@ pub mod ship_skin;
 mod wreck;
 mod zone_livery;
 
-pub use draw::teams_for_slots;
 pub use shield::cockpit_shield;
 use shield::shell;
 pub use wreck::Wreck;
@@ -374,7 +372,7 @@ fn one(
     // `oag_mesh::mesh::rcs` for what is decoded and what is not. A source
     // with no sibling draws nothing and says so rather than substituting
     // anything.
-    if mesh::geometry_is_external(&blob) {
+    if oag_vex::vex::geometry_is_external(&blob) {
         let sibling = mesh::rcs::sibling_name(&hull_name);
         let geometry = sibling.as_deref().and_then(|s| archives.read_name(s).ok());
         // **A sibling that will not decode is the same outcome as no sibling**,

@@ -29,8 +29,8 @@ impl Race {
         };
         if let Some(free) = self.sim.world.repulsers.iter_mut().find(|r| r.is_none()) {
             *free = Some(Repulser::launch(owner, &stats));
-            self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                oag_sound::sfx::Cue::Repulsor,
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Repulsor,
                 slot,
             ));
         }
@@ -75,8 +75,8 @@ impl Race {
             );
             for (slot, &was_struck) in struck.iter().enumerate() {
                 if was_struck {
-                    self.sim.cues.push(oag_sound::sfx::CueEvent::new(
-                        oag_sound::sfx::Cue::RepulsorHit,
+                    self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                        oag_gameplay::cue::Cue::RepulsorHit,
                         slot,
                     ));
                     credits.push((slot, repulser.owner));
@@ -108,6 +108,7 @@ impl Race {
                 self.shield_hit(slot);
             }
         }
+        #[cfg(feature = "view")]
         self.throw_hit_sparks(&hits, false);
         for (slot, owner) in credits {
             if hits[slot].landed {
@@ -117,6 +118,7 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 impl Race {
     /// Keeps each live Repulser's three particle instances where the original
     /// keeps them, and releases them when it retires.

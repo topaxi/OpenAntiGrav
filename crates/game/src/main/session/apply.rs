@@ -242,7 +242,7 @@ impl Session {
                 }
             },
             // The voice bus, which a cue reaches by living in `speech.bnk`
-            // rather than by being listed anywhere - see `sfx::Cue::bus`.
+            // rather than by being listed anywhere - see `sfx::CueTables::bus`.
             "audio.speech_volume" => match text.parse::<oag_sound::Volume>() {
                 Ok(volume) => {
                     self.settings.audio.speech_volume = volume;

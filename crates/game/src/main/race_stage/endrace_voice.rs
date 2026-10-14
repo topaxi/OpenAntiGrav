@@ -72,7 +72,7 @@ impl Speaker {
         &mut self,
         which: Which,
         results: &ResultsModel,
-    ) -> Option<oag_sound::sfx::Cue> {
+    ) -> Option<oag_gameplay::cue::Cue> {
         use oag_game::endrace_voice::Screen;
         let screen = match which {
             Which::Results => Screen::Results,
@@ -89,7 +89,7 @@ impl Speaker {
 mod tests {
     use super::*;
     use oag_game::endrace_voice::Screen;
-    use oag_sound::sfx::Cue;
+    use oag_gameplay::cue::Cue;
     use oag_tables::race_campaign::Medal;
     use oag_ui_screens::endrace::{
         EliminationRow, Headline, Results, TournamentResults, TournamentRow,

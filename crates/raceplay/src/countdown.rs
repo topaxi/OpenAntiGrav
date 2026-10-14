@@ -51,7 +51,7 @@
 use oag_race::COUNTDOWN_TICKS;
 
 use super::Race;
-use oag_sound::sfx::{Cue, CueEvent};
+use oag_gameplay::cue::{Cue, CueEvent};
 
 /// Ticks from `ready` to `go`: the countdown state's own length.
 ///

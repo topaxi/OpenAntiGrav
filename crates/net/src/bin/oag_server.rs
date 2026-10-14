@@ -9,8 +9,9 @@
 //! the state hash it reached. The simulation itself never reads the clock; the
 //! clock only paces when the next tick runs.
 //!
-//! It opens no window, no GPU device and no audio device. It links
-//! `oag-raceplay`, which links wgpu and winit, and never initialises either.
+//! It opens no window, no GPU device and no audio device, and links none: built
+//! with this crate's default features it takes `oag-raceplay` without `view`
+//! (rule 6 of `just check-deps`).
 //!
 //! ```sh
 //! cargo run -p oag-net --bin oag-server -- --people 1

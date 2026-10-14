@@ -94,6 +94,7 @@ impl Race {
         ship.physics.body.forward().dot(tangent) < 0.0
     }
 
+    #[cfg(feature = "view")]
     /// What the HUD shows, as of the last tick.
     ///
     /// Separate from [`Telemetry`], which is a log line and carries diagnostics
@@ -106,6 +107,7 @@ impl Race {
         self.readout_for(self.player_slot())
     }
 
+    #[cfg(feature = "view")]
     /// What the HUD of the view that follows `slot` shows.
     ///
     /// [`Self::readout`] for the primary slot, which is the full-screen HUD. A
@@ -248,6 +250,7 @@ impl Race {
         readout
     }
 
+    #[cfg(feature = "view")]
     /// What a person's own view holds once their craft has crossed the line for the
     /// last time and the race is not over: `None` for one person (whose finish ends
     /// the race and hides the HUD), for a craft still racing, and for an AI craft.
@@ -281,6 +284,7 @@ impl Race {
         })
     }
 
+    #[cfg(feature = "view")]
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
     /// for a slot with no team on record (a `Setup` built by hand).
@@ -309,6 +313,7 @@ impl Race {
             .collect()
     }
 
+    #[cfg(feature = "view")]
     /// The place the HUD shows: [`Self::places`] ranked among the craft that are in
     /// the race. A slot with no craft in it sits at distance zero, so on a grid still
     /// short of the line (the back rows are) a field smaller than eight read `8 / 2`
@@ -323,6 +328,7 @@ impl Race {
         u32::from(places[slot]) - u32::try_from(empty_ahead).unwrap_or(0)
     }
 
+    #[cfg(feature = "view")]
     /// Head2Head's gap readout: the unwrapped-progress difference between the
     /// player and the one opponent, and who leads. `None` outside Head2Head.
     /// With two people the opponent is the other person, so each view reads its
@@ -360,10 +366,12 @@ impl Race {
     }
 }
 
+#[cfg(feature = "view")]
 /// The id of the line a finished person's view carries: our own text, in
 /// `assets/ui/strings/english.toml`.
 const FINISHED_LINE: &str = "OAG_SPLIT_FINISHED";
 
+#[cfg(feature = "view")]
 /// A finished person's held readout, see [`Race::finished_view`].
 #[derive(Debug, Clone, Copy)]
 pub(super) struct FinishedView {

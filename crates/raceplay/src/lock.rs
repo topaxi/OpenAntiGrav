@@ -25,7 +25,7 @@
 //! `250` unit range - is `HudSight_Update` and `FUN_0881e8c8`, unchanged. What
 //! it is *fed* is **chosen, not measured**: the original projects through the
 //! one camera it has; this projects through the team's far chase rig at rest
-//! (`oag_render::camera::chase::anchor` and `look_at_point`: the settled eye,
+//! (`oag_race::chase_rig::anchor` and `look_at_point`: the settled eye,
 //! with no spring lag, no impact shake and no boost kick), at the authored
 //! field of view widened by the same speed term, in the title's own HUD grid.
 //! It differs from what the player sees in four ways: the eye's spring lag, the
@@ -79,8 +79,8 @@ impl Race {
             forward: body.forward(),
             up: body.up(),
         };
-        let eye = oag_render::camera::chase::anchor(craft, rig);
-        let look = oag_render::camera::chase::look_at_point(craft, rig);
+        let eye = oag_race::chase_rig::anchor(craft, rig);
+        let look = oag_race::chase_rig::look_at_point(craft, rig);
         let view = oag_core::math::camera::look_at(eye, look, craft.up);
         let screen = self.sim.locks[slot].screen();
         let widened = (rig.fov + SPEED_FOV_GAIN_DEG * craft.forward.dot(body.linear_velocity))

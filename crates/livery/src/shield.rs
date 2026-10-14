@@ -25,7 +25,7 @@ fn shield_model(
     let blob = archives
         .read_name(name)
         .map_err(|_| format!("{name}: not in the archive set"))?;
-    if !mesh::geometry_is_external(&blob) {
+    if !oag_vex::vex::geometry_is_external(&blob) {
         let mut model = mesh::build_with_textures(name, &blob, None)
             .map_err(|error| format!("{name}: {} bytes, does not parse ({error})", blob.len()))?;
         let mut note = format!("{} triangle(s)", model.indices.len() / 3);

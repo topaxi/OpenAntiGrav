@@ -25,6 +25,7 @@ pub(super) struct Inputs {
     pub weapon_pads: Vec<PadVolume>,
     /// The foreign track's flat-shaded floor and wall, drawn in place of the
     /// art meshes it has no mapping for. `None` for a disc circuit.
+    #[cfg(feature = "view")]
     pub drawn: Option<Model>,
 }
 
@@ -83,7 +84,11 @@ pub(super) fn resolve(
         .ok_or_else(|| assets::zone_circuit_miss(&track, options.mode, title, archives))?
         .to_string();
 
-    let (ai, label) = track_render::load(&spec, &track)?;
+    // `oag_render::track::load`'s read, without the renderer: the same
+    // container open and the same parse.
+    let data = oag_assets::Container::open(&spec)?.read_entry(&track)?;
+    let ai = oag_vex::track::from_vex(&data, &track).map_err(anyhow::Error::msg)?;
+    let label = track.clone();
     report.push(format!(
         "{label}: {} path(s), {} junction(s), {} control point(s)",
         ai.paths.len(),
@@ -209,6 +214,7 @@ pub(super) fn resolve(
         collision,
         speedup_pads,
         weapon_pads,
+        #[cfg(feature = "view")]
         drawn: None,
     })
 }
@@ -234,6 +240,7 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
             .map(oag_physics::TriangleSoup::triangle_count)
             .sum::<usize>()
     ));
+    #[cfg(feature = "view")]
     let drawn =
         render_collision::build_model(&f.title, &f.nodes, render_collision::Style::Solid, false);
     Ok(Inputs {
@@ -248,6 +255,7 @@ fn foreign(path: &std::path::Path, options: &Options, report: &mut Vec<String>) 
         collision,
         speedup_pads: f.speedup_pads,
         weapon_pads: f.weapon_pads,
+        #[cfg(feature = "view")]
         drawn: Some(drawn),
     })
 }
@@ -267,7 +275,7 @@ pub(super) fn export(
 ) -> Result<oag_trackfile::Track> {
     let mut report = Vec::new();
     let inputs = resolve(options, archives, title, &mut report)?;
-    if inputs.drawn.is_some() {
+    if inputs.track.starts_with("foreign:") {
         anyhow::bail!(
             "{}: already a foreign track, nothing to export from a disc",
             inputs.track

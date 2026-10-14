@@ -23,7 +23,7 @@
 //! visualisation assumes; nothing here depends on it being that way round, and a
 //! mirrored guess would only swap the two widths.
 
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use oag_vex::track::{self, AiTrack, Sample};
 use oag_vex::vex;
 
@@ -41,29 +41,7 @@ const STRIP_HALF_WIDTH: f32 = 0.6;
 /// Loads a track's spline graph from a `.vex` model inside an archive.
 pub fn load(spec: &str, name: &str) -> Result<(AiTrack, String)> {
     let data = oag_mesh::mesh::read_blob(spec, name)?;
-    if !vex::has_magic(&data) {
-        bail!("{name} is not a .vex file (no VEXX magic)");
-    }
-
-    let nodes = vex::nodes(&data).context("walking the node tree")?;
-    let node =
-        track::find_node(&data, &nodes).with_context(|| format!("{name} has no WO Track node"))?;
-
-    let payload = data
-        .get(node.payload())
-        .context("the WO Track payload runs past the end of the file")?;
-    let ai = track::parse(payload).map_err(|e| anyhow::anyhow!("{name}: {e}"))?;
-
-    // The check that settled the layout, kept as a runtime assertion rather
-    // than a comment: a parse that is one structure out cannot come out even.
-    if ai.encoded_len() != payload.len() {
-        bail!(
-            "{name}: decoded {} bytes but the payload is {} -- the layout is wrong",
-            ai.encoded_len(),
-            payload.len()
-        );
-    }
-
+    let ai = track::from_vex(&data, name).map_err(anyhow::Error::msg)?;
     Ok((ai, name.to_string()))
 }
 

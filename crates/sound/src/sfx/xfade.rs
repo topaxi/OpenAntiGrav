@@ -59,6 +59,7 @@ use oag_formats::sblk;
 use oag_formats::xfx::Xfx;
 
 use super::Cue;
+use super::CueTables;
 use super::banks::{load_cue_record, load_indexed_cue};
 
 /// Channel 0's term `X`, held. The two grid readings of the first boot were

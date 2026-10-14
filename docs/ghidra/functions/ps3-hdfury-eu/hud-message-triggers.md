@@ -85,7 +85,7 @@ red `0xff3030` for a bad one. The differences:
    `Sound_QueueAnnouncerCue`: `PERFECT_LAP` for `0x1`, `NEW_LAP_REC` for `0x2`,
    `cont_elim` for `0x8` only. All are gated on a global byte (`0x00938560`,
    `g_PhysicsHalfStep`) being clear. **Not wired**: no `Cue` exists for the first
-   two (`oag_sound::sfx::Cue::ContElim` is raised for a wrecked opponent).
+   two (`oag_gameplay::cue::Cue::ContElim` is raised for a wrecked opponent).
 4. **A voice-only branch.** `hud+0x44 & 0x20` turns the whole drain into
    "`0x1` plays `PERFECT_LAP` and nothing is drawn". What sets that bit is not read
    (a second local player is the obvious reading; 40).

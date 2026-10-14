@@ -15,7 +15,7 @@
 //!   rear view and a rigid front view looking back.
 //!
 //! The last two are the ones a player cycles between with a button, and both take
-//! the same [`chase::Target`] so the caller describes the ship once. Which of them
+//! the same [`oag_race::chase_rig::Target`] so the caller describes the ship once. Which of them
 //! is live is `crate::display::CameraView` in `oag-game`, not a decision made
 //! here: this crate offers cameras and picks none.
 //!
@@ -43,7 +43,7 @@ use oag_core::math::{Mat4, camera};
 /// `fov_radians` is the *vertical* field of view. The parameter is still named
 /// for its unit deliberately, though no longer because the disc's unit is a
 /// mystery - it is **vertical degrees**, settled at confidence 94 (see
-/// [`chase::ChaseParams::fov`]). The name stays because a library taking a bare
+/// [`oag_race::chase_rig::ChaseParams::fov`]). The name stays because a library taking a bare
 /// `fov` invites a caller to pass whatever it has, and the conversion belongs
 /// at the call site where the authored value's unit is known.
 #[must_use]

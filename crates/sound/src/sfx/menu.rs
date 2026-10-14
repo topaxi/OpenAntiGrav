@@ -10,6 +10,7 @@
 
 use oag_core::Rng;
 
+use super::CueTables;
 use super::{Audio, Banks, Cue, NameVoices, VoicePlace, start_voices};
 
 /// A different stream from [`super::SFX_SEED`]: a menu choosing an alternate

@@ -27,6 +27,7 @@
 //! that is the reading this split keeps. They are produced by the tick and
 //! drained by the caller; what plays them is the bank, and the bank is here.
 
+#[cfg(feature = "view")]
 use super::*;
 
 /// The half of a race that exists to be looked at and listened to.
@@ -34,6 +35,7 @@ use super::*;
 /// Reached as `Race::view`. Every field is out of the determinism hash by
 /// construction - see the module doc comment - so a change here can move a
 /// picture and cannot move a race.
+#[cfg(feature = "view")]
 #[derive(Debug)]
 pub struct RaceView {
     /// Which of the three perspectives is live. **Render-only state**, on `Race`
@@ -138,8 +140,6 @@ pub struct RaceView {
     pub(super) pulse_laid_pose: bool,
     /// See `options::Setup::laid_pose_scaled`.
     pub(super) laid_pose_scaled: bool,
-    /// See `options::Setup::laid_from_rear`.
-    pub(super) laid_from_rear: bool,
     /// The weapon detonations' full-screen wash; `Some` on Pulse's PSP
     /// source alone - see `options::Setup::screen_flash`.
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
@@ -371,7 +371,7 @@ pub struct RaceView {
     ///
     /// Counts down every tick regardless of contact, and gates a burst
     /// alongside `oag_physics::wall::WallResponse::impact` - see
-    /// `oag_fx::sparks::COLLISION_COOLDOWN`'s doc comment for why this is
+    /// `oag_gameplay::cue::COLLISION_COOLDOWN`'s doc comment for why this is
     /// a cooldown timer and not a one-shot edge latch: `impact` stays `true`
     /// for every tick of a sustained scrape, and spawning a burst on every
     /// one of those ticks is the per-frame-instead-of-per-impact bug
@@ -503,5 +503,21 @@ pub struct RaceView {
     /// replay reproduces it by reaching the same tick. See [`Self::results`].
     pub(super) results: Option<crate::scoreboard::Board>,
     /// The tallies the Zone results screen reports - see [`RunStats`].
+    pub(super) run_stats: super::results::RunStats,
+}
+
+/// The half of a race that exists to be looked at, in a build with nothing to
+/// look at it with (the `view` feature off): only what a headless host still
+/// reads - the results it prints, the slot teams and seat it reports, the
+/// wreck's end tick that decides whether the race ran on - each documented on
+/// the full struct's field of the same name. Every tick runs as
+/// [`Race::tick_sim_only`] runs one, so nothing else here is ever written.
+#[cfg(not(feature = "view"))]
+#[derive(Debug, Default)]
+pub struct RaceView {
+    pub(super) seat: Option<usize>,
+    pub(super) wreck_ended_tick: Option<u64>,
+    pub(super) slot_teams: Vec<String>,
+    pub(super) results: Option<crate::scoreboard::Board>,
     pub(super) run_stats: super::results::RunStats,
 }

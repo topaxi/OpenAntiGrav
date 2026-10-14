@@ -78,7 +78,7 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
     let cue = race
         .drain_cues()
         .into_iter()
-        .find(|e| e.cue == oag_sound::sfx::Cue::Plasma)
+        .find(|e| e.cue == oag_gameplay::cue::Cue::Plasma)
         .expect("the press raised no Plasma cue");
     assert_eq!(cue.slot, 1, "the Plasma cue sounds from slot {}", cue.slot);
 }

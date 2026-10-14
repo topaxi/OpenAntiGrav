@@ -367,7 +367,7 @@ executable, so each is recorded here with a
 [confidence score](../reverse-engineering/confidence-rubric.md).
 
 **`fov` is degrees** (confidence 85). The unit is not recovered, and
-`oag_render::camera::chase::ChaseParams::fov` deliberately refuses to guess, so the
+`oag_race::chase_rig::ChaseParams::fov` deliberately refuses to guess, so the
 conversion is written at the call site in `race.rs`. Every camera block on the disc
 carries a value in the sixties or seventies, which is a normal field of view in
 degrees and an impossible one in radians.

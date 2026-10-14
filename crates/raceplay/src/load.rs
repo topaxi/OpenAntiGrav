@@ -4,35 +4,55 @@
 //! Split out of `race.rs` under the 1,000-line rule; its tests are `race/tests/load.rs`.
 
 use super::*;
+#[cfg(feature = "view")]
 mod audio;
+#[cfg(feature = "view")]
 mod cameras;
+#[cfg(feature = "view")]
 pub mod campaign;
 mod closing_report;
+#[cfg(feature = "view")]
 mod countdown;
+#[cfg(feature = "view")]
 mod engine_light;
+#[cfg(feature = "view")]
 mod environment;
 mod family;
+#[cfg(feature = "view")]
 mod gantry_visibility;
+#[cfg(feature = "view")]
 mod geometry;
 mod global;
+#[cfg(feature = "view")]
 mod glow_mask;
+#[cfg(feature = "view")]
 mod intro;
+#[cfg(feature = "view")]
 pub(crate) mod magstrip_wake;
 mod original_laws;
+#[cfg(feature = "view")]
 mod pads;
 mod pose;
+#[cfg(feature = "view")]
 mod pulse_ps2;
 mod pulse_psp;
+#[cfg(feature = "view")]
 pub(super) mod ripple;
 mod roster;
+#[cfg(feature = "view")]
 mod skin;
 mod surfaces;
 mod track_inputs;
 mod track_stats;
+#[cfg(feature = "view")]
 mod variant;
+#[cfg(feature = "view")]
 mod weapon_models;
+#[cfg(feature = "view")]
 mod zone_livery;
+#[cfg(feature = "view")]
 pub use campaign::load_event;
+#[cfg(feature = "view")]
 use environment::{cloud_layer, hd_sky_model, psp2_sky_model};
 use oag_source::remix::craft_of;
 
@@ -106,6 +126,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
     report.extend(problems.into_iter().map(|p| format!("dlc: {p}")));
 
+    // `label`, `track_classes` and `nodes` build only what is drawn.
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     let track_inputs::Inputs {
         track,
         ai,
@@ -117,6 +139,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         collision,
         speedup_pads,
         weapon_pads,
+        #[cfg(feature = "view")]
         mut drawn,
     } = track_inputs::resolve(options, &mut archives, title, &mut report)?;
     let read = |archives: &mut oag_assets::Archives, name: &str| -> Result<Vec<u8>> {
@@ -131,6 +154,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     let team = roster::resolve_team(options.team.as_deref(), craft_title, &mut report);
 
     // The player's own alternate hull file, resolved where `team` is: `variant::resolve`.
+    #[cfg(feature = "view")]
     let hull_variant = variant::resolve(options.hull_variant.as_deref(), craft_title, &mut report);
 
     let stats_name = handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team);
@@ -186,6 +210,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `<AirbrakeGraphics>` is the fifth pre-scaled field and it *is* converted
     // here, by its own function: it is per team rather than per class, and it
     // is graphics, so it deliberately never enters `Handling`.
+    #[cfg(feature = "view")]
     let airbrake_graphics = oag_gameplay::airbrake_graphics_for(&stats);
     // The weapon table. Read on every mode even though only a single race arms
     // the pads: which mode is racing is a gameplay question and this is the
@@ -200,8 +225,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
         // Only worth saying on a mode that would otherwise hand something out.
         report.push("weapon pads hand nothing out this run".to_string());
     }
+    #[cfg(feature = "view")]
     let (chase, chase_close, internal) =
         cameras::resolve(&stats, &stats_name, options, &handling, &team, &mut report);
+    // The lock-on's rig, which is all of the cameras the simulation reads.
+    #[cfg(not(feature = "view"))]
+    let chase = chase_params(stats.external_camera_far);
 
     // The grid's roster - see `roster::available`.
     let available = roster::available(
@@ -210,6 +239,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &options.opponent_teams,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let roster::Grid {
         slot_teams,
         hd_trail_red,
@@ -223,6 +253,8 @@ pub fn load(options: &Options) -> Result<Loaded> {
         hull_variant,
         &mut report,
     )?;
+    #[cfg(not(feature = "view"))]
+    let slot_teams = roster::teams(craft_title, options, &team, &available, &mut report);
     // Each AI slot's own tuning where the title's variant family says it flies a
     // different team's file than the player's - see `family`.
     let opponent_handling = family::opponent_handling(
@@ -234,6 +266,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         special,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let (shadows, shadow_hulls) = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
         &slot_teams,
@@ -241,7 +274,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.mode,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let wm = craft_title.weapon_models; // every weapon's own body, per title
+    #[cfg(feature = "view")]
     let (
         rocket_model,
         mine_model,
@@ -254,6 +289,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.
+    #[cfg(feature = "view")]
     let shield_cockpit =
         oag_livery::cockpit_shield(craft_of(&mut craft, &mut archives), &mut report);
 
@@ -263,6 +299,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // see `mesh::build_sky`'s doc comment. Resolved once here, against the track
     // model's own embedded textures, and reused rather than re-read from the
     // archive and re-decoded per model.
+    #[cfg(feature = "view")]
     let mut ps2_track_textures: Option<mesh::Ps2TextureSet> = None;
 
     // **A PS3 circuit's geometry is in the `.rcsmodel` beside it.** Both the
@@ -277,8 +314,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Omega Collection's `track.final.rcsmodel`.** No circuit ships both (see
     // `mesh::rcs::sibling_name_cooked`), so the order only decides which title's
     // lookup pays a second, failing read - every other title's pays none.
+    #[cfg(feature = "view")]
     let (ps3_geometry, geometry_name) =
-        if mesh::geometry_is_external(&track_blob) && !options.ribbon {
+        if oag_vex::vex::geometry_is_external(&track_blob) && !options.ribbon {
             geometry::sibling_model(
                 &mut archives,
                 &track,
@@ -293,6 +331,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // race as none at all - the derived ribbon - and Wipeout 2048 made the
     // distinction matter: it ships one beside every circuit, in a container
     // that is not HD's, and that used to stop the race. The report says which.
+    #[cfg(feature = "view")]
     let (rcs_model, behind_glass) = geometry::track_model(
         &mut archives,
         &track,
@@ -301,20 +340,23 @@ pub fn load(options: &Options) -> Result<Loaded> {
         geometry_name.as_deref(),
         &mut report,
     );
+    #[cfg(feature = "view")]
     let ribbon = options.ribbon
         || drawn.is_some()
-        || (mesh::geometry_is_external(&track_blob) && rcs_model.is_none());
+        || (oag_vex::vex::geometry_is_external(&track_blob) && rcs_model.is_none());
     // **Everything else built out of the track `.vex` is PSP-shaped geometry.**
     // The sky and the per-node visibility read a `Mesh`-layout payload, which a
     // PS3 file does not have - its `Skycube` is in the `.rcsmodel` too, keyed
     // by a hash this project has not tied back to that class. So they are
     // skipped on a PS3 source for the same reason they are skipped on a
     // ribbon build, and reported the same way: absent, not invented.
+    #[cfg(feature = "view")]
     let vex_geometry = !ribbon && rcs_model.is_none();
     // Whether the `.rcsmodel` *built*, not merely whether one was found - the
     // report below says which surface is on screen, and since a sibling that
     // will not decode now falls back to the ribbon, "found" is the wrong
     // question to ask.
+    #[cfg(feature = "view")]
     let rcs_drawn = rcs_model.is_some();
     // Both pad classes, decoded once and shared between the two blocks below -
     // mirrors `sky_model`'s own HD/Wipeout 2048 split just past it, since only
@@ -322,6 +364,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // Wipeout 2048's `.rcsmodel` carries no comparable node tree yet, so a
     // 2048 source stays `(None, None)` here exactly as it did before this
     // pair existed.
+    #[cfg(feature = "view")]
     let (ps3_pad_model, ps3_weapon_pad_model) = match &ps3_geometry {
         Some(geometry) if rcs_drawn && !mesh::rcs::psp2::is_psp2(geometry) => {
             pads::ps3_pad_models(&mut archives, &track, &track_blob, geometry, &mut report)?
@@ -329,6 +372,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         _ => (None, None),
     };
 
+    #[cfg(feature = "view")]
     let mut track_model = if let Some(model) = rcs_model {
         model
     } else if ribbon {
@@ -356,11 +400,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // HD's zoom-streak ring on a title that draws none of its own: the player's
     // `graphics.boost_zoom`, honoured only where the title offers it. Chosen, not
     // measured - see `crate::zoom`.
+    #[cfg(feature = "view")]
     let borrowed_zoom = options.boost_zoom.filter(|_| title.race.borrows_zoom_ring);
     // The circuit's staging, all four readers at once: its light rig, its
     // distance fog, its bloom block and the Zone stage grade laid over the
     // first two. Every one of them reports what it found and substitutes
     // nothing for what it did not - see `environment::staging`.
+    #[cfg(feature = "view")]
     let environment::Staging {
         light,
         authored_fog,
@@ -376,6 +422,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let spu_vertex_lights = engine_light::spu_vertex_lights_enabled(
         &mut archives,
         &track,
@@ -385,6 +432,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The track's authored fog volumes. Empty for a ribbon build, and empty for
     // the four circuits that author no `fogCube` at all - both ordinary, and
     // both meaning the race renders unfogged.
+    #[cfg(feature = "view")]
     let fog_volumes = if !vex_geometry {
         Vec::new()
     } else {
@@ -406,6 +454,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon build draws an invented surface rather than the disc's art, so
     // it gets no sky either: the two belong to the same "show what shipped"
     // mode.
+    #[cfg(feature = "view")]
     let sky_model = if let Some(geometry) = &ps3_geometry {
         // Two containers wear this extension, and their skies are unrelated
         // formats - see `geometry::track_model`'s own dispatch on the same
@@ -448,6 +497,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // `ps3_pad_model`, decoded above beside `ps3_weapon_pad_model` - see
     // `pads::ps3_pad_models`' own doc comment for why HD needs a pass of its
     // own rather than reusing `mesh::build_pads`' PSP-shaped one.
+    #[cfg(feature = "view")]
     let pad_model = if ps3_pad_model.is_some() {
         ps3_pad_model
     } else if !vex_geometry {
@@ -482,6 +532,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // the original's own order: `World_CollectNodeLists` always walks the tree
     // before anything asks whether weapons are on. The PS3 path is
     // `geometry::weapon_pad_model` - see its own doc comment for why.
+    #[cfg(feature = "view")]
     let weapon_pad_model = if rcs_drawn {
         geometry::weapon_pad_model(ps3_weapon_pad_model, options.weapons_on(), &mut report)
     } else if !vex_geometry {
@@ -510,6 +561,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Some(pads)
         }
     };
+    #[cfg(feature = "view")]
     report.push(format!(
         "drawing the track's {}: {} triangle(s), radius {:.0}",
         match (vex_geometry, rcs_drawn) {
@@ -521,6 +573,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         track_model.radius
     ));
 
+    #[cfg(feature = "view")]
     for model in [
         Some(&liveries[0].hull),
         Some(&track_model),
@@ -536,6 +589,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         }
     }
 
+    #[cfg(feature = "view")]
     let (gantry, visibility, adverts) = gantry_visibility::build(
         &mut archives,
         &track,
@@ -551,6 +605,14 @@ pub fn load(options: &Options) -> Result<Loaded> {
         start_position.as_ref(),
         &mut report,
     );
+    // What `vex_geometry` comes to above with nothing built: an `.rcsmodel` that
+    // builds and one that does not both leave it false, so only the request,
+    // a foreign track and the file's own export decide it. `pulse_psp` below
+    // reads it, and through `track_stats` the finished thrust does.
+    #[cfg(not(feature = "view"))]
+    let vex_geometry = !options.ribbon
+        && !track.starts_with("foreign:")
+        && !oag_vex::vex::geometry_is_external(&track_blob);
     stages::reach(stages::Stage::TrackBuilt);
 
     let spline = Spline::from_track(&ai);
@@ -561,6 +623,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         spline.max_half_width()
     ));
 
+    #[cfg(feature = "view")]
     let collision_model = if options.collision {
         let soup = render_collision::build_model(
             &label,
@@ -581,12 +644,16 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // read off. Sparks are slot 0's today - `oag_fx::sparks` triggers off
     // the player's contacts alone - so this takes slot 0's locators rather than
     // carrying eight sets nothing reads.
+    #[cfg(feature = "view")]
     let collision_fx = liveries[0].collision_fx.clone();
+    #[cfg(feature = "view")]
     let absorb_burst = super::absorb::absorb_burst_for(craft_title);
+    #[cfg(feature = "view")]
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
     // One loop, one report line each: an effect is a name in the craft title's
     // `Effects` table, resolved to its trigger once below. Pulse's PSP laws only - see `psys::Effect::without_extents`,
     // `without_pulse_psp_draw` and `oag_fx::flash` for what others keep.
+    #[cfg(feature = "view")]
     let mut effects = psys::Library::new();
     let extents = pulse_psp::is_pulse_psp(title, &archives);
     // The launch boost is measured on Pulse PSP only; Pulse PS2 and HD author the
@@ -595,6 +662,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     if !extents {
         report.push("<StartBoost>: not applied, only measured on Pulse PSP".to_string());
     }
+    #[cfg(feature = "view")]
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let gtf = craft_title.effects.sprites.contains(&name);
         let extent_law = craft_title.effects.extents.contains(&name);
@@ -608,8 +676,10 @@ pub fn load(options: &Options) -> Result<Loaded> {
             Err(why) => report.push(format!("{why} - {name} will not be drawn")),
         }
     }
+    #[cfg(feature = "view")]
     let handles = super::EffectHandles::resolve(craft_title, &effects);
 
+    #[cfg(feature = "view")]
     let (sounds, announcer, class_announcer) = audio::banks_and_announcers(
         &mut archives,
         title.race,
@@ -617,6 +687,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &slot_teams,
         &mut report,
     );
+    #[cfg(feature = "view")]
     let track_emitters = audio::track_emitters(
         &mut archives,
         title.race.sounds,
@@ -628,11 +699,13 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The ribbon's texture is a title axis, not a constant: Pulse and Pure name
     // one, HD authors a template whose material names its own - craft content,
     // hence `craft_title`. See `oag_title::exhaust::Exhaust`.
+    #[cfg(feature = "view")]
     let (noise, trail_blend, trail_shape) = assets::trail_texture(
         craft_of(&mut craft, &mut archives),
         craft_title,
         &mut report,
     );
+    #[cfg(feature = "view")]
     if trail_shape.is_some() {
         report.push(
             "the ribbon's geometry is HD's own, measured from the running game: a 54-sample \
@@ -664,6 +737,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // The flare is a title axis too, and a second one rather than a variant of
     // the ribbon's: Pulse and Pure name a sprite texture, HD authors a
     // per-team model - craft content too. See `oag_title::flare::Flare`.
+    #[cfg(feature = "view")]
     let flare = assets::flare_texture(
         craft_of(&mut craft, &mut archives),
         craft_title,
@@ -672,7 +746,9 @@ pub fn load(options: &Options) -> Result<Loaded> {
 
     // The LeachBeam ribbon's own texture - see `assets::leach_beam_texture`.
     // A table that failed to load keeps asking, as it always did.
+    #[cfg(feature = "view")]
     let leach_authored = weapons.as_ref().is_none_or(|w| w.leach_beam().is_some());
+    #[cfg(feature = "view")]
     let leach_beam_texture = assets::leach_beam_texture(
         craft_of(&mut craft, &mut archives),
         wm.leachbeam_ball.is_some(),
@@ -680,6 +756,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
 
+    #[cfg(feature = "view")]
     let magstrip_wake = magstrip_wake::load(
         craft_of(&mut craft, &mut archives),
         wm,
@@ -691,6 +768,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // answer: a title whose front end is unrecovered declares no languages, so
     // the HUD draws its captions as their own `idstring` keys and says so, as
     // it already did for a source whose plugins would not parse.
+    #[cfg(feature = "view")]
     let language_plugins = craft_title
         .front_end
         .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
@@ -699,6 +777,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     // **`options.language`, not `None`** - see that field's own doc for the
     // bug this closes: every launch site now sets it from the live
     // `settings::Settings::language` before `load` ever runs.
+    #[cfg(feature = "view")]
     let hud = load_hud(
         craft_of(&mut craft, &mut archives),
         craft_title,
@@ -714,6 +793,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     );
 
     // The countdown's own `<Mode3D><Model>` mesh - see `load::countdown`.
+    #[cfg(feature = "view")]
     let countdown_model = countdown::model(&hud, &mut archives, &mut report);
 
     // The ring the lap counter runs on. Reported either way: "this track has no
@@ -737,6 +817,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     }
     let pose_override = pose::resolve(options.pose, &spline, &mut report);
     let pulse_psp = vex_geometry && pulse_psp::is_pulse_psp(title, &archives);
+    #[cfg(feature = "view")]
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);
     let track_stats = track_stats::read(&options.source, &track, pulse_psp, &mut report);
     let original_laws =
@@ -762,8 +843,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
         &mut report,
     );
     stages::reach(stages::Stage::CraftsBuilt);
+    #[cfg(feature = "view")]
     let models = &craft_title.weapon_models;
+    #[cfg_attr(not(feature = "view"), allow(unused_mut))]
     let mut loaded = Loaded {
+        #[cfg(feature = "view")]
         started: None,
         title,
         platform: archives.layout.platform,
@@ -779,6 +863,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
             opponents: options.opponents,
             no_opponents: options.no_driver_for_class,
             people: options.people_flying(),
+            #[cfg(feature = "view")]
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
@@ -787,64 +872,107 @@ pub fn load(options: &Options) -> Result<Loaded> {
             spline,
             course,
             start_position,
+            #[cfg(feature = "view")]
             hd_trail: trail_shape.is_some().then_some(hd_trail_red),
+            #[cfg(feature = "view")]
             shield_palette: roster::shield_palette(
                 craft_title,
                 craft_of(&mut craft, &mut archives).layout.platform,
             ),
+            #[cfg(feature = "view")]
             hd_plasma_blast: models.plasma_blast_hd.is_some(),
+            #[cfg(feature = "view")]
             hd_bomb_blast: models.bomb_blast_hd.is_some(),
+            #[cfg(feature = "view")]
             bomb_shockwave_fades: models.bomb_blast_pulse.is_some_and(|b| b.shockwave_fades),
+            #[cfg(feature = "view")]
             hd_missile_blast: models.missile_blast_hd.is_some(),
+            #[cfg(feature = "view")]
             pulse_laid_pose: craft_title.looks.laid_pose.applies_everywhere(),
+            #[cfg(feature = "view")]
             laid_pose_scaled: craft_title.looks.laid_pose_scaled.applies_everywhere(),
             laid_from_rear: craft_title.looks.laid_from_rear.applies_everywhere(),
             grid_frame_from_sample: extents,
+            #[cfg(feature = "view")]
             screen_flash: extents,
+            #[cfg(feature = "view")]
             quake_flash: craft_title.effects.quake_look.flash,
+            #[cfg(feature = "view")]
             absorb_burst,
+            #[cfg(feature = "view")]
             absorb_anchors,
+            #[cfg(feature = "view")]
             hit_spark_anchors: super::hit_sparks::anchors(craft_title, &liveries),
+            #[cfg(feature = "view")]
             weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
+            #[cfg(feature = "view")]
             wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
+            #[cfg(feature = "view")]
             destroy_stations: super::destroy_camera::stations(pulse_psp, &track_blob, &mut report),
+            #[cfg(feature = "view")]
             intro_camera: intro::read(&mut archives, &track, pre_race, &mut report),
             slot_teams: slot_teams.clone(),
+            #[cfg(feature = "view")]
             sight: super::Sighting::of(&hud),
+            #[cfg(not(feature = "view"))]
+            sight: super::Sighting::without_view(
+                craft_of(&mut craft, &mut archives).layout.platform,
+                craft_title.hud_art,
+            ),
+            #[cfg(feature = "view")]
             magstrip_wake: magstrip_wake.anchors,
+            #[cfg(feature = "view")]
             magstrip_pob: wm.magstrip_pob,
+            #[cfg(feature = "view")]
             leach_strip: magstrip_wake.leach_anchors,
             collision,
             handling,
             opponent_handling,
+            #[cfg(feature = "view")]
             airbrake_graphics,
             chase,
+            #[cfg(feature = "view")]
             chase_close,
+            #[cfg(feature = "view")]
             internal,
+            #[cfg(feature = "view")]
             nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
+            #[cfg(feature = "view")]
             engine_lights: liveries.iter().map(|livery| livery.engine_light).collect(),
+            #[cfg(feature = "view")]
             spu_vertex_lights,
             // Positions only: this list feeds the trail-hit sparks' nearest-of search
             // (`RaceView::spark_anchor_of`), which has no live hull orientation to aim along today
             // - see `collision_fx` below for the field that does.
+            #[cfg(feature = "view")]
             spark_anchors: liveries
                 .iter()
                 .map(|livery| livery.collision_fx.iter().map(|a| a.position).collect())
                 .collect(),
+            #[cfg(feature = "view")]
             collision_fx,
+            #[cfg(feature = "view")]
             scenery_fx: Default::default(),
+            #[cfg(feature = "view")]
             effects,
+            #[cfg(feature = "view")]
             handles,
+            #[cfg(feature = "view")]
             sounds,
+            #[cfg(feature = "view")]
             track_emitters,
+            #[cfg(feature = "view")]
             announcer,
+            #[cfg(feature = "view")]
             class_announcer,
             zone_stages: title.race.zone_stages,
             countdown_voice: title.race.countdown_voice.is_some(),
             launch_hover: title.race.launch_hover,
             hover_rig: title.race.hover_rig,
             craft_laws: title.race.craft_laws,
+            #[cfg(feature = "view")]
             zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
+            #[cfg(feature = "view")]
             zoom_borrowed: borrowed_zoom.is_some(),
             weapon_pad_glow: title.weapon_pad_glow,
             speedup_pads,
@@ -860,9 +988,12 @@ pub fn load(options: &Options) -> Result<Loaded> {
             start_boost,
             pilot_assist,
             pose_override,
+            #[cfg(feature = "view")]
             camera_override: options.camera,
         },
+        #[cfg(feature = "view")]
         hud,
+        #[cfg(feature = "view")]
         track_panel: intro::read_panel(
             &mut archives,
             title,
@@ -871,52 +1002,93 @@ pub fn load(options: &Options) -> Result<Loaded> {
             options.language.as_deref(),
             &mut report,
         ),
+        #[cfg(feature = "view")]
         track_stats,
+        #[cfg(feature = "view")]
         track_model,
+        #[cfg(feature = "view")]
         behind_glass,
+        #[cfg(feature = "view")]
         billboards: crate::adverts::Billboards { gantry, adverts },
+        #[cfg(feature = "view")]
         collision_model,
+        #[cfg(feature = "view")]
         sky_model,
+        #[cfg(feature = "view")]
         pad_model,
+        #[cfg(feature = "view")]
         weapon_pad_model,
+        #[cfg(feature = "view")]
         fog_volumes,
+        #[cfg(feature = "view")]
         clouds: cloud_layer(&mut archives, &track_blob, vex_geometry, &mut report),
+        #[cfg(feature = "view")]
         light,
+        #[cfg(feature = "view")]
         authored_fog,
+        #[cfg(feature = "view")]
         hd_bloom,
+        #[cfg(feature = "view")]
         omega_tonemap,
+        #[cfg(feature = "view")]
         zone_grade,
+        #[cfg(feature = "view")]
         liveries,
+        #[cfg(feature = "view")]
         rocket_model,
+        #[cfg(feature = "view")]
         cannon_model,
+        #[cfg(feature = "view")]
         mine_model,
+        #[cfg(feature = "view")]
         bomb_model,
+        #[cfg(feature = "view")]
         plasma_blast_models,
+        #[cfg(feature = "view")]
         bomb_blast_models,
+        #[cfg(feature = "view")]
         leach_ball_model,
+        #[cfg(feature = "view")]
         shield_cockpit,
+        #[cfg(feature = "view")]
         countdown_model,
+        #[cfg(feature = "view")]
         visibility,
+        #[cfg(feature = "view")]
         flare,
+        #[cfg(feature = "view")]
         leach_beam_texture,
+        #[cfg(feature = "view")]
         ribbon_textures: magstrip_wake.textures,
+        #[cfg(feature = "view")]
         noise,
+        #[cfg(feature = "view")]
         trail_blend,
+        #[cfg(feature = "view")]
         trail_shape,
+        #[cfg(feature = "view")]
         cannon_quad_textures: weapon_models::cannon_quads(&mut archives, wm, &mut report),
+        #[cfg(feature = "view")]
         ghost_static: weapon_models::load_ghost_static(&mut archives, wm, &mut report),
+        #[cfg(feature = "view")]
         shadows,
+        #[cfg(feature = "view")]
         shadow_hulls,
         // Overwritten by `load_event` on the one path that has an event
         // name to carry - see `Loaded::campaign_2048_event`'s own doc.
+        #[cfg(feature = "view")]
         campaign_2048_event: None,
+        #[cfg(feature = "view")]
         ripples: ripple::Ripples::default(),
         report,
     };
+    #[cfg(feature = "view")]
     if !(pulse_psp && options.track_shine) {
         loaded.track_model.shine_draws.clear();
     }
+    #[cfg(feature = "view")]
     pulse_psp::finish(&mut loaded, pulse_psp, &track_blob, (&mut archives, &track));
+    #[cfg(feature = "view")]
     pulse_ps2::finish(
         &mut loaded,
         vex_geometry && pulse_ps2::is_pulse_ps2(title, &archives),

@@ -8,6 +8,7 @@ use oag_audio::{Mixer, VoiceId};
 use oag_core::Rng;
 use oag_core::math::Vec3;
 
+use super::CueTables;
 use super::layers::{self, Where as VoicePlace};
 use super::{Banks, Cue, CueEvent, place};
 

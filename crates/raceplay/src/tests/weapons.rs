@@ -197,7 +197,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         fired
             .drain_cues()
             .iter()
-            .any(|event| event.cue == oag_sound::sfx::Cue::Turbo),
+            .any(|event| event.cue == oag_gameplay::cue::Cue::Turbo),
         "a fired Turbo raised no TURBO cue"
     );
 

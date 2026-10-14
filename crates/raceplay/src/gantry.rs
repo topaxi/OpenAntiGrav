@@ -596,7 +596,7 @@ fn build(
     blob: &[u8],
     report: &mut Vec<String>,
 ) -> Result<Model> {
-    if !mesh::geometry_is_external(blob) {
+    if !oag_vex::vex::geometry_is_external(blob) {
         let mut model = mesh::build_with_textures(name, blob, None)?;
         // The same PS2 signature `livery::shield_model` and `livery::plume`
         // both gate on: every `Texture` node present and none decoded,

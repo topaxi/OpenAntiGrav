@@ -125,6 +125,7 @@ pub fn chase_params(block: handling::ExternalCamera) -> ChaseParams {
     }
 }
 
+#[cfg(feature = "view")]
 /// The chase camera's view of a ship.
 ///
 /// Three vectors rather than a ship, because `oag-render` may not see a gameplay
@@ -138,6 +139,7 @@ pub(super) fn target_of(ship: &Ship) -> Target {
     }
 }
 
+#[cfg(feature = "view")]
 impl Race {
     /// Where the camera is and what it is aimed at, as a view matrix.
     ///

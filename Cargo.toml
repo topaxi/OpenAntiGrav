@@ -96,7 +96,9 @@ oag-present = { path = "crates/present" }
 oag-pulse = { path = "crates/pulse" }
 oag-pure = { path = "crates/pure" }
 oag-race = { path = "crates/race" }
-oag-raceplay = { path = "crates/raceplay" }
+# Off by default: a dependent asks for `view` (the drawn race) by name, so the
+# headless server links the simulation half alone. See `crates/raceplay/Cargo.toml`.
+oag-raceplay = { path = "crates/raceplay", default-features = false }
 oag-rcs = { path = "crates/rcs" }
 oag-render = { path = "crates/render" }
 oag-replay = { path = "crates/replay" }

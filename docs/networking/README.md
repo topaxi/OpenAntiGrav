@@ -727,18 +727,27 @@ a human at the keys, Android and iOS, the web (the rows decline there).
 The server is one binary and one disc image; the client is the game. Nothing is
 installed on the server's host.
 
-1. **Build a binary the host can run.** `oag-server` links `oag-raceplay`, which
-   links wgpu, winit and cpal, but it never calls into them: the linker keeps only
-   `libc` and `libm` (`ldd target/debug/oag-server`), and
-   `crates/net/tests/server_libs.rs` fails if the server ever asks for another
-   shared library, so a host with no ALSA, X11 or Vulkan runs it. What does not
-   travel is the build machine's glibc: a binary linked on a current distribution
-   asks for symbols an older host lacks. `scripts/build-server-portable.sh [GLIBC]
-   [OUT]` links through `zig cc` against a named glibc (default 2.35, Ubuntu 22.04),
-   needs `zig` and nothing on the host, and strips the result to about 14 MB. A musl
-   static build does not work today: `alsa-sys` (through `oag-audio`) has no
-   cross-compiling `pkg-config`, which is one more reason for the lean-server item
-   in the handover thread.
+1. **Build a binary the host can run.** Built on its own, `oag-server` links the
+   simulation half of `oag-raceplay` and no renderer, window, audio or UI crate at
+   all (the `view` feature is off; rule 6 of `just check-deps` holds it, see
+   [the lean race](../architecture/workspace-layout.md#the-lean-race-2026-10-14)).
+   What does not travel is the build machine's libc, so build it for the host:
+
+   ```sh
+   scripts/build-server-portable.sh musl target/portable/oag-server   # fully static
+   scripts/build-server-portable.sh 2.35 target/portable/oag-server   # glibc 2.35 and up
+   ```
+
+   **`musl`** links a fully static binary (`ldd`: "statically linked", about 9 MB
+   stripped) that runs on any x86-64 Linux whatever its libc. It needs the
+   `x86_64-unknown-linux-musl` Rust target (`rustup target add`) and `zig` on PATH,
+   which compiles `ring`'s C for musl; nothing on the host. The **glibc** form links
+   through `zig cc` against a named glibc (default 2.35, Ubuntu 22.04) and needs
+   `libc` and `libm` on the host (`crates/net/tests/server_libs.rs` fails if the
+   server asks for any other shared library). Measured 2026-10-14: a static musl
+   server against the game as a `--net-bot` client, 1,039 confirmed ticks at a
+   100 ms `--net-shim`, 0 bad hashes, and the same tick-0 fingerprint as the glibc
+   build.
 2. **Copy the binary and the one image** the race is on (`pulse-psp-eu.chd`, 210 MB)
    to a directory of its own, and give the server that directory for its settings
    and logs (`XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`).

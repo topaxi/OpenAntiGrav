@@ -14,6 +14,7 @@
 use super::*;
 
 impl Race {
+    #[cfg(feature = "view")]
     /// One tick of the lock-on reticle, and the tone state that goes with it.
     ///
     /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
@@ -93,6 +94,7 @@ impl Race {
         self.update_viewed_sights();
     }
 
+    #[cfg(feature = "view")]
     /// The reticle of every other slot a split-screen view follows.
     ///
     /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in

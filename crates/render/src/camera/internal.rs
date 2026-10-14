@@ -8,7 +8,7 @@
 //! them.
 //!
 //! [`InternalParams`] therefore has **no `Default`**, for the same reason
-//! [`super::chase::ChaseParams`] does not.
+//! [`oag_race::chase_rig::ChaseParams`] does not.
 //!
 //! # What is recovered and what is not
 //!
@@ -47,7 +47,7 @@
 
 use oag_core::math::{Mat4, Vec3, camera};
 
-use super::chase::Target;
+use oag_race::chase_rig::Target;
 
 /// How far ahead of the eye the aim point sits, in world units.
 ///

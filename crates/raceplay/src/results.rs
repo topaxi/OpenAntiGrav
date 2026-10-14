@@ -64,6 +64,7 @@ impl RunStats {
         self.top_speed_centi = self.top_speed_centi.max(centi);
     }
 
+    #[cfg(feature = "view")]
     /// One speedup pad entered on `lap` (1-based, `RaceState::lap`'s own meaning). A lap
     /// past the recorded few is dropped, as its split is.
     pub(super) fn count_boost(&mut self, lap: u32) {
@@ -155,6 +156,7 @@ impl Race {
         self.runs_on_after_the_line() || self.runs_on_after_the_wreck()
     }
 
+    #[cfg(feature = "view")]
     /// One tick of a race that ended another way than the player's crossing:
     /// the world stands still, and only what a player can *see* keeps moving.
     ///
@@ -198,6 +200,7 @@ impl Race {
         if self.runs_on_after_the_end() {
             self.tick(&oag_gameplay::PlayerInputs::none());
         } else {
+            #[cfg(feature = "view")]
             self.tick_cosmetics();
         }
     }

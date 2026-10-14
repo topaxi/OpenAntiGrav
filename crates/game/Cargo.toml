@@ -65,7 +65,7 @@ oag-input.workspace = true
 oag-livery.workspace = true
 oag-physics.workspace = true
 oag-race.workspace = true
-oag-raceplay.workspace = true
+oag-raceplay = { workspace = true, features = ["view"] }
 oag-source.workspace = true
 # Where a phone keeps its files and how its OS builds the event loop; the entry
 # points themselves stay here. See ADR-0065.
@@ -81,7 +81,7 @@ oag-gpu.workspace = true
 # The front end: boot movies, menus, the HUD's font, the strings a screen
 # draws. `render.rs` rasterises the `Draw` list this crate emits.
 oag-mod.workspace = true
-oag-net.workspace = true
+oag-net = { workspace = true, features = ["client"] }
 semver = "1"
 oag-ui.workspace = true
 oag-ui-screens.workspace = true

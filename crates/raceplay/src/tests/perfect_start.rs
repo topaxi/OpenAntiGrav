@@ -3,7 +3,7 @@
 
 use super::*;
 use oag_gameplay::PlayerInputs;
-use oag_sound::sfx::Cue;
+use oag_gameplay::cue::Cue;
 
 /// A time trial with a launch window whose player first thrusts inside the
 /// perfect window: what `ExhaustFlare_OnPerfectStart` (`0x08904fd4`) raises
