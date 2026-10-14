@@ -294,6 +294,19 @@ about Omega. Put the extra scope in a fresh member's brief instead, or in the
 original brief if it is known at spawn time. Short corrections, such as "main
 moved" or a new rule, do arrive and are acted on.
 
+**Extra scope often lands after the "done" report, not in it.** A member reads
+its messages at its next tool round, and one finishing up reports first and
+picks up the message afterwards. On 2026-10-14 this happened three times: the
+niri window fix (`window-layout-picker`), the multiplayer-only countdown decision
+(`pause-timeout`) and the seats-per-window model (`multi-window`) each arrived as
+commits after a report that did not mention them. So after sending scope
+mid-lane: do not read its absence from the report as dropped, and do not reap on
+that report. Check `git log --oneline main..<branch>` again, wait for the
+follow-up report, and only then merge and stop the member. A member stopped on
+the first report leaves its late commits unmerged on the branch, and
+`git branch -d` refusing ("not fully merged") is the sign. Put "report every
+commit, including any made after your report" in every brief.
+
 ## Hard rules to put in briefs, as they apply
 
 - **Never invent what the assets already author.** Parse it and play it, or draw
