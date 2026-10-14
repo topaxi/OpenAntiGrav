@@ -370,7 +370,7 @@ still (`--menu-page ship-select`) and a `--race --team Feisar --variant _c1`/`_n
 **The five 2048-era teams (`Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048`) are on Omega's Ship Select, for one
 person and for each split seat, and picking one starts a race on that craft.** Walked on an own Xvfb with a virtual pad: RACE, START, Track Select,
 `SHIP SELECT`, right to `Feisar2048` (the team column is the definition's file order, which puts them first; the wrap from `Tigron` is **chosen, not
-measured**), the `speed` craft, confirm, and the race loads and starts on the yellow `Feisar2048\3` hull.
+measured**), the `speed` craft, confirm, and the race loads and starts on the yellow `Feisar2048\3` hull. The split seats were walked too (two virtual pads: RACE, 2 players, join, Track Select): `SHIP SELECT - PLAYER 1` on `Feisar2048`, `PLAYER 2` opening on the next team, `Qirex2048`, with its own hull and ratings, then a two-view race flying a `Feisar2048` and a `Qirex2048` craft against HD-era opponents.
 
 - **What a team is.** `Feisar2048` is offered under its bare id, as the definition declares it; the bare id names no craft (`Ships\Feisar2048\ship.vex`
   does not exist), only `Feisar2048\1`..`\4` do. `oag_title::GuestRoster::offered` (data, `true` on Omega's roster, `false` on 2048's HD-derived twelve,
