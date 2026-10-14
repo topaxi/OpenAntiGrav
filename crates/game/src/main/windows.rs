@@ -11,7 +11,9 @@
 //!
 //! **Chosen, not measured**, all of it: the original has no multi-window mode.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use web_time::Instant;
 
 use oag_present::perf;
 use oag_present::upscale::Framebuffer;
@@ -142,6 +144,10 @@ pub(crate) fn covers(open: &[usize], people: usize) -> bool {
 
 /// The title of the window of seat `player` (1-based): the app's title and the join
 /// screen's own word for a person.
+#[cfg_attr(
+    any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
+    allow(dead_code)
+)]
 pub(crate) fn title(app: &str, player_word: &str, player: usize) -> String {
     format!("{app} - {player_word} {player}")
 }

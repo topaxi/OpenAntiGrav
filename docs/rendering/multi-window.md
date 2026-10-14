@@ -106,7 +106,9 @@ follows the player's craft draws it.
 - **Placement.** Seat windows are asked to sit beside window 1 at creation (X11); the compositor
   places them under Wayland, which cannot place a plain window. `--windows-fullscreen` puts window
   `k` borderless on the platform's `k`-th monitor (they share when there are fewer), which Wayland
-  honours. **Open:** `--window-monitor`, a monitor per window by name.
+  honours. **`--windows-fullscreen` was not exercised** (no second monitor, and no `xrandr
+--setmonitor` run under Xvfb); it is the winit calls `Fullscreen::Borderless(Some(monitor))` per window
+and nothing more. **Open:** `--window-monitor`, a monitor per window by name.
 - **A window that cannot open** is said in the log and skipped; the run goes on with the windows it
   has.
 
@@ -115,7 +117,8 @@ follows the player's craft draws it.
 Desktop only. The browser, Android and iOS give the program the one surface the platform makes, so
 `--windows` there is **an error** (`DriverArgs::window_count`, behind `cfg(wasm32 | android | ios)`)
 rather than a flag silently ignored, and `Gpu::open_output`, the seat opener and the present modes
-are compiled out. The cfg-gated paths were not built for those targets here.
+are compiled out. Checked: `cargo check -p oag-game --example oag_web --features web --target wasm32-unknown-unknown`
+builds (no warning of this lane's). **Not checked: Android and iOS** (no NDK or iOS SDK here).
 
 ## Pacing (chosen, not measured on real displays)
 

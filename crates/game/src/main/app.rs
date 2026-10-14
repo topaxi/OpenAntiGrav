@@ -536,6 +536,7 @@ impl App {
             split_lobby: None,
             split_cut: self.split_cut,
             seats: Vec::new(),
+            seats_opened: false,
             windows_wanted,
             windows_fullscreen: self.windows_fullscreen,
             focus: crate::windows::Focus::default(),
@@ -664,17 +665,20 @@ impl ApplicationHandler for App {
         // window has the focus, so its events go the way window 1's do; a seat window's
         // own life (resize, close, focus) is handled here; the rest of what a seat
         // receives is not for it (the front end, the pointer and drops are window 1's).
-        if !session.seats.is_empty() {
+        if session.seats_opened {
             let ids = session.seat_ids();
             let primary = session.gpu.output.window.id();
-            let is_seat = windows::which(id, primary, &ids).is_some_and(|which| which != windows::Which::Primary);
-            match (&event, windows::closed(id, primary, &ids)) {
-                (WindowEvent::CloseRequested | WindowEvent::Destroyed, windows::Closed::Seat(index)) => {
-                    session.close_seat(index);
-                    return;
-                }
-                (WindowEvent::Destroyed, windows::Closed::Nothing) => return,
-                _ => {}
+            let Some(which) = windows::which(id, primary, &ids) else {
+                // A window this run let go of: whatever it still has to say (a late
+                // focus, a resize, a redraw) is not window 1's.
+                return;
+            };
+            let is_seat = which != windows::Which::Primary;
+            if let (WindowEvent::CloseRequested | WindowEvent::Destroyed, windows::Closed::Seat(index)) =
+                (&event, windows::closed(id, primary, &ids))
+            {
+                session.close_seat(index);
+                return;
             }
             match &event {
                 WindowEvent::Focused(gained) => {
@@ -873,7 +877,7 @@ impl ApplicationHandler for App {
             if let Some(count) = session.seats_to_open() {
                 session.open_seats(event_loop, count);
             }
-            if !session.seats.is_empty() && session.focus.away(web_time::Instant::now()) {
+            if session.seats_opened && session.focus.away(web_time::Instant::now()) {
                 session.window_away(Away::FocusLost);
             }
         }

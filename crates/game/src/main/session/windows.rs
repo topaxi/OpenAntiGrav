@@ -9,7 +9,7 @@
 //! in one submission would draw with the last window's uniforms. Anything else gets a
 //! holding frame.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use log::{info, warn};
 
 use oag_display::display;
@@ -18,7 +18,6 @@ use oag_present::upscale;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::strings;
 
-use crate::hints;
 use crate::stage::Stage;
 use crate::windows::{self, Seat};
 
@@ -33,6 +32,10 @@ impl Session {
     /// yet, the title is known, and the title offers a split on this adapter - the same
     /// rule `--players` follows ([`oag_game::split_screen::offered`]). A refusal is said
     /// once and ends the request.
+    #[cfg_attr(
+        any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
+        allow(dead_code)
+    )]
     pub(crate) fn seats_to_open(&mut self) -> Option<u8> {
         if self.windows_wanted < 2 || !self.seats.is_empty() {
             return None;
@@ -59,6 +62,11 @@ impl Session {
     /// said and skipped: the run goes on with the windows it has.
     #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
     pub(crate) fn open_seats(&mut self, event_loop: &winit::event_loop::ActiveEventLoop, count: u8) {
+        use anyhow::Context;
+
+        use crate::hints;
+
+        self.seats_opened = true;
         let table = strings::project_table(self.settings.language.as_deref());
         let app = hints::title(&table);
         let word = table.get("OAG_JOIN_PLAYER").unwrap_or("PLAYER").to_string();

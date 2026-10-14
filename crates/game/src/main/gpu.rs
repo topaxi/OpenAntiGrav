@@ -51,6 +51,10 @@ pub(crate) struct Gpu {
     instance: wgpu::Instance,
     /// The adapter the device came from, which a further window's surface is
     /// configured against. Cheap to clone and kept for that.
+    #[cfg_attr(
+        any(target_arch = "wasm32", target_os = "android", target_os = "ios"),
+        allow(dead_code)
+    )]
     adapter: wgpu::Adapter,
     pub(crate) device: wgpu::Device,
     pub(crate) queue: wgpu::Queue,
