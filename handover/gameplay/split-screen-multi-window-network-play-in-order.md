@@ -1068,6 +1068,14 @@ a guess.
 
 ## Open
 
+- **The Deck's frame-rate drop on CUT -> VERTICAL is not reproduced (2026-10-14, `split-preseat`).**
+  Measured on the Deck and on the desk (`docs/rendering/multi-window.md`, "The WINDOW LAYOUT
+  screen's CUT row costs nothing"): 120 fps (cap) or 60 (vsync) both cuts, no size change. Next:
+  the maintainer launches from Steam with `--frame-log` and reads the log file with their real
+  profile and pads. Also open: the RACE page's launch row is not yet scripted, so the race START
+  with CUT vertical is unmeasured; and the Deck's gamescope opens windows at six times the size
+  asked for (`gamescope-window`).
+
 - ~~Whether `RaceState` should become a fixed `[RaceState; MAX_PLAYERS]` or
   gain an explicit human/AI-slot distinction on top of the existing
   `[Ship; MAX_SHIPS]` grid - not decided here, needs a design pass against

@@ -58,6 +58,8 @@ pub(crate) struct App {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--preseat`, `--script`, `--frame-log`. See `oag_game::devrun`.
+    pub(crate) dev: oag_game::devrun::Dev,
     /// `--connect`: the race is a server's. Joined once the race is built, then
     /// handed to the session. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
@@ -499,6 +501,8 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             no_intro: self.no_intro,
+            dev: std::mem::take(&mut self.dev),
+            dev_clock: crate::session::devrun::Clock::default(),
             net: self.net.take(),
             net_bot: self.net_bot,
             net_over_ticks: 0,

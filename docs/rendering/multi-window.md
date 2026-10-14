@@ -38,6 +38,37 @@ oag-game --race --window-seats 4,2 --screenshot shot.png --ticks 300   # headles
   (`split_screen::parse_window_seats`, tested).
 - `--windows-fullscreen`: see Windows below.
 
+**Measuring without a person at it (2026-10-14, lane `split-preseat`).** Three dev switches, off by
+default, none a setting (`oag_game::devrun`, **chosen, not measured**):
+
+- `--preseat`: with `--players N`, `--windows N` or `--window-seats` and no `--race`, seat those
+  people on placeholder devices (seat 0 the anonymous keyboard, the rest keyboards no key ever
+  matches - no pads, no virtual input) and open the WINDOW LAYOUT screen as soon as the menus are
+  up, pre-filled from the flags (`--players 2` is one window of two seats, so the CUT row is
+  there). It is the real path: `mp_devices` seeded, `open_join`, then the join screen's START.
+  **Explicit rather than implied by the flags**, because `--windows 2` has always opened its
+  windows and waited for a person. **Landed on directly** rather than walked to (a walk is the
+  boot's taps plus MULTIPLAYER, LOCAL MULTIPLAYER and two presses; direct is one frame and cannot
+  drift with the menu's row order). A real pad still takes a free seat the normal way after BACK to
+  the join screen; with every seat dealt (`--players 8`) it cannot until a seat is freed there.
+  `--windows`/`--window-seats` still open their extra windows at boot, before the screen.
+- `--script SCRIPT`: `SECONDS:BUTTON,...` taps (`--press`'s names, plus `quit`), in a normal
+  windowed run - no `--screenshot`. `+SECONDS:BUTTON` counts from where `--preseat` landed, and the
+  plain taps that got through the boot (`3:start,6:start,9:cross,12:start`) are dropped once it
+  has, so a layout walk does not depend on the boot's length. Wall clock, one frame down and one
+  up per tap.
+- `--frame-log` (or `OAG_FRAME_LOG=1`): one `info` line a second on every stage, menus included,
+  from the overlay's own meters: `frame-log stage=menu:window-layout(windows=1,cut=h) fps=
+  frame_ms= p99_ms= cpu_ms= gpu_ms= present_ms= target_hz= window=WxH surface=WxH render=`, a `-`
+  where a reading does not exist (the GPU scene pass on a menu), and one `size change` line
+  whenever the window or surface size moves. Terminal and log file, with no overlay.
+
+```sh
+cargo build --release -p oag-game
+oag-game data/images/pulse-psp-eu.chd --no-audio --players 2 --preseat --frame-log \
+  --script "3:start,6:start,9:cross,12:start,+4:down,+5:down,+6:right,+16:right,+26:quit"
+```
+
 ## Who sits where
 
 Seated the way `--players N` seats people ([split-screen.md](split-screen.md), "Who plays which
@@ -603,6 +634,49 @@ they are scene-side only, and the FSR 3.1 chain is a `Framebuffer` pass outside 
 **What is not measured:** the live frame's HUD, resolve and composite per window (identical before and
 after), real-display pacing, and the controller on a GPU that can hold its target (lavapipe cannot, and
 the log says so).
+
+## The WINDOW LAYOUT screen's CUT row costs nothing (2026-10-14, lane `split-preseat`)
+
+The maintainer saw the frame rate fall on the WINDOW LAYOUT screen itself the moment CUT went to
+VERTICAL, on a Steam Deck in gaming mode at 3840x2160. It is **not reproduced** by the path below,
+on either machine. The reading of the code agrees (a Fill and a Text or two either way;
+`apply_window_layout` runs only at START); this is the measurement.
+
+How: `--players 2 --preseat --frame-log --script ...` (above), Pulse (PSP, EU), a fresh profile
+(defaults: perf overlay off, no screen filter, no upscaler), the script walking the real screen:
+CUT horizontal 6 s, tap RIGHT to vertical for 10 s, RIGHT back to horizontal 10 s. Release builds.
+Locally the window is `gamescope --backend headless -W 3840 -H 2160` (the Deck's compositor, on
+RADV, no display; `MESA_VK_DEVICE_SELECT` picks the GPU) with `window_mode = "borderless"`; Xvfb
+and lavapipe are for mechanism checks only and are not a GPU number. One line a second, mean over
+the meter's window.
+
+| Machine, GPU | vsync | CUT horizontal | CUT vertical | window = surface |
+| --- | --- | --- | --- | --- |
+| desk, RX 7800 XT (RADV) | off | 120.0 fps, 8.33 ms, CPU 0.66 ms, present 0.20 ms | the same | 3840x2160 throughout |
+| desk, Raphael iGPU (RADV) | off | 87.6 fps, 11.41 ms, CPU 6.6 ms, present 6.3 ms | 87.7 fps, 11.40 ms, CPU 6.5 ms | 3840x2160 throughout |
+| desk, RX 7800 XT | on | 60.0 fps, 16.67 ms | the same | 3840x2160 throughout |
+| **Deck** (Van Gogh, RADV, Mesa 26.2.0-devel; znver2 dist build) | off | 120.0 fps, 8.33 ms, CPU 1.0 ms, present 0.22 ms | 120.0 fps, CPU 1.05 ms | 3840x2160 throughout |
+| **Deck** | on | 60.0 fps, 16.67 ms, p99 16.8 ms | 60.0 fps, p99 16.8 ms | 3840x2160 throughout |
+
+Load average when each run started: desk 4 to 10 (other lanes; the iGPU row's present time is a
+constant, not a trend), Deck 0.6 to 0.9. The front end's own limit is 120 fps (`frame limit in
+force: 120`), so "120" is the cap, not what the GPU could do. No `size change` line follows the one
+at start, so neither the window nor the surface moves on CUT. START on the screen, with CUT vertical,
+goes on to the seat assignment screen and the RACE page (the log names each stage); the race itself
+was not reached by the script (**open**: the RACE page's launch row needs a walk this lane did not
+finish).
+
+What this leaves: the drop the maintainer saw needs something the probe does not have - a real
+profile (a screen filter, an upscaler, motion blur), real pads, or the Steam launch path. Launch
+the game from Steam with `--frame-log` in its launch options (or `OAG_FRAME_LOG=1`) and read the
+log file: the line names the stage, so the CUT toggle shows up with its own fps, CPU and present time.
+
+**Found on the way, `gamescope-window`'s area (not fixed here).** On the Deck's gaming-mode
+gamescope (`DISPLAY=:1`, 3840x2160) a requested window size arrives **six times too large**:
+`window_mode = "windowed"` at 1440x816 opened 8640x4896; at 3840x2160 it panicked in
+`Surface::configure` (`Requested was (23040, 12960), maximum extent for either dimension is
+16384`) on all three tries. `borderless` is clamped to 3840x2160, but about half the launches still
+panicked the same way and a retry worked. The measurements above are borderless with a retry.
 
 ## Verification
 

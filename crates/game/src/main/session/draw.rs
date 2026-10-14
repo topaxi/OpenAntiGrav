@@ -993,6 +993,8 @@ impl Session {
         if frame_seconds.is_some() {
             self.present_cost.record(present_seconds);
         }
+        // `--frame-log`'s once-a-second line, on every stage.
+        self.dev_log(has_scene.then(|| self.framebuffer.extent()));
         // The third and last diagnostic timestamp - see `Session::race_ready_at`.
         // Taken rather than read, so this fires once: the first frame drawn
         // with the new scene, not every frame after it.

@@ -80,6 +80,8 @@ mod multiplayer;
 mod seat_assign;
 #[path = "session/window_layout.rs"]
 mod window_layout;
+#[path = "session/devrun.rs"]
+pub(crate) mod devrun;
 #[path = "session/pure_chain.rs"]
 mod pure_chain;
 #[path = "session/placeholder.rs"]
@@ -384,6 +386,10 @@ pub(crate) struct Session {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`, carried into the race loop. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--preseat`, `--script`, `--frame-log`, carried into the loop. See `session::devrun`.
+    pub(crate) dev: oag_game::devrun::Dev,
+    /// When the script and the frame log started counting, and the frame log's window.
+    pub(crate) dev_clock: crate::session::devrun::Clock,
     /// `--connect`: the race is stepped through the server's protocol instead of
     /// `Race::tick`. See `oag_game::net_play`.
     pub(crate) net: Option<oag_game::net_play::NetPlay>,
