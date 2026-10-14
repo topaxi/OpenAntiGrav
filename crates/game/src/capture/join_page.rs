@@ -85,11 +85,10 @@ pub(super) fn capture_lan(
         // The first host can be joined; the next ones each show one reason in turn (another
         // title, version, content, a full race).
         // The still's hosts run this title, or (for the "other title" row) another one.
-        let elsewhere = if title == "Wipeout HD" {
-            "Wipeout Pulse"
-        } else {
-            "Wipeout HD"
-        };
+        let elsewhere = ["Wipeout Pulse", "Wipeout HD"]
+            .into_iter()
+            .find(|name| *name != title)
+            .unwrap_or("Another title");
         let local = oag_net::discovery::Local {
             protocol: 1,
             build: "build",
