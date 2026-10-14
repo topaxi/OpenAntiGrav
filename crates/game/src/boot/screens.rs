@@ -397,6 +397,7 @@ pub(super) fn selection_layouts(
     space: oag_display::space::Space,
     borrows_ps2_split: bool,
     ship_dir: &str,
+    ship_pose: Option<oag_title::ShipPose>,
     report: &mut Vec<String>,
 ) -> (
     Option<oag_ui_screens::picker::Layout>,
@@ -455,6 +456,24 @@ pub(super) fn selection_layouts(
                 grid,
                 ship_dir,
             )
+            .map(|mut layout| {
+                // A title whose own `ShipModel` camera is not reproducible draws the
+                // pose it names instead; the widget's rotations stay as authored.
+                if let Some(pose) = ship_pose
+                    && let Some(model) = layout
+                        .hd
+                        .as_mut()
+                        .and_then(|screen| screen.ship_model.as_mut())
+                {
+                    report.push(format!(
+                        "ship preview: pose borrowed from {} (origin {:?}, z {})",
+                        pose.from, pose.origin, pose.z
+                    ));
+                    model.origin = pose.origin;
+                    model.z = pose.z;
+                }
+                layout
+            })
         });
     // A source that authors `Team SelectionSplit` has one (Pulse's PS2 pressing); a title
     // whose pressings borrow the PS2's design builds it from the PS2's numbers on the

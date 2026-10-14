@@ -20,7 +20,7 @@ pub fn variant_location(
     }
 }
 
-/// [`model`] for a variant's own entry, falling back to `fallback` (the
+/// [`super::psp2_scene::model`] for a variant's own entry, falling back to `fallback` (the
 /// team's default hull) when the variant ships no such asset, and saying so
 /// in the log rather than inventing one. Returns the entry name that loaded.
 ///
@@ -32,7 +32,7 @@ pub fn model_or_default(
     entry: &str,
     fallback: Option<&str>,
 ) -> Result<(Model, String)> {
-    match super::model(archives, entry) {
+    match super::psp2_scene::model(archives, entry) {
         Ok(model) => Ok((model, entry.to_string())),
         Err(error) => {
             let Some(fallback) = fallback.filter(|fallback| *fallback != entry) else {
@@ -41,7 +41,7 @@ pub fn model_or_default(
             log::warn!(
                 "{entry}: {error:#} - the variant has no hull of its own, drawing {fallback}"
             );
-            super::model(archives, fallback).map(|model| (model, fallback.to_string()))
+            super::psp2_scene::model(archives, fallback).map(|model| (model, fallback.to_string()))
         }
     }
 }

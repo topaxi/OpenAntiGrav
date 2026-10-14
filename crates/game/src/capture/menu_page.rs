@@ -756,7 +756,7 @@ pub(super) fn picker_page(
                     // The same axis rule the live screen applies - see
                     // `session::picker::open_ship_picker`: the team's own skins
                     // where it declares any, the title's variants otherwise.
-                    let variants: Vec<(String, String)> = if !team.skins.is_empty() {
+                    let mut variants: Vec<(String, String)> = if !team.skins.is_empty() {
                         std::iter::once((
                             String::new(),
                             strings
@@ -794,6 +794,11 @@ pub(super) fn picker_page(
                             .map(|variant| (variant.stem.to_string(), variant.label.to_string()))
                             .collect()
                     };
+                    if variants.is_empty()
+                        && let Some(own) = team.own_directory_variant()
+                    {
+                        variants.push(own);
+                    }
                     let stats = team.variant_stats(variants.iter().map(|(id, _)| id.as_str()));
                     let models = team.hex_cells(variants.iter().map(|(id, _)| id.as_str()));
                     (

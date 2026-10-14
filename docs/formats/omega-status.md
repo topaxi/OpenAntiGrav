@@ -202,16 +202,16 @@ Xvfb + lavapipe on `main` `4def1665` plus the texture-limit change, language -> 
 same widget and do not yet. Omega authors both selection screens
 (`Track_Selection_Definition.xml` and `Team_Selection_Definition.xml`, `data08`/`data09`, the
 files `skin.xml` includes by `SrcRel`); Track Select is read and drawn
-([below](#the-circuit-model-on-track-select-2026-10-09-omega-track-model)), Team Select is not
-(`FrontEnd::team_select`, see `crates/omega/src/frontend.rs`).
+([below](#the-circuit-model-on-track-select-2026-10-09-omega-track-model)), and so is Team Select
+([Ship Select](#ship-select-2026-10-14-omega-ship-select)).
 
 ## The circuit model on Track Select (2026-10-09, `omega-track-model`)
 
 **Omega draws each circuit's own front-end model on `Track Select`, as HD does.** The screen is
 HD's file (`Track_Selection_Definition.xml`, nine lines of diff in colours and `.4x` texture
 names), read by the same reader (`oag_ui_screens::picker::hd::track`), reached from RACEBOX ->
-START (`track_select` is `Some`; Omega's ship picker is `None`, so a confirmed circuit launches
-the race). Walked live under Xvfb 2026-10-09: RACEBOX, START, `Track Select`, Right steps the
+START (`track_select` is `Some`; at the time Omega's ship picker was `None`, so a confirmed circuit
+launched the race - Ship Select follows it now, see [below](#ship-select-2026-10-14-omega-ship-select)). Walked live under Xvfb 2026-10-09: RACEBOX, START, `Track Select`, Right steps the
 circuit and the model reloads, a click on a hexagon selects it, Return launches.
 
 **The table** is `oag_omega::frontend`'s `CIRCUIT_MODELS`, 26 rows, each a `fe/` scene on
@@ -289,13 +289,85 @@ HD's and overrun the frame a little at this pose.
 table that names all 38 listed circuits, and Omega's has none, so every circuit shows its id
 where a few (`PRO TOZO`) already have text; the emblem of a 2048 circuit; the page's white
 backdrop, against which the rim-lit circuit loses its edge (the material is authored for a dark
-one); whether Omega's original ever shows this screen outside RACEBOX; Team Select.
+one); whether Omega's original ever shows this screen outside RACEBOX.
 
 **2048, checked, applies, not wired.** 2048's own archives carry `fe/Track0N.vex` only for its
 DLC1 circuits (`Vineta_K`, `Moa_Therma`, `Chenghou_Project`, `Anulpha_Pass`, `zone_1..4`, under
 `art/published/DLC1/environments`), none for its ten own circuits (which Omega adds), and its
 front end authors no circuit screen (`race_box`/`track_select` are `None`), so nothing draws
 them; the reader and the material shape are the same.
+
+## Ship Select (2026-10-14, `omega-ship-select`)
+
+**Omega's `Team Selection` (and its `Player 1`/`Player 2` copies) is HD's file in HD's dialect and now draws
+what HD's does: open model cells, each model's ratings, and the craft.** Reached from RACE -> START -> Track
+Select, and per seat in a split. Before this change every cell was a padlock, the statistics bars empty and
+the `SHIP MODEL` frame blank (`92aba1858` had wired only the screen).
+
+**The roster, off `Data\plugins\teams\Definition.xml` (`data09`, 70,000 bytes; measured).** 19 `PI_Team`:
+five 2048-era (`Feisar2048`, `Qirex2048`, `Piranha2048`, `AG_Systems2048`, `Auricom2048`, four craft each plus four
+`IsVR` copies under `VR_2048`), twelve HD-era (`AG_Systems`, `Assegai`, `Auricom`, `EGX`, `Feisar`, `Goteki`, `Harimau`,
+`Icaras`, `Mirage`, `Piranha`, `Qirex`, `Triakis`) and `Tigron_x` and `Tigron` (named `Tigron` and `VanUber`). Each HD-era team
+authors thirteen `PI_TeamModel`: nine with an `<FE speed thrust handling shield length firepower>` (`chrome_c1`, `nitro`,
+`concept1`, `normal`, `SKIN1`, `SKIN2`, `chrome`, `vr_hd`, `vr_fury`; `zone`, `detonator` and the two `vr_` ones have none), which is
+the **nine rows** the honeycomb authors. The screen offers **14 teams**: the twelve and the two Tigrons. The five
+2048-era teams are declared and **not offered**: `load_teams` asks for `hdships\<id>\Ship.vex` and
+`handlingstats.xml` by the bare id, and theirs sit under `Ships\<id>\<n>\` (the load report says "5 declared team(s)
+have no ship or no handling stats").
+
+**What opens.** `oag_omega::race::TEAM_VARIANTS`: the twelve HD-era teams, `""`, `_c1`, `_n1` joined as a suffix, labelled with the
+models' own names (`Normal`, `Concept`, `Nitro`; **measured**: `normal` is at `hdships\<Team>`, `concept1` at `<Team>_c1` and
+`nitro` at `<Team>_n1`). That is three open cells per team, in the rows `nitro`, `concept1` and `normal`; the other six are padlocks (two
+`<Unlock>`-gated skins, `chrome`, `chrome_c1`, and the two PSVR models, which this build never offers),
+by `Team::hex_cells`' existing rule. `crates/raceplay/tests/omega_2048_era_craft_ground_truth.rs`
+now resolves every combined id's hull, `.rcsmodel` and tuning (24 more than before) and holds Feisar's
+ratings. `Tigron_x` and `Tigron` carry no `_c1`/`_n1` directory (their models all name one folder), so they sit outside the table
+and `Team::own_directory_variant` gives their screen the one row their own directory is: of the models sharing it
+(none is `<Unlock>`-gated) the one named `normal` opens (`Team::model_for_directory`; the first in file order was `chrome_c1`
+with the wrong ratings), `Tigron_x` rated 10/7.5/7/7 and `Tigron` (the disc's "VanUber") 8.5/9/10/6.5 (pinned in the ground
+truth; walked 2026-10-14, one open cell each). **Chosen, not
+measured**: `opponents_match_player_variant` is `false` (HD's `true` was read off HD's executable, Omega's `Ship_Construct` is unread)
+and `fresh_variant` is `None` (a fresh profile opens on `normal`). **Not measured**: whether the original shows the two
+PSVR rows on a flat screen; this build draws them as padlocks.
+
+**The statistics.** The four bars take the selected model's own `<FE>` (tenths, so Feisar `normal` reads `070 080 100 080`
+and `concept1`/`nitro` `080 085 100 080`) through `Team::variant_stats`, as HD does, with the down-nobble and the three-digit
+value. **What does not read on Omega**: the bar's two halves. HD draws left of the split in `HD_Grey` and right of it in the
+block's `AlwaysSolidColor` (`0xff646464`). This build resolves Omega's `FEGlobals->HD_Grey` to `0xFF646464`, the value in the
+skin's first colour block (`HD_Colours`), whose own comment says it is *"IGNORED AND OVERWRITTEN by the WOHD_Colours and
+Fury_Colours templates"*; the two halves are then the same grey and the rating shows by the nobble and its three digits alone
+(the digits are small, at the authored `0.45`). **That is this build's unresolved colour-template switch, not a finding about
+the original**: `WOHD_Colours` (`HD_Grey 0xFF010001`, `HD_SubGrey 0xff646464`, `HD_BG 0xffffffff`) is the template Omega's white
+page and its `HD_SubGrey` headings point at, and under it the left half would be near black over the grey remainder, a visible
+bar. Which template is live is unread (`omega-frontend.md`); selecting it moves every Omega screen's `HD_Grey`, so it is its own
+lane, not done here. Nothing was added to the bars in the meantime. `LOYALTY` stays empty (this build keeps no loyalty on Omega). `firepower` and
+`length` are authored per model and no block of this screen shows them: drawn nowhere.
+
+**The craft.** `ship_preview_hull` is `"ship.vex"` and the hull is the team's race hull, a PS4 `.rcsmodel` (8-byte pointers, `.gnf`
+textures) that `preview::model` does not read: the preview goes through `psp2_scene::model` (the loader the circuit model already used, renamed
+from `circuit_model` and now used by `variant::model_or_default` too, so the flyer and end-of-race callers still do not draw a PS4 scene).
+Each of the fourteen builds with its own textures (Assegai: 19,934 triangles, 16 submeshes) and `_c1`/`_n1` are hulls of their own (Feisar: three shapes).
+**Pose, chosen, not measured**: Omega's `ShipModel` authors `z=-2.05`, `x=0.5 y=0.1`, `nearZ=0.1` where HD's authors `z=-24`; no PS4
+capture exists to recover that camera and model scale. The fourteen PS4 hulls frame to the same size as HD's (1st to 99th percentile
+radius 5.2 to 7.3 against HD's 6.1 to 7.3), and the `SHIP MODEL` frame sits where HD's does, so HD's authored origin `(1220, 412)` and
+`z=-24` frame them (`oag_title::FrontEnd::ship_preview_pose`, `Some` on Omega only; the rotations stay as authored and
+are HD's, `RotX 0.4 RotY -0.5`). The load report says so ("ship preview: pose borrowed from Wipeout HD"). HD's lens, pitch and slide
+are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's does.
+**Not drawn**: `ShipDesc` (the model's description string, authored per model with `teletype`), the `L1/R1` livery hint,
+`PadlockText1/2` (they hold unlock conditions this build keeps no state for).
+
+**Walked 2026-10-14**, windowed on an own Xvfb with two virtual pads: RACE, two players, join, Track Select, `SHIP SELECT - PLAYER 1`
+(Assegai, then Mirage) and `PLAYER 2` (Icaras), each with its own hull and ratings, then a two-view race flying Mirage and Icaras. A one-player
+still (`--menu-page ship-select`) and a `--race --team Feisar --variant _c1`/`_n1` race load.
+
+**2048 cross-check.**
+- *Team definition and ratings*: **checked, applies, not wired.** 2048's own `Data\plugins\teams\Definition.xml` is the same shape: the catalogue reader finds
+  17 teams and 104 `PI_TeamModel` with an `<FE>`, all 104 rated (`omega_ship_select_probe`, run on `PCSF00007/base`). 2048 authors no
+  `Team Selection` (and so no per-player pair), so nothing draws them.
+- *PS4/Vita `.rcsmodel` hull as a preview*: **checked, applies, not wired.** `psp2_scene::model` reads the Vita container too (`mesh::rcs::psp2::is_psp2`); 2048 has no ship screen to draw it.
+- *Numbered craft (`Subdirectory` join) in the honeycomb*: **checked, differs.** `Team::hex_cells` and `variant_stats` append a suffix to the
+  team's location, which is right for HD's suffix join and wrong for 2048's `<team>\<n>`; Omega's five 2048-era teams would need the title's `VariantJoin` passed in, and
+  they are not offered on this screen, so it is not done. Open.
 
 ## What a menu-page capture does today
 
@@ -546,17 +618,10 @@ their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
   `Tournament` and 1 on `Head2Head`; the test asserts every Omega cell's value
   equals `Mode::opponent_count()`, so the field the mode already races with is
   the authored one. Nothing reads `AICount` for any title.
-- **Team Selection is skipped, not wired.** `Team_Selection_Definition.xml` is
-  in `data09.psarc` at HD's path and naming it in `oag_omega::frontend::FRONT_END`
-  makes the screen read, but it draws an empty frame: the logos are at
-  `Data\art\published\hdships\<Team>\FE\Logo.gnf` where HD's reader asks
-  `Data\Ships\<Team>\FE\Logo.gtf` (`oag_ui_screens::picker::hd::logo_src`), the stat
-  blocks do not draw, and `hdships\<Team>\screen.xml` has no slideshow chain.
-  A cell therefore races whichever team the RACE page holds (`settings.race.team`;
-  `Session::apply_race_team` copies it in): slot 0 was `hdships\Assegai` on the walk,
-  the first entry of the catalogue, which is where `settle` falls when the stored
-  id is not offered (the catalogue lists `AG_Systems`; `DEFAULTS.team` spells it
-  `ag_systems`). **Chosen, not measured.**
+- ~~**Team Selection is skipped, not wired.**~~ Wired 2026-10-13 (`FrontEnd::team_select`), the honeycomb,
+  ratings and hull preview 2026-10-14: see [Ship Select](#ship-select-2026-10-14-omega-ship-select).
+  What stands from the 2026-09-30 walk: a campaign cell races the RACE page's team (`settings.race.team`;
+  `Session::apply_race_team`), which is a campaign path and not Ship Select. **Chosen, not measured.**
 - **Omega also ships 2048's end-race file** (checked 2026-10-06, `checked, applies, not wired`): `data09.psarc`'s `data/plugins/frontend/gui/vita/vita_EndRace_Definition.xml` is byte-identical (22,098 bytes) to 2048 v1.04's `NEWGUI/EndRace_Definition.xml`, beside Omega's own HD-lineage `endrace_definition.xml`; nothing in Omega's front-end XML names the `vita/` file. See [endrace-2048.md](../ui/endrace-2048.md#omega).
 - **The EndRace screens are skipped, not wired.** (Census 2026-10-06: the three copies of `EndRace_Definition.xml` author Results, Menu and Podium and no Rewards - `hd-endrace-screens.md`.) `EndRace_Definition.xml` is at
   HD's path too, and dispatching Omega through HD's loader draws `EndRace

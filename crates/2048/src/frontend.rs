@@ -492,6 +492,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // for why it is not routed through this flag.
     preview_meshes: false,
     ship_preview_hull: None,
+    ship_preview_pose: None,
     circuit_models: &[],
     // Plain XML (not dictionary-shortened) in the base package's `data.psarc`;
     // `patch-v104/data2.psarc` re-ships only the `Legacy` sibling, so the base

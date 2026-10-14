@@ -85,7 +85,7 @@ pub(super) fn draw_preview(
     }
     let built = open_for_previews(race).and_then(|mut archives| {
         let mut model = if request.track_model.is_some() {
-            crate::preview::psp2_scene::circuit_model(&mut archives, &request.entry)?
+            crate::preview::psp2_scene::model(&mut archives, &request.entry)?
         } else {
             crate::preview::variant::model_or_default(
                 &mut archives,

@@ -417,6 +417,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // `circuit_models`. See `oag_ui_screens::picker::hd`.
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
+    ship_preview_pose: None,
     circuit_models: &CIRCUIT_MODELS,
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence

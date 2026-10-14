@@ -658,6 +658,20 @@ impl Team {
             .collect()
     }
 
+    /// The one livery row of a team its title's variant table does not name:
+    /// its own directory, the empty suffix, called what the model that
+    /// resolves there is called. `None` when the team authors no per-model
+    /// ratings (Pulse's and Pure's teams) or no model sits in its directory.
+    ///
+    /// Omega's `Tigron` and `Tigron_x` are the two that need it - every one of
+    /// their models names one directory, so no `_c1`/`_n1` sibling exists to
+    /// table - and without it every row of their honeycomb is a padlock.
+    #[must_use]
+    pub fn own_directory_variant(&self) -> Option<(String, String)> {
+        let model = self.model_for_directory(&self.location)?;
+        Some((String::new(), model.name.clone()))
+    }
+
     /// What `Team Selection`'s hex column shows for each of this team's
     /// [`Self::models`], in file order: the model's own thumbnail, and
     /// whether it can be picked right now.
@@ -702,7 +716,8 @@ impl Team {
     /// among [`Self::models`]: the one whose `modellocation` names that
     /// directory, case-insensitively, preferring one with no `<Unlock>` -
     /// `Feisar_c1` is both `chrome_c1` (locked) and `concept1` (not), and
-    /// only the second is on a fresh profile's grid. **Chosen, not
+    /// only the second is on a fresh profile's grid. Of several with no
+    /// `<Unlock>` the one named `normal` wins. **Chosen, not
     /// measured**: which of two models sharing a directory the original
     /// means is decided by its unlock state, which this build does not keep.
     #[must_use]
@@ -714,12 +729,19 @@ impl Team {
                 .to_ascii_lowercase()
         };
         let want = leaf(directory);
-        let mut matching = self
+        let matching = self
             .models
             .iter()
             .filter(|model| leaf(&model.model_location) == want);
         let first = matching.clone().next();
-        matching.find(|model| !model.has_unlock).or(first)
+        let open: Vec<&TeamModel> = matching.filter(|model| !model.has_unlock).collect();
+        // Several open models in one directory (Omega's `Tigron_x`, whose models all name it):
+        // the one called `normal`, then the first. **Chosen, not measured.**
+        open.iter()
+            .find(|model| model.name.eq_ignore_ascii_case("normal"))
+            .or(open.first())
+            .copied()
+            .or(first)
     }
 }
 

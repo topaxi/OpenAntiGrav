@@ -393,7 +393,7 @@ impl PickerStage {
             _ => None,
         };
         let mut model = if circuit_model {
-            oag_game::preview::psp2_scene::circuit_model(&mut self.archives, &name)
+            oag_game::preview::psp2_scene::model(&mut self.archives, &name)
                 .with_context(|| format!("{name} did not resolve as a preview mesh"))?
         } else {
             let entry = variant_name.as_deref().unwrap_or(&name);

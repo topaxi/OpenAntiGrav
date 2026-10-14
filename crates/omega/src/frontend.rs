@@ -225,16 +225,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ],
     // See this module's own "What is not here" section.
     race_box: None,
-    // `Team_Selection_Definition.xml` is in `data09.psarc` at HD's own path,
-    // and naming it makes the screen read - but it then draws an empty frame:
-    // the team logos sit at `Data\art\published\hdships\<Team>\FE\Logo.gnf`
-    // (HD's reader asks `Data\Ships\<Team>\FE\Logo.gtf`), the stat blocks do
-    // not draw, and `screen.xml` has no slideshow chain. Left `None` so a
-    // confirmed campaign cell races the RACE page's team (`settings.race.team`)
-    // rather than opening a screen a player cannot read; measured 2026-09-30, the open item in
-    // `docs/formats/omega-status.md`.
     // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's
-    // dialect: HD's reader parses them as they stand.
+    // dialect: HD's reader parses them as they stand. The logos sit under `hdships\<Team>\FE`
+    // (`TITLE.race.ship_dir`) and the rosters' models and ratings come from the teams definition
+    // (`race::TEAM_VARIANTS`); see `docs/formats/omega-status.md`, "Ship Select".
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
     race_setup: None,
@@ -242,7 +236,18 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // and `SplitScreen`, same ids and English text): see `names::RACEBOX_DEFINITION`.
     local_split: Some(oag_title::LocalSplit::Authored(names::RACEBOX_DEFINITION)),
     preview_meshes: false,
-    ship_preview_hull: None,
+    ship_preview_hull: Some("ship.vex"),
+    // **Chosen, not measured.** Omega's `ShipModel` authors `z=-2.05` with
+    // `x=0.5 y=0.1` and `nearZ=0.1` where HD's authors `z=-24`, a camera and a
+    // model scale no PS4 capture exists to recover; the PS4 hulls carry HD's own
+    // raw size (framed radius 6.0 to 7.3 across the fourteen, against HD's 6.1 to
+    // 7.3), so HD's authored pose frames them in the same `SHIP MODEL` frame, which
+    // sits where HD's does (the grid's 705 to 1757 across).
+    ship_preview_pose: Some(oag_title::ShipPose {
+        origin: [1220.0, 412.0],
+        z: -24.0,
+        from: "Wipeout HD",
+    }),
     circuit_models: &CIRCUIT_MODELS,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
