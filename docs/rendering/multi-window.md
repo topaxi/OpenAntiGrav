@@ -44,6 +44,9 @@ Seated the way `--players N` seats people ([split-screen.md](split-screen.md), "
 slot"): the keyboard and the first pad on slot 0, each further pad on the next slot in the order
 the pads connect. A slot nobody drives is flown by the AI. Slots are dealt to windows in order,
 window 1 taking the first: `--window-seats 4,2` is slots 0 to 3 in window 1 and 4 and 5 in window 2.
+The LOCAL MULTIPLAYER flow's **seat assignment screen** (below) can put any person in any pane: the slots a
+window shows are then the ones its panes were given (`split_screen::window_slots`), the slots themselves,
+and so the grid order, stay the join order.
 **Keyboards are seats** (2026-10-14, lane `keyboard-seats`, **chosen, not measured**; it replaces the
 `window-keyboard` lane's "the keyboard follows the focus", which put a pad player's craft under the
 keyboard of whoever's window had the focus). In a race dealt across windows a keyboard is a seat like a
@@ -245,8 +248,9 @@ it** (`Race::windows`, window `i` of the race is window `i` of the run; `Race::w
 
 **Chosen, not measured, all of it.** After the join screen's START (two or more people seated, a
 desktop build, a title that offers a split on this adapter), the **WINDOW LAYOUT** screen opens
-before Track and Ship Select; its START goes on to the race box exactly as the join screen's did,
-and its BACK returns to the join screen with everybody still seated. It is `oag_ui_screens::window_layout`
+before Track and Ship Select; its START opens the seat assignment screen below (with one window, nothing to
+choose between, it goes straight on to the RACE page), and its BACK returns to the join screen with everybody
+still seated. It is `oag_ui_screens::window_layout`
 (model, drawing, pad, keyboard and pointer) over the join screen's rows, on the title's own menu
 skin and font (HD's and Omega's row blocks where the title draws them), driven by
 `session/window_layout.rs`.
@@ -312,6 +316,63 @@ by side); a fresh process re-opened on the remembered 3 and 1; `--windows 2` the
 and wrote an empty `window_seats`. **Not exercised**: more than one real monitor (Xvfb's RandR keeps one,
 `xrandr --setmonitor` is not kept), FULLSCREEN, and a monitor that has gone since the layout was saved
 (the clamp is a unit test); Wayland placement.
+
+## The seat assignment screen
+
+**Chosen, not measured, all of it** (2026-10-14, lane `mp-seat-assign`, step 5 of the LOCAL
+MULTIPLAYER flow in `split-screen.md`). After the layout screen's START, when the layout has **two or
+more windows**, the **WHO SITS WHERE** screen opens before the RACE page: which pane of the chosen layout each
+seated person flies in. With one window (which is also every browser and phone, where no layout screen
+exists) the people sit in join order and the screen is skipped: there is no window to choose between and a
+two-way split in one window keeps its order. It is `oag_ui_screens::seat_assign` over the join screen's rows
+and the layout screen's preview (one shared `window_layout::draw_preview`, so the boxes and the cuts are the
+picture the race draws), on the title's own skin and font, driven by `session/seat_assign.rs`.
+
+- **A row per person** (`PLAYER 3  WINDOW 1 VIEW 2`; a window of one pane says just `WINDOW 2`), then AUTO,
+  START and BACK. The preview's cells say which person is in each pane.
+- **Each person moves their own marker with their own device**: left or up steps to the pane before, right or
+  down to the pane after (window order, a window's panes in the order the race cuts them, wrapping), and
+  confirm says "I sit here". Each device's presses are told apart as the join screen's are
+  (`Controls::device_presses`, `Lobby::seat_of`; a raw keyboard that no seat names is the anonymous keyboard a
+  click seated). A pane holds one person, so **moving onto a held pane swaps** the two and keeps everyone placed;
+  whoever moved, and whoever was swapped, has to confirm again (dimmed until they do). START, or confirm from
+  the last person to confirm, goes on; with somebody unconfirmed it is refused (the decline sound). Circle,
+  Escape or the secondary button goes back to the layout screen with its choice as it was.
+- **A fresh screen opens everybody confirmed**, on the last assignment where the devices are still seated and in
+  join order elsewhere, so OK is enough. AUTO puts everybody back in join order, confirmed.
+- **The mouse** has no seat of its own: a click on a pane (or a person's row) picks that person up, a click on
+  another pane puts them there (swapping), and that click is the confirmation of both; a click on START goes
+  on once everybody is confirmed.
+- **What START writes**: `Session::pane_people`, who sits in each pane. A race built from the menus deals the
+  windows by it (`split_screen::deal_windows(race, layout, order)`, `window_slots`): `--window-seats 2,1` with
+  `pane_people = [0, 2, 1]` is window 1 showing slots 0 and 2 and window 2 slot 1, logged as
+  `multi-window: 2 window(s) holding slot 0 + slot 2, slot 1`. **Grid order is untouched** (a person's craft is
+  the slot their join order gave them, `rank_from_back`); only the pane that shows it moves, so a pad, and
+  the keyboard of a window, drive the craft the pane shows. An order that is not every slot once is ignored.
+  The windows' titles and holding frames name the people they hold (`PLAYER 1, 3`, `Session::planned_seats`).
+  A race again, and a RETURN TO MENU race, skip the screen and keep `pane_people` (cleared when the flow
+  ends, `Session::sync_multiplayer`, or the join screen is left).
+- **Remembered on disk** with the layout: `[race] window_panes`, one device key per pane in pane order
+  (`split_screen::device_key`: `keyboard`, `keyboard 2`, a pad's name, `name 2` for a second pad of that name;
+  a `GamepadId` is per run). The next screen puts each device back in its pane
+  (`split_screen::remembered_panes`); a device that is gone or new fills the panes left, in join order.
+
+`--menu-page seat-assign[:SEATS[:ORDER[:UNCONFIRMED]]]` draws it as a still (`2,1` seats, join order by
+default). **Looked at**: Pulse EU and HD EU stills at 1440x816; and live under Xvfb with software Vulkan and
+virtual pads (`scripts/uinput-pads.py`, `OAG_PADS=3`): **Pulse PSP EU**, three pads joined, WINDOWS 2 seated
+2+1; pad 3 stepped left (it and player 2 swapped and dimmed), pad 3 and pad 2 confirmed, the RACE page,
+Track and Ship Select, and the race logged `seat assignment: pane 1 = player 1, pane 2 = player 3, pane 3 =
+player 2` then `multi-window: 2 window(s) holding slot 0 + slot 2, slot 1`; holding pad 3's throttle drove the
+craft in window 1's **lower** pane, holding pad 2's drove window 2's, window 1's upper pane stood still; a fresh
+process opened the screen on the remembered assignment with everybody confirmed (OK went on) and logged the
+same layout; window 2's title changed from `PLAYER 3` to `PLAYER 2` with the assignment. **HD EU**, two pads and
+the keyboard: the keyboard's Left moved player 3's marker and swapped it with player 2's, START was refused
+while they were dimmed, and both confirmed. The join screen's START row no longer shows the head count.
+**Not walked**: a race again and a RETURN TO MENU race (no race finished on lavapipe: the path reads the
+same `pane_people` the first launch did), Pure, Omega, 2048 (the screen is title-agnostic and drawn off the
+same skin hooks as the layout screen; Pure/Omega/2048 stills were not drawn), a single window of two or more
+people (skipped by rule, so nothing to look at), a second real keyboard, the pointer on a live window (unit
+tests only).
 
 ## Windows
 

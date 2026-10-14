@@ -5,7 +5,7 @@ categories: [gameplay]
 # The multiplayer menu flow: one MULTIPLAYER entry, local now, LAN and online greyed
 
 2026-10-14, planned with the maintainer. **Landed the same day (`mp-menu-flow`): steps 1 to 4 and 6 to 8**; step 5, seat
-assignment, is `mp-seat-assign` (the hook is `Session::assign_seats`, between layout and settings). Replaces the per-title split
+assignment, **landed 2026-10-14 as `mp-seat-assign`** (`session::seat_assign`, between layout and settings). Replaces the per-title split
 entries (Pulse and Pure's two SPLIT SCREEN rows, HD/Omega/2048's race-box NUMBER OF PLAYERS
 and SPLIT SCREEN rows) with one flow on every title.
 
@@ -38,8 +38,8 @@ and SPLIT SCREEN rows) with one flow on every title.
    session** are pre-seated if still connected; held in memory only, so a restart joins again.
 4. **Layout**: windows, monitor, cut, fullscreen (the existing WINDOW LAYOUT screen). Remembered
    on disk.
-5. **Seat assignment** (new): each player moves their own marker onto the pane they want.
-   Remembered on disk.
+5. **Seat assignment** (**landed**): each player moves their own marker onto the pane they want (moving onto a held pane
+   swaps; a moved person confirms again). Remembered on disk by device. Skipped with one window.
 6. **Race settings**: our RACE page (mode, class, weapons, AI difficulty, AI on/off); Head to
    Head greyed unless exactly two are seated (`Mode::max_people`). Remembered.
 7. **Track Select**, then **Ship Select** per seat, then the race.
@@ -66,8 +66,8 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
 ## Lanes
 
 - ~~`mp-menu-flow`: steps 1 to 4 and 6 to 8.~~ **Landed 2026-10-14.**
-- `mp-seat-assign`: step 5. About 1 day, after `mp-menu-flow` merges (both edit the session
-  flow).
+- ~~`mp-seat-assign`: step 5.~~ **Landed 2026-10-14**: `oag_ui_screens::seat_assign`, `session::seat_assign`, `[race] window_panes`;
+  skipped for one window. Documented in `docs/rendering/multi-window.md`, "The seat assignment screen".
 - Not before `h2h-port-titles` adds Head to Head to the mode list, or coordinate: both touch
   the RACE page's MODE row.
 
@@ -91,3 +91,7 @@ Written up in `docs/rendering/split-screen.md`, "Where the entry is, per title".
   people are seated (the row dims, `launch_from_settings` does not yet refuse).
 - The cut on the web and phones (no layout screen) is the remembered layout's first window, else horizontal; nothing there can
   choose a vertical split.
+- **Seat assignment, not walked** (`mp-seat-assign`): a race again and a RETURN TO MENU race after an assigned layout (the
+  path keeps `Session::pane_people` and reads it at the same load site as the first launch; no race finished on lavapipe), Pure,
+  Omega and 2048 stills, the pointer on a live window (unit tests only). A single window of two or more people skips the
+  screen, so a two-way split in one window cannot put person 2 on top; say if that should be choosable.

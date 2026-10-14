@@ -176,6 +176,7 @@ impl Session {
                 if let Stage::Menu(stage) = &mut self.stage {
                     stage.join = None;
                 }
+                self.pane_people.clear();
                 self.controls.forget_lobby_keys();
                 self.play_navs(Some(Nav::Decline));
             }

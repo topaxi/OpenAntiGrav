@@ -51,6 +51,10 @@ impl Session {
         let keys = self.device_keys(layout.join().lobby());
         let order = remembered_panes(&keys, &self.settings.race.window_panes);
         let screen = SeatAssign::new(labels, windows, Some(&order));
+        // The windows already open are named for the assignment the screen starts on.
+        self.pane_people = screen.pane_people();
+        #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+        self.refresh_window_titles();
         if let Stage::Menu(stage) = &mut self.stage {
             stage.assign = Some(SeatAssignStage::new(layout, screen));
         }
@@ -150,6 +154,8 @@ impl Session {
                 .join(", ")
         );
         self.pane_people = pane_people;
+        #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+        self.refresh_window_titles();
         self.play_navs(Some(Nav::Accept));
         self.continue_multiplayer(lobby);
     }

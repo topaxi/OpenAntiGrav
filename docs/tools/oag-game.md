@@ -32,7 +32,7 @@ pad drive slot 0 and each further pad the next slot, in connection order; a pad
 plugged in mid-race takes the lowest free slot and one unplugged frees its slot.
 From the menus, SPLIT SCREEN (under RACEBOX) opens a screen where each device
 presses a button to take a seat, START begins with the seated count, and
-`--menu-page join[:N]` draws it as a still with `N` seats taken. On a desktop its START opens the window layout screen (windows, seats per window, cut, monitor, windowed or fullscreen; [multi-window](../rendering/multi-window.md#the-layout-screen)), drawn by `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]`.
+`--menu-page join[:N]` draws it as a still with `N` seats taken. On a desktop its START opens the window layout screen (windows, seats per window, cut, monitor, windowed or fullscreen; [multi-window](../rendering/multi-window.md#the-layout-screen)), drawn by `--menu-page window-layout[:PEOPLE[:WINDOWS[:MONITORS[:EDITED]]]]`. Its START opens the seat assignment screen (who sits in which pane, [multi-window](../rendering/multi-window.md#the-seat-assignment-screen)) when there are two or more windows, drawn by `--menu-page seat-assign[:SEATS[:ORDER[:UNCONFIRMED]]]`.
 
 WASD steers (arrow keys also work), X or Return thrusts, Q and E are the left
 and right airbrakes, C and V are square and triangle.
