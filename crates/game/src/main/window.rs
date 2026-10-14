@@ -97,6 +97,22 @@ pub(crate) fn effective_mode(mode: display::WindowMode, gamescope: bool) -> disp
     if gamescope { display::WindowMode::Borderless } else { mode }
 }
 
+/// The windows a multi-window layout opens. Under gamescope it is one: every window of a client
+/// is mapped full-output at 0,0 and gamescope shows one of them (measured on a Steam Deck,
+/// 2026-10-14; `docs/rendering/multi-window.md`, "Under gamescope"), so the seats of the windows
+/// that could not be seen are cut up in the one window instead, as a split screen is. Window 1
+/// keeps its cut. **Chosen, not measured.**
+pub(crate) fn one_window_under_gamescope(
+    layout: Vec<oag_game::split_screen::WindowSeats>,
+    gamescope: bool,
+) -> Vec<oag_game::split_screen::WindowSeats> {
+    if !gamescope || layout.len() < 2 {
+        return layout;
+    }
+    let count = layout.iter().map(|window| window.count).sum();
+    vec![oag_game::split_screen::WindowSeats { count, cut: layout[0].cut }]
+}
+
 /// The size asked of winit for a window of `size`: logical on a desktop, which is what the
 /// setting means there, and physical pixels under gamescope, held to the monitor so a saved size
 /// larger than the output cannot ask for more pixels than gamescope displays.
@@ -437,6 +453,22 @@ mod tests {
         assert!(matches!(under.fullscreen, Some(winit::window::Fullscreen::Borderless(None))));
         let desktop = attributes_in(look(Windowed), false);
         assert!(!desktop.resizable && desktop.fullscreen.is_none());
+    }
+
+    #[test]
+    fn under_gamescope_the_windows_of_a_layout_become_one_window_holding_every_seat() {
+        use oag_game::split_screen::WindowSeats;
+        use oag_render::viewport::Cut;
+        let two = |count, cut| WindowSeats { count, cut };
+        let layout = vec![two(4, Cut::Horizontal), two(2, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(layout.clone(), false), layout);
+        assert_eq!(
+            one_window_under_gamescope(layout, true),
+            vec![two(6, Cut::Horizontal)]
+        );
+        let single = vec![two(3, Cut::Vertical)];
+        assert_eq!(one_window_under_gamescope(single.clone(), true), single);
+        assert!(one_window_under_gamescope(Vec::new(), true).is_empty());
     }
 
     #[test]
