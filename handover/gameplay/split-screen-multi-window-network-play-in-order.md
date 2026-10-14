@@ -1396,6 +1396,13 @@ both spawn them; done in `oag_gameplay::rank_from_back` / `Setup::people`, evide
   poses at the countdown and compare with the rows (HD race manager at `0x0095ae78`, ships at
   `+0xe8`, slot array at `+0x2d78`).
 - Three to eight people are chosen, not measured (the next row forward each).
+- **Fixed 2026-10-14 (`split-head2head`, maintainer's report): the grid's head count was the first
+  window's view count.** `load` read `Options::views` (one window's HUD need) for `Setup::people`,
+  so `--window-seats 1,1` counted one person and started the second at the front as an opponent
+  (and `2,2` two). `Options::people` now carries the seats across every window (`prepare.rs` from
+  `--window-seats`/`--players`, `Session::launch` from the join seats; `0` means one per view, so
+  one window is unchanged) and the log reads `people on the grid: 1:8 2:7 ...`. Pinned by
+  `crates/game/tests/window_seats_grid_ground_truth.rs` (`1,1`, `2,2`, `3,1`, `--players 4` and `2`).
 - What sets the ship count `g_GameState[0]` for a split race is unread: the rule assumes it stays eight.
 - A launch whose `--players` is clamped after the load (an integrated GPU) keeps the people's rows.
 

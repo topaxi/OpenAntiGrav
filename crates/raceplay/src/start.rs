@@ -454,6 +454,20 @@ impl Race {
                 .map(|(row, name)| format!("{row}:{name}"))
                 .collect();
             info!("pilots on the grid: {}", grid.join(" "));
+            if people > 1 {
+                // Where each seat starts, counted from the front (1 to 8): the back rows, in seat order.
+                let seats: Vec<String> = (0..usize::from(people).min(field_opponents as usize + 1))
+                    .map(|seat| {
+                        let rank = oag_gameplay::rank_from_back(
+                            seat,
+                            field_opponents as usize + 1,
+                            usize::from(people),
+                        );
+                        format!("{}:{}", seat + 1, GRID_SLOTS as usize - rank)
+                    })
+                    .collect();
+                info!("people on the grid: {}", seats.join(" "));
+            }
         } else {
             world.ship_count = 1;
         }

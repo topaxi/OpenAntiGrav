@@ -456,12 +456,15 @@ impl Session {
         // title's authored two-player split HUD, so it needs the view count
         // before `split_screen::seat_for_launch` cuts the screen. See `race::Options::views`.
         self.seat_the_windows(&mut options);
+        options.people = 0;
         if let Some(seats) = self
             .split_lobby
             .as_ref()
             .map(oag_input::lobby::Lobby::count)
             .or_else(|| self.controls.assignment().humans())
         {
+            // The grid wants the head count, whatever the windows make of the views.
+            options.people = u8::try_from(seats).unwrap_or(u8::MAX);
             // With windows, the load is told what the windows' layout needs: a window each
             // shows the whole-screen HUD, which is what one view packs.
             options.views = u8::try_from(if self.screens.is_empty() {

@@ -1102,7 +1102,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
 - **Pulse PSP and Pure** have no local split in the original and take PS2 Pulse's rule; **Omega and
   2048** take HD's (both ship the same `SPArcade_RaceManager`, found by string, **checked, applies,
   not decompiled**). All five are the same code path in ours: `oag_gameplay::rank_from_back`, fed
-  `Setup::people` (`Options::views`, the head count the launch seats).
+  `Setup::people` (`Options::people`, the seats across every window; `Options::views` only when it is `0`).
 - **Three to eight people are chosen, not measured**: the originals ship two. The law is continued
   - person `k` on the `k`-th row from the back - and the opponents keep their own order ahead.
 - **One person is untouched**: ship 0 at the back and ship `s` on the row `8 - s`, bit for bit

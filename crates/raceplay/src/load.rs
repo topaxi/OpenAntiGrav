@@ -777,7 +777,11 @@ pub fn load(options: &Options) -> Result<Loaded> {
             class: options.class.clone(),
             opponents: options.opponents,
             no_opponents: options.no_driver_for_class,
-            people: options.views.max(1),
+            people: if options.people == 0 {
+                options.views.max(1)
+            } else {
+                options.people
+            },
             trail_sparks: options.trail_sparks,
             seed: options.seed.unwrap_or(SEED),
             zone,
