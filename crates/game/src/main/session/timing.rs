@@ -475,7 +475,7 @@ impl Session {
         }
         for reading in blur_readings.iter().flatten() {
             if reading.frame > self.stall_frame && reading.seconds > 0.0 {
-                self.blur_cost.record(reading.seconds);
+                self.blur_cost.record(reading.frame, reading.seconds);
                 trace!(
                     "motion blur chain: frame {} took {:.3} ms, read on frame {}",
                     reading.frame,
@@ -486,7 +486,7 @@ impl Session {
         }
         for reading in hd_bloom_readings.iter().flatten() {
             if reading.frame > self.stall_frame && reading.seconds > 0.0 {
-                self.hd_bloom_cost.record(reading.seconds);
+                self.hd_bloom_cost.record(reading.frame, reading.seconds);
                 trace!(
                     "hd bloom chain: frame {} took {:.3} ms, read on frame {}",
                     reading.frame,
