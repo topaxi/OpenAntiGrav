@@ -410,6 +410,11 @@ impl Drawable {
         self.model.radius
     }
 
+    /// The centre of that bounding sphere, in model space.
+    pub(super) fn centre(&self) -> Vec3 {
+        Vec3::from_array(self.model.centre)
+    }
+
     /// This drawable as a shadow caster: its own buffers, its opaque ranges
     /// and the matrix that places it.
     ///

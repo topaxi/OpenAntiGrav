@@ -51,7 +51,7 @@ fn triangle() -> Model {
     }
 }
 
-fn livery() -> Livery {
+pub(super) fn livery() -> Livery {
     Livery {
         team: "Test".to_string(),
         hull: triangle(),
@@ -94,11 +94,20 @@ pub(super) fn test_gpu() -> Option<(wgpu::Device, wgpu::Queue)> {
 /// A scene over one triangle for a circuit and for every pool: enough to be
 /// drawn, nothing a picture could be judged by.
 pub(super) fn bare_scene(device: &wgpu::Device, queue: &wgpu::Queue) -> Scene {
+    bare_scene_of(device, queue, &[livery()])
+}
+
+/// [`bare_scene`] with one hull per entry of `liveries`, slot by slot.
+pub(super) fn bare_scene_of(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    liveries: &[Livery],
+) -> Scene {
     Scene::new(
         device,
         queue,
         triangle(),
-        &[livery()],
+        liveries,
         None,
         None,
         None,
