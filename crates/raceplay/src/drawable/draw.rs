@@ -111,7 +111,8 @@ impl Drawable {
             Lists::Solid { order } => order,
             Lists::All | Lists::Blended => None,
         };
-        let mut runs = run::Runs::new(&self.textures);
+        let mut binds = oag_gpu::perfprobe::Binds::default();
+        let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
         // the first tier always allows. That is the ship and the collision
         // overlay, and any track whose sections did not decode.
@@ -187,27 +188,39 @@ impl Drawable {
         // encoder validates at `finish`. The shade half binds as usual from this state.
         if self.prepass.is_some() && !shown.is_empty() {
             pass.set_bind_group(1, &self.textures[0], &[]);
-            runs.assume_bound(0);
+            last_bound = Some(0);
         }
-        let slot_of = |draw: &DrawCall| {
-            draw.texture
-                .map_or(0, |t| t + 1)
-                .min(self.textures.len() - 1)
-        };
-        // One batch: queued, so the run it continues stays one `draw_indexed`. Measured on
-        // Talon's Junction, 87 of 580 texture binds a frame in a time trial and 101 of 579
-        // in a full grid re-bound the group already bound; see `run::Runs`.
-        let draw_one = |runs: &mut run::Runs<'_>,
-                        pass: &mut wgpu::RenderPass<'_>,
-                        index: u32,
-                        reversed: bool| {
+        let mut draw_one = |pass: &mut wgpu::RenderPass<'_>, index: u32, reversed: bool| {
             let draw = &opaque_draws[index as usize];
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Switched only when the slot changes, the same elision the
+            // transparent list's `set_pipeline` already runs. Batches
+            // sharing a texture arrive in runs - a model's own batch order
+            // groups them - so this is not a bet: measured on Talon's
+            // Junction, 87 of 580 binds a frame in a time trial and 101 of
+            // 579 in a full grid re-bound the group already bound.
+            //
+            // Carried across all three lists rather than reset per list,
+            // because a `set_pipeline` between them does not unbind
+            // anything: every pipeline this drawable owns is built from one
+            // layout, which is the same fact that already lets groups 0, 2
+            // and 3 be bound once at the top and left alone through both
+            // pipeline switches below. It restarts at `None` per
+            // [`Self::draw`] call, where the texture array itself changes.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
             let range = if reversed {
                 index_count - draw.range.end..index_count - draw.range.start
             } else {
                 draw.range.clone()
             };
-            runs.push(pass, slot_of(draw), range);
+            pass.draw_indexed(range, 0, 0..1);
         };
         match &self.prepass {
             // Depth first, then the shading against it, **backwards** - see
@@ -223,28 +236,24 @@ impl Drawable {
                 pass.set_pipeline(&prepass.depth);
                 for &index in depth_order.iter() {
                     let draw = &opaque_draws[index as usize];
-                    // The white fallback is bound: the depth half reads no texture.
-                    runs.push(pass, 0, draw.range.clone());
+                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
-                runs.flush(pass);
                 pass.set_pipeline(&prepass.shade);
                 let reversed = self.reversed_indices.as_ref();
                 if let Some(reversed) = reversed {
                     pass.set_index_buffer(reversed.slice(..), wgpu::IndexFormat::Uint32);
                 }
                 for &index in shown.iter().rev() {
-                    draw_one(&mut runs, pass, index, reversed.is_some());
+                    draw_one(pass, index, reversed.is_some());
                 }
-                runs.flush(pass);
                 if reversed.is_some() {
                     pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
                 }
             }
             _ => {
                 for &index in shown.iter() {
-                    draw_one(&mut runs, pass, index, false);
+                    draw_one(pass, index, false);
                 }
-                runs.flush(pass);
             }
         }
 
@@ -291,14 +300,22 @@ impl Drawable {
             // (or none) still pays for a single `set_pipeline`.
             let cutout = cutouts.select(draw);
             if !cutout_set.is_some_and(|set| std::ptr::eq(set, cutout)) {
-                runs.flush(pass);
                 oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(cutout);
                 cutout_set = Some(cutout);
             }
-            runs.push(pass, slot_of(draw), draw.range.clone());
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Elided when unchanged, as above.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        runs.flush(pass);
 
         // Third pipeline group, same pass: transparent batches, blended.
         //
@@ -339,7 +356,6 @@ impl Drawable {
             }
             let pipeline = pipelines.select(draw);
             if !current.is_some_and(|set| std::ptr::eq(set, pipeline)) {
-                runs.flush(pass);
                 oag_gpu::perfprobe::pipeline_set();
                 pass.set_pipeline(pipeline);
                 current = Some(pipeline);
@@ -347,9 +363,18 @@ impl Drawable {
             stats.draws_submitted += 1;
             stats.triangles += (draw.range.end - draw.range.start) / 3;
             self.trace_draw("blended", draw);
-            runs.push(pass, slot_of(draw), draw.range.clone());
+            let slot = draw
+                .texture
+                .map_or(0, |t| t + 1)
+                .min(self.textures.len() - 1);
+            binds.record(slot);
+            // Elided when unchanged, as above.
+            if last_bound != Some(slot) {
+                pass.set_bind_group(1, &self.textures[slot], &[]);
+                last_bound = Some(slot);
+            }
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        runs.flush(pass);
         self.draw_stamps(pass, transparent, set, chunks, frustum);
         stats
     }
