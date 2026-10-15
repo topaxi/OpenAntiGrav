@@ -976,6 +976,17 @@ shape and place unchanged).
   shows in the frame; what the change adds is the road's loop over the eight craft records. A sphere test ahead of the
   projection (below) took the iGPU's 1080p scene-pass delta from about +320 to about +190 us; sending the shader only
   the craft near the view is the further cut.
+- **Trimming the loop was tried and did not help (2026-10-15, after merging `main`'s shared scene blocks).** Three
+  variants, each byte-identical in pixels (grid, mid-race and 2-seat stills against the untrimmed build): (a) the CPU
+  packs, per view, only the craft whose sphere meets the view frustum and the shader loops over that count; (b) the
+  same with a constant trip count and a break; (c) a cylinder along the sun around each craft in place of the sphere.
+  Interleaved, quiet runs, 1080p scene pass p50: RTX **2,361 / 2,373 / 2,350 us for (a)** against 2,366 / 2,414 /
+  2,262 us untrimmed (no difference), **iGPU 3,946-4,192 us for (a) against 3,704-3,808 us untrimmed, worse**; (c) was
+  within noise of the sphere on both (RTX 2,314 / 2,347 vs 2,326 / 2,302; iGPU 3,833 vs 3,843). A build with the
+  loop returning at once (no craft shadow on the road at all) reads 1,862-1,984 us on the RTX, below `main`'s 2,109 us,
+  so the road's shadow costs about 210 us on `main` and about 450 us here: the extra is not the number of craft
+  tested (it did not move with the count) and not how tightly the test culls; it is in the loop's own per-pixel work
+  or its code, and was not found. The branch keeps the sphere and the constant loop.
 - **A cull sphere ahead of the projection** (`CRAFT_CULL_RADIUS` 56): a road point farther than that from a craft is
   skipped with one subtract and one dot. It holds the slab (52.8 at its corner), so no pixel changes (a still at the
   grid is byte-identical with and without it).
