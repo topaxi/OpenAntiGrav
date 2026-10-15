@@ -280,10 +280,6 @@ struct VertexInput {
     // `1.0` for a surface the Quake's displacement reaches - see
     // `oag_mesh::mesh::GpuVertex::quake` and `quake.wesl`.
     @location(13) quake: f32,
-    // The `bindless` variant's material slot: the draw's first instance, which
-    // `oag_raceplay`'s drawable sets to the slot a per-draw bind group would have
-    // bound. See `bindings.wesl`.
-    @if(bindless) @builtin(instance_index) material: u32,
 };
 
 struct VertexOutput {
@@ -321,8 +317,6 @@ struct VertexOutput {
     @location(12) spu_light: vec3<f32>,
     // `VertexInput::glow`, flat: a batch stamps one value.
     @location(13) @interpolate(flat) glow: f32,
-    // `VertexInput::material`, flat: one slot per draw.
-    @if(bindless) @location(14) @interpolate(flat) material: u32,
 };
 
 // Colour and screen-space velocity together, for the pipelines built against

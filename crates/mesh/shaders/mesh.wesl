@@ -97,7 +97,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.cur_clip = out.clip;
     out.prev_clip = uniforms.prev_mvp * placed;
     out.spu_light = spu_light_sum(out.world, out.normal);
-    @if(bindless) out.material = in.material;
     return out;
 }
 

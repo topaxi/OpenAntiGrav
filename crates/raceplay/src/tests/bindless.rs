@@ -203,8 +203,8 @@ fn centres(pixels: &[u8]) -> Vec<[u8; 4]> {
 /// **A draw on the arrays reads its own slot.** Eight draws of eight slots, drawn once
 /// through the arrays and once through the per-slot groups: every pixel equal, and the
 /// strips distinct but for the one pair that shares a texture, so a draw reading another
-/// slot (the instance off by one, the white fallback at 0 forgotten, a table row or a role
-/// in it shifted) changes a strip. Fails, too, if a device that has the features stops
+/// slot (a row pushed for the wrong slot or not pushed at a change, the white fallback at 0
+/// forgotten, a role in the row shifted) changes a strip. Fails, too, if a device that has the features stops
 /// taking the arrays path.
 #[test]
 fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {

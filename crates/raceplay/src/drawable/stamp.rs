@@ -54,8 +54,8 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            let first = self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, first..first + 1);
+            self.bind_slot(pass, &mut last_bound, slot);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
     }
 }

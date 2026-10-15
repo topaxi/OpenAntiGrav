@@ -137,7 +137,7 @@ pub struct Built {
     /// Group 1 as arrays, the same materials slot for slot, when the caller asked
     /// for [`bindless`] and the device has it: every pipeline above was then built
     /// against [`bindless::layout`], so this is the group they bind, once, and a
-    /// draw passes its slot as its first instance. [`Built::texture_binds`] is
+    /// draw pushes its slot's [`bindless::Bindless::row`]. [`Built::texture_binds`] is
     /// built either way, for the passes that bind a slot through
     /// [`material_bind_group_layout`].
     pub bindless: Option<bindless::Bindless>,
@@ -517,7 +517,12 @@ pub fn build_with(
             Some(&fog_layout),
             Some(&anim_layout),
         ],
-        immediate_size: 0,
+        // The bindless variant's slot row (`bindless::Row`), pushed per slot change.
+        immediate_size: if bindless {
+            bindless::IMMEDIATE_SIZE
+        } else {
+            0
+        },
     });
 
     // The vertex layout never varies with the model, so it is built once and

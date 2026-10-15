@@ -419,32 +419,39 @@ impl Drawable {
         self.bindless.is_some()
     }
 
-    /// Binds group 1 for this drawable's draws: the arrays once, or nothing,
-    /// leaving [`Self::bind_slot`] to bind each slot's group.
-    pub(super) fn bind_materials(&self, pass: &mut wgpu::RenderPass<'_>) {
+    /// Binds group 1 for this drawable's draws: the arrays once, with slot 0's row
+    /// pushed so a draw before any [`Self::bind_slot`] (the prepass's depth half) has
+    /// its immediates set; or nothing, leaving [`Self::bind_slot`] to bind each slot's
+    /// group.
+    pub(super) fn bind_materials(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        last_bound: &mut Option<usize>,
+    ) {
         if let Some(bindless) = &self.bindless {
             pass.set_bind_group(1, bindless.group(), &[]);
+            pass.set_immediates(0, bindless.row(0));
+            *last_bound = Some(0);
         }
     }
 
-    /// Readies material slot `slot` for the next draw and returns its first
-    /// instance: the slot itself with the arrays bound ([`Self::bind_materials`]),
-    /// whose shader reads it as `VertexOutput::material`; otherwise 0, after
-    /// binding the slot's group unless `last_bound` says it already is.
+    /// Readies material slot `slot` for the next draw, unless `last_bound` says it
+    /// already is: pushes its row with the arrays bound ([`Self::bind_materials`]),
+    /// binds its group otherwise.
     pub(super) fn bind_slot(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
         last_bound: &mut Option<usize>,
         slot: usize,
-    ) -> u32 {
-        if self.bindless.is_some() {
-            return slot as u32;
+    ) {
+        if *last_bound == Some(slot) {
+            return;
         }
-        if *last_bound != Some(slot) {
-            pass.set_bind_group(1, &self.textures[slot], &[]);
-            *last_bound = Some(slot);
+        match &self.bindless {
+            Some(bindless) => pass.set_immediates(0, bindless.row(slot)),
+            None => pass.set_bind_group(1, &self.textures[slot], &[]),
         }
-        0
+        *last_bound = Some(slot);
     }
 
     /// Binds this drawable's vertex buffer - and its streamed coordinates,

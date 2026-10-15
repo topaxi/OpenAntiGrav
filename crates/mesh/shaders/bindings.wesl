@@ -22,30 +22,30 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 @if(!bindless) @group(1) @binding(4) var wave_map: texture_2d<f32>;
 
 // The `bindless` variant (`mesh_render::bindless`): group 1 is a drawable's distinct
-// textures and samplers in two arrays and a row per material slot naming which of them
-// the slot's five bindings were, bound once per drawable; a draw names its slot by its
-// instance index (`VertexOutput::material`). Every function that reads the five names
-// below declares them from that row first, so the rest of the shader is one source.
+// textures and samplers in two arrays, bound once per drawable, and the drawn slot's row
+// naming which of them its five bindings were (`material`). Every function that reads
+// the five names below declares them from that row first, so the rest of the shader is
+// one source.
 // Native only; WebGPU has no binding arrays. The `enable` directive is `mesh.wesl`'s,
 // the root module's.
 @if(bindless) @group(1) @binding(0) var textures: binding_array<texture_2d<f32>>;
 
 @if(bindless) @group(1) @binding(1) var samplers: binding_array<sampler>;
 
-// One material slot's indices into `textures` and `samplers`, written by
-// `mesh_render::bindless`'s `group`.
+// The drawn slot's indices into `textures` and `samplers`, which the draw pushes as
+// immediates when its slot changes (`mesh_render::bindless::Bindless::row`). Immediates
+// rather than an index read from the vertex stage: a flat varying is not provably
+// uniform, so every array read through it took the non-uniform path, which the Arrow
+// Lake iGPU's driver pays for per fragment.
 @if(bindless) struct MaterialSlot {
     albedo: u32,
     lightmap: u32,
     pad_mask: u32,
     wave_map: u32,
     albedo_sampler: u32,
-    pad0: u32,
-    pad1: u32,
-    pad2: u32,
 }
 
-@if(bindless) @group(1) @binding(2) var<storage, read> material_slots: array<MaterialSlot>;
+@if(bindless) var<immediate> material: MaterialSlot;
 
 @group(2) @binding(0) var<uniform> scene: Scene;
 
@@ -132,7 +132,3 @@ var<private> sun_delta: vec3<f32>;
 // floor's facing ramp, the magstrip floor, a light cone) is never charged a sun
 // term it did not contain. Zero otherwise, per invocation.
 var<private> sun_known: f32;
-
-// The `bindless` variant's material slot, `VertexOutput::material`: set by
-// `lit_texel` before anything reads group 1, and read by every function that does.
-@if(bindless) var<private> material: u32;

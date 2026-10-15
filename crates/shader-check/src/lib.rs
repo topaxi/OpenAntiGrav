@@ -208,14 +208,15 @@ pub fn validate(source: &str, path: &str) -> Result<(), Problem> {
 /// The shader capabilities `source` is validated under: none, unless it opts
 /// into binding arrays with `enable wgpu_binding_array;`, which only the
 /// variants a device asks for by feature do (`oag_mesh`'s `mesh_bindless`,
-/// built for `TEXTURE_BINDING_ARRAY` with non-uniform indexing). Those are the
-/// two capabilities wgpu grants for those two features, so the variant fails
-/// here as it would on such a device, and every other shader still fails on
-/// any capability at all.
+/// built for `TEXTURE_BINDING_ARRAY` and `IMMEDIATES`). Those get the two
+/// capabilities wgpu grants for those features and **not** non-uniform
+/// indexing: the variant indexes its arrays by immediates, which are uniform,
+/// so an index that is not (one read from a varying, which costs every
+/// fragment on some drivers) fails the build. Every other shader still fails
+/// on any capability at all.
 fn capabilities(source: &str) -> Capabilities {
     if source.contains("enable wgpu_binding_array;") {
-        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
-            | Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY | Capabilities::IMMEDIATES
     } else {
         Capabilities::empty()
     }

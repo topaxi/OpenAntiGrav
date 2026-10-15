@@ -1,7 +1,7 @@
 // Slope-based texture level of detail and anisotropic sampling.
 
 @if(!bindless) import package::bindings::{albedo, albedo_sampler};
-@if(bindless) import package::bindings::{material, material_slots, samplers, textures};
+@if(bindless) import package::bindings::{material, samplers, textures};
 
 // The GE's texture level slope and bias for a PSP `.vex` model, off by default
 // (0 = the sampler's own derivative-driven selection). See
@@ -34,11 +34,10 @@ override aniso_max: f32 = 1.0;
 // Tint judges against this function's own `dpdx`, `dpdy` and gradient fetch.
 @diagnostic(off, derivative_uniformity)
 fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
-    // The `bindless` variant's slot, which `lit_texel` set - see `bindings.wesl`.
+    // The `bindless` variant's slot - see `bindings.wesl`.
     @if(bindless) {
-        let slot = material_slots[material];
-        let albedo = textures[slot.albedo];
-        let albedo_sampler = samplers[slot.albedo_sampler];
+        let albedo = textures[material.albedo];
+        let albedo_sampler = samplers[material.albedo_sampler];
     }
     let size = vec2<f32>(textureDimensions(albedo, 0));
     let tx = dpdx(uv) * size;

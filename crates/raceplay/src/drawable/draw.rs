@@ -161,7 +161,7 @@ impl Drawable {
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         // Same reasoning as fog: the table is per frame, not per draw call.
         pass.set_bind_group(3, &self.anim_bind, &[]);
-        self.bind_materials(pass);
+        self.bind_materials(pass, &mut last_bound);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
@@ -244,13 +244,13 @@ impl Drawable {
             // and 3 be bound once at the top and left alone through both
             // pipeline switches below. It restarts at `None` per
             // [`Self::draw`] call, where the texture array itself changes.
-            let first = self.bind_slot(pass, &mut last_bound, slot);
+            self.bind_slot(pass, &mut last_bound, slot);
             let range = if reversed {
                 index_count - draw.range.end..index_count - draw.range.start
             } else {
                 draw.range.clone()
             };
-            pass.draw_indexed(range, 0, first..first + 1);
+            pass.draw_indexed(range, 0, 0..1);
         };
         match &self.prepass {
             // Depth first, then the shading against it, **backwards** - see
@@ -343,8 +343,8 @@ impl Drawable {
                 binds.record(slot);
             }
             // Elided when unchanged, as above.
-            let first = self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, first..first + 1);
+            self.bind_slot(pass, &mut last_bound, slot);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
         // Third pipeline group, same pass: transparent batches, blended.
@@ -402,8 +402,8 @@ impl Drawable {
                 binds.record(slot);
             }
             // Elided when unchanged, as above.
-            let first = self.bind_slot(pass, &mut last_bound, slot);
-            pass.draw_indexed(draw.range.clone(), 0, first..first + 1);
+            self.bind_slot(pass, &mut last_bound, slot);
+            pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
         self.draw_stamps(pass, &shows, transparent, set, chunks, frustum);
         stats
