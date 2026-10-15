@@ -20,7 +20,9 @@ oag-fx, oag-post, oag-render, oag-present and oag-game, located through
 the five built-in screen filters, which `oag-post` joins at run time
 (`crates/post/examples/screen_filters_wgsl.rs`). `oag-view`'s shader is not in
 the web build and is left out. The text a build script writes is what wgpu hands
-the browser unchanged, on every target.
+the browser unchanged, on every target. A variant that enables
+`wgpu_binding_array` is native only (no WebGPU device has binding arrays) and is
+skipped by name.
 
 What this does not catch: a module is created alone, so a pipeline layout that
 disagrees with its bindings, an `override` given a bad value, or a limit the
@@ -54,6 +56,10 @@ import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# The `enable` directive of a shader variant a native device feature selects, which the
+# web build never creates.
+NATIVE_ONLY = "enable wgpu_binding_array;"
 
 PACKAGES = ["oag-mesh", "oag-fx", "oag-post", "oag-render", "oag-present", "oag-game"]
 
@@ -124,7 +130,13 @@ def collect_modules(build: bool) -> dict[str, str]:
         if not found or found.group(1) not in wanted:
             continue
         for artifact in sorted(Path(message["out_dir"]).glob("*.wgsl")):
-            modules[f"{found.group(1)}/{artifact.name}"] = artifact.read_text()
+            text = artifact.read_text()
+            # A native-only variant (oag-mesh's `mesh_bindless`, binding arrays): built for
+            # a device feature WebGPU does not have, so never handed to the browser.
+            if NATIVE_ONLY in text:
+                print(f"check-web-shaders: {found.group(1)}/{artifact.name} is native only, skipped")
+                continue
+            modules[f"{found.group(1)}/{artifact.name}"] = text
     with tempfile.TemporaryDirectory(prefix="oag-screen-filters-") as scratch:
         subprocess.run(
             [
