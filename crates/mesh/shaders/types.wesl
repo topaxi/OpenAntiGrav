@@ -228,7 +228,9 @@ struct ShadowMap {
     // depth map's own units. Ours; a depth comparison without it makes a lit
     // surface shadow itself.
     depth_bias: f32,
-    _pad0: f32,
+    // In the coverage mode, how many of `Scene.craft_shadow`'s records are in
+    // use: the CPU packs the craft whose sphere reaches the view first.
+    crafts: f32,
 };
 
 // The world matrix of each `Anim Transform` node the model carries, sampled for

@@ -205,7 +205,7 @@ impl super::super::Scene {
                     strength: MAP_STRENGTH,
                     mode: oag_mesh::mesh_render::ShadowMap::COVERAGE,
                     depth_bias: 0.0,
-                    _pad: 0.0,
+                    crafts: 0.0,
                 }
             }
             oag_display::display::Shadows::Mapped if map.depth_casters() > 0 => {
@@ -214,7 +214,7 @@ impl super::super::Scene {
                     strength: MAPPED_STRENGTH,
                     mode: oag_mesh::mesh_render::ShadowMap::DEPTH,
                     depth_bias: MAPPED_DEPTH_BIAS,
-                    _pad: 0.0,
+                    crafts: 0.0,
                 }
             }
             // Every other case, `off` included: a strength of zero is what
@@ -328,6 +328,35 @@ fn rank_by_distance(
         .collect();
     ranked.sort_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
     ranked.into_iter().map(|(slot, _)| slot).collect()
+}
+
+/// The records of the craft whose cull sphere reaches `frustum`, packed first,
+/// and how many there are.
+///
+/// A road pixel is only ever shadowed by a craft within the sphere
+/// ([`oag_render::shadow::map::CRAFT_CULL_RADIUS`]), so a craft whose sphere
+/// misses the view's frustum cannot change a pixel of it and the receiver need
+/// not test it: the road's per-pixel loop runs over this count, not eight.
+/// Conservative (a pixel inside the frustum and inside a craft's sphere puts
+/// the sphere inside it) with a margin for the camera jitter's sub-pixel shift.
+pub(in crate::scene) fn pack_visible_craft_shadows(
+    records: &[oag_mesh::mesh_render::CraftShadow; oag_render::shadow::map::MAX_CASTERS],
+    frustum: &oag_core::math::frustum::Frustum,
+) -> (
+    [oag_mesh::mesh_render::CraftShadow; oag_render::shadow::map::MAX_CASTERS],
+    f32,
+) {
+    let mut packed =
+        [oag_mesh::mesh_render::CraftShadow::NONE; oag_render::shadow::map::MAX_CASTERS];
+    let mut count = 0;
+    for record in records.iter().filter(|record| record.rect[2] > 0.0) {
+        let centre = Vec3::new(record.centre[0], record.centre[1], record.centre[2]);
+        if frustum.intersects_sphere(centre, record.centre[3].sqrt() + 2.0) {
+            packed[count] = *record;
+            count += 1;
+        }
+    }
+    (packed, count as f32)
 }
 
 /// The box a craft's shadow maps are fitted to: [`oag_render::shadow::map::Fit::craft`]
@@ -701,8 +730,37 @@ fn default_fit() -> oag_render::shadow::map::Fit {
 mod tests {
     use oag_core::math::Mat4;
 
-    use super::{MAPPED_AHEAD, mapped_centre, mapped_fit, rank_by_distance};
+    use super::{
+        MAPPED_AHEAD, mapped_centre, mapped_fit, pack_visible_craft_shadows, rank_by_distance,
+    };
     use oag_core::math::Vec3;
+
+    /// Only the craft whose sphere reaches the view are listed, in slot order and
+    /// packed first; a craft with no map is never listed.
+    #[test]
+    fn only_the_craft_that_reach_the_view_are_packed() {
+        use oag_core::math::{Mat4, camera, frustum::Frustum};
+        use oag_mesh::mesh_render::CraftShadow;
+        let record = |x: f32, mapped: bool| CraftShadow {
+            matrix: [[0.0; 4]; 4],
+            rect: [0.0, 0.0, if mapped { 0.5 } else { 0.0 }, 0.5],
+            centre: [x, 0.0, -50.0, 56.0 * 56.0],
+        };
+        // Looking down -Z from the origin, 90 degrees wide, to 200 units.
+        let view_projection =
+            camera::perspective(std::f32::consts::FRAC_PI_2, 1.0, 0.1, 200.0) * Mat4::IDENTITY;
+        let mut records = [CraftShadow::NONE; 8];
+        records[0] = record(5000.0, true); // far off to the side: out
+        records[1] = record(10.0, true); // in view
+        records[2] = record(0.0, false); // no map: never
+        records[3] = record(-60.0, true); // in view (the sphere reaches it)
+        let (packed, count) =
+            pack_visible_craft_shadows(&records, &Frustum::from_view_projection(view_projection));
+        assert_eq!(count, 2.0);
+        assert_eq!(packed[0], records[1]);
+        assert_eq!(packed[1], records[3]);
+        assert_eq!(packed[2], CraftShadow::NONE);
+    }
 
     /// The rank is by squared distance to the nearest reference point, nearest
     /// first, and a tie goes to the lower slot.

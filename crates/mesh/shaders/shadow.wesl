@@ -78,10 +78,12 @@ const CRAFT_SLAB_FAR: f32 = 0.5 + 50.0 / 140.0;
 fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
     let atlas = vec2<f32>(textureDimensions(shadow_tex));
     var open = 1.0;
-    for (var i = 0; i < 8; i = i + 1) {
-        // A craft with no map has a zero radius (`CraftShadow::NONE`), so this
-        // skips it too. Member by member rather than the whole record: a road
-        // point near no craft reads only the centre.
+    // Only the craft whose sphere reaches this view are listed, packed first
+    // (`Scene::craft_shadow_block`): a road pixel tests a handful, not eight.
+    let crafts = min(i32(scene.shadow.crafts + 0.5), 8);
+    for (var i = 0; i < crafts; i = i + 1) {
+        // Member by member rather than the whole record: a road point near no
+        // craft reads only the centre.
         // Most road is far from most craft: one subtract and one dot reject it
         // before the projection's twelve multiplies. The sphere holds the whole
         // slab (`CRAFT_CULL_RADIUS` in `shadow::map`), so this skips only what

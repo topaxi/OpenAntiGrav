@@ -209,6 +209,11 @@ impl Scene {
         // first frame - which is the only frame a `--screenshot` capture
         // draws - reading an empty map at zero strength.
         self.render_shadow_passes(queue, encoder, race, shadows);
+        // The craft shadow records this view's road can read, packed first.
+        let (craft_shadow, craft_shadow_count) = shadow::pack_visible_craft_shadows(
+            &self.shadow_map.borrow().craft_shadows(),
+            &Frustum::from_view_projection(view_projection),
+        );
         let scene = mesh_render::Scene {
             fog: fog.with_texture_detail(race.texture_detail()),
             // Pulse's hull lights reach the craft alone - see `ship_scene`.
@@ -229,10 +234,13 @@ impl Scene {
                 .map_or_else(Default::default, |grade| grade.zone_uniform()),
             // The shadow map's own projection and strength, or `off` where
             // nothing casts - see `Scene::shadow_uniform`.
-            shadow: self.shadow_uniform(shadows),
+            shadow: oag_mesh::mesh_render::ShadowMap {
+                crafts: craft_shadow_count,
+                ..self.shadow_uniform(shadows)
+            },
             spu_lights: mesh_render::SpuLights::from_slice(&race.hd_spu_lights()),
             sun_occlusion: self.sun_occlusion_matrices(),
-            craft_shadow: self.shadow_map.borrow().craft_shadows(),
+            craft_shadow,
             refraction: super::behind_glass::view_projection(section_view).to_cols_array_2d(),
             quake: race.quake_wave(),
         };
