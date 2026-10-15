@@ -197,6 +197,9 @@ struct Scene {
 struct CraftShadow {
     matrix: mat4x4<f32>,
     rect: vec4<f32>,
+    // The craft's centre and, in `w`, the squared radius of the sphere its map
+    // can shadow within.
+    centre: vec4<f32>,
 };
 
 // Wipeout HD's four `StaticQuake` registers. `point_b.w` is the amplitude

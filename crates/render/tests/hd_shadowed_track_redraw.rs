@@ -138,6 +138,7 @@ fn shadowed(mut scene: Scene, strength: f32) -> Scene {
     scene.craft_shadow[0] = CraftShadow {
         matrix: Mat4::IDENTITY.to_cols_array_2d(),
         rect: [0.0, 0.0, 1.0, 1.0],
+        centre: [0.0, 0.0, 0.0, 1.0e6],
     };
     scene
 }
@@ -218,6 +219,7 @@ fn with_crafts(mut scene: Scene, matrices: &[Mat4]) -> Scene {
         scene.craft_shadow[slot] = CraftShadow {
             matrix: matrix.to_cols_array_2d(),
             rect: [0.0, 0.0, 1.0, 1.0],
+            centre: [0.0, 0.0, 0.0, 1.0e6],
         };
     }
     scene
@@ -290,6 +292,14 @@ fn craft_maps_combine_as_the_originals_redraws_do_and_keep_to_their_box() {
     assert!(
         fraction(&[Mat4::from_translation(Vec3::new(1.5, 0.0, 0.0))]).abs() < 0.04,
         "outside the box is lit"
+    );
+    // And outside the craft's cull sphere, which is checked before the box.
+    let mut far = with_crafts(rig(SUN), &[Mat4::IDENTITY]);
+    far.craft_shadow[0].centre = [100.0, 0.0, 0.0, 50.0 * 50.0];
+    let got = draw(&device, &queue, &model, far, Some(255));
+    assert!(
+        covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
+        "a point outside the cull sphere is lit"
     );
 }
 

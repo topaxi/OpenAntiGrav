@@ -83,6 +83,15 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
         if craft.rect.z <= 0.0 {
             continue;
         }
+        // Most road is far from most craft: one subtract and one dot reject it
+        // before the projection's twelve multiplies. The sphere holds the whole
+        // slab (`CRAFT_CULL_RADIUS` in `shadow::map`), so this skips only what
+        // the slab would, and is the original's own "track chunks within 50
+        // units of the ship" in form.
+        let offset = world - craft.centre.xyz;
+        if dot(offset, offset) > craft.centre.w {
+            continue;
+        }
         // Orthographic, so `w` is 1 and the divide is the identity.
         let ndc = (craft.matrix * vec4<f32>(world, 1.0)).xyz;
         if ndc.z < CRAFT_SLAB_NEAR || ndc.z > CRAFT_SLAB_FAR

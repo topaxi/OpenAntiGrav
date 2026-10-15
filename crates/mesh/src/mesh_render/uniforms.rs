@@ -703,6 +703,11 @@ pub struct CraftShadow {
     /// `x`, `y` the top-left corner and `z`, `w` the width and height. A
     /// zero width is "this craft has no map".
     pub rect: [f32; 4],
+    /// The craft's centre in `xyz` and the squared radius of the sphere around
+    /// it that holds everything its map can shadow in `w`: a point outside it
+    /// is skipped before the projection, which is where the receiver's cost
+    /// goes (a road pixel is far from almost every craft).
+    pub centre: [f32; 4],
 }
 
 impl CraftShadow {
@@ -710,6 +715,7 @@ impl CraftShadow {
     pub const NONE: Self = Self {
         matrix: [[0.0; 4]; 4],
         rect: [0.0; 4],
+        centre: [0.0; 4],
     };
 }
 
@@ -922,8 +928,8 @@ const _: () = assert!(
     "and Scene.sun_occlusion, an array of mat4x4"
 );
 const _: () = assert!(
-    std::mem::size_of::<CraftShadow>() == 80,
-    "shaders/types.wesl's CraftShadow is a mat4x4 and a vec4"
+    std::mem::size_of::<CraftShadow>() == 96,
+    "shaders/types.wesl's CraftShadow is a mat4x4 and two vec4s"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, craft_shadow).is_multiple_of(16),

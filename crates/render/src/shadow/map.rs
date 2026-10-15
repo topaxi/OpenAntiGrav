@@ -76,6 +76,13 @@ pub const RANK_SQUARES: [(u32, u32, u32); MAX_CASTERS] = [
 /// the box to the ship's own bbox with none.
 pub const CRAFT_HALF_EXTENT: f32 = 12.0;
 
+/// The radius of the sphere around a craft outside which the receiver skips its
+/// map without projecting, in world units. **Not a new bound**: it encloses the
+/// receiver's slab (50 units past the craft along the sun, the box's 12-unit
+/// half width across it, so 52.8 at the corner) with room to spare, and the
+/// original redraws the track chunks within 50 units of each ship too.
+pub const CRAFT_CULL_RADIUS: f32 = 56.0;
+
 /// How far each craft's box reaches along the sun either side of the craft,
 /// in world units.
 ///
@@ -303,6 +310,12 @@ pub fn craft_shadow(fit: &Fit, rank: usize) -> CraftShadow {
             y as f32 / height,
             side as f32 / width,
             side as f32 / height,
+        ],
+        centre: [
+            fit.centre.x,
+            fit.centre.y,
+            fit.centre.z,
+            CRAFT_CULL_RADIUS * CRAFT_CULL_RADIUS,
         ],
     }
 }
