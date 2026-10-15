@@ -144,6 +144,12 @@ Full recipes: `docs/reverse-engineering/emulator-recipes.md`. The rules:
   `test-data` once per merge batch. Run the full pair yourself only when your
   brief says so.
 
+  **On the notebook (8 GB NVIDIA dGPU) `test-data` at the default thread
+  count fails HD weapon-scene tests with `wgpu error: Out of Memory`**, a
+  different test each run, each passing alone (2026-10-15, `split-cpu`). Add
+  `NEXTEST_TEST_THREADS=6` to the `env` of the test-data line there; a red
+  that is only this OOM is the machine, not your change.
+
   **A render bench takes the same lock.** `just bench-render` (whole-race
   rendering benchmark, `docs/tools/render-bench.md`) holds
   `$HOME/.cache/oag/gate.lock` itself for the runs, so it measures on a quiet
