@@ -13,7 +13,7 @@ use super::*;
 /// One circuit's worth of parameters, none of it load-bearing for this test -
 /// only that the numbers are finite, so the constants buffer round-trips
 /// without producing NaN uniforms a validation layer would reject.
-fn params() -> Params {
+pub(super) fn params() -> Params {
     Params {
         alpha_contribution: 1.0,
         frame_contribution: 1.0,
@@ -535,7 +535,6 @@ fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, 
     };
     let chain =
         Chain::new(device, format, size, chain_params, Glow::Drawn).expect("the pipelines build");
-    chain.set_reach(reach);
     let half = |linear: bool| (if linear { 0x3c00u16 } else { 0 }).to_le_bytes();
     let mut texels = Vec::new();
     for _row in 0..size.1 {
@@ -591,7 +590,19 @@ fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, 
         mapped_at_creation: false,
     });
     let mut encoder = device.create_command_encoder(&Default::default());
-    chain.run(queue, &mut encoder, &view, (0.0, 0.0), size, None);
+    chain.run_view(
+        queue,
+        device,
+        &mut encoder,
+        &view,
+        View {
+            seat: 0,
+            rect: (0, 0, size.0, size.1),
+            area: size,
+            reach,
+            first: true,
+        },
+    );
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
             texture: &output,
@@ -632,7 +643,7 @@ fn spill_over_the_edge(device: &wgpu::Device, queue: &wgpu::Queue, reach: (f32, 
 
 /// **A shorter reach spills less glow over an edge.** A split screen sets it to the
 /// views' own scale for the frame, so a view's glow keeps its size against what it
-/// surrounds; whole pictures leave it at `(1, 1)`. Drop `set_reach`'s effect on the
+/// surrounds; whole pictures leave it at `(1, 1)`. Drop the view's `reach` effect on the
 /// blur's tap spacing and the two readings are equal.
 #[test]
 fn a_shorter_reach_spills_less_glow_over_an_edge() {

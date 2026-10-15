@@ -981,10 +981,10 @@ impl Scene {
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
         //
-        // A split-screen view runs neither chain: both encode into `view` with a
-        // clearing pass and sample the linear scene from its top-left, so one run
-        // per view would wipe every earlier view. `Scene::render_viewports` runs
-        // the chain once over the whole area after the last view instead.
+        // A split-screen view runs neither chain as it is drawn: HD's encode clears
+        // `view`, so one run per view would wipe every earlier view.
+        // `Scene::render_viewports` runs each chain once per view over its own
+        // rectangle after the last view instead (`split_exposure`).
         //
         // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
         // target's origin and fills it, which is what the chains sample from, so it

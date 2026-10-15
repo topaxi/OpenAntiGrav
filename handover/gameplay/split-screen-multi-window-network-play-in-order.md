@@ -184,7 +184,8 @@ checked and fixed.** On HD and 2048 a split drew only its last view (the encode 
 clears the frame), and on Omega and HD the last view was graded from the first view's
 pixels; the chain now runs once over the whole area after the last view
 ([split-screen.md](../../docs/rendering/split-screen.md#drawing)). **Open from it**
-(all chosen, not measured): one shared exposure and glow for all views, HD's boost
+(all chosen, not measured): ~~one shared exposure and glow for all views~~ (per view since
+2026-10-15, `hd-exposure`), HD's boost
 zoom streak and Omega's distortion offsets are not drawn under a split, and a
 race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
 from the primary's pulse (read from the code, not captured).
@@ -402,7 +403,8 @@ checked and fixed.** On HD and 2048 a split drew only its last view (the encode 
 clears the frame), and on Omega and HD the last view was graded from the first view's
 pixels; the chain now runs once over the whole area after the last view
 ([split-screen.md](../../docs/rendering/split-screen.md#drawing)). **Open from it**
-(all chosen, not measured): one shared exposure and glow for all views, HD's boost
+(all chosen, not measured): ~~one shared exposure and glow for all views~~ (per view since
+2026-10-15, `hd-exposure`), HD's boost
 zoom streak and Omega's distortion offsets are not drawn under a split, and a
 race that borrows HD's zoom ring (`Scene::run_boost_zoom`) still runs it per view
 from the primary's pulse (read from the code, not captured).

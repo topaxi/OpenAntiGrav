@@ -45,16 +45,15 @@
 //!   blur over each rectangle, one submission each. **No camera jitter and no temporal
 //!   upscaler input**: the upscaler's frame record holds one camera, and the window's is
 //!   kept cleared. **Chosen, not measured.**
-//! - **HD's and Omega's post chains run once, after the last view.** Both draw
-//!   the scene into a linear float target and then encode it into `view` with a
-//!   pass that *clears* `view`, sampling the linear target from its top-left
-//!   whatever the view's origin is. Run per view, each encode wiped every earlier
-//!   view (a black top view in a two-player HD race) and every later view was
-//!   graded from the first view's pixels. The views now only fill the linear
-//!   target, and [`Scene::encode_split_post`] runs the chain once over `area`,
-//!   which is what a single view passes: one exposure and one glow for the whole
-//!   picture. **Chosen, not measured**; glow bleeds a few pixels across the gap
-//!   between views. The boost zoom streak (HD's own ring) is not drawn under a
+//! - **HD's and Omega's post chains run once per view, after the last one**
+//!   ([`Scene::run_split_post`], `split_exposure`). Both draw the scene into a linear
+//!   float target and then encode it into `view` with a pass that *clears* `view`
+//!   (HD's). Run as each view drew, each encode wiped every earlier view (a black
+//!   top view in a two-player HD race) and every later view was graded from the first
+//!   view's pixels. The views now only fill the linear target, and the chain then
+//!   runs over each view's own rectangle of it, with an adaptation per seat: a view in
+//!   a dark tunnel and one in daylight each have their own exposure, and HD's glow
+//!   stops at the view's edge. **Chosen, not measured.** The boost zoom streak (HD's own ring) is not drawn under a
 //!   split and Omega's distortion offsets are not drawn: the first holds the
 //!   primary craft's pulse; the second reads the depth attachment, which since the blur
 //!   (a later view loads it) holds every view's and could be wired. Both open.
@@ -376,8 +375,7 @@ impl Scene {
         )
     }
 
-    /// `slots[i]`'s view drawn into `rects[i]` of `area`, then the post chain once over
-    /// `area`: what [`Scene::render_viewports`] and [`Scene::render_window_views`] are.
+    /// `slots[i]`'s view drawn into `rects[i]` of `area`, then the post chains once per view: what [`Scene::render_viewports`] and [`Scene::render_window_views`] are.
     #[allow(clippy::too_many_arguments)]
     fn render_slots(
         &self,
@@ -458,17 +456,19 @@ impl Scene {
         self.reuse_frame_work.set(false);
         self.history.set(0);
         race.reset_viewpoint();
+        // HD's and Omega's chains, one run per view with its own adaptation
+        // (`split_exposure`).
+        let post_ran = self.run_split_post(device, queue, view, slots, rects, area);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),
         });
-        let split_post = self.encode_split_post(device, queue, &mut encoder, view, rects, area);
         // Pulse's glow, one lane per view, read from the finished picture: every view is in
         // `view` now, and the composite waits for the HUD as a single view's does.
         let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
-        if split_post || glow {
-            stats.hd_bloom_encoded = split_post && self.hd.is_some();
+        if glow {
             queue.submit(Some(encoder.finish()));
         }
+        stats.hd_bloom_encoded = post_ran && self.hd.is_some();
         // Motion blur, last, as a single view's is: after the glow's bright pass (which the
         // composite adds back over the blurred frame after the HUD) and after HD's and
         // Omega's chain, before the HUD. See `split_blur`.
@@ -482,33 +482,5 @@ impl Scene {
             effects.blur_timestamps,
         );
         stats
-    }
-
-    /// HD's or Omega's chain, once, over the whole `area` the views were drawn
-    /// into. Returns whether a chain ran: Pulse, Pure and 2048 draw straight into
-    /// the caller's view and have nothing to do here.
-    fn encode_split_post(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        rects: &[(f32, f32, f32, f32)],
-        area: (f32, f32, f32, f32),
-    ) -> bool {
-        if let Some(hd) = &self.hd {
-            // The glow's reach is authored as a fraction of the whole frame, and a view
-            // of a split shows a fraction of it: scale it by the views' own pixel scale
-            // so the glow keeps its size against what it surrounds. Chosen, not measured.
-            hd.set_reach(super::bloom::mean_reach(area, rects));
-            self.run_hd(queue, encoder, view, area, None, None);
-            hd.set_reach((1.0, 1.0));
-            true
-        } else if let Some(omega) = &self.omega {
-            self.run_omega(omega, device, queue, encoder, view, area, false);
-            true
-        } else {
-            false
-        }
     }
 }

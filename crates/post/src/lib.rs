@@ -43,6 +43,9 @@ pub mod ps2_bloom;
 pub mod screen;
 pub mod smaa;
 
+#[cfg(test)]
+mod split_fixture;
+
 /// A sampled 2D colour texture, at `binding`, visible to the fragment stage.
 ///
 /// Every pass here reads at least one, and three of them had written this
