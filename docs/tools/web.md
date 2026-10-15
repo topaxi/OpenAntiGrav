@@ -416,8 +416,8 @@ Firefox draws slower, so its walks want the presses further apart.
 
 ### The shader smoke test
 
-`scripts/check-web-shaders.py` (`just check-web-shaders`, in `just` and
-`just gate-affected`) creates every WGSL module the web build emits with
+`scripts/check-web-shaders.py` (`just check-web-shaders`; run by CI's `web-shaders` job, not
+by the local `just` gate, whose runtime is long enough already) creates every WGSL module the web build emits with
 `device.createShaderModule` in a real browser and fails on any
 `getCompilationInfo()` message of type `error`, printing the module, the line,
 the function it is in and Tint's own notes (which call chain made the value

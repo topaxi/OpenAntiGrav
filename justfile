@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas check-web-shaders
+check: fmt-check lint test check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -168,7 +168,7 @@ test-data *ARGS:
 # selects nothing. The lead still runs the full `just` and `just test-data` once
 # per merge batch - see `.claude/skills/oag-drive/member-rules.md`.
 [parallel]
-gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas check-web-shaders
+gate-affected: fmt-check lint test-affected check-docs check-deps check-unused-deps check-determinism check-size check-title-branching check-title-reach check-names check-captures check-handover check-link-data check-strings check-just-args check-status check-schemas
 
 # `just test`, narrowed to what `scripts/affected.py` selects.
 test-affected:
@@ -1208,7 +1208,7 @@ check-schemas:
 # rejects, and a rejected module draws nothing in the browser. Skips loudly,
 # naming what it looked for, when no Chromium or Chrome is installed; CI sets
 # OAG_REQUIRE_WEB_SHADERS=1 so a skip there fails. `--browser all` adds
-# Firefox, which needs a GPU. See docs/tools/web.md, "Shaders".
+# Firefox, which needs a GPU. Run in CI only, not in the local `just` gate\n# (maintainer, 2026-10-15). See docs/tools/web.md, "Shaders".
 check-web-shaders *ARGS:
     python3 scripts/check-web-shaders.py "$@"
 
