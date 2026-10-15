@@ -387,6 +387,9 @@ impl Cards {
         seconds: f32,
         gantry_clock: &dyn Fn(&crate::gantry::CardTimeline) -> f32,
     ) {
+        // A card is drawn into its own texture, outside any view: its matrices go straight to
+        // its own buffer.
+        let queue = &Uploads::immediate(queue);
         for card in &self.cards {
             let seconds = card.timeline.as_ref().map_or(seconds, |timeline| {
                 timeline.apply(&card.drawable, gantry_clock(timeline))
@@ -434,7 +437,8 @@ impl Cards {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            card.drawable.draw(&mut pass, None, None, None, None);
+            card.drawable
+                .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
         }
     }
 }

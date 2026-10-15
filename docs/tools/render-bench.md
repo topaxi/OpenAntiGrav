@@ -352,6 +352,148 @@ or atlas per drawable, render bundles for the view-independent draws, merging a 
 cut it, each a change to how the scene is built.
 
 
+## Encoder finish and the uniform uploads (2026-10-15, `encoder-finish`)
+
+Same notebook, same NVIDIA RTX PRO 2000 Blackwell Laptop GPU and Arrow Lake iGPU, release builds,
+1280x800, the gate lock held, every run pinned to the P-cores (`taskset -c 0-5`). The `perf-probe`
+build's `OAG_RENDER_BENCH=300` line `render_viewports CPU (record + submit)` is the number (it prints
+a one-view race too, and it is the only one that includes `encoder.finish`); `scripts/bench-render.py`
+is not used for the comparison, see "Whole-race medians" below. **Other members' builds shared the
+machine**, so each cell is the **minimum over four interleaved rounds of the per-run median** (a quiet
+round, not a typical one).
+
+**What changed.**
+
+- **One scene block per kind and view** (`oag_raceplay::drawable::SceneBlocks`). Bind group 2 holds
+  `Scene` (fog, light rig, clock, shadow map, Zone grade, about a kilobyte) and every drawable owned a
+  buffer for it that the frame filled with the same bytes. A drawable now binds one block of a shared
+  buffer by dynamic offset, and the frame writes the circuit's, the craft's, the shine passes', the
+  flame surfaces' and the behind-the-glass alternate's once a view. Writes through `queue.write_buffer`
+  a view (`perf-probe`'s counter, frame 0; one view then two): Pulse 89 / 159 to 56 / 93, HD 78 / 139
+  to 55 / 93, Pure 28 / 51 to 19 / 33; Pulse's bytes a view 454 to 282 KiB. Shield shells, weapon
+  models and the sky never get a block written (or only while live) and keep a buffer of their own.
+- **Every drawable's matrices share one buffer too** (bind group 0, `UniformBlocks` and `Uploads`
+  in `drawable/scene_block.rs`): a region per view, a slot of 256 bytes per drawable, the hulls,
+  shine passes, wrecks, flares, plumes, shields, absorb passes, circuit, sky, pads, collision,
+  gantry, behind-the-glass drawables and the weapon pools claim a slot at load; a view stages its
+  matrices in memory and writes them in runs of neighbouring slots just before its scene pass, and
+  a slot a view did not stage keeps what that view's region held (what the old per-drawable buffer
+  did). Writes a view (one view, then two): Pulse 56 / 93 to 36 / 45, HD 55 / 93 to 37 / 41, Pure 19
+  / 33 to 8 / 11. `OAG_RENDER_PERF_SITES=1` prints a probe frame's writes by call site.
+- **The craft's animation tables are written by the first view** (`FrameWork::craft_anims`): a
+  function of the race clock that every view wrote (8 writes a later view on Pulse, 16 on HD).
+- **Tried and not kept: contiguous batches of one texture as one `draw_indexed`** (commit `5b646661f`,
+  reverted). Queued draws to issued calls a view, one view: HD 1,447 to 969, Pulse 423 to 363, Pure
+  368 to 290, the triangles in the same order, every still identical. Measured quiet (four
+  interleaved rounds, second view of a 2h frame, minimum of the per-run medians of the `encoder-finish`
+  span): HD 294 to 275 us, Pulse 220 to 220, Pure 144 to 143, while queueing the draws costs 3 to 8 us
+  in the recording (`scene-pass` span: HD 84 to 92, Pulse 36 to 39, Pure 22 to 25). Net about -11 us a
+  view on HD and +2 to +3 on Pulse and Pure: the draw calls are not what `finish` pays for (see
+  below), so it did not pay for its code.
+
+**Result** (`render_viewports CPU`, p50 us, before then after the scene blocks; the merge column is the
+reverted commit on top, kept as the record of what it did; "before" is `main` plus a commit that only
+routes the writes through the counter):
+
+| Title, case | before | + scene blocks | + merged draws (reverted) |
+| --- | ---: | ---: | ---: |
+| Pulse, 1 | 1,108 | 1,050 | 1,056 |
+| Pulse, 2h | 1,679 | 1,608 | 1,609 |
+| HD, 1 | 1,883 | 1,863 | 1,902 |
+| HD, 2h | 2,101 | 2,116 | 2,021 |
+| Pure, 1 | 551 | 471 | 498 |
+| Pure, 2h | 700 | 684 | 667 |
+
+The scene blocks are worth 4 to 5% of Pulse's CPU (about 1 us a `write_buffer` removed, 33 a view)
+and Pure's one view (14%, 80 us), nothing measurable on HD (23 writes a view, 2,116 against 2,101 is
+noise); the merged column's HD 2h gain did not reproduce in the quiet span runs above, so it is not
+credited to the merge. **The Arrow Lake iGPU, same A/B (before then scene blocks plus the merge
+column's commit, three rounds, minimum):** Pulse 1 6,903 to 6,267,
+Pulse 2h 6,244 to 6,024, HD 1 6,032 to 5,964, HD 2h 8,389 to 8,125, Pure 1 1,839 to 1,830, Pure 2h
+2,667 to 2,626 us. **Pictures and state, scene blocks:** 9 stills (Pulse, HD, Pure; one view, 2h, 2v) and 8 more
+(HD Vineta K one view and 2h with the behind-the-glass target dumped, HD Zone stage 2 one view and
+2h, 2048 and Omega one view, Pulse at tick 1500 one view and 2h, and the Ship Select page, whose 3D
+preview draws through `oag_game::preview`) byte-identical before and after, the
+before binary rendered twice is identical to itself, `oag-view` ship and circuit stills render (the
+viewer binds offset 0 too), and
+`final_state_hash` of all six `bench-render` races is the same before and after.
+
+**The matrices and the animation tables, second step** (same method, minimum over four interleaved
+rounds, the `render_viewports CPU` p50, scene blocks only then plus both: Pulse 1 1,284 to 1,306,
+Pulse 2h 2,028 to 1,987, HD 1 2,058 to 2,016, HD 2h 2,951 to 2,780, Pure 1 567 to 564, Pure 2h 862 to
+826 us, at load 3 to 17, so read it as a few percent). **The second view's spans** (`perf-probe`, the
+quiet runs, sum of the span minimums: Pulse 483 to 476 us, HD 636 to 571, Pure 294 to 282): the
+craft animation span goes to 0 (Pulse 9 us, HD 41), the hull and shine write span falls (Pulse 61
+to 42, HD 22 to 12, Pure 12 to 4), `encoder.finish` does not move (216 to 213, 290 to 289, 143 to
+140), as it counts commands. **Pictures:** the 9 stills, the 10 above, 19 with weapons and a wreck
+(each weapon type fired on Pulse and HD, a bomb trip, a missile hit, a wreck, a two-view rocket)
+byte-identical against `main`'s tip (38 of 38 on the merged branch), and
+`tests::scene_blocks::two_views_leave_a_block_each_holding_their_own_eye` reads back both views'
+craft matrices (dropping the share or the flush fails it).
+
+**Where `encoder.finish` goes: the texture bind-group switches.** The second view of a 2h frame, in
+`perf-probe`'s `encoder-finish` span, with and without a timing-only hack that never switches
+group 1 again after the first bind (the picture is wrong; never committed), **minimum over four
+interleaved rounds of the per-run median** (the medians of the four are Pulse 223 / 100, HD 285 /
+102, Pure 139 / 41), us:
+
+| | finish, as is | finish, no group-1 switches | CPU of the 2h frame, as is | no switches |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse | 216 | 96 | 1,605 | 1,297 |
+| HD | 273 | 98 | 2,283 | 1,814 |
+| Pure | 133 | 39 | 680 | 420 |
+
+So the per-draw texture bind groups are **55 to 65% of `encoder.finish` and 20 to 25% of a view's
+CPU**: the most a texture array, an atlas or bindless textures could remove. Skipping eleven bind
+group 2 sets (the craft's, same buffer and offset) moved Pulse's finish by 3 us and HD's by 4, so the
+group-2 sets, with their thirteen textures, are not the cost; a switch is about 0.35 to 0.4 us of
+finish on this driver (the table's no-switch difference over the switches a view issues: Pure 94 us /
+262, Pulse 120 / 334, HD 175 / 442; each switch's share, not an upper bound on its price).
+
+**Why the texture switches are not taken out here.** Sorting the draws by texture changes pixels
+(2026-10-03, `scene/shine.rs`: a distance sort moved 1 to 419 pixels where coplanar batches tie);
+`texture_2d_array` needs one size and format; an atlas breaks repeat wrapping; and a
+`binding_array` indexed by the draw's instance index (`TEXTURE_BINDING_ARRAY` plus non-uniform
+indexing) is native only, so the web and phone builds would keep the per-draw path next to it, and
+group 1 holds five bindings (albedo, its sampler, lightmap, pad mask, wave map) that every title's
+mesh shader reads. That is a lane of its own with this table as its ceiling. Render bundles do not
+fit either: a bundle's commands are fixed at its creation, and every drawable's draw list changes
+each view with the culling and the level of detail (and the dynamic offsets differ per view).
+
+**Whole-race medians were not readable.** `bench-render pulse hd pure --views 1,2h` before and after,
+two interleaved rounds each, at load 3 to 14 from other members' builds: Pulse 1 read 1,991 / 1,468
+before and 1,435 / 2,382 after, HD 2h 3,042 / 2,896 and 3,337 / 4,422, Pure 352 / 330 and 322 / 575
+(CPU p50 us). The same binary swings by more than the change. What those runs do show is the
+state: every `final_state_hash` identical across all four runs. The in-process numbers above are the
+evidence.
+
+**A microbenchmark of `finish` per command kind** (400 to 800 draws, a pipeline with the mesh
+layout's four groups, 13 textures in group 2) read about 0.1 us a draw, 0.4 us a `set_pipeline` and
+0.5 to 1.1 us a `set_bind_group`, but two of its variants doubled between rounds while others stayed
+flat, so treat its ratios, not its microseconds, as indicative; the ceiling run above is the
+measured share.
+
+**Steam Deck commands (not run: the Deck is the maintainer's), Pulse and HD first.** From the repo
+root on the Deck, desktop mode, plugged in, nothing else open. Build the two binaries once each (the
+private `XDG_*` directories keep the runs off the Deck's own settings and saves, as in the Cost recipe
+of [split screen](../rendering/split-screen.md)):
+
+```sh
+git checkout main && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-main
+git checkout encoder-finish && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-new
+mkdir -p /tmp/oag-bench
+for title in pulse-psp-eu.chd hdfury-ps3-eu-dec.iso; do for rep in 1 2 3; do for n in 1 2; do for bin in /tmp/oag-game-main /tmp/oag-game-new; do
+  echo "== $title $bin players=$n load=$(cut -d' ' -f1 /proc/loadavg)"
+  XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+  OAG_RENDER_BENCH=300 $bin data/images/$title --race --no-audio --mode single_race \
+    --players $n --split-cut horizontal --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+    | grep -E '^bench (split|render_viewports CPU)'
+done; done; done; done | tee /tmp/oag-bench/encoder-finish.txt
+```
+
+`bench split:` must name the Deck's GPU (RADV), not llvmpipe. Read the minimum of each binary's
+medians. For one run of each binary add `OAG_RENDER_PERF=1` and read the `encoder-finish` mark.
+
 ## HD on a notebook, before and after the craft cull (2026-10-15, `hd-gpu`)
 
 Release build, 1280x800 and 1920x1080 scene only, Talon's Junction, seed 1, autopilot, the

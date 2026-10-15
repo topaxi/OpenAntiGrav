@@ -612,6 +612,35 @@ are in [render bench](../tools/render-bench.md#split-cpu-on-the-notebook-2026-10
 What is left is `encoder.finish`, the driver-side validation of the recorded commands, 40% of a
 Pulse view and half of HD's, which only fewer commands reduce.
 
+**`encoder.finish` and the uploads, measured (2026-10-15, `encoder-finish`).** One shared buffer of
+scene blocks now holds the fog-and-light block every drawable of a kind binds (a block per view and
+per kind, a dynamic offset; `oag_raceplay::drawable::SceneBlocks`), so a view writes five instead of
+one per drawable (Pulse 89 to 56 `queue.write_buffer` calls a view), and every drawable's matrices (bind group 0) share
+one buffer with a region per view, written in runs before the scene pass (Pulse 56 to 36 in one view,
+93 to 45 in two; HD 55 to 37 and 93 to 41; Pure 19 to 8 and 33 to 11), and the craft's animation
+tables are written by the first view only. Pulse's CPU fell about 4 to 5% from the first, a few
+percent more from the rest, HD's two-view CPU about 6%, the pictures are byte-identical. Merging a drawable's contiguous
+same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) was tried and reverted:
+`finish` fell 19 us on HD and nothing elsewhere, recording it cost 3 to 8. **What `finish` is made of:** the per-draw texture
+bind-group switches, 55 to 65% of it (Pulse 216 to 96 us a view, HD 273 to 98, Pure 133 to 39 with a
+hack that never re-binds group 1), 20 to 25% of a view's CPU. Taking them out needs a texture array or
+bindless scheme: sorting by texture moves pixels, an atlas breaks wrapping, and `binding_array` is
+native only. Numbers, the iGPU and the Deck commands are in
+[render bench](../tools/render-bench.md#encoder-finish-and-the-uniform-uploads-2026-10-15-encoder-finish).
+
+**The per-view scene blocks are not yet a threaded view.** The block region is the one piece of
+per-view state that can be written and bound without touching another view's: the offset travels as a
+`ViewBlock` handed to the draw calls and is not stored in a drawable. What a view still shares at
+record time, which a concurrent-encoder lane has to split first: `Scene::upload_staging` (the staging
+memory, taken and put back around a view), the craft's `anims`/`node_anims` tables (written by the
+first view, read by the rest), and `Drawable`'s `shown`,
+`ripple`, `pad_glow` and `hidden` `RefCell`s; `Scene`'s `layer`, `history`, `reuse_frame_work`,
+`scratch`, `opaque_order` and `anim_clock` cells and the effect pipelines' own uniform and vertex
+buffers (exhaust, sparks, clouds, shadow geometry, beams, which a view rewrites); and the race's
+viewpoint cell (`Race::set_viewpoint`). The scene blocks and the matrices are keyed by
+`Race::viewed_slot` (unique to a view within a frame, because a craft is followed by one seat) and a
+view's matrices are staged in `Uploads`, a value of the view, so those two no longer count.
+
 The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
 reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
 eight views, and `--pvs false` 7,923 at tick 1800, so the old figures were most likely taken
@@ -1770,8 +1799,11 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   seat, and the glow stops at the cut. Open from it: the exposure itself only moves a view darker
   than an adapted luma of 0.15 on Talon's Junction (rule 6: the glow fade is what a Zone 4 split
   shows), the multi-window single-seat window re-seeds the lanes every frame, and the Deck reading.
-- **CPU per view is mostly the driver now**: `encoder.finish` is about 230 us of a Pulse view's
-  590 and about 500 us of an HD view's (see "Cost", 2026-10-15). Open in the `split-cpu` thread.
+- **CPU per view is mostly the driver now**: `encoder.finish` is about 220 us of a Pulse view's
+  590 and about 280 us of an HD view's (see "Cost", 2026-10-15), more than half of it the texture
+  bind-group switches. The scene uniform is one block per kind and view now; open: a texture array
+  or bindless path (native only), group-0 matrices packed into one write a view, and the per-view
+  state list above. Open in the `split-screen-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
   view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
   and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole

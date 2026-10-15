@@ -5,6 +5,7 @@
 //! `scripts/check-file-size.py`, the seam `frame/craft.rs` and
 //! `frame/attachments.rs` already set; a move, with no behaviour change.
 
+use crate::Uploads;
 use oag_core::math::{Mat4, Vec3};
 use oag_mesh::mesh::GpuVertex;
 use oag_render::shadow::Placement;
@@ -418,7 +419,7 @@ impl super::super::Scene {
     /// uniforms and is not drawn, the same as before.
     pub(super) fn write_hull_uniforms(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         race: &Race,
         view_projection: Mat4,
         prev_vp: Mat4,

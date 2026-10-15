@@ -844,9 +844,15 @@ impl Gantry {
         race_clock(&self.clock, &self.tracker, race)
     }
 
-    /// The fog block this frame, shared with the rest of the scenery.
-    pub(super) fn fog(&self) -> &wgpu::Buffer {
-        &self.drawable.fog
+    /// Moves the gantry's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        self.drawable.share_uniforms(device, blocks);
+    }
+
+    /// Moves the gantry onto the circuit's scene block, written with the rest of the scenery's.
+    pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
+        self.drawable
+            .share_scene(device, blocks, SceneKind::Circuit);
     }
 
     /// Writes the frame's matrices and both animation tables.
@@ -858,7 +864,7 @@ impl Gantry {
     /// panel at `seconds` ([`PanelCull`]).
     pub(super) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         previous_view_projection: Mat4,
         seconds: f32,
@@ -889,8 +895,9 @@ impl Gantry {
     pub(super) fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         frustum: Option<&oag_core::math::frustum::Frustum>,
     ) -> SceneStats {
-        self.drawable.draw(pass, None, None, None, frustum)
+        self.drawable.draw(pass, block, None, None, None, frustum)
     }
 }

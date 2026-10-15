@@ -7,6 +7,10 @@
 use super::*;
 mod instance;
 mod pad_glow;
+mod scene_block;
+#[cfg(test)]
+pub(crate) use scene_block::Matrices;
+pub(crate) use scene_block::{SceneBlocks, SceneKind, Staging, UniformBlocks, Uploads, ViewBlock};
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -52,6 +56,9 @@ pub(super) struct Drawable {
     indices: wgpu::Buffer,
     uniforms: wgpu::Buffer,
     uniform_bind: wgpu::BindGroup,
+    /// Which slot of the race's [`UniformBlocks`] [`Self::uniform_bind`] reads, once
+    /// [`Self::share_uniforms`] moved it there; `None` while it reads [`Self::uniforms`].
+    uniform_slot: Option<u32>,
     textures: Vec<wgpu::BindGroup>,
     /// Bind group 2: the fog this drawable is rendered with.
     fog_bind: wgpu::BindGroup,
@@ -59,6 +66,9 @@ pub(super) struct Drawable {
     /// or left at [`mesh_render::Fog::off`] for the sky and for a track that
     /// authors no fog.
     pub(super) fog: wgpu::Buffer,
+    /// The kind of scene block [`Self::fog_bind`] reads, once [`Self::share_scene`] moved it
+    /// onto the race's shared buffer; `None` while it reads [`Self::fog`] as its own.
+    scene_kind: Option<SceneKind>,
     /// Bind group 3: this drawable's authored texture transforms, sampled for
     /// the current tick.
     anim_bind: wgpu::BindGroup,
@@ -338,9 +348,11 @@ impl Drawable {
             indices,
             uniforms,
             uniform_bind,
+            uniform_slot: None,
             textures,
             fog_bind,
             fog: fog_buffer,
+            scene_kind: None,
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
@@ -485,9 +497,10 @@ impl Drawable {
     /// first frame, a rocket that just spawned) passes this frame's product,
     /// which is zero object velocity rather than a smear from stale state.
     /// See `race::scene::frame::MotionState`.
+    #[track_caller]
     pub(super) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -499,9 +512,10 @@ impl Drawable {
     /// of the frame's per-craft sun-occlusion array this hull samples - a
     /// craft under the `original` tier on Wipeout HD - or `None`, which is
     /// what every other drawable writes. See `oag_render::shadow::occlusion`.
+    #[track_caller]
     pub(super) fn write_hull(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -520,9 +534,10 @@ impl Drawable {
     /// [`Self::write`] for a model whose materials read their own animation
     /// clock - `clock` seconds, what an HD material's `UV_offset` is bound
     /// to. See `oag_mesh::mesh::slots::CLOCK_SCROLL_RING`.
+    #[track_caller]
     pub(super) fn write_clocked(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -534,9 +549,10 @@ impl Drawable {
     /// [`Self::write_clocked`] for the Bomb's fireball, whose program also
     /// reads `ColourAnim` - a float the blast object owns. See
     /// `oag_mesh::mesh::slots::BOMB_FIRE`.
+    #[track_caller]
     pub(super) fn write_blast(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -553,9 +569,10 @@ impl Drawable {
         );
     }
 
+    #[track_caller]
     fn write_uniforms(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         model: Mat4,
         prev_mvp: Mat4,
@@ -571,7 +588,20 @@ impl Drawable {
             _pad2: 0.0,
             prev_mvp: prev_mvp.to_cols_array_2d(),
         };
-        oag_gpu::perfprobe::write_buffer(queue, &self.uniforms, 0, bytemuck::bytes_of(&uniforms));
+        self.put_uniforms(queue, uniforms);
+    }
+
+    /// Puts `scene` - the fog, the light rig, the clock and the shadow map - in bind group 2.
+    /// **For a drawable with a block of its own**; a shared one ([`Self::share_scene`]) is
+    /// written through [`SceneBlocks::write`].
+    #[track_caller]
+    pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        debug_assert!(
+            self.scene_kind.is_none(),
+            "{} shares its scene block",
+            self.model.label
+        );
+        oag_gpu::perfprobe::write_buffer(queue, &self.fog, 0, bytemuck::bytes_of(scene));
     }
 
     /// Samples every authored texture-transform track this model carries at
@@ -591,6 +621,7 @@ impl Drawable {
     /// different buffer: the plume's *node* table is written, off the same
     /// reveal timer, because a PS2 plume's two meshes hang off `Anim
     /// Transform` anchors and draw at the craft's origin without it.
+    #[track_caller]
     pub(super) fn write_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_tracks.is_empty() {
             return;
@@ -609,6 +640,7 @@ impl Drawable {
     /// boost plume - writes nothing and keeps the identity table
     /// `mesh_render::build` initialised it with. A **PS2** plume carries two
     /// and is placed entirely by them.
+    #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_nodes.is_empty() {
             return;

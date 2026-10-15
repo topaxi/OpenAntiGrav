@@ -53,7 +53,7 @@ impl Scene {
     pub(super) fn write_absorb_overlays(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         view_projection: Mat4,
         prev_vp: Mat4,
         prev: &motion::Snapshot,
@@ -85,12 +85,13 @@ impl Scene {
         &self,
         race: &Race,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
-        self.draw_shine(race, pass, stats);
+        self.draw_shine(race, pass, block, stats);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (_, overlay, _) in self.hull_overlays(race, which) {
-                stats.add(overlay.draw_overlay(pass));
+                stats.add(overlay.draw_overlay(pass, block));
             }
         }
     }

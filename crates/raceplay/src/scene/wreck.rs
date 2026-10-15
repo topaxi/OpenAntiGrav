@@ -42,6 +42,20 @@ pub(super) struct Wrecks {
 }
 
 impl Wrecks {
+    /// Moves every wreck's matrices onto the shared buffer.
+    pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
+        for wreck in self.hull.iter_mut().flatten() {
+            wreck.share_uniforms(device, blocks);
+        }
+    }
+
+    /// Moves every wreck onto the craft's scene block: it is written with the hulls'.
+    pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
+        for wreck in self.hull.iter_mut().flatten() {
+            wreck.share_scene(device, blocks, SceneKind::Ship);
+        }
+    }
+
     /// Builds the wreck drawables from each slot's livery: the hull's own
     /// pipeline, depth and glow mask (the wreck is a `.vex` mesh of the same
     /// class).
@@ -99,7 +113,7 @@ impl Scene {
     /// Writes every live wreck's pose, as the hull's own is written.
     pub(super) fn write_wrecks(
         &self,
-        queue: &wgpu::Queue,
+        queue: &Uploads<'_>,
         race: &Race,
         view_projection: Mat4,
         prev_vp: Mat4,
@@ -121,14 +135,6 @@ impl Scene {
         }
     }
 
-    /// Writes the frame's scene uniform into every wreck, the same one the
-    /// hulls get.
-    pub(super) fn write_wreck_scenes(&self, queue: &wgpu::Queue, ship_scene: &mesh_render::Scene) {
-        for wreck in self.wrecks.hull.iter().flatten() {
-            queue.write_buffer(&wreck.fog, 0, bytemuck::bytes_of(ship_scene));
-        }
-    }
-
     /// Chooses the `LodGroup` child of every live wreck.
     pub(super) fn select_wreck_lod(&self, race: &Race, eye: oag_mesh::mesh::LodEye) {
         for slot in 0..usize::from(race.ship_count()) {
@@ -145,6 +151,7 @@ impl Scene {
         &self,
         race: &Race,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         for slot in 0..usize::from(race.ship_count()) {
@@ -152,7 +159,7 @@ impl Scene {
                 continue;
             }
             if let Some(wreck) = &self.wrecks.hull[slot] {
-                stats.add(wreck.draw(pass, None, None, None, None));
+                stats.add(wreck.draw(pass, block, None, None, None, None));
             }
         }
     }

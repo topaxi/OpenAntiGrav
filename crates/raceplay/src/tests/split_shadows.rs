@@ -29,7 +29,7 @@ fn target(device: &wgpu::Device) -> wgpu::TextureView {
 /// Four views do the frame's shared work once, and the next frame once more.
 /// The shadow gather is per tick, so the race ticks between the two frames.
 /// Drop any `Layer::Next` gate (`render_shadow_passes`, `upload_shadow_geometry`,
-/// the scenery clocks, the advert cards and the craft shine maps in `Scene::render`) and its count reads
+/// the scenery clocks, the advert cards, the craft animation tables and the craft shine maps in `Scene::render`) and its count reads
 /// four for the first frame.
 #[test]
 fn four_views_do_the_shared_work_once() {
@@ -65,6 +65,7 @@ fn four_views_do_the_shared_work_once() {
             ("shadow gather", work.shadow_gathers),
             ("scenery clocks", work.scenery_clocks),
             ("advert cards", work.advert_cards),
+            ("craft animation tables", work.craft_anims),
             ("shine maps", work.shine_maps),
         ] {
             assert_eq!(
