@@ -92,7 +92,7 @@ impl super::super::Scene {
     /// view redraws that one, alone.
     pub(super) fn render_shadow_passes(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
@@ -134,7 +134,7 @@ impl super::super::Scene {
     /// tier.
     pub(super) fn upload_shadow_geometry(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         vp: &[[f32; 4]; 4],
         race: &Race,
         shadows: oag_display::display::Shadows,
@@ -247,7 +247,7 @@ impl super::super::Scene {
     /// from one that was never rendered.
     pub(super) fn render_shadow_map(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
@@ -348,7 +348,7 @@ impl super::super::Scene {
     /// uniform field.
     pub(super) fn render_sun_occlusion(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
         shadows: oag_display::display::Shadows,
@@ -536,7 +536,7 @@ impl super::super::Scene {
     fn render_depth_map(
         &self,
         map: &mut oag_render::shadow::map::Map,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         race: &Race,
     ) -> usize {

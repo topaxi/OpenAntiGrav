@@ -42,9 +42,6 @@ pub(super) struct Drawable {
     /// own vertices untouched, for the prepass's shaded half - see
     /// `draw_lists`. `None` without a prepass.
     reversed_indices: Option<wgpu::Buffer>,
-    /// The opaque draws one `draw_lists` call shows, refilled per call -
-    /// see `draw_lists`.
-    shown: std::cell::RefCell<draw::Shown>,
     /// The alpha-only glow-mask stamp for blended batches - see
     /// `mesh_render::Built::stamp_pipeline` and [`Self::draw_stamps`].
     stamp_pipeline: Option<mesh_render::Stamp>,
@@ -110,19 +107,23 @@ pub(super) struct Drawable {
     /// This instance's per-frame `LodGroup` choice - see [`Self::select_lod`].
     /// Starts on every group's finest child, which a drawable nobody
     /// switches keeps.
-    lod: oag_mesh::mesh::LodSwitch,
+    ///
+    /// **One per view** ([`ViewBlock::index`]): the views of a split choose from
+    /// their own cameras, and record their draws at once.
+    lod: Box<[oag_mesh::mesh::LodSwitch]>,
     /// [`Self::bound`], found on first use.
-    bound: std::cell::OnceCell<(Vec3, f32)>,
+    bound: std::sync::OnceLock<(Vec3, f32)>,
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
-    ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
+    ripple: std::sync::Mutex<Option<oag_render::ripple::Ripple>>,
     /// Each weapon pad's own position in HD's colour cycle - see
     /// [`Self::glow_weapon_pads`]. Empty on every drawable but HD's pads.
-    pad_glow: std::cell::RefCell<pad_glow::PadGlow>,
+    pad_glow: std::sync::Mutex<pad_glow::PadGlow>,
     /// Draws left out this frame, by [`oag_render::gantry::panel::key`]:
     /// the start gantry's states off its panel ([`Self::set_hidden`]).
     /// Empty on everything else.
-    hidden: std::cell::RefCell<Vec<u32>>,
+    /// The same in every view of a frame (a function of the race clock).
+    hidden: std::sync::Mutex<Vec<u32>>,
 }
 
 impl std::fmt::Debug for Drawable {
@@ -328,8 +329,8 @@ impl Drawable {
         Ok(Self {
             opaque_ranges,
             opaque_reach,
-            lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
-            bound: std::cell::OnceCell::new(),
+            lod: lod_switches(&model.lod_groups),
+            bound: std::sync::OnceLock::new(),
             model,
             pipeline,
             alpha_test_pipeline,
@@ -340,8 +341,7 @@ impl Drawable {
             authored_pipelines,
             stamp_pipeline,
             prepass,
-            shown: std::cell::RefCell::default(),
-            hidden: std::cell::RefCell::default(),
+            hidden: std::sync::Mutex::default(),
             reversed_indices,
             vertices,
             texcoords,
@@ -359,8 +359,8 @@ impl Drawable {
             emissive: emissive_buffer,
             zone_vis: zone_vis_texture,
             zone_rebind: std::sync::Arc::new(zone_rebind),
-            ripple: std::cell::RefCell::new(None),
-            pad_glow: std::cell::RefCell::default(),
+            ripple: std::sync::Mutex::new(None),
+            pad_glow: std::sync::Mutex::default(),
         })
     }
 
@@ -487,7 +487,12 @@ impl Drawable {
     /// `tint` - or blanks it when `tint` is `None`, which is what a stage
     /// with no authored `EQ colour tint` gets. See
     /// `oag_mesh::mesh_render::zone::write_vis`, which this forwards to.
-    pub(super) fn write_zone_vis(&self, queue: &wgpu::Queue, bands: &[f32], tint: Option<[u8; 3]>) {
+    pub(super) fn write_zone_vis(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        bands: &[f32],
+        tint: Option<[u8; 3]>,
+    ) {
         mesh_render::zone::write_vis(queue, &self.zone_vis, bands, tint);
     }
 
@@ -595,7 +600,11 @@ impl Drawable {
     /// **For a drawable with a block of its own**; a shared one ([`Self::share_scene`]) is
     /// written through [`SceneBlocks::write`].
     #[track_caller]
-    pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+    pub(super) fn write_scene(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        scene: &mesh_render::Scene,
+    ) {
         debug_assert!(
             self.scene_kind.is_none(),
             "{} shares its scene block",
@@ -622,7 +631,7 @@ impl Drawable {
     /// reveal timer, because a PS2 plume's two meshes hang off `Anim
     /// Transform` anchors and draw at the craft's origin without it.
     #[track_caller]
-    pub(super) fn write_anims(&self, queue: &wgpu::Queue, seconds: f32) {
+    pub(super) fn write_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
         if self.model.anim_tracks.is_empty() {
             return;
         }
@@ -641,7 +650,7 @@ impl Drawable {
     /// `mesh_render::build` initialised it with. A **PS2** plume carries two
     /// and is placed entirely by them.
     #[track_caller]
-    pub(super) fn write_node_anims(&self, queue: &wgpu::Queue, seconds: f32) {
+    pub(super) fn write_node_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
         if self.model.anim_nodes.is_empty() {
             return;
         }
@@ -665,7 +674,7 @@ impl Drawable {
     /// accumulating offsets would drift.
     pub(super) fn apply_uv_transform(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         scale: (f32, f32),
         offset: (f32, f32),
     ) {
@@ -705,7 +714,7 @@ impl Drawable {
     /// the upload.
     pub(super) fn deflect_airbrakes(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         left: f32,
         right: f32,
         moved: &mut Vec<mesh::GpuVertex>,
@@ -754,7 +763,7 @@ impl Drawable {
     /// avoids is larger than the pads' and rarer.
     pub(super) fn tint(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         rgba: [f32; 4],
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
@@ -800,7 +809,7 @@ impl Drawable {
     /// than an invented state.
     pub(super) fn tint_weapon_pads(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         seconds: f32,
         ready: &[bool],
         tinted: &mut Vec<mesh::GpuVertex>,
@@ -838,14 +847,14 @@ impl Drawable {
     /// `Scene::scratch`.
     fn recolour_nodes(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         colours: impl Iterator<Item = [f32; 3]>,
         tinted: &mut Vec<mesh::GpuVertex>,
     ) {
         let stride = std::mem::size_of::<mesh::GpuVertex>() as u64;
         // A Quake's bump rolling over a pad has to survive the pad's own
         // rewrite from the authored vertices - see `Ripple::displace`.
-        let ripple = self.ripple.borrow();
+        let ripple = lock(&self.ripple);
         for (range, colour) in self.model.node_vertex_ranges.iter().zip(colours) {
             let span = range.start as usize..range.end as usize;
             let Some(base) = self.model.vertices.get(span) else {
@@ -875,8 +884,8 @@ impl Drawable {
     /// instance at `model` seen from `eye` - `LodGroup_SelectChild`'s rule,
     /// see `oag_mesh::mesh::LodGroups::child_at`. Free on a model with no
     /// group, which is every drawable but a circuit and a hull.
-    pub(super) fn select_lod(&self, model: Mat4, eye: oag_mesh::mesh::LodEye) {
-        self.lod.select(&self.model.lod_groups, model, eye);
+    pub(super) fn select_lod(&self, view: ViewBlock, model: Mat4, eye: oag_mesh::mesh::LodEye) {
+        self.lod[view.index()].select(&self.model.lod_groups, model, eye);
     }
 
     /// The opaque list, in the model's own order - what an `order` handed to
@@ -885,18 +894,20 @@ impl Drawable {
         &self.model.draws
     }
 
-    /// Whether `draw` is in the `LodGroup` child this frame enables, and not
-    /// left out by [`Self::set_hidden`].
-    fn lod_shows(&self, draw: &DrawCall) -> bool {
-        self.lod.shows(&self.model.lod_groups, draw) && {
-            let hidden = self.hidden.borrow();
-            hidden.is_empty() || !hidden.contains(&oag_render::gantry::panel::key(draw))
+    /// What `view` shows of this drawable: its `LodGroup` choice and the draws
+    /// [`Self::set_hidden`] leaves out. Taken once per draw call of the
+    /// drawable, never per batch.
+    pub(super) fn shows(&self, view: ViewBlock) -> Shows<'_> {
+        Shows {
+            groups: &self.model.lod_groups,
+            lod: &self.lod[view.index()],
+            hidden: lock(&self.hidden),
         }
     }
 
     /// Leaves the draws keyed in `keys` out of every list until the next call.
     pub(super) fn set_hidden(&self, keys: &[u32]) {
-        let mut hidden = self.hidden.borrow_mut();
+        let mut hidden = lock(&self.hidden);
         hidden.clear();
         hidden.extend_from_slice(keys);
     }
@@ -926,6 +937,37 @@ impl Drawable {
                 .collect(),
         }
     }
+}
+
+/// What one view shows of a drawable: [`Drawable::shows`].
+pub(super) struct Shows<'a> {
+    groups: &'a oag_mesh::mesh::LodGroups,
+    lod: &'a oag_mesh::mesh::LodSwitch,
+    hidden: std::sync::MutexGuard<'a, Vec<u32>>,
+}
+
+impl Shows<'_> {
+    /// Whether `draw` is in the `LodGroup` child this view enables, and not
+    /// left out by [`Drawable::set_hidden`].
+    pub(super) fn draw(&self, draw: &DrawCall) -> bool {
+        self.lod.shows(self.groups, draw)
+            && (self.hidden.is_empty()
+                || !self.hidden.contains(&oag_render::gantry::panel::key(draw)))
+    }
+}
+
+/// One `LodGroup` switch per view a frame can draw ([`SceneBlocks::VIEWS`]).
+fn lod_switches(groups: &oag_mesh::mesh::LodGroups) -> Box<[oag_mesh::mesh::LodSwitch]> {
+    (0..SceneBlocks::VIEWS)
+        .map(|_| oag_mesh::mesh::LodSwitch::new(groups))
+        .collect()
+}
+
+/// A lock nothing holds across a panic: a poisoned one still holds what the frame wrote.
+pub(crate) fn lock<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Uniforms shared with `oag-render`'s `mesh.wgsl`.
@@ -1122,3 +1164,11 @@ mod ranges_tests {
         );
     }
 }
+
+// A view's draws are recorded on a thread of its own (`Scene::render_slots`), reading drawables
+// every other view reads too.
+#[cfg(not(target_arch = "wasm32"))]
+const _: () = {
+    const fn shared<T: Sync>() {}
+    shared::<Drawable>();
+};

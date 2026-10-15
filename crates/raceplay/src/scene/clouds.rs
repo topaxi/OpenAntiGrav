@@ -52,7 +52,7 @@ impl Clouds {
     /// vertices. A no-op when this circuit authors no cloud node.
     pub(super) fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         tick: u64,
         camera: &oag_fx::psys::field::Frame,
@@ -72,12 +72,18 @@ impl Clouds {
         pipeline.upload(queue, view_projection, &vertices);
     }
 
-    /// Draws into a pass the caller already opened. Depth-tested but not
-    /// depth-writing, the same as `exhaust::Pipeline::draw` and for the same
-    /// reason - see `oag_fx::cloud::Pipeline::draw`.
-    pub(super) fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if let Some((_, pipeline)) = &self.state {
-            pipeline.draw(pass);
-        }
+    /// What the last upload left to draw; nothing on a circuit with no cloud node.
+    pub(super) fn drawn(&self) -> oag_fx::cloud::Drawn {
+        self.state
+            .as_ref()
+            .map(|(_, pipeline)| pipeline.drawn())
+            .unwrap_or_default()
+    }
+
+    /// The pipeline, drawn after the solid scene: depth-tested but not depth-writing, the
+    /// same as `exhaust::Pipeline::draw` and for the same reason - see
+    /// `oag_fx::cloud::Pipeline::draw`.
+    pub(super) fn pipeline(&self) -> Option<&oag_fx::cloud::Pipeline> {
+        self.state.as_ref().map(|(_, pipeline)| pipeline)
     }
 }

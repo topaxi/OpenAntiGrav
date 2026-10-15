@@ -16,6 +16,18 @@ pub(super) struct Magstrip {
     contact: std::cell::RefCell<oag_fx::beam::Pipeline>,
 }
 
+impl Magstrip {
+    /// The contact quads, drawn under the arc bodies.
+    pub(super) fn contact(&self) -> &std::cell::RefCell<oag_fx::beam::Pipeline> {
+        &self.contact
+    }
+
+    /// The arc bodies.
+    pub(super) fn atlas(&self) -> &std::cell::RefCell<oag_fx::beam::Pipeline> {
+        &self.atlas
+    }
+}
+
 /// `None` when the title builds no wake or a texture did not decode - the loader
 /// report says which, and nothing is drawn in its place.
 pub(super) fn build(
@@ -49,22 +61,13 @@ impl super::Scene {
     pub(super) fn upload_magstrip_wake(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         vp: &[[f32; 4]; 4],
     ) {
         if let Some(magstrip) = &self.ribbons.magstrip {
             let (atlas, contact) = race.magstrip_wake_vertices();
             magstrip.atlas.borrow_mut().upload(queue, vp, &atlas);
             magstrip.contact.borrow_mut().upload(queue, vp, &contact);
-        }
-    }
-
-    /// Draws the contact quads under the arc bodies, into the pass `draw_effects`
-    /// owns: depth-tested, unwritten, after the solid scene.
-    pub(super) fn draw_magstrip_wake(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if let Some(magstrip) = &self.ribbons.magstrip {
-            magstrip.contact.borrow().draw(pass);
-            magstrip.atlas.borrow().draw(pass);
         }
     }
 }

@@ -53,6 +53,15 @@ pub const BLEND_ALPHA_OVER: wgpu::BlendState = wgpu::BlendState {
 /// tail of the last quads and reads as an explosion that never happened.
 pub const MAX_VERTICES: usize = MAX_INSTANCES * MAX_PARTICLES * 6;
 
+/// What the last uploads left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    additive_count: u32,
+    alpha_count: u32,
+    flash: crate::flash::Drawn,
+}
+
 /// The particle draw pipeline - two of them, one per blend class, sharing
 /// the shader and layout.
 ///
@@ -292,7 +301,7 @@ impl Pipeline {
 
     /// Uploads `sheet`'s texels if they changed since the last call - once
     /// per race in practice, since a race loads its effects up front.
-    pub fn sync_sheet(&mut self, queue: &wgpu::Queue, sheet: &Sheet) {
+    pub fn sync_sheet(&mut self, queue: &dyn oag_gpu::writes::Writes, sheet: &Sheet) {
         if self.sheet_generation == Some(sheet.generation()) {
             return;
         }
@@ -327,7 +336,7 @@ impl Pipeline {
     /// `queue`, the same split [`crate::exhaust::Pipeline::upload`] uses.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         additive: &[GpuVertex],
         alpha_over: &[GpuVertex],
@@ -368,7 +377,7 @@ impl Pipeline {
     }
 
     /// Uploads this frame's blend class 8 quads, [`super::Stage::extend_distort_vertices`].
-    pub fn upload_distort(&mut self, queue: &wgpu::Queue, vertices: &[GpuVertex]) {
+    pub fn upload_distort(&mut self, queue: &dyn oag_gpu::writes::Writes, vertices: &[GpuVertex]) {
         self.distort.upload(queue, vertices);
     }
 
@@ -397,14 +406,24 @@ impl Pipeline {
     }
 
     /// This frame's screen flash, [`crate::flash::ScreenFlash::colour`].
-    pub fn upload_flash(&mut self, queue: &wgpu::Queue, colour: Option<[f32; 4]>) {
+    pub fn upload_flash(&mut self, queue: &dyn oag_gpu::writes::Writes, colour: Option<[f32; 4]>) {
         self.flash.upload(queue, colour);
     }
 
     /// Draws the screen flash, if one runs - **last** in the scene pass, so
     /// it washes over everything the pass drew and nothing the HUD does.
-    pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>) {
-        self.flash.draw(pass);
+    pub fn draw_flash(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        self.flash.draw(pass, drawn.flash);
+    }
+
+    /// What the last uploads left to draw, for [`Self::draw`] and [`Self::draw_flash`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn {
+            additive_count: self.additive_count,
+            alpha_count: self.alpha_count,
+            flash: self.flash.drawn(),
+        }
     }
 
     /// Draws into a pass the caller already opened.
@@ -415,18 +434,18 @@ impl Pipeline {
     /// the original interleaves them in particle order, which two batched
     /// draws cannot reproduce exactly; additive-last is the closer
     /// approximation since adding light commutes.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.alpha_count > 0 {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if drawn.alpha_count > 0 {
             pass.set_pipeline(&self.alpha_over);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.alpha_vertices.slice(..));
-            pass.draw(0..self.alpha_count, 0..1);
+            pass.draw(0..drawn.alpha_count, 0..1);
         }
-        if self.additive_count > 0 {
+        if drawn.additive_count > 0 {
             pass.set_pipeline(&self.additive);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.additive_vertices.slice(..));
-            pass.draw(0..self.additive_count, 0..1);
+            pass.draw(0..drawn.additive_count, 0..1);
         }
     }
 }

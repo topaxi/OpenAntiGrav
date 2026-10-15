@@ -320,6 +320,8 @@ pub use replay::{Ghost, GhostCapture};
 pub use respawn::RespawnCause;
 pub use results::RunStats;
 #[cfg(feature = "view")]
+pub use scene::Recording;
+#[cfg(feature = "view")]
 pub use scene::Scene;
 #[cfg(feature = "view")]
 pub use scene::WindowEffects;

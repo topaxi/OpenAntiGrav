@@ -1,0 +1,497 @@
+//! A view's scene pass, split from what decides it: [`Scene::prepare_view`] (in `frame.rs`) makes
+//! every write and every choice a view needs - culling inputs, which craft, weapons and effects
+//! are live, the effect pipelines' counts - and hands back a [`ViewPass`]; a [`Recorder`] then
+//! records the pass from that value and from GPU objects nothing changes during a frame.
+//!
+//! **Why the split.** A split screen's views can then be recorded at once
+//! (`Scene::render_slots`): a `ViewPass` is a value of its view, and the `Recorder` holds only
+//! shared references to `Sync` data, so a view's recording reads no `Cell`, no `Race` and no
+//! other view's state. The compiler checks the second half (the assertion at the end of this
+//! file); the first is what `tests::threaded_views` checks, by recording the views in reverse
+//! and comparing the pictures.
+//!
+//! **What a view keeps for itself**: the draws it decided ([`Draw`]), its culling sets, the
+//! counts each effect pipeline's upload left ([`EffectsDrawn`]) and the shadow's runs, its
+//! depth-prepass order (sorted while recording, from its own eye), and its `LodGroup` choice,
+//! which a drawable holds once per view ([`ViewBlock::index`]).
+
+use std::cell::Ref;
+
+use super::viewports::Layer;
+use super::*;
+use crate::drawable::draw::Lists;
+
+/// One thing a view's scene pass draws, in the order the pass draws them.
+pub(super) enum Draw<'a> {
+    /// A `perf-probe` marker over the draws after it.
+    Mark(&'static str),
+    /// The circuit: its solid lists, the sky, its blended list and its shine pass
+    /// ([`Recorder::draw_track`]), under the view's sets and frustum.
+    Track,
+    /// Every list of a drawable, culled by the view's frustum.
+    Culled(&'a Drawable),
+    /// Every list of a drawable, uncull'd.
+    Mesh(&'a Drawable),
+    /// [`Drawable::draw_additive`].
+    Additive(&'a Drawable),
+    /// [`Drawable::draw_overlay`].
+    Overlay(&'a Drawable),
+    /// The blob and hull shadows, [`ViewPass::shadow_runs`].
+    Shadow,
+    /// The blended effects over everything solid ([`Recorder::draw_effects`]).
+    Effects,
+}
+
+/// The draws one view decided, built by its prepare.
+pub(super) struct DrawList<'a>(pub(super) Vec<Draw<'a>>);
+
+impl<'a> DrawList<'a> {
+    pub(super) fn mark(&mut self, label: &'static str) {
+        self.0.push(Draw::Mark(label));
+    }
+
+    pub(super) fn mesh(&mut self, drawable: &'a Drawable) {
+        self.0.push(Draw::Mesh(drawable));
+    }
+
+    pub(super) fn culled(&mut self, drawable: &'a Drawable) {
+        self.0.push(Draw::Culled(drawable));
+    }
+
+    pub(super) fn additive(&mut self, drawable: &'a Drawable) {
+        self.0.push(Draw::Additive(drawable));
+    }
+
+    pub(super) fn overlay(&mut self, drawable: &'a Drawable) {
+        self.0.push(Draw::Overlay(drawable));
+    }
+
+    pub(super) fn push(&mut self, draw: Draw<'a>) {
+        self.0.push(draw);
+    }
+}
+
+/// What each effect pipeline's upload left to draw for one view.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct EffectsDrawn {
+    exhaust: exhaust::Drawn,
+    sparks: sparks::Drawn,
+    /// [`Scene::beams`]' order.
+    beams: [oag_fx::beam::Drawn; BEAMS],
+    clouds: oag_fx::cloud::Drawn,
+    weapon_quads: oag_fx::weapon_quads::Drawn,
+    mist: oag_fx::mist::Drawn,
+}
+
+/// The strip pipelines, in the order the effects draw them: the Leach beam, the magstrip wake's
+/// contact quads and arcs, the Rocket smoke and HD's Leach strip.
+const BEAMS: usize = 5;
+
+/// One view's scene pass, decided: everything [`Recorder::record`] reads that is not the scene's
+/// own GPU objects.
+pub(super) struct ViewPass<'a> {
+    pub(super) layer: Layer,
+    pub(super) block: ViewBlock,
+    pub(super) viewport: (f32, f32, f32, f32),
+    /// Where the camera is: the depth prepass's order is sorted from it.
+    pub(super) eye: Vec3,
+    pub(super) frustum: Option<Frustum>,
+    pub(super) visible_set: Option<VisibleSet>,
+    pub(super) chunk_set: Option<ChunkSet>,
+    /// The scene's colour target: the caller's view, or the post chains' linear one.
+    pub(super) target: &'a wgpu::TextureView,
+    pub(super) timestamps: Option<wgpu::RenderPassTimestampWrites<'a>>,
+    pub(super) draws: DrawList<'a>,
+    pub(super) effects: EffectsDrawn,
+    pub(super) shadow_runs: Vec<oag_render::shadow::Run>,
+    pub(super) ghost: Option<(oag_render::ghost::Hull<'a>, oag_render::ghost::Fade)>,
+    /// What the prepare already drew (the behind-the-glass target), counted in.
+    pub(super) stats: SceneStats,
+    /// The camera shake's own screen motion, for the blur after the pass.
+    pub(super) blur_shake: Mat4,
+}
+
+/// The effect pipelines borrowed out of their cells for one frame's recording, on the thread
+/// that prepared it: [`Self::recorder`] hands out plain references the recording threads share.
+pub(super) struct Borrowed<'a> {
+    scene: &'a Scene,
+    exhaust: Ref<'a, exhaust::Pipeline>,
+    sparks: Ref<'a, sparks::Pipeline>,
+    beams: [Option<Ref<'a, oag_fx::beam::Pipeline>>; BEAMS],
+    clouds: Ref<'a, clouds::Clouds>,
+    weapon_quads: Ref<'a, oag_fx::weapon_quads::Pipeline>,
+    mist: Ref<'a, Option<oag_fx::mist::Pipeline>>,
+    shadow: Ref<'a, oag_render::shadow::Pipeline>,
+}
+
+impl Scene {
+    /// The strip pipelines, in [`BEAMS`]' order; `None` where the title builds none.
+    fn beams(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; BEAMS] {
+        let [contact, atlas, smoke, leach] = self.ribbons.cells();
+        [self.beam.as_ref(), contact, atlas, smoke, leach]
+    }
+
+    /// What every effect pipeline's last upload left, for the view that made them.
+    pub(super) fn effects_drawn(&self) -> EffectsDrawn {
+        EffectsDrawn {
+            exhaust: self.exhaust.borrow().drawn(),
+            sparks: self.sparks.borrow().drawn(),
+            beams: self
+                .beams()
+                .map(|beam| beam.map(|b| b.borrow().drawn()).unwrap_or_default()),
+            clouds: self.clouds.borrow().drawn(),
+            weapon_quads: self.weapon_quads.pipeline.borrow().drawn(),
+            mist: self
+                .mist
+                .borrow()
+                .as_ref()
+                .map(oag_fx::mist::Pipeline::drawn)
+                .unwrap_or_default(),
+        }
+    }
+
+    /// The shadow pipeline's runs as the view's upload left them.
+    pub(super) fn shadow_runs(&self, into: &mut Vec<oag_render::shadow::Run>) {
+        into.clear();
+        into.extend_from_slice(self.shadow.borrow().runs());
+    }
+
+    /// The effect pipelines out of their cells, for [`Borrowed::recorder`].
+    pub(super) fn borrow_for_recording(&self) -> Borrowed<'_> {
+        Borrowed {
+            scene: self,
+            exhaust: self.exhaust.borrow(),
+            sparks: self.sparks.borrow(),
+            beams: self
+                .beams()
+                .map(|beam| beam.map(std::cell::RefCell::borrow)),
+            clouds: self.clouds.borrow(),
+            weapon_quads: self.weapon_quads.pipeline.borrow(),
+            mist: self.mist.borrow(),
+            shadow: self.shadow.borrow(),
+        }
+    }
+}
+
+impl Borrowed<'_> {
+    /// What every view's recording reads.
+    pub(super) fn recorder(&self) -> Recorder<'_> {
+        let scene = self.scene;
+        Recorder {
+            track: &scene.track,
+            sky: scene.sky.as_ref(),
+            track_shine: scene.track_shine.as_ref().map(shine::TrackShine::parts),
+            sections: scene.visibility.as_ref().map(|v| &v.sections),
+            sorts_opaque: scene.hd.is_some(),
+            exhaust: &self.exhaust,
+            sparks: &self.sparks,
+            beams: [0, 1, 2, 3, 4].map(|i| self.beams[i].as_deref()),
+            clouds: self.clouds.pipeline(),
+            weapon_quads: &self.weapon_quads,
+            mist: self.mist.as_ref(),
+            shadow: &self.shadow,
+            ghost: scene.ghost.pipeline(),
+            attachments: &scene.attachment_views,
+        }
+    }
+}
+
+/// The GPU objects a view's scene pass draws with: shared by every view of a frame, and
+/// changed by none of them while they record.
+pub(super) struct Recorder<'a> {
+    track: &'a Drawable,
+    sky: Option<&'a Drawable>,
+    track_shine: Option<(&'a Drawable, &'a [usize])>,
+    sections: Option<&'a DrawSections>,
+    /// Whether the circuit's opaque depth goes down nearest first: HD's prepass.
+    sorts_opaque: bool,
+    exhaust: &'a exhaust::Pipeline,
+    sparks: &'a sparks::Pipeline,
+    beams: [Option<&'a oag_fx::beam::Pipeline>; BEAMS],
+    clouds: Option<&'a oag_fx::cloud::Pipeline>,
+    weapon_quads: &'a oag_fx::weapon_quads::Pipeline,
+    mist: Option<&'a oag_fx::mist::Pipeline>,
+    shadow: &'a oag_render::shadow::Pipeline,
+    ghost: Option<&'a oag_render::ghost::Pipeline>,
+    attachments: &'a motion::Attachments,
+}
+
+impl Recorder<'_> {
+    /// Records `pass`'s scene pass into `encoder`, and returns what it drew.
+    pub(super) fn record(
+        &self,
+        pass: &ViewPass<'_>,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> SceneStats {
+        // MSAA draws into its own multisampled attachment and resolves into
+        // the target at the end of this one pass; everything else draws
+        // straight into it, exactly as before this setting existed. See
+        // `Scene::msaa_color`.
+        let (attachment_view, resolve_target) = match self.attachments.msaa.as_ref() {
+            Some(msaa_view) => (msaa_view, Some(pass.target)),
+            None => (pass.target, None),
+        };
+        // A split-screen view after the first keeps what the earlier ones drew - see
+        // `Scene::render_viewports`.
+        let later = pass.layer == Layer::Next;
+        let mut render = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("race"),
+            color_attachments: &[
+                Some(wgpu::RenderPassColorAttachment {
+                    view: attachment_view,
+                    depth_slice: None,
+                    resolve_target,
+                    ops: wgpu::Operations {
+                        // Black rather than the near-black blue this used to clear
+                        // to. The clear covers the whole attachment and the scene is
+                        // then drawn into a sub-rectangle, so this colour is what
+                        // `Aspect`'s bars are made of - and a bar has to read as a
+                        // bar. The old value was 0.03/0.04/0.06, dark enough that
+                        // losing it costs nothing inside the viewport either.
+                        // Black, and **alpha zero**: alpha is the bloom's glow mask
+                        // and a frame starts with nothing glowing.
+                        // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
+                        // entire frame in and bloom everything.
+                        load: if later {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.0,
+                                g: 0.0,
+                                b: 0.0,
+                                a: 0.0,
+                            })
+                        },
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                // The velocity target, cleared to zero - nothing moved where
+                // nothing drew - and never resolved: under MSAA the blur's
+                // prepare stage reads sample 0 instead, because averaging
+                // velocity across a silhouette edge produces a vector that
+                // describes neither surface. See `Scene::velocity`.
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &self.attachments.velocity,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        // A later view of a split loads, as the colour does: the first view
+                        // cleared the whole attachment and each view draws inside its own
+                        // rectangle, so clearing again would wipe the views before it and
+                        // leave the blur only the last view's motion.
+                        load: if later {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                        },
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+            ],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.attachments.depth,
+                depth_ops: Some(wgpu::Operations {
+                    // Loaded by a later view of a split for the velocity's reason above.
+                    load: if later {
+                        wgpu::LoadOp::Load
+                    } else {
+                        wgpu::LoadOp::Clear(1.0)
+                    },
+                    // `Store`, not `Discard`: the motion blur's reconstruction
+                    // weighs its taps by depth ordering after this pass
+                    // closes, and a discarded attachment is undefined memory
+                    // by then. This is also the depth half of
+                    // `docs/overview/modern-features.md`'s FSR 3.1
+                    // prerequisite table.
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            // The one pass whose cost falls with the render extent, and so the
+            // one a resolution controller will be driven by - see
+            // `oag_gpu::timing::PassTimer` and `Scene::render`'s own doc.
+            // `None` on every path that is not the window's frame loop: a
+            // capture measures nothing, because a capture has to be
+            // reproducible rather than fast.
+            timestamp_writes: pass.timestamps.clone(),
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        oag_gpu::perfprobe::mark("pass-open");
+        let (x, y, w, h) = pass.viewport;
+        render.set_viewport(x, y, w, h, 0.0, 1.0);
+        let block = pass.block;
+        let mut stats = pass.stats;
+        for draw in &pass.draws.0 {
+            match draw {
+                Draw::Mark(label) => oag_gpu::perfprobe::marks::mark(&mut render, label),
+                Draw::Track => stats.add(self.draw_track(&mut render, pass)),
+                Draw::Culled(drawable) => stats.add(drawable.draw(
+                    &mut render,
+                    block,
+                    None,
+                    None,
+                    None,
+                    pass.frustum.as_ref(),
+                )),
+                Draw::Mesh(drawable) => {
+                    stats.add(drawable.draw(&mut render, block, None, None, None, None));
+                }
+                Draw::Additive(drawable) => stats.add(drawable.draw_additive(&mut render, block)),
+                Draw::Overlay(drawable) => stats.add(drawable.draw_overlay(&mut render, block)),
+                Draw::Shadow => self.shadow.draw(&mut render, &pass.shadow_runs),
+                Draw::Effects => self.draw_effects(&mut render, pass, &mut stats),
+            }
+        }
+        stats
+    }
+
+    /// Draws the circuit's solid lists, the sky, the circuit's blended list,
+    /// then the circuit's extra pass over it: the pass is tested against the
+    /// circuit's depth, so it follows the circuit and precedes everything
+    /// drawn after it.
+    ///
+    /// **The sky goes behind the solid circuit rather than first.** It writes
+    /// no depth, so it used to be drawn first comparing `Always`, filling the
+    /// whole viewport for the circuit to cover - every covered sample shaded
+    /// for nothing, the full frame's worth: 5.1 ms of HD's 47 ms race pass at
+    /// 3200x1800 on an integrated GPU, and the largest single span in Pulse's.
+    /// Drawn here with its depth range pinned to the far plane, it compares
+    /// `LessEqual` against the 1.0 the pass cleared to, so it lands on exactly
+    /// the samples nothing solid has reached - the ones it was visible on
+    /// before. The blended list still draws over it, as it always did, and
+    /// nothing solid ever read the colour underneath it.
+    ///
+    /// Neither culling tier is offered it: a skybox is never outside the
+    /// frustum and belongs to no visibility section, which is the behaviour
+    /// ADR-0011 already assumes for it. Its draw calls are deliberately **not**
+    /// added to the stats either: being exempt from both tiers, folding them in
+    /// would shift the denominator ADR-0011's and the roadmap's PVS
+    /// effectiveness figures are quoted against.
+    fn draw_track(&self, render: &mut wgpu::RenderPass<'_>, pass: &ViewPass<'_>) -> SceneStats {
+        let block = pass.block;
+        let (set, chunks, frustum) = (
+            pass.visible_set.as_ref(),
+            pass.chunk_set.as_ref(),
+            pass.frustum.as_ref(),
+        );
+        oag_gpu::perfprobe::marks::mark(render, "track solid");
+        let order = self
+            .sorts_opaque
+            .then(|| opaque_order(self.track, pass.eye));
+        let mut stats = self.track.draw_lists(
+            render,
+            block,
+            self.sections,
+            set,
+            chunks,
+            frustum,
+            Lists::Solid {
+                order: order.as_deref(),
+            },
+        );
+        oag_gpu::perfprobe::marks::mark(render, "sky");
+        if let Some(sky) = self.sky {
+            let (x, y, w, h) = pass.viewport;
+            render.set_viewport(x, y, w, h, 1.0, 1.0);
+            let _ = sky.draw(render, block, None, None, None, None);
+            render.set_viewport(x, y, w, h, 0.0, 1.0);
+        }
+        oag_gpu::perfprobe::marks::mark(render, "track blended");
+        stats.add(self.track.draw_lists(
+            render,
+            block,
+            self.sections,
+            set,
+            chunks,
+            frustum,
+            Lists::Blended,
+        ));
+        oag_gpu::perfprobe::marks::mark(render, "track shine");
+        if let Some((shine, sources)) = self.track_shine {
+            stats.add(shine.draw_track_shine(
+                render,
+                block,
+                self.track,
+                sources,
+                self.sections,
+                set,
+                chunks,
+                frustum,
+            ));
+        }
+        stats
+    }
+
+    /// The race pass's last stretch: the depth-tested, depth-unwritten effects that draw over
+    /// everything solid. The order is load-bearing: the flare tests depth but does not write it,
+    /// so the hull's depth has to already be in the buffer for the flare to be occluded by it,
+    /// and sparks are the same kind of geometry.
+    fn draw_effects(
+        &self,
+        render: &mut wgpu::RenderPass<'_>,
+        pass: &ViewPass<'_>,
+        stats: &mut SceneStats,
+    ) {
+        let drawn = &pass.effects;
+        oag_gpu::perfprobe::marks::mark(render, "exhaust, sparks, clouds, ghost");
+        self.exhaust.draw(render, drawn.exhaust);
+        self.sparks.draw(render, drawn.sparks);
+        for (beam, drawn) in self.beams.iter().zip(drawn.beams) {
+            if let Some(beam) = beam {
+                beam.draw(render, drawn);
+            }
+        }
+        if let Some(clouds) = self.clouds {
+            clouds.draw(render, drawn.clouds);
+        }
+        self.weapon_quads.draw(render, drawn.weapon_quads);
+        // The ghost, last of the world - see `oag_render::ghost`, "what is ours", for why last.
+        if let (Some(pipeline), Some((hull, fade))) = (self.ghost, &pass.ghost) {
+            stats.draws_submitted += pipeline.draw(render, hull, *fade);
+        }
+        // The render queue's key `0x4f000000`, which the flash shares: after
+        // every world layer, under the HUD.
+        if let Some(mist) = self.mist {
+            mist.draw(render, drawn.mist);
+        }
+        self.sparks.draw_flash(render, drawn.sparks);
+        oag_gpu::perfprobe::marks::mark(render, "end");
+    }
+}
+
+/// The order HD's depth prepass lays the circuit's opaque depth down in: each batch by the
+/// distance from `eye` to the nearest point of its bounding sphere, nearest first, as
+/// `(key, index)` pairs into [`Drawable::opaque_draws`], so the depth test rejects what is
+/// behind as early as it can. See `mesh_render::Prepass`.
+///
+/// **Only the prepass reads it, and that is why it moves no pixel.** The depth `Less` leaves
+/// is the nearest surface whatever order it arrives in.
+/// Sorting the shading itself was tried first, 2026-10-03: 44.1 -> 37.4 ms at 3200x1800 on an
+/// integrated GPU, at the cost of 1 to 419 pixels a capture where coplanar ties resolved to the
+/// nearer batch. The prepass took that to 32.4 ms with the original's picture back; the shading
+/// that follows keeps the model's own order. `sort_by` is stable, so equal keys keep the model's
+/// order. Per view, from its own eye, while the view records.
+fn opaque_order(track: &Drawable, eye: Vec3) -> Vec<(f32, u32)> {
+    let mut order: Vec<(f32, u32)> = track
+        .opaque_draws()
+        .iter()
+        .zip(0u32..)
+        .map(|(draw, i)| {
+            let centre = Vec3::from_array(draw.bounds.centre);
+            (centre.distance(eye) - draw.bounds.radius, i)
+        })
+        .collect();
+    order.sort_by(|a, b| a.0.total_cmp(&b.0));
+    order
+}
+
+// A view's recording reads only these, from a thread of its own (`Scene::render_slots`). wgpu's
+// browser objects are not `Send`, and the web records its views on the page's thread.
+#[cfg(not(target_arch = "wasm32"))]
+const _: () = {
+    const fn shared<T: Sync>() {}
+    const fn sent<T: Send>() {}
+    shared::<Recorder<'_>>();
+    sent::<ViewPass<'_>>();
+};

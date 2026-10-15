@@ -316,6 +316,13 @@ pub const BLEND: wgpu::BlendState = wgpu::BlendState {
     },
 };
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    count: u32,
+}
+
 /// The cloud draw pipeline: one texture, one blend class, in `psys::Pipeline`'s
 /// shape rather than `exhaust::Pipeline`'s - there is no ribbon and no HD
 /// variant here.
@@ -489,7 +496,7 @@ impl Pipeline {
     /// Uploads this frame's camera matrix and geometry.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         vertices: &[GpuVertex],
     ) {
@@ -506,6 +513,12 @@ impl Pipeline {
         self.count = n as u32;
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn { count: self.count }
+    }
+
     /// Draws into a pass the caller already opened.
     ///
     /// Must be issued after the opaque geometry, for the same depth-write-off
@@ -513,15 +526,15 @@ impl Pipeline {
     /// before the track's own transparent surfaces is closest to the
     /// original's own distance-sorted submission, though this project does
     /// not reproduce that sort - see `race::Scene`.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.count == 0 {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if drawn.count == 0 {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_bind_group(1, &self.texture, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.draw(0..self.count, 0..1);
+        pass.draw(0..drawn.count, 0..1);
     }
 }
 

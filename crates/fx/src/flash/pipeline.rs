@@ -2,6 +2,13 @@
 
 use oag_mesh::mesh_render::{DEPTH_FORMAT, Velocity, fragment_options};
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    visible: bool,
+}
+
 /// The flash pipeline and its one-colour uniform.
 #[derive(Debug)]
 pub struct Pipeline {
@@ -111,17 +118,25 @@ impl Pipeline {
 
     /// This frame's colour, [`super::ScreenFlash::colour`]; `None` draws
     /// nothing.
-    pub fn upload(&mut self, queue: &wgpu::Queue, colour: Option<[f32; 4]>) {
+    pub fn upload(&mut self, queue: &dyn oag_gpu::writes::Writes, colour: Option<[f32; 4]>) {
         self.visible = colour.is_some();
         if let Some(colour) = colour {
             queue.write_buffer(&self.uniforms, 0, bytemuck::cast_slice(&colour));
         }
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn {
+            visible: self.visible,
+        }
+    }
+
     /// Draws the quad into a pass the caller opened, after everything the
     /// flash should wash over.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if !self.visible {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if !drawn.visible {
             return;
         }
         pass.set_pipeline(&self.pipeline);

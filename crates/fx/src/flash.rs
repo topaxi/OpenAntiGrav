@@ -326,7 +326,7 @@ impl ScreenFlash {
 }
 
 mod pipeline;
-pub use pipeline::Pipeline;
+pub use pipeline::{Drawn, Pipeline};
 
 #[cfg(test)]
 mod tests;

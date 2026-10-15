@@ -33,11 +33,17 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
 - **What is left of the uploads** is the per-view effect pipelines' own buffers (exhaust, sparks,
   clouds, shadow geometry, beams, which the probe does not count: `exhaust-upload` alone is about 35 us a view on Pulse) and the advert cards; the matrices and the
   scene blocks are done.
-- **Views recorded on separate threads**: the scene blocks and the matrices are per view, but the
-  animation tables, `Drawable`'s `RefCell`s (`shown`, `ripple`, `pad_glow`, `hidden`), `Scene`'s
-  `layer`, `history`, `scratch`, `opaque_order` and `upload_staging` cells, the effect pipelines'
-  buffers and the race's viewpoint cell are shared at record time (list in
-  `docs/rendering/split-screen.md`, "Cost").
+- ~~**Views recorded on separate threads**~~ **Built, measured slower, opt-in (2026-10-15,
+  `threaded-views`)**: every view's frame is a prepare (all writes, a `ViewPass` value) and a
+  record that reads no shared state (`Recorder: Sync`, compile-time), and `OAG_SPLIT_RECORDING=
+  threaded` records the views on scoped threads; on the notebook that cost 10 to 100% more CPU than one after another (a cold second core for a 0.2 to 0.4 ms burst), so `interleaved` is the
+  default. Evidence: `docs/rendering/split-screen.md` "Prepare and record",
+  `docs/tools/render-bench.md` "Threaded views". **Open: the Deck A/B** (commands there) decides
+  whether any platform defaults to threads; a persistent worker pool (would need `unsafe` lifetime
+  erasure, a spinning core gains, a parked one does not) is not built. **The lever the numbers
+  point at instead**: record view k on a worker while view k+1 is prepared and submit each as it
+  is recorded (the GPU starts early, as interleaved does); it needs the effect pipelines' uploads
+  to stop holding `&mut` state the recording reads.
 - **Render bundles are not cheap**: a bundle's commands are fixed at creation, and every drawable's
   draw list changes each view with the culling and the level of detail, with per-view dynamic offsets.
 - **The Arrow Lake iGPU's driver (Mesa ANV) costs about four times NVIDIA's CPU on Pulse** and is
@@ -53,4 +59,5 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
 1. Run the Deck commands in `docs/tools/render-bench.md` ("Encoder finish and the uniform uploads")
    on `main` and `encoder-finish`.
 2. Decide whether the group-1 switches are worth a native-only bindless path, and who owns it.
-3. List and split what is left shared at record time for the threaded-views lane (the cells above).
+3. ~~List and split what is left shared at record time~~ done (`threaded-views`); run the
+   threaded A/B on the Deck (`docs/tools/render-bench.md`, "Threaded views").

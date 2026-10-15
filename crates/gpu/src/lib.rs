@@ -14,9 +14,12 @@
 //! - [`init_buffer`] is a small constant buffer created holding its contents,
 //!   by mapping on native and through the queue in a browser.
 //! - [`timing`] is whether the GPU can be asked how long it took.
+//! - [`writes`] is where a frame's writes go: the queue, or a log of them a split
+//!   screen replays before each view's submission.
 
 pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;
 pub mod perfprobe;
 pub mod timing;
+pub mod writes;

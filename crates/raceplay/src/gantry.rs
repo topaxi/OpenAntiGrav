@@ -888,16 +888,11 @@ impl Gantry {
         self.drawable.write_node_anims(queue, seconds);
     }
 
-    /// Draws it, frustum-culled and nothing else.
+    /// What draws it, frustum-culled and nothing else.
     ///
     /// No PVS: the gantry is not in the track file, so it carries no `section`
     /// id to look one up with - the same exemption the speed pads take.
-    pub(super) fn draw(
-        &self,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        frustum: Option<&oag_core::math::frustum::Frustum>,
-    ) -> SceneStats {
-        self.drawable.draw(pass, block, None, None, None, frustum)
+    pub(super) fn drawable(&self) -> &Drawable {
+        &self.drawable
     }
 }

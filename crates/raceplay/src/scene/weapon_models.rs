@@ -250,15 +250,13 @@ impl super::Scene {
 
 impl super::Scene {
     /// Draws the `live` Shuriken blades [`Self::write_weapon_models`] wrote.
-    pub(super) fn draw_shurikens(
-        &self,
+    pub(super) fn draw_shurikens<'a>(
+        &'a self,
         live: usize,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+        list: &mut super::record::DrawList<'a>,
     ) {
         for drawable in self.plasma_blast.shuriken.iter().take(live) {
-            stats.add(drawable.draw(pass, block, None, None, None, None));
+            list.mesh(drawable);
         }
     }
 
@@ -340,12 +338,10 @@ impl super::Scene {
     /// Draws every live blast's three models - `active` is
     /// [`Self::write_plasma_blasts`]'s own return, sparse rather than a
     /// leading count the way the four kinds above are bounded.
-    pub(super) fn draw_plasma_blasts(
-        &self,
+    pub(super) fn draw_plasma_blasts<'a>(
+        &'a self,
         active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+        list: &mut super::record::DrawList<'a>,
     ) {
         let pools = [
             &self.plasma_blast.halo,
@@ -355,7 +351,7 @@ impl super::Scene {
         for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
             for pool in pools {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, block, None, None, None, None));
+                    list.mesh(drawable);
                 }
             }
         }
@@ -452,16 +448,14 @@ impl super::Scene {
 
     /// Draws every live Bomb blast's two models - the two arrays are
     /// [`Self::write_bomb_blasts`]'s own return.
-    pub(super) fn draw_bomb_blasts(
-        &self,
+    pub(super) fn draw_bomb_blasts<'a>(
+        &'a self,
         active: &BlastsActive,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+        list: &mut super::record::DrawList<'a>,
     ) {
-        self.draw_hd_bomb_blasts(&active.hd, pass, block, stats);
+        self.draw_hd_bomb_blasts(&active.hd, list);
         for drawable in self.bomb_blast.hd.halo.iter().take(active.halos) {
-            stats.add(drawable.draw(pass, block, None, None, None, None));
+            list.mesh(drawable);
         }
         for (drawable, _) in self
             .bomb_blast
@@ -471,12 +465,12 @@ impl super::Scene {
             .zip(&active.missiles)
             .filter(|(_, live)| **live)
         {
-            stats.add(drawable.draw(pass, block, None, None, None, None));
+            list.mesh(drawable);
         }
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
             for pool in &self.bomb_blast.mag_floor {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, block, None, None, None, None));
+                    list.mesh(drawable);
                 }
             }
         }
@@ -487,7 +481,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.repulser_field.get(slot) {
-                stats.add(drawable.draw(pass, block, None, None, None, None));
+                list.mesh(drawable);
             }
         }
         for (slot, _) in active
@@ -497,7 +491,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.hemisphere.get(slot) {
-                stats.add(drawable.draw(pass, block, None, None, None, None));
+                list.mesh(drawable);
             }
         }
         for (slot, _) in active
@@ -507,7 +501,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.shockwave.get(slot) {
-                stats.add(drawable.draw(pass, block, None, None, None, None));
+                list.mesh(drawable);
             }
         }
     }
@@ -643,17 +637,15 @@ impl super::Scene {
 
     /// Draws what [`Self::write_hd_bomb_blasts`] wrote: the cut-out fireball
     /// and its core first, then the additive disc and rings.
-    fn draw_hd_bomb_blasts(
-        &self,
+    fn draw_hd_bomb_blasts<'a>(
+        &'a self,
         shown: &[Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+        list: &mut super::record::DrawList<'a>,
     ) {
         let pools = &self.bomb_blast.hd;
-        let mut draw = |drawable: Option<&Drawable>, shown: bool| {
+        let mut draw = |drawable: Option<&'a Drawable>, shown: bool| {
             if let (Some(drawable), true) = (drawable, shown) {
-                stats.add(drawable.draw(pass, block, None, None, None, None));
+                list.mesh(drawable);
             }
         };
         for (slot, pieces) in shown.iter().enumerate() {
@@ -736,7 +728,11 @@ fn write_one_kind(
 }
 
 /// Puts the circuit's scene block on a weapon drawable a PS3 program shades.
-pub(super) fn write_fog(drawable: &Drawable, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+pub(super) fn write_fog(
+    drawable: &Drawable,
+    queue: &dyn oag_gpu::writes::Writes,
+    scene: &mesh_render::Scene,
+) {
     if drawable.is_ps3_shaded() {
         drawable.write_scene(queue, scene);
     }

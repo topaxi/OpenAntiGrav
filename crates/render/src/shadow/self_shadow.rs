@@ -231,7 +231,7 @@ impl Maps {
     /// turned since.
     pub fn render(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         matrix: Mat4,

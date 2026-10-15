@@ -713,7 +713,7 @@ impl Hold {
 /// `bands.len()` need not be sixteen; a shorter slice simply leaves the
 /// higher bars dark, and anything past texel [`VIS_WIDTH`] is dropped.
 pub fn write_vis(
-    queue: &wgpu::Queue,
+    queue: &dyn oag_gpu::writes::Writes,
     texture: &wgpu::Texture,
     bands: &[f32],
     tint: Option<[u8; 3]>,

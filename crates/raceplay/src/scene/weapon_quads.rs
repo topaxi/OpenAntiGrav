@@ -72,7 +72,7 @@ impl Scene {
     /// Uploads what [`Self::gather_cannon_quads`] built.
     pub(super) fn upload_cannon_quads(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         bolt: &[oag_mesh::mesh::GpuVertex],
         flash: &[oag_mesh::mesh::GpuVertex],

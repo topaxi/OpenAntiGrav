@@ -20,6 +20,7 @@
 //! in it is shared mutable state between views at record time.
 
 use super::*;
+use oag_gpu::writes::{Log, Writes};
 
 /// What a block holds. A drawable is one kind for its life ([`Drawable::share_scene`]), and
 /// the frame writes the kind's block with the value every drawable of the kind used to be
@@ -53,6 +54,9 @@ impl SceneKind {
 pub(crate) struct ViewBlock {
     scene: u32,
     uniforms: u32,
+    /// Which view this is, `0..SceneBlocks::VIEWS`: what a drawable's per-view state is
+    /// indexed by.
+    index: u8,
 }
 
 impl ViewBlock {
@@ -60,7 +64,13 @@ impl ViewBlock {
     pub(crate) const NONE: Self = Self {
         scene: 0,
         uniforms: 0,
+        index: 0,
     };
+
+    /// Which view this is, `0..SceneBlocks::VIEWS`.
+    pub(crate) fn index(self) -> usize {
+        usize::from(self.index)
+    }
 }
 
 /// The buffer behind every shared drawable's bind group 2.
@@ -73,7 +83,7 @@ pub(crate) struct SceneBlocks {
 
 impl SceneBlocks {
     /// A view per craft slot, because a view is named by the craft it follows.
-    const VIEWS: usize = GRID_SLOTS as usize;
+    pub(crate) const VIEWS: usize = GRID_SLOTS as usize;
 
     /// Every block holding [`mesh_render::Scene::off`], so a drawable drawn before its kind is
     /// first written reads what its own buffer held.
@@ -108,6 +118,7 @@ impl SceneBlocks {
         ViewBlock {
             scene: (view * SceneKind::COUNT as u64 * mesh_render::SCENE_STRIDE) as u32,
             uniforms: (view * UniformBlocks::SLOTS as u64 * mesh_render::UNIFORMS_STRIDE) as u32,
+            index: view as u8,
         }
     }
 
@@ -115,7 +126,7 @@ impl SceneBlocks {
     /// of the kind. Nothing when no drawable is of the kind.
     pub(crate) fn write(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view: ViewBlock,
         kind: SceneKind,
         scene: &mesh_render::Scene,
@@ -265,13 +276,17 @@ impl UniformBlocks {
     }
 }
 
-/// What a frame's writes go through: the queue itself (`Deref`, for every upload that is not a
-/// drawable's matrices) and the staging of the matrices of drawables on [`UniformBlocks`].
-/// [`Self::flush`] writes what was staged, **before the view's scene pass**: a queue write lands
-/// before the submission's commands wherever it is made, but a block staged after the flush is
-/// written straight away instead (still correct, one call each).
+/// What a frame's writes go through: the queue, or a [`Log`] of them a split screen replays before
+/// the view's submission ([`Writes`], which every per-frame upload takes), and the staging of the
+/// matrices of drawables on [`UniformBlocks`]. [`Self::flush`] writes what was staged, **before
+/// the view's scene pass**: a queue write lands before the submission's commands wherever it is
+/// made, but a block staged after the flush is written straight away instead (still correct, one
+/// call each).
 pub(crate) struct Uploads<'a> {
     queue: &'a wgpu::Queue,
+    /// `Some` when the view's writes wait for its submission ([`Self::logged`]): every write
+    /// goes into it instead of the queue.
+    log: Option<std::cell::RefCell<Log>>,
     /// `None` for [`Self::immediate`]: nothing is staged, every write goes straight to its buffer.
     blocks: Option<&'a UniformBlocks>,
     view: ViewBlock,
@@ -296,6 +311,7 @@ impl<'a> Uploads<'a> {
         staging.blocks.clear();
         Self {
             queue,
+            log: None,
             blocks: Some(blocks),
             view,
             staged: std::cell::RefCell::new(staging),
@@ -308,10 +324,26 @@ impl<'a> Uploads<'a> {
     pub(crate) fn immediate(queue: &'a wgpu::Queue) -> Self {
         Self {
             queue,
+            log: None,
             blocks: None,
             view: ViewBlock::NONE,
             staged: std::cell::RefCell::default(),
             flushed: std::cell::Cell::new(true),
+        }
+    }
+
+    /// These uploads with every write kept in `log` instead of made, for
+    /// [`Self::into_parts`] to hand back and the caller to replay before the view's submission.
+    pub(crate) fn logged(mut self, log: Log) -> Self {
+        self.log = Some(std::cell::RefCell::new(log));
+        self
+    }
+
+    /// Where a write goes: the log, or the queue.
+    fn sink(&self) -> &dyn Writes {
+        match &self.log {
+            Some(log) => log,
+            None => self.queue,
         }
     }
 
@@ -322,7 +354,7 @@ impl<'a> Uploads<'a> {
         if self.flushed.get() {
             let at = u64::from(self.view.uniforms) + u64::from(slot) * mesh_render::UNIFORMS_STRIDE;
             oag_gpu::perfprobe::write_buffer(
-                self.queue,
+                self.sink(),
                 &blocks.buffer,
                 at,
                 bytemuck::bytes_of(&uniforms),
@@ -361,22 +393,43 @@ impl<'a> Uploads<'a> {
             }
             let at =
                 u64::from(self.view.uniforms) + u64::from(first) * mesh_render::UNIFORMS_STRIDE;
-            oag_gpu::perfprobe::write_buffer(self.queue, &blocks.buffer, at, packed);
+            oag_gpu::perfprobe::write_buffer(self.sink(), &blocks.buffer, at, packed);
         }
         staged.clear();
     }
 
     /// The working memory back, for the next view.
     pub(crate) fn into_staging(self) -> Staging {
-        self.staged.into_inner()
+        self.into_parts().0
+    }
+
+    /// The working memory back, and the writes [`Self::logged`] kept.
+    pub(crate) fn into_parts(self) -> (Staging, Option<Log>) {
+        (
+            self.staged.into_inner(),
+            self.log.map(std::cell::RefCell::into_inner),
+        )
+    }
+
+    /// The queue itself, for what is not a write (a pass encoded with it, a submission).
+    pub(crate) fn queue(&self) -> &'a wgpu::Queue {
+        self.queue
     }
 }
 
-impl std::ops::Deref for Uploads<'_> {
-    type Target = wgpu::Queue;
+impl Writes for Uploads<'_> {
+    fn write_buffer(&self, buffer: &wgpu::Buffer, offset: wgpu::BufferAddress, data: &[u8]) {
+        self.sink().write_buffer(buffer, offset, data);
+    }
 
-    fn deref(&self) -> &wgpu::Queue {
-        self.queue
+    fn write_texture(
+        &self,
+        texture: wgpu::TexelCopyTextureInfo<'_>,
+        data: &[u8],
+        data_layout: wgpu::TexelCopyBufferLayout,
+        size: wgpu::Extent3d,
+    ) {
+        self.sink().write_texture(texture, data, data_layout, size);
     }
 }
 
@@ -421,8 +474,10 @@ impl Drawable {
     pub(super) fn put_uniforms(&self, uploads: &Uploads<'_>, uniforms: Uniforms) {
         match self.uniform_slot {
             Some(slot) => uploads.stage(slot, uniforms),
+            // Through the uploads, never their queue: a later view of a split keeps this write
+            // for its own submission (`Uploads::logged`).
             None => oag_gpu::perfprobe::write_buffer(
-                uploads.queue,
+                uploads,
                 &self.uniforms,
                 0,
                 bytemuck::bytes_of(&uniforms),

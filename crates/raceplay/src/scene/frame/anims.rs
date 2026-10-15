@@ -5,7 +5,7 @@
 impl super::super::Scene {
     /// Samples both animation mechanisms of every piece of scenery off the one
     /// clock and uploads them.
-    pub(super) fn write_scenery_anims(&self, queue: &wgpu::Queue, seconds: f32) {
+    pub(super) fn write_scenery_anims(&self, queue: &dyn oag_gpu::writes::Writes, seconds: f32) {
         for drawable in [
             Some(&self.track),
             self.sky.as_ref(),

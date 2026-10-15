@@ -71,10 +71,32 @@ pub(super) fn build(
     }
 }
 
+impl Ribbons {
+    /// The pipelines in the order the effects draw them: the wake's contact quads under its
+    /// arcs, then the smoke over it, then HD's Leach strip.
+    pub(super) fn cells(&self) -> [Option<&std::cell::RefCell<oag_fx::beam::Pipeline>>; 4] {
+        let (contact, atlas) = self
+            .magstrip
+            .as_ref()
+            .map_or((None, None), |m| (Some(m.contact()), Some(m.atlas())));
+        [
+            contact,
+            atlas,
+            self.rocket_smoke.as_ref().map(|smoke| &smoke.pipeline),
+            self.leach_strip.as_ref(),
+        ]
+    }
+}
+
 impl super::Scene {
     /// Uploads this frame's ribbons. The smoke's facing fade needs the eye,
     /// read out of the view matrix's inverse.
-    pub(super) fn upload_ribbons(&self, race: &Race, queue: &wgpu::Queue, vp: &[[f32; 4]; 4]) {
+    pub(super) fn upload_ribbons(
+        &self,
+        race: &Race,
+        queue: &dyn oag_gpu::writes::Writes,
+        vp: &[[f32; 4]; 4],
+    ) {
         self.upload_magstrip_wake(race, queue, vp);
         if let Some(smoke) = &self.ribbons.rocket_smoke {
             let eye = race.view().inverse().w_axis.truncate();
@@ -93,18 +115,6 @@ impl super::Scene {
                 self.anim_clock.get(),
                 &race.leach_strip_vertices(),
             );
-        }
-    }
-
-    /// Draws the ribbons into the pass `draw_effects` owns: the wake, then
-    /// the smoke over it.
-    pub(super) fn draw_ribbons(&self, pass: &mut wgpu::RenderPass<'_>) {
-        self.draw_magstrip_wake(pass);
-        if let Some(smoke) = &self.ribbons.rocket_smoke {
-            smoke.pipeline.borrow().draw(pass);
-        }
-        if let Some(strip) = &self.ribbons.leach_strip {
-            strip.borrow().draw(pass);
         }
     }
 }
