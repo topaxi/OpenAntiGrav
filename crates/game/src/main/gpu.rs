@@ -249,7 +249,7 @@ impl Gpu {
         #[cfg(target_arch = "wasm32")]
         let instance = web::instance()?;
         #[cfg(not(target_arch = "wasm32"))]
-        let instance = adapter::instance();
+        let instance = adapter::instance_for_window(event_loop);
         let surface = instance
             .create_surface(window.clone())
             .context("creating the surface")?;

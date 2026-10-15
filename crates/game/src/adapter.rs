@@ -55,6 +55,25 @@ use oag_display::display::Renderer;
 /// `docs/tools/packaging.md`.
 pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 
+/// The environment variable that adds wgpu's GL backend to [`BACKENDS`].
+///
+/// **A dev switch, not a setting**: GL is a trial (`docs/tools/gl-backend.md`),
+/// so a player's menu never lists a `gl:` row. Set it to anything but `0` or
+/// the empty string and the instance enumerates GL beside the primary
+/// backends; name the adapter in `graphics.renderer` to draw with it.
+pub const GL_ENV: &str = "OAG_GL";
+
+/// The backends this run offers: [`BACKENDS`], plus GL when [`GL_ENV`] asks.
+#[must_use]
+pub fn backends() -> wgpu::Backends {
+    let gl = std::env::var_os(GL_ENV).is_some_and(|value| !value.is_empty() && value != "0");
+    if gl {
+        BACKENDS | wgpu::Backends::GL
+    } else {
+        BACKENDS
+    }
+}
+
 /// An instance restricted to [`BACKENDS`].
 ///
 /// Every entry point makes its instance through here rather than
@@ -64,7 +83,28 @@ pub const BACKENDS: wgpu::Backends = wgpu::Backends::PRIMARY;
 #[must_use]
 pub fn instance() -> wgpu::Instance {
     let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
-    descriptor.backends = BACKENDS;
+    descriptor.backends = backends();
+    wgpu::Instance::new(descriptor)
+}
+
+/// [`instance`] for a window: the same backends, and when GL is on, the
+/// window system's display handle as well.
+///
+/// **Only GL needs it.** GL's EGL display is built from the window system's
+/// own display (X11, Wayland), and an instance made without one can still
+/// enumerate a GL adapter but reports it unable to present to any surface, so
+/// the window would fall back to Vulkan without saying why. Vulkan and Metal
+/// ignore the handle, and the default path stays exactly what it was.
+#[cfg(not(target_arch = "wasm32"))]
+#[must_use]
+pub fn instance_for_window(event_loop: &winit::event_loop::ActiveEventLoop) -> wgpu::Instance {
+    if !backends().contains(wgpu::Backends::GL) {
+        return instance();
+    }
+    let mut descriptor = wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
+        event_loop.owned_display_handle(),
+    ));
+    descriptor.backends = backends();
     wgpu::Instance::new(descriptor)
 }
 
@@ -191,7 +231,7 @@ pub fn choose(
     surface: Option<&wgpu::Surface<'_>>,
     setting: &Renderer,
 ) -> Result<Chosen> {
-    let adapters: Vec<wgpu::Adapter> = pollster::block_on(instance.enumerate_adapters(BACKENDS))
+    let adapters: Vec<wgpu::Adapter> = pollster::block_on(instance.enumerate_adapters(backends()))
         .into_iter()
         .filter(|adapter| surface.is_none_or(|surface| adapter.is_surface_supported(surface)))
         .collect();
