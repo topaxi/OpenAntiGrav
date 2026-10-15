@@ -12,7 +12,9 @@ PRO 2000 Blackwell Laptop GPU and the Arrow Lake iGPU). Evidence and numbers:
 Landed: the circuit shine pass's normals are kept, the craft shine maps are written by the first view
 of a frame, HD's depth prepass binds one texture slot (`split-cpu`); one shared buffer of scene blocks
 (a block per view and per kind, bound by dynamic offset: 33 fewer `queue.write_buffer` calls a view on
-Pulse; Pulse's CPU -4 to 5%), every still byte-identical and every state hash unchanged
+Pulse; Pulse's CPU -4 to 5%), every drawable's matrices on one buffer with a region per view (Pulse
+56 to 36 writes a view in one view, 93 to 45 in two), the craft animation tables written by the
+first view only, every still byte-identical and every state hash unchanged
 (`encoder-finish`). Tried and reverted (`5b646661f`, still in the history): merging contiguous
 same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took 19 us out of HD's
 `finish` and nothing out of Pulse's or Pure's, and costs 3 to 8 us to queue: draw calls are not what
@@ -28,14 +30,14 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
   and a `binding_array` indexed by the instance index is native only (the web and phone builds keep
   the per-draw path) and touches group 1's five bindings in every title's mesh shader. Its own lane,
   decided by the maintainer.
-- **Group 0 is still one `queue.write_buffer` per drawable per view** (matrices; Pulse 56 writes a view
-  after the scene blocks). Packing them into one write a view, a dynamic offset per drawable inside the
-  view's region, is the next upload win (about 1 us a write removed, an estimate from the scene
-  blocks' 33 writes and 4 to 5%) and is also what a threaded view needs.
-- **Views recorded on separate threads**: the scene block region is per view, but the group-0
-  buffers, the animation tables, `Drawable`'s `RefCell`s (`shown`, `ripple`, `pad_glow`, `hidden`),
-  `Scene`'s `layer`, `history`, `scratch`, `opaque_order` cells, the effect pipelines' buffers and the
-  race's viewpoint cell are shared at record time (list in `docs/rendering/split-screen.md`, "Cost").
+- **What is left of the uploads** is the per-view effect pipelines' own buffers (exhaust, sparks,
+  clouds, shadow geometry, beams, which the probe does not count: `exhaust-upload` alone is about 35 us a view on Pulse) and the advert cards; the matrices and the
+  scene blocks are done.
+- **Views recorded on separate threads**: the scene blocks and the matrices are per view, but the
+  animation tables, `Drawable`'s `RefCell`s (`shown`, `ripple`, `pad_glow`, `hidden`), `Scene`'s
+  `layer`, `history`, `scratch`, `opaque_order` and `upload_staging` cells, the effect pipelines'
+  buffers and the race's viewpoint cell are shared at record time (list in
+  `docs/rendering/split-screen.md`, "Cost").
 - **Render bundles are not cheap**: a bundle's commands are fixed at creation, and every drawable's
   draw list changes each view with the culling and the level of detail, with per-view dynamic offsets.
 - **The Arrow Lake iGPU's driver (Mesa ANV) costs about four times NVIDIA's CPU on Pulse** and is
@@ -51,5 +53,4 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
 1. Run the Deck commands in `docs/tools/render-bench.md` ("Encoder finish and the uniform uploads")
    on `main` and `encoder-finish`.
 2. Decide whether the group-1 switches are worth a native-only bindless path, and who owns it.
-3. Pack the group-0 matrices into one write a view with per-view regions, then list what is left
-   shared at record time for the threaded-views lane.
+3. List and split what is left shared at record time for the threaded-views lane (the cells above).

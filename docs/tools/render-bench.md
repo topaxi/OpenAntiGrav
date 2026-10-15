@@ -372,6 +372,16 @@ round, not a typical one).
   a view (`perf-probe`'s counter, frame 0; one view then two): Pulse 89 / 159 to 56 / 93, HD 78 / 139
   to 55 / 93, Pure 28 / 51 to 19 / 33; Pulse's bytes a view 454 to 282 KiB. Shield shells, weapon
   models and the sky never get a block written (or only while live) and keep a buffer of their own.
+- **Every drawable's matrices share one buffer too** (bind group 0, `UniformBlocks` and `Uploads`
+  in `drawable/scene_block.rs`): a region per view, a slot of 256 bytes per drawable, the hulls,
+  shine passes, wrecks, flares, plumes, shields, absorb passes, circuit, sky, pads, collision,
+  gantry, behind-the-glass drawables and the weapon pools claim a slot at load; a view stages its
+  matrices in memory and writes them in runs of neighbouring slots just before its scene pass, and
+  a slot a view did not stage keeps what that view's region held (what the old per-drawable buffer
+  did). Writes a view (one view, then two): Pulse 56 / 93 to 36 / 45, HD 55 / 93 to 37 / 41, Pure 19
+  / 33 to 8 / 11. `OAG_RENDER_PERF_SITES=1` prints a probe frame's writes by call site.
+- **The craft's animation tables are written by the first view** (`FrameWork::craft_anims`): a
+  function of the race clock that every view wrote (8 writes a later view on Pulse, 16 on HD).
 - **Tried and not kept: contiguous batches of one texture as one `draw_indexed`** (commit `5b646661f`,
   reverted). Queued draws to issued calls a view, one view: HD 1,447 to 969, Pulse 423 to 363, Pure
   368 to 290, the triangles in the same order, every still identical. Measured quiet (four
@@ -407,6 +417,19 @@ preview draws through `oag_game::preview`) byte-identical before and after, the
 before binary rendered twice is identical to itself, `oag-view` ship and circuit stills render (the
 viewer binds offset 0 too), and
 `final_state_hash` of all six `bench-render` races is the same before and after.
+
+**The matrices and the animation tables, second step** (same method, minimum over four interleaved
+rounds, the `render_viewports CPU` p50, scene blocks only then plus both: Pulse 1 1,284 to 1,306,
+Pulse 2h 2,028 to 1,987, HD 1 2,058 to 2,016, HD 2h 2,951 to 2,780, Pure 1 567 to 564, Pure 2h 862 to
+826 us, at load 3 to 17, so read it as a few percent). **The second view's spans** (`perf-probe`, the
+quiet runs, sum of the span minimums: Pulse 483 to 476 us, HD 636 to 571, Pure 294 to 282): the
+craft animation span goes to 0 (Pulse 9 us, HD 41), the hull and shine write span falls (Pulse 61
+to 42, HD 22 to 12, Pure 12 to 4), `encoder.finish` does not move (216 to 213, 290 to 289, 143 to
+140), as it counts commands. **Pictures:** the 9 stills, the 10 above, 19 with weapons and a wreck
+(each weapon type fired on Pulse and HD, a bomb trip, a missile hit, a wreck, a two-view rocket)
+byte-identical against `main`'s tip (38 of 38 on the merged branch), and
+`tests::scene_blocks::two_views_leave_a_block_each_holding_their_own_eye` reads back both views'
+craft matrices (dropping the share or the flush fails it).
 
 **Where `encoder.finish` goes: the texture bind-group switches.** The second view of a 2h frame, in
 `perf-probe`'s `encoder-finish` span, with and without a timing-only hack that never switches
