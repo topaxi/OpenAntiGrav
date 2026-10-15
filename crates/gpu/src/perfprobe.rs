@@ -210,14 +210,17 @@ pub fn mark(label: &str) {
     use std::sync::atomic::AtomicU64;
     static LAST_ALLOCS: AtomicU64 = AtomicU64::new(0);
     static LAST_BYTES: AtomicU64 = AtomicU64::new(0);
-    static LAST_TIME: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+    // Per thread: a split screen records its views on threads of their own, and a span is
+    // the time since the last mark *of the same thread*. The allocation counts stay global.
+    thread_local! {
+        static LAST_TIME: std::cell::Cell<Option<std::time::Instant>> =
+            const { std::cell::Cell::new(None) };
+    }
     let allocs = ALLOCS.load(Relaxed);
     let bytes = ALLOC_BYTES.load(Relaxed);
     let now = std::time::Instant::now();
     let micros = LAST_TIME
-        .lock()
-        .ok()
-        .and_then(|mut last| last.replace(now))
+        .with(|last| last.replace(Some(now)))
         .map_or(0, |last| now.duration_since(last).as_micros());
     println!(
         "  perf mark {label}: +{micros} us, +{} allocs, +{} bytes",

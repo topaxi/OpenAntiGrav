@@ -332,6 +332,13 @@ impl<'a> Uploads<'a> {
         }
     }
 
+    /// These uploads with every write kept in `log` instead of made, for
+    /// [`Self::into_parts`] to hand back and the caller to replay before the view's submission.
+    pub(crate) fn logged(mut self, log: Log) -> Self {
+        self.log = Some(std::cell::RefCell::new(log));
+        self
+    }
+
     /// Where a write goes: the log, or the queue.
     fn sink(&self) -> &dyn Writes {
         match &self.log {
@@ -467,8 +474,10 @@ impl Drawable {
     pub(super) fn put_uniforms(&self, uploads: &Uploads<'_>, uniforms: Uniforms) {
         match self.uniform_slot {
             Some(slot) => uploads.stage(slot, uniforms),
+            // Through the uploads, never their queue: a later view of a split keeps this write
+            // for its own submission (`Uploads::logged`).
             None => oag_gpu::perfprobe::write_buffer(
-                uploads.queue,
+                uploads,
                 &self.uniforms,
                 0,
                 bytemuck::bytes_of(&uniforms),

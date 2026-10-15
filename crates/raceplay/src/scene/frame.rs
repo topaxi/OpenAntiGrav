@@ -105,6 +105,42 @@ impl Scene {
         oag_gpu::perfprobe::mark("scene-pass");
         let blur_shake = pass.blur_shake;
         drop(pass);
+        let (hd_bloom_encoded, blur_encoded) = self.finish_view(
+            device,
+            queue,
+            encoder,
+            view,
+            race,
+            viewport,
+            (motion_blur, blur_shake),
+            blur_timestamps,
+            hd_bloom_timestamps,
+        );
+        stats.hd_bloom_encoded |= hd_bloom_encoded;
+        stats.blur_encoded = blur_encoded;
+        oag_gpu::perfprobe::mark("post-chain");
+        *self.upload_staging.borrow_mut() = uploads.into_staging();
+        stats
+    }
+
+    /// What follows a view's scene pass, recorded into `encoder`: HD's or Omega's chain or the
+    /// PSP bloom's prepare for a whole picture, the borrowed boost zoom, and the motion blur
+    /// (`blur` is its strength and the camera shake it takes out). Returns whether HD's chain
+    /// and the blur were encoded.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn finish_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        race: &Race,
+        viewport: (f32, f32, f32, f32),
+        (motion_blur, blur_shake): (oag_display::display::MotionBlur, Mat4),
+        blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
+    ) -> (bool, bool) {
+        let mut hd_bloom_encoded = false;
         let depth_view = &self.attachment_views.depth;
         let velocity_view = &self.attachment_views.velocity;
 
@@ -135,7 +171,7 @@ impl Scene {
                     race.hd_zoom_frame().filter(|_| own_pulse),
                     hd_bloom_timestamps,
                 );
-                stats.hd_bloom_encoded = true;
+                hd_bloom_encoded = true;
             }
         } else if let Some(omega) = &self.omega {
             // Omega's tone map: the executable's exposure and curve over the
@@ -182,7 +218,7 @@ impl Scene {
         // applies live; at `off` the pass encodes nothing. The velocity
         // buffer it reads was written by the scene pass above either way -
         // see `Scene::velocity`.
-        stats.blur_encoded = self.encode_motion_blur(
+        let blur_encoded = self.encode_motion_blur(
             device,
             queue,
             encoder,
@@ -193,8 +229,7 @@ impl Scene {
             blur_timestamps,
         );
         oag_gpu::perfprobe::mark("post-chain");
-        *self.upload_staging.borrow_mut() = uploads.into_staging();
-        stats
+        (hd_bloom_encoded, blur_encoded)
     }
 
     /// One view's writes and choices, and its scene pass as a value for [`Recorder::record`]:

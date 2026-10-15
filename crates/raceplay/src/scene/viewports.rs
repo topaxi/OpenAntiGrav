@@ -406,51 +406,68 @@ impl Scene {
             .last_frame
             .set(None);
         self.split_live.set(true);
-        for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
-            race.set_viewpoint(slot);
-            // This seat's own camera history: the previous view-projection its velocity is
-            // measured against and the shake the blur takes out, never another view's.
-            self.history.set(motion::split_history(slot));
-            self.layer.set(if index == 0 {
-                Layer::First
-            } else {
-                Layer::Next
-            });
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("race viewport"),
-            });
-            let timer = view_timers.get_mut(index).and_then(Option::as_mut);
-            stats.add(
-                self.render(
-                    device,
-                    queue,
-                    &mut encoder,
-                    view,
-                    race,
-                    rect,
-                    fov,
-                    cull,
-                    pvs_cull,
-                    anim_seconds,
-                    // The blur runs after the last view: `Scene::blur_split_views`.
-                    oag_display::display::MotionBlur::Off,
-                    shadows,
-                    None,
-                    zone_spectrum,
-                    timer
-                        .as_deref()
-                        .and_then(oag_gpu::timing::PassTimer::writes),
-                    None,
-                    None,
-                ),
-            );
-            if let Some(timer) = timer {
-                timer.resolve(&mut encoder);
+        let recording = self.split_recording();
+        if recording == super::Recording::Interleaved {
+            for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
+                self.enter_view(race, index, slot);
+                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("race viewport"),
+                });
+                let timer = view_timers.get_mut(index).and_then(Option::as_mut);
+                stats.add(
+                    self.render(
+                        device,
+                        queue,
+                        &mut encoder,
+                        view,
+                        race,
+                        rect,
+                        fov,
+                        cull,
+                        pvs_cull,
+                        anim_seconds,
+                        // The blur runs after the last view: `Scene::blur_split_views`.
+                        oag_display::display::MotionBlur::Off,
+                        shadows,
+                        None,
+                        zone_spectrum,
+                        timer
+                            .as_deref()
+                            .and_then(oag_gpu::timing::PassTimer::writes),
+                        None,
+                        None,
+                    ),
+                );
+                if let Some(timer) = timer {
+                    timer.resolve(&mut encoder);
+                }
+                let commands = encoder.finish();
+                oag_gpu::perfprobe::mark("encoder-finish");
+                queue.submit(Some(commands));
+                oag_gpu::perfprobe::mark("submit");
             }
-            let commands = encoder.finish();
-            oag_gpu::perfprobe::mark("encoder-finish");
-            queue.submit(Some(commands));
-            oag_gpu::perfprobe::mark("submit");
+        } else {
+            let settings = super::frame::ViewSettings {
+                fov,
+                cull,
+                pvs_cull,
+                anim_seconds,
+                shadows,
+                // A split draws no camera jitter, as `render` was handed for it.
+                camera_jitter: None,
+                zone_spectrum,
+            };
+            stats = self.render_slots_batched(
+                device,
+                queue,
+                view,
+                race,
+                slots,
+                rects,
+                &settings,
+                view_timers,
+                recording,
+            );
         }
         self.layer.set(Layer::Whole);
         self.reuse_frame_work.set(false);
