@@ -1373,9 +1373,11 @@ Two views cost about 0.5 to 0.6 ms more than one on NVIDIA and 0.6 to 1.0 ms on 
 pixels, twice the fixed passes (each chain is eight dispatches, a pyramid and a clear). Against the
 FSR 1 a split drew before, a split pays 0.8 ms (NVIDIA) and 1.7 ms (iGPU) more for reconstruction.
 
-**Steam Deck, for the maintainer** (not measured):
+**Steam Deck, for the maintainer** (not measured). `OAG_RESOLVE_BENCH` runs only in a
+`perf-probe` build; a plain build prints nothing:
 
 ```sh
+cargo build --release -p oag-game --features perf-probe
 for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
   XDG_CONFIG_HOME=/tmp/oag-fsr3/config XDG_DATA_HOME=/tmp/oag-fsr3/data XDG_STATE_HOME=/tmp/oag-fsr3/state \
     OAG_RESOLVE_BENCH=200 ./target/release/oag-game data/images/pulse-psp-eu.chd --race --no-audio \

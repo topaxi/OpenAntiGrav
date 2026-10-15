@@ -121,8 +121,12 @@ impl Scene {
             view,
         };
         let mut views = Views::begin(self);
+        // The draw dump appends a line a draw to one file, which two threads would interleave.
         #[cfg(not(target_arch = "wasm32"))]
-        if recording == Recording::Overlapped && slots.len() > 1 {
+        if recording == Recording::Overlapped
+            && slots.len() > 1
+            && std::env::var_os("OAG_DRAW_DUMP").is_none()
+        {
             let stats = self.render_slots_overlapped(
                 gpu,
                 &mut views,

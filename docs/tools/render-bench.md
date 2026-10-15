@@ -768,7 +768,10 @@ reads Pulse 2h 1,336 us overlapped against 1,246 interleaved and HD 2h 2,199 aga
 threaded recording 1,644 and 2,193. So the work does not get slower, the handoffs do: every view
 is a round trip to a worker that sleeps on its channel between views, a wake-up per view where
 `threaded` pays one per frame, and a cold P-core under `powersave` does not stay awake through a
-0.2 to 0.4 ms prepare. **The default stays interleaved.** A spinning worker is the one variant the
+0.2 to 0.4 ms prepare. **The default stays interleaved.** The worker is scoped to the frame, not
+long-lived: the recording borrows the scene, the workspace denies `unsafe` (no lifetime erasure)
+and there is no thread pool crate to lend a safe one; a parked long-lived worker woken once per
+view would pay the same wake-up the one-core run isolates. A spinning worker is the one variant the
 microbenchmark under "Threaded views" says could win, at the cost of a core burning between
 frames; not built.
 
@@ -779,7 +782,21 @@ same three rounds, Pulse one view 881 / 893 us and 2h 1,267 / 1,244, HD one view
 **Pictures**: `split_recording_ground_truth::` compares overlapped with interleaved (Pure 2h, Pulse
 four views with a Rocket) and fails if a later view's log is dropped (Pulse's four views, checked).
 
-**Steam Deck**: the "Threaded views" loop with `for rec in interleaved threaded overlapped`.
+**Steam Deck**: build from `main` after this lane merged (the `threaded-views` branch has no
+`overlapped`, and an unknown `OAG_SPLIT_RECORDING` silently records interleaved), then the
+"Threaded views" loop with that binary:
+
+```sh
+git checkout main && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-ov
+mkdir -p /tmp/oag-bench
+for title in pulse-psp-eu.chd hdfury-ps3-eu-dec.iso; do for rep in 1 2 3; do for n in 2 4; do for rec in interleaved threaded overlapped; do
+  echo "== $title players=$n $rec load=$(cut -d' ' -f1 /proc/loadavg)"
+  XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+  OAG_SPLIT_RECORDING=$rec OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100 /tmp/oag-game-ov data/images/$title --race --no-audio \
+    --mode single_race --players $n --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+    | grep -E '^bench (split|render_viewports CPU|pipelined)'
+done; done; done; done | tee /tmp/oag-bench/overlapped.txt
+```
 
 ## The presentation resolve (2026-10-16, `split-followups`)
 
