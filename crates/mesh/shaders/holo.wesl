@@ -34,6 +34,13 @@ fn overlay(base: vec3<f32>, layer: vec3<f32>) -> vec3<f32> {
 
 @diagnostic(off, derivative_uniformity)
 fn holo_billboard(in: VertexOutput) -> vec4<f32> {
+    // The `bindless` variant's slot, as `lit_texel` takes it.
+    @if(bindless) {
+        let albedo = albedo[in.material];
+        let albedo_sampler = albedo_sampler[in.material];
+        let lightmap = lightmap[in.material];
+        let pad_mask = pad_mask[in.material];
+    }
     let rates = emissives.tint_offset[in.slots >> 24u];
     let t = scene.time.x;
     let layer_uv = in.lightmap_texcoord.xy;

@@ -5,7 +5,6 @@
 // Pulse's look. A single light leaves faces pointing away from it unreadably
 // black.
 
-
 import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissives, node_anims, scene, uniforms};
 import package::fog::{fogged};
@@ -17,6 +16,9 @@ import package::shadow::{shadowed};
 import package::spu_light::{spu_light_sum};
 import package::types::{BlendMrtOutput, MrtOutput, VertexInput, VertexOutput};
 import package::velocity::{velocity_of};
+
+// Binding arrays, for the `bindless` variant's group 1 - see `bindings.wesl`.
+@if(bindless) enable wgpu_binding_array;
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
@@ -95,6 +97,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.cur_clip = out.clip;
     out.prev_clip = uniforms.prev_mvp * placed;
     out.spu_light = spu_light_sum(out.world, out.normal);
+    @if(bindless) out.material = in.material;
     return out;
 }
 

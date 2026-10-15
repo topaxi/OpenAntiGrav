@@ -72,6 +72,7 @@ impl TrackShine {
             false,
             false,
             mesh_render::Velocity::Write,
+            false,
         )?;
         Ok(Some(Self {
             drawable,

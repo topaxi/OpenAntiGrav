@@ -644,6 +644,9 @@ impl Scene {
             hd.is_some(),
             false,
             mesh_render::Velocity::Write,
+            // Group 1 as arrays where the device has them: the circuit switches
+            // material per draw more than any other drawable.
+            true,
         )?;
         let adverts = if adverts.is_empty() {
             None

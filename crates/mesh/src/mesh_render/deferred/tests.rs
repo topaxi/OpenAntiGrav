@@ -35,6 +35,7 @@ fn build_deferring(
         false,
         false,
         true,
+        false,
     )
     .expect("building the mesh pipeline")
 }

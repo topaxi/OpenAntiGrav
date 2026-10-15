@@ -57,6 +57,11 @@ pub(super) struct Drawable {
     /// [`Self::share_uniforms`] moved it there; `None` while it reads [`Self::uniforms`].
     uniform_slot: Option<u32>,
     textures: Vec<wgpu::BindGroup>,
+    /// Group 1 as arrays, bound once per [`Self::draw`] instead of a slot's group per
+    /// draw, when this drawable was built for it and the device has it - see
+    /// `mesh_render::bindless` and [`Self::bind_slot`]. Every pipeline above then
+    /// binds this; [`Self::textures`] stays for the sun-occlusion pass and the ghost.
+    bindless: Option<mesh_render::bindless::Bindless>,
     /// Bind group 2: the fog this drawable is rendered with.
     fog_bind: wgpu::BindGroup,
     /// The buffer behind it. Rewritten each frame from the track's `fogCube`,
@@ -171,6 +176,7 @@ impl Drawable {
             false,
             false,
             velocity,
+            false,
         )
     }
 
@@ -201,6 +207,9 @@ impl Drawable {
         // `mesh_render::build_with`.
         cull_back: bool,
         velocity: mesh_render::Velocity,
+        // Whether group 1 is the binding arrays, where the device has them and
+        // `OAG_BINDLESS` does not say `0` - see [`Self::bindless`].
+        bindless: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -216,6 +225,7 @@ impl Drawable {
             vertex_buffer: vertices,
             index_buffer: indices,
             texture_binds: textures,
+            bindless,
             fog_bind,
             fog_buffer,
             zone_vis_texture,
@@ -248,6 +258,7 @@ impl Drawable {
             prepass,
             cull_back,
             true,
+            bindless && mesh_render::bindless::wanted(device),
         )?;
         let reversed_indices = prepass.is_some().then(|| {
             let reversed: Vec<u32> = model
@@ -350,6 +361,7 @@ impl Drawable {
             uniform_bind,
             uniform_slot: None,
             textures,
+            bindless,
             fog_bind,
             fog: fog_buffer,
             scene_kind: None,
@@ -375,16 +387,47 @@ impl Drawable {
         view: &wgpu::TextureView,
     ) {
         // Slot 0 is the white fallback, so a texture slot n binds group n + 1.
-        let Some(bind) = self.textures.get_mut(texture_slot + 1) else {
+        let slot = texture_slot + 1;
+        let Some(bind) = self.textures.get_mut(slot) else {
             return;
         };
-        *bind = mesh_render::albedo_bind_group(
+        let material = mesh_render::card_material(device, queue, view);
+        *bind = material.bind_group(
             device,
-            queue,
-            &self.pipeline.get_bind_group_layout(1),
-            view,
+            &mesh_render::material_bind_group_layout(device),
             "advert albedo",
         );
+        if let Some(bindless) = &mut self.bindless {
+            bindless.set(device, slot, material);
+        }
+    }
+
+    /// Binds group 1 for this drawable's draws: the arrays once, or nothing,
+    /// leaving [`Self::bind_slot`] to bind each slot's group.
+    pub(super) fn bind_materials(&self, pass: &mut wgpu::RenderPass<'_>) {
+        if let Some(bindless) = &self.bindless {
+            pass.set_bind_group(1, bindless.group(), &[]);
+        }
+    }
+
+    /// Readies material slot `slot` for the next draw and returns its first
+    /// instance: the slot itself with the arrays bound ([`Self::bind_materials`]),
+    /// whose shader reads it as `VertexOutput::material`; otherwise 0, after
+    /// binding the slot's group unless `last_bound` says it already is.
+    pub(super) fn bind_slot(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        last_bound: &mut Option<usize>,
+        slot: usize,
+    ) -> u32 {
+        if self.bindless.is_some() {
+            return slot as u32;
+        }
+        if *last_bound != Some(slot) {
+            pass.set_bind_group(1, &self.textures[slot], &[]);
+            *last_bound = Some(slot);
+        }
+        0
     }
 
     /// Binds this drawable's vertex buffer - and its streamed coordinates,

@@ -213,8 +213,8 @@ fn with_no_scope_open_every_build_creates_its_own_shader_and_pipelines() {
         "with no scope open, nothing should be shared"
     );
 
-    let a = shared_shader_module(&device);
-    let b = shared_shader_module(&device);
+    let a = shared_shader_module(&device, false);
+    let b = shared_shader_module(&device, false);
     assert_ne!(a, b, "with no scope open, the shader module is not cached");
 }
 

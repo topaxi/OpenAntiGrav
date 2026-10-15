@@ -82,6 +82,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
+        self.bind_materials(pass);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
@@ -111,11 +112,8 @@ impl Drawable {
                 .min(self.textures.len() - 1);
             binds.record(slot);
             // Elided when unchanged, as in `draw`.
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
-            }
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            let first = self.bind_slot(pass, &mut last_bound, slot);
+            pass.draw_indexed(draw.range.clone(), 0, first..first + 1);
         }
         stats
     }
@@ -210,6 +208,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
+        self.bind_materials(pass);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
@@ -239,11 +238,8 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
-            }
-            pass.draw_indexed(draw.range.clone(), 0, 0..1);
+            let first = self.bind_slot(pass, &mut last_bound, slot);
+            pass.draw_indexed(draw.range.clone(), 0, first..first + 1);
         }
         stats
     }

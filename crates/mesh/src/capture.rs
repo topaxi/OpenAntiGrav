@@ -173,6 +173,7 @@ pub fn capture_pixels_from(
         vertex_buffer,
         index_buffer,
         texture_binds,
+        bindless: _,
         fog_bind,
         fog_buffer: _,
         zone_vis_texture: _,
