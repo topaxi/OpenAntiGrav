@@ -100,3 +100,9 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 // is per-invocation state and not a binding. Zero wherever the authored rig did
 // not shade the fragment, which makes `shadowed` fall back to its multiply.
 var<private> sun_delta: vec3<f32>;
+
+// Whether `sun_delta` was written for the colour `lit_texel` returned: set only
+// where that colour is the generic combine's, so a special combine (the glass
+// floor's facing ramp, the magstrip floor, a light cone) is never charged a sun
+// term it did not contain. Zero otherwise, per invocation.
+var<private> sun_known: f32;

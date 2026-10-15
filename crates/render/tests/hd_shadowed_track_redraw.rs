@@ -31,7 +31,7 @@ const SIZE: u32 = 64;
 const SUN: [f32; 3] = [0.6, 0.5, 0.4];
 const AMBIENT: [f32; 3] = [0.08, 0.1, 0.14];
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+fn vertex(position: [f32; 3], slot_bits: u32) -> GpuVertex {
     GpuVertex {
         quake: 0.0,
         position,
@@ -45,7 +45,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
         xform: 0,
         sun_mask: 1.0,
         // Neither `NO_AMBIENT` nor `NO_SUN`: the track's own ordinary lit path.
-        slots: slots::DEFAULT,
+        slots: slot_bits,
         specular_exponent: oag_mesh::mesh::DEFAULT_SPECULAR_EXPONENT,
         glow: 0.0,
         texcoord2: [0.0, 0.0],
@@ -63,7 +63,7 @@ fn texture(label: &str, rgba: [u8; 4]) -> Arc<ModelTexture> {
 }
 
 /// One triangle at `z = 0.5`, a white albedo, no second texture.
-fn model() -> Model {
+fn model(slot_bits: u32) -> Model {
     Model {
         airbrakes: [None, None],
         node_vertex_ranges: Vec::new(),
@@ -112,9 +112,9 @@ fn model() -> Model {
         anim_nodes: Vec::new(),
         emissive: Vec::new(),
         vertices: vec![
-            vertex([-0.9, -0.9, 0.5]),
-            vertex([0.9, -0.9, 0.5]),
-            vertex([0.0, 0.9, 0.5]),
+            vertex([-0.9, -0.9, 0.5], slot_bits),
+            vertex([0.9, -0.9, 0.5], slot_bits),
+            vertex([0.0, 0.9, 0.5], slot_bits),
         ],
     }
 }
@@ -146,7 +146,7 @@ fn a_covered_texel_shows_the_road_lit_without_its_sun() {
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
-    let model = model();
+    let model = model(slots::DEFAULT);
 
     let sunlit = draw(&device, &queue, &model, rig(SUN), None);
     let ambient_only = draw(&device, &queue, &model, rig([0.0; 3]), None);
@@ -394,4 +394,40 @@ fn draw(
     // Dead centre of the triangle.
     let at = (((SIZE / 2) * SIZE + SIZE / 2) * 4) as usize;
     [mapped[at], mapped[at + 1], mapped[at + 2], mapped[at + 3]]
+}
+
+/// A track chunk whose colour is a special combine - here the glass floor's
+/// facing-ramp sheen - is not the generic path's, so the generic sun term must
+/// not be subtracted from it: it falls back to the chosen multiply. At a
+/// strength of 0.25 the multiply leaves 0.75 of the colour (191 of 255) where
+/// subtracting the generic sun term (about 130 on this rig) would leave about
+/// half. A `MAG_LOOP` or `LIGHT_CONE` chunk draws nothing in this harness, so the
+/// sheen stands for the family.
+#[test]
+fn a_special_combine_keeps_the_multiply_and_is_not_charged_a_sun_it_never_had() {
+    let instance = wgpu::Instance::default();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let model = model(slots::DEFAULT | slots::FACING_RAMP_SHEEN);
+
+    let plain = draw(&device, &queue, &model, rig(SUN), None);
+    let mut scene = rig(SUN);
+    scene.shadow = shadow(0.25);
+    let covered = draw(&device, &queue, &model, scene, Some(255));
+    assert!(
+        plain[0] > 100,
+        "the floor must draw something to be shadowed: {plain:?}"
+    );
+    for channel in 0..3 {
+        let expected = (f32::from(plain[channel]) * 0.75).round() as u8;
+        assert!(
+            covered[channel].abs_diff(expected) <= 3,
+            "channel {channel}: a sheen chunk keeps the multiply, 0.75 of {plain:?}, got {covered:?}"
+        );
+    }
 }

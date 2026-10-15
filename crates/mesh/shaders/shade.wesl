@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, sun_delta, uniforms, wave_map};
+import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, sun_delta, sun_known, uniforms, wave_map};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::holo::{holo_billboard};
 import package::pad::{pad_normal};
@@ -813,7 +813,6 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
         mix(plain_rgb, authored_rgb, scene.light.enabled * in.lit),
         texel.a * in.colour.a,
     );
-    sun_delta = scene.light.enabled * in.lit * sun_removed;
     // **The facing-ramp combine replaces the generic rig entirely**, the
     // same shape `flame` below already takes: block #7 computes its own
     // light (the traced `vertexLight`) rather than being multiplied by
@@ -1085,6 +1084,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let rim_glow_on = (in.slots & 2048u) != 0u;
     let rim_edge_on = (in.slots & 4096u) != 0u;
     if !(rim_glow_on || rim_edge_on) {
+        // **Only where the colour returned is still the generic combine's**, which is
+        // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
+        // floor, the light cone, the flame and the absorb shell each replace it with
+        // their own program, and subtracting the generic sun term from one of those
+        // would take out light it never contained: they leave `sun_known` clear and
+        // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
+        // programs are unread.
+        let generic_combine = !ramp_sheen
+            && !((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0)
+            && (in.slots & 524288u) == 0u
+            && flame_shading == 0.0
+            && absorb_shading == 0.0;
+        if generic_combine && scene.light.enabled != 0.0 {
+            sun_delta = scene.light.enabled * in.lit * sun_removed;
+            sun_known = 1.0;
+        }
         return composed;
     }
     let rim_noise = textureSample(

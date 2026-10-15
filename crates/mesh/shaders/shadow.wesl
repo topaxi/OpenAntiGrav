@@ -1,6 +1,6 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
-import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_delta, sun_occlusion_tex, uniforms};
+import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
 
 // **Wipeout HD's engine-flare program**, off by default and on only for a model
 // whose material declares the whole parameter set it reads - see
@@ -195,10 +195,13 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // coverage: `colour - coverage * sun`, and there is no darkness number in it -
 // a covered texel shows exactly the ambient the road would have had at night.
 //
-// **Without an authored rig** (`light.enabled` zero, so no sun exists to take
-// out) and in the `mapped` tier, which is this project's and not the
-// original's, the coverage multiplies the colour by `1 - coverage * strength`
-// instead; `strength` is chosen, not measured.
+// **Everywhere else the coverage multiplies the colour by `1 - coverage *
+// strength`**, and `strength` is chosen, not measured: a scene with no authored
+// rig (no sun exists to take out), the `mapped` tier (this project's, not the
+// original's), and a track chunk whose colour is a special combine rather than
+// the generic one - the glass floor's facing ramp, the magstrip floor, a light
+// cone - because `sun_known` is clear there. Those materials' own `ShadowToAlpha`
+// programs are unread.
 //
 // **Called from every entry point that draws a lit surface**, which is five of
 // them and not one: a race draws through the `_velocity` pair, so a version of
@@ -206,7 +209,7 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // and left the road untouched. That is exactly what the first cut did.
 fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     let coverage = shadow_coverage(world);
-    if scene.shadow.mode < 1.5 && scene.light.enabled != 0.0 {
+    if scene.shadow.mode < 1.5 && sun_known > 0.5 {
         return max(colour - coverage * sun_delta, vec3<f32>(0.0));
     }
     return colour * (1.0 - coverage * scene.shadow.strength);
