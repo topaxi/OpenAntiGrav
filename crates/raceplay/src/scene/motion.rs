@@ -524,6 +524,11 @@ impl super::Scene {
             .as_ref()
             .map(|state| (state.prev.view_projection, state.cur.view_projection))
     }
+
+    /// The same for the split-screen view that follows `slot`.
+    pub(crate) fn split_motion_probe(&self, slot: usize) -> Option<(Mat4, Mat4)> {
+        self.motion_probe(split_history(slot))
+    }
 }
 
 #[cfg(test)]

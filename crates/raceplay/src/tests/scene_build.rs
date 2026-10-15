@@ -3,7 +3,7 @@
 use super::*;
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex};
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+pub(super) fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {
         quake: 0.0,
         position,
@@ -23,7 +23,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
 }
 
 /// One opaque triangle: enough geometry that every pool builds a drawable.
-fn triangle() -> Model {
+pub(super) fn triangle() -> Model {
     Model {
         vertices: vec![
             vertex([-1.0, 0.0, 0.0]),
@@ -116,7 +116,7 @@ pub(super) fn bare_scene_of(
 
 /// The one constructor under the rest: a bare scene over `track`, with one hull per entry
 /// of `liveries`.
-fn scene_over(
+pub(super) fn scene_over(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     track: Model,

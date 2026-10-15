@@ -62,6 +62,7 @@ mod spawn;
 mod spectator_press;
 mod spline;
 mod split_bloom;
+mod split_blur;
 mod split_shadows;
 mod thrust_chase;
 mod title_effects;
