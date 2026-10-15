@@ -387,14 +387,17 @@ Arrow Lake iGPU, same A/B (before then both changes, three rounds, minimum):** P
 Pulse 2h 6,244 to 6,024, HD 1 6,032 to 5,964, HD 2h 8,389 to 8,125, Pure 1 1,839 to 1,830, Pure 2h
 2,667 to 2,626 us. **Pictures and state:** 9 stills (Pulse, HD, Pure; one view, 2h, 2v) and 8 more
 (HD Vineta K one view and 2h with the behind-the-glass target dumped, HD Zone stage 2 one view and
-2h, 2048 and Omega one view, Pulse at tick 1500 one view and 2h) byte-identical before and after, the
-before binary rendered twice is identical to itself, `oag-view` ship and circuit stills render, and
+2h, 2048 and Omega one view, Pulse at tick 1500 one view and 2h, and the Ship Select page, whose 3D
+preview draws through `oag_game::preview`) byte-identical before and after, the
+before binary rendered twice is identical to itself, `oag-view` ship and circuit stills render (the
+viewer binds offset 0 too), and
 `final_state_hash` of all six `bench-render` races is the same before and after.
 
 **Where `encoder.finish` goes: the texture bind-group switches.** The second view of a 2h frame, in
 `perf-probe`'s `encoder-finish` span, with and without a timing-only hack that never switches
-group 1 again after the first bind (the picture is wrong; never committed), medians of four
-interleaved rounds, us:
+group 1 again after the first bind (the picture is wrong; never committed), **minimum over four
+interleaved rounds of the per-run median** (the medians of the four are Pulse 223 / 100, HD 285 /
+102, Pure 139 / 41), us:
 
 | | finish, as is | finish, no group-1 switches | CPU of the 2h frame, as is | no switches |
 | --- | ---: | ---: | ---: | ---: |
@@ -405,9 +408,9 @@ interleaved rounds, us:
 So the per-draw texture bind groups are **55 to 65% of `encoder.finish` and 20 to 25% of a view's
 CPU**: the most a texture array, an atlas or bindless textures could remove. Skipping eleven bind
 group 2 sets (the craft's, same buffer and offset) moved Pulse's finish by 3 us and HD's by 4, so the
-group-2 sets, with their thirteen textures, are not the cost; a switch is about 0.5 to 0.65 us of
-finish on this driver (finish divided by the actual switches: Pure 133 us / 262, Pulse 220 / 334, HD
-278 / 442; an upper bound, as the rest of finish is not zero).
+group-2 sets, with their thirteen textures, are not the cost; a switch is about 0.35 to 0.4 us of
+finish on this driver (the table's no-switch difference over the switches a view issues: Pure 94 us /
+262, Pulse 120 / 334, HD 175 / 442; each switch's share, not an upper bound on its price).
 
 **Why the texture switches are not taken out here.** Sorting the draws by texture changes pixels
 (2026-10-03, `scene/shine.rs`: a distance sort moved 1 to 419 pixels where coplanar batches tie);
@@ -433,19 +436,25 @@ flat, so treat its ratios, not its microseconds, as indicative; the ceiling run 
 measured share.
 
 **Steam Deck commands (not run: the Deck is the maintainer's), Pulse and HD first.** From the repo
-root on the Deck, desktop mode, plugged in, once on `main` and once on branch `encoder-finish`:
+root on the Deck, desktop mode, plugged in, nothing else open. Build the two binaries once each (the
+private `XDG_*` directories keep the runs off the Deck's own settings and saves, as in the Cost recipe
+of [split screen](../rendering/split-screen.md)):
 
 ```sh
-cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-$(git rev-parse --short HEAD)
-for rep in 1 2 3; do for n in 1 2; do
-  OAG_RENDER_BENCH=300 /tmp/oag-game-<hash> data/images/pulse-psp-eu.chd --race --no-audio \
-    --mode single_race --players $n --split-cut horizontal --ticks 300 --size 1280x800 \
-    --screenshot /tmp/shot.png 2>&1 | grep -E '^bench (split|render_viewports CPU)'
-done; done
+git checkout main && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-main
+git checkout encoder-finish && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-new
+mkdir -p /tmp/oag-bench
+for title in pulse-psp-eu.chd hdfury-ps3-eu-dec.iso; do for rep in 1 2 3; do for n in 1 2; do for bin in /tmp/oag-game-main /tmp/oag-game-new; do
+  echo "== $title $bin players=$n load=$(cut -d' ' -f1 /proc/loadavg)"
+  XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+  OAG_RENDER_BENCH=300 $bin data/images/$title --race --no-audio --mode single_race \
+    --players $n --split-cut horizontal --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+    | grep -E '^bench (split|render_viewports CPU)'
+done; done; done; done | tee /tmp/oag-bench/encoder-finish.txt
 ```
 
-Alternate the two binaries inside the loop (A, B, A, B) and read the minimum of the medians; repeat
-with `hdfury-ps3-eu-dec.iso`. Add `OAG_RENDER_PERF=1` to one run each for the `encoder-finish` span.
+`bench split:` must name the Deck's GPU (RADV), not llvmpipe. Read the minimum of each binary's
+medians. For one run of each binary add `OAG_RENDER_PERF=1` and read the `encoder-finish` mark.
 
 ## HD on a notebook, before and after the craft cull (2026-10-15, `hd-gpu`)
 
