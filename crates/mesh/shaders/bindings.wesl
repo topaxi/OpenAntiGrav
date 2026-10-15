@@ -93,3 +93,16 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 @group(3) @binding(1) var<uniform> node_anims: NodeAnims;
 
 @group(3) @binding(2) var<uniform> emissives: Emissives;
+
+// What the sun added to the colour `lit_texel` last returned, in that colour's
+// own space: the amount the track's shadowed redraw takes back out. Written by
+// `shade::lit_texel` and read by `shadow::shadowed` within one fragment, so it
+// is per-invocation state and not a binding. Zero wherever the authored rig did
+// not shade the fragment, which makes `shadowed` fall back to its multiply.
+var<private> sun_delta: vec3<f32>;
+
+// Whether `sun_delta` was written for the colour `lit_texel` returned: set only
+// where that colour is the generic combine's, so a special combine (the glass
+// floor's facing ramp, the magstrip floor, a light cone) is never charged a sun
+// term it did not contain. Zero otherwise, per invocation.
+var<private> sun_known: f32;

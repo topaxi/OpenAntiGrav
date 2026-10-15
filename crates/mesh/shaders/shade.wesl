@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, uniforms, wave_map};
+import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, sun_delta, sun_known, uniforms, wave_map};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::holo::{holo_billboard};
 import package::pad::{pad_normal};
@@ -75,6 +75,9 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let colour_factor = marked && receives_shadow != 2.0;
     let sun_mask = select(in.sun_mask, -1.0 - in.sun_mask, marked);
     var authored = vec3<f32>(0.0);
+    // The sun's share of `authored`, kept apart so the track's shadowed redraw
+    // can take exactly that out - see `sun_removed` below.
+    var sun_light = vec3<f32>(0.0);
     var mask = 0.0;
     var emissive = false;
     if scene.light.enabled != 0.0 {
@@ -273,10 +276,16 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             colour_factor,
         );
         authored = select(lit_sum, vec3<f32>(1.0), emissive);
+        sun_light = select(
+            select(sun_diffuse, in.colour.rgb * sun_diffuse, colour_factor),
+            vec3<f32>(0.0),
+            emissive,
+        );
         // `water_test_2`: `ambient + sun * sat(N.L)` with no vertex light or
         // prelit term added (the vertex colour is the picture there).
         if (in.slots & 4194304u) != 0u && emissives.scale[in.slots >> 24u].y > 1.5 {
             authored = ambient_term + sun_diffuse;
+            sun_light = sun_diffuse;
         }
     }
 
@@ -604,6 +613,8 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     // The authored rig's half of the output, computed only when the rig is
     // on - see the same branch above `atlas`.
     var authored_rgb = vec3<f32>(0.0);
+    // What the sun adds to `authored_rgb`, in its output space.
+    var sun_removed = vec3<f32>(0.0);
     if scene.light.enabled != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
@@ -669,6 +680,21 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
             vec3<f32>(1.0 / 2.2),
         );
         authored_rgb = mix(encoded, lit_linear, linear_out);
+        // **The same fragment lit without the sun**, which is what the original's
+        // shadowed track redraw draws: the permutation `Shadow_CompileShadowedTrackRedraw`
+        // asks for is `ShadowToAlpha` + the chunk's ambient source + `Spot0`, and no
+        // variant on the disc pairs `ShadowToAlpha` with `Sun` (16,554 of them, none),
+        // so the program is ambient/prelit times albedo, fogged, and no sun or
+        // specular term at all. See
+        // `docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md`.
+        let sun_linear = scene.light.output_scale
+            * (surface_linear * sun_light + specular);
+        let sunless = lit_linear - sun_linear;
+        let sunless_encoded = pow(
+            clamp(sunless, vec3<f32>(0.0), vec3<f32>(1.0)),
+            vec3<f32>(1.0 / 2.2),
+        );
+        sun_removed = authored_rgb - mix(sunless_encoded, sunless, linear_out);
     }
 
     // The stand-in path, byte-for-byte what every other title always drew.
@@ -1058,6 +1084,22 @@ fn lit_texel(in: VertexOutput) -> vec4<f32> {
     let rim_glow_on = (in.slots & 2048u) != 0u;
     let rim_edge_on = (in.slots & 4096u) != 0u;
     if !(rim_glow_on || rim_edge_on) {
+        // **Only where the colour returned is still the generic combine's**, which is
+        // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
+        // floor, the light cone, the flame and the absorb shell each replace it with
+        // their own program, and subtracting the generic sun term from one of those
+        // would take out light it never contained: they leave `sun_known` clear and
+        // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
+        // programs are unread.
+        let generic_combine = !ramp_sheen
+            && !((in.slots & 262144u) != 0u && scene.zone.enabled == 0.0)
+            && (in.slots & 524288u) == 0u
+            && flame_shading == 0.0
+            && absorb_shading == 0.0;
+        if generic_combine && scene.light.enabled != 0.0 {
+            sun_delta = scene.light.enabled * in.lit * sun_removed;
+            sun_known = 1.0;
+        }
         return composed;
     }
     let rim_noise = textureSample(

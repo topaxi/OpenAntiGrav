@@ -14,14 +14,16 @@ use crate::scene::FrameWork;
 use crate::scene::motion::Snapshot;
 use crate::scene::viewports::Layer;
 
-/// How dark a fully covered texel of the shadow map draws the track.
+/// How dark a covered texel draws where there is no sun to take out.
 ///
-/// **Ours, and the same kind of number `HULL_DARKNESS` is.** Wipeout HD's own
-/// track material computes `1 - shadow` into the fragment's *alpha* and a later
-/// compositing pass consumes it; that pass is unread, so how dark the result
-/// lands is not something this project can read off the disc. `0.5` is chosen
-/// to sit where the craft reads as shadowed without the road going black under
-/// it, and it is the first thing to replace once the compositing pass is read.
+/// **Not Wipeout HD's number, and it no longer reaches an HD race.** The
+/// original's shadowed track redraw is the road lit *without its sun* blended in
+/// by the map's coverage (`Shadow_CompileShadowedTrackRedraw`,
+/// [`shadow-track-redraw.md`](../../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md)),
+/// and `mesh`'s `shadowed` does exactly that wherever an authored light rig is
+/// on, which is every HD circuit - there is no darkness constant in it. This
+/// multiply is what remains for a scene with no rig, where there is no sun to
+/// remove. **Chosen, not measured.**
 const MAP_STRENGTH: f32 = 0.5;
 
 /// How dark the `mapped` tier draws a shadowed pixel.
@@ -59,6 +61,19 @@ const MAPPED_RADIUS: f32 = 70.0;
 /// margin keeps a craft that is banking or airborne inside it rather than
 /// clipping its own shadow at the border.
 const FIT_MARGIN: f32 = 6.0;
+
+/// The radius a craft adds to the grid's fit: the bounding sphere of the
+/// original's own per-ship box, the `(-6, -6, -6)..(6, 6, 6)` cube
+/// `Shadow_BuildShipShadowMatrices` falls back to (`6 * sqrt(3)`).
+///
+/// The drawable's own radius is not that: an HD `Ship.vex` measures 50 to 200
+/// units across by it, its authored geometry reaching far past the hull, and
+/// fitting the one map to that spent every texel on a 467-unit box
+/// (measured: radius 233.6 on Talon's Junction's grid, 2.2 texels per world
+/// unit, where the grid itself spans 70). A caster past the box is clipped by
+/// the orthographic volume, which is where geometry that far from the hull
+/// belongs.
+const HULL_FIT_RADIUS: f32 = 6.0 * 1.732_050_8;
 
 impl super::super::Scene {
     /// Both shadow maps, once for a frame, ahead of its first view.
@@ -266,24 +281,18 @@ impl super::super::Scene {
             return 0;
         }
         centre /= count;
-        // Fitted to the grid's own spread **plus each craft's own size**, and
-        // not to the track - see `shadow::map::Fit`. Leaving the hull's radius
-        // out is not a small error: with one craft it makes the box smaller
-        // than the caster, and the shadow comes out the size of the overlap.
-        let mut radius = FIT_MARGIN;
-        for slot in 0..drawn.min(self.ships.len()) {
-            if !race.ship_active(slot) {
-                continue;
-            }
-            let model = race.ship_model_matrix_of(slot);
-            let at = model.transform_point3(Vec3::ZERO);
-            // The matrix carries the craft's own render scale, so the world
-            // radius is the model's through it - see
-            // `oag_fx::exhaust::CRAFT_ROW_SCALE`.
-            let scale = model.x_axis.truncate().length();
-            let hull = self.ships[slot].radius() * scale;
-            radius = radius.max((at - centre).length() + hull + FIT_MARGIN);
-        }
+        // Fitted to the grid's own spread **plus each craft's own box**, and
+        // not to the track - see `shadow::map::Fit`. Leaving the hull out is not
+        // a small error: with one craft it makes the box smaller than the
+        // caster, and the shadow comes out the size of the overlap.
+        let radius = grid_fit_radius(
+            (0..drawn.min(self.ships.len()))
+                .filter(|&slot| race.ship_active(slot))
+                .map(|slot| {
+                    (race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO) - centre).length()
+                }),
+        );
+
         let fit = oag_render::shadow::map::Fit {
             centre,
             radius,
@@ -295,6 +304,16 @@ impl super::super::Scene {
         map.render(queue, encoder, &fit, &casters);
         casters.len()
     }
+}
+
+/// The radius the one coverage map's light view is fitted to, from each
+/// craft's distance to the grid's centre: the farthest craft plus the original's
+/// own per-ship box ([`HULL_FIT_RADIUS`]) and the margin. Never less than the
+/// margin, so an empty grid still fits something.
+fn grid_fit_radius(spreads: impl IntoIterator<Item = f32>) -> f32 {
+    spreads.into_iter().fold(FIT_MARGIN, |radius, spread| {
+        radius.max(spread + HULL_FIT_RADIUS + FIT_MARGIN)
+    })
 }
 
 /// The environment variable that, naming a file, writes the player's
@@ -653,8 +672,40 @@ fn default_fit() -> oag_render::shadow::map::Fit {
 mod tests {
     use oag_core::math::Mat4;
 
-    use super::{MAPPED_AHEAD, mapped_centre, mapped_fit};
+    use super::{
+        FIT_MARGIN, HULL_FIT_RADIUS, MAPPED_AHEAD, grid_fit_radius, mapped_centre, mapped_fit,
+    };
     use oag_core::math::Vec3;
+
+    /// A lone craft is fitted to the original's own 12-unit box plus the
+    /// margin, and a grid to its farthest craft plus the same: neither depends
+    /// on the drawable's own radius, which was 50 to 200 units for an HD
+    /// `Ship.vex` and put Talon's Junction's grid (spread 70) at a radius of
+    /// 233.6 - 2.2 texels per world unit where this gives about 12 at
+    /// `shadow::map::SIZE`.
+    #[test]
+    fn the_grid_fit_is_the_spread_plus_the_originals_per_ship_box() {
+        let lone = grid_fit_radius([0.0]);
+        assert!(
+            (lone - (HULL_FIT_RADIUS + FIT_MARGIN)).abs() < 1e-4,
+            "{lone}"
+        );
+        assert!(
+            lone < 20.0,
+            "a lone craft fits a box about its own size: {lone}"
+        );
+        let grid = grid_fit_radius([69.6, 13.6, 31.4]);
+        assert!(
+            (grid - (69.6 + HULL_FIT_RADIUS + FIT_MARGIN)).abs() < 1e-3,
+            "{grid}"
+        );
+        let texels_per_unit = oag_render::shadow::map::SIZE as f32 / (2.0 * grid);
+        assert!(
+            texels_per_unit > 10.0,
+            "the grid's map should hold the original's third ship's density: {texels_per_unit}"
+        );
+        assert_eq!(grid_fit_radius([]), FIT_MARGIN);
+    }
 
     /// The report under investigation was "the box follows the camera". This
     /// pins the actual dependency: [`mapped_centre`] takes a model matrix and

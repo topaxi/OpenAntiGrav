@@ -254,3 +254,18 @@ a chase-camera diff; withdrawn.
   resolution difference and a documented choice (`shadow::map::SIZE`), not
   a placement one.
 - `shadowMapTexSize` stays unread - this job never touches it.
+
+## 2026-10-15 (`hd-shadow`): the two numbers left unread above are read
+
+[`shadow-track-redraw.md`](shadow-track-redraw.md) reads what
+`Shadow_CompileShadowedTrackRedraw` draws with and who writes `shadowMapTexSize`:
+
+- The redraw's permutation word is `ShadowToAlpha` + the chunk's ambient source +
+  `Spot0` and never `Sun`, so the colour it blends in is the road lit **without
+  its sun** (confidence 82) - the "colour that variant computes" this page left
+  open at "still the fragment program's business and unread". The function is 82
+  there, not the 75 in the table above.
+- `shadowMapTexSize` is `(2/width, 2/height)` of the ship's own map, written at
+  `0x00405628` in that same function (so "this job never touches it" above holds
+  for `Shadow_RenderModelShadowMaps` itself, and the redraw does), and the maps
+  are 512, 512, 256, 128, 64, 32, 32, 32 texels square by distance rank.
