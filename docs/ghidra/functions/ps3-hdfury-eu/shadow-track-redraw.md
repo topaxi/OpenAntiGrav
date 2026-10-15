@@ -220,8 +220,8 @@ through the world matrix, or the `(-6)..(6)` cube when the model has none, so
 12 to 21 units across (the cube's face to its space diagonal). The original's
 density is therefore 512 / 12..21 = **24 to 43 texels per world unit** for the
 two nearest ships, 12 to 21 for the third, 6 to 10 for the fourth. This
-renderer fits one map to the whole grid; measured on Talon's Junction's grid
-(eight craft, `--race --opponents`) the fit radius was **233.6 units** because
+renderer fitted one map to the whole grid until 2026-10-15; measured then on Talon's
+Junction's grid (eight craft, `--race --opponents`) the fit radius was **233.6 units** because
 the fit added each drawable's own radius (50 to 200 for an HD `Ship.vex`), which
 made the 1024 map **2.2 texels per world unit**. Wiring: see below.
 
@@ -244,14 +244,12 @@ made the 1024 map **2.2 texels per world unit**. Wiring: see below.
   measured**: those materials' own `ShadowToAlpha` variants are decoded for the
   two generic blocks above only, and what each computes is unread. Talon's glass
   floor is one of these chunks.
-- **Map size.** `shadow::map::SIZE` 1024 -> **2048**, and the grid fit's per-craft
-  term from the drawable's radius to `6 * sqrt(3)`, the bounding sphere of the
-  original's own fallback box. At the grid (casters' spread 70 + 10.4 + the 6
-  margin, ~172 units across) 2048 texels is **11.9 texels per unit**, the
-  original's third ship. **Chosen, not measured**: the original's 512 is per
-  ship and a shared map has no equivalent. 4096 would reach the nearest ships'
-  density at 16 MiB; one map per craft, each sized by distance rank, is the
-  faithful version and is the open alternative.
+- **Map size.** `shadow::map::SIZE` went 1024 -> 2048 (chosen), and the same day was **replaced by one map per
+  craft**: an atlas holding each craft's own map at the rank sides above (512, 512, 256, 128, 64, 32, 32, 32),
+  each fitted to a 24-unit box on the craft, so the nearest two get 21 texels per world unit (the original's 24-43,
+  less by this renderer's box margin) and the road combines the maps the way the original's per-ship redraws blend.
+  What the rank is measured from is chosen: once per frame, from the camera eye (the reading at confidence 62) and
+  every person's craft in a multi-person race. See [`shadows.md`](../../../rendering/shadows.md), "Per-craft maps".
 
 ## Cross-title check
 

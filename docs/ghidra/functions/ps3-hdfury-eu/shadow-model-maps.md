@@ -249,10 +249,12 @@ a chase-camera diff; withdrawn.
 
 - The direction was right: `shadow::map::Fit::towards_light` from the
   circuit's sun is what the original does.
-- The fit is not: the original fits **one map per ship to that ship's own
-  box**, where this renderer fits one map to the whole grid. That is a
-  resolution difference and a documented choice (`shadow::map::SIZE`), not
-  a placement one.
+- The fit was not, until 2026-10-15: the original fits **one map per ship to that
+  ship's own box**, where this renderer fitted one map to the whole grid. It now
+  draws one map per craft, in the box the sun-occlusion map already used (the
+  original shares one matrix between a ship's maps), at the rank sides
+  [`shadow-track-redraw.md`](shadow-track-redraw.md) reads - see
+  [`shadows.md`](../../../rendering/shadows.md), "Per-craft maps".
 - `shadowMapTexSize` stays unread - this job never touches it.
 
 ## 2026-10-15 (`hd-shadow`): the two numbers left unread above are read

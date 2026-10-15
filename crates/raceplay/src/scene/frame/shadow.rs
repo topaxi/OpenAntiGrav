@@ -101,6 +101,14 @@ impl super::super::Scene {
         self.frame_work.get()
     }
 
+    /// Each craft's shadow map record as the last frame left it, for the tests.
+    #[cfg(test)]
+    pub(crate) fn craft_shadows(
+        &self,
+    ) -> [oag_mesh::mesh_render::CraftShadow; oag_render::shadow::map::MAX_CASTERS] {
+        self.shadow_map.borrow().craft_shadows()
+    }
+
     /// Gathers this frame's blob quads and projected hulls and uploads them with
     /// the view's camera matrix.
     ///

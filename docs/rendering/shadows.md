@@ -901,8 +901,8 @@ project does not draw, and says so below.
 | what the map holds | depth, rendered colour-masked-off and compared by the sampler ([`ship-sun-occlusion.md`](../ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)) | coverage, which is equivalent for a road under a craft |
 | who casts | models (`Job RenderModelShadowMaps`) | the craft |
 | who receives | the track surface, whose material declares `shadowMapTex` | the same, as a per-model pipeline constant |
-| the projection | `shadowMatrix`: **one orthographic map per ship**, looking from 70 units up `Lighting.Sun direction` at the ship, fitted to the ship's own bbox, near 1 / far 140 - read on 2026-09-11, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md) | the same sun; one map fitted to the whole grid, which is ours |
-| the map's size | `shadowMapTexSize` = `(2/w, 2/h)` of **each ship's own map**, which is 512, 512, 256, 128, 64, 32, 32, 32 texels square by the ship's distance rank (the two nearest get 512), each fitted to the ship's own 12-21 unit box: 24-43 texels per world unit for the nearest two - **read 2026-10-15**, [`shadow-track-redraw.md`](../ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md); no shipped material reads the parameter | 2048 for the one grid-fitted map, about 12 texels per world unit (the original's third ship). **Chosen, not measured**: the original's number is per ship, and one map per craft is the open faithful version |
+| the projection | `shadowMatrix`: **one orthographic map per ship**, looking from 70 units up `Lighting.Sun direction` at the ship, fitted to the ship's own bbox, near 1 / far 140 - read on 2026-09-11, [`shadow-model-maps.md`](../ghidra/functions/ps3-hdfury-eu/shadow-model-maps.md) | **the same, per craft** (2026-10-15): `Fit::craft`, 70 up the sun at the craft, near 0 / far 140, the box 24 units across - the original's 6-unit fallback cube plus a margin of 6 that is ours (its bbox fit has no margin: 12-21 units across), shared with the sun-occlusion map as the original shares one matrix between a ship's maps. Each craft's box is snapped to whole texels of its own map (ours; the original does not). Near is 0 where the original's is 1: ours |
+| the map's size | `shadowMapTexSize` = `(2/w, 2/h)` of **each ship's own map**, which is 512, 512, 256, 128, 64, 32, 32, 32 texels square by the ship's distance rank (the two nearest get 512), each fitted to the ship's own 12-21 unit box: 24-43 texels per world unit for the nearest two - **read 2026-10-15**, [`shadow-track-redraw.md`](../ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md); no shipped material reads the parameter | **the same sides by the same rank** (2026-10-15), in one 1024x768 atlas (613,376 texels of it in use, where the one 2048 map held 4,194,304): 21 texels per world unit for the two nearest craft (our box is 24 across, so 0.5-0.9 of the original's density), 11, 5, 2.7 and 1.3 below. What the rank is measured from is **chosen**, below. The atlas, its layout and the receiver's loop are ours |
 | where `1 - shadow` lands | the fragment's **alpha**, which `ShadowToAlpha` names, consumed by `RenderModelShadowsOnTrack`'s accumulate half: the track chunks within 50 units of the ship redrawn inside the stencil volume under `SRC_ALPHA / ONE_MINUS_SRC_ALPHA` - found 2026-09-11 | the same blend, expressed on colour: `colour - coverage * sun`, because this renderer's alpha is the bloom's glow mask |
 | how dark | **no constant**: the redraw's permutation word is `ShadowToAlpha` + the chunk's ambient source + `Spot0` and **never `Sun`** (16,554 shipped variants, none with `Sun`), so the colour it blends in is the road lit by ambient/lightmap alone, no sun and no specular, fogged - read 2026-10-15, confidence 82, [`shadow-track-redraw.md`](../ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md) | the same: `mesh`'s `shadowed` removes the sun's share of the lit colour in proportion to coverage. `MAP_STRENGTH` (0.5, ours) remains only for a scene with no authored light rig |
 
@@ -920,6 +920,42 @@ pass only); its work is a 4 MiB `R8Unorm` clear and eight craft drawn into it. A
 camera (`talons-grid-recheck/00`, 1920x1080) puts the two side by side: the player's shadow edge is
 visibly stair-stepped at 1024 (about 6 texels per world unit) and clean at 2048 (about 12), the latter
 the original's third ship, so **2048 stays**; a player would see 1024's edge on the nearest craft.
+
+**Per-craft maps, 2026-10-15 (`craft-shadows`): the 2048 map above is gone.** The original draws one map per ship
+and redraws the road once per ship through that ship's own map, and this renderer now does the same instead of
+fitting one map to the grid. A craft far from the pack - which the one map smeared across a box as wide as the
+gap - gets its own crisp shadow: with the pack driven off and the player left at the grid, the old shadow is a
+blurred patch and the new one is the craft's outline (A/B: `oag-game --race --opponents --ticks 560` at the
+`talons-grid-recheck/00` camera, 21,069 pixels differ, worst delta 77; at the grid itself, tick 0 and the same
+camera, 5,766 pixels differ at a worst delta of 38 - the player's edge goes from 2-pixel steps to a clean one, the
+shape and place unchanged).
+
+- **Where the maps live** (ours): one `R8` atlas, 1024x768, one render pass with a viewport and scissor per
+  craft, the squares laid out by rank in `shadow::map::RANK_SQUARES` (two 512 squares on top, the rest in a row
+  below). Not eight textures or an array: an array's layers are one size, which would hold 8 x 512^2 and give back
+  none of the saving, and the atlas keeps the mesh shader's binding 6 a plain `texture_2d`.
+- **What the road does** (the original's law, ours in form): `shadow.wesl`'s `craft_shadow_coverage` projects the
+  point through each craft's record (`Scene.craft_shadow`, a matrix and the atlas rectangle) and combines the
+  samples as `1 - product(1 - c_i)`, which is what the original's sequential `SRC_ALPHA / ONE_MINUS_SRC_ALPHA`
+  redraws do. The coverage law (`colour - coverage * sun`) is untouched; only the coverage's source changed.
+- **A craft's box is a slab, not a cylinder** (**chosen, not measured**): a point on the sun's side of the craft
+  (further than the box's 6-unit half thickness) is lit, and one more than 50 units past it is lit - the original
+  stores depth and compares it, and redraws only the track chunks within 50 units of the ship. A coverage map holds
+  no depth, so without the first bound a tunnel roof above a craft would take its shadow.
+- **What the rank is measured from** (**chosen, not measured**): the original ranks by squared distance to a vec4
+  its job carries, the camera's eye at confidence 62 and only that. Here the rank is once per frame, not per view
+  (a later view of a split reads what the first drew, as every other piece of camera-independent work does), from
+  the nearest of this view's eye and, in a race with more than one person, every person's craft - so each seat's
+  craft takes one of the two 512 squares. Ties go to the lower slot. `rank_by_distance` in
+  `crates/raceplay/src/scene/frame/shadow.rs`.
+- **2048 and Omega: checked, differs / not checkable.** 2048's executable has none of HD's shadow-map jobs (the
+  string census above) and Omega's has no readable strings, so there is no per-ship map there to port; both stay
+  `Unbuilt`. Their forced `--shadows original` (a developer flag, not a default) goes through the same coverage
+  path and so now draws per-craft maps too - their default stills, Pulse's and Pure's are byte-identical before and
+  after (`cmp`), and so are every title's `mapped`, `blob` and `off` tiers.
+- **What did not change**: the hull's self-shadow and sun-occlusion maps read nothing from the coverage atlas, and
+  their box is the one the coverage maps now take (`Fit::craft`), so they are byte-for-byte what they were
+  (`self_shadow_map` and `sun_occlusion_map` green, unchanged). The `mapped` tier keeps its one depth map.
 
 **Proved inert where it should be**: every pipeline binds the map and samples
 it, so a Pulse capture is the guard - `original` on Pulse before and after this
