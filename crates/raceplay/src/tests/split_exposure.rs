@@ -1,5 +1,5 @@
-//! A split screen runs HD's post chain per view, each with an adaptation of its own
-//! ([`Scene::run_split_hd`]).
+//! A split screen runs HD's post chain and Omega's tone map per view, each with an adaptation
+//! of its own ([`Scene::run_split_post`]).
 
 use super::scene_build::test_gpu;
 use super::split_blur::{AREA, drawn, hull_scene, pixels, rows, target};
@@ -23,6 +23,38 @@ fn params() -> oag_post::hd_bloom::Params {
         zoom: None,
     }
 }
+
+fn omega_params() -> oag_post::omega_tonemap::Params {
+    oag_post::omega_tonemap::Params {
+        luminance_a: 0.18,
+        luminance_b: 0.05,
+        exposure_minimum: 0.25,
+        exposure_maximum: 4.0,
+        exposure_response: 3.0,
+        exposure_time: 4.0,
+        source_end_a: 2.0,
+        source_end_b: 0.5,
+        start_angle: 10.0,
+        end_angle: -20.0,
+    }
+}
+
+/// Which post chain the scene is built with.
+#[derive(Clone, Copy, Debug)]
+enum Chain {
+    Hd,
+    Omega,
+}
+
+fn scene_of(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, chain: Chain) -> Scene {
+    let (hd, omega) = match chain {
+        Chain::Hd => (Some(params()), None),
+        Chain::Omega => (None, Some(omega_params())),
+    };
+    hull_scene(device, queue, race, Msaa::Off, hd, omega)
+}
+
+const CHAINS: [Chain; 2] = [Chain::Hd, Chain::Omega];
 
 fn draw_split(
     (device, queue): (&wgpu::Device, &wgpu::Queue),
@@ -56,19 +88,31 @@ fn every_view_resolves_into_its_own_rectangle_with_a_lane_of_its_own() {
     let Some((device, queue)) = test_gpu() else {
         return;
     };
-    let mut race = race_with_a_grid();
-    assert_eq!(race.set_viewport_count(2), 2);
-    let scene = hull_scene(&device, &queue, &race, Msaa::Off, Some(params()));
-    let target = target(&device);
-    for _ in 0..90 {
-        race.tick(&oag_gameplay::PlayerInputs::none());
+    for chain in CHAINS {
+        let mut race = race_with_a_grid();
+        assert_eq!(race.set_viewport_count(2), 2);
+        let scene = scene_of(&device, &queue, &race, chain);
+        let target = target(&device);
+        for _ in 0..90 {
+            race.tick(&oag_gameplay::PlayerInputs::none());
+        }
+        draw_split((&device, &queue), &scene, &race, &target);
+        let picture = pixels(&device, &queue, &target);
+        let rects = race.view_rects(AREA);
+        assert!(
+            drawn(rows(&picture, rects[0])),
+            "{chain:?}: the first view survives"
+        );
+        assert!(
+            drawn(rows(&picture, rects[1])),
+            "{chain:?}: the second view is drawn"
+        );
+        assert_eq!(
+            scene.split_exposure_seats(),
+            2,
+            "{chain:?}: a lane per seat"
+        );
     }
-    draw_split((&device, &queue), &scene, &race, &target);
-    let picture = pixels(&device, &queue, &target);
-    let rects = race.view_rects(AREA);
-    assert!(drawn(rows(&picture, rects[0])), "the first view survives");
-    assert!(drawn(rows(&picture, rects[1])), "the second view is drawn");
-    assert_eq!(scene.split_exposure_seats(), 2, "a lane per seat");
 }
 
 /// The first single-view frame after a split forgets the seats' lanes, as it forgets their
@@ -78,33 +122,35 @@ fn a_single_view_frame_forgets_the_seats_adaptation() {
     let Some((device, queue)) = test_gpu() else {
         return;
     };
-    let mut race = race_with_a_grid();
-    assert_eq!(race.set_viewport_count(2), 2);
-    let scene = hull_scene(&device, &queue, &race, Msaa::Off, Some(params()));
-    let target = target(&device);
-    draw_split((&device, &queue), &scene, &race, &target);
-    assert_eq!(scene.split_exposure_seats(), 2);
-    assert_eq!(race.set_viewport_count(1), 1);
-    let mut encoder = device.create_command_encoder(&Default::default());
-    scene.render(
-        &device,
-        &queue,
-        &mut encoder,
-        &target.create_view(&Default::default()),
-        &race,
-        AREA,
-        Fov::AUTHORED,
-        true,
-        true,
-        None,
-        MotionBlur::Off,
-        Shadows::Off,
-        None,
-        &[],
-        None,
-        None,
-        None,
-    );
-    queue.submit(Some(encoder.finish()));
-    assert_eq!(scene.split_exposure_seats(), 0);
+    for chain in CHAINS {
+        let mut race = race_with_a_grid();
+        assert_eq!(race.set_viewport_count(2), 2);
+        let scene = scene_of(&device, &queue, &race, chain);
+        let target = target(&device);
+        draw_split((&device, &queue), &scene, &race, &target);
+        assert_eq!(scene.split_exposure_seats(), 2);
+        assert_eq!(race.set_viewport_count(1), 1);
+        let mut encoder = device.create_command_encoder(&Default::default());
+        scene.render(
+            &device,
+            &queue,
+            &mut encoder,
+            &target.create_view(&Default::default()),
+            &race,
+            AREA,
+            Fov::AUTHORED,
+            true,
+            true,
+            None,
+            MotionBlur::Off,
+            Shadows::Off,
+            None,
+            &[],
+            None,
+            None,
+            None,
+        );
+        queue.submit(Some(encoder.finish()));
+        assert_eq!(scene.split_exposure_seats(), 0, "{chain:?}");
+    }
 }

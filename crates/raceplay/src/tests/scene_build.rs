@@ -139,11 +139,11 @@ pub(super) fn scene_over_msaa(
     liveries: &[Livery],
     msaa: oag_display::display::Msaa,
 ) -> Scene {
-    scene_over_post(device, queue, track, liveries, msaa, None)
+    scene_over_post(device, queue, track, liveries, msaa, None, None)
 }
 
-/// [`scene_over_msaa`] with Wipeout HD's post chain, as a circuit that authors an `HDR and
-/// Bloom` block builds it.
+/// [`scene_over_msaa`] with Wipeout HD's post chain or Omega's tone map, as a circuit that
+/// authors an `HDR and Bloom` or a `Tonemap` block builds it.
 pub(super) fn scene_over_post(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -151,6 +151,7 @@ pub(super) fn scene_over_post(
     liveries: &[Livery],
     msaa: oag_display::display::Msaa,
     hd_bloom: Option<oag_post::hd_bloom::Params>,
+    omega_tonemap: Option<oag_post::omega_tonemap::Params>,
 ) -> Scene {
     Scene::new(
         device,
@@ -188,7 +189,7 @@ pub(super) fn scene_over_post(
         mesh_render::Light::stand_in(),
         None,
         hd_bloom,
-        None,
+        omega_tonemap,
         None,
         Vec::new(),
         Vec::new(),

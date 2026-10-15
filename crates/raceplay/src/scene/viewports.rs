@@ -458,19 +458,19 @@ impl Scene {
         self.reuse_frame_work.set(false);
         self.history.set(0);
         race.reset_viewpoint();
-        // HD's chain, one run per view with its own adaptation (`split_exposure`).
-        let hd_ran = self.run_split_hd(device, queue, view, slots, rects, area);
+        // HD's and Omega's chains, one run per view with its own adaptation
+        // (`split_exposure`).
+        let post_ran = self.run_split_post(device, queue, view, slots, rects, area);
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("race viewports post"),
         });
-        let split_post = self.encode_split_post(device, queue, &mut encoder, view, area);
         // Pulse's glow, one lane per view, read from the finished picture: every view is in
         // `view` now, and the composite waits for the HUD as a single view's does.
         let glow = self.prepare_split_bloom(device, queue, &mut encoder, view, rects, area);
-        if split_post || glow {
+        if glow {
             queue.submit(Some(encoder.finish()));
         }
-        stats.hd_bloom_encoded = hd_ran;
+        stats.hd_bloom_encoded = post_ran && self.hd.is_some();
         // Motion blur, last, as a single view's is: after the glow's bright pass (which the
         // composite adds back over the blurred frame after the HUD) and after HD's and
         // Omega's chain, before the HUD. See `split_blur`.
@@ -484,27 +484,5 @@ impl Scene {
             effects.blur_timestamps,
         );
         stats
-    }
-
-    /// Omega's tone map, once, over the whole `area` the views were drawn into. Returns
-    /// whether it ran: Pulse, Pure and 2048 draw straight into the caller's view, and HD's
-    /// chain runs per view ([`Scene::run_split_hd`]).
-    fn encode_split_post(
-        &self,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        area: (f32, f32, f32, f32),
-    ) -> bool {
-        if self.hd.is_some() {
-            return false;
-        }
-        if let Some(omega) = &self.omega {
-            self.run_omega(omega, device, queue, encoder, view, area, false);
-            true
-        } else {
-            false
-        }
     }
 }

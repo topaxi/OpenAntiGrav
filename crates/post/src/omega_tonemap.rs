@@ -71,6 +71,19 @@ pub const DISTORT_SCALE: f32 = 0.010_002_1;
 /// aspect: it is the constant the original wrote.
 pub const DISTORT_ASPECT: f32 = 16.0 / 9.0;
 
+/// Seats a split can hold, and so the most adaptations besides the window's own.
+pub const MAX_SEATS: usize = 8;
+
+/// One view of a split, as the chain runs over it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct View {
+    /// The seat, whose adaptation this view keeps from frame to frame.
+    pub seat: usize,
+    /// The view's rectangle, `x, y, width, height`: where it was drawn in the scene target
+    /// and where its picture goes in the frame (the same place).
+    pub rect: (u32, u32, u32, u32),
+}
+
 /// The luma ladder's format.
 pub const LADDER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R16Float;
 
@@ -93,11 +106,14 @@ struct Uniform {
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
     distortion: [f32; 2],
-    padding: [f32; 2],
+    /// Where the drawn rectangle starts in the scene target: a split view's rectangle need
+    /// not be at the corner. `(0, 0)` for a whole picture, which then reads the bits it
+    /// always did.
+    uv_offset: [f32; 2],
 }
 
 impl Uniform {
-    fn new(p: Params, (uv_scale, uv_max): ([f32; 2], [f32; 2])) -> Self {
+    fn new(p: Params, (uv_offset, uv_scale, uv_max): ([f32; 2], [f32; 2], [f32; 2])) -> Self {
         Self {
             luminance_a: p.luminance_a,
             luminance_b: p.luminance_b,
@@ -114,13 +130,59 @@ impl Uniform {
             uv_scale,
             uv_max,
             distortion: [DISTORT_SCALE * DISTORT_ASPECT, DISTORT_SCALE],
-            padding: [0.0; 2],
+            uv_offset,
         }
     }
 }
 
 /// `State` in the shader: four words, two `vec4`s and the 256-entry ring.
 const STATE_SIZE: u64 = 16 + 16 + 16 + 256 * 4;
+
+/// One picture's adaptation: the luminance history, the stepped `LAvg` and the curve built
+/// from them, and the two groups that read and write it.
+#[derive(Debug)]
+struct Seat {
+    #[expect(dead_code, reason = "held so the bindings stay valid")]
+    state: wgpu::Buffer,
+    /// The coefficient pass's read-write binding.
+    coefficients: wgpu::BindGroup,
+    /// The apply pass's read-only binding of the same buffer.
+    curve: wgpu::BindGroup,
+}
+
+impl Seat {
+    fn new(
+        device: &wgpu::Device,
+        state_rw: &wgpu::BindGroupLayout,
+        state_ro: &wgpu::BindGroupLayout,
+    ) -> Self {
+        // Zeroed: `primed` is 0, so the first dispatch seeds the history.
+        let state = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("omega tonemap state"),
+            size: STATE_SIZE,
+            usage: wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+        let group = |layout: &wgpu::BindGroupLayout| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("omega tonemap state"),
+                layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: state.as_entire_binding(),
+                }],
+            })
+        };
+        Self {
+            coefficients: group(state_rw),
+            curve: group(state_ro),
+            state,
+        }
+    }
+}
+
+/// The rectangle last written into the uniform: its corner in the scene target and its size.
+type Drawn = ((u32, u32), (u32, u32));
 
 /// One colour texture and its view.
 #[derive(Debug)]
@@ -187,14 +249,20 @@ pub struct Chain {
     /// the group that reads the level before it.
     ladder: Vec<(Target, u32)>,
     halve_groups: Vec<wgpu::BindGroup>,
-    coefficient_groups: [wgpu::BindGroup; 2],
-    curve_group: wgpu::BindGroup,
+    /// The coefficient pass's input: the ladder's last texel.
+    coefficients_in: wgpu::BindGroup,
+    /// The window's own picture's adaptation.
+    window: Seat,
+    /// Each split seat's, built when a split first draws it ([`Chain::run_view`]).
+    seats: std::cell::RefCell<Vec<Option<Seat>>>,
+    state_rw: wgpu::BindGroupLayout,
+    state_ro: wgpu::BindGroupLayout,
     /// The composite's `DistortionTexture` slot, and the zero texture that
     /// fills it on a frame that drew no distortion.
     distortion_layout: wgpu::BindGroupLayout,
     no_distortion: wgpu::BindGroup,
     sized: Sized,
-    written: std::cell::Cell<Option<(u32, u32)>>,
+    written: std::cell::Cell<Option<Drawn>>,
 }
 
 impl Chain {
@@ -354,16 +422,8 @@ impl Chain {
             device,
             "omega tonemap uniform",
             wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            bytemuck::bytes_of(&Uniform::new(params, ([1.0, 1.0], [1.0, 1.0]))),
+            bytemuck::bytes_of(&Uniform::new(params, ([0.0, 0.0], [1.0, 1.0], [1.0, 1.0]))),
         );
-        // Zeroed: `primed` is 0, so the first dispatch seeds the history.
-        let state = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("omega tonemap state"),
-            size: STATE_SIZE,
-            usage: wgpu::BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
-
         let group = |label: &str, source: &wgpu::TextureView| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some(label),
@@ -401,21 +461,8 @@ impl Chain {
             .map(|pair| group("omega tonemap halve", &pair[0].0.view))
             .collect();
         let last = &ladder.last().expect("the ladder ends at one texel").0.view;
-        let state_group = |layout: &wgpu::BindGroupLayout| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("omega tonemap state"),
-                layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: state.as_entire_binding(),
-                }],
-            })
-        };
-        let coefficient_groups = [
-            group("omega tonemap coefficients", last),
-            state_group(&state_rw),
-        ];
-        let curve_group = state_group(&state_ro);
+        let coefficients_in = group("omega tonemap coefficients", last);
+        let window = Seat::new(device, &state_rw, &state_ro);
         let sized = Self::sized(device, &layout, &sampler, &uniform, size);
         let zero = Target::new(device, "omega no distortion", DISTORTION_FORMAT, (1, 1));
         let no_distortion = Self::distortion_group(device, &distortion_layout, &zero.view);
@@ -430,8 +477,11 @@ impl Chain {
             uniform,
             ladder,
             halve_groups,
-            coefficient_groups,
-            curve_group,
+            coefficients_in,
+            window,
+            seats: std::cell::RefCell::new(Vec::new()),
+            state_rw,
+            state_ro,
             distortion_layout,
             no_distortion,
             sized,
@@ -537,16 +587,43 @@ impl Chain {
         viewport: (u32, u32),
         distortion: Option<&wgpu::TextureView>,
     ) {
+        self.run_placed(
+            device,
+            queue,
+            encoder,
+            view,
+            &self.window,
+            ((0, 0), origin),
+            viewport,
+            distortion,
+        );
+    }
+
+    /// [`Chain::run`] for a rectangle that starts at `placement.0` of the scene target and
+    /// lands at `placement.1` of `view`, adapting in `seat`.
+    #[allow(clippy::too_many_arguments)]
+    fn run_placed(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        seat: &Seat,
+        placement: ((u32, u32), (f32, f32)),
+        viewport: (u32, u32),
+        distortion: Option<&wgpu::TextureView>,
+    ) {
+        let (source, origin) = placement;
         let scene = self.sized.size;
         let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
-        if self.written.get() != Some(viewport) {
-            let rect = super::sub_rectangle(viewport, scene);
+        if self.written.get() != Some((source, viewport)) {
+            let rect = super::sub_rectangle_at(source, viewport, scene);
             queue.write_buffer(
                 &self.uniform,
                 0,
                 bytemuck::bytes_of(&Uniform::new(self.params, rect)),
             );
-            self.written.set(Some(viewport));
+            self.written.set(Some((source, viewport)));
         }
         draw(
             encoder,
@@ -574,8 +651,8 @@ impl Chain {
                 timestamp_writes: None,
             });
             pass.set_pipeline(&self.coefficients);
-            pass.set_bind_group(0, &self.coefficient_groups[0], &[]);
-            pass.set_bind_group(1, &self.coefficient_groups[1], &[]);
+            pass.set_bind_group(0, &self.coefficients_in, &[]);
+            pass.set_bind_group(1, &seat.coefficients, &[]);
             pass.dispatch_workgroups(1, 1, 1);
         }
         let drawn =
@@ -586,13 +663,63 @@ impl Chain {
             &self.apply,
             &[
                 &self.sized.apply_group,
-                &self.curve_group,
+                &seat.curve,
                 drawn.as_ref().unwrap_or(&self.no_distortion),
             ],
             view,
             origin,
             viewport,
         );
+    }
+
+    /// Runs the chain over one view of a split: the view's own mean luminance and
+    /// adaptation (the seat's), the curve applied over the view's rectangle and nothing
+    /// outside it. **Call it once per view with its own encoder and submit each before the
+    /// next**: the constants are written with the queue, which lands before the submission
+    /// that follows. **The per-seat adaptation is this project's, chosen, not measured**:
+    /// the original has no split screen. Draws no distortion (that pass reads the depth
+    /// attachment, which holds the last view's alone).
+    pub fn run_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        run: View,
+    ) {
+        let seat = run.seat.min(MAX_SEATS - 1);
+        {
+            let mut seats = self.seats.borrow_mut();
+            if seats.len() <= seat {
+                seats.resize_with(seat + 1, || None);
+            }
+            if seats[seat].is_none() {
+                seats[seat] = Some(Seat::new(device, &self.state_rw, &self.state_ro));
+            }
+        }
+        let seats = self.seats.borrow();
+        let (x, y, w, h) = run.rect;
+        self.run_placed(
+            device,
+            queue,
+            encoder,
+            view,
+            seats[seat].as_ref().expect("built above"),
+            ((x, y), (x as f32, y as f32)),
+            (w, h),
+            None,
+        );
+    }
+
+    /// How many seats hold an adaptation of their own right now.
+    #[must_use]
+    pub fn seat_lanes(&self) -> usize {
+        self.seats.borrow().iter().flatten().count()
+    }
+
+    /// Forgets every seat's adaptation, for the first whole-picture frame after a split.
+    pub fn retire_seats(&self) {
+        self.seats.borrow_mut().clear();
     }
 }
 
@@ -630,5 +757,7 @@ fn draw(
     pass.draw(0..3, 0..1);
 }
 
+#[cfg(test)]
+mod split_tests;
 #[cfg(test)]
 mod tests;
