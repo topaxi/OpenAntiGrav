@@ -3,10 +3,9 @@
 //! The hulls were drawn with no frustum at all, so a grid of twelve cost twelve
 //! hulls' vertices and draw calls however many were on screen: HD's craft are a
 //! large share of a frame's triangles, and on a field that has spread out most of
-//! them are behind the camera or off to a side. The test is the track's own, the
-//! frustum's sphere test, so it culls nothing the picture shows - the cost of a
-//! hull is what it has in common with the circuit's culling, and nothing else
-//! about the draw changes.
+//! them are behind the camera or off to a side. The test is the circuit's own, the
+//! frustum's sphere test, with a margin; it leaves out only a hull no pixel of
+//! which is in the picture, and nothing else about the draw changes.
 
 use super::*;
 
