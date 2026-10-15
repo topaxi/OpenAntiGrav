@@ -167,7 +167,10 @@ things make that more than a loop:
    `Chain::set_reach` scales the spacing by the mean over the views of their pixels per
    texel against a whole picture's (`scene::bloom::mean_reach`, 0.5 on both axes for every
    two- and four-way cut) for a split frame and puts it back, so a one-view frame is
-   byte-identical (`cmp`, Talon's Junction). HD's boost zoom streak is not drawn
+   byte-identical (`cmp`, Talon's Junction). **2048: ported** (it draws through HD's `hd_bloom::Chain`, so
+   the reach applies; one 2h still looked at, glow on the craft and no black view, and
+   `split_screen_ground_truth` passed). **Omega: checked, differs** (its own tone map, no
+   `hd_bloom` glow, so there is nothing for the reach to scale). HD's boost zoom streak is not drawn
    (it holds the primary craft's pulse) and Omega's distortion offsets are not drawn
    (the pass reads a depth attachment only the last view still has). Both open.
    `crates/game/tests/split_screen_ground_truth.rs` pins HD two and four views,
@@ -947,6 +950,10 @@ Medians per round, us:
   buffers are rewritten when the rectangle or the reach moves, and a split holds both. Its two
   columns here are an A/A (the off switch is Pulse's only), 4.4 to 4.9 ms CPU in both for the
   cuts at this load, which says only that nothing separates them.
+- **Through the presentation path** (`--presented --render-scale 50` and `150`, 2h and 2v, Pulse
+  PSP): the glow sits on each view's own exhaust and signs and stops at the view's edge, where
+  the HUD target is a different size from the scene target (`composite_bloom` maps each view's
+  rectangle across).
 - **Default**: what one view draws. There is no setting; at about 100 us a frame the effect does
   not need one. The Steam Deck is the machine to check (below).
 
@@ -966,8 +973,6 @@ for c in "1" "2 --split-cut horizontal" "2 --split-cut vertical" "4"; do
     2>&1 | grep -E '^bench (split|render_viewports CPU|pipelined)'
 done
 ```
-
-(`--players 1` takes no `--split-cut`; drop it for the first case.)
 
 ### The overlay's BLUR row in a split (2026-10-14, `split-blur-cost`)
 
