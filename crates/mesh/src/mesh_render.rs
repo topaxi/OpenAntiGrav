@@ -70,6 +70,19 @@ pub mod zone;
 mod device;
 pub use device::{device_descriptor, optional_features, required_limits};
 
+/// The depth-writing pipelines of a [`Velocity::Gated`] model with the velocity
+/// target's write masked: what a frame draws with when nothing reads the velocity
+/// buffer. The same shaders and the same state as [`Built::pipeline`],
+/// [`Built::prepass`], [`Built::alpha_test_pipeline`] and [`Built::cutout_pipelines`]
+/// but for that mask, so the colour and depth are bit-identical.
+#[derive(Debug, Clone)]
+pub struct Unwritten {
+    pub pipeline: wgpu::RenderPipeline,
+    pub prepass: Option<Prepass>,
+    pub alpha_test_pipeline: wgpu::RenderPipeline,
+    pub cutout_pipelines: Vec<(f32, wgpu::RenderPipeline)>,
+}
+
 /// Everything [`build`] hands back: geometry, texture bindings, and the three
 /// pipelines a `Model` draws through.
 #[derive(Debug)]
@@ -129,6 +142,9 @@ pub struct Built {
     /// [`stamp`]. `Some` only for a [`GlowMask::Stamped`] model, and indexed by
     /// `culled as usize` like [`Built::blend_pipeline`], one pair per blend class.
     pub stamp_pipeline: Option<Stamp>,
+    /// The opaque, prepass and cutout pipelines again with the velocity write
+    /// masked, for a [`Velocity::Gated`] model - see [`Unwritten`].
+    pub unwritten: Option<Unwritten>,
     pub bind_group: wgpu::BindGroup,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -517,14 +533,12 @@ pub fn build_with(
         ..Default::default()
     };
 
-    let targets = velocity_targets(
-        wgpu::ColorTargetState {
-            format,
-            blend: None,
-            write_mask: glow.writes(),
-        },
-        velocity.target(false),
-    );
+    let colour_target = wgpu::ColorTargetState {
+        format,
+        blend: None,
+        write_mask: glow.writes(),
+    };
+    let targets = velocity_targets(colour_target.clone(), velocity.target(false));
     let depth_stencil = wgpu::DepthStencilState {
         format: DEPTH_FORMAT,
         depth_write_enabled: Some(depth_write),
@@ -532,100 +546,28 @@ pub fn build_with(
         stencil: Default::default(),
         bias: Default::default(),
     };
-    // Alpha is the bloom's glow mask - see [`GlowMask`]. The second target,
-    // when [`Velocity::Write`] adds one, takes this surface's real screen
-    // motion - this pipeline writes depth.
-    let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
-    let pipeline = pipeline_cache::cached_pipeline(
-        "vs_main",
-        &vertex_buffers,
-        fragment_entry,
-        &targets,
-        primitive,
-        Some(depth_stencil.clone()),
-        multisample,
-        constants,
-        || {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some("mesh"),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: shader,
-                    entry_point: Some("vs_main"),
-                    buffers: &vertex_buffers,
-                    compilation_options: Default::default(),
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: Some(fragment_entry),
-                    targets: &targets,
-                    compilation_options: wgpu::PipelineCompilationOptions {
-                        constants,
-                        ..Default::default()
-                    },
-                }),
-                primitive,
-                depth_stencil: Some(depth_stencil.clone()),
-                multisample,
-                multiview_mask: None,
-                cache: None,
-            })
-        },
-    );
-
-    let prepass = prepass.then(|| {
-        prepass::pipelines(&prepass::Shared {
-            device,
-            shader,
-            layout: &pipeline_layout,
-            vertex_buffers: &vertex_buffers,
-            constants,
-            velocity,
-            targets: &targets,
-            fragment_entry,
-            primitive,
-            multisample,
-        })
-    });
-
-    // Second pipeline for `Model::alpha_tested_draws`: same shader module,
-    // bind group layouts, vertex layout and depth state as the opaque
-    // pipeline (a cutout is meant to occlude and be occluded exactly like
-    // opaque geometry), except the fragment shader discards pixels below a
-    // threshold instead of always returning alpha 1.0.
-    //
-    // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout writes
-    // depth like the opaque pipeline, so it writes real velocity too - same
-    // `targets` as the opaque pipeline above, reused rather than rebuilt.
-    let cutout_fragment_entry = velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
-    let make_cutout = |label: &str, reference: Option<f32>| {
-        // A per-batch reference overrides the model-level one already in
-        // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
-        // than shadows.
-        let mut constants = constants.to_vec();
-        if let Some(reference) = reference {
-            constants.retain(|(name, _)| *name != "alpha_test_ref");
-            constants.push(("alpha_test_ref", f64::from(reference)));
-        }
-        let depth_stencil = wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(depth_write),
-            depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
-            stencil: Default::default(),
-            bias: Default::default(),
-        };
-        pipeline_cache::cached_pipeline(
+    let want_prepass = prepass;
+    // The opaque, prepass and cutout pipelines for one set of colour targets: built once
+    // for the targets the model draws with, and a second time with the velocity write
+    // masked for a [`Velocity::Gated`] model (see [`Unwritten`]). The pipeline cache
+    // shares everything but the target state between the two.
+    let opaque_set = |targets: &[Option<wgpu::ColorTargetState>]| {
+        // Alpha is the bloom's glow mask - see [`GlowMask`]. The second target,
+        // when [`Velocity::Write`] adds one, takes this surface's real screen
+        // motion - this pipeline writes depth.
+        let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
+        let pipeline = pipeline_cache::cached_pipeline(
             "vs_main",
             &vertex_buffers,
-            cutout_fragment_entry,
-            &targets,
+            fragment_entry,
+            targets,
             primitive,
             Some(depth_stencil.clone()),
             multisample,
-            &constants,
+            constants,
             || {
                 device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some(label),
+                    label: Some("mesh"),
                     layout: Some(&pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: shader,
@@ -635,10 +577,10 @@ pub fn build_with(
                     },
                     fragment: Some(wgpu::FragmentState {
                         module: shader,
-                        entry_point: Some(cutout_fragment_entry),
-                        targets: &targets,
+                        entry_point: Some(fragment_entry),
+                        targets,
                         compilation_options: wgpu::PipelineCompilationOptions {
-                            constants: &constants,
+                            constants,
                             ..Default::default()
                         },
                     }),
@@ -649,11 +591,103 @@ pub fn build_with(
                     cache: None,
                 })
             },
-        )
+        );
+
+        let prepass = want_prepass.then(|| {
+            prepass::pipelines(&prepass::Shared {
+                device,
+                shader,
+                layout: &pipeline_layout,
+                vertex_buffers: &vertex_buffers,
+                constants,
+                velocity,
+                targets,
+                fragment_entry,
+                primitive,
+                multisample,
+            })
+        });
+
+        // Second pipeline for `Model::alpha_tested_draws`: same shader module,
+        // bind group layouts, vertex layout and depth state as the opaque
+        // pipeline (a cutout is meant to occlude and be occluded exactly like
+        // opaque geometry), except the fragment shader discards pixels below a
+        // threshold instead of always returning alpha 1.0.
+        //
+        // Alpha is the bloom's glow mask - see [`GlowMask`]. A cutout writes
+        // depth like the opaque pipeline, so it writes real velocity too - same
+        // `targets` as the opaque pipeline above, reused rather than rebuilt.
+        let cutout_fragment_entry =
+            velocity.entry("fs_main_alpha_test", "fs_main_alpha_test_velocity");
+        let make_cutout = |label: &str, reference: Option<f32>| {
+            // A per-batch reference overrides the model-level one already in
+            // `constants`; `wgpu` rejects a duplicate key, so it replaces rather
+            // than shadows.
+            let mut constants = constants.to_vec();
+            if let Some(reference) = reference {
+                constants.retain(|(name, _)| *name != "alpha_test_ref");
+                constants.push(("alpha_test_ref", f64::from(reference)));
+            }
+            let depth_stencil = wgpu::DepthStencilState {
+                format: DEPTH_FORMAT,
+                depth_write_enabled: Some(depth_write),
+                depth_compare: Some(cutout::depth_compare(reference, depth_compare)),
+                stencil: Default::default(),
+                bias: Default::default(),
+            };
+            pipeline_cache::cached_pipeline(
+                "vs_main",
+                &vertex_buffers,
+                cutout_fragment_entry,
+                targets,
+                primitive,
+                Some(depth_stencil.clone()),
+                multisample,
+                &constants,
+                || {
+                    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                        label: Some(label),
+                        layout: Some(&pipeline_layout),
+                        vertex: wgpu::VertexState {
+                            module: shader,
+                            entry_point: Some("vs_main"),
+                            buffers: &vertex_buffers,
+                            compilation_options: Default::default(),
+                        },
+                        fragment: Some(wgpu::FragmentState {
+                            module: shader,
+                            entry_point: Some(cutout_fragment_entry),
+                            targets,
+                            compilation_options: wgpu::PipelineCompilationOptions {
+                                constants: &constants,
+                                ..Default::default()
+                            },
+                        }),
+                        primitive,
+                        depth_stencil: Some(depth_stencil.clone()),
+                        multisample,
+                        multiview_mask: None,
+                        cache: None,
+                    })
+                },
+            )
+        };
+        let alpha_test_pipeline = make_cutout("mesh alpha test", None);
+        let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
+            make_cutout(label, Some(reference))
+        });
+        (pipeline, prepass, alpha_test_pipeline, cutout_pipelines)
     };
-    let alpha_test_pipeline = make_cutout("mesh alpha test", None);
-    let cutout_pipelines = cutout::pipelines(&model.alpha_tested_draws, |label, reference| {
-        make_cutout(label, Some(reference))
+    let (pipeline, prepass, alpha_test_pipeline, cutout_pipelines) = opaque_set(&targets);
+    let unwritten = (velocity == Velocity::Gated).then(|| {
+        let masked = velocity_targets(colour_target.clone(), velocity.target(true));
+        let (pipeline, prepass, alpha_test_pipeline, cutout_pipelines) = opaque_set(&masked);
+        Unwritten {
+            pipeline,
+            prepass,
+            alpha_test_pipeline,
+            cutout_pipelines,
+        }
     });
 
     // Third pipeline for `Model::transparent_draws` (list B): same shader
@@ -986,6 +1020,7 @@ pub fn build_with(
         unblended_pipeline,
         authored_pipelines,
         stamp_pipeline,
+        unwritten,
         bind_group,
         vertex_buffer,
         index_buffer,

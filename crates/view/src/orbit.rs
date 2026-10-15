@@ -296,6 +296,7 @@ impl Session {
             node_anim_buffer,
             emissive_buffer: _,
             stamp_pipeline: _,
+            unwritten: _,
             prepass: _,
         } = mesh_render::build(
             &device,

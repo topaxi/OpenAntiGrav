@@ -8,6 +8,14 @@ use super::*;
 mod instance;
 mod pad_glow;
 
+/// [`Drawable::opaque`]'s answer.
+pub(super) struct Opaque<'a> {
+    pub pipeline: &'a wgpu::RenderPipeline,
+    pub prepass: Option<&'a mesh_render::Prepass>,
+    pub alpha_test: &'a wgpu::RenderPipeline,
+    pub cutouts: &'a [(f32, wgpu::RenderPipeline)],
+}
+
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
 /// Two of these are drawn into one render pass. Separate pipelines rather than one
@@ -103,6 +111,13 @@ pub(super) struct Drawable {
     lod: oag_mesh::mesh::LodSwitch,
     /// [`Self::bound`], found on first use.
     bound: std::cell::OnceCell<(Vec3, f32)>,
+    /// The opaque, prepass and cutout pipelines with the velocity write masked, for a
+    /// drawable built [`mesh_render::Velocity::Gated`] - see [`Self::opaque`].
+    unwritten: Option<mesh_render::Unwritten>,
+    /// Whether the frame being drawn reads the velocity buffer; set before each frame by
+    /// [`Self::set_velocity_read`]. `true` until told otherwise, so a drawable nobody
+    /// gates writes velocity as it always did.
+    velocity_read: std::cell::Cell<bool>,
     /// The road spans a Quake ripples through this model - see
     /// [`oag_render::ripple`]. `None` on everything but a Pulse PSP circuit.
     ripple: std::cell::RefCell<Option<oag_render::ripple::Ripple>>,
@@ -201,6 +216,7 @@ impl Drawable {
             unblended_pipeline,
             authored_pipelines,
             stamp_pipeline,
+            unwritten,
             bind_group: _placeholder,
             vertex_buffer: vertices,
             index_buffer: indices,
@@ -320,6 +336,8 @@ impl Drawable {
             opaque_reach,
             lod: oag_mesh::mesh::LodSwitch::new(&model.lod_groups),
             bound: std::cell::OnceCell::new(),
+            unwritten,
+            velocity_read: std::cell::Cell::new(true),
             model,
             pipeline,
             alpha_test_pipeline,
@@ -411,6 +429,37 @@ impl Drawable {
     /// shadow the size of the overlap rather than of the hull.
     pub(super) fn radius(&self) -> f32 {
         self.model.radius
+    }
+
+    /// Whether this frame's draws write the velocity buffer: `false` on a gated
+    /// drawable swaps in the pipelines with the write masked (see
+    /// [`mesh_render::Velocity::Gated`]); anything else ignores it.
+    pub(super) fn set_velocity_read(&self, read: bool) {
+        self.velocity_read.set(read);
+    }
+
+    /// Whether the last [`Self::set_velocity_read`] said the frame reads velocity.
+    #[cfg(test)]
+    pub(super) fn velocity_read(&self) -> bool {
+        self.velocity_read.get()
+    }
+
+    /// The opaque, prepass and cutout pipelines this frame draws with.
+    pub(super) fn opaque(&self) -> Opaque<'_> {
+        match (&self.unwritten, self.velocity_read.get()) {
+            (Some(unwritten), false) => Opaque {
+                pipeline: &unwritten.pipeline,
+                prepass: unwritten.prepass.as_ref(),
+                alpha_test: &unwritten.alpha_test_pipeline,
+                cutouts: &unwritten.cutout_pipelines,
+            },
+            _ => Opaque {
+                pipeline: &self.pipeline,
+                prepass: self.prepass.as_ref(),
+                alpha_test: &self.alpha_test_pipeline,
+                cutouts: &self.cutout_pipelines,
+            },
+        }
     }
 
     /// A sphere, in model space, that holds every vertex: the centre of the

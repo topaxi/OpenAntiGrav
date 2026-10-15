@@ -122,7 +122,8 @@ impl Drawable {
             return stats;
         }
         oag_gpu::perfprobe::pipeline_set();
-        pass.set_pipeline(&self.pipeline);
+        let pipes = self.opaque();
+        pass.set_pipeline(pipes.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
         // and group 2 survives the `set_pipeline` calls below.
@@ -161,7 +162,7 @@ impl Drawable {
         // it arrives in, so nearest first only lets the depth test reject
         // sooner - it cannot change a pixel.
         depth_order.clear();
-        if let Some(order) = order.filter(|_| self.prepass.is_some()) {
+        if let Some(order) = order.filter(|_| pipes.prepass.is_some()) {
             flags.clear();
             flags.resize(opaque_draws.len(), false);
             for &index in shown.iter() {
@@ -211,7 +212,7 @@ impl Drawable {
             };
             pass.draw_indexed(range, 0, 0..1);
         };
-        match &self.prepass {
+        match pipes.prepass {
             // Depth first, then the shading against it, **backwards** - see
             // `mesh_render::Prepass` for why the reversal keeps every
             // coplanar tie where the plain pipeline puts it.
@@ -256,8 +257,8 @@ impl Drawable {
         // it. See `oag_vex::vex::Batch::alpha_test_reference` and
         // `mesh_render::cutout`.
         let cutouts = mesh_render::CutoutPipelines {
-            default: &self.alpha_test_pipeline,
-            by_reference: &self.cutout_pipelines,
+            default: pipes.alpha_test,
+            by_reference: pipes.cutouts,
         };
         let mut cutout_set: Option<&wgpu::RenderPipeline> = None;
         for (index, draw) in (if solid {

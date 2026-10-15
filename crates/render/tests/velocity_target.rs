@@ -138,7 +138,7 @@ fn half_to_f32(bits: u16) -> f32 {
 /// means it moved down the screen). The y sign is the whole point.
 #[test]
 fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
-    let Some((centre, corner)) = draw(mesh_render::Velocity::Write, false, 1.0) else {
+    let Some((centre, corner, _)) = draw(mesh_render::Velocity::Write, false, 1.0, false) else {
         return;
     };
     let (vx, vy) = centre;
@@ -159,11 +159,11 @@ fn the_velocity_target_carries_the_ndc_delta_halved_and_y_flipped() {
 /// its alpha, which is what keeps a plume on its craft under motion blur.
 #[test]
 fn an_attached_blended_draw_writes_its_own_motion_weighted_by_alpha() {
-    let Some((masked, _)) = draw(mesh_render::Velocity::Write, true, 0.5) else {
+    let Some((masked, _, _)) = draw(mesh_render::Velocity::Write, true, 0.5, false) else {
         return;
     };
     assert_eq!(masked, (0.0, 0.0), "a Write blended draw must stay masked");
-    let Some(((vx, vy), _)) = draw(mesh_render::Velocity::Attached, true, 0.5) else {
+    let Some(((vx, vy), _, _)) = draw(mesh_render::Velocity::Attached, true, 0.5, false) else {
         return;
     };
     assert!(
@@ -172,13 +172,42 @@ fn an_attached_blended_draw_writes_its_own_motion_weighted_by_alpha() {
     );
 }
 
-/// Draws the triangle and returns the velocity texel at its centre and at a
-/// corner it never covers; `None` when there is no adapter.
+/// A `Gated` model's masked pipelines (`Built::unwritten`) draw the same colour and leave
+/// the velocity target at its clear: the saving `scene::velocity_gate` takes on a frame
+/// nobody reads, with nothing else changed. The written pipeline, drawn the same way,
+/// does write velocity, so the comparison is not of two blanks.
+#[test]
+fn a_gated_models_masked_pipeline_draws_the_same_colour_and_writes_no_velocity() {
+    let Some((written, _, written_colour)) = draw(mesh_render::Velocity::Gated, false, 1.0, false)
+    else {
+        return;
+    };
+    let Some((masked, _, masked_colour)) = draw(mesh_render::Velocity::Gated, false, 1.0, true)
+    else {
+        return;
+    };
+    assert!(
+        written.0.abs() > 0.1,
+        "the written pipeline wrote no velocity"
+    );
+    assert_eq!(masked, (0.0, 0.0), "the masked pipeline wrote velocity");
+    assert_eq!(written_colour, masked_colour, "the mask changed the colour");
+    assert_ne!(written_colour, [0, 0, 0, 0], "nothing was drawn");
+}
+
+/// The velocity texel at the triangle's centre, the velocity texel at a corner it never
+/// covers, and the colour texel at its centre.
+type Drawn = ((f32, f32), (f32, f32), [u8; 4]);
+
+/// Draws the triangle and returns the velocity texel at its centre, at a corner it never
+/// covers, and the colour texel at its centre; `None` when there is no adapter. `masked`
+/// draws with a `Gated` model's [`mesh_render::Built::unwritten`] pipeline.
 fn draw(
     velocity_mode: mesh_render::Velocity,
     blended: bool,
     alpha: f32,
-) -> Option<((f32, f32), (f32, f32))> {
+    masked: bool,
+) -> Option<Drawn> {
     let instance = wgpu::Instance::default();
     let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         eprintln!("no GPU adapter: skipping");
@@ -191,6 +220,7 @@ fn draw(
     let model = triangle_model(blended, alpha);
     let mesh_render::Built {
         pipeline,
+        unwritten,
         blend_pipeline,
         vertex_buffer,
         index_buffer,
@@ -221,6 +251,10 @@ fn draw(
     let pipeline = if blended {
         let [two_sided, _] = blend_pipeline;
         two_sided
+    } else if masked {
+        unwritten
+            .expect("a Gated model builds its masked pipelines")
+            .pipeline
     } else {
         pipeline
     };
@@ -257,7 +291,11 @@ fn draw(
             view_formats: &[],
         })
     };
-    let colour = texture("colour", FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT);
+    let colour = texture(
+        "colour",
+        FORMAT,
+        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+    );
     let velocity = texture(
         "velocity",
         VELOCITY_FORMAT,
@@ -330,7 +368,28 @@ fn draw(
         },
         extent,
     );
+    let colour_readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("colour readback"),
+        size: u64::from(SIZE * SIZE * 4),
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_texture_to_buffer(
+        colour.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &colour_readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(SIZE * 4),
+                rows_per_image: None,
+            },
+        },
+        extent,
+    );
     queue.submit(Some(encoder.finish()));
+    colour_readback
+        .slice(..)
+        .map_async(wgpu::MapMode::Read, |_| {});
     readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
     device
         .poll(wgpu::PollType::wait_indefinitely())
@@ -343,5 +402,16 @@ fn draw(
         (r, g)
     };
 
-    Some((texel(SIZE / 2, SIZE / 2), texel(1, 1)))
+    let colour_mapped = colour_readback
+        .slice(..)
+        .get_mapped_range()
+        .expect("mapping");
+    let at = ((SIZE / 2 * SIZE + SIZE / 2) * 4) as usize;
+    let colour_texel = [
+        colour_mapped[at],
+        colour_mapped[at + 1],
+        colour_mapped[at + 2],
+        colour_mapped[at + 3],
+    ];
+    Some((texel(SIZE / 2, SIZE / 2), texel(1, 1), colour_texel))
 }

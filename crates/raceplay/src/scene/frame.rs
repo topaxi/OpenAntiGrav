@@ -84,6 +84,9 @@ impl Scene {
         // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
         let blur_shake = race.shake_screen_motion(projection, prev.shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
+        // Before anything draws: whether this frame has a reader of the velocity buffer
+        // decides which pipelines the track and the hulls draw with.
+        self.gate_velocity(self.velocity_readers(motion_blur, camera_jitter));
         // The same unjittered matrix, for the section boxes' view test.
         let section_view = view_projection;
         // Recorded before the offset is applied - see `Scene::record_frame`.
@@ -1030,9 +1033,9 @@ impl Scene {
         // runs before the caller composites the HUD over `view`, so the
         // readouts stay sharp however the world moves. `motion_blur` is the
         // strength read fresh off the settings this frame, so the row
-        // applies live; at `off` the pass encodes nothing. The velocity
-        // buffer it reads was written by the scene pass above either way -
-        // see `Scene::velocity`.
+        // applies live; at `off` the pass encodes nothing. The scene pass
+        // above wrote the velocity buffer for it because the same strength
+        // opened the gate before drawing - see `scene::velocity_gate`.
         stats.blur_encoded = self.encode_motion_blur(
             device,
             queue,

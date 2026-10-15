@@ -65,6 +65,7 @@ mod split_shadows;
 mod thrust_chase;
 mod title_effects;
 mod trail_hits;
+mod velocity_gate;
 mod viewpoint;
 mod weapons;
 mod windowed;

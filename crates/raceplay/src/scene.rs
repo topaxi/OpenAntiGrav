@@ -28,6 +28,7 @@ mod queries;
 mod ribbons;
 mod scratch;
 mod shine;
+mod velocity_gate;
 mod viewports;
 mod weapon_models;
 mod weapon_quads;
@@ -371,10 +372,15 @@ pub struct Scene {
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
-    /// count. **Always written in the game path**, whatever the blur setting
-    /// says, per the design: the buffer is an FSR 3.1/TAA prerequisite as
-    /// much as a blur input, and gating it on a setting would make it a
-    /// sometimes-there artefact nothing downstream could rely on.
+    /// count. **Written for the frames that read it.** Its readers are the motion
+    /// blur and a temporal upscaler (`scene::velocity_gate::Readers`), and the
+    /// track and the hulls - where nearly every velocity fragment is - draw with the
+    /// write masked on a frame with none, which is every frame at the defaults and
+    /// about a tenth of a Wipeout HD race pass at 1080p. This replaced "always
+    /// written, whatever the blur setting says", which kept the buffer present for an
+    /// FSR 3.1/TAA that had not landed: the reader list is now the one place that
+    /// says who needs it, a new reader is a new field there, and the buffer is
+    /// cleared every frame so a reader never finds the previous frame's.
     velocity: wgpu::Texture,
     /// Each camera's frame-to-frame history: the previous tick's camera and model
     /// matrices for the `prev_mvp` every drawable's velocity is measured against
@@ -615,7 +621,7 @@ impl Scene {
             // a pixel, where Pulse's shades 1.2 - see `mesh_render::Prepass`.
             hd.is_some(),
             false,
-            mesh_render::Velocity::Write,
+            mesh_render::Velocity::Gated,
         )?;
         let adverts = if adverts.is_empty() {
             None
@@ -646,7 +652,7 @@ impl Scene {
                 zone_art,
                 shadow_maps,
                 mesh_render::ShadowReceiver::Mapped,
-                mesh_render::Velocity::Write,
+                mesh_render::Velocity::Gated,
             )?);
         }
         let collision = collision_model

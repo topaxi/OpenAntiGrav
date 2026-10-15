@@ -182,6 +182,7 @@ pub fn capture_pixels_from(
         node_anim_buffer,
         emissive_buffer: _,
         stamp_pipeline: _,
+        unwritten: _,
         prepass: _,
     } = build(
         &device,
