@@ -40,6 +40,7 @@ fn draw(gpu: &(wgpu::Device, wgpu::Queue), scene: &Scene, view: &wgpu::TextureVi
         None,
         Shadows::Original,
         &[],
+        WindowEffects::default(),
         &mut [],
     );
 }

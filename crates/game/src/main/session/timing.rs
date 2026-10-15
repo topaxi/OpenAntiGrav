@@ -228,7 +228,10 @@ impl Rings {
                 .and_then(oag_gpu::timing::PassTimer::writes),
             blur_timestamps: half(&self.blur, oag_gpu::timing::Half::Begin)
                 .zip(half(&self.blur, oag_gpu::timing::Half::End))
-                .map(|(begin, end)| oag_post::motion_blur::ChainTimestamps { begin, end }),
+                .map(|(begin, end)| oag_post::motion_blur::ChainTimestamps {
+                    begin: Some(begin),
+                    end: Some(end),
+                }),
             hd_bloom_timestamps: half(&self.hd_bloom, oag_gpu::timing::Half::Begin)
                 .zip(half(&self.hd_bloom, oag_gpu::timing::Half::End))
                 .map(|(begin, end)| oag_post::hd_bloom::ChainTimestamps { begin, end }),

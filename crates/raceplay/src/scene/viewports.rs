@@ -38,10 +38,13 @@
 //!   into a scratch lane of its own. [`Scene::composite_bloom`] adds each back after
 //!   the HUD, as a single view's is. **Chosen, not measured**: each lane's size
 //!   keeps the glow's reach in proportion to the view (`oag_post::bloom::lane_extent`).
-//! - **No motion blur and no jitter.** [`MotionState`] and the temporal
-//!   upscaler's frame record hold one camera's history, and `N` cameras a tick
-//!   would corrupt it. **Chosen, not measured.**
-//!
+//! - **Motion blur runs once per view, after the last one** (`split_blur`). Each view
+//!   measures its velocity against a camera history of its own ([`motion::split_history`]),
+//!   writes it into its rectangle of the velocity and depth attachments (a later view
+//!   *loads* them, as it loads the colour), and [`Scene::blur_split_views`] then runs the
+//!   blur over each rectangle, one submission each. **No camera jitter and no temporal
+//!   upscaler input**: the upscaler's frame record holds one camera, and the window's is
+//!   kept cleared. **Chosen, not measured.**
 //! - **HD's and Omega's post chains run once, after the last view.** Both draw
 //!   the scene into a linear float target and then encode it into `view` with a
 //!   pass that *clears* `view`, sampling the linear target from its top-left
@@ -53,8 +56,8 @@
 //!   picture. **Chosen, not measured**; glow bleeds a few pixels across the gap
 //!   between views. The boost zoom streak (HD's own ring) is not drawn under a
 //!   split and Omega's distortion offsets are not drawn: the first holds the
-//!   primary craft's pulse, the second reads a depth attachment only the last view
-//!   still has. Both open.
+//!   primary craft's pulse; the second reads the depth attachment, which since the blur
+//!   (a later view loads it) holds every view's and could be wired. Both open.
 
 use super::*;
 
@@ -73,11 +76,12 @@ pub(super) enum Layer {
     Window,
 }
 
-/// What a one-seat window draws on top of the scene itself, read fresh off the settings each
+/// What a window draws on top of the scene itself, read fresh off the settings each
 /// frame as [`Scene::render`]'s arguments are: the motion blur, the camera jitter a temporal
-/// upscaler wants and the timestamp pairs a dynamic-resolution timer is read from. Each is
-/// one camera's: they ride the window's own history ([`Scene::render_window`]), which is why
-/// a window of several seats (a split) draws none of them.
+/// upscaler wants and the timestamp pairs a dynamic-resolution timer is read from. A one-seat
+/// window uses all of them on the window's own history ([`Scene::render_window`]). A split
+/// (several views in one target) uses the blur and its timestamp pair only, once per view
+/// ([`Scene::blur_split_views`]); the jitter and the other timers are one camera's.
 #[derive(Default)]
 pub struct WindowEffects<'a> {
     /// The blur's strength; `Off` encodes nothing.
@@ -202,6 +206,7 @@ impl Scene {
         anim_seconds: Option<f32>,
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
+        effects: WindowEffects<'_>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let rects = race.view_rects(area);
@@ -222,6 +227,7 @@ impl Scene {
             zone_spectrum,
             false,
             0,
+            effects,
             view_timers,
         )
     }
@@ -233,9 +239,9 @@ impl Scene {
     /// it). The one place that choice is made; the window's frame loop and the headless
     /// capture both draw through it.
     ///
-    /// `effects` is the one-seat window's blur, jitter and timers; a window of several seats
-    /// is a split and draws none of them (**chosen, not measured**: the views in one target
-    /// are N cameras in one frame, and a history holds one). `view_timers` brackets each of
+    /// `effects` is the window's blur, jitter and timers; a window of several seats is a
+    /// split and draws the blur only (once per view, [`Scene::blur_split_views`]; the jitter
+    /// is one camera's - **chosen, not measured**). `view_timers` brackets each of
     /// the window's seats' scene passes, as [`Scene::render_viewports`]'s does: empty
     /// everywhere but the render bench, where it stands in for `effects.timestamps`.
     ///
@@ -316,6 +322,7 @@ impl Scene {
                 shadows,
                 zone_spectrum,
                 shared,
+                effects,
                 view_timers,
             ),
         }
@@ -343,6 +350,7 @@ impl Scene {
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
         shared: bool,
+        effects: WindowEffects<'_>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let slots = race.window_drawn(window);
@@ -363,6 +371,7 @@ impl Scene {
             zone_spectrum,
             shared,
             window,
+            effects,
             view_timers,
         )
     }
@@ -386,16 +395,24 @@ impl Scene {
         shadows: oag_display::display::Shadows,
         zone_spectrum: &[f32],
         shared: bool,
-        history: usize,
+        window: usize,
+        effects: WindowEffects<'_>,
         view_timers: &mut [Option<oag_gpu::timing::PassTimer>],
     ) -> SceneStats {
         let mut stats = SceneStats::default();
         self.reuse_frame_work.set(shared);
-        // The window's own history slot, so these views' cameras (several in one frame, and
-        // unread: a split draws no blur and no jitter) never touch another window's.
-        self.history.set(history);
+        // A split draws no camera jitter and feeds no temporal upscaler, so the window's own
+        // record is cleared as `render` always did for it (jitter `None`): the views' histories
+        // below are not the window's.
+        self.histories[window.min(motion::MAX_HISTORIES - 1)]
+            .last_frame
+            .set(None);
+        self.split_live.set(true);
         for (index, (&slot, &rect)) in slots.iter().zip(rects).enumerate() {
             race.set_viewpoint(slot);
+            // This seat's own camera history: the previous view-projection its velocity is
+            // measured against and the shake the blur takes out, never another view's.
+            self.history.set(motion::split_history(slot));
             self.layer.set(if index == 0 {
                 Layer::First
             } else {
@@ -417,6 +434,7 @@ impl Scene {
                     cull,
                     pvs_cull,
                     anim_seconds,
+                    // The blur runs after the last view: `Scene::blur_split_views`.
                     oag_display::display::MotionBlur::Off,
                     shadows,
                     None,
@@ -451,6 +469,18 @@ impl Scene {
             stats.hd_bloom_encoded = split_post && self.hd.is_some();
             queue.submit(Some(encoder.finish()));
         }
+        // Motion blur, last, as a single view's is: after the glow's bright pass (which the
+        // composite adds back over the blurred frame after the HUD) and after HD's and
+        // Omega's chain, before the HUD. See `split_blur`.
+        stats.blur_encoded = self.blur_split_views(
+            device,
+            queue,
+            view,
+            slots,
+            rects,
+            effects.motion_blur.shutter(),
+            effects.blur_timestamps,
+        );
         stats
     }
 

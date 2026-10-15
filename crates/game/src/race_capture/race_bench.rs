@@ -254,6 +254,10 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
                 options.anim_seconds,
                 options.shadows,
                 &spectrum,
+                oag_raceplay::WindowEffects {
+                    motion_blur: options.motion_blur,
+                    ..Default::default()
+                },
                 &mut timers,
             );
         } else {
@@ -282,8 +286,8 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
                 scene_timer.as_ref().and_then(PassTimer::writes),
                 blur_timer.as_ref().and_then(|t| {
                     Some(oag_post::motion_blur::ChainTimestamps {
-                        begin: t.half_writes(Half::Begin)?,
-                        end: t.half_writes(Half::End)?,
+                        begin: Some(t.half_writes(Half::Begin)?),
+                        end: Some(t.half_writes(Half::End)?),
                     })
                 }),
                 bloom_timer.as_ref().and_then(|t| {
