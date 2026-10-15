@@ -193,7 +193,7 @@ impl Target {
                 false,
                 cull_back,
                 mesh_render::Velocity::Write,
-                false,
+                true,
             )
         };
         let scenery = |model| {

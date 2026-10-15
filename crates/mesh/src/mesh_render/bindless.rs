@@ -22,7 +22,7 @@
 //!
 //! **The samplers are a small array too.** A drawable binds one sampler for every slot
 //! (`build`'s repeat sampler), and the only other a mesh draw binds is the billboard
-//! card's clamp sampler ([`super::albedo_bind_group`]), which an advert slot swaps in:
+//! card's clamp sampler ([`super::card_material`]), which an advert slot swaps in:
 //! two descriptors a race, one or two a drawable.
 //!
 //! Native only: WebGPU has no binding arrays, and a device without [`FEATURES`] keeps

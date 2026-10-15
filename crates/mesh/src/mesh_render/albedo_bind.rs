@@ -1,24 +1,13 @@
-//! A material bind group around a texture the caller renders into, for the
+//! The material of a slot whose albedo is a texture the caller renders into, for the
 //! billboard adverts: a slot of a model whose picture is drawn each frame
 //! instead of decoded once.
 
 use super::bindless::Material;
 use super::texture;
 
-/// Bind group 1 for a material whose albedo is `albedo`, built against
-/// `layout` - [`super::material_bind_group_layout`]. [`card_material`]'s group.
-#[must_use]
-pub fn albedo_bind_group(
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-    albedo: &wgpu::TextureView,
-    label: &str,
-) -> wgpu::BindGroup {
-    card_material(device, queue, albedo).bind_group(device, layout, label)
-}
-
-/// The material of a slot whose albedo is `albedo`.
+/// The material of a slot whose albedo is `albedo`. A caller replacing several slots
+/// builds this once and swaps the albedo into a copy for each, so the slots share one
+/// sampler and one of each 1x1 (one element each of the bindless arrays).
 ///
 /// Everything besides the albedo is what a slot with no lightmap, no pad mask
 /// and no wave map binds in [`super::build`]: black with alpha 1, a flat tangent

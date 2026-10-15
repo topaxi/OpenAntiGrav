@@ -73,6 +73,7 @@ impl Drawable {
             uniform_slot: None,
             textures: self.textures.clone(),
             bindless: self.bindless.clone(),
+            card: self.card.clone(),
             fog_bind: self.fog_bind.clone(),
             fog: self.fog.clone(),
             scene_kind: self.scene_kind,

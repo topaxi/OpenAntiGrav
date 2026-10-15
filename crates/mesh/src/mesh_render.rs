@@ -1030,4 +1030,4 @@ mod material_layout;
 pub use material_layout::material_bind_group_layout;
 
 mod albedo_bind;
-pub use albedo_bind::{albedo_bind_group, card_material};
+pub use albedo_bind::card_material;

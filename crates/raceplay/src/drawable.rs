@@ -62,6 +62,9 @@ pub(super) struct Drawable {
     /// `mesh_render::bindless` and [`Self::bind_slot`]. Every pipeline above then
     /// binds this; [`Self::textures`] stays for the sun-occlusion pass and the ghost.
     bindless: Option<mesh_render::bindless::Bindless>,
+    /// The billboard card's material, made by the first [`Self::set_albedo`] and copied with
+    /// each later card's albedo, so every card slot shares its sampler and 1x1s.
+    card: Option<mesh_render::bindless::Material>,
     /// Bind group 2: the fog this drawable is rendered with.
     fog_bind: wgpu::BindGroup,
     /// The buffer behind it. Rewritten each frame from the track's `fogCube`,
@@ -176,7 +179,7 @@ impl Drawable {
             false,
             false,
             velocity,
-            false,
+            true,
         )
     }
 
@@ -208,7 +211,8 @@ impl Drawable {
         cull_back: bool,
         velocity: mesh_render::Velocity,
         // Whether group 1 is the binding arrays, where the device has them and
-        // `OAG_BINDLESS` does not say `0` - see [`Self::bindless`].
+        // `OAG_BINDLESS` does not say `0` - see [`Self::bindless`]. Every race drawable
+        // asks; the test of the per-slot path is the one caller that does not.
         bindless: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
@@ -362,6 +366,7 @@ impl Drawable {
             uniform_slot: None,
             textures,
             bindless,
+            card: None,
             fog_bind,
             fog: fog_buffer,
             scene_kind: None,
@@ -391,7 +396,13 @@ impl Drawable {
         let Some(bind) = self.textures.get_mut(slot) else {
             return;
         };
-        let material = mesh_render::card_material(device, queue, view);
+        let card = self
+            .card
+            .get_or_insert_with(|| mesh_render::card_material(device, queue, view));
+        let material = mesh_render::bindless::Material {
+            albedo: view.clone(),
+            ..card.clone()
+        };
         *bind = material.bind_group(
             device,
             &mesh_render::material_bind_group_layout(device),
