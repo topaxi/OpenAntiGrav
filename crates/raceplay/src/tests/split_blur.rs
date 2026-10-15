@@ -4,6 +4,7 @@
 
 use super::scene_build::{livery, scene_over, test_gpu, triangle, vertex};
 use super::*;
+use crate::mesh_render;
 use oag_display::display::{Fov, MotionBlur, Shadows};
 
 const SIZE: u32 = 64;
@@ -55,8 +56,13 @@ fn target(device: &wgpu::Device) -> wgpu::Texture {
     })
 }
 
-/// The target's pixels, `SIZE * SIZE * 4` bytes.
+/// The texture's texels, `SIZE * SIZE * 4` bytes (every texture read here is 4 bytes a texel).
 fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -> Vec<u8> {
+    let aspect = if texture.format() == mesh_render::DEPTH_FORMAT {
+        wgpu::TextureAspect::DepthOnly
+    } else {
+        wgpu::TextureAspect::All
+    };
     let row = (SIZE * 4) as usize;
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("split blur readback"),
@@ -66,7 +72,10 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, texture: &wgpu::Texture) -
     });
     let mut encoder = device.create_command_encoder(&Default::default());
     encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
+        wgpu::TexelCopyTextureInfo {
+            aspect,
+            ..texture.as_image_copy()
+        },
         wgpu::TexelCopyBufferInfo {
             buffer: &buffer,
             layout: wgpu::TexelCopyBufferLayout {
@@ -132,12 +141,11 @@ fn drawn(rows: &[u8]) -> bool {
     rows.iter().any(|&byte| byte != 0)
 }
 
-/// Two frames of a two-view race in which only craft `mover` travels, the blur off and on
-/// drawn from the same state (a repeat of one tick measures against the same previous pose),
-/// and the two views' rows of each picture. Returns `(off, on)` per view.
-fn two_frames(mover: usize) -> Option<[[Vec<u8>; 2]; 2]> {
+/// A two-view race and its scene after three frames in which only craft `mover` travels, drawn
+/// with the blur off into the first target and on into the second from the same state (a
+/// repeat of one tick measures against the same previous pose).
+fn after_frames(mover: usize) -> Option<Frames> {
     let (device, queue) = test_gpu()?;
-    let gpu = (&device, &queue);
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
     let scene = scene(&device, &queue, &race);
@@ -151,13 +159,37 @@ fn two_frames(mover: usize) -> Option<[[Vec<u8>; 2]; 2]> {
         let ahead = race.sim.world.ships[mover].physics.body.position + forward * 6.0;
         race.sim.world.ships[mover].physics.body.position = ahead;
         race.tick(&oag_gameplay::PlayerInputs::none());
-        draw(gpu, &scene, &race, &off, MotionBlur::Off);
-        draw(gpu, &scene, &race, &on, MotionBlur::High);
+        draw((&device, &queue), &scene, &race, &off, MotionBlur::Off);
+        draw((&device, &queue), &scene, &race, &on, MotionBlur::High);
     }
-    let rects = race.view_rects(AREA);
-    let (off, on) = (pixels(&device, &queue, &off), pixels(&device, &queue, &on));
-    let of = |picture: &[u8], view: usize| rows(picture, rects[view]).to_vec();
-    Some([[of(&off, 0), of(&on, 0)], [of(&off, 1), of(&on, 1)]])
+    Some(Frames {
+        device,
+        queue,
+        race,
+        scene,
+        off,
+        on,
+    })
+}
+
+struct Frames {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    race: Race,
+    scene: Scene,
+    off: wgpu::Texture,
+    on: wgpu::Texture,
+}
+
+impl Frames {
+    /// Each view's rows of the picture drawn with the blur off and on: `[view][off, on]`.
+    fn views(&self) -> [[Vec<u8>; 2]; 2] {
+        let rects = self.race.view_rects(AREA);
+        let off = pixels(&self.device, &self.queue, &self.off);
+        let on = pixels(&self.device, &self.queue, &self.on);
+        let of = |picture: &[u8], view: usize| rows(picture, rects[view]).to_vec();
+        [[of(&off, 0), of(&on, 0)], [of(&off, 1), of(&on, 1)]]
+    }
 }
 
 /// The first view's craft travels and the second sits still: the first view blurs, the second
@@ -166,9 +198,10 @@ fn two_frames(mover: usize) -> Option<[[Vec<u8>; 2]; 2]> {
 /// the whole picture (the second view is touched) and when no chain runs at all.
 #[test]
 fn the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
-    let Some([first, second]) = two_frames(0) else {
+    let Some(frames) = after_frames(0) else {
         return;
     };
+    let [first, second] = frames.views();
     assert!(
         drawn(&first[0]) && drawn(&second[0]),
         "both views show a craft"
@@ -181,9 +214,10 @@ fn the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
 /// view's. Fails when only the first view's chain, or only the last view's rectangle, is run.
 #[test]
 fn it_is_the_view_that_moves_wherever_it_is_drawn() {
-    let Some([first, second]) = two_frames(1) else {
+    let Some(frames) = after_frames(1) else {
         return;
     };
+    let [first, second] = frames.views();
     assert!(
         drawn(&first[0]) && drawn(&second[0]),
         "both views show a craft"
@@ -234,4 +268,103 @@ fn every_view_keeps_the_history_of_its_own_camera() {
         );
         assert!(scene.temporal(0).is_none(), "a split feeds no upscaler");
     }
+}
+
+/// A later view keeps what the views before it wrote to the velocity and depth attachments
+/// (it loads them, as it loads the colour): the first view's craft is in the depth buffer and
+/// its motion in the velocity one after the second view has drawn, and the view at rest wrote
+/// no motion. Fails when a later view's scene pass clears either attachment whole.
+#[test]
+fn a_later_view_keeps_the_velocity_and_depth_of_the_views_before_it() {
+    let Some(frames) = after_frames(0) else {
+        return;
+    };
+    let (velocity, depth) = frames.scene.attachment_textures();
+    let velocity = pixels(&frames.device, &frames.queue, velocity);
+    let depth = pixels(&frames.device, &frames.queue, depth);
+    let rects = frames.race.view_rects(AREA);
+    let near = |rect| {
+        rows(&depth, rect)
+            .chunks_exact(4)
+            .any(|texel| f32::from_le_bytes([texel[0], texel[1], texel[2], texel[3]]) < 1.0)
+    };
+    assert!(
+        near(rects[0]),
+        "the first view's craft is still in the depth buffer"
+    );
+    assert!(
+        near(rects[1]),
+        "the second view's craft is in the depth buffer"
+    );
+    let motion = |rect| {
+        rows(&velocity, rect)
+            .chunks_exact(2)
+            .map(|half| half_to_f32(u16::from_le_bytes([half[0], half[1]])).abs())
+            .fold(0.0_f32, f32::max)
+    };
+    assert!(
+        motion(rects[0]) > 1e-2,
+        "the first view's motion is still in the velocity buffer"
+    );
+    assert!(motion(rects[1]) < 1e-4, "the view at rest wrote no motion");
+}
+
+/// An IEEE half as an `f32` (normal numbers and zero are all a velocity texel holds here).
+fn half_to_f32(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let fraction = f32::from(bits & 0x3ff);
+    match exponent {
+        0 => sign * fraction * 2.0_f32.powi(-24),
+        0x1f => sign * f32::INFINITY,
+        _ => sign * (1.0 + fraction / 1024.0) * 2.0_f32.powi(exponent - 15),
+    }
+}
+
+/// The first single-view frame after a split forgets the seats' histories: a seat that comes
+/// back later measures its first frame against itself, not against a pose from before the gap.
+#[test]
+fn a_single_view_frame_forgets_the_split_histories() {
+    let Some((device, queue)) = test_gpu() else {
+        return;
+    };
+    let mut race = race_with_a_grid();
+    assert_eq!(race.set_viewport_count(2), 2);
+    let scene = scene(&device, &queue, &race);
+    let target = target(&device);
+    draw(
+        (&device, &queue),
+        &scene,
+        &race,
+        &target,
+        MotionBlur::Medium,
+    );
+    assert!(scene.split_motion_probe(0).is_some() && scene.split_motion_probe(1).is_some());
+    assert_eq!(race.set_viewport_count(1), 1);
+    let mut encoder = device.create_command_encoder(&Default::default());
+    scene.render(
+        &device,
+        &queue,
+        &mut encoder,
+        &target.create_view(&Default::default()),
+        &race,
+        AREA,
+        Fov::AUTHORED,
+        true,
+        true,
+        None,
+        MotionBlur::Off,
+        Shadows::Off,
+        None,
+        &[],
+        None,
+        None,
+        None,
+    );
+    queue.submit(Some(encoder.finish()));
+    assert!(scene.split_motion_probe(0).is_none() && scene.split_motion_probe(1).is_none());
+    assert!(
+        scene.motion_probe(0).is_some(),
+        "the single view's own history is kept"
+    );
 }

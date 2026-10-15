@@ -233,9 +233,21 @@ pub(super) fn velocity_texture(
         sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: oag_gpu::formats::VELOCITY_FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | readable_in_tests(),
         view_formats: &[],
     })
+}
+
+/// `COPY_SRC` in this crate's own tests, which read the velocity and depth attachments back;
+/// nothing in a build that is not a test.
+pub(super) const fn readable_in_tests() -> wgpu::TextureUsages {
+    if cfg!(test) {
+        wgpu::TextureUsages::COPY_SRC
+    } else {
+        wgpu::TextureUsages::empty()
+    }
 }
 
 /// Detects a camera cut mid-race: a view change or the player's own respawn,
@@ -523,6 +535,11 @@ impl super::Scene {
             .borrow()
             .as_ref()
             .map(|state| (state.prev.view_projection, state.cur.view_projection))
+    }
+
+    /// The velocity and depth attachments, for the tests that read them back.
+    pub(crate) fn attachment_textures(&self) -> (&wgpu::Texture, &wgpu::Texture) {
+        (&self.velocity, &self.depth)
     }
 
     /// The same for the split-screen view that follows `slot`.

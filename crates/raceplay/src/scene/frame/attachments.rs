@@ -30,7 +30,9 @@ pub(crate) fn depth_texture(
         // sample counts, where that pass does not run: the flag costs
         // nothing, and a conditional usage would be one more thing the two
         // call sites could disagree about.
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | crate::scene::motion::readable_in_tests(),
         view_formats: &[],
     })
 }
