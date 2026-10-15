@@ -11,8 +11,9 @@ the notebook's NVIDIA dGPU, `encoder.finish` (wgpu validating and tracking the r
 commands) is 40-50% of the view's CPU and the `queue.write_buffer` uniform uploads 25-40%.
 Those costs are in a one-view race too.
 
-A tree-wide search on wgpu 30.0.1 finds **no render bundles, no push constants, no
-multi-draw-indirect, no texture binding arrays and no staging belt**. The levers below are
+A tree-wide search on wgpu 30.0.1 found **no render bundles, no push constants, no
+multi-draw-indirect, no texture binding arrays and no staging belt** (2026-10-15; binding arrays and
+immediates are used since 2026-10-16, lever 4). The levers below are
 ranked by how directly they hit those two costs. None is tried; the expected effects are
 readings of how wgpu works, not measurements.
 
@@ -40,19 +41,12 @@ readings of how wgpu works, not measurements.
    Measured: about 4 to 5% of Pulse's CPU for the scene blocks, a further 3 to 8% from the matrices
    and the craft animation tables written once a frame. It did **not** move `finish`, which counts
    commands, not uploads.
-4. **Texture binding arrays** (`TEXTURE_BINDING_ARRAY` and
-   `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING`). One bind group holding a
-   drawable's textures, indexed in the shader, removes most of HD's bind switches (its
-   circuit draws about 800 batches). Vulkan on the Steam Deck is expected to support it,
-   unchecked; WebGPU does not, so a fallback stays. **Measured ceiling (`encoder-finish`,
-   2026-10-15):** a timing-only hack that never re-binds group 1 takes the second view's
-   `encoder.finish` from 216 to 96 us on Pulse, 273 to 98 on HD, 133 to 39 on Pure (55 to 65% of
-   it, 20 to 25% of a view's CPU). Not built: sorting by texture moves pixels (the 2026-10-03
-   coplanar-tie note), a `texture_2d_array` needs one size and format, an atlas breaks repeat
-   wrapping, and `binding_array` is native only (two mechanisms) with five bindings in group 1,
-   one of them a per-material sampler, in every title's mesh shader. Merging contiguous
-   same-texture batches into one `draw_indexed` was tried and reverted: it took 19 us out of HD's
-   `finish` and nothing out of Pulse's.
+4. ~~**Texture binding arrays**~~ **Landed (2026-10-16, `bindless`)**: every race drawable binds
+   group 1 once as binding arrays of its distinct textures and samplers, and each draw pushes its
+   slot's indices as immediates (so this lane also used lever 2, push constants, for the index), on a
+   device with `TEXTURE_BINDING_ARRAY`, `PARTIALLY_BOUND_BINDING_ARRAY` and `IMMEDIATES`; the per-slot
+   path stays for the rest. NVIDIA 2h, the second view's `finish`: Pulse 208 to 124 us, HD 283 to 160,
+   Pure 138 to 88. Open: the Deck. Evidence: `docs/tools/render-bench.md`, "Bindless textures".
 5. **Multi-draw indirect** (`MULTI_DRAW_INDIRECT`, `MULTI_DRAW_INDIRECT_COUNT`). Many draws
    per command; with a GPU cull it would also take the CPU frustum cull off the frame. The
    largest rewrite: only if 1-4 leave the Deck short.
