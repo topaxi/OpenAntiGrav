@@ -321,7 +321,15 @@ impl Scene {
         // The craft always animate. Their blink lights are the one animation
         // on the disc confirmed against a frame-accurate capture of the
         // original, so there is nothing about them for that switch to test.
-        for drawable in &self.ships {
+        // **A function of the race clock alone, so the first view of a frame writes it**: a
+        // later view of a split reads the tables that view left (`Scene::does_frame_work`).
+        if first_view {
+            self.frame_work.update(|w| super::FrameWork {
+                craft_anims: w.craft_anims + 1,
+                ..w
+            });
+        }
+        for drawable in self.ships.iter().filter(|_| first_view) {
             drawable.write_anims(queue, seconds);
             // A hull whose hinges are `Anim Transform` nodes (HD's, 2048's
             // `Airbrake_L`/`Airbrake_R`) bakes the flap's vertices in the

@@ -94,6 +94,9 @@ pub fn reset() {
     if !counting() {
         return;
     }
+    if let Ok(mut sites) = WRITE_SITES.lock() {
+        sites.clear();
+    }
     for counter in [
         &ALLOCS,
         &ALLOC_BYTES,
@@ -127,6 +130,22 @@ pub fn report_frame(frame: u64) {
         WRITE_BUFFERS.load(Relaxed),
         WRITE_BUFFER_BYTES.load(Relaxed) / 1024,
     );
+    if std::env::var_os("OAG_RENDER_PERF_SITES").is_some() {
+        print!("{}", write_sites());
+    }
+}
+
+/// The counted writes of the frame by call site, most first, as `file:line count`.
+fn write_sites() -> String {
+    let Ok(sites) = WRITE_SITES.lock() else {
+        return String::new();
+    };
+    let mut sorted: Vec<_> = sites.iter().collect();
+    sorted.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+    sorted
+        .iter()
+        .map(|(at, count)| format!("    {count:4} x {}:{}\n", at.file(), at.line()))
+        .collect()
 }
 
 /// `device.create_bind_group`, counted.
@@ -150,11 +169,27 @@ pub fn texture_view(
     texture.create_view(desc)
 }
 
-/// `queue.write_buffer`, counted.
+/// Where each counted `write_buffer` came from, by call site: what `report_frame` prints, so a
+/// frame's uploads can be told apart without a profiler.
+static WRITE_SITES: std::sync::Mutex<Vec<(&'static std::panic::Location<'static>, u64)>> =
+    std::sync::Mutex::new(Vec::new());
+
+/// `queue.write_buffer`, counted, and tallied by the caller's source line.
+#[track_caller]
 pub fn write_buffer(queue: &wgpu::Queue, buffer: &wgpu::Buffer, offset: u64, data: &[u8]) {
     if counting() {
         WRITE_BUFFERS.fetch_add(1, Relaxed);
         WRITE_BUFFER_BYTES.fetch_add(data.len() as u64, Relaxed);
+        let site = std::panic::Location::caller();
+        if let Ok(mut sites) = WRITE_SITES.lock() {
+            match sites
+                .iter_mut()
+                .find(|(at, _)| at.line() == site.line() && at.file() == site.file())
+            {
+                Some((_, count)) => *count += 1,
+                None => sites.push((site, 1)),
+            }
+        }
     }
     queue.write_buffer(buffer, offset, data);
 }

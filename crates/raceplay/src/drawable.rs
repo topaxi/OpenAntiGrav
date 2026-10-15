@@ -500,6 +500,7 @@ impl Drawable {
     /// first frame, a rocket that just spawned) passes this frame's product,
     /// which is zero object velocity rather than a smear from stale state.
     /// See `race::scene::frame::MotionState`.
+    #[track_caller]
     pub(super) fn write(
         &self,
         queue: &wgpu::Queue,
@@ -514,6 +515,7 @@ impl Drawable {
     /// of the frame's per-craft sun-occlusion array this hull samples - a
     /// craft under the `original` tier on Wipeout HD - or `None`, which is
     /// what every other drawable writes. See `oag_render::shadow::occlusion`.
+    #[track_caller]
     pub(super) fn write_hull(
         &self,
         queue: &wgpu::Queue,
@@ -535,6 +537,7 @@ impl Drawable {
     /// [`Self::write`] for a model whose materials read their own animation
     /// clock - `clock` seconds, what an HD material's `UV_offset` is bound
     /// to. See `oag_mesh::mesh::slots::CLOCK_SCROLL_RING`.
+    #[track_caller]
     pub(super) fn write_clocked(
         &self,
         queue: &wgpu::Queue,
@@ -549,6 +552,7 @@ impl Drawable {
     /// [`Self::write_clocked`] for the Bomb's fireball, whose program also
     /// reads `ColourAnim` - a float the blast object owns. See
     /// `oag_mesh::mesh::slots::BOMB_FIRE`.
+    #[track_caller]
     pub(super) fn write_blast(
         &self,
         queue: &wgpu::Queue,
@@ -568,6 +572,7 @@ impl Drawable {
         );
     }
 
+    #[track_caller]
     fn write_uniforms(
         &self,
         queue: &wgpu::Queue,
@@ -592,6 +597,7 @@ impl Drawable {
     /// Puts `scene` - the fog, the light rig, the clock and the shadow map - in bind group 2.
     /// **For a drawable with a block of its own**; a shared one ([`Self::share_scene`]) is
     /// written through [`SceneBlocks::write`].
+    #[track_caller]
     pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
         debug_assert!(
             self.scene_kind.is_none(),
@@ -618,6 +624,7 @@ impl Drawable {
     /// different buffer: the plume's *node* table is written, off the same
     /// reveal timer, because a PS2 plume's two meshes hang off `Anim
     /// Transform` anchors and draw at the craft's origin without it.
+    #[track_caller]
     pub(super) fn write_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_tracks.is_empty() {
             return;
@@ -636,6 +643,7 @@ impl Drawable {
     /// boost plume - writes nothing and keeps the identity table
     /// `mesh_render::build` initialised it with. A **PS2** plume carries two
     /// and is placed entirely by them.
+    #[track_caller]
     pub(super) fn write_node_anims(&self, queue: &wgpu::Queue, seconds: f32) {
         if self.model.anim_nodes.is_empty() {
             return;
