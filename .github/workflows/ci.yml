@@ -104,6 +104,44 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
       - run: cargo +${{ steps.msrv-toolchain.outputs.name }} build --workspace
 
+  # Every WGSL module the web build emits goes through a real browser's shader
+  # compiler (scripts/check-web-shaders.py, docs/tools/web.md "Shaders").
+  # naga, which validates at build time, lets through what Chrome's Tint
+  # rejects: Chromium 154 refused the mesh module on a `textureSample` reached
+  # past an early return, so every race frame was black in a browser while
+  # `cargo build` and every test were green. Chrome stable is what players
+  # run; Chrome beta is the next Tint, so a tightening fails here before it
+  # reaches them. The browser runs on its own CPU adapter
+  # (`--use-webgpu-adapter=swiftshader`), so the runner needs no GPU. Firefox
+  # is not here: it gave no WebGPU adapter on lavapipe when tried locally, so
+  # it is a local check (`--browser firefox`).
+  # Reproduce locally with the same script and flags:
+  #   OAG_REQUIRE_WEB_SHADERS=1 python3 scripts/check-web-shaders.py --chromium /path/to/chrome
+  web-shaders:
+    name: web shaders (Chrome ${{ matrix.chrome }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        chrome: [stable, beta]
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      OAG_REQUIRE_WEB_SHADERS: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install libpipewire and ALSA
+        run: sudo apt-get update && sudo apt-get install -y libpipewire-0.3-dev libasound2-dev libudev-dev libclang-dev pkg-config
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+        with:
+          chrome-version: ${{ matrix.chrome }}
+      # Playwright drives the browser the step above installed; its own
+      # download is not needed.
+      - run: python3 -m pip install playwright
+      - run: python3 scripts/check-web-shaders.py --chromium "${{ steps.chrome.outputs.chrome-path }}"
+
   # The simulation must produce bit-identical results on every target we ship.
   # This job exists from day one on purpose: a determinism gate added later can
   # only ratify whatever drift already happened.

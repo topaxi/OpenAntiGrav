@@ -772,31 +772,54 @@ pub fn capture(
             let mut primer = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("race capture primer"),
             });
-            scene.render(
-                &device,
-                &queue,
-                &mut primer,
-                &view,
-                &race,
-                viewport,
-                options.fov,
-                options.frustum_culling,
-                options.pvs_culling,
-                options.anim_seconds,
-                options.motion_blur,
-                options.shadows,
-                camera_jitter,
-                &spectrum,
-                // **No timestamps on any capture path**, deliberately: this
-                // project compares captures byte for byte, and a measurement is
-                // the input a resolution controller would eventually act on. See
-                // `oag_gpu::timing::PassTimer` and `perf.rs`'s own argument for
-                // why the overlay is window-only. All three pairs: the scene
-                // pass's, the motion-blur chain's, and the HD/Fury bloom chain's.
-                None,
-                None,
-                None,
-            );
+            if race.viewport_count() > 1 {
+                // A split primes every view's own camera history (it submits its own buffers;
+                // `primer` stays empty).
+                scene.render_viewports(
+                    &device,
+                    &queue,
+                    &view,
+                    &race,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.shadows,
+                    &spectrum,
+                    oag_raceplay::WindowEffects {
+                        motion_blur: options.motion_blur,
+                        ..Default::default()
+                    },
+                    &mut [],
+                );
+            } else {
+                scene.render(
+                    &device,
+                    &queue,
+                    &mut primer,
+                    &view,
+                    &race,
+                    viewport,
+                    options.fov,
+                    options.frustum_culling,
+                    options.pvs_culling,
+                    options.anim_seconds,
+                    options.motion_blur,
+                    options.shadows,
+                    camera_jitter,
+                    &spectrum,
+                    // **No timestamps on any capture path**, deliberately: this
+                    // project compares captures byte for byte, and a measurement is
+                    // the input a resolution controller would eventually act on. See
+                    // `oag_gpu::timing::PassTimer` and `perf.rs`'s own argument for
+                    // why the overlay is window-only. All three pairs: the scene
+                    // pass's, the motion-blur chain's, and the HD/Fury bloom chain's.
+                    None,
+                    None,
+                    None,
+                );
+            }
             queue.submit(Some(primer.finish()));
             advance_one_tick(&mut race, &mut held, audio, options, tick);
         }
@@ -931,6 +954,10 @@ pub fn capture(
                         options.anim_seconds,
                         options.shadows,
                         &spectrum,
+                        oag_raceplay::WindowEffects {
+                            motion_blur: options.motion_blur,
+                            ..Default::default()
+                        },
                         timers,
                     );
                     return;
@@ -1031,6 +1058,11 @@ pub fn capture(
                 options.anim_seconds,
                 options.shadows,
                 &spectrum,
+                // The blur per view, as the primer above set it up.
+                oag_raceplay::WindowEffects {
+                    motion_blur: options.motion_blur,
+                    ..Default::default()
+                },
                 &mut [],
             )
         } else {

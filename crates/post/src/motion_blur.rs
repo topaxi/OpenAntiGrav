@@ -155,10 +155,12 @@ fn clamped(viewport: (f32, f32, f32, f32), target: (u32, u32)) -> (f32, f32, f32
 /// claimed slot.
 #[derive(Debug)]
 pub struct ChainTimestamps<'a> {
-    /// Opening timestamp only, for the chain's first pass.
-    pub begin: wgpu::RenderPassTimestampWrites<'a>,
+    /// Opening timestamp only, for the chain's first pass. `None` for a chain that is
+    /// not the first of a frame's: a split screen runs one chain per view and brackets
+    /// them all with one pair (`begin` on the first view's chain, `end` on the last's).
+    pub begin: Option<wgpu::RenderPassTimestampWrites<'a>>,
     /// Closing timestamp only, for the chain's last pass.
-    pub end: wgpu::RenderPassTimestampWrites<'a>,
+    pub end: Option<wgpu::RenderPassTimestampWrites<'a>>,
 }
 
 /// One frame's worth of input to [`MotionBlur::render`].
@@ -589,7 +591,7 @@ impl MotionBlur {
         // Destructured here rather than carried into the closure so the
         // borrow ends before `encoder` is used again.
         let (mut opening, mut closing) = match timestamps {
-            Some(pair) => (Some(pair.begin), Some(pair.end)),
+            Some(pair) => (pair.begin, pair.end),
             None => (None, None),
         };
 

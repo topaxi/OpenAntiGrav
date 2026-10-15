@@ -16,11 +16,13 @@
 //! direction the projection is built around
 //! ([`envsettings.md`](../../../docs/formats/envsettings.md)).
 //!
-//! **Ours**: the map's size, the extent the light's view is fitted to, and how
-//! dark a covered texel draws. `shadowMapTexSize` is a real engine parameter
-//! and its *value* has not been read, so [`SIZE`] is a choice; the fit is a
-//! choice with a measurement behind it (see [`Fit`]); and the darkening is a
-//! choice because the pass that consumes the original's alpha is unread.
+//! **Ours**: the map's size and the extent the light's view is fitted to.
+//! `shadowMapTexSize` is the reciprocal of each ship's own map side, 512 down
+//! to 32 by distance rank, and no shipped material reads it; one shared map
+//! has no counterpart for that, so [`SIZE`] is a choice with a measurement
+//! behind it, and so is the fit (see [`Fit`]). How dark a covered texel draws
+//! is no longer a choice: the original's redraw is the road lit without its
+//! sun, which `mesh`'s `shadowed` reproduces.
 
 use oag_core::math::{Mat4, Vec3, camera};
 
@@ -29,12 +31,24 @@ use oag_mesh::mesh_render::{COVERAGE_FORMAT, SHADOW_DEPTH_FORMAT};
 
 /// The map's resolution, square.
 ///
-/// **Ours.** `shadowMapTexSize` is bound by the original's own parameter table
-/// and its value is unread, so this is a choice rather than a reading: 1024 is
-/// where a craft-sized caster fitted to the grid's own bounds ([`Fit`]) covers
-/// enough texels that its outline reads as a hull rather than as a staircase,
-/// at 1 MiB for the whole map.
-pub const SIZE: u32 = 1024;
+/// **Chosen, from a measured comparison.** The original's per-ship maps are
+/// not one size: each ship's depth map is allocated from a pool of eight whose
+/// sides run 512, 512, 256, 128, 64, 32, 32, 32 (`g_ShipMapSizes`,
+/// [`ship-sun-occlusion.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/ship-sun-occlusion.md)),
+/// handed out in order of distance from the job's eye point
+/// ([`shadow-track-redraw.md`](../../../../docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md)),
+/// and each is fitted to that ship's own box, 12 to 21 units across: 24 to 43
+/// texels per world unit for the two nearest ships, 12 to 21 for the third.
+/// This renderer fits **one** map to the whole grid, so the same density
+/// takes a larger map: at Talon's Junction's grid (the casters' spread plus
+/// [`Fit`]'s margin, about 170 units across) 2048 texels is about 12 per unit,
+/// the original's third ship; the 1024 this replaces was 2.2 per unit, because
+/// the fit then used the drawable's radius and spanned 467 units. 4096 would
+/// reach the nearest ships' density at 16 MiB and was left out; one map per
+/// craft would match it at any size and is the open alternative. **Chosen,
+/// not measured**: the original's number is per ship and has no equivalent
+/// for a shared map.
+pub const SIZE: u32 = 2048;
 
 /// How far behind the casters the light's own near plane sits, in world units.
 ///

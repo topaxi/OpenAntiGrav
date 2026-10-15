@@ -56,6 +56,7 @@ fn four_views_do_the_shared_work_once() {
             None,
             Shadows::Original,
             &[],
+            WindowEffects::default(),
             &mut [],
         );
         let work = scene.frame_work();
@@ -107,6 +108,7 @@ fn frame_with(
         None,
         shadows,
         &[],
+        WindowEffects::default(),
         &mut [],
     );
     race.set_draw_alpha(1.0);

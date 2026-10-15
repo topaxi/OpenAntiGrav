@@ -50,6 +50,7 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
         None,
         Shadows::Off,
         &[],
+        crate::scene::WindowEffects::default(),
         &mut [],
     );
     let eye_of = |slot| {

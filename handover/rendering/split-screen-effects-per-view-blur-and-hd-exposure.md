@@ -2,7 +2,7 @@
 categories: [rendering]
 ---
 
-# Split screen draws Pulse's glow per view; blur, the temporal upscaler and HD's exposure are open
+# Split screen draws Pulse's glow, the motion blur and HD's and Omega's exposure per view; the temporal upscaler is open
 
 2026-10-15, `split-bloom`. Evidence and numbers: `docs/rendering/split-screen.md` rules 3, 4 and 6
 and "Per-view glow"; `docs/tools/render-bench.md`.
@@ -17,22 +17,38 @@ a frame for two views on the NVIDIA card; one view byte-identical.
 
 ## Open
 
-- **Motion blur per view.** The blur reads the velocity and depth attachments, which every
-  view's scene pass clears whole, and its output cannot be written as a view is drawn because the
-  next view's multisample resolve rewrites the target. Needs a region of velocity and depth per
-  view, the blur run per view after the last (as the glow is), and `Scene::history` extended from
-  windows to view slots. `hd-gpu`'s "is velocity read this frame" rule must count split views once
-  this lands. Not started.
-- **The temporal upscaler and camera jitter** hold one camera's frame record; not touched.
-- **HD's exposure is one for the whole picture** and the glow bleeds a few pixels across the gap.
-  A per-view adaptation needs the chain's scratch targets sized per view.
-- **The Steam Deck**: run the commands in "Per-view glow" (`split-screen.md`) and send the
-  pipelined and CPU medians of one view, 2h and 2v, and look at the stills; the Arrow Lake iGPU
-  reading on the notebook was too noisy to quote.
+- ~~**Motion blur per view.**~~ **Done, 2026-10-15, `split-blur`** (`docs/rendering/split-screen.md`
+  rule 3 and "Per-view blur"): a later view loads velocity and depth, a camera history per seat,
+  the blur once per view after the last (one submit each), `hd-gpu`'s velocity-gate rule moot (the
+  buffer is always written on `main`; if the gate ever lands, a split's views count as read when the
+  blur is on). Open from it: the Deck reading (below).
+- **The temporal upscaler and camera jitter** hold one camera's frame record; not touched. A way in:
+  the history slots exist now (`motion::split_history`), so a record and a jitter phase per seat
+  are the bookkeeping; the resolve (`resolve_scene` encodes one FSR 3 chain over the whole picture)
+  would run per view over its rectangle. Not free, not started.
+- ~~**HD's exposure is one for the whole picture**~~ **Done, 2026-10-15, `hd-exposure`**
+  (`docs/rendering/split-screen.md` rule 6 and "Per-view exposure"): HD's chain (and 2048's, which
+  draws through it) and Omega's tone map run once per view over the view's rectangle with an
+  adaptation lane per seat (forgotten by the first single-view frame), one submit each; the glow stops
+  at the view's edge. The scratch levels did not need to be sized per view: the views run one after
+  another in their own submissions, each over its fraction of the same levels. Open from it: HD's exposure is
+  unity above an adapted luma of 0.15 on Talon's Junction, so it only moves a very dark view; what
+  an ordinary difference between views moves is the glow fade (Zone 4 in Zone mode, 2h and 2v: the
+  dark view's bright-pixel share 0.4 % to 5.2 %, the bright view unchanged); the other circuits'
+  `Tone` values were not read. The zoom streak and Omega's distortion are still not drawn in a
+  split. **A multi-window session where one window holds a single seat and another a split**:
+  the single-seat window's `Layer::Window` frame calls `retire_split_histories` every frame
+  (split-blur's rule), which now also drops the split seats' adaptation lanes, so they are rebuilt
+  and re-seeded every frame there (two textures and six bind groups each); "kept frame to frame"
+  does not hold in that arrangement. Not looked at.
+- **The Steam Deck**: run the commands in "Per-view blur", "Per-view glow" and "Per-view exposure"
+  (`split-screen.md`) and send the pipelined and CPU medians of one view, 2h and 2v, and look at
+  the stills; the Arrow Lake iGPU reading on the notebook was too noisy to quote.
 - **PS2 and Pulse stills were judged by eye on two circuits**; Pure has no glow mask, 2048 and
-  Omega draw through other chains and were not looked at under the new reach.
+  Omega draw through other chains and were not looked at under the new reach (2048 and Omega were
+  looked at, 2h and 2v, under the per-view chains in `hd-exposure`).
 
 ## Next Steps
 
 1. Deck numbers (above), 15 minutes on the Deck.
-2. If blur per view is wanted: start with the velocity and depth regions, then the history slots.
+2. The Deck's blur reading ("Per-view blur", `split-screen.md`), 15 minutes.

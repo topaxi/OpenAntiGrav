@@ -29,6 +29,8 @@ mod ribbons;
 mod scene_blocks;
 mod scratch;
 mod shine;
+mod split_blur;
+mod split_exposure;
 mod viewports;
 mod weapon_models;
 mod weapon_quads;
@@ -400,7 +402,8 @@ pub struct Scene {
     /// matrices for the `prev_mvp` every drawable's velocity is measured against
     /// ([`motion::MotionState`]), the camera-jitter phase, what the last frame was drawn
     /// with for a temporal upscaler, and the cut watch. **One per window**
-    /// ([`motion::MAX_HISTORIES`]), because each is one camera's: a second window drawn at
+    /// ([`motion::MAX_HISTORIES`]) **and one per split-screen seat**
+    /// ([`motion::split_history`], after the windows'), because each is one camera's: a second window drawn at
     /// the same tick would otherwise read the first's previous view, take every other
     /// jitter phase, and find a camera cut in every frame. Window 1, and everything that
     /// is not a multi-window race, is history 0. Which one a draw reads and writes is
@@ -409,6 +412,9 @@ pub struct Scene {
     /// The history the draw in progress reads and writes: the window's, set by
     /// [`Scene::render_window`] and put back to 0 after.
     history: std::cell::Cell<usize>,
+    /// Whether the split-screen seats' histories hold a frame the last split drew, so the
+    /// first single-view frame after it forgets them ([`Scene::retire_split_histories`]).
+    split_live: std::cell::Cell<bool>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -991,10 +997,11 @@ impl Scene {
             motion_blur,
             blur_half: std::cell::Cell::new(false),
             velocity,
-            histories: (0..motion::MAX_HISTORIES)
+            histories: (0..motion::HISTORY_COUNT)
                 .map(|_| motion::History::default())
                 .collect(),
             history: std::cell::Cell::new(0),
+            split_live: std::cell::Cell::new(false),
             track,
             visibility,
             ships,

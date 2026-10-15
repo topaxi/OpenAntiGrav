@@ -55,8 +55,8 @@ fn field_scale(area: (f32, f32, f32, f32), rect: (f32, f32, f32, f32)) -> (f32, 
 /// How far a glow reaches across and down in a split's views against a whole picture's,
 /// as the mean over the views of the view's pixels per texel of a lane
 /// ([`field_scale`]) against the whole area's: `(0.5, 0.5)` for the quadrants and the
-/// halves of a two-way cut. The one number HD's whole-frame chain takes in place of a
-/// lane per view (`oag_post::hd_bloom::Chain::set_reach`).
+/// halves of a two-way cut. HD's per-view chain takes one view's value as the `reach` of
+/// its `oag_post::hd_bloom::View`.
 pub(super) fn mean_reach(area: (f32, f32, f32, f32), rects: &[(f32, f32, f32, f32)]) -> (f32, f32) {
     if rects.is_empty() || area.2 <= 0.0 || area.3 <= 0.0 {
         return (1.0, 1.0);

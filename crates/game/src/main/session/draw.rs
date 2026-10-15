@@ -376,8 +376,8 @@ impl Session {
                             .and_then(oag_gpu::timing::PassTimer::writes),
                         self.blur_timer.as_ref().and_then(|timer| {
                             Some(oag_post::motion_blur::ChainTimestamps {
-                                begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
-                                end: timer.half_writes(oag_gpu::timing::Half::End)?,
+                                begin: Some(timer.half_writes(oag_gpu::timing::Half::Begin)?),
+                                end: Some(timer.half_writes(oag_gpu::timing::Half::End)?),
                             })
                         }),
                         self.hd_bloom_timer.as_ref().and_then(|timer| {
@@ -456,8 +456,8 @@ impl Session {
                     // last pass - see `PassTimer::half_writes`.
                     self.blur_timer.as_ref().and_then(|timer| {
                         Some(oag_post::motion_blur::ChainTimestamps {
-                            begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
-                            end: timer.half_writes(oag_gpu::timing::Half::End)?,
+                            begin: Some(timer.half_writes(oag_gpu::timing::Half::Begin)?),
+                            end: Some(timer.half_writes(oag_gpu::timing::Half::End)?),
                         })
                     }),
                     // The same split, for the HD/Fury bloom chain.
@@ -503,9 +503,10 @@ impl Session {
         {
             timer.abandon();
         }
-        // **And what it last cost stops being reported**: a split draws no blur, so no reading
-        // ever replaces the last single view's, and the overlay went on naming it. Only on a
-        // frame that had a scene - a menu frame says nothing about the chain.
+        // **And what it last cost stops being reported**: a frame whose scene drew no blur (the
+        // setting is off, or the pass failed to build) has no reading to replace the last
+        // one, and the overlay went on naming it (it did for a split, before the split drew
+        // its own). Only on a frame that had a scene - a menu frame says nothing about the chain.
         if  has_scene
             && !scene_stats.is_some_and(|stats| stats.blur_encoded)
             && self.blur_cost.after_frame(

@@ -3,7 +3,7 @@
 use super::*;
 use oag_mesh::mesh::{Bounds, DrawCall, GpuVertex};
 
-fn vertex(position: [f32; 3]) -> GpuVertex {
+pub(super) fn vertex(position: [f32; 3]) -> GpuVertex {
     GpuVertex {
         quake: 0.0,
         position,
@@ -23,7 +23,7 @@ fn vertex(position: [f32; 3]) -> GpuVertex {
 }
 
 /// One opaque triangle: enough geometry that every pool builds a drawable.
-fn triangle() -> Model {
+pub(super) fn triangle() -> Model {
     Model {
         vertices: vec![
             vertex([-1.0, 0.0, 0.0]),
@@ -116,11 +116,42 @@ pub(super) fn bare_scene_of(
 
 /// The one constructor under the rest: a bare scene over `track`, with one hull per entry
 /// of `liveries`.
-fn scene_over(
+pub(super) fn scene_over(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     track: Model,
     liveries: &[Livery],
+) -> Scene {
+    scene_over_msaa(
+        device,
+        queue,
+        track,
+        liveries,
+        oag_display::display::Msaa::Off,
+    )
+}
+
+/// [`scene_over`] at a multisample level.
+pub(super) fn scene_over_msaa(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+    msaa: oag_display::display::Msaa,
+) -> Scene {
+    scene_over_post(device, queue, track, liveries, msaa, None, None)
+}
+
+/// [`scene_over_msaa`] with Wipeout HD's post chain or Omega's tone map, as a circuit that
+/// authors an `HDR and Bloom` or a `Tonemap` block builds it.
+pub(super) fn scene_over_post(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+    msaa: oag_display::display::Msaa,
+    hd_bloom: Option<oag_post::hd_bloom::Params>,
+    omega_tonemap: Option<oag_post::omega_tonemap::Params>,
 ) -> Scene {
     Scene::new(
         device,
@@ -153,12 +184,12 @@ fn scene_over(
         (64, 64),
         Anisotropy::Off,
         None,
-        oag_display::display::Msaa::Off,
+        msaa,
         Vec::new(),
         mesh_render::Light::stand_in(),
         None,
-        None,
-        None,
+        hd_bloom,
+        omega_tonemap,
         None,
         Vec::new(),
         Vec::new(),

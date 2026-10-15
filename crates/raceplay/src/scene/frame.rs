@@ -85,6 +85,9 @@ impl Scene {
         //
         // Shaken views, so the buffer stays true screen motion for the temporal
         // upscaler; the blur subtracts the shake itself, `blur_shake` below.
+        if matches!(self.layer.get(), Layer::Whole | Layer::Window) {
+            self.retire_split_histories();
+        }
         let prev = MotionState::advance(
             &self.history().motion,
             race,
@@ -95,6 +98,7 @@ impl Scene {
         let prev_vp = prev.view_projection;
         // The shake's own screen motion, for the blur - see `Race::shake_screen_motion`.
         let blur_shake = race.shake_screen_motion(projection, prev.shake);
+        self.history().blur_shake.set(blur_shake);
         let frustum = cull.then(|| Frustum::from_view_projection(view_projection));
         // The same unjittered matrix, for the section boxes' view test.
         let section_view = view_projection;
@@ -785,7 +789,15 @@ impl Scene {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        // A later view of a split loads, as the colour does: the first view
+                        // cleared the whole attachment and each view draws inside its own
+                        // rectangle, so clearing again would wipe the views before it and
+                        // leave the blur only the last view's motion.
+                        load: if self.layer.get() == Layer::Next {
+                            wgpu::LoadOp::Load
+                        } else {
+                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
+                        },
                         store: wgpu::StoreOp::Store,
                     },
                 }),
@@ -793,7 +805,12 @@ impl Scene {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: depth_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
+                    // Loaded by a later view of a split for the velocity's reason above.
+                    load: if self.layer.get() == Layer::Next {
+                        wgpu::LoadOp::Load
+                    } else {
+                        wgpu::LoadOp::Clear(1.0)
+                    },
                     // `Store`, not `Discard`: the motion blur's reconstruction
                     // weighs its taps by depth ordering after this pass
                     // closes, and a discarded attachment is undefined memory
@@ -994,10 +1011,10 @@ impl Scene {
         // scene, and the encode into the caller's view. Replaces the PSP
         // bloom outright - its gate consumes the same glow-mask alpha.
         //
-        // A split-screen view runs neither chain: both encode into `view` with a
-        // clearing pass and sample the linear scene from its top-left, so one run
-        // per view would wipe every earlier view. `Scene::render_viewports` runs
-        // the chain once over the whole area after the last view instead.
+        // A split-screen view runs neither chain as it is drawn: HD's encode clears
+        // `view`, so one run per view would wipe every earlier view.
+        // `Scene::render_viewports` runs each chain once per view over its own
+        // rectangle after the last view instead (`split_exposure`).
         //
         // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
         // target's origin and fills it, which is what the chains sample from, so it

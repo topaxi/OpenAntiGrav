@@ -102,6 +102,11 @@ fn zone_set(slots: u32, world: vec3<f32>) -> ZoneSet {
 // the same reason: `textureSample` wants uniform control flow, and a `select`
 // on its *result* (or, as below, on which pre-sampled result to keep) satisfies
 // that where an `if` around the call itself would not.
+//
+// Its derivative-uniformity diagnostic is off for the reason `zone_glow`'s is:
+// the early return in `lit_texel` makes the analysis treat everything after it
+// as possibly non-uniform, and a callee's fetches are judged on the callee.
+@diagnostic(off, derivative_uniformity)
 fn zone_sample(uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     let track = textureSample(zone_tex, zone_sampler, zone_uv).rgb;
@@ -188,6 +193,16 @@ fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
 // `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
 // own window-space depth in `0..1`, the same convention the microcode's own
 // `f[POS]` carries.
+//
+// **Its own derivative-uniformity diagnostic is off**, as `lit_texel`'s is.
+// The attribute on a caller covers only the caller's own body, and Chrome's
+// Tint (154) reports a `textureSample` in a callee against the callee, so the
+// five fetches below were rejected at module creation and every mesh pipeline
+// was invalid in a browser. The argument is `lit_texel`'s: `slots` is a flat
+// varying, every lane of a 2x2 quad takes the same side of the `holo`
+// early-return that makes the analysis give up, and the four band samples and
+// the visualiser lookup keep the neighbours they need.
+@diagnostic(off, derivative_uniformity)
 fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     // The band comes from whichever stage texture this chunk publishes - the

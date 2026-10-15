@@ -9,6 +9,8 @@ slow on lap 2 shows up where one frame never would.
 just bench-render                      # every title that is on disk, release build
 just bench-render pulse hd --repeat    # two titles, each run twice, tick count and state hash compared
 just bench-render pulse --views 1,2h,2v --size 1280x800   # one view, then a split cut both ways
+just bench-render pulse --views 2h,2v --motion-blur medium   # the blur on (the default is off), in a split too
+just bench-render pulse --binary /path/to/oag-game --tag before   # a binary built from another commit
 just bench-render pulse --tag before   # results in data/bench/before/
 # ... change something, rebuild ...
 just bench-render pulse --tag after
@@ -64,9 +66,14 @@ What a split frame records differs from one view in four ways, all in
   (after `triangles`) and as `metrics.gpu_view<N>_us` in the summary. `gpu_scene_us` and
   `gpu_us` are their **sum**. Views overlap on the GPU, so the sum is work, not elapsed time;
   `frame_us` is the number a frame budget is read against.
-- A split draws no motion blur (rule 3 in [split screen](../rendering/split-screen.md)), so
-  `gpu_blur_us` stays empty. HD's bloom chain *does* run, once over the whole area after the
-  last view, but outside every view's timed scene pass and untimed itself, so `gpu_bloom_us`
+- **A split draws its motion blur since 2026-10-15** (rule 3 in
+  [split screen](../rendering/split-screen.md)), once per view after the last, one submission
+  each, but the bench times none of those chains (its timers are one scene pass per view), so
+  `gpu_blur_us` stays empty and the blur's cost is in `cpu_us` and `frame_us`. The blur is off
+  unless `--motion-blur low|medium|high` asks (the bench's settings are the defaults, and the
+  default is off); the setting is recorded in the result's `settings` and the command, so a
+  blur-on result never compares clean against a blur-off one. HD's bloom chain *does* run, once per view after the
+  last view (`split_exposure`), but outside every view's timed scene pass and untimed itself, so `gpu_bloom_us`
   stays empty too; Pulse's per-view glow (rule 4) is likewise in no GPU column. Both are in
   `frame_us`, which is where their cost is read (see "Per-view glow" in the split-screen page).
 - `settings` gains `views` and `split_cut`, so a split result never compares clean against a
@@ -529,6 +536,8 @@ and read the adapter on the result line.
 - A `--profile debug` run (`just bench-render --profile debug`) keeps debug
   assertions on and is several times slower on the CPU side; use it only to
   iterate on the tool.
+- `--binary PATH` runs another `oag-game` (a before/after pair built from two commits) with the
+  same flags; the result records the command, so say which commit the binary was in the tag.
 - A windowed, presenting bench (vsync, the compositor) is not done: this is
   offscreen, so it never waits on a display. A multi-window race is
   refused by name; benching those is the existing `OAG_RENDER_BENCH` path in

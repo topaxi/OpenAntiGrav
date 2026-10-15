@@ -147,13 +147,25 @@ makes no request after loading itself.
   tab, and browsers refuse a fullscreen request made outside a click.
 - **Shaders.** Chrome compiles WGSL with Tint, which enforces WGSL's uniformity
   rules where naga (the desktop's compiler and `oag-shader-check`'s) lets some
-  through. The mesh shadow term sampled with `textureSample` inside a
-  non-uniform branch, which made every mesh pipeline invalid and every race
-  frame black; it is `textureSampleLevel(.., 0.0)` now, the same texel on a
-  one-mip map. Other shaders on paths not yet reached in a browser (HD, 2048,
-  Omega, the post chain's other modes) may hide more of these: the browser's
-  console names the line, and nothing in `just` would.
-- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
+  through. Twice a race has been black in a browser with every build and test
+  green. The first: the mesh shadow term sampled with `textureSample` inside a
+  non-uniform branch; it is `textureSampleLevel(.., 0.0)` now, the same texel on
+  a one-mip map. The second, on Chromium 154 (upgraded here 2026-10-12; 153
+  raced on 2026-10-09 and 10, not re-run against today's shader, so the version
+  that began rejecting it is unconfirmed): `textureSample must only be called
+  from uniform control flow` at `zone_glow`'s four band reads. `lit_texel`
+  carries `@diagnostic(off, derivative_uniformity)` to say a flat varying
+  keeps a 2x2 quad together, but the attribute covers only the function it is
+  written on, and this Tint judges a callee's fetch against the callee. Tint
+  stops at the first such error, so the next one showed only once that was
+  silenced: `zone_sample` and `sample_at_slope_level` the same way. All three
+  carry the attribute now (`crates/mesh/shaders/zone.wesl`, `texture_lod.wesl`;
+  native stills of HD Zone, an HD single race, Pulse single race and Pulse Zone
+  are byte-identical before and after). **A function that samples with implicit
+  derivatives (`textureSample`, `dpdx`, `dpdy`) and is reached from `lit_texel`
+  past its `holo` early return needs the attribute itself.**
+  `just check-web-shaders` is what finds the next one; see "Verifying it".
+- **Logging.**- **Logging.** The console, through a small `log` sink in `web.rs`: `warn` and
   above from everything, `info` from this project's own crates. `?log=debug` or
   `?log=trace` on the page's URL widens it, which is how the loader reports
   are read here. There is no log file.
@@ -402,7 +414,67 @@ uv run --with playwright python3 scripts/web-screenshot.py \
 
 Firefox draws slower, so its walks want the presses further apart.
 
-`/usr/bin/chromium` (Chromium 153) is the browser it was run with: Playwright's
+### The shader smoke test
+
+`scripts/check-web-shaders.py` (`just check-web-shaders`; run by CI's `web-shaders` job, not
+by the local `just` gate, whose runtime is long enough already) creates every WGSL module the web build emits with
+`device.createShaderModule` in a real browser and fails on any
+`getCompilationInfo()` message of type `error`, printing the module, the line,
+the function it is in and Tint's own notes (which call chain made the value
+non-uniform). The modules are the build scripts' `$OUT_DIR/*.wgsl` of
+`oag-mesh`, `oag-fx`, `oag-post`, `oag-render`, `oag-present` and `oag-game`,
+located through `cargo check --message-format=json` (no stale build directory
+is read), plus the five built-in screen filters, which `oag-post` joins at run
+time (`crates/post/examples/screen_filters_wgsl.rs`): 44 modules. The wasm
+build's `mesh.wgsl` is byte-identical to the native one (`cmp`, 2026-10-15), so
+this is the text the page is handed. `oag-view`'s shader is not in the web
+build and is left out. **No disc image or game file is read**, so CI, which has
+none, runs it: every `ShaderSource::Wgsl` site in the workspace is an
+`include_str!` of one of those artifacts or `Preset::wgsl()` over the five
+files in `assets/shaders/screen/` (checked by `rg`, 2026-10-15), and no module
+is keyed off disc data. A player's own screen-filter file under their config
+directory is the one module the check cannot see. Pipeline `override`
+constants are not module text and are not varied.
+
+- **Chromium and Chrome** run on `--enable-unsafe-webgpu
+  --use-webgpu-adapter=swiftshader`: Chromium's own CPU adapter, so no GPU is
+  needed and the answer is the WGSL compiler's alone, which is the same on
+  every GPU. Headless Chromium 154.0.8037.97 gave a `google swiftshader`
+  adapter and reproduced the `zone_glow` error on the unfixed shader.
+  `--chromium PATH` names another binary (Chrome beta), `$OAG_CHROMIUM` too.
+- **Firefox** (`--browser firefox`, Playwright's own build with the two WebGPU
+  prefs; `--firefox-binary` names an installed one) accepted all 44 modules
+  including the one Chromium 154 rejected, so the two compilers do differ. It
+  gives an adapter only on a GPU: under lavapipe
+  (`VK_ICD_FILENAMES=.../lvp_icd.json`, with and without the sandboxes off,
+  `forceFallbackAdapter`, `gfx.webgpu.force-fallback`) `requestAdapter()`
+  returned null in Firefox 153 (Playwright's build 1538) on this machine; with a GPU it gave an adapter whose `info` is empty. So Firefox is a local check and
+  is not in CI; the script says "no WebGPU adapter, nothing was checked" rather
+  than passing.
+- **The walk with the fix** (Chromium 154, dev build, the Pulse PSP walk in
+  this section, 2026-10-15): the race draws, with sky, track, scenery, craft,
+  HUD and the "wrong way" banner, at 60.2 fps. On this notebook that needed
+  the Intel iGPU (`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`):
+  on the default adapter, the NVIDIA card, every still from the front end on
+  was a blank white page (a screenshot of an undrawn canvas, 3,226 bytes each),
+  with no error in the page's log. Not investigated; it is not a shader error.
+- **Safari's compiler (WebKit's)** is not covered: no WebKit here has been
+  shown to give a WebGPU adapter headless on Linux, and a macOS runner is not
+  set up. Open.
+- **A skip is loud.** With no Chromium or Chrome (or no `uv`/`playwright`) the
+  script prints `SKIPPED, nothing was checked` and why, and exits 0 on a
+  developer machine; `OAG_REQUIRE_WEB_SHADERS=1`, which CI sets, makes it exit
+  1.
+- **What it does not find.** A module is created alone, so a pipeline layout
+  that disagrees with the shader's bindings, an `override` given a bad value or
+  a limit the device lacks still shows only in a race. Tint also stops at the
+  first uniformity error in a module, so a red run may hide a second one.
+- **CI** (`web-shaders` in `.github/workflows/ci.yml`) runs the same script on
+  Chrome stable and Chrome beta (`browser-actions/setup-chrome`), the second to
+  catch the next Tint tightening before a player does. It could not be run from
+  here, so the runner is unverified (HANDOVER.md lists what).
+
+`/usr/bin/chromium` (Chromium 153 for the walks above; 154 since 2026-10-12) is the browser it was run with: Playwright's
 own Chromium build has no WebGPU on Linux. Headless Chromium here reports a hardware
 adapter (`GPUAdapterInfo`: vendor `amd`, architecture `rdna-3`,
 `isFallbackAdapter` false), not SwiftShader; `fps: 60.2` is the

@@ -84,6 +84,9 @@ use oag_gpu::formats::SCENE_FORMAT;
 
 use super::{sampler_entry, texture_entry, uniform_entry};
 
+use lanes::{Lane, LaneInputs};
+pub use lanes::{MAX_SEATS, View};
+
 /// The luminance weights of the gate's `dot`, inline in
 /// `FunkLayerBloomGate_fp`'s own microcode: `(0.3, 0.59, 0.11) * 3`. The
 /// adaptation's own weights are the plain [`ADAPT_LUMINANCE`].
@@ -247,10 +250,53 @@ struct Constants {
     /// extent - see `post::sub_rectangle`.
     uv_scale: [f32; 2],
     uv_max: [f32; 2],
+    /// Where the drawn rectangle starts **in the scene target**, and the clamp half a texel
+    /// inside its far edge there. Only the two taps that read the scene itself use them
+    /// (`drawn_scene` in the shader); every other pass reads a scratch texture whose
+    /// rectangle starts at its top-left. `(0, 0)` and `uv_max` for every whole picture, so
+    /// the bits they read are the ones they always read.
+    uv_offset: [f32; 2],
+    scene_max: [f32; 2],
+}
+
+/// How a pass's `0..1` maps onto what was drawn: the scale and clamp of the scratch levels
+/// (every level is the same fraction of its target) and the offset and clamp of the scene
+/// target, where a split view's rectangle need not start at the corner.
+#[derive(Clone, Copy)]
+struct Mapping {
+    scale: [f32; 2],
+    max: [f32; 2],
+    offset: [f32; 2],
+    scene_max: [f32; 2],
+}
+
+impl Mapping {
+    /// The rectangle `viewport` pixels across that starts at `origin` of a scene target of
+    /// `scene` pixels. The scratch levels start at their corners whatever `origin` is.
+    fn at(origin: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) -> Self {
+        let (scale, max) = super::sub_rectangle(viewport, scene);
+        let (offset, _, scene_max) = super::sub_rectangle_at(origin, viewport, scene);
+        Self {
+            scale,
+            max,
+            offset,
+            scene_max,
+        }
+    }
+
+    /// Exactly the whole-picture mapping the chain had before a split could start anywhere.
+    fn whole() -> Self {
+        Self {
+            scale: [1.0, 1.0],
+            max: [1.0, 1.0],
+            offset: [0.0, 0.0],
+            scene_max: [1.0, 1.0],
+        }
+    }
 }
 
 impl Constants {
-    fn new(params: Params, step: [f32; 2], rect: ([f32; 2], [f32; 2])) -> Self {
+    fn new(params: Params, step: [f32; 2], rect: Mapping) -> Self {
         Self {
             step,
             alpha_contribution: params.alpha_contribution,
@@ -262,8 +308,10 @@ impl Constants {
             tone_darkening_clamp: params.tone_darkening_clamp,
             tone_maximum_brightness: params.tone_maximum_brightness,
             _pad: [0.0; 2],
-            uv_scale: rect.0,
-            uv_max: rect.1,
+            uv_scale: rect.scale,
+            uv_max: rect.max,
+            uv_offset: rect.offset,
+            scene_max: rect.scene_max,
         }
     }
 }
@@ -286,11 +334,8 @@ struct Sized {
     /// Downsample scene -> half -> quarter, then the luminance reduction
     /// halvings, all on the copy pipeline, in order.
     downsamples: Vec<Pass>,
-    /// The two adapt-pass variants, indexed by which ping-pong texture is
-    /// being written this frame.
-    adapt: [Pass; 2],
-    /// The two gate variants, reading the adapted state written this frame.
-    gate: [Pass; 2],
+    /// The window's own picture: its adaptation and the passes bound to it.
+    window: Lane,
     blur_vertical: Pass,
     blur_horizontal: Pass,
     /// The scene target's dimensions - the allocation every level below is a
@@ -299,14 +344,12 @@ struct Sized {
     /// The quarter buffer's dimensions, which the blur tap spacing is measured
     /// against. Kept because that divisor moves with the render extent.
     quarter: (u32, u32),
-    /// The three uniform buffers, `still` then the two blurs. All three carry
-    /// the drawn rectangle, so all three are rewritten when it moves - which
-    /// is why they are `COPY_DST` rather than mapped once at creation.
-    buffers: [wgpu::Buffer; 3],
-    /// The two resolve variants, reading the adapted state written this
-    /// frame. `Pass::target` is unused here - the caller's view is the
-    /// target.
-    encode: [Pass; 2],
+    /// The four uniform buffers: `still`, the two blurs, then the one the scene-reading
+    /// passes use. All carry the drawn rectangle, so all are rewritten when it moves -
+    /// which is why they are `COPY_DST` rather than mapped once at creation.
+    buffers: [wgpu::Buffer; 4],
+    /// What a split seat's lane binds, so one can be built later.
+    inputs: LaneInputs,
     #[expect(dead_code, reason = "held so the views stay valid")]
     scratch: Vec<Target>,
 }
@@ -334,17 +377,10 @@ pub struct Chain {
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     sized: Sized,
-    /// Which adaptation ping-pong texture the next frame writes.
-    current: std::cell::Cell<usize>,
-    /// Whether the adaptation state still holds its zero-initialised value.
-    fresh: std::cell::Cell<bool>,
-    /// The drawn rectangle last written into the three uniform buffers, so a
-    /// frame that moved nothing writes nothing.
-    written: std::cell::Cell<Option<(u32, u32)>>,
-    /// How far the glow reaches, as a share of what [`Params`] authors, and the share
-    /// last written. See [`Chain::set_reach`].
-    reach: std::cell::Cell<(f32, f32)>,
-    written_reach: std::cell::Cell<(f32, f32)>,
+    /// Each split seat's adaptation, built when a split first draws it. See `lanes.rs`.
+    seats: lanes::SeatLanes,
+    /// What the four uniform buffers last held, so a frame that moved nothing writes nothing.
+    written: std::cell::Cell<Option<Placement>>,
     /// The zoom-streak ring, when the title has one, and the pulses it draws
     /// this frame. See `zoom.rs`.
     zoom: Option<super::hd_zoom::Zoom>,
@@ -484,11 +520,8 @@ impl Chain {
             layout,
             sampler,
             sized,
-            current: std::cell::Cell::new(0),
-            fresh: std::cell::Cell::new(true),
+            seats: lanes::SeatLanes::default(),
             written: std::cell::Cell::new(None),
-            reach: std::cell::Cell::new((1.0, 1.0)),
-            written_reach: std::cell::Cell::new((1.0, 1.0)),
             zoom,
             zoom_frame: std::cell::Cell::new(None),
         })
@@ -513,11 +546,11 @@ impl Chain {
         self.zoom = Self::zoom_for(device, &self.params, &self.sized)
             .ok()
             .flatten();
-        // The three uniform buffers are new and hold the whole rectangle, so
-        // whatever was last written is no longer what is in them.
+        // The uniform buffers are new and hold the whole rectangle, so whatever was last
+        // written is no longer what is in them, and the seats' lanes were bound to the old
+        // levels.
         self.written.set(None);
-        self.current.set(0);
-        self.fresh.set(true);
+        self.seats.clear();
     }
 
     fn sized(
@@ -544,89 +577,50 @@ impl Chain {
             h = h.div_ceil(2);
             reductions.push((Target::new(device, "hd bloom reduce", (w, h)), (w, h)));
         }
-        let adapted = [
-            Target::new(device, "hd bloom adapted a", (1, 1)),
-            Target::new(device, "hd bloom adapted b", (1, 1)),
-        ];
 
         let constants = |label: &str| {
             oag_gpu::init_buffer::init(
                 device,
                 label,
                 wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                bytemuck::bytes_of(&Constants::new(
-                    params,
-                    [0.0, 0.0],
-                    ([1.0, 1.0], [1.0, 1.0]),
-                )),
+                bytemuck::bytes_of(&Constants::new(params, [0.0, 0.0], Mapping::whole())),
             )
         };
         let still = constants("hd bloom constants");
         let vertical = constants("hd bloom blur-v constants");
         let horizontal = constants("hd bloom blur-h constants");
+        let scene_read = constants("hd bloom scene-read constants");
 
-        let group = |label: &str,
-                     source: &wgpu::TextureView,
-                     state: &wgpu::TextureView,
-                     bloom: &wgpu::TextureView,
-                     buffer: &wgpu::Buffer| {
-            device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(label),
-                layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(source),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: wgpu::BindingResource::TextureView(state),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 4,
-                        resource: wgpu::BindingResource::TextureView(bloom),
-                    },
-                ],
-            })
-        };
         let pass = |label: &str,
                     source: &wgpu::TextureView,
-                    state: &wgpu::TextureView,
-                    bloom: &wgpu::TextureView,
                     buffer: &wgpu::Buffer,
                     target: &wgpu::TextureView,
                     level: (u32, u32)| Pass {
-            group: group(label, source, state, bloom, buffer),
+            // The unused input slots of a pass bind whatever view is already bound
+            // elsewhere in the pass and never its own target: a texture bound for sampling
+            // in the pass that renders into it - even unread - is a usage conflict.
+            group: bind_group(
+                device,
+                layout,
+                sampler,
+                label,
+                [source, source, source],
+                buffer,
+            ),
             target: target.clone(),
             level,
         };
 
-        // The unused input slots of a pass bind whatever view is already
-        // bound elsewhere in the pass and never its own target: a texture
-        // bound for sampling in the pass that renders into it - even
-        // unread - is a usage conflict.
         let mut downsamples = vec![
             pass(
                 "hd bloom to-half",
                 &scene.view,
-                &scene.view,
-                &scene.view,
-                &still,
+                &scene_read,
                 &half_target.view,
                 half,
             ),
             pass(
                 "hd bloom to-quarter",
-                &half_target.view,
-                &half_target.view,
                 &half_target.view,
                 &still,
                 &quarter_a.view,
@@ -638,8 +632,6 @@ impl Chain {
             downsamples.push(pass(
                 "hd bloom reduce",
                 previous,
-                previous,
-                previous,
                 &still,
                 &reduction.view,
                 *level,
@@ -647,52 +639,19 @@ impl Chain {
             previous = &reduction.view;
         }
         let mean = reductions.last().map_or(&quarter_a.view, |(r, _)| &r.view);
-        // adapt[i] writes ping-pong texture i, reading the other as state.
-        let adapt = [
-            pass(
-                "hd bloom adapt a",
-                mean,
-                &adapted[1].view,
-                mean,
-                &still,
-                &adapted[0].view,
-                (1, 1),
-            ),
-            pass(
-                "hd bloom adapt b",
-                mean,
-                &adapted[0].view,
-                mean,
-                &still,
-                &adapted[1].view,
-                (1, 1),
-            ),
-        ];
-        // gate[i] runs after adapt[i] and reads the state adapt[i] wrote.
-        let gate = [
-            pass(
-                "hd bloom gate a",
-                &quarter_a.view,
-                &adapted[0].view,
-                &quarter_a.view,
-                &still,
-                &quarter_b.view,
-                quarter,
-            ),
-            pass(
-                "hd bloom gate b",
-                &quarter_a.view,
-                &adapted[1].view,
-                &quarter_a.view,
-                &still,
-                &quarter_b.view,
-                quarter,
-            ),
-        ];
+        let inputs = LaneInputs {
+            scene: scene.view.clone(),
+            quarter_a: quarter_a.view.clone(),
+            quarter_b: quarter_b.view.clone(),
+            mean: mean.clone(),
+            still: still.clone(),
+            scene_read: scene_read.clone(),
+            extent: (width, height),
+            quarter,
+        };
+        let window = Lane::new(device, layout, sampler, &inputs);
         let blur_vertical = pass(
             "hd bloom blur-v",
-            &quarter_b.view,
-            &quarter_b.view,
             &quarter_b.view,
             &vertical,
             &quarter_a.view,
@@ -701,48 +660,22 @@ impl Chain {
         let blur_horizontal = pass(
             "hd bloom blur-h",
             &quarter_a.view,
-            &quarter_a.view,
-            &quarter_a.view,
             &horizontal,
             &quarter_b.view,
             quarter,
         );
-        // The read resolve: scene * exposure + bloom, into the caller's
-        // view. encode[i] reads the adapted state written this frame.
-        let encode = [
-            pass(
-                "hd encode a",
-                &scene.view,
-                &adapted[0].view,
-                &quarter_b.view,
-                &still,
-                &scene.view,
-                (width, height),
-            ),
-            pass(
-                "hd encode b",
-                &scene.view,
-                &adapted[1].view,
-                &quarter_b.view,
-                &still,
-                &scene.view,
-                (width, height),
-            ),
-        ];
         let mut scratch = vec![half_target, quarter_a, quarter_b];
         scratch.extend(reductions.into_iter().map(|(target, _)| target));
-        scratch.extend(adapted);
         Sized {
             scene,
             scene_size: (width, height),
             quarter,
-            buffers: [still, vertical, horizontal],
+            buffers: [still, vertical, horizontal, scene_read],
             downsamples,
-            adapt,
-            gate,
+            window,
             blur_vertical,
             blur_horizontal,
-            encode,
+            inputs,
             scratch,
         }
     }
@@ -784,23 +717,69 @@ impl Chain {
         viewport: (u32, u32),
         timestamps: Option<ChainTimestamps<'_>>,
     ) {
+        self.run_placed(
+            queue,
+            encoder,
+            view,
+            &self.sized.window,
+            Placement {
+                source: (0, 0),
+                dest: origin,
+                viewport,
+                reference: viewport,
+                reach: (1.0, 1.0),
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                zoom: true,
+            },
+            timestamps,
+        );
+    }
+
+    /// [`Chain::run`] for a rectangle that need not start at the corner, with the lane it
+    /// adapts in. A whole picture is `source` `(0, 0)`, `reference` its own size and a
+    /// reach of `(1, 1)`, which is every bit the chain ever drew.
+    fn run_placed(
+        &self,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        lane: &Lane,
+        placement: Placement,
+        timestamps: Option<ChainTimestamps<'_>>,
+    ) {
         let scene = self.sized.scene_size;
-        let viewport = (viewport.0.clamp(1, scene.0), viewport.1.clamp(1, scene.1));
-        let reach = self.reach.get();
-        if self.written.get() != Some(viewport) || self.written_reach.get() != reach {
-            let rect = super::sub_rectangle(viewport, scene);
-            let quarter = level_viewport(self.sized.quarter, viewport, scene);
-            let write = |buffer: &wgpu::Buffer, step: [f32; 2]| {
+        let clamp = |size: (u32, u32)| (size.0.clamp(1, scene.0), size.1.clamp(1, scene.1));
+        let viewport = clamp(placement.viewport);
+        let reach = placement.reach;
+        let origin = placement.dest;
+        let placement = Placement {
+            viewport,
+            reference: clamp(placement.reference),
+            ..placement
+        };
+        if self.written.get() != Some(placement) {
+            let scene_rect = Mapping::at(placement.source, viewport, scene);
+            // Only the passes that read the scene target itself see where its rectangle
+            // starts; the scratch levels all start at their corners.
+            let rect = Mapping {
+                offset: [0.0, 0.0],
+                scene_max: scene_rect.max,
+                ..scene_rect
+            };
+            // The blur's step is authored against a whole frame's quarter buffer.
+            let quarter = level_viewport(self.sized.quarter, placement.reference, scene);
+            let write = |buffer: &wgpu::Buffer, step: [f32; 2], rect: Mapping| {
                 queue.write_buffer(
                     buffer,
                     0,
                     bytemuck::bytes_of(&Constants::new(self.params, step, rect)),
                 );
             };
-            write(&self.sized.buffers[0], [0.0, 0.0]);
+            write(&self.sized.buffers[0], [0.0, 0.0], rect);
             write(
                 &self.sized.buffers[1],
                 [0.0, self.params.vertical_size / quarter.1 as f32 * reach.1],
+                rect,
             );
             write(
                 &self.sized.buffers[2],
@@ -808,9 +787,10 @@ impl Chain {
                     self.params.horizontal_size / quarter.0 as f32 * reach.0,
                     0.0,
                 ],
+                rect,
             );
-            self.written.set(Some(viewport));
-            self.written_reach.set(reach);
+            write(&self.sized.buffers[3], [0.0, 0.0], scene_rect);
+            self.written.set(Some(placement));
         }
 
         // **The two halves, taken apart here rather than carried into the
@@ -886,9 +866,11 @@ impl Chain {
                 opening.take(),
             );
         }
-        self.zoom_history(queue, encoder, viewport);
-        let current = self.current.get();
-        let adapt_pipeline = if self.fresh.replace(false) {
+        if placement.zoom {
+            self.zoom_history(queue, encoder, viewport);
+        }
+        let current = lane.current.get();
+        let adapt_pipeline = if lane.fresh.replace(false) {
             &self.adapt_jump
         } else {
             &self.adapt
@@ -897,7 +879,7 @@ impl Chain {
             encoder,
             "hd bloom adapt",
             Some(adapt_pipeline),
-            &self.sized.adapt[current],
+            &lane.adapt[current],
             None,
             clear,
             (0.0, 0.0),
@@ -909,7 +891,7 @@ impl Chain {
                     encoder,
                     "hd bloom gate",
                     Some(&self.gate),
-                    &self.sized.gate[current],
+                    &lane.gate[current],
                     None,
                     clear,
                     (0.0, 0.0),
@@ -952,7 +934,9 @@ impl Chain {
                 None,
             ),
         }
-        self.zoom_ring(queue, encoder, viewport);
+        if placement.zoom {
+            self.zoom_ring(queue, encoder, viewport);
+        }
         // The closing write, on the chain's genuinely last pass - see
         // [`ChainTimestamps`]. The only stage that writes into `view` (the
         // caller's shared canvas) rather than a dedicated scratch texture, so
@@ -961,14 +945,70 @@ impl Chain {
             encoder,
             "hd encode",
             Some(&self.encode),
-            &self.sized.encode[current],
+            &lane.encode[current],
             Some(view),
-            clear,
+            placement.load,
             origin,
             closing.take(),
         );
-        self.current.set(1 - current);
+        lane.current.set(1 - current);
     }
+}
+
+/// Where a run draws: what it reads of the scene target, where it writes, and what the
+/// uniform buffers must hold for it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Placement {
+    /// The corner of the rectangle in the scene target.
+    source: (u32, u32),
+    /// The corner of the rectangle in the frame it resolves into.
+    dest: (f32, f32),
+    viewport: (u32, u32),
+    /// The size of the whole picture, which the blur's tap spacing is authored against.
+    reference: (u32, u32),
+    reach: (f32, f32),
+    /// The resolve's load: the first rectangle of a frame clears the whole frame.
+    load: wgpu::LoadOp<wgpu::Color>,
+    /// Whether the zoom streak draws. A split's views draw none.
+    zoom: bool,
+}
+
+/// One pass's bindings: its source, the adapted-luminance state, the blurred bloom, and
+/// its constants.
+fn bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    label: &str,
+    [source, state, bloom]: [&wgpu::TextureView; 3],
+    buffer: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some(label),
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(source),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(state),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::TextureView(bloom),
+            },
+        ],
+    })
 }
 
 /// The rectangle drawn into a target of `level`, given the scene's own drawn
@@ -991,7 +1031,10 @@ fn level_viewport(level: (u32, u32), viewport: (u32, u32), scene: (u32, u32)) ->
     )
 }
 
+mod lanes;
 mod zoom;
 
+#[cfg(test)]
+mod split_tests;
 #[cfg(test)]
 mod tests;

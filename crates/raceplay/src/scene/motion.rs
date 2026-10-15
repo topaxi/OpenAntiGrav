@@ -31,8 +31,19 @@ pub(super) struct MotionState {
     cur: Snapshot,
 }
 
-/// How many cameras keep a history: a multi-window race's windows, the most `--windows` allows.
+/// How many windows keep a history: a multi-window race's windows, the most `--windows` allows.
 pub(super) const MAX_HISTORIES: usize = 8;
+
+/// How many histories a scene holds: the windows' and then one per seat of a split, so a view
+/// of a split (or of a window cut into several) has a camera history of its own that no window's
+/// can alias.
+pub(super) const HISTORY_COUNT: usize = 2 * MAX_HISTORIES;
+
+/// The history of the split-screen view that follows `slot`: seats are unique across a race, so
+/// the views of one window and the views of a plain split never share one.
+pub(super) fn split_history(slot: usize) -> usize {
+    MAX_HISTORIES + slot.min(MAX_HISTORIES - 1)
+}
 
 /// One camera's frame-to-frame state, the fields [`Scene::history`] picks one set of.
 #[derive(Debug, Default)]
@@ -54,6 +65,10 @@ pub(super) struct History {
     /// The camera view and player respawn count as of the last recorded frame, for
     /// detecting a camera cut mid-race - see [`CutWatch`].
     pub(super) cut_watch: std::cell::Cell<CutWatch>,
+    /// The impact shake's own screen motion as of the last [`Scene::render`] on this history,
+    /// which the blur takes out of its velocities ([`Race::shake_screen_motion`]). Kept here
+    /// because a split's blur runs after every view is drawn, from this view's own value.
+    pub(super) blur_shake: std::cell::Cell<Mat4>,
 }
 
 /// One tick's worth of the matrices anything draws with.
@@ -218,9 +233,21 @@ pub(super) fn velocity_texture(
         sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: oag_gpu::formats::VELOCITY_FORMAT,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | readable_in_tests(),
         view_formats: &[],
     })
+}
+
+/// `COPY_SRC` in this crate's own tests, which read the velocity and depth attachments back;
+/// nothing in a build that is not a test.
+pub(super) const fn readable_in_tests() -> wgpu::TextureUsages {
+    if cfg!(test) {
+        wgpu::TextureUsages::COPY_SRC
+    } else {
+        wgpu::TextureUsages::empty()
+    }
 }
 
 /// Detects a camera cut mid-race: a view change or the player's own respawn,
@@ -299,7 +326,7 @@ mod cut_watch_tests {
 impl super::Scene {
     /// The history the draw in progress reads and writes ([`Scene::history`]'s field).
     pub(super) fn history(&self) -> &History {
-        &self.histories[self.history.get().min(MAX_HISTORIES - 1)]
+        &self.histories[self.history.get().min(HISTORY_COUNT - 1)]
     }
 
     /// Records what this frame is being drawn with, for the upscaler that
@@ -508,6 +535,16 @@ impl super::Scene {
             .borrow()
             .as_ref()
             .map(|state| (state.prev.view_projection, state.cur.view_projection))
+    }
+
+    /// The velocity and depth attachments, for the tests that read them back.
+    pub(crate) fn attachment_textures(&self) -> (&wgpu::Texture, &wgpu::Texture) {
+        (&self.velocity, &self.depth)
+    }
+
+    /// The same for the split-screen view that follows `slot`.
+    pub(crate) fn split_motion_probe(&self, slot: usize) -> Option<(Mat4, Mat4)> {
+        self.motion_probe(split_history(slot))
     }
 }
 

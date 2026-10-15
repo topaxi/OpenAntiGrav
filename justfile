@@ -1203,6 +1203,15 @@ check-status:
 check-schemas:
     scripts/check-schemas.sh
 
+# Every WGSL module the web build emits, created by a real browser's compiler
+# (Chromium on a CPU adapter, no GPU needed). naga passes shaders Chrome's Tint
+# rejects, and a rejected module draws nothing in the browser. Skips loudly,
+# naming what it looked for, when no Chromium or Chrome is installed; CI sets
+# OAG_REQUIRE_WEB_SHADERS=1 so a skip there fails. `--browser all` adds
+# Firefox, which needs a GPU. Run in CI only, not in the local `just` gate\n# (maintainer, 2026-10-15). See docs/tools/web.md, "Shaders".
+check-web-shaders *ARGS:
+    python3 scripts/check-web-shaders.py "$@"
+
 # Rebuild the Blender add-on's committed fixtures with a headless Blender and fail on a
 # diff (`--update` rewrites them). Needs Blender 4.2+, so it is not in the gate.
 # docs/tools/blender.md
