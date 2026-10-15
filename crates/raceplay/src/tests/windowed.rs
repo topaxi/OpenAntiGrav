@@ -211,6 +211,7 @@ fn a_frame_does_the_shared_work_once_across_its_windows() {
             assert_eq!(work.scenery_clocks, frame, "frame {frame}, window {window}");
             assert_eq!(work.shadow_maps, frame, "frame {frame}, window {window}");
             assert_eq!(work.advert_cards, frame, "frame {frame}, window {window}");
+            assert_eq!(work.shine_maps, frame, "frame {frame}, window {window}");
         }
     }
 }
@@ -238,8 +239,13 @@ fn a_window_told_the_work_is_done_does_none_of_it() {
     );
     let work = scene.frame_work();
     assert_eq!(
-        (work.scenery_clocks, work.shadow_maps, work.advert_cards),
-        (0, 0, 0)
+        (
+            work.scenery_clocks,
+            work.shadow_maps,
+            work.advert_cards,
+            work.shine_maps
+        ),
+        (0, 0, 0, 0)
     );
 }
 

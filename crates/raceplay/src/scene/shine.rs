@@ -19,6 +19,9 @@ pub(super) struct TrackShine {
     /// This frame's coordinates, refilled rather than rebuilt - the drawable
     /// streams them alone (`mesh_render::Texcoords::Streamed`).
     texcoords: std::cell::RefCell<Vec<[f32; 2]>>,
+    /// The vertices' turned normals, which no camera decides: computed once for the race
+    /// when no node moves, else once per clock value, however many views draw at it.
+    normals: std::cell::RefCell<oag_render::shine::TrackNormals>,
 }
 
 impl TrackShine {
@@ -59,6 +62,7 @@ impl TrackShine {
             drawable,
             sources: pass.sources,
             texcoords: std::cell::RefCell::default(),
+            normals: std::cell::RefCell::default(),
         }))
     }
 }
@@ -207,6 +211,12 @@ impl Scene {
     /// Writes every live craft's pose and its environment-mapped coordinates:
     /// [`oag_render::shine::write`] over the craft's model matrix, never the
     /// camera.
+    ///
+    /// **The coordinates are the frame's, not the view's**: a craft's pose, its flaps and the
+    /// set of craft drawn (`Scene::shines` reads the slot, never the viewpoint) are the same
+    /// from every camera, so only the first view of a split uploads them
+    /// ([`Scene::does_frame_work`]) and a later view draws what it left in the vertex
+    /// buffers. The pose uniform carries the view-projection and stays per view.
     pub(super) fn write_shine(
         &self,
         race: &Race,
@@ -223,16 +233,20 @@ impl Scene {
                 .drawable
                 .write(queue, view_projection, Mat4::IDENTITY, prev_vp);
             track.drawable.write_node_anims(queue, seconds);
-            track
-                .drawable
-                .write_view_map(queue, view, seconds, &mut track.texcoords.borrow_mut());
+            track.drawable.write_view_map(
+                queue,
+                view,
+                seconds,
+                &mut track.normals.borrow_mut(),
+                &mut track.texcoords.borrow_mut(),
+            );
         }
         // The flaps the hull's base draw swings: the player's alone
         // (`deflect_airbrakes` runs for `ships.first()`), so a rival's pass
         // stays with its own stowed hull.
         let player_flaps = race.airbrake_flaps();
+        let maps = self.does_frame_work();
         for (slot, shine) in self.shines(race) {
-            let flaps = if slot == 0 { player_flaps } else { [0.0; 2] };
             let ship = race.ship_model_matrix_of(slot);
             shine.write(
                 queue,
@@ -240,7 +254,16 @@ impl Scene {
                 ship,
                 prev_vp * prev.ship(slot, race),
             );
-            shine.write_environment_map(queue, ship, flaps, scratch);
+            if maps {
+                let flaps = if slot == 0 { player_flaps } else { [0.0; 2] };
+                shine.write_environment_map(queue, ship, flaps, scratch);
+            }
+        }
+        if maps {
+            self.frame_work.update(|w| super::FrameWork {
+                shine_maps: w.shine_maps + 1,
+                ..w
+            });
         }
     }
 

@@ -211,6 +211,103 @@ fn an_animated_nodes_normal_is_turned_by_its_matrix() {
     );
 }
 
+/// What `write_view` computed before the normals were kept between cameras: every
+/// vertex's normal turned by its node, renormalised for the coordinate. The reference the
+/// cache must equal bit for bit.
+fn per_call_view_map(model: &Model, view: Mat4, seconds: f32) -> Vec<[f32; 2]> {
+    let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x).normalize_or_zero();
+    let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y).normalize_or_zero();
+    let nodes = model.sample_anim_nodes(seconds);
+    let identity = oag_core::math::Mat3::IDENTITY;
+    model
+        .vertices
+        .iter()
+        .map(|v| {
+            let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
+                Some(m) => Vec3::new(
+                    m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
+                    m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
+                    m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
+                )
+                .normalize_or_zero(),
+                None => Vec3::from_array(v.normal),
+            };
+            let n = (identity * normal).normalize_or_zero();
+            [(1.0 + n.dot(right)) * 0.5, (1.0 + n.dot(up)) * 0.5]
+        })
+        .collect()
+}
+
+fn skewed(model: &mut Model) {
+    for (i, v) in model.vertices.iter_mut().enumerate() {
+        let t = i as f32 + 1.0;
+        v.normal = [0.3 * t, 0.7 - 0.2 * t, 1.9 + 0.11 * t];
+    }
+}
+
+/// A split screen draws the circuit's shine pass from each view's camera in one frame; the
+/// normals are computed once and every camera's coordinates are the per-call bits.
+#[test]
+fn kept_normals_give_every_camera_the_bits_a_fresh_call_does() {
+    let mut track = circuit();
+    track.vertices[3].xform = 1;
+    track.anim_nodes = vec![oag_mesh::mesh::AnimNode {
+        transform: oag_mesh::mesh::Motion::Vex(Box::default()),
+        static_above: oag_vex::vex::IDENTITY,
+        parent: None,
+    }];
+    let animated = build_track(&track).unwrap().model;
+    let mut still = animated.clone();
+    still.anim_nodes.clear();
+    for mut model in [animated, still] {
+        skewed(&mut model);
+        let mut kept = TrackNormals::default();
+        let mut out = Vec::new();
+        for (yaw, seconds) in [(0.3_f32, 1.0_f32), (2.1, 1.0), (-1.2, 1.0), (0.3, 1.5)] {
+            let view = Mat4::from_rotation_y(yaw);
+            kept.write_view(&model, &mut out, view, seconds);
+            let fresh = per_call_view_map(&model, view, seconds);
+            assert_eq!(
+                out.iter().map(|c| c.map(f32::to_bits)).collect::<Vec<_>>(),
+                fresh
+                    .iter()
+                    .map(|c| c.map(f32::to_bits))
+                    .collect::<Vec<_>>(),
+                "yaw {yaw}, seconds {seconds}"
+            );
+        }
+    }
+}
+
+/// The saving itself: a second camera at the same `seconds` reuses the normals, and a
+/// circuit with no animated node never computes them again, whatever the clock says.
+#[test]
+fn the_normals_are_computed_once_per_clock_value_and_never_again_when_nothing_moves() {
+    let mut track = circuit();
+    track.vertices[3].xform = 1;
+    track.anim_nodes = vec![oag_mesh::mesh::AnimNode {
+        transform: oag_mesh::mesh::Motion::Vex(Box::default()),
+        static_above: oag_vex::vex::IDENTITY,
+        parent: None,
+    }];
+    let animated = build_track(&track).unwrap().model;
+    let mut still = animated.clone();
+    still.anim_nodes.clear();
+    let mut out = Vec::new();
+
+    let mut kept = TrackNormals::default();
+    for seconds in [1.0, 1.0, 2.0, 2.0] {
+        kept.write_view(&animated, &mut out, Mat4::IDENTITY, seconds);
+    }
+    assert_eq!(kept.refreshed(), 2, "one per clock value, two views each");
+
+    let mut kept = TrackNormals::default();
+    for seconds in [1.0, 2.0, 3.0] {
+        kept.write_view(&still, &mut out, Mat4::IDENTITY, seconds);
+    }
+    assert_eq!(kept.refreshed(), 1, "no animated node: once for the race");
+}
+
 /// A shine model whose last three vertices are the left airbrake flap: off the
 /// hinge, with a normal that turns when the flap does.
 fn flapped() -> Model {

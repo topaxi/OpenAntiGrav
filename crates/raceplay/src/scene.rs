@@ -45,6 +45,8 @@ pub(crate) struct FrameWork {
     pub(crate) shadow_gathers: u32,
     pub(crate) scenery_clocks: u32,
     pub(crate) advert_cards: u32,
+    /// The craft shine passes' environment-mapped coordinates (`Scene::write_shine`).
+    pub(crate) shine_maps: u32,
     /// How many of the track's opaque draws the latest `mapped` depth map recorded:
     /// those whose bounds touch that map's box, not the whole circuit.
     #[cfg(test)]
