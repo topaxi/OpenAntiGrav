@@ -350,7 +350,7 @@ fn rib_vertex(p: Vec3, colour: [f32; 4], texcoord: [f32; 2]) -> GpuVertex {
 }
 
 pub mod pipeline;
-pub use pipeline::Pipeline;
+pub use pipeline::{Drawn, Pipeline};
 
 /// Wipeout HD's own LeachBall: the model `LeachBall_Advance` (`0x00114c78`)
 /// carries along the beam, one trip per drain - a different mechanism from

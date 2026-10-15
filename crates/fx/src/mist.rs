@@ -33,7 +33,7 @@ use crate::psys::field::Frame;
 
 mod pipeline;
 
-pub use pipeline::{Pipeline, Vertex, vertices};
+pub use pipeline::{Drawn, Pipeline, Vertex, vertices};
 
 /// How far a layer's phase moves per unit of forward travel, `mist+0x88`
 /// (`0x3ca3d70a`, set by `WeatherMist_Construct`).

@@ -115,6 +115,14 @@ fn bind_texture(
     })
 }
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    bolt_count: u32,
+    flash_count: u32,
+}
+
 /// Draws the bolt and the flash.
 ///
 /// One render pipeline covers both: `Cannon_BuildBoltList` and
@@ -306,7 +314,7 @@ impl Pipeline {
     /// [`geometry::bolt_vertices`]/[`geometry::flash_vertices`] build it.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         bolt: &[GpuVertex],
         flash: &[GpuVertex],
@@ -340,21 +348,30 @@ impl Pipeline {
         self.flash_count = n as u32;
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn {
+            bolt_count: self.bolt_count,
+            flash_count: self.flash_count,
+        }
+    }
+
     /// Draws into a pass the caller already opened, after the opaque
     /// geometry (this pipeline blends).
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
         pass.set_pipeline(&self.pipeline);
-        if self.bolt_count > 0 {
+        if drawn.bolt_count > 0 {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.bolt_texture, &[]);
             pass.set_vertex_buffer(0, self.bolt_vertices.slice(..));
-            pass.draw(0..self.bolt_count, 0..1);
+            pass.draw(0..drawn.bolt_count, 0..1);
         }
-        if self.flash_count > 0 {
+        if drawn.flash_count > 0 {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_bind_group(1, &self.flash_texture, &[]);
             pass.set_vertex_buffer(0, self.flash_vertices.slice(..));
-            pass.draw(0..self.flash_count, 0..1);
+            pass.draw(0..drawn.flash_count, 0..1);
         }
     }
 }

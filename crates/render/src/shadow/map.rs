@@ -622,7 +622,7 @@ impl Map {
     /// clears its own target: a stale depth is a shadow that stays behind.
     pub fn render_depth(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         fit: &Fit,
         casters: &[Caster<'_>],
@@ -699,7 +699,7 @@ impl Map {
     /// every craft. An empty `crafts` is a clear and nothing else.
     pub fn render(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         crafts: &[CraftCaster<'_>],
     ) {

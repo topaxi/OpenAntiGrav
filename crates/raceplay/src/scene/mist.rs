@@ -28,7 +28,12 @@ impl Scene {
 
     /// Uploads this frame's two quads. `tan_half_fov` is the drawn camera's
     /// vertical half-angle tangent, `g_camera_tan_half_fov`'s counterpart.
-    pub(super) fn upload_mist(&self, race: &Race, queue: &wgpu::Queue, tan_half_fov: f32) {
+    pub(super) fn upload_mist(
+        &self,
+        race: &Race,
+        queue: &dyn oag_gpu::writes::Writes,
+        tan_half_fov: f32,
+    ) {
         let mut pipeline = self.mist.borrow_mut();
         let Some(pipeline) = pipeline.as_mut() else {
             return;

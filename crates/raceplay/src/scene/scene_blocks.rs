@@ -136,7 +136,7 @@ impl Scene {
     /// The blocks of the view following the craft `race` is drawing, one kind each.
     pub(super) fn write_scene_blocks(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         block: ViewBlock,
         circuit: &mesh_render::Scene,
         ship: &mesh_render::Scene,

@@ -8,10 +8,24 @@
 use super::super::*;
 use super::Scene;
 use super::motion::MotionState;
+use super::record::{Draw, DrawList, ViewPass};
 use super::viewports::Layer;
 
 mod craft;
 use craft::{cockpit_shield_visible, hd_flame_transform, shell_visible};
+
+/// What a view is drawn with besides its camera and its rectangle: [`Scene::render`]'s
+/// arguments of that kind, read fresh off the settings each frame.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ViewSettings<'a> {
+    pub(super) fov: oag_display::display::Fov,
+    pub(super) cull: bool,
+    pub(super) pvs_cull: bool,
+    pub(super) anim_seconds: Option<f32>,
+    pub(super) shadows: oag_display::display::Shadows,
+    pub(super) camera_jitter: Option<u32>,
+    pub(super) zone_spectrum: &'a [f32],
+}
 
 impl Scene {
     /// Draws one frame into `view`. One render pass with one clear: a
@@ -64,18 +78,188 @@ impl Scene {
         blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
         hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
     ) -> SceneStats {
-        // The scene blocks of the view being drawn: the craft it follows names them, so two
-        // views of a frame never read or write the same one (`SceneBlocks`).
-        let block = SceneBlocks::view(race.viewed_slot());
         // Every drawable's matrices of this view are staged here and written once, in runs,
         // before the scene pass (`UniformBlocks`); anything else goes through to the queue.
         let uploads = Uploads::begin(
             queue,
             &self.uniform_blocks,
-            block,
+            SceneBlocks::view(race.viewed_slot()),
             std::mem::take(&mut *self.upload_staging.borrow_mut()),
         );
-        let queue = &uploads;
+        let settings = ViewSettings {
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            shadows,
+            camera_jitter,
+            zone_spectrum,
+        };
+        let pass = self.prepare_view(
+            &uploads, encoder, view, race, viewport, &settings, timestamps,
+        );
+        let mut stats = self
+            .borrow_for_recording()
+            .recorder()
+            .record(&pass, encoder);
+        oag_gpu::perfprobe::mark("scene-pass");
+        let blur_shake = pass.blur_shake;
+        drop(pass);
+        let (hd_bloom_encoded, blur_encoded) = self.finish_view(
+            device,
+            queue,
+            encoder,
+            view,
+            race,
+            viewport,
+            (motion_blur, blur_shake),
+            blur_timestamps,
+            hd_bloom_timestamps,
+        );
+        stats.hd_bloom_encoded |= hd_bloom_encoded;
+        stats.blur_encoded = blur_encoded;
+        oag_gpu::perfprobe::mark("post-chain");
+        *self.upload_staging.borrow_mut() = uploads.into_staging();
+        stats
+    }
+
+    /// What follows a view's scene pass, recorded into `encoder`: HD's or Omega's chain or the
+    /// PSP bloom's prepare for a whole picture, the borrowed boost zoom, and the motion blur
+    /// (`blur` is its strength and the camera shake it takes out). Returns whether HD's chain
+    /// and the blur were encoded.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn finish_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+        race: &Race,
+        viewport: (f32, f32, f32, f32),
+        (motion_blur, blur_shake): (oag_display::display::MotionBlur, Mat4),
+        blur_timestamps: Option<oag_post::motion_blur::ChainTimestamps<'_>>,
+        hd_bloom_timestamps: Option<oag_post::hd_bloom::ChainTimestamps<'_>>,
+    ) -> (bool, bool) {
+        let mut hd_bloom_encoded = false;
+        let depth_view = &self.attachment_views.depth;
+        let velocity_view = &self.attachment_views.velocity;
+
+        // Wipeout HD's read post chain (`oag_post::hd_bloom`): gate,
+        // downsample, the two blurs, the composite back over the linear
+        // scene, and the encode into the caller's view. Replaces the PSP
+        // bloom outright - its gate consumes the same glow-mask alpha.
+        //
+        // A split-screen view runs neither chain as it is drawn: HD's encode clears
+        // `view`, so one run per view would wipe every earlier view.
+        // `Scene::render_viewports` runs each chain once per view over its own
+        // rectangle after the last view instead (`split_exposure`).
+        //
+        // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
+        // target's origin and fills it, which is what the chains sample from, so it
+        // runs them as an unsplit race does. The boost pulse is the player's own, so
+        // only the window that follows the player's craft draws it.
+        let layer = self.layer.get();
+        let whole = matches!(layer, Layer::Whole | Layer::Window);
+        let own_pulse = layer != Layer::Window || race.viewed_slot() == race.player_slot();
+        if self.hd.is_some() {
+            if whole {
+                self.run_hd(
+                    queue,
+                    encoder,
+                    view,
+                    viewport,
+                    race.hd_zoom_frame().filter(|_| own_pulse),
+                    hd_bloom_timestamps,
+                );
+                hd_bloom_encoded = true;
+            }
+        } else if let Some(omega) = &self.omega {
+            // Omega's tone map: the executable's exposure and curve over the
+            // linear scene, encoded into `view`. See `Self::omega`.
+            if whole {
+                self.run_omega(omega, device, queue, encoder, view, viewport, true);
+            }
+        } else if (self.bloom.is_some() || self.ps2_bloom.is_some()) && whole {
+            // The recovered post-process, reading the alpha channel the scene
+            // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and
+            // adding a blurred copy of the masked colour back over the frame.
+            // `view` is the resolved image in both the MSAA and the
+            // single-sample case, which is why this runs on it rather than on
+            // `attachment_view`. See `oag_post::bloom` - its own
+            // `Frame` fields document `size`/`origin`/`viewport` in full - and
+            // `oag_post::ps2_bloom` for the PS2's own chain.
+            let size = self.depth.size();
+            let frame = oag_post::bloom::Frame {
+                scene: view,
+                size: (size.width, size.height),
+                origin: (viewport.0, viewport.1),
+                viewport: (viewport.2 as u32, viewport.3 as u32),
+            };
+            // The composite waits for the HUD: the caller runs
+            // `Scene::composite_bloom` after drawing it, as Pulse PSP's queue
+            // order does (`bloom.md`, "The bloom draws over the HUD"). The PS2
+            // inherits that order, unmeasured on its own disc.
+            if let Some(bloom) = &self.bloom {
+                bloom.prepare(device, queue, encoder, frame);
+            } else if let Some(bloom) = &self.ps2_bloom {
+                bloom.prepare(device, queue, encoder, frame);
+            }
+            self.bloom_pending.set(true);
+        }
+        // The borrowed zoom-streak ring (`BoostZoom`): after the bloom's prepare, before the HUD.
+        if own_pulse {
+            self.run_boost_zoom(device, queue, encoder, view, viewport, race);
+        }
+        // Motion blur, last: it smears the finished frame - but not the
+        // Pulse glow, whose composite comes after the HUD - and it
+        // runs before the caller composites the HUD over `view`, so the
+        // readouts stay sharp however the world moves. `motion_blur` is the
+        // strength read fresh off the settings this frame, so the row
+        // applies live; at `off` the pass encodes nothing. The velocity
+        // buffer it reads was written by the scene pass above either way -
+        // see `Scene::velocity`.
+        let blur_encoded = self.encode_motion_blur(
+            device,
+            queue,
+            encoder,
+            [view, velocity_view, depth_view],
+            viewport,
+            motion_blur.shutter(),
+            blur_shake,
+            blur_timestamps,
+        );
+        oag_gpu::perfprobe::mark("post-chain");
+        (hd_bloom_encoded, blur_encoded)
+    }
+
+    /// One view's writes and choices, and its scene pass as a value for [`Recorder::record`]:
+    /// everything [`Scene::render`] does before the pass. Its writes go through `uploads` (the
+    /// queue, or the view's log under a split); its passes of other targets (the shadow maps,
+    /// the advert cards, the behind-the-glass target) are recorded into `encoder`.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn prepare_view<'a>(
+        &'a self,
+        uploads: &Uploads<'_>,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &'a wgpu::TextureView,
+        race: &'a Race,
+        viewport: (f32, f32, f32, f32),
+        settings: &ViewSettings<'_>,
+        timestamps: Option<wgpu::RenderPassTimestampWrites<'a>>,
+    ) -> ViewPass<'a> {
+        let ViewSettings {
+            fov,
+            cull,
+            pvs_cull,
+            anim_seconds,
+            shadows,
+            camera_jitter,
+            zone_spectrum,
+        } = *settings;
+        // The scene blocks of the view being drawn: the craft it follows names them, so two
+        // views of a frame never read or write the same one (`SceneBlocks`).
+        let block = SceneBlocks::view(race.viewed_slot());
+        let queue = uploads;
         let aspect = viewport.2.max(1.0) / viewport.3.max(1.0);
         let projection = race.projection(aspect, self.far, fov);
         let view_projection = projection * race.view();
@@ -313,7 +497,17 @@ impl Scene {
             gantry.write(queue, view_projection, prev_vp, clock);
         }
         if first_view {
-            crate::adverts::render(&self.adverts, queue, encoder, seconds, race, anim_seconds);
+            // The cards draw into textures of their own with passes of their own, on the
+            // queue itself: frame work, which the first view of a split does, and the first
+            // view's writes are never kept for later (`Scene::render_slots`).
+            crate::adverts::render(
+                &self.adverts,
+                uploads.queue(),
+                encoder,
+                seconds,
+                race,
+                anim_seconds,
+            );
             self.frame_work.update(|w| super::FrameWork {
                 advert_cards: w.advert_cards + 1,
                 ..w
@@ -405,7 +599,7 @@ impl Scene {
         let drawn = usize::from(race.ship_count());
         self.write_hull_uniforms(queue, race, view_projection, prev_vp, &prev);
         let lod_eye = race.lod_eye(aspect, fov);
-        self.select_lod(race, lod_eye);
+        self.select_lod(block, race, lod_eye);
         // The flaps move in *model* space, before the ship's own matrix, so
         // this is a vertex write and not a second uniform - see
         // `Drawable::deflect_airbrakes`. Unconditional rather than
@@ -731,137 +925,30 @@ impl Scene {
         oag_gpu::perfprobe::mark("shadow-gather");
 
         oag_gpu::perfprobe::mark("psys-gather");
-        let depth_view = &self.attachment_views.depth;
         // Under the HD chain the whole scene draws into its linear float
         // target instead of the caller's view; the chain's own encode pass is
         // what reaches `view`, after the read bloom. See `Self::hd`.
         let target = self.linear_scene_view().unwrap_or(view);
-        // MSAA draws into its own multisampled attachment and resolves into
-        // the target at the end of this one pass; everything else draws
-        // straight into it, exactly as before this setting existed. See
-        // `Self::msaa_color`.
-        let msaa_view = self.attachment_views.msaa.as_ref();
-        let (attachment_view, resolve_target) = match msaa_view {
-            Some(msaa_view) => (msaa_view, Some(target)),
-            None => (target, None),
-        };
-        let velocity_view = &self.attachment_views.velocity;
         uploads.flush();
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("race"),
-            color_attachments: &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view: attachment_view,
-                    depth_slice: None,
-                    resolve_target,
-                    ops: wgpu::Operations {
-                        // Black rather than the near-black blue this used to clear
-                        // to. The clear covers the whole attachment and the scene is
-                        // then drawn into a sub-rectangle, so this colour is what
-                        // `Aspect`'s bars are made of - and a bar has to read as a
-                        // bar. The old value was 0.03/0.04/0.06, dark enough that
-                        // losing it costs nothing inside the viewport either.
-                        // Black, and **alpha zero**: alpha is the bloom's glow mask
-                        // and a frame starts with nothing glowing.
-                        // `wgpu::Color::BLACK` has `a: 1.0`, which would mask the
-                        // entire frame in and bloom everything.
-                        // A split-screen view after the first keeps what the
-                        // earlier ones drew - see `Scene::render_viewports`.
-                        load: if self.layer.get() == Layer::Next {
-                            wgpu::LoadOp::Load
-                        } else {
-                            wgpu::LoadOp::Clear(wgpu::Color {
-                                r: 0.0,
-                                g: 0.0,
-                                b: 0.0,
-                                a: 0.0,
-                            })
-                        },
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-                // The velocity target, cleared to zero - nothing moved where
-                // nothing drew - and never resolved: under MSAA the blur's
-                // prepare stage reads sample 0 instead, because averaging
-                // velocity across a silhouette edge produces a vector that
-                // describes neither surface. See `Self::velocity`.
-                Some(wgpu::RenderPassColorAttachment {
-                    view: velocity_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        // A later view of a split loads, as the colour does: the first view
-                        // cleared the whole attachment and each view draws inside its own
-                        // rectangle, so clearing again would wipe the views before it and
-                        // leave the blur only the last view's motion.
-                        load: if self.layer.get() == Layer::Next {
-                            wgpu::LoadOp::Load
-                        } else {
-                            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
-                        },
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-            ],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    // Loaded by a later view of a split for the velocity's reason above.
-                    load: if self.layer.get() == Layer::Next {
-                        wgpu::LoadOp::Load
-                    } else {
-                        wgpu::LoadOp::Clear(1.0)
-                    },
-                    // `Store`, not `Discard`: the motion blur's reconstruction
-                    // weighs its taps by depth ordering after this pass
-                    // closes, and a discarded attachment is undefined memory
-                    // by then. This is also the depth half of
-                    // `docs/overview/modern-features.md`'s FSR 3.1
-                    // prerequisite table.
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            // The one pass whose cost falls with the render extent, and so the
-            // one a resolution controller will be driven by - see
-            // `oag_gpu::timing::PassTimer` and this function's own doc.
-            // `None` on every path that is not the window's frame loop: a
-            // capture measures nothing, because a capture has to be
-            // reproducible rather than fast.
-            timestamp_writes: timestamps,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        oag_gpu::perfprobe::mark("pass-open");
-        pass.set_viewport(viewport.0, viewport.1, viewport.2, viewport.3, 0.0, 1.0);
-        // The sky draws inside this, between the circuit's solid and blended
-        // lists - see `draw_track` for why there.
-        self.sort_opaque(race.camera_position());
-        let mut stats = behind_glass;
-        stats.add(self.draw_track(
-            &mut pass,
-            block,
-            viewport,
-            self.visibility.as_ref().map(|v| &v.sections),
-            visible_set.as_ref(),
-            chunk_set.as_ref(),
-            frustum.as_ref(),
-        ));
+        // What the pass draws, in its order. The sky draws inside the track, between the
+        // circuit's solid and blended lists - see `Recorder::draw_track` for why there.
+        let mut draws = DrawList(Vec::with_capacity(64));
+        draws.push(Draw::Track);
         // After the track, so a pad sitting flush on the surface wins the depth
         // test rather than z-fighting whatever it was authored on top of.
         // Frustum culling applies; the PVS does not, because a pad carries no
         // `section` id to look up - the same exemption the sky takes, for a
         // different reason.
-        oag_gpu::perfprobe::marks::mark(&mut pass, "pads, gantry, shadow");
+        draws.mark("pads, gantry, shadow");
         if let Some(pads) = &self.pads {
-            stats.add(pads.draw(&mut pass, block, None, None, None, frustum.as_ref()));
+            draws.culled(pads);
         }
         if let Some(pads) = &self.weapon_pads {
-            stats.add(pads.draw(&mut pass, block, None, None, None, frustum.as_ref()));
+            draws.culled(pads);
         }
         // With the track and before the hulls: scenery a craft passes under.
         if let Some(gantry) = &self.gantry {
-            stats.add(gantry.draw(&mut pass, block, frustum.as_ref()));
+            draws.culled(gantry.drawable());
         }
         // After the track and the pads, before the hulls: the road's depth has
         // to be in the buffer for the quad to be occluded by the geometry in
@@ -871,57 +958,51 @@ impl Scene {
         // gave it no placements. **Where in the frame this sits is ours**: the
         // original's own draw-order key has no layer for a blob, because no
         // title in the lineage draws one. See `docs/rendering/draw-order.md`.
-        self.shadow.borrow().draw(&mut pass);
+        draws.push(Draw::Shadow);
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
         // polygon across the middle of the screen. See `Race::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
-        oag_gpu::perfprobe::marks::mark(&mut pass, "craft, weapons, shields");
+        draws.mark("craft, weapons, shields");
         for (index, drawable) in self.ships.iter().take(drawn).enumerate() {
             if self.hull_skipped(race, index) {
                 continue;
             }
             let (centre, radius) = drawable.bound();
-            if !super::craft_cull::hull_in_view(
+            if super::craft_cull::hull_in_view(
                 frustum.as_ref(),
                 race.ship_model_matrix_of(index),
                 centre,
                 radius,
             ) {
-                continue;
+                draws.mesh(drawable);
             }
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
         }
-        oag_gpu::perfprobe::marks::mark(&mut pass, "wrecks, weapon bodies");
-        self.draw_wrecks(race, &mut pass, block, &mut stats);
+        draws.mark("wrecks, weapon bodies");
+        self.draw_wrecks(race, &mut draws);
         // Every weapon's own body: opaque painted models, bounded by how many
         // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(drawable);
         }
         for drawable in self.mines.iter().take(mine_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(drawable);
         }
         for drawable in self.bombs.iter().take(bomb_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(drawable);
         }
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(drawable);
         }
         for drawable in self.plasma_blast.ball.iter().take(ball_matrices.len()) {
-            stats.add(drawable.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(drawable);
         }
-        self.draw_shurikens(
-            race.shuriken_model_matrices().len(),
-            &mut pass,
-            block,
-            &mut stats,
-        );
-        self.draw_plasma_blasts(&plasma_blast_active, &mut pass, block, &mut stats);
-        self.draw_bomb_blasts(&blasts_active, &mut pass, block, &mut stats);
-        self.draw_leach_ball(leach_ball_active, &mut pass, block, &mut stats);
+        self.draw_shurikens(race.shuriken_model_matrices().len(), &mut draws);
+        self.draw_plasma_blasts(&plasma_blast_active, &mut draws);
+        self.draw_bomb_blasts(&blasts_active, &mut draws);
+        self.draw_leach_ball(leach_ball_active, &mut draws);
         // After the ships, so the hulls' depth is already in the buffer: a
         // plume's own blend pipeline writes no depth, the same reasoning as
         // the flares below. One draw per boosting craft, gated on the same
@@ -938,7 +1019,7 @@ impl Scene {
         // rather than the asset's. What the original *does* animate on it is
         // unread: `EF_Main` carries one attribute, `AnimEnd = 1.0`, and
         // nothing here plays it. See docs/rendering/trail-ribbon.md.
-        oag_gpu::perfprobe::marks::mark(&mut pass, "engine flares");
+        draws.mark("engine flares");
         for (slot, flare) in self.flares.iter().enumerate().take(drawn) {
             let Some(flare) = flare else {
                 continue;
@@ -950,9 +1031,9 @@ impl Scene {
             // carries its material's own factor pair, so the ordinary path
             // routes it through the authored pipeline. The override the plume
             // needs is for a model that authors none.
-            stats.add(flare.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(flare);
         }
-        oag_gpu::perfprobe::marks::mark(&mut pass, "boost plumes");
+        draws.mark("boost plumes");
         for (slot, boost) in self.boost.iter().enumerate().take(drawn) {
             let Some(boost) = boost else {
                 continue;
@@ -966,7 +1047,7 @@ impl Scene {
             // Additive for every list, not just the transparent one - see
             // `Drawable::draw_additive`, which carries the reference frame
             // that settled it and the PS2 dispatch that has not been followed.
-            stats.add(boost.draw_additive(&mut pass, block));
+            draws.additive(boost);
         }
         // With the plumes, and after the hulls for the same reason: the shell
         // wraps a craft whose depth has to already be in the buffer, or the far
@@ -976,7 +1057,7 @@ impl Scene {
         // plume's loop gives - a shell drawn from a uniform buffer that was not
         // written this frame would sit at last frame's pose *and* at last
         // frame's swell.
-        oag_gpu::perfprobe::marks::mark(&mut pass, "shield shells");
+        draws.mark("shield shells");
         for (slot, shell) in self.shield.iter().enumerate().take(drawn) {
             let Some(shell) = shell else {
                 continue;
@@ -984,116 +1065,43 @@ impl Scene {
             if !race.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
-            stats.add(shell.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(shell);
         }
         if let Some(sphere) = &self.shield_cockpit
             && cockpit_shield_visible(race)
         {
-            stats.add(sphere.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(sphere);
         }
-        self.draw_absorb_overlays(race, &mut pass, block, &mut stats);
-        self.draw_absorb_shells(race, &mut pass, block, &mut stats);
+        self.draw_absorb_overlays(race, &mut draws);
+        self.draw_absorb_shells(race, &mut draws);
         if let Some(collision) = &self.collision {
-            stats.add(collision.draw(&mut pass, block, None, None, None, None));
+            draws.mesh(collision);
         }
         // Last, and that ordering is load-bearing: the flare tests depth but does
         // not write it, so the hull's depth has to already be in the buffer for the
         // flare to be occluded by it. Sparks are the same kind of blended,
         // depth-tested-not-written geometry, so they follow right after for the
         // same reason.
-        self.draw_effects(race, lod_eye, &mut pass, &mut stats);
-        // The scene pass has to close before the bloom can sample what it drew,
-        // so this ends the borrow rather than waiting for the scope to.
-        drop(pass);
-        oag_gpu::perfprobe::mark("scene-pass");
-
-        // Wipeout HD's read post chain (`oag_post::hd_bloom`): gate,
-        // downsample, the two blurs, the composite back over the linear
-        // scene, and the encode into the caller's view. Replaces the PSP
-        // bloom outright - its gate consumes the same glow-mask alpha.
-        //
-        // A split-screen view runs neither chain as it is drawn: HD's encode clears
-        // `view`, so one run per view would wipe every earlier view.
-        // `Scene::render_viewports` runs each chain once per view over its own
-        // rectangle after the last view instead (`split_exposure`).
-        //
-        // **A window's view is a whole picture** ([`Layer::Window`]): it starts at the
-        // target's origin and fills it, which is what the chains sample from, so it
-        // runs them as an unsplit race does. The boost pulse is the player's own, so
-        // only the window that follows the player's craft draws it.
-        let layer = self.layer.get();
-        let whole = matches!(layer, Layer::Whole | Layer::Window);
-        let own_pulse = layer != Layer::Window || race.viewed_slot() == race.player_slot();
-        if self.hd.is_some() {
-            if whole {
-                self.run_hd(
-                    queue,
-                    encoder,
-                    view,
-                    viewport,
-                    race.hd_zoom_frame().filter(|_| own_pulse),
-                    hd_bloom_timestamps,
-                );
-                stats.hd_bloom_encoded = true;
-            }
-        } else if let Some(omega) = &self.omega {
-            // Omega's tone map: the executable's exposure and curve over the
-            // linear scene, encoded into `view`. See `Self::omega`.
-            if whole {
-                self.run_omega(omega, device, queue, encoder, view, viewport, true);
-            }
-        } else if (self.bloom.is_some() || self.ps2_bloom.is_some()) && whole {
-            // The recovered post-process, reading the alpha channel the scene
-            // stamped (`GlowMask::Stamped`, or the PS2's `StampedByTexel`) and
-            // adding a blurred copy of the masked colour back over the frame.
-            // `view` is the resolved image in both the MSAA and the
-            // single-sample case, which is why this runs on it rather than on
-            // `attachment_view`. See `oag_post::bloom` - its own
-            // `Frame` fields document `size`/`origin`/`viewport` in full - and
-            // `oag_post::ps2_bloom` for the PS2's own chain.
-            let size = self.depth.size();
-            let frame = oag_post::bloom::Frame {
-                scene: view,
-                size: (size.width, size.height),
-                origin: (viewport.0, viewport.1),
-                viewport: (viewport.2 as u32, viewport.3 as u32),
-            };
-            // The composite waits for the HUD: the caller runs
-            // `Scene::composite_bloom` after drawing it, as Pulse PSP's queue
-            // order does (`bloom.md`, "The bloom draws over the HUD"). The PS2
-            // inherits that order, unmeasured on its own disc.
-            if let Some(bloom) = &self.bloom {
-                bloom.prepare(device, queue, encoder, frame);
-            } else if let Some(bloom) = &self.ps2_bloom {
-                bloom.prepare(device, queue, encoder, frame);
-            }
-            self.bloom_pending.set(true);
-        }
-        // The borrowed zoom-streak ring (`BoostZoom`): after the bloom's prepare, before the HUD.
-        if own_pulse {
-            self.run_boost_zoom(device, queue, encoder, view, viewport, race);
-        }
-        // Motion blur, last: it smears the finished frame - but not the
-        // Pulse glow, whose composite comes after the HUD - and it
-        // runs before the caller composites the HUD over `view`, so the
-        // readouts stay sharp however the world moves. `motion_blur` is the
-        // strength read fresh off the settings this frame, so the row
-        // applies live; at `off` the pass encodes nothing. The velocity
-        // buffer it reads was written by the scene pass above either way -
-        // see `Scene::velocity`.
-        stats.blur_encoded = self.encode_motion_blur(
-            device,
-            queue,
-            encoder,
-            [view, velocity_view, depth_view],
+        draws.push(Draw::Effects);
+        let mut shadow_runs = Vec::new();
+        self.shadow_runs(&mut shadow_runs);
+        ViewPass {
+            layer: self.layer.get(),
+            block,
             viewport,
-            motion_blur.shutter(),
+            eye: race.camera_position(),
+            frustum,
+            visible_set,
+            chunk_set,
+            target,
+            timestamps,
+            draws,
+            effects: self.effects_drawn(),
+            shadow_runs,
+            ghost: self.ghost_draw(race, lod_eye),
+            stats: behind_glass,
             blur_shake,
-            blur_timestamps,
-        );
-        oag_gpu::perfprobe::mark("post-chain");
-        *self.upload_staging.borrow_mut() = uploads.into_staging();
-        stats
+        }
     }
 }
 

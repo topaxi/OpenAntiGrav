@@ -18,7 +18,7 @@ impl super::super::Scene {
     pub(super) fn upload_particles(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         vp: &[[f32; 4]; 4],
         right: Vec3,
         up: Vec3,

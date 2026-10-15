@@ -21,16 +21,16 @@ impl super::Scene {
     /// The sky, the pads and every weapon model are not switched: none
     /// authors a group on any disc measured, and a drawable nobody switches
     /// keeps its finest tier anyway.
-    pub(super) fn select_lod(&self, race: &Race, eye: LodEye) {
-        self.track.select_lod(Mat4::IDENTITY, eye);
+    pub(super) fn select_lod(&self, view: crate::drawable::ViewBlock, race: &Race, eye: LodEye) {
+        self.track.select_lod(view, Mat4::IDENTITY, eye);
         for slot in 0..usize::from(race.ship_count()) {
             if !race.ship_active(slot) {
                 continue;
             }
             if let Some(drawable) = self.ships.get(slot) {
-                drawable.select_lod(race.ship_model_matrix_of(slot), eye);
+                drawable.select_lod(view, race.ship_model_matrix_of(slot), eye);
             }
         }
-        self.select_wreck_lod(race, eye);
+        self.select_wreck_lod(view, race, eye);
     }
 }

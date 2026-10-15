@@ -1105,6 +1105,14 @@ pub mod hd;
 mod texture;
 pub use texture::FlareTexture;
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    count: u32,
+    trail_count: u32,
+}
+
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -1373,7 +1381,7 @@ impl Pipeline {
     /// simulation tick, not here.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         camera: Vec3,
         vertices: &[GpuVertex],
@@ -1402,13 +1410,22 @@ impl Pipeline {
         self.trail_count = t as u32;
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn {
+            count: self.count,
+            trail_count: self.trail_count,
+        }
+    }
+
     /// Draws into a pass the caller already opened.
     ///
     /// Must be issued **after** the opaque geometry: with depth write off, the
     /// flare relies on the hull's depth already being present to be occluded by
     /// it.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.count == 0 && self.trail_count == 0 {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if drawn.count == 0 && drawn.trail_count == 0 {
             return;
         }
         pass.set_bind_group(0, &self.bind_group, &[]);
@@ -1419,17 +1436,17 @@ impl Pipeline {
         // sort orders them and keeps the sprite reading as the hottest part of
         // the plume. The ribbon uses its own pipeline: its recovered blend is
         // `dst + src`, not the flare's alpha-weighted one.
-        if self.trail_count > 0 {
+        if drawn.trail_count > 0 {
             pass.set_pipeline(&self.trail_pipeline);
             pass.set_bind_group(1, &self.noise, &[]);
             pass.set_vertex_buffer(0, self.trail_vertices.slice(..));
-            pass.draw(0..self.trail_count, 0..1);
+            pass.draw(0..drawn.trail_count, 0..1);
         }
-        if self.count > 0 {
+        if drawn.count > 0 {
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(1, &self.texture, &[]);
             pass.set_vertex_buffer(0, self.vertices.slice(..));
-            pass.draw(0..self.count, 0..1);
+            pass.draw(0..drawn.count, 0..1);
         }
     }
 }

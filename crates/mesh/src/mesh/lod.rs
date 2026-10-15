@@ -21,7 +21,7 @@
 //! reached. Only that child's subtree draws. [`LodGroups::child_at`] is that
 //! function, and the one place its arithmetic lives.
 
-use std::cell::Cell;
+use std::sync::atomic::{AtomicU16, Ordering::Relaxed};
 
 use oag_core::math::{Mat4, Vec3};
 use oag_vex::vex;
@@ -366,9 +366,11 @@ pub struct LodEye {
 /// Interior-mutable so a drawable holding it behind `&self` can be switched
 /// in the frame that draws it; sized once when the instance is made, so
 /// switching allocates nothing. Starts on the finest tier of every group.
+/// Atomic rather than a `Cell` so a drawable can be read by several threads
+/// recording at once; a relaxed load or store is a plain one on every target.
 #[derive(Debug, Default)]
 pub struct LodSwitch {
-    chosen: Box<[Cell<u16>]>,
+    chosen: Box<[AtomicU16]>,
 }
 
 impl LodSwitch {
@@ -376,7 +378,7 @@ impl LodSwitch {
     #[must_use]
     pub fn new(groups: &LodGroups) -> Self {
         Self {
-            chosen: (0..groups.len()).map(|_| Cell::new(0)).collect(),
+            chosen: (0..groups.len()).map(|_| AtomicU16::new(0)).collect(),
         }
     }
 
@@ -385,14 +387,17 @@ impl LodSwitch {
     pub fn select(&self, groups: &LodGroups, model: Mat4, eye: LodEye) {
         let model_view = eye.view * model;
         for (group, chosen) in self.chosen.iter().enumerate() {
-            chosen.set(groups.child_at(group, model_view, eye.fov_degrees, eye.detail));
+            chosen.store(
+                groups.child_at(group, model_view, eye.fov_degrees, eye.detail),
+                Relaxed,
+            );
         }
     }
 
     /// Puts every group back on its finest child.
     pub fn reset(&self) {
         for chosen in &self.chosen {
-            chosen.set(0);
+            chosen.store(0, Relaxed);
         }
     }
 
@@ -402,14 +407,14 @@ impl LodSwitch {
         groups.member_of(draw).is_none_or(|(group, child)| {
             self.chosen
                 .get(group)
-                .map_or(child == 0, |chosen| chosen.get() == child)
+                .map_or(child == 0, |chosen| chosen.load(Relaxed) == child)
         })
     }
 
     /// Which child group `group` is on this frame, for a report.
     #[must_use]
     pub fn chosen(&self, group: usize) -> Option<u16> {
-        self.chosen.get(group).map(Cell::get)
+        self.chosen.get(group).map(|chosen| chosen.load(Relaxed))
     }
 }
 

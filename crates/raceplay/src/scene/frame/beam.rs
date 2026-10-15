@@ -7,7 +7,7 @@
 use oag_core::math::Mat4;
 use oag_mesh::mesh_render;
 
-use crate::{Race, SceneStats, Uploads, ViewBlock};
+use crate::{Race, Uploads};
 
 impl super::super::Scene {
     /// Uploads this frame's ribbon geometry, or nothing when
@@ -18,7 +18,12 @@ impl super::super::Scene {
     /// Reads the camera's own right and up out of the view matrix, the same
     /// way `frame.rs` does for its sprites: `LeachBeam_BuildStrip` widens its
     /// two strips along view-space `x` and `y`.
-    pub(super) fn upload_beam(&self, race: &Race, queue: &wgpu::Queue, vp: &[[f32; 4]; 4]) {
+    pub(super) fn upload_beam(
+        &self,
+        race: &Race,
+        queue: &dyn oag_gpu::writes::Writes,
+        vp: &[[f32; 4]; 4],
+    ) {
         if let Some(beam) = &self.beam {
             let camera = race.view();
             let right =
@@ -31,16 +36,6 @@ impl super::super::Scene {
                 race.leach_beam_ribbon_vertices(right, up)
             };
             beam.borrow_mut().upload(queue, vp, &vertices);
-        }
-    }
-
-    /// Draws the ribbon into a pass the caller already opened, after the
-    /// hull's own depth is present to occlude it - the same ordering
-    /// [`super::super::Scene::exhaust`] and [`super::super::Scene::sparks`]
-    /// need and for the same reason.
-    pub(in crate::scene) fn draw_beam(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if let Some(beam) = &self.beam {
-            beam.borrow().draw(pass);
         }
     }
 
@@ -77,15 +72,13 @@ impl super::super::Scene {
 
     /// Draws the LeachBall's own model, when [`Self::write_leach_ball`]'s
     /// own return says it was written this frame.
-    pub(super) fn draw_leach_ball(
-        &self,
+    pub(super) fn draw_leach_ball<'a>(
+        &'a self,
         active: bool,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+        list: &mut super::super::record::DrawList<'a>,
     ) {
         if active && let Some(drawable) = &self.leach_ball {
-            stats.add(drawable.draw(pass, block, None, None, None, None));
+            list.mesh(drawable);
         }
     }
 }

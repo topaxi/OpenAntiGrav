@@ -187,7 +187,7 @@ fn the_exhaust_pipeline_builds_and_draws_on_a_real_device() {
             occlusion_query_set: None,
             multiview_mask: None,
         });
-        pipeline.draw(&mut pass);
+        pipeline.draw(&mut pass, pipeline.drawn());
     }
     queue.submit(std::iter::once(encoder.finish()));
     device

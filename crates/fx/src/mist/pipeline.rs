@@ -33,6 +33,13 @@ pub fn vertices(quads: &[[[f32; 2]; 4]; 2], alphas: [f32; 2]) -> [Vertex; VERTIC
     out
 }
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    visible: bool,
+}
+
 /// The mist pipeline, its texture and its twelve vertices.
 #[derive(Debug)]
 pub struct Pipeline {
@@ -153,17 +160,29 @@ impl Pipeline {
 
     /// This frame's quads; `None` draws nothing, as `WeatherMist_Draw` does
     /// while the opacity is not above zero.
-    pub fn upload(&mut self, queue: &wgpu::Queue, vertices: Option<&[Vertex; VERTICES]>) {
+    pub fn upload(
+        &mut self,
+        queue: &dyn oag_gpu::writes::Writes,
+        vertices: Option<&[Vertex; VERTICES]>,
+    ) {
         self.visible = vertices.is_some();
         if let Some(vertices) = vertices {
             queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(vertices));
         }
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn {
+            visible: self.visible,
+        }
+    }
+
     /// Draws into a pass the caller opened, after the world and before the
     /// HUD.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if !self.visible {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if !drawn.visible {
             return;
         }
         pass.set_pipeline(&self.pipeline);

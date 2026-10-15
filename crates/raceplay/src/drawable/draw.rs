@@ -19,7 +19,9 @@ pub(crate) enum Lists<'a> {
     Blended,
 }
 
-/// The scratch [`Drawable::draw_lists`] gathers its opaque draws into.
+/// The scratch [`Drawable::draw_lists`] gathers its opaque draws into, one per thread: the
+/// views of a split record on threads of their own, and two of them can draw one drawable at
+/// once.
 #[derive(Debug, Default)]
 pub(crate) struct Shown {
     /// What this frame shows, in the model's order.
@@ -28,6 +30,10 @@ pub(crate) struct Shown {
     depth: Vec<u32>,
     /// Per draw, whether it is in `natural`.
     flags: Vec<bool>,
+}
+
+thread_local! {
+    static SHOWN: std::cell::RefCell<Shown> = std::cell::RefCell::default();
 }
 
 impl Drawable {
@@ -103,14 +109,39 @@ impl Drawable {
         frustum: Option<&Frustum>,
         lists: Lists<'_>,
     ) -> SceneStats {
-        let mut stats = SceneStats::default();
-        let none: &[DrawCall] = &[];
         let solid = !matches!(lists, Lists::Blended);
         let blended = !matches!(lists, Lists::Solid { .. });
         let order = match lists {
             Lists::Solid { order } => order,
             Lists::All | Lists::Blended => None,
         };
+        if self.model.indices.is_empty() {
+            return SceneStats::default();
+        }
+        SHOWN.with_borrow_mut(|shown| {
+            self.draw_lists_into(
+                pass, block, sections, set, chunks, frustum, order, solid, blended, shown,
+            )
+        })
+    }
+
+    /// [`Self::draw_lists`], with this thread's scratch.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_lists_into(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
+        sections: Option<&DrawSections>,
+        set: Option<&VisibleSet>,
+        chunks: Option<&ChunkSet>,
+        frustum: Option<&Frustum>,
+        order: Option<&[(f32, u32)]>,
+        solid: bool,
+        blended: bool,
+        shown: &mut Shown,
+    ) -> SceneStats {
+        let mut stats = SceneStats::default();
+        let none: &[DrawCall] = &[];
         let mut binds = oag_gpu::perfprobe::Binds::default();
         let mut last_bound: Option<usize> = None;
         // A model with no placement table has every draw call unplaced, which
@@ -121,9 +152,7 @@ impl Drawable {
             Some(s) => (&s.opaque[..], &s.alpha_tested[..], &s.transparent[..]),
             None => (empty, empty, empty),
         };
-        if self.model.indices.is_empty() {
-            return stats;
-        }
+        let shows = self.shows(block);
         oag_gpu::perfprobe::pipeline_set();
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.uniform_bind, &self.uniform_offset(block));
@@ -138,16 +167,15 @@ impl Drawable {
         let opaque_draws = if solid { &self.model.draws[..] } else { none };
         // The draws this frame shows, in the model's order, gathered first
         // because a prepass walks them twice - the second time backwards.
-        let mut shown = self.shown.borrow_mut();
         let Shown {
             natural: shown,
             depth: depth_order,
             flags,
-        } = &mut *shown;
+        } = shown;
         shown.clear();
         for (index, draw) in opaque_draws.iter().enumerate() {
             // A tier the switch has off is not culled, it is not there.
-            if !self.lod_shows(draw) {
+            if !shows.draw(draw) {
                 continue;
             }
             if !visible(draw, DrawSections::at(opaque, index), set, chunks, frustum) {
@@ -280,7 +308,7 @@ impl Drawable {
         .iter()
         .enumerate()
         {
-            if !self.lod_shows(draw) {
+            if !shows.draw(draw) {
                 continue;
             }
             if !visible(
@@ -341,7 +369,7 @@ impl Drawable {
             return stats;
         }
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
-            if !self.lod_shows(draw) {
+            if !shows.draw(draw) {
                 continue;
             }
             if !visible(
@@ -375,7 +403,7 @@ impl Drawable {
             }
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
-        self.draw_stamps(pass, transparent, set, chunks, frustum);
+        self.draw_stamps(pass, &shows, transparent, set, chunks, frustum);
         stats
     }
 }

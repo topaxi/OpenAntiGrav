@@ -16,7 +16,6 @@ mod bloom;
 mod boost_flare;
 mod clouds;
 mod craft_cull;
-mod effects;
 mod frame;
 mod ghost;
 mod hd_chain;
@@ -25,12 +24,15 @@ mod mist;
 mod motion;
 mod per_slot;
 mod queries;
+mod record;
 mod ribbons;
 mod scene_blocks;
 mod scratch;
 mod shine;
 mod split_blur;
 mod split_exposure;
+mod split_record;
+pub use split_record::Recording;
 mod viewports;
 mod weapon_models;
 mod weapon_quads;
@@ -336,10 +338,6 @@ pub struct Scene {
     /// nothing reads it between frames, and [`Scratch::clear`] is the first
     /// thing done with it.
     scratch: std::cell::RefCell<Scratch>,
-    /// This frame's front-to-back order of the circuit's opaque draws, under
-    /// HD's chain only - see `Scene::draw_track`. Kept apart from
-    /// [`Self::scratch`], which `render` holds borrowed across the pass.
-    opaque_order: std::cell::RefCell<Vec<(f32, u32)>>,
     /// The recovered bloom, run after the scene pass over whatever the frame
     /// stamped into its alpha channel. `None` when the pipelines would not
     /// build, which costs the glow and nothing else.
@@ -415,6 +413,10 @@ pub struct Scene {
     /// Whether the split-screen seats' histories hold a frame the last split drew, so the
     /// first single-view frame after it forgets them ([`Scene::retire_split_histories`]).
     split_live: std::cell::Cell<bool>,
+    /// How a split records its views ([`Scene::set_split_recording`]).
+    split_recording: std::cell::Cell<Recording>,
+    /// The later views' write logs, kept between frames for their memory (`split_record`).
+    split_logs: std::cell::RefCell<Vec<oag_gpu::writes::Log>>,
     depth: wgpu::Texture,
     /// The colour attachment every pipeline here actually draws into, and its
     /// sample count.
@@ -1002,6 +1004,8 @@ impl Scene {
                 .collect(),
             history: std::cell::Cell::new(0),
             split_live: std::cell::Cell::new(false),
+            split_recording: std::cell::Cell::new(Recording::default_for_target()),
+            split_logs: std::cell::RefCell::default(),
             track,
             visibility,
             ships,
@@ -1053,7 +1057,6 @@ impl Scene {
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),
-            opaque_order: std::cell::RefCell::default(),
             depth,
             msaa_color,
             attachment_views,

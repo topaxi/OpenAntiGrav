@@ -30,6 +30,13 @@ pub(super) struct Ghosts {
     warned: std::cell::Cell<bool>,
 }
 
+impl Ghosts {
+    /// The pipeline, where this race draws a ghost.
+    pub(super) fn pipeline(&self) -> Option<&oag_render::ghost::Pipeline> {
+        self.pipeline.as_ref()
+    }
+}
+
 impl Scene {
     /// Builds the ghost's pipeline for a race of `mode`, when that mode races
     /// one - [`oag_race::Mode::races_a_ghost`].
@@ -116,7 +123,7 @@ impl Scene {
     pub(super) fn write_ghost(
         &self,
         race: &Race,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: Mat4,
         prev_vp: Mat4,
     ) {
@@ -128,31 +135,21 @@ impl Scene {
         }
     }
 
-    /// Draws the ghost, last in the scene pass - see `oag_render::ghost`,
-    /// "what is ours", for why last.
-    pub(super) fn draw_ghost(
+    /// What the ghost draws this view, last in the scene pass - see `oag_render::ghost`,
+    /// "what is ours", for why last: its hull's draws and its fade.
+    pub(super) fn ghost_draw(
         &self,
         race: &Race,
         eye: oag_mesh::mesh::LodEye,
-        pass: &mut wgpu::RenderPass<'_>,
-        stats: &mut SceneStats,
-    ) {
-        let (Some(pipeline), Some(ghost), Some((now, before))) = (
-            self.ghost.pipeline.as_ref(),
-            race.ghost(),
-            race.ghost_pose(),
-        ) else {
-            return;
-        };
-        let Some(drawable) = self.ghost_drawable(&ghost.team) else {
-            return;
-        };
+    ) -> Option<(oag_render::ghost::Hull<'_>, oag_render::ghost::Fade)> {
+        self.ghost.pipeline.as_ref()?;
+        let ghost = race.ghost()?;
+        let (now, before) = race.ghost_pose()?;
+        let drawable = self.ghost_drawable(&ghost.team)?;
         let distance = (race.ship().physics.body.position - now.position).length();
-        let drawn = pipeline.draw(
-            pass,
-            &drawable.ghost_hull(race.ghost_draw_matrix(&now, &before), eye),
+        Some((
+            drawable.ghost_hull(race.ghost_draw_matrix(&now, &before), eye),
             oag_render::ghost::fade(distance),
-        );
-        stats.draws_submitted += drawn;
+        ))
     }
 }

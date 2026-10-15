@@ -288,7 +288,7 @@ impl Maps {
     /// stale layer would drag last frame's road under a craft that has moved.
     pub fn render(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         fit: &Fit,
@@ -361,7 +361,7 @@ impl Maps {
     /// Returns how many index ranges it drew.
     pub fn render_self_shadow(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         encoder: &mut wgpu::CommandEncoder,
         layer: usize,
         caster: &Caster<'_>,

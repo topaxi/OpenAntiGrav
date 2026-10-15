@@ -81,17 +81,15 @@ impl Scene {
 
     /// Draws every live overlay, after the hulls so their depth is in the
     /// buffer the overlay tests against.
-    pub(super) fn draw_absorb_overlays(
-        &self,
-        race: &Race,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+    pub(super) fn draw_absorb_overlays<'a>(
+        &'a self,
+        race: &'a Race,
+        list: &mut super::record::DrawList<'a>,
     ) {
-        self.draw_shine(race, pass, block, stats);
+        self.draw_shine(race, list);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (_, overlay, _) in self.hull_overlays(race, which) {
-                stats.add(overlay.draw_overlay(pass, block));
+                list.overlay(overlay);
             }
         }
     }
