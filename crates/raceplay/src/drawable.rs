@@ -57,6 +57,14 @@ pub(super) struct Drawable {
     /// [`Self::share_uniforms`] moved it there; `None` while it reads [`Self::uniforms`].
     uniform_slot: Option<u32>,
     textures: Vec<wgpu::BindGroup>,
+    /// Group 1 as arrays, bound once per [`Self::draw`] instead of a slot's group per
+    /// draw, when this drawable was built for it and the device has it - see
+    /// `mesh_render::bindless` and [`Self::bind_slot`]. Every pipeline above then
+    /// binds this; [`Self::textures`] stays for the sun-occlusion pass and the ghost.
+    bindless: Option<mesh_render::bindless::Bindless>,
+    /// The billboard card's material, made by the first [`Self::set_albedo`] and copied with
+    /// each later card's albedo, so every card slot shares its sampler and 1x1s.
+    card: Option<mesh_render::bindless::Material>,
     /// Bind group 2: the fog this drawable is rendered with.
     fog_bind: wgpu::BindGroup,
     /// The buffer behind it. Rewritten each frame from the track's `fogCube`,
@@ -171,6 +179,7 @@ impl Drawable {
             false,
             false,
             velocity,
+            true,
         )
     }
 
@@ -201,6 +210,10 @@ impl Drawable {
         // `mesh_render::build_with`.
         cull_back: bool,
         velocity: mesh_render::Velocity,
+        // Whether group 1 is the binding arrays, where the device has them and
+        // `OAG_BINDLESS` does not say `0` - see [`Self::bindless`]. Every race drawable
+        // asks; the test of the per-slot path is the one caller that does not.
+        bindless: bool,
     ) -> Result<Self> {
         let mesh_render::Built {
             pipeline,
@@ -216,6 +229,7 @@ impl Drawable {
             vertex_buffer: vertices,
             index_buffer: indices,
             texture_binds: textures,
+            bindless,
             fog_bind,
             fog_buffer,
             zone_vis_texture,
@@ -248,6 +262,7 @@ impl Drawable {
             prepass,
             cull_back,
             true,
+            bindless && mesh_render::bindless::wanted(device),
         )?;
         let reversed_indices = prepass.is_some().then(|| {
             let reversed: Vec<u32> = model
@@ -350,6 +365,8 @@ impl Drawable {
             uniform_bind,
             uniform_slot: None,
             textures,
+            bindless,
+            card: None,
             fog_bind,
             fog: fog_buffer,
             scene_kind: None,
@@ -375,16 +392,66 @@ impl Drawable {
         view: &wgpu::TextureView,
     ) {
         // Slot 0 is the white fallback, so a texture slot n binds group n + 1.
-        let Some(bind) = self.textures.get_mut(texture_slot + 1) else {
+        let slot = texture_slot + 1;
+        let Some(bind) = self.textures.get_mut(slot) else {
             return;
         };
-        *bind = mesh_render::albedo_bind_group(
+        let card = self
+            .card
+            .get_or_insert_with(|| mesh_render::card_material(device, queue, view));
+        let material = mesh_render::bindless::Material {
+            albedo: view.clone(),
+            ..card.clone()
+        };
+        *bind = material.bind_group(
             device,
-            queue,
-            &self.pipeline.get_bind_group_layout(1),
-            view,
+            &mesh_render::material_bind_group_layout(device),
             "advert albedo",
         );
+        if let Some(bindless) = &mut self.bindless {
+            bindless.set(device, slot, material);
+        }
+    }
+
+    /// Whether this drawable binds group 1 as arrays ([`Self::bindless`]).
+    #[cfg(test)]
+    pub(crate) fn binds_arrays(&self) -> bool {
+        self.bindless.is_some()
+    }
+
+    /// Binds group 1 for this drawable's draws: the arrays once, with slot 0's row
+    /// pushed so a draw before any [`Self::bind_slot`] (the prepass's depth half) has
+    /// its immediates set; or nothing, leaving [`Self::bind_slot`] to bind each slot's
+    /// group.
+    pub(super) fn bind_materials(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        last_bound: &mut Option<usize>,
+    ) {
+        if let Some(bindless) = &self.bindless {
+            pass.set_bind_group(1, bindless.group(), &[]);
+            pass.set_immediates(0, bindless.row(0));
+            *last_bound = Some(0);
+        }
+    }
+
+    /// Readies material slot `slot` for the next draw, unless `last_bound` says it
+    /// already is: pushes its row with the arrays bound ([`Self::bind_materials`]),
+    /// binds its group otherwise.
+    pub(super) fn bind_slot(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        last_bound: &mut Option<usize>,
+        slot: usize,
+    ) {
+        if *last_bound == Some(slot) {
+            return;
+        }
+        match &self.bindless {
+            Some(bindless) => pass.set_immediates(0, bindless.row(slot)),
+            None => pass.set_bind_group(1, &self.textures[slot], &[]),
+        }
+        *last_bound = Some(slot);
     }
 
     /// Binds this drawable's vertex buffer - and its streamed coordinates,

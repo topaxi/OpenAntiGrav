@@ -38,8 +38,16 @@ pub fn optional_features(adapter: &wgpu::Adapter) -> wgpu::Features {
     } else {
         wgpu::Features::empty()
     };
+    // The binding arrays are the `bindless` mesh variant's (`super::bindless`):
+    // both or neither, since the variant needs the two together.
+    let arrays = if adapter.features().contains(super::bindless::FEATURES) {
+        super::bindless::FEATURES
+    } else {
+        wgpu::Features::empty()
+    };
     adapter.features()
         & (wgpu::Features::TEXTURE_COMPRESSION_BC | wgpu::Features::TIMESTAMP_QUERY | probe)
+        | arrays
 }
 
 /// The device descriptor every `request_device` in this workspace uses.
@@ -65,7 +73,8 @@ pub fn device_descriptor<'a>(
 }
 
 /// wgpu's default limits with the **texture-dimension limits raised to the
-/// adapter's own**.
+/// adapter's own**, and the binding-array limits to what the `bindless` mesh
+/// variant needs where the adapter has them (`super::bindless::with_limits`).
 ///
 /// The default `max_texture_dimension_2d` is 8,192, and Wipeout Omega's Talon's
 /// Junction ships `ds_floor_cs.gnf` 16,384 texels wide: `create_texture` on it
@@ -83,5 +92,8 @@ pub fn device_descriptor<'a>(
 /// adapter allows.
 #[must_use]
 pub fn required_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
-    wgpu::Limits::default().using_resolution(adapter.limits())
+    super::bindless::with_limits(
+        wgpu::Limits::default().using_resolution(adapter.limits()),
+        adapter,
+    )
 }

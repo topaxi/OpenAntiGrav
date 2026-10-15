@@ -77,6 +77,7 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Stamp {
             ..Default::default()
         };
         pipeline_cache::cached_pipeline(
+            shared.shader,
             "vs_main",
             shared.vertex_buffers,
             entry,

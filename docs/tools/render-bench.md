@@ -494,6 +494,118 @@ done; done; done; done | tee /tmp/oag-bench/encoder-finish.txt
 `bench split:` must name the Deck's GPU (RADV), not llvmpipe. Read the minimum of each binary's
 medians. For one run of each binary add `OAG_RENDER_PERF=1` and read the `encoder-finish` mark.
 
+## Bindless textures (2026-10-16, `bindless`)
+
+Same notebook (NVIDIA RTX PRO 2000 Blackwell Laptop GPU and the Arrow Lake iGPU), release
+`perf-probe` builds, 1280x800, `--mode single_race --ticks 300`, pinned (`taskset -c 0-5`), the gate
+lock held, interleaved A/B on **one binary** (`OAG_BINDLESS=0` selects the per-slot groups), **minimum
+of two rounds of the per-run median**: `render_viewports CPU`, `pipelined per frame` and the scene
+passes' GPU timestamps from a plain run, and the `encoder-finish` span of the second view from a run
+with `OAG_RENDER_PERF=1`. `main` (`b4581bf70`) reads the same as `OAG_BINDLESS=0`, so the
+asked-for features and limits cost the per-slot path nothing: on the final build, one view, CPU
+Pulse 978 / 1,027, HD 1,958 / 1,960, Pure 569 / 507 us (two rounds); on the build before
+immediates, 2h, Pulse 2,042 / 1,989, HD 2,913 / 2,822, Pure 792 / 823.
+
+**What it is** (`oag_mesh::mesh_render::bindless`): on a device with `TEXTURE_BINDING_ARRAY`,
+`PARTIALLY_BOUND_BINDING_ARRAY` and `IMMEDIATES`, every race drawable binds group 1 once: its
+distinct textures in one `binding_array` (at most 1,024), its distinct samplers in another (at most
+16), and each draw pushes its slot's row of five indices (albedo, lightmap, pad mask, wave map,
+sampler) as immediates when the slot changes. One WESL source: `shaders/bindings.wesl` declares the
+arrays under `@if(bindless)`, and the three functions that read group 1 (`lit_texel`,
+`holo_billboard`, `sample_at_slope_level`) declare the five old names from the row first, so the
+default `mesh.wgsl` is byte-identical to `main`'s and the variant is `mesh_bindless.wgsl`.
+
+**NVIDIA, 2h, us, per-slot then arrays:**
+
+| Title | CPU | pipelined | scene passes, GPU | second view's `finish` | ceiling (no group-1 switch) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pulse | 1,499 / 1,264 | 1,498 / 1,265 | 423 / 401 | 208 / 124 | 96 |
+| HD | 2,064 / 1,916 | 3,545 / 3,660 | 1,516 / 1,660 | 283 / 160 | 98 |
+| Pure | 638 / 552 | 1,021 / 992 | 514 / 515 | 138 / 88 | 39 |
+
+**One view, NVIDIA, us (per-slot / arrays), two rounds:** CPU Pulse 1,027 / 890, HD 1,960 /
+1,960, Pure 507 / 503; pipelined 1,093 / 902, 3,018 / 2,872, 779 / 740; scene pass GPU 333 / 361,
+1,072 / 1,083, 398 / 387. One view switches less than a split's second view pays for, so only
+Pulse's CPU moves; nothing regresses.
+
+HD's GPU and pipelined cells were re-run three more times each way (scene passes 1,348 / 1,406 at
+the minimum, pipelined 3,549 / 3,442): within the noise, and the pipelined frame is lower with the
+arrays. The `finish` ceiling column is `encoder-finish`'s, measured on a busier machine (its
+per-slot `finish` read 216, 273 and 133), so read the arrays as taking 53 to 70% of what that hack
+took out (Pulse 84 of 120 us, HD 123 of 175, Pure 50 of 94), not as reaching it: a group 1 bind per drawable call and an immediate per slot change
+are left, and the wgpu tracking of each array's elements when the group is bound.
+
+**Arrow Lake iGPU** (`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`), 2h, us, per-slot
+then arrays: pipelined HD 6,598 / 6,616, Pulse 2,535 / 2,508, Pure 1,804 / 1,809; second view's
+`finish` HD 664 / 500, Pulse 342 / 258, Pure 486 / 370. The CPU line swings by 50% between
+rounds here and is not quoted. The iGPU is GPU-bound in a split, so the frame does not move; what it
+shows is that the variant costs its GPU nothing.
+
+**Two designs that lost, and why** (both measured, neither kept):
+
+- **One array element per slot and role, padded to a fixed 1,024**: the second view's `finish`
+  *rose* on NVIDIA (Pulse 288 to 440 us, Pure and HD alike). wgpu walks a texture-initialisation
+  check per array element every time the group is bound, so 4 x 1,024 elements a bind cost more than
+  the switches. Padded to 256 instead it fell (Pulse 318 to 216, Pure 190 to 151), which is what
+  identified the cause; the arrays now hold each distinct texture once and are bound short of their
+  length (`PARTIALLY_BOUND_BINDING_ARRAY`), so the layout stays one and the pipeline cache valid.
+- **The slot carried from the vertex stage** (the first instance as a flat varying, with a table of
+  rows in a storage buffer): `finish` fell as now, but the iGPU's pipelined frame rose 6.5% on HD
+  (6,571 to 6,995 us, three runs each) and 16% on Pure (1,827 to 2,122), and NVIDIA's scene passes
+  about 15% on Pulse and Pure. A varying is not provably uniform, so naga decorates every array read
+  through it `NonUniform` (four in a probe of the same reads, none with an immediate), and ANV, which
+  has no native non-uniform indexing, pays for that per fragment. The variant now asks for no
+  non-uniform indexing at all, and `oag-shader-check` validates it without that capability, so an
+  index that is not uniform fails the build.
+
+**Cost elsewhere.** Race load on HD: about +0.3 s on NVIDIA (4.1 to 4.3 s against 4.6 to 4.9,
+three runs each), none on the iGPU; the first runs after a rebuild read +3 s on both while the
+drivers compiled the variant's pipelines into their shader caches. Pipelines built per race: the
+same (84 distinct for HD's Talon's Junction either way). Per title, the drawable with the most
+distinct textures on the default circuit: Pulse 141, Pure 191, HD 192, Omega 176, 2048 167; at
+most two samplers a drawable (the repeat sampler, and the advert cards' clamp sampler, which every
+card slot now shares).
+
+**Pictures.** Twelve stills (Pulse, Pure, HD Talon's Junction, HD Zone, 2048 and Omega, one view
+and 2h, tick 300) are byte-identical against `main` on both paths, and
+`oag_raceplay::tests::bindless` draws eight slots of eight colours (one pair sharing a texture, one
+slot on the white fallback) through both paths and fails on a pixel's difference.
+
+**How long a run takes.** This lane's first A/B (three titles, one view and 2h, three binaries,
+plain and `perf` runs, three rounds) was 108 launches and about 50 minutes, almost all of it race
+loads and the 300 ticks before the measured frames. The table above is the trimmed form: 2h only,
+off against on (main was already shown equal to off), two rounds, about 10 minutes a GPU. An A/B
+inside one process (load once, alternate the two paths frame by frame) would take most of the rest
+out; not built.
+
+**Steam Deck commands (not run: the Deck is the maintainer's).** First, whether RADV has the three
+features and the limits under wgpu 30; the race log says which drawables took the arrays:
+
+```sh
+git checkout main && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-bl
+mkdir -p /tmp/oag-bench
+XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+RUST_LOG=info,oag_mesh::mesh_render::bindless=debug /tmp/oag-game-bl data/images/hdfury-ps3-eu-dec.iso --race --no-audio \
+  --mode single_race --ticks 60 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 | grep -E 'binding arrays|bindless:' | head
+vulkaninfo 2>/dev/null | grep -E 'descriptorBindingPartiallyBound|maxPushConstantsSize|maxPerStageDescriptorUpdateAfterBindSampledImages|maxPerStageDescriptorUpdateAfterBindSamplers'
+```
+
+No `group 1 as binding arrays` line means the Deck lacks one of the three; the race then draws as
+`main` does. If the lines are there, the A/B (one binary, `OAG_BINDLESS` per run):
+
+```sh
+for title in pulse-psp-eu.chd hdfury-ps3-eu-dec.iso; do for rep in 1 2; do for b in 0 1; do
+  echo "== $title bindless=$b load=$(cut -d' ' -f1 /proc/loadavg)"
+  XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+  OAG_BINDLESS=$b OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100 /tmp/oag-game-bl data/images/$title --race --no-audio \
+    --mode single_race --players 2 --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+    | grep -E '^bench (split|render_viewports CPU|pipelined|sum of)'
+done; done; done | tee /tmp/oag-bench/bindless.txt
+```
+
+Read the minimum of each path's medians; the Deck is GPU-bound in a split like the iGPU, so the
+pipelined frame is the line that decides, and it must not rise.
+
 ## HD on a notebook, before and after the craft cull (2026-10-15, `hd-gpu`)
 
 Release build, 1280x800 and 1920x1080 scene only, Talon's Junction, seed 1, autopilot, the

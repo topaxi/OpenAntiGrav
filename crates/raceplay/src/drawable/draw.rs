@@ -161,6 +161,7 @@ impl Drawable {
         pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         // Same reasoning as fog: the table is per frame, not per draw call.
         pass.set_bind_group(3, &self.anim_bind, &[]);
+        self.bind_materials(pass, &mut last_bound);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         // Slot 0 is the white fallback, so a texture index of n binds slot n + 1.
@@ -214,7 +215,8 @@ impl Drawable {
         // under an empty write mask), so group 1 is bound once, to the white fallback, and its
         // draws go out without switching it: half of HD's circuit binds, and what the wgpu
         // encoder validates at `finish`. The shade half binds as usual from this state.
-        if self.prepass.is_some() && !shown.is_empty() {
+        // With the arrays bound ([`Self::bind_materials`]) there is nothing to bind.
+        if self.bindless.is_none() && self.prepass.is_some() && !shown.is_empty() {
             pass.set_bind_group(1, &self.textures[0], &[]);
             last_bound = Some(0);
         }
@@ -224,7 +226,10 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            binds.record(slot);
+            // The probe counts group 1 switches, which the arrays do not make.
+            if self.bindless.is_none() {
+                binds.record(slot);
+            }
             // Switched only when the slot changes, the same elision the
             // transparent list's `set_pipeline` already runs. Batches
             // sharing a texture arrive in runs - a model's own batch order
@@ -239,10 +244,7 @@ impl Drawable {
             // and 3 be bound once at the top and left alone through both
             // pipeline switches below. It restarts at `None` per
             // [`Self::draw`] call, where the texture array itself changes.
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
-            }
+            self.bind_slot(pass, &mut last_bound, slot);
             let range = if reversed {
                 index_count - draw.range.end..index_count - draw.range.start
             } else {
@@ -336,12 +338,12 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            binds.record(slot);
-            // Elided when unchanged, as above.
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
+            // The probe counts group 1 switches, which the arrays do not make.
+            if self.bindless.is_none() {
+                binds.record(slot);
             }
+            // Elided when unchanged, as above.
+            self.bind_slot(pass, &mut last_bound, slot);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
 
@@ -395,12 +397,12 @@ impl Drawable {
                 .texture
                 .map_or(0, |t| t + 1)
                 .min(self.textures.len() - 1);
-            binds.record(slot);
-            // Elided when unchanged, as above.
-            if last_bound != Some(slot) {
-                pass.set_bind_group(1, &self.textures[slot], &[]);
-                last_bound = Some(slot);
+            // The probe counts group 1 switches, which the arrays do not make.
+            if self.bindless.is_none() {
+                binds.record(slot);
             }
+            // Elided when unchanged, as above.
+            self.bind_slot(pass, &mut last_bound, slot);
             pass.draw_indexed(draw.range.clone(), 0, 0..1);
         }
         self.draw_stamps(pass, &shows, transparent, set, chunks, frustum);

@@ -22,8 +22,11 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 /// Everything that distinguishes one render pipeline `build` creates from
-/// another, **except the shader module and the bind group layouts it was
-/// built against**. Those two belong out of the key on purpose: wgpu
+/// another, **except the bind group layouts it was built against**, which
+/// the shader module stands for: the default module's group 1 is
+/// [`super::material_bind_group_layout`] and the `bindless` variant's is
+/// [`super::bindless::layout`], so two pipelines of one module share layouts.
+/// The layouts themselves belong out of the key on purpose: wgpu
 /// deduplicates a `BindGroupLayout` - and the `PipelineLayout` built from it -
 /// by its descriptor's own content, the fact
 /// [`super::material_bind_group_layout`]'s own doc comment already relies on
@@ -34,6 +37,8 @@ use std::collections::HashMap;
 /// call's bind groups as one built fresh for it would have.
 #[derive(PartialEq, Eq, Hash)]
 struct Key {
+    /// Which of the two modules [`shared_shader_module`] hands out.
+    shader: wgpu::ShaderModule,
     vertex_entry: &'static str,
     /// The vertex buffers' layouts - stride, step and attributes. Not
     /// optional: two pipelines differing only by where `texcoord` comes from
@@ -64,7 +69,8 @@ impl Key {
 
 #[derive(Default)]
 struct Cache {
-    shader: Option<wgpu::ShaderModule>,
+    /// `[default, bindless]`.
+    shader: [Option<wgpu::ShaderModule>; 2],
     pipelines: HashMap<Key, wgpu::RenderPipeline>,
     /// One upload per distinct decoded texture across the whole scene, keyed
     /// by the `Arc`'s address. The `Weak` is what makes the address a safe
@@ -190,30 +196,38 @@ pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {
     })
 }
 
-/// `build`'s one shader module: shared for the life of an open [`Scope`],
-/// freshly created and uncached with none open.
-pub(crate) fn shared_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
+/// `build`'s shader module, the default or the `bindless` variant
+/// (`super::bindless`): shared for the life of an open [`Scope`], freshly
+/// created and uncached with none open.
+pub(crate) fn shared_shader_module(device: &wgpu::Device, bindless: bool) -> wgpu::ShaderModule {
     CACHE.with(|cell| match cell.borrow_mut().as_mut() {
-        None => create_shader_module(device),
+        None => create_shader_module(device, bindless),
         Some(cache) => {
             cache.shader_calls += 1;
-            if let Some(shader) = &cache.shader {
+            let slot = &mut cache.shader[usize::from(bindless)];
+            if let Some(shader) = slot {
                 cache.shader_hits += 1;
                 return shader.clone();
             }
-            let shader = create_shader_module(device);
-            cache.shader = Some(shader.clone());
+            let shader = create_shader_module(device, bindless);
+            *slot = Some(shader.clone());
             shader
         }
     })
 }
 
-fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
+fn create_shader_module(device: &wgpu::Device, bindless: bool) -> wgpu::ShaderModule {
+    let (label, source) = if bindless {
+        (
+            "mesh bindless",
+            include_str!(concat!(env!("OUT_DIR"), "/mesh_bindless.wgsl")),
+        )
+    } else {
+        ("mesh", include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl")))
+    };
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("mesh"),
-        source: wgpu::ShaderSource::Wgsl(
-            include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl")).into(),
-        ),
+        label: Some(label),
+        source: wgpu::ShaderSource::Wgsl(source.into()),
     })
 }
 
@@ -223,6 +237,7 @@ fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
 /// cache miss.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn cached_pipeline(
+    shader: &wgpu::ShaderModule,
     vertex_entry: &'static str,
     vertex_buffers: &[Option<wgpu::VertexBufferLayout<'_>>],
     fragment_entry: &'static str,
@@ -237,6 +252,7 @@ pub(crate) fn cached_pipeline(
         None => create(),
         Some(cache) => {
             let key = Key {
+                shader: shader.clone(),
                 vertex_entry,
                 vertex_buffers: vertex_buffers
                     .iter()

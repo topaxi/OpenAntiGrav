@@ -644,6 +644,7 @@ impl Scene {
             hd.is_some(),
             false,
             mesh_render::Velocity::Write,
+            true,
         )?;
         let adverts = if adverts.is_empty() {
             None

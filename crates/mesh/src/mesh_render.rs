@@ -134,6 +134,13 @@ pub struct Built {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub texture_binds: Vec<wgpu::BindGroup>,
+    /// Group 1 as arrays, the same materials slot for slot, when the caller asked
+    /// for [`bindless`] and the device has it: every pipeline above was then built
+    /// against [`bindless::layout`], so this is the group they bind, once, and a
+    /// draw pushes its slot's [`bindless::Bindless::row`]. [`Built::texture_binds`] is
+    /// built either way, for the passes that bind a slot through
+    /// [`material_bind_group_layout`].
+    pub bindless: Option<bindless::Bindless>,
     /// Bind group 2, holding [`Scene`] - [`Fog`] **and** [`Light`]. Bound by
     /// every draw; write [`Built::fog_buffer`] to change it.
     pub fog_bind: wgpu::BindGroup,
@@ -252,6 +259,7 @@ pub fn build(
         false,
         false,
         false,
+        false,
     )
 }
 
@@ -292,7 +300,12 @@ pub fn build_with(
     // and takes parked texture writes, while a deferral scope is open. Every
     // caller but `race::Drawable` keeps immediate writes.
     defer_uploads: bool,
+    // Whether to bind group 1 as arrays, one group for the whole model, where the
+    // device has the features - see [`bindless`]. [`Built::bindless`] says whether
+    // it did; every caller draws [`Built::texture_binds`] otherwise.
+    bindless: bool,
 ) -> Result<Built> {
+    let bindless = bindless && bindless::supported(device) && bindless::fits(model);
     // The blended pipeline never writes depth whichever role this is; the rest
     // is what [`Depth`] chooses between.
     let (depth_write, depth_compare) = match depth {
@@ -306,7 +319,7 @@ pub fn build_with(
     // see `pipeline_cache` for why and by how much. A caller with no scope
     // open (the viewer, every test but the cache's own) gets exactly the
     // fresh module this always created.
-    let shader = pipeline_cache::shared_shader_module(device);
+    let shader = pipeline_cache::shared_shader_module(device, bindless);
     let shader = &shader;
     // The target format is the statement about colour space - see
     // [`is_linear_target`] - and it reaches the shader as a pipeline
@@ -395,7 +408,14 @@ pub fn build_with(
         }],
     });
 
+    // The per-slot groups are built against this whichever variant the pipelines
+    // are; the sun-occlusion pass and the ghost bind them through it.
     let texture_layout = material_bind_group_layout(device);
+    let group_1_layout = if bindless {
+        bindless::layout(device)
+    } else {
+        texture_layout.clone()
+    };
 
     // Bind group 2 whole - the `Scene` layout and buffer, the Zone stage's
     // four textures and the shadow map - lives in `zone.rs` now, under the
@@ -493,11 +513,16 @@ pub fn build_with(
         label: Some("mesh"),
         bind_group_layouts: &[
             Some(&layout),
-            Some(&texture_layout),
+            Some(&group_1_layout),
             Some(&fog_layout),
             Some(&anim_layout),
         ],
-        immediate_size: 0,
+        // The bindless variant's slot row (`bindless::Row`), pushed per slot change.
+        immediate_size: if bindless {
+            bindless::IMMEDIATE_SIZE
+        } else {
+            0
+        },
     });
 
     // The vertex layout never varies with the model, so it is built once and
@@ -541,6 +566,7 @@ pub fn build_with(
     // motion - this pipeline writes depth.
     let fragment_entry = velocity.entry("fs_main", "fs_main_velocity");
     let pipeline = pipeline_cache::cached_pipeline(
+        shader,
         "vs_main",
         &vertex_buffers,
         fragment_entry,
@@ -619,6 +645,7 @@ pub fn build_with(
             bias: Default::default(),
         };
         pipeline_cache::cached_pipeline(
+            shader,
             "vs_main",
             &vertex_buffers,
             cutout_fragment_entry,
@@ -716,6 +743,7 @@ pub fn build_with(
             ..Default::default()
         };
         pipeline_cache::cached_pipeline(
+            shader,
             "vs_main",
             &vertex_buffers,
             blend_entry,
@@ -844,40 +872,17 @@ pub fn build_with(
             .view
     };
 
-    // One bind group per material slot: its albedo and its lightmap, which the
-    // shader multiplies. Split from `make` because the two are separate
-    // textures paired per slot rather than one texture per group.
-    let bind = |albedo: &wgpu::TextureView,
-                lightmap: &wgpu::TextureView,
-                pad_mask: &wgpu::TextureView,
-                wave: &wgpu::TextureView,
-                label: &str| {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(label),
-            layout: &texture_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(albedo),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(lightmap),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(pad_mask),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::TextureView(wave),
-                },
-            ],
-        })
+    // One material per slot: its albedo and its lightmap, which the shader
+    // multiplies, the pad mask and the wave map, all through the one sampler.
+    let material = |albedo: wgpu::TextureView,
+                    lightmap: wgpu::TextureView,
+                    pad_mask: wgpu::TextureView,
+                    wave: wgpu::TextureView| bindless::Material {
+        albedo,
+        sampler: sampler.clone(),
+        lightmap,
+        pad_mask,
+        wave,
     };
 
     // A white 1x1 stands in for untextured draws, so the shader needs no branch.
@@ -894,6 +899,9 @@ pub fn build_with(
     // track material". Full gloss is the honest default there: the specular
     // block that *was* read (#7) masks by the lightmap's own alpha, and a
     // surface with no lightmap has no mask to apply.
+    //
+    // One of each, shared by every slot that lacks the texture: the same texels as a 1x1
+    // per slot, and one element of the bindless texture array rather than one per slot.
     let white = make(1, 1, &[255, 255, 255, 255], "white");
     let no_lightmap = make(1, 1, &[0, 0, 0, 255], "no lightmap");
     // A material with no pad mask binds a flat tangent-space normal
@@ -927,18 +935,24 @@ pub fn build_with(
             .clone()
     };
 
-    let mut texture_binds = vec![bind(&white, &no_lightmap, &no_pad_mask, &white, "white")];
+    let mut materials = vec![material(
+        white.clone(),
+        no_lightmap.clone(),
+        no_pad_mask.clone(),
+        white.clone(),
+    )];
+    let mut labels = vec!["white"];
     for (index, slot) in model.textures.iter().enumerate() {
         let albedo = slot
             .as_ref()
             .and_then(&mut view_of)
-            .unwrap_or_else(|| make(1, 1, &[255, 255, 255, 255], "undecoded"));
+            .unwrap_or_else(|| white.clone());
         let lightmap = model
             .lightmaps
             .get(index)
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
-            .unwrap_or_else(|| make(1, 1, &[0, 0, 0, 255], "no lightmap"));
+            .unwrap_or_else(|| no_lightmap.clone());
         let pad_mask = model
             .pad_masks
             .get(index)
@@ -951,9 +965,27 @@ pub fn build_with(
             .and_then(Option::as_ref)
             .and_then(&mut view_of)
             .unwrap_or_else(|| white.clone());
-        let label = slot.as_ref().map_or("undecoded", |t| t.label.as_str());
-        texture_binds.push(bind(&albedo, &lightmap, &pad_mask, &wave, label));
+        labels.push(slot.as_ref().map_or("undecoded", |t| t.label.as_str()));
+        materials.push(material(albedo, lightmap, pad_mask, wave));
     }
+    let texture_binds = materials
+        .iter()
+        .zip(labels)
+        .map(|(material, label)| material.bind_group(device, &texture_layout, label))
+        .collect();
+    let bindless = if bindless {
+        log::info!(
+            "{}: group 1 as binding arrays, {} material slots",
+            model.label,
+            materials.len()
+        );
+        Some(
+            bindless::Bindless::new(device, materials)
+                .expect("`bindless::fits` bounds the textures, and every slot shares the sampler"),
+        )
+    } else {
+        None
+    };
 
     texture::log_census(model, blocks, device.limits().max_texture_dimension_2d);
 
@@ -994,11 +1026,13 @@ pub fn build_with(
         vertex_buffer,
         index_buffer,
         texture_binds,
+        bindless,
     })
 }
 
+pub mod bindless;
 mod material_layout;
 pub use material_layout::material_bind_group_layout;
 
 mod albedo_bind;
-pub use albedo_bind::albedo_bind_group;
+pub use albedo_bind::card_material;

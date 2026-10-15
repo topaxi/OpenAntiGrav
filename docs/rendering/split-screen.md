@@ -628,6 +628,19 @@ bindless scheme: sorting by texture moves pixels, an atlas breaks wrapping, and 
 native only. Numbers, the iGPU and the Deck commands are in
 [render bench](../tools/render-bench.md#encoder-finish-and-the-uniform-uploads-2026-10-15-encoder-finish).
 
+**The texture switches, taken out where the device allows (2026-10-16, `bindless`).** On a device
+with `TEXTURE_BINDING_ARRAY`, `PARTIALLY_BOUND_BINDING_ARRAY` and `IMMEDIATES` (both GPUs of the
+notebook; the Deck unchecked) every race drawable binds group 1 once: its distinct textures and
+samplers as two binding arrays, and each draw pushes its slot's five indices as immediates when the
+slot changes (`oag_mesh::mesh_render::bindless`, the `bindless` feature of the one WESL source). The
+web, GL and any device without the three keep the per-slot groups and the default shader byte for
+byte. NVIDIA, 2h, per-slot then arrays: the second view's `finish` Pulse 208 to 124 us, HD 283 to
+160, Pure 138 to 88 (53 to 70% of what the no-switch hack above removed), the frame's CPU 1,499 to
+1,264, 2,064 to 1,916 and 638 to 552; on the iGPU, GPU-bound, the pipelined frame does not move. All
+twelve stills are byte-identical on both paths. Two designs that lost (an element per slot padded to
+a fixed length: `finish` rose; the slot as a flat varying: the iGPU's frame rose 6 to 16%) and the
+Deck commands are in [render bench](../tools/render-bench.md#bindless-textures-2026-10-16-bindless).
+
 **Prepare and record (2026-10-15, `threaded-views`).** A view's frame is two halves now.
 `Scene::prepare_view` makes every write and every choice the view needs - the culling sets, which
 craft, wreck, weapon and effect draws, each effect pipeline's counts (`exhaust::Drawn` and its
@@ -1826,8 +1839,10 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   shows), the multi-window single-seat window re-seeds the lanes every frame, and the Deck reading.
 - **CPU per view is mostly the driver now**: `encoder.finish` is about 220 us of a Pulse view's
   590 and about 280 us of an HD view's (see "Cost", 2026-10-15), more than half of it the texture
-  bind-group switches. The scene uniform is one block per kind and view now; open: a texture array
-  or bindless path (native only) and group-0 matrices packed into one write a view. The per-view
+  bind-group switches. The scene uniform is one block per kind and view now, and the texture
+  switches are binding arrays where the device has them (`bindless`, 2026-10-16: Pulse's second
+  view's `finish` 208 to 124 us); open: the Deck's reading of that, and group-0 matrices packed into
+  one write a view. The per-view
   state is split (prepare and record, "Cost"); threaded recording measured slower on the notebook
   and is opt-in. Open in the `split-screen-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later

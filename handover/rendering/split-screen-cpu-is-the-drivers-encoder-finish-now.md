@@ -22,14 +22,11 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
 
 ## Open
 
-- **The texture bind-group switches are 55 to 65% of `encoder.finish` and 20 to 25% of a view's CPU**
-  (a hack that never re-binds group 1: Pulse's second view 216 to 96 us of finish, HD 273 to 98, Pure
-  133 to 39; 2h CPU Pulse 1,605 to 1,297, HD 2,283 to 1,814, Pure 680 to 420 us). That is the ceiling
-  of any scheme that removes them. Sorting the draws by texture moves pixels (the 2026-10-03 note in
-  `scene/shine.rs`), `texture_2d_array` needs one size and format, an atlas breaks repeat wrapping,
-  and a `binding_array` indexed by the instance index is native only (the web and phone builds keep
-  the per-draw path) and touches group 1's five bindings in every title's mesh shader. Its own lane,
-  decided by the maintainer.
+- ~~**The texture bind-group switches are 55 to 65% of `encoder.finish`**~~ **Taken out on native
+  (2026-10-16, `bindless`)**: binding arrays bound once per drawable, the slot's indices pushed as
+  immediates; NVIDIA 2h, the second view's `finish` Pulse 208 to 124 us, HD 283 to 160, Pure 138 to
+  88, the iGPU's frame unchanged. Open: the Deck, in
+  [bindless-textures-could-take-a-fifth-of-a-views-cpu.md](bindless-textures-could-take-a-fifth-of-a-views-cpu.md).
 - **What is left of the uploads** is the per-view effect pipelines' own buffers (exhaust, sparks,
   clouds, shadow geometry, beams, which the probe does not count: `exhaust-upload` alone is about 35 us a view on Pulse) and the advert cards; the matrices and the
   scene blocks are done.
@@ -58,6 +55,7 @@ same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took
 
 1. Run the Deck commands in `docs/tools/render-bench.md` ("Encoder finish and the uniform uploads")
    on `main` and `encoder-finish`.
-2. Decide whether the group-1 switches are worth a native-only bindless path, and who owns it.
+2. ~~Decide whether the group-1 switches are worth a native-only bindless path~~ built
+   (`bindless`, 2026-10-16); its Deck run is in its own thread.
 3. ~~List and split what is left shared at record time~~ done (`threaded-views`); run the
    threaded A/B on the Deck (`docs/tools/render-bench.md`, "Threaded views").

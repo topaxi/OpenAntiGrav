@@ -65,6 +65,7 @@ pub(super) fn pipelines(shared: &Shared<'_>) -> Prepass {
                 targets: &[Option<wgpu::ColorTargetState>],
                 depth: wgpu::DepthStencilState| {
         pipeline_cache::cached_pipeline(
+            shared.shader,
             "vs_main",
             shared.vertex_buffers,
             entry,

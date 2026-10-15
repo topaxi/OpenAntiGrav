@@ -1,7 +1,9 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading};
-import package::bindings::{albedo, albedo_sampler, emissives, lightmap, pad_mask, scene, sun_delta, sun_known, uniforms, wave_map};
+import package::bindings::{emissives, scene, sun_delta, sun_known, uniforms};
+@if(!bindless) import package::bindings::{albedo, albedo_sampler, lightmap, pad_mask, wave_map};
+@if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::holo::{holo_billboard};
 import package::pad::{pad_normal};
@@ -20,6 +22,15 @@ import package::zone::{zone_base_term, zone_glow, zone_sample, zone_set};
 // varying, so it is told here.
 @diagnostic(off, derivative_uniformity)
 fn lit_texel(in: VertexOutput) -> vec4<f32> {
+    // The `bindless` variant: this draw's slot of each group 1 array, under the
+    // names the per-draw variant binds them by - see `bindings.wesl`.
+    @if(bindless) {
+        let albedo = textures[material.albedo];
+        let albedo_sampler = samplers[material.albedo_sampler];
+        let lightmap = textures[material.lightmap];
+        let pad_mask = textures[material.pad_mask];
+        let wave_map = textures[material.wave_map];
+    }
     if (in.slots & 8388608u) != 0u {
         return holo_billboard(in);
     }

@@ -11,6 +11,8 @@
 //! no optional shader capabilities. The renderer requests none (its
 //! `required_features` are texture compression and timestamps, which map to no
 //! `naga` capability), so a shader that needs one fails here as it would there.
+//! The one exception is a shader that enables `wgpu_binding_array`, built for a
+//! device that has the binding-array features - see `capabilities`.
 //!
 //! A WESL artifact is printed from the syntax tree, so its line numbers belong
 //! to no source file. The failure is therefore reported as the generated line
@@ -194,13 +196,30 @@ pub fn validate(source: &str, path: &str) -> Result<(), Problem> {
             .next()
             .map(|(span, _)| span.to_range().expect("a span")),
     })?;
-    Validator::new(ValidationFlags::all(), Capabilities::empty())
+    Validator::new(ValidationFlags::all(), capabilities(source))
         .validate(&module)
         .map(|_| ())
         .map_err(|e| Problem {
             message: e.emit_to_string_with_path(source, path),
             range: e.spans().next().and_then(|(span, _)| span.to_range()),
         })
+}
+
+/// The shader capabilities `source` is validated under: none, unless it opts
+/// into binding arrays with `enable wgpu_binding_array;`, which only the
+/// variants a device asks for by feature do (`oag_mesh`'s `mesh_bindless`,
+/// built for `TEXTURE_BINDING_ARRAY` and `IMMEDIATES`). Those get the two
+/// capabilities wgpu grants for those features and **not** non-uniform
+/// indexing: the variant indexes its arrays by immediates, which are uniform,
+/// so an index that is not (one read from a varying, which costs every
+/// fragment on some drivers) fails the build. Every other shader still fails
+/// on any capability at all.
+fn capabilities(source: &str) -> Capabilities {
+    if source.contains("enable wgpu_binding_array;") {
+        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY | Capabilities::IMMEDIATES
+    } else {
+        Capabilities::empty()
+    }
 }
 
 /// The full failure text: naga's own, then where it lands.

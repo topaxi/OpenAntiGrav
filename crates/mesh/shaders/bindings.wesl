@@ -4,22 +4,48 @@ import package::types::{Emissives, NodeAnims, Scene, TexAnims, Uniforms};
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
-@group(1) @binding(0) var albedo: texture_2d<f32>;
+@if(!bindless) @group(1) @binding(0) var albedo: texture_2d<f32>;
 
-@group(1) @binding(1) var albedo_sampler: sampler;
+@if(!bindless) @group(1) @binding(1) var albedo_sampler: sampler;
 
 // The circuit's baked lighting atlas, on the surfaces whose material names one.
 // Every other draw binds a white 1x1, so the multiply below is the identity and
 // no branch is needed - the same arrangement `albedo` already uses.
-@group(1) @binding(2) var lightmap: texture_2d<f32>;
+@if(!bindless) @group(1) @binding(2) var lightmap: texture_2d<f32>;
 
 // HD's pad mask (`_ne`): RGB a tangent-space normal, alpha the light-bar mask.
 // Bound third, beside the lightmap, and read only where `slots::PAD_NE` (bit
 // 14) is set - see `mesh::rcs::pad_ne`. A flat 1x1 everywhere else.
-@group(1) @binding(3) var pad_mask: texture_2d<f32>;
+@if(!bindless) @group(1) @binding(3) var pad_mask: texture_2d<f32>;
 
 // HD's magstrip wave, read only where `slots::MAG_WAVE` is set. `mesh::rcs::mag_wave`.
-@group(1) @binding(4) var wave_map: texture_2d<f32>;
+@if(!bindless) @group(1) @binding(4) var wave_map: texture_2d<f32>;
+
+// The `bindless` variant (`mesh_render::bindless`): group 1 is a drawable's distinct
+// textures and samplers in two arrays, bound once per drawable, and the drawn slot's row
+// naming which of them its five bindings were (`material`). Every function that reads
+// the five names below declares them from that row first, so the rest of the shader is
+// one source.
+// Native only; WebGPU has no binding arrays. The `enable` directive is `mesh.wesl`'s,
+// the root module's.
+@if(bindless) @group(1) @binding(0) var textures: binding_array<texture_2d<f32>>;
+
+@if(bindless) @group(1) @binding(1) var samplers: binding_array<sampler>;
+
+// The drawn slot's indices into `textures` and `samplers`, which the draw pushes as
+// immediates when its slot changes (`mesh_render::bindless::Bindless::row`). Immediates
+// rather than an index read from the vertex stage: a flat varying is not provably
+// uniform, so every array read through it took the non-uniform path, which the Arrow
+// Lake iGPU's driver pays for per fragment.
+@if(bindless) struct MaterialSlot {
+    albedo: u32,
+    lightmap: u32,
+    pad_mask: u32,
+    wave_map: u32,
+    albedo_sampler: u32,
+}
+
+@if(bindless) var<immediate> material: MaterialSlot;
 
 @group(2) @binding(0) var<uniform> scene: Scene;
 
