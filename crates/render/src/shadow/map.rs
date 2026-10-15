@@ -76,12 +76,12 @@ pub const RANK_SQUARES: [(u32, u32, u32); MAX_CASTERS] = [
 /// the box to the ship's own bbox with none.
 pub const CRAFT_HALF_EXTENT: f32 = 12.0;
 
-/// The radius of the cylinder along the sun around a craft outside which the
-/// receiver skips its map without projecting, in world units. **Not a new
-/// bound**: it encloses the box the map is fitted to (12 units to each side
-/// across the sun, so 17 at the corner, and a snap's sub-texel shift) and the
-/// receiver's slab bounds it along the sun.
-pub const CRAFT_CULL_LATERAL: f32 = 18.0;
+/// The radius of the sphere around a craft outside which the receiver skips its
+/// map without projecting, in world units. **Not a new bound**: it encloses the
+/// receiver's slab (50 units past the craft along the sun, the box's 12-unit
+/// half width across it, so 52.8 at the corner) with room to spare, and the
+/// original redraws the track chunks within 50 units of each ship too.
+pub const CRAFT_CULL_RADIUS: f32 = 56.0;
 
 /// How far each craft's box reaches along the sun either side of the craft,
 /// in world units.
@@ -139,14 +139,12 @@ impl Fit {
     }
 
     /// The light direction actually used for the view: [`Self::towards_light`],
-    /// or a fallback that keeps the view non-degenerate. What the receiver's
-    /// cull measures along.
+    /// or a fallback that keeps the view non-degenerate.
     ///
     /// Shared by [`Self::matrix`] and [`Self::snapped`] so both build the same
     /// basis from the same fallback - two independent readings of "is this
     /// direction usable" would let them disagree on a degenerate rig.
-    #[must_use]
-    pub fn resolved_direction(&self) -> Vec3 {
+    fn resolved_direction(&self) -> Vec3 {
         let direction = self.towards_light.normalize_or_zero();
         if direction.length_squared() < 0.5 {
             // A rig with no usable direction points straight down rather than
@@ -317,7 +315,7 @@ pub fn craft_shadow(fit: &Fit, rank: usize) -> CraftShadow {
             fit.centre.x,
             fit.centre.y,
             fit.centre.z,
-            CRAFT_CULL_LATERAL * CRAFT_CULL_LATERAL,
+            CRAFT_CULL_RADIUS * CRAFT_CULL_RADIUS,
         ],
     }
 }
@@ -353,8 +351,6 @@ pub struct Map {
     /// left them, for the receiver; [`CraftShadow::NONE`] for a craft that
     /// drew nothing.
     crafts: [CraftShadow; MAX_CASTERS],
-    /// The sun direction those records were fitted along.
-    sun: Vec3,
     /// How many casters it actually drew.
     drawn: usize,
     /// The `mapped` tier's depth target, its view and the pipeline that fills
@@ -579,7 +575,6 @@ impl Map {
             uniforms,
             binds,
             crafts: [CraftShadow::NONE; MAX_CASTERS],
-            sun: Vec3::Y,
             drawn: 0,
             depth,
             depth_view,
@@ -682,13 +677,6 @@ impl Map {
         self.crafts
     }
 
-    /// The unit direction towards the sun the records were fitted along, `xyz`,
-    /// for the receiver's cull.
-    #[must_use]
-    pub fn craft_sun(&self) -> [f32; 4] {
-        [self.sun.x, self.sun.y, self.sun.z, 0.0]
-    }
-
     /// How many casters the last pass drew - an observable, since a map that
     /// was cleared and a map that was never rendered look identical.
     #[must_use]
@@ -718,9 +706,6 @@ impl Map {
         let crafts = &crafts[..crafts.len().min(MAX_CASTERS)];
         self.crafts = [CraftShadow::NONE; MAX_CASTERS];
         self.drawn = crafts.len();
-        if let Some(first) = crafts.first() {
-            self.sun = first.fit.resolved_direction();
-        }
         for (index, craft) in crafts.iter().enumerate() {
             let record = craft_shadow(&craft.fit, craft.rank);
             if let Some(slot) = self.crafts.get_mut(craft.slot) {

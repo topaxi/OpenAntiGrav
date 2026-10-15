@@ -708,10 +708,10 @@ pub struct CraftShadow {
     /// `x`, `y` the top-left corner and `z`, `w` the width and height. A
     /// zero width is "this craft has no map".
     pub rect: [f32; 4],
-    /// The craft's centre in `xyz` and the squared radius of the cylinder
-    /// along the sun around it that holds everything its map can shadow in
-    /// `w`: a point outside it is skipped before the projection (a road pixel
-    /// is far from almost every craft's box).
+    /// The craft's centre in `xyz` and the squared radius of the sphere around
+    /// it that holds everything its map can shadow in `w`: a point outside it
+    /// is skipped before the projection, which is where the receiver's cost
+    /// goes (a road pixel is far from almost every craft).
     pub centre: [f32; 4],
 }
 
@@ -837,9 +837,6 @@ pub struct Scene {
     /// craft with no map, which the receiver skips. Read in
     /// [`ShadowMap::COVERAGE`] mode only.
     pub craft_shadow: [CraftShadow; super::shadow_map::OCCLUSION_LAYERS as usize],
-    /// The unit direction towards the sun the craft maps were fitted along,
-    /// in `xyz`: what the receiver's cull measures along and across.
-    pub craft_sun: [f32; 4],
     /// World to the behind-the-glass target's clip space - the original's
     /// `refractProject`, which the tunnel glass projects a point through to
     /// find where it reads that target (`mesh::rcs::refraction`). The
@@ -905,7 +902,6 @@ impl Scene {
             sun_occlusion: [Mat4::IDENTITY.to_cols_array_2d();
                 super::shadow_map::OCCLUSION_LAYERS as usize],
             craft_shadow: [CraftShadow::NONE; super::shadow_map::OCCLUSION_LAYERS as usize],
-            craft_sun: [0.0, 1.0, 0.0, 0.0],
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
             quake: QuakeWave::off(),
         }

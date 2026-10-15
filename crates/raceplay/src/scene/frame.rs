@@ -233,7 +233,6 @@ impl Scene {
             spu_lights: mesh_render::SpuLights::from_slice(&race.hd_spu_lights()),
             sun_occlusion: self.sun_occlusion_matrices(),
             craft_shadow: self.shadow_map.borrow().craft_shadows(),
-            craft_sun: self.shadow_map.borrow().craft_sun(),
             refraction: super::behind_glass::view_projection(section_view).to_cols_array_2d(),
             quake: race.quake_wave(),
         };

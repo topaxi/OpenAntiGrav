@@ -140,7 +140,6 @@ fn shadowed(mut scene: Scene, strength: f32) -> Scene {
         rect: [0.0, 0.0, 1.0, 1.0],
         centre: [0.0, 0.0, 0.0, 1.0e6],
     };
-    scene.craft_sun = [0.0, 0.0, 1.0, 0.0];
     scene
 }
 
@@ -294,20 +293,14 @@ fn craft_maps_combine_as_the_originals_redraws_do_and_keep_to_their_box() {
         fraction(&[Mat4::from_translation(Vec3::new(1.5, 0.0, 0.0))]).abs() < 0.04,
         "outside the box is lit"
     );
-    // And outside the craft's cull cylinder, which is checked before the box:
-    // 100 units across the sun, then 100 units along it.
-    for centre in [
-        [100.0, 0.0, 0.0, 18.0 * 18.0],
-        [0.0, 0.0, -100.0, 18.0 * 18.0],
-    ] {
-        let mut far = with_crafts(rig(SUN), &[Mat4::IDENTITY]);
-        far.craft_shadow[0].centre = centre;
-        let got = draw(&device, &queue, &model, far, Some(255));
-        assert!(
-            covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
-            "a point outside the cull cylinder is lit: {centre:?}"
-        );
-    }
+    // And outside the craft's cull sphere, which is checked before the box.
+    let mut far = with_crafts(rig(SUN), &[Mat4::IDENTITY]);
+    far.craft_shadow[0].centre = [100.0, 0.0, 0.0, 50.0 * 50.0];
+    let got = draw(&device, &queue, &model, far, Some(255));
+    assert!(
+        covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
+        "a point outside the cull sphere is lit"
+    );
 }
 
 /// Identity camera and model, so clip space is model space.
