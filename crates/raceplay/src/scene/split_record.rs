@@ -13,7 +13,7 @@
 //!
 //! **The default is [`Recording::Interleaved`], one view after another, on every target.**
 //! Measured on an Intel Core Ultra 7 265H notebook (NVIDIA RTX PRO 2000, `powersave` governor,
-//! pinned to the P-cores, 2026-10-15), threaded recording cost 15 to 20% *more* CPU a frame than
+//! pinned to the P-cores, 2026-10-15), threaded recording cost 10 to 100% *more* CPU a frame than
 //! serial: Pulse two views 1,630 against 2,045 us (median), HD two views 2,218 against 2,612,
 //! Pulse four views 2,536 against 2,966. Serial batching itself costs nothing (Pulse two views
 //! 1,630 against interleaved 1,655). The loss is the second core, not contention: one view at a

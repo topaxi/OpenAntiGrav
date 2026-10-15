@@ -527,6 +527,100 @@ first is wrong; and **this iGPU is CPU-bound at 1280x800** (frame 4.3 ms, GPU 2.
 `frame_us` hides a GPU saving there. The per-piece GPU spans, the settings matrix and the
 Deck commands are in [`hd-gpu-cost.md`](../rendering/hd-gpu-cost.md).
 
+## Threaded views (2026-10-15, `threaded-views`)
+
+Same notebook (Core Ultra 7 265H, `powersave` governor, NVIDIA RTX PRO 2000 Blackwell Laptop GPU and
+the Arrow Lake iGPU), release `perf-probe` builds, 1280x800, `--mode single_race --ticks 300`, every
+run pinned to the P-cores (`taskset -c 0-5`) and under the gate lock, three interleaved rounds
+(two on the iGPU), **minimum of the per-run medians** of `render_viewports CPU (record + submit)`
+and of `pipelined per frame` (`OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`), load 1.2 to 1.95 at
+each run's start. "main" is `5db58a86f`; "new" is this lane's build, whose recording is picked
+with `OAG_SPLIT_RECORDING` on one binary (`interleaved` is the old order and the default; `serial`
+prepares every view and then records them in order; `threaded` records them on scoped threads).
+
+**NVIDIA, microseconds (CPU / pipelined):**
+
+| Title, views | main | new, interleaved | new, serial | new, threaded |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse, 1 | 974 / 991 | 1,033 / 1,002 | | |
+| Pulse, 2h | 1,520 / 1,518 | 1,527 / 1,512 | 1,537 / 1,612 | 2,025 / 2,067 |
+| Pulse, 2v | 1,515 / 1,494 | 1,541 / 1,469 | 1,506 / 1,528 | 2,011 / 2,097 |
+| Pulse, 4 | 2,442 / 2,563 | 2,461 / 2,593 | 2,509 / 2,782 | 2,856 / 3,194 |
+| HD, 1 | 1,950 / 2,842 | 1,955 / 2,892 | | |
+| HD, 2h | 2,094 / 3,514 | 2,093 / 3,542 | 2,265 / 3,594 | 2,521 / 3,562 |
+| HD, 2v | 2,045 / 3,630 | 2,073 / 3,716 | 2,296 / 3,670 | 2,492 / 3,643 |
+| HD, 4 | 3,813 / 5,675 | 3,633 / 5,729 | 3,954 / 5,821 | 4,033 / 5,679 |
+| Pure, 1 | 521 / 767 | 516 / 766 | | |
+| Pure, 2h | 612 / 1,031 | 593 / 1,020 | 641 / 1,018 | 1,192 / 1,068 |
+| Pure, 2v | 606 / 817 | 604 / 813 | 673 / 848 | 1,189 / 1,067 |
+| Pure, 4 | 1,199 / 1,311 | 1,213 / 1,277 | 1,216 / 1,256 | 1,524 / 1,608 |
+
+The prepare and record split costs nothing measurable (main against new, interleaved; Pulse's one
+view re-measured over five interleaved rounds: 1,040 against 1,032). **Threads lose everywhere on
+this machine**, by 15 to 100% (Pure's views are the smallest bursts). Serial batching is free on
+Pulse and 8 to 11% dearer on HD and Pure: the GPU starts on the first view only once every view is
+prepared.
+
+**Why the threads lose: the second core, not wgpu.** `encoder.finish` takes only a read lock on
+the device, and the spans show both views' `finish` slowing (Pulse 2h: 353 and 204 us serial, 515
+and 654 us threaded). Three experiments, Pulse four views, one build: one view at a time on its
+own spawned thread (`staggered`) is as slow as all at once (6,064 against 5,962 us, a loaded
+round); the threaded build pinned to one core matches serial (3,872 against 3,037, 2,834 against
+2,656); and a standalone microbenchmark on the same cores between 12 ms sleeps reads an empty
+`std::thread::scope` spawn and join at about 200 us median, a 2 x 250 us compute split gaining 4%
+on a fresh thread, nothing on a parked worker woken by a condvar, 10 to 20% with the worker woken
+at the start of the frame, and half on a worker spinning between frames. A view's recording is a
+0.2 to 0.4 ms burst once a frame, and an idle P-core under `powersave` does not wake and clock up
+for it.
+
+**The Arrow Lake iGPU** (`VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json`, two rounds, new
+build only, CPU / pipelined):
+
+| Title, views | interleaved | serial | threaded |
+| --- | ---: | ---: | ---: |
+| Pulse, 2h | 3,497 / 2,469 | 2,971 / 2,530 | 3,426 / 3,031 |
+| Pulse, 4 | 4,366 / 5,905 | 6,738 / 4,488 | 6,420 / 4,469 |
+| HD, 2h | 5,509 / 7,472 | 6,775 / 7,276 | 6,445 / 7,339 |
+| HD, 4 | 7,443 / 11,665 | 12,423 / 11,740 | 9,743 / 11,489 |
+| Pure, 2h | 1,902 / 1,818 | 2,524 / 1,869 | 2,050 / 1,761 |
+| Pure, 4 | 2,400 / 2,607 | 4,102 / 2,780 | 3,309 / 2,557 |
+
+Here, where ANV's per-view CPU is about four times NVIDIA's, threads do beat serial batching (HD
+four views 12,423 to 9,743 us, Pure four 4,102 to 3,309), but batching itself loses more than that
+to the interleaved order, whose first view is on the GPU while the next is prepared; the pipelined
+frame barely moves (the iGPU is GPU-bound). **The lever this points at, not built**: record a view
+on a worker *while the next view is prepared*, and submit each as soon as it is recorded, which
+keeps the GPU starting early and overlaps the two halves. It needs the effect pipelines' uploads
+to stop holding `&mut` state the recording reads (today `Recorder` holds their `RefCell` guards,
+so a prepare cannot run beside a recording).
+
+**Pictures and state.** 34 stills (Pulse, HD and Pure at 1, 2h, 2v and 4 views with the blur off
+and on, Pulse/HD/Pure 2h and 4 at tick 1500, 2048 and Omega 2h) and 51 weapon stills (thirteen
+weapons fired, a bomb trip, a wreck, a hit and a Leach lock on each of Pulse, HD and Pure, 2h) are
+byte-identical against `main` in all four recordings; `final_state_hash` of a 600-tick two-view
+autopilot race is the same on Pulse, HD and Pure. `oag-game` tests
+`split_recording_ground_truth::` capture one frame (Pure 2h at tick 1500, Pulse four views with a
+Rocket) interleaved, reversed and threaded and fail on a difference.
+
+**Steam Deck commands (not run: the Deck is the maintainer's).** One binary, the recording picked
+per run; the Deck's per-view CPU is closer to the iGPU's than to NVIDIA's, so threads have a
+better chance there, and this A/B decides any per-platform default:
+
+```sh
+git checkout threaded-views && cargo build --release -p oag-game --features perf-probe && cp target/release/oag-game /tmp/oag-game-tv
+mkdir -p /tmp/oag-bench
+for title in pulse-psp-eu.chd hdfury-ps3-eu-dec.iso; do for rep in 1 2 3; do for n in 2 4; do for rec in interleaved threaded; do
+  echo "== $title players=$n $rec load=$(cut -d' ' -f1 /proc/loadavg)"
+  XDG_CONFIG_HOME=/tmp/oag-bench/config XDG_DATA_HOME=/tmp/oag-bench/data XDG_STATE_HOME=/tmp/oag-bench/state \
+  OAG_SPLIT_RECORDING=$rec OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100 /tmp/oag-game-tv data/images/$title --race --no-audio \
+    --mode single_race --players $n --ticks 300 --size 1280x800 --screenshot /tmp/oag-bench/shot.png 2>&1 \
+    | grep -E '^bench (split|render_viewports CPU|pipelined)'
+done; done; done; done | tee /tmp/oag-bench/threaded-views.txt
+```
+
+Read the minimum of each recording's `render_viewports CPU` medians; threads are worth a default
+only where they win that by more than the rounds' spread.
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

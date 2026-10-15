@@ -9,7 +9,9 @@
 //!   drawable's uniforms with `queue.write_buffer`, and a queue write lands
 //!   before the *submission's* commands, not at its place in the encoder. Two
 //!   views recorded into one encoder would both draw with the last view's
-//!   matrices: every rectangle the same camera.
+//!   matrices: every rectangle the same camera. A batched [`super::Recording`] keeps
+//!   that order by keeping a later view's writes in a log of its own and replaying
+//!   it just before that view's submission (`split_record`).
 //! - **Only the first view clears.** The scene pass clears the whole attachment
 //!   whatever the viewport is, so the later views load what is there
 //!   ([`Layer::Next`]). Depth is cleared each time; the views do not

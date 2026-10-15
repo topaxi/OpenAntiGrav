@@ -628,18 +628,43 @@ bindless scheme: sorting by texture moves pixels, an atlas breaks wrapping, and 
 native only. Numbers, the iGPU and the Deck commands are in
 [render bench](../tools/render-bench.md#encoder-finish-and-the-uniform-uploads-2026-10-15-encoder-finish).
 
-**The per-view scene blocks are not yet a threaded view.** The block region is the one piece of
-per-view state that can be written and bound without touching another view's: the offset travels as a
-`ViewBlock` handed to the draw calls and is not stored in a drawable. What a view still shares at
-record time, which a concurrent-encoder lane has to split first: `Scene::upload_staging` (the staging
-memory, taken and put back around a view), the craft's `anims`/`node_anims` tables (written by the
-first view, read by the rest), and `Drawable`'s `shown`,
-`ripple`, `pad_glow` and `hidden` `RefCell`s; `Scene`'s `layer`, `history`, `reuse_frame_work`,
-`scratch`, `opaque_order` and `anim_clock` cells and the effect pipelines' own uniform and vertex
-buffers (exhaust, sparks, clouds, shadow geometry, beams, which a view rewrites); and the race's
-viewpoint cell (`Race::set_viewpoint`). The scene blocks and the matrices are keyed by
-`Race::viewed_slot` (unique to a view within a frame, because a craft is followed by one seat) and a
-view's matrices are staged in `Uploads`, a value of the view, so those two no longer count.
+**Prepare and record (2026-10-15, `threaded-views`).** A view's frame is two halves now.
+`Scene::prepare_view` makes every write and every choice the view needs - the culling sets, which
+craft, wreck, weapon and effect draws, each effect pipeline's counts (`exhaust::Drawn` and its
+kin, returned by the upload rather than read off the pipeline by its draw), the shadow's runs and
+the ghost's hull - and returns them as a `ViewPass` value; its passes into other targets (shadow
+maps, advert cards, the behind-the-glass target) go into the view's encoder. `Recorder::record`
+then records the scene pass from that value and GPU objects no view changes during the frame.
+**Nothing a view's recording reads is shared with another view's prepare any more**: `Recorder`
+is `Sync` and `ViewPass` is `Send`, asserted at compile time (`scene/record.rs`), so a cell cannot
+creep back in unnoticed; a drawable keeps its `LodGroup` choice per view (`ViewBlock::index`) and
+its draw scratch per thread; HD's prepass order is sorted from the view's own eye while it
+records. Every write of a frame goes through `oag_gpu::writes::Writes`, which `Uploads` is, so a
+view's writes can be kept in a `Log` and replayed later. All pictures are unchanged (34 stills and
+51 weapon stills byte-identical against the commit before, below).
+
+**Recording the views at once does not pay on the notebook it was measured on.**
+`Scene::render_slots` can prepare every view first (the first view's writes go to the queue, every
+later view's into its log), record the scene passes, each into its own encoder, and then replay
+each view's log and submit in view order (`oag_raceplay::Recording`, `scene/split_record.rs`). With
+the recording on scoped threads (`threaded`) the frame's CPU rose 10 to 100% against recording the
+same views one after another; batching itself costs nothing. The loss is the second core: one
+view at a time on a second thread is as slow as both at once, threads pinned to one core match
+serial, and on that machine (`powersave` governor, other lanes' builds on the E-cores) an empty
+scoped spawn and join between frames costs about 200 us, and a parked worker gains nothing on a
+2 x 250 us split while a spinning one halves it. A view's recording is a 0.2 to 0.4 ms burst once a
+frame, which a sleeping core does not wake and clock up for. **So the default is `interleaved`**
+(prepare, record and submit per view, as before) on every target, and `OAG_SPLIT_RECORDING=serial`,
+`reversed` or `threaded` selects the others. On the web the views always record on the page's
+thread. Numbers in [render bench](../tools/render-bench.md#threaded-views-2026-10-15-threaded-views);
+`split_recording_ground_truth` captures one frame interleaved, reversed and threaded and fails on a
+difference, which found the one leak there was (a drawable with no slot on the shared matrix
+buffer wrote its matrices straight to the queue, so Pure's magstrip effect drew view 0 from view
+1's camera).
+
+**A window per seat could use the same halves**: each window's prepare in turn, the recordings at
+once, and the acquire, submit and present of each surface on the calling thread, as now. Not
+built; it would meet the same cold-core cost.
 
 The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
 reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
@@ -1041,10 +1066,10 @@ evidence here.
    encoder and submit instead of N: about 0.1 ms a view), but it is the prerequisite for
    the item below, and it lets the craft, shield and pad uniform writes (0.3 ms a view
    today) move out of the per-view path.
-4. **Recording the views on several threads** (wgpu encoders are `Send`), after item 3.
-   The views are independent once they stop sharing uniform buffers; on a CPU-bound split
-   this divides the per-view CPU by the cores used. The largest change and the largest
-   possible gain; do it only if items 1 and 2 leave the Deck short.
+4. ~~**Recording the views on several threads**~~ **Built and measured, 2026-10-15**
+   (`threaded-views`): the views are independent at record time, and recording them at once
+   cost 10 to 100% more CPU on the notebook, so it is opt-in (`OAG_SPLIT_RECORDING=threaded`);
+   see "Prepare and record" under "Cost". The Steam Deck reading decides any other default.
 5. ~~Per-view bloom~~ **Done, 2026-10-15** (rule 4); what it costs is measured under
    "Per-view glow". ~~Motion blur~~ **Done, 2026-10-15** (rule 3), measured under "Per-view
    blur". The temporal upscaler stays omitted.
@@ -1802,8 +1827,9 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
 - **CPU per view is mostly the driver now**: `encoder.finish` is about 220 us of a Pulse view's
   590 and about 280 us of an HD view's (see "Cost", 2026-10-15), more than half of it the texture
   bind-group switches. The scene uniform is one block per kind and view now; open: a texture array
-  or bindless path (native only), group-0 matrices packed into one write a view, and the per-view
-  state list above. Open in the `split-screen-cpu` thread.
+  or bindless path (native only) and group-0 matrices packed into one write a view. The per-view
+  state is split (prepare and record, "Cost"); threaded recording measured slower on the notebook
+  and is opt-in. Open in the `split-screen-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
   view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
   and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole
