@@ -736,6 +736,51 @@ done; done; done; done | tee /tmp/oag-bench/threaded-views.txt
 Read the minimum of each recording's `render_viewports CPU` medians; threads are worth a default
 only where they win that by more than the rounds' spread.
 
+## Overlapped recording (2026-10-16, `split-followups`)
+
+`OAG_SPLIT_RECORDING=overlapped` (`Recording::Overlapped`): one scoped worker a frame, spawned
+before the first view is prepared; it records view `k` while the calling thread prepares view
+`k + 1`, and the calling thread submits view `k` as soon as it comes back (the last view is
+recorded on the calling thread). What made it possible: each effect pipeline's draw handles are a
+cloneable `Drawer` a view's `ViewPass` keeps, so a recording no longer holds the pipelines'
+`RefCell` guards while the next view's upload needs them `&mut`.
+
+Same notebook and protocol as "Threaded views": release `perf-probe` build, 1280x800, `--mode
+single_race --ticks 300`, `OAG_RENDER_BENCH=300 OAG_RENDER_GPU_BENCH=100`, pinned to
+`taskset -c 0-5`, under the gate lock, three interleaved rounds, **minimum of the per-run medians**,
+one binary with the recording picked by the variable, load 0.9 to 2.9. CPU (`render_viewports CPU`)
+/ pipelined, us:
+
+| Title, views | NVIDIA interleaved | NVIDIA overlapped | iGPU interleaved | iGPU overlapped |
+| --- | ---: | ---: | ---: | ---: |
+| Pulse, 2h | 1,272 / 1,270 | 2,123 / 2,297 | 1,999 / 2,537 | 4,963 / 3,310 |
+| Pulse, 2v | 1,239 / 1,292 | 1,985 / 2,210 | 3,094 / 2,493 | 4,966 / 3,367 |
+| Pulse, 4 | 2,031 / 2,038 | 3,044 / 3,422 | 3,585 / 3,757 | 6,507 / 4,976 |
+| HD, 2h | 1,987 / 3,771 | 4,177 / 4,626 | 5,909 / 7,622 | 7,620 / 7,651 |
+| HD, 2v | 1,973 / 3,806 | 4,587 / 4,758 | 5,863 / 7,548 | 7,390 / 7,629 |
+| HD, 4 | 3,127 / 5,836 | 6,048 / 6,390 | 7,517 / 11,726 | 11,377 / 11,783 |
+
+**Overlapped loses everywhere on this notebook, by more than the scoped threads did**: 50 to 130 %
+more CPU on NVIDIA, 25 to 150 % on the iGPU, and the pipelined frame follows on both. **Why,
+measured** (NVIDIA, three rounds, minimum): the same binary pinned to **one** core (`taskset -c 0`)
+reads Pulse 2h 1,336 us overlapped against 1,246 interleaved and HD 2h 2,199 against 1,980 (+7 to
+11 %, the thread and channel bookkeeping), where on six cores it reads 2,135 and 4,426, and the
+threaded recording 1,644 and 2,193. So the work does not get slower, the handoffs do: every view
+is a round trip to a worker that sleeps on its channel between views, a wake-up per view where
+`threaded` pays one per frame, and a cold P-core under `powersave` does not stay awake through a
+0.2 to 0.4 ms prepare. **The default stays interleaved.** A spinning worker is the one variant the
+microbenchmark under "Threaded views" says could win, at the cost of a core burning between
+frames; not built.
+
+**The `Drawer` refactor costs nothing**: base (`022164d47`) against this branch, interleaved, the
+same three rounds, Pulse one view 881 / 893 us and 2h 1,267 / 1,244, HD one view 1,956 / 1,987 and
+2h 2,063 / 1,950 (an A/A pair: the draws are the same calls on the same handles).
+
+**Pictures**: `split_recording_ground_truth::` compares overlapped with interleaved (Pure 2h, Pulse
+four views with a Rocket) and fails if a later view's log is dropped (Pulse's four views, checked).
+
+**Steam Deck**: the "Threaded views" loop with `for rec in interleaved threaded overlapped`.
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

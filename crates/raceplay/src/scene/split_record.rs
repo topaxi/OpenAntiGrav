@@ -24,6 +24,12 @@
 //! clock up for. **[`Recording::Threaded`] stays selectable** (`OAG_SPLIT_RECORDING=threaded`,
 //! [`Scene::set_split_recording`]) for a machine where it measures faster, the Steam Deck first.
 //!
+//! **[`Recording::Overlapped`]** (2026-10-16) records view `k` on a worker while view `k + 1` is
+//! prepared. It lost more than threads did on the same notebook (Pulse two views 1,272 against
+//! 2,123 us, HD two views 1,987 against 4,177): pinned to one core it is within 7 to 11 % of
+//! interleaved, so the loss is a worker woken once per view (`docs/tools/render-bench.md`,
+//! "Overlapped recording"). Selectable, not the default.
+//!
 //! **On the web the views are always recorded on the page's thread**: wgpu's browser objects
 //! belong to it, and the page may not block on a worker, so `threaded` records serially there.
 
