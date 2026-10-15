@@ -501,10 +501,10 @@ Same notebook (NVIDIA RTX PRO 2000 Blackwell Laptop GPU and the Arrow Lake iGPU)
 lock held, interleaved A/B on **one binary** (`OAG_BINDLESS=0` selects the per-slot groups), **minimum
 of two rounds of the per-run median**: `render_viewports CPU`, `pipelined per frame` and the scene
 passes' GPU timestamps from a plain run, and the `encoder-finish` span of the second view from a run
-with `OAG_RENDER_PERF=1`. `main` (`b4581bf70`) read the same as `OAG_BINDLESS=0` in the three
-rounds it ran beside it (2h CPU Pulse 2,042 / 1,989, HD 2,913 / 2,822, Pure 792 / 823; second view's
-`finish` 287 / 296, 412 / 407, 194 / 172 us), so the asked-for features and limits cost the
-per-slot path nothing.
+with `OAG_RENDER_PERF=1`. `main` (`b4581bf70`) reads the same as `OAG_BINDLESS=0`, so the
+asked-for features and limits cost the per-slot path nothing: on the final build, one view, CPU
+Pulse 978 / 1,027, HD 1,958 / 1,960, Pure 569 / 507 us (two rounds); on the build before
+immediates, 2h, Pulse 2,042 / 1,989, HD 2,913 / 2,822, Pure 792 / 823.
 
 **What it is** (`oag_mesh::mesh_render::bindless`): on a device with `TEXTURE_BINDING_ARRAY`,
 `PARTIALLY_BOUND_BINDING_ARRAY` and `IMMEDIATES`, every race drawable binds group 1 once: its
@@ -522,6 +522,11 @@ default `mesh.wgsl` is byte-identical to `main`'s and the variant is `mesh_bindl
 | Pulse | 1,499 / 1,264 | 1,498 / 1,265 | 423 / 401 | 208 / 124 | 96 |
 | HD | 2,064 / 1,916 | 3,545 / 3,660 | 1,516 / 1,660 | 283 / 160 | 98 |
 | Pure | 638 / 552 | 1,021 / 992 | 514 / 515 | 138 / 88 | 39 |
+
+**One view, NVIDIA, us (per-slot / arrays), two rounds:** CPU Pulse 1,027 / 890, HD 1,960 /
+1,960, Pure 507 / 503; pipelined 1,093 / 902, 3,018 / 2,872, 779 / 740; scene pass GPU 333 / 361,
+1,072 / 1,083, 398 / 387. One view switches less than a split's second view pays for, so only
+Pulse's CPU moves; nothing regresses.
 
 HD's GPU and pipelined cells were re-run three more times each way (scene passes 1,348 / 1,406 at
 the minimum, pipelined 3,549 / 3,442): within the noise, and the pipelined frame is lower with the
