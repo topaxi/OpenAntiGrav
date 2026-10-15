@@ -840,11 +840,12 @@ impl Scene {
             if self.hull_skipped(race, index) {
                 continue;
             }
+            let (centre, radius) = drawable.bound();
             if !super::craft_cull::hull_in_view(
                 frustum.as_ref(),
                 race.ship_model_matrix_of(index),
-                drawable.centre(),
-                drawable.radius(),
+                centre,
+                radius,
             ) {
                 continue;
             }

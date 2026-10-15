@@ -3,7 +3,7 @@
 The question was why HD is the title that runs out of GPU first (14.0 ms on the
 Raphael iGPU at 1280x800, 28 fps on the Steam Deck's worst stretch) and what can
 come off it without changing the picture. **One cut landed (craft outside the
-frustum are not drawn, byte-identical, 1 to 3 % of the GPU); the largest one found
+frustum are not drawn, byte-identical, 1 to 4 % of the GPU on the iGPU); the largest one found
 is a design decision left open (the velocity attachment, about 10 % of the race
 pass); and three suspects were measured and cleared.** Everything is `chosen`
 workload, not measured against the original.
@@ -74,14 +74,19 @@ The same frame, one setting at a time (race pass unless said):
 
 `Scene::render` drew every hull with no frustum, so a field of twelve cost twelve
 hulls' vertices and draw calls however many were on screen. `scene/craft_cull.rs`
-tests each hull's bounding sphere (`Model::radius`, widened 1.5x for the airbrake
-flaps, node animation and camera jitter: **chosen, not measured**) against the
-view's frustum, the same sphere test the circuit already uses; `frustum_culling`
-off draws them all.
+tests each hull's bounding sphere against the view's frustum, the same sphere test
+the circuit already uses; `frustum_culling` off draws them all. The sphere is
+`Drawable::bound`, the vertices' own box centre and the farthest vertex, **not**
+`Model::radius`: that is a sphere for an `rcs` model but only the largest
+half-extent of the box when `merge` built it (the PSP and PS2 hulls), up to 1.7x too
+small to cull by. It is widened 1.5x for the airbrake flaps, node animation and
+camera jitter (**chosen, not measured**).
 
-- **Byte-identical**: 24 frames (Talon's Junction and Anulpha Pass, ticks 300 to
-  6,900 every 600, 1280x720) and a two-player horizontal split frame, cull on
-  against cull off, `cmp` equal.
+- **Byte-identical on six titles**: 36 frames, Pulse PSP, Pure PSP, Pulse PS2, 2048,
+  Omega and HD, ticks 300 to 6,300 every 1,200, 1280x720, the binary before this
+  change against the binary after (`cmp` equal); and 24 more HD frames on Talon's
+  Junction and Anulpha Pass (ticks 300 to 6,900 every 600) plus a two-player
+  horizontal split frame, cull on against cull off.
 - **Craft span** (1080p, tick 2,500 and 5,000): 620 to 552 us and 649 to 519 us
   (-11 % and -20 %); at tick 600, with the whole grid on screen, no change. Draw
   calls fall about 10 % where it culls.

@@ -263,8 +263,9 @@ Generation Laptop GPU` (the default adapter). "Before" is `f82807832`'s `oag-rac
 | NVIDIA, 1280x800, 2h, before | 2,952 | 1,488 | 3,272 |
 | NVIDIA, 1280x800, 2h, after | 3,216 | 1,303 | 3,561 |
 
-**Read it as no change beyond noise**: the iGPU's GPU time falls 1 to 4 %, the NVIDIA card is
-CPU-bound and does not move. Two traps recorded by this lane: **the first bench after a
+**Read it as no change beyond noise**: one run each, and no run-to-run spread was measured on
+this host (the NVIDIA 2h CPU reads 9 % worse, which the same code could do on another run); the
+iGPU's GPU time falls 1 to 4 %, the NVIDIA card is CPU-bound and does not move. Two traps recorded by this lane: **the first bench after a
 rebuild read 2x the CPU** (4,805 against 2,472 us for the same code), so a "before" taken
 first is wrong; and **this iGPU is CPU-bound at 1280x800** (frame 4.3 ms, GPU 2.2 ms), so
 `frame_us` hides a GPU saving there. The per-piece GPU spans, the settings matrix and the
