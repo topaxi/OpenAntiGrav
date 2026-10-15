@@ -85,13 +85,14 @@ impl Drawable {
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
+        let shows = self.shows(block);
         for draw in self
             .model
             .draws
             .iter()
             .chain(&self.model.alpha_tested_draws)
             .chain(&self.model.transparent_draws)
-            .filter(|draw| self.lod_shows(draw))
+            .filter(|draw| shows.draw(draw))
         {
             // Two-sidedness stays the batch's own: the plume's `0x20` is set
             // on both discs, so nothing here is culled, and a future model
@@ -130,7 +131,7 @@ impl Drawable {
     /// matrix's translation off the same pulse.
     pub(crate) fn write_overlay(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         rgba: [f32; 4],
         v_offset: f32,
         scratch: &mut Vec<mesh::GpuVertex>,
@@ -155,7 +156,7 @@ impl Drawable {
     /// [`Self::write_overlay`].
     pub(crate) fn write_environment_map(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         ship: oag_core::math::Mat4,
         flaps: [f32; 2],
         scratch: &mut Vec<mesh::GpuVertex>,
@@ -172,7 +173,7 @@ impl Drawable {
     /// frame's turned normals, shared by every camera drawn at `seconds`.
     pub(crate) fn write_view_map(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view: oag_core::math::Mat4,
         seconds: f32,
         normals: &mut oag_render::shine::TrackNormals,
@@ -213,9 +214,10 @@ impl Drawable {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         let mut current: Option<&wgpu::RenderPipeline> = None;
         let mut last_bound: Option<usize> = None;
+        let shows = track.shows(block);
         for (draw, &source) in self.model.draws.iter().zip(sources) {
             let circuit = &track.model.draws[source];
-            if !track.lod_shows(circuit)
+            if !shows.draw(circuit)
                 || !oag_render::pvs::visible(
                     circuit,
                     DrawSections::at(opaque, source),

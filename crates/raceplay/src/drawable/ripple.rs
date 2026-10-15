@@ -9,7 +9,10 @@ use super::Drawable;
 impl Drawable {
     /// Gives this drawable the road spans a Quake ripples through it.
     pub(crate) fn set_ripple(&mut self, ripple: Option<Ripple>) {
-        *self.ripple.get_mut() = ripple;
+        *self
+            .ripple
+            .get_mut()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = ripple;
     }
 
     /// Moves this drawable's rippling vertices to `wave` - `None` once no
@@ -19,11 +22,11 @@ impl Drawable {
     /// `scratch` is the caller's, refilled per batch - see `Scene::scratch`.
     pub(crate) fn write_ripple(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         wave: Option<Wave>,
         scratch: &mut Vec<GpuVertex>,
     ) {
-        let mut slot = self.ripple.borrow_mut();
+        let mut slot = super::lock(&self.ripple);
         let Some(ripple) = slot.as_mut() else {
             return;
         };

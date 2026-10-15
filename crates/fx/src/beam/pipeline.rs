@@ -196,6 +196,13 @@ impl Style {
     }
 }
 
+/// What the last upload left to draw, as a value: a split screen records its views at once, so
+/// each view keeps its own while a later view's upload refills the pipeline. `draw` draws it.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Drawn {
+    count: u32,
+}
+
 #[derive(Debug)]
 pub struct Pipeline {
     pipeline: wgpu::RenderPipeline,
@@ -468,7 +475,7 @@ impl Pipeline {
     /// draw.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         vertices: &[GpuVertex],
     ) {
@@ -480,7 +487,7 @@ impl Pipeline {
     /// same seat `exhaust`'s HD ribbon gives it.
     pub fn upload_with_eye(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         eye: [f32; 3],
         vertices: &[GpuVertex],
@@ -493,7 +500,7 @@ impl Pipeline {
     /// [`Style::leach_strip`]'s scroll.
     pub fn upload_with_clock(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         eye: [f32; 3],
         clock: f32,
@@ -514,18 +521,24 @@ impl Pipeline {
         self.count = n as u32;
     }
 
+    /// What the last upload left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn drawn(&self) -> Drawn {
+        Drawn { count: self.count }
+    }
+
     /// Draws into a pass the caller already opened, after the opaque
     /// geometry - depth write is off, so it relies on the scene's depth
     /// already being present to be occluded by it.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.count == 0 {
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, drawn: Drawn) {
+        if drawn.count == 0 {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_bind_group(1, &self.texture, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        pass.draw(0..self.count, 0..1);
+        pass.draw(0..drawn.count, 0..1);
     }
 }
 

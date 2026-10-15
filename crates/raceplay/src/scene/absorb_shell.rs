@@ -60,15 +60,13 @@ impl Scene {
 
     /// Draws every live shell, after the hulls so it tests against their
     /// depth, on the material's own additive blend.
-    pub(super) fn draw_absorb_shells(
-        &self,
-        race: &Race,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+    pub(super) fn draw_absorb_shells<'a>(
+        &'a self,
+        race: &'a Race,
+        list: &mut super::record::DrawList<'a>,
     ) {
         for (_, shell, _) in self.absorb_shells(race) {
-            stats.add(shell.draw(pass, block, None, None, None, None));
+            list.mesh(shell);
         }
     }
 }

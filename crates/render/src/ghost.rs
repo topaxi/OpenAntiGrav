@@ -178,7 +178,7 @@ mod tests;
 
 impl Pipeline {
     /// Writes this frame's uniforms. Call before the pass that draws.
-    pub fn write(&self, queue: &wgpu::Queue, frame: &Frame) {
+    pub fn write(&self, queue: &dyn oag_gpu::writes::Writes, frame: &Frame) {
         let uniforms = Uniforms {
             view_projection: frame.view_projection.to_cols_array_2d(),
             model: frame.model.to_cols_array_2d(),

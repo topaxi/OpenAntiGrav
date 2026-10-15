@@ -616,6 +616,9 @@ impl Silhouette {
     }
 }
 
+/// One draw of [`Pipeline::draw`]: a silhouette's bind group and the vertices drawn with it.
+pub type Run = (usize, u32, u32);
+
 /// The blob pass: one pipeline, one vertex buffer, one bind group per
 /// silhouette.
 ///
@@ -635,7 +638,7 @@ pub struct Pipeline {
     vertices: wgpu::Buffer,
     /// `(silhouette, first vertex, count)` per run, as the last
     /// [`Pipeline::upload`] grouped them.
-    runs: Vec<(usize, u32, u32)>,
+    runs: Vec<Run>,
 }
 
 impl Pipeline {
@@ -828,7 +831,7 @@ impl Pipeline {
     /// another team's outline is worse than no shadow.
     pub fn upload(
         &mut self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         view_projection: &[[f32; 4]; 4],
         placements: &[Placement],
         hulls: &[GpuVertex],
@@ -882,17 +885,26 @@ impl Pipeline {
     /// the geometry behind; before, because the hulls are opaque and write
     /// depth, so a craft drawn afterwards covers its own shadow where it
     /// overlaps it rather than the shadow drawing over the craft.
-    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>) {
-        if self.runs.is_empty() {
+    ///
+    /// `runs` is what the upload of the view being drawn left ([`Self::runs`]), kept by the view:
+    /// a split screen records its views at once, while a later view's upload refills this.
+    pub fn draw(&self, pass: &mut wgpu::RenderPass<'_>, runs: &[Run]) {
+        if runs.is_empty() {
             return;
         }
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
         pass.set_vertex_buffer(0, self.vertices.slice(..));
-        for (silhouette, first, count) in &self.runs {
+        for (silhouette, first, count) in runs {
             pass.set_bind_group(1, &self.silhouettes[*silhouette], &[]);
             pass.draw(*first..*first + *count, 0..1);
         }
+    }
+
+    /// What the last [`Pipeline::upload`] left to draw, for [`Self::draw`].
+    #[must_use]
+    pub fn runs(&self) -> &[Run] {
+        &self.runs
     }
 
     /// How many blob quads the last [`Pipeline::upload`] kept.

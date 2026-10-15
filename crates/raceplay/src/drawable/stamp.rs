@@ -21,6 +21,7 @@ impl Drawable {
     pub(super) fn draw_stamps(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        shows: &super::Shows<'_>,
         transparent: &[u64],
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
@@ -32,7 +33,7 @@ impl Drawable {
         let mut current: Option<&wgpu::RenderPipeline> = None;
         let mut last_bound: Option<usize> = None;
         for (index, draw) in self.model.transparent_draws.iter().enumerate() {
-            if !self.lod_shows(draw)
+            if !shows.draw(draw)
                 || !visible(
                     draw,
                     DrawSections::at(transparent, index),

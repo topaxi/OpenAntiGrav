@@ -139,7 +139,7 @@ impl Distort {
         }
     }
 
-    pub(super) fn upload(&mut self, queue: &wgpu::Queue, vertices: &[GpuVertex]) {
+    pub(super) fn upload(&mut self, queue: &dyn oag_gpu::writes::Writes, vertices: &[GpuVertex]) {
         let n = vertices.len().min(MAX_VERTICES);
         queue.write_buffer(&self.vertices, 0, bytemuck::cast_slice(&vertices[..n]));
         self.count = n as u32;

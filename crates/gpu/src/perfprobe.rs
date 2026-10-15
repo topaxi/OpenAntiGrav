@@ -176,7 +176,12 @@ static WRITE_SITES: std::sync::Mutex<Vec<(&'static std::panic::Location<'static>
 
 /// `queue.write_buffer`, counted, and tallied by the caller's source line.
 #[track_caller]
-pub fn write_buffer(queue: &wgpu::Queue, buffer: &wgpu::Buffer, offset: u64, data: &[u8]) {
+pub fn write_buffer(
+    queue: &dyn crate::writes::Writes,
+    buffer: &wgpu::Buffer,
+    offset: u64,
+    data: &[u8],
+) {
     if counting() {
         WRITE_BUFFERS.fetch_add(1, Relaxed);
         WRITE_BUFFER_BYTES.fetch_add(data.len() as u64, Relaxed);

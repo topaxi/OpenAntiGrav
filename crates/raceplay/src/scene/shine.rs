@@ -25,6 +25,11 @@ pub(super) struct TrackShine {
 }
 
 impl TrackShine {
+    /// The pass's drawable and, per draw, the circuit draw it redraws: what recording it reads.
+    pub(super) fn parts(&self) -> (&Drawable, &[usize]) {
+        (&self.drawable, &self.sources)
+    }
+
     /// Moves the pass's matrices onto the shared buffer.
     pub(super) fn share_uniforms(&mut self, device: &wgpu::Device, blocks: &mut UniformBlocks) {
         self.drawable.share_uniforms(device, blocks);
@@ -78,119 +83,6 @@ impl TrackShine {
 }
 
 impl Scene {
-    /// Draws the circuit's solid lists, the sky, the circuit's blended list,
-    /// then the circuit's extra pass over it: the pass is tested against the
-    /// circuit's depth, so it follows the circuit and precedes everything
-    /// drawn after it.
-    ///
-    /// **The sky goes behind the solid circuit rather than first.** It writes
-    /// no depth, so it used to be drawn first comparing `Always`, filling the
-    /// whole viewport for the circuit to cover - every covered sample shaded
-    /// for nothing, the full frame's worth: 5.1 ms of HD's 47 ms race pass at
-    /// 3200x1800 on an integrated GPU, and the largest single span in Pulse's.
-    /// Drawn here with its depth range pinned to the far plane, it compares
-    /// `LessEqual` against the 1.0 the pass cleared to, so it lands on exactly
-    /// the samples nothing solid has reached - the ones it was visible on
-    /// before. The blended list still draws over it, as it always did, and
-    /// nothing solid ever read the colour underneath it.
-    ///
-    /// Neither culling tier is offered it: a skybox is never outside the
-    /// frustum and belongs to no visibility section, which is the behaviour
-    /// ADR-0011 already assumes for it. Its draw calls are deliberately **not**
-    /// added to the stats either: being exempt from both tiers, folding them in
-    /// would shift the denominator ADR-0011's and the roadmap's PVS
-    /// effectiveness figures are quoted against.
-    /// Sorts the circuit's opaque draws nearest first from `eye`, under HD's
-    /// chain only, as the order its depth prepass lays depth down in - so the
-    /// depth test rejects what is behind as early as it can. See
-    /// `mesh_render::Prepass`.
-    ///
-    /// **Only the prepass reads it, and that is why it moves no pixel.** The
-    /// depth `Less` leaves is the nearest surface whatever order it arrives
-    /// in; the shading that follows keeps the model's own order. Sorting the
-    /// shading itself was tried first, 2026-10-03: 44.1 -> 37.4 ms at
-    /// 3200x1800 on an integrated GPU, at the cost of 1 to 419 pixels a
-    /// capture where coplanar ties resolved to the nearer batch. The prepass
-    /// took that to 32.4 ms with the original's picture back.
-    ///
-    /// The key is the distance from `eye` to the nearest point of each
-    /// batch's bounding sphere; `sort_by` is stable, so equal keys keep the
-    /// model's order.
-    pub(super) fn sort_opaque(&self, eye: Vec3) {
-        let mut order = self.opaque_order.borrow_mut();
-        order.clear();
-        if self.hd.is_none() {
-            return;
-        }
-        order.extend(
-            self.track
-                .opaque_draws()
-                .iter()
-                .zip(0u32..)
-                .map(|(draw, i)| {
-                    let centre = Vec3::from_array(draw.bounds.centre);
-                    (centre.distance(eye) - draw.bounds.radius, i)
-                }),
-        );
-        order.sort_by(|a, b| a.0.total_cmp(&b.0));
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn draw_track(
-        &self,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        viewport: (f32, f32, f32, f32),
-        sections: Option<&DrawSections>,
-        set: Option<&VisibleSet>,
-        chunks: Option<&ChunkSet>,
-        frustum: Option<&Frustum>,
-    ) -> SceneStats {
-        oag_gpu::perfprobe::marks::mark(pass, "track solid");
-        let order = self.opaque_order.borrow();
-        let order = (!order.is_empty()).then_some(&order[..]);
-        let mut stats = self.track.draw_lists(
-            pass,
-            block,
-            sections,
-            set,
-            chunks,
-            frustum,
-            Lists::Solid { order },
-        );
-        oag_gpu::perfprobe::marks::mark(pass, "sky");
-        if let Some(sky) = &self.sky {
-            let (x, y, w, h) = viewport;
-            pass.set_viewport(x, y, w, h, 1.0, 1.0);
-            let _ = sky.draw(pass, block, None, None, None, None);
-            pass.set_viewport(x, y, w, h, 0.0, 1.0);
-        }
-        oag_gpu::perfprobe::marks::mark(pass, "track blended");
-        stats.add(self.track.draw_lists(
-            pass,
-            block,
-            sections,
-            set,
-            chunks,
-            frustum,
-            Lists::Blended,
-        ));
-        oag_gpu::perfprobe::marks::mark(pass, "track shine");
-        if let Some(shine) = &self.track_shine {
-            stats.add(shine.drawable.draw_track_shine(
-                pass,
-                block,
-                &self.track,
-                &shine.sources,
-                sections,
-                set,
-                chunks,
-                frustum,
-            ));
-        }
-        stats
-    }
-
     /// The slots whose shine pass draws this frame - the same craft the hull
     /// itself is drawn for.
     fn shines<'a>(&'a self, race: &'a Race) -> impl Iterator<Item = (usize, &'a Drawable)> + 'a {
@@ -268,15 +160,9 @@ impl Scene {
 
     /// Draws every live craft's shine pass, after the hulls so their depth is
     /// in the buffer it tests against.
-    pub(super) fn draw_shine(
-        &self,
-        race: &Race,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
-    ) {
+    pub(super) fn draw_shine<'a>(&'a self, race: &'a Race, list: &mut super::record::DrawList<'a>) {
         for (_, shine) in self.shines(race) {
-            stats.add(shine.draw_overlay(pass, block));
+            list.overlay(shine);
         }
     }
 }

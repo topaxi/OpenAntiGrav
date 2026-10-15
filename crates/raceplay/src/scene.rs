@@ -16,7 +16,6 @@ mod bloom;
 mod boost_flare;
 mod clouds;
 mod craft_cull;
-mod effects;
 mod frame;
 mod ghost;
 mod hd_chain;
@@ -25,6 +24,7 @@ mod mist;
 mod motion;
 mod per_slot;
 mod queries;
+mod record;
 mod ribbons;
 mod scene_blocks;
 mod scratch;
@@ -336,10 +336,6 @@ pub struct Scene {
     /// nothing reads it between frames, and [`Scratch::clear`] is the first
     /// thing done with it.
     scratch: std::cell::RefCell<Scratch>,
-    /// This frame's front-to-back order of the circuit's opaque draws, under
-    /// HD's chain only - see `Scene::draw_track`. Kept apart from
-    /// [`Self::scratch`], which `render` holds borrowed across the pass.
-    opaque_order: std::cell::RefCell<Vec<(f32, u32)>>,
     /// The recovered bloom, run after the scene pass over whatever the frame
     /// stamped into its alpha channel. `None` when the pipelines would not
     /// build, which costs the glow and nothing else.
@@ -1053,7 +1049,6 @@ impl Scene {
             sun_occlusion: std::cell::RefCell::new(sun_occlusion),
             shadow_hulls,
             scratch: std::cell::RefCell::default(),
-            opaque_order: std::cell::RefCell::default(),
             depth,
             msaa_color,
             attachment_views,

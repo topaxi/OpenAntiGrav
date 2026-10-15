@@ -33,12 +33,12 @@ impl Drawable {
     /// its own glow entry, which `mesh::rcs::build_weapon_pads` gives it.
     pub(crate) fn glow_weapon_pads(
         &self,
-        queue: &wgpu::Queue,
+        queue: &dyn oag_gpu::writes::Writes,
         seconds: f32,
         cycle: &oag_title::weapon_pad::Cycle,
         ready: &[bool],
     ) {
-        let mut state = self.pad_glow.borrow_mut();
+        let mut state = super::lock(&self.pad_glow);
         let pads = self.model.node_vertex_ranges.len();
         if state.position.len() != pads {
             state.position = (0..pads)

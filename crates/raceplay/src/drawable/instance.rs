@@ -63,8 +63,7 @@ impl Drawable {
             authored_pipelines: self.authored_pipelines.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
             prepass: self.prepass.clone(),
-            shown: std::cell::RefCell::default(),
-            hidden: std::cell::RefCell::default(),
+            hidden: std::sync::Mutex::default(),
             reversed_indices: self.reversed_indices.clone(),
             vertices: self.vertices.clone(),
             texcoords: self.texcoords.clone(),
@@ -84,10 +83,10 @@ impl Drawable {
             zone_rebind: self.zone_rebind.clone(),
             opaque_ranges: self.opaque_ranges.clone(),
             opaque_reach: self.opaque_reach.clone(),
-            lod: oag_mesh::mesh::LodSwitch::new(&self.model.lod_groups),
+            lod: super::lod_switches(&self.model.lod_groups),
             bound: self.bound.clone(),
-            ripple: std::cell::RefCell::new(None),
-            pad_glow: std::cell::RefCell::default(),
+            ripple: std::sync::Mutex::new(None),
+            pad_glow: std::sync::Mutex::default(),
         }
     }
 

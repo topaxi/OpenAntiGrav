@@ -136,30 +136,33 @@ impl Scene {
     }
 
     /// Chooses the `LodGroup` child of every live wreck.
-    pub(super) fn select_wreck_lod(&self, race: &Race, eye: oag_mesh::mesh::LodEye) {
+    pub(super) fn select_wreck_lod(
+        &self,
+        view: ViewBlock,
+        race: &Race,
+        eye: oag_mesh::mesh::LodEye,
+    ) {
         for slot in 0..usize::from(race.ship_count()) {
             if self.is_wrecked(race, slot)
                 && let Some(wreck) = &self.wrecks.hull[slot]
             {
-                wreck.select_lod(race.ship_model_matrix_of(slot), eye);
+                wreck.select_lod(view, race.ship_model_matrix_of(slot), eye);
             }
         }
     }
 
     /// Draws every live wreck, where the hulls are drawn.
-    pub(super) fn draw_wrecks(
-        &self,
-        race: &Race,
-        pass: &mut wgpu::RenderPass<'_>,
-        block: ViewBlock,
-        stats: &mut SceneStats,
+    pub(super) fn draw_wrecks<'a>(
+        &'a self,
+        race: &'a Race,
+        list: &mut super::record::DrawList<'a>,
     ) {
         for slot in 0..usize::from(race.ship_count()) {
             if !self.is_wrecked(race, slot) || (slot == 0 && !race.draws_own_ship()) {
                 continue;
             }
             if let Some(wreck) = &self.wrecks.hull[slot] {
-                stats.add(wreck.draw(pass, block, None, None, None, None));
+                list.mesh(wreck);
             }
         }
     }
