@@ -156,21 +156,23 @@ impl Drawable {
     }
 
     /// Uploads texture coordinates generated for the camera `view` -
-    /// [`oag_render::shine::write_view`], a circuit's extra pass, whose
+    /// [`oag_render::shine::TrackNormals::write_view`], a circuit's extra pass, whose
     /// coordinates follow the camera and so cannot be baked. Into the streamed
     /// coordinate buffer when this drawable has one, which is the eight bytes
-    /// a vertex that change; the whole vertex is never rewritten.
+    /// a vertex that change; the whole vertex is never rewritten. `normals` is the
+    /// frame's turned normals, shared by every camera drawn at `seconds`.
     pub(crate) fn write_view_map(
         &self,
         queue: &wgpu::Queue,
         view: oag_core::math::Mat4,
         seconds: f32,
+        normals: &mut oag_render::shine::TrackNormals,
         scratch: &mut Vec<[f32; 2]>,
     ) {
         let Some(texcoords) = &self.texcoords else {
             return;
         };
-        oag_render::shine::write_view(&self.model, scratch, view, seconds);
+        normals.write_view(&self.model, scratch, view, seconds);
         queue.write_buffer(texcoords, 0, bytemuck::cast_slice(scratch));
     }
 

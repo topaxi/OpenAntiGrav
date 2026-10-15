@@ -197,40 +197,86 @@ pub fn build_track(track: &Model) -> Option<TrackPass> {
 /// 2 batches carry lights 0 and 1 equal to rows 0 and 1 of the view matrix's
 /// rotation, not its columns, and a hull in the same frame is placed by the
 /// same matrix at view-space `(0, -1.8, -11.5)`, centred and ahead.
+///
+/// One camera, one call. A frame that draws the circuit from several cameras keeps a
+/// [`TrackNormals`] and calls [`TrackNormals::write_view`], which does the normals once.
 pub fn write_view(model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f32) {
-    let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
-    let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
-    let nodes = model.sample_anim_nodes(seconds);
-    // The identity is the model matrix the map takes for a circuit, kept as
-    // a multiply so the coordinates are the interleaved form's to the bit.
-    let identity = oag_core::math::Mat3::IDENTITY;
-    if nodes.is_empty() {
-        texgen::environment_texcoords_by(&model.vertices, out, right, up, |v| {
-            identity * Vec3::from_array(v.normal)
-        });
-        return;
+    TrackNormals::default().write_view(model, out, view, seconds);
+}
+
+/// The unit world normals of a [`build_track`] model, kept between the cameras of a frame.
+///
+/// What [`write_view`] spends most of its time on is not the camera: each vertex's normal is
+/// turned by its animated node and renormalised, and none of that reads the view. This is
+/// that half, computed for a `seconds` once and reused by every camera drawn at it - a
+/// split screen's second view and every view after - and for good when the circuit has no
+/// animated node (the common case), where nothing it holds ever changes. The result is the
+/// bits [`write_view`] always produced.
+#[derive(Debug, Default)]
+pub struct TrackNormals {
+    units: Vec<Vec3>,
+    /// The `seconds` (as bits) `units` is current for; `None` before the first call.
+    at: Option<u32>,
+    /// Whether the model has no animated node, so `units` holds for any `seconds`.
+    fixed: bool,
+    /// How many times `units` has been recomputed.
+    refreshed: u32,
+}
+
+impl TrackNormals {
+    /// How many times the normals have been computed, as opposed to reused.
+    #[must_use]
+    pub fn refreshed(&self) -> u32 {
+        self.refreshed
     }
-    // An animated node's vertices are in the node's space; its matrix takes the
-    // normal to the circuit's. Not an inverse transpose, as the vertex shader's
-    // own normal is not: the animated meshes under a non-uniformly scaled node
-    // are the ones this skews.
-    //
-    // Placed and mapped in one pass rather than copied into a placed list
-    // first. The arithmetic is the two-pass form's to the bit: a placed normal
-    // is renormalised, then goes through the identity the map's model matrix
-    // was, and is renormalised again.
-    texgen::environment_texcoords_by(&model.vertices, out, right, up, |v| {
-        let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
-            Some(m) => Vec3::new(
-                m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
-                m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
-                m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
-            )
-            .normalize_or_zero(),
-            None => Vec3::from_array(v.normal),
-        };
-        identity * normal
-    });
+
+    fn refresh(&mut self, model: &Model, seconds: f32) {
+        if self.at.is_some() && (self.fixed || self.at == Some(seconds.to_bits())) {
+            return;
+        }
+        self.refreshed += 1;
+        self.at = Some(seconds.to_bits());
+        let nodes = model.sample_anim_nodes(seconds);
+        self.fixed = nodes.is_empty();
+        // The identity is the model matrix the map takes for a circuit, kept as
+        // a multiply so the coordinates are the interleaved form's to the bit.
+        let identity = oag_core::math::Mat3::IDENTITY;
+        if nodes.is_empty() {
+            texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
+                identity * Vec3::from_array(v.normal)
+            });
+            return;
+        }
+        // An animated node's vertices are in the node's space; its matrix takes the
+        // normal to the circuit's. Not an inverse transpose, as the vertex shader's
+        // own normal is not: the animated meshes under a non-uniformly scaled node
+        // are the ones this skews.
+        //
+        // Placed and mapped in one pass rather than copied into a placed list
+        // first. The arithmetic is the two-pass form's to the bit: a placed normal
+        // is renormalised, then goes through the identity the map's model matrix
+        // was, and is renormalised again.
+        texgen::unit_normals_by(&model.vertices, &mut self.units, |v| {
+            let normal = match (v.xform as usize).checked_sub(1).and_then(|i| nodes.get(i)) {
+                Some(m) => Vec3::new(
+                    m[0] * v.normal[0] + m[4] * v.normal[1] + m[8] * v.normal[2],
+                    m[1] * v.normal[0] + m[5] * v.normal[1] + m[9] * v.normal[2],
+                    m[2] * v.normal[0] + m[6] * v.normal[1] + m[10] * v.normal[2],
+                )
+                .normalize_or_zero(),
+                None => Vec3::from_array(v.normal),
+            };
+            identity * normal
+        });
+    }
+
+    /// [`write_view`] for `model` at `seconds`, reusing the normals if they are current.
+    pub fn write_view(&mut self, model: &Model, out: &mut Vec<[f32; 2]>, view: Mat4, seconds: f32) {
+        let right = Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x);
+        let up = Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y);
+        self.refresh(model, seconds);
+        texgen::environment_texcoords_from_units(&self.units, out, right, up);
+    }
 }
 
 /// The vertices of `model` (a [`build`] result) with their texture coordinates

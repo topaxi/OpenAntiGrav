@@ -238,6 +238,110 @@ What it says (relative, one machine):
 - The `2h` and `2v` runs of a title end on one state hash, and the one-view and the two-view
   races differ because a second person is on the grid.
 
+## Split CPU on the notebook (2026-10-15, `split-cpu`)
+
+A second machine and a CPU lane: an **Intel Core Ultra 7 265H notebook** (6 P-cores 0-5, 8 E-cores
+6-13, 2 LP-E cores 14-15; `powersave` governor, `balance_performance`), the **NVIDIA RTX PRO 2000
+Blackwell Laptop GPU** (8 GB, proprietary driver, the default adapter) and the **Arrow Lake iGPU**
+(`Intel(R) Graphics (ARL)`, Mesa ANV). Release build, 1280x800, the same races as above, the gate
+lock held. **Every number here says which adapter it is from.**
+
+**An unpinned bench on this machine is not readable.** The same binary measured Pulse 2h at 4,402,
+3,541 and 2,134 us (CPU p50) on three runs, Pure 2h at 1,111 and 653 us, HD at 3,894 and 2,075 us,
+and Pure's two cuts 1,111 against 711 us in one run: the scheduler moves the render thread between
+P and E cores. **Pin it: `taskset -c 0-5 just bench-render ...`** (the P-cores) made the two cuts
+agree (Pulse 2,134 / 2,098, Pure 658 / 655 us) and the repeats agree to a few percent. The
+comparison below is an **interleaved A/B on the pinned cores**: the before and the after binary
+alternate, three rounds each for Pulse and two for HD and Pure, so a load spike lands on both.
+Other members' builds still ran on the machine (load 1.2 to 17 across the runs), so a single
+round can still carry an outlier; every round is listed.
+
+**The iGPU is selected with the Intel ICD, not `MESA_VK_DEVICE_SELECT`**: with an NVIDIA card in
+the machine `MESA_VK_DEVICE_SELECT=8086:7d51` still ran on the NVIDIA GPU (the result line said so),
+and `VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/intel_icd.json` hides the NVIDIA one. Always read the
+adapter off the `bench:` line.
+
+**The profiler.** `samply` (built locally) refused to sample: `kernel.perf_event_paranoid` is 2 and
+there is no root (`echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid` lets it). The numbers
+below come from the in-tree `perf-probe` marks instead (`cargo build --release -p oag-game
+--features perf-probe`, then `OAG_RENDER_BENCH=300 OAG_RENDER_PERF=1 oag-game ... --players 2
+--screenshot x.png`, which prints a CPU span between consecutive `perfprobe::mark` calls), run on
+the pinned cores.
+
+**Where a Pulse view's CPU went (NVIDIA, the second view of a two-view frame, us):** 18 fog and
+zone writes, 50 scenery and glass, 22 pads, 35 exhaust upload, 23 shadow gather, 40 recording the
+scene pass, **234 `encoder.finish`**, 44 submit, and **282 for the ships' and the circuit's shine
+passes** (`ship+shield-write`: 366 us on the circuit's per-vertex normal turn and 264 us on the
+craft's environment-map rebuild when split out, in an earlier run). The shine passes were the
+largest item that was not the driver's.
+
+**What changed (`Scene::write_shine`, `oag_render::shine::TrackNormals`, `Drawable::draw_lists`):**
+
+- The circuit shine pass turned and renormalised every vertex's normal on every view; none of it
+  reads the camera. `TrackNormals` keeps the unit normals (for the whole race when the circuit
+  has no animated node, once per clock value otherwise) and a view only takes two dot products.
+  Bit-identical to the per-call arithmetic (`kept_normals_give_every_camera_the_bits_a_fresh_call_does`).
+  It speeds up one view too (Pulse 1 view, about 2%).
+- The craft shine passes rebuilt every hull's vertex buffer on every view from the craft's pose and
+  flaps, which a camera does not decide; the first view of a frame does it now
+  (`FrameWork::shine_maps`, asserted by `four_views_do_the_shared_work_once` and the window tests;
+  dropping the gate fails the first). The second view's `ship+shield-write` went 282 to 63 us.
+- HD's depth prepass bound a texture group per draw for a fragment stage that reads none
+  (`fs_depth_only`); it binds one now. That is about 400 us of HD's CPU in one view and in two.
+
+**Result, CPU p50 (us), `record + submit`, NVIDIA RTX PRO 2000 Blackwell Laptop GPU, pinned to
+cores 0-5, interleaved A/B, before then after by round:**
+
+| Title, case | before | after | 2-view cost over 1 view, before then after |
+| --- | --- | --- | --- |
+| Pulse, 1 | 1,308 / 1,364 / 1,324 | 1,301 / 1,302 / 1,272 | |
+| Pulse, 2h | 2,116 / 2,098 / 2,068 | 1,897 / 1,832 / 2,105 | 1.58x to 1.46x (p50 of the rounds) |
+| Pulse, 2v | 2,831 / 2,259 / 2,086 | 1,853 / 1,918 / 1,890 | |
+| HD, 1 | 2,107 / 2,038 | 1,677 / 1,770 | |
+| HD, 2h | 3,151 / 2,980 | 2,638 / 2,636 | 1.48x to 1.53x |
+| HD, 2v | 2,950 / 2,914 | 2,653 / 2,611 | |
+| Pure, 1 | 337 / 345 | 338 / 338 | |
+| Pure, 2h | 654 / 648 | 648 / 650 | 1.9x, unchanged |
+| Pure, 2v | 655 / 661 | 657 / 656 | |
+
+Pulse's second view cost 774 us over the first and costs about 595 now. HD's saving is in the
+shared depth prepass, so it lands on one view as much as on two and the ratio does not fall. Pure
+has no shine pass and no prepass and did not move. The pipelined frame (p50) moved with the CPU:
+Pulse 2h 2,225 / 2,205 / 2,178 to 2,009 / 1,943 / 2,227, HD 2h 3,513 / 3,336 to 3,124 / 3,138.
+
+**Arrow Lake iGPU (`Intel(R) Graphics (ARL)`, Mesa ANV), same A/B, CPU p50 us, two rounds:**
+
+| Title, case | before | after |
+| --- | --- | --- |
+| Pulse, 1 | 5,401 / 5,454 | 5,263 / 5,446 |
+| Pulse, 2h | 9,078 / 9,332 | 8,408 / 8,801 |
+| Pulse, 2v | 9,234 / 9,282 | 8,686 / 8,624 |
+| HD, 1 | 2,514 / 2,481 | 2,325 / 2,312 |
+| HD, 2h | 3,928 / 3,961 | 3,577 / 3,574 |
+| HD, 2v | 3,855 / 3,820 | 3,527 / 3,546 |
+
+The ANV driver spends about four times the NVIDIA driver's CPU on Pulse's frame (5.4 ms against
+1.3 ms for one view, 9.2 ms for two): on this iGPU Pulse's split is **CPU-bound** at about 9 ms
+pipelined, not GPU-bound as on the Raphael iGPU above (1.5 ms of GPU). The change is worth
+about 7% there. HD stays GPU-bound (`frame` 5.9 ms with 2.8 ms of CPU) and its pipelined frame
+moved by about 1%. Pure is untouched.
+
+The first `split-cpu-before` / `split-cpu-after-pin` tag directories (sequential runs, not
+interleaved) agree on direction but carry the load of other members' builds, which is why the
+A/B above is the evidence: Pulse 1 view read 1,968 us in one after-run at load 4.6 against 1,300
+in the A/B. Every state hash is unchanged (`final_state_hash`).
+
+**Picture.** 15 stills compared byte for byte before and after, all identical: Pulse 2h and 2v at
+ticks 300, 1200 and 2500, Pulse one view, three views, the cockpit camera in a split, two windows
+of one seat each, HD one view and 2h, Pure 2h and 2v. A run of the before binary twice is
+identical to itself, so the comparison has no noise floor.
+
+**Left, and why** (the open-work thread is in the repository's handover tree): `encoder.finish` is now 40% of a Pulse view's CPU
+(234 of about 590 us) and half of HD's (about 500 us at about 800 draws): wgpu validates the
+recorded commands there and it scales with their count, so only fewer commands (a texture array
+or atlas per drawable, render bundles for the view-independent draws, merging a craft's draws)
+cut it, each a change to how the scene is built.
+
 ## On the Steam Deck (the maintainer runs this)
 
 Not run by this lane. On the Deck, in desktop mode, with the repository checked out and the

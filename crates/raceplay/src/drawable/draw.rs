@@ -179,6 +179,14 @@ impl Drawable {
         // `reversed`: draw from `reversed_indices`, where a range `s..e` of
         // the model's own sits at `n - e..n - s`.
         let index_count = self.model.indices.len() as u32;
+        // The depth half of a prepass reads no texture (`fs_depth_only` returns a constant
+        // under an empty write mask), so group 1 is bound once, to the white fallback, and its
+        // draws go out without switching it: half of HD's circuit binds, and what the wgpu
+        // encoder validates at `finish`. The shade half binds as usual from this state.
+        if self.prepass.is_some() && !shown.is_empty() {
+            pass.set_bind_group(1, &self.textures[0], &[]);
+            last_bound = Some(0);
+        }
         let mut draw_one = |pass: &mut wgpu::RenderPass<'_>, index: u32, reversed: bool| {
             let draw = &opaque_draws[index as usize];
             let slot = draw
@@ -224,7 +232,8 @@ impl Drawable {
             Some(prepass) if !shown.is_empty() => {
                 pass.set_pipeline(&prepass.depth);
                 for &index in depth_order.iter() {
-                    draw_one(pass, index, false);
+                    let draw = &opaque_draws[index as usize];
+                    pass.draw_indexed(draw.range.clone(), 0, 0..1);
                 }
                 pass.set_pipeline(&prepass.shade);
                 let reversed = self.reversed_indices.as_ref();
