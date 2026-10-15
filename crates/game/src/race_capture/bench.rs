@@ -118,8 +118,8 @@ pub(super) fn run(
                     scene: scene.as_ref().and_then(PassTimer::writes),
                     blur: blur.as_ref().and_then(|t| {
                         Some(oag_post::motion_blur::ChainTimestamps {
-                            begin: t.half_writes(Half::Begin)?,
-                            end: t.half_writes(Half::End)?,
+                            begin: Some(t.half_writes(Half::Begin)?),
+                            end: Some(t.half_writes(Half::End)?),
                         })
                     }),
                     bloom: bloom.as_ref().and_then(|t| {

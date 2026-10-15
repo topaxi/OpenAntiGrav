@@ -251,8 +251,9 @@ impl RaceStage {
         }
         // A split screen draws one scene per view, each submitted on its own, so
         // `encoder` keeps only what the caller records after it: see
-        // `Scene::render_viewports`. No timers, blur or jitter - the views
-        // share one camera history that `N` cameras would corrupt.
+        // `Scene::render_viewports`. The blur runs once per view after the last, its
+        // timestamp pair bracketing every chain; no scene timer and no jitter (one
+        // camera's).
         if self.race.viewport_count() > 1 {
             return self.scene.render_viewports(
                 gpu.device(),
@@ -266,6 +267,11 @@ impl RaceStage {
                 anim_seconds,
                 shadows,
                 zone_spectrum,
+                race::WindowEffects {
+                    motion_blur,
+                    blur_timestamps,
+                    ..Default::default()
+                },
                 &mut [],
             );
         }
@@ -298,7 +304,7 @@ impl RaceStage {
     /// as a split screen cuts its views (`Scene::render_window_views`, which submits its own
     /// command buffers first). The caller submits `encoder` before the next window draws, and
     /// has set the draw alpha. `effects` is the window's blur, jitter and timers, for a window of
-    /// one seat (a window of several is a split and draws none). A window with no seats draws
+    /// one seat (a window of several is a split and draws the blur only). A window with no seats draws
     /// nothing.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn render_window(

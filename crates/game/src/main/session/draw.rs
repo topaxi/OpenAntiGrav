@@ -376,8 +376,8 @@ impl Session {
                             .and_then(oag_gpu::timing::PassTimer::writes),
                         self.blur_timer.as_ref().and_then(|timer| {
                             Some(oag_post::motion_blur::ChainTimestamps {
-                                begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
-                                end: timer.half_writes(oag_gpu::timing::Half::End)?,
+                                begin: Some(timer.half_writes(oag_gpu::timing::Half::Begin)?),
+                                end: Some(timer.half_writes(oag_gpu::timing::Half::End)?),
                             })
                         }),
                         self.hd_bloom_timer.as_ref().and_then(|timer| {
@@ -456,8 +456,8 @@ impl Session {
                     // last pass - see `PassTimer::half_writes`.
                     self.blur_timer.as_ref().and_then(|timer| {
                         Some(oag_post::motion_blur::ChainTimestamps {
-                            begin: timer.half_writes(oag_gpu::timing::Half::Begin)?,
-                            end: timer.half_writes(oag_gpu::timing::Half::End)?,
+                            begin: Some(timer.half_writes(oag_gpu::timing::Half::Begin)?),
+                            end: Some(timer.half_writes(oag_gpu::timing::Half::End)?),
                         })
                     }),
                     // The same split, for the HD/Fury bloom chain.
