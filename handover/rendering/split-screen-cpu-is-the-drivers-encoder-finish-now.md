@@ -2,69 +2,51 @@
 categories: [rendering, tooling]
 ---
 
-# Split-screen CPU: the shine passes are cheap now, `encoder.finish` is what is left
+# Split-screen CPU: `encoder.finish` is the texture bind-group switches
 
-2026-10-15, `split-cpu`, on an Intel Core Ultra 7 265H notebook (NVIDIA RTX PRO 2000 Blackwell
-Laptop GPU and the Arrow Lake iGPU). Evidence and numbers:
-`docs/tools/render-bench.md` "Split CPU on the notebook", `docs/rendering/split-screen.md` "Cost".
+2026-10-15, `split-cpu` then `encoder-finish`, on an Intel Core Ultra 7 265H notebook (NVIDIA RTX
+PRO 2000 Blackwell Laptop GPU and the Arrow Lake iGPU). Evidence and numbers:
+`docs/tools/render-bench.md` "Split CPU on the notebook" and "Encoder finish and the uniform uploads",
+`docs/rendering/split-screen.md` "Cost".
 
-Landed: the circuit shine pass's normals are kept (`TrackNormals`), the craft shine passes'
-environment maps are written by the first view of a frame, and HD's depth prepass binds one
-texture slot. A Pulse view's extra CPU fell from about 774 to 595 us, HD's two-view CPU by 10 to
-16%, every still byte-identical.
+Landed: the circuit shine pass's normals are kept, the craft shine maps are written by the first view
+of a frame, HD's depth prepass binds one texture slot (`split-cpu`); one shared buffer of scene blocks
+(a block per view and per kind, bound by dynamic offset: 33 fewer `queue.write_buffer` calls a view on
+Pulse) and contiguous same-texture batches merged into one `draw_indexed` (HD 1,447 to 969 calls a
+view), every still byte-identical and every state hash unchanged (`encoder-finish`).
 
 ## Open
 
-- **`encoder.finish` is the biggest item left**: about 230 us of a Pulse view's 590 and about
-  500 us of an HD view's at about 800 draws. It is wgpu validating the recorded commands, so it
-  scales with their count (the probe's `scene-pass` recording is 40 us). Ideas, each a change to
-  how a drawable is recorded, none tried: one texture array or atlas per drawable instead of a
-  bind group per texture; render bundles for the draws a camera does not change (a bundle takes
-  no per-view uniform, so the scene uniform would have to move to a shared dynamic-offset
-  buffer first); fewer, merged draws for a craft.
-- **The scene uniform is written once per drawable per view** (`Scene` is about a kilobyte and
-  there are 40 to 60 drawables with their own `fog` buffer): around 40 `queue.write_buffer`
-  calls a view at 1.5 to 4 us each on NVIDIA. One shared buffer per view, bound by every
-  drawable, would be one write.
-- **The Arrow Lake iGPU's driver (Mesa ANV) costs about four times NVIDIA's CPU on Pulse**
-  (5.4 ms for one view, 9.2 ms for two), so Pulse's split is CPU-bound there at about 9 ms. Not
-  profiled below `perf-probe` spans: `samply` could not sample (`kernel.perf_event_paranoid` is
-  2, no root). A maintainer run of `echo 1 | sudo tee /proc/sys/kernel/perf_event_paranoid`
-  lets `cargo install samply` and `samply record` see inside the driver.
+- **The texture bind-group switches are 55 to 65% of `encoder.finish` and 20 to 25% of a view's CPU**
+  (a hack that never re-binds group 1: Pulse's second view 216 to 96 us of finish, HD 273 to 98, Pure
+  133 to 39; 2h CPU Pulse 1,605 to 1,297, HD 2,283 to 1,814, Pure 680 to 420 us). That is the ceiling
+  of any scheme that removes them. Sorting the draws by texture moves pixels (the 2026-10-03 note in
+  `scene/shine.rs`), `texture_2d_array` needs one size and format, an atlas breaks repeat wrapping,
+  and a `binding_array` indexed by the instance index is native only (the web and phone builds keep
+  the per-draw path) and touches group 1's five bindings in every title's mesh shader. Its own lane,
+  decided by the maintainer.
+- **Group 0 is still one `queue.write_buffer` per drawable per view** (matrices; Pulse 56 writes a view
+  after the scene blocks). Packing them into one write a view, a dynamic offset per drawable inside the
+  view's region, is the next upload win (about 1 us a write removed, an estimate from the scene
+  blocks' 33 writes and 4 to 5%) and is also what a threaded view needs.
+- **Views recorded on separate threads**: the scene block region is per view, but the group-0
+  buffers, the animation tables, `Drawable`'s `RefCell`s (`shown`, `ripple`, `pad_glow`, `hidden`),
+  `Scene`'s `layer`, `history`, `scratch`, `opaque_order` cells, the effect pipelines' buffers and the
+  race's viewpoint cell are shared at record time (list in `docs/rendering/split-screen.md`, "Cost").
+- **Render bundles are not cheap**: a bundle's commands are fixed at creation, and every drawable's
+  draw list changes each view with the culling and the level of detail, with per-view dynamic offsets.
+- **The Arrow Lake iGPU's driver (Mesa ANV) costs about four times NVIDIA's CPU on Pulse** and is
+  CPU-bound there; not profiled below `perf-probe` spans (`samply` could not sample,
+  `kernel.perf_event_paranoid` is 2).
 - A bench on this machine must be pinned (`taskset -c 0-5`) and read from an interleaved A/B;
-  `scripts/bench-render.py` does neither itself.
-- Not measured: the Steam Deck (the maintainer runs it).
-
-## Concurrency share of a two-view frame's CPU (2026-10-15)
-
-NVIDIA RTX PRO 2000 Blackwell Laptop GPU, pinned P-cores, `perf-probe` spans of the **second
-view** of a 2h frame (it leaves out the first view's once-per-frame work, which stays serial;
-the first view was not re-profiled after the fixes, and HD's `finish` is from before the
-prepass fix). Probe spans, not a flame graph (`samply` could not sample).
-
-| Per view | Pulse (~590 us) | HD (~1,000 us) | Pure (~310 us) |
-| --- | --- | --- | --- |
-| `encoder.finish` | 234 (40%) | ~500 (50%) | 142 (46%) |
-| scene-pass recording | 40 (7%) | ~96 (10%) | 22 (7%) |
-| culling and gathers | 20-25 (4%) | ~100 (10%) | small |
-| `queue.write_buffer` uploads | ~250 (42%) | ~230 (23%) | ~120 (38%) |
-| submit | 44 (7%) | 31-47 (4%) | 23-30 (9%) |
-
-- **Could run on its own thread now** (finish, recording, gathers): about 50% of Pulse's view,
-  70% of HD's, 55% of Pure's. That is the ceiling for a concurrent-encoder lane.
-- **Parallel only after a redesign** (the uploads, 25-40%): `queue.write_buffer` lands before the
-  next submission's commands, not at its place in the encoder, so views recorded concurrently
-  into separate encoders still need per-view uniform buffers, or one shared per-view scene
-  buffer with dynamic offsets (the "scene uniform is written once per drawable per view" item).
-- **Serial regardless:** submit (4-9%), any device or queue locking wgpu takes inside `finish`
-  and `write_buffer` (not measured), and the first view's shared work (shadow maps, gather,
-  scenery clocks, adverts). The real ceiling is lower than the shares above.
+  `scripts/bench-render.py` does neither itself, and **a whole-race run at load 3 to 14 read +-40% on
+  identical binaries**, so compare with the `OAG_RENDER_BENCH` line, minimum of rounds.
+- Not measured: the Steam Deck (the maintainer runs it; commands in `docs/tools/render-bench.md`).
 
 ## Next Steps
 
-1. Run `samply` on `oag-game --race --players 2` once the paranoid level allows it, on both
-   adapters, and read `encoder.finish` and the ANV frames by symbol.
-2. Try the shared per-view scene uniform: it is the smaller change and it removes 40 writes
-   a view.
-3. Judge the texture-array change by what it removes from `finish`, on HD first (its circuit
-   draws about 800 batches).
+1. Run the Deck commands in `docs/tools/render-bench.md` ("Encoder finish and the uniform uploads")
+   on `main` and `encoder-finish`.
+2. Decide whether the group-1 switches are worth a native-only bindless path, and who owns it.
+3. Pack the group-0 matrices into one write a view with per-view regions, then list what is left
+   shared at record time for the threaded-views lane.
