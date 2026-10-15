@@ -285,11 +285,14 @@ impl super::super::Scene {
         // not to the track - see `shadow::map::Fit`. Leaving the hull out is not
         // a small error: with one craft it makes the box smaller than the
         // caster, and the shadow comes out the size of the overlap.
-        let radius = grid_fit_radius((0..drawn.min(self.ships.len())).filter_map(|slot| {
-            race.ship_active(slot).then(|| {
-                (race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO) - centre).length()
-            })
-        }));
+        let radius = grid_fit_radius(
+            (0..drawn.min(self.ships.len()))
+                .filter(|&slot| race.ship_active(slot))
+                .map(|slot| {
+                    (race.ship_model_matrix_of(slot).transform_point3(Vec3::ZERO) - centre).length()
+                }),
+        );
+
         let fit = oag_render::shadow::map::Fit {
             centre,
             radius,
