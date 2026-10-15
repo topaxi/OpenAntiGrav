@@ -22,9 +22,12 @@ struct Constants {
     // Three scalars rather than a `vec3<f32>`: a trailing vec3 aligns to 16 in
     // WGSL's uniform address space and would push the block to 48 bytes, where
     // the Rust `Constants` is 32.
-    _pad0: f32,
-    _pad1: f32,
-    _pad2: f32,
+    // The drawn rectangle's corner in the scene target as a UV offset, again two
+    // scalars so the block keeps the Rust `Constants`' layout. Zero for a
+    // rectangle that starts at the target's own corner.
+    uv_offset_x: f32,
+    uv_offset_y: f32,
+    _pad: f32,
     // Which sub-rectangle of `source_tex` was drawn, as a UV scale and a clamp
     // half a texel inside its edge. **Only `fs_bright` reads these** - it is
     // the one pass that samples the scene target, which since ADR-0037 may be
@@ -87,7 +90,7 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
     // The downsample, and the one place the drawn rectangle enters: mapping
     // the extent onto the whole of the scratch buffer is what keeps the blur
     // radius a constant fraction of the picture at every render scale.
-    let at = min(in.uv * constants.uv_scale, constants.uv_max);
+    let at = min(vec2<f32>(constants.uv_offset_x, constants.uv_offset_y) + in.uv * constants.uv_scale, constants.uv_max);
     let texel = textureSample(source_tex, source_sampler, at);
     let alpha = u32(floor(texel.a * 255.0 + 0.5));
     return vec4<f32>(vec3<f32>(bytes(texel.rgb) * alpha / 255u) / 255.0, 1.0);
