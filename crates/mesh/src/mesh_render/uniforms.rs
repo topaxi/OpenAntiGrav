@@ -656,10 +656,8 @@ pub struct ShadowMap {
     /// per-texel derivative. Ignored in [`ShadowMap::COVERAGE`], which
     /// compares nothing.
     pub depth_bias: f32,
-    /// In [`ShadowMap::COVERAGE`] mode, how many of [`Scene::craft_shadow`]'s
-    /// records are in use, packed first: the craft whose sphere reaches the
-    /// view. Zero elsewhere.
-    pub crafts: f32,
+    /// Padding to the 16-byte boundary a uniform's own size needs.
+    pub _pad: f32,
 }
 
 impl ShadowMap {
@@ -687,7 +685,7 @@ impl ShadowMap {
             strength: 0.0,
             mode: 0.0,
             depth_bias: 0.0,
-            crafts: 0.0,
+            _pad: 0.0,
         }
     }
 }

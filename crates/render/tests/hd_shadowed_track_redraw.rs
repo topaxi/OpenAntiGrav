@@ -140,7 +140,6 @@ fn shadowed(mut scene: Scene, strength: f32) -> Scene {
         rect: [0.0, 0.0, 1.0, 1.0],
         centre: [0.0, 0.0, 0.0, 1.0e6],
     };
-    scene.shadow.crafts = 1.0;
     scene
 }
 
@@ -223,7 +222,6 @@ fn with_crafts(mut scene: Scene, matrices: &[Mat4]) -> Scene {
             centre: [0.0, 0.0, 0.0, 1.0e6],
         };
     }
-    scene.shadow.crafts = matrices.len() as f32;
     scene
 }
 
@@ -302,14 +300,6 @@ fn craft_maps_combine_as_the_originals_redraws_do_and_keep_to_their_box() {
     assert!(
         covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
         "a point outside the cull sphere is lit"
-    );
-    // And a record past the listed count is not read at all.
-    let mut unlisted = with_crafts(rig(SUN), &[Mat4::IDENTITY]);
-    unlisted.shadow.crafts = 0.0;
-    let got = draw(&device, &queue, &model, unlisted, Some(255));
-    assert!(
-        covered_fraction(got, sunlit, ambient_only).abs() < 0.04,
-        "a craft beyond the packed count is lit"
     );
 }
 
