@@ -2,15 +2,16 @@
 //! the velocity and depth attachments keep every view's, and the blur runs over each view's
 //! own rectangle ([`Scene::blur_split_views`]).
 
-use super::scene_build::{livery, scene_over, test_gpu, triangle, vertex};
+use super::scene_build::{livery, scene_over_msaa, test_gpu, triangle, vertex};
 use super::*;
 use crate::mesh_render;
+use oag_display::display::Msaa;
 use oag_display::display::{Fov, MotionBlur, Shadows};
 
 const SIZE: u32 = 64;
 const AREA: (f32, f32, f32, f32) = (0.0, 0.0, SIZE as f32, SIZE as f32);
 
-fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race) -> Scene {
+fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race, msaa: Msaa) -> Scene {
     // The craft is the one thing here that draws bright (the track draws black in this
     // fixture), so each hull is a few big triangles ahead of the craft along its model's
     // forward (-z), at several sizes: whichever the chase camera frames shows in the view.
@@ -34,7 +35,7 @@ fn scene(device: &wgpu::Device, queue: &wgpu::Queue, race: &Race) -> Scene {
         livery
     };
     let liveries: Vec<_> = (0..race.ship_count()).map(|_| hull()).collect();
-    scene_over(device, queue, triangle(), &liveries)
+    scene_over_msaa(device, queue, triangle(), &liveries, msaa)
 }
 
 fn target(device: &wgpu::Device) -> wgpu::Texture {
@@ -144,11 +145,11 @@ fn drawn(rows: &[u8]) -> bool {
 /// A two-view race and its scene after three frames in which only craft `mover` travels, drawn
 /// with the blur off into the first target and on into the second from the same state (a
 /// repeat of one tick measures against the same previous pose).
-fn after_frames(mover: usize) -> Option<Frames> {
+fn after_frames(mover: usize, msaa: Msaa) -> Option<Frames> {
     let (device, queue) = test_gpu()?;
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
-    let scene = scene(&device, &queue, &race);
+    let scene = scene(&device, &queue, &race, msaa);
     let (off, on) = (target(&device), target(&device));
     // Let the chase cameras settle on the grid: a camera still catching up is motion.
     for _ in 0..90 {
@@ -198,7 +199,7 @@ impl Frames {
 /// the whole picture (the second view is touched) and when no chain runs at all.
 #[test]
 fn the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
-    let Some(frames) = after_frames(0) else {
+    let Some(frames) = after_frames(0, Msaa::Off) else {
         return;
     };
     let [first, second] = frames.views();
@@ -214,7 +215,7 @@ fn the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
 /// view's. Fails when only the first view's chain, or only the last view's rectangle, is run.
 #[test]
 fn it_is_the_view_that_moves_wherever_it_is_drawn() {
-    let Some(frames) = after_frames(1) else {
+    let Some(frames) = after_frames(1, Msaa::Off) else {
         return;
     };
     let [first, second] = frames.views();
@@ -238,7 +239,7 @@ fn every_view_keeps_the_history_of_its_own_camera() {
     let gpu = (&device, &queue);
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
-    let scene = scene(&device, &queue, &race);
+    let scene = scene(&device, &queue, &race, Msaa::Off);
     let target = target(&device);
     let mut last = [None; 2];
     for frame in 0..4 {
@@ -276,7 +277,7 @@ fn every_view_keeps_the_history_of_its_own_camera() {
 /// no motion. Fails when a later view's scene pass clears either attachment whole.
 #[test]
 fn a_later_view_keeps_the_velocity_and_depth_of_the_views_before_it() {
-    let Some(frames) = after_frames(0) else {
+    let Some(frames) = after_frames(0, Msaa::Off) else {
         return;
     };
     let (velocity, depth) = frames.scene.attachment_textures();
@@ -334,7 +335,7 @@ fn a_single_view_frame_forgets_the_split_histories() {
     };
     let mut race = race_with_a_grid();
     assert_eq!(race.set_viewport_count(2), 2);
-    let scene = scene(&device, &queue, &race);
+    let scene = scene(&device, &queue, &race, Msaa::Off);
     let target = target(&device);
     draw(
         (&device, &queue),
@@ -371,4 +372,64 @@ fn a_single_view_frame_forgets_the_split_histories() {
         scene.motion_probe(0).is_some(),
         "the single view's own history is kept"
     );
+}
+
+/// The same two properties under 4x MSAA, where velocity and depth are multisampled and only the
+/// colour resolves: a later view's resolve does not touch the earlier view's velocity or depth
+/// (neither is resolved), so the first view still blurs and the one at rest still does not.
+/// Velocity and depth cannot be copied out at 4 samples, so this reads the pictures.
+#[test]
+fn under_msaa_the_view_that_moves_blurs_and_the_one_that_sits_still_does_not() {
+    let Some(frames) = after_frames(0, Msaa::X4) else {
+        return;
+    };
+    let [first, second] = frames.views();
+    assert!(
+        drawn(&first[0]) && drawn(&second[0]),
+        "both views show a craft"
+    );
+    assert!(first[0] != first[1], "the moving view is blurred");
+    assert!(second[0] == second[1], "the view at rest is not touched");
+}
+
+/// A frame starts with nothing of the one before it: the same state drawn twice leaves the same
+/// depth and velocity, whatever the first draw left, and the same picture. A later view loads
+/// both and relies on the first view's whole-attachment clear: without it the second draw would
+/// fail the depth test against the first's depth (equal is not less) and draw nothing.
+#[test]
+fn a_frame_reads_nothing_of_the_frame_before_it() {
+    let Some(frames) = after_frames(0, Msaa::Off) else {
+        return;
+    };
+    let gpu = (&frames.device, &frames.queue);
+    let (velocity, depth) = frames.scene.attachment_textures();
+    let read = || {
+        (
+            pixels(gpu.0, gpu.1, velocity),
+            pixels(gpu.0, gpu.1, depth),
+            pixels(gpu.0, gpu.1, &frames.off),
+        )
+    };
+    let once = read();
+    draw(
+        gpu,
+        &frames.scene,
+        &frames.race,
+        &frames.off,
+        MotionBlur::Off,
+    );
+    let twice = read();
+    assert!(
+        once.0 == twice.0,
+        "the velocity of a repeated frame is the same"
+    );
+    assert!(
+        once.1 == twice.1,
+        "the depth of a repeated frame is the same"
+    );
+    assert!(
+        once.2 == twice.2,
+        "the picture of a repeated frame is the same"
+    );
+    assert!(drawn(&twice.2), "and it is not because nothing was drawn");
 }

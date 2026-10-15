@@ -149,7 +149,7 @@ things make that more than a loop:
    what it was with the blur off, with the moving view drawn first and drawn last; a later
    view keeps the velocity and depth of the ones before it; each seat keeps its own camera's
    history; a single view forgets them): reverting the velocity load, the depth load, or
-   making every chain use the last view's rectangle each fails one of them. Camera jitter
+   making every chain use the last view's rectangle each fails one of them. Two more pin what the load relies on: `a_frame_reads_nothing_of_the_frame_before_it` (the same state drawn twice leaves the same depth, velocity and picture; with no whole-attachment clear by the first view the second draw fails the depth test and draws nothing) and the blur test again under 4x MSAA (velocity and depth are multisampled and not resolved, so a later view's colour resolve does not touch an earlier view's; they cannot be copied out at 4 samples, so that one reads the pictures). Camera jitter
    and the temporal upscaler need a frame record and a history per view, and a resolve pass
    per view over that view's rectangle (FSR 3's `resolve_scene` encodes one chain over the
    whole picture): not started, and not free.

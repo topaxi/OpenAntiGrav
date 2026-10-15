@@ -122,6 +122,23 @@ pub(super) fn scene_over(
     track: Model,
     liveries: &[Livery],
 ) -> Scene {
+    scene_over_msaa(
+        device,
+        queue,
+        track,
+        liveries,
+        oag_display::display::Msaa::Off,
+    )
+}
+
+/// [`scene_over`] at a multisample level.
+pub(super) fn scene_over_msaa(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    track: Model,
+    liveries: &[Livery],
+    msaa: oag_display::display::Msaa,
+) -> Scene {
     Scene::new(
         device,
         queue,
@@ -153,7 +170,7 @@ pub(super) fn scene_over(
         (64, 64),
         Anisotropy::Off,
         None,
-        oag_display::display::Msaa::Off,
+        msaa,
         Vec::new(),
         mesh_render::Light::stand_in(),
         None,
