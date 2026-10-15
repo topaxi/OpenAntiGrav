@@ -450,6 +450,21 @@ split vertically, records every frame and compares across machines by file name;
 discrete card the split is CPU-bound at about 1.5 to 1.9x the CPU of one view; on the iGPU it
 is GPU-bound and adds 6% (Pulse) to 15% (Pure, horizontal) to the pipelined frame, HD 18%.
 
+**The shine passes were the largest per-view cost left (2026-10-15, `split-cpu`, an Intel
+notebook, NVIDIA RTX PRO 2000 Blackwell Laptop GPU and Arrow Lake iGPU).** On Pulse a later view
+spent 282 of about 800 us of CPU in `ship+shield-write`: the circuit shine pass turned and
+renormalised every vertex's normal per view, and the craft shine passes rebuilt every hull's
+vertex buffer per view, neither of which reads the camera past two dot products. The normals are
+kept (`oag_render::shine::TrackNormals`) and the craft maps are written by the first view only
+(`Layer::Next` skips them; `FrameWork::shine_maps`); the uniform with the view-projection stays
+per view. HD's depth prepass also bound a texture per draw for a stage that reads none. Pulse's
+two-view CPU fell 8 to 10% (2,098 to 1,897 us at 2h, p50, pinned P-cores, interleaved A/B), HD's
+10 to 16% (it also fell in one view), Pure's did not move, and every still of 15 is
+byte-identical. The numbers, the iGPU's, and why an unpinned bench on a hybrid CPU is not readable
+are in [render bench](../tools/render-bench.md#split-cpu-on-the-notebook-2026-10-15-split-cpu).
+What is left is `encoder.finish`, the driver-side validation of the recorded commands, 40% of a
+Pulse view and half of HD's, which only fewer commands reduce.
+
 The previous table here (6,507 and 7,172 draws at eight views, tick 300 and 1800) does not
 reproduce: Pulse's default circuit with the default culling submits 3,762 and 3,700 draws at
 eight views, and `--pvs false` 7,923 at tick 1800, so the old figures were most likely taken
@@ -1393,6 +1408,8 @@ cannot be read in place, plus a DLC `.vpk` with no base game).
   The render bench does time every view (`Scene::render_viewports`' `view_timers`);
   it also shows resolution would not help a split here: the GPU is not the limit
   (see "Cost").
+- **CPU per view is mostly the driver now**: `encoder.finish` is about 230 us of a Pulse view's
+  590 and about 500 us of an HD view's (see "Cost", 2026-10-15). Open in the `split-cpu` thread.
 - ~~**The `mapped` shadow tier follows slot 0 only**~~ **Done, 2026-10-13**: each later
   view redraws the depth map fitted on its own craft (see "The shadow gather per tick,
   and the `mapped` map per view" under "Cost"). Open from it: the track is drawn whole

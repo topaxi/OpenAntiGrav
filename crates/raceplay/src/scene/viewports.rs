@@ -19,7 +19,8 @@
 //! - **What does not depend on the camera is done once, by the first view.** The
 //!   two shadow maps, the shadow geometry's gather (`Scene::upload_shadow_geometry`
 //!   keeps the lists; each view uploads them with its own matrix), the scenery's
-//!   animation clocks and the advert cards are functions of the craft and the race
+//!   animation clocks, the advert cards and the craft shine passes' environment-mapped
+//!   vertices (`Scene::write_shine`) are functions of the craft and the race
 //!   clock, so a later view ([`Layer::Next`]) reads what the first left in the
 //!   buffers and textures. Measured on Pulse, the gather alone was half of a view's
 //!   CPU, and a split is CPU-bound (`docs/rendering/split-screen.md`, "Cost"). The
