@@ -287,7 +287,7 @@ impl Session {
             vertex_buffer,
             index_buffer,
             texture_binds,
-                bindless: _,
+            bindless: _,
             fog_bind,
             fog_buffer: _,
             zone_vis_texture: _,

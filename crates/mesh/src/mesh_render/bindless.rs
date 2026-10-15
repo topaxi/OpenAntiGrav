@@ -293,14 +293,17 @@ fn group(device: &wgpu::Device, materials: &[Material]) -> Option<(wgpu::BindGro
         views.len(),
         samplers.len()
     );
-    if views.is_empty() || views.len() > CAPACITY as usize || samplers.len() > SAMPLERS as usize
-    {
+    if views.is_empty() || views.len() > CAPACITY as usize || samplers.len() > SAMPLERS as usize {
         return None;
     }
     let rows = view_index
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .zip(&sampler_index)
-        .map(|(roles, &sampler)| [roles[0], roles[1], roles[2], roles[3], sampler])
+        .map(|(&[albedo, lightmap, pad_mask, wave], &sampler)| {
+            [albedo, lightmap, pad_mask, wave, sampler]
+        })
         .collect();
     let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("material arrays"),

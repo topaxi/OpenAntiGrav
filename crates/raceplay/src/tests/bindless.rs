@@ -24,7 +24,12 @@ fn strips() -> Model {
     for strip in 0..STRIPS {
         let left = -1.0 + width * strip as f32;
         let base = vertices.len() as u32;
-        for (x, y) in [(left, -1.0), (left + width, -1.0), (left + width, 1.0), (left, 1.0)] {
+        for (x, y) in [
+            (left, -1.0),
+            (left + width, -1.0),
+            (left + width, 1.0),
+            (left, 1.0),
+        ] {
             vertices.push(vertex([x, y, 0.5]));
         }
         let start = indices.len() as u32;
@@ -185,7 +190,10 @@ fn pixels(device: &wgpu::Device, queue: &wgpu::Queue, drawable: &Drawable) -> Ve
     device
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("the readback maps");
-    slice.get_mapped_range().expect("the readback is mapped").to_vec()
+    slice
+        .get_mapped_range()
+        .expect("the readback is mapped")
+        .to_vec()
 }
 
 /// Each strip's centre pixel, left to right.
@@ -222,7 +230,10 @@ fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     assert!(!per_slot.binds_arrays());
     let expected = pixels(&device, &queue, &per_slot);
     let strips = centres(&expected);
-    assert_eq!(strips[SHARED], strips[SHARED_WITH], "one texture, one colour");
+    assert_eq!(
+        strips[SHARED], strips[SHARED_WITH],
+        "one texture, one colour"
+    );
     for (index, strip) in strips.iter().enumerate() {
         if index == SHARED {
             continue;
@@ -234,5 +245,8 @@ fn each_draw_on_the_binding_arrays_reads_its_own_material_slot() {
     }
     let got = pixels(&device, &queue, &arrays);
     assert_eq!(centres(&got), strips, "the strips through the arrays");
-    assert!(got == expected, "every pixel as the per-slot groups draw it");
+    assert!(
+        got == expected,
+        "every pixel as the per-slot groups draw it"
+    );
 }
