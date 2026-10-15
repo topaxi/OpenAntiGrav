@@ -844,9 +844,10 @@ impl Gantry {
         race_clock(&self.clock, &self.tracker, race)
     }
 
-    /// Writes the frame's scene block into the gantry's drawable.
-    pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
-        self.drawable.write_scene(queue, scene);
+    /// Moves the gantry onto the circuit's scene block, written with the rest of the scenery's.
+    pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
+        self.drawable
+            .share_scene(device, blocks, SceneKind::Circuit);
     }
 
     /// Writes the frame's matrices and both animation tables.
@@ -889,8 +890,9 @@ impl Gantry {
     pub(super) fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         frustum: Option<&oag_core::math::frustum::Frustum>,
     ) -> SceneStats {
-        self.drawable.draw(pass, None, None, None, frustum)
+        self.drawable.draw(pass, block, None, None, None, frustum)
     }
 }

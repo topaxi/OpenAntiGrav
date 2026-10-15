@@ -74,6 +74,7 @@ impl Drawable {
             textures: self.textures.clone(),
             fog_bind: self.fog_bind.clone(),
             fog: self.fog.clone(),
+            scene_kind: self.scene_kind,
             anim_bind,
             anims,
             node_anims,

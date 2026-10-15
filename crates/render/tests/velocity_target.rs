@@ -303,7 +303,7 @@ fn draw(
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.set_bind_group(1, &texture_binds[0], &[]);
-        pass.set_bind_group(2, &fog_bind, &[]);
+        pass.set_bind_group(2, &fog_bind, &[0]);
         pass.set_bind_group(3, &anim_bind, &[]);
         pass.set_vertex_buffer(0, vertex_buffer.slice(..));
         pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);

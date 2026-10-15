@@ -434,7 +434,8 @@ impl Cards {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            card.drawable.draw(&mut pass, None, None, None, None);
+            card.drawable
+                .draw(&mut pass, ViewBlock::NONE, None, None, None, None);
         }
     }
 }

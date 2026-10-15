@@ -85,12 +85,13 @@ impl Scene {
         &self,
         race: &Race,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
-        self.draw_shine(race, pass, stats);
+        self.draw_shine(race, pass, block, stats);
         for which in [Overlay::Absorb, Overlay::LeachBeam] {
             for (_, overlay, _) in self.hull_overlays(race, which) {
-                stats.add(overlay.draw_overlay(pass));
+                stats.add(overlay.draw_overlay(pass, block));
             }
         }
     }

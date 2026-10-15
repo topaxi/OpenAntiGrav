@@ -357,7 +357,7 @@ pub(crate) use drawable::Uniforms;
 #[cfg(feature = "view")]
 use drawable::draw::Lists;
 #[cfg(feature = "view")]
-use drawable::{Drawable, model_matrix_of};
+use drawable::{Drawable, SceneBlocks, SceneKind, ViewBlock, model_matrix_of};
 #[cfg(feature = "view")]
 use effects::exhaust_seed;
 #[cfg(all(test, feature = "view"))]

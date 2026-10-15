@@ -340,6 +340,9 @@ pub struct RebindResources {
     vis_view: wgpu::TextureView,
     vis_sampler: wgpu::Sampler,
     shadow: super::shadow_map::Resources,
+    /// The four stage views the group was first built with, for [`rebind_buffer`]: a drawable
+    /// moved onto a shared buffer straight after it is built keeps the stage it was given.
+    stage: [wgpu::TextureView; 4],
 }
 
 /// Bind group 2 itself, from the stage's four texture views and everything
@@ -361,7 +364,13 @@ fn bind_group(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: fog_buffer.as_entire_binding(),
+                // One block of the buffer, not all of it: the offset a draw names
+                // picks which.
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: fog_buffer,
+                    offset: 0,
+                    size: std::num::NonZeroU64::new(super::SCENE_SIZE),
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -468,10 +477,14 @@ pub(super) fn scene_bind_group(
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                // **A dynamic offset**, so a race can keep one block per view and
+                // per kind of scene in a single buffer and bind every drawable of
+                // a kind to it ([`super::SCENE_STRIDE`]); a caller with one block
+                // binds offset `0`.
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+                    has_dynamic_offset: true,
+                    min_binding_size: std::num::NonZeroU64::new(super::SCENE_SIZE),
                 },
                 count: None,
             },
@@ -536,6 +549,12 @@ pub(super) fn scene_bind_group(
         vis_view: zone_resources.vis_view,
         vis_sampler: zone_resources.vis_sampler,
         shadow,
+        stage: [
+            zone_resources.view.clone(),
+            zone_resources.scene_view.clone(),
+            zone_resources.outer_view.clone(),
+            zone_resources.scene_outer_view.clone(),
+        ],
     };
     let bind = bind_group(
         device,
@@ -579,6 +598,27 @@ pub fn rebind(
         &scene_tex,
         &track_outer,
         &scene_outer,
+        kept,
+    )
+}
+
+/// Bind group 2 again, over `buffer` instead of the one [`scene_bind_group`] made, with the
+/// stage that call was given. How a race points many drawables at one shared block buffer:
+/// call it straight after the build, before any [`rebind`] (which would otherwise have
+/// replaced the stage this rebuilds from).
+pub fn rebind_buffer(
+    buffer: &wgpu::Buffer,
+    device: &wgpu::Device,
+    kept: &RebindResources,
+) -> wgpu::BindGroup {
+    let [track, scene_tex, track_outer, scene_outer] = &kept.stage;
+    bind_group(
+        device,
+        buffer,
+        track,
+        scene_tex,
+        track_outer,
+        scene_outer,
         kept,
     )
 }

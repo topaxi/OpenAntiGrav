@@ -4,7 +4,7 @@
 
 use oag_mesh::mesh;
 
-use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, VisibleSet};
+use super::{ChunkSet, DrawSections, Drawable, Frustum, SceneStats, ViewBlock, VisibleSet};
 
 impl Drawable {
     /// Draws **every** list of this model through the additive pipeline,
@@ -45,16 +45,24 @@ impl Drawable {
     /// A PSP plume never reaches this method's opaque or cutout lists, both
     /// being empty there, so calling it for both titles changes nothing on
     /// PSP.
-    pub(crate) fn draw_additive(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
-        self.draw_every_list(pass, &self.additive_pipeline)
+    pub(crate) fn draw_additive(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
+    ) -> SceneStats {
+        self.draw_every_list(pass, block, &self.additive_pipeline)
     }
 
     /// Draws the absorb overlay: every draw of every list through the
     /// pipelines built with this drawable's own blend, which for the overlay
     /// is [`oag_fx::hull_overlay::BLEND`] rather than the fixed additive
     /// equation, so the glow mask takes the stencil's full value.
-    pub(crate) fn draw_overlay(&self, pass: &mut wgpu::RenderPass<'_>) -> SceneStats {
-        self.draw_every_list(pass, &self.blend_pipeline)
+    pub(crate) fn draw_overlay(
+        &self,
+        pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
+    ) -> SceneStats {
+        self.draw_every_list(pass, block, &self.blend_pipeline)
     }
 
     /// Every draw of the opaque, cutout and transparent lists, each through
@@ -62,6 +70,7 @@ impl Drawable {
     pub(super) fn draw_every_list(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         pipelines: &[wgpu::RenderPipeline; 2],
     ) -> SceneStats {
         let mut stats = SceneStats::default();
@@ -71,7 +80,7 @@ impl Drawable {
             return stats;
         }
         pass.set_bind_group(0, &self.uniform_bind, &[]);
-        pass.set_bind_group(2, &self.fog_bind, &[]);
+        pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
@@ -184,6 +193,7 @@ impl Drawable {
     pub(crate) fn draw_track_shine(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         track: &Drawable,
         sources: &[usize],
         sections: Option<&DrawSections>,
@@ -197,7 +207,7 @@ impl Drawable {
         }
         let opaque: &[u64] = sections.map_or(&[], |s| &s.opaque[..]);
         pass.set_bind_group(0, &self.uniform_bind, &[]);
-        pass.set_bind_group(2, &self.fog_bind, &[]);
+        pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_vertices(pass);
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);

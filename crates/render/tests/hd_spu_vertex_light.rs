@@ -337,7 +337,7 @@ fn draw(device: &wgpu::Device, queue: &wgpu::Queue, model: &Model, scene: Scene)
         pass.set_bind_group(0, &bind_group, &[]);
         // Slot 1: the model's own textures. Slot 0 is `build`'s white 1x1.
         pass.set_bind_group(1, &built.texture_binds[1], &[]);
-        pass.set_bind_group(2, &built.fog_bind, &[]);
+        pass.set_bind_group(2, &built.fog_bind, &[0]);
         pass.set_bind_group(3, &built.anim_bind, &[]);
         pass.set_vertex_buffer(0, built.vertex_buffer.slice(..));
         pass.set_index_buffer(built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

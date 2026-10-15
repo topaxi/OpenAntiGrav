@@ -80,20 +80,23 @@ impl Drawable {
     pub(crate) fn draw(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         sections: Option<&DrawSections>,
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
     ) -> SceneStats {
-        self.draw_lists(pass, sections, set, chunks, frustum, Lists::All)
+        self.draw_lists(pass, block, sections, set, chunks, frustum, Lists::All)
     }
 
     /// [`Self::draw`], restricted to `lists`. The circuit draws its solid
     /// lists and its blended one in two calls so the sky can go between them -
     /// see `Scene::draw_track`.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn draw_lists(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         sections: Option<&DrawSections>,
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
@@ -126,7 +129,7 @@ impl Drawable {
         pass.set_bind_group(0, &self.uniform_bind, &[]);
         // Bound once for the whole drawable: fog is per-frame, not per draw call,
         // and group 2 survives the `set_pipeline` calls below.
-        pass.set_bind_group(2, &self.fog_bind, &[]);
+        pass.set_bind_group(2, &self.fog_bind, &self.scene_offset(block));
         // Same reasoning as fog: the table is per frame, not per draw call.
         pass.set_bind_group(3, &self.anim_bind, &[]);
         self.bind_vertices(pass);

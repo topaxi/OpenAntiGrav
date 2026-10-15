@@ -229,13 +229,26 @@ impl Target {
         })
     }
 
+    /// Moves the two groups onto the race's scene blocks: the primary reads the circuit's own
+    /// block, the alternate its own, which [`Self::write`] fills.
+    pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
+        if let Some(alternate) = &mut self.alternate {
+            alternate.share_scene(device, blocks, SceneKind::GlassAlternate);
+        }
+        if let Some(primary) = &mut self.primary {
+            primary.share_scene(device, blocks, SceneKind::Circuit);
+        }
+    }
+
     /// Writes every drawable's uniforms for this frame: `matrix` is
     /// [`view_projection`] of the main view's, `scene` the circuit's own scene
-    /// uniform (whose fog the alternate group swaps for its pair), `seconds`
-    /// the scenery clock.
+    /// uniform (whose fog the alternate group swaps for its pair, in the view's
+    /// alternate block), `seconds` the scenery clock. The primary group reads the circuit's
+    /// block, which the caller wrote.
     pub(super) fn write(
         &self,
         queue: &wgpu::Queue,
+        (blocks, block): (&SceneBlocks, ViewBlock),
         matrix: Mat4,
         eye: Vec3,
         scene: &mesh_render::Scene,
@@ -257,14 +270,11 @@ impl Target {
                 }),
             ..*scene
         };
-        for (drawable, scene) in [(&self.alternate, &alternate), (&self.primary, scene)] {
-            let Some(drawable) = drawable else {
-                continue;
-            };
+        blocks.write(queue, block, SceneKind::GlassAlternate, &alternate);
+        for drawable in [&self.alternate, &self.primary].into_iter().flatten() {
             drawable.write(queue, matrix, Mat4::IDENTITY, matrix);
             drawable.write_anims(queue, seconds);
             drawable.write_node_anims(queue, seconds);
-            drawable.write_scene(queue, scene);
         }
     }
 
@@ -274,6 +284,7 @@ impl Target {
     pub(super) fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        block: ViewBlock,
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
@@ -318,16 +329,24 @@ impl Target {
         let mut stats = SceneStats::default();
         let solid = Lists::Solid { order: None };
         for group in groups() {
-            stats.add(group.draw_lists(&mut pass, None, set, chunks, frustum, solid));
+            stats.add(group.draw_lists(&mut pass, block, None, set, chunks, frustum, solid));
         }
         if let Some(sky) = &self.sky {
             let (width, height) = (SIZE.0 as f32, SIZE.1 as f32);
             pass.set_viewport(0.0, 0.0, width, height, 1.0, 1.0);
-            let _ = sky.draw(&mut pass, None, None, None, None);
+            let _ = sky.draw(&mut pass, block, None, None, None, None);
             pass.set_viewport(0.0, 0.0, width, height, 0.0, 1.0);
         }
         for group in groups() {
-            stats.add(group.draw_lists(&mut pass, None, set, chunks, frustum, Lists::Blended));
+            stats.add(group.draw_lists(
+                &mut pass,
+                block,
+                None,
+                set,
+                chunks,
+                frustum,
+                Lists::Blended,
+            ));
         }
         stats
     }
@@ -342,6 +361,7 @@ impl Scene {
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
+        block: ViewBlock,
         scene: &mesh_render::Scene,
         (matrix, eye, seconds): (Mat4, Vec3, f32),
         set: Option<&VisibleSet>,
@@ -351,8 +371,15 @@ impl Scene {
         let Some(target) = &self.behind_glass else {
             return SceneStats::default();
         };
-        target.write(queue, view_projection(matrix), eye, scene, seconds);
-        target.render(encoder, set, chunks, frustum)
+        target.write(
+            queue,
+            (&self.scene_blocks, block),
+            view_projection(matrix),
+            eye,
+            scene,
+            seconds,
+        );
+        target.render(encoder, block, set, chunks, frustum)
     }
 }
 

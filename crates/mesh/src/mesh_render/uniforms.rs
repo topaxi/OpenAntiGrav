@@ -912,3 +912,8 @@ const _: () = assert!(
 /// field; what was wrong was that anyone adding to `Scene` read a constant
 /// claiming to measure one of its two halves.
 pub const SCENE_SIZE: u64 = std::mem::size_of::<Scene>() as u64;
+
+/// The distance between two [`Scene`] blocks in a buffer that holds several, bound with a
+/// dynamic offset: [`SCENE_SIZE`] rounded up to 256, the largest
+/// `min_uniform_buffer_offset_alignment` WebGPU allows any device to ask for.
+pub const SCENE_STRIDE: u64 = SCENE_SIZE.div_ceil(256) * 256;

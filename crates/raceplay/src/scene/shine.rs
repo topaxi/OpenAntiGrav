@@ -25,6 +25,11 @@ pub(super) struct TrackShine {
 }
 
 impl TrackShine {
+    /// Moves the pass onto the shine block, written with the hulls' shine passes'.
+    pub(super) fn share_scene(&mut self, device: &wgpu::Device, blocks: &mut SceneBlocks) {
+        self.drawable.share_scene(device, blocks, SceneKind::Shine);
+    }
+
     /// `None` when the circuit authors no drawable shine batch.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn build(
@@ -125,9 +130,11 @@ impl Scene {
         order.sort_by(|a, b| a.0.total_cmp(&b.0));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn draw_track(
         &self,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         viewport: (f32, f32, f32, f32),
         sections: Option<&DrawSections>,
         set: Option<&VisibleSet>,
@@ -137,25 +144,37 @@ impl Scene {
         oag_gpu::perfprobe::marks::mark(pass, "track solid");
         let order = self.opaque_order.borrow();
         let order = (!order.is_empty()).then_some(&order[..]);
-        let mut stats =
-            self.track
-                .draw_lists(pass, sections, set, chunks, frustum, Lists::Solid { order });
+        let mut stats = self.track.draw_lists(
+            pass,
+            block,
+            sections,
+            set,
+            chunks,
+            frustum,
+            Lists::Solid { order },
+        );
         oag_gpu::perfprobe::marks::mark(pass, "sky");
         if let Some(sky) = &self.sky {
             let (x, y, w, h) = viewport;
             pass.set_viewport(x, y, w, h, 1.0, 1.0);
-            let _ = sky.draw(pass, None, None, None, None);
+            let _ = sky.draw(pass, block, None, None, None, None);
             pass.set_viewport(x, y, w, h, 0.0, 1.0);
         }
         oag_gpu::perfprobe::marks::mark(pass, "track blended");
-        stats.add(
-            self.track
-                .draw_lists(pass, sections, set, chunks, frustum, Lists::Blended),
-        );
+        stats.add(self.track.draw_lists(
+            pass,
+            block,
+            sections,
+            set,
+            chunks,
+            frustum,
+            Lists::Blended,
+        ));
         oag_gpu::perfprobe::marks::mark(pass, "track shine");
         if let Some(shine) = &self.track_shine {
             stats.add(shine.drawable.draw_track_shine(
                 pass,
+                block,
                 &self.track,
                 &shine.sources,
                 sections,
@@ -181,31 +200,6 @@ impl Scene {
                 }
                 Some((slot, shine.as_ref()?))
             })
-    }
-
-    /// Writes the craft's scene uniform: every hull's own, and the shine
-    /// passes' (a copy with the fog colour **black**).
-    ///
-    /// One function for both so the hull and its extra pass cannot drift: the
-    /// pass was drawn with fog off until the two were read side by side in a
-    /// recorded GE list. On a live Metropia grid the six hull batches drawn
-    /// under `TEXMAPMODE` 2 carry fog **enabled** with the fog colour register
-    /// at `0`, where the ordinary pass over the same batch carries the
-    /// circuit's own colour; the fog's distance registers are the same on both
-    /// (`FOG1` 1600, `FOG2` 1/1540 there). So the pass fades to nothing with
-    /// distance rather than into the haze, and a rival far down a straight
-    /// loses its sheen as it loses the rest of its colour. Inside the fog's
-    /// near distance, where the chase camera sits, it changes nothing.
-    pub(super) fn write_ship_scenes(&self, queue: &wgpu::Queue, ship_scene: &mesh_render::Scene) {
-        for drawable in self.ships.iter() {
-            drawable.write_scene(queue, ship_scene);
-        }
-        let shine = shine_scene(ship_scene);
-        let track_shine = self.track_shine.iter().map(|t| &t.drawable);
-        for pass in self.shine.iter().flatten().chain(track_shine) {
-            pass.write_scene(queue, &shine);
-        }
-        self.write_wreck_scenes(queue, ship_scene);
     }
 
     /// Writes every live craft's pose and its environment-mapped coordinates:
@@ -273,16 +267,26 @@ impl Scene {
         &self,
         race: &Race,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         for (_, shine) in self.shines(race) {
-            stats.add(shine.draw_overlay(pass));
+            stats.add(shine.draw_overlay(pass, block));
         }
     }
 }
 
-/// `ship_scene` with the fog colour black: see [`Scene::write_ship_scenes`].
-fn shine_scene(ship_scene: &mesh_render::Scene) -> mesh_render::Scene {
+/// The shine passes' scene block: `ship_scene` with the fog colour **black**.
+///
+/// Written with the hull's own, one function's worth, so the hull and its extra pass cannot
+/// drift: the pass was drawn with fog off until the two were read side by side in a recorded GE
+/// list. On a live Metropia grid the six hull batches drawn under `TEXMAPMODE` 2 carry fog
+/// **enabled** with the fog colour register at `0`, where the ordinary pass over the same batch
+/// carries the circuit's own colour; the fog's distance registers are the same on both (`FOG1`
+/// 1600, `FOG2` 1/1540 there). So the pass fades to nothing with distance rather than into the
+/// haze, and a rival far down a straight loses its sheen as it loses the rest of its colour.
+/// Inside the fog's near distance, where the chase camera sits, it changes nothing.
+pub(super) fn shine_scene(ship_scene: &mesh_render::Scene) -> mesh_render::Scene {
     mesh_render::Scene {
         fog: mesh_render::Fog {
             colour: [0.0; 3],

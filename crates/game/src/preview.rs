@@ -913,7 +913,7 @@ impl Preview {
         pass.set_scissor_rect(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32);
 
         pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.set_bind_group(2, &self.built.fog_bind, &[]);
+        pass.set_bind_group(2, &self.built.fog_bind, &[0]);
         pass.set_bind_group(3, &self.built.anim_bind, &[]);
         pass.set_vertex_buffer(0, self.built.vertex_buffer.slice(..));
         pass.set_index_buffer(self.built.index_buffer.slice(..), wgpu::IndexFormat::Uint32);

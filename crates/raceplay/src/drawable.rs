@@ -7,6 +7,8 @@
 use super::*;
 mod instance;
 mod pad_glow;
+mod scene_block;
+pub(crate) use scene_block::{SceneBlocks, SceneKind, ViewBlock};
 
 /// One model on the GPU: its pipeline, its geometry and its own uniform buffer.
 ///
@@ -59,6 +61,9 @@ pub(super) struct Drawable {
     /// or left at [`mesh_render::Fog::off`] for the sky and for a track that
     /// authors no fog.
     pub(super) fog: wgpu::Buffer,
+    /// The kind of scene block [`Self::fog_bind`] reads, once [`Self::share_scene`] moved it
+    /// onto the race's shared buffer; `None` while it reads [`Self::fog`] as its own.
+    scene_kind: Option<SceneKind>,
     /// Bind group 3: this drawable's authored texture transforms, sampled for
     /// the current tick.
     anim_bind: wgpu::BindGroup,
@@ -341,6 +346,7 @@ impl Drawable {
             textures,
             fog_bind,
             fog: fog_buffer,
+            scene_kind: None,
             anim_bind,
             anims: anim_buffer,
             node_anims: node_anim_buffer,
@@ -584,7 +590,14 @@ impl Drawable {
     }
 
     /// Puts `scene` - the fog, the light rig, the clock and the shadow map - in bind group 2.
+    /// **For a drawable with a block of its own**; a shared one ([`Self::share_scene`]) is
+    /// written through [`SceneBlocks::write`].
     pub(super) fn write_scene(&self, queue: &wgpu::Queue, scene: &mesh_render::Scene) {
+        debug_assert!(
+            self.scene_kind.is_none(),
+            "{} shares its scene block",
+            self.model.label
+        );
         oag_gpu::perfprobe::write_buffer(queue, &self.fog, 0, bytemuck::bytes_of(scene));
     }
 

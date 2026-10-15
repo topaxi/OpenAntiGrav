@@ -254,10 +254,11 @@ impl super::Scene {
         &self,
         live: usize,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         for drawable in self.plasma_blast.shuriken.iter().take(live) {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
     }
 
@@ -343,6 +344,7 @@ impl super::Scene {
         &self,
         active: &[bool; blast_models::PLASMA_BLAST_SLOTS],
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         let pools = [
@@ -353,7 +355,7 @@ impl super::Scene {
         for (slot, _) in active.iter().enumerate().filter(|(_, live)| **live) {
             for pool in pools {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, None, None, None, None));
+                    stats.add(drawable.draw(pass, block, None, None, None, None));
                 }
             }
         }
@@ -454,11 +456,12 @@ impl super::Scene {
         &self,
         active: &BlastsActive,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
-        self.draw_hd_bomb_blasts(&active.hd, pass, stats);
+        self.draw_hd_bomb_blasts(&active.hd, pass, block, stats);
         for drawable in self.bomb_blast.hd.halo.iter().take(active.halos) {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
         for (drawable, _) in self
             .bomb_blast
@@ -468,12 +471,12 @@ impl super::Scene {
             .zip(&active.missiles)
             .filter(|(_, live)| **live)
         {
-            stats.add(drawable.draw(pass, None, None, None, None));
+            stats.add(drawable.draw(pass, block, None, None, None, None));
         }
         for (slot, _) in active.mag_floor.iter().enumerate().filter(|(_, l)| **l) {
             for pool in &self.bomb_blast.mag_floor {
                 if let Some(drawable) = pool.get(slot) {
-                    stats.add(drawable.draw(pass, None, None, None, None));
+                    stats.add(drawable.draw(pass, block, None, None, None, None));
                 }
             }
         }
@@ -484,7 +487,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.repulser_field.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
         for (slot, _) in active
@@ -494,7 +497,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.hemisphere.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
         for (slot, _) in active
@@ -504,7 +507,7 @@ impl super::Scene {
             .filter(|(_, live)| **live)
         {
             if let Some(drawable) = self.bomb_blast.shockwave.get(slot) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         }
     }
@@ -644,12 +647,13 @@ impl super::Scene {
         &self,
         shown: &[Option<bomb_blast::hd::Pieces>; bomb_blast::hd::SLOTS],
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         let pools = &self.bomb_blast.hd;
         let mut draw = |drawable: Option<&Drawable>, shown: bool| {
             if let (Some(drawable), true) = (drawable, shown) {
-                stats.add(drawable.draw(pass, None, None, None, None));
+                stats.add(drawable.draw(pass, block, None, None, None, None));
             }
         };
         for (slot, pieces) in shown.iter().enumerate() {

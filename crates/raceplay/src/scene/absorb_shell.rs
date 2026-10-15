@@ -64,10 +64,11 @@ impl Scene {
         &self,
         race: &Race,
         pass: &mut wgpu::RenderPass<'_>,
+        block: ViewBlock,
         stats: &mut SceneStats,
     ) {
         for (_, shell, _) in self.absorb_shells(race) {
-            stats.add(shell.draw(pass, None, None, None, None));
+            stats.add(shell.draw(pass, block, None, None, None, None));
         }
     }
 }

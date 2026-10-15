@@ -26,6 +26,7 @@ mod motion;
 mod per_slot;
 mod queries;
 mod ribbons;
+mod scene_blocks;
 mod scratch;
 mod shine;
 mod viewports;
@@ -62,6 +63,9 @@ pub(crate) struct FrameWork {
 #[derive(Debug)]
 pub struct Scene {
     track: Drawable,
+    /// The buffer every drawable the frame writes a scene block into reads it from, a block
+    /// per view and per kind - see [`SceneBlocks`] and `scene_blocks.rs`.
+    scene_blocks: SceneBlocks,
     /// The circuit's own light rig, where it authors one.
     ///
     /// [`mesh_render::Light::stand_in`] for every title whose rig has not been
@@ -966,7 +970,8 @@ impl Scene {
              {}/{} reused ({} distinct built), texture upload {texture_hits}/{texture_calls} reused",
             build_cache.1, build_cache.0, build_cache.2
         );
-        Ok(Self {
+        let mut scene = Self {
+            scene_blocks: SceneBlocks::new(device, queue),
             build_cache,
             bloom,
             ps2_bloom,
@@ -1041,6 +1046,8 @@ impl Scene {
             msaa,
             far,
             ghost: ghost::Ghosts::default(),
-        })
+        };
+        scene.share_scene_blocks(device);
+        Ok(scene)
     }
 }

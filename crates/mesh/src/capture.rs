@@ -308,7 +308,7 @@ pub fn capture_pixels_from(
             // Group 2 never changes within a pass and survives `set_pipeline`, so it
             // is bound once here rather than per draw call. The capture path leaves
             // it at `Fog::off`.
-            pass.set_bind_group(2, &fog_bind, &[]);
+            pass.set_bind_group(2, &fog_bind, &[0]);
             pass.set_bind_group(3, &anim_bind, &[]);
             pass.set_vertex_buffer(0, vertex_buffer.slice(..));
             pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
