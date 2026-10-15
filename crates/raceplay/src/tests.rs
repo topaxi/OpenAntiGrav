@@ -16,6 +16,7 @@ use oag_vex::track;
 
 mod autopilot;
 mod between_ticks;
+mod bindless;
 mod camera;
 mod cannon_draw;
 mod correction;

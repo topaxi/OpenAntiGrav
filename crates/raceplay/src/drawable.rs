@@ -402,6 +402,12 @@ impl Drawable {
         }
     }
 
+    /// Whether this drawable binds group 1 as arrays ([`Self::bindless`]).
+    #[cfg(test)]
+    pub(crate) fn binds_arrays(&self) -> bool {
+        self.bindless.is_some()
+    }
+
     /// Binds group 1 for this drawable's draws: the arrays once, or nothing,
     /// leaving [`Self::bind_slot`] to bind each slot's group.
     pub(super) fn bind_materials(&self, pass: &mut wgpu::RenderPass<'_>) {
