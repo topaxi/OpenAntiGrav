@@ -249,15 +249,17 @@ pub(super) fn resources(
     let occlusion_view = match occlusion {
         Some(view) => view.clone(),
         None => {
-            // Black, one layer: no hull names a layer without a map bound,
+            // Black, **two layers**: no hull names a layer without a map bound,
             // so this is never sampled; it exists so the layout is one
-            // layout.
+            // layout. Two because wgpu's GL backend binds a texture by its
+            // layer count and would take a one-layer texture for a plain 2D
+            // one, which an array view of it then contradicts.
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("sun occlusion placeholder"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: 2,
                 },
                 mip_level_count: 1,
                 sample_count: 1,
@@ -289,15 +291,15 @@ pub(super) fn resources(
     let self_shadow_view = match self_shadow {
         Some(view) => view.clone(),
         None => {
-            // One layer, never sampled for the reason the occlusion
-            // placeholder is not; a fresh depth texture's contents are
+            // Two layers (see the occlusion placeholder), never sampled for the
+            // reason it is not; a fresh depth texture's contents are
             // unspecified, and that is fine for a binding nothing reads.
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("self shadow placeholder"),
                 size: wgpu::Extent3d {
                     width: 1,
                     height: 1,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: 2,
                 },
                 mip_level_count: 1,
                 sample_count: 1,

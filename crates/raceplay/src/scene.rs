@@ -510,6 +510,14 @@ impl Scene {
         // distinct ones - about 7 MiB of resident memory per weapon drawable,
         // 8.4 GiB for a Pulse race. See `pipeline_cache`.
         let crate::adverts::Billboards { gantry, adverts } = billboards;
+        // GL cannot hold a sampled multisample texture (`oag_gpu::backend::GAPS`),
+        // so the race draws without MSAA there and says so once.
+        let msaa = if oag_gpu::backend::is_gl(device) && msaa != oag_display::display::Msaa::Off {
+            warn!("GL backend: msaa {msaa} is off for this race (the report's GL line says why)");
+            oag_display::display::Msaa::Off
+        } else {
+            msaa
+        };
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
         // The far plane comes from the track's own bounding sphere: a track is

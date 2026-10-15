@@ -137,6 +137,26 @@ fn zone_base_term(rim: f32, colours: ZoneSet) -> vec3<f32> {
     return colours.base.rgb * pow(r, 10.0) + colours.base_alt.rgb * pow(r, 5.0);
 }
 
+// One stage texture's alpha at `zone_uv`, point-filtered with `Repeat`
+// addressing - the band index `zone_glow` reads.
+//
+// **Two spellings of the same read.** Everywhere but GL it is a sample through
+// `zone_nearest_sampler`. GL has no sampler objects apart from the texture: a
+// texture sampled with two samplers in one shader (`zone_sampler` already reads
+// these four) is a translation error, so the `gl` feature fetches the texel
+// itself - `floor(uv * size)`, wrapped - which is what a point sampler with
+// `Repeat` addresses.
+@if(gl)
+fn zone_band(tex: texture_2d<f32>, zone_uv: vec2<f32>) -> f32 {
+    let size = vec2<i32>(textureDimensions(tex));
+    let texel = vec2<i32>(floor(zone_uv * vec2<f32>(size)));
+    return textureLoad(tex, ((texel % size) + size) % size, 0).a;
+}
+@else
+fn zone_band(tex: texture_2d<f32>, zone_uv: vec2<f32>) -> f32 {
+    return textureSample(tex, zone_nearest_sampler, zone_uv).a;
+}
+
 // The visualiser glow: `saturate(N.y - 0.5) * (1 - windowDepth) * E.w *
 // zoneTexVis[band].rgb`, read out of the Zone shader's own fragment microcode
 // - `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`. Re-read
@@ -197,10 +217,10 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
     // above already names both sides. Four samples, `select`ed rather than
     // branched into, for the same uniform-control-flow reason `zone_sample`
     // is.
-    let track_band = textureSample(zone_tex, zone_nearest_sampler, zone_uv).a;
-    let track_outer_band = textureSample(zone_tex_outer, zone_nearest_sampler, zone_uv).a;
-    let scene_band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv).a;
-    let scene_outer_band = textureSample(zone_scene_tex_outer, zone_nearest_sampler, zone_uv).a;
+    let track_band = zone_band(zone_tex, zone_uv);
+    let track_outer_band = zone_band(zone_tex_outer, zone_uv);
+    let scene_band = zone_band(zone_scene_tex, zone_uv);
+    let scene_outer_band = zone_band(zone_scene_tex_outer, zone_uv);
     let inside = zone_inside(world);
     let band = select(
         select(scene_outer_band, track_outer_band, zone_is_track(slots)),

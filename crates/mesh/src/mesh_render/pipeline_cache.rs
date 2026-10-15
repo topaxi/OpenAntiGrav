@@ -208,12 +208,18 @@ pub(crate) fn shared_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule 
     })
 }
 
+/// The `gl` feature's variant on wgpu's GL backend, and the one shader
+/// everywhere else - see `crates/mesh/shaders/zone.wesl` and `shadow.wesl` for
+/// what differs and `oag_gpu::backend::GAPS` for what a player loses.
 fn create_shader_module(device: &wgpu::Device) -> wgpu::ShaderModule {
+    let source = if oag_gpu::backend::is_gl(device) {
+        include_str!(concat!(env!("OUT_DIR"), "/mesh_gl.wgsl"))
+    } else {
+        include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl"))
+    };
     device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("mesh"),
-        source: wgpu::ShaderSource::Wgsl(
-            include_str!(concat!(env!("OUT_DIR"), "/mesh.wgsl")).into(),
-        ),
+        source: wgpu::ShaderSource::Wgsl(source.into()),
     })
 }
 

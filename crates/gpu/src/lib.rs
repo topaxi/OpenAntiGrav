@@ -6,6 +6,7 @@
 //! write timestamps into is neither's own. Those few things live here, below
 //! both.
 //!
+//! - [`backend`] is what wgpu's GL backend cannot do, asked in one place.
 //! - [`formats`] are the two offscreen target formats the scene pass and the
 //!   post chain have to agree on.
 //! - [`perfprobe`] is the off-by-default `perf-probe` instrumentation.
@@ -15,6 +16,7 @@
 //!   by mapping on native and through the queue in a browser.
 //! - [`timing`] is whether the GPU can be asked how long it took.
 
+pub mod backend;
 pub mod deferred_upload;
 pub mod formats;
 pub mod init_buffer;

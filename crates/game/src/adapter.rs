@@ -210,6 +210,16 @@ pub struct Chosen {
     pub in_use: Vec<String>,
 }
 
+/// Names what GL cannot do, once, in the loader report, when `adapter` is GL.
+///
+/// Every effect `oag_gpu::backend::GAPS` turns off is a line a player reads
+/// rather than a picture that is quietly worse.
+fn report_gaps(adapter: &wgpu::Adapter) {
+    if adapter.get_info().backend == wgpu::Backend::Gl {
+        warn!("{}", oag_gpu::backend::gaps_report());
+    }
+}
+
 /// The adapter `setting` names, or the one wgpu would have picked.
 ///
 /// `surface` is `Some` for the window and `None` for an offscreen capture; an
@@ -238,6 +248,7 @@ pub fn choose(
     let offered = names(&adapters);
 
     if let Some(index) = setting.choose(&offered) {
+        report_gaps(&adapters[index]);
         // `offered[index]` and not the setting's own spelling: the match is
         // case-insensitive, and this string is compared against a menu row.
         let in_use = vec![offered[index].clone()];
@@ -262,6 +273,7 @@ pub fn choose(
         ..Default::default()
     }))
     .context("no suitable GPU adapter (is a Vulkan driver installed?)")?;
+    report_gaps(&adapter);
     // Which of the enumerated adapters wgpu landed on, so the row can be told
     // that naming it changes nothing. Matched on `AdapterInfo` because that is
     // all an adapter can be compared by; two identical cards are indistinguishable

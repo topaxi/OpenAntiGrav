@@ -20,6 +20,69 @@ import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_
 // out of both - see `mesh_render::ShadowReceiver`.
 override receives_shadow: f32 = 0.0;
 
+// How many of the `mapped` tier's four compared taps see the light, `0.0` to
+// `4.0`: four taps a texel apart, each compared, summed - the caller takes
+// their mean. **The softening is in the comparison, not in the sample** -
+// filtering the depth itself would average two surfaces into one that is
+// neither. Four rather than sixteen because this runs on every lit pixel of
+// the frame; it is a choice, and it is ours, like everything else in this
+// tier.
+//
+// **On GL it is `4.0`, every tap lit, so the tier draws no shadow.** GL cannot
+// read a depth texture through `textureSampleLevel` (the translation is
+// `textureLod` on a shadow sampler, which no GLSL accepts) or `textureLoad`
+// (unsupported), only compare it through a comparison sampler, and that is a
+// different binding type on every backend. See `oag_gpu::backend::GAPS`.
+@if(gl)
+fn depth_taps_lit(uv: vec2<f32>, reference: f32) -> f32 {
+    return 4.0;
+}
+@else
+fn depth_taps_lit(uv: vec2<f32>, reference: f32) -> f32 {
+    let texel = 1.0 / f32(textureDimensions(shadow_depth_tex).x);
+    var lit = 0.0;
+    for (var i = 0; i < 4; i = i + 1) {
+        let offset = vec2<f32>(
+            f32(i % 2) * 2.0 - 1.0,
+            f32(i / 2) * 2.0 - 1.0
+        ) * texel * 0.5;
+        let nearest = textureSampleLevel(
+            shadow_depth_tex,
+            shadow_depth_sampler,
+            uv + offset,
+            // A depth texture's own `textureSampleLevel` takes an `i32` mip
+            // level, not the `f32` a colour texture's does.
+            0
+        );
+        lit = lit + select(0.0, 1.0, reference <= nearest);
+    }
+    return lit;
+}
+
+// The same four compared taps against a hull's own self-shadow layer, half a
+// texel apart. The original's is one hardware-compared `TXP`; how the RSX
+// filters that is unread, and four is the softening this side already uses for
+// a depth compare. `4.0` on GL, for `depth_taps_lit`'s reason: the hull keeps
+// the coverage term and loses only its own shadow.
+@if(gl)
+fn self_shadow_taps_lit(uv: vec2<f32>, layer: i32, reference: f32) -> f32 {
+    return 4.0;
+}
+@else
+fn self_shadow_taps_lit(uv: vec2<f32>, layer: i32, reference: f32) -> f32 {
+    let texel = 1.0 / f32(textureDimensions(self_shadow_tex).x);
+    var lit = 0.0;
+    for (var i = 0; i < 4; i = i + 1) {
+        let offset = vec2<f32>(
+            f32(i % 2) * 2.0 - 1.0,
+            f32(i / 2) * 2.0 - 1.0
+        ) * texel * 0.5;
+        let nearest = textureSampleLevel(self_shadow_tex, shadow_depth_sampler, uv + offset, layer, 0);
+        lit = lit + select(0.0, 1.0, reference <= nearest);
+    }
+    return lit;
+}
+
 // The GE's fog is a linear ramp between `near` and `far` - `Gu_Fog`
 // (`0x08811748`) sends `far` and `1/(far - near)` and nothing else, so there is
 // no curve to reproduce here. What the original varies is the *parameters*,
@@ -94,23 +157,7 @@ fn shadow_coverage(world: vec3<f32>) -> f32 {
     // Four rather than sixteen because this runs on every lit pixel of the
     // frame; it is a choice, and it is ours, like everything else in this
     // tier.
-    let texel = 1.0 / f32(textureDimensions(shadow_depth_tex).x);
-    var lit = 0.0;
-    for (var i = 0; i < 4; i = i + 1) {
-        let offset = vec2<f32>(
-            f32(i % 2) * 2.0 - 1.0,
-            f32(i / 2) * 2.0 - 1.0
-        ) * texel * 0.5;
-        let nearest = textureSampleLevel(
-            shadow_depth_tex,
-            shadow_depth_sampler,
-            uv + offset,
-            // A depth texture's own `textureSampleLevel` takes an `i32` mip
-            // level, not the `f32` a colour texture's does.
-            0
-        );
-        lit = lit + select(0.0, 1.0, ndc.z - scene.shadow.depth_bias <= nearest);
-    }
+    let lit = depth_taps_lit(uv, ndc.z - scene.shadow.depth_bias);
     return (1.0 - lit * 0.25) * scene.shadow.strength;
 }
 
@@ -170,16 +217,7 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
     // mode takes, half a texel apart, and their mean. The original's is one
     // hardware-compared `TXP`; how the RSX filters that is unread, and four
     // is the softening this side already uses for a depth compare.
-    let texel = 1.0 / f32(textureDimensions(self_shadow_tex).x);
-    var lit = 0.0;
-    for (var i = 0; i < 4; i = i + 1) {
-        let offset = vec2<f32>(
-            f32(i % 2) * 2.0 - 1.0,
-            f32(i / 2) * 2.0 - 1.0
-        ) * texel * 0.5;
-        let nearest = textureSampleLevel(self_shadow_tex, shadow_depth_sampler, uv + offset, layer, 0);
-        lit = lit + select(0.0, 1.0, ndc.z - SELF_SHADOW_BIAS <= nearest);
-    }
+    let lit = self_shadow_taps_lit(uv, layer, ndc.z - SELF_SHADOW_BIAS);
     return occlusion * lit * 0.25;
 }
 
