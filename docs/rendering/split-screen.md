@@ -510,9 +510,10 @@ Pulse view and half of HD's, which only fewer commands reduce.
 **`encoder.finish` and the uploads, measured (2026-10-15, `encoder-finish`).** One shared buffer of
 scene blocks now holds the fog-and-light block every drawable of a kind binds (a block per view and
 per kind, a dynamic offset; `oag_raceplay::drawable::SceneBlocks`), so a view writes five instead of
-one per drawable (Pulse 89 to 56 `queue.write_buffer` calls a view), and contiguous same-texture
-batches are one `draw_indexed` (HD 1,447 to 969 a view). Pulse's CPU fell about 4 to 5%, HD's two-view
-CPU about 4%, the pictures are byte-identical. **What `finish` is made of:** the per-draw texture
+one per drawable (Pulse 89 to 56 `queue.write_buffer` calls a view). Pulse's CPU fell about 4 to 5%, Pure's one view
+14%, HD's did not move measurably, the pictures are byte-identical. Merging a drawable's contiguous
+same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) was tried and reverted:
+`finish` fell 19 us on HD and nothing elsewhere, recording it cost 3 to 8. **What `finish` is made of:** the per-draw texture
 bind-group switches, 55 to 65% of it (Pulse 216 to 96 us a view, HD 273 to 98, Pure 133 to 39 with a
 hack that never re-binds group 1), 20 to 25% of a view's CPU. Taking them out needs a texture array or
 bindless scheme: sorting by texture moves pixels, an atlas breaks wrapping, and `binding_array` is

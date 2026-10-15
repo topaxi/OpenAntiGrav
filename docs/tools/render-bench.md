@@ -365,14 +365,20 @@ round, not a typical one).
   a view (`perf-probe`'s counter, frame 0; one view then two): Pulse 89 / 159 to 56 / 93, HD 78 / 139
   to 55 / 93, Pure 28 / 51 to 19 / 33; Pulse's bytes a view 454 to 282 KiB. Shield shells, weapon
   models and the sky never get a block written (or only while live) and keep a buffer of their own.
-- **Contiguous batches of one texture are one `draw_indexed`** (`drawable/run.rs`). Queued draws to
-  issued calls a view, one view: HD 1,447 to 969, Pulse 423 to 363, Pure 368 to 290. The triangles
-  reach the rasteriser in the same order.
+- **Tried and not kept: contiguous batches of one texture as one `draw_indexed`** (commit `5b646661f`,
+  reverted). Queued draws to issued calls a view, one view: HD 1,447 to 969, Pulse 423 to 363, Pure
+  368 to 290, the triangles in the same order, every still identical. Measured quiet (four
+  interleaved rounds, second view of a 2h frame, minimum of the per-run medians of the `encoder-finish`
+  span): HD 294 to 275 us, Pulse 220 to 220, Pure 144 to 143, while queueing the draws costs 3 to 8 us
+  in the recording (`scene-pass` span: HD 84 to 92, Pulse 36 to 39, Pure 22 to 25). Net about -11 us a
+  view on HD and +2 to +3 on Pulse and Pure: the draw calls are not what `finish` pays for (see
+  below), so it did not pay for its code.
 
-**Result** (`render_viewports CPU`, p50 us, before then after the scene blocks then after the
-merge; "before" is `main` plus a commit that only routes the writes through the counter):
+**Result** (`render_viewports CPU`, p50 us, before then after the scene blocks; the merge column is the
+reverted commit on top, kept as the record of what it did; "before" is `main` plus a commit that only
+routes the writes through the counter):
 
-| Title, case | before | + scene blocks | + merged draws |
+| Title, case | before | + scene blocks | + merged draws (reverted) |
 | --- | ---: | ---: | ---: |
 | Pulse, 1 | 1,108 | 1,050 | 1,056 |
 | Pulse, 2h | 1,679 | 1,608 | 1,609 |
@@ -382,10 +388,12 @@ merge; "before" is `main` plus a commit that only routes the writes through the 
 | Pure, 2h | 700 | 684 | 667 |
 
 The scene blocks are worth 4 to 5% of Pulse's CPU (about 1 us a `write_buffer` removed, 33 a view)
-and the merge 4% of HD's two-view CPU; the rest is inside the noise of a shared machine. **The
-Arrow Lake iGPU, same A/B (before then both changes, three rounds, minimum):** Pulse 1 6,903 to 6,267,
+and Pure's one view (14%, 80 us), nothing measurable on HD (23 writes a view, 2,116 against 2,101 is
+noise); the merged column's HD 2h gain did not reproduce in the quiet span runs above, so it is not
+credited to the merge. **The Arrow Lake iGPU, same A/B (before then scene blocks plus the merge
+column's commit, three rounds, minimum):** Pulse 1 6,903 to 6,267,
 Pulse 2h 6,244 to 6,024, HD 1 6,032 to 5,964, HD 2h 8,389 to 8,125, Pure 1 1,839 to 1,830, Pure 2h
-2,667 to 2,626 us. **Pictures and state:** 9 stills (Pulse, HD, Pure; one view, 2h, 2v) and 8 more
+2,667 to 2,626 us. **Pictures and state, scene blocks:** 9 stills (Pulse, HD, Pure; one view, 2h, 2v) and 8 more
 (HD Vineta K one view and 2h with the behind-the-glass target dumped, HD Zone stage 2 one view and
 2h, 2048 and Omega one view, Pulse at tick 1500 one view and 2h, and the Ship Select page, whose 3D
 preview draws through `oag_game::preview`) byte-identical before and after, the

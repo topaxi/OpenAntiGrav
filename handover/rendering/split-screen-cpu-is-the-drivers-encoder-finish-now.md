@@ -12,8 +12,11 @@ PRO 2000 Blackwell Laptop GPU and the Arrow Lake iGPU). Evidence and numbers:
 Landed: the circuit shine pass's normals are kept, the craft shine maps are written by the first view
 of a frame, HD's depth prepass binds one texture slot (`split-cpu`); one shared buffer of scene blocks
 (a block per view and per kind, bound by dynamic offset: 33 fewer `queue.write_buffer` calls a view on
-Pulse) and contiguous same-texture batches merged into one `draw_indexed` (HD 1,447 to 969 calls a
-view), every still byte-identical and every state hash unchanged (`encoder-finish`).
+Pulse; Pulse's CPU -4 to 5%), every still byte-identical and every state hash unchanged
+(`encoder-finish`). Tried and reverted (`5b646661f`, still in the history): merging contiguous
+same-texture batches into one `draw_indexed` (HD 1,447 to 969 calls a view) took 19 us out of HD's
+`finish` and nothing out of Pulse's or Pure's, and costs 3 to 8 us to queue: draw calls are not what
+`finish` pays for, the texture bind-group switches are.
 
 ## Open
 
